@@ -46,6 +46,7 @@ const routeApp = (authenticate: () => Promise<Result<typeof session, never>>) =>
   new Elysia().use(
     createLegalResolveRoute({
       authenticate,
+      recordAudit: async () => undefined,
       mayReadPublicLaw: async () => Result.ok(true),
       publicLawEnabled: () => true,
       resolveSessionContext,
@@ -68,7 +69,14 @@ test("one request is authorized once, whoever asks first", async () => {
   const first = new Request("https://api.test/v1/law/cz/citations/resolve");
   const second = new Request("https://api.test/v1/law/cz/citations/resolve");
 
+  expect(authorize.getExistingAuthorization(first)).toBeUndefined();
+  expect(seen).toEqual([]);
   await Promise.all([authorize(first), authorize(first)]);
+  expect(await authorize.getExistingAuthorization(first)).toEqual({
+    status: 403,
+    body: { error: "missing_scope" },
+  });
+  expect(authorize.getExistingAuthorization(second)).toBeUndefined();
   await authorize(first);
   await authorize(second);
 
@@ -179,7 +187,11 @@ test("legal resolve refuses a token after its live membership is removed", async
     },
   );
 
-  expect(result).toEqual({ status: 403, body: { error: "missing_scope" } });
+  expect(result).toEqual({
+    status: 403,
+    session: { ...session, memberId: "removed" },
+    body: { error: "missing_scope" },
+  });
 });
 
 test("legal resolve reports verifier outages as a captured 503", async () => {
@@ -239,7 +251,11 @@ test("legal resolve refuses access while the public-law plan state is off", asyn
       resolveSessionContext,
     },
   );
-  expect(result).toEqual({ status: 403, body: { error: "missing_scope" } });
+  expect(result).toEqual({
+    status: 403,
+    session,
+    body: { error: "missing_scope" },
+  });
 });
 
 test("legal resolve distinguishes missing scope from organization entitlement", async () => {
@@ -261,10 +277,12 @@ test("legal resolve distinguishes missing scope from organization entitlement", 
 
   expect(missingScope).toEqual({
     status: 403,
+    session: { ...session, scopes: [] },
     body: { error: "missing_scope" },
   });
   expect(notEntitled).toEqual({
     status: 403,
+    session,
     body: { error: "not_entitled" },
   });
 });
@@ -273,6 +291,7 @@ test("the route returns 403 when the organization is not entitled", async () => 
   const app = new Elysia().use(
     createLegalResolveRoute({
       authenticate: async () => Result.ok(session),
+      recordAudit: async () => undefined,
       publicLawEnabled: () => true,
       mayReadPublicLaw: async () => Result.ok(false),
       resolveSessionContext,
@@ -296,6 +315,7 @@ test("an organization access read failure returns 503, never 200", async () => {
   const app = new Elysia().use(
     createLegalResolveRoute({
       authenticate: async () => Result.ok(session),
+      recordAudit: async () => undefined,
       publicLawEnabled: () => true,
       mayReadPublicLaw: async () =>
         Result.err(
@@ -330,6 +350,7 @@ test("a legal resolve request authenticates its token once", async () => {
         authenticationCount += 1;
         return Result.ok(session);
       },
+      recordAudit: async () => undefined,
       publicLawEnabled: () => true,
       mayReadPublicLaw: async () => {
         accessReadCount += 1;
@@ -373,4 +394,26 @@ test("decision and law routes consume separate rate-limit budgets", async () => 
   expect(
     (await request("/law/CZE/citations/resolve?citation=law")).status,
   ).toBe(429);
+});
+
+test("legal resolve captures live user-session outages and retains the audit principal", async () => {
+  const captured: unknown[] = [];
+  const result = await authorizeLegalResolveRequest(
+    authorizationRequest("synthetic"),
+    {
+      authenticate: async () => Result.ok(session),
+      resolveSessionContext: async () => {
+        throw new TypeError("Synthetic session infrastructure outage");
+      },
+      captureError: (error) => {
+        captured.push(error);
+      },
+    },
+  );
+  expect(result).toEqual({
+    status: 503,
+    session,
+    body: { error: "access_unavailable" },
+  });
+  expect(captured).toHaveLength(1);
 });

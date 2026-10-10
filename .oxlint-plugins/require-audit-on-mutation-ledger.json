@@ -260,7 +260,7 @@
     "reason": "Write outside handlers that predates the audit scope; triage whether it needs its own audit event."
   },
   {
-    "id": "apps/api/src/lib/audit-log.ts::insertAuditRows",
+    "id": "apps/api/src/lib/db/audit-recording.ts::insertAuditRows",
     "writes": {
       "insert:auditLogs": 1
     },

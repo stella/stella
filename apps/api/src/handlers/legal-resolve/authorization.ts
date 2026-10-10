@@ -5,10 +5,10 @@ import { mayReadPublicLawForOrganization } from "@/api/db/root";
 import { admitLawRead } from "@/api/handlers/legal-resolve/admission";
 import { hasLawReadScope } from "@/api/handlers/legal-resolve/scope";
 import { captureRequestError } from "@/api/lib/analytics/capture";
+import { isServiceResolveSession } from "@/api/lib/auth/legal-resolve-principal";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { parseAuthProviderId } from "@/api/lib/safe-id-boundaries";
-import { authenticateMcpRequest } from "@/api/mcp/auth";
 import { getMcpResourceUrl } from "@/api/mcp/constants";
 import { resolveMcpSessionContext } from "@/api/mcp/context";
 import {
@@ -16,8 +16,10 @@ import {
   McpTokenVerificationError,
 } from "@/api/mcp/errors";
 
+import { authenticateLegalResolveToken } from "./authentication";
+
 export type LegalResolveAuthorizationDependencies = {
-  authenticate?: typeof authenticateMcpRequest;
+  authenticate?: typeof authenticateLegalResolveToken;
   captureError?: typeof captureRequestError;
   mayReadPublicLaw?: (
     organizationId: SafeId<"organization">,
@@ -44,7 +46,7 @@ const legalResolveAuthenticationMode = (token: string) => {
 export const authorizeLegalResolveRequest = async (
   request: Request,
   {
-    authenticate = authenticateMcpRequest,
+    authenticate = authenticateLegalResolveToken,
     captureError = captureRequestError,
     mayReadPublicLaw: readPublicLaw = mayReadPublicLawForOrganization,
     publicLawEnabled = () => isDeploymentFeatureEnabled("FEATURE_PUBLIC_LAW"),
@@ -73,24 +75,36 @@ export const authorizeLegalResolveRequest = async (
     return { status: 403 as const, body: { error: "missing_scope" as const } };
   }
   if (!hasLawReadScope(session.value.scopes)) {
-    return { status: 403 as const, body: { error: "missing_scope" as const } };
+    return {
+      session: session.value,
+      status: 403 as const,
+      body: { error: "missing_scope" as const },
+    };
   }
-  const liveSession = await Result.tryPromise({
-    try: async () => await resolveSessionContext(session.value, { request }),
-    catch: (error) => error,
-  });
-  if (Result.isError(liveSession)) {
-    if (!(liveSession.error instanceof McpOrganizationAccessError)) {
-      captureError(liveSession.error, {
-        request,
-        context: { source: "legal-resolve", phase: "session-resolution" },
-      });
+  if (!isServiceResolveSession(session.value)) {
+    const userSession = session.value;
+    const liveSession = await Result.tryPromise({
+      try: async () => await resolveSessionContext(userSession, { request }),
+      catch: (error) => error,
+    });
+    if (Result.isError(liveSession)) {
+      if (!(liveSession.error instanceof McpOrganizationAccessError)) {
+        captureError(liveSession.error, {
+          request,
+          context: { source: "legal-resolve", phase: "session-resolution" },
+        });
+        return {
+          session: session.value,
+          status: 503 as const,
+          body: { error: "access_unavailable" as const },
+        };
+      }
       return {
-        status: 503 as const,
-        body: { error: "access_unavailable" as const },
+        session: session.value,
+        status: 403 as const,
+        body: { error: "missing_scope" as const },
       };
     }
-    return { status: 403 as const, body: { error: "missing_scope" as const } };
   }
   const organizationId = parseAuthProviderId<"organization">(
     session.value.organizationId,
@@ -109,11 +123,13 @@ export const authorizeLegalResolveRequest = async (
   if (Result.isError(admission)) {
     if (admission.error.type === "access_unavailable") {
       return {
+        session: session.value,
         status: 503 as const,
         body: { error: "access_unavailable" as const },
       };
     }
     return {
+      session: session.value,
       status: 403 as const,
       body: { error: admission.error.type },
     };
@@ -157,7 +173,7 @@ export const authorizeOncePerRequest = (
       body: { error: "access_unavailable" as const },
     };
   };
-  return async (request: Request) => {
+  const authorizeRequest = async (request: Request) => {
     const existing = byRequest.get(request);
     if (existing !== undefined) {
       return await existing;
@@ -166,6 +182,9 @@ export const authorizeOncePerRequest = (
     byRequest.set(request, authorization);
     return await authorization;
   };
+  return Object.assign(authorizeRequest, {
+    getExistingAuthorization: (request: Request) => byRequest.get(request),
+  });
 };
 
 /** The production authorization, shared by the endpoints and the limiter. */

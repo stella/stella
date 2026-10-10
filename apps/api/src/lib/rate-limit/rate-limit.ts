@@ -57,9 +57,18 @@ export type RateLimitOptions = {
   duration: number;
   errorResponse?: RateLimitErrorResponse;
   generator: RateLimitGenerator;
-  max: number;
+  max: number | ((request: Request) => MaybePromise<number>);
+  additionalBudgets?: (
+    request: Request,
+  ) => MaybePromise<readonly RateLimitBudget[]>;
   onLimit?: () => void;
   skip?: (request: Request) => MaybePromise<boolean>;
+};
+
+export type RateLimitBudget = {
+  key: string;
+  max: number;
+  duration: number;
 };
 
 type RateLimitEntry = {
@@ -176,11 +185,35 @@ export class InMemoryRateLimitContext implements RateLimitContext {
 type RateLimitResponseSet = Context["set"];
 
 type RateLimitRequestState =
-  | { type: "counted"; key: string }
-  | { type: "counted_early_failure"; key: string }
-  | { type: "limited"; key: string }
+  | { type: "counted"; keys: string[] }
+  | { type: "counted_early_failure"; keys: string[] }
+  | { type: "limited"; keys: string[] }
   | { type: "refunded" }
   | { type: "skipped" };
+
+type CompleteRateLimitRequestOptions = {
+  context: RateLimitContext;
+  requestState: WeakMap<Request, RateLimitRequestState>;
+  request: Request;
+};
+
+const completeRateLimitRequest = async ({
+  context,
+  requestState,
+  request,
+}: CompleteRateLimitRequestOptions) => {
+  const state = requestState.get(request);
+  if (
+    state?.type === "counted" ||
+    state?.type === "counted_early_failure" ||
+    state?.type === "limited"
+  ) {
+    await Promise.all(
+      state.keys.map(async (key) => await context.complete(key)),
+    );
+  }
+  requestState.delete(request);
+};
 
 type RateLimitApplicationPhase = "before_handler" | "early_failure";
 
@@ -246,8 +279,8 @@ const isEarlyFailureStatus = (statusCode: number): boolean =>
 /**
  * Stella's Elysia adapter for its replica-safe rate-limit contexts.
  *
- * The adapter deliberately exposes only the static fixed-window policy Stella
- * uses. Counter storage, outage behavior, and refund identity remain owned by
+ * Fixed-window policies may be bound to the authenticated client. Counter
+ * storage, outage behavior, and refund identity remain owned by
  * the supplied context rather than by framework middleware.
  */
 export const rateLimit = ({
@@ -256,6 +289,7 @@ export const rateLimit = ({
   errorResponse = DEFAULT_RATE_LIMIT_ERROR_RESPONSE,
   generator,
   max,
+  additionalBudgets,
   onLimit,
   skip = () => false,
 }: RateLimitOptions) => {
@@ -286,40 +320,53 @@ export const rateLimit = ({
     }
 
     const key = await generator(request, server);
-    const { count, nextReset } = await context.increment(
-      key,
-      duration,
-      Temporal.Now.instant().epochMilliseconds,
-    );
-    const remaining = Math.max(max - count, 0);
-    const reset = Math.max(
-      0,
-      Math.ceil(
-        (nextReset.getTime() - Temporal.Now.instant().epochMilliseconds) / 1000,
-      ),
-    );
-    const exceeded = count > max;
+    const requestMax = typeof max === "number" ? max : await max(request);
+    const budgets = [
+      { key, max: requestMax, duration },
+      ...(additionalBudgets === undefined
+        ? []
+        : await additionalBudgets(request)),
+    ];
+    const keys: string[] = [];
+    // Rejected attempts consume earlier windows; later windows are untouched.
+    for (const budget of budgets) {
+      const { count, nextReset } = await context.increment(
+        budget.key,
+        budget.duration,
+        Temporal.Now.instant().epochMilliseconds,
+      );
+      keys.push(budget.key);
+      const remaining = Math.max(budget.max - count, 0);
+      const reset = Math.max(
+        0,
+        Math.ceil(
+          (nextReset.getTime() - Temporal.Now.instant().epochMilliseconds) /
+            1000,
+        ),
+      );
+      const exceeded = count > budget.max;
 
-    writeRateLimitHeaders({
-      max,
-      remaining,
-      reset,
-      retryAfter: exceeded,
-      set,
-    });
+      writeRateLimitHeaders({
+        max: budget.max,
+        remaining,
+        reset,
+        retryAfter: exceeded,
+        set,
+      });
 
-    if (exceeded) {
-      onLimit?.();
-      requestState.set(request, { type: "limited", key });
-      set.status = 429;
-      return errorResponse;
+      if (exceeded) {
+        onLimit?.();
+        requestState.set(request, { type: "limited", keys });
+        set.status = 429;
+        return errorResponse;
+      }
     }
 
     requestState.set(
       request,
       phase === "before_handler"
-        ? { type: "counted", key }
-        : { type: "counted_early_failure", key },
+        ? { type: "counted", keys }
+        : { type: "counted_early_failure", keys },
     );
     return undefined;
   };
@@ -350,7 +397,9 @@ export const rateLimit = ({
         switch (state.type) {
           case "counted":
             requestState.set(request, { type: "refunded" });
-            await context.decrement(state.key);
+            await Promise.all(
+              state.keys.map(async (key) => await context.decrement(key)),
+            );
             return undefined;
           case "counted_early_failure":
           case "limited":
@@ -426,7 +475,9 @@ export const rateLimit = ({
       case "counted":
         if (handledError) {
           requestState.set(request, { type: "refunded" });
-          await context.decrement(state.key);
+          await Promise.all(
+            state.keys.map(async (key) => await context.decrement(key)),
+          );
         }
         return undefined;
       case "counted_early_failure":
@@ -441,17 +492,11 @@ export const rateLimit = ({
     }
   });
 
-  plugin.onAfterResponse({ as: "scoped" }, async ({ request }) => {
-    const state = requestState.get(request);
-    if (
-      state?.type === "counted" ||
-      state?.type === "counted_early_failure" ||
-      state?.type === "limited"
-    ) {
-      await context.complete(state.key);
-    }
-    requestState.delete(request);
-  });
+  plugin.onAfterResponse(
+    { as: "scoped" },
+    async ({ request }) =>
+      await completeRateLimitRequest({ context, requestState, request }),
+  );
 
   plugin.onStop(async () => {
     await context.kill();

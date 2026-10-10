@@ -5,6 +5,7 @@ export * from "./schema/backfill-state";
 export * from "./schema/case-law-replay";
 export * from "./schema/eu-completion";
 export * from "./schema/system-audit";
+export * from "./schema/service-oauth-clients";
 export * from "./schema/properties";
 export * from "./schema/entities";
 export * from "./schema/templates";
