@@ -75,7 +75,7 @@ test("skip-locked batches preserve their bound and close the blocking acquisitio
       limit: (limit) => {
         selectedLimit = limit;
         return {
-          for: (mode, config) => {
+          for: async (mode, config) => {
             expect(mode).toBe("update");
             expect(config).toEqual({ skipLocked: true });
             return Promise.resolve(["receipt"]);
