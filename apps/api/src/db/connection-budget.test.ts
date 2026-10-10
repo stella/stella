@@ -393,7 +393,7 @@ describe("database connection budget", () => {
         processNames.add(process);
       }
     }
-    expect([...processNames].toSorted()).toEqual(
+    expect(Array.from(processNames, String).toSorted()).toEqual(
       Object.keys(DATABASE_PROCESS_ASSUMPTIONS).toSorted(),
     );
     const managed = [...processNames].reduce(
