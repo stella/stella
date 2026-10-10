@@ -625,8 +625,9 @@ type BunFlagPolicy =
   | "workspace"
   | "unsupported";
 
-// Bun 1.4.2 CLI help owns this census; tests reject new undocumented decisions.
+// Bun 1.4.3 CLI help owns this census; tests reject new undocumented decisions.
 const runtimeBunFlags = {
+  "--check": "switch",
   "--silent": "switch",
   "--elide-lines": "value",
   "-F": "workspace",
@@ -760,6 +761,8 @@ export const BUN_FLAGS = {
     "--asset": "unsupported",
     "--bytecode": "switch",
     "--bytecode-depth": "value",
+    "--bytecode-order": "unsupported",
+    "--compile-jit-policy": "value",
     "--no-optimize-bytecode": "switch",
     "--watch": "switch",
     "--no-clear-screen": "switch",

@@ -39,7 +39,10 @@ export const isConnectionFailure = (cause: unknown): boolean => {
   const codes: string[] = [];
   const messages: string[] = [];
   let current = cause;
-  while (current instanceof Error && !visited.has(current)) {
+  while (
+    (Error.isError(current) || current instanceof Error) &&
+    !visited.has(current)
+  ) {
     visited.add(current);
     if (current.name === "AbortError" || current.name === "TimeoutError") {
       return false;

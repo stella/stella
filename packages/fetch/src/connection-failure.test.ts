@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { runInNewContext } from "node:vm";
 
 import { isConnectionFailure } from "./connection-failure";
 
@@ -17,7 +18,10 @@ describe("connection failure classification", () => {
     );
     expect(cause).toBeInstanceOf(TypeError);
     expect(cause).toMatchObject({ code: expect.any(String) });
-    expect(isConnectionFailure(cause)).toBe(true);
+    expect(
+      isConnectionFailure(cause),
+      JSON.stringify(cause, Object.getOwnPropertyNames(cause)),
+    ).toBe(true);
   });
 
   for (const code of [
@@ -43,6 +47,22 @@ describe("connection failure classification", () => {
       );
     });
   }
+
+  test.each(["ECONNREFUSED", "ECONNRESET", "ENOTFOUND", "ETIMEDOUT"])(
+    "recognizes %s errors from another realm",
+    (code) => {
+      const cause: unknown = runInNewContext(
+        "Object.assign(new TypeError('message omitted'), { code })",
+        { code },
+      );
+      expect(cause).not.toBeInstanceOf(Error);
+      expect(Error.isError(cause)).toBe(true);
+      expect(isConnectionFailure(cause)).toBe(true);
+      expect(isConnectionFailure(new Error("Request failed", { cause }))).toBe(
+        true,
+      );
+    },
+  );
 
   test("uses messages only when there is no runtime code", () => {
     expect(isConnectionFailure(new TypeError("Unable to connect"))).toBe(true);

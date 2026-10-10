@@ -4,7 +4,7 @@
 # same value; scripts/check-standalone-lockfiles.ts fails when they differ.
 minimumReleaseAge = 432_000
 minimumReleaseAgeExcludes = [
-  "bun-types", # quarantine-expires: 2026-10-15T05:25:00Z
+  "bun-types", # quarantine-expires: 2026-10-15T05:25:00.000Z
 ]
 # Fail on a missing import instead of installing it at run time.
 auto = "disable"
