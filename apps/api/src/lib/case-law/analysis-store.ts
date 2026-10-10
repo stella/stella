@@ -12,6 +12,8 @@
  * process keeps it in memory instead.
  */
 
+import { Result } from "better-result";
+
 import type { AnalysisGenerating } from "@stll/legal-ast/analysis";
 import { parsePersistedDecisionAnalysis } from "@stll/legal-ast/analysis";
 
@@ -20,6 +22,11 @@ import { envBase } from "@/api/env-base";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
+import {
+  failureMatchesGuard,
+  type AnalysisFailureRecord,
+  type FailureClaimGuard,
+} from "./analysis-failure";
 import {
   createDbAnalysisStore,
   type AnalysisStore,
@@ -32,23 +39,59 @@ const dbAnalysisStore = createDbAnalysisStore(rootDb);
 
 const memoryAnalyses = new Map<SafeId<"caseLawDecision">, unknown>();
 
+// A development process's failure records; it restarts long before they
+// could accumulate.
+const memoryFailures = new Map<string, AnalysisFailureRecord>();
+
+const memoryFailureKey = (
+  decisionId: SafeId<"caseLawDecision">,
+  keyTag: string,
+): string => `${decisionId}:${keyTag}`;
+
+type MemoryClaim = Parameters<AnalysisStore["claim"]>[0] & {
+  unlessFailed?: FailureClaimGuard | undefined;
+};
+
+// Synchronous: nothing awaits between the checks and the write, so in one
+// process no claim or failure can land in between.
+const claimInMemory = ({
+  decisionId,
+  fingerprint,
+  observed,
+  unlessFailed,
+}: MemoryClaim): AnalysisGenerating | null => {
+  // The same compare-and-swap as the row, over what this process holds:
+  // an entry must still be the one this request read (entries are the
+  // exact objects stored, so identity is equality). No entry means the
+  // request read the read-only row, which this store never writes.
+  const held = memoryAnalyses.get(decisionId);
+  if (held !== undefined && held !== observed) {
+    return null;
+  }
+  // The same failure guard as the row store's claim transaction.
+  const failure =
+    unlessFailed === undefined
+      ? undefined
+      : memoryFailures.get(memoryFailureKey(decisionId, unlessFailed.keyTag));
+  if (
+    failure !== undefined &&
+    unlessFailed !== undefined &&
+    failureMatchesGuard({ failure, fingerprint, guard: unlessFailed })
+  ) {
+    return null;
+  }
+  const sentinel: AnalysisGenerating = analysisSentinel(
+    fingerprint,
+    new Date(),
+  );
+  memoryAnalyses.set(decisionId, sentinel);
+  return sentinel;
+};
+
 const memoryAnalysisStore: AnalysisStore = {
-  claim: async ({ decisionId, fingerprint, observed }) => {
-    // The same compare-and-swap as the row, over what this process holds:
-    // an entry must still be the one this request read (entries are the
-    // exact objects stored, so identity is equality). No entry means the
-    // request read the read-only row, which this store never writes.
-    const held = memoryAnalyses.get(decisionId);
-    if (held !== undefined && held !== observed) {
-      return await Promise.resolve(null);
-    }
-    const sentinel: AnalysisGenerating = analysisSentinel(
-      fingerprint,
-      new Date(),
-    );
-    memoryAnalyses.set(decisionId, sentinel);
-    return await Promise.resolve(sentinel);
-  },
+  claim: async (claim) => await Promise.resolve(claimInMemory(claim)),
+  claimUnlessFailed: async (claim) =>
+    await Promise.resolve(Result.ok(claimInMemory(claim))),
   // The document behind a memory entry is a read-only row this process
   // never re-parses, so the fingerprint alone identifies the run here.
   // `expected` still applies: it separates two runs over one document.
@@ -69,6 +112,19 @@ const memoryAnalysisStore: AnalysisStore = {
     }
     await Promise.resolve();
   },
+  fail: async ({ decisionId, failure, keyTag, sentinel }) => {
+    // Only the run that still holds the row files its failure; a superseded
+    // run writes nothing (as the row store's single statement does).
+    if (memoryAnalyses.get(decisionId) === sentinel) {
+      memoryFailures.set(memoryFailureKey(decisionId, keyTag), failure);
+      memoryAnalyses.delete(decisionId);
+    }
+    await Promise.resolve();
+  },
+  readFailure: async ({ decisionId, keyTag }) =>
+    await Promise.resolve(
+      memoryFailures.get(memoryFailureKey(decisionId, keyTag)) ?? null,
+    ),
   peek: (decisionId) => memoryAnalyses.get(decisionId) ?? null,
 };
 
