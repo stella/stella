@@ -283,6 +283,7 @@ mod tests {
         key: key.into(),
         expires_at: (chrono::Utc::now() + chrono::Duration::hours(1)).to_rfc3339(),
       },
+      device_key: crate::device_proof::DeviceKey::default(),
     };
 
     assert_eq!(
