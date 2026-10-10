@@ -14,6 +14,7 @@ import {
 import type { FixEvidence } from "./dated-waiver-fix-task";
 import {
   applyHealing,
+  armRemovalThroughBar,
   redactProbeOutput,
   renderRemovalEvidence,
   type HealingEntry,
@@ -73,6 +74,7 @@ const scenario = (records: HealingEntry[]) => {
     },
   };
   return {
+    actions,
     effects,
     closeTask: () => {
       taskState = "closed";
@@ -88,6 +90,27 @@ const scenario = (records: HealingEntry[]) => {
       }),
   };
 };
+
+test("merge bar refusals fail publication instead of reporting a pending arm", async () => {
+  const calls: number[] = [];
+  const armed = await armRemovalThroughBar(42, async (number) => {
+    calls.push(number);
+    return 0;
+  });
+  expect(armed).toEqual({ signal: "dated-waiver-armed", pr: 42 });
+  expect(calls).toEqual([42]);
+  for (const exit of [1, 2, 137]) {
+    const run = scenario([{ entry, outcome: green }]);
+    run.actions.armRemoval = async (number) => {
+      await armRemovalThroughBar(number, async () => exit);
+    };
+    expect(await rejectionOf(run.run("2026-10-10T00:00:00Z"))).toMatchObject({
+      message:
+        "Removal merge bar refused or failed; diagnostic output withheld.",
+    });
+    expect(run.effects).toEqual(["remove", "resolve"]);
+  }
+});
 
 test("N/N green removes through the sanctioned arm collaborator; main no-op never arms", async () => {
   const fresh = scenario([{ entry, outcome: green }]);

@@ -2,6 +2,8 @@ import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import * as v from "valibot";
 
+import { evaluate } from "./github-expression";
+
 const workflow = v.parse(
   v.object({
     on: v.object({
@@ -119,4 +121,91 @@ test("every healing job has an explicit main event policy", () => {
   for (const job of Object.keys(workflow.jobs)) {
     expect(policy.jobs[`dated-waiver-healing.yml/${job}`]).toBe("main");
   }
+});
+
+test("required CI expiry checks cannot be skipped by paths, reuse, or queue depth", () => {
+  const ci = v.parse(
+    v.object({
+      jobs: v.object({
+        "ci-result": v.object({
+          if: v.string(),
+          steps: v.array(
+            v.looseObject({
+              name: v.string(),
+              id: v.optional(v.string()),
+              if: v.optional(v.string()),
+              run: v.optional(v.string()),
+              "continue-on-error": v.optional(v.boolean()),
+              with: v.optional(v.record(v.string(), v.unknown())),
+              env: v.optional(v.record(v.string(), v.string())),
+            }),
+          ),
+        }),
+      }),
+    }),
+    Bun.YAML.parse(
+      readFileSync(
+        new URL("../.github/workflows/ci.yml", import.meta.url),
+        "utf-8",
+      ),
+    ),
+  );
+  const result = ci.jobs["ci-result"];
+  const guardNames = [
+    "Checkout dated waiver guard inputs",
+    "Setup Bun for dated waiver guard",
+    "Install dated waiver guard dependencies",
+    "Check dated waiver expiry on the current tree",
+  ];
+  const guards = guardNames.map((name) => {
+    const step = result.steps.find((candidate) => candidate.name === name);
+    if (!step) {
+      throw new TypeError(`Missing required dated waiver CI guard: ${name}`);
+    }
+    return step;
+  });
+  for (const event of ["pull_request", "merge_group"]) {
+    for (const reused of ["true", "false"]) {
+      const context = {
+        values: {
+          "github.event_name": event,
+          "github.event.pull_request.draft": false,
+          "needs.ci-plan.outputs.run_required": "false",
+          "needs.ci-plan.outputs.package_checks_required": "false",
+          "needs.ci-plan.outputs.docs_checks_required": "true",
+          "needs.ci-plan.outputs.pr_depth_reused": reused,
+          "needs.ci-plan.outputs.trusted": "true",
+          "steps.checkout.outcome": "success",
+          "steps.install.outcome": "success",
+          "inputs.heavy_only": true,
+          "inputs.pr_depth_only": true,
+        },
+        status: { always: true, cancelled: false },
+      };
+      expect(evaluate(result.if, context)).toBe(true);
+      for (const step of guards) {
+        expect(evaluate(v.parse(v.string(), step.if), context)).toBe(true);
+        expect(step["continue-on-error"]).not.toBe(true);
+      }
+    }
+  }
+  expect(guards.at(-1)?.run).toBe("bun scripts/dated-waivers.ts --check");
+  expect(guards.at(0)?.with?.["persist-credentials"]).toBe(false);
+  expect(guards.at(2)?.run).toBe("bun ci --ignore-scripts");
+  for (const step of guards) {
+    expect(step.env?.["GH_TOKEN"]).toBeUndefined();
+  }
+  const outcome = result.steps.find(
+    (step) => step.name === "Evaluate CI outcome",
+  );
+  if (!outcome) {
+    throw new TypeError("Missing required CI outcome step");
+  }
+  const expiryGuard = guards.at(-1);
+  if (!expiryGuard) {
+    throw new TypeError("Missing required expiry guard");
+  }
+  expect(result.steps.indexOf(expiryGuard)).toBeLessThan(
+    result.steps.indexOf(outcome),
+  );
 });

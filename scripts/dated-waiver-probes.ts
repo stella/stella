@@ -1,5 +1,6 @@
 import { panic, Result } from "better-result";
 import path from "node:path";
+import { stripVTControlCharacters } from "node:util";
 import ts from "typescript";
 import * as v from "valibot";
 
@@ -343,12 +344,30 @@ export const runWaiverProbe = async (
       continue;
     }
     const receipt = result.value;
-    // Bun exits successfully when a pattern selects no tests or an outer
-    // describe.skip still masks the test. Require an executed passing test.
-    const executedTest =
-      entry.kind !== "quarantined-test" ||
-      (/^\s*[1-9]\d* pass\s*$/mu.test(receipt.output) &&
-        !/^\s*[1-9]\d* skip\s*$/mu.test(receipt.output));
+    let executedTest = true;
+    if (entry.kind === "quarantined-test") {
+      // Bun 1.4.2 reports nonmatching tests as skips under -t. Only the named
+      // selected declaration establishes recovery; summary totals cannot.
+      const output = stripVTControlCharacters(receipt.output);
+      const selected = output.split(/\r?\n/u).flatMap((line) => {
+        const match = /^\((pass|fail|skip|todo)\) (.+)$/u.exec(line);
+        const status = match?.at(1);
+        const name = match?.at(2)?.replace(/ \[\d+(?:\.\d+)?(?:ms|s)\]$/u, "");
+        if (
+          !status ||
+          !name ||
+          (name !== entry.id && !name.endsWith(` > ${entry.id}`))
+        ) {
+          return [];
+        }
+        return [status];
+      });
+      // Duplicate selected names and outer describe.skip remain fail-closed.
+      executedTest =
+        selected.length === 1 &&
+        selected.at(0) === "pass" &&
+        /^\s*[1-9]\d* pass\s*$/mu.test(output);
+    }
     results.push({
       passed: receipt.passed && executedTest,
       output: receipt.output,

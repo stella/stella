@@ -440,6 +440,38 @@ const readReport = async (file: string): Promise<HealingReport> => {
   return { sha: parsed.sha, observedAt: parsed.observedAt, entries };
 };
 
+const runMergeBar = async (number: number): Promise<number> => {
+  const proc = Bun.spawn(["bun", "scripts/merge-bar.ts", String(number)], {
+    cwd: root,
+    stdout: "pipe",
+    stderr: "pipe",
+    timeout: PROBE_TIMEOUT_MS,
+    killSignal: "SIGKILL",
+  });
+  const execution = await Promise.all([
+    boundedOutput(proc.stdout),
+    boundedOutput(proc.stderr),
+    proc.exited,
+  ]);
+  return execution[2];
+};
+
+export const armRemovalThroughBar = async (
+  number: number,
+  run = runMergeBar,
+) => {
+  const exit = await run(number);
+  // The ordinary bar permits pending checks. Every nonzero exit is a real
+  // refusal or failure, and must fail the scheduled publication boundary.
+  if (exit !== 0) {
+    throw new HealingError({
+      message:
+        "Removal merge bar refused or failed; diagnostic output withheld.",
+    });
+  }
+  return { signal: "dated-waiver-armed", pr: number } as const;
+};
+
 const main = async (): Promise<void> => {
   const fileIndex = process.argv.indexOf("--evidence");
   const file = process.argv.at(fileIndex + 1);
@@ -514,24 +546,7 @@ const main = async (): Promise<void> => {
         if (process.env["MERGE_HOLD"]) {
           return;
         }
-        const proc = Bun.spawn(
-          ["bun", "scripts/merge-bar.ts", String(number)],
-          { cwd: root, stdout: "pipe", stderr: "pipe" },
-        );
-        const execution = await Promise.all([
-          boundedOutput(proc.stdout),
-          boundedOutput(proc.stderr),
-          proc.exited,
-        ]);
-        const exit = execution[2];
-        // Pending CI is a refusal, never authorization to bypass the merge bar.
-        console.log(
-          JSON.stringify({
-            signal:
-              exit === 0 ? "dated-waiver-armed" : "dated-waiver-arm-pending",
-            pr: number,
-          }),
-        );
+        console.log(JSON.stringify(await armRemovalThroughBar(number)));
       },
     },
   });

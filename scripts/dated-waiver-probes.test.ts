@@ -1,4 +1,7 @@
 import { expect, test } from "bun:test";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import ts from "typescript";
 
 import {
@@ -226,17 +229,97 @@ test("command launch failures become private red evidence for all N samples", as
   expect(evidence.output).not.toContain("private details");
 });
 
-test("test green requires a positive Bun receipt and no remaining skip", async () => {
+test("test green requires exactly one named passing selected receipt", async () => {
   for (const [output, expected] of [
     ["0 pass\n0 fail", "red"],
-    ["1 pass\n1 skip\n0 fail", "red"],
-    ["1 pass\n0 skip\n0 fail", "green"],
+    ["1 pass\n0 skip\n0 fail", "red"],
+    [
+      "(pass) package [0.10ms]\n(skip) unrelated\n1 pass\n1 skip\n0 fail",
+      "green",
+    ],
+    [
+      "(pass) group > package [0.10ms]\n(skip) group > unrelated\n1 pass\n1 skip\n0 fail",
+      "green",
+    ],
+    ["(skip) package\n(pass) other [0.10ms]\n1 pass\n1 skip\n0 fail", "red"],
+    ["(pass) package [0.10ms]\n(pass) package [0.20ms]\n2 pass\n0 fail", "red"],
+    ["\u001b[32m(pass)\u001b[0m package [0.10ms]\n1 pass\n0 fail", "green"],
   ] as const) {
     const evidence = await runWaiverProbe(
       waiver("quarantined-test", "a.test.ts"),
-      { run: async () => ({ passed: true, output }) },
+      {
+        run: async () => ({ passed: true, output }),
+      },
     );
     expect(evidence.status).toBe(expected);
+  }
+});
+
+test("real Bun filtered receipts accept only the selected passing declaration", async () => {
+  const directory = mkdtempSync(
+    path.join(tmpdir(), "dated-waiver-bun-receipt-"),
+  );
+  const source = path.join(directory, "receipt.test.ts");
+  const selected =
+    '// test-quarantine-expires: 2026-10-05T00:00:00.000Z\ntest.skip("selected", () => expect(1).toBe(1));';
+  const neighbor = 'test("neighbor", () => expect(2).toBe(2));';
+  const cases = [
+    { contents: `${selected}\n${neighbor}`, status: "green" },
+    {
+      contents: `describe("group", () => {\n${selected}\n${neighbor}\n});`,
+      status: "green",
+    },
+    {
+      contents: `describe.skip("group", () => {\n${selected}\n});\n${neighbor}`,
+      status: "red",
+    },
+    {
+      contents: `${selected}\ntest("selected", () => expect(3).toBe(3));\n${neighbor}`,
+      status: "red",
+    },
+  ] as const;
+  try {
+    for (const fixture of cases) {
+      writeFileSync(
+        source,
+        `import { describe, expect, test } from "bun:test";\n${fixture.contents}\n`,
+      );
+      const entry = readTestQuarantines({
+        [source]: readFileSync(source, "utf-8"),
+      }).at(0);
+      if (!entry) {
+        throw new TypeError("Fixture quarantine missing");
+      }
+      for (const change of removeWaiver(entry, (file) =>
+        readFileSync(file, "utf-8"),
+      )) {
+        writeFileSync(change.source, change.after);
+      }
+      // One real sample proves receipt classification; the stress-count matrix
+      // separately verifies every production attempt is collected.
+      const sample = {
+        ...entry,
+        probe: { command: entry.probe.command, attempts: 1 },
+      };
+      let captured = "";
+      const evidence = await runWaiverProbe(sample, {
+        run: async (command) => {
+          const result = Bun.spawnSync([...command], {
+            cwd: directory,
+            stdout: "pipe",
+            stderr: "pipe",
+            env: { ...process.env, FORCE_COLOR: "0" },
+            timeout: 30_000,
+          });
+          captured = result.stdout.toString() + result.stderr.toString();
+          return { passed: result.exitCode === 0, output: captured };
+        },
+      });
+      expect(captured).toContain("(skip)");
+      expect(evidence.status).toBe(fixture.status);
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
   }
 });
 

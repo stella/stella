@@ -2475,7 +2475,6 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: |
           bun test scripts/dated-waivers.test.ts scripts/dated-waiver-probes.test.ts scripts/dated-waiver-publish.test.ts scripts/dated-waiver-healing.test.ts scripts/dated-waiver-healing-workflow.test.ts
-          bun scripts/dated-waivers.ts --check
 
       - name: Documentation source policy rule
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
@@ -7885,6 +7884,37 @@ jobs:
         run: |
           cp "$GITHUB_WORKSPACE/.workflow-tooling/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
           echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
+
+      # Expiry is wall-clock state: path scopes and previously completed runs
+      # cannot certify it. This required job owns a fresh check on every tree.
+      - name: Checkout dated waiver guard inputs
+        id: checkout
+        if: ${{ !cancelled() && (github.event_name != 'pull_request' || github.event.pull_request.draft != true) }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          path: .dated-waiver-check
+          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
+
+      - name: Setup Bun for dated waiver guard
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        with:
+          save: false
+          bun-version-file: .dated-waiver-check/package.json
+
+      - name: Install dated waiver guard dependencies
+        id: install
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
+        working-directory: .dated-waiver-check
+        run: bun ci --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      - name: Check dated waiver expiry on the current tree
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        working-directory: .dated-waiver-check
+        run: bun scripts/dated-waivers.ts --check
 
       - name: Evaluate CI outcome
         id: outcome

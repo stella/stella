@@ -1,7 +1,9 @@
 # Dated waivers
 
 `scripts/dated-waivers.ts` derives the dated inventory from each owning registry.
-CI validates dates and rejects expired entries. Dates never advance automatically.
+CI validates dates and rejects expired entries for every merge candidate,
+including changes that do not select package checks. Dates never advance
+automatically.
 
 The daily `dated-waiver-healing.yml` workflow checks entries during the five days
 before expiry. Each kind declares its probe and stress count alongside its owner.
@@ -14,6 +16,7 @@ and workflow run link. Each entry has one stable proposal branch, refreshed from
 current main. Already removed entries produce no proposal. Commits are signed
 through the GitHub API; proposals use `scripts/merge-bar.ts` and respect
 `STELLA_MERGE_HOLD`.
+Any merge-bar refusal or execution failure fails the scheduled publication run.
 
 Failed probes create or refresh one task per entry in a separate repository whose
 privacy is checked before publication. Failure evidence stays local until it is
