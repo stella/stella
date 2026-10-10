@@ -405,6 +405,7 @@ test("push, dispatch and queue events always run without querying evidence", asy
 test("reused depth prevents every nonstructural CI job and expensive planner step", () => {
   const reused = contextWithPlanOutputs({
     context: {
+      status: { cancelled: false },
       values: {
         "github.event_name": "pull_request",
         "github.event.pull_request.draft": false,
@@ -970,6 +971,7 @@ test("enqueue events leave every PR suite to unchanged merge-group validation", 
   expect(requests).toHaveLength(0);
   const enqueued = contextWithPlanOutputs({
     context: {
+      status: { cancelled: false },
       values: {
         "github.event_name": "pull_request",
         "github.event.pull_request.draft": false,
