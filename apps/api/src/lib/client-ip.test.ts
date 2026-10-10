@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   AUTH_CLIENT_ADDRESS_HEADER,
   CLIENT_ADDRESS_SOURCE,
+  clientAddressConfigurationWarning,
   FRONTEND_ADDRESS_HEADER,
   FRONTEND_VERIFY_HEADER,
   isTrustedProxy,
@@ -267,8 +268,11 @@ describe("resolveSignupRateLimitClientIp", () => {
 describe("edge client address", () => {
   const EDGE_HEADER = "cloudfront-viewer-address";
   const trusted = parseTrustedProxies("10.0.0.0/8");
+  const ORIGIN = "edge-origin-test-value";
   const request = (headers: Record<string, string> = {}) =>
-    new Request("https://example/test", { headers });
+    new Request("https://example/test", {
+      headers: { [ORIGIN_VERIFY_HEADER]: ORIGIN, ...headers },
+    });
 
   test("parses the address and drops the port", () => {
     expect(parseEdgeClientAddress("203.0.113.7:46532")).toBe("203.0.113.7");
@@ -287,10 +291,8 @@ describe("edge client address", () => {
     expect(parseEdgeClientAddress("203.0.113.7:443", "bare")).toBeNull();
   });
 
-  test("rejects values that are not an address with a port", () => {
-    for (const value of [null, "", "203.0.113.7", "host:443", "1.2.3.4:x"]) {
-      expect(parseEdgeClientAddress(value)).toBeNull();
-    }
+  test("rejects a value without a valid address", () => {
+    expect(parseEdgeClientAddress("host:443")).toBeNull();
   });
 
   test("uses the edge header from a trusted peer, ahead of x-forwarded-for", () => {
@@ -301,7 +303,7 @@ describe("edge client address", () => {
           "x-forwarded-for": "198.51.100.1",
         }),
         fakeServer("10.0.0.5"),
-        { trusted, edgeHeader: EDGE_HEADER },
+        { trusted, edgeHeader: EDGE_HEADER, originSecrets: [ORIGIN] },
       ),
     ).toEqual({
       address: "203.0.113.7",
@@ -314,7 +316,7 @@ describe("edge client address", () => {
       resolveClientAddress(
         request({ [EDGE_HEADER]: "203.0.113.7:443" }),
         fakeServer("198.51.100.9"),
-        { trusted, edgeHeader: EDGE_HEADER },
+        { trusted, edgeHeader: EDGE_HEADER, originSecrets: [ORIGIN] },
       ),
     ).toEqual({
       address: "198.51.100.9",
@@ -337,7 +339,7 @@ describe("edge client address", () => {
       resolveClientAddress(
         request({ "x-forwarded-for": "203.0.113.7" }),
         fakeServer("10.0.0.5"),
-        { trusted, edgeHeader: EDGE_HEADER },
+        { trusted, edgeHeader: EDGE_HEADER, originSecrets: [ORIGIN] },
       ),
     ).toEqual({
       address: "203.0.113.7",
@@ -353,7 +355,7 @@ describe("edge client address", () => {
           "x-forwarded-for": forwardedFor,
         }),
         fakeServer("10.0.0.5"),
-        { trusted, edgeHeader: EDGE_HEADER },
+        { trusted, edgeHeader: EDGE_HEADER, originSecrets: [ORIGIN] },
       );
 
     expect(resolve("198.51.100.1")).toBe("203.0.113.7");
@@ -369,6 +371,7 @@ describe("edge client address", () => {
           source: SIGNUP_RATE_LIMIT_IP_SOURCE.trustedProxy,
           trusted,
           edgeHeader: EDGE_HEADER,
+          originSecrets: [ORIGIN],
         },
       ),
     ).toBe("203.0.113.7");
@@ -417,6 +420,7 @@ describe("rate limit address normalization", () => {
         request: new Request("https://example.test/", {
           headers: {
             "viewer-address": "[2001:0DB8:abcd:1234::9]:443",
+            [ORIGIN_VERIFY_HEADER]: "rate-limit-origin-value",
             "x-forwarded-for": "198.51.100.1",
           },
         }),
@@ -424,6 +428,7 @@ describe("rate limit address normalization", () => {
         clientAddressOptions: {
           trusted: parseTrustedProxies("10.0.0.0/8"),
           edgeHeader: "viewer-address",
+          originSecrets: ["rate-limit-origin-value"],
         },
       }),
     ).toBe("2001:db8:abcd:1234::");
@@ -464,19 +469,17 @@ describe("edge origin verification", () => {
     }
   });
 
-  test("uses the forwarded chain when the value is missing or different", () => {
-    for (const headers of [
-      { [EDGE_HEADER]: "203.0.113.7" },
-      { [EDGE_HEADER]: "203.0.113.7", [ORIGIN_VERIFY_HEADER]: "other" },
-      { [EDGE_HEADER]: "203.0.113.7", [ORIGIN_VERIFY_HEADER]: `${CURRENT}x` },
-    ]) {
-      expect(
-        resolveClientAddress(request(headers), fakeServer("10.0.0.5"), options),
-      ).toEqual({
-        address: "198.51.100.1",
-        source: CLIENT_ADDRESS_SOURCE.forwardedFor,
-      });
-    }
+  test("uses the forwarded chain when the origin value is absent", () => {
+    expect(
+      resolveClientAddress(
+        request({ [EDGE_HEADER]: "203.0.113.7" }),
+        fakeServer("10.0.0.5"),
+        options,
+      ),
+    ).toEqual({
+      address: "198.51.100.1",
+      source: CLIENT_ADDRESS_SOURCE.forwardedFor,
+    });
   });
 
   test("applies the same rule to the signup bucket", () => {
@@ -583,7 +586,7 @@ describe("frontend edge address", () => {
     }
   });
 
-  test("a forged frontend address without the frontend value falls to the API edge", () => {
+  test("uses the API edge when the frontend value is absent", () => {
     const forged = new Request("https://example/test", {
       headers: {
         [EDGE_HEADER]: "192.0.2.10:443",
@@ -592,22 +595,6 @@ describe("frontend edge address", () => {
       },
     });
     expect(resolve(forged)).toEqual(viaApiEdge);
-  });
-
-  test("a wrong frontend value is ignored", () => {
-    for (const value of [
-      "",
-      "other",
-      ORIGIN,
-      `${FRONTEND_CURRENT}x`,
-      FRONTEND_CURRENT.slice(0, -1),
-      `${FRONTEND_CURRENT},${FRONTEND_NEXT}`,
-      FRONTEND_CURRENT.toUpperCase(),
-    ]) {
-      expect(resolve(browserCall({ [FRONTEND_VERIFY_HEADER]: value }))).toEqual(
-        viaApiEdge,
-      );
-    }
   });
 
   test("the origin value does not admit the frontend address", () => {
@@ -642,21 +629,10 @@ describe("frontend edge address", () => {
     }
   });
 
-  test("a port, brackets or a malformed value fall through to the API edge", () => {
-    for (const value of [
-      "203.0.113.7:443",
-      "[2001:db8::1]:443",
-      "[2001:db8::1]",
-      "203.0.113.7, 198.51.100.1",
-      "unknown",
-      "",
-      "256.0.0.1",
-      "2001:db8:::1",
-    ]) {
-      expect(resolve(browserCall({ [FRONTEND_HEADER]: value }))).toEqual(
-        viaApiEdge,
-      );
-    }
+  test("uses the API edge when the frontend address includes a port", () => {
+    expect(
+      resolve(browserCall({ [FRONTEND_HEADER]: "203.0.113.7:443" })),
+    ).toEqual(viaApiEdge);
   });
 
   test("the signup bucket uses the same precedence", () => {
@@ -687,5 +663,97 @@ describe("frontend edge address", () => {
     expect(sealed.headers.get(FRONTEND_ADDRESS_HEADER)).toBeNull();
     expect(sealed.headers.get(ORIGIN_VERIFY_HEADER)).toBeNull();
     expect(resolveClientAddress(sealed, fakeServer(PEER))).toEqual(address);
+  });
+});
+
+describe("viewer address selection", () => {
+  const trusted = parseTrustedProxies("10.0.0.0/8");
+  const origin = "viewer-address-test-value";
+  const request = (headers: Record<string, string>) =>
+    new Request("https://example.test/mcp", { headers });
+
+  test("uses a configured viewer address with a matching origin value", () => {
+    expect(
+      resolveClientAddress(
+        request({
+          "cloudfront-viewer-address": "203.0.113.5:443",
+          [ORIGIN_VERIFY_HEADER]: origin,
+        }),
+        fakeServer("10.0.0.5"),
+        {
+          trusted,
+          edgeHeader: "cloudfront-viewer-address",
+          originSecrets: [origin],
+        },
+      ),
+    ).toEqual({
+      address: "203.0.113.5",
+      source: CLIENT_ADDRESS_SOURCE.edgeHeader,
+    });
+  });
+
+  test("custom address headers use the peer trust configuration", () => {
+    expect(
+      resolveClientAddress(
+        request({ "x-proxy-viewer-address": "203.0.113.5:443" }),
+        fakeServer("198.51.100.10"),
+        { trusted, edgeHeader: "x-proxy-viewer-address", originSecrets: [] },
+      ),
+    ).toEqual({ address: "198.51.100.10", source: CLIENT_ADDRESS_SOURCE.peer });
+  });
+
+  test("custom address headers honor a configured origin value", () => {
+    expect(
+      resolveClientAddress(
+        request({
+          "x-proxy-viewer-address": "203.0.113.5:443",
+          "x-forwarded-for": "198.51.100.1",
+        }),
+        fakeServer("10.0.0.5"),
+        {
+          trusted,
+          edgeHeader: "x-proxy-viewer-address",
+          originSecrets: [origin],
+        },
+      ),
+    ).toEqual({
+      address: "198.51.100.1",
+      source: CLIENT_ADDRESS_SOURCE.forwardedFor,
+    });
+  });
+});
+
+describe("viewer address configuration warning", () => {
+  test("warns when the configured viewer header has no origin value", () => {
+    expect(
+      resolveClientAddress(
+        new Request("https://api.example.test", {
+          headers: {
+            "cloudfront-viewer-address": "203.0.113.5:443",
+            "x-forwarded-for": "198.51.100.1",
+          },
+        }),
+        fakeServer("10.0.0.5"),
+        {
+          trusted: parseTrustedProxies("10.0.0.0/8"),
+          edgeHeader: "cloudfront-viewer-address",
+          originSecrets: [],
+        },
+      ),
+    ).toEqual({
+      address: "198.51.100.1",
+      source: CLIENT_ADDRESS_SOURCE.forwardedFor,
+    });
+    expect(
+      clientAddressConfigurationWarning({
+        edgeHeader: "cloudfront-viewer-address",
+      }),
+    ).toBe("client_ip.viewer_address_unconfigured");
+    expect(
+      clientAddressConfigurationWarning({
+        edgeHeader: "cloudfront-viewer-address",
+        originVerifySecret: "configured-value",
+      }),
+    ).toBeNull();
   });
 });

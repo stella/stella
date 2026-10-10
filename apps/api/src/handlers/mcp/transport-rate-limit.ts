@@ -1,7 +1,10 @@
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
+import { Temporal } from "@stll/time";
 
+import { env } from "@/api/env";
 import { resolveRateLimitClientAddress } from "@/api/lib/client-ip";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
+import { recordBudgetRejection } from "@/api/lib/rate-limit/budget-observability";
 import type {
   RateLimitGenerator,
   RateLimitOptions,
@@ -69,12 +72,7 @@ const addressKey = (
   return clientIp ? `${scope}:ip:${clientIp}` : scope;
 };
 
-/**
- * The credential bucket alone does not bound a caller who invents a new
- * bearer value per request: every value opens a fresh bucket, and every
- * request still costs a token verification. The address bucket sits in front
- * of it so that rotation is charged to the one thing the caller cannot rotate.
- */
+/** Invalid credentials share an address budget; authenticated traffic does not. */
 export const mcpTransportAddressRateLimitKey: RateLimitGenerator = (
   request,
   server,
@@ -107,12 +105,17 @@ export const MCP_TRANSPORT_RATE_LIMIT_POLICY = {
   errorResponse: MCP_RATE_LIMIT_JSON_RPC_ERROR,
   max: API_RATE_LIMITS.mcpTransport.max,
   skip: (request: Request) => !isMcpTransportRateLimitedRequest(request),
+  budget: (key: string) =>
+    key.startsWith(`${MCP_TRANSPORT_RATE_LIMIT_SCOPE}:token:`)
+      ? { name: "mcp.transport.bearer", keyKind: "bearer" }
+      : { name: "mcp.transport.address", keyKind: "address" },
 } as const satisfies Omit<RateLimitOptions, "context" | "generator">;
 
 export const MCP_TRANSPORT_ADDRESS_RATE_LIMIT_POLICY = {
   ...MCP_TRANSPORT_RATE_LIMIT_POLICY,
   duration: API_RATE_LIMITS.mcpTransportAddress.duration,
   max: API_RATE_LIMITS.mcpTransportAddress.max,
+  budget: { name: "mcp.authentication.address", keyKind: "address" },
 } as const satisfies Omit<RateLimitOptions, "context" | "generator">;
 
 export const createMcpTransportRateLimitOptions = () =>
@@ -125,7 +128,7 @@ export const createMcpTransportRateLimitOptions = () =>
     }),
   }) as const satisfies RateLimitOptions;
 
-export const createMcpTransportAddressRateLimitOptions = () =>
+const createMcpTransportAddressRateLimitOptions = () =>
   ({
     ...MCP_TRANSPORT_ADDRESS_RATE_LIMIT_POLICY,
     ...createRedisRateLimit({
@@ -134,3 +137,84 @@ export const createMcpTransportAddressRateLimitOptions = () =>
       scope: MCP_TRANSPORT_ADDRESS_RATE_LIMIT_SCOPE,
     }),
   }) as const satisfies RateLimitOptions;
+
+type McpAuthenticationRunOptions = {
+  request: Request;
+  clientIp?: string | null | undefined;
+  run: () => Promise<Response>;
+};
+
+export const createMcpAuthenticationFailureLimiter = (
+  options: RateLimitOptions = createMcpTransportAddressRateLimitOptions(),
+  recordRejection: typeof recordBudgetRejection = recordBudgetRejection,
+) => {
+  options.context.init({ duration: options.duration });
+  const skip = async (request: Request) =>
+    env.E2E_DISABLE_AUTH_RATE_LIMIT || (await options.skip?.(request));
+  const getKey = async ({
+    request,
+    clientIp,
+  }: Pick<McpAuthenticationRunOptions, "request" | "clientIp">) =>
+    await options.generator(
+      request,
+      clientIp ? { requestIP: () => ({ address: clientIp }) } : null,
+    );
+  const reject = (nextReset: Date) => {
+    recordRejection({
+      name: "mcp.authentication.address",
+      keyKind: "address",
+      windowMs: options.duration,
+    });
+    const resetSeconds = Math.max(
+      1,
+      Math.ceil(
+        (nextReset.getTime() - Temporal.Now.instant().epochMilliseconds) / 1000,
+      ),
+    );
+    const headers = new Headers();
+    headers.set("content-type", "application/json");
+    headers.set("Retry-After", String(resetSeconds));
+    headers.set("RateLimit-Limit", String(options.max));
+    headers.set("RateLimit-Remaining", "0");
+    headers.set("RateLimit-Reset", String(resetSeconds));
+    return Response.json(MCP_RATE_LIMIT_JSON_RPC_ERROR, {
+      status: 429,
+      headers,
+    });
+  };
+  return async ({
+    request,
+    clientIp,
+    run,
+  }: McpAuthenticationRunOptions): Promise<Response> => {
+    if (await skip(request)) {
+      return await run();
+    }
+    const key = await getKey({ request, clientIp });
+    try {
+      // Reserve before verification: concurrent unverified requests must share
+      // the same address ceiling even while their credential checks are pending.
+      const counter = await options.context.increment(key, options.duration);
+      if (counter.count > options.max) {
+        await options.context.decrement(key, counter.start);
+        return reject(counter.nextReset);
+      }
+      let settlement: "refund" | "retain" = "refund";
+      try {
+        const response = await run();
+        if (response.status === 401) {
+          settlement = "retain";
+        }
+        return response;
+      } finally {
+        // Only an authentication failure retains quota; accepted requests and
+        // verification exceptions both release their pending reservation.
+        if (settlement === "refund") {
+          await options.context.decrement(key, counter.start);
+        }
+      }
+    } finally {
+      await options.context.complete(key);
+    }
+  };
+};

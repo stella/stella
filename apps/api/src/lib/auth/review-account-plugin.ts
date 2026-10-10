@@ -29,6 +29,7 @@ import {
   isReviewAccountTokenRedemptionPath,
 } from "@/api/lib/auth/review-account-token-subjects";
 import type { SafeId } from "@/api/lib/branded-types";
+import { ACCOUNT_ATTEMPT_RATE_LIMITS } from "@/api/lib/rate-limit/budget-config";
 import type { createAccountAttemptBudget } from "@/api/lib/rate-limit/otp-account-budget";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { isRecord } from "@/api/lib/type-guards";
@@ -38,10 +39,8 @@ const GET_SESSION_PATH = "/get-session";
 const API_KEY_CREATE_PATH = "/api-key/create";
 const BUDGET_CONTEXT_KEY = "reviewAccountSignInBudgetKey";
 /** Failed password sign-ins one account may make in one window. */
-export const REVIEW_ACCOUNT_SIGN_IN_BUDGET = {
-  max: 10,
-  durationMs: 60 * 60 * 1000,
-} as const;
+export const REVIEW_ACCOUNT_SIGN_IN_BUDGET =
+  ACCOUNT_ATTEMPT_RATE_LIMITS.password;
 
 type SignInBudget = ReturnType<typeof createAccountAttemptBudget>;
 

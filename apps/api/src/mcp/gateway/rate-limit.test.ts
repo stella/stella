@@ -1,6 +1,9 @@
+import "@/api/env";
 import { describe, expect, mock, test } from "bun:test";
 
 import { LIMITS } from "@/api/lib/limits";
+import { MCP_RATE_LIMITS } from "@/api/lib/rate-limit/budget-config";
+import type { recordBudgetRejection } from "@/api/lib/rate-limit/budget-observability";
 import { createMcpGatewayRateLimiter } from "@/api/mcp/gateway/rate-limit";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -95,3 +98,47 @@ describe("MCP gateway rate limiter", () => {
     ).toBe(true);
   });
 });
+
+test.each(["redis", "fallback"] as const)(
+  "gateway %s refusals emit one owning budget observation",
+  async (backend) => {
+    const observations: Parameters<typeof recordBudgetRejection>[0][] = [];
+    let count = 0;
+    const limiter = createMcpGatewayRateLimiter({
+      createRedis: () => ({
+        send: async () => {
+          if (backend === "fallback") {
+            throw new TypeError("counter unavailable");
+          }
+          count += 1;
+          return count;
+        },
+      }),
+      now: () => 1000,
+      onRedisError: () => undefined,
+      recordRejection: (observation) => observations.push(observation),
+    });
+    for (let index = 0; index < MCP_RATE_LIMITS.gateway.max; index += 1) {
+      expect(
+        await limiter.consume({
+          connectorSlug: "fixture",
+          userId: "gateway-user",
+        }),
+      ).toBe(true);
+    }
+    expect(observations).toEqual([]);
+    expect(
+      await limiter.consume({
+        connectorSlug: "fixture",
+        userId: "gateway-user",
+      }),
+    ).toBe(false);
+    expect(observations).toEqual([
+      {
+        name: "mcp.gateway.user_client",
+        keyKind: "client",
+        windowMs: MCP_RATE_LIMITS.gateway.windowMs,
+      },
+    ]);
+  },
+);

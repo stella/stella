@@ -68,6 +68,7 @@ export const createPublicSanctionsRateLimitOptions = () =>
   ({
     duration: API_RATE_LIMITS.publicSanctionsSearch.duration,
     max: API_RATE_LIMITS.publicSanctionsSearch.max,
+    budget: { name: "api.public_sanctions.address", keyKind: "address" },
     ...createRedisRateLimit({
       failurePolicy: "fail_closed",
       scope: PUBLIC_SANCTIONS_RATE_LIMIT_SCOPE,

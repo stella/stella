@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
 import { createFeedbackIntakeGuards } from "@/api/handlers/feedback/intake-guards";
+import { consumeSkillSourceRateLimit } from "@/api/handlers/skills/source-rate-limit";
 import { toSafeId } from "@/api/lib/branded-types";
+import { API_RATE_LIMITS } from "@/api/lib/limits";
+import type { recordBudgetRejection } from "@/api/lib/rate-limit/budget-observability";
 import {
   consumeInvokeCapabilityRateLimit,
   DEFAULT_INVOKE_RATE_LIMIT,
@@ -104,15 +107,15 @@ describe("consumeInvokeCapabilityRateLimit", () => {
     ).toBe(true);
   });
 
-  test("skill source capabilities share one per-IP budget across organizations", async () => {
+  test("skill source capabilities share one per-user budget across organizations", async () => {
     const max = resolveInvokeRateLimit("skills.discover").max;
     const counts = new Map<string, number>();
     const consumeSkillSource = async ({
-      clientIp,
+      userId,
     }: {
-      clientIp: string | null;
+      userId: ReturnType<typeof user>;
     }) => {
-      const key = clientIp ?? "unknown";
+      const key = userId;
       const count = (counts.get(key) ?? 0) + 1;
       counts.set(key, count);
       return { ok: count <= max, retryAfterSeconds: 60 };
@@ -149,7 +152,18 @@ describe("consumeInvokeCapabilityRateLimit", () => {
         })
       ).ok,
     ).toBe(false);
-    expect(counts.get("192.0.2.1")).toBe(max + 1);
+    expect(counts.get("user_a")).toBe(max + 1);
+    expect(
+      (
+        await consumeInvokeCapabilityRateLimit({
+          capabilityId: "skills.discover",
+          clientIp: "192.0.2.1",
+          consumeSkillSource,
+          organizationId: org("org_a"),
+          userId: user("user_b"),
+        })
+      ).ok,
+    ).toBe(true);
   });
 
   test("distinct callers in one organization share no budget", async () => {
@@ -201,4 +215,70 @@ describe("consumeInvokeCapabilityRateLimit", () => {
       ).ok,
     ).toBe(true);
   });
+});
+
+test.each([
+  ["time-entries.create", "mcp.capability.user"],
+  ["document-translations.runs.create", "mcp.translate.user"],
+  ["entities.bilingual.create", "mcp.translate.user"],
+  ["entities.upload", "mcp.upload.user"],
+  ["entities.versions.upload", "mcp.upload.user"],
+] as const)(
+  "%s refusals emit one owning budget observation",
+  async (capabilityId, name) => {
+    const observations: Parameters<typeof recordBudgetRejection>[0][] = [];
+    let allowed = true;
+    const input = {
+      capabilityId,
+      clientIp: "192.0.2.10",
+      organizationId: org("telemetry-org"),
+      userId: user("telemetry-user"),
+      guards: { consumeCounter: async () => allowed },
+      recordRejection: (
+        observation: Parameters<typeof recordBudgetRejection>[0],
+      ) => observations.push(observation),
+    };
+    expect((await consumeInvokeCapabilityRateLimit(input)).ok).toBe(true);
+    expect(observations).toEqual([]);
+    allowed = false;
+    expect((await consumeInvokeCapabilityRateLimit(input)).ok).toBe(false);
+    expect(observations).toEqual([
+      {
+        name,
+        keyKind: "user",
+        windowMs: resolveInvokeRateLimit(capabilityId).windowMs,
+      },
+    ]);
+  },
+);
+
+test("source capability refusals retain the source owner observation without a duplicate", async () => {
+  const observations: Parameters<typeof recordBudgetRejection>[0][] = [];
+  const result = await consumeInvokeCapabilityRateLimit({
+    capabilityId: "skills.discover",
+    organizationId: org("source-org"),
+    userId: user("source-user"),
+    recordRejection: (observation) => observations.push(observation),
+    consumeSkillSource: async (input) =>
+      await consumeSkillSourceRateLimit({
+        ...input,
+        context: {
+          increment: async () => ({
+            count: API_RATE_LIMITS.skillSource.max + 1,
+            start: 0,
+            nextReset: new Date(API_RATE_LIMITS.skillSource.duration),
+          }),
+          complete: async () => undefined,
+        },
+        recordRejection: (observation) => observations.push(observation),
+      }),
+  });
+  expect(result.ok).toBe(false);
+  expect(observations).toEqual([
+    {
+      name: "skills.source.user",
+      keyKind: "user",
+      windowMs: API_RATE_LIMITS.skillSource.duration,
+    },
+  ]);
 });

@@ -11,6 +11,7 @@ import {
   createAuthMiddleware,
   getAuthoritativeSessionFromCtx,
   getOAuthState,
+  isAPIError,
 } from "better-auth/api";
 import {
   emailOTP,
@@ -119,6 +120,7 @@ import {
   REGISTRATION_RETENTION_SCHEMA_PLUGIN,
   withAuthRetention,
 } from "@/api/lib/auth/registration-adapter";
+import { createAuthRequestBudgetHook } from "@/api/lib/auth/request-budget-hooks";
 import {
   checkConfiguredReviewAccountAccess,
   getReviewAccountConfig,
@@ -211,6 +213,14 @@ import {
   readAuthorizedMemberRole,
   sessionMemberRole,
 } from "@/api/lib/permission-authorization";
+import {
+  AUTH_FRAMEWORK_BUDGET_RULES,
+  observeFrameworkAuthStorage,
+} from "@/api/lib/rate-limit/auth-framework-budget";
+import {
+  AUTH_REQUEST_IP_RULE_OVERRIDES,
+  type AuthRequestBudgetFrameworkApi,
+} from "@/api/lib/rate-limit/auth-request-budget";
 import { createAuthRateLimitStorage } from "@/api/lib/rate-limit/auth-storage";
 import {
   createAccountAttemptBudget,
@@ -1022,7 +1032,42 @@ const authRefusalLogPlugin = {
 // database adapter, which accesses `rootDb`. Deferring to
 // first use prevents the TDZ error when the test runner
 // evaluates this module before db/index.ts finishes.
-export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
+type CreateAuthOptions = {
+  rateLimitStorage?: ReturnType<typeof createAuthRateLimitStorage>;
+  rateLimitEnabled?: boolean;
+};
+
+export const createAuth = (
+  roleAssignmentPolicy = assignableRoles,
+  factoryOptions: CreateAuthOptions = {},
+) => {
+  const authRateLimitStorage =
+    factoryOptions.rateLimitStorage ?? createAuthRateLimitStorage();
+  const rateLimitEnabled =
+    factoryOptions.rateLimitEnabled ?? !env.E2E_DISABLE_AUTH_RATE_LIMIT;
+  const requestBudgetFrameworkApi = {
+    readUserId: async (ctx) =>
+      (await getAuthoritativeSessionFromCtx(ctx))?.user.id,
+    createQuotaError: (retryAfter) =>
+      new APIError(
+        "TOO_MANY_REQUESTS",
+        { message: "Try again later.", code: "TOO_MANY_REQUESTS" },
+        { "Retry-After": String(retryAfter) },
+      ),
+    isAcceptedTokenResponse: (returned) =>
+      !isAPIError(returned) &&
+      isRecord(returned) &&
+      typeof returned["access_token"] === "string" &&
+      returned["access_token"].length > 0 &&
+      (returned["token_type"] === "Bearer" ||
+        returned["token_type"] === "DPoP"),
+  } satisfies AuthRequestBudgetFrameworkApi;
+  const signInRequestBudget = createAuthRequestBudgetHook({
+    type: "authentication",
+    storage: authRateLimitStorage,
+    enabled: rateLimitEnabled,
+    frameworkApi: requestBudgetFrameworkApi,
+  });
   const sessionLifetime = createSessionLifetime({
     store: createDatabaseSessionLifetimeStore(rootDb, {
       expiresIn: SESSION_LIFETIME_SECONDS,
@@ -1692,29 +1737,13 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
       useSecureCookies,
     },
     rateLimit: {
-      enabled: !env.E2E_DISABLE_AUTH_RATE_LIMIT,
+      enabled: rateLimitEnabled,
       window: AUTH_RATE_LIMITS.global.window,
       max: AUTH_RATE_LIMITS.global.max,
-      customStorage: createAuthRateLimitStorage(),
+      customStorage: observeFrameworkAuthStorage(authRateLimitStorage),
       customRules: {
-        "/sign-in/email-otp": AUTH_RATE_LIMITS.signIn,
-        "/sign-in/email": AUTH_RATE_LIMITS.signIn,
-        "/sign-up/email": AUTH_RATE_LIMITS.signUp,
-        "/email-otp/send-verification-otp": AUTH_RATE_LIMITS.sendOtp,
-        "/email-otp/verify-email": AUTH_RATE_LIMITS.verifyOtp,
-        "/forget-password": AUTH_RATE_LIMITS.forgetPassword,
-        "/reset-password": AUTH_RATE_LIMITS.resetPassword,
-        // The two-factor plugin's own built-in rate limit is a single
-        // shared bucket across every `/two-factor/*` path (10s window,
-        // max 3 — see node_modules/better-auth/dist/plugins/two-factor/index.mjs).
-        // Sustained over a minute that is weaker than this app's other
-        // brute-force-sensitive endpoints, so verify-totp/verify-backup-code
-        // (guessable 6-digit / short codes) and enable/disable (session-gated
-        // but still sensitive) get the same posture as sign-in/verifyOtp.
-        "/two-factor/verify-totp": AUTH_RATE_LIMITS.verifyOtp,
-        "/two-factor/verify-backup-code": AUTH_RATE_LIMITS.verifyOtp,
-        "/two-factor/enable": AUTH_RATE_LIMITS.signIn,
-        "/two-factor/disable": AUTH_RATE_LIMITS.signIn,
+        ...AUTH_REQUEST_IP_RULE_OVERRIDES,
+        ...AUTH_FRAMEWORK_BUDGET_RULES,
       },
     },
     verification: AUTH_VERIFICATION_STORAGE_OPTIONS,
@@ -1815,7 +1844,7 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
       createSessionBearer(),
       createDemoSessionFilter(demoConfig),
       createOtpAccountLimitPlugin({
-        enabled: !env.E2E_DISABLE_AUTH_RATE_LIMIT,
+        enabled: rateLimitEnabled,
         context: new RedisRateLimitContext({
           failurePolicy: "fail_open_local",
         }),
@@ -1824,12 +1853,13 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
       createReviewAccountPlugin({
         config: reviewConfig,
         localPasswordEnabled: isSelfhostLocalPasswordAuthEnabled(),
-        signInBudget: env.E2E_DISABLE_AUTH_RATE_LIMIT
+        signInBudget: !rateLimitEnabled
           ? undefined
           : createAccountAttemptBudget(
               new RedisRateLimitContext({ failurePolicy: "fail_open_local" }),
               {
                 counterPrefix: "password-account",
+                nameFor: () => "auth.password.account",
                 budgetFor: () => REVIEW_ACCOUNT_SIGN_IN_BUDGET,
               },
             ),
@@ -1943,7 +1973,11 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
           clientRegistrationAllowedResources: oauthResourceIdentifiers,
           allowDynamicClientRegistration: true,
           allowUnauthenticatedClientRegistration: true,
-          rateLimit: { register: AUTH_RATE_LIMITS.oauthClientRegistration },
+          rateLimit: {
+            token: AUTH_RATE_LIMITS.oauthToken,
+            authorize: AUTH_RATE_LIMITS.oauthAuthorization,
+            register: AUTH_RATE_LIMITS.oauthClientRegistration,
+          },
           // Hosted MCP clients identify themselves by an https URL `client_id`
           // and skip per-user registration entirely. The transport resolves the
           // host once, refuses any non-public-routable answer, pins that address
@@ -2065,6 +2099,11 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
           },
         },
         {
+          requestBudget: {
+            storage: authRateLimitStorage,
+            enabled: rateLimitEnabled,
+            frameworkApi: requestBudgetFrameworkApi,
+          },
           verifiedOrigins: getVerifiedOAuthOrigins([
             env.FRONTEND_URL,
             getAuthIssuerUrl(),
@@ -2078,6 +2117,7 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
     ],
     hooks: {
       before: createAuthMiddleware(async (ctx) => {
+        await signInRequestBudget(ctx);
         sessionLifetime.prepare(ctx.context);
         if (!ctx.path) {
           return undefined;
@@ -2267,6 +2307,15 @@ export const getAuth = () => {
   }
   _auth = createAuth();
   return _auth;
+};
+
+/** Read the rate-limit subject at the session validation boundary. */
+export const resolveRateLimitSessionUserId = async (headers: Headers) => {
+  const session = await getAuth().api.getSession({
+    headers,
+    query: { disableCookieCache: true, disableRefresh: true },
+  });
+  return session ? toSafeId<"user">(session.user.id) : null;
 };
 
 export type { MemberRole } from "@/api/lib/member-roles";

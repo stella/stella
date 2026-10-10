@@ -24,6 +24,7 @@ export const styleSetsRoute = new Elysia({ prefix: "/style-sets" })
     rateLimit({
       duration: API_RATE_LIMITS.upload.duration,
       max: API_RATE_LIMITS.upload.max,
+      budget: { name: "api.upload.address", keyKind: "address" },
       ...createRedisRateLimit({
         failurePolicy: "fail_open_local",
         scope: "style-set-upload",

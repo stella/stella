@@ -18,6 +18,7 @@ export const documentTranslationsRoute = new Elysia({
     rateLimit({
       duration: API_RATE_LIMITS.translate.duration,
       max: API_RATE_LIMITS.translate.max,
+      budget: { name: "api.translate.address", keyKind: "address" },
       ...createRedisRateLimit({
         failurePolicy: "fail_open_local",
         scope: "translate",

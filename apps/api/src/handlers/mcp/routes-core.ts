@@ -6,6 +6,7 @@ import {
   readDocumentsMetadata,
   readLawMetadata,
 } from "@/api/handlers/mcp/read-discovery-metadata";
+import type { createMcpAuthenticationFailureLimiter } from "@/api/handlers/mcp/transport-rate-limit";
 import { resolveRateLimitClientAddress } from "@/api/lib/client-ip";
 import {
   MCP_ANONYMIZED_DISCOVERY_PATH,
@@ -27,7 +28,7 @@ import {
 
 type HandleMcpHttpRequest = (
   request: Request,
-  options?: { clientIp?: string | null; mode?: McpMode },
+  options?: { clientIp?: string | null | undefined; mode?: McpMode },
 ) => Promise<Response>;
 
 type RouteSet = {
@@ -116,15 +117,19 @@ const discoveryOptionsHandler = ({ set }: { set: RouteSet }) => {
 
 export const createMcpRoute = ({
   handleMcpHttpRequest,
+  limitAuthenticationFailure,
 }: {
   handleMcpHttpRequest: HandleMcpHttpRequest;
+  limitAuthenticationFailure?: ReturnType<
+    typeof createMcpAuthenticationFailureLimiter
+  >;
 }) => {
   const handleMcpTransportRoute = async ({
     options,
     request,
     set,
   }: {
-    options?: { clientIp?: string | null; mode?: McpMode };
+    options?: { clientIp?: string | null | undefined; mode?: McpMode };
     request: Request;
     set: RouteSet;
   }) => {
@@ -137,7 +142,14 @@ export const createMcpRoute = ({
       });
     }
 
-    return await handleMcpHttpRequest(request, options);
+    if (!limitAuthenticationFailure) {
+      return await handleMcpHttpRequest(request, options);
+    }
+    return await limitAuthenticationFailure({
+      request,
+      clientIp: options?.clientIp,
+      run: async () => await handleMcpHttpRequest(request, options),
+    });
   };
 
   return new Elysia()
