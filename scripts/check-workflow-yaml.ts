@@ -76,7 +76,7 @@ export const validateCompositeAction = (value: unknown, file: string): void => {
     }
     if (
       "run" in step &&
-      (typeof step["shell"] !== "string" || !step["shell"])
+      (typeof step["shell"] !== "string" || step["shell"].trim() === "")
     ) {
       throw new WorkflowYamlError({
         message: `${file}: runs.steps[${index}] has run but no shell`,

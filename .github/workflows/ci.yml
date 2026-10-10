@@ -3205,7 +3205,13 @@ jobs:
             --output "$archive"
           echo "$ACTIONLINT_SHA256  $archive" | sha256sum --check
           tar --extract --gzip --file "$archive" --directory "$RUNNER_TEMP" actionlint
-          "$RUNNER_TEMP/actionlint" -format '{{json .}}' > "$RUNNER_TEMP/actionlint.json" || true
+          # Exit 1 means diagnostics, compared below; any other failure is fatal.
+          status=0
+          "$RUNNER_TEMP/actionlint" -format '{{json .}}' > "$RUNNER_TEMP/actionlint.json" || status=$?
+          if [[ "$status" -ne 0 && "$status" -ne 1 ]]; then
+            echo "::error::actionlint exited with status $status"
+            exit "$status"
+          fi
           jq 'group_by([.filepath, .kind, .message]) | map({count: length, filepath: .[0].filepath, kind: .[0].kind, message: .[0].message})' \
             "$RUNNER_TEMP/actionlint.json" > "$RUNNER_TEMP/actionlint-actual.json"
           diff --unified .github/actionlint-baseline.json "$RUNNER_TEMP/actionlint-actual.json"

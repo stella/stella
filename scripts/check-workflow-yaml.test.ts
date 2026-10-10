@@ -33,6 +33,17 @@ describe("workflow YAML validation", () => {
     );
   });
 
+  test("a composite run step with a whitespace-only shell is rejected", () => {
+    const action = {
+      name: "setup",
+      description: "Fixture composite action",
+      runs: { using: "composite", steps: [{ run: "echo ok", shell: " " }] },
+    };
+    expect(() => validateCompositeAction(action, "action.yml")).toThrow(
+      "action.yml: runs.steps[0] has run but no shell",
+    );
+  });
+
   test("workflows with the .yaml extension are parsed", async () => {
     const root = path.join(FIXTURES, "yaml-workflow-root");
     const file = path.join(root, ".github/workflows/broken.yaml");
