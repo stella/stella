@@ -90,20 +90,19 @@ const fixture = (
     leftJoin: () => chain,
     where: () => chain,
     orderBy: () => chain,
-    limit: async () =>
-      Promise.resolve([
-        {
-          id: toSafeId<"auditLog">("00000000-0000-4000-8000-000000000006"),
-          action: AUDIT_ACTION.UPDATE,
-          resourceType: AUDIT_RESOURCE_TYPE.LEGAL_LIST_ITEM,
-          performerName: "Reviewer",
-          userName: "Reviewer",
-          changes,
-          metadata: operation === null ? null : { operation },
-          createdAt,
-          createdAtCursor: createdAt.toISOString(),
-        },
-      ]),
+    limit: async () => [
+      {
+        id: toSafeId<"auditLog">("00000000-0000-4000-8000-000000000006"),
+        action: AUDIT_ACTION.UPDATE,
+        resourceType: AUDIT_RESOURCE_TYPE.LEGAL_LIST_ITEM,
+        performerName: "Reviewer",
+        userName: "Reviewer",
+        changes,
+        metadata: operation === null ? null : { operation },
+        createdAt,
+        createdAtCursor: createdAt.toISOString(),
+      },
+    ],
   };
   const db = createScopedDbMock({
     query: {
