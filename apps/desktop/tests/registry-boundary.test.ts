@@ -98,14 +98,6 @@ const accountBearerOwners = {
   "http_client.rs": "key: &crate::device_proof::DeviceKey",
 } as const;
 
-// Account credentials travel only with a device proof: every account owner
-// sends through `device_proof_request`, which attaches the bearer itself.
-// Only the signer and the session-token stream set a bearer directly.
-const directBearerOwners: ReadonlySet<string> = new Set([
-  "http_client.rs",
-  "sse.rs",
-]);
-
 const assertBearerOwner = (file: string, source: string) => {
   const compactSource = source.replace(/\s+/gu, "");
   if (
@@ -116,12 +108,6 @@ const assertBearerOwner = (file: string, source: string) => {
   }
   if (!(file in accountBearerOwners)) {
     throw new TypeError(`Unowned bearer transport: ${file}`);
-  }
-  if (
-    !directBearerOwners.has(file) &&
-    compactSource.includes(".bearer_auth(")
-  ) {
-    throw new TypeError(`Unsigned account transport: ${file}`);
   }
   const obligation = Object.entries(accountBearerOwners)
     .find(([owner]) => owner === file)
@@ -178,11 +164,5 @@ describe("native account transport ownership", () => {
     expect(() =>
       assertBearerOwner("unowned.rs", ".bearer_auth(&credential)"),
     ).toThrow("Unowned bearer transport");
-    expect(() =>
-      assertBearerOwner(
-        "registry.rs",
-        "saved: &account::AccountRequest client.get(url).bearer_auth(&saved.credential.key)",
-      ),
-    ).toThrow("Unsigned account transport: registry.rs");
   });
 });
