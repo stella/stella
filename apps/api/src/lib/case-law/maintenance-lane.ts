@@ -184,16 +184,10 @@ export const holdCaseLawMaintenanceLane = async ({
       "maintenanceLane.waitMs": now() - startedAt,
     });
   }, MAINTENANCE_LANE_WAIT_LOG_MS);
-  const opened = await Result.tryPromise(
-    async () => providedSql ?? (await openConnection()),
-  );
-  if (opened.isErr()) {
-    clearTimeout(warnTimer);
-    throw opened.error;
-  }
-  const lock = opened.value;
+  let lock: MaintenanceLaneSql | undefined;
   let acquisition: "waiting" | "held" = "waiting";
   try {
+    lock = providedSql ?? (await openConnection());
     await lock.unsafe("SELECT pg_advisory_lock(hashtext($1), hashtext($2))", [
       CASE_LAW_MAINTENANCE_LANE.domain,
       CASE_LAW_MAINTENANCE_LANE.lane,
@@ -201,10 +195,11 @@ export const holdCaseLawMaintenanceLane = async ({
     acquisition = "held";
   } finally {
     clearTimeout(warnTimer);
-    if (acquisition === "waiting") {
+    if (lock && acquisition === "waiting") {
       await lock.end();
     }
   }
+  const heldLock = lock;
   const waitedMs = now() - startedAt;
   if (waitedMs >= MAINTENANCE_LANE_WAIT_LOG_MS) {
     logger.info("case_law.maintenance_lane.acquired", {
@@ -215,7 +210,7 @@ export const holdCaseLawMaintenanceLane = async ({
     waitedMs,
     release: async () => {
       try {
-        const rows = await lock.unsafe(
+        const rows = await heldLock.unsafe(
           "SELECT pg_advisory_unlock(hashtext($1), hashtext($2)) AS released",
           [CASE_LAW_MAINTENANCE_LANE.domain, CASE_LAW_MAINTENANCE_LANE.lane],
         );
@@ -224,7 +219,7 @@ export const holdCaseLawMaintenanceLane = async ({
           panic("Maintenance lane was not held by this session at release");
         }
       } finally {
-        await lock.end();
+        await heldLock.end();
       }
     },
   };
