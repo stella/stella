@@ -8931,9 +8931,10 @@ describe("OpenAI-compatible MCP tools", () => {
           ),
         }),
         grantedScopes: ["stella:read", "stella:matters_write"],
-        request: new Request("https://example.test/mcp"),
+        request: new Request("https://example.test/mcp/advanced"),
       },
       toolName: "read_document",
+      mode: "advanced",
     });
 
     expect(parseToolPayload(result)).toMatchObject({
