@@ -91,7 +91,6 @@ test("package and probe execution precede conditional write credential minting",
   });
   expect(token.with?.["repositories"]).toContain("DATED_WAIVER_FIX_REPOSITORY");
   expect(publish.env?.["GH_READ_TOKEN"]).toBe(`\${{ github.token }}`);
-  expect(publish.env?.["STELLA_MERGE_HOLD_CHECKED_BY_WORKFLOW"]).toBe("1");
   expect(publish.env?.["MERGE_HOLD"]).toBe(`\${{ vars.STELLA_MERGE_HOLD }}`);
 });
 

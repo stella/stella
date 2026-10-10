@@ -20,8 +20,8 @@ import {
 import type { FixEvidence } from "./dated-waiver-fix-task";
 import {
   applyHealing,
-  armRemovalThroughBar,
-  disarmRemovalThroughBar,
+  armRemoval,
+  disarmRemoval,
   collectProbeReport,
   readReport,
   renderHealingFailureSignal,
@@ -42,6 +42,7 @@ import {
   runWaiverProbe,
 } from "./dated-waiver-probes";
 import {
+  type PublishedRemoval,
   listRemovalProposals,
   orphanRemovalProposals,
   retireRemoval,
@@ -72,6 +73,10 @@ const evidence = {
   observedAt: "2026-10-12T00:00:00.000Z",
   run: "run-link",
 };
+const removal = {
+  number: 42,
+  headSha: "0123456789abcdef0123456789abcdef01234567",
+} satisfies PublishedRemoval;
 const green = {
   status: "green",
   evidence,
@@ -90,9 +95,11 @@ const scenario = (records: HealingEntry[]) => {
     },
     openRemoval: async () => {
       effects.push("remove");
-      return removalNumber;
+      return removalNumber === undefined
+        ? undefined
+        : { ...removal, number: removalNumber };
     },
-    armRemoval: async (number: number) => {
+    armRemoval: async ({ number }: PublishedRemoval) => {
       effects.push(`arm:${number}`);
     },
     openFixTask: async () => {
@@ -130,18 +137,35 @@ const scenario = (records: HealingEntry[]) => {
   };
 };
 
-test("merge bar refusals fail publication instead of reporting a pending arm", async () => {
-  const calls: number[] = [];
-  const armed = await armRemovalThroughBar(42, async (number) => {
-    calls.push(number);
+test("enqueue refusals fail publication instead of reporting a pending arm", async () => {
+  const calls: string[][] = [];
+  const armed = await armRemoval(removal, async (command) => {
+    calls.push(command);
     return 0;
   });
   expect(armed).toEqual({ signal: "dated-waiver-armed", pr: 42 });
-  expect(calls).toEqual([42]);
+  expect(calls).toEqual([
+    [
+      "gh",
+      "pr",
+      "merge",
+      "42",
+      "--repo",
+      "stella/stella",
+      "--auto",
+      "--match-head-commit",
+      removal.headSha,
+    ],
+  ]);
+  expect(
+    await rejectionOf(
+      armRemoval({ ...removal, headSha: "bad" }, async () => 0),
+    ),
+  ).toHaveProperty("message", "Removal head is not a full commit SHA.");
   for (const exit of [1, 2, 137]) {
     const run = scenario([{ entry, outcome: green }]);
-    run.actions.armRemoval = async (number) => {
-      await armRemovalThroughBar(number, async () => exit);
+    run.actions.armRemoval = async (published) => {
+      await armRemoval(published, async () => exit);
     };
     expect(await rejectionOf(run.run("2026-10-10T00:00:00Z"))).toMatchObject({
       message: "Dated waiver operations failed; diagnostic output withheld.",
@@ -151,7 +175,7 @@ test("merge bar refusals fail publication instead of reporting a pending arm", a
   }
 });
 
-test("recorded failures publish before an earlier removal's merge bar can refuse", async () => {
+test("recorded failures publish before an earlier removal's enqueue can refuse", async () => {
   const run = scenario([
     { entry, outcome: green },
     {
@@ -163,8 +187,8 @@ test("recorded failures publish before an earlier removal's merge bar can refuse
       },
     },
   ]);
-  run.actions.armRemoval = async (number) => {
-    await armRemovalThroughBar(number, async () => 1);
+  run.actions.armRemoval = async (published) => {
+    await armRemoval(published, async () => 1);
   };
   expect(await rejectionOf(run.run("2026-10-10T00:00:00Z"))).toMatchObject({
     message: "Dated waiver operations failed; diagnostic output withheld.",
@@ -665,7 +689,7 @@ const resolutionScenario = async (
     ...sink,
     openRemoval: async () => {
       effects.push("remove");
-      return 42;
+      return removal;
     },
     resolveFixTask: async (taskOwner: DatedWaiver, proof: FixEvidence) => {
       await sink.resolveFixTask(taskOwner, proof);
@@ -971,12 +995,20 @@ const proposalLifecycle = async (owner: DatedWaiver = lifecycleOwner) => {
       repo: "stella/stella",
       request,
       disarm: async (number) =>
-        disarmRemovalThroughBar(number, async (pr, mode) => {
-          expect(mode).toBe("disarm");
+        disarmRemoval(number, async (command) => {
+          expect(command).toEqual([
+            "gh",
+            "pr",
+            "merge",
+            String(number),
+            "--repo",
+            "stella/stella",
+            "--disable-auto",
+          ]);
           if (!proposal) {
             throw new TypeError("Proposal fixture missing");
           }
-          expect(pr).toBe(proposal.number);
+          expect(number).toBe(proposal.number);
           effects.push("disarm");
           if (disarmExit === 0) {
             proposal.status = "unarmed";
@@ -995,15 +1027,28 @@ const proposalLifecycle = async (owner: DatedWaiver = lifecycleOwner) => {
         };
         effects.push("publish");
       }
-      return proposal.number;
+      return {
+        number: proposal.number,
+        headSha: removal.headSha,
+      } satisfies PublishedRemoval;
     },
-    armRemoval: async (number: number) => {
-      await armRemovalThroughBar(number, async (pr, mode) => {
-        expect(mode).toBe("arm");
+    armRemoval: async (published: PublishedRemoval) => {
+      await armRemoval(published, async (command) => {
+        expect(command).toEqual([
+          "gh",
+          "pr",
+          "merge",
+          String(published.number),
+          "--repo",
+          "stella/stella",
+          "--auto",
+          "--match-head-commit",
+          removal.headSha,
+        ]);
         if (!proposal) {
           throw new TypeError("Proposal fixture missing");
         }
-        expect(pr).toBe(proposal.number);
+        expect(published.number).toBe(proposal.number);
         proposal.status = "armed";
         effects.push("arm");
         return 0;
@@ -1567,14 +1612,17 @@ test(GREEN_FAILURE_PROPERTY, async () => {
           openRemoval: async ({ entry: owner }: HealingEntry) => {
             published.add(owner.id);
             fail(owner, "openRemoval");
-            return owners.findIndex(({ id }) => id === owner.id) + 1;
+            return {
+              number: owners.findIndex(({ id }) => id === owner.id) + 1,
+              headSha: removal.headSha,
+            } satisfies PublishedRemoval;
           },
           resolveFixTask: async (owner: DatedWaiver) => {
             expect(published.has(owner.id)).toBe(true);
             fail(owner, "resolveFixTask");
             resolved.add(owner.id);
           },
-          armRemoval: async (number: number) => {
+          armRemoval: async ({ number }: PublishedRemoval) => {
             const owner = owners.at(number - 1);
             if (!owner) {
               throw new TypeError("Proposal fixture missing");

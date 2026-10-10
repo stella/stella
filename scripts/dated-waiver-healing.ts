@@ -31,6 +31,7 @@ import {
   listRemovalProposals,
   orphanRemovalProposals,
   type RemovalProposal,
+  type PublishedRemoval,
   publishRemoval,
   retireRemoval,
   validateRemovalModules,
@@ -73,8 +74,8 @@ export type HealingActions = {
     record: HealingEntry & {
       outcome: Extract<HealingEntry["outcome"], { evidence: FixEvidence }>;
     },
-  ) => Promise<number | undefined>;
-  armRemoval: (number: number) => Promise<void>;
+  ) => Promise<PublishedRemoval | undefined>;
+  armRemoval: (removal: PublishedRemoval) => Promise<void>;
   retireRemoval: (entry: DatedWaiver) => Promise<void>;
   assessRemoval: (
     entry: DatedWaiver,
@@ -230,10 +231,10 @@ const healEntry = async ({
         await effect("retireRemoval", async () => actions.retireRemoval(entry));
         return;
       }
-      const number = proposal.value;
-      if (number !== undefined) {
+      const removal = proposal.value;
+      if (removal !== undefined) {
         const armed = await attempt("armRemoval", async () =>
-          actions.armRemoval(number),
+          actions.armRemoval(removal),
         );
         if (Result.isError(armed)) {
           await effect("retireRemoval", async () =>
@@ -771,15 +772,7 @@ export const readReport = async (
   return { sha: parsed.sha, observedAt: parsed.observedAt, entries, failures };
 };
 
-const runMergeBar = async (
-  number: number,
-  mode: "arm" | "disarm",
-): Promise<number> => {
-  const command = ["bun", "scripts/merge-bar.ts", "--repo", "stella/stella"];
-  if (mode === "disarm") {
-    command.push("--disarm");
-  }
-  command.push(String(number));
+const runRemovalMerge = async (command: string[]): Promise<number> => {
   const proc = Bun.spawn(command, {
     cwd: root,
     stdout: "pipe",
@@ -795,27 +788,51 @@ const runMergeBar = async (
   return execution[2];
 };
 
-export const armRemovalThroughBar = async (
-  number: number,
-  run = runMergeBar,
+const REMOVAL_REPOSITORY = "stella/stella";
+
+export const armRemoval = async (
+  { number, headSha }: PublishedRemoval,
+  run = runRemovalMerge,
 ) => {
-  const exit = await run(number, "arm");
-  // The ordinary bar permits pending checks. Every nonzero exit is a real
-  // refusal or failure, and must fail the scheduled publication boundary.
+  if (!/^[a-f0-9]{40}$/u.test(headSha)) {
+    throw new HealingError({
+      message: "Removal head is not a full commit SHA.",
+    });
+  }
+  const exit = await run([
+    "gh",
+    "pr",
+    "merge",
+    String(number),
+    "--repo",
+    REMOVAL_REPOSITORY,
+    "--auto",
+    "--match-head-commit",
+    headSha,
+  ]);
   if (exit !== 0) {
     throw new HealingError({
-      message:
-        "Removal merge bar refused or failed; diagnostic output withheld.",
+      message: "Removal enqueue refused or failed; diagnostic output withheld.",
     });
   }
   return { signal: "dated-waiver-armed", pr: number } as const;
 };
 
-export const disarmRemovalThroughBar = async (
+export const disarmRemoval = async (
   number: number,
-  run = runMergeBar,
+  run = runRemovalMerge,
 ): Promise<void> => {
-  if ((await run(number, "disarm")) !== 0) {
+  if (
+    (await run([
+      "gh",
+      "pr",
+      "merge",
+      String(number),
+      "--repo",
+      REMOVAL_REPOSITORY,
+      "--disable-auto",
+    ])) !== 0
+  ) {
     throw new HealingError({
       message: "Removal disarm refused or failed; diagnostic output withheld.",
     });
@@ -955,7 +972,7 @@ const main = async (): Promise<void> => {
           branch,
           repo: "stella/stella",
           request: githubRequest,
-          disarm: disarmRemovalThroughBar,
+          disarm: disarmRemoval,
         }),
     },
     actions: {
@@ -975,13 +992,13 @@ const main = async (): Promise<void> => {
           branch: `chore/dated-waiver-${waiverKey(entry)}`,
           repo: "stella/stella",
           request: githubRequest,
-          disarm: disarmRemovalThroughBar,
+          disarm: disarmRemoval,
         }),
-      armRemoval: async (number) => {
+      armRemoval: async (removal) => {
         if (process.env["MERGE_HOLD"]) {
           return;
         }
-        console.log(JSON.stringify(await armRemovalThroughBar(number)));
+        console.log(JSON.stringify(await armRemoval(removal)));
       },
     },
   });

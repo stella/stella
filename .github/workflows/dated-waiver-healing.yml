@@ -91,7 +91,6 @@ jobs:
           GH_READ_TOKEN: ${{ github.token }}
           DATED_WAIVER_FIX_REPO: ${{ github.repository_owner }}/${{ vars.DATED_WAIVER_FIX_REPOSITORY }}
           MERGE_HOLD: ${{ vars.STELLA_MERGE_HOLD }}
-          STELLA_MERGE_HOLD_CHECKED_BY_WORKFLOW: "1"
 
       - name: Remove local evidence
         timeout-minutes: 1

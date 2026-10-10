@@ -9,6 +9,7 @@ import { waiverKey } from "./dated-waiver-fix-task";
 import { applyHealing, HealingRunError } from "./dated-waiver-healing";
 import type { HealingActions } from "./dated-waiver-healing";
 import {
+  type PublishedRemoval,
   listRemovalProposals,
   orphanRemovalProposals,
   publishRemoval,
@@ -241,7 +242,7 @@ const fakeGithub = ({ failure }: FakeOptions = {}) => {
 
 type HealingPublicationOptions = {
   github: ReturnType<typeof fakeGithub>;
-  arm: (number: number) => Promise<void>;
+  arm: (removal: PublishedRemoval) => Promise<void>;
 };
 const healingPublication = async ({
   github,
@@ -446,8 +447,8 @@ describe("dated waiver removal publication", () => {
     let arms = 0;
     await healingPublication({
       github,
-      arm: async (number) => {
-        expect(number).toBe(42);
+      arm: async (removal) => {
+        expect(removal).toEqual({ number: 42, headSha: "signed-2" });
         const head = github.refs.get(BRANCH) ?? "";
         expect(head).toBe("signed-2");
         expect(github.parents.get(head)).toEqual(["base-sha"]);
@@ -483,9 +484,9 @@ describe("dated waiver removal publication", () => {
   });
   test("replayed evidence rebuilds signed commits while retaining one ready PR", async () => {
     const github = fakeGithub();
-    expect(await github.publish()).toBe(42);
+    expect(await github.publish()).toEqual({ number: 42, headSha: "signed-1" });
     const writes = github.writes.length;
-    expect(await github.publish()).toBe(42);
+    expect(await github.publish()).toEqual({ number: 42, headSha: "signed-2" });
     expect(github.writes.length).toBeGreaterThan(writes);
     expect(github.commits.size).toBe(2);
     expect(github.prs).toEqual([
@@ -498,7 +499,10 @@ describe("dated waiver removal publication", () => {
   test("new evidence rebuilds the existing PR from its probed base", async () => {
     const github = fakeGithub();
     await github.publish();
-    expect(await github.publish("Verified new run.")).toBe(42);
+    expect(await github.publish("Verified new run.")).toEqual({
+      number: 42,
+      headSha: "signed-2",
+    });
     expect(github.commits.size).toBe(2);
     expect(github.prs).toEqual([
       { number: 42, title: REMOVAL_TITLE, body: "Verified new run." },
@@ -523,7 +527,7 @@ describe("dated waiver removal publication", () => {
         repo: "stella/stella",
         request: github.request,
       });
-    expect(await publishFresh()).toBe(42);
+    expect(await publishFresh()).toEqual({ number: 42, headSha: "signed-2" });
     const head = github.refs.get(BRANCH) ?? "";
     expect(head).not.toBe("signed-1");
     expect(github.parents.get(head)).toEqual(["new-main-sha"]);
@@ -533,7 +537,7 @@ describe("dated waiver removal publication", () => {
     });
     expect(github.prs).toEqual([{ number: 42, title: REMOVAL_TITLE, body }]);
     const writes = github.writes.length;
-    expect(await publishFresh()).toBe(42);
+    expect(await publishFresh()).toEqual({ number: 42, headSha: "signed-3" });
     expect(github.writes.length).toBeGreaterThan(writes);
     expect(github.refs.get(BRANCH)).toBe("signed-3");
   });
@@ -542,7 +546,7 @@ describe("dated waiver removal publication", () => {
     const github = fakeGithub();
     await github.publish();
     github.commits.set("signed-1", { [FILE]: BEFORE });
-    expect(await github.publish()).toBe(42);
+    expect(await github.publish()).toEqual({ number: 42, headSha: "signed-2" });
     expect(github.prs).toHaveLength(1);
     expect(github.refs.get(BRANCH)).toBe("signed-2");
     expect(github.commits.get("signed-2")).toEqual({ [FILE]: AFTER });
@@ -695,7 +699,10 @@ describe("dated waiver removal publication", () => {
       `${API}/git/refs`,
       "graphql",
     ]);
-    expect(await github.publish()).toBe(42);
+    expect(await github.publish()).toEqual({
+      number: 42,
+      headSha: github.refs.get(BRANCH),
+    });
     expect(github.prs).toHaveLength(1);
     expect(github.prs.at(0)?.body).toBe(BODY);
   });
@@ -711,7 +718,10 @@ describe("dated waiver removal publication", () => {
       expect(await rejectionOf(github.publish())).toMatchObject({
         message: expect.stringContaining(`Transient ${failure} failure`),
       });
-      expect(await github.publish()).toBe(42);
+      expect(await github.publish()).toEqual({
+        number: 42,
+        headSha: github.refs.get(BRANCH),
+      });
       expect(github.prs).toEqual([
         { number: 42, title: REMOVAL_TITLE, body: BODY },
       ]);
@@ -719,7 +729,10 @@ describe("dated waiver removal publication", () => {
         [FILE]: AFTER,
       });
       const writes = github.writes.length;
-      expect(await github.publish()).toBe(42);
+      expect(await github.publish()).toEqual({
+        number: 42,
+        headSha: github.refs.get(BRANCH),
+      });
       expect(github.writes.length).toBeGreaterThan(writes);
       expect(github.prs).toHaveLength(1);
     }
@@ -731,7 +744,10 @@ describe("dated waiver removal publication", () => {
     expect(await rejectionOf(github.publish("new evidence"))).toMatchObject({
       message: expect.stringContaining("Transient update failure"),
     });
-    expect(await github.publish("new evidence")).toBe(42);
+    expect(await github.publish("new evidence")).toEqual({
+      number: 42,
+      headSha: github.refs.get(BRANCH),
+    });
     expect(github.prs).toEqual([
       { number: 42, title: REMOVAL_TITLE, body: "new evidence" },
     ]);

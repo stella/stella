@@ -305,8 +305,11 @@ export const retireRemoval = async ({
   );
 };
 
-// The two branch refs are reserved for this workflow. Build a proposal before
-// swapping the PR head; moving an open PR straight to main would close it.
+export type PublishedRemoval = {
+  number: number;
+  headSha: string;
+};
+
 type PublishRemovalOptions = {
   branch: string;
   baseSha: string;
@@ -316,6 +319,8 @@ type PublishRemovalOptions = {
   repo: string | undefined;
   request: typeof githubRequest;
 };
+// The two branch refs are reserved for this workflow. Build a proposal before
+// swapping the PR head; moving an open PR straight to main would close it.
 export const publishRemoval = async ({
   branch,
   baseSha,
@@ -324,7 +329,7 @@ export const publishRemoval = async ({
   files,
   repo,
   request,
-}: PublishRemovalOptions): Promise<number | undefined> => {
+}: PublishRemovalOptions): Promise<PublishedRemoval | undefined> => {
   validateRemovalModules(files);
   const { api } = removalLocation({ branch, repo });
   const setRef = async (refBranch: string, sha: string): Promise<void> => {
@@ -446,5 +451,8 @@ export const publishRemoval = async ({
     });
   }
   await request([`${api}/git/refs/heads/${buildBranch}`, "--method", "DELETE"]);
-  return reconcileRemovalPr({ body, github });
+  return {
+    number: await reconcileRemovalPr({ body, github }),
+    headSha: pushed,
+  };
 };
