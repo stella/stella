@@ -77,10 +77,10 @@ const citationText = v.pipe(
   v.maxLength(LIMITS.caseLawIdentifierMaxLength),
 );
 const lawCountrySchema = countryInputSchema(
-  "Country of the cited law; alpha-2, alpha-3 or country name. Unsupported countries return country_unavailable.",
+  "Country of the cited law; alpha-2, alpha-3 or country name. Unrecognized or unsupported countries return country_unavailable.",
 );
 const decisionCountrySchema = countryInputSchema(
-  "Country of the deciding court; alpha-2, alpha-3 or country name. Unsupported countries return country_unavailable; unrecognized country text returns not_found.",
+  "Country of the deciding court; alpha-2, alpha-3 or country name. Unrecognized or unsupported countries return country_unavailable.",
 );
 const resolveDecisionArgsSchema = nullAsAbsent(
   v.strictObject({
@@ -172,7 +172,7 @@ const LEGAL_RESOLVE_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description:
-      "Resolve one exact docket (including its sheet) or ECLI; use search_case_law for descriptions. Returns the legal resolve API envelope: resolved carries decisionId, readerUrl and readable, licence-withheld or unavailable text. Readable text has extent complete or partial; for partial call read_case_law_decision with decisionId to continue, or open readerUrl. Ambiguous lists candidates without choosing; open only an explicitly chosen readerUrl. Incomplete_identifier lists missing parts: supply them and retry. Not_found names the reason: use search_case_law. Country_unavailable means no resolver: use case_law_coverage. Add missing stella:search for search or stella:read for the reader and coverage through OAuth consent before recovery calls.",
+      "Resolve one exact docket (including its sheet) or ECLI; use search_case_law for descriptions. Returns the legal resolve API envelope: resolved carries decisionId, readerUrl and readable, licence-withheld or unavailable text. Readable text has extent complete or partial; for partial call read_case_law_decision with decisionId to continue, or open readerUrl. Ambiguous lists candidates without choosing; open only an explicitly chosen readerUrl. Incomplete_identifier lists missing parts: supply them and retry. Not_found names the reason: use search_case_law. Country_unavailable means the country is unrecognized or unsupported: use case_law_coverage. Add missing stella:search for search or stella:read for the reader and coverage through OAuth consent before recovery calls.",
     inputSchema: resolveDecisionArgsSchema,
     _meta: {
       ui: {
@@ -191,7 +191,7 @@ const LEGAL_RESOLVE_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description:
-      "Resolve one statute provision from a citation or structured gazette identity and section. Supports Czech statutes; other countries return country_unavailable. Omit as_of for the current expression. Returns the legal resolve API envelope: resolved carries a provision, readerUrl, force dates, versionStatus and blocks; not_found names unknown_document or unknown_section; incomplete_identifier lists missing parts; ambiguous lists candidates without choosing. Open through readerUrl; supply missing parts and retry. For unknown_document use search_legislation; for unknown_section search then read_statute_provisions. Add missing stella:search (search) or stella:read (read) through OAuth consent before recovery calls.",
+      "Resolve one statute provision from a citation or structured gazette identity and section. Supports Czech statutes; unrecognized or unsupported countries return country_unavailable. Omit as_of for the current expression. Returns the legal resolve API envelope: resolved carries a provision, readerUrl, force dates, versionStatus and blocks; not_found names unknown_document or unknown_section; incomplete_identifier lists missing parts; ambiguous lists candidates without choosing. Open through readerUrl; supply missing parts and retry. For unknown_document use search_legislation; for unknown_section search then read_statute_provisions. Add missing stella:search (search) or stella:read (read) through OAuth consent before recovery calls.",
     inputSchema: resolveLawArgsSchema,
     inputNormalization: {
       ...common.inputNormalization,
