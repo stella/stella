@@ -1,7 +1,8 @@
 import { Result } from "better-result";
 
-import { errorTag } from "@/api/lib/errors/utils";
+import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import type { AuthRateLimitRedisClient } from "@/api/lib/rate-limit/auth-storage";
 import {
   withCommandTimeout,
@@ -10,6 +11,10 @@ import {
 import { coordinationKey } from "@/api/lib/redis-keys";
 
 const FALLBACK_CLEANUP_INTERVAL_MS = 60_000;
+const REDIS_ADMISSION_FAILURE_SINK = failureSink({
+  event: "auth.rate_limit.redis_admission_failed",
+  expected: [],
+});
 
 const RESERVE_SCRIPT = `
 -- admission-reserve
@@ -106,8 +111,8 @@ export const createAuthAdmissionStorage = ({
       catch: (error: unknown) => error,
     });
     if (outcome.isErr()) {
-      logger.warn("auth.rate_limit.redis_admission_failed", {
-        "error.type": errorTag(outcome.error),
+      observeFailure(outcome.error, {
+        sink: REDIS_ADMISSION_FAILURE_SINK,
       });
     }
     return outcome;
