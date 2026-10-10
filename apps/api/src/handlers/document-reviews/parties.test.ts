@@ -226,7 +226,7 @@ describe("reviewParties", () => {
       type: "cached",
       entityVersionId: ENTITY_VERSION_ID,
       parties: cachedParties,
-    };
+    } as const;
     expect(await handler.handler(context)).toEqual(answer);
     context.body.mode = "cached";
     expect(await handler.handler(context)).toEqual(answer);

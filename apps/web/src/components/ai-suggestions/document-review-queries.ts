@@ -129,15 +129,16 @@ export const documentReviewPartiesOptions = (
 export const documentReviewPartiesDetectOptions = (
   target: DocumentReviewRunTarget,
   queryClient: QueryClient,
-) => ({
-  ...documentReviewPartiesOptions(target, "detect"),
-  initialData: () => {
-    const cached = queryClient.getQueryData(
-      documentReviewPartiesOptions(target, "cached").queryKey,
-    );
-    return cached?.type === "cached" ? cached : undefined;
-  },
-});
+) =>
+  queryOptions({
+    ...documentReviewPartiesOptions(target, "detect"),
+    initialData: () => {
+      const cached = queryClient.getQueryData(
+        documentReviewPartiesOptions(target, "cached").queryKey,
+      );
+      return cached?.type === "cached" ? cached : undefined;
+    },
+  });
 
 export const documentReviewSourcesOptions = ({
   workspaceId,
