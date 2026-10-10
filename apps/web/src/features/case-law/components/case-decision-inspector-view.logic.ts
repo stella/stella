@@ -73,13 +73,19 @@ export const analysisReaderBreadcrumbPaths = (
     ancestors: readonly ReaderBreadcrumbSegment[],
   ) => {
     for (const node of nodes) {
-      const entry = {
-        anchorId: getHeadingDisplayAnchorId(node),
-        title: node.label,
-      };
+      const anchorId = getHeadingDisplayAnchorId(node);
+      // Breadcrumb segments are keyed and matched by anchor. A heading that
+      // starts at an anchor an outer heading already owns (a parent and its
+      // first child on one paragraph) merges into that owner.
+      const owner = paths.get(anchorId);
+      if (owner !== undefined) {
+        visit(node.children, owner);
+        continue;
+      }
+      const entry = { anchorId, title: node.label };
       const path = [...ancestors, entry];
       headings.push(entry);
-      paths.set(entry.anchorId, path);
+      paths.set(anchorId, path);
       visit(node.children, path);
     }
   };
