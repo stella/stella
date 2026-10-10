@@ -369,7 +369,7 @@ test("invalid legacy rows receive durable failures while later rows convert and 
       message_id: MESSAGE_1,
       from_version: 2,
       outcome: "failed",
-      reason: "invalid-legacy-content",
+      reason: "invalid-legacy-part",
     });
     expect(await receipts(connection)).toContainEqual({
       source: "message",
@@ -504,4 +504,49 @@ test("interruption rolls back the current batch and a new runtime resumes from t
       await resumed.close();
     }
   });
+});
+
+test("malformed and unknown v1 and v2 parts retain the original row and record failure without discarding valid neighbors", async () => {
+  const invalidMessages = [
+    { version: 1, data: [{ type: "text", text: 42 }] },
+    {
+      version: 1,
+      data: [
+        { type: "text", text: "retained" },
+        { type: "unknown-part", payload: "unrecognized" },
+      ],
+    },
+    { version: 2, data: [{ type: "text", content: 42 }] },
+    {
+      version: 2,
+      data: [
+        { type: "text", content: "retained" },
+        { type: "unknown-part", payload: "unrecognized" },
+      ],
+    },
+  ];
+  for (const invalid of invalidMessages) {
+    await withFixture(async (connection) => {
+      await insertMessage(connection, MESSAGE_1, invalid);
+      await insertMessage(connection, MESSAGE_2, V1);
+      expect(await rejectionOf(repair().repair(connection))).toMatchObject({
+        message: expect.stringContaining("Non-v3 chat content remains"),
+      });
+      expect(await contents(connection)).toEqual([
+        { id: MESSAGE_1, content: invalid },
+        {
+          id: MESSAGE_2,
+          content: { version: 3, data: [{ type: "text", content: "Příloha" }] },
+        },
+      ]);
+      expect(await receipts(connection)).toContainEqual({
+        source: "message",
+        row_id: MESSAGE_1,
+        message_id: MESSAGE_1,
+        from_version: invalid.version,
+        outcome: "failed",
+        reason: "invalid-legacy-part",
+      });
+    });
+  }
 });

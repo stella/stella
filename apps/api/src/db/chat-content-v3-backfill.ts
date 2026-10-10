@@ -5,7 +5,10 @@ import { defaultConfig, type Verdict } from "@stll/db-load-gate/health";
 
 import { isRecord } from "../lib/type-guards";
 import { createBackfillRuntime } from "./backfill-runtime";
-import { convertLegacyChatContent } from "./chat-content-v3-legacy";
+import {
+  convertLegacyChatContent,
+  LegacyChatContentError,
+} from "./chat-content-v3-legacy";
 import { readConstraintCompletion } from "./online-constraint-completion";
 import type {
   OnlineMigrationConnection,
@@ -89,7 +92,10 @@ export const backfillChatContentV3Batch = async ({
     }
     const converted = Result.try({
       try: () => convertLegacyChatContent(content),
-      catch: () => "invalid-legacy-content",
+      catch: (error) =>
+        error instanceof LegacyChatContentError
+          ? error.reason
+          : "invalid-legacy-content",
     });
     if (converted.isErr()) {
       receipts.push({

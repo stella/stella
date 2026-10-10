@@ -1,6 +1,7 @@
 // Frozen pre-cutover conversion for the one-time v3 data migration. Runtime
 // readers must never import this module.
-import { panic, Result } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
+import { deepEquals } from "bun";
 
 import {
   createChatAttachmentPart,
@@ -18,6 +19,24 @@ import type {
 import { arrayOrEmpty } from "@/api/lib/array";
 import { isPersistedJsonValue } from "@/api/lib/chat/persisted-message-content";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
+
+export class LegacyChatContentError extends TaggedError(
+  "LegacyChatContentError",
+)<{
+  message: string;
+  reason: "invalid-legacy-part";
+}> {}
+
+const invalidLegacyPart = (
+  message = "Stored legacy chat content has an invalid or unsupported part",
+): never => {
+  throw new LegacyChatContentError({ message, reason: "invalid-legacy-part" });
+};
+
+const isOptionalString = (value: unknown) =>
+  value === undefined || typeof value === "string";
+const isOptionalNullableString = (value: unknown) =>
+  value === null || isOptionalString(value);
 
 type LegacyAiSdkFilePart = {
   filename?: string | undefined;
@@ -44,7 +63,9 @@ const isLegacyAiSdkFilePart = (part: unknown): part is LegacyAiSdkFilePart =>
   isRecord(part) &&
   part["type"] === "file" &&
   typeof part["mediaType"] === "string" &&
-  typeof part["url"] === "string";
+  typeof part["url"] === "string" &&
+  isOptionalString(part["filename"]) &&
+  isOptionalString(part["placeholder"]);
 
 const legacyAiSdkTextPartToTanStack = (
   part: LegacyAiSdkTextPart,
@@ -70,24 +91,47 @@ const normalizeLegacyMessagePartsToTanStack = (
   const normalized: ChatPart[] = [];
   const metadata: ChatMessageMetadata = {};
   for (const part of parts) {
+    if (!isPersistedJsonValue(part)) {
+      invalidLegacyPart();
+    }
+    if (
+      isRecord(part) &&
+      part["type"] === "text" &&
+      "text" in part &&
+      !isLegacyAiSdkTextPart(part)
+    ) {
+      invalidLegacyPart();
+    }
     if (isLegacyAiSdkTextPart(part)) {
       normalized.push(legacyAiSdkTextPartToTanStack(part));
       continue;
     }
     if (isLegacyAiSdkFilePart(part)) {
-      normalized.push(legacyAiSdkFilePartToTanStack(part));
+      normalized.push(validateV2Part(legacyAiSdkFilePartToTanStack(part)));
       continue;
     }
     if (isLegacyAnonRestorationsPart(part)) {
-      // Legacy parts predate thread-wide placeholder numbering, so a repeated
-      // placeholder here is expected history, not a fault: not reported.
-      metadata.anonRestorations = mergeAnonRestorations(
+      const merged = mergeAnonRestorations(
         metadata.anonRestorations,
         part.data,
-      ).restorations;
+      );
+      if (merged.conflicts > 0) {
+        invalidLegacyPart(
+          "Stored legacy restorations would lose a conflicting value",
+        );
+      }
+      metadata.anonRestorations = merged.restorations;
       continue;
     }
     if (isLegacyMentionsPart(part)) {
+      if (
+        metadata.mentions !== undefined &&
+        !deepEquals(metadata.mentions, part.data)
+      ) {
+        invalidLegacyPart(
+          "Stored legacy mentions would overwrite a previous part",
+        );
+      }
       metadata.mentions = part.data;
       continue;
     }
@@ -100,14 +144,17 @@ const normalizeLegacyMessagePartsToTanStack = (
     }
     if (isLegacyToolPart(part)) {
       const converted = legacyToolPartToTanStack(part);
-      if (converted) {
-        normalized.push(converted);
+      if (converted === null) {
+        invalidLegacyPart();
       }
+      normalized.push(converted);
       continue;
     }
     if (isChatPart(part)) {
-      normalized.push(part);
+      normalized.push(validateV2Part(part));
+      continue;
     }
+    invalidLegacyPart();
   }
   return { metadata, parts: normalized };
 };
@@ -150,7 +197,13 @@ const isLegacyAnonRestorationsPart = (
   isRecord(part) &&
   part["type"] === "data-stella-anon-restorations" &&
   isRecord(part["data"]) &&
-  Array.isArray(part["data"]["pairs"]);
+  Array.isArray(part["data"]["pairs"]) &&
+  part["data"]["pairs"].every(
+    (pair) =>
+      isRecord(pair) &&
+      typeof pair["placeholder"] === "string" &&
+      typeof pair["original"] === "string",
+  );
 
 const isLegacyMentionsPart = (
   part: unknown,
@@ -161,7 +214,16 @@ const isLegacyMentionsPart = (
   isRecord(part) &&
   part["type"] === "data-stella-mentions" &&
   isRecord(part["data"]) &&
-  Array.isArray(part["data"]["mentions"]);
+  Array.isArray(part["data"]["mentions"]) &&
+  part["data"]["mentions"].every(
+    (mention) =>
+      isRecord(mention) &&
+      typeof mention["id"] === "string" &&
+      typeof mention["label"] === "string" &&
+      (mention["category"] === "entity" ||
+        mention["category"] === "workspace") &&
+      isOptionalNullableString(mention["workspaceId"]),
+  );
 
 const isLegacySourceDocumentPart = (
   part: unknown,
@@ -171,7 +233,15 @@ const isLegacySourceDocumentPart = (
 } =>
   isRecord(part) &&
   part["type"] === "data-stella-source-document" &&
-  isRecord(part["data"]);
+  isRecord(part["data"]) &&
+  typeof part["data"]["kind"] === "string" &&
+  typeof part["data"]["title"] === "string" &&
+  isOptionalString(part["data"]["entityId"]) &&
+  isOptionalString(part["data"]["entityRef"]) &&
+  isOptionalString(part["data"]["matterRef"]) &&
+  isOptionalString(part["data"]["mention"]) &&
+  isOptionalNullableString(part["data"]["mimeType"]) &&
+  isOptionalNullableString(part["data"]["workspaceId"]);
 
 const isLegacyToolPart = (
   part: unknown,
@@ -235,8 +305,10 @@ const legacyToolStateToTanStack = (state: unknown) => {
     case "output-error":
     case "complete":
       return "complete" as const;
-    default:
+    case "awaiting-input":
       return "input-complete" as const;
+    default:
+      return invalidLegacyPart();
   }
 };
 
@@ -251,15 +323,22 @@ const legacyToolApprovalToTanStack = (
       };
     }
   | Record<string, never> => {
-  if (!isRecord(approval)) {
+  if (approval === undefined) {
     return {};
+  }
+  if (!isRecord(approval)) {
+    return invalidLegacyPart();
   }
   const id = getStringProperty(approval, "id");
   const needsApproval = approval["needsApproval"];
-  if (!id || typeof needsApproval !== "boolean") {
-    return {};
-  }
   const approved = approval["approved"];
+  if (
+    !id ||
+    typeof needsApproval !== "boolean" ||
+    (approved !== undefined && typeof approved !== "boolean")
+  ) {
+    return invalidLegacyPart();
+  }
   return {
     approval: {
       id,
@@ -358,8 +437,36 @@ const normalizeLegacyRawCreateDocumentPart = (part: unknown): unknown => {
     return part;
   }
 
-  const input = normalizeCreateDocumentInput(part["input"]);
-  const output = normalizeCreateDocumentOutput(part["output"]);
+  const rawInput = part["input"];
+  if (
+    isRecord(rawInput) &&
+    (!isOptionalString(rawInput["name"]) ||
+      !isOptionalString(rawInput["source"]) ||
+      !isOptionalString(rawInput["markdown"]))
+  ) {
+    return invalidLegacyPart();
+  }
+  const rawOutput = part["output"];
+  if (
+    isRecord(rawOutput) &&
+    ((rawOutput["success"] !== undefined &&
+      typeof rawOutput["success"] !== "boolean") ||
+      ![
+        "message",
+        "fileName",
+        "entityId",
+        "fieldId",
+        "workspaceId",
+        "entityRef",
+        "matterRef",
+        "href",
+        "mention",
+      ].every((key) => isOptionalString(rawOutput[key])))
+  ) {
+    return invalidLegacyPart();
+  }
+  const input = normalizeCreateDocumentInput(rawInput);
+  const output = normalizeCreateDocumentOutput(rawOutput);
   if (!input && !output) {
     return part;
   }
@@ -384,7 +491,7 @@ const getLegacyStringProperty = (
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null;
+  typeof value === "object" && value !== null && !Array.isArray(value);
 
 const safeStringifyToolArguments = (value: unknown): string => {
   const serialized = Result.try((): unknown => JSON.stringify(value));
@@ -411,34 +518,98 @@ export const convertLegacyChatContent = (
   if (version !== 1 && version !== 2) {
     return panic("Legacy chat conversion requires version 1 or 2");
   }
+  if (version === 1 && content["metadata"] !== undefined) {
+    return invalidLegacyPart(
+      "Stored v1 chat content has unsupported envelope metadata",
+    );
+  }
   const normalized =
     version === 1
       ? normalizeLegacyMessagePartsToTanStack(
           normalizeLegacyRawToolInputs(content["data"]),
         )
       : normalizeV2Content(content);
-  return toPersistedChatMessageContentV3({
-    data: normalizeLegacyPersistedToolInputs(normalized.parts),
-    ...(Object.keys(normalized.metadata).length > 0 ||
-    (version === 2 && content["metadata"] !== undefined)
-      ? { metadata: normalized.metadata }
-      : {}),
+  const proved = Result.try({
+    try: () =>
+      toPersistedChatMessageContentV3({
+        data: normalizeLegacyPersistedToolInputs(normalized.parts),
+        ...(Object.keys(normalized.metadata).length > 0 ||
+        (version === 2 && content["metadata"] !== undefined)
+          ? { metadata: normalized.metadata }
+          : {}),
+      }),
+    catch: () =>
+      new LegacyChatContentError({
+        message: "Stored legacy chat parts cannot be proved as v3",
+        reason: "invalid-legacy-part",
+      }),
   });
+  if (proved.isErr()) {
+    throw proved.error;
+  }
+  return proved.value;
 };
 
 const normalizeV2Content = (
   content: Record<string, unknown>,
 ): NormalizedLegacyMessageParts => {
   const parts = content["data"];
-  if (!Array.isArray(parts) || !parts.every(isChatPart)) {
-    return panic("Stored v2 chat content has invalid parts");
+  if (!Array.isArray(parts)) {
+    return invalidLegacyPart("Stored v2 chat content has invalid parts");
   }
   const metadata = content["metadata"];
   if (metadata !== undefined && !isLegacyMetadata(metadata)) {
-    return panic("Stored v2 chat content has invalid metadata");
+    return invalidLegacyPart("Stored v2 chat content has invalid metadata");
   }
-  return { parts, metadata: metadata ?? {} };
+  return { parts: parts.map(validateV2Part), metadata: metadata ?? {} };
 };
 
-const isLegacyMetadata = (value: unknown): value is ChatMessageMetadata =>
-  isRecord(value) && isPersistedJsonValue(value);
+const validateV2Part = (part: unknown): ChatPart => {
+  if (!isChatPart(part) || !isPersistedJsonValue(part)) {
+    return invalidLegacyPart("Stored v2 chat content has invalid parts");
+  }
+  if (part.type === "tool-call") {
+    if (!part.id || !part.name) {
+      return invalidLegacyPart();
+    }
+    legacyToolApprovalToTanStack(
+      "approval" in part ? part.approval : undefined,
+    );
+  }
+  return part;
+};
+
+const isLegacyMetadata = (value: unknown): value is ChatMessageMetadata => {
+  if (!isRecord(value) || !isPersistedJsonValue(value)) {
+    return false;
+  }
+  if (
+    value["anonRestorations"] !== undefined &&
+    !isLegacyAnonRestorationsPart({
+      type: "data-stella-anon-restorations",
+      data: value["anonRestorations"],
+    })
+  ) {
+    return false;
+  }
+  if (
+    value["mentions"] !== undefined &&
+    !isLegacyMentionsPart({
+      type: "data-stella-mentions",
+      data: value["mentions"],
+    })
+  ) {
+    return false;
+  }
+  const sourceDocuments = value["sourceDocuments"];
+  return (
+    sourceDocuments === undefined ||
+    (Array.isArray(sourceDocuments) &&
+      sourceDocuments.every((data) =>
+        isLegacySourceDocumentPart({
+          type: "data-stella-source-document",
+          data,
+        }),
+      ))
+  );
+};
