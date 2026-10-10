@@ -783,7 +783,7 @@ describe("dated waiver removal publication", () => {
     ]);
     expect(await github.publish()).toEqual({
       number: 42,
-      headSha: github.refs.get(BRANCH),
+      headSha: v.parse(v.string(), github.refs.get(BRANCH)),
     });
     expect(github.prs).toHaveLength(1);
     expect(github.prs.at(0)?.body).toBe(BODY);
@@ -802,7 +802,7 @@ describe("dated waiver removal publication", () => {
       });
       expect(await github.publish()).toEqual({
         number: 42,
-        headSha: github.refs.get(BRANCH),
+        headSha: v.parse(v.string(), github.refs.get(BRANCH)),
       });
       expect(github.prs).toEqual([
         { number: 42, title: REMOVAL_TITLE, body: BODY },
@@ -813,7 +813,7 @@ describe("dated waiver removal publication", () => {
       const writes = github.writes.length;
       expect(await github.publish()).toEqual({
         number: 42,
-        headSha: github.refs.get(BRANCH),
+        headSha: v.parse(v.string(), github.refs.get(BRANCH)),
       });
       expect(github.writes.length).toBeGreaterThan(writes);
       expect(github.prs).toHaveLength(1);
@@ -828,7 +828,7 @@ describe("dated waiver removal publication", () => {
     });
     expect(await github.publish("new evidence")).toEqual({
       number: 42,
-      headSha: github.refs.get(BRANCH),
+      headSha: v.parse(v.string(), github.refs.get(BRANCH)),
     });
     expect(github.prs).toEqual([
       { number: 42, title: REMOVAL_TITLE, body: "new evidence" },
