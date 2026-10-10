@@ -173,6 +173,16 @@ describe("decision legal resolution", () => {
     ).toEqual({
       status: "country_unavailable",
     });
+    // A code that names no country answers like the law route does.
+    expect(
+      await resolveDecision({
+        admission,
+        country: "XX",
+        identifier: "3 Afs 41/2008 - 98",
+      }),
+    ).toEqual({
+      status: "country_unavailable",
+    });
     expect(
       await resolveDecision({
         admission,

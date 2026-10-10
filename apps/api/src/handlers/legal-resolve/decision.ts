@@ -160,7 +160,7 @@ export const resolveDecision = async ({
   }
   const normalized = normalizeCountry(countryInput);
   if (!normalized.ok) {
-    return { status: "not_found", reason: "no_exact_identity" };
+    return { status: "country_unavailable" };
   }
   const country = normalized.value.alpha3;
   if (!isPublicCountry(country)) {
