@@ -32,13 +32,15 @@ jobs:
 
       # This git-only probe runs before setup or install, so a pull request with
       # no lockfile change performs no registry or advisory-database access.
+      # package.json carries the lifecycle trust set, so manifest changes
+      # still run the trust check.
       - name: Detect lockfile changes
         id: lockfile
         if: github.event_name == 'pull_request'
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          if git diff --quiet "$BASE_SHA...HEAD" -- bun.lock; then
+          if git diff --quiet "$BASE_SHA...HEAD" -- bun.lock package.json; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"

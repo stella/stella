@@ -69,7 +69,7 @@ const step = (
 test("pull requests avoid network work when the lockfile is unchanged", () => {
   expect(auditWorkflow.on.pull_request).toBeNull();
   expect(step(auditWorkflow, "audit", "Detect lockfile changes").run).toContain(
-    'git diff --quiet "$BASE_SHA...HEAD" -- bun.lock',
+    'git diff --quiet "$BASE_SHA...HEAD" -- bun.lock package.json',
   );
   for (const name of ["Setup Bun", "Install dependencies"]) {
     expect(step(auditWorkflow, "audit", name).if).toContain(
