@@ -35,6 +35,7 @@ export const PILOT_DEFERRED = [
   "legal-atlas-image",
   "windows-scripts",
   "desktop-clippy",
+  "scan-engine-wasm-drift",
   "dependency-malware",
   "api-test-durations",
 ] as const;

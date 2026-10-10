@@ -1,8 +1,8 @@
 import { Result } from "better-result";
 
+import initWasm, { clean_scan_rgba } from "../generated/scan_engine.js";
 import type {
   ContentBox,
-  Quad,
   RasterizedScanPage,
   ScanEngine,
   ScanOptions,
@@ -23,7 +23,6 @@ type WasmScanResult = {
 };
 
 type WasmBindings = {
-  default: (input?: { module_or_path: URL }) => Promise<unknown>;
   clean_scan_rgba: (
     ...args: [
       width: number,
@@ -39,28 +38,19 @@ type WasmBindings = {
 
 type WasmLoader = () => Promise<WasmBindings>;
 
-const isWasmBindings = (value: unknown): value is WasmBindings =>
-  typeof value === "object" &&
-  value !== null &&
-  "default" in value &&
-  typeof value.default === "function" &&
-  "clean_scan_rgba" in value &&
-  typeof value.clean_scan_rgba === "function";
+type AppliedQuad = NonNullable<
+  Extract<ScanResult, { type: "cleaned" }>["appliedQuad"]
+>;
+
+const WASM_LOAD_TIMEOUT_MS = 10_000;
 
 const loadWasmBindings = async () => {
-  const imported: unknown = await import("../generated/scan_engine.js");
-  if (!isWasmBindings(imported)) {
-    throw new ScanEngineError({
-      message: "The scan engine WebAssembly module has an invalid interface",
-    });
-  }
-  await imported.default({
-    module_or_path: new URL(
-      "../generated/scan_engine_bg.wasm",
-      import.meta.url,
-    ),
-  });
-  return imported;
+  const response = await fetch(
+    new URL("../generated/scan_engine_bg.wasm", import.meta.url),
+    { signal: AbortSignal.timeout(WASM_LOAD_TIMEOUT_MS) },
+  );
+  await initWasm({ module_or_path: response });
+  return { clean_scan_rgba };
 };
 
 const readContentBox = (values: Uint32Array): ContentBox => {
@@ -82,7 +72,7 @@ const readContentBox = (values: Uint32Array): ContentBox => {
   return { x, y, width, height };
 };
 
-const readQuad = (values: Float32Array): Quad | null => {
+const readQuad = (values: Float32Array): AppliedQuad | null => {
   if (values.length === 0) {
     return null;
   }

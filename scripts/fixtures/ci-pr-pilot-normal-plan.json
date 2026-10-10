@@ -96,6 +96,9 @@
     "desktop-clippy": {
       "if": "needs.ci-plan.outputs.run_required != 'false' && ( github.event_name != 'pull_request' && ( needs.ci-plan.outputs.queue_depth != 'thin' && ((needs.ci-plan.outputs.trusted == 'true'\n || github.event_name == 'workflow_dispatch')\n&& needs.ci-plan.outputs.desktop_rust_checks_required == 'true' ) ) )"
     },
+    "scan-engine-wasm-drift": {
+      "if": "needs.ci-plan.outputs.run_required != 'false' && ( github.event_name != 'pull_request' && ( needs.ci-plan.outputs.queue_depth != 'thin' && ((needs.ci-plan.outputs.trusted == 'true'\n || github.event_name == 'workflow_dispatch')\n&& needs.ci-plan.outputs.scan_engine_wasm_required == 'true' ) ) )"
+    },
     "dependency-malware": {
       "if": "needs.ci-plan.outputs.run_required != 'false' && ( needs.ci-plan.outputs.queue_depth != 'thin' && (needs.ci-plan.outputs.trusted == 'true' && needs.ci-plan.outputs.dependency_malware_required == 'true') )"
     },

@@ -7508,8 +7508,17 @@ jobs:
     needs: ci-plan
     if: >-
       inputs.pr_depth_only != true
-      && needs.ci-plan.outputs.run_required != 'false'
+      &&
+      needs.ci-plan.outputs.run_required != 'false'
+      && (
+      github.event_name != 'pull_request' && (
+      needs.ci-plan.outputs.queue_depth != 'thin'
+      && ((needs.ci-plan.outputs.trusted == 'true'
+       || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.scan_engine_wasm_required == 'true'
+      )
+      )
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:

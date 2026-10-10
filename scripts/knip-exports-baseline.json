@@ -1,6 +1,6 @@
 {
   "apps/api": {
-    "count": 152,
+    "count": 151,
     "files": {
       "apps/api/scripts/lib/capability-catalog.ts": 7,
       "apps/api/scripts/lib/case-law-fixture-analyses.ts": 1,
@@ -62,7 +62,6 @@
       "apps/api/src/lib/workflow-queue.ts": 1,
       "apps/api/src/lib/workflow/verdict-engine.ts": 3,
       "apps/api/src/mcp/billing-tools.ts": 1,
-      "apps/api/src/mcp/capability-context.ts": 1,
       "apps/api/src/mcp/constants.ts": 1,
       "apps/api/src/mcp/context.ts": 1,
       "apps/api/src/mcp/file-comparison-picker-tool.ts": 1,
@@ -81,18 +80,15 @@
     }
   },
   "apps/web": {
-    "count": 26,
+    "count": 22,
     "files": {
       "apps/web/src/components/ai-config-role-models.logic.ts": 5,
       "apps/web/src/components/ai-suggestions/review-position-header.tsx": 1,
       "apps/web/src/components/chat/chat-thread-messages.tsx": 1,
       "apps/web/src/components/document-language-picker.logic.ts": 1,
-      "apps/web/src/components/legal-reader/document-ast-text.tsx": 2,
       "apps/web/src/components/templates/template-form.logic.ts": 1,
       "apps/web/src/components/workspaces/property-helpers.tsx": 2,
-      "apps/web/src/features/case-law/components/case-viewer/decision-text.logic.ts": 1,
       "apps/web/src/features/statutes/components/statute-table.tsx": 1,
-      "apps/web/src/features/statutes/queries/provision-preview.ts": 1,
       "apps/web/src/lib/api-contract.ts": 1,
       "apps/web/src/lib/eden-client.ts": 1,
       "apps/web/src/lib/memory-api.ts": 1,

@@ -1,10 +1,6 @@
 export type {
-  CleanedScanImage,
-  ContentBox,
   PageRotation,
   PhysicalPageSize,
-  Point,
-  Quad,
   RasterizedScanPage,
   ScanEngine,
   ScanOptions,

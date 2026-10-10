@@ -23,15 +23,6 @@ export type ScanOptions = {
   deskew: "on" | "off";
 };
 
-export type Point = { x: number; y: number };
-
-export type Quad = {
-  topLeft: Point;
-  topRight: Point;
-  bottomRight: Point;
-  bottomLeft: Point;
-};
-
 export type ContentBox = {
   x: number;
   y: number;
@@ -50,7 +41,12 @@ export type ScanResult =
   | {
       type: "cleaned";
       image: CleanedScanImage;
-      appliedQuad: Quad | null;
+      appliedQuad: {
+        topLeft: { x: number; y: number };
+        topRight: { x: number; y: number };
+        bottomRight: { x: number; y: number };
+        bottomLeft: { x: number; y: number };
+      } | null;
       skewDegrees: number;
       contentBox: ContentBox;
     }
