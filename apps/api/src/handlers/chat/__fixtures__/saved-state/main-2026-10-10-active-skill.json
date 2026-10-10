@@ -1,29 +1,29 @@
 {
   "release": null,
-  "sourceCommit": "1e485ee37ab5765b145824264e0185ab66d2521c",
-  "newestMigration": "20261010160000_chat_thread_active_skill",
-  "shape": "Unreleased durable chat skills: chat_threads includes nullable active_skill, the skill a conversation was started with.",
+  "sourceCommit": "609130509abc5c7bd2f6c6b707c1a334cf0eed88",
+  "newestMigration": "20261010212000_replay_owner_policy_plans",
+  "shape": "Unreleased durable chat skills: chat_threads includes nullable active_skill, the skill a conversation was started with, alongside the resume state awaiting-user assistant messages store.",
   "actors": {
-    "organizationId": "aAnsIVETEG0owEGTCQZ0m12Kt0ih8If3",
-    "userId": "lmtN8IQbAv3dWTE48bSEQMDm7hhXfbBd"
+    "organizationId": "QdlKSb9VDPXFGqnAUCusvWRsg5MiVtZh",
+    "userId": "PHtSDB876FoIp7qHGoZuE3zWF5CmPch8"
   },
-  "threadId": "01a126c5-ba67-719f-a659-a89d88742a67",
+  "threadId": "01a12836-0882-7632-b862-495533aef3b3",
   "pendingToolCallId": "call-lease",
   "rows": {
     "chat_threads": [
       {
-        "id": "01a126c5-ba67-719f-a659-a89d88742a67",
+        "id": "01a12836-0882-7632-b862-495533aef3b3",
         "title": "Scripted side answer",
-        "user_id": "lmtN8IQbAv3dWTE48bSEQMDm7hhXfbBd",
+        "user_id": "PHtSDB876FoIp7qHGoZuE3zWF5CmPch8",
         "chat_model": null,
-        "created_at": "2026-10-10T18:04:14.991+01:00",
+        "created_at": "2026-10-11T00:46:32.235+01:00",
         "recap_text": null,
-        "updated_at": "2026-10-10T18:04:16.469+01:00",
+        "updated_at": "2026-10-11T00:46:33.8+01:00",
         "active_skill": null,
         "title_source": "ai",
         "workspace_id": null,
         "rollback_token": null,
-        "organization_id": "aAnsIVETEG0owEGTCQZ0m12Kt0ih8If3",
+        "organization_id": "QdlKSb9VDPXFGqnAUCusvWRsg5MiVtZh",
         "compaction_epoch": 4,
         "parent_thread_id": null,
         "recap_message_id": null,
@@ -43,7 +43,7 @@
     ],
     "chat_messages": [
       {
-        "id": "01a126c5-ba67-71a1-88e0-8a1f25a34489",
+        "id": "01a12836-0882-7634-b3fb-5146eb98e179",
         "role": "user",
         "content": {
           "data": [
@@ -54,15 +54,15 @@
           ],
           "version": 3
         },
-        "user_id": "lmtN8IQbAv3dWTE48bSEQMDm7hhXfbBd",
+        "user_id": "PHtSDB876FoIp7qHGoZuE3zWF5CmPch8",
         "revision": 0,
-        "thread_id": "01a126c5-ba67-719f-a659-a89d88742a67",
-        "created_at": "2026-10-10T18:04:15.014+01:00",
+        "thread_id": "01a12836-0882-7632-b862-495533aef3b3",
+        "created_at": "2026-10-11T00:46:32.244+01:00",
         "workspace_id": null,
         "memory_extraction_eligible": false
       },
       {
-        "id": "01a126c5-bb28-776d-bcba-19568020ca83",
+        "id": "01a12836-0940-75d9-a81a-62f1a74b22ed",
         "role": "assistant",
         "content": {
           "data": [
@@ -95,15 +95,15 @@
             }
           }
         },
-        "user_id": "lmtN8IQbAv3dWTE48bSEQMDm7hhXfbBd",
+        "user_id": "PHtSDB876FoIp7qHGoZuE3zWF5CmPch8",
         "revision": 0,
-        "thread_id": "01a126c5-ba67-719f-a659-a89d88742a67",
-        "created_at": "2026-10-10T18:04:15.164+01:00",
+        "thread_id": "01a12836-0882-7632-b862-495533aef3b3",
+        "created_at": "2026-10-11T00:46:32.395+01:00",
         "workspace_id": null,
         "memory_extraction_eligible": false
       },
       {
-        "id": "01a126c5-bcbb-70a8-9ce6-b04d3dced272",
+        "id": "01a12836-09e0-7038-bf6f-4234ab3cba83",
         "role": "user",
         "content": {
           "data": [
@@ -114,15 +114,15 @@
           ],
           "version": 3
         },
-        "user_id": "lmtN8IQbAv3dWTE48bSEQMDm7hhXfbBd",
+        "user_id": "PHtSDB876FoIp7qHGoZuE3zWF5CmPch8",
         "revision": 0,
-        "thread_id": "01a126c5-ba67-719f-a659-a89d88742a67",
-        "created_at": "2026-10-10T18:04:15.576+01:00",
+        "thread_id": "01a12836-0882-7632-b862-495533aef3b3",
+        "created_at": "2026-10-11T00:46:32.571+01:00",
         "workspace_id": null,
         "memory_extraction_eligible": false
       },
       {
-        "id": "01a126c5-bd28-77f8-9875-4ef24e6d4b95",
+        "id": "01a12836-0a8d-75fc-a202-1c0363721d0e",
         "role": "assistant",
         "content": {
           "data": [
@@ -139,7 +139,7 @@
                 "value": {
                   "templates": [
                     {
-                      "id": "01a126c5-b9ca-7206-8b45-101d6589d12b",
+                      "id": "01a12836-07c7-7176-b1af-89718f7df4fb",
                       "name": "Tmpl A",
                       "tags": null,
                       "whenToUse": null,
@@ -187,15 +187,15 @@
             }
           }
         },
-        "user_id": "lmtN8IQbAv3dWTE48bSEQMDm7hhXfbBd",
+        "user_id": "PHtSDB876FoIp7qHGoZuE3zWF5CmPch8",
         "revision": 0,
-        "thread_id": "01a126c5-ba67-719f-a659-a89d88742a67",
-        "created_at": "2026-10-10T18:04:15.679+01:00",
+        "thread_id": "01a12836-0882-7632-b862-495533aef3b3",
+        "created_at": "2026-10-11T00:46:32.749+01:00",
         "workspace_id": null,
         "memory_extraction_eligible": false
       },
       {
-        "id": "01a126c5-bd58-705c-9126-92f74cf02047",
+        "id": "01a12836-0ac8-72b8-a37f-0bdd8ec22bef",
         "role": "user",
         "content": {
           "data": [
@@ -206,15 +206,15 @@
           ],
           "version": 3
         },
-        "user_id": "lmtN8IQbAv3dWTE48bSEQMDm7hhXfbBd",
+        "user_id": "PHtSDB876FoIp7qHGoZuE3zWF5CmPch8",
         "revision": 0,
-        "thread_id": "01a126c5-ba67-719f-a659-a89d88742a67",
-        "created_at": "2026-10-10T18:04:15.729+01:00",
+        "thread_id": "01a12836-0882-7632-b862-495533aef3b3",
+        "created_at": "2026-10-11T00:46:32.808+01:00",
         "workspace_id": null,
         "memory_extraction_eligible": false
       },
       {
-        "id": "01a126c5-bdbd-77ec-b03e-682b4c185dbd",
+        "id": "01a12836-0b3f-7090-8f5e-4dd664e6d205",
         "role": "assistant",
         "content": {
           "data": [
@@ -277,15 +277,15 @@
             }
           }
         },
-        "user_id": "lmtN8IQbAv3dWTE48bSEQMDm7hhXfbBd",
+        "user_id": "PHtSDB876FoIp7qHGoZuE3zWF5CmPch8",
         "revision": 0,
-        "thread_id": "01a126c5-ba67-719f-a659-a89d88742a67",
-        "created_at": "2026-10-10T18:04:15.825+01:00",
+        "thread_id": "01a12836-0882-7632-b862-495533aef3b3",
+        "created_at": "2026-10-11T00:46:32.915+01:00",
         "workspace_id": null,
         "memory_extraction_eligible": false
       },
       {
-        "id": "01a126c5-be65-771d-a667-d7e54a9ec33e",
+        "id": "01a12836-0bef-7092-b374-f30efdc8ccda",
         "role": "user",
         "content": {
           "data": [
@@ -296,15 +296,15 @@
           ],
           "version": 3
         },
-        "user_id": "lmtN8IQbAv3dWTE48bSEQMDm7hhXfbBd",
+        "user_id": "PHtSDB876FoIp7qHGoZuE3zWF5CmPch8",
         "revision": 0,
-        "thread_id": "01a126c5-ba67-719f-a659-a89d88742a67",
-        "created_at": "2026-10-10T18:04:15.998+01:00",
+        "thread_id": "01a12836-0882-7632-b862-495533aef3b3",
+        "created_at": "2026-10-11T00:46:33.097+01:00",
         "workspace_id": null,
         "memory_extraction_eligible": false
       },
       {
-        "id": "01a126c5-bec7-759c-ae17-e76e39a420df",
+        "id": "01a12836-0c6c-750f-b795-aa19c43307c9",
         "role": "assistant",
         "content": {
           "data": [
@@ -357,15 +357,15 @@
             }
           }
         },
-        "user_id": "lmtN8IQbAv3dWTE48bSEQMDm7hhXfbBd",
+        "user_id": "PHtSDB876FoIp7qHGoZuE3zWF5CmPch8",
         "revision": 0,
-        "thread_id": "01a126c5-ba67-719f-a659-a89d88742a67",
-        "created_at": "2026-10-10T18:04:16.087+01:00",
+        "thread_id": "01a12836-0882-7632-b862-495533aef3b3",
+        "created_at": "2026-10-11T00:46:33.212+01:00",
         "workspace_id": null,
         "memory_extraction_eligible": false
       },
       {
-        "id": "01a126c5-bf61-72b6-bbfe-a8fbe98a0d08",
+        "id": "01a12836-0d07-754f-bb57-f7cbadfa4aec",
         "role": "user",
         "content": {
           "data": [
@@ -376,15 +376,15 @@
           ],
           "version": 3
         },
-        "user_id": "lmtN8IQbAv3dWTE48bSEQMDm7hhXfbBd",
+        "user_id": "PHtSDB876FoIp7qHGoZuE3zWF5CmPch8",
         "revision": 0,
-        "thread_id": "01a126c5-ba67-719f-a659-a89d88742a67",
-        "created_at": "2026-10-10T18:04:16.248+01:00",
+        "thread_id": "01a12836-0882-7632-b862-495533aef3b3",
+        "created_at": "2026-10-11T00:46:33.374+01:00",
         "workspace_id": null,
         "memory_extraction_eligible": false
       },
       {
-        "id": "01a126c5-bfc5-740b-8108-aa71433ae8d0",
+        "id": "01a12836-0e04-70f2-9e8e-7e7a5f08485e",
         "role": "assistant",
         "content": {
           "data": [],
@@ -408,15 +408,15 @@
             }
           }
         },
-        "user_id": "lmtN8IQbAv3dWTE48bSEQMDm7hhXfbBd",
+        "user_id": "PHtSDB876FoIp7qHGoZuE3zWF5CmPch8",
         "revision": 0,
-        "thread_id": "01a126c5-ba67-719f-a659-a89d88742a67",
-        "created_at": "2026-10-10T18:04:16.332+01:00",
+        "thread_id": "01a12836-0882-7632-b862-495533aef3b3",
+        "created_at": "2026-10-11T00:46:33.613+01:00",
         "workspace_id": null,
         "memory_extraction_eligible": false
       },
       {
-        "id": "01a126c5-bfe1-7081-8e64-4aed9688acd9",
+        "id": "01a12836-0e35-7010-8874-aa4b639a8927",
         "role": "user",
         "content": {
           "data": [
@@ -427,15 +427,15 @@
           ],
           "version": 3
         },
-        "user_id": "lmtN8IQbAv3dWTE48bSEQMDm7hhXfbBd",
+        "user_id": "PHtSDB876FoIp7qHGoZuE3zWF5CmPch8",
         "revision": 0,
-        "thread_id": "01a126c5-ba67-719f-a659-a89d88742a67",
-        "created_at": "2026-10-10T18:04:16.375+01:00",
+        "thread_id": "01a12836-0882-7632-b862-495533aef3b3",
+        "created_at": "2026-10-11T00:46:33.682+01:00",
         "workspace_id": null,
         "memory_extraction_eligible": false
       },
       {
-        "id": "01a126c5-c040-7239-85b5-96fe99425750",
+        "id": "01a12836-0ead-7680-a749-b24464a41792",
         "role": "assistant",
         "content": {
           "data": [
@@ -484,154 +484,228 @@
                 "type": "approval",
                 "toolCallId": "call-lease"
               }
+            },
+            "resumeSnapshot": {
+              "resumeState": {
+                "runId": "run-01a12836-0e35-700f-a382-7db544c092a6",
+                "threadId": "01a12836-0882-7632-b862-495533aef3b3"
+              },
+              "pendingInterrupts": [
+                {
+                  "id": "approval_call-lease",
+                  "reason": "tool_call",
+                  "message": "Approval required to run mcp__external__delete",
+                  "metadata": {
+                    "kind": "approval",
+                    "input": {
+                      "name": "lease"
+                    },
+                    "toolName": "mcp__external__delete",
+                    "tanstack:interruptBinding": {
+                      "v": 1,
+                      "kind": "tool-approval",
+                      "toolName": "mcp__external__delete",
+                      "generation": 0,
+                      "toolCallId": "call-lease",
+                      "interruptId": "approval_call-lease",
+                      "originalArgs": {
+                        "name": "lease"
+                      },
+                      "inputSchemaHash": "sha256:683d9429c1da897d8ebe18c7b70131ca0cedecbb26b499a5ccb82d2d01b08428",
+                      "interruptedRunId": "run-01a12836-0e35-700f-a382-7db544c092a6",
+                      "approvalSchemaHash": "sha256:22f76d9a1c618a3cfaa891208a14f6e5e6ab1be4ff1c38cc8a8cd1e8fd0c0e4e",
+                      "responseSchemaHash": "sha256:ffc21793d9e22678a177d3ad9e30c00c0330603b8e422b01dffa72054f8c18f4"
+                    }
+                  },
+                  "toolCallId": "call-lease",
+                  "responseSchema": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "required": ["approved"],
+                        "properties": {
+                          "approved": {
+                            "const": true
+                          },
+                          "editedArgs": {
+                            "type": "object",
+                            "required": ["name"],
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              },
+                              "note": {
+                                "type": "string",
+                                "minLength": 1
+                              }
+                            },
+                            "additionalProperties": false
+                          }
+                        },
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "required": ["approved"],
+                        "properties": {
+                          "approved": {
+                            "const": false
+                          }
+                        },
+                        "additionalProperties": false
+                      }
+                    ]
+                  }
+                }
+              ]
             }
           }
         },
-        "user_id": "lmtN8IQbAv3dWTE48bSEQMDm7hhXfbBd",
+        "user_id": "PHtSDB876FoIp7qHGoZuE3zWF5CmPch8",
         "revision": 0,
-        "thread_id": "01a126c5-ba67-719f-a659-a89d88742a67",
-        "created_at": "2026-10-10T18:04:16.463+01:00",
+        "thread_id": "01a12836-0882-7632-b862-495533aef3b3",
+        "created_at": "2026-10-11T00:46:33.793+01:00",
         "workspace_id": null,
         "memory_extraction_eligible": false
       }
     ],
     "chat_turns": [
       {
-        "id": "01a126c5-baa5-7772-8d8f-2a4745fbaace",
-        "run_id": "run-01a126c5-ba67-71a0-844f-a332fa5ec403",
+        "id": "01a12836-08b4-77f0-89eb-dff560276a33",
+        "run_id": "run-01a12836-0882-7633-95d7-351cd0c0eba9",
         "status": "completed",
-        "user_id": "lmtN8IQbAv3dWTE48bSEQMDm7hhXfbBd",
-        "thread_id": "01a126c5-ba67-719f-a659-a89d88742a67",
-        "created_at": "2026-10-10T18:04:15.014+01:00",
-        "settled_at": "2026-10-10T18:04:15.164+01:00",
-        "updated_at": "2026-10-10T18:04:15.172+01:00",
+        "user_id": "PHtSDB876FoIp7qHGoZuE3zWF5CmPch8",
+        "thread_id": "01a12836-0882-7632-b862-495533aef3b3",
+        "created_at": "2026-10-11T00:46:32.244+01:00",
+        "settled_at": "2026-10-11T00:46:32.395+01:00",
+        "updated_at": "2026-10-11T00:46:32.404+01:00",
         "execution_id": null,
         "failure_code": null,
         "workspace_id": null,
-        "organization_id": "aAnsIVETEG0owEGTCQZ0m12Kt0ih8If3",
-        "user_message_id": "01a126c5-ba67-71a1-88e0-8a1f25a34489",
+        "organization_id": "QdlKSb9VDPXFGqnAUCusvWRsg5MiVtZh",
+        "user_message_id": "01a12836-0882-7634-b3fb-5146eb98e179",
         "interaction_type": null,
         "lease_expires_at": null,
         "failure_retryable": null,
         "cancel_requested_at": null,
         "cancellation_reason": null,
         "interruption_reason": null,
-        "assistant_message_id": "01a126c5-bb28-776d-bcba-19568020ca83",
+        "assistant_message_id": "01a12836-0940-75d9-a81a-62f1a74b22ed",
         "interaction_tool_call_id": null
       },
       {
-        "id": "01a126c5-bcd8-74f9-b3e3-7b30fed1db2b",
-        "run_id": "run-01a126c5-bcbb-70a7-9c3b-2d092195b48c",
+        "id": "01a12836-09fb-7086-9940-0313c434f5c9",
+        "run_id": "run-01a12836-09e0-7037-9b99-d0f2ff0fa262",
         "status": "completed",
-        "user_id": "lmtN8IQbAv3dWTE48bSEQMDm7hhXfbBd",
-        "thread_id": "01a126c5-ba67-719f-a659-a89d88742a67",
-        "created_at": "2026-10-10T18:04:15.576+01:00",
-        "settled_at": "2026-10-10T18:04:15.679+01:00",
-        "updated_at": "2026-10-10T18:04:15.686+01:00",
+        "user_id": "PHtSDB876FoIp7qHGoZuE3zWF5CmPch8",
+        "thread_id": "01a12836-0882-7632-b862-495533aef3b3",
+        "created_at": "2026-10-11T00:46:32.571+01:00",
+        "settled_at": "2026-10-11T00:46:32.749+01:00",
+        "updated_at": "2026-10-11T00:46:32.756+01:00",
         "execution_id": null,
         "failure_code": null,
         "workspace_id": null,
-        "organization_id": "aAnsIVETEG0owEGTCQZ0m12Kt0ih8If3",
-        "user_message_id": "01a126c5-bcbb-70a8-9ce6-b04d3dced272",
+        "organization_id": "QdlKSb9VDPXFGqnAUCusvWRsg5MiVtZh",
+        "user_message_id": "01a12836-09e0-7038-bf6f-4234ab3cba83",
         "interaction_type": null,
         "lease_expires_at": null,
         "failure_retryable": null,
         "cancel_requested_at": null,
         "cancellation_reason": null,
         "interruption_reason": null,
-        "assistant_message_id": "01a126c5-bd28-77f8-9875-4ef24e6d4b95",
+        "assistant_message_id": "01a12836-0a8d-75fc-a202-1c0363721d0e",
         "interaction_tool_call_id": null
       },
       {
-        "id": "01a126c5-bd71-716e-97f5-3fe8d9ce7d94",
-        "run_id": "run-01a126c5-bdeb-7574-b53d-12f7a53fd781",
+        "id": "01a12836-0ae8-7144-9c2b-13ffaf3799c9",
+        "run_id": "run-01a12836-0b6e-7482-9bcb-e85c2fe452dd",
         "status": "completed",
-        "user_id": "lmtN8IQbAv3dWTE48bSEQMDm7hhXfbBd",
-        "thread_id": "01a126c5-ba67-719f-a659-a89d88742a67",
-        "created_at": "2026-10-10T18:04:15.729+01:00",
-        "settled_at": "2026-10-10T18:04:15.943+01:00",
-        "updated_at": "2026-10-10T18:04:15.957+01:00",
+        "user_id": "PHtSDB876FoIp7qHGoZuE3zWF5CmPch8",
+        "thread_id": "01a12836-0882-7632-b862-495533aef3b3",
+        "created_at": "2026-10-11T00:46:32.808+01:00",
+        "settled_at": "2026-10-11T00:46:33.035+01:00",
+        "updated_at": "2026-10-11T00:46:33.049+01:00",
         "execution_id": null,
         "failure_code": null,
         "workspace_id": null,
-        "organization_id": "aAnsIVETEG0owEGTCQZ0m12Kt0ih8If3",
-        "user_message_id": "01a126c5-bd58-705c-9126-92f74cf02047",
+        "organization_id": "QdlKSb9VDPXFGqnAUCusvWRsg5MiVtZh",
+        "user_message_id": "01a12836-0ac8-72b8-a37f-0bdd8ec22bef",
         "interaction_type": null,
         "lease_expires_at": null,
         "failure_retryable": null,
         "cancel_requested_at": null,
         "cancellation_reason": null,
         "interruption_reason": null,
-        "assistant_message_id": "01a126c5-bdbd-77ec-b03e-682b4c185dbd",
+        "assistant_message_id": "01a12836-0b3f-7090-8f5e-4dd664e6d205",
         "interaction_tool_call_id": null
       },
       {
-        "id": "01a126c5-be7e-73a0-92a5-df3c27360015",
-        "run_id": "run-01a126c5-beee-71ff-85ea-34915b3e0e73",
+        "id": "01a12836-0c09-7386-ace8-259b921f2283",
+        "run_id": "run-01a12836-0c95-7344-ae1c-554f7ca04a04",
         "status": "completed",
-        "user_id": "lmtN8IQbAv3dWTE48bSEQMDm7hhXfbBd",
-        "thread_id": "01a126c5-ba67-719f-a659-a89d88742a67",
-        "created_at": "2026-10-10T18:04:15.998+01:00",
-        "settled_at": "2026-10-10T18:04:16.194+01:00",
-        "updated_at": "2026-10-10T18:04:16.208+01:00",
+        "user_id": "PHtSDB876FoIp7qHGoZuE3zWF5CmPch8",
+        "thread_id": "01a12836-0882-7632-b862-495533aef3b3",
+        "created_at": "2026-10-11T00:46:33.097+01:00",
+        "settled_at": "2026-10-11T00:46:33.322+01:00",
+        "updated_at": "2026-10-11T00:46:33.335+01:00",
         "execution_id": null,
         "failure_code": null,
         "workspace_id": null,
-        "organization_id": "aAnsIVETEG0owEGTCQZ0m12Kt0ih8If3",
-        "user_message_id": "01a126c5-be65-771d-a667-d7e54a9ec33e",
+        "organization_id": "QdlKSb9VDPXFGqnAUCusvWRsg5MiVtZh",
+        "user_message_id": "01a12836-0bef-7092-b374-f30efdc8ccda",
         "interaction_type": null,
         "lease_expires_at": null,
         "failure_retryable": null,
         "cancel_requested_at": null,
         "cancellation_reason": null,
         "interruption_reason": null,
-        "assistant_message_id": "01a126c5-bec7-759c-ae17-e76e39a420df",
+        "assistant_message_id": "01a12836-0c6c-750f-b795-aa19c43307c9",
         "interaction_tool_call_id": null
       },
       {
-        "id": "01a126c5-bf78-71e9-8430-e3a93f7695d0",
-        "run_id": "run-01a126c5-bf61-72b5-87ab-1e936327270e",
+        "id": "01a12836-0d1e-7714-b92e-bc22f2088ef3",
+        "run_id": "run-01a12836-0d07-754e-8e43-04d8874dfd6c",
         "status": "failed",
-        "user_id": "lmtN8IQbAv3dWTE48bSEQMDm7hhXfbBd",
-        "thread_id": "01a126c5-ba67-719f-a659-a89d88742a67",
-        "created_at": "2026-10-10T18:04:16.248+01:00",
-        "settled_at": "2026-10-10T18:04:16.332+01:00",
-        "updated_at": "2026-10-10T18:04:16.336+01:00",
+        "user_id": "PHtSDB876FoIp7qHGoZuE3zWF5CmPch8",
+        "thread_id": "01a12836-0882-7632-b862-495533aef3b3",
+        "created_at": "2026-10-11T00:46:33.374+01:00",
+        "settled_at": "2026-10-11T00:46:33.613+01:00",
+        "updated_at": "2026-10-11T00:46:33.625+01:00",
         "execution_id": null,
         "failure_code": "provider-error",
         "workspace_id": null,
-        "organization_id": "aAnsIVETEG0owEGTCQZ0m12Kt0ih8If3",
-        "user_message_id": "01a126c5-bf61-72b6-bbfe-a8fbe98a0d08",
+        "organization_id": "QdlKSb9VDPXFGqnAUCusvWRsg5MiVtZh",
+        "user_message_id": "01a12836-0d07-754f-bb57-f7cbadfa4aec",
         "interaction_type": null,
         "lease_expires_at": null,
         "failure_retryable": true,
         "cancel_requested_at": null,
         "cancellation_reason": null,
         "interruption_reason": null,
-        "assistant_message_id": "01a126c5-bfc5-740b-8108-aa71433ae8d0",
+        "assistant_message_id": "01a12836-0e04-70f2-9e8e-7e7a5f08485e",
         "interaction_tool_call_id": null
       },
       {
-        "id": "01a126c5-bff7-7511-a2f6-05b32e723a77",
-        "run_id": "run-01a126c5-bfe1-7080-9907-d876c110e737",
+        "id": "01a12836-0e52-77e5-aba3-3186c48b124c",
+        "run_id": "run-01a12836-0e35-700f-a382-7db544c092a6",
         "status": "awaiting-user",
-        "user_id": "lmtN8IQbAv3dWTE48bSEQMDm7hhXfbBd",
-        "thread_id": "01a126c5-ba67-719f-a659-a89d88742a67",
-        "created_at": "2026-10-10T18:04:16.375+01:00",
+        "user_id": "PHtSDB876FoIp7qHGoZuE3zWF5CmPch8",
+        "thread_id": "01a12836-0882-7632-b862-495533aef3b3",
+        "created_at": "2026-10-11T00:46:33.682+01:00",
         "settled_at": null,
-        "updated_at": "2026-10-10T18:04:16.47+01:00",
+        "updated_at": "2026-10-11T00:46:33.803+01:00",
         "execution_id": null,
         "failure_code": null,
         "workspace_id": null,
-        "organization_id": "aAnsIVETEG0owEGTCQZ0m12Kt0ih8If3",
-        "user_message_id": "01a126c5-bfe1-7081-8e64-4aed9688acd9",
+        "organization_id": "QdlKSb9VDPXFGqnAUCusvWRsg5MiVtZh",
+        "user_message_id": "01a12836-0e35-7010-8874-aa4b639a8927",
         "interaction_type": "approval",
         "lease_expires_at": null,
         "failure_retryable": null,
         "cancel_requested_at": null,
         "cancellation_reason": null,
         "interruption_reason": null,
-        "assistant_message_id": "01a126c5-c040-7239-85b5-96fe99425750",
+        "assistant_message_id": "01a12836-0ead-7680-a749-b24464a41792",
         "interaction_tool_call_id": "call-lease"
       }
     ],
@@ -640,36 +714,36 @@
         "kind": "ledger-start",
         "name": "",
         "target": null,
-        "thread_id": "01a126c5-ba67-719f-a659-a89d88742a67",
-        "created_at": "2026-10-10T18:04:15.164+01:00"
+        "thread_id": "01a12836-0882-7632-b862-495533aef3b3",
+        "created_at": "2026-10-11T00:46:32.395+01:00"
       },
       {
         "kind": "tool-call-id",
         "name": "call-draft",
         "target": null,
-        "thread_id": "01a126c5-ba67-719f-a659-a89d88742a67",
-        "created_at": "2026-10-10T18:04:15.825+01:00"
+        "thread_id": "01a12836-0882-7632-b862-495533aef3b3",
+        "created_at": "2026-10-11T00:46:32.915+01:00"
       },
       {
         "kind": "tool-call-id",
         "name": "call-lease",
         "target": null,
-        "thread_id": "01a126c5-ba67-719f-a659-a89d88742a67",
-        "created_at": "2026-10-10T18:04:16.463+01:00"
+        "thread_id": "01a12836-0882-7632-b862-495533aef3b3",
+        "created_at": "2026-10-11T00:46:33.793+01:00"
       },
       {
         "kind": "tool-call-id",
         "name": "call-memo",
         "target": null,
-        "thread_id": "01a126c5-ba67-719f-a659-a89d88742a67",
-        "created_at": "2026-10-10T18:04:16.087+01:00"
+        "thread_id": "01a12836-0882-7632-b862-495533aef3b3",
+        "created_at": "2026-10-11T00:46:33.212+01:00"
       },
       {
         "kind": "tool-call-id",
         "name": "call-templates",
         "target": null,
-        "thread_id": "01a126c5-ba67-719f-a659-a89d88742a67",
-        "created_at": "2026-10-10T18:04:15.679+01:00"
+        "thread_id": "01a12836-0882-7632-b862-495533aef3b3",
+        "created_at": "2026-10-11T00:46:32.749+01:00"
       }
     ]
   }
