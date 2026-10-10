@@ -7,6 +7,7 @@ import {
  * stdin is the original OOXML file; stdout is one JSON result.
  */
 
+import { sanitizeErrorForOutput } from "@stll/errors";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import { OFFICE_EVIDENCE_LIMITS } from "@/api/lib/files/office-evidence-domain";
@@ -259,7 +260,7 @@ const main = async (): Promise<void> => {
       errorCode: classifyFailure(error),
       status: OFFICE_EVIDENCE_STATUS.unavailable,
     } as const satisfies OfficeEvidenceWorkerResult;
-    process.stdout.write(JSON.stringify(result));
+    process.stdout.write(JSON.stringify(sanitizeErrorForOutput(result)));
   }
 };
 

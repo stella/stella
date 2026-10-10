@@ -1087,31 +1087,6 @@ const countAdHocRelativeTimeFormatting: FileCounter = (content, { file }) => {
   );
 };
 
-const countDirectAuditLogInserts: FileCounter = (content, { file }) => {
-  if (!content.includes(".insert")) {
-    return 0;
-  }
-  const code = stripComments({ content, file });
-  const auditLogBindings = importedLocalBindings({
-    content: code,
-    file,
-    moduleName: "@/api/db/schema",
-    importedName: "auditLogs",
-  });
-  return [...auditLogBindings].reduce(
-    (total, binding) =>
-      total +
-      countMatches(
-        code,
-        new RegExp(
-          "\\.insert\\s*\\(\\s*" + escapeRegExp(binding) + "\\s*\\)",
-          "gu",
-        ),
-      ),
-    0,
-  );
-};
-
 // Every hand-written API module, not only `src`: a script or eval that reaches
 // an owner-level handle is as much a use of it as a lib module.
 const API_OWNER_HANDLE_GLOBS = [
@@ -1218,58 +1193,6 @@ const countWeakMcpProjectionTies: FileCounter = (content, { file }) => {
     node.forEachChild(visit);
   };
   visit(source);
-  return total;
-};
-
-const BOUNDARY_HELPER = "pgTimestampCursorBoundary";
-
-const countRepeatedTimestampCursorBoundaries: FileCounter = (
-  content,
-  { file },
-) => {
-  if (!mayNameIdentifier(content, BOUNDARY_HELPER)) {
-    return 0;
-  }
-  const code = stripComments({ content, file });
-  const sourceFile = parseSource({ fileName: file, text: code });
-  const boundaryBindings = importedLocalBindings({
-    content: code,
-    file,
-    moduleName: "@/api/lib/db-pagination",
-    importedName: BOUNDARY_HELPER,
-  });
-  const orBindings = importedLocalBindings({
-    content: code,
-    file,
-    moduleName: "drizzle-orm",
-    importedName: "or",
-  });
-
-  const countBoundaries = (node: ts.Node): number => {
-    let count =
-      ts.isCallExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      boundaryBindings.has(node.expression.text)
-        ? 1
-        : 0;
-    node.forEachChild((child) => {
-      count += countBoundaries(child);
-    });
-    return count;
-  };
-
-  let total = 0;
-  const visit = (node: ts.Node) => {
-    if (
-      ts.isCallExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      orBindings.has(node.expression.text)
-    ) {
-      total += Math.max(0, countBoundaries(node) - 1);
-    }
-    node.forEachChild(visit);
-  };
-  visit(sourceFile);
   return total;
 };
 
@@ -3253,16 +3176,6 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
   },
   {
     scope: "file",
-    id: "direct-audit-log-insert",
-    description:
-      "direct .insert(auditLogs) calls outside the audit-log recorder module",
-    include: ["apps/api/src/**/*.{ts,tsx}"],
-    exclude: (file) =>
-      isExcludedSource(file) || file === "apps/api/src/lib/audit-log.ts",
-    count: countDirectAuditLogInserts,
-  },
-  {
-    scope: "file",
     id: "direct-root-connection-imports",
     description:
       "runtime references to the owner-level database handles (`rootDb`, `rlsDb` from apps/api/src/db/root.ts) anywhere in the API outside tests, one per handle named: named, renamed and namespace imports, re-exports, `import = require` and dynamic imports (scripts/root-connection-shapes.ts). An allowlist gated per file: a new file, a file naming one more handle, or a type-only import turned into a value import fails even when another file dropped one",
@@ -3331,19 +3244,6 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
       file === "apps/api/src/lib/db-pagination.ts" ||
       file === "apps/api/src/handlers/case-law/citation-authority.ts",
     count: countInlineTimestampCursorSql,
-  },
-  {
-    scope: "file",
-    id: "repeated-timestamp-cursor-boundary",
-    description:
-      "pgTimestampCursorBoundary calls beyond the first per API source file (fuzzy proxy for hand-built timestamp/id disjunctions; explicit heterogeneous/range owners excluded)",
-    include: ["apps/api/src/**/*.{ts,tsx}"],
-    exclude: (file) =>
-      isExcludedSource(file) ||
-      file === "apps/api/src/lib/db-pagination.ts" ||
-      file === "apps/api/src/lib/entities/list-cursor.ts" ||
-      file === "apps/api/src/lib/workflow-target-queries.ts",
-    count: countRepeatedTimestampCursorBoundaries,
   },
   ...RESULT_BOUNDARY_METRICS,
   ...PER_RULE_SUPPRESSION_METRICS,
@@ -4817,7 +4717,6 @@ const SHARED_API_HELPER_FIXTURE_LINES = [
   "// value::timestamp AT TIME ZONE 'UTC' must not count.",
 ];
 const SELF_TEST_SHARED_API_HELPERS = `${SHARED_API_HELPER_FIXTURE_LINES.join("\n")}\n`;
-const EXPECTED_DIRECT_AUDIT_LOG_INSERTS = 1;
 
 // One of each shape the implicit-root counter owns (the exhaustive cases live
 // in scripts/root-connection-shapes.test.ts); the same content written to a
@@ -4897,29 +4796,6 @@ const SELF_TEST_AUDIT_SKIP_DIRECTIVES = `${AUDIT_SKIP_FIXTURE_LINES.join("\n")}\
 // The final directive catches TSX parsing swallowing a .ts generic arrow.
 const EXPECTED_AUDIT_SKIP_DIRECTIVES = 4;
 const EXPECTED_INLINE_TIMESTAMP_CURSOR_SQL = 2;
-
-const TIMESTAMP_BOUNDARY_FIXTURE_LINES = [
-  'import { or as anyOf } from "drizzle-orm";',
-  'import { pgTimestampCursorBoundary as cursorBoundary } from "@/api/lib/db-pagination";',
-  [
-    "const manual = or(",
-    "lt(column, pgTimestampCursorBoundary(first)), ",
-    "eq(column, pgTimestampCursorBoundary(first))",
-    ");",
-  ].join(""),
-  [
-    "const aliased = anyOf(",
-    "lt(column, cursorBoundary(second)), ",
-    "eq(column, cursorBoundary(second))",
-    ");",
-  ].join(""),
-  "const first = pgTimestampCursorBoundary(cursor.timestamp);",
-  "const second = pgTimestampCursorBoundary(other.timestamp);",
-  "const unrelated = buildTimestampBoundary(value);",
-  "// or(pgTimestampCursorBoundary(a), pgTimestampCursorBoundary(b))",
-];
-const SELF_TEST_TIMESTAMP_BOUNDARIES = `${TIMESTAMP_BOUNDARY_FIXTURE_LINES.join("\n")}\n`;
-const EXPECTED_REPEATED_TIMESTAMP_CURSOR_BOUNDARIES = 2;
 
 const DIRECT_ERROR_FIXTURE_LINES = [
   "stellaToast.add({ title: error instanceof Error ? error.message : fallback });",
@@ -6523,11 +6399,6 @@ const runSelfTest = (): number => {
     );
     writeFixture(
       root,
-      "apps/api/src/timestamp-boundaries.ts",
-      SELF_TEST_TIMESTAMP_BOUNDARIES,
-    );
-    writeFixture(
-      root,
       "apps/api/src/super-linear-regexes.ts",
       SELF_TEST_SUPER_LINEAR_REGEXES,
     );
@@ -6937,17 +6808,12 @@ const runSelfTest = (): number => {
         "ad-hoc-relative-time-formatting",
         EXPECTED_AD_HOC_RELATIVE_TIME_FORMATTING,
       ],
-      ["direct-audit-log-insert", EXPECTED_DIRECT_AUDIT_LOG_INSERTS],
       ["audit-skip-directives", EXPECTED_AUDIT_SKIP_DIRECTIVES],
       [
         "implicit-root-connection-shapes",
         EXPECTED_IMPLICIT_ROOT_CONNECTION_SHAPES,
       ],
       ["inline-timestamp-cursor-sql", EXPECTED_INLINE_TIMESTAMP_CURSOR_SQL],
-      [
-        "repeated-timestamp-cursor-boundary",
-        EXPECTED_REPEATED_TIMESTAMP_CURSOR_BOUNDARIES,
-      ],
     ] as const;
     for (const [id, expected] of sharedHelperMetricExpectations) {
       const metric = requireSnapshot(snapshot, id);

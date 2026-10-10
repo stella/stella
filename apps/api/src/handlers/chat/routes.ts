@@ -7,10 +7,12 @@ import getSuggestedPrompts from "@/api/handlers/chat/get-suggested-prompts";
 import getThreadRecap from "@/api/handlers/chat/get-thread-recap";
 import getThreadTitle from "@/api/handlers/chat/get-thread-title";
 import improvePrompt from "@/api/handlers/chat/improve-prompt";
+import getMessage from "@/api/handlers/chat/messages/get";
 import getMessages from "@/api/handlers/chat/messages/list";
 import acceptMessageRevision from "@/api/handlers/chat/messages/revisions/accept";
 import getMessageRevisions from "@/api/handlers/chat/messages/revisions/list";
 import revertMessageRevision from "@/api/handlers/chat/messages/revisions/revert";
+import proposeMessageSpanEdit from "@/api/handlers/chat/messages/revisions/span-edit";
 import getOlderMessages from "@/api/handlers/chat/older-messages/list";
 import readFileThread from "@/api/handlers/chat/read-file-thread";
 import resolveFileThread from "@/api/handlers/chat/resolve-file-thread";
@@ -26,6 +28,7 @@ import getThreads from "@/api/handlers/chat/threads/list";
 import renameThread from "@/api/handlers/chat/threads/rename";
 import updateThread from "@/api/handlers/chat/threads/update";
 import cancelTurn from "@/api/handlers/chat/turns/cancel";
+import { joinChatTurn, probeChatTurn } from "@/api/handlers/chat/turns/resume";
 import updateThreadModel from "@/api/handlers/chat/update-thread-model";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 
@@ -129,6 +132,19 @@ export const chatRoute = new Elysia({ prefix: "/chat" })
     query: getMessages.config.query,
   })
   .post(
+    "/threads/:threadId/messages/:messageId/span-edit",
+    proposeMessageSpanEdit.handler,
+    {
+      body: proposeMessageSpanEdit.config.body,
+      params: proposeMessageSpanEdit.config.params,
+      permissions: proposeMessageSpanEdit.config.permissions,
+    },
+  )
+  .get("/threads/:threadId/messages/:messageId", getMessage.handler, {
+    params: getMessage.config.params,
+    permissions: getMessage.config.permissions,
+  })
+  .post(
     "/threads/:threadId/messages/:messageId/revisions",
     acceptMessageRevision.handler,
     {
@@ -169,6 +185,16 @@ export const chatRoute = new Elysia({ prefix: "/chat" })
     params: getSuggestedPrompts.config.params,
     permissions: getSuggestedPrompts.config.permissions,
     query: getSuggestedPrompts.config.query,
+  })
+  .get("/threads/:threadId/turns/:turnId/resume", probeChatTurn.handler, {
+    params: probeChatTurn.config.params,
+    permissions: probeChatTurn.config.permissions,
+    query: probeChatTurn.config.query,
+  })
+  .get("/threads/:threadId/turns/:turnId/join", joinChatTurn.handler, {
+    params: joinChatTurn.config.params,
+    permissions: joinChatTurn.config.permissions,
+    query: joinChatTurn.config.query,
   })
   .post("/threads/:threadId/turns/:turnId/cancel", cancelTurn.handler, {
     params: cancelTurn.config.params,

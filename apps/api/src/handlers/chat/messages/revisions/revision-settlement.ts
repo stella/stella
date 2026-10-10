@@ -1,5 +1,7 @@
 import { panic } from "better-result";
 
+import { getAwaitingUserInteractions } from "@/api/handlers/chat/chat-message-parts";
+import type { NormalizedLegacyMessageParts } from "@/api/handlers/chat/chat-message-parts";
 import type { ChatPart } from "@/api/handlers/chat/types";
 
 type ChatToolCallPart = Extract<ChatPart, { type: "tool-call" }>;
@@ -21,3 +23,15 @@ export const isRevisionToolCallSettled = (part: ChatToolCallPart): boolean => {
       return panic(`Unhandled tool call state: ${String(part.state)}`);
   }
 };
+
+export const hasUnsettledRevisionContent = ({
+  parts,
+  metadata,
+}: NormalizedLegacyMessageParts) =>
+  getAwaitingUserInteractions({ role: "assistant", parts, metadata }).length >
+    0 ||
+  parts.some(
+    (part) =>
+      (part.type === "tool-call" && !isRevisionToolCallSettled(part)) ||
+      (part.type === "tool-result" && part.state === "streaming"),
+  );

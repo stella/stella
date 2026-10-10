@@ -66,6 +66,7 @@ import { healthRoute } from "@/api/handlers/health/routes";
 import { hostedUsageWebhookRoute } from "@/api/handlers/hosted-usage-webhook/routes";
 import { invoicesRoute } from "@/api/handlers/invoices/routes";
 import { legalReaderRoute } from "@/api/handlers/legal-reader/routes";
+import { legalResolveRoute } from "@/api/handlers/legal-resolve/routes";
 import { legislationCorpusRoute } from "@/api/handlers/legislation/corpus-routes";
 import { publicLegislationRoute } from "@/api/handlers/legislation/public-routes";
 import { legislationRoute } from "@/api/handlers/legislation/routes";
@@ -94,6 +95,7 @@ import { reportsRoute } from "@/api/handlers/reports/routes";
 import { publicSanctionsRoute } from "@/api/handlers/sanctions/public-routes";
 import { savedSearchesRoute } from "@/api/handlers/saved-searches/routes";
 import { savedTimeNarrativesRoute } from "@/api/handlers/saved-time-narratives/routes";
+import { searchHistoryRoute } from "@/api/handlers/search-history/routes";
 import { searchRoute } from "@/api/handlers/search/routes";
 import { sellerProfilesRoute } from "@/api/handlers/seller-profiles/routes";
 import { sharepointRoute } from "@/api/handlers/sharepoint/routes";
@@ -556,12 +558,22 @@ const api = new Elysia()
       .use(legislationCorpusRoute)
       .use(new Elysia().use(publicLegislationRoute).use(publicSanctionsRoute))
       .use(publicKnowledgeRoute)
-      .use(searchRoute)
-      .use(savedSearchesRoute)
+      // Compose the search slice in one link to bound the server's inferred
+      // Elysia chain depth while preserving each route's full contract.
+      .use(
+        new Elysia()
+          .use(searchRoute)
+          .use(savedSearchesRoute)
+          .use(searchHistoryRoute),
+      )
       .use(savedTimeNarrativesRoute)
       .use(auditLogsRoute)
-      .use(caseLawRoute)
-      .use(legalReaderRoute)
+      .use(
+        new Elysia()
+          .use(caseLawRoute)
+          .use(legalReaderRoute)
+          .use(legalResolveRoute),
+      )
       .use(chatRoute)
       .use(userFilesRoute)
       .use(skillsRoute)

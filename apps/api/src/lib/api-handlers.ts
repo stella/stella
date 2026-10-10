@@ -177,6 +177,9 @@ export type McpToolName = (typeof MCP_STATIC_TOOL_NAMES)[number];
  *   source document (e.g. a procuração); review-before-create only, not a
  *   standing agent capability. Mirrors `template_authoring_ui`.
  * - `correspondence`: matter correspondence list, read, and handling changes.
+ * - `personal_history`: the caller's own search history (list, delete one,
+ *   clear). Recording a use and the one-time browser import stay `internal`
+ *   under `search_ui`.
  */
 type McpCapabilityReason =
   | "template_authoring_ui"
@@ -194,7 +197,8 @@ type McpCapabilityReason =
   | "chat_thread_ui"
   | "file_transport"
   | "contact_extraction_ui"
-  | "correspondence";
+  | "correspondence"
+  | "personal_history";
 
 /**
  * Approved, permanent reasons an endpoint is intentionally never reachable from

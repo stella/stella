@@ -57,6 +57,7 @@ export const AGGREGATE_LOCKS = {
   processingClaim: { rank: 600, kind: "row" },
   contactCapacity: { rank: 700, kind: "advisory" },
   personalCatalog: { rank: 700, kind: "advisory" },
+  searchHistory: { rank: 710, kind: "row" },
   chatMessage: { rank: 810, kind: "row" },
 } as const;
 
@@ -109,6 +110,7 @@ export const AGGREGATE_CHAINS = {
   automatedFlowRunCap: ["automatedFlowRunCap"],
   contactCapacity: ["contactCapacity"],
   personalCatalog: ["personalCatalog"],
+  searchHistory: ["desktopMembership", "searchHistory"],
   chatRevision: ["chatThread", "chatMessage"],
 } as const satisfies Record<string, readonly AggregateName[]>;
 
@@ -200,6 +202,10 @@ type AggregateIdentities = {
   };
   contactCapacity: { organizationId: SafeId<"organization"> };
   personalCatalog: {
+    organizationId: SafeId<"organization">;
+    userId: SafeId<"user">;
+  };
+  searchHistory: {
     organizationId: SafeId<"organization">;
     userId: SafeId<"user">;
   };
@@ -447,6 +453,47 @@ export const withAggregateTransaction = async <Tx extends object, T>(
   });
 };
 
+type SkipLockedBatchOptions<Tx extends object, Row, T> = {
+  database: {
+    transaction: <Value>(run: (tx: Tx) => Promise<Value>) => Promise<Value>;
+  };
+  limit: number;
+  select: (tx: Tx) => {
+    toSQL: () => { sql: string };
+    limit: (limit: number) => {
+      for: (mode: RowLockMode, config: LockConfig) => PromiseLike<Row[]>;
+    };
+  };
+  run: (tx: Tx, rows: Row[]) => Promise<T>;
+};
+
+/** Nonblocking batches own a fresh transaction and forbid later aggregate acquisitions. */
+export const withSkipLockedBatch = async <Tx extends object, Row, T>({
+  database,
+  limit,
+  select,
+  run,
+}: SkipLockedBatchOptions<Tx, Row, T>): Promise<T> => {
+  if (!Number.isSafeInteger(limit) || limit < 1) {
+    panic("Skip-locked batches require a bounded positive limit");
+  }
+  return await withAggregateTransaction(database, async (tx) => {
+    const history = lockHistory(tx);
+    const query = select(tx);
+    const target = aggregateSelectTarget(query.toSQL().sql);
+    if (target.joined || !target.filtered) {
+      panic("Skip-locked batches require a filtered single-table query");
+    }
+    // These locks never wait, but holding them while acquiring a blocking
+    // aggregate would reintroduce an unordered chain. Keep that path closed.
+    history.status = "acquiring";
+    const rows = await query.limit(limit).for("update", { skipLocked: true });
+    const value = await run(tx, rows);
+    completeAcquisition(history);
+    return value;
+  });
+};
+
 /** Track the public savepoint callback without inspecting driver internals. */
 export const withAggregateSavepoint = async <T>(
   tx: Pick<Transaction, "execute" | "transaction">,
@@ -522,6 +569,14 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
         table: "member",
         columns: ["user_id", "organization_id"],
         values: [options.id.userId, options.id.organizationId],
+        scopeColumns: [],
+        scopeValues: [],
+      };
+    case "searchHistory":
+      return {
+        table: "search_history_owners",
+        columns: ["organization_id", "user_id"],
+        values: [options.id.organizationId, options.id.userId],
         scopeColumns: [],
         scopeValues: [],
       };

@@ -1426,6 +1426,7 @@ test("everything CI runs without the dependency install imports only built-ins",
     "scripts/check-api-deployment.test.ts",
     "scripts/check-standalone-lockfiles.ts",
     "scripts/detect-e2e-changes.test.ts",
+    "scripts/e2e-spec-shards-core.ts",
     "scripts/install-free-ci.test.ts",
   ]) {
     expect(loaded).toContain(file);

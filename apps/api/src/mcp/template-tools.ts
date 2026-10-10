@@ -763,7 +763,7 @@ const LIST_TEMPLATES_TOOL_DEFINITION = defineValibotMcpTool({
     "List the document templates in this organization (NDAs, powers of " +
     "attorney, leases), or describe one template's fillable fields. Omit " +
     "template_id to list templates: each template's id, name, field count, " +
-    "tags, and usage guidance (whenToUse / whenNotToUse); prefer a template " +
+    "tags, and usage guidance (whenToUse / whenNotToUse); use a template " +
     "whose whenToUse matches the request and skip any whose whenNotToUse " +
     "applies. Pass template_id to return that template's full field " +
     "configuration, its named conditions and formula fields. The " +

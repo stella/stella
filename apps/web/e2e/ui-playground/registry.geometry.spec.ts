@@ -23,6 +23,19 @@ for (const [name, { label }] of Object.entries(visualRegistry)) {
     await expect(
       section.locator(":scope > :not(header)").first(),
     ).toBeVisible();
+    if (name === "chat-history-decision") {
+      // The fixtures stay out of this spec: they are typed against the web
+      // API routes, which would pull the app's types into the browser tests.
+      const rows = await section.locator("[data-playground-state]").all();
+      expect(rows.length).toBeGreaterThan(0);
+      for (const row of rows) {
+        await expect(row).toBeVisible();
+        const fitsRow = await row.evaluate(
+          (element) => element.scrollWidth <= element.clientWidth,
+        );
+        expect(fitsRow).toBe(true);
+      }
+    }
     const sharesPageScrollFlow = await section.evaluate((fixture) => {
       const main = fixture.closest("main");
       const header = fixture.querySelector("header");
@@ -75,5 +88,73 @@ test("renders retained playbook edits and rejected-save recovery at stable ancho
   await expect(
     rejected.locator("button").filter({ hasText: /Retry|إعادة المحاولة/u }),
   ).toBeVisible();
+  expect(requests).toEqual([]);
+});
+
+test("long paste fixtures preserve composer expansion and sent preview", async ({
+  page,
+}) => {
+  const requests: string[] = [];
+  page.on("request", (request) => {
+    if (
+      ["fetch", "xhr"].includes(request.resourceType()) &&
+      /\/(?:chat|ai)(?:\/|$)/u.test(new URL(request.url()).pathname)
+    ) {
+      requests.push(request.url());
+    }
+  });
+  await page.goto("/dev?visual=chat-long-paste", {
+    waitUntil: "domcontentloaded",
+  });
+  const collapsed = page.locator(
+    '[data-playground-section="chat-long-paste:draft-collapsed"]',
+  );
+  const expanded = page.locator(
+    '[data-playground-section="chat-long-paste:draft-expanded"]',
+  );
+  const sent = page.locator(
+    '[data-playground-section="chat-long-paste:sent-collapsed"]',
+  );
+  const sentExpanded = page.locator(
+    '[data-playground-section="chat-long-paste:sent-expanded"]',
+  );
+  await expect(sentExpanded.locator("pre")).toBeVisible();
+  await expect(sentExpanded.locator("button[aria-expanded]")).toHaveAttribute(
+    "aria-expanded",
+    "true",
+  );
+  const title = "Lease review: maintenance and notice provisions";
+  await expect(collapsed.getByRole("textbox")).toHaveText(
+    "Review the maintenance obligations in this lease.",
+  );
+  await expect(
+    collapsed.getByRole("button", { name: title, exact: true }),
+  ).toBeVisible();
+  await expect(expanded.getByRole("textbox")).toContainText("Clause 22:");
+  await expect(
+    expanded.getByRole("button", { name: title, exact: true }),
+  ).toHaveCount(0);
+
+  const preview = sent.locator("pre");
+  const disclosure = sent.locator("button[aria-expanded]");
+  await expect(preview).toBeHidden();
+  await expect(disclosure).toHaveAttribute("aria-expanded", "false");
+  const text = await preview.textContent();
+  expect(text).toContain("Clause 22:");
+  await disclosure.click();
+  await expect(preview).toBeVisible();
+  await expect(disclosure).toHaveAttribute("aria-expanded", "true");
+  await expect(preview).toHaveText(text ?? "");
+
+  await collapsed
+    .getByRole("button", { name: title, exact: true })
+    .locator("..")
+    .locator("button[title]")
+    .first()
+    .click();
+  await expect(
+    collapsed.getByRole("button", { name: title, exact: true }),
+  ).toHaveCount(0);
+  await expect(collapsed.getByRole("textbox")).toContainText("Clause 22:");
   expect(requests).toEqual([]);
 });

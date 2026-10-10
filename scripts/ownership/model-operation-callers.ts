@@ -16,6 +16,7 @@ export default {
     "apps/api/src/handlers/chat/generate-thread-title.ts",
     "apps/api/src/handlers/chat/get-suggested-prompts.ts",
     "apps/api/src/handlers/chat/improve-prompt.ts",
+    "apps/api/src/handlers/chat/messages/revisions/span-edit.ts",
     "apps/api/src/handlers/chat/stream-chat.ts",
     "apps/api/src/handlers/chat/subagent-runner.ts",
     "apps/api/src/handlers/chat/suggest-thread-title.ts",

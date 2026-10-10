@@ -1,6 +1,7 @@
 import { Value } from "@sinclair/typebox/value";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
 import * as v from "valibot";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
@@ -12,6 +13,8 @@ import {
   resourceRef,
   RESOURCE_TYPE,
 } from "@stll/api-contract";
+import { createChatPastedTextPart } from "@stll/api-contract/chat";
+import { assertProperty } from "@stll/property-testing";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
@@ -626,6 +629,45 @@ describe("validateChatFileParts", () => {
 });
 
 describe("parseMessage", () => {
+  test("pasted text remains identical through parsing persistence and reload", () => {
+    assertProperty(
+      "pasted text remains identical through parsing persistence and reload",
+      fc.property(fc.string(), (text) => {
+        const part = createChatPastedTextPart(text);
+        const { message, mentions } = parseMessage({
+          accessibleWorkspaceIds: [],
+          message: toPersistableChatMessage({
+            id: chatMessageId("msg_pasted_text"),
+            role: "user",
+            parts: [part],
+          }),
+        });
+        expect(mentions).toEqual([]);
+        const reloaded = chatMessageFromPersisted({
+          id: message.id,
+          role: message.role,
+          content: chatMessageContentFromMessage(message),
+        });
+        expect(reloaded.parts).toEqual([part]);
+      }),
+    );
+  });
+
+  test("pasted text preserves HTML literals and surrounding whitespace", () => {
+    const text = " \r\n<p>literal &amp; text</p>\n\t ";
+    const part = createChatPastedTextPart(text);
+    const parsed = parseMessage({
+      accessibleWorkspaceIds: [],
+      message: toPersistableChatMessage({
+        id: chatMessageId("msg_pasted_literal"),
+        role: "user",
+        parts: [part],
+      }),
+    });
+    expect(parsed.message.parts).toEqual([part]);
+    expect(parsed.mentions).toEqual([]);
+  });
+
   test("caps mentions accumulated across text parts", () => {
     const accessibleWorkspaceId = toSafeId<"workspace">("workspace_1");
     const parts = Array.from(
@@ -1056,6 +1098,13 @@ describe("validateMessage", () => {
       pendingAskUserCall,
     ] satisfies ChatParts;
     const persistedMetadata = {
+      resumeSnapshot: {
+        resumeState: {
+          threadId: "thread_immutable_continuation",
+          runId: "paused-run",
+        },
+        pendingInterrupts: [],
+      },
       anonRestorations: {
         pairs: [{ placeholder: "[PERSON_1]", original: "Ada Lovelace" }],
       },
@@ -1912,6 +1961,10 @@ describe("validateMessage", () => {
         id: chatMessageId("msg_forged_server_provenance"),
         role: "assistant",
         metadata: {
+          resumeSnapshot: {
+            resumeState: { threadId: "forged-thread", runId: "forged-run" },
+            pendingInterrupts: [],
+          },
           refEncoding: CHAT_REF_ENCODING.PERSISTED_RESOURCE_IDS_V1,
           serverProvenance: { type: "search-summary", version: 1 },
           sourceDocuments: [

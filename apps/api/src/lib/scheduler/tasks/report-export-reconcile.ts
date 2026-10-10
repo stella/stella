@@ -1,5 +1,7 @@
 import { panic, Result } from "better-result";
 
+import { sanitizeErrorAttributesForOutput } from "@stll/errors";
+
 import type { RequeueableQueue } from "@/api/lib/bullmq-requeue";
 import { errorTag } from "@/api/lib/errors/error-tag";
 import type { ReportExportJobData } from "@/api/lib/report-export-enqueue";
@@ -48,23 +50,29 @@ export const createReconcileReportExportsTask =
     const requeueSummary = Result.isError(requeue)
       ? requeue.error.summary
       : requeue.value;
-    logger.info("scheduler.report_exports_reconciled", {
-      "reportExports.failed": recoverySummary.failed + requeueSummary.failed,
-      "reportExports.recovered": recoverySummary.recovered,
-      "reportExports.requeued": requeueSummary.handedOff,
-      "reportExports.scanned": requeueSummary.scanned,
-      "reportExports.unattributed": requeueSummary.unattributed,
-      "reportExports.unrecoverable": requeueSummary.unrecoverable,
-    });
+    logger.info(
+      "scheduler.report_exports_reconciled",
+      sanitizeErrorAttributesForOutput({
+        "reportExports.failed": recoverySummary.failed + requeueSummary.failed,
+        "reportExports.recovered": recoverySummary.recovered,
+        "reportExports.requeued": requeueSummary.handedOff,
+        "reportExports.scanned": requeueSummary.scanned,
+        "reportExports.unattributed": requeueSummary.unattributed,
+        "reportExports.unrecoverable": requeueSummary.unrecoverable,
+      }),
+    );
     if (Result.isError(recovery)) {
       if (Result.isError(requeue)) {
         // The runner captures one cause per tick: the inspection failure,
         // since it ran first. The requeue stage keeps its own diagnosis here
         // instead of a second capture.
-        logger.warn("report_export.requeue_stage_failed", {
-          "error.type": errorTag(requeue.error.cause),
-          "reportExports.failed": requeue.error.summary.failed,
-        });
+        logger.warn(
+          "report_export.requeue_stage_failed",
+          sanitizeErrorAttributesForOutput({
+            "error.type": errorTag(requeue.error.cause),
+            "reportExports.failed": requeue.error.summary.failed,
+          }),
+        );
       }
       return Result.err(
         new SchedulerTaskFailure({

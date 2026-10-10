@@ -8,9 +8,11 @@ import {
   chatMessageRevisions,
   chatThreads,
 } from "@/api/db/schema";
+import { hasChatWorkspaceAccess } from "@/api/handlers/chat/chat-scope";
+import type { ChatWorkspaceAccess } from "@/api/handlers/chat/chat-scope";
 import { CHAT_TURN_PERMISSIONS } from "@/api/handlers/chat/chat-turn-state";
 import { revisionParams } from "@/api/handlers/chat/messages/revisions/accept";
-import type { PersistedChatMessageContent } from "@/api/handlers/chat/types";
+import { serializeRevisionSnapshot } from "@/api/handlers/chat/messages/revisions/serialize-revision-snapshot";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -28,23 +30,6 @@ import type {
 
 const MAX_REVISION_PAGE_SIZE = 50;
 const DEFAULT_REVISION_PAGE_SIZE = 20;
-
-type RevisionSnapshot = {
-  version: PersistedChatMessageContent["version"];
-  data: unknown[];
-  metadata?: unknown;
-};
-
-// Persistence proofs belong to the server; snapshots expose only stored JSON.
-const serializeRevisionSnapshot = (
-  content: PersistedChatMessageContent,
-): RevisionSnapshot => ({
-  version: content.version,
-  data: content.data,
-  ...(content.version === 1 || content.metadata === undefined
-    ? {}
-    : { metadata: content.metadata }),
-});
 
 const config = {
   contentDelivery: {
@@ -75,6 +60,7 @@ type ReadChatMessageRevisionsOptions = {
   messageId: SafeId<"chatMessage">;
   userId: SafeId<"user">;
   organizationId: SafeId<"organization">;
+  getWorkspaceAccess: ChatWorkspaceAccess;
   before?: number;
   limit: number;
 };
@@ -85,12 +71,13 @@ export const readChatMessageRevisionsOnTx = async ({
   messageId,
   userId,
   organizationId,
+  getWorkspaceAccess,
   before,
   limit,
 }: ReadChatMessageRevisionsOptions) => {
   const message = (
     await tx
-      .select({ role: chatMessages.role })
+      .select({ role: chatMessages.role, workspaceId: chatThreads.workspaceId })
       .from(chatMessages)
       .innerJoin(chatThreads, eq(chatThreads.id, chatMessages.threadId))
       .where(
@@ -103,7 +90,13 @@ export const readChatMessageRevisionsOnTx = async ({
       )
       .limit(1)
   ).at(0);
-  if (!message) {
+  if (
+    !message ||
+    !(await hasChatWorkspaceAccess({
+      workspaceId: message.workspaceId,
+      getWorkspaceAccess,
+    }))
+  ) {
     return null;
   }
   const rows = await tx
@@ -151,6 +144,7 @@ export default createSafeRootHandler(
     params: { threadId, messageId },
     query: { cursor, limit = DEFAULT_REVISION_PAGE_SIZE },
     safeDb,
+    getWorkspaceAccess,
     user,
     session,
   }) {
@@ -177,6 +171,7 @@ export default createSafeRootHandler(
         async (tx) =>
           await readChatMessageRevisionsOnTx({
             tx,
+            getWorkspaceAccess,
             threadId,
             messageId,
             userId: user.id,

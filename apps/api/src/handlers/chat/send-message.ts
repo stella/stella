@@ -16,7 +16,7 @@ import {
   ACTION_ADMISSION_REFUSALS,
   isActionAdmissionCode,
 } from "@stll/api-contract/action-admission";
-import type { SkillMetadata } from "@stll/skills";
+import type { SkillMetadata } from "@stll/skills/frontmatter";
 
 import type { SafeDb, SafeDbError, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads } from "@/api/db/schema";
@@ -607,6 +607,20 @@ export class ChatSendLifecycle {
 
   constructor(options: ChatSendLifecycleOptions) {
     this.options = options;
+  }
+
+  /** Once accepted durably, a turn belongs to its lease rather than a viewer. */
+  isClientConnectionAborted(signal: AbortSignal): boolean {
+    switch (this.claimedTurn.status) {
+      case "unclaimed":
+        return signal.aborted;
+      case "preflight":
+      case "failure-pending":
+      case "handed-over":
+        return false;
+      default:
+        return panic(this.claimedTurn satisfies never);
+    }
   }
 
   /**
@@ -1774,6 +1788,7 @@ const prepareValidatedIncomingMessage = async ({
         organizationId,
         recordAuditEvent,
         safeDb,
+        subjectDecisionId: body.activeDecision?.decisionId ?? null,
         threadId: body.threadId,
         title: initialThreadTitle,
         userId,
@@ -2034,6 +2049,7 @@ const assembleTurnSystemPrompt = ({
 });
 
 export type SendMessageDependencies = {
+  caseLawDb?: Parameters<typeof buildChatSystemPromptParts>[0]["caseLawDb"];
   startAdmission?: typeof startExecutionAdmission;
   compactMessagesForContext: typeof compactMessagesForContext;
   createRefRegistry: typeof createChatRefRegistry;
@@ -2119,7 +2135,11 @@ export const createSendMessage = (
         "parentRunId" in transportBody ? transportBody.parentRunId : undefined;
       const transportResume =
         "resume" in transportBody ? transportBody.resume : undefined;
-      const isClientConnectionAborted = () => request.signal.aborted;
+      let acceptedLifecycle: ChatSendLifecycle | undefined = undefined;
+      const isClientConnectionAborted = () =>
+        acceptedLifecycle === undefined
+          ? request.signal.aborted
+          : acceptedLifecycle.isClientConnectionAborted(request.signal);
 
       if (isClientConnectionAborted()) {
         return Result.err(
@@ -2393,6 +2413,7 @@ export const createSendMessage = (
         workspaceId,
         rollbackSideEffects: dependencies.rollbackSideEffects,
       });
+      acceptedLifecycle = lifecycle;
 
       // The try/finally starts immediately after the loader is constructed
       // (rather than just around the streaming pass) so that a throw from
@@ -2576,10 +2597,9 @@ export const createSendMessage = (
           threadNames.retiredRefs,
         );
 
-        // The incoming message is durable now, so a disconnect must not run the
-        // pre-persistence rollback (which would delete files referenced by that
-        // message). It should still stop before connector discovery and any
-        // metered provider work.
+        // Before acceptance, a disconnected viewer may abandon preparation.
+        // Once claimed, the lifecycle ignores viewer loss and preserves the
+        // accepted message, execution admission, and provider budgets.
         if (isClientConnectionAborted()) {
           yield* Result.await(lifecycle.interruptCurrentTurn());
           return Result.err(
@@ -2788,6 +2808,7 @@ export const createSendMessage = (
           return skillToolNames;
         };
         const chatContextResult = await prepareChatContext({
+          caseLawDb: dependencies.caseLawDb,
           featureAccessSnapshot,
           activeDecision: body.activeDecision,
           activeDraft: body.activeDraft,
@@ -3341,6 +3362,7 @@ export const shouldLoadExternalMcpToolsForStreaming = (
 ): boolean => runMode !== CHAT_RUN_MODE.agent;
 
 type PrepareChatContextProps = {
+  caseLawDb?: SendMessageDependencies["caseLawDb"];
   featureAccessSnapshot: FeatureAccessSnapshot;
   activeDecision: IncomingActiveDecision | undefined;
   activeDraft: IncomingActiveDraft | undefined;
@@ -3389,6 +3411,7 @@ type PrepareChatContextResult = Result<
 >;
 
 const prepareChatContext = async ({
+  caseLawDb,
   featureAccessSnapshot,
   activeDecision,
   activeDraft,
@@ -3428,6 +3451,7 @@ const prepareChatContext = async ({
 
     const promptAndMessagesResult = await Result.allAsync([
       buildChatSystemPromptParts({
+        ...(caseLawDb === undefined ? {} : { caseLawDb }),
         featureAccessContext: { featureAccessSnapshot, organizationId, userId },
         activeDecision,
         activeDraft,

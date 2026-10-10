@@ -27,6 +27,9 @@ export const RESULT_CONVENTION_SOURCE_GLOBS = [
 // oxlint.config.ts spreads this list rather than restating it, so the lint
 // scope and the enrolment guard cannot drift apart.
 export const RESULT_CONVENTION_ENABLED_GLOBS = [
+  "apps/web/src/features/law-search-history/**/*.ts",
+  "apps/desktop/src/activity/**/*.ts",
+  "apps/desktop/src/activity/**/*.tsx",
   "apps/visual-preview/src/**/*.ts",
   "apps/api/src/handlers/realtime-resource-sets.ts",
   "apps/api/src/lib/auth/**/*.ts",
@@ -52,6 +55,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/handlers/files/**/*.ts",
   "apps/api/src/handlers/flows/**/*.ts",
   "apps/api/src/handlers/folio-collab/**/*.ts",
+  "apps/api/src/handlers/legal-resolve/**/*.ts",
   "apps/api/src/handlers/legal-reader/**/*.ts",
   "apps/api/src/handlers/mcp/**/*.ts",
   "apps/api/src/handlers/me/**/*.ts",
@@ -67,6 +71,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/handlers/saved-searches/**/*.ts",
   "apps/api/src/handlers/sanctions/**/*.ts",
   "apps/api/src/handlers/search/**/*.ts",
+  "apps/api/src/handlers/search-history/**/*.ts",
   "apps/api/src/handlers/soft-law/**/*.ts",
   "apps/api/src/handlers/seller-profiles/**/*.ts",
   "apps/api/src/handlers/tasks/**/*.ts",
@@ -252,6 +257,9 @@ export const RESULT_BOUNDARY_GLOBS = [
   // Handed to TanStack's connection adapter, which consumes rejections: a
   // refused response travels back as a thrown `APIError`, not as a `Result`.
   "apps/web/src/features/chat/chat-fetch.ts",
+  // TanStack's fetch and connection adapters consume Response/rejection;
+  // this transport cannot return Result across the SDK callback boundary.
+  "packages/chat/src/durable-transport.ts",
   // TanStack AI reads a chat tool's failure only from the error its server
   // function throws; tools keep `Result`s and raise through this one module.
   "apps/api/src/handlers/chat/tools/tool-failure.ts",

@@ -16,6 +16,7 @@ import {
 import type { ModelRole } from "@stll/ai-catalog";
 import type { AIErrorKind } from "@stll/api-contract";
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
+import { sanitizeQueryErrorText } from "@stll/errors";
 
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import type { CachingDecision, OrgAIConfig } from "@/api/lib/ai-config";
@@ -261,6 +262,9 @@ const PROVIDER_CALL_ERROR_RETRYABILITY = {
   model_unavailable: false,
   provider_unavailable: true,
   provider_stream_incomplete: true,
+  output_incomplete: true,
+  output_invalid: false,
+  deadline_exceeded: true,
   loop_detected: false,
   empty_completion: false,
   unknown: false,
@@ -958,8 +962,9 @@ type PdfCanarySelection = {
 export const pdfCanarySelection = (
   provider: CanaryProvider,
 ): PdfCanarySelection | null => {
-  if (isBYOKProviderRoleSupported({ provider, role: "pdf" })) {
-    return { modelId: DEFAULT_MODELS[provider].pdf, role: "pdf" };
+  const defaultModelId = DEFAULT_MODELS[provider].pdf;
+  if (defaultModelId !== null) {
+    return { modelId: defaultModelId, role: "pdf" };
   }
 
   const modelId = CHAT_PDF_ATTACHMENT_MODEL_OPTIONS[provider].at(0);
@@ -1214,12 +1219,16 @@ const runStructuredOutputModelRoleProbe = async ({
   role,
   signal,
 }: RunModelRoleProbeOptions): Promise<void> => {
+  const modelId = DEFAULT_MODELS[provider][role];
+  if (modelId === null) {
+    return panic("Unsupported role must not run a structured output canary");
+  }
   await generateTanStackObjectForRole({
     dataClass: "public_corpus",
     abortSignal: signal,
     caching: NO_CACHING,
     maxOutputTokens: structuredOutputModelRoleMaxOutputTokens({
-      modelId: DEFAULT_MODELS[provider][role],
+      modelId,
       role,
     }),
     organizationId: null,
@@ -1512,12 +1521,17 @@ const modelSelections = (provider: CanaryProvider, rotatedModelId?: string) => {
       ? rotatedModelId
       : DEFAULT_MODELS[provider][role];
 
-  return {
-    fast: { provider, modelId: modelIdForRole("fast") },
-    chat: { provider, modelId: modelIdForRole("chat") },
-    reasoning: { provider, modelId: modelIdForRole("reasoning") },
-    pdf: { provider, modelId: modelIdForRole("pdf") },
-  };
+  const selections: [
+    ModelRole,
+    { provider: CanaryProvider; modelId: string },
+  ][] = [];
+  for (const role of MODEL_ROLES) {
+    const modelId = modelIdForRole(role);
+    if (modelId !== null) {
+      selections.push([role, { provider, modelId }]);
+    }
+  }
+  return Object.fromEntries(selections);
 };
 
 /**
@@ -1530,7 +1544,10 @@ const modelSelections = (provider: CanaryProvider, rotatedModelId?: string) => {
 export const catalogModelIds = (provider: CanaryProvider): string[] => {
   const ids = new Set<string>();
   for (const role of MODEL_ROLES) {
-    ids.add(DEFAULT_MODELS[provider][role]);
+    const modelId = DEFAULT_MODELS[provider][role];
+    if (modelId !== null) {
+      ids.add(modelId);
+    }
   }
   for (const modelId of BYOK_MODEL_OPTIONS[provider]) {
     ids.add(modelId);
@@ -1711,7 +1728,9 @@ const recordProbeResult = ({
   }
 
   console.error(
-    `[ai-canary] ${provider}/${label}: failed${attemptSummary(result.attempts)} (${errorSummary(result.error, result.signal)})`,
+    sanitizeQueryErrorText(
+      `[ai-canary] ${provider}/${label}: failed${attemptSummary(result.attempts)} (${errorSummary(result.error, result.signal)})`,
+    ),
   );
   return 1;
 };
@@ -2038,7 +2057,7 @@ if (import.meta.main) {
   await run().catch((error: unknown) => {
     // Never print provider errors: bodies can echo request content or headers.
     const message = CanaryError.is(error) ? error.message : "Canary failed.";
-    console.error(`[ai-canary] ${message}`);
+    console.error(sanitizeQueryErrorText(`[ai-canary] ${message}`));
     process.exitCode = 1;
   });
 }

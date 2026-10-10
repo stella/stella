@@ -179,7 +179,7 @@ const loadChatMessagePageOnTx = async ({
  * timestamp, its attachments carrying the placeholders of the files they
  * reference.
  */
-const projectPageRowsOnTx = async ({
+export const projectPageRowsOnTx = async ({
   rows,
   tx,
   userId,

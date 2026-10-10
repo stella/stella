@@ -4,6 +4,7 @@ import { and, eq, sql } from "drizzle-orm";
 
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 import { CHAT_MESSAGE_EDIT_TYPE } from "@stll/api-contract/chat-message-revisions";
+import { sha256Hex } from "@stll/sha256/bun";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
@@ -66,6 +67,7 @@ const edited = toPersistedChatMessageContentV3({
 const acceptedChange = {
   type: "accept",
   baseRevision: 0,
+  selectedTextHash: sha256Hex("Original"),
   content: edited,
   edit: {
     type: CHAT_MESSAGE_EDIT_TYPE.format,
@@ -149,6 +151,7 @@ const seedFixture = async (db: GatedTestDb) => {
           messageId,
           userId,
           organizationId,
+          getWorkspaceAccess: async (id) => ({ id, status: "active" }),
           change,
           recordAuditEvent,
         }),
@@ -379,6 +382,14 @@ if (!databaseUrl || !runPostgres) {
         const db = openClient().db;
         const fixture = await seedFixture(db);
         try {
+          const unedited = await fixture.observe();
+          expect(
+            await fixture.write(db, {
+              ...acceptedChange,
+              selectedTextHash: sha256Hex("Changed selection"),
+            }),
+          ).toEqual({ type: "stale" });
+          expect(await fixture.observe()).toEqual(unedited);
           await fixture.write(db, acceptedChange);
           const before = await fixture.observe();
           const originalBytes = await db.execute<{ bytes: string }>(
@@ -441,6 +452,7 @@ if (!databaseUrl || !runPostgres) {
                 messageId: fixture.messageId,
                 userId: fixture.userId,
                 organizationId: fixture.organizationId,
+                getWorkspaceAccess: async (id) => ({ id, status: "active" }),
                 limit: 1,
               }),
           );
@@ -461,6 +473,7 @@ if (!databaseUrl || !runPostgres) {
                 messageId: fixture.messageId,
                 userId: fixture.userId,
                 organizationId: fixture.organizationId,
+                getWorkspaceAccess: async (id) => ({ id, status: "active" }),
                 limit: 1,
                 before: beforeRevision,
               }),
@@ -845,10 +858,66 @@ if (!databaseUrl || !runPostgres) {
               await fixture.write(db, {
                 type: "accept",
                 baseRevision: 0,
+                selectedTextHash: sha256Hex(
+                  "Original answer".slice(
+                    candidate.edit.start,
+                    candidate.edit.end,
+                  ),
+                ),
                 content: candidate.content,
                 edit: candidate.edit,
               }),
             ).toEqual({ type: candidate.expected });
+            expect(await fixture.observe()).toEqual(before);
+          }
+        } finally {
+          await fixture.cleanUp();
+        }
+      });
+    });
+
+    test("denied matter access prevents revision reads and writes without mutation", async () => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const db = openClient().db;
+        const fixture = await seedFixture(db);
+        try {
+          const before = await fixture.observe();
+          for (const getWorkspaceAccess of [
+            async () => null,
+            async () => ({
+              id: fixture.workspaceId,
+              status: "deleting" as const,
+            }),
+          ]) {
+            const write = await fixture.scoped(db)(
+              async (tx) =>
+                await writeChatMessageRevisionOnTx({
+                  tx,
+                  threadId: fixture.threadId,
+                  messageId: fixture.messageId,
+                  userId: fixture.userId,
+                  organizationId: fixture.organizationId,
+                  getWorkspaceAccess,
+                  change: acceptedChange,
+                  recordAuditEvent: async () => {
+                    throw new TypeError("Denied write reached audit");
+                  },
+                }),
+            );
+            expect(write).toEqual({ type: "not-found" });
+            const page = await fixture.scoped(db)(
+              async (tx) =>
+                await readChatMessageRevisionsOnTx({
+                  tx,
+                  threadId: fixture.threadId,
+                  messageId: fixture.messageId,
+                  userId: fixture.userId,
+                  organizationId: fixture.organizationId,
+                  getWorkspaceAccess,
+                  limit: 1,
+                }),
+            );
+            expect(page).toBeNull();
             expect(await fixture.observe()).toEqual(before);
           }
         } finally {
@@ -883,6 +952,10 @@ if (!databaseUrl || !runPostgres) {
                     messageId: fixture.messageId,
                     userId: fixture.userId,
                     organizationId: fixture.organizationId,
+                    getWorkspaceAccess: async (id) => ({
+                      id,
+                      status: "active",
+                    }),
                     change: acceptedChange,
                     recordAuditEvent: async () => {
                       throw failure;
@@ -1019,6 +1092,7 @@ if (!databaseUrl || !runPostgres) {
             await fixture.write(db, {
               type: "accept",
               baseRevision: 0,
+              selectedTextHash: sha256Hex("H"),
               content: redistributed,
               edit,
             }),
@@ -1037,6 +1111,7 @@ if (!databaseUrl || !runPostgres) {
             await fixture.write(db, {
               type: "accept",
               baseRevision: 0,
+              selectedTextHash: sha256Hex("H"),
               content: candidate,
               edit,
             }),

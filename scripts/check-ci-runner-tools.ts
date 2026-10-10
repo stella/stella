@@ -21,7 +21,7 @@ import {
 } from "./workflow-steps";
 
 // This guard must run before dependencies are installed.
-class RunnerToolInvariantError extends Error {
+export class RunnerToolInvariantError extends Error {
   override name = "RunnerToolInvariantError";
   readonly _tag = "RunnerToolInvariantError";
 }
@@ -47,32 +47,107 @@ const readYaml = (file: string): unknown =>
 // Hosted inventories promise jq; x64 Ubuntu and macOS also provide yq.
 // Unknown and container images inherit no hosted-runner tools.
 // https://github.com/actions/runner-images/blob/main/images/ubuntu/Ubuntu2404-Readme.md
-export type SelfHostedProfiles = ReadonlyMap<string, ReadonlySet<string>>;
+type RunnerToolchain = {
+  directory: string;
+  tools: ReadonlySet<string>;
+};
+export type SelfHostedProfiles = ReadonlyMap<
+  string,
+  { tools: ReadonlySet<string>; toolchain?: RunnerToolchain }
+>;
 
-// Tools a pinned-toolchain lock declares (`artifact <name> ...` lines),
-// limited to the tracked executables.
-export const toolchainLockTools = (lock: string): ReadonlySet<string> =>
-  new Set(
-    lock
-      .split("\n")
-      .map((line) => /^artifact\s+(\S+)\s/u.exec(line.trim())?.[1])
-      .filter(
-        (name): name is string => name !== undefined && tracked.has(name),
-      ),
-  );
+const onlyKeys = (value: Record<string, unknown>, keys: readonly string[]) =>
+  Object.keys(value).every((key) => keys.includes(key));
+const profileTools = (value: unknown): ReadonlySet<string> => {
+  if (!Array.isArray(value)) {
+    throw new RunnerToolInvariantError(
+      "Invalid runner profile: expected executable names",
+    );
+  }
+  const tools = new Set<string>();
+  for (const tool of value) {
+    if (
+      typeof tool !== "string" ||
+      !/^[A-Za-z_][A-Za-z_0-9.-]*$/u.test(tool) ||
+      tools.has(tool)
+    ) {
+      throw new RunnerToolInvariantError(
+        "Invalid runner profile: expected unique executable names",
+      );
+    }
+    tools.add(tool);
+  }
+  return tools;
+};
 
-// The deploy runner's installer puts the toolchain its lock pins first on
-// every job's PATH, so the lock in the checked-out repository is the
-// contract for that label. Repositories without the lock declare nothing.
-const DEPLOY_RUNNER_LABEL = "mini-infra-deploy";
-const DEPLOY_RUNNER_LOCK = "ci/deploy-runner/toolchain.lock";
-export const selfHostedProfiles = (root: string): SelfHostedProfiles => {
-  const lock = path.join(root, DEPLOY_RUNNER_LOCK);
-  return existsSync(lock)
-    ? new Map([
-        [DEPLOY_RUNNER_LABEL, toolchainLockTools(readFileSync(lock, "utf-8"))],
-      ])
-    : new Map();
+// Profiles are explicit caller input, never inferred from the checkout.
+// Validation uses built-ins so the guard remains install-free.
+export const selfHostedProfiles = (file?: string): SelfHostedProfiles => {
+  if (file === undefined) {
+    return new Map();
+  }
+  let input: unknown;
+  try {
+    input = JSON.parse(readFileSync(file, "utf-8"));
+  } catch {
+    throw new RunnerToolInvariantError(
+      "Invalid runner profile: expected a readable JSON file",
+    );
+  }
+  if (
+    !isRecord(input) ||
+    !onlyKeys(input, ["version", "runners"]) ||
+    input["version"] !== 1 ||
+    !Array.isArray(input["runners"])
+  ) {
+    throw new RunnerToolInvariantError(
+      "Invalid runner profile: expected version 1 and runners",
+    );
+  }
+  const profiles = new Map<
+    string,
+    { tools: ReadonlySet<string>; toolchain?: RunnerToolchain }
+  >();
+  for (const runner of input["runners"]) {
+    if (
+      !isRecord(runner) ||
+      !onlyKeys(runner, ["label", "tools", "toolchain"]) ||
+      typeof runner["label"] !== "string" ||
+      !/^[A-Za-z0-9][A-Za-z0-9_.-]*$/u.test(runner["label"]) ||
+      runner["label"] === "self-hosted" ||
+      profiles.has(runner["label"])
+    ) {
+      throw new RunnerToolInvariantError(
+        "Invalid runner profile: expected unique runner labels",
+      );
+    }
+    const tools = profileTools(runner["tools"]);
+    const declaration = runner["toolchain"];
+    if (declaration === undefined) {
+      profiles.set(runner["label"], { tools });
+      continue;
+    }
+    if (
+      !isRecord(declaration) ||
+      !onlyKeys(declaration, ["directory", "tools"]) ||
+      typeof declaration["directory"] !== "string" ||
+      !/^\/(?:[\w.-]+\/)*[\w.-]+$/u.test(declaration["directory"]) ||
+      path.posix.normalize(declaration["directory"]) !==
+        declaration["directory"]
+    ) {
+      throw new RunnerToolInvariantError(
+        "Invalid runner profile: expected an absolute canonical toolchain directory",
+      );
+    }
+    profiles.set(runner["label"], {
+      tools,
+      toolchain: {
+        directory: declaration["directory"],
+        tools: profileTools(declaration["tools"]),
+      },
+    });
+  }
+  return profiles;
 };
 
 export const runnerTools = (
@@ -91,7 +166,7 @@ export const runnerTools = (
     runner[0] === "self-hosted" &&
     typeof runner[1] === "string"
   ) {
-    return selfHosted.get(runner[1]) ?? new Set();
+    return selfHosted.get(runner[1])?.tools ?? new Set();
   }
   if (typeof runner !== "string") {
     return new Set();
@@ -170,47 +245,138 @@ const eventOperand = (operand: string) => {
 };
 const operands = (condition: unknown) =>
   conditionOperands(condition).map(eventOperand);
-const runnerCases = (
-  job: Record<string, unknown>,
-  selfHosted: SelfHostedProfiles,
-) => {
-  const runner = job["runs-on"];
-  const match =
-    typeof runner === "string"
-      ? /^\$\{\{\s*(github\.event_name\s*(==|!=)\s*'([\w-]+)')\s*&&\s*(fromJSON\('([^']+)'\)|'([^']+)')\s*\|\|\s*'([^']+)'\s*\}\}$/u.exec(
-          runner,
-        )
-      : null;
-  if (match === null) {
-    return [{ guaranteed: jobTools(job, selfHosted), condition: [] }];
+// Parse only static event choices. Each token is consumed in order, so extra
+// operators, computed values and malformed JSON cannot acquire guarantees.
+const parseRunnerChoice = (source: string) => {
+  let remaining = source.trim();
+  const consume = (pattern: RegExp) => {
+    const match = pattern.exec(remaining);
+    if (match === null) {
+      return undefined;
+    }
+    remaining = remaining.slice(match[0].length).trimStart();
+    return match;
+  };
+  const literal = () => {
+    const match = consume(/^'((?:[^']|'')*)'/u);
+    return match?.[1]?.replaceAll("''", "'");
+  };
+  const branch = (): unknown => {
+    if (!remaining.startsWith("fromJSON")) {
+      return literal();
+    }
+    if (consume(/^fromJSON\s*\(\s*/u) === undefined) {
+      return undefined;
+    }
+    const json = literal();
+    if (json === undefined || consume(/^\)/u) === undefined) {
+      return undefined;
+    }
+    // JSON is workflow input: malformed data belongs at this parser boundary.
+    try {
+      const value: unknown = JSON.parse(json);
+      return typeof value === "string" ||
+        (Array.isArray(value) &&
+          value.every((label) => typeof label === "string"))
+        ? value
+        : undefined;
+    } catch {
+      return undefined;
+    }
+  };
+  if (consume(/^\$\{\{\s*/u) === undefined) {
+    return undefined;
   }
-  const condition = match[1];
-  const operator = match[2];
-  const event = match[3];
-  const jsonRunner = match[5];
-  const plainRunner = match[6];
-  const fallbackRunner = match[7];
+  const condition = consume(/^github\.event_name\s*(==|!=)\s*/u);
+  const event = literal();
   if (
     condition === undefined ||
-    operator === undefined ||
     event === undefined ||
-    (jsonRunner === undefined && plainRunner === undefined) ||
-    fallbackRunner === undefined
+    !/^[\w-]+$/u.test(event) ||
+    consume(/^&&\s*/u) === undefined
   ) {
-    return [{ guaranteed: new Set<string>(), condition: [] }];
+    return undefined;
   }
-  const firstRunner: unknown =
-    jsonRunner === undefined ? plainRunner : Bun.YAML.parse(jsonRunner);
+  const first = branch();
+  if (first === undefined || consume(/^\|\|\s*/u) === undefined) {
+    return undefined;
+  }
+  const fallback = branch();
+  if (
+    fallback === undefined ||
+    consume(/^\}\}/u) === undefined ||
+    remaining !== ""
+  ) {
+    return undefined;
+  }
+  const operator = condition[1];
+  if (operator !== "==" && operator !== "!=") {
+    return undefined;
+  }
+  return { operator, event, first, fallback };
+};
+type RunnerToolchainOptions = {
+  runner: unknown;
+  job: Record<string, unknown>;
+  selfHosted: SelfHostedProfiles;
+};
+const runnerToolchain = ({
+  runner,
+  job,
+  selfHosted,
+}: RunnerToolchainOptions) =>
+  job["container"] === undefined &&
+  Array.isArray(runner) &&
+  runner.length === 2 &&
+  runner[0] === "self-hosted" &&
+  typeof runner[1] === "string"
+    ? selfHosted.get(runner[1])?.toolchain
+    : undefined;
+
+type RunnerCasesOptions = {
+  job: Record<string, unknown>;
+  selfHosted: SelfHostedProfiles;
+  problems: string[];
+  label: string;
+};
+const runnerCases = ({
+  job,
+  selfHosted,
+  problems,
+  label,
+}: RunnerCasesOptions) => {
+  const runner = job["runs-on"];
+  const choice =
+    typeof runner === "string" ? parseRunnerChoice(runner) : undefined;
+  if (choice === undefined) {
+    if (
+      typeof runner === "string" &&
+      runner.includes("${{") &&
+      !/^\$\{\{\s*matrix\.\w+\s*\}\}$/u.test(runner)
+    ) {
+      problems.push(`${label}: unsupported runs-on expression: ${runner}`);
+    }
+    return [
+      {
+        guaranteed: jobTools(job, selfHosted),
+        condition: [],
+        toolchain: runnerToolchain({ runner, job, selfHosted }),
+      },
+    ];
+  }
+  const { operator, event, first, fallback } = choice;
   return [
     {
-      guaranteed: runnerTools(firstRunner, job["container"], selfHosted),
-      condition: [eventOperand(condition)],
+      guaranteed: runnerTools(first, job["container"], selfHosted),
+      condition: [`github.event_name ${operator} '${event}'`],
+      toolchain: runnerToolchain({ runner: first, job, selfHosted }),
     },
     {
-      guaranteed: runnerTools(fallbackRunner, job["container"], selfHosted),
+      guaranteed: runnerTools(fallback, job["container"], selfHosted),
       condition: [
         `github.event_name ${operator === "==" ? "!=" : "=="} '${event}'`,
       ],
+      toolchain: runnerToolchain({ runner: fallback, job, selfHosted }),
     },
   ];
 };
@@ -234,6 +400,7 @@ type ScanContext = {
   cwd: string;
   label: string;
   guaranteed: ReadonlySet<string>;
+  toolchain: RunnerToolchain | undefined;
   installs: Install[];
   condition: readonly string[];
   active: Set<string>;
@@ -381,7 +548,14 @@ const inspectSource = (file: string, context: ScanContext) => {
     }
     for (const executable of executables) {
       const command = path.basename(executable);
-      if (tracked.has(command) && !toolInstalled(command, context)) {
+      const declaredExecutable =
+        context.toolchain?.tools.has(command) === true &&
+        executable === `${context.toolchain.directory}/${command}`;
+      if (
+        tracked.has(command) &&
+        !declaredExecutable &&
+        !toolInstalled(command, context)
+      ) {
         context.problems.push(
           `${context.label}: ${path.relative(context.root, file)} requires ${command}, which this runner/job does not provide`,
         );
@@ -601,6 +775,13 @@ const inspectShell = (source: string, context: ScanContext) => {
     !context.allowInstalls ||
     events.some((event) => event.type === "control-flow");
   let directories = new Set([context.cwd]);
+  const variables =
+    context.toolchain === undefined
+      ? new Map<string, string>()
+      : (nativeToolchainContract({
+          source,
+          directory: context.toolchain.directory,
+        })?.variables ?? new Map<string, string>());
   for (const event of events) {
     switch (event.type) {
       case "control-flow":
@@ -647,7 +828,19 @@ const inspectShell = (source: string, context: ScanContext) => {
       }
       continue;
     }
-    if (tracked.has(command) && !toolInstalled(command, context)) {
+    const executable = rawCommand.replace(
+      /^\$(?:([A-Za-z_][A-Za-z_0-9]*)|\{([A-Za-z_][A-Za-z_0-9]*)\})/u,
+      (original, name: string | undefined, braced: string | undefined) =>
+        variables.get(name ?? braced ?? "") ?? original,
+    );
+    const declaredExecutable =
+      context.toolchain?.tools.has(command) === true &&
+      executable === `${context.toolchain.directory}/${command}`;
+    if (
+      tracked.has(command) &&
+      !declaredExecutable &&
+      !toolInstalled(command, context)
+    ) {
       context.problems.push(
         `${context.label}: ${path.relative(context.root, context.file)} requires ${command}, which this runner/job does not provide`,
       );
@@ -665,6 +858,133 @@ const inspectShell = (source: string, context: ScanContext) => {
     });
   }
 };
+
+const appendedPath = (line: string, variables: ReadonlyMap<string, string>) => {
+  const append =
+    /^\s*echo\s+(?:"([^"`]+)"|'([^']+)'|([/\w.-]+))\s*>>\s*(?:"\$GITHUB_PATH"|"\$\{GITHUB_PATH\}"|\$GITHUB_PATH|\$\{GITHUB_PATH\})\s*$/u.exec(
+      line,
+    );
+  if (append !== null) {
+    const value = append[1] ?? append[2] ?? append[3];
+    const variable =
+      append[1] === undefined
+        ? undefined
+        : /^\$(?:([A-Za-z_][A-Za-z_0-9]*)|\{([A-Za-z_][A-Za-z_0-9]*)\})$/u.exec(
+            append[1],
+          );
+    const resolved =
+      variable === undefined || variable === null
+        ? value
+        : variables.get(variable[1] ?? variable[2] ?? "");
+    return resolved;
+  }
+  return undefined;
+};
+
+const standaloneToolchainAssignment = (line: string) => {
+  const match =
+    /^\s*([A-Za-z_][A-Za-z_0-9]*)=(?:([/\w.-]+)|"([/\w.-]+)"|'([/\w.-]+)')\s*$/u.exec(
+      line,
+    );
+  if (match?.[1] === undefined) {
+    return undefined;
+  }
+  return { name: match[1], directory: match[2] ?? match[3] ?? match[4] };
+};
+
+type NativeCheckOptions = {
+  line: string;
+  variables: ReadonlyMap<string, string>;
+  directory: string;
+};
+const resolveNativeCheckExecutable = (
+  executable: string,
+  variables: ReadonlyMap<string, string>,
+) =>
+  executable.replace(
+    /^\$(?:([A-Za-z_][A-Za-z_0-9]*)|\{([A-Za-z_][A-Za-z_0-9]*)\})/u,
+    (original, name: string | undefined, braced: string | undefined) =>
+      variables.get(name ?? braced ?? "") ?? original,
+  );
+
+// The read-only allowlist is exact: native executable existence, command
+// lookup, and --version. No wrappers, options, redirects or extra statements.
+const readOnlyNativeCheck = ({
+  line,
+  variables,
+  directory,
+}: NativeCheckOptions) => {
+  if (/^command\s+-v\s+[A-Za-z_][A-Za-z_0-9-]*$/u.test(line)) {
+    return true;
+  }
+  const exists = /^test\s+-x\s+"([^"`]+)"$/u.exec(line)?.[1];
+  const version = /^(?:"([^"`]+)"|'([^']+)'|([/\w.-]+))\s+--version$/u.exec(
+    line,
+  );
+  const executable = exists ?? version?.[1] ?? version?.[2] ?? version?.[3];
+  if (executable === undefined) {
+    return false;
+  }
+  const resolved =
+    exists !== undefined || version?.[1] !== undefined
+      ? resolveNativeCheckExecutable(executable, variables)
+      : executable;
+  if (version !== null && tracked.has(resolved)) {
+    return true;
+  }
+  const name = path.posix.basename(resolved);
+  return resolved === `${directory}/${name}` && /^[\w.-]+$/u.test(name);
+};
+
+type NativeToolchainContractOptions = { source: string; directory: string };
+// Straight-line preflights only: literal assignments, exact PATH appends and
+// the read-only checks above. The existing lexer rejects control flow and
+// substitutions; exact raw lines preserve quote and redirect provenance.
+const nativeToolchainContract = ({
+  source,
+  directory,
+}: NativeToolchainContractOptions) => {
+  const events = lexShell(source);
+  if (
+    events.some(
+      (event) => event.type !== "command" || event.stdin !== undefined,
+    )
+  ) {
+    return undefined;
+  }
+  const variables = new Map<string, string>();
+  let appended = false;
+  for (const rawLine of source.split("\n")) {
+    const line = rawLine.trim();
+    if (line === "" || line.startsWith("#")) {
+      continue;
+    }
+    const assignment = standaloneToolchainAssignment(line);
+    if (assignment !== undefined) {
+      if (
+        assignment.directory !== directory ||
+        variables.has(assignment.name) ||
+        assignment.name === "GITHUB_PATH"
+      ) {
+        return undefined;
+      }
+      variables.set(assignment.name, directory);
+      continue;
+    }
+    if (appendedPath(line, variables) === directory) {
+      appended = true;
+      continue;
+    }
+    if (!readOnlyNativeCheck({ line, variables, directory })) {
+      return undefined;
+    }
+  }
+  return { variables, appended };
+};
+
+// GITHUB_PATH changes subsequent steps; the whole script must preserve the proof.
+const addsToolchainPath = (source: string, directory: string) =>
+  nativeToolchainContract({ source, directory })?.appended === true;
 
 type StepExecutionOptions = {
   step: Record<string, unknown>;
@@ -719,6 +1039,7 @@ type RunnerStepContext = {
   readonly jobDefaults: Record<string, unknown>;
   readonly workflowDefaults: Record<string, unknown>;
   readonly guaranteed: ReadonlySet<string>;
+  readonly toolchain: RunnerToolchain | undefined;
   readonly active: Set<string>;
   readonly problems: string[];
   readonly aliases: ReadonlyMap<string, string>;
@@ -779,6 +1100,7 @@ const walkRunnerSteps = ({
     jobDefaults,
     workflowDefaults,
     guaranteed,
+    toolchain,
     active,
     problems,
     aliases,
@@ -836,6 +1158,7 @@ const walkRunnerSteps = ({
       cwd,
       label,
       guaranteed,
+      toolchain,
       installs: availableInstalls,
       condition: [...parent, ...operands(step["if"])],
       active,
@@ -852,6 +1175,14 @@ const walkRunnerSteps = ({
     ) {
       const before = availableInstalls.length;
       inspectShell(step["run"], scanContext);
+      if (
+        toolchain !== undefined &&
+        addsToolchainPath(step["run"], toolchain.directory)
+      ) {
+        for (const tool of toolchain.tools) {
+          availableInstalls.push({ tool, condition: scanContext.condition });
+        }
+      }
       if (
         step["continue-on-error"] !== undefined &&
         step["continue-on-error"] !== false
@@ -987,14 +1318,16 @@ type RunnerToolProblemsOptions = {
   root: string;
   workflow: string;
   repository: string;
+  profile?: string;
 };
 export const runnerToolProblems = ({
   root: inputRoot,
   workflow,
   repository,
+  profile,
 }: RunnerToolProblemsOptions): string[] => {
   const root = realpathSync(inputRoot);
-  const selfHosted = selfHostedProfiles(root);
+  const selfHosted = selfHostedProfiles(profile);
   const source = readYaml(path.join(root, workflow));
   if (!isRecord(source) || !isRecord(source["jobs"])) {
     return [`${workflow}: expected workflow jobs`];
@@ -1024,7 +1357,12 @@ export const runnerToolProblems = ({
         aliases.set(inputs["path"], "");
       }
     }
-    for (const runnerCase of runnerCases(job, selfHosted)) {
+    for (const runnerCase of runnerCases({
+      job,
+      selfHosted,
+      problems,
+      label: `${workflow}/${jobName}`,
+    })) {
       const guaranteed = runnerCase.guaranteed;
       const installs: Install[] = [];
       const pending = new Map<string, Install[]>();
@@ -1045,6 +1383,7 @@ export const runnerToolProblems = ({
           jobDefaults,
           workflowDefaults,
           guaranteed,
+          toolchain: runnerCase.toolchain,
           active,
           problems,
           aliases,
@@ -1066,13 +1405,36 @@ if (import.meta.main) {
   const repository = process.argv.at(3) ?? process.env["GITHUB_REPOSITORY"];
   if (repository === undefined) {
     console.error(
-      "Usage: bun check-ci-runner-tools.ts <checkout> <owner/repository>",
+      "Usage: bun check-ci-runner-tools.ts <checkout> <owner/repository> [--profile <file>]",
     );
     process.exit(1);
   }
+  const options = process.argv.slice(4);
+  if (
+    options.length !== 0 &&
+    (options.length !== 2 ||
+      options.at(0) !== "--profile" ||
+      options.at(1)?.startsWith("-") === true)
+  ) {
+    console.error(
+      "Usage: bun check-ci-runner-tools.ts <checkout> <owner/repository> [--profile <file>]",
+    );
+    process.exit(1);
+  }
+  const profile = options.at(1);
+  const profileFile =
+    profile === undefined ? undefined : path.resolve(root, profile);
+  selfHostedProfiles(profileFile);
   const problems = [
     ...new Bun.Glob(".github/workflows/*.{yml,yaml}").scanSync({ cwd: root }),
-  ].flatMap((workflow) => runnerToolProblems({ root, workflow, repository }));
+  ].flatMap((workflow) =>
+    runnerToolProblems({
+      root,
+      workflow,
+      repository,
+      ...(profileFile === undefined ? {} : { profile: profileFile }),
+    }),
+  );
   for (const problem of problems) {
     console.error(problem);
   }

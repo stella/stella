@@ -19,6 +19,7 @@ import type {
   ChatUITools,
 } from "@/lib/api-contract";
 import { MCP_CHAT_TOOL_GRANT_POLICIES } from "@/lib/api-contract";
+import type { WebApiRoutes } from "@/lib/eden-client";
 import { toAPIError } from "@/lib/errors/api";
 
 export type {
@@ -28,7 +29,13 @@ export type {
   ChatUITools,
 } from "@/lib/api-contract";
 export type ChatPart = TanStackChatPart;
-export type PersistedChatMessage = ChatMessage;
+type AnswerRevision = Partial<
+  Pick<
+    WebApiRoutes["chat"]["threads"][":threadId"]["messages"]["get"]["response"][200]["messages"][number],
+    "revision" | "edited"
+  >
+>;
+export type PersistedChatMessage = ChatMessage & AnswerRevision;
 type TanStackChatToolCallPart = Extract<
   TanStackChatPart,
   { type: "tool-call" }
@@ -85,7 +92,7 @@ export type ChatUIToolCallPart =
 export type ChatUIPart =
   | Exclude<TanStackChatPart, { type: "tool-call" }>
   | ChatUIToolCallPart;
-export type ChatUIMessage = Omit<ChatMessage, "parts"> & {
+export type ChatUIMessage = Omit<PersistedChatMessage, "parts"> & {
   parts: ChatUIPart[];
 };
 export type ChatToolCallPart = TanStackChatToolCallPart;

@@ -11,15 +11,14 @@ import {
   chatThreads,
   chatTurns,
 } from "@/api/db/schema";
-import {
-  getAwaitingUserInteractions,
-  isChatPart,
-  normalizePersistedChatMessageContent,
-  toPersistedChatMessageContentV3,
-} from "@/api/handlers/chat/chat-message-parts";
+import { isChatPart } from "@/api/handlers/chat/chat-message-parts";
+import { hasChatWorkspaceAccess } from "@/api/handlers/chat/chat-scope";
+import type { ChatWorkspaceAccess } from "@/api/handlers/chat/chat-scope";
 import { ACTIVE_CHAT_TURN_STATUSES } from "@/api/handlers/chat/chat-turn-state";
-import { isRevisionToolCallSettled } from "@/api/handlers/chat/messages/revisions/revision-settlement";
+import { normalizeRevisionContent } from "@/api/handlers/chat/messages/revisions/normalize-revision-content";
+import { hasUnsettledRevisionContent } from "@/api/handlers/chat/messages/revisions/revision-settlement";
 import { isRevisionEditSpanValid } from "@/api/handlers/chat/messages/revisions/revision-span";
+import { findAnchoredSpan } from "@/api/handlers/chat/messages/revisions/span-proposal";
 import { reconcileChatCompactionChainOnTx } from "@/api/handlers/chat/persistent-compaction";
 import type { PersistedChatMessageContentV3 } from "@/api/handlers/chat/types";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -32,6 +31,7 @@ export type ChatMessageRevisionChange =
   | {
       type: "accept";
       baseRevision: number;
+      selectedTextHash: string;
       content: { version: 3; data: unknown[]; metadata?: unknown };
       edit: ChatMessageAcceptedEdit;
     }
@@ -45,6 +45,7 @@ type WriteChatMessageRevisionOptions = {
   organizationId: SafeId<"organization">;
   change: ChatMessageRevisionChange;
   recordAuditEvent: AuditRecorder;
+  getWorkspaceAccess: ChatWorkspaceAccess;
 };
 
 // Turn acceptance and settlement lock the thread before touching messages.
@@ -57,6 +58,7 @@ export const writeChatMessageRevisionOnTx = async ({
   organizationId,
   change,
   recordAuditEvent,
+  getWorkspaceAccess,
 }: WriteChatMessageRevisionOptions) => {
   const threadLock = await withAggregateRowQuery({
     tx,
@@ -69,13 +71,21 @@ export const writeChatMessageRevisionOnTx = async ({
           id: chatThreads.id,
           organizationId: chatThreads.organizationId,
           userId: chatThreads.userId,
+          workspaceId: chatThreads.workspaceId,
         })
         .from(chatThreads),
   });
   if (threadLock.status === "busy") {
     return panic("Blocking thread lock returned busy");
   }
-  if (threadLock.rows.length === 0) {
+  const thread = threadLock.rows.at(0);
+  if (
+    !thread ||
+    !(await hasChatWorkspaceAccess({
+      workspaceId: thread.workspaceId,
+      getWorkspaceAccess,
+    }))
+  ) {
     return { type: "not-found" } as const;
   }
   const messageLock = await withAggregateRowQuery({
@@ -107,20 +117,10 @@ export const writeChatMessageRevisionOnTx = async ({
       )
       .limit(1)
   ).at(0);
-  const normalized = normalizePersistedChatMessageContent(message.content);
-  if (
-    active ||
-    getAwaitingUserInteractions({
-      role: "assistant",
-      parts: normalized.parts,
-      metadata: normalized.metadata,
-    }).length > 0 ||
-    normalized.parts.some(
-      (part) =>
-        (part.type === "tool-call" && !isRevisionToolCallSettled(part)) ||
-        (part.type === "tool-result" && part.state === "streaming"),
-    )
-  ) {
+  const { normalized, content: original } = normalizeRevisionContent(
+    message.content,
+  );
+  if (active || hasUnsettledRevisionContent(normalized)) {
     return { type: "unsettled" } as const;
   }
   if (message.revision !== change.baseRevision) {
@@ -152,13 +152,6 @@ export const writeChatMessageRevisionOnTx = async ({
     // Do not decode/re-encode a snapshot: a revert restores the stored JSONB.
     content = target.content;
   } else {
-    const original = toPersistedChatMessageContentV3({
-      data: normalized.parts,
-      ...(Object.keys(normalized.metadata).length > 0 ||
-      ("metadata" in message.content && message.content.metadata !== undefined)
-        ? { metadata: normalized.metadata }
-        : {}),
-    });
     const candidate = change.content;
     if (
       !deepEquals(candidate.metadata, original.metadata) ||
@@ -189,6 +182,15 @@ export const writeChatMessageRevisionOnTx = async ({
       })
     ) {
       return { type: "invalid-edit" } as const;
+    }
+    const anchor = findAnchoredSpan({
+      content: original,
+      start: change.edit.start,
+      end: change.edit.end,
+      selectedTextHash: change.selectedTextHash,
+    });
+    if (anchor === null) {
+      return { type: "stale" } as const;
     }
     content = provePersistedChatMessageContentV3(
       {

@@ -12,6 +12,27 @@ type VisualLoader = {
 };
 
 const visualLoaders = {
+  "chat-long-paste": {
+    load: async () => {
+      const { ChatLongPastePlayground } =
+        await import("./-components/chat-long-paste-playground");
+      return { default: ChatLongPastePlayground };
+    },
+  },
+  "chat-history-decision": {
+    load: async () => {
+      const { ChatHistoryDecisionPlayground } =
+        await import("./-components/chat-history-decision-playground");
+      return { default: ChatHistoryDecisionPlayground };
+    },
+  },
+  "answer-edit": {
+    load: async () => {
+      const { AnswerEditPlayground } =
+        await import("./-components/answer-edit-playground");
+      return { default: AnswerEditPlayground };
+    },
+  },
   autocomplete: {
     load: async () => {
       const { AutocompletePlayground } =

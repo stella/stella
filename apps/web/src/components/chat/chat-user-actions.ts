@@ -66,6 +66,8 @@ export const CHAT_USER_ACTIONS = {
   },
   "open-draft": { handler: "handleOpenCreateDocumentDraft", via: "session" },
   "open-playbook": { handler: "handleOpenPlaybook", via: "session" },
+  /** Reloads the canonical answer after an accepted edit or revision conflict. */
+  "refresh-edited-answer": { handler: "refreshAnswers", via: "session" },
   "remove-queued-message": { handler: "removeQueuedMessage", via: "session" },
   "rename-thread": { via: "request" },
   /** The error's resend after the anonymization boundary refused a turn. */
