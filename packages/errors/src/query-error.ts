@@ -53,8 +53,18 @@ const recordQueryText = (queryValues: Set<string>, text: string): void => {
   }
 };
 
+const hexOfBytes = (bytes: Uint8Array): string =>
+  Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+
+type QueryObjectValues = {
+  text: Set<string>;
+  // Hex of every binary parameter: the same bytes in a sibling diagnostic
+  // would otherwise be projected byte by byte.
+  binary: Set<string>;
+};
+
 const recordQueryObjectText = (
-  queryValues: Set<string>,
+  { text: queryValues, binary }: QueryObjectValues,
   input: object,
 ): boolean => {
   if (input instanceof Date) {
@@ -66,9 +76,8 @@ const recordQueryObjectText = (
   }
   if (input instanceof Uint8Array) {
     recordQueryText(queryValues, String(input));
-    const hex = Array.from(input, (byte) =>
-      byte.toString(16).padStart(2, "0"),
-    ).join("");
+    const hex = hexOfBytes(input);
+    binary.add(hex);
     if (hex.length > 0) {
       recordQueryText(queryValues, `\\x${hex}`);
     }
@@ -148,6 +157,7 @@ export const sanitizeErrorForOutput = (value: unknown): unknown => {
   const seen = new WeakSet<object>();
   const queryValues = new Set<string>();
   const queryPrimitiveValues = new Set<number | bigint | boolean>();
+  const queryBinaryValues = new Set<string>();
   let queryGraph = false;
   const projectText = (text: string): string => {
     const output = sanitizeQueryErrorText(text);
@@ -161,6 +171,13 @@ export const sanitizeErrorForOutput = (value: unknown): unknown => {
     }
     return text;
   };
+  // Primitive and binary parameters are matched by value, wherever they sit.
+  const isQueryParameterValue = (input: unknown): boolean =>
+    ((typeof input === "number" ||
+      typeof input === "bigint" ||
+      typeof input === "boolean") &&
+      queryPrimitiveValues.has(input)) ||
+    (input instanceof Uint8Array && queryBinaryValues.has(hexOfBytes(input)));
   type VisitErrorOptions = {
     input: unknown;
     databaseCause?: boolean;
@@ -171,6 +188,9 @@ export const sanitizeErrorForOutput = (value: unknown): unknown => {
     databaseCause = false,
     depth = 0,
   }: VisitErrorOptions): unknown => {
+    if (isQueryParameterValue(input)) {
+      return "[redacted]";
+    }
     if (!isRecord(input)) {
       if (databaseCause) {
         return "[redacted]";
@@ -180,14 +200,6 @@ export const sanitizeErrorForOutput = (value: unknown): unknown => {
       }
       if (typeof input === "string") {
         return projectText(input);
-      }
-      if (
-        (typeof input === "number" ||
-          typeof input === "bigint" ||
-          typeof input === "boolean") &&
-        queryPrimitiveValues.has(input)
-      ) {
-        return "[redacted]";
       }
       return input;
     }
@@ -300,7 +312,13 @@ export const sanitizeErrorForOutput = (value: unknown): unknown => {
         }
         continue;
       }
-      if (source === "query" && recordQueryObjectText(queryValues, input)) {
+      if (
+        source === "query" &&
+        recordQueryObjectText(
+          { text: queryValues, binary: queryBinaryValues },
+          input,
+        )
+      ) {
         continue;
       }
       const visited = source === "query" ? visitedQuery : visitedOutput;

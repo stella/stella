@@ -408,6 +408,26 @@ test.each([
   },
 );
 
+test("binary query parameters are redacted when diagnostics carry their bytes", () => {
+  const parameter = new Uint8Array([0xde, 0xad, 0xbe, 0xef]);
+  const query = Object.assign(new Error("Database query failed"), {
+    name: "DrizzleQueryError",
+    query: "insert into account values ($1)",
+    params: [parameter],
+  });
+  expect(
+    sanitizeErrorForOutput([
+      { same: parameter, copy: Buffer.from(parameter) },
+      query,
+    ]),
+  ).toEqual([{ same: "[redacted]", copy: "[redacted]" }, expect.any(Error)]);
+  const unrelated = new Uint8Array([0x01, 0x02]);
+  expect(sanitizeErrorForOutput([{ unrelated }, query])).not.toEqual([
+    { unrelated: "[redacted]" },
+    expect.any(Error),
+  ]);
+});
+
 test("query attribute output projects the whole record and keeps a record on failure", () => {
   const attrs = sanitizeErrorAttributesForOutput({
     message: SECRET,
