@@ -1,20 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
 import { sha256Hex } from "@stll/sha256/bun";
-import { SKILL_PACKAGE_LIMITS } from "@stll/skills/package-limits";
+import { validateSkillPackage } from "@stll/skills/format";
 
-import {
-  archiveSizeLimitError,
-  checkFrontmatterLimits,
-  pinnedLicenseMismatchError,
-  registerResourcePath,
-  resourceContentLimitError,
-  resourcePathLimitError,
-} from "../scripts/check-pinned-content";
+import { pinnedLicenseMismatchError } from "../scripts/check-pinned-content";
 import {
   PinnedContentError,
   assertCompleteGithubContentsListing,
-  projectFrontmatter,
+  syntheticSkillSource,
 } from "../scripts/pinned-content-facts";
 import {
   fetchDirectoryContents,
@@ -169,6 +162,58 @@ describe("pinned content fetch retry", () => {
 });
 
 describe("pinned skill install-limit preflight", () => {
+  test("reconstructs adjacent resource references within the recorded body length", () => {
+    const referencedResourcePaths = ["references/a.md", "references/b.md"];
+    const bodyLength = referencedResourcePaths.reduce(
+      (length, resourcePath) => length + resourcePath.length + 2,
+      0,
+    );
+    const source = syntheticSkillSource(
+      {
+        compatibilityUtf16Length: 0,
+        descriptionUtf16Length: 7,
+        license: null,
+        licenseUtf16Length: 0,
+        metadata: [],
+        name: "example",
+        versionUtf16Length: 0,
+      },
+      bodyLength,
+      referencedResourcePaths,
+    );
+    const result = validateSkillPackage({
+      files: [
+        { content: source, path: "SKILL.md" },
+        { content: "a", path: "references/a.md" },
+        { content: "b", path: "references/b.md" },
+      ],
+      tools: { type: "deferred" },
+    });
+
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value.body).toBe("`references/a.md``references/b.md`");
+    }
+  });
+
+  test("rejects pinned references longer than the recorded body", () => {
+    expect(() =>
+      syntheticSkillSource(
+        {
+          compatibilityUtf16Length: 0,
+          descriptionUtf16Length: 7,
+          license: null,
+          licenseUtf16Length: 0,
+          metadata: [],
+          name: "example",
+          versionUtf16Length: 0,
+        },
+        1,
+        ["references/a.md"],
+      ),
+    ).toThrow("Pinned skill references exceed the recorded body length");
+  });
+
   test("rejects GitHub Contents listings that may have hit the API ceiling", () => {
     expect(() =>
       assertCompleteGithubContentsListing({
@@ -183,28 +228,6 @@ describe("pinned skill install-limit preflight", () => {
       }),
     ).not.toThrow();
   });
-  test("reports frontmatter fields and metadata rejected at install time", () => {
-    const errors = checkFrontmatterLimits(
-      "oversized",
-      projectFrontmatter({
-        compatibility: null,
-        description: "d".repeat(SKILL_PACKAGE_LIMITS.descriptionMaxChars + 1),
-        license: null,
-        metadata: Object.fromEntries(
-          Array.from(
-            { length: SKILL_PACKAGE_LIMITS.metadataEntriesMax + 1 },
-            (_, index) => [`key-${index}`, "value"],
-          ),
-        ),
-        name: "oversized",
-        version: null,
-      }),
-    );
-
-    expect(errors.some((error) => error.includes("description"))).toBe(true);
-    expect(errors.some((error) => error.includes("metadata has"))).toBe(true);
-  });
-
   test("requires the pinned license to match the reviewed manifest", () => {
     expect(
       pinnedLicenseMismatchError({
@@ -227,53 +250,5 @@ describe("pinned skill install-limit preflight", () => {
         upstreamLicense: " mit ",
       }),
     ).toBeNull();
-  });
-
-  test("rejects decoded resource characters below the byte fetch cap", () => {
-    const error = resourceContentLimitError({
-      utf16Length: SKILL_PACKAGE_LIMITS.resourceMaxChars + 1,
-      path: "references/large.txt",
-      slug: "ascii-heavy",
-    });
-
-    expect(error).toContain(
-      `${SKILL_PACKAGE_LIMITS.resourceMaxChars + 1} chars`,
-    );
-  });
-
-  test("counts SKILL.md bytes toward the package archive limit", () => {
-    const error = archiveSizeLimitError({
-      resourceBytes: 11,
-      skillFileBytes: SKILL_PACKAGE_LIMITS.archiveUncompressedMaxBytes - 10,
-      slug: "combined-oversize",
-    });
-
-    expect(error).toContain("skill package exceeds");
-  });
-
-  test("rejects resource paths longer than the persistence boundary", () => {
-    const path = `references/${"a".repeat(SKILL_PACKAGE_LIMITS.resourcePathMaxChars)}.md`;
-
-    expect(resourcePathLimitError({ path, slug: "long-path" })).toContain(
-      `${path.length} chars`,
-    );
-  });
-
-  test("reports paths that collide after normalization", () => {
-    const seenPaths = new Set<string>();
-    expect(
-      registerResourcePath({
-        path: "references/same.md",
-        seenPaths,
-        slug: "duplicate-path",
-      }),
-    ).toBeNull();
-    expect(
-      registerResourcePath({
-        path: "references/same.md",
-        seenPaths,
-        slug: "duplicate-path",
-      }),
-    ).toContain("duplicate normalized resource path references/same.md");
   });
 });

@@ -2,11 +2,8 @@ import { Result } from "better-result";
 import { and, asc, desc, eq, gt, or, sql } from "drizzle-orm";
 import { t } from "elysia";
 
-import {
-  listSkillMetadata,
-  listSkillResources,
-  readSkillDisplayName,
-} from "@stll/skills";
+import { listSkillMetadata, listSkillResources } from "@stll/skills";
+import { readSkillDisplayName } from "@stll/skills/frontmatter";
 
 import { member, user } from "@/api/db/auth-schema";
 import {
