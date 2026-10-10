@@ -11,6 +11,7 @@ import {
 } from "@stll/docx-utils";
 
 import { isDocxFile } from "@/lib/consts";
+import { createUuid } from "@/lib/uuid";
 
 const MAX_INSPECTED_DOCX_BYTES = 50 * 1024 * 1024;
 const MAX_ARCHIVE_ENTRIES = 1000;
@@ -155,7 +156,7 @@ export const prepareAttachedTemplateFile = async (
           type: originalFile.type,
           lastModified: originalFile.lastModified,
         }),
-        id: crypto.randomUUID(),
+        id: createUuid(),
         originalFile,
         rule: ATTACHED_TEMPLATE_SECURITY_RULE,
         targetKinds: [...targetKinds],

@@ -8,6 +8,7 @@ import {
   statuteFindRowText,
 } from "@/features/statutes/statute-find.logic";
 import { toSafeId } from "@/lib/safe-id";
+import { createUuid } from "@/lib/uuid";
 
 const statute = (
   overrides: Pick<StatuteListItem, "documentType" | "eli" | "title">,
@@ -18,7 +19,7 @@ const statute = (
   documentUrl: null,
   effectiveDate: "2026-01-01",
   firstVersionValidFrom: "2012-03-22",
-  id: toSafeId<"legislationDocument">(crypto.randomUUID()),
+  id: toSafeId<"legislationDocument">(createUuid()),
   language: "cs",
   lastAmendedOn: "2026-01-01",
   slug: null,

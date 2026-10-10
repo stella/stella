@@ -2,6 +2,8 @@ import { expect, test } from "@playwright/test";
 
 import { VISUAL_SANDBOX_PATH } from "@stll/api-contract/visual-sandbox";
 
+import { createRandomValue } from "@/lib/uuid";
+
 import declaration from "../visual-sandbox-network-budgets/frame-shell.json" with { type: "json" };
 import { E2E_API_ORIGIN } from "./api";
 import {
@@ -24,7 +26,7 @@ export const declareVisualSandboxSmoke = () => {
     // fulfilled by page.route() does not, and Chromium blocks the frame.
     const hostUrl = new URL("/prepaint-init.js", baseURL).href;
     const sandboxUrl = new URL(VISUAL_SANDBOX_PATH, E2E_API_ORIGIN).href;
-    const nonce = crypto.randomUUID();
+    const nonce = createRandomValue();
     const frameUrl = `${sandboxUrl}#n=${nonce}`;
     const collector = createNetworkCollector();
     const stopTracking = collector.trackPage(page);

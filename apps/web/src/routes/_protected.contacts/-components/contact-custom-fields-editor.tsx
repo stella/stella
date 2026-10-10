@@ -10,6 +10,7 @@ import { Input } from "@stll/ui/input";
 import { normalizeOptionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { createUuid } from "@/lib/uuid";
 import { useContactPatch } from "@/routes/_protected.contacts/-components/contact-caches";
 import { getContactMetadata } from "@/routes/_protected.contacts/-components/contact-metadata";
 import type {
@@ -45,7 +46,7 @@ export const ContactCustomFieldsEditor = ({
           customFields: [
             ...customFields,
             {
-              id: crypto.randomUUID(),
+              id: createUuid(),
               label,
               value: valueDraft.trim(),
             },

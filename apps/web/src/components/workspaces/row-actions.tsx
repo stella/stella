@@ -146,6 +146,7 @@ import type {
 } from "@/lib/types";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { downloadFile } from "@/lib/utils";
+import { createUuid } from "@/lib/uuid";
 import {
   useCreateEntities,
   useDeleteEntities,
@@ -866,8 +867,7 @@ export const RowActions = ({
     try {
       for (const target of bulkTargets) {
         const targetEntityId =
-          duplicateTargetIdsRef.current.get(target.entityId) ??
-          crypto.randomUUID();
+          duplicateTargetIdsRef.current.get(target.entityId) ?? createUuid();
         duplicateTargetIdsRef.current.set(target.entityId, targetEntityId);
         const result = await Result.tryPromise(async () => {
           // oxlint-disable-next-line no-network-await-in-loop/no-network-await-in-loop -- sequential bulk action: each source owns a stable target identity, so retries converge and a partial failure has an exact per-item result

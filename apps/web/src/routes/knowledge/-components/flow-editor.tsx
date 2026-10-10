@@ -62,6 +62,7 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 import { flowDetailOptions, knowledgeKeys } from "@/lib/knowledge/queries";
 import { WEEKDAY_NAME_FORMAT } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
+import { createUuid } from "@/lib/uuid";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import {
   buildFlowExample,
@@ -286,7 +287,7 @@ type EditableStep = FlowStep & { _id: string };
 
 const withStepId = (step: FlowStep): EditableStep => ({
   ...step,
-  _id: crypto.randomUUID(),
+  _id: createUuid(),
 });
 
 // ── Editor form ───────────────────────────────────────

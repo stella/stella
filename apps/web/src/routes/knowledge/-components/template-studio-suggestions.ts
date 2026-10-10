@@ -1,3 +1,4 @@
+import type { Node as PMNode } from "@tiptap/pm/model";
 /**
  * Spec → in-document AISuggestion mapping for the Template Studio chat.
  *
@@ -10,8 +11,6 @@
  * all go stale. One suggestion per span: first spec wins per occupied
  * range.
  */
-
-import type { Node as PMNode } from "@tiptap/pm/model";
 import { panic } from "better-result";
 
 import type {
@@ -23,6 +22,8 @@ import { buildPositionalText } from "@stll/folio-react";
 import type { AISuggestion } from "@stll/folio-react";
 import { stableStringify } from "@stll/stable-stringify";
 import { scanMarkers } from "@stll/template-conditions";
+
+import { createUuid } from "@/lib/uuid";
 
 /** Chars of surrounding text recorded so suggestions survive document edits
  *  (the host re-anchors stale ranges via contextBefore/After). */
@@ -99,7 +100,7 @@ export const buildReplacementSuggestions = (
       const overlaps = occupied.some((r) => from < r.to && to > r.from);
       if (!overlaps) {
         occupied.push({ from, to });
-        const id = crypto.randomUUID();
+        const id = createUuid();
         spec.registerMeta?.(id);
         placedSpecIds.add(spec.id);
         const suggestion: AISuggestion = {

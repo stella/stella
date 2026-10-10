@@ -1,13 +1,14 @@
-// Ban crypto.randomUUID() in Bun-runtime code.
+// Ban direct crypto.randomUUID() use in application code.
 //
-// Backend code runs on Bun; use Bun.randomUUIDv7() so generated
-// UUIDs are Bun-native and database-friendly for ordered inserts.
+// UUID generation belongs behind the runtime's UUIDv7 owner so generated
+// identifiers are time ordered and callers do not choose their own primitive.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
-import { getImportedName, isIdentifier } from "./utils.ts";
+import { getImportedName, isAstNode, isIdentifier } from "./utils.ts";
 
 const CRYPTO_MODULES = new Set(["crypto", "node:crypto"]);
+const DIRECT_UUID_GENERATORS = new Set(["v4", "v7"]);
 
 export default eslintCompatPlugin({
   meta: { name: "no-crypto-random-uuid" },
@@ -17,28 +18,61 @@ export default eslintCompatPlugin({
         type: "problem",
         messages: {
           noCryptoRandomUuid:
-            "Do not use crypto.randomUUID() in Bun-runtime code. " +
-            "Use Bun.randomUUIDv7() instead.",
+            "Do not use crypto.randomUUID() directly. " +
+            "Use the runtime's UUIDv7 owner instead.",
           noCryptoRandomUuidImport:
             "Do not import randomUUID from '{{module}}'. " +
-            "Use Bun.randomUUIDv7() instead.",
+            "Use the UUID owner for this runtime instead.",
+          noDirectUuidGeneratorImport:
+            "Do not import {{generator}} directly from 'uuid'. " +
+            "Use the UUID owner for this runtime instead.",
+          noDirectUuidGeneratorCall:
+            "Do not call {{generator}} from the 'uuid' module directly. " +
+            "Use the UUID owner for this runtime instead.",
         },
       },
       createOnce(context) {
         const randomUuidAliases = new Set();
         const cryptoAliases = new Set(["crypto"]);
+        const uuidModuleAliases = new Set<string>();
 
         return {
           before() {
             randomUuidAliases.clear();
             cryptoAliases.clear();
             cryptoAliases.add("crypto");
+            uuidModuleAliases.clear();
           },
           ImportDeclaration(node) {
-            if (
-              typeof node.source.value !== "string" ||
-              !CRYPTO_MODULES.has(node.source.value)
-            ) {
+            if (typeof node.source.value !== "string") {
+              return;
+            }
+
+            if (node.source.value === "uuid") {
+              for (const specifier of node.specifiers) {
+                if (
+                  specifier.type === "ImportNamespaceSpecifier" ||
+                  specifier.type === "ImportDefaultSpecifier"
+                ) {
+                  uuidModuleAliases.add(specifier.local.name);
+                  continue;
+                }
+                const importedName = getImportedName(specifier);
+                if (
+                  importedName !== null &&
+                  DIRECT_UUID_GENERATORS.has(importedName)
+                ) {
+                  context.report({
+                    node: specifier,
+                    messageId: "noDirectUuidGeneratorImport",
+                    data: { generator: importedName },
+                  });
+                }
+              }
+              return;
+            }
+
+            if (!CRYPTO_MODULES.has(node.source.value)) {
               return;
             }
 
@@ -76,11 +110,26 @@ export default eslintCompatPlugin({
             }
 
             if (
+              callee.type === "MemberExpression" &&
+              !callee.computed &&
+              isIdentifier(callee.object) &&
+              uuidModuleAliases.has(callee.object.name) &&
+              isIdentifier(callee.property) &&
+              DIRECT_UUID_GENERATORS.has(callee.property.name)
+            ) {
+              context.report({
+                node,
+                messageId: "noDirectUuidGeneratorCall",
+                data: { generator: callee.property.name },
+              });
+              return;
+            }
+
+            if (
               callee.type !== "MemberExpression" ||
               callee.computed ||
-              !isIdentifier(callee.object) ||
               !isIdentifier(callee.property, "randomUUID") ||
-              !cryptoAliases.has(callee.object.name)
+              !isCryptoObject(callee.object, cryptoAliases)
             ) {
               return;
             }
@@ -95,3 +144,17 @@ export default eslintCompatPlugin({
     },
   },
 });
+
+const isCryptoObject = (node: unknown, cryptoAliases: Set<string>): boolean => {
+  if (isIdentifier(node) && cryptoAliases.has(node.name)) {
+    return true;
+  }
+
+  return (
+    isAstNode(node) &&
+    node.type === "MemberExpression" &&
+    node.computed === false &&
+    isIdentifier(node.object, "globalThis") &&
+    isIdentifier(node.property, "crypto")
+  );
+};

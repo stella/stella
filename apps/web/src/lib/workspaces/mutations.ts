@@ -15,6 +15,7 @@ import {
   unwrapEden,
 } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
+import { createUuid } from "@/lib/uuid";
 import { workspacesKeys } from "@/lib/workspaces/queries";
 import { useTableStore } from "@/lib/workspaces/table-store";
 
@@ -37,7 +38,7 @@ export const useCreateWorkspace = () => {
 
   return useMutation({
     mutationFn: async (vars: CreateWorkspaceVars) => {
-      const id = crypto.randomUUID();
+      const id = createUuid();
       const response = await api.workspaces.put({
         id: toSafeId<"workspace">(id),
         ...(vars.clientId !== undefined && {

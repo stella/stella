@@ -4656,6 +4656,19 @@ const config = defineConfig({
       },
     },
     {
+      files: ["apps/web/**/*.{ts,tsx}"],
+      excludeFiles: [
+        // E2E runs in Node and uses UUIDv4 prefixes as parallel-worker suffixes;
+        // UUIDv7 timestamp prefixes would collide across concurrent tests.
+        "apps/web/e2e/**",
+        // This is the browser UUID owner and therefore the sole direct uuid v7 importer.
+        "apps/web/src/lib/uuid.ts",
+      ],
+      rules: {
+        "no-crypto-random-uuid/no-crypto-random-uuid": "error",
+      },
+    },
+    {
       files: ["apps/api/**/*.ts"],
       excludeFiles: [
         // These are the only low-level documents-bucket writers: they own

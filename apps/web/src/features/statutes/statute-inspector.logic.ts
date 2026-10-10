@@ -1,3 +1,4 @@
+import { createUuid } from "@/lib/uuid";
 /** Inspector view kind for one consolidation of a statute, read whole. */
 export const STATUTE_VIEW = "statute";
 
@@ -118,7 +119,7 @@ export const createStatuteViewTab = ({
     versionValidFrom: versionValidFrom ?? null,
     ...(searchQuery === undefined || searchQuery.trim() === ""
       ? {}
-      : { searchQuery, findSessionId: crypto.randomUUID() }),
+      : { searchQuery, findSessionId: createUuid() }),
     ...(anchorId === undefined ? {} : { anchorId }),
   },
 });

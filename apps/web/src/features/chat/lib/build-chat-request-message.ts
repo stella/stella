@@ -7,6 +7,7 @@ import type {
 } from "@/components/chat/chat-ui-tools";
 import { toSafeId } from "@/lib/safe-id";
 import type { SafeId } from "@/lib/safe-id";
+import { createUuid } from "@/lib/uuid";
 
 type ChatRequestMessage = MultimodalContent & {
   id: SafeId<"chatMessage">;
@@ -15,7 +16,7 @@ type ChatRequestMessage = MultimodalContent & {
 const IMAGE_MIME_PREFIX = "image/";
 
 const createChatMessageId = (): SafeId<"chatMessage"> =>
-  toSafeId<"chatMessage">(crypto.randomUUID());
+  toSafeId<"chatMessage">(createUuid());
 
 const toDataUrl = async (file: File) =>
   await new Promise<string>((resolve, reject) => {

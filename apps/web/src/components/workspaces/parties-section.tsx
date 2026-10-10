@@ -52,6 +52,7 @@ import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 import { useQueryView } from "@/lib/use-query-view";
+import { createUuid } from "@/lib/uuid";
 import { useUpdateWorkspace } from "@/lib/workspaces/mutations";
 import {
   PARTY_ROLES,
@@ -75,7 +76,7 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
   const createContact = useCreateContact();
 
   const handleCreateAndSetClient = (name: string, type: ContactType) => {
-    const id = toSafeId<"contact">(crypto.randomUUID());
+    const id = toSafeId<"contact">(createUuid());
     createContact.mutate(
       { id, type, displayName: name },
       {
@@ -363,7 +364,7 @@ const PromoteDialog = ({ workspaceId }: PromoteDialogProps) => {
   };
 
   const handleCreateContact = (name: string, type: ContactType) => {
-    const id = toSafeId<"contact">(crypto.randomUUID());
+    const id = toSafeId<"contact">(createUuid());
     createContact.mutate(
       { id, type, displayName: name },
       {

@@ -38,6 +38,7 @@ import { unwrapEden } from "@/lib/errors/api";
 import { detachedUserAction } from "@/lib/errors/user-toast";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { toSafeId } from "@/lib/safe-id";
+import { createRandomValue } from "@/lib/uuid";
 
 import { readVisualThemeOrOmit } from "./generated-visual-theme";
 import { parseVisualHostMessage } from "./generated-visual.logic";
@@ -95,7 +96,7 @@ const GeneratedVisualFrame = ({
           }),
     [page.data, now],
   );
-  const newNonce = useLatestCallback(() => crypto.randomUUID());
+  const newNonce = useLatestCallback(() => createRandomValue());
   const shell = useMemo(
     () => createVisualShellSession({ url: sandboxUrl.href, newNonce }),
     [sandboxUrl.href, newNonce],
