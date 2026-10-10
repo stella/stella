@@ -11,6 +11,7 @@ import { toJsonSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
 import { isUnknownArray } from "@/api/lib/type-guards";
 import type {
   McpToolDefinition,
+  McpToolAnnotationReasons,
   McpToolInputSchema,
   McpToolOutputContract,
   McpToolOutputSchema,
@@ -38,7 +39,7 @@ type JsonSchemaProjectionWaiver = {
 };
 
 type ToolWithoutInputSchema<TDefinition> = TDefinition extends McpToolDefinition
-  ? Omit<TDefinition, "inputSchema">
+  ? Omit<TDefinition, "annotationReasons" | "inputSchema">
   : never;
 
 type ValibotMcpToolInput = ToolWithoutInputSchema<McpToolDefinition> & {
@@ -54,6 +55,7 @@ type ValibotMcpToolDefinition<TDefinition extends ValibotMcpToolInput> = Omit<
   TDefinition,
   "inputSchema" | "inputNormalization" | "jsonSchemaProjectionWaiver"
 > & {
+  annotationReasons: McpToolAnnotationReasons;
   inputSchema: McpToolInputSchema;
   inputSchemaSource: TDefinition["inputSchema"];
   inputSchemaProjectionWaiver: JsonSchemaProjectionWaiver | undefined;
@@ -770,8 +772,29 @@ export const defineValibotMcpTool = <
     jsonSchemaProjectionWaiver,
     ...toolDefinition
   } = definition;
+  const { annotations } = toolDefinition;
+  const subject = annotations.title;
+  let destructiveHintReason = `${subject} is additive and does not overwrite or remove existing state.`;
+  if (annotations.readOnlyHint) {
+    destructiveHintReason = `${subject} does not change state.`;
+  }
+  if (annotations.destructiveHint) {
+    destructiveHintReason =
+      toolDefinition.destructiveBehavior?.type === "outbound"
+        ? toolDefinition.destructiveBehavior.reason
+        : `${subject} can overwrite, delete, cancel, revoke, or otherwise irreversibly change existing state.`;
+  }
   return {
     ...toolDefinition,
+    annotationReasons: {
+      readOnlyHint: annotations.readOnlyHint
+        ? `${subject} only retrieves or computes data.`
+        : `${subject} changes state or starts stateful work.`,
+      destructiveHint: destructiveHintReason,
+      openWorldHint: annotations.openWorldHint
+        ? `${subject} can access public or external entities outside the private workspace.`
+        : `${subject} is confined to the private workspace or a bounded computation.`,
+    },
     inputSchema: applyInputNormalizationPlan(
       deriveMcpInputSchema(
         inputSchema.advertisedSchema,

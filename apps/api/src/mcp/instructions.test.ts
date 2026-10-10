@@ -7,6 +7,7 @@ import { FEEDBACK_WORKFLOW_REFERENCE_URI } from "@/api/mcp/feedback-workflow-ref
 import {
   getMcpInstructions,
   MCP_INSTRUCTIONS,
+  MCP_INSTRUCTIONS_ADVANCED_MAX_CHARS,
   MCP_INSTRUCTIONS_ANONYMIZED_MAX_CHARS,
   MCP_INSTRUCTIONS_DEFAULT_MAX_CHARS,
   MCP_INSTRUCTIONS_DOCUMENTS_MAX_CHARS,
@@ -25,6 +26,12 @@ describe("MCP server instructions", () => {
   test("default instructions stay within the character budget", () => {
     expect(MCP_INSTRUCTIONS.default.length).toBeLessThanOrEqual(
       MCP_INSTRUCTIONS_DEFAULT_MAX_CHARS,
+    );
+  });
+
+  test("advanced instructions stay within the character budget", () => {
+    expect(MCP_INSTRUCTIONS.advanced.length).toBeLessThanOrEqual(
+      MCP_INSTRUCTIONS_ADVANCED_MAX_CHARS,
     );
   });
 
@@ -47,6 +54,8 @@ describe("MCP server instructions", () => {
   });
 
   test("all surfaces are non-empty and selected by mode", () => {
+    expect(MCP_INSTRUCTIONS.advanced.length).toBeGreaterThan(0);
+    expect(getMcpInstructions("advanced")).toBe(MCP_INSTRUCTIONS.advanced);
     expect(MCP_INSTRUCTIONS.default.length).toBeGreaterThan(0);
     expect(MCP_INSTRUCTIONS.anonymized.length).toBeGreaterThan(0);
     expect(MCP_INSTRUCTIONS.documents.length).toBeGreaterThan(0);

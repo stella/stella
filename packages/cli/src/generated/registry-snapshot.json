@@ -1175,7 +1175,7 @@
       "feature": "FEATURE_PUBLIC_LAW"
     },
     "name": "read_statute_provisions",
-    "description": "Read named provisions of one or more statutes in one call: each `items[]` entry is { eli, anchor } plus an optional as_of and language. An anchor is the publisher's own (par_1729, par_1729-odst_1) and read_statute's `outline` lists them. Every entry is answered separately, in input order, under `status`: `found` carries the provision's text, while `not_found` (no such ELI), `uncovered_date` (no consolidation applies that day, including where the publisher's own dates are inconsistent), `provision_not_found` (that consolidation has no such anchor) and `text_withheld` (the source bars AI use of its wording) each carry a message. Prefer one batched call over one call per provision. Use `url` for the stella reader when served, otherwise the publisher; `source_url` is the publisher source.",
+    "description": "Read named provisions of one or more statutes in one call: each `items[]` entry is { eli, anchor } plus an optional as_of and language. An anchor is the publisher's own (par_1729, par_1729-odst_1) and read_statute's `outline` lists them. Every entry is answered separately, in input order, under `status`: `found` carries the provision's text, while `not_found` (no such ELI), `uncovered_date` (no consolidation applies that day, including where the publisher's own dates are inconsistent), `provision_not_found` (that consolidation has no such anchor) and `text_withheld` (the source bars AI use of its wording) each carry a message. One batched call accepts multiple provisions. Use `url` for the stella reader when served, otherwise the publisher; `source_url` is the publisher source.",
     "inputSchema": {
       "type": "object",
       "required": ["items"],
@@ -1300,7 +1300,7 @@
       "singleReadWhen": "template_id"
     },
     "name": "list_templates",
-    "description": "List the document templates in this organization (NDAs, powers of attorney, leases), or describe one template's fillable fields. Omit template_id to list templates: each template's id, name, field count, tags, and usage guidance (whenToUse / whenNotToUse); prefer a template whose whenToUse matches the request and skip any whose whenNotToUse applies. Pass template_id to return that template's full field configuration, its named conditions and formula fields. The configuration is in the shape configure_template_fields accepts (see stella://reference/template-fields), and the response carries that call to make next. `arrays` marks {% for %} fields as arrays of objects, not dotted keys.",
+    "description": "List the document templates in this organization (NDAs, powers of attorney, leases), or describe one template's fillable fields. Omit template_id to list templates: each template's id, name, field count, tags, and usage guidance (whenToUse / whenNotToUse); use a template whose whenToUse matches the request and skip any whose whenNotToUse applies. Pass template_id to return that template's full field configuration, its named conditions and formula fields. The configuration is in the shape configure_template_fields accepts (see stella://reference/template-fields), and the response carries that call to make next. `arrays` marks {% for %} fields as arrays of objects, not dotted keys.",
     "inputSchema": {
       "type": "object",
       "required": [],
@@ -2381,7 +2381,7 @@
     },
     "annotations": {
       "title": "Compare document versions",
-      "destructiveHint": true,
+      "destructiveHint": false,
       "idempotentHint": true,
       "openWorldHint": false,
       "readOnlyHint": false
@@ -2393,7 +2393,7 @@
       "scope": "documents_write"
     },
     "name": "prepare_file_comparison",
-    "description": "Reserve upload slots for redlining two .docx files that are not stored in stella, for a client that can PUT the bytes itself (the CLI, a script). In a chat, prefer open_file_comparison, whose panel uploads from the user's browser, or prepare_file_comparison_from_links when the files are reachable by HTTPS link. Both files must be .docx and at most 50 MB. PUT each file's bytes to its url with the returned headers sent verbatim: the URL is signed against that exact size and checksum. Then call compare_documents with the echoed next.source, within the hour. The staged files and the redline are temporary and never become a document, a version, or matter content.",
+    "description": "Reserve upload slots for redlining two .docx files that are not stored in stella, for a client that can PUT the bytes itself (the CLI, a script). In a chat, open_file_comparison provides a picker panel that uploads from the user's browser; prepare_file_comparison_from_links accepts files reachable by HTTPS link. Both files must be .docx and at most 50 MB. PUT each file's bytes to its url with the returned headers sent verbatim: the URL is signed against that exact size and checksum. Then call compare_documents with the echoed next.source, within the hour. The staged files and the redline are temporary and never become a document, a version, or matter content.",
     "inputSchema": {
       "type": "object",
       "required": ["base", "target"],
@@ -5545,7 +5545,7 @@
     },
     "annotations": {
       "title": "Submit feedback",
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": true,
       "openWorldHint": true,
       "readOnlyHint": false

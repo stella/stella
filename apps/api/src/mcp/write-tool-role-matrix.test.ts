@@ -1123,7 +1123,7 @@ describe("CLI and MCP write tool parity", () => {
         // db-await-in-loop: no database; dispatch stops at the gate or input check.
         const { code, outcome } = await callOutcome({
           args: { [GATE_PROBE_ARGUMENT]: true },
-          mode: "default",
+          mode: "advanced",
           role,
           tool: leaf.toolName,
         });
@@ -1131,7 +1131,7 @@ describe("CLI and MCP write tool parity", () => {
           command: leaf.commandPath.join(" "),
           exit: code === null ? null : (resolveMcpErrorCodeExit(code) ?? null),
           outcome,
-          offered: offeredOn(role, "default").has(leaf.toolName),
+          offered: offeredOn(role, "advanced").has(leaf.toolName),
         });
       }
       expect(results.length).toBeGreaterThan(0);
@@ -1240,7 +1240,7 @@ describe("static feature tool enrolment boundary", () => {
         const call = {
           args: { capability: capabilityId },
           context,
-          mode: "default" as const,
+          mode: "advanced" as const,
           toolName: "describe_capability",
         };
         const expected =

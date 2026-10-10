@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { env } from "@/api/env";
 import { getAuthIssuerUrl } from "@/api/lib/auth/auth-paths";
 import {
+  MCP_ADVANCED_RESOURCE_SCOPES,
   MCP_ANONYMIZED_RESOURCE_SCOPES,
   MCP_DEFAULT_RESOURCE_SCOPES,
   MCP_LAW_RESOURCE_SCOPES,
@@ -48,6 +49,19 @@ describe("MCP protected resource metadata", () => {
         },
       },
     });
+  });
+
+  test("keeps external gateway consent on the advanced resource", () => {
+    expect(getMcpProtectedResourceMetadata().scopes_supported).not.toContain(
+      "stella:external_mcps",
+    );
+    expect(
+      getMcpProtectedResourceMetadata("advanced").scopes_supported,
+    ).toEqual([...MCP_ADVANCED_RESOURCE_SCOPES]);
+    expect(getMcpResourceUrl("advanced")).toEndWith("/mcp/advanced");
+    expect(getMcpProtectedResourceMetadataUrl("advanced")).toEndWith(
+      "/.well-known/oauth-protected-resource/mcp/advanced",
+    );
   });
 
   test("advertises anonymized MCP metadata on the separate resource", () => {

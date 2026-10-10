@@ -361,7 +361,7 @@ export const FEEDBACK_TOOL_DEFINITIONS = [
     },
     annotations: {
       title: "Submit feedback",
-      destructiveHint: false,
+      destructiveHint: true,
       idempotentHint: true,
       openWorldHint: true,
       readOnlyHint: false,

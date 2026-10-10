@@ -185,6 +185,7 @@ const invokeValidateOnly = async (
 ) =>
   await handleMcpToolCall({
     args: { capability, input, validate_only: true },
+    mode: "advanced",
     context: createContext(),
     toolName:
       MCP_CAPABILITY_EXECUTORS[
