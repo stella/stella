@@ -3,7 +3,8 @@ use imageproc::geometric_transformations::{Border, Interpolation, rotate_about_c
 
 use crate::{
     CleanOptions, CleanOutput, UnrecognizedReason, clean_scan, content_bounds, cross, deskew_angle,
-    detect_page_quad, perspective, rgba_to_gray, rotate_centered,
+    detect_page_quad, perspective, rgba_to_gray, rotate_centered, rotation_geometry,
+    threshold_document,
 };
 
 fn text_page() -> GrayImage {
@@ -92,7 +93,9 @@ fn deskew_without_content_crop_preserves_edge_content() {
         .pixels()
         .filter(|pixel| pixel[0] < 128)
         .count();
-    let rotated = rotate_centered(&source, -3.0).image;
+    let rotated = rotate_centered(&source, -3.0)
+        .expect("normal page rotation should fit")
+        .image;
     let result = clean_scan(
         &rotated,
         CleanOptions {
@@ -332,6 +335,33 @@ fn flattening_removes_a_background_gradient_without_losing_text() {
                 && (350..365).contains(&y)
                 && pixel[0] == 0)
     );
+}
+
+#[test]
+fn binary_output_preserves_the_interior_of_a_solid_dark_region() {
+    let mut source = GrayImage::from_pixel(300, 300, Luma([255]));
+    for y in 100..200 {
+        for x in 100..200 {
+            source.put_pixel(x, y, Luma([0]));
+        }
+    }
+
+    let binary = threshold_document(&source);
+    assert_eq!(binary.get_pixel(150, 150)[0], 0);
+    let dark_interior = (110..190)
+        .flat_map(|y| (110..190).map(move |x| (x, y)))
+        .filter(|(x, y)| binary.get_pixel(*x, *y)[0] == 0)
+        .count();
+    assert!(dark_interior >= 80 * 80 * 95 / 100);
+}
+
+#[test]
+fn expanded_rotation_rejects_an_area_above_the_input_limit() {
+    let source = GrayImage::from_pixel(100_000, 400, Luma([255]));
+
+    let result = rotation_geometry(&source, 6.0);
+
+    assert!(matches!(result, Err(UnrecognizedReason::TooLarge)));
 }
 
 #[test]

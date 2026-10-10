@@ -19,6 +19,8 @@ pub type Quad = [Point; 4];
 const MAX_DIMENSION_AREA: u32 = 40_000_000;
 const MAX_DESKEW_TENTHS: i32 = 60;
 const DESKEW_TENTHS: f32 = 0.1;
+const MIN_FOREGROUND_CONTRAST: u8 = 15;
+const ADAPTIVE_THRESHOLD_OFFSET: i32 = 5;
 const CROP_PADDING_MM: f32 = 3.0;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -60,6 +62,7 @@ pub enum UnrecognizedReason {
     InvalidPixelBuffer,
     InvalidDpi,
     DegeneratePageQuad,
+    TooLarge,
 }
 
 impl UnrecognizedReason {
@@ -71,6 +74,7 @@ impl UnrecognizedReason {
             Self::InvalidPixelBuffer => "invalid-pixel-buffer",
             Self::InvalidDpi => "invalid-dpi",
             Self::DegeneratePageQuad => "degenerate-page-quad",
+            Self::TooLarge => "too-large",
         }
     }
 }
@@ -299,6 +303,12 @@ struct RotatedImage {
     image: GrayImage,
 }
 
+struct RotationGeometry {
+    projection: Projection,
+    width: u32,
+    height: u32,
+}
+
 fn page_background(gray: &GrayImage) -> u8 {
     let mut counts = [0_u32; 256];
     for pixel in gray.pixels() {
@@ -311,7 +321,7 @@ fn page_background(gray: &GrayImage) -> u8 {
         .map_or(255, |(value, _)| value as u8)
 }
 
-fn rotate_centered(gray: &GrayImage, angle: f32) -> RotatedImage {
+fn rotation_geometry(gray: &GrayImage, angle: f32) -> Result<RotationGeometry, UnrecognizedReason> {
     let center_x = gray.width() as f32 / 2.0;
     let center_y = gray.height() as f32 / 2.0;
     let rotation = Projection::translate(center_x, center_y)
@@ -348,21 +358,46 @@ fn rotate_centered(gray: &GrayImage, angle: f32) -> RotatedImage {
         .fold(f32::NEG_INFINITY, f32::max)
         .ceil()
         + 1.0;
+    let width = (max_x - min_x) as u32;
+    let height = (max_y - min_y) as u32;
+    if width
+        .checked_mul(height)
+        .is_none_or(|area| area > MAX_DIMENSION_AREA)
+    {
+        return Err(UnrecognizedReason::TooLarge);
+    }
     let projection = Projection::translate(-min_x, -min_y) * rotation;
+    Ok(RotationGeometry {
+        projection,
+        width,
+        height,
+    })
+}
+
+fn rotate_centered(gray: &GrayImage, angle: f32) -> Result<RotatedImage, UnrecognizedReason> {
+    let geometry = rotation_geometry(gray, angle)?;
     let background = page_background(gray);
-    let mut output = GrayImage::from_pixel(
-        (max_x - min_x) as u32,
-        (max_y - min_y) as u32,
-        Luma([background]),
-    );
+    let mut output = GrayImage::from_pixel(geometry.width, geometry.height, Luma([background]));
     warp_into(
         gray,
-        projection,
+        geometry.projection,
         Interpolation::Bilinear,
         Border::Constant(Luma([background])),
         &mut output,
     );
-    RotatedImage { image: output }
+    Ok(RotatedImage { image: output })
+}
+
+fn threshold_document(flattened: &GrayImage) -> GrayImage {
+    let local = adaptive_threshold(flattened, 20, ADAPTIVE_THRESHOLD_OFFSET);
+    let absolute_threshold = page_background(flattened).saturating_sub(MIN_FOREGROUND_CONTRAST);
+    GrayImage::from_fn(flattened.width(), flattened.height(), |x, y| {
+        // Local contrast preserves fine strokes; the page-background threshold also preserves
+        // solid marks whose interior has no local contrast.
+        let foreground =
+            local.get_pixel(x, y)[0] == 0 || flattened.get_pixel(x, y)[0] <= absolute_threshold;
+        Luma([if foreground { 0 } else { 255 }])
+    })
 }
 
 fn content_bounds(binary: &GrayImage, dpi: f32) -> Option<ContentBox> {
@@ -454,7 +489,7 @@ pub fn clean_scan(
         0.0
     };
     let rotated = if options.deskew {
-        rotate_centered(&rectified, skew_degrees)
+        rotate_centered(&rectified, skew_degrees)?
     } else {
         RotatedImage { image: rectified }
     };
@@ -466,8 +501,7 @@ pub fn clean_scan(
         let base = f32::from(background.get_pixel(x, y)[0].max(1));
         Luma([(value * 245.0 / base).min(255.0).round() as u8])
     });
-    // Radius 20 produces the requested 41 by 41 adaptive threshold window.
-    let binary = adaptive_threshold(&flattened, 20, 0);
+    let binary = threshold_document(&flattened);
     let content = content_bounds(&binary, options.dpi).ok_or(UnrecognizedReason::NoContent)?;
     let selected = match options.output {
         CleanOutput::Grayscale => flattened,
