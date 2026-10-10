@@ -349,6 +349,19 @@ describe("decision legal resolution", () => {
     });
   });
 
+  test("asks for the sheet when a bare docket finds one decision in a file that can hold more", async () => {
+    const result = await resolveDecision({
+      admission,
+      country: "CZE",
+      identifier: "3 Afs 41/2008",
+      dependencies: { lookup: lookupRows([row()]), read: missingDecision },
+    });
+    expect(result).toEqual({
+      status: "incomplete_identifier",
+      missing: ["sheet"],
+    });
+  });
+
   test("marks a missing read as unavailable, not licensed", async () => {
     const result = await resolveDecision({
       admission,

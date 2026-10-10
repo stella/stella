@@ -226,6 +226,13 @@ export const resolveDecision = async ({
         },
       };
     }
+    case "incomplete_identifier":
+      // A docket file that may hold several decisions needs its sheet number;
+      // exact identity never picks one of the candidates for the caller.
+      return {
+        status: "incomplete_identifier",
+        missing: [...resolution.missing],
+      };
     default:
       resolution satisfies never;
       return panic("Unhandled decision identity resolution");
