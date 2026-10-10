@@ -4,10 +4,5 @@ SET statement_timeout = '5s';--> statement-breakpoint
 
 -- The application owner assumes the existing column-restricted reader;
 -- the creator ADMIN grant alone does not permit SET ROLE on PostgreSQL 16+.
-DO $$
-BEGIN
-  IF CURRENT_USER <> 'stella_public_law_reader'
-     AND NOT pg_has_role(CURRENT_USER, 'stella_public_law_reader', 'SET') THEN
-    EXECUTE format('GRANT stella_public_law_reader TO %I WITH SET TRUE, INHERIT FALSE', CURRENT_USER);
-  END IF;
-END $$;
+-- stella-migration-safety: reviewed grant-privileges - Only the migration owner can assume the existing column-restricted reader; its privileges are not inherited.
+GRANT stella_public_law_reader TO CURRENT_USER WITH SET TRUE, INHERIT FALSE;
