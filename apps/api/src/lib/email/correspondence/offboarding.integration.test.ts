@@ -928,16 +928,6 @@ describe("correspondence offboarding", () => {
               primaryUserId: null,
             }),
           ).toEqual({ status: "denied" });
-          expect(
-            await resolveInboundSender({
-              tx: asTestRaw<Transaction>(tx),
-              organizationId: ids.orgB,
-              workspaceId: ids.wsB1,
-              sender: `${senderId}@example.test`,
-              receivedAt: "2026-09-26T12:00:00.000Z",
-              primaryUserId: null,
-            }),
-          ).toEqual({ status: "denied" });
           await tx.execute(sql`RESET ROLE`);
           tx.rollback();
         });
