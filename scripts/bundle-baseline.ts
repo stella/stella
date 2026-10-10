@@ -33,6 +33,10 @@ const BASELINE_REL = BASELINE_PATHS.bundle;
 const BASELINE_PATH = path.resolve(REPO_ROOT, BASELINE_REL);
 const ASSETS_REL = "apps/web/dist/client/assets";
 const ASSETS_DIR = path.resolve(REPO_ROOT, ASSETS_REL);
+const SCAN_ENGINE_WASM = path.resolve(
+  REPO_ROOT,
+  "packages/scan-engine/generated/scan_engine_bg.wasm",
+);
 const WRITE_HINT = "bun scripts/bundle-baseline.ts --write-baseline";
 
 // A chunk may grow by up to this factor over its baseline before CI fails.
@@ -80,6 +84,7 @@ const VENDOR_GROUPS = [
 // newly-appearing vendor chunk a visible, guarded event.
 const GROUP_KEYS = [
   "entry",
+  "scan-engine-wasm",
   ...VENDOR_GROUPS,
   "routes",
   "largest-route",
@@ -135,6 +140,7 @@ const emptySizes = (): Sizes => ({
   entry: 0,
   "largest-route": 0,
   routes: 0,
+  "scan-engine-wasm": 0,
   total: 0,
   "vendor-anonymize-data": 0,
   "vendor-base-ui": 0,
@@ -172,6 +178,14 @@ const measure = (assetsDir: string): MeasureResult => {
   }
 
   const sizes = emptySizes();
+  if (!existsSync(SCAN_ENGINE_WASM)) {
+    return {
+      ok: false,
+      error:
+        "No committed scan engine WebAssembly found. Run `bun --filter @stll/scan-engine build:wasm` first.",
+    };
+  }
+  sizes["scan-engine-wasm"] = gzipSize(SCAN_ENGINE_WASM);
   let largestRoute = 0;
 
   for (const file of files) {

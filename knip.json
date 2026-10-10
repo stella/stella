@@ -185,6 +185,9 @@
     "packages/sanctions": {
       "entry": ["src/index.ts", "src/**/*.test.ts", "scripts/evaluate.ts"]
     },
+    "packages/scan-engine": {
+      "entry": ["src/scan-engine.ts", "src/**/*.test.ts"]
+    },
     "packages/scripts": {
       "entry": ["src/i18n-check.ts", "src/i18n-typegen.ts"]
     },

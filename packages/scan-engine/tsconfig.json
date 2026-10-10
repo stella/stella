@@ -1,0 +1,10 @@
+{
+  "extends": "@stll/typescript-config/base.json",
+  "compilerOptions": {
+    "lib": ["ESNext", "WebWorker"],
+    "module": "ESNext",
+    "types": ["bun-types"]
+  },
+  "include": ["."],
+  "exclude": ["generated/*.js", "node_modules", "target"]
+}
