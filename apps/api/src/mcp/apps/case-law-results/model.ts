@@ -77,6 +77,9 @@ const lookupRows = (items: LookupPage["items"]) => {
         );
         notices.push(item.message);
         break;
+      case "incomplete_identifier":
+        notices.push(item.message);
+        break;
       case "not_found":
         notices.push(`${item.message} ${item.hint}`);
         break;
@@ -127,7 +130,8 @@ export const searchView = (data: SearchResults) => {
     results: data.results.map((row) =>
       resultRow(row, {
         type: "search",
-        snippet: row.snippet,
+        // A licence-withheld row carries no excerpt to show.
+        snippet: "snippet" in row ? row.snippet : null,
         keywords:
           row.keywords === null
             ? null

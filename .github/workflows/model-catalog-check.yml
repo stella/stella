@@ -7,8 +7,8 @@ name: Model Catalog Upstream Check
 # deprecated or gone upstream, or the committed Text Arena quality ratings
 # (Hugging Face lmarena-ai/leaderboard-dataset) drift or lose a mapped row.
 # Rates and request capabilities refresh together in one maintained pull request.
-# Benchmark availability is inconclusive twice, then alerts on the third
-# consecutive scheduled run. A successful fetch resets the persisted streak.
+# Benchmark availability remains inconclusive for 7 days, then alerts once the
+# outage lasts longer. A successful fetch clears the persisted outage start.
 
 on:
   schedule:
@@ -79,7 +79,7 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           mkdir -p .benchmark-state
-          bash "$GH_RETRY_SCRIPT" api "repos/$GH_REPO/actions/artifacts?name=model-catalog-benchmark-state-v1&per_page=1" > .benchmark-state/artifacts.json
+          bash "$GH_RETRY_SCRIPT" api "repos/$GH_REPO/actions/artifacts?name=model-catalog-benchmark-state-v2&per_page=1" > .benchmark-state/artifacts.json
           jq -e '(.artifacts | type) == "array"' .benchmark-state/artifacts.json > /dev/null
           if [ "$(jq '.artifacts | length' .benchmark-state/artifacts.json)" = 0 ]; then
             echo 'Starting scheduled benchmark state.'
@@ -115,13 +115,21 @@ jobs:
             echo "changed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          cat > "$REFRESH_CHANGESET" <<'CHANGESET'
+          runtime_changed="$(git status --porcelain --untracked-files=all -- packages/ai-catalog/src/model-rates.gen.ts packages/ai-catalog/src/capabilities.gen.ts)"
+          if [[ -z "$runtime_changed" ]]; then
+            bun run changeset --empty
+            empty_changeset="$(git ls-files --others --exclude-standard -- '.changeset/*.md')"
+            test -f "$empty_changeset"
+            mv "$empty_changeset" "$REFRESH_CHANGESET"
+          else
+            cat > "$REFRESH_CHANGESET" <<'CHANGESET'
           ---
           "@stll/ai-catalog": patch
           ---
 
           Refresh upstream model rates and request capabilities.
           CHANGESET
+          fi
           echo "changed=true" >> "$GITHUB_OUTPUT"
 
       - name: Discover models and validate IDs, rates, and capabilities
@@ -145,7 +153,7 @@ jobs:
         if: ${{ !cancelled() && github.event_name == 'schedule' && steps.benchmarks.outcome != 'skipped' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: model-catalog-benchmark-state-v1
+          name: model-catalog-benchmark-state-v2
           path: .benchmark-state/state.json
           if-no-files-found: error
           retention-days: 90
@@ -181,4 +189,4 @@ jobs:
             .changeset/model-catalog-refresh.md
           commit-message: "chore: refresh model catalog snapshots"
           pr-title: "chore: refresh model catalog snapshots"
-          pr-body: "Refreshes committed upstream inputs, generated model rates, and request capabilities together. Includes a patch changeset for @stll/ai-catalog."
+          pr-body: "Refreshes committed upstream inputs, generated model rates, and request capabilities together. Includes a patch changeset when published catalog outputs change."

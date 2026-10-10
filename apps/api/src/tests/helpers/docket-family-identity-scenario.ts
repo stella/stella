@@ -402,8 +402,8 @@ export const describeDocketFamilyIdentity = (
           sorted(ids.legacySibling),
         );
         expect(await lookedUp(dockets.legacy)).toMatchObject({
-          status: "ambiguous",
-          reason: "file_incomplete",
+          status: "incomplete_identifier",
+          missing: ["sheet"],
         });
       } finally {
         await context().setFamilyKeyGrant("grant");
@@ -416,8 +416,8 @@ export const describeDocketFamilyIdentity = (
       const { dockets, ids } = context().scenario;
       expect(await searched(dockets.unkeyed)).toEqual(sorted(ids.unkeyedBare));
       expect(await lookedUp(dockets.unkeyed)).toMatchObject({
-        status: "ambiguous",
-        reason: "file_incomplete",
+        status: "incomplete_identifier",
+        missing: ["sheet"],
       });
       expect(await searched(`${dockets.unkeyed} - 12`)).toEqual(
         sorted(ids.unkeyedSheet),
@@ -437,8 +437,8 @@ export const describeDocketFamilyIdentity = (
       ]) {
         expect(await searched(entry), entry).toEqual(sorted(ids.lone));
         expect(await lookedUp(entry), entry).toMatchObject({
-          status: "ambiguous",
-          reason: "file_incomplete",
+          status: "incomplete_identifier",
+          missing: ["sheet"],
         });
       }
     });
@@ -765,7 +765,7 @@ export const describeDocketGrammarFamilyIdentity = (
       expect(await searched(entry)).toEqual(sorted(ids.lone));
       expect(await lookedUp(entry)).toMatchObject(
         DECISION_DOCKETS_STORED_WITH_SHEETS[jurisdiction]
-          ? { status: "ambiguous", reason: "file_incomplete" }
+          ? { status: "incomplete_identifier", missing: ["sheet"] }
           : { status: "unique", basis: "docket" },
       );
     });

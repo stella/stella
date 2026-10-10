@@ -75,7 +75,8 @@ const expectDailyRefusal = (
 
 describe("demo account daily action budget", () => {
   test("admits the daily maximum and refuses the next action even with admission disabled", async () => {
-    const { budget } = demoBudget();
+    const tracked = demoBudget();
+    const { budget } = tracked;
     await exhaustWith(budget, disabledAction);
     let calls = 0;
     const refused = await withActionAdmission({
@@ -90,6 +91,9 @@ describe("demo account daily action budget", () => {
     });
     expectDailyRefusal(refused);
     expect(calls).toBe(0);
+    expect(tracked.completions()).toBe(
+      DEMO_ACCOUNT_DAILY_ACTION_BUDGET.max + 1,
+    );
   });
 
   test("counts concurrency-only background actions against the same budget", async () => {
@@ -132,6 +136,76 @@ describe("demo account daily action budget", () => {
     });
     expect(Result.isOk(admitted)).toBe(true);
     expect(tracked.increments()).toBe(1);
+  });
+
+  test("completes started success, started failure, and unstarted refund attempts", async () => {
+    const tracked = demoBudget();
+    const success = await withActionAdmission({
+      organizationId,
+      userId: demoUser,
+      enabled: false,
+      demoActionBudget: tracked.budget,
+      run: async () => await Promise.resolve("served"),
+    });
+    expect(Result.isOk(success)).toBe(true);
+
+    const failure = await withActionAdmission({
+      organizationId,
+      userId: demoUser,
+      enabled: false,
+      demoActionBudget: tracked.budget,
+      run: async () => {
+        throw new Error("Synthetic started action failure");
+      },
+    });
+    expect(Result.isError(failure)).toBe(true);
+
+    const refusedBeforeStart = await withActionAdmission({
+      organizationId,
+      userId: demoUser,
+      enabled: true,
+      execution: "background-job",
+      actionKind: "workflow.background",
+      policy,
+      redis: { send: async () => await Promise.resolve(0) },
+      demoActionBudget: tracked.budget,
+      run: async () => await Promise.resolve("unreachable"),
+    });
+    expect(Result.isError(refusedBeforeStart)).toBe(true);
+    expect(refusedBeforeStart).toMatchObject({
+      error: { reason: "busy" },
+    });
+
+    expect(tracked.increments()).toBe(3);
+    expect(tracked.completions()).toBe(3);
+    expect(tracked.count()).toBe(2);
+  });
+
+  test("completes an increment failure to clear an uncertain refund marker", async () => {
+    let completions = 0;
+    const unavailable = await withActionAdmission({
+      organizationId,
+      userId: demoUser,
+      enabled: false,
+      demoActionBudget: {
+        resolveDemoUserId: async () => await Promise.resolve(demoUser),
+        counter: () => ({
+          increment: async () => {
+            throw new Error("Synthetic ambiguous increment failure");
+          },
+          decrement: async () => await Promise.resolve(),
+          complete: async () => {
+            completions += 1;
+          },
+        }),
+        now: () => DAY_START_MS,
+      },
+      run: async () => await Promise.resolve("unreachable"),
+    });
+    expect(unavailable).toMatchObject({
+      error: { reason: "unavailable" },
+    });
+    expect(completions).toBe(1);
   });
 
   test("refunds an attempt refused before its work starts", async () => {

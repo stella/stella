@@ -171,6 +171,8 @@ export const citingDecisionsSuccessResponseSchema = t.Object({
       caseNumber: boundedString(1024),
       slug: nullableBoundedString(1024),
       court: boundedString(2048),
+      courtAbbreviation: nullableBoundedString(2048),
+      sourceUrl: nullableBoundedString(8192),
       country: boundedString(12),
       language: boundedString(32),
       decisionDate: date,

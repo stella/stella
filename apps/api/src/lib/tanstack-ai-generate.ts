@@ -22,6 +22,7 @@ import type {
   TanStackAIProvider,
 } from "@stll/ai-catalog";
 import { classifyFailure } from "@stll/errors";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import type {
   AIRequestServiceTier,
@@ -1403,10 +1404,7 @@ export const abortControllerFromSignal = (
 const PROVIDER_CACHE_KEY_MAX = 64;
 
 const hashCacheScopeKey = (raw: string): string =>
-  new Bun.CryptoHasher("sha256")
-    .update(raw)
-    .digest("hex")
-    .slice(0, PROVIDER_CACHE_KEY_MAX);
+  hashSha256Hex(raw).slice(0, PROVIDER_CACHE_KEY_MAX);
 
 /**
  * The request's system prompt. A layered prompt (a chat turn's) is split at

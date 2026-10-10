@@ -18,6 +18,8 @@ import { OCR_LOCAL_MODEL_FILES } from "@/api/lib/document-processing-contract";
 import { fetchBytesFollowingRedirects } from "@/api/lib/redirect-fetch";
 import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 
+import { hashArtifactBytes as sha256Hex } from "./artifact-content-hash";
+
 // Each URL names a repository commit, not a branch, so the bytes behind it
 // cannot move; the digest still guards the transfer.
 const MODEL_SOURCES = {
@@ -39,9 +41,6 @@ const DOWNLOAD_MAX_BYTES = 64 * 1024 * 1024;
 const MAX_REDIRECT_HOPS = 4;
 const DOWNLOAD_ATTEMPTS = 3;
 const RETRY_BASE_DELAY_MS = 5000;
-
-const sha256Hex = (bytes: ArrayBuffer): string =>
-  new Bun.CryptoHasher("sha256").update(bytes).digest("hex");
 
 const targetDir = path.resolve(process.argv[2] ?? "ocr-models");
 
