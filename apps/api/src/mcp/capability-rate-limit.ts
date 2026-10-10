@@ -3,12 +3,10 @@
  * per (organization, capability id); outbound skill-source capabilities consume
  * the REST routes' shared user budget instead.
  *
- * The generic invoke path bypasses the per-route rate-limit middleware some REST
- * routes install (e.g. `document-translations.runs.create`, `entities.upload`), so it needs its
- * own budget or an agent could drive backend cost through the long tail. It
- * reuses the same fixed-window counter as the public feedback intake
+ * The generic invoke path applies its own budget independently of REST route
+ * middleware. It uses the same fixed-window counter as the public feedback intake
  * (`FeedbackIntakeGuards.consumeCounter`, Redis-backed with an in-memory
- * fallback), under a distinct bucket rather than hand-rolling a limiter.
+ * fallback), under a distinct bucket.
  *
  * A generous default applies to every capability; a small override table mirrors
  * the explicit limits capability endpoints carry on their REST routes so the

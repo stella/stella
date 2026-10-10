@@ -134,15 +134,9 @@ type RefundProvenance = {
   | {
       type: "redis";
       /**
-       * The attempt id sent with the increment EVAL. Kept even when the
-       * increment's own reply never arrived (client-side timeout): Redis may
-       * have already applied that EVAL before the timeout fired, and
-       * DECREMENT_SCRIPT's attempt-id match makes refunding against an
-       * unconfirmed attempt safe either way -- it decrements only if Redis
-       * actually recorded this attempt, and no-ops otherwise. Discarding
-       * provenance on timeout (the previous behavior) traded that bounded
-       * ambiguity for a guaranteed permanent over-count whenever the EVAL had
-       * in fact landed.
+       * The attempt id sent with the increment EVAL, retained when its reply
+       * times out. DECREMENT_SCRIPT refunds only a matching recorded attempt;
+       * an unrecorded attempt leaves the counter unchanged.
        */
       attemptId: string;
     }

@@ -11,7 +11,7 @@ import { logger } from "@/api/lib/observability/logger";
  * weakens brute-force / OTP-guessing protection.
  *
  * Fail-open: if Redis is unreachable the storage degrades to a
- * per-process Map (the previous behaviour) instead of blocking auth. A
+ * per-process Map instead of blocking auth. A
  * Redis outage must never hard-lock sign-in.
  */
 import { createAuthAdmissionStorage } from "@/api/lib/rate-limit/auth-admission-reservations";
