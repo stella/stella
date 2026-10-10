@@ -31,7 +31,10 @@ const ENTITY_COUNT = 100_000;
 const MATCHES_PER_KIND = 1000;
 const SAMPLE_COUNT = 5;
 const POLICY_COUNT = 47;
-const MAX_TIME_RATIO = 1.1;
+// Shared CI runners vary ~10% between alternating samples of a ~300 ms query.
+// The per-row SubPlan check and the buffer bound carry the structural signal;
+// time only has to catch a gross regression.
+const MAX_TIME_RATIO = 1.5;
 const MAX_BUFFER_RATIO = 1.25;
 const QUERY_TEXT = "budgetneedle";
 const HIT_LIMIT = 20;
