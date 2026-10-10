@@ -265,6 +265,7 @@
     "moveGroupEarlier": "Nach links verschieben",
     "moveGroupLater": "Nach rechts verschieben",
     "moreOptions": "Weitere Optionen",
+    "moreItemActions": "Weitere Aktionen für Element {number}",
     "noResults": "Keine passenden Inhalte",
     "noResultsDescription": "Möchten Sie stattdessen in den Registern nach „{query}“ suchen?",
     "noGroup": "Keine Gruppe",

@@ -265,6 +265,7 @@
     "moveGroupEarlier": "Mozgatás balra",
     "moveGroupLater": "Mozgatás jobbra",
     "moreOptions": "További lehetőségek",
+    "moreItemActions": "További műveletek a(z) {number}. elemhez",
     "noResults": "Nincs egyező kivágás",
     "noResultsDescription": "Szeretné inkább a nyilvántartásokban keresni ezt: „{query}”?",
     "noGroup": "Nincs csoport",

@@ -265,6 +265,7 @@
     "moveGroupEarlier": "Przesuń w lewo",
     "moveGroupLater": "Przesuń w prawo",
     "moreOptions": "Więcej opcji",
+    "moreItemActions": "Więcej działań dla elementu {number}",
     "noResults": "Brak pasujących wycinków",
     "noResultsDescription": "Czy zamiast tego wyszukać „{query}” w rejestrach?",
     "noGroup": "Bez grupy",

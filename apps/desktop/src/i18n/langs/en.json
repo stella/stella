@@ -265,6 +265,7 @@
     "moveGroupEarlier": "Move left",
     "moveGroupLater": "Move right",
     "moreOptions": "More options",
+    "moreItemActions": "More actions for item {number}",
     "noResults": "No matching clips",
     "noResultsDescription": "Search registries for “{query}” instead?",
     "noGroup": "No group",

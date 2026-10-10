@@ -265,6 +265,7 @@
     "moveGroupEarlier": "Liiguta vasakule",
     "moveGroupLater": "Liiguta paremale",
     "moreOptions": "Rohkem valikuid",
+    "moreItemActions": "Veel toiminguid kirjega {number}",
     "noResults": "Sobivaid lõikeid pole",
     "noResultsDescription": "Kas soovite otsida „{query}” hoopis registritest?",
     "noGroup": "Rühmata",

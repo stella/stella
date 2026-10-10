@@ -265,6 +265,7 @@
     "moveGroupEarlier": "Posunúť doľava",
     "moveGroupLater": "Posunúť doprava",
     "moreOptions": "Ďalšie možnosti",
+    "moreItemActions": "Ďalšie akcie pre položku {number}",
     "noResults": "Žiadne zodpovedajúce výstrižky",
     "noResultsDescription": "Chcete namiesto toho vyhľadať „{query}“ v registroch?",
     "noGroup": "Bez skupiny",
