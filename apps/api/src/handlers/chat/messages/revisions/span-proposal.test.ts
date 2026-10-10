@@ -15,7 +15,7 @@ const content = toPersistedChatMessageContentV3({
     {
       type: "tool-call",
       id: "call",
-      name: "search",
+      name: "boe_search_legislation",
       arguments: "{}",
       state: "complete",
     },

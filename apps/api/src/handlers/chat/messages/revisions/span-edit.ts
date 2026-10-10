@@ -63,10 +63,10 @@ const config = {
   }),
 } satisfies HandlerConfig;
 
-type SpanGenerationOptions = Omit<
-  Parameters<typeof generateTanStackObjectForRole>[0],
-  "outputSchema"
-> & { outputSchema: typeof outputSchema };
+type SpanGenerationOptions = Extract<
+  Parameters<typeof generateTanStackObjectForRole<typeof outputSchema>>[0],
+  { dataClass: "customer" }
+>;
 
 export const createProposeMessageSpanEdit = ({
   generateObject = generateTanStackObjectForRole,

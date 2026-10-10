@@ -21,10 +21,20 @@ type PrepareSpanRewriteOptions = {
   };
 };
 
+type PreparedSpanRewrite = {
+  content: ReturnType<typeof normalizeRevisionContent>["content"];
+  anchor: NonNullable<ReturnType<typeof findAnchoredSpan>>;
+  instruction: string;
+  answer: string;
+};
+
 export const prepareSpanRewrite = ({
   loaded,
   body,
-}: PrepareSpanRewriteOptions) => {
+}: PrepareSpanRewriteOptions): Result<
+  PreparedSpanRewrite,
+  HandlerError<400 | 403 | 409>
+> => {
   if (loaded.message.role !== "assistant") {
     return Result.err(
       new HandlerError({

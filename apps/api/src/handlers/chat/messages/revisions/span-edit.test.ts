@@ -82,6 +82,7 @@ const runProposal = async ({
     generateObject: async (options) => {
       modelCalls += 1;
       expect(options.modelId).toBe("openai::gpt-5.4-mini");
+      expect(options.dataClass).toBe("customer");
       expect(options.managedAIResidency).toBe("eu");
       expect(options.orgAIConfig).toEqual(orgAIConfig);
       return { replacement };
