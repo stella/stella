@@ -7,6 +7,7 @@ import {
   isNotNull,
   isNull,
   lte,
+  or,
   sql,
 } from "drizzle-orm";
 
@@ -25,6 +26,7 @@ import {
 } from "@/api/handlers/chat/chat-turn-settlement";
 import type { CutShortOutcome } from "@/api/handlers/chat/chat-turn-settlement";
 import {
+  CHAT_TURN_TIMING_ACTIVE_STATUSES,
   chatTurnViewOf,
   planChatTurnTransition,
 } from "@/api/handlers/chat/chat-turn-state";
@@ -35,9 +37,11 @@ import type {
   ChatTurnState,
   ChatTurnView,
 } from "@/api/handlers/chat/chat-turn-state";
+import { messageTurnTiming } from "@/api/handlers/chat/chat-turn-timing";
 import { isChatHistorySnapshotCurrentOnTx } from "@/api/handlers/chat/history-window";
 import type { ChatHistorySnapshot } from "@/api/handlers/chat/history-window";
 import type {
+  ChatTurnTiming,
   ChatTurnOutcome,
   ChatMessageRole,
   PersistableChatMessage,
@@ -155,6 +159,19 @@ export const isChatTurnNotOwned = (error: { cause?: unknown }): boolean =>
  * a row whose creation and settlement are both enforced by PostgreSQL.
  */
 const databaseNow = () => sql<Date>`now()`;
+
+// Sum only active execution spans. Closing a span before awaiting-user keeps
+// human response time out of the next continuation's accumulated duration.
+const closeActiveTiming = () => ({
+  activeDurationMs: sql<number | null>`CASE
+    WHEN ${chatTurns.activeDurationMs} IS NULL THEN NULL
+    WHEN ${chatTurns.activeStartedAt} IS NULL AND ${inArray(chatTurns.status, CHAT_TURN_TIMING_ACTIVE_STATUSES)} THEN NULL
+    WHEN ${chatTurns.activeStartedAt} IS NULL THEN ${chatTurns.activeDurationMs}
+    WHEN now() < ${chatTurns.activeStartedAt} THEN NULL
+    ELSE ${chatTurns.activeDurationMs} + floor(extract(epoch FROM (now() - ${chatTurns.activeStartedAt})) * 1000)::bigint
+  END`,
+  activeStartedAt: null,
+});
 
 const nextChatTurnLeaseExpiry = () =>
   sql<Date>`now() + ${CHAT_TURN_LEASE_MS} * interval '1 millisecond'`;
@@ -289,6 +306,9 @@ const interruptExpiredRunningChatTurnOnTx = async ({
     lte(chatTurns.leaseExpiresAt, now),
   );
   const ended = {
+    // An expired owner has no known end instant; do not invent active time.
+    activeDurationMs: null,
+    activeStartedAt: null,
     assistantMessageId: null,
     executionId: null,
     failureCode: null,
@@ -569,6 +589,7 @@ export const insertChatTurnAcceptanceOnTx = async ({
   await tx
     .update(chatTurns)
     .set({
+      ...closeActiveTiming(),
       assistantMessageId: null,
       cancellationReason: "superseded",
       executionId: null,
@@ -592,6 +613,8 @@ export const insertChatTurnAcceptanceOnTx = async ({
   const inserted = await tx
     .insert(chatTurns)
     .values({
+      activeDurationMs: 0,
+      activeStartedAt: now,
       id: acceptance.id,
       leaseExpiresAt: nextChatTurnLeaseExpiry(),
       organizationId: acceptance.organizationId,
@@ -768,6 +791,7 @@ const stopUnownedChatTurnOnTx = async ({
   const stopped = await tx
     .update(chatTurns)
     .set({
+      ...closeActiveTiming(),
       assistantMessageId: null,
       cancellationReason: planned.state.reason,
       cancelRequestedAt: now,
@@ -938,6 +962,35 @@ type ClaimSource = {
   status: "accepted" | "awaiting-user" | "running";
 };
 
+const claimActiveTiming = (
+  source: ClaimSource,
+  incomingMessageId: SafeId<"chatMessage">,
+) => {
+  switch (source.status) {
+    case "accepted":
+      return {
+        activeDurationMs: chatTurns.activeDurationMs,
+        activeStartedAt: chatTurns.activeStartedAt,
+        timingMessageId: chatTurns.timingMessageId,
+      };
+    case "awaiting-user":
+      return {
+        activeDurationMs: chatTurns.activeDurationMs,
+        activeStartedAt: sql<Date | null>`CASE WHEN ${chatTurns.activeDurationMs} IS NULL THEN NULL ELSE now() END`,
+        timingMessageId: incomingMessageId,
+      };
+    case "running":
+      return {
+        activeDurationMs: null,
+        activeStartedAt: null,
+        timingMessageId: chatTurns.timingMessageId,
+      };
+    default:
+      source.status satisfies never;
+      return panic(`Unhandled timing claim status: ${String(source.status)}`);
+  }
+};
+
 /** Claim on the caller's transaction before any owned history mutation. */
 export const claimChatTurnForExecutionOnTx = async ({
   acceptedTurnId,
@@ -1101,6 +1154,8 @@ export const claimChatTurnForExecutionOnTx = async ({
     const legacyTurnId = createSafeId<"chatTurn">();
     // audit: skip — deploy compatibility for a persisted pre-chat_turns message; later message settlement is audited
     await tx.insert(chatTurns).values({
+      activeDurationMs: incomingMessageRole === "user" ? 0 : null,
+      activeStartedAt: incomingMessageRole === "user" ? databaseNow() : null,
       executionId,
       id: legacyTurnId,
       leaseExpiresAt,
@@ -1122,6 +1177,7 @@ export const claimChatTurnForExecutionOnTx = async ({
   const claimed = await tx
     .update(chatTurns)
     .set({
+      ...claimActiveTiming(source, incomingMessageId),
       assistantMessageId: null,
       executionId,
       interactionToolCallId: null,
@@ -1385,6 +1441,8 @@ export const settleChatTurnOnTx = async ({
 }: SettleChatTurnProps): Promise<ChatTurnSettlementResult> => {
   const settledAt = databaseNow();
   const base = {
+    ...closeActiveTiming(),
+    timingMessageId: assistantMessageId ?? chatTurns.timingMessageId,
     cancellationReason: null,
     executionId: null,
     leaseExpiresAt: null,
@@ -1511,3 +1569,35 @@ export const settleChatTurnOnTx = async ({
     .limit(1);
   return stillOwned.length === 1 ? "stop-requested" : "not-owned";
 };
+
+/** Read an execution's clock anchor, including its just-settled outcome. */
+export const readChatTurnTiming = async ({
+  execution,
+  safeDb,
+}: {
+  execution: ChatTurnExecution;
+  safeDb: SafeDb;
+}): Promise<Result<ChatTurnTiming | null, SafeDbError>> =>
+  await safeDb(async (tx) => {
+    const rows = await tx
+      .select({
+        timing: messageTurnTiming({
+          messageId: chatTurns.timingMessageId,
+          threadId: chatTurns.threadId,
+          fallbackTurnId: chatTurns.id,
+        }),
+      })
+      .from(chatTurns)
+      .where(
+        and(
+          eq(chatTurns.id, execution.id),
+          or(
+            eq(chatTurns.executionId, execution.executionId),
+            isNull(chatTurns.executionId),
+          ),
+        ),
+      )
+      .limit(1);
+    const row = rows.at(0);
+    return row?.timing ?? null;
+  });

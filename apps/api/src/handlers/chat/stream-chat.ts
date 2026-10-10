@@ -65,6 +65,7 @@ import {
   type ChatRunMode,
 } from "@/api/handlers/chat/chat-schema";
 import {
+  readChatTurnTiming,
   OWNER_LOST_OUTCOME,
   USER_STOP_OUTCOME,
 } from "@/api/handlers/chat/chat-turn-persistence";
@@ -79,6 +80,7 @@ import {
 } from "@/api/handlers/chat/chat-turn-settlement";
 import type { CutShortOutcome } from "@/api/handlers/chat/chat-turn-settlement";
 import type { ChatTurnFailureCode } from "@/api/handlers/chat/chat-turn-state";
+import { withChatTurnTiming } from "@/api/handlers/chat/chat-turn-timing-stream";
 import { compactModelMessagesForModel } from "@/api/handlers/chat/compaction";
 import {
   createLoopRecoverySystemPrompt,
@@ -192,13 +194,16 @@ import {
 } from "@/api/lib/chat/tanstack-chat-runtime";
 import type { PublicStreamChunk } from "@/api/lib/chat/tanstack-chat-runtime";
 import { ToolCallIdLedger } from "@/api/lib/chat/unique-tool-call-ids";
+import { readPresent, readUnavailable } from "@/api/lib/errors/read-outcome";
 import {
   ChatEmptyCompletionError,
   ChatLoopDetectedError,
 } from "@/api/lib/errors/tagged-errors";
 import type { ChatTerminalError } from "@/api/lib/errors/tagged-errors";
 import { errorFingerprint } from "@/api/lib/errors/utils";
+import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   providerErrorFields,
   providerErrorReason,
@@ -223,6 +228,11 @@ import {
 } from "@/api/lib/tanstack-ai-usage";
 import { projectVisualPreviewStream } from "@/api/lib/visual-preview-stream";
 import { isLocalDevOpen } from "@/api/runtime-mode";
+
+const TIMING_READ_FAILURE = failureSink({
+  event: "chat.turn.timing_read_failed",
+  expected: [],
+});
 
 const MAX_TOOL_STEPS = 100;
 const THIRD_PARTY_BOUNDARY_REFUSAL_MESSAGE =
@@ -765,6 +775,7 @@ export const streamChat = async ({
     restorationPairs,
     source: shadow.source,
   });
+  const timingPhase: { status: "running" | "settled" } = { status: "running" };
   const processedStream = processTurnForPersistence({
     visualOrigin,
     // The run's own signal, not the deadline's. Cancelling the response stream
@@ -813,6 +824,7 @@ export const streamChat = async ({
             }),
           }),
       );
+      timingPhase.status = "settled";
     },
     owningAssistantMessageId,
     restorationPairs,
@@ -828,7 +840,29 @@ export const streamChat = async ({
     storedHistory,
   });
 
-  return { type: "streaming", response: run.produce(output) };
+  return {
+    type: "streaming",
+    response: run.produce(
+      withChatTurnTiming({
+        source: output,
+        getPhase: () => timingPhase.status,
+        readTiming: async () => {
+          const timing = await readChatTurnTiming({
+            execution: run.execution,
+            safeDb,
+          });
+          if (Result.isError(timing)) {
+            observeFailure(timing.error, {
+              sink: TIMING_READ_FAILURE,
+              ctx: { threadId },
+            });
+            return readUnavailable({ kind: "thrown", error: timing.error });
+          }
+          return readPresent(timing.value);
+        },
+      }),
+    ),
+  };
 };
 
 const thirdPartyBoundaryRefusalResponse = (

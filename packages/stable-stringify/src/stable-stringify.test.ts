@@ -4,10 +4,7 @@ import { isDeepStrictEqual } from "node:util";
 
 import { assertProperty } from "@stll/property-testing";
 
-import {
-  type StableStringifyInput,
-  stableStringify,
-} from "./stable-stringify.js";
+import { type StableStringifyInput, stableStringify } from "./stable-stringify";
 
 describe("stableStringify", () => {
   test("is insensitive to the order keys were assembled in", () => {

@@ -417,7 +417,7 @@
           },
           "ended": "complete",
           "response": {
-            "body": "data: {\"type\":\"TEXT_MESSAGE_START\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"role\":\"assistant\",\"timestamp\":1767225607000}\n\ndata: {\"type\":\"RUN_ERROR\",\"timestamp\":1767225608000,\"message\":\"unknown\",\"code\":\"unknown\"}\n\n",
+            "body": "data: {\"type\":\"TEXT_MESSAGE_START\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"role\":\"assistant\",\"timestamp\":1767225607000,\"metadata\":{\"turnTiming\":{\"status\":\"finished\",\"durationMs\":0}}}\n\ndata: {\"type\":\"TEXT_MESSAGE_END\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"timestamp\":1767225608000,\"metadata\":{\"turnTiming\":{\"status\":\"finished\",\"durationMs\":0}}}\n\ndata: {\"type\":\"RUN_ERROR\",\"timestamp\":1767225609000,\"message\":\"unknown\",\"code\":\"unknown\"}\n\n",
             "status": 200
           },
           "page": {
@@ -456,6 +456,10 @@
                   "turnOutcome": {
                     "type": "failed",
                     "error": "unknown"
+                  },
+                  "turnTiming": {
+                    "status": "finished",
+                    "durationMs": 0
                   }
                 },
                 "role": "assistant",

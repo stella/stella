@@ -13,6 +13,7 @@ import type {
   ReasoningProvenance,
 } from "@stll/ai-catalog";
 import type { ActionAdmissionRefusal } from "@stll/api-contract/action-admission";
+import type { ChatTurnTiming } from "@stll/api-contract/chat";
 import type { FolioAgentToolName } from "@stll/folio-agents";
 import type {
   FolioAgentToolInputByName,
@@ -45,6 +46,8 @@ import type {
 } from "@/api/lib/chat/persisted-message-content";
 import type { ChatRefContext, ChatRefEncoding } from "@/api/lib/chat/ref-token";
 import type { ChatMentionsData } from "@/api/lib/chat/references";
+
+export type { ChatTurnTiming } from "@stll/api-contract/chat";
 
 export type { ChatSourceDocument } from "@/api/handlers/chat/tools/chat-source-document";
 
@@ -157,6 +160,8 @@ export type ChatTurnOutcome =
     };
 
 export type ChatMessageMetadata = {
+  /** Server-owned active execution time; human interaction waits are excluded. */
+  turnTiming?: ChatTurnTiming | null | undefined;
   /** Server-owned generated-document draft binding. Incoming client metadata
    * deliberately does not accept this field. */
   activeDraftContext?: GeneratedDocumentActiveDraftContext | undefined;

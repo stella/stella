@@ -12,8 +12,10 @@ import {
   normalizePersistedChatMessageContent,
 } from "@/api/handlers/chat/chat-message-parts";
 import { ACTIVE_CHAT_TURN_STATUSES } from "@/api/handlers/chat/chat-turn-state";
+import { messageTurnTiming } from "@/api/handlers/chat/chat-turn-timing";
 import type {
   ChatMessageMetadata,
+  ChatTurnTiming,
   ChatMessageRole,
   ChatPart,
   PersistedChatMessageContent,
@@ -127,6 +129,10 @@ const loadChatMessagePageOnTx = async ({
       content: chatMessages.content,
       revision: chatMessages.revision,
       createdAt: chatMessages.createdAt,
+      turnTiming: messageTurnTiming({
+        messageId: chatMessages.id,
+        threadId: chatMessages.threadId,
+      }),
     })
     .from(chatMessages)
     .where(
@@ -235,6 +241,10 @@ export const loadClientMessages = async ({
         content: chatMessages.content,
         revision: chatMessages.revision,
         createdAt: chatMessages.createdAt,
+        turnTiming: messageTurnTiming({
+          messageId: chatMessages.id,
+          threadId: chatMessages.threadId,
+        }),
       })
       .from(chatMessages)
       .where(
@@ -254,6 +264,7 @@ type ChatMessagePageRow = {
   createdAt: Date;
   id: SafeId<"chatMessage">;
   role: ChatMessageRole;
+  turnTiming?: ChatTurnTiming | null;
   revision: number;
 };
 
@@ -262,11 +273,18 @@ export const clientMessageFromPageRow = (
   placeholderById: Map<string, string>,
 ): ClientMessage => {
   const message = chatMessageFromPersisted(row);
+  let metadata = message.metadata;
+  if (
+    row.turnTiming !== undefined &&
+    (row.turnTiming !== null || metadata !== undefined)
+  ) {
+    metadata = { ...metadata, turnTiming: row.turnTiming ?? undefined };
+  }
   return {
     createdAt: row.createdAt.toISOString(),
     edited: row.revision > 0,
     id: message.id,
-    ...(message.metadata === undefined ? {} : { metadata: message.metadata }),
+    ...(metadata === undefined ? {} : { metadata }),
     role: message.role,
     revision: row.revision,
     parts: attachPlaceholders(message.parts, placeholderById),
