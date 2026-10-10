@@ -117,6 +117,10 @@ const PR_LIST = v.array(
 );
 const CREATED_PR = v.object({ number: PR_NUMBER });
 const FILE_CONTENT = v.object({ content: v.string() });
+const REF_HEAD = v.object({ object: v.object({ sha: v.string() }) });
+const COMMIT_PARENTS = v.object({
+  parents: v.array(v.object({ sha: v.string() })),
+});
 const SIGNED_COMMIT = v.union([
   v.object({
     errors: v.pipe(v.array(v.object({ message: v.string() })), v.minLength(1)),
@@ -225,7 +229,7 @@ export const publishRemoval = async ({
     return undefined;
   }
   const remoteBase = v.parse(
-    v.object({ object: v.object({ sha: v.string() }) }),
+    REF_HEAD,
     await request([`${api}/git/ref/heads/main`]),
   );
   if (remoteBase.object.sha !== baseSha) {
@@ -234,24 +238,39 @@ export const publishRemoval = async ({
     });
   }
   if (existing) {
-    const sameFiles = await Promise.all(
-      Object.entries(files).map(async ([file, content]) => {
-        const response = v.parse(
-          FILE_CONTENT,
-          await request([
-            `${api}/contents/${file}`,
-            "--method",
-            "GET",
-            "-f",
-            `ref=${branch}`,
-          ]),
-        );
-        return (
-          Buffer.from(response.content, "base64").toString("utf-8") === content
-        );
-      }),
+    const proposalHead = v.parse(
+      REF_HEAD,
+      await request([`${api}/git/ref/heads/${branch}`]),
+    ).object.sha;
+    const proposal = v.parse(
+      COMMIT_PARENTS,
+      await request([`${api}/git/commits/${proposalHead}`]),
     );
-    if (sameFiles.every(Boolean)) {
+    // This workflow builds exactly one removal commit on its probed base.
+    // Matching edited files alone cannot establish unchanged probe inputs.
+    const sameBase =
+      proposal.parents.length === 1 && proposal.parents.at(0)?.sha === baseSha;
+    const sameFiles = sameBase
+      ? await Promise.all(
+          Object.entries(files).map(async ([file, content]) => {
+            const response = v.parse(
+              FILE_CONTENT,
+              await request([
+                `${api}/contents/${file}`,
+                "--method",
+                "GET",
+                "-f",
+                `ref=${proposalHead}`,
+              ]),
+            );
+            return (
+              Buffer.from(response.content, "base64").toString("utf-8") ===
+              content
+            );
+          }),
+        )
+      : [];
+    if (sameBase && sameFiles.every(Boolean)) {
       return reconcileRemovalPr({ body, github });
     }
   }

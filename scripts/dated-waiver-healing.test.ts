@@ -15,10 +15,16 @@ import type { FixEvidence } from "./dated-waiver-fix-task";
 import {
   applyHealing,
   armRemovalThroughBar,
+  executeProbeCommand,
   redactProbeOutput,
   renderRemovalEvidence,
   type HealingEntry,
 } from "./dated-waiver-healing";
+import {
+  createProbeBudget,
+  PROBE_PHASE_BUDGET_MS,
+  runWaiverProbe,
+} from "./dated-waiver-probes";
 import type { DatedWaiver } from "./dated-waivers";
 
 const entry = {
@@ -112,6 +118,27 @@ test("merge bar refusals fail publication instead of reporting a pending arm", a
   }
 });
 
+test("recorded failures publish before an earlier removal's merge bar can refuse", async () => {
+  const run = scenario([
+    { entry, outcome: green },
+    {
+      entry: { ...entry, id: "later" },
+      outcome: {
+        ...green,
+        status: "red",
+        evidence: { ...evidence, passed: 2 },
+      },
+    },
+  ]);
+  run.actions.armRemoval = async (number) => {
+    await armRemovalThroughBar(number, async () => 1);
+  };
+  expect(await rejectionOf(run.run("2026-10-10T00:00:00Z"))).toMatchObject({
+    message: "Removal merge bar refused or failed; diagnostic output withheld.",
+  });
+  expect(run.effects).toEqual(["fix", "remove", "resolve"]);
+});
+
 test("N/N green removes through the sanctioned arm collaborator; main no-op never arms", async () => {
   const fresh = scenario([{ entry, outcome: green }]);
   await fresh.run("2026-10-10T00:00:00Z");
@@ -153,6 +180,84 @@ test("red opens one root-cause task and only signals expiry at T-1", async () =>
   const due = scenario(records);
   await due.run("2026-10-14T00:00:00Z");
   expect(due.effects).toEqual(["fix", "alert"]);
+});
+
+test("twenty timed-out samples still publish one private fix task within the phase budget", async () => {
+  let clock = 0;
+  const timeoutEntry = {
+    ...entry,
+    probe: { command: entry.probe.command, attempts: 20 },
+  };
+  const budget = createProbeBudget({ attempts: 20, now: () => clock });
+  const result = await runWaiverProbe(timeoutEntry, {
+    run: (command) =>
+      budget.run(command, async ({ timeoutMs }) => {
+        clock += timeoutMs;
+        return { passed: false, output: "Probe attempt timed out." };
+      }),
+  });
+  expect(result.status).toBe("red");
+  expect(result.attempts).toBe(20);
+  expect(result.passed).toBe(0);
+  expect(clock).toBeLessThanOrEqual(PROBE_PHASE_BUDGET_MS);
+  const fixture = taskFixture();
+  const sink = await createPrivateTaskSink({
+    repo: "stella/companion",
+    request: fixture.request,
+    ensureLabel: fixture.ensureLabel,
+  });
+  const lifecycle = scenario([]);
+  await applyHealing({
+    now: new Date("2026-10-10T00:00:00Z"),
+    report: {
+      sha: evidence.sha,
+      observedAt: "2026-10-10",
+      entries: [
+        {
+          entry: timeoutEntry,
+          outcome: {
+            ...green,
+            status: "red",
+            evidence: { ...evidence, ...result },
+          },
+        },
+      ],
+    },
+    actions: { ...lifecycle.actions, ...sink },
+  });
+  expect(fixture.tasks).toHaveLength(1);
+  expect(fixture.tasks.at(0)?.body).toContain("Probe attempt timed out.");
+  expect(fixture.tasks.at(0)?.body).toContain('"attempts": 20');
+  expect(lifecycle.effects).toEqual([]);
+  expect(timeoutEntry.expiresAt).toBe(entry.expiresAt);
+});
+
+test("twenty hanging Bun commands become recorded timeout failures", async () => {
+  const hanging = {
+    ...entry,
+    probe: {
+      attempts: 20,
+      command: [process.execPath, "-e", "setInterval(() => {}, 1000)"],
+    },
+  };
+  let launched = 0;
+  const result = await runWaiverProbe(hanging, {
+    run: (command) => {
+      launched += 1;
+      return executeProbeCommand({
+        command,
+        timeoutMs: 10,
+        cwd: import.meta.dir,
+        env: {},
+        secrets: [],
+      });
+    },
+  });
+  expect(launched).toBe(20);
+  expect(result.status).toBe("red");
+  expect(result.attempts).toBe(20);
+  expect(result.passed).toBe(0);
+  expect(result.output.match(/Probe attempt timed out\./gu)).toHaveLength(20);
 });
 
 test("expiry lapses without probing, removal, renewal or duplicate fix creation", async () => {

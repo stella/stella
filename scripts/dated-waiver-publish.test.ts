@@ -43,6 +43,8 @@ const fakeGithub = ({ failure }: FakeOptions = {}) => {
   const prs: { number: number; title: string; body: string }[] = [];
   const refs = new Map<string, string>();
   const commits = new Map<string, Record<string, string>>();
+  const parents = new Map<string, string[]>();
+  const baseTrees = new Map<string, Record<string, string>>();
   const writes: { endpoint: string; input: unknown }[] = [];
   let mainSha = "base-sha";
   let failuresRemaining = failure ? 1 : 0;
@@ -69,13 +71,25 @@ const fakeGithub = ({ failure }: FakeOptions = {}) => {
     if (endpoint === `${API}/git/ref/heads/main`) {
       return { object: { sha: mainSha } };
     }
+    if (endpoint === `${API}/git/ref/heads/${BRANCH}`) {
+      return { object: { sha: refs.get(BRANCH) } };
+    }
+    if (endpoint.startsWith(`${API}/git/commits/`)) {
+      const sha = endpoint.slice(`${API}/git/commits/`.length);
+      return {
+        parents: (parents.get(sha) ?? []).map((parent) => ({ sha: parent })),
+      };
+    }
     if (endpoint.startsWith(`${API}/git/matching-refs/heads/`)) {
       const branch = endpoint.slice(`${API}/git/matching-refs/heads/`.length);
       return refs.has(branch) ? [{ ref: `refs/heads/${branch}` }] : [];
     }
     if (endpoint.startsWith(`${API}/contents/`)) {
       const file = endpoint.slice(`${API}/contents/`.length);
-      const content = commits.get(refs.get(BRANCH) ?? "")?.[file];
+      const reference =
+        args.find((arg) => arg.startsWith("ref="))?.slice("ref=".length) ??
+        BRANCH;
+      const content = commits.get(refs.get(reference) ?? reference)?.[file];
       if (content === undefined) {
         throw new TypeError("Fixture branch file absent");
       }
@@ -83,22 +97,23 @@ const fakeGithub = ({ failure }: FakeOptions = {}) => {
     }
     if (endpoint === "graphql") {
       const commit = v.parse(COMMIT_INPUT, input).variables.input;
-      expect(commit.expectedHeadOid).toBe("base-sha");
+      expect(commit.expectedHeadOid).toBe(mainSha);
       expect(refs.get(commit.branch.branchName)).toBe(commit.expectedHeadOid);
       if (failure === "signed" && failuresRemaining > 0) {
         failuresRemaining--;
         return { errors: [{ message: "PRIVATE signed error output" }] };
       }
       const sha = `signed-${commits.size + 1}`;
-      commits.set(
-        sha,
-        Object.fromEntries(
+      commits.set(sha, {
+        ...baseTrees.get(commit.expectedHeadOid),
+        ...Object.fromEntries(
           commit.fileChanges.additions.map(({ path, contents }) => [
             path,
             Buffer.from(contents, "base64").toString("utf-8"),
           ]),
         ),
-      );
+      });
+      parents.set(sha, [commit.expectedHeadOid]);
       refs.set(commit.branch.branchName, sha);
       return { data: { createCommitOnBranch: { commit: { oid: sha } } } };
     }
@@ -159,9 +174,11 @@ const fakeGithub = ({ failure }: FakeOptions = {}) => {
     prs,
     refs,
     commits,
+    parents,
     writes,
-    advanceMain: () => {
+    advanceMain: (tree: Record<string, string> = {}) => {
       mainSha = "new-main-sha";
+      baseTrees.set(mainSha, tree);
     },
   };
 };
@@ -189,6 +206,55 @@ describe("dated waiver removal publication", () => {
     expect(github.prs).toEqual([
       { number: 42, title: REMOVAL_TITLE, body: "Verified new run." },
     ]);
+  });
+
+  test("fresh main evidence rebuilds an unchanged removal on the freshly probed base", async () => {
+    const github = fakeGithub();
+    await github.publish();
+    github.advanceMain({
+      [FILE]: BEFORE,
+      "bun.lock": "updated probe dependency",
+    });
+    const body = "Verified 20/20 probes at new-main-sha.";
+    const publishFresh = () =>
+      publishRemoval({
+        branch: BRANCH,
+        baseSha: "new-main-sha",
+        baseFiles: { [FILE]: BEFORE },
+        files: { [FILE]: AFTER },
+        body,
+        repo: "stella/stella",
+        request: github.request,
+      });
+    expect(await publishFresh()).toBe(42);
+    const head = github.refs.get(BRANCH) ?? "";
+    expect(head).not.toBe("signed-1");
+    expect(github.parents.get(head)).toEqual(["new-main-sha"]);
+    expect(github.commits.get(head)).toEqual({
+      [FILE]: AFTER,
+      "bun.lock": "updated probe dependency",
+    });
+    expect(github.prs).toEqual([{ number: 42, title: REMOVAL_TITLE, body }]);
+    const writes = github.writes.length;
+    expect(await publishFresh()).toBe(42);
+    expect(github.writes).toHaveLength(writes);
+  });
+
+  test("only a single commit parent equal to the probed base permits reuse", async () => {
+    for (const parents of [
+      [],
+      ["different-base"],
+      ["base-sha", "other-parent"],
+    ]) {
+      const github = fakeGithub();
+      await github.publish();
+      github.parents.set("signed-1", parents);
+      expect(await github.publish()).toBe(42);
+      const head = github.refs.get(BRANCH) ?? "";
+      expect(head).toBe("signed-2");
+      expect(github.parents.get(head)).toEqual(["base-sha"]);
+      expect(github.prs).toHaveLength(1);
+    }
   });
 
   test("an existing removal PR receives refreshed files on the same branch", async () => {

@@ -8,6 +8,9 @@ import {
   removeWaiver,
   runWaiverProbe,
   probeDocUrl,
+  createProbeBudget,
+  PROBE_PHASE_BUDGET_MS,
+  PROBE_TIMEOUT_MS,
 } from "./dated-waiver-probes";
 import { readTestQuarantines, type DatedWaiver } from "./dated-waivers";
 
@@ -264,18 +267,30 @@ test("real Bun filtered receipts accept only the selected passing declaration", 
     '// test-quarantine-expires: 2026-10-05T00:00:00.000Z\ntest.skip("selected", () => expect(1).toBe(1));';
   const neighbor = 'test("neighbor", () => expect(2).toBe(2));';
   const cases = [
-    { contents: `${selected}\n${neighbor}`, status: "green" },
+    {
+      contents: `${selected}\n${neighbor}`,
+      status: "green",
+      receipt: "filtered out",
+    },
+    {
+      contents: `${selected}\ntest.skip("selected neighbor", () => expect(2).toBe(2));`,
+      status: "green",
+      receipt: "(skip) selected neighbor",
+    },
     {
       contents: `describe("group", () => {\n${selected}\n${neighbor}\n});`,
       status: "green",
+      receipt: "filtered out",
     },
     {
       contents: `describe.skip("group", () => {\n${selected}\n});\n${neighbor}`,
       status: "red",
+      receipt: "(skip) group > selected",
     },
     {
       contents: `${selected}\ntest("selected", () => expect(3).toBe(3));\n${neighbor}`,
       status: "red",
+      receipt: "filtered out",
     },
   ] as const;
   try {
@@ -315,7 +330,7 @@ test("real Bun filtered receipts accept only the selected passing declaration", 
           return { passed: result.exitCode === 0, output: captured };
         },
       });
-      expect(captured).toContain("(skip)");
+      expect(captured).toContain(fixture.receipt);
       expect(evidence.status).toBe(fixture.status);
     }
   } finally {
@@ -383,4 +398,128 @@ test("suppression removal reads only listed relative paths", () => {
   });
   expect(reads).toEqual([...files.keys()]);
   expect(changes.map(({ source }) => source)).toEqual([...files.keys()]);
+});
+
+test("twenty sequential command timeouts fit one global phase deadline", async () => {
+  let elapsed = 0;
+  const budget = createProbeBudget({ attempts: 20, now: () => elapsed });
+  const timeouts: number[] = [];
+  const entry = {
+    ...waiver("dependency-audit", "baseline.json"),
+    probe: { command: ["bun", "run", "security:audit"], attempts: 20 },
+  };
+  const evidence = await runWaiverProbe(entry, {
+    run: async (command) =>
+      budget.run(command, async ({ timeoutMs }) => {
+        timeouts.push(timeoutMs);
+        elapsed += timeoutMs;
+        return {
+          passed: false,
+          output: `Probe timed out after ${timeoutMs}ms.`,
+        };
+      }),
+  });
+  expect(timeouts).toHaveLength(20);
+  expect(evidence.status).toBe("red");
+  expect(evidence.attempts).toBe(20);
+  expect(evidence.passed).toBe(0);
+  expect(evidence.output).toContain("Probe timed out");
+  expect(elapsed).toBeLessThanOrEqual(PROBE_PHASE_BUDGET_MS);
+  expect(Math.max(...timeouts)).toBeLessThanOrEqual(PROBE_TIMEOUT_MS);
+});
+
+test("an exhausted shared phase records every later sample without launching commands", async () => {
+  let clock = 0;
+  const budget = createProbeBudget({ attempts: 6, now: () => clock });
+  clock = PROBE_PHASE_BUDGET_MS;
+  let launches = 0;
+  const execute = async () => {
+    launches += 1;
+    return { passed: true, output: "" };
+  };
+  for (const id of ["first", "later"]) {
+    const evidence = await runWaiverProbe(
+      waiver("dependency-audit", "baseline.json", id),
+      { run: async (command) => budget.run(command, execute) },
+    );
+    expect(evidence.status).toBe("red");
+    expect(evidence.attempts).toBe(3);
+    expect(evidence.passed).toBe(0);
+    expect(
+      evidence.output.match(
+        /Probe phase budget exhausted; no command was launched\./gu,
+      ),
+    ).toHaveLength(3);
+  }
+  expect(launches).toBe(0);
+});
+
+test("preparation consumes the existing deadline and fast probes release time to later samples", async () => {
+  let clock = 0;
+  const budget = createProbeBudget({ attempts: 20, now: () => clock });
+  clock += 5 * 60_000;
+  const timeouts: number[] = [];
+  const execute = async ({ timeoutMs }: { timeoutMs: number }) => {
+    timeouts.push(timeoutMs);
+    clock += 1000;
+    return { passed: true, output: "" };
+  };
+  const first = await budget.run(["bun", "probe"], execute);
+  const later = await budget.run(["bun", "probe"], execute);
+  expect(first.passed).toBe(true);
+  expect(later.passed).toBe(true);
+  expect(timeouts.at(0)).toBe(
+    Math.floor((PROBE_PHASE_BUDGET_MS - 5 * 60_000) / 20),
+  );
+  expect(timeouts.at(1)).toBe(
+    Math.floor((PROBE_PHASE_BUDGET_MS - 5 * 60_000 - 1000) / 19),
+  );
+  expect(timeouts.at(1)).toBeGreaterThan(timeouts.at(0) ?? 0);
+  clock += PROBE_PHASE_BUDGET_MS;
+  const exhausted = await budget.run(["bun", "probe"], execute);
+  expect(exhausted).toEqual({
+    passed: false,
+    output: "Probe phase budget exhausted; no command was launched.",
+  });
+  expect(timeouts).toHaveLength(2);
+});
+
+test("individual commands keep the ten minute ceiling and attempt inventory cannot be exceeded", async () => {
+  const budget = createProbeBudget({ attempts: 1, now: () => 0 });
+  const timeouts: number[] = [];
+  const execute = async ({ timeoutMs }: { timeoutMs: number }) => {
+    timeouts.push(timeoutMs);
+    return { passed: true, output: "" };
+  };
+  expect((await budget.run(["bun", "probe"], execute)).passed).toBe(true);
+  expect((await budget.run(["bun", "probe"], execute)).passed).toBe(false);
+  expect(timeouts).toEqual([PROBE_TIMEOUT_MS]);
+  for (const attempts of [-1, 0.5, Number.NaN]) {
+    expect(() => createProbeBudget({ attempts })).toThrow(
+      "nonnegative integer attempt count",
+    );
+  }
+});
+
+test("a completed command cannot report green after consuming its entire allocation", async () => {
+  let clock = 0;
+  const budget = createProbeBudget({ attempts: 3, now: () => clock });
+  const result = await budget.run(["bun", "probe"], async ({ timeoutMs }) => {
+    clock += timeoutMs + 1;
+    return { passed: true, output: "completed command output" };
+  });
+  expect(result.passed).toBe(false);
+  expect(result.output).toContain("Probe timed out after");
+  expect(result.output).toContain("completed command output");
+  const empty = createProbeBudget({ attempts: 0, now: () => clock });
+  let launched = false;
+  expect(
+    (
+      await empty.run(["bun", "probe"], async () => {
+        launched = true;
+        return { passed: true, output: "" };
+      })
+    ).passed,
+  ).toBe(false);
+  expect(launched).toBe(false);
 });

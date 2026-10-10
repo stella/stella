@@ -324,6 +324,55 @@ export const removeWaiver = (
 };
 
 export type ProbeResult = { passed: boolean; output: string };
+
+export const PROBE_PHASE_BUDGET_MS = 45 * 60_000;
+export const PROBE_TIMEOUT_MS = 10 * 60_000;
+const BUDGET_EXHAUSTED_OUTPUT =
+  "Probe phase budget exhausted; no command was launched.";
+type ExecuteProbeOptions = { command: readonly string[]; timeoutMs: number };
+type CreateProbeBudgetOptions = { attempts: number; now?: () => number };
+
+export const createProbeBudget = ({
+  attempts,
+  now = () => performance.now(),
+}: CreateProbeBudgetOptions) => {
+  if (!Number.isSafeInteger(attempts) || attempts < 0) {
+    panic("Probe budget requires a nonnegative integer attempt count");
+  }
+  // One monotonic deadline includes preparation and every entry's probes.
+  const deadline = now() + PROBE_PHASE_BUDGET_MS;
+  let remainingAttempts = attempts;
+  return {
+    run: async (
+      command: readonly string[],
+      execute: (options: ExecuteProbeOptions) => Promise<ProbeResult>,
+    ): Promise<ProbeResult> => {
+      const started = now();
+      const remaining = deadline - started;
+      const availableAttempts = remainingAttempts;
+      remainingAttempts = Math.max(0, remainingAttempts - 1);
+      const timeoutMs =
+        availableAttempts > 0
+          ? Math.min(
+              PROBE_TIMEOUT_MS,
+              Math.floor(remaining / availableAttempts),
+            )
+          : 0;
+      if (timeoutMs <= 0) {
+        return { passed: false, output: BUDGET_EXHAUSTED_OUTPUT };
+      }
+      const result = await execute({ command, timeoutMs });
+      if (now() >= Math.min(deadline, started + timeoutMs)) {
+        return {
+          passed: false,
+          output: `Probe timed out after ${timeoutMs}ms.\n${result.output}`,
+        };
+      }
+      return result;
+    },
+  };
+};
+
 type RunProbeOptions = {
   run: (command: readonly string[]) => Promise<ProbeResult>;
 };
@@ -346,8 +395,8 @@ export const runWaiverProbe = async (
     const receipt = result.value;
     let executedTest = true;
     if (entry.kind === "quarantined-test") {
-      // Bun 1.4.2 reports nonmatching tests as skips under -t. Only the named
-      // selected declaration establishes recovery; summary totals cannot.
+      // Filtered Bun runs may include skipped declarations other than the
+      // selected test. Only its named receipt establishes recovery.
       const output = stripVTControlCharacters(receipt.output);
       const selected = output.split(/\r?\n/u).flatMap((line) => {
         const match = /^\((pass|fail|skip|todo)\) (.+)$/u.exec(line);

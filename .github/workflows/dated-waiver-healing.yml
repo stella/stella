@@ -35,6 +35,7 @@ jobs:
 
       # Neither package installation nor probe commands receive a write token.
       - name: Install dependencies
+        timeout-minutes: 20
         run: bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
@@ -42,9 +43,13 @@ jobs:
       # Evidence stays on the runner; failure output is never a public artifact.
       - name: Probe dated entries
         id: probe
+        # The shared probe deadline is shorter than this step, so exhaustion
+        # records failed evidence and leaves time to publish remediation tasks.
+        timeout-minutes: 50
         run: bun scripts/dated-waiver-healing.ts --probe --evidence "$RUNNER_TEMP/dated-waiver-evidence.json"
 
       - name: Validate private task configuration
+        timeout-minutes: 1
         if: steps.probe.outputs.write_needed == 'true'
         env:
           FIX_REPOSITORY: ${{ vars.DATED_WAIVER_FIX_REPOSITORY }}
@@ -60,6 +65,7 @@ jobs:
           fi
 
       - name: Mint app token
+        timeout-minutes: 1
         if: steps.probe.outputs.write_needed == 'true'
         id: app-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
@@ -75,6 +81,7 @@ jobs:
           permission-issues: write
 
       - name: Publish healing results
+        timeout-minutes: 15
         if: steps.probe.outputs.write_needed == 'true'
         run: bun scripts/dated-waiver-healing.ts --publish --evidence "$RUNNER_TEMP/dated-waiver-evidence.json"
         env:
@@ -85,5 +92,6 @@ jobs:
           STELLA_MERGE_HOLD_CHECKED_BY_WORKFLOW: "1"
 
       - name: Remove local evidence
+        timeout-minutes: 1
         if: always()
         run: rm -f "$RUNNER_TEMP/dated-waiver-evidence.json"

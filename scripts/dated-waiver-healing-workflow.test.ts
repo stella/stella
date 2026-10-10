@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import * as v from "valibot";
 
+import { PROBE_PHASE_BUDGET_MS } from "./dated-waiver-probes";
 import { evaluate } from "./github-expression";
 
 const workflow = v.parse(
@@ -15,6 +16,7 @@ const workflow = v.parse(
     jobs: v.object({
       heal: v.object({
         if: v.string(),
+        "timeout-minutes": v.number(),
         permissions: v.record(v.string(), v.string()),
         steps: v.array(
           v.looseObject({
@@ -23,6 +25,7 @@ const workflow = v.parse(
             if: v.optional(v.string()),
             uses: v.optional(v.string()),
             run: v.optional(v.string()),
+            "timeout-minutes": v.optional(v.number()),
             with: v.optional(v.record(v.string(), v.unknown())),
             env: v.optional(v.record(v.string(), v.string())),
           }),
@@ -106,6 +109,42 @@ test("probe evidence stays local and public output does not expose failed probes
     expect(step.uses ?? "").not.toContain("upload-artifact");
     expect(step.run ?? "").not.toMatch(/\b(cat|tee)\b|gh pr merge/u);
   }
+});
+
+test("the shared probe deadline preserves a separate publication budget", () => {
+  const minuteMs = 60_000;
+  const probeMinutes = v.parse(
+    v.number(),
+    requiredStep("Probe dated entries")["timeout-minutes"],
+  );
+  const publishMinutes = v.parse(
+    v.number(),
+    requiredStep("Publish healing results")["timeout-minutes"],
+  );
+  expect(PROBE_PHASE_BUDGET_MS).toBeGreaterThan(0);
+  expect(PROBE_PHASE_BUDGET_MS).toBeLessThan(probeMinutes * minuteMs);
+  expect(probeMinutes).toBeLessThan(workflow.jobs.heal["timeout-minutes"]);
+  expect(publishMinutes).toBeGreaterThanOrEqual(15);
+  const allocatedMinutes = steps.reduce(
+    (total, step) => total + (step["timeout-minutes"] ?? 0),
+    0,
+  );
+  // Checkout and Bun setup have at least two minutes outside these allocations.
+  expect(allocatedMinutes).toBeLessThanOrEqual(
+    workflow.jobs.heal["timeout-minutes"] - 2,
+  );
+  for (const name of [
+    "Install dependencies",
+    "Probe dated entries",
+    "Validate private task configuration",
+    "Mint app token",
+    "Publish healing results",
+  ]) {
+    expect(requiredStep(name)["timeout-minutes"]).toBeGreaterThan(0);
+  }
+  expect(requiredStep("Publish healing results").if).toBe(
+    "steps.probe.outputs.write_needed == 'true'",
+  );
 });
 
 test("every healing job has an explicit main event policy", () => {

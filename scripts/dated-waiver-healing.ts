@@ -20,7 +20,12 @@ import {
   type FixEvidence,
   type RemovalAssessment,
 } from "./dated-waiver-fix-task";
-import { removeWaiver, runWaiverProbe } from "./dated-waiver-probes";
+import {
+  createProbeBudget,
+  PROBE_TIMEOUT_MS,
+  removeWaiver,
+  runWaiverProbe,
+} from "./dated-waiver-probes";
 import {
   githubRequest,
   publishRemoval,
@@ -35,7 +40,6 @@ import {
   type DatedWaiver,
 } from "./dated-waivers";
 
-const PROBE_TIMEOUT_MS = 10 * 60_000;
 const OUTPUT_LIMIT = 24_000;
 const root = path.resolve(import.meta.dir, "..");
 
@@ -93,7 +97,12 @@ export const applyHealing = async ({
   actions,
   now,
 }: ApplyHealingOptions): Promise<void> => {
-  for (const { entry, outcome } of report.entries) {
+  // Publish recorded failures before removal writes, whose merge bar can refuse.
+  const records = [
+    ...report.entries.filter(({ outcome }) => outcome.status !== "green"),
+    ...report.entries.filter(({ outcome }) => outcome.status === "green"),
+  ];
+  for (const { entry, outcome } of records) {
     const at = Date.parse(expiryInstant(entry.expiresAt));
     // Publishing may cross the owner's deadline after probing. Every stale
     // outcome lapses; only an existing unresolved task may emit the alert.
@@ -193,29 +202,73 @@ const checkedGit = (args: readonly string[]): string => {
 
 const boundedOutput = async (
   stream: ReadableStream<Uint8Array>,
+  signal?: AbortSignal,
 ): Promise<string> => {
   const decoder = new TextDecoder();
   let output = "";
-  const reader = stream.getReader();
-  try {
-    while (true) {
-      const chunk = await reader.read();
-      if (chunk.done) {
-        break;
-      }
-      // Keep the terminal receipt even when a test emits many diagnostics.
-      output = (output + decoder.decode(chunk.value, { stream: true })).slice(
-        -OUTPUT_LIMIT,
-      );
-    }
-  } finally {
-    try {
-      await reader.cancel();
-    } finally {
-      reader.releaseLock();
-    }
+  const drained = await Result.tryPromise(() =>
+    stream.pipeTo(
+      new WritableStream({
+        write: (chunk) => {
+          output = (output + decoder.decode(chunk, { stream: true })).slice(
+            -OUTPUT_LIMIT,
+          );
+        },
+      }),
+      { signal },
+    ),
+  );
+  // Cancellation returns the bounded partial diagnostic to the caller, which
+  // records timeout as red. pipeTo cancels the stream and releases its lock.
+  if (Result.isError(drained) && !signal?.aborted) {
+    throw drained.error;
   }
   return output;
+};
+
+type ExecuteProbeCommandOptions = {
+  command: readonly string[];
+  timeoutMs: number;
+  cwd: string;
+  env: Record<string, string | undefined>;
+  secrets: readonly string[];
+};
+export const executeProbeCommand = async ({
+  command,
+  timeoutMs,
+  cwd,
+  env,
+  secrets,
+}: ExecuteProbeCommandOptions) => {
+  const controller = new AbortController();
+  const proc = Bun.spawn([...command], {
+    cwd,
+    env,
+    stdout: "pipe",
+    stderr: "pipe",
+    timeout: timeoutMs,
+    killSignal: "SIGKILL",
+  });
+  // Bound inherited output pipes as well as the process. Descendants can
+  // retain them after the direct command exits.
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const [stdout, stderr, exit] = await Promise.all([
+      boundedOutput(proc.stdout, controller.signal),
+      boundedOutput(proc.stderr, controller.signal),
+      proc.exited,
+    ]);
+    const timedOut = controller.signal.aborted || proc.signalCode === "SIGKILL";
+    return {
+      passed: exit === 0 && !timedOut,
+      output: redactProbeOutput(
+        `${timedOut ? "Probe attempt timed out.\n" : ""}${stdout}\n${stderr}`,
+        secrets,
+      ),
+    };
+  } finally {
+    clearTimeout(timer);
+  }
 };
 
 // Hash the sources actually edited for the probe plus pinned dependencies.
@@ -243,10 +296,16 @@ const sourceFingerprint = (
   return probeSourceFingerprint(inputs);
 };
 
-const probeEntry = async (
-  entry: DatedWaiver,
-  sha: string,
-): Promise<HealingEntry["outcome"]> => {
+type ProbeEntryOptions = {
+  entry: DatedWaiver;
+  sha: string;
+  budget: ReturnType<typeof createProbeBudget>;
+};
+const probeEntry = async ({
+  entry,
+  sha,
+  budget,
+}: ProbeEntryOptions): Promise<HealingEntry["outcome"]> => {
   const temporary = mkdtempSync(path.join(tmpdir(), "dated-waiver-"));
   const checkout = path.join(temporary, "checkout");
   checkedGit(["worktree", "add", "--detach", checkout, sha]);
@@ -308,25 +367,16 @@ const probeEntry = async (
       ),
     );
     const result = await runWaiverProbe(entry, {
-      run: async (command) => {
-        const proc = Bun.spawn([...command], {
-          cwd: checkout,
-          env,
-          stdout: "pipe",
-          stderr: "pipe",
-          timeout: PROBE_TIMEOUT_MS,
-          killSignal: "SIGKILL",
-        });
-        const [stdout, stderr, exit] = await Promise.all([
-          boundedOutput(proc.stdout),
-          boundedOutput(proc.stderr),
-          proc.exited,
-        ]);
-        return {
-          passed: exit === 0,
-          output: redactProbeOutput(`${stdout}\n${stderr}`, secrets),
-        };
-      },
+      run: (command) =>
+        budget.run(command, ({ command: executable, timeoutMs }) =>
+          executeProbeCommand({
+            command: executable,
+            timeoutMs,
+            cwd: checkout,
+            env,
+            secrets,
+          }),
+        ),
     });
     const evidence = {
       attempts: result.attempts,
@@ -481,13 +531,23 @@ const main = async (): Promise<void> => {
   if (process.argv.includes("--probe")) {
     const sha = checkedGit(["rev-parse", "HEAD"]);
     const now = new Date();
+    const due = dueWaivers(await loadWaivers(), now);
+    const budget = createProbeBudget({
+      attempts: due
+        .filter(
+          (entry) => now.getTime() < Date.parse(expiryInstant(entry.expiresAt)),
+        )
+        .reduce((count, entry) => count + entry.probe.attempts, 0),
+    });
     const entries: HealingEntry[] = [];
-    for (const entry of dueWaivers(await loadWaivers(), now)) {
+    for (const entry of due) {
       const expired =
         now.getTime() >= Date.parse(expiryInstant(entry.expiresAt));
       entries.push({
         entry,
-        outcome: expired ? { status: "expired" } : await probeEntry(entry, sha),
+        outcome: expired
+          ? { status: "expired" }
+          : await probeEntry({ entry, sha, budget }),
       });
     }
     mkdirSync(path.dirname(file), { recursive: true });

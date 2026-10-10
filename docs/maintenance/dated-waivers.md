@@ -10,11 +10,16 @@ before expiry. Each kind declares its probe and stress count alongside its owner
 Probe commands run with the individual entry removed, using the owning check.
 Every required run must pass before a removal proposal is published. A failed run
 requires a root-cause fix; subsequent runs cannot turn that failure into a pass.
+All entries share a 45-minute probe-phase budget. Remaining time is divided
+among remaining samples, with a ten-minute ceiling per command. Exhaustion is
+recorded as red timeout evidence, leaving the workflow time to publish fix tasks.
 
 Removal proposals include the successful run count, command, runner, source commit
 and workflow run link. Each entry has one stable proposal branch, refreshed from
-current main. Already removed entries produce no proposal. Commits are signed
-through the GitHub API; proposals use `scripts/merge-bar.ts` and respect
+current main. Already removed entries produce no proposal.
+Matching files are reused only when the proposal commit is based directly on the
+probed main commit; otherwise the proposal is rebuilt from that commit.
+Commits are signed through the GitHub API; proposals use `scripts/merge-bar.ts` and respect
 `STELLA_MERGE_HOLD`.
 Any merge-bar refusal or execution failure fails the scheduled publication run.
 
