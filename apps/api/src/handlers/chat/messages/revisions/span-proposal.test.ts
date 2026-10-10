@@ -70,6 +70,59 @@ describe("anchored answer proposals", () => {
 
 describe("Markdown replacement boundaries", () => {
   test.each([
+    { source: "hello world", start: 0, end: 6 },
+    { source: "hello world", start: 3, end: 8 },
+    { source: "hello world", start: 6, end: 11 },
+    { source: "hello world", start: 0, end: 11 },
+    { source: "left\n\n**right**", start: 0, end: 4 },
+    { source: "**left**\n\nright", start: 10, end: 15 },
+  ])("permits empty replacements at $start..$end in $source", (options) => {
+    expect(isSpanReplacementBalanced({ ...options, replacement: "" })).toBe(
+      true,
+    );
+  });
+  test("every contiguous plain-text deletion preserves the remaining structure", () => {
+    const source = "abcdef";
+    for (let start = 0; start < source.length; start += 1) {
+      for (let end = start + 1; end <= source.length; end += 1) {
+        expect(
+          isSpanReplacementBalanced({ source, start, end, replacement: "" }),
+        ).toBe(true);
+      }
+    }
+  });
+  test.each([
+    { source: "hello world", start: 0 },
+    { source: "hello world", start: 5 },
+    { source: "hello world", start: 11 },
+    { source: "**left**\n\nright", start: 0 },
+    { source: "**left**\n\nright", start: 8 },
+    { source: "**left**\n\nright", start: 10 },
+    { source: "**left**\n\nright", start: 15 },
+  ])(
+    "permits plain-text insertion at boundary $start in $source",
+    (options) => {
+      expect(
+        isSpanReplacementBalanced({
+          ...options,
+          end: options.start,
+          replacement: "added",
+        }),
+      ).toBe(true);
+    },
+  );
+  test.each([
+    { source: "**bold** tail", start: 0, end: 1, replacement: "" },
+    { source: "`code` tail", start: 0, end: 1, replacement: "" },
+    { source: "left\n\nright", start: 4, end: 6, replacement: "" },
+    { source: "**bold** tail", start: 1, end: 1, replacement: "added" },
+  ])(
+    "rejects boundary edits that change surrounding structure in $source",
+    (options) => {
+      expect(isSpanReplacementBalanced(options)).toBe(false);
+    },
+  );
+  test.each([
     "plain text",
     "**bold**",
     "`code`",

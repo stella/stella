@@ -44,7 +44,6 @@ type StructureProjectionOptions = {
   node: MarkdownNode;
   start: number;
   end: number;
-  delta: number;
 };
 
 // Preserve every node outside the edit and the containers crossing its
@@ -53,7 +52,6 @@ const projectOutsideStructure = ({
   node,
   start,
   end,
-  delta,
 }: StructureProjectionOptions): unknown[] => {
   const nodeStart = node.position?.start.offset;
   const nodeEnd = node.position?.end.offset;
@@ -67,24 +65,20 @@ const projectOutsideStructure = ({
     node.children === undefined
       ? []
       : node.children.flatMap((child) =>
-          projectOutsideStructure({ node: child, start, end, delta }),
+          projectOutsideStructure({ node: child, start, end }),
         );
   // Text nodes can merge across the splice; compare their preserved prefix
   // and suffix via the server splice invariant rather than their AST shape.
   if (node.type === "text") {
     return [];
   }
-  let position;
-  if (nodeEnd <= start) {
-    position = [nodeStart, nodeEnd];
-  } else if (nodeStart >= end) {
-    position = [nodeStart - delta, nodeEnd - delta];
-  } else {
-    position = [
-      nodeStart < start ? nodeStart : start,
-      nodeEnd > end ? nodeEnd - delta : end - delta,
-    ];
-  }
+  // Collapse each tree's edited interval to the same point. This also maps
+  // nodes touching a zero-width insertion or deletion without guessing which
+  // side their endpoint belonged to before the splice.
+  const position = [
+    Math.min(nodeStart, start) + Math.max(0, nodeStart - end),
+    Math.min(nodeEnd, start) + Math.max(0, nodeEnd - end),
+  ];
   // Keep every parser-owned semantic attribute (including task-list state,
   // code language and link titles). Leaf values are covered by the splice;
   // positions and children have their own projections.
@@ -108,7 +102,6 @@ export const preservesMarkdownOutsideSpan = ({
 }) => {
   const before = source.slice(0, start);
   const after = source.slice(end);
-  const delta = replacement.length - (end - start);
   const parsedOriginal = parseMarkdown(source);
   const parsedCandidate = parseMarkdown(before + replacement + after);
   if (!parsedCandidate.fencesClosed) {
@@ -118,13 +111,11 @@ export const preservesMarkdownOutsideSpan = ({
     node: parsedOriginal.root,
     start,
     end,
-    delta: 0,
   });
   const candidate = projectOutsideStructure({
     node: parsedCandidate.root,
     start,
     end: start + replacement.length,
-    delta,
   });
   return JSON.stringify(original) === JSON.stringify(candidate);
 };
