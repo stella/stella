@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { getTableName, sql } from "drizzle-orm";
+import { getColumns, getTableName, sql } from "drizzle-orm";
 
 import { agentDelegation, agentRegistration } from "@/api/db/agent-auth-schema";
 import {
@@ -125,6 +125,16 @@ if (!databaseUrl || !enabled) {
             await db.execute(
               sql`CREATE TABLE ${sql.identifier(schema)}.${name} (LIKE public.${name} INCLUDING ALL)`,
             );
+            if (
+              Object.values(getColumns(table)).some(
+                (column) => column.name === "entity_feature_gate",
+              )
+            ) {
+              await db.execute(
+                sql`ALTER TABLE ${sql.identifier(schema)}.${name}
+                  ALTER COLUMN entity_feature_gate SET DEFAULT 'open'`,
+              );
+            }
           }
           const transaction = async <T>(
             work: (tx: Transaction) => Promise<T>,

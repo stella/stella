@@ -48,6 +48,7 @@ import {
   PublicLawResultsToolbar,
 } from "@/components/public-law-table/public-law-results-toolbar";
 import type { PublicLawFilterChip } from "@/components/public-law-table/public-law-results-toolbar";
+import { usePublicLawPageArrival } from "@/components/public-law-table/use-public-law-page-arrival";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { TableFindBar } from "@/components/workspaces/table/table-find-bar";
 import { StatuteFilterPopover } from "@/features/statutes/components/statute-filter-popover";
@@ -91,7 +92,7 @@ import {
 } from "@/lib/public-law-seo";
 import { ensureRouteInfiniteQueryData } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
-import { isPublicStatuteCountry } from "@/lib/statute-route";
+import { isPublicStatuteCountry } from "@/lib/statutes/statute-route";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import {
   createStatuteListFilters,
@@ -402,6 +403,45 @@ function PublicStatuteFullText({ query }: { query: string }) {
   );
 }
 
+type StatuteListFilterChipsOptions = {
+  search: StatutesIndexSearch;
+  onRemove: (key: "year" | "validity" | "type") => void;
+};
+
+const useStatuteListFilterChips = ({
+  search,
+  onRemove,
+}: StatuteListFilterChipsOptions) => {
+  const t = useTranslations();
+  const chips: PublicLawFilterChip[] = [];
+  if (search.year !== undefined) {
+    chips.push({
+      id: "filter:year",
+      kind: t("workspaces.views.calendar.year"),
+      onRemove: () => onRemove("year"),
+      value: search.year,
+    });
+  }
+  if (search.validity !== undefined) {
+    chips.push({
+      id: "filter:validity",
+      kind: t(FILTER_KIND_LABEL_KEYS.validity),
+      onRemove: () => onRemove("validity"),
+      value: t(STATUTE_VALIDITY_LABEL_KEYS[search.validity]),
+    });
+  }
+  if (search.type !== undefined) {
+    chips.push({
+      id: "filter:type",
+      kind: t(FILTER_KIND_LABEL_KEYS.type),
+      onRemove: () => onRemove("type"),
+      value: search.type,
+    });
+  }
+
+  return chips;
+};
+
 function PublicStatuteList({
   routeState,
 }: {
@@ -497,6 +537,11 @@ function PublicStatuteList({
   });
   const statutes: readonly StatuteListItem[] =
     data?.pages.at(pager.currentPage - 1)?.items ?? EMPTY_STATUTES;
+  // A page the reader steps to brings them to its first row once it is drawn.
+  const requestPage = usePublicLawPageArrival({
+    regionRef: paneRef,
+    shownPage: rows === "rows" ? pager.currentPage : null,
+  });
   const find = useStatuteFind({
     layout,
     paneRef,
@@ -553,6 +598,7 @@ function PublicStatuteList({
         if (walked <= walkedPageCount) {
           return;
         }
+        requestPage(walked);
         await navigate({
           search: (previous) => ({
             ...previous,
@@ -564,36 +610,14 @@ function PublicStatuteList({
     );
   };
 
-  const chips: PublicLawFilterChip[] = [];
-  if (search.year !== undefined) {
-    chips.push({
-      id: "filter:year",
-      kind: t("workspaces.views.calendar.year"),
-      onRemove: () => {
-        detached(
-          searchNavigation((previous) => ({ ...previous, year: undefined })),
-          "statutes.year-filter-navigate",
-        );
-      },
-      value: search.year,
-    });
-  }
-  if (search.validity !== undefined) {
-    chips.push({
-      id: "filter:validity",
-      kind: t(FILTER_KIND_LABEL_KEYS.validity),
-      onRemove: () => selectFacet("validity", undefined),
-      value: t(STATUTE_VALIDITY_LABEL_KEYS[search.validity]),
-    });
-  }
-  if (search.type !== undefined) {
-    chips.push({
-      id: "filter:type",
-      kind: t(FILTER_KIND_LABEL_KEYS.type),
-      onRemove: () => selectFacet("type", undefined),
-      value: search.type,
-    });
-  }
+  const chips = useStatuteListFilterChips({
+    search,
+    onRemove: (key) =>
+      detached(
+        searchNavigation((previous) => ({ ...previous, [key]: undefined })),
+        "statutes.filter-navigate",
+      ),
+  });
 
   // Enter on an act reference opens the act when exactly one work answers
   // to it. Several (the same number in two collections) stay listed, so the
@@ -716,10 +740,14 @@ function PublicStatuteList({
           />
         )}
         <PublicLawPager
-          isWalking={isFetchingNextPage}
-          model={pager}
+          navigation={{
+            type: "chain",
+            model: pager,
+            isWalking: isFetchingNextPage,
+            onWalkForward: walkForward,
+          }}
+          onPageRequest={requestPage}
           onPageSizeChange={setPageSize}
-          onWalkForward={walkForward}
           pageLink={({ label, page }) => (
             <Link
               aria-label={label}

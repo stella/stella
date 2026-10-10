@@ -7,6 +7,52 @@ import {
   ActionAdmissionError,
   withActionAdmission,
 } from "@/api/lib/rate-limit/action-admission";
+import type { ActionCostObservation } from "@/api/lib/usage/action-costs/context";
+
+test("pending action admission retains its organization and execution callback", async () => {
+  const entered = Promise.withResolvers<undefined>();
+  const proceed = Promise.withResolvers<undefined>();
+  const observedOrganizations: string[] = [];
+  const acquisitionKeys: string[] = [];
+  const options = {
+    enabled: true,
+    organizationId,
+    userId: firstUser,
+    policy: { ...policy },
+    periodIdentity: {
+      actionKind: "chat.send",
+      logicalPhaseId: "original-phase",
+    },
+    costRecorder: {
+      enqueue: (observation: ActionCostObservation) => {
+        observedOrganizations.push(observation.record.organizationId);
+      },
+      estimate: () => 0,
+      callRate: () => 0,
+    },
+    redis: {
+      send: async (_command: string, args: string[]) => {
+        if (args.at(0)?.includes("ZREMRANGEBYSCORE")) {
+          acquisitionKeys.push(args.at(2) ?? "missing");
+          entered.resolve(undefined);
+          await proceed.promise;
+        }
+        return 1;
+      },
+    },
+    run: async () => await Promise.resolve("original"),
+  } satisfies Parameters<typeof withActionAdmission>[0];
+  const admitted = withActionAdmission(options);
+  await entered.promise;
+  options.organizationId = toSafeId<"organization">("org_changed");
+  options.periodIdentity.logicalPhaseId = "changed-phase";
+  options.run = async () => await Promise.resolve("changed");
+  proceed.resolve(undefined);
+  expect(await admitted).toEqual(Result.ok("original"));
+  expect(acquisitionKeys).toHaveLength(1);
+  expect(acquisitionKeys.at(0)).toContain("org_a");
+  expect(observedOrganizations).toEqual([organizationId, organizationId]);
+});
 
 test("period exhaustion has its own non-transient code before execution", async () => {
   let calls = 0;

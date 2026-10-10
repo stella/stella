@@ -1,0 +1,5 @@
+{
+  "metric": "duplicate-token-blocks",
+  "delta": 30,
+  "reason": "Frozen pre-compaction name-matching and screening implementations are test-only independent oracles for exact response and work-limit parity. Sharing their logic with the compact implementation would let the same regression change both sides of the comparison."
+}

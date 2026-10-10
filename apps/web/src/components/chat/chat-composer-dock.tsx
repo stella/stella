@@ -26,6 +26,7 @@ import {
   useSetChatAnonymized,
 } from "@/lib/chat-anonymized-store";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
+import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 
 /**
  * A question the surface asks before a new thread starts, anchored to the
@@ -167,16 +168,24 @@ export const ChatComposerDock = (props: ChatComposerDockProps) => {
               {/* The anchor wraps the button rather than tracking it, so the
                   button's own click handler stays a plain handler. */}
               <span className="inline-flex" ref={newThreadAnchorRef}>
-                <Button
-                  aria-label={t("chat.newChat")}
-                  disabled={onNewThread === null}
-                  onClick={onNewThread ?? undefined}
-                  size="icon-xs"
-                  tooltip={t("chat.newChat")}
-                  variant="muted"
+                <CapabilityAction
+                  action={{ capability: "ai" }}
+                  surface="control"
                 >
-                  <NewChatIcon className="size-3.5" />
-                </Button>
+                  {(capabilityProps) => (
+                    <Button
+                      aria-label={t("chat.newChat")}
+                      disabled={onNewThread === null}
+                      onClick={onNewThread ?? undefined}
+                      size="icon-xs"
+                      tooltip={t("chat.newChat")}
+                      variant="muted"
+                      {...capabilityProps}
+                    >
+                      <NewChatIcon className="size-3.5" />
+                    </Button>
+                  )}
+                </CapabilityAction>
               </span>
               <Popover
                 onOpenChange={(open) => {

@@ -1,5 +1,4 @@
 import { Result } from "better-result";
-import { createHash } from "node:crypto";
 
 import {
   BUSINESS_REGISTRY_CONFIGURATION,
@@ -9,6 +8,7 @@ import {
 import type { BusinessRegistrySlug } from "@stll/api-contract";
 import { CompaniesHouseAuthError } from "@stll/business-registries/companies-house";
 import { DenueAuthError } from "@stll/business-registries/denue";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
@@ -100,7 +100,7 @@ export const getOrganizationRegistryDispatch = async ({
     rows.map(async (row) => ({
       registry: row.registry,
       credential: await decryptContent(organizationId, row.ciphertext, row.iv),
-      version: createHash("sha256").update(row.ciphertext).digest("hex"),
+      version: hashSha256Hex(row.ciphertext),
     })),
   );
   for (const entry of configured) {

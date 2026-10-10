@@ -655,7 +655,8 @@ const isGlobalNamePosition = (node: ts.Identifier): boolean => {
       ts.isMethodDeclaration(parent) ||
       ts.isPropertyDeclaration(parent) ||
       ts.isMethodSignature(parent) ||
-      ts.isPropertySignature(parent)) &&
+      ts.isPropertySignature(parent) ||
+      ts.isJsxAttribute(parent)) &&
     parent.name === node
   ) {
     return true;

@@ -9,6 +9,7 @@ import {
   caseLawSources,
 } from "@/api/db/schema";
 import { CITATION_KIND } from "@/api/handlers/case-law/citation-kind";
+import { readGatedDecisionCitationDigest } from "@/api/handlers/case-law/decisions/citation-digest";
 import {
   CITATION_SUMMARY_SCAN_LIMIT,
   CITATION_TIMELINE_MAX_YEARS,
@@ -19,6 +20,7 @@ import {
   treatmentOf,
 } from "@/api/handlers/case-law/decisions/citation-graph";
 import type { DecisionCitationRow } from "@/api/handlers/case-law/decisions/citation-graph";
+import { readGatedDecisionCitations } from "@/api/handlers/case-law/decisions/citation-passages";
 import { POLARITIES, POLARITY } from "@/api/handlers/case-law/polarity/consts";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -41,9 +43,11 @@ import {
 
 const openSourceId = createSafeId<"caseLawSource">();
 const closedSourceId = createSafeId<"caseLawSource">();
+const withheldSourceId = createSafeId<"caseLawSource">();
 const subjectId = createSafeId<"caseLawDecision">();
 const openRelatedId = createSafeId<"caseLawDecision">();
 const closedRelatedId = createSafeId<"caseLawDecision">();
+const withheldSubjectId = createSafeId<"caseLawDecision">();
 const unavailableRelatedId = createSafeId<"caseLawDecision">();
 
 /**
@@ -144,6 +148,17 @@ beforeAll(
         id: closedSourceId,
         name: "closed",
       }),
+      caseLawSourceRow({
+        adapterKey: "withheld",
+        descriptor: {
+          allowsDerivedAi: false,
+          allowsRedistribution: true,
+          attribution: null,
+          license: "permitted-redistribution",
+        },
+        id: withheldSourceId,
+        name: "withheld",
+      }),
     ]);
     await db.insert(caseLawDecisions).values([
       {
@@ -158,6 +173,7 @@ beforeAll(
         caseNumber: "open-related",
         country: "CZE",
         court: "Related court",
+        sourceUrl: "https://example.test/decision/open-related",
         decisionDate: "2020-02-03",
         decisionType: "nález",
         ecli: "ECLI:CZ:US:2020:1.US.1.20.2",
@@ -173,6 +189,14 @@ beforeAll(
         id: closedRelatedId,
         language: "cs",
         sourceId: closedSourceId,
+      },
+      {
+        caseNumber: "withheld-subject",
+        country: "CZE",
+        court: "Court",
+        id: withheldSubjectId,
+        language: "cs",
+        sourceId: withheldSourceId,
       },
       {
         caseNumber: "unavailable-related",
@@ -318,6 +342,12 @@ beforeAll(
       );
     }
     await db.insert(caseLawCitations).values(rows);
+    await db.insert(caseLawCitations).values({
+      citedDecisionId: null,
+      citingDecisionId: withheldSubjectId,
+      citationText: "citation-text-fixture",
+      id: citationId(999),
+    });
   },
   { timeout: 120_000 },
 );
@@ -410,6 +440,8 @@ test("incoming pages carry treatment and the citing decision, and the rollup mat
       citationAuthority: 0,
       country: "CZE",
       court: "Related court",
+      courtAbbreviation: "ÚS",
+      sourceUrl: "https://example.test/decision/open-related",
       decisionDate: "2020-02-03",
       decisionType: "nález",
       ecli: "ECLI:CZ:US:2020:1.US.1.20.2",
@@ -586,6 +618,8 @@ test("top citing decisions are one row per visible precedent citer", async () =>
   expect(top.at(0)).toMatchObject({
     caseNumber: "open-related",
     court: "Related court",
+    courtAbbreviation: "ÚS",
+    sourceUrl: "https://example.test/decision/open-related",
     decisionDate: "2020-02-03",
   });
 });
@@ -759,4 +793,40 @@ test("leading citations rank one decision per treatment by authority", async () 
   expect(outgoing.items.map((item) => item.citationText)).toEqual([
     "outgoing-resolved",
   ]);
+});
+
+test("citation digests omit withheld unresolved references", async () => {
+  const digest = await readGatedDecisionCitationDigest({
+    caseLawDb,
+    decisionId: withheldSubjectId,
+  });
+  expect(digest?.cites).toMatchObject([
+    {
+      citationText: null,
+      textWithheldReason: "source_licence",
+      decision: null,
+    },
+  ]);
+});
+
+test("citation reads carry withheld text dispositions", async () => {
+  const read = await readGatedDecisionCitations({
+    caseLawDb,
+    cursor: undefined,
+    decisionId: withheldSubjectId,
+    direction: "cites",
+    limit: 10,
+  });
+  expect(read).toMatchObject({
+    type: "page",
+    page: {
+      items: [
+        {
+          citationText: null,
+          textWithheldReason: "source_licence",
+          passage: null,
+        },
+      ],
+    },
+  });
 });

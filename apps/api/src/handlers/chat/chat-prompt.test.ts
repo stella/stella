@@ -9,6 +9,7 @@ import {
 } from "@stll/api-contract";
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
+import { sha256Hex as legacyHex } from "@stll/sha256/node";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import type { ActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
@@ -637,6 +638,9 @@ describe("chat prompt builders", () => {
     expect(first.cacheStablePrefix).not.toContain("First User");
     expect(first.cacheStablePrefix).not.toContain("Current date");
     expect(first.fullPrompt).not.toBe(second.fullPrompt);
+    expect(buildChatPromptCacheKey(first.cacheStablePrefix)).toBe(
+      `stella-chat:v1:${legacyHex(first.cacheStablePrefix).slice(0, 24)}`,
+    );
     expect(buildChatPromptCacheKey(first.cacheStablePrefix)).toBe(
       buildChatPromptCacheKey(second.cacheStablePrefix),
     );

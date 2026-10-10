@@ -16,7 +16,7 @@
 
 import { panic, Result } from "better-result";
 import { spawn } from "node:child_process";
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import {
   closeSync,
   existsSync,
@@ -34,6 +34,7 @@ import * as v from "valibot";
 
 import { MCP_DEFAULT_RESOURCE_SCOPES } from "@stll/api-contract";
 import { roles } from "@stll/permissions";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import {
@@ -656,13 +657,17 @@ const runStackScript = (
   return result.stdout.toString();
 };
 
-const checkSeal = (root: string, runtime: DevRuntime) =>
-  parseSealStatus(
-    runStackScript(root, runtime, {
-      args: ["scripts/seed-seal.ts", "check", devStatePath(root, SEAL_FILE)],
-      label: "Checking the seal",
-    }),
-  ) ?? fail("The seal check printed no status");
+const checkSeal = (root: string, runtime: DevRuntime) => {
+  const output = runStackScript(root, runtime, {
+    args: ["scripts/seed-seal.ts", "check", devStatePath(root, SEAL_FILE)],
+    label: "Checking the seal",
+  });
+  const status =
+    parseSealStatus(output) ?? fail("The seal check printed no status");
+  // Preserve the classified write report on both sides of each capture.
+  console.log(output.trim());
+  return status;
+};
 
 const EVIDENCE_DIR = "evidence";
 const MANIFEST_PATTERN = /^manifest-\d{20}-\d+\.json$/u;
@@ -739,8 +744,8 @@ const drive = async (root: string, args: readonly string[]) => {
   process.exit(exitCode);
 };
 
-const sha256File = (filePath: string) =>
-  createHash("sha256").update(readFileSync(filePath)).digest("hex");
+export const agentCaptureFileSha256 = (filePath: string) =>
+  hashSha256Hex(readFileSync(filePath));
 
 // The only way screenshots reach a pull request: each must be an unaltered
 // agent:drive capture of a stack that held only seeded content.
@@ -769,7 +774,7 @@ const attach = (root: string, args: readonly string[]) => {
     const verdict = verifyAttachment({
       evidenceDir,
       filePath,
-      fileSha256: sha256File(filePath),
+      fileSha256: agentCaptureFileSha256(filePath),
       manifest,
     });
     switch (verdict.type) {

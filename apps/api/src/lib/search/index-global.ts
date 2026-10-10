@@ -3,7 +3,7 @@ import { and, asc, eq, gt, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import { isEntityKind, resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
-import { courtAbbreviation } from "@stll/api-contract/court-abbreviations";
+import { courtAbbreviation } from "@stll/api-contract/case-law-court-abbreviations";
 import { compareCodeUnit } from "@stll/collation";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { Temporal } from "@stll/time";

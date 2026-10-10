@@ -1,5 +1,6 @@
 import { EventType } from "@tanstack/ai";
 import type { AnyTextAdapter, StreamChunk } from "@tanstack/ai";
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
@@ -188,7 +189,12 @@ describe("AI provider catalog canary coverage", () => {
       const ids = catalogModelIds(provider);
       expect(new Set(ids).size).toBe(ids.length);
       for (const role of MODEL_ROLES) {
-        expect(ids).toContain(DEFAULT_MODELS[provider][role]);
+        const modelId = DEFAULT_MODELS[provider][role];
+        if (modelId === null) {
+          expect(isBYOKProviderRoleSupported({ provider, role })).toBe(false);
+          continue;
+        }
+        expect(ids).toContain(modelId);
       }
       for (const modelId of BYOK_MODEL_OPTIONS[provider]) {
         expect(ids).toContain(modelId);
@@ -309,7 +315,9 @@ describe("AI provider PDF canary contract", () => {
       const selection = pdfCanarySelection(provider);
       if (isBYOKProviderRoleSupported({ provider, role: "pdf" })) {
         expect(selection).toEqual({
-          modelId: DEFAULT_MODELS[provider].pdf,
+          modelId:
+            DEFAULT_MODELS[provider].pdf ??
+            panic(`${provider} supports PDF without a default PDF model`),
           role: "pdf",
         });
         continue;

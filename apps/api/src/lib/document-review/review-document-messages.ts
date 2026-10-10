@@ -1,6 +1,8 @@
 import type { TextPart } from "@tanstack/ai";
 import type { AnthropicTextMetadata } from "@tanstack/ai-anthropic";
 
+import { createSha256 } from "@stll/sha256/bun";
+
 import type { CachingDecision } from "@/api/lib/ai-config";
 import type { SafeId } from "@/api/lib/branded-types";
 import { markTanStackCacheBreakpoint } from "@/api/lib/tanstack-ai-caching";
@@ -57,7 +59,7 @@ export const reviewDocumentsScopeKey = (
   targetEntityVersionId: SafeId<"entityVersion">,
   referenceEntityVersionIds: readonly SafeId<"entityVersion">[],
 ): string => {
-  const hasher = new Bun.CryptoHasher("sha256");
+  const hasher = createSha256();
   hasher.update(targetEntityVersionId);
   for (const versionId of referenceEntityVersionIds) {
     hasher.update(versionId);

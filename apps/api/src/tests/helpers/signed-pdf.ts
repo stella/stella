@@ -1,13 +1,3 @@
-/**
- * Digitally signed PDF fixtures, and the check that a signature still covers
- * the bytes it was made over.
- *
- * The certificate is minted per run by the shared test PKI rather than
- * checked in: these tests care whether the signed byte ranges survive, never
- * whether the signer is trusted, and a checked-in key would be one more
- * secret-shaped file in the tree.
- */
-
 import {
   CryptoKeySigner,
   PDF,
@@ -19,7 +9,18 @@ import {
   PdfString,
   rgb,
 } from "@libpdf/core";
+/**
+ * Digitally signed PDF fixtures, and the check that a signature still covers
+ * the bytes it was made over.
+ *
+ * The certificate is minted per run by the shared test PKI rather than
+ * checked in: these tests care whether the signed byte ranges survive, never
+ * whether the signer is trusted, and a checked-in key would be one more
+ * secret-shaped file in the tree.
+ */
 import { panic } from "better-result";
+
+import { sha256Bytes as hashSha256Bytes } from "@stll/sha256/browser";
 
 import { createTestCertificate } from "@/api/tests/helpers/test-pki";
 import type { TestRsaKeyPool } from "@/api/tests/helpers/test-pki";
@@ -284,9 +285,7 @@ export const readSignatureIntegrity = async (
               at + MESSAGE_DIGEST_PREFIX.length,
               at + MESSAGE_DIGEST_PREFIX.length + 32,
             );
-      const actualDigest = new Uint8Array(
-        await crypto.subtle.digest("SHA-256", covered),
-      );
+      const actualDigest = new Uint8Array(await hashSha256Bytes(covered));
       return {
         coveredLength: second + secondLength,
         digestMatches:

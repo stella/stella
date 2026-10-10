@@ -361,12 +361,6 @@
   },
   {
     "kind": "tsconfig-include",
-    "source": "apps/legal-atlas-runner/tsconfig.json",
-    "specifier": "../api/src",
-    "target": "apps/api"
-  },
-  {
-    "kind": "tsconfig-include",
     "source": "packages/catalogue/scripts/tsconfig.json",
     "specifier": "../../../apps/web/scripts/**/*.ts",
     "target": "apps/web"

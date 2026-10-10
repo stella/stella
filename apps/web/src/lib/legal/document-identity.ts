@@ -1,4 +1,4 @@
-import { courtAbbreviation } from "@stll/api-contract/court-abbreviations";
+import { courtAbbreviation } from "@stll/api-contract/case-law-court-abbreviations";
 import type { DocumentIdentity } from "@stll/ui/document-identity-badge.logic";
 
 /** Use the corpus's court reader, including ECLI precedence, on plain row values. */

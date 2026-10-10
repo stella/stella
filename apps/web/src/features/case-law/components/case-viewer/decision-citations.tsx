@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
@@ -10,6 +11,9 @@ import { ChevronRightIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import { CitedDecisionLink } from "@/components/legal-reader/cited-decision-link";
+import { decisionCitationCourtLabel } from "@/components/references/decision-citation-chip.logic";
+import { decisionCitationPresentationsById } from "@/components/references/decision-citation-presentation.logic";
+import type { DecisionCitationPresentation } from "@/components/references/decision-citation-presentation.logic";
 import {
   CITATION_TREATMENT_DOT,
   CITATION_TREATMENT_LABEL,
@@ -179,9 +183,20 @@ export const CitationList = ({
     refetch,
   } = useInfiniteQuery(decisionCitationsInfiniteOptions(decisionId, direction));
 
-  const groups = groupByTreatment(
-    optionalArray(data?.pages).flatMap((page) => page.items),
+  const items = optionalArray(data?.pages).flatMap((page) => page.items);
+  const presentations = decisionCitationPresentationsById(
+    items.flatMap(({ decision: cited }) =>
+      cited === null
+        ? []
+        : [
+            {
+              decisionId: cited.id,
+              courtShortCode: decisionCitationCourtLabel(cited),
+            },
+          ],
+    ),
   );
+  const groups = groupByTreatment(items);
 
   return (
     <div className="flex flex-col gap-3 px-3 pb-3">
@@ -219,6 +234,7 @@ export const CitationList = ({
                 decision={decision}
                 direction={direction}
                 item={item}
+                presentations={presentations}
                 key={item.id}
               />
             ))}
@@ -360,7 +376,9 @@ const CitationRow = ({
   decision,
   direction,
   item,
+  presentations,
 }: {
+  presentations: ReadonlyMap<string, DecisionCitationPresentation>;
   decision: CitedDecisionAddress;
   direction: CitationDirection;
   item: DecisionCitation;
@@ -395,7 +413,12 @@ const CitationRow = ({
       />
       <CitedDecisionLink
         decision={item.decision}
+        presentation={
+          presentations.get(item.decision.id) ??
+          panic("Citation list target missing collected identity")
+        }
         passage={{
+          type: "citation",
           citation: {
             citationText: item.citationText,
             decision: cited,

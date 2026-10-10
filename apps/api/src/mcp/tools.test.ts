@@ -18,13 +18,14 @@ import {
   agentInputNormalizationMetadata,
   COUNTRY_INPUT_MAX_CHARS,
 } from "@stll/agent-input";
+import { courtAbbreviation } from "@stll/api-contract/case-law-court-abbreviations";
 import type { CaseLawCourtYear } from "@stll/api-contract/case-law-court-year";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
-import { courtAbbreviation } from "@stll/api-contract/court-abbreviations";
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
 import {
+  SEARCH_PAGE_REACH,
   SEARCH_PAGINATION_COMPLETE,
   SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET,
   countedSearchTotal,
@@ -33,7 +34,10 @@ import {
   SEARCH_SORTS,
   SEARCH_TOTAL_TYPE,
 } from "@stll/api-contract/search";
-import type { SearchPaginationOutcome } from "@stll/api-contract/search";
+import type {
+  SearchPageReach,
+  SearchPaginationOutcome,
+} from "@stll/api-contract/search";
 import {
   CZ_INSOLVENCY_SOURCE,
   CZ_VAT_RELIABILITY_SOURCE,
@@ -56,10 +60,7 @@ import {
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
 import type { DecisionCitationDigest } from "@/api/handlers/case-law/decisions/citation-digest";
-import type {
-  DecisionCitationRow,
-  RankedRelatedDecision,
-} from "@/api/handlers/case-law/decisions/citation-graph";
+import type { RankedRelatedDecision } from "@/api/handlers/case-law/decisions/citation-graph";
 import {
   type DecisionDocumentHydration,
   STORED_ONLY_DOCUMENT_HYDRATION,
@@ -100,10 +101,12 @@ import { encodePaginationCursor } from "@/api/lib/pagination";
 import type { SearchHit, SearchResult } from "@/api/lib/search/types";
 import * as actionCostContext from "@/api/lib/usage/action-costs/context";
 import type { withTimeout } from "@/api/lib/with-timeout";
+import { decisionTextVersion } from "@/api/mcp/case-law-decision-read";
 import { COMPAT_SEARCH_CURSOR_MAX_LENGTH } from "@/api/mcp/compat-shared";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { resolveMcpToolOutputContract } from "@/api/mcp/gateway/list-tools";
 import { deriveContactDisplayName } from "@/api/mcp/matter-tools";
+import { getMcpResourceModeConfig } from "@/api/mcp/resource-policy-contract";
 import { DEFAULT_MCP_CLI_ANNOTATIONS } from "@/api/mcp/static-cli-metadata";
 import {
   CASE_LAW_SEARCH_CURSOR_MAX_LENGTH,
@@ -496,6 +499,8 @@ const createRelatedDecision = (
   citationAuthority: 0,
   country: "CZE",
   court: "Nejvyšší soud",
+  courtAbbreviation: "NS",
+  sourceUrl: null,
   decisionDate: "2025-01-15",
   decisionType: "rozsudek",
   ecli: null,
@@ -508,9 +513,10 @@ const createRelatedDecision = (
 const createCitationRow = (
   citationText: string,
   decision: RankedRelatedDecision | null,
-): DecisionCitationRow => ({
+): DecisionCitationDigest["cites"][number] => ({
   id: toSafeId<"caseLawCitation">(`c_${citationText}`),
   citationText,
+  textWithheldReason: null,
   sectionIndex: null,
   treatment: "unclassified",
   decision,
@@ -2413,6 +2419,7 @@ describe("OpenAI-compatible MCP tools", () => {
           // The handler builds the headline for the web UI; the MCP snippet
           // must come back as plain text.
           headline: "Relevant <mark>holding</mark> on &quot;smlouva&quot;",
+          textWithheldReason: null,
           language: "cs",
           headnote: {
             type: "present",
@@ -2588,6 +2595,81 @@ describe("OpenAI-compatible MCP tools", () => {
     },
   );
 
+  test("search_case_law withholds a result's text when its source licence keeps it from AI use", async () => {
+    const hit = {
+      caseNumber: "29 Cdo 123/2024",
+      caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+      citationAuthority: 1,
+      citationCount: 0,
+      country: "CZE",
+      court: "Nejvyšší soud",
+      courtAbbreviation: "NS",
+      decisionDate: "2024-02-01",
+      decisionId: DECISION_ID,
+      decisionType: "judgment",
+      ecli: null,
+      identifiers: [
+        {
+          type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+          value: "29 Cdo 123/2024",
+        },
+      ],
+      headline: "Licensed <mark>passage</mark> text",
+      language: "cs",
+      headnote: {
+        type: "present",
+        text: "Licensed headnote text.",
+        truncated: false,
+      },
+      keywords: { type: "keywords", items: ["Licensed keyword"], omitted: 0 },
+      matchingPassages: 1,
+      languageAlternates: [],
+      slug: "stable-official-slug",
+      sourceUrl: "https://example.test/decision",
+    } as const;
+    const search = async (textWithheldReason: "source_licence" | null) => {
+      searchDecisionsHandlerMock.mockResolvedValue({
+        paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+        facets: null,
+        hits: [{ ...hit, textWithheldReason }],
+        nextCursor: null,
+        total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
+        queryUsed: "smlouva",
+        warnings: [],
+      });
+      return await handleMcpToolCall({
+        args: { country: "CZE", queries: ["smlouva"] },
+        context: createContext(),
+        toolName: "search_case_law",
+      });
+    };
+
+    const withheld = await search("source_licence");
+    expect(parseToolPayload(withheld)).toMatchObject({
+      results: [
+        {
+          caseNumber: "29 Cdo 123/2024",
+          excerpt: { type: "withheld", reason: "source_licence" },
+          keywords: null,
+          headnote: null,
+        },
+      ],
+    });
+    expect(JSON.stringify(withheld)).not.toContain("Licensed");
+
+    // The same hit from a source that permits AI use keeps its text.
+    const readable = await search(null);
+    expect(parseToolPayload(readable)).toMatchObject({
+      results: [
+        {
+          snippet: "Licensed passage text",
+          keywords: { items: ["Licensed keyword"] },
+          headnote: { text: "Licensed headnote text." },
+        },
+      ],
+    });
+  });
+
   test("an output with an undeclared key is stripped, returned, and logged as a defect", async () => {
     searchDecisionsHandlerMock.mockResolvedValue({
       paginationOutcome: SEARCH_PAGINATION_COMPLETE,
@@ -2726,6 +2808,7 @@ describe("OpenAI-compatible MCP tools", () => {
             },
           ],
           headline: "Relevant <mark>holding</mark>",
+          textWithheldReason: null,
           language: "cs",
           headnote: { type: "absent", reason: "not_published" },
           keywords: null,
@@ -2850,6 +2933,7 @@ describe("OpenAI-compatible MCP tools", () => {
       ecli?: string | null;
       hint?: string;
       identifier: string;
+      missing?: string[];
       message?: string;
       resourceName?: string;
       status: string;
@@ -3120,7 +3204,7 @@ describe("OpenAI-compatible MCP tools", () => {
     // fifty is worth the forty-nine that resolved, and a failure is not
     // evidence that the corpus lacks the decision.
     expect(payload.items.map(({ status }) => status)).toEqual([
-      "ambiguous",
+      "incomplete_identifier",
       "lookup_failed",
     ]);
     expect(payload.items.at(1)?.message).toContain("Retry this reference");
@@ -3145,12 +3229,12 @@ describe("OpenAI-compatible MCP tools", () => {
     // A Czech file's lone decision is listed, not claimed: a sibling stored
     // under its sheet is keyed apart from the file the read reached.
     expect(payload.items.map(({ status }) => status)).toEqual([
-      "ambiguous",
+      "incomplete_identifier",
       "not_found",
-      "ambiguous",
+      "incomplete_identifier",
       "not_found",
     ]);
-    expect(payload.items.at(0)?.message).toContain("listed rather than chosen");
+    expect(payload.items.at(0)?.message).toContain("Add the sheet");
     expect(payload.items.map(({ identifier }) => identifier)).toEqual([
       CZ_DOCKET,
       "the one about good morals",
@@ -3226,6 +3310,7 @@ describe("OpenAI-compatible MCP tools", () => {
     decisionType: "judgment",
     ecli: null,
     headline,
+    textWithheldReason: null,
     identifiers: [
       {
         type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
@@ -3763,6 +3848,7 @@ describe("OpenAI-compatible MCP tools", () => {
               decisionType: "judgment",
               ecli: null,
               headline: null,
+              textWithheldReason: null,
               identifiers: [
                 {
                   type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
@@ -3816,6 +3902,7 @@ describe("OpenAI-compatible MCP tools", () => {
           {
             id: "00000000-0000-4000-8000-0000000c0001",
             citationText: "29 Cdo 123/2024",
+            textWithheldReason: null,
             sectionIndex: 3,
             treatment: "negative",
             decision: {
@@ -3846,6 +3933,7 @@ describe("OpenAI-compatible MCP tools", () => {
           {
             id: "00000000-0000-4000-8000-0000000c0002",
             citationText: "Rozhodnutí, které korpus nedrží",
+            textWithheldReason: null,
             sectionIndex: null,
             treatment: "unclassified",
             decision: null,
@@ -3881,6 +3969,7 @@ describe("OpenAI-compatible MCP tools", () => {
         {
           citationId: "00000000-0000-4000-8000-0000000c0001",
           citationText: "29 Cdo 123/2024",
+          textWithheldReason: null,
           polarity: "negative",
           decision: {
             appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/cs/ns-31-cdo-900-2025`,
@@ -3903,6 +3992,7 @@ describe("OpenAI-compatible MCP tools", () => {
         {
           citationId: "00000000-0000-4000-8000-0000000c0002",
           citationText: "Rozhodnutí, které korpus nedrží",
+          textWithheldReason: null,
           polarity: "unclassified",
           decision: null,
           passage: null,
@@ -4163,6 +4253,7 @@ describe("OpenAI-compatible MCP tools", () => {
             country: "CZE",
             documentType: "act",
             headline: "nahrada <mark>skody</mark>",
+            textWithheldReason: null,
             language: "cs",
             match: { type: matchType },
             score: 1.5,
@@ -4909,15 +5000,18 @@ describe("OpenAI-compatible MCP tools", () => {
       hits,
       limit,
       nextCursor = null,
+      pageReach = SEARCH_PAGE_REACH.REACHED,
     }: {
       guidance: CaseLawSearchGuidanceMode;
       queryUsed: string;
       hits: number;
       limit: number;
       nextCursor?: string | null;
+      pageReach?: SearchPageReach;
     }) => {
       searchDecisionsHandlerMock.mockResolvedValue({
         paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+        pageReach,
         facets: null,
         hits: Array.from({ length: hits }, (_, index) =>
           createCaseLawHit(`decision-${String(index)}`, "Holding"),
@@ -4968,6 +5062,20 @@ describe("OpenAI-compatible MCP tools", () => {
       );
       // Read from the page already returned: one engine call per phrasing.
       expect(searchDecisionsHandlerMock).toHaveBeenCalledTimes(1);
+    });
+
+    test("a short page whose scan stopped on a budget is not called exhausted", async () => {
+      // No cursor after it, but the scan stopped before the end of the
+      // results, so nothing proves the phrasing found only these.
+      const warnings = await searchFor({
+        guidance: "v1",
+        queryUsed: SIX_TERMS,
+        hits: 2,
+        limit: 3,
+        pageReach: SEARCH_PAGE_REACH.SCAN_BUDGET,
+      });
+
+      expect(warnings).toEqual([]);
     });
 
     test("a quoted six-word phrase counts each of its words", async () => {
@@ -5618,13 +5726,19 @@ describe("OpenAI-compatible MCP tools", () => {
                   },
                 ],
               },
-              cites: { count: 1, decisions: [{ citation: "29 Odo 1/2001" }] },
+              cites: {
+                count: 1,
+                decisions: [
+                  { citation: "29 Odo 1/2001", textWithheldReason: null },
+                ],
+              },
             },
             text,
             textSource: "ast",
             page: 1,
             pageCount: 1,
             charCount: text.length,
+            textVersion: decisionTextVersion(text),
             outline: [
               {
                 title: "29 Cdo 123/2024",
@@ -7134,14 +7248,14 @@ describe("OpenAI-compatible MCP tools", () => {
       max_chars: maxChars,
     });
 
-    // Each long decision fills its own max_chars page rather than a third of
-    // it; the short one is whole.
+    // The short decision's unused first-pass share moves to the still
+    // truncated decisions in input order.
     expect(windowsOf(payload.items)).toEqual([
       {
         charCount: 5000,
         decisionId: DECISION_ID,
-        pageCount: 2,
-        text: texts.get(DECISION_ID)?.slice(0, maxChars),
+        pageCount: 1,
+        text: texts.get(DECISION_ID),
       },
       {
         charCount: 40,
@@ -7152,12 +7266,12 @@ describe("OpenAI-compatible MCP tools", () => {
       {
         charCount: 6000,
         decisionId: THIRD_DECISION_ID,
-        pageCount: 2,
-        text: texts.get(THIRD_DECISION_ID)?.slice(0, maxChars),
+        pageCount: 1,
+        text: texts.get(THIRD_DECISION_ID),
       },
     ]);
 
-    // Page 2 of the same batch continues each decision where it stopped.
+    // A single decision still treats max_chars as its page size.
     const second = await readDecisions({
       decision_ids: [THIRD_DECISION_ID],
       max_chars: maxChars,
@@ -7224,14 +7338,19 @@ describe("OpenAI-compatible MCP tools", () => {
       [SECOND_DECISION_ID, decisionText("B", 40)],
     ]);
     serveTexts(texts);
-    const share = MCP_CONTENT_MAX_CHARS / 2;
+    // The long decision cannot be completed by the short one's unused share,
+    // so it keeps the even share and pages on that stable window.
+    const evenShare = Math.floor(MCP_CONTENT_MAX_CHARS / 2);
 
     const payload = await readDecisions({
       decision_ids: [DECISION_ID, SECOND_DECISION_ID],
     });
 
     expect(payload.items.map(({ decision }) => decision)).toMatchObject([
-      { text: texts.get(DECISION_ID)?.slice(0, share), pageCount: 2 },
+      {
+        text: texts.get(DECISION_ID)?.slice(0, evenShare),
+        pageCount: Math.ceil(MCP_CONTENT_MAX_CHARS / evenShare),
+      },
       { text: texts.get(SECOND_DECISION_ID), pageCount: 1 },
     ]);
   });
@@ -8392,13 +8511,14 @@ describe("OpenAI-compatible MCP tools", () => {
       version: 1,
     };
     const result = await handleMcpToolCall({
+      mode: "advanced",
       args: { entity_id: "00000000-0000-4000-8000-0000000e0001" },
       context: {
         ...createContext({
           scopedDb: createScopedDb([], textlessProjection, [currentPdf]),
         }),
         grantedScopes: ["stella:read", "stella:matters_write"],
-        request: new Request("https://example.test/mcp"),
+        request: new Request("https://example.test/mcp/advanced"),
       },
       toolName: "read_document",
     });
@@ -8428,6 +8548,7 @@ describe("OpenAI-compatible MCP tools", () => {
   test("read_document derives state and remediation from the persisted non-first source", async () => {
     const sourceSha256Hex = "b".repeat(64);
     const result = await handleMcpToolCall({
+      mode: "advanced",
       args: { entity_id: "00000000-0000-4000-8000-0000000e0001" },
       context: {
         ...createContext({
@@ -8467,7 +8588,7 @@ describe("OpenAI-compatible MCP tools", () => {
           ),
         }),
         grantedScopes: ["stella:read", "stella:matters_write"],
-        request: new Request("https://example.test/mcp"),
+        request: new Request("https://example.test/mcp/advanced"),
       },
       toolName: "read_document",
     });
@@ -8487,18 +8608,26 @@ describe("OpenAI-compatible MCP tools", () => {
 
   test.each([
     {
+      mode: "advanced" as const,
       label: "missing matter-write scope",
       memberRole: "owner" as const,
       grantedScopes: ["stella:read"],
     },
     {
+      mode: "advanced" as const,
       label: "missing entity permission",
       memberRole: "intern" as const,
       grantedScopes: ["stella:read", "stella:matters_write"],
     },
+    {
+      mode: "default" as const,
+      label: "default surface with full permissions",
+      memberRole: "owner" as const,
+      grantedScopes: ["stella:read", "stella:matters_write"],
+    },
   ])(
     "read_document returns an OCR escalation for a caller $label",
-    async ({ grantedScopes, memberRole }) => {
+    async ({ grantedScopes, memberRole, mode }) => {
       const textlessProjection = createExtractedContentRow({ charCount: 0 });
       const currentPdf = {
         encrypted: false,
@@ -8515,12 +8644,15 @@ describe("OpenAI-compatible MCP tools", () => {
         scopedDb: createScopedDb([], textlessProjection, [currentPdf]),
       });
       const result = await handleMcpToolCall({
+        mode,
         args: { entity_id: "00000000-0000-4000-8000-0000000e0001" },
         context: {
           ...context,
           grantedScopes,
           memberRole,
-          request: new Request("https://example.test/mcp"),
+          request: new Request(
+            `https://example.test${getMcpResourceModeConfig(mode).httpPath}`,
+          ),
         },
         toolName: "read_document",
       });
@@ -8799,9 +8931,10 @@ describe("OpenAI-compatible MCP tools", () => {
           ),
         }),
         grantedScopes: ["stella:read", "stella:matters_write"],
-        request: new Request("https://example.test/mcp"),
+        request: new Request("https://example.test/mcp/advanced"),
       },
       toolName: "read_document",
+      mode: "advanced",
     });
 
     expect(parseToolPayload(result)).toMatchObject({

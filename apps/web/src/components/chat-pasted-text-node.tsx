@@ -5,7 +5,7 @@ import type { NodeViewProps } from "@tiptap/react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import { ClipboardPasteIcon, CommandIcon, XIcon } from "@stll/ui/icons";
+import { CommandIcon, XIcon } from "@stll/ui/icons";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { contentDir } from "@stll/ui/use-content-dir";
 import { cn } from "@stll/ui/utils";
@@ -14,6 +14,7 @@ import type {
   PastedTextAttrs,
   PastedTextSource,
 } from "@/components/chat-pasted-text-extension";
+import { ChatAttachmentChip } from "@/components/chat/chat-draft-attachment-chips";
 import { ReferenceChip } from "@/components/references/reference-chip";
 
 const CHIP_MAX_LABEL_WIDTH_CLASS = "max-w-48";
@@ -25,20 +26,6 @@ const CHIP_BASE_CLASS = cn(
   "bg-muted/60 rounded-md border px-1.5 py-0.5",
   "text-foreground text-xs font-medium",
 );
-
-// Skills and saved prompts render through `ReferenceChip`; this draws the
-// paste and command chips only.
-const ChipIcon = ({
-  source,
-}: {
-  source: Exclude<PastedTextSource, "prompt" | "skill">;
-}) => {
-  const className = "text-muted-foreground size-3 shrink-0";
-  if (source === "command") {
-    return <CommandIcon className={className} />;
-  }
-  return <ClipboardPasteIcon className={className} />;
-};
 
 const PASTED_TEXT_SOURCE_VALUES: readonly string[] = [
   "paste",
@@ -113,7 +100,7 @@ export const ChatPastedTextNode = (props: NodeViewProps) => {
           className={cn(CHIP_BASE_CLASS, "select-none")}
           contentEditable={false}
         >
-          <ChipIcon source={attrs.source} />
+          <CommandIcon className="text-muted-foreground size-3 shrink-0" />
           <span className={cn("truncate", CHIP_MAX_LABEL_WIDTH_CLASS)}>
             {chipLabel}
           </span>
@@ -122,46 +109,66 @@ export const ChatPastedTextNode = (props: NodeViewProps) => {
     );
   }
 
+  if (attrs.source === "paste") {
+    return (
+      <NodeViewWrapper
+        className="inline"
+        contentEditable={false}
+        data-source={attrs.source}
+      >
+        <ChatAttachmentChip
+          behavior={{
+            type: "draft",
+            onRemove: () => {
+              props.deleteNode();
+              props.editor.commands.focus();
+            },
+            onExpand: () => {
+              const position = props.getPos();
+              if (position === undefined) {
+                return;
+              }
+              props.editor
+                .chain()
+                .focus()
+                .insertContentAt(
+                  { from: position, to: position + props.node.nodeSize },
+                  { type: "text", text: attrs.text },
+                  { applyInputRules: false, applyPasteRules: false },
+                )
+                .run();
+            },
+          }}
+          item={{
+            type: "pasted_text",
+            id: "inline-pasted-text",
+            text: attrs.text,
+          }}
+        />
+      </NodeViewWrapper>
+    );
+  }
+
   return (
     <NodeViewWrapper className="inline" data-source={attrs.source}>
       <Popover>
-        {attrs.source === "prompt" || attrs.source === "skill" ? (
-          // A skill (or saved prompt, the same concept to users) is a
-          // reference: it draws the very chip the sent message shows.
-          <PopoverTrigger
-            aria-label={t("chat.pastedText.expand")}
-            className="inline-flex max-w-full cursor-pointer align-middle select-none"
-            contentEditable={false}
-            type="button"
-          >
-            <ReferenceChip
-              interactive={false}
-              reference={{
-                type: "skill",
-                slug: attrs.source === "skill" ? attrs.text : "",
-                label: chipLabel,
-              }}
-              selected={props.selected}
-            />
-          </PopoverTrigger>
-        ) : (
-          <PopoverTrigger
-            aria-label={t("chat.pastedText.expand")}
-            className={cn(
-              CHIP_BASE_CLASS,
-              "hover:bg-muted",
-              "focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none",
-              "cursor-pointer select-none",
-            )}
-            contentEditable={false}
-            type="button"
-          >
-            <ChipIcon source={attrs.source} />
-            <span className={cn("truncate", CHIP_MAX_LABEL_WIDTH_CLASS)}>
-              {chipLabel}
-            </span>
-          </PopoverTrigger>
-        )}
+        <PopoverTrigger
+          aria-label={t("chat.pastedText.expand")}
+          className="inline-flex max-w-full cursor-pointer align-middle select-none"
+          contentEditable={false}
+          type="button"
+        >
+          <ReferenceChip
+            interactive={false}
+            reference={{
+              type: "skill",
+              slug: attrs.source === "skill" ? attrs.text : "",
+              label: chipLabel,
+            }}
+            selected={props.selected}
+          />
+        </PopoverTrigger>
+
         <PopoverPopup className="w-(--available-width) max-w-md" side="top">
           <div className="flex max-h-72 flex-col gap-2 text-xs">
             <div className="flex items-center justify-between gap-2">

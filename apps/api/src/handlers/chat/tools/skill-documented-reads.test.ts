@@ -1,7 +1,8 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import { listSkillMetadata, readDocumentedChatReads } from "@stll/skills";
+import { listSkillMetadata } from "@stll/skills";
+import { readDocumentedChatReads } from "@stll/skills/frontmatter";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {

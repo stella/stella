@@ -1,0 +1,62 @@
+@import "tailwindcss";
+@import "../../styles/theme.css";
+@source "../../";
+
+html,
+body,
+#root {
+  width: 100%;
+  min-height: 100%;
+  margin: 0;
+}
+
+[data-outline-fixture] {
+  position: relative;
+  display: flex;
+  width: 100%;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+[data-outline-document] {
+  min-width: 0;
+  flex: 1;
+  overflow: auto;
+  padding: 20px;
+}
+
+[data-outline-host] {
+  display: flex;
+  width: min(340px, 42vw);
+  min-width: 0;
+  height: 100%;
+  flex: 0 0 auto;
+  flex-direction: column;
+  overflow: hidden;
+  border-inline-start: 1px solid var(--color-border);
+}
+
+[data-outline-toggle] {
+  display: flex;
+  min-height: 44px;
+  flex: 0 0 44px;
+  align-items: center;
+  padding-inline: 12px;
+}
+
+[data-outline-composer] {
+  position: absolute;
+  z-index: 30;
+  inset-inline: 0;
+  bottom: 0;
+  display: flex;
+  height: 88px;
+  align-items: center;
+  justify-content: center;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-background);
+}
+
+[data-outline-composer][data-expanded="true"] {
+  height: 136px;
+}

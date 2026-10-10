@@ -1,5 +1,11 @@
 import { expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
@@ -252,4 +258,56 @@ test("the planner derives exactly prDepthJobs before any source checkout", () =>
 test("the release gate requires heavy and PR-depth status provenance", () => {
   expect(releaseHealth).toContain('validate_main_status "main/heavy"');
   expect(releaseHealth).toContain('validate_main_status "main/pr-depth"');
+});
+
+test("the patch-id step leaves reuse off for an empty net change", () => {
+  const script = v.parse(v.string(), planStep("Compute stable patch id").run);
+  const directory = mkdtempSync(path.join(tmpdir(), "pr-depth-empty-change-"));
+  try {
+    command(directory, "git", "init", "-q", "--initial-branch", "main");
+    command(directory, "git", "config", "commit.gpgsign", "false");
+    command(directory, "git", "config", "user.name", "test");
+    command(directory, "git", "config", "user.email", "test@example.com");
+    mkdirSync(path.join(directory, ".github/workflows"), { recursive: true });
+    writeFileSync(
+      path.join(directory, ".github/workflows/ci.yml"),
+      "name: CI\n",
+    );
+    writeFileSync(path.join(directory, "file"), "base\n");
+    command(directory, "git", "add", ".");
+    command(directory, "git", "commit", "-qm", "base");
+    const base = command(directory, "git", "rev-parse", "HEAD");
+    const run = (head: string) => {
+      const output = path.join(directory, "output");
+      writeFileSync(output, "");
+      const result = Bun.spawnSync(["bash", "-e", "-c", script], {
+        cwd: directory,
+        env: {
+          ...process.env,
+          EVENT_NAME: "pull_request",
+          PR_BASE_SHA: base,
+          PR_HEAD_SHA: head,
+          WORKFLOW_SHA: head,
+          GITHUB_OUTPUT: output,
+        },
+      });
+      expect(result.exitCode, result.stderr.toString()).toBe(0);
+      return readFileSync(output, "utf-8");
+    };
+    // A pull request that reverts itself: the head moved, the net change is empty.
+    writeFileSync(path.join(directory, "file"), "changed\n");
+    command(directory, "git", "commit", "-qam", "change");
+    writeFileSync(path.join(directory, "file"), "base\n");
+    command(directory, "git", "commit", "-qam", "revert");
+    expect(run(command(directory, "git", "rev-parse", "HEAD"))).toMatch(
+      /^patch_id=\n/mu,
+    );
+    writeFileSync(path.join(directory, "file"), "real change\n");
+    command(directory, "git", "commit", "-qam", "real");
+    expect(run(command(directory, "git", "rev-parse", "HEAD"))).toMatch(
+      /^patch_id=[0-9a-f]{40}\n/mu,
+    );
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });

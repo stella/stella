@@ -1,10 +1,10 @@
 import { sql } from "drizzle-orm";
 
+import { courtAbbreviation } from "@stll/api-contract/case-law-court-abbreviations";
 import {
   COURT_TIER_LABELS,
   type CourtTierLabel,
 } from "@stll/api-contract/case-law-court-tiers";
-import { courtAbbreviation } from "@stll/api-contract/court-abbreviations";
 import { DAY_IN_MS, Temporal } from "@stll/time";
 
 import { withSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
