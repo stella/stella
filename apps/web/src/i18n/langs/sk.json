@@ -988,10 +988,14 @@
     "viewer": {
       "abstract": "Abstrakt",
       "appliedVersionNotStated": "Použité znenie neuvedené",
+      "appliedVersionNotStatedCompact": "Znenie neuvedené",
       "appliedVersionStatedAmendment": "Znenie podľa novely <reference>{amendment}</reference>",
+      "appliedVersionStatedAmendmentCompact": "Uvedené: <reference>{amendment}</reference>",
       "appliedVersionStatedDate": "{relation, select, on {Znenie účinné k {date}} until {Znenie účinné do {date}} from {Znenie účinné od {date}} other {Znenie účinné k {date}}}",
+      "appliedVersionStatedDateCompact": "{relation, select, on {Uvedené: {date}} until {Uvedené: do {date}} from {Uvedené: od {date}} other {Uvedené: {date}}}",
       "caseFileMayHoldOthers": "Tento spis môže obsahovať aj ďalšie rozhodnutia.",
       "citedBy": "Citované v",
+      "citedDecisionPassage": "Pasáž v rozhodnutí",
       "cites": "Cituje",
       "dissentByline": "Odlišné stanovisko: <bdi>{names}</bdi>",
       "judgeRole": {
@@ -1018,7 +1022,9 @@
       "textPending": "Text rozhodnutia sa stále načítava",
       "textReadFailed": "Text rozhodnutia sa nepodarilo načítať",
       "textUnavailable": "K tomuto rozhodnutiu nie je k dispozícii text",
-      "versionAtDecisionDateInferred": "Znenie k dátumu rozhodnutia (odvodené)"
+      "versionAtDecisionDateInferred": "Znenie k dátumu rozhodnutia (odvodené)",
+      "versionBasisInferredCompact": "Dátum rozhodnutia · odvodené",
+      "versionBasisInferredExplanation": "Znenie je odvodené z dátumu rozhodnutia. Rozhodnutie neuvádza, ktoré znenie sa použije."
     }
   },
   "catalogue": {

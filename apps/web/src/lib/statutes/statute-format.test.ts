@@ -4,7 +4,7 @@ import { createFormatter } from "use-intl/core";
 import {
   formatStatedWindow,
   formatValidityRange,
-} from "@/features/statutes/statute-format";
+} from "@/lib/statutes/statute-format";
 
 const format = createFormatter({ locale: "cs", timeZone: "UTC" });
 
