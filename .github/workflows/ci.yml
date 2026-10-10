@@ -7822,7 +7822,7 @@ jobs:
   # Expiry is wall-clock state: path scopes and previously completed runs
   # cannot certify it. This required job runs for every merge candidate.
   dated-waiver-expiry:
-    if: ${{ !cancelled() && (github.event_name != 'pull_request' || github.event.pull_request.draft != true) }}
+    if: ${{ !cancelled() && inputs.heavy_only != true && (github.event_name != 'pull_request' || github.event.pull_request.draft != true) }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

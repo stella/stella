@@ -224,12 +224,21 @@ test("required CI expiry checks cannot be skipped by paths, reuse, or queue dept
         "needs.ci-plan.outputs.package_checks_required": "false",
         "needs.ci-plan.outputs.docs_checks_required": "true",
         "needs.ci-plan.outputs.pr_depth_reused": "true",
-        "inputs.heavy_only": true,
+        "inputs.heavy_only": false,
         "inputs.pr_depth_only": true,
       },
       status: { always: true, cancelled: false },
     };
     expect(evaluate(expiry.if, context), event).toBe(true);
+    // A heavy-only dispatch adds heavy suites to a tree whose merge group
+    // already ran this thin job, so it is the one run that skips it.
+    expect(
+      evaluate(expiry.if, {
+        ...context,
+        values: { ...context.values, "inputs.heavy_only": true },
+      }),
+      event,
+    ).toBe(false);
   }
   const install = expiry.steps.find(
     ({ name }) => name === "Install dated waiver guard dependencies",

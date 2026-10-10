@@ -2138,10 +2138,11 @@ describe("green result freshness", () => {
     ).toBe(true);
   });
 
-  test.each([
-    { profile: "normal-v1" as const },
-    { profile: "pilot-fast-v1" as const, jobs: [] },
-  ])(
+  const alwaysPlannedCoverages: CiCoverageEvidence[] = [
+    { profile: "normal-v1" },
+    { profile: "pilot-fast-v1", jobs: [] },
+  ];
+  test.each(alwaysPlannedCoverages)(
     "dated waiver expiry is always planned for $profile coverage",
     (coverage) => {
       const source = readFileSync(

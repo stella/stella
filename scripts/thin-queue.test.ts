@@ -760,6 +760,7 @@ test("unset and full preserve historical predicates except declared PR, Postgres
         "ci-generated-sources",
         "ci-checks-docs",
         "code-quality-web-rest",
+        "dated-waiver-expiry",
       ]),
     ].toSorted(),
   );

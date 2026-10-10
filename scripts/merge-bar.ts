@@ -798,7 +798,7 @@ type CheckFastJobPredicateOptions = {
   workflow: unknown;
 };
 
-const ALWAYS_PLANNED_PREDICATE = `\${{ !cancelled() && (github.event_name != 'pull_request' || github.event.pull_request.draft != true) }}`;
+const ALWAYS_PLANNED_PREDICATE = `\${{ !cancelled() && inputs.heavy_only != true && (github.event_name != 'pull_request' || github.event.pull_request.draft != true) }}`;
 
 const checkFastJobPredicate = ({
   id,
