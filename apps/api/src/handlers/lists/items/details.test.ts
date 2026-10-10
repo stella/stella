@@ -13,9 +13,9 @@ import {
   decideFeatureAccess,
 } from "@/api/lib/feature-access/policy";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
-import { featurePrerequisiteClosure } from "@/api/lib/feature-access/prerequisites";
 import {
   FEATURE_REGISTRY,
+  LEGAL_LISTS_FEATURE_ID,
   LIST_VERIFICATION_FEATURE_ID,
 } from "@/api/lib/feature-access/registry";
 import { LIST_VERIFICATION_ITEM_OPERATION } from "@/api/lib/lists/item-operations";
@@ -42,40 +42,44 @@ const listId = toSafeId<"legalList">("00000000-0000-4000-8000-000000000002");
 const itemId = toSafeId<"entity">("00000000-0000-4000-8000-000000000003");
 const createdAt = new Date("2026-07-16T12:00:00.000Z");
 const changes = { confidence: { old: "low", new: "medium" } };
-const snapshot = (enabled: boolean, caller = principal) =>
-  createFeatureAccessSnapshot({
-    ...caller,
-    decisions: new Map([
-      [
-        LIST_VERIFICATION_FEATURE_ID,
-        decideFeatureAccess({
-          ...caller,
-          featureId: LIST_VERIFICATION_FEATURE_ID,
-          registry: FEATURE_REGISTRY,
-          grants: enabled
-            ? Object.fromEntries(
-                [
-                  ...featurePrerequisiteClosure(
-                    FEATURE_REGISTRY,
-                    LIST_VERIFICATION_FEATURE_ID,
-                  ),
-                ].map((id) => [
-                  id,
-                  [
-                    {
-                      type: "organization" as const,
-                      organizationId: caller.organizationId,
-                    },
-                  ],
-                ]),
-              )
-            : {},
-          user: { email: "reviewer@example.test", emailVerified: true },
-          membership: true,
-        }),
-      ],
-    ]),
+const snapshot = (enabled: boolean) => {
+  const grants = {
+    [LEGAL_LISTS_FEATURE_ID]: [
+      {
+        type: "organization" as const,
+        organizationId: principal.organizationId,
+      },
+    ],
+    ...(enabled
+      ? {
+          [LIST_VERIFICATION_FEATURE_ID]: [
+            {
+              type: "organization" as const,
+              organizationId: principal.organizationId,
+            },
+          ],
+        }
+      : {}),
+  };
+  return createFeatureAccessSnapshot({
+    ...principal,
+    decisions: new Map(
+      [LEGAL_LISTS_FEATURE_ID, LIST_VERIFICATION_FEATURE_ID].map(
+        (featureId) => [
+          featureId,
+          decideFeatureAccess({
+            ...principal,
+            registry: FEATURE_REGISTRY,
+            featureId,
+            grants,
+            user: { email: "reviewer@example.test", emailVerified: true },
+            membership: true,
+          }),
+        ],
+      ),
+    ),
   });
+};
 
 const fixture = (
   featureAccessSnapshot: FeatureAccessSnapshot | undefined,
