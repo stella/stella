@@ -1,4 +1,4 @@
-import Elysia from "elysia";
+import Elysia, { type Context } from "elysia";
 
 import {
   readAdvancedMetadata,
@@ -8,6 +8,7 @@ import {
   readLawMetadata,
 } from "@/api/handlers/mcp/read-discovery-metadata";
 import { resolveRateLimitClientAddress } from "@/api/lib/client-ip";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import {
   MCP_ADVANCED_DISCOVERY_PATH,
   MCP_ADVANCED_HTTP_PATH,
@@ -184,18 +185,29 @@ export const createMcpRoute = ({
     )
     .all(
       MCP_ADVANCED_HTTP_PATH,
-      async ({ request, server, set }) =>
-        await handleMcpTransportRoute({
-          options: {
-            clientIp: resolveRateLimitClientAddress({
-              request,
-              server: server ?? null,
-            }),
-            mode: "advanced",
-          },
+      declareAggregateMutation(
+        async ({
           request,
+          server,
           set,
-        }),
+        }: Pick<Context, "request" | "server" | "set">) =>
+          await handleMcpTransportRoute({
+            options: {
+              clientIp: resolveRateLimitClientAddress({
+                request,
+                server: server ?? null,
+              }),
+              mode: "advanced",
+            },
+            request,
+            set,
+          }),
+        {
+          type: "independent",
+          reason:
+            "MCP transport dispatches to capability handlers that own their aggregate mutations; the transport itself owns no aggregate state.",
+        },
+      ),
       { parse: "none" },
     )
     .all(
