@@ -27,8 +27,9 @@ test("recognizes an imported module loader", async () => {
       [
         'import { createRequire } from "node:module";',
         "const loadModule = createRequire(import.meta.url);",
+        'loadModule("node:fs");',
         'loadModule("nanoid");',
       ].join("\n"),
     ),
-  ).toEqual([3]);
+  ).toEqual([4]);
 });

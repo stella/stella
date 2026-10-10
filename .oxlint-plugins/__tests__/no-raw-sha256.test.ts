@@ -382,8 +382,9 @@ test("recognizes a primitive loaded by an imported module loader", async () => {
       [
         'import { createRequire } from "node:module";',
         "const require = createRequire(import.meta.url);",
+        'require("node:fs");',
         'require("node:crypto").createHash("sha256");',
       ].join("\n"),
     ),
-  ).toEqual([3]);
+  ).toEqual([4]);
 });

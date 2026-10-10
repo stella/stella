@@ -584,13 +584,10 @@ const isCreateRequireReference = (
     variable === null ||
     initializer?.type !== "CallExpression" ||
     !isAstNode(definition?.node) ||
-    !isIdentifier(definition.node.id, reference.name) ||
-    variable.references.some(
-      (use) =>
-        !use.init &&
-        (use.identifier.range[0] !== reference.range[0] ||
-          use.identifier.range[1] !== reference.range[1]),
-    )
+    !isAstNode(definition.parent) ||
+    definition.parent.type !== "VariableDeclaration" ||
+    definition.parent.kind !== "const" ||
+    !isIdentifier(definition.node.id, reference.name)
   ) {
     return false;
   }
@@ -607,15 +604,16 @@ const isCreateRequireReference = (
   }
   // Only an imported factory is eligible; a loader cannot prove itself through
   // another call to its own binding.
-  const factory = resolveImportedExpression(context, callee);
+  const factory = resolveImportedExpressionForEnforcement(context, callee);
   return (
     factory?.imported === "createRequire" &&
     (factory.source === "node:module" || factory.source === "module")
   );
 };
 
-// The module a `require("m")`, `import("m")` or `await import("m")` loads.
-export const dynamicModuleSource = (
+// Enforcement provenance recognizes stable loaders regardless of read count.
+// Admission checks must separately prove that the expression is eligible.
+export const dynamicModuleSourceForEnforcement = (
   node: unknown,
   context: ScopeContext,
 ): string | null => {
@@ -624,7 +622,7 @@ export const dynamicModuleSource = (
     return null;
   }
   if (expression.type === "AwaitExpression") {
-    return dynamicModuleSource(expression.argument, context);
+    return dynamicModuleSourceForEnforcement(expression.argument, context);
   }
   if (expression.type === "ImportExpression") {
     return isStringLiteral(expression.source) ? expression.source.value : null;
@@ -753,10 +751,10 @@ const bindingFromVariable = (
   ) {
     return null;
   }
-  const loaded = dynamicModuleSource(node.init, context);
+  const loaded = dynamicModuleSourceForEnforcement(node.init, context);
   const init =
     loaded === null
-      ? resolveImportedExpression(context, node.init, seen)
+      ? resolveImportedExpressionForEnforcement(context, node.init, seen)
       : { source: loaded, imported: NAMESPACE_IMPORT };
   if (init === null) {
     return null;
@@ -770,9 +768,10 @@ const bindingFromVariable = (
   return null;
 };
 
+// Enforcement provenance; recognizing a binding never grants an exemption.
 // The module export an expression evaluates to, or null when it is anything
 // else: a local, a parameter, a call result, an unresolved global.
-export const resolveImportedExpression = (
+export const resolveImportedExpressionForEnforcement = (
   context: ScopeContext,
   node: unknown,
   seen = new Set<unknown>(),
@@ -789,10 +788,17 @@ export const resolveImportedExpression = (
       : bindingFromVariable(context, variable, seen);
   }
   if (expression.type === "MemberExpression") {
-    const loaded = dynamicModuleSource(expression.object, context);
+    const loaded = dynamicModuleSourceForEnforcement(
+      expression.object,
+      context,
+    );
     const base =
       loaded === null
-        ? resolveImportedExpression(context, expression.object, seen)
+        ? resolveImportedExpressionForEnforcement(
+            context,
+            expression.object,
+            seen,
+          )
         : { source: loaded, imported: NAMESPACE_IMPORT };
     return memberOfNamespace(base, memberPropertyName(expression));
   }
@@ -817,7 +823,7 @@ export const resolveImport = (
   context: ScopeContext & FilenameContext,
   node: unknown,
 ): ResolvedImport | null => {
-  const binding = resolveImportedExpression(context, node);
+  const binding = resolveImportedExpressionForEnforcement(context, node);
   if (binding === null) {
     return null;
   }

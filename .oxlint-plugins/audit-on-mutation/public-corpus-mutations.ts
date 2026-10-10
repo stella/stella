@@ -5,9 +5,8 @@ import {
   isAstNode,
   isIdentifierReference,
   isIdentifier,
-  isImportedFrom,
   memberPropertyName,
-  resolveImportedExpression,
+  resolveImportedExpressionForEnforcement,
   exactModuleId,
   repoRelativeFilename,
   resolveVariable,
@@ -72,11 +71,18 @@ const hasProvenImportShape = ({
   }
 };
 
+// Admission requires the allowlisted shape and single-use local references,
+// even when enforcement can identify broader module provenance.
+const resolveImportedExpressionForAdmission = (
+  context: Context,
+  node: unknown,
+) =>
+  hasProvenImportShape({ context, node })
+    ? resolveImportedExpressionForEnforcement(context, node)
+    : null;
+
 const tableFor = ({ context, node, tables }: MutationArgs) => {
-  if (!hasProvenImportShape({ context, node })) {
-    return undefined;
-  }
-  const binding = resolveImportedExpression(context, node);
+  const binding = resolveImportedExpressionForAdmission(context, node);
   const imported =
     binding === null
       ? null
@@ -174,15 +180,14 @@ const staticSql = ({ context, node }: StaticSqlArgs): string | null => {
   if (isIdentifierReference(expression)) {
     expression = singleUseInitializer(context, expression);
   }
+  const tag =
+    expression?.type === "TaggedTemplateExpression"
+      ? resolveImportedExpressionForAdmission(context, expression.tag)
+      : null;
   if (
     expression?.type !== "TaggedTemplateExpression" ||
-    !hasProvenImportShape({ context, node: expression.tag }) ||
-    !isImportedFrom({
-      context,
-      node: expression.tag,
-      modules: ["drizzle-orm"],
-      names: new Set(["sql"]),
-    }) ||
+    tag?.source !== "drizzle-orm" ||
+    tag.imported !== "sql" ||
     !isAstNode(expression.quasi) ||
     !Array.isArray(expression.quasi.expressions) ||
     expression.quasi.expressions.length !== 0 ||
