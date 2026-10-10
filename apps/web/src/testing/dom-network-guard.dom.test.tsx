@@ -3,7 +3,7 @@ import { afterAll, describe, expect, test } from "bun:test";
 import http from "node:http";
 import https from "node:https";
 
-import { takeRefusedRequests } from "@/test-setup";
+import { takeRefusedRequests } from "@/testing/dom-network-guard";
 
 // Read before any DOM exists: these are the functions the guard must hand
 // back when the DOM goes away.

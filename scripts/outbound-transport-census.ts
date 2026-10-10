@@ -829,7 +829,7 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["global:fetch"],
   },
   {
-    path: "apps/web/src/test-setup.ts",
+    path: "apps/web/src/testing/dom-network-guard.ts",
     class: "package-owned-client",
     reason:
       "Replaces the HTTP client's request functions in DOM tests so unmocked requests are refused; it sends none.",
