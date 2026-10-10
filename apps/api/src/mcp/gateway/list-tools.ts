@@ -185,7 +185,9 @@ export const listGatewayMcpToolDefinitions = async ({
   ) {
     for (const tool of await listGatewayExternalMcpTools({
       context,
-      dependencies: externalGatewayDependencies,
+      ...(externalGatewayDependencies === undefined
+        ? {}
+        : { dependencies: externalGatewayDependencies }),
     })) {
       definitions.push(externalToolDefinition(tool));
     }
@@ -261,7 +263,9 @@ export const getGatewayMcpToolDefinition = async ({
     const externalTool = await resolveGatewayExternalMcpTool({
       context,
       toolName,
-      dependencies: externalGatewayDependencies,
+      ...(externalGatewayDependencies === undefined
+        ? {}
+        : { dependencies: externalGatewayDependencies }),
     });
     return externalTool === null
       ? undefined
