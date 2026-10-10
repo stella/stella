@@ -4,7 +4,7 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 import { sleep } from "@stll/concurrency/sleep";
 
 import { toSafeId } from "@/lib/safe-id";
-import type { ProvisionPreviewData } from "@/lib/statutes/provision-preview";
+import type { provisionPreviewOptions } from "@/lib/statutes/provision-preview";
 
 import { provision } from "./provisions-cited.fixture";
 
@@ -13,6 +13,12 @@ const { act, cleanup, fireEvent, render, screen, waitFor } =
   await import("@testing-library/react");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
+const {
+  RouterContextProvider,
+  createRouter,
+  createRootRoute,
+  createMemoryHistory,
+} = await import("@tanstack/react-router");
 const { IntlProvider } = await import("use-intl");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { TooltipProvider } = await import("@stll/ui/tooltip");
@@ -106,18 +112,25 @@ const mount = (items: ReturnType<typeof provision>[], resolveTitle = false) => {
     ] satisfies ResolvedWorks;
     client.setQueryData(statutesResolveOptions([work]).queryKey, resolved);
   }
+  const appRouter = createRouter({
+    routeTree: createRootRoute(),
+    history: createMemoryHistory({ initialEntries: ["/law"] }),
+    isServer: false,
+  });
   const ui = render(
     <QueryClientProvider client={client}>
       <IntlProvider locale="en" messages={messages} timeZone="UTC">
         <FormattingProvider locale="en" timeZone="UTC">
-          <TooltipProvider>
-            <ProvisionsCited
-              decisionDate="2024-01-01"
-              decisionId={decisionId}
-              expanded
-              isHydrated
-            />
-          </TooltipProvider>
+          <RouterContextProvider router={appRouter}>
+            <TooltipProvider>
+              <ProvisionsCited
+                decisionDate="2024-01-01"
+                decisionId={decisionId}
+                expanded
+                isHydrated
+              />
+            </TooltipProvider>
+          </RouterContextProvider>
         </FormattingProvider>
       </IntlProvider>
     </QueryClientProvider>,
@@ -300,7 +313,6 @@ test("a resolved provision fetches wording on focus and retries into a valid sta
         throw new Error("temporary preview failure");
       }
       const preview = {
-        key: "preview-s1",
         documentId: toSafeId<"legislationDocument">(
           "00000000-0000-4000-8000-000000000003",
         ),
@@ -316,8 +328,11 @@ test("a resolved provision fetches wording on focus and retries into a valid sta
             text: "Wording of section one",
           },
         ],
-        truncated: false,
-      } satisfies ProvisionPreviewData;
+      } satisfies Awaited<
+        ReturnType<
+          NonNullable<ReturnType<typeof provisionPreviewOptions>["queryFn"]>
+        >
+      >;
       return Response.json(preview);
     },
     { preconnect: originalFetch.preconnect },

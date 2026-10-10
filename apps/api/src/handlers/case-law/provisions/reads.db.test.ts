@@ -306,7 +306,7 @@ const readCitingDecisions = async ({
       ...(year === undefined ? {} : { year }),
       ...(work === undefined ? {} : { work }),
     },
-    { caseLawDb, courtRegistry: null },
+    { caseLawDb, courtRegistry: new Map() },
   );
 
 /** Defaults to the display citation, the key a decision's own text states. */
@@ -372,6 +372,21 @@ test("citing decisions group mentions and order by decision date, newest first",
   expect(page.items.map((item) => item.decisionId)).not.toContain(
     closedDecisionId,
   );
+});
+
+test("an unavailable court registry preserves citing decisions without court badges", async () => {
+  const page = await listCitingDecisionsHandler(
+    { jurisdiction: JURISDICTION, work: WORK, limit: 10 },
+    { caseLawDb, courtRegistry: null },
+  );
+  if (!("items" in page)) {
+    panic("Expected citing decisions when the court registry is unavailable");
+  }
+  expect(page.items.map((item) => item.caseNumber)).toEqual(["low", "high"]);
+  for (const item of page.items) {
+    expect(item.courtAbbreviation).toBeNull();
+    expect(item.courtTier).toBe("other");
+  }
 });
 
 test("a tombstoned decision keeps its citation edge without its excerpt", async () => {

@@ -38,7 +38,7 @@ export const CitingDecisionItem = ({
     switch (decision.versionBasis.type) {
       case "inferred":
         return (
-          decision.inferredVersionCandidate?.versionValidFrom ??
+          decision.inferredVersionCandidate.versionValidFrom ??
           decision.versionValidFrom
         );
       case "not_stated":

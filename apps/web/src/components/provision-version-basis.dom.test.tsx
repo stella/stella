@@ -1,6 +1,7 @@
 import type { ComponentProps } from "react";
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { panic } from "better-result";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import {
@@ -301,7 +302,14 @@ for (const [locale, messages] of [
         </QueryClientProvider>,
       );
       const chip = ui.getByRole("button", { name: reference });
-      expect(chip.getAttribute("href")).toBe(readerUrl);
+      const href = chip.getAttribute("href");
+      expect(href).not.toBeNull();
+      if (href === null) {
+        panic("Missing decision reader link");
+      }
+      const target = new URL(href);
+      expect(`${target.origin}${target.pathname}`).toBe(readerUrl);
+      expect(target.searchParams.get("q")).toBe(decision.sentenceText);
       expect(chip.textContent).not.toContain(label);
       const citingBasis = ui.getByText(
         (_, element) =>

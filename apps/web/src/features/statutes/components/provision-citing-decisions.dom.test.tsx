@@ -4,6 +4,7 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 import { PROVISION_CITING_SNAPSHOT_LIMIT } from "@stll/api-contract/provision-citing-decisions";
 import { DECISION_DATE_VERSION_BASIS } from "@stll/api-contract/provision-version-basis";
 import { sleep } from "@stll/concurrency/sleep";
+import type { UiLocale } from "@stll/locales";
 
 import { readProvisionCitingSearch } from "@/features/statutes/statute-page-search";
 import type { ProvisionCitingSearch } from "@/features/statutes/statute-page-search";
@@ -116,7 +117,7 @@ const mount = async ({
   onFiltersChange = () => undefined,
 }: {
   client: InstanceType<typeof QueryClient>;
-  locale?: string;
+  locale?: UiLocale;
   messages?: typeof en;
   filters?: ProvisionCitingSearch;
   onFiltersChange?: (filters: ProvisionCitingSearch) => void;
@@ -230,7 +231,9 @@ for (const [locale, messages] of [
       client,
       locale,
       messages,
-      onFiltersChange: (nextFilters) => changes.push(nextFilters),
+      onFiltersChange: (nextFilters) => {
+        changes.push(nextFilters);
+      },
     });
 
     expect(ui.getAllByRole("button", { name: /1 C 11\/2020/u })).toHaveLength(
@@ -292,7 +295,7 @@ for (const [locale, messages] of [
     const capNotice = ui.getByText(
       (_, element) =>
         element?.tagName === "P" &&
-        element.textContent?.includes(localizedCount) === true &&
+        element.textContent.includes(localizedCount) &&
         element.textContent.includes(localizedLimit),
     );
 
