@@ -211,6 +211,10 @@ import {
   readAuthorizedMemberRole,
   sessionMemberRole,
 } from "@/api/lib/permission-authorization";
+import {
+  AUTH_REQUEST_IP_RULE_OVERRIDES,
+  createAuthRequestBudgetMiddleware,
+} from "@/api/lib/rate-limit/auth-request-budget";
 import { createAuthRateLimitStorage } from "@/api/lib/rate-limit/auth-storage";
 import {
   createAccountAttemptBudget,
@@ -1022,7 +1026,24 @@ const authRefusalLogPlugin = {
 // database adapter, which accesses `rootDb`. Deferring to
 // first use prevents the TDZ error when the test runner
 // evaluates this module before db/index.ts finishes.
-export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
+type CreateAuthOptions = {
+  rateLimitStorage?: ReturnType<typeof createAuthRateLimitStorage>;
+  rateLimitEnabled?: boolean;
+};
+
+export const createAuth = (
+  roleAssignmentPolicy = assignableRoles,
+  factoryOptions: CreateAuthOptions = {},
+) => {
+  const authRateLimitStorage =
+    factoryOptions.rateLimitStorage ?? createAuthRateLimitStorage();
+  const rateLimitEnabled =
+    factoryOptions.rateLimitEnabled ?? !env.E2E_DISABLE_AUTH_RATE_LIMIT;
+  const signInRequestBudget = createAuthRequestBudgetMiddleware({
+    type: "authentication",
+    storage: authRateLimitStorage,
+    enabled: rateLimitEnabled,
+  });
   const sessionLifetime = createSessionLifetime({
     store: createDatabaseSessionLifetimeStore(rootDb, {
       expiresIn: SESSION_LIFETIME_SECONDS,
@@ -1692,15 +1713,13 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
       useSecureCookies,
     },
     rateLimit: {
-      enabled: !env.E2E_DISABLE_AUTH_RATE_LIMIT,
+      enabled: rateLimitEnabled,
       window: AUTH_RATE_LIMITS.global.window,
       max: AUTH_RATE_LIMITS.global.max,
-      customStorage: createAuthRateLimitStorage(),
+      customStorage: authRateLimitStorage,
       customRules: {
-        "/sign-in/email-otp": AUTH_RATE_LIMITS.signIn,
-        "/sign-in/email": AUTH_RATE_LIMITS.signIn,
+        ...AUTH_REQUEST_IP_RULE_OVERRIDES,
         "/sign-up/email": AUTH_RATE_LIMITS.signUp,
-        "/email-otp/send-verification-otp": AUTH_RATE_LIMITS.sendOtp,
         "/email-otp/verify-email": AUTH_RATE_LIMITS.verifyOtp,
         "/forget-password": AUTH_RATE_LIMITS.forgetPassword,
         "/reset-password": AUTH_RATE_LIMITS.resetPassword,
@@ -1815,7 +1834,7 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
       createSessionBearer(),
       createDemoSessionFilter(demoConfig),
       createOtpAccountLimitPlugin({
-        enabled: !env.E2E_DISABLE_AUTH_RATE_LIMIT,
+        enabled: rateLimitEnabled,
         context: new RedisRateLimitContext({
           failurePolicy: "fail_open_local",
         }),
@@ -1824,7 +1843,7 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
       createReviewAccountPlugin({
         config: reviewConfig,
         localPasswordEnabled: isSelfhostLocalPasswordAuthEnabled(),
-        signInBudget: env.E2E_DISABLE_AUTH_RATE_LIMIT
+        signInBudget: !rateLimitEnabled
           ? undefined
           : createAccountAttemptBudget(
               new RedisRateLimitContext({ failurePolicy: "fail_open_local" }),
@@ -1943,7 +1962,11 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
           clientRegistrationAllowedResources: oauthResourceIdentifiers,
           allowDynamicClientRegistration: true,
           allowUnauthenticatedClientRegistration: true,
-          rateLimit: { register: AUTH_RATE_LIMITS.oauthClientRegistration },
+          rateLimit: {
+            token: AUTH_RATE_LIMITS.oauthToken,
+            authorize: AUTH_RATE_LIMITS.oauthAuthorization,
+            register: AUTH_RATE_LIMITS.oauthClientRegistration,
+          },
           // Hosted MCP clients identify themselves by an https URL `client_id`
           // and skip per-user registration entirely. The transport resolves the
           // host once, refuses any non-public-routable answer, pins that address
@@ -2065,6 +2088,10 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
           },
         },
         {
+          requestBudget: {
+            storage: authRateLimitStorage,
+            enabled: rateLimitEnabled,
+          },
           verifiedOrigins: getVerifiedOAuthOrigins([
             env.FRONTEND_URL,
             getAuthIssuerUrl(),
@@ -2078,6 +2105,7 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
     ],
     hooks: {
       before: createAuthMiddleware(async (ctx) => {
+        await signInRequestBudget(ctx);
         sessionLifetime.prepare(ctx.context);
         if (!ctx.path) {
           return undefined;
@@ -2267,6 +2295,15 @@ export const getAuth = () => {
   }
   _auth = createAuth();
   return _auth;
+};
+
+/** Read the rate-limit subject at the session validation boundary. */
+export const resolveRateLimitSessionUserId = async (headers: Headers) => {
+  const session = await getAuth().api.getSession({
+    headers,
+    query: { disableCookieCache: true, disableRefresh: true },
+  });
+  return session ? toSafeId<"user">(session.user.id) : null;
 };
 
 export type { MemberRole } from "@/api/lib/member-roles";

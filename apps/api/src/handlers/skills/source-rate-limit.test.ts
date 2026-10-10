@@ -1,9 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
+import { toSafeId } from "@/api/lib/branded-types";
+import { API_RATE_LIMITS } from "@/api/lib/limits";
 import { RedisRateLimitContext } from "@/api/lib/rate-limit/redis-context";
 
 import {
   consumeSkillSourceRateLimit,
+  createSkillSourceRateLimitGenerator,
   isSkillSourceRateLimitedRequest,
 } from "./source-rate-limit";
 
@@ -81,4 +84,69 @@ describe("skill source rate-limit routing", () => {
       context.kill();
     }
   });
+});
+
+test("verified skill-source callers share REST and MCP quotas across addresses", async () => {
+  const context = new RedisRateLimitContext({
+    createRedis: () => ({
+      send: async () => {
+        throw new Error("redis disabled in test");
+      },
+    }),
+    failurePolicy: "fail_open_local",
+    onRedisError: () => undefined,
+  });
+  const userId = toSafeId<"user">("user-a");
+  const generator = createSkillSourceRateLimitGenerator(async () => userId);
+  const req = new Request("https://stella.example/v1/skills/discover-url");
+  const restKey = await generator(req, {
+    requestIP: () => ({ address: "192.0.2.1" }),
+  });
+  expect(restKey).toBe("skill-source:user:user-a");
+  expect(
+    await generator(req, { requestIP: () => ({ address: "192.0.2.2" }) }),
+  ).toBe(restKey);
+  try {
+    for (let index = 0; index < API_RATE_LIMITS.skillSource.max; index += 1) {
+      expect(
+        (
+          await consumeSkillSourceRateLimit({
+            clientIp: "192.0.2.1",
+            context,
+            userId,
+          })
+        ).ok,
+      ).toBe(true);
+    }
+    expect(
+      (
+        await consumeSkillSourceRateLimit({
+          clientIp: "192.0.2.2",
+          context,
+          userId,
+        })
+      ).ok,
+    ).toBe(false);
+    expect(
+      (
+        await consumeSkillSourceRateLimit({
+          clientIp: "192.0.2.1",
+          context,
+          userId: toSafeId<"user">("user-b"),
+        })
+      ).ok,
+    ).toBe(true);
+  } finally {
+    context.kill();
+  }
+});
+
+test("unverified REST source callers retain the address fallback", async () => {
+  const generator = createSkillSourceRateLimitGenerator(async () => null);
+  expect(
+    await generator(
+      new Request("https://stella.example/v1/skills/import-url"),
+      { requestIP: () => ({ address: "192.0.2.1" }) },
+    ),
+  ).toBe("skill-source:192.0.2.1");
 });

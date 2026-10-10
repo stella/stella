@@ -5,6 +5,7 @@ import { sha256Hex as legacyHex } from "@stll/sha256/node";
 
 import { createMcpRoute } from "@/api/handlers/mcp/routes-core";
 import {
+  createMcpAuthenticationFailureLimiter,
   isMcpTransportRateLimitedRequest,
   MCP_RATE_LIMIT_JSON_RPC_ERROR,
   MCP_TRANSPORT_ADDRESS_RATE_LIMIT_POLICY,
@@ -63,14 +64,6 @@ const createLimitedApp = ({
   new Elysia()
     .use(
       rateLimit({
-        ...MCP_TRANSPORT_ADDRESS_RATE_LIMIT_POLICY,
-        context: new InMemoryRateLimitContext(),
-        generator: mcpTransportAddressRateLimitKey,
-        max: addressMax,
-      }),
-    )
-    .use(
-      rateLimit({
         ...MCP_TRANSPORT_RATE_LIMIT_POLICY,
         context: new InMemoryRateLimitContext(),
         generator: mcpTransportRateLimitKey,
@@ -79,7 +72,23 @@ const createLimitedApp = ({
     )
     .use(
       createMcpRoute({
-        handleMcpHttpRequest: async () => new Response("transport reached"),
+        handleMcpHttpRequest: async (request) =>
+          new Response("transport reached", {
+            status:
+              request.headers
+                .get("authorization")
+                ?.includes("stella_at_invented_") ||
+              !request.headers.has("authorization")
+                ? 401
+                : 200,
+            headers: { "WWW-Authenticate": 'Bearer realm="mcp"' },
+          }),
+        limitAuthenticationFailure: createMcpAuthenticationFailureLimiter({
+          ...MCP_TRANSPORT_ADDRESS_RATE_LIMIT_POLICY,
+          context: new InMemoryRateLimitContext(),
+          generator: mcpTransportAddressRateLimitKey,
+          max: addressMax,
+        }),
       }),
     );
 
@@ -213,9 +222,32 @@ describe("MCP transport rate limit", () => {
       responses.push(response.status);
     }
 
-    // Each invented credential is a fresh credential bucket; the address
-    // bucket (one peer under `handle`) still refuses the third call.
-    expect(responses).toEqual([200, 200, 429]);
+    // Distinct invalid credentials remain in the shared anonymous address budget.
+    expect(responses).toEqual([401, 401, 429]);
+  });
+
+  test("accepted credentials do not consume the shared anonymous address budget", async () => {
+    const app = createLimitedApp({ max: 1, addressMax: 1 });
+    for (const path of [
+      MCP_HTTP_PATH,
+      MCP_ANONYMIZED_HTTP_PATH,
+      MCP_DOCUMENTS_HTTP_PATH,
+      MCP_LAW_HTTP_PATH,
+    ]) {
+      expect(
+        (await app.handle(transportRequest({ path, token: `valid_${path}` })))
+          .status,
+      ).toBe(200);
+    }
+    expect((await app.handle(transportRequest())).status).toBe(401);
+    const limited = await app.handle(
+      transportRequest({ token: "stella_at_invented_1" }),
+    );
+    expect(limited.status).toBe(429);
+    expect(limited.headers.get("WWW-Authenticate")).toBe('Bearer realm="mcp"');
+    expect((await app.handle(transportRequest({ token: TOKEN }))).status).toBe(
+      200,
+    );
   });
 
   test("gives each credential its own bucket", async () => {

@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   AUTH_CLIENT_ADDRESS_HEADER,
   CLIENT_ADDRESS_SOURCE,
+  clientAddressConfigurationWarning,
   FRONTEND_ADDRESS_HEADER,
   FRONTEND_VERIFY_HEADER,
   isTrustedProxy,
@@ -267,8 +268,11 @@ describe("resolveSignupRateLimitClientIp", () => {
 describe("edge client address", () => {
   const EDGE_HEADER = "cloudfront-viewer-address";
   const trusted = parseTrustedProxies("10.0.0.0/8");
+  const ORIGIN = "edge-origin-test-value";
   const request = (headers: Record<string, string> = {}) =>
-    new Request("https://example/test", { headers });
+    new Request("https://example/test", {
+      headers: { [ORIGIN_VERIFY_HEADER]: ORIGIN, ...headers },
+    });
 
   test("parses the address and drops the port", () => {
     expect(parseEdgeClientAddress("203.0.113.7:46532")).toBe("203.0.113.7");
@@ -301,7 +305,7 @@ describe("edge client address", () => {
           "x-forwarded-for": "198.51.100.1",
         }),
         fakeServer("10.0.0.5"),
-        { trusted, edgeHeader: EDGE_HEADER },
+        { trusted, edgeHeader: EDGE_HEADER, originSecrets: [ORIGIN] },
       ),
     ).toEqual({
       address: "203.0.113.7",
@@ -314,7 +318,7 @@ describe("edge client address", () => {
       resolveClientAddress(
         request({ [EDGE_HEADER]: "203.0.113.7:443" }),
         fakeServer("198.51.100.9"),
-        { trusted, edgeHeader: EDGE_HEADER },
+        { trusted, edgeHeader: EDGE_HEADER, originSecrets: [ORIGIN] },
       ),
     ).toEqual({
       address: "198.51.100.9",
@@ -337,7 +341,7 @@ describe("edge client address", () => {
       resolveClientAddress(
         request({ "x-forwarded-for": "203.0.113.7" }),
         fakeServer("10.0.0.5"),
-        { trusted, edgeHeader: EDGE_HEADER },
+        { trusted, edgeHeader: EDGE_HEADER, originSecrets: [ORIGIN] },
       ),
     ).toEqual({
       address: "203.0.113.7",
@@ -353,7 +357,7 @@ describe("edge client address", () => {
           "x-forwarded-for": forwardedFor,
         }),
         fakeServer("10.0.0.5"),
-        { trusted, edgeHeader: EDGE_HEADER },
+        { trusted, edgeHeader: EDGE_HEADER, originSecrets: [ORIGIN] },
       );
 
     expect(resolve("198.51.100.1")).toBe("203.0.113.7");
@@ -369,6 +373,7 @@ describe("edge client address", () => {
           source: SIGNUP_RATE_LIMIT_IP_SOURCE.trustedProxy,
           trusted,
           edgeHeader: EDGE_HEADER,
+          originSecrets: [ORIGIN],
         },
       ),
     ).toBe("203.0.113.7");
@@ -417,6 +422,7 @@ describe("rate limit address normalization", () => {
         request: new Request("https://example.test/", {
           headers: {
             "viewer-address": "[2001:0DB8:abcd:1234::9]:443",
+            [ORIGIN_VERIFY_HEADER]: "rate-limit-origin-value",
             "x-forwarded-for": "198.51.100.1",
           },
         }),
@@ -424,6 +430,7 @@ describe("rate limit address normalization", () => {
         clientAddressOptions: {
           trusted: parseTrustedProxies("10.0.0.0/8"),
           edgeHeader: "viewer-address",
+          originSecrets: ["rate-limit-origin-value"],
         },
       }),
     ).toBe("2001:db8:abcd:1234::");
@@ -687,5 +694,218 @@ describe("frontend edge address", () => {
     expect(sealed.headers.get(FRONTEND_ADDRESS_HEADER)).toBeNull();
     expect(sealed.headers.get(ORIGIN_VERIFY_HEADER)).toBeNull();
     expect(resolveClientAddress(sealed, fakeServer(PEER))).toEqual(address);
+  });
+});
+
+describe("viewer address proof boundary", () => {
+  const trusted = parseTrustedProxies("10.0.0.0/8");
+  const edgeHeader = "cloudfront-viewer-address";
+  const origin = "viewer-proof-test-value";
+
+  test("uses verified IPv4 and IPv6 viewer addresses only from a trusted peer", () => {
+    for (const [viewer, address] of [
+      ["203.0.113.5:443", "203.0.113.5"],
+      ["[2001:db8::1]:443", "2001:db8::1"],
+    ] as const) {
+      const request = new Request("https://example.test/mcp", {
+        headers: {
+          [edgeHeader]: viewer,
+          [ORIGIN_VERIFY_HEADER]: origin,
+          "x-forwarded-for": "192.0.2.99, 198.51.100.1",
+        },
+      });
+      const options = { trusted, edgeHeader, originSecrets: [origin] };
+      expect(
+        resolveClientAddress(request, fakeServer("10.0.0.5"), options),
+      ).toEqual({ address, source: CLIENT_ADDRESS_SOURCE.edgeHeader });
+      expect(
+        resolveClientAddress(request, fakeServer("198.51.100.10"), options),
+      ).toEqual({
+        address: "198.51.100.10",
+        source: CLIENT_ADDRESS_SOURCE.peer,
+      });
+    }
+  });
+
+  test("forged viewer and first forwarded values never select the viewer without origin proof", () => {
+    for (const claimed of ["203.0.113.5", "198.51.100.77", "2001:db8::1"]) {
+      for (const originSecrets of [[], [origin]]) {
+        const request = new Request("https://example.test/mcp", {
+          headers: {
+            [edgeHeader]: "203.0.113.5:443",
+            "x-forwarded-for": `${claimed}, 198.51.100.1`,
+          },
+        });
+        expect(
+          resolveClientAddress(request, fakeServer("10.0.0.5"), {
+            trusted,
+            edgeHeader,
+            originSecrets,
+            nodeEnv: "production",
+            selfhostLocalPasswordAuth: false,
+          }),
+        ).toEqual({
+          address: "198.51.100.1",
+          source: CLIENT_ADDRESS_SOURCE.forwardedFor,
+        });
+      }
+    }
+  });
+
+  test("trusted development and stock self-host peers may omit origin verification", () => {
+    for (const mode of [
+      { nodeEnv: "development", selfhostLocalPasswordAuth: false },
+      { nodeEnv: "test", selfhostLocalPasswordAuth: false },
+      { nodeEnv: "production", selfhostLocalPasswordAuth: true },
+    ] as const) {
+      const request = new Request("https://example.test/mcp", {
+        headers: { [edgeHeader]: "203.0.113.5:443" },
+      });
+      expect(
+        resolveClientAddress(request, fakeServer("10.0.0.5"), {
+          trusted,
+          edgeHeader,
+          originSecrets: [],
+          ...mode,
+        }),
+      ).toEqual({
+        address: "203.0.113.5",
+        source: CLIENT_ADDRESS_SOURCE.edgeHeader,
+      });
+      expect(
+        resolveClientAddress(request, fakeServer("198.51.100.10"), {
+          trusted,
+          edgeHeader,
+          originSecrets: [],
+          ...mode,
+        }),
+      ).toEqual({
+        address: "198.51.100.10",
+        source: CLIENT_ADDRESS_SOURCE.peer,
+      });
+      for (const originValue of [null, "wrong-origin-value"]) {
+        const unverifiedRequest = new Request("https://example.test/mcp", {
+          headers: {
+            [edgeHeader]: "203.0.113.5:443",
+            "x-forwarded-for": "198.51.100.1",
+            ...(originValue === null
+              ? {}
+              : { [ORIGIN_VERIFY_HEADER]: originValue }),
+          },
+        });
+        expect(
+          resolveClientAddress(unverifiedRequest, fakeServer("10.0.0.5"), {
+            trusted,
+            edgeHeader,
+            originSecrets: [origin],
+            ...mode,
+          }),
+        ).toEqual({
+          address: "198.51.100.1",
+          source: CLIENT_ADDRESS_SOURCE.forwardedFor,
+        });
+      }
+    }
+  });
+
+  test("hosted production rejects wrong configured origin values", () => {
+    for (const value of ["wrong-origin-value", `${origin}x`]) {
+      const request = new Request("https://example.test/mcp", {
+        headers: {
+          [edgeHeader]: "203.0.113.5:443",
+          [ORIGIN_VERIFY_HEADER]: value,
+          "x-forwarded-for": "192.0.2.99, 198.51.100.1",
+        },
+      });
+      expect(
+        resolveClientAddress(request, fakeServer("10.0.0.5"), {
+          trusted,
+          edgeHeader,
+          originSecrets: [origin],
+          nodeEnv: "production",
+          selfhostLocalPasswordAuth: false,
+        }),
+      ).toEqual({
+        address: "198.51.100.1",
+        source: CLIENT_ADDRESS_SOURCE.forwardedFor,
+      });
+    }
+  });
+
+  test("reads the leftmost viewer only when every later hop is trusted", () => {
+    for (const claimed of ["203.0.113.5", "198.51.100.77", "2001:db8::1"]) {
+      for (const suffix of ["", ", 10.2.3.4", ", 10.2.3.4, 10.3.4.5"]) {
+        const request = new Request("https://example.test/mcp", {
+          headers: { "x-forwarded-for": `${claimed}${suffix}` },
+        });
+        expect(
+          resolveClientAddress(request, fakeServer("10.0.0.5"), {
+            trusted,
+            edgeHeader: null,
+          }),
+        ).toEqual({
+          address: claimed,
+          source: CLIENT_ADDRESS_SOURCE.forwardedFor,
+        });
+      }
+      const request = new Request("https://example.test/mcp", {
+        headers: { "x-forwarded-for": `${claimed}, 198.51.100.1, 10.3.4.5` },
+      });
+      expect(
+        resolveClientAddress(request, fakeServer("10.0.0.5"), {
+          trusted,
+          edgeHeader: null,
+        }),
+      ).toEqual({
+        address: "198.51.100.1",
+        source: CLIENT_ADDRESS_SOURCE.forwardedFor,
+      });
+    }
+  });
+});
+
+describe("viewer address configuration warning", () => {
+  test("warns in production until one complete verified header pair is configured", () => {
+    for (const config of [
+      {},
+      { edgeHeader: "cloudfront-viewer-address" },
+      { originVerifySecret: "origin-value" },
+      { edgeHeader: "cloudfront-viewer-address", originVerifySecret: " , " },
+      { frontendVerifySecret: " , " },
+      {
+        edgeHeader: "cloudfront-viewer-address",
+        frontendVerifySecret: "frontend-value",
+      },
+    ]) {
+      expect(
+        clientAddressConfigurationWarning({ nodeEnv: "production", ...config }),
+      ).toBe("client_ip.viewer_address_unconfigured");
+    }
+    for (const config of [
+      {
+        edgeHeader: "cloudfront-viewer-address",
+        originVerifySecret: "origin-value",
+      },
+      { frontendVerifySecret: "frontend-value" },
+    ]) {
+      expect(
+        clientAddressConfigurationWarning({ nodeEnv: "production", ...config }),
+      ).toBeNull();
+    }
+    expect(
+      clientAddressConfigurationWarning({
+        nodeEnv: "production",
+        selfhostLocalPasswordAuth: true,
+        edgeHeader: "cloudfront-viewer-address",
+      }),
+    ).toBeNull();
+    for (const nodeEnv of [
+      "development",
+      "test",
+      "staging",
+      "unset",
+    ] as const) {
+      expect(clientAddressConfigurationWarning({ nodeEnv })).toBeNull();
+    }
   });
 });

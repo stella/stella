@@ -75,10 +75,7 @@ import { handleMcpAppSandboxRequest } from "@/api/handlers/mcp-app-sandbox/route
 import { mcpConnectorsRoute } from "@/api/handlers/mcp-connectors/routes";
 import { mcpRoute } from "@/api/handlers/mcp/routes";
 import { handleMcpPreflightRequest } from "@/api/handlers/mcp/routes-core";
-import {
-  createMcpTransportAddressRateLimitOptions,
-  createMcpTransportRateLimitOptions,
-} from "@/api/handlers/mcp/transport-rate-limit";
+import { createMcpTransportRateLimitOptions } from "@/api/handlers/mcp/transport-rate-limit";
 import { meRoute } from "@/api/handlers/me/routes";
 import { memoriesRoute } from "@/api/handlers/memories/routes";
 import { notificationsRoute } from "@/api/handlers/notifications/routes";
@@ -140,6 +137,7 @@ import {
 } from "@/api/lib/browser-origin-guard";
 import { startManagedProviderChecks } from "@/api/lib/chat/managed-provider-checks";
 import {
+  clientAddressConfigurationWarning,
   resolveClientAddress,
   resolveSignupRateLimitClientIp,
   sealEdgeHeaders,
@@ -210,7 +208,11 @@ import { startSse, stopSse } from "@/api/lib/sse";
 import { clearByokAdapterCache } from "@/api/lib/tanstack-ai-models";
 import { isUploadRateLimitedPath } from "@/api/lib/upload-rate-limit";
 import { flushActionCostRecords } from "@/api/lib/usage/action-costs/recorder";
-import { isLocalDevOpen, runtimeMode } from "@/api/runtime-mode";
+import {
+  isLocalDevOpen,
+  runtimeMode,
+  runtimeNodeEnv,
+} from "@/api/runtime-mode";
 import { startConfiguredScheduler } from "@/api/server-scheduled-jobs";
 import {
   API_SHUTDOWN_OUTCOME,
@@ -457,11 +459,9 @@ const api = new Elysia()
   .use(
     // The MCP transport paths sit at the root, outside the shared `/v1`
     // budget, and one agent loop can otherwise issue unbounded JSON-RPC calls.
-    // The address budget runs first so rotating bearer values cannot dodge
-    // the credential budget. Each limiter's own `skip` keeps discovery and
-    // preflight unmetered.
+    // Accepted credentials have independent buckets. Authentication failures
+    // consume the route-owned address budget; discovery and preflight are unmetered.
     new Elysia()
-      .use(rateLimit(createMcpTransportAddressRateLimitOptions()))
       .use(rateLimit(createMcpTransportRateLimitOptions()))
       .use(mcpRoute),
   )
@@ -711,6 +711,18 @@ const startS3RefreshLoop = () => {
 // schema mirror — must yield the fully constructed `api` without any of
 // these side effects (no DB, no Redis, no listen).
 const startServer = async (): Promise<void> => {
+  const clientAddressWarning = clientAddressConfigurationWarning({
+    nodeEnv: runtimeNodeEnv(),
+    selfhostLocalPasswordAuth: env.SELFHOST_LOCAL_PASSWORD_AUTH,
+    edgeHeader: env.STELLA_CLIENT_ADDRESS_HEADER,
+    originVerifySecret: env.STELLA_ORIGIN_VERIFY_SECRET,
+    frontendVerifySecret: env.STELLA_FRONTEND_VERIFY_SECRET,
+  });
+  if (clientAddressWarning !== null) {
+    logger.warn(clientAddressWarning, {
+      "clientAddress.configurationWarning": 1,
+    });
+  }
   if (envBase.REDIS_URL !== undefined) {
     const { mode } = redisConnectionConfig({
       url: envBase.REDIS_URL,

@@ -1,7 +1,7 @@
 /**
  * Gateway-side rate limit for capability executors. Most capabilities are keyed
  * per (organization, capability id); outbound skill-source capabilities consume
- * the REST routes' shared client-IP budget instead.
+ * the REST routes' shared user budget instead.
  *
  * The generic invoke path bypasses the per-route rate-limit middleware some REST
  * routes install (e.g. `document-translations.runs.create`, `entities.upload`), so it needs its
@@ -137,7 +137,7 @@ export type InvokeRateLimitResult = { ok: boolean; retryAfterSeconds: number };
 
 /**
  * Consume one unit of the applicable invoke budget. Skill-source capabilities
- * share the REST client-IP counter; all others use the (user, organization,
+ * share the REST user counter; all others use the (user, organization,
  * capability) counter. The user belongs in the key: without it one caller's
  * traffic exhausts the window for every other member of the org, which turns a
  * per-caller cost cap into a shared outage. `ok: false` once the window is
@@ -159,12 +159,13 @@ export const consumeInvokeCapabilityRateLimit = async ({
   guards?: FeedbackIntakeGuards;
   consumeSkillSource?: (input: {
     clientIp: string | null;
+    userId: SafeId<"user">;
   }) => Promise<SkillSourceRateLimitResult>;
 }): Promise<InvokeRateLimitResult> => {
   const policy = resolveInvokeRateLimitPolicy(capabilityId);
   switch (policy.budget) {
     case "skill-source":
-      return await consumeSkillSource({ clientIp });
+      return await consumeSkillSource({ clientIp, userId });
     case "capability": {
       const { limit } = policy;
       const ok = await guards.consumeCounter({

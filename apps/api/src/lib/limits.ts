@@ -828,18 +828,17 @@ export const AUTH_RATE_LIMITS = {
   verifyOtp: { window: 60, max: 5 },
   forgetPassword: { window: 60, max: 3 },
   resetPassword: { window: 60, max: 5 },
-  /**
-   * Dynamic client registration (RFC 7591). The OAuth provider defaults this
-   * to 5 per minute, which is below what normal onboarding produces: several
-   * MCP clients register a fresh client on every user connect, some register
-   * twice per attempt, an office behind a single NAT address onboarding a team
-   * lands all of it in one minute, and a hosted registrar such as Microsoft's
-   * Enterprise token store egresses from addresses shared across tenants. A
-   * refused registration is a dead connector before authorization starts, so
-   * 30 covers a team onboarding together while still bounding an
-   * unauthenticated flood from any one address.
-   */
+  /** Verified client-user token exchanges and signed-in authorization requests. */
+  oauthToken: { window: 60, max: 20 },
+  oauthAuthorization: { window: 60, max: 30 },
+  /** Per-user registration; anonymous callbacks share a broader client budget. */
   oauthClientRegistration: { window: 60, max: 30 },
+  /** Shared egress admits 1,200 anonymous authorization/sign-in attempts per minute. */
+  authSharedAddress: { window: 60, max: 1200 },
+  /** One hosted callback can register for up to 300 users per minute. */
+  oauthAnonymousClientRegistration: { window: 60, max: 300 },
+  /** Broad address ceiling for registrations with self-declared client metadata. */
+  oauthAnonymousAddress: { window: 60, max: 3000 },
 } as const;
 
 /**
