@@ -11,6 +11,8 @@ import { compareCodeUnit } from "@stll/collation";
  */
 export const EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS: ReadonlySet<string> =
   new Set([
+    "src/db/entity-feature-gate-maintenance.postgres.test.ts",
+    "src/db/entity-feature-search-budget.postgres.test.ts",
     "src/handlers/case-law/ingestion/background-replay-store.postgres.test.ts",
     "src/handlers/case-law/ingestion/reconciliation-listing-revisions.postgres.test.ts",
     "src/lib/hosted-usage-provider/replay.postgres.test.ts",

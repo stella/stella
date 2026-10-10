@@ -20,10 +20,13 @@ mod desktop_telemetry;
 mod diagnostics;
 #[cfg(test)]
 mod e2e;
+mod foreground_app;
 mod handoff;
 mod http_client;
 mod i18n;
 mod keychain;
+mod local_store;
+mod local_window;
 mod logging;
 mod marker_file;
 mod pdf_signing;

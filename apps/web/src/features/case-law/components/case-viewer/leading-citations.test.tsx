@@ -22,6 +22,8 @@ const decision = {
   caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
   country: "CZ",
   court: "Ústavní soud",
+  courtAbbreviation: "ÚS",
+  sourceUrl: null,
   decisionDate: "2026-01-01",
   decisionType: null,
   ecli: null,

@@ -2,6 +2,7 @@ import { Result, TaggedError } from "better-result";
 import type { PreContext } from "elysia";
 import { timingSafeEqual } from "node:crypto";
 
+import { sha256Bytes as hashSha256Bytes } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import { env } from "@/api/env";
@@ -220,9 +221,7 @@ const matchesConfiguredCanary = ({
     return false;
   }
 
-  const presentedDigest = new Bun.CryptoHasher("sha256")
-    .update(credential)
-    .digest();
+  const presentedDigest = hashSha256Bytes(credential);
   const expectedDigest = Buffer.from(configuredDigest, "hex");
   return timingSafeEqual(presentedDigest, expectedDigest);
 };

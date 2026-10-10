@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { Result, panic, TaggedError } from "better-result";
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import {
   copyFileSync,
   existsSync,
@@ -16,6 +16,7 @@ import {
 import { createServer, Socket } from "node:net";
 import path from "node:path";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import { isSealTrusted, parseSealStatus } from "./agent-evidence";
@@ -260,10 +261,7 @@ const legacyDockerProjectName = (infraOffset: number) =>
     : `${SHARED_DOCKER_PROJECT_BASE}-${String(infraOffset)}`;
 
 const worktreeProjectHash = (worktreePath: string) =>
-  createHash("sha256")
-    .update(worktreePath)
-    .digest("hex")
-    .slice(0, DOCKER_PROJECT_WORKTREE_HASH_LENGTH);
+  hashSha256Hex(worktreePath).slice(0, DOCKER_PROJECT_WORKTREE_HASH_LENGTH);
 
 export const dockerProjectName = ({
   infraOffset,
@@ -1988,7 +1986,9 @@ export const buildPersistentSteps = ({
     ports,
     rootDir,
   });
-  const apiEnv = seeded
+  // Widened to the env map the steps take, so any key reads the same way on
+  // both branches.
+  const apiEnv: NodeJS.ProcessEnv = seeded
     ? {
         ...withSeededStackSearch(configuredApiEnv),
         SCHEDULED_JOBS_MODE: "disabled",
@@ -2054,8 +2054,11 @@ export const buildPersistentSteps = ({
   // Uploads only become searchable, extractable, and readable by AI once the
   // document-processing worker drains their runs; without it every upload
   // stays queued forever. It has no HTTP surface, so it goes after the
-  // readiness-checked steps: checks pair with steps by position.
-  if (modeIncludesApi(mode)) {
+  // readiness-checked steps: checks pair with steps by position. With
+  // background workers disabled (always for a seeded stack, or by the
+  // developer's env) the process would exit at once and the runner would
+  // treat that as a crash, so it is not started.
+  if (modeIncludesApi(mode) && apiEnv["SCHEDULED_JOBS_MODE"] !== "disabled") {
     primary.push({
       cmd: [
         resolveCommandPath("bun"),

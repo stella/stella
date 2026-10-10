@@ -10,6 +10,7 @@ import {
   useOpenSourceDocument,
 } from "@/components/workspaces/list-source";
 import { SourceVerificationAction } from "@/components/workspaces/source-verification-action";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { useCallerFeatureEnabled } from "@/lib/organization/feature-access/access";
 import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
@@ -26,11 +27,17 @@ export const ListItemSources = ({
   itemEntityId,
 }: ListItemSourcesProps) => {
   const t = useTranslations();
+  const user = useAuthenticatedUser();
   const enabled = useCallerFeatureEnabled(CALLER_FEATURE.legalLists);
   const openSourceDocument = useOpenSourceDocument(workspaceId);
   const view = useQueryView(
     useQuery({
-      ...legalListSourcesOptions(workspaceId, listId, itemEntityId),
+      ...legalListSourcesOptions({
+        workspaceId,
+        listId,
+        itemEntityId,
+        viewer: { userId: user.id, organizationId: user.activeOrganizationId },
+      }),
       enabled,
     }),
   );
