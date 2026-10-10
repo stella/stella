@@ -5,33 +5,25 @@ import {
   redirect,
 } from "@tanstack/react-router";
 import { panic, Result, UnhandledException } from "better-result";
-import * as v from "valibot";
 
 import {
   createCaseLawDecisionPath,
   createCaseLawDecisionRouteParams,
 } from "@stll/api-contract/case-law-decision-route";
-import {
-  DEFAULT_SEARCH_EXCERPT,
-  SEARCH_SORTS,
-} from "@stll/api-contract/search";
+import { DEFAULT_SEARCH_EXCERPT } from "@stll/api-contract/search";
 
 import {
   PUBLIC_LAW_SEARCH_STATE,
   publicLawLoadMode,
 } from "@/components/public-law-table/public-law-results-state.logic";
 import {
-  publicLawPageSearchSchemaUpTo,
   publicLawPageSearchValue,
   publicLawPageSize,
-  publicLawPageSizeSearchSchema,
 } from "@/components/public-law-table/public-law-route-pagination.logic";
 import {
   createCaseLawIndexPath,
   decisionDateRange,
   hasActiveCaseLawFilter,
-  strictSearchValue,
-  validDecisionDate,
 } from "@/features/case-law/case-law-index-search.logic";
 import {
   caseLawCountryScope,
@@ -39,7 +31,6 @@ import {
   toCaseLawCountryParam,
 } from "@/features/case-law/case-law-jurisdiction";
 import {
-  CASE_LAW_MAX_PAGE,
   caseLawLandingPage,
   caseLawPageNumber,
   caseLawPageEvidence,
@@ -47,7 +38,6 @@ import {
 import type { Decision } from "@/features/case-law/components/decision-table";
 import { prefetchDecisionFacetsAfterSearch } from "@/features/case-law/decision-filter-facets";
 import { decisionsPageOptions } from "@/features/case-law/queries/decisions";
-import { searchQuestionsParam } from "@/features/case-law/research/search-questions.logic";
 import { getMessageLocale, getTranslator } from "@/i18n/i18n-store";
 import { resolveCaseLawRouteCountry } from "@/lib/case-law-route";
 import { readQueryResult } from "@/lib/errors/query-result";
@@ -62,87 +52,12 @@ import {
   createPublicLawHead,
 } from "@/lib/public-law-seo";
 import { ensureRouteQueryData } from "@/lib/react-query";
-import { optionalUuidSearchSchema } from "@/lib/schema";
-import { optionalLawSearchQuerySchema } from "@/routes/law/-search-query.logic";
 import { ssrStatusHeaders } from "@/ssr-response-status";
 
+import type { CaseLawIndexSearch } from "./-case-law-search-schema";
+import { searchSchema } from "./-case-law-search-schema";
+
 const EMPTY_DECISIONS: readonly Decision[] = [];
-
-const optionalBrowseStringSchema = (maxLength: number) =>
-  v.optional(
-    v.pipe(
-      v.string(),
-      v.trim(),
-      v.maxLength(maxLength),
-      v.transform((value) => (value.length > 0 ? value : undefined)),
-    ),
-  );
-
-/**
- * A calendar date, dropped rather than refused when it is not one: a public
- * URL may be typed or crawled, and a bad date is a page without that bound,
- * not an error screen.
- */
-const optionalDateSchema = v.fallback(
-  v.optional(
-    v.pipe(
-      v.string(),
-      v.trim(),
-      v.transform((value) => validDecisionDate(value)),
-    ),
-  ),
-  undefined,
-);
-
-/**
- * Whether the search requires every word its query carries. Read leniently
- * like the rest: any spelling but the one the link writes is the default
- * search, which is what a hand-typed or crawled URL gets.
- */
-const optionalStrictSchema = v.fallback(
-  v.optional(
-    v.pipe(
-      v.string(),
-      v.transform((value) => strictSearchValue(value)),
-    ),
-  ),
-  undefined,
-);
-
-const searchSchema = v.object({
-  country: optionalBrowseStringSchema(3),
-  court: optionalBrowseStringSchema(512),
-  from: optionalDateSchema,
-  lang: optionalBrowseStringSchema(16),
-  // Read up to the deepest page any size reaches; `beforeLoad` applies the
-  // size's own bound.
-  page: publicLawPageSearchSchemaUpTo(CASE_LAW_MAX_PAGE),
-  pageSize: publicLawPageSizeSearchSchema,
-  q: optionalLawSearchQuerySchema,
-  // The organization's questions this search draws, in order. Read leniently
-  // like the rest; an id the reader's organization does not hold is not drawn.
-  questions: v.fallback(
-    v.optional(
-      v.pipe(
-        v.array(v.string()),
-        v.transform((columnIds) => searchQuestionsParam(columnIds)),
-      ),
-    ),
-    undefined,
-  ),
-  // A link is public and may be edited by hand or by a crawler; an order this
-  // build does not know is not an error page, it is the default order.
-  sort: v.fallback(v.optional(v.picklist(SEARCH_SORTS)), undefined),
-  sourceId: optionalUuidSearchSchema,
-  strict: optionalStrictSchema,
-  to: optionalDateSchema,
-  type: optionalBrowseStringSchema(128),
-  // Accepted, never written: links made before the range existed still work,
-  // and `decisionDateRange` resolves them to that year's whole span.
-  year: optionalBrowseStringSchema(4),
-});
-
-type CaseLawIndexSearch = v.InferOutput<typeof searchSchema>;
 
 /** Which facet a chip belongs to, for the label the chip carries. */
 /**

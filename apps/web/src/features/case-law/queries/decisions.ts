@@ -15,7 +15,7 @@ import {
 import {
   DEFAULT_PUBLIC_LAW_PAGE_SIZE,
   type PublicLawPageSize,
-} from "@/components/public-law-table/public-law-pagination.logic";
+} from "@/components/public-law-table/public-law-route-pagination.logic";
 import { api } from "@/lib/api";
 import { APIError, shouldRetryAPIRequest, unwrapEden } from "@/lib/errors/api";
 import { type PublicLawData, unwrapPublicLawEden } from "@/lib/public-law-api";

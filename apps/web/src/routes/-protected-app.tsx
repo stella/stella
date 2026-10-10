@@ -90,6 +90,7 @@ import {
   workspacesNavigationOptions,
 } from "@/lib/workspaces/queries";
 import { shouldForceSidebarCollapsed } from "@/routes/-inspector-pane-width";
+import { ChatMenuContent } from "@/routes/-protected-app/-components/chat-menu-content";
 import { PaymentRetryBanner } from "@/routes/-protected-app/-components/payment-retry-banner";
 import {
   createSessionActivity,
@@ -523,10 +524,12 @@ function ProtectedContent() {
           />
           {/* oxlint-disable-next-line react/refs -- reads the imperatively-captured trigger anchor to position the menu; the menu-open state that gates this render is set in the same handler that captures the anchor */}
           <MenuPopup anchor={chatMenuAnchorRef.current ?? undefined}>
-            <LazyNewChatMenuItem
-              label={t("chat.newChat")}
-              onClick={handleOpenNewChatFromMenu}
-            />
+            <ChatMenuContent label={t("chat.newChat")}>
+              <LazyNewChatMenuItem
+                label={t("chat.newChat")}
+                onClick={handleOpenNewChatFromMenu}
+              />
+            </ChatMenuContent>
           </MenuPopup>
         </Menu>
       </header>

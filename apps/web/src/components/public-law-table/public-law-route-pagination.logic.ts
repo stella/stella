@@ -3,8 +3,9 @@ import * as v from "valibot";
 import { PUBLIC_LAW_PAGE_SIZES } from "@stll/api-contract/limits";
 
 export type PublicLawPageSize = (typeof PUBLIC_LAW_PAGE_SIZES)[number];
-const DEFAULT_PUBLIC_LAW_PAGE_SIZE = 50 satisfies PublicLawPageSize;
-const PUBLIC_LAW_MAX_PAGE = 40;
+
+export const DEFAULT_PUBLIC_LAW_PAGE_SIZE = 50 satisfies PublicLawPageSize;
+export const PUBLIC_LAW_MAX_PAGE = 40;
 
 const isPublicLawPageSize = (value: number): value is PublicLawPageSize =>
   PUBLIC_LAW_PAGE_SIZES.some((size) => size === value);
@@ -30,7 +31,7 @@ export const publicLawPageNumber = (
 export const publicLawPageSearchValue = (page: number): number | undefined =>
   page <= 1 ? undefined : page;
 
-const publicLawPageSizeSearchValue = (
+export const publicLawPageSizeSearchValue = (
   pageSize: PublicLawPageSize,
 ): PublicLawPageSize | undefined =>
   pageSize === DEFAULT_PUBLIC_LAW_PAGE_SIZE ? undefined : pageSize;
@@ -46,6 +47,9 @@ export const publicLawPageSearchSchemaUpTo = (deepestPage: number) =>
     ),
     undefined,
   );
+
+export const publicLawPageSearchSchema =
+  publicLawPageSearchSchemaUpTo(PUBLIC_LAW_MAX_PAGE);
 
 export const publicLawPageSizeSearchSchema = v.fallback(
   v.optional(
