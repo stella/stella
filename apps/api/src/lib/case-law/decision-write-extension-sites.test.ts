@@ -42,7 +42,7 @@ const MUTATION_OWNERS = {
   "scripts/backfill-corpus-storage.ts": {
     enqueueBackfillRow: "enqueueBackfillRow",
   },
-  "scripts/corpus-column-trim.ts": { trimRow: "trimRow" },
+  "scripts/corpus-column-trim.ts": { trimColumnRow: "trimColumnRow" },
   "scripts/repair-case-law-jsonb.ts": { repairBatch: "repairBatch" },
   "scripts/repair-decision-dates-plan.ts": {
     applyDecisionDateRepairsStatement: "repairDecisionDateBatch",
