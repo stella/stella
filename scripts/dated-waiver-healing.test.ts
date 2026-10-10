@@ -21,8 +21,8 @@ import type { FixEvidence } from "./dated-waiver-fix-task";
 import {
   applyHealing,
   armRemoval,
+  armRemovalUnlessHeld,
   disarmRemoval,
-  reconcileRemovalMerge,
   collectProbeReport,
   readReport,
   renderHealingFailureSignal,
@@ -1070,6 +1070,25 @@ const proposalLifecycle = async (owner: DatedWaiver = lifecycleOwner) => {
   const actions = {
     ...sink,
     openRemoval: async () => {
+      if (mergeHold && proposal && proposal.status !== "closed") {
+        const existing = proposal;
+        await disarmRemoval(existing.number, async (command) => {
+          expect(command).toEqual([
+            "gh",
+            "pr",
+            "merge",
+            String(existing.number),
+            "--repo",
+            "stella/stella",
+            "--disable-auto",
+          ]);
+          effects.push("disarm");
+          if (disarmExit === 0) {
+            existing.status = "unarmed";
+          }
+          return { exitCode: disarmExit, stderr: "" };
+        });
+      }
       publications++;
       if (!proposal || proposal.status === "closed") {
         proposal = {
@@ -1085,44 +1104,27 @@ const proposalLifecycle = async (owner: DatedWaiver = lifecycleOwner) => {
       } satisfies PublishedRemoval;
     },
     armRemoval: async (published: PublishedRemoval) => {
-      await reconcileRemovalMerge({
+      await armRemovalUnlessHeld({
         removal: published,
         mergeHold,
         run: async (command) => {
-          expect(command).toEqual(
-            mergeHold
-              ? [
-                  "gh",
-                  "pr",
-                  "merge",
-                  String(published.number),
-                  "--repo",
-                  "stella/stella",
-                  "--disable-auto",
-                ]
-              : [
-                  "gh",
-                  "pr",
-                  "merge",
-                  String(published.number),
-                  "--repo",
-                  "stella/stella",
-                  "--auto",
-                  "--match-head-commit",
-                  removal.headSha,
-                ],
-          );
+          expect(command).toEqual([
+            "gh",
+            "pr",
+            "merge",
+            String(published.number),
+            "--repo",
+            "stella/stella",
+            "--auto",
+            "--match-head-commit",
+            removal.headSha,
+          ]);
           if (!proposal) {
             throw new TypeError("Proposal fixture missing");
           }
           expect(published.number).toBe(proposal.number);
-          if (mergeHold) {
-            proposal.status = "unarmed";
-            effects.push("disarm");
-          } else {
-            proposal.status = "armed";
-            effects.push("arm");
-          }
+          proposal.status = "armed";
+          effects.push("arm");
           return { exitCode: disarmExit, stderr: "" };
         },
       });

@@ -318,6 +318,7 @@ type PublishRemovalOptions = {
   files: Readonly<Record<string, string>>;
   repo: string | undefined;
   request: typeof githubRequest;
+  disarmExisting?: (number: number) => Promise<void>;
 };
 // The two branch refs are reserved for this workflow. Build a proposal before
 // swapping the PR head; moving an open PR straight to main would close it.
@@ -329,6 +330,7 @@ export const publishRemoval = async ({
   files,
   repo,
   request,
+  disarmExisting,
 }: PublishRemovalOptions): Promise<PublishedRemoval | undefined> => {
   validateRemovalModules(files);
   const { api } = removalLocation({ branch, repo });
@@ -377,6 +379,10 @@ export const publishRemoval = async ({
     );
   }
   const existing = open.at(0);
+  // Hold an armed proposal before either reserved branch can change.
+  if (existing && disarmExisting) {
+    await disarmExisting(existing.number);
+  }
   const alreadyRemoved = Object.entries(files).every(
     ([file, content]) => baseFiles[file] === content,
   );

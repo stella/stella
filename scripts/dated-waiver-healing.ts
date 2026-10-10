@@ -847,20 +847,19 @@ export const disarmRemoval = async (
   }
 };
 
-type ReconcileRemovalMergeOptions = {
+type ArmRemovalUnlessHeldOptions = {
   removal: PublishedRemoval;
   mergeHold: string | undefined;
   run?: typeof runRemovalMerge;
 };
 
-export const reconcileRemovalMerge = async ({
+export const armRemovalUnlessHeld = async ({
   removal,
   mergeHold,
   run = runRemovalMerge,
-}: ReconcileRemovalMergeOptions) => {
+}: ArmRemovalUnlessHeldOptions) => {
   if (mergeHold) {
-    await disarmRemoval(removal.number, run);
-    return { signal: "dated-waiver-disarmed", pr: removal.number } as const;
+    return { signal: "dated-waiver-held", pr: removal.number } as const;
   }
   return armRemoval(removal, run);
 };
@@ -1012,6 +1011,9 @@ const main = async (): Promise<void> => {
           body: renderRemovalEvidence(outcome.evidence),
           repo: process.env["GITHUB_REPOSITORY"],
           request: githubRequest,
+          ...(process.env["MERGE_HOLD"]
+            ? { disarmExisting: disarmRemoval }
+            : {}),
         }),
       retireRemoval: async (entry) =>
         retireRemoval({
@@ -1023,7 +1025,7 @@ const main = async (): Promise<void> => {
       armRemoval: async (removal) => {
         console.log(
           JSON.stringify(
-            await reconcileRemovalMerge({
+            await armRemovalUnlessHeld({
               removal,
               mergeHold: process.env["MERGE_HOLD"],
             }),

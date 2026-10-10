@@ -6,7 +6,13 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 import { sha256Hex } from "@stll/sha256/bun";
 
 import { waiverKey } from "./dated-waiver-fix-task";
-import { applyHealing, HealingRunError } from "./dated-waiver-healing";
+import {
+  applyHealing,
+  armRemoval,
+  armRemovalUnlessHeld,
+  disarmRemoval,
+  HealingRunError,
+} from "./dated-waiver-healing";
 import type { HealingActions } from "./dated-waiver-healing";
 import {
   type PublishedRemoval,
@@ -437,6 +443,82 @@ describe("the complete removal proposal inventory", () => {
 });
 
 describe("dated waiver removal publication", () => {
+  test("a held armed proposal is disarmed before any branch update", async () => {
+    const github = fakeGithub();
+    github.prs.push({ number: 42, title: REMOVAL_TITLE, body: BODY });
+    github.refs.set(BRANCH, "previous-head");
+    const calls: string[] = [];
+    let state: "armed" | "unarmed" = "unarmed";
+    const run = async (command: string[]) => {
+      if (command.at(-1) === "--disable-auto") {
+        expect(command).toEqual([
+          "gh",
+          "pr",
+          "merge",
+          "42",
+          "--repo",
+          "stella/stella",
+          "--disable-auto",
+        ]);
+        calls.push("disarm");
+        state = "unarmed";
+      } else {
+        calls.push("arm");
+        state = "armed";
+      }
+      return { exitCode: 0, stderr: "" };
+    };
+    await armRemoval({ number: 42, headSha: "a".repeat(40) }, run);
+    expect(state).toBe("armed");
+    calls.length = 0;
+    const published = await publishRemoval({
+      branch: BRANCH,
+      baseSha: "base-sha",
+      baseFiles: { [FILE]: BEFORE },
+      body: BODY,
+      files: { [FILE]: AFTER },
+      repo: "stella/stella",
+      disarmExisting: async (number) => disarmRemoval(number, run),
+      request: async (args, input) => {
+        if (input !== undefined && args.at(0)?.startsWith(`${API}/git/refs`)) {
+          calls.push("branch-update");
+          expect(state).toBe("unarmed");
+        }
+        return github.request(args, input);
+      },
+    });
+    if (!published) {
+      throw new TypeError("Expected refreshed proposal");
+    }
+    await armRemovalUnlessHeld({ removal: published, mergeHold: "1", run });
+    expect(calls).toEqual(["disarm", "branch-update", "branch-update"]);
+    expect(published.number).toBe(42);
+    expect(state).toBe("unarmed");
+  });
+
+  test("a hold disarm failure prevents every publication write", async () => {
+    const github = fakeGithub();
+    github.prs.push({ number: 42, title: REMOVAL_TITLE, body: BODY });
+    const failure = new TypeError("Disarm failed");
+    expect(
+      await rejectionOf(
+        publishRemoval({
+          branch: BRANCH,
+          baseSha: "base-sha",
+          baseFiles: { [FILE]: BEFORE },
+          body: BODY,
+          files: { [FILE]: AFTER },
+          repo: "stella/stella",
+          request: github.request,
+          disarmExisting: async () => {
+            throw failure;
+          },
+        }),
+      ),
+    ).toBe(failure);
+    expect(github.writes).toEqual([]);
+  });
+
   test("a proposal with additional content is rebuilt from the probe base before arming", async () => {
     const github = fakeGithub();
     await github.publish();
