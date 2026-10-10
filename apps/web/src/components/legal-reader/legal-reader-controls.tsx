@@ -15,7 +15,7 @@ export const LEGAL_READER_CONTENT_CLEARANCE_CLASS_NAME =
 type LegalReaderControlsProps = {
   blocks: readonly Block[];
   content: HTMLElement | null;
-  fallbackBreadcrumb?: ReaderBreadcrumbModel;
+  fallbackBreadcrumb?: ReaderBreadcrumbModel | undefined;
   viewport: HTMLElement | null;
   textScale: ReturnType<typeof useReaderTextScale>;
 };

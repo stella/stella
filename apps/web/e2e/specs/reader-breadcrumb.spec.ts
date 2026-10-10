@@ -200,7 +200,15 @@ for (const view of views) {
             const bounds = element.getBoundingClientRect();
             return bounds.width > 1 && bounds.height > 1;
           });
-          const controls = document.querySelector(
+          // Both surfaces render a breadcrumb: measure the one in this reader.
+          let reader: Element | null = introduction;
+          while (
+            reader !== null &&
+            reader.querySelector('[data-slot="reader-breadcrumb"]') === null
+          ) {
+            reader = reader.parentElement;
+          }
+          const controls = reader?.querySelector(
             '[data-slot="reader-breadcrumb"]',
           )?.parentElement;
           if (

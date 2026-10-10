@@ -19,7 +19,7 @@ import type { ReaderBreadcrumbSegment } from "./reader-breadcrumb.logic";
 type LegalReaderBreadcrumbProps = {
   blocks: readonly Block[];
   content: HTMLElement | null;
-  fallback?: ReaderBreadcrumbModel;
+  fallback?: ReaderBreadcrumbModel | undefined;
   viewport: HTMLElement | null;
 };
 
