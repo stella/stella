@@ -32,6 +32,7 @@ import { SKILL_PACKAGE_LIMITS } from "@stll/skills/package-limits";
 
 import type { env } from "@/api/env";
 import {
+  API_RATE_LIMITS,
   MCP_RATE_LIMITS,
   OTP_DELIVERY_RATE_LIMITS,
 } from "@/api/lib/rate-limit/budget-config";

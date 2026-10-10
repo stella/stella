@@ -19,7 +19,10 @@ import {
   isLoopbackRedirectUri,
   OAUTH_CLIENT_REGISTRATION_PATH,
 } from "@/api/lib/oauth-loopback-registration";
-import { isAuthRequestBudgetPath } from "@/api/lib/rate-limit/auth-request-budget";
+import {
+  isAuthRequestBudgetPath,
+  type AuthRequestBudgetFrameworkApi,
+} from "@/api/lib/rate-limit/auth-request-budget";
 import type { createAuthRateLimitStorage } from "@/api/lib/rate-limit/auth-storage";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -414,6 +417,7 @@ export const createStellaOAuthProvider = (
     requestBudget: {
       storage: ReturnType<typeof createAuthRateLimitStorage>;
       enabled: boolean;
+      frameworkApi: AuthRequestBudgetFrameworkApi;
     };
   },
 ) => {

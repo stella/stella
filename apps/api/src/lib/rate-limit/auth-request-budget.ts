@@ -3,12 +3,7 @@ import {
   type OAuthOptions,
   type Scope,
 } from "@better-auth/oauth-provider";
-import {
-  APIError,
-  isAPIError,
-  type createAuthMiddleware,
-  getAuthoritativeSessionFromCtx,
-} from "better-auth/api";
+import type { APIError, createAuthMiddleware } from "better-auth/api";
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
@@ -200,6 +195,12 @@ type AuthRequestBudgetContext = Parameters<
   Parameters<typeof createAuthMiddleware>[0]
 >[0];
 
+export type AuthRequestBudgetFrameworkApi = {
+  readUserId: (ctx: AuthRequestBudgetContext) => Promise<string | undefined>;
+  createQuotaError: (retryAfter: number) => APIError;
+  isAcceptedTokenResponse: (returned: unknown) => boolean;
+};
+
 type ReadAuthBudgetGrantOptions = {
   ctx: AuthRequestBudgetContext;
   providerOptions: OAuthOptions<Scope[]>;
@@ -250,6 +251,7 @@ const readAuthBudgetGrant = async ({
 };
 
 type ConsumeAuthRequestBudgetOptions = BudgetObservation & {
+  createQuotaError: AuthRequestBudgetFrameworkApi["createQuotaError"];
   storage: ReturnType<typeof createAuthRateLimitStorage>;
   key: string;
   rule: { max: number; window: number };
@@ -261,22 +263,18 @@ const consumeAuthRequestBudget = async ({
   rule,
   name,
   keyKind,
+  createQuotaError,
 }: ConsumeAuthRequestBudgetOptions) => {
   const decision = await storage.consume(key, rule);
   if (decision.allowed) {
     return Result.ok(undefined);
   }
   recordBudgetRejection({ name, keyKind, windowMs: rule.window * 1000 });
-  return Result.err(
-    new APIError(
-      "TOO_MANY_REQUESTS",
-      { message: "Try again later.", code: "TOO_MANY_REQUESTS" },
-      { "Retry-After": String(decision.retryAfter ?? rule.window) },
-    ),
-  );
+  return Result.err(createQuotaError(decision.retryAfter ?? rule.window));
 };
 
 type CreateAuthRequestBudgetOptions = {
+  frameworkApi: AuthRequestBudgetFrameworkApi;
   storage: ReturnType<typeof createAuthRateLimitStorage>;
   enabled: boolean;
 } & (
@@ -285,6 +283,7 @@ type CreateAuthRequestBudgetOptions = {
 );
 
 export const createAuthRequestBudget = ({
+  frameworkApi,
   storage,
   enabled,
   ...policy
@@ -312,13 +311,7 @@ export const createAuthRequestBudget = ({
           keyKind: "address",
           windowMs: AUTH_TOKEN_ADDRESS_BUDGET.rule.window * 1000,
         });
-        return Result.err(
-          new APIError(
-            "TOO_MANY_REQUESTS",
-            { message: "Try again later.", code: "TOO_MANY_REQUESTS" },
-            { "Retry-After": String(admission.retryAfter) },
-          ),
-        );
+        return Result.err(frameworkApi.createQuotaError(admission.retryAfter));
       }
       reservations.set(ctx.request ?? ctx.context, admission.reservation);
     }
@@ -326,8 +319,7 @@ export const createAuthRequestBudget = ({
       path: ctx.path,
       address,
       body: ctx.body,
-      readUserId: async () =>
-        (await getAuthoritativeSessionFromCtx(ctx))?.user.id,
+      readUserId: async () => await frameworkApi.readUserId(ctx),
       readGrant: async (token, grantType) =>
         policy.type === "oauth"
           ? await readAuthBudgetGrant({
@@ -405,7 +397,11 @@ export const createAuthRequestBudget = ({
       }
     }
     for (const budget of budgets) {
-      const decision = await consumeAuthRequestBudget({ storage, ...budget });
+      const decision = await consumeAuthRequestBudget({
+        storage,
+        createQuotaError: frameworkApi.createQuotaError,
+        ...budget,
+      });
       if (decision.isErr()) {
         return decision;
       }
@@ -420,15 +416,7 @@ export const createAuthRequestBudget = ({
     }
     reservations.delete(owner);
     const returned: unknown = ctx.context.returned;
-    const accepted =
-      !isAPIError(returned) &&
-      v.is(
-        v.object({
-          access_token: v.pipe(v.string(), v.nonEmpty()),
-          token_type: v.union([v.literal("Bearer"), v.literal("DPoP")]),
-        }),
-        returned,
-      );
+    const accepted = frameworkApi.isAcceptedTokenResponse(returned);
     await storage.settle(reservation, accepted ? "accepted" : "rejected");
   };
   return Object.assign(enforce, { complete });

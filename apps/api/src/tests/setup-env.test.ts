@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import { envApiServerSchema } from "../env-schema";
+import { rateLimitBudgetEnvSchema } from "../lib/rate-limit/budget-config-schema";
 
 const nonModelKeys = new Set([
   "SECURITY_CANARY_API_KEY_SHA256",
@@ -12,12 +13,17 @@ const nonModelKeys = new Set([
   "AGENT_SANDBOX_HARNESS_API_KEY",
 ]);
 const credentialNames = Object.keys(envApiServerSchema).filter(
-  (name) => name.includes("API_KEY") || name.startsWith("OPENROUTER_WIF_"),
+  (name) =>
+    !Object.hasOwn(rateLimitBudgetEnvSchema, name) &&
+    (name.includes("API_KEY") || name.startsWith("OPENROUTER_WIF_")),
 );
 const placeholder = "stella-test-provider-credential-0";
 const preloadPath = new URL("setup-env.ts", import.meta.url).pathname;
 
-const readPreloadedCredentials = (env: Record<string, string | undefined>) => {
+const readPreloadedCredentials = (
+  env: Record<string, string | undefined>,
+  names: readonly string[] = credentialNames,
+) => {
   const child = Bun.spawnSync({
     cmd: [
       process.execPath,
@@ -25,7 +31,7 @@ const readPreloadedCredentials = (env: Record<string, string | undefined>) => {
       "--preload",
       preloadPath,
       "-e",
-      `console.log(JSON.stringify(${JSON.stringify(credentialNames)}.map(name => [name, process.env[name] ?? null])));`,
+      `console.log(JSON.stringify(${JSON.stringify(names)}.map(name => [name, process.env[name] ?? null])));`,
     ],
     cwd: new URL("../..", import.meta.url).pathname,
     env,
@@ -38,6 +44,16 @@ const readPreloadedCredentials = (env: Record<string, string | undefined>) => {
 };
 
 describe("API test preload credentials", () => {
+  test("preserves every configured request budget", () => {
+    const budgets = Object.fromEntries(
+      Object.entries(v.parse(v.object(rateLimitBudgetEnvSchema), {})).map(
+        ([name, value]) => [name, String(value)],
+      ),
+    );
+    expect(readPreloadedCredentials(budgets, Object.keys(budgets))).toEqual(
+      Object.entries(budgets),
+    );
+  });
   test("replaces every inherited model credential while preserving service keys", () => {
     const inherited = Object.fromEntries(
       credentialNames.map((name) => [name, `sk-inherited-${name}-1234567890`]),
