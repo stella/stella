@@ -40,6 +40,9 @@ jobs:
           # the real npm token to dependency lifecycle scripts.
           NPM_TOKEN: ""
 
+      - name: Typecheck parity (all checked projects)
+        run: bun run check:typecheck-parity
+
       - name: Full typecheck (no --affected, no turbo cache)
         # The API compiler and web contract generator each build the API graph.
         # Keep their peak memory separate, as in the full release check.

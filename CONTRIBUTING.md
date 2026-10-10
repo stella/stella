@@ -48,7 +48,10 @@ repository tooling. These commands use Bun 1.4.3’s native checker locally and 
 CI. For a direct project check, use
 `bun check --no-pretty --all --project=<tsconfig path>`; add `--build` for a
 solution config with project references. `bun run check:typecheck-parity` compares
-TypeScript and Bun diagnostics on repository code and seeded cases.
+TypeScript and Bun diagnostics on repository code and seeded cases. CI runs full
+parity when the Bun pin or resolved TypeScript compiler versions change, and
+nightly or on manual dispatch. Every PR retains Bun checks and a seeded-error
+probe.
 
 Editors continue to use the TypeScript language service: Bun provides no LSP.
 Keep the TypeScript dependency and its compatibility alias for compiler-API tools

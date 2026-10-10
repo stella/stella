@@ -2842,15 +2842,53 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun scripts/ci-generated-sources.ts restore "$RUNNER_TEMP/generated-sources"
 
+      - name: Select typecheck parity coverage
+        id: typecheck_parity_gate
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
+        # Compare resolved compiler versions, not dependency ranges or unrelated
+        # lockfile edits. Scheduled and manual proofs always compare both checkers.
+        run: |
+          bun test scripts/typecheck-parity-gate.test.ts
+          bun --eval '
+          import ts from "typescript";
+          const git = (...args) => {
+            const child = Bun.spawnSync(["git", ...args], { stdout: "pipe", stderr: "pipe" });
+            if (child.exitCode !== 0) throw new Error(child.stderr.toString());
+            return child.stdout.toString().trim();
+          };
+          const versions = (ref) => {
+            const manifest = JSON.parse(git("show", `${ref}:package.json`));
+            const parsed = ts.parseConfigFileTextToJson("bun.lock", git("show", `${ref}:bun.lock`));
+            if (parsed.error) throw new Error("Cannot parse compiler lockfile");
+            const packages = parsed.config?.packages;
+            if (!packages || typeof manifest.packageManager !== "string" || !manifest.packageManager.startsWith("bun@")) {
+              throw new Error("Missing Bun or resolved compiler versions");
+            }
+            const compilers = [...new Set(Object.values(packages)
+              .filter(Array.isArray)
+              .map((entry) => entry[0])
+              .filter((pin) => typeof pin === "string" && /^(typescript|@typescript\/native-preview)@/u.test(pin)))].sort();
+            if (compilers.length === 0) throw new Error("Missing resolved TypeScript compiler versions");
+            return JSON.stringify([manifest.packageManager, compilers]);
+          };
+          const forced = ["schedule", "workflow_dispatch"].includes(process.env.EVENT_NAME);
+          const base = process.env.BASE_SHA || (forced ? "" : git("rev-parse", "HEAD^"));
+          const required = forced || versions(base) !== versions("HEAD");
+          console.log(`required=${required}`);
+          ' >> "$GITHUB_OUTPUT"
+
       - name: Typecheck parity (all checked projects)
         id: typecheck_parity
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && steps.typecheck_parity_gate.outputs.required == 'true') }}
         run: |
           set -o pipefail
           bun run check:typecheck-parity | tee "$RUNNER_TEMP/typecheck-parity.log"
 
       - name: Record typecheck parity report
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && steps.typecheck_parity_gate.outputs.required == 'true') }}
         run: |
           {
             cat CLOUD_REPORT.md
@@ -2860,7 +2898,7 @@ jobs:
           } > "$RUNNER_TEMP/CLOUD_REPORT.md"
 
       - name: Upload typecheck parity report
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && steps.typecheck_parity_gate.outputs.required == 'true') }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: typecheck-parity-report

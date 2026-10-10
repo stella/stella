@@ -304,7 +304,9 @@ rules.
 tasks. Direct project checks use
 `bun check --no-pretty --all --project=<tsconfig path>`; add `--build` for
 solution configs with project references. CI runs `bun run check:typecheck-parity`
-to compare TypeScript and Bun diagnostics on repository code and seeded cases.
+to compare TypeScript and Bun diagnostics on repository code and seeded cases
+when the Bun pin or resolved TypeScript compiler versions change, and nightly or
+on manual dispatch. Every PR retains Bun checks and a seeded-error probe.
 Editors keep the TypeScript language service because Bun provides no LSP.
 Keep TypeScript and its compatibility alias for compiler-API tools and declaration
 generation.
