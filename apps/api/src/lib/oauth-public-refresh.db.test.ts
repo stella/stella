@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
 import { and, eq, isNotNull } from "drizzle-orm";
 import { createLocalJWKSet, jwtVerify } from "jose";
@@ -242,7 +243,7 @@ describe("resource-bound refresh grants", () => {
           break;
         default: {
           const exhaustive: never = state;
-          return exhaustive;
+          panic(`Unknown refresh token state: ${String(exhaustive)}`);
         }
       }
       const response = await refreshOAuthGrant({

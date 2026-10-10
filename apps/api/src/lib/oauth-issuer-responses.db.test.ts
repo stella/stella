@@ -343,7 +343,7 @@ describe("OAuth authorization response issuer", () => {
         errorCodes.add(v.parse(v.string(), match.at(1)));
       }
     }
-    const plugin = getAuth().options.plugins?.find(
+    const plugin = getAuth().options.plugins.find(
       ({ id }) => id === "oauth-provider",
     );
     const providerOptions = v.parse(
