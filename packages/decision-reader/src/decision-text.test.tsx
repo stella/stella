@@ -11,7 +11,7 @@ import {
 } from "@stll/api-contract/case-law-text-field";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
-import { CitedProvisionExpansion } from "./cited-provision";
+import { CitedProvisionExpansion, CitedProvisionPeek } from "./cited-provision";
 import type { FullProvisionRead } from "./cited-provision";
 import { DecisionText, prepareDecisionTextPlacements } from "./decision-text";
 import { BlockRenderer } from "./document-ast-text";
@@ -680,3 +680,92 @@ for (const response of ["error", "null", "empty"] as const) {
     }
   });
 }
+
+test("a hover preview scrolls a long provision inside a viewport-bound cap while inline cards keep growing", async () => {
+  const provision = {
+    document: {
+      country: "cz",
+      eli: "/eli/cz/sb/2012/89",
+      id: "act",
+      slug: null,
+      versionValidFrom: null,
+    },
+    payload: {
+      anchorId: "par_5",
+      documentId: "act",
+      eli: "/eli/cz/sb/2012/89",
+      highlightAnchorId: "par_5",
+      jurisdiction: "CZE",
+      provisionLabel: "§ 5",
+      statuteTitle: "Občanský zákoník",
+      versionCount: 1,
+      versionValidFrom: null,
+    },
+    preview: null,
+  } satisfies CitedProvisionTarget;
+  const lastBlockText = "Poslední odstavec dlouhého ustanovení.";
+  const wording = {
+    anchorId: "par_5",
+    blocks: [
+      ...Array.from({ length: 40 }, (_, index) => ({
+        anchorId: `par_5-odst_${index + 1}`,
+        id: `part-${index + 1}`,
+        text: `Odstavec ${index + 1}. ${"Dlouhé znění, které se do náhledu nevejde. ".repeat(12)}`,
+      })),
+      { anchorId: "par_5-odst_41", id: "part-41", text: lastBlockText },
+    ],
+    citedAnchorId: null,
+    documentId: "act",
+    heading: null,
+    headings: [],
+    language: "cs",
+  } satisfies ProvisionPreviewData;
+  const wordings = [{ target: provision, wording }];
+  const previewMarkup = renderReaderFixture(
+    <CitedProvisionPeek provision={provision} wordings={wordings} />,
+  );
+  const inlineMarkup = renderReaderFixture(
+    <CitedProvisionExpansion
+      citations={[provision]}
+      full={{ isPending: false, whole: null }}
+      onToggleFull={() => undefined}
+      showsFull={false}
+      wordings={wordings}
+    />,
+  );
+  const { GlobalRegistrator } = await import("@happy-dom/global-registrator");
+  GlobalRegistrator.register();
+  try {
+    const preview = new DOMParser().parseFromString(previewMarkup, "text/html");
+    const scroller =
+      preview.querySelector('[data-slot="provision-preview-scroll"]') ??
+      panic("Missing bounded preview scroller");
+    expect(scroller.classList).toContain(
+      "max-h-[min(24rem,calc(100dvh-6rem))]",
+    );
+    const viewport =
+      scroller.querySelector('[data-slot="scroll-area-viewport"]') ??
+      panic("Missing preview scroll viewport");
+    const previewWording =
+      preview.querySelector('[data-slot="provision-card-wording"]') ??
+      panic("Missing preview wording");
+    expect(previewWording.closest('[data-slot="scroll-area-viewport"]')).toBe(
+      viewport,
+    );
+    expect(viewport.textContent).toContain(lastBlockText);
+
+    const inline = new DOMParser().parseFromString(inlineMarkup, "text/html");
+    const inlineWording =
+      inline.querySelector('[data-slot="provision-card-wording"]') ??
+      panic("Missing inline wording");
+    expect(inlineWording.textContent).toContain(lastBlockText);
+    expect(
+      inlineWording.closest('[data-slot="scroll-area-viewport"]'),
+    ).toBeNull();
+    expect(
+      inline.querySelector('[data-slot="scroll-area-viewport"]'),
+    ).toBeNull();
+  } finally {
+    await GlobalRegistrator.unregister();
+  }
+});

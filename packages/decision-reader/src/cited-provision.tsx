@@ -10,6 +10,7 @@ import {
   PreviewCardPopup,
   PreviewCardTrigger,
 } from "@stll/ui/preview-card";
+import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
@@ -393,8 +394,13 @@ export const CitedProvisionExpansion = ({
   );
 };
 
-/** The hover card's content, read only while the card is open. */
-const CitedProvisionPeek = ({
+/**
+ * The hover card's content, read only while the card is open. Inline cards
+ * grow with the reader's single scroll; the hover card floats over the
+ * reader, so a long provision scrolls inside a viewport-bound cap instead of
+ * running past the screen edge where the reader's scroll cannot reach it.
+ */
+export const CitedProvisionPeek = ({
   provision,
   wordings,
 }: {
@@ -405,14 +411,21 @@ const CitedProvisionPeek = ({
   const wording = wordings.at(0)?.wording;
   const label = provision.payload.provisionLabel;
   return (
-    <>
-      <ProvisionCardHeader label={label} provision={provision.payload} />
-      <ProvisionTrailLine
-        language={wording?.language}
-        trail={provisionTrail({ label, passage, wording })}
-      />
-      <PassageBody passage={passage} />
-    </>
+    <ScrollArea
+      axis="vertical"
+      className="max-h-[min(24rem,calc(100dvh-6rem))]"
+      data-slot="provision-preview-scroll"
+      scrollFade
+    >
+      <div className="flex flex-col gap-1.5">
+        <ProvisionCardHeader label={label} provision={provision.payload} />
+        <ProvisionTrailLine
+          language={wording?.language}
+          trail={provisionTrail({ label, passage, wording })}
+        />
+        <PassageBody passage={passage} />
+      </div>
+    </ScrollArea>
   );
 };
 
@@ -437,7 +450,7 @@ export const CitedProvisionLink = ({
 }: CitedProvisionLinkProps) => (
   <PreviewCard onOpenChange={onPreviewOpenChange} open={previewOpen}>
     <PreviewCardTrigger render={link}>{children}</PreviewCardTrigger>
-    <PreviewCardPopup className="reader-chrome w-[min(32rem,calc(100vw-2rem))] max-w-none flex-col gap-1.5 p-3">
+    <PreviewCardPopup className="reader-chrome w-[min(32rem,calc(100vw-2rem))] max-w-none flex-col p-3">
       <CitedProvisionPeek provision={provision} wordings={wordings} />
     </PreviewCardPopup>
   </PreviewCard>
