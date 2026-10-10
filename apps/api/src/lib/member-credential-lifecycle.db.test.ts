@@ -8,13 +8,14 @@ import {
   spyOn,
   test,
 } from "bun:test";
-import { createHash, randomBytes } from "node:crypto";
+import { randomBytes } from "node:crypto";
 import * as v from "valibot";
 
 import {
   DESKTOP_ACCOUNT_POLICY,
   DESKTOP_ACCOUNT_PROTOCOL_HEADER,
 } from "@stll/api-contract/desktop-registry";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
 
 import { apiKeysRoute } from "@/api/handlers/api-keys/routes";
 import { desktopRegistryRoute } from "@/api/handlers/desktop-registry/routes";
@@ -115,7 +116,7 @@ const createDesktopCredential = async (
     browser,
     {
       correlationId,
-      verifierHash: createHash("sha256").update(verifier).digest("hex"),
+      verifierHash: hashSha256Hex(verifier),
     },
   );
   expect(grant.status, await grant.clone().text()).toBe(200);

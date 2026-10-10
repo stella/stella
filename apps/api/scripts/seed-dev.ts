@@ -109,6 +109,7 @@ import {
   DEFAULT_USER_ID,
   pickAuthor,
   seedId,
+  seedFileIdentity,
 } from "./seed-utils";
 
 const db = openMaintenanceDb({ readOnly: false });
@@ -5936,9 +5937,7 @@ export async function seed(organizationId?: string, userId?: string) {
         docText = parsedEmailToText(parsedResult.value);
       }
 
-      const sha256Hex = new Bun.CryptoHasher("sha256")
-        .update(content)
-        .digest("hex");
+      const { sha256Hex, sizeBytes } = seedFileIdentity(content);
 
       const fileId = seedId(`${wsLabel}-file-${j}`);
       const s3Key = `${ORG_ID}/${wsId}/${fileId}.${format.extension}`;
@@ -5959,7 +5958,7 @@ export async function seed(organizationId?: string, userId?: string) {
         id: fileId,
         fileName,
         mimeType: format.mimeType,
-        sizeBytes: content.length,
+        sizeBytes,
         encrypted: false,
         sha256Hex,
         pdfFileId,
@@ -5990,6 +5989,7 @@ export async function seed(organizationId?: string, userId?: string) {
           `${wsLabel}-supplier-agreement-base-file`,
         );
         const baseContent = await createSupplierAgreementDocx("reject");
+        const baseIdentity = seedFileIdentity(baseContent);
         await writeS3ObjectWithRetry(
           {
             data: new Uint8Array(baseContent),
@@ -6003,11 +6003,9 @@ export async function seed(organizationId?: string, userId?: string) {
           id: baseFileId,
           fileName: "Supplier_Agreement_v3.docx",
           mimeType: DOCX_MIME,
-          sizeBytes: baseContent.byteLength,
+          sizeBytes: baseIdentity.sizeBytes,
           encrypted: false,
-          sha256Hex: new Bun.CryptoHasher("sha256")
-            .update(baseContent)
-            .digest("hex"),
+          sha256Hex: baseIdentity.sha256Hex,
           pdfFileId: null,
         } as const satisfies FieldContent;
         await db.transaction(

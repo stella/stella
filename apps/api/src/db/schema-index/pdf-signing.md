@@ -4,37 +4,39 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## pdf_signing_sessions · `pdfSigningSessions` · pdf-signing.ts:105 · rls
+## pdf_signing_sessions · `pdfSigningSessions` · pdf-signing.ts:110 · rls
 
 ```text
-pdf_signing_sessions.id                         pUuid            pk,not null       pdf-signing.ts:108
-pdf_signing_sessions.workspace_id               safeWorkspaceId  fk,not null       pdf-signing.ts:109
-pdf_signing_sessions.entity_id                  safeUuid         not null          pdf-signing.ts:112
-pdf_signing_sessions.property_id                safeUuid         not null          pdf-signing.ts:113
-pdf_signing_sessions.base_version_id            safeUuid         fk,not null       pdf-signing.ts:114
-pdf_signing_sessions.finalized_version_id       safeUuid         null              pdf-signing.ts:117
-pdf_signing_sessions.created_by                 text             fk,not null       pdf-signing.ts:118
-pdf_signing_sessions.status                     text             default,not null  pdf-signing.ts:122
-pdf_signing_sessions.close_reason               text             null              pdf-signing.ts:126
-pdf_signing_sessions.handoff_token_hash         varchar          not null          pdf-signing.ts:129
-pdf_signing_sessions.handoff_expires_at         timestamptz      not null          pdf-signing.ts:130
-pdf_signing_sessions.handoff_consumed_at        timestamptz      null              pdf-signing.ts:131
-pdf_signing_sessions.session_token_hash         varchar          null              pdf-signing.ts:132
-pdf_signing_sessions.token_expires_at           timestamptz      not null          pdf-signing.ts:133
-pdf_signing_sessions.reason                     text             null              pdf-signing.ts:134
-pdf_signing_sessions.location                   text             null              pdf-signing.ts:135
-pdf_signing_sessions.signer_certificate_der     bytea            null              pdf-signing.ts:136
-pdf_signing_sessions.signer_certificate_chain   jsonb            null              pdf-signing.ts:137
-pdf_signing_sessions.signing_time               timestamptz      null              pdf-signing.ts:140
-pdf_signing_sessions.stamp                      jsonb            null              pdf-signing.ts:142  The visible stamp to sign into; null signs invisibly.
-pdf_signing_sessions.digest_hex                 varchar          null              pdf-signing.ts:143
-pdf_signing_sessions.signed_attributes          bytea            null              pdf-signing.ts:148  The DER CMS signed attributes `digest_hex` hashes.
-pdf_signing_sessions.placeholder_size           integer          null              pdf-signing.ts:153  Bytes reserved for the signature in phase 1.
-pdf_signing_sessions.signature                  bytea            null              pdf-signing.ts:159  The desktop's verified signature.
-pdf_signing_sessions.finalize_attempts          integer          default,not null  pdf-signing.ts:161  Finalizations started; bounded so a failing one cannot loop.
-pdf_signing_sessions.finalize_lease_expires_at  timestamptz      null              pdf-signing.ts:167  Set while a finalization runs, so a retry that races a slow attempt waits instead of embedding twice.
-pdf_signing_sessions.key_type                   text             null              pdf-signing.ts:168
-pdf_signing_sessions.created_at                 timestamptz      default,not null  pdf-signing.ts:169
-pdf_signing_sessions.updated_at                 timestamptz      default,not null  pdf-signing.ts:170
-pdf_signing_sessions.closed_at                  timestamptz      null              pdf-signing.ts:174
+pdf_signing_sessions.{...entityFeatureGateColumns()}           spread                             pdf-signing.ts:113
+pdf_signing_sessions.{...entityFeatureWorkspaceGateColumns()}  spread                             pdf-signing.ts:114
+pdf_signing_sessions.id                                        pUuid            pk,not null       pdf-signing.ts:115
+pdf_signing_sessions.workspace_id                              safeWorkspaceId  fk,not null       pdf-signing.ts:116
+pdf_signing_sessions.entity_id                                 safeUuid         not null          pdf-signing.ts:119
+pdf_signing_sessions.property_id                               safeUuid         not null          pdf-signing.ts:120
+pdf_signing_sessions.base_version_id                           safeUuid         fk,not null       pdf-signing.ts:121
+pdf_signing_sessions.finalized_version_id                      safeUuid         null              pdf-signing.ts:124
+pdf_signing_sessions.created_by                                text             fk,not null       pdf-signing.ts:125
+pdf_signing_sessions.status                                    text             default,not null  pdf-signing.ts:129
+pdf_signing_sessions.close_reason                              text             null              pdf-signing.ts:133
+pdf_signing_sessions.handoff_token_hash                        varchar          not null          pdf-signing.ts:136
+pdf_signing_sessions.handoff_expires_at                        timestamptz      not null          pdf-signing.ts:137
+pdf_signing_sessions.handoff_consumed_at                       timestamptz      null              pdf-signing.ts:138
+pdf_signing_sessions.session_token_hash                        varchar          null              pdf-signing.ts:139
+pdf_signing_sessions.token_expires_at                          timestamptz      not null          pdf-signing.ts:140
+pdf_signing_sessions.reason                                    text             null              pdf-signing.ts:141
+pdf_signing_sessions.location                                  text             null              pdf-signing.ts:142
+pdf_signing_sessions.signer_certificate_der                    bytea            null              pdf-signing.ts:143
+pdf_signing_sessions.signer_certificate_chain                  jsonb            null              pdf-signing.ts:144
+pdf_signing_sessions.signing_time                              timestamptz      null              pdf-signing.ts:147
+pdf_signing_sessions.stamp                                     jsonb            null              pdf-signing.ts:149  The visible stamp to sign into; null signs invisibly.
+pdf_signing_sessions.digest_hex                                varchar          null              pdf-signing.ts:150
+pdf_signing_sessions.signed_attributes                         bytea            null              pdf-signing.ts:155  The DER CMS signed attributes `digest_hex` hashes.
+pdf_signing_sessions.placeholder_size                          integer          null              pdf-signing.ts:160  Bytes reserved for the signature in phase 1.
+pdf_signing_sessions.signature                                 bytea            null              pdf-signing.ts:166  The desktop's verified signature.
+pdf_signing_sessions.finalize_attempts                         integer          default,not null  pdf-signing.ts:168  Finalizations started; bounded so a failing one cannot loop.
+pdf_signing_sessions.finalize_lease_expires_at                 timestamptz      null              pdf-signing.ts:174  Set while a finalization runs, so a retry that races a slow attempt waits instead of embedding twice.
+pdf_signing_sessions.key_type                                  text             null              pdf-signing.ts:175
+pdf_signing_sessions.created_at                                timestamptz      default,not null  pdf-signing.ts:176
+pdf_signing_sessions.updated_at                                timestamptz      default,not null  pdf-signing.ts:177
+pdf_signing_sessions.closed_at                                 timestamptz      null              pdf-signing.ts:181
 ```

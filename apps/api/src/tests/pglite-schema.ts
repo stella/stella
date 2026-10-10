@@ -326,6 +326,40 @@ const TREE_PARENT_CYCLE_GUARD_MIGRATION_PATH = nodePath.join(
   "20261004003000_tree_parent_cycle_guard",
   "migration.sql",
 );
+const ENTITY_FEATURE_GATE_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261009112500_entity_feature_row_gates",
+  "migration.sql",
+);
+
+/** Replay the committed gate migration's transactional setup against pushed schema. */
+export const installPgliteEntityFeatureGateMaintenance = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    ENTITY_FEATURE_GATE_MIGRATION_PATH,
+  );
+  const commitIndex = statements.findIndex((statement) =>
+    /^COMMIT\b/iu.test(executableSql(statement)),
+  );
+  if (commitIndex === -1) {
+    panic("Entity feature gate migration has no initial transaction commit");
+  }
+
+  for (const statement of statements.slice(0, commitIndex)) {
+    const executable = executableSql(statement);
+    if (
+      executable.length === 0 ||
+      /^SET\s+(?:lock_timeout|statement_timeout)\b/iu.test(executable)
+    ) {
+      continue;
+    }
+    if (/\bCONCURRENTLY\b/iu.test(executable)) {
+      panic("PGlite gate setup must not replay concurrent index statements");
+    }
+    await db.execute(sql.raw(statement));
+  }
+};
 
 /** Install the self-referencing tree triggers omitted by declarative schema push. */
 export const installPgliteTreeParentGuards = async (
@@ -393,6 +427,26 @@ export const installPgliteChatRunLogRls = async (
     panic("Chat run log entries FORCE RLS migration statement is missing");
   }
   await db.execute(sql.raw(entriesStatement));
+};
+
+/** Apply the committed setting omitted by schema push. */
+export const installPgliteChatSecretRls = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    nodePath.join(DRIZZLE_DIR, "20261008090000_chat_secrets", "migration.sql"),
+  );
+  for (const table of ["chat_secrets"]) {
+    const statement = statements.find((candidate) =>
+      executableSql(candidate).startsWith(
+        `ALTER TABLE "${table}" FORCE ROW LEVEL SECURITY`,
+      ),
+    );
+    if (statement === undefined) {
+      panic("Chat secret FORCE RLS migration statement is missing");
+    }
+    await db.execute(sql.raw(statement));
+  }
 };
 
 const PDF_SIGNING_TOKEN_SCOPE_STATEMENT_PREFIXES = [

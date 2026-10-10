@@ -1,6 +1,8 @@
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import {
+  lstatSync,
+  readlinkSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -11,6 +13,8 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+
+import { createSha256, sha256Hex as nodeSha256Hex } from "@stll/sha256/node";
 
 import { CI_GENERATED_FILES } from "./generated-files";
 import {
@@ -116,17 +120,23 @@ test("CLI runtime preparation consumes a verified artifact without invoking gene
         readFileSync(new URL(file, import.meta.url), "utf-8"),
       );
     }
-    for (const dependency of ["better-result", "valibot"]) {
+    for (const dependency of ["better-result", "valibot", "@stll/sha256/bun"]) {
       const entry = import.meta.resolve(dependency);
+      const packageName = dependency.startsWith("@")
+        ? dependency.split("/").slice(0, 2).join("/")
+        : dependency;
+      const directoryName = path.basename(packageName);
       let directory = path.dirname(new URL(entry).pathname);
-      while (path.basename(directory) !== dependency) {
+      while (path.basename(directory) !== directoryName) {
         const parent = path.dirname(directory);
         if (parent === directory) {
           panic(`Fixture dependency directory not found: ${dependency}`);
         }
         directory = parent;
       }
-      symlinkSync(directory, path.join(root, "node_modules", dependency));
+      const destination = path.join(root, "node_modules", packageName);
+      mkdirSync(path.dirname(destination), { recursive: true });
+      symlinkSync(directory, destination);
     }
     write(
       "packages/cli/src/codegen.ts",
@@ -376,6 +386,77 @@ test("API runtime generation works with only packaged sources and rejects a root
     expect(broken.stderr.toString()).toContain(
       "Cannot find module '../../../scripts/generated-files'",
     );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// A gitlink hashes its mode and object id, a symlink its target, anything
+// else its contents.
+const treeEntryBytes = (entry: string, separator: number, absolute: string) => {
+  if (entry.startsWith("160000 ")) {
+    return entry.slice(0, separator);
+  }
+  return lstatSync(absolute).isSymbolicLink()
+    ? readlinkSync(absolute)
+    : readFileSync(absolute);
+};
+
+test("prepared input identities retain tracked directory, symlink and byte framing", () => {
+  const { root, write } = fixture();
+  try {
+    write("nested/Článek.ts", 'export const title = "Příliš žluťoučký kůň";\n');
+    write("empty.txt", "");
+    writeFileSync(
+      path.join(root, "binary.dat"),
+      new Uint8Array([255, 0, 128, 13, 10]),
+    );
+    symlinkSync("nested/Článek.ts", path.join(root, "link.ts"));
+    expect(
+      Bun.spawnSync(
+        ["git", "add", "nested", "empty.txt", "binary.dat", "link.ts"],
+        { cwd: root },
+      ).exitCode,
+    ).toBe(0);
+    expect(
+      Bun.spawnSync(
+        [
+          "git",
+          "update-index",
+          "--add",
+          "--cacheinfo",
+          "160000",
+          "a".repeat(40),
+          "submodule",
+        ],
+        { cwd: root },
+      ).exitCode,
+    ).toBe(0);
+    const inventory = Bun.spawnSync(["git", "ls-files", "--stage", "-z"], {
+      cwd: root,
+    });
+    expect(inventory.exitCode).toBe(0);
+    const oracle = createSha256().update(
+      JSON.stringify({ bun: Bun.version, compiler: "test-compiler" }),
+    );
+    const generated = new Set<string>(CI_GENERATED_FILES);
+    for (const entry of inventory.stdout.toString().split("\0")) {
+      if (entry === "") {
+        continue;
+      }
+      const separator = entry.indexOf("\t");
+      expect(separator).toBeGreaterThan(0);
+      const file = entry.slice(separator + 1);
+      if (generated.has(file)) {
+        continue;
+      }
+      const absolute = path.join(root, file);
+      const bytes = treeEntryBytes(entry, separator, absolute);
+      oracle.update(
+        JSON.stringify([entry.slice(0, 6), file, nodeSha256Hex(bytes)]),
+      );
+    }
+    expect(generatedInputIdentity(root).inputHash).toBe(oracle.digest("hex"));
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
