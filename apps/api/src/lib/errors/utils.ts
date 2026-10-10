@@ -260,6 +260,7 @@ const serializeSafeError = (error: unknown): unknown => {
     const stack = safeErrorStack(error);
     const cause = safeErrorCause(error);
     const out: SerializedError = {
+      ...Object.fromEntries(Object.entries(error)),
       name: errorClassName(error),
       ...errorSystemFields(error),
       message: safeErrorMessage(error) ?? "",
