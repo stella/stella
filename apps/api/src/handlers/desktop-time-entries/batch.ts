@@ -235,9 +235,8 @@ export const createDesktopTimeEntryBatchEndpoint = (
           }
           const entries = [];
           const auditEvents: AuditEvent[] = [];
-          const bufferAuditEvent: AuditRecorder = async (_tx, events) => {
+          const bufferAuditEvent: AuditRecorder = (_tx, events) => {
             auditEvents.push(...(Array.isArray(events) ? events : [events]));
-            return Promise.resolve();
           };
           for (const { workspaceId, prepared } of preparedBatch.value) {
             const entry = await insertPreparedTimeEntry({

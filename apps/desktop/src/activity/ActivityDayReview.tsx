@@ -226,23 +226,17 @@ export const ActivityDayReview = ({
         ? submission
         : {
             idempotencyKey: crypto.randomUUID(),
-            items: selected.flatMap((group) =>
-              group.matter
-                ? [
-                    {
-                      entry: {
-                        matterId: group.matter.id,
-                        dateWorked: snapshot.date,
-                        timezoneId: Temporal.Now.timeZoneId(),
-                        durationMinutes: group.roundedTenths * 6,
-                        narrative: editFor(group).narrative,
-                        billable: editFor(group).billable,
-                      },
-                      ranges: group.ranges,
-                    },
-                  ]
-                : [],
-            ),
+            items: selected.map((group) => ({
+              entry: {
+                matterId: group.matter.id,
+                dateWorked: snapshot.date,
+                timezoneId: Temporal.Now.timeZoneId(),
+                durationMinutes: group.roundedTenths * 6,
+                narrative: editFor(group).narrative,
+                billable: editFor(group).billable,
+              },
+              ranges: group.ranges,
+            })),
           };
     if (pending.items.length === 0) {
       return;

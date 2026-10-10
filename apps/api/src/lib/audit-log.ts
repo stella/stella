@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
+import type { MaybePromise } from "elysia";
 
 import type { Transaction } from "@/api/db/root";
 import type { AUDIT_ACTIVITY_CATEGORIES } from "@/api/db/schema";
@@ -125,7 +126,9 @@ export type AuditEvent =
 export type AuditRecorder = (
   tx: AuditTransaction,
   event: AuditEvent | AuditEvent[],
-) => Promise<void>;
+) => MaybePromise<void>;
+
+type AsyncAuditRecorder = (...args: Parameters<AuditRecorder>) => Promise<void>;
 
 type AuditRecorderBindings = {
   organizationId: SafeId<"organization">;
@@ -446,7 +449,7 @@ export const recordAuditGroups = async ({
  * request-derived metadata (IP, UA, forwarded-for) since there is no request.
  */
 export const createBackgroundAuditRecorder =
-  (bindings: BackgroundAuditRecorderBindings): AuditRecorder =>
+  (bindings: BackgroundAuditRecorderBindings): AsyncAuditRecorder =>
   async (tx, event) => {
     await recordAuditGroups({
       tx,
@@ -456,7 +459,7 @@ export const createBackgroundAuditRecorder =
 
 export const createAuditRecorder = (
   bindings: AuditRecorderBindings,
-): AuditRecorder => {
+): AsyncAuditRecorder => {
   const base = baseRequestMetadata(bindings.request, bindings.server);
 
   return async (tx, event) => {
