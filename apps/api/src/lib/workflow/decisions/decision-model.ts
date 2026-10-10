@@ -130,7 +130,20 @@ export const probeDecisionModel = async ({
     abortSignal: AbortSignal.timeout(timeoutMs),
   });
   if (Result.isOk(asked)) {
-    return { valid: true };
+    const answer = asked.value.answers.probe;
+    switch (answer.type) {
+      case "noul":
+        return { valid: true };
+      case "refusal":
+        return {
+          valid: false,
+          error:
+            "The decision model declined to answer the validation question",
+        };
+      default:
+        answer satisfies never;
+        return panic("Unhandled decision model probe answer");
+    }
   }
   const { kind, status, message } = asked.error;
   if (kind === "http" && (status === 401 || status === 403)) {

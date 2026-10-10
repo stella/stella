@@ -194,6 +194,33 @@ describe("decision model request policy", () => {
 });
 
 describe("OpenAI decision credentials", () => {
+  test("a refused credential probe remains unavailable", async () => {
+    const { createOpenAIDecisionsClient } = await import("./openai-decisions");
+    const result = await probeDecisionModel({
+      config: {
+        provider: "openai",
+        apiKey: "candidate-key",
+        modelId: "gpt-6-luna",
+        region: "eu",
+      },
+      timeoutMs: 1000,
+      createClient: (config) =>
+        createOpenAIDecisionsClient({
+          apiKey: config.apiKey,
+          fetcher: async () =>
+            Response.json({
+              model: "gpt-6-luna",
+              answers: [{ type: "refusal", name: "probe" }],
+              usage: { input_tokens: 2, output_tokens: 0 },
+            }),
+        }),
+    });
+    expect(result).toEqual({
+      valid: false,
+      error: "The decision model declined to answer the validation question",
+    });
+  });
+
   test.each(["customer", "public_corpus"] as const)(
     "missing reused credentials fall back for %s and report one config defect",
     async (dataClass) => {
