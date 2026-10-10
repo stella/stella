@@ -232,7 +232,7 @@ export const AIConfigDecisionModel = ({
             </Select>
           </Field>
           <Field>
-            <FieldLabel>{t("aiConfig.dataRegion")}</FieldLabel>
+            <FieldLabel>{t("aiConfig.decision.dataRegion")}</FieldLabel>
             <Select
               disabled={disabled}
               value={draft.region}
@@ -250,7 +250,7 @@ export const AIConfigDecisionModel = ({
                   {t("aiConfig.decision.regionEu")}
                 </SelectItem>
                 <SelectItem value="global">
-                  {t("aiConfig.regions.global")}
+                  {t("aiConfig.decision.regionGlobal")}
                 </SelectItem>
               </SelectPopup>
             </Select>

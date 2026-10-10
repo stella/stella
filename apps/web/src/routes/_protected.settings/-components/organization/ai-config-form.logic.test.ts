@@ -53,6 +53,7 @@ test.each([
           provider: "openai",
           modelId: "gpt-6-luna",
           region: "eu",
+          apiKeyMasked: undefined,
         },
       }),
     ).toBe(expected);
