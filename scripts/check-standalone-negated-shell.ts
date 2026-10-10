@@ -375,6 +375,7 @@ const trackCondition = (stack: ConditionState[], word: string) => {
 };
 
 const NEWLINE = new Set(["\n"]);
+const LINE_BREAKS = new Set(["\n", "#"]);
 
 const opensFunctionBody = (tokens: readonly Token[], index: number) => {
   // The body brace may sit on its own line after the definition.
@@ -454,7 +455,12 @@ const negationConsumed = ({
   // follow the list containing the negation to its end.
   let listEnd = end;
   while (isOperator(tokens[listEnd], AND_OR)) {
-    listEnd = pipelineEnd(tokens, listEnd);
+    // An and-or operator continues the list across newlines and comments.
+    let next = listEnd + 1;
+    while (isOperator(tokens[next], LINE_BREAKS)) {
+      next += 1;
+    }
+    listEnd = pipelineEnd(tokens, next - 1);
   }
   let listTail = listEnd;
   while (isOperator(tokens[listTail], STATEMENT_ENDS)) {

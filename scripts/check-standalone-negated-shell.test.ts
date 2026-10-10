@@ -253,6 +253,12 @@ test("a condition negation counts only in the list that decides the condition", 
   ).toHaveLength(1);
   expect(
     check(
+      "scripts/condition-continued.sh",
+      "if ! grep -q x file &&\n  # still the condition\n  test -f other; then echo ok; fi",
+    ),
+  ).toEqual([]);
+  expect(
+    check(
       "scripts/condition-list-discarded.sh",
       "if ! true && echo absent; true; then echo x; fi",
     ),
