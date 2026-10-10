@@ -331,6 +331,52 @@ mod tests {
   }
 
   #[tokio::test]
+  async fn matter_lookups_sign_the_final_request_with_the_account_device() {
+    use axum::{extract::OriginalUri, routing::get};
+    use std::sync::{
+      Arc,
+      atomic::{AtomicUsize, Ordering},
+    };
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let account = fixture(format!("http://{}", listener.local_addr().unwrap())).await;
+    let thumbprint = account.device_key.thumbprint().unwrap();
+    let base = account.api_base_url.clone();
+    let requests = Arc::new(AtomicUsize::new(0));
+    let received = Arc::clone(&requests);
+    let router = Router::new().route(
+      "/v1/desktop/{*path}",
+      get(move |OriginalUri(uri): OriginalUri, headers: HeaderMap| {
+        let mut request = reqwest::Request::new(
+          reqwest::Method::GET,
+          format!("{base}{uri}").parse().unwrap(),
+        );
+        *request.headers_mut() = headers;
+        crate::device_proof::tests::verify_request(
+          &request,
+          &thumbprint,
+          Some("fixture_key"),
+          None,
+        );
+        match uri.path() {
+          "/v1/desktop/matters" => assert_eq!(uri.query(), Some("query=A%2F101")),
+          "/v1/desktop/matter-candidates" => assert_eq!(uri.query(), None),
+          _ => panic!("Unexpected matter lookup route"),
+        }
+        received.fetch_add(1, Ordering::SeqCst);
+        async { Json(serde_json::json!({"matters": []})) }
+      }),
+    );
+    let server = tokio::spawn(async move {
+      axum::serve(listener, router).await.unwrap();
+    });
+    assert!(search_matters(&account, "A/101").await.unwrap().is_empty());
+    assert!(candidates(&account).await.unwrap().is_empty());
+    assert_eq!(requests.load(Ordering::SeqCst), 2);
+    server.abort();
+  }
+
+  #[tokio::test]
   async fn outbound_request_contains_only_confirmed_fields_and_credential() {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let account = fixture(format!("http://{}", listener.local_addr().unwrap())).await;
