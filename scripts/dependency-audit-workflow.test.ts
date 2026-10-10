@@ -5,6 +5,9 @@ import * as v from "valibot";
 const root = path.resolve(import.meta.dir, "..");
 const stepSchema = v.looseObject({
   name: v.optional(v.string()),
+  id: v.optional(v.string()),
+  uses: v.optional(v.string()),
+  with: v.optional(v.record(v.string(), v.unknown())),
   run: v.optional(v.string()),
   if: v.optional(v.string()),
   env: v.optional(v.record(v.string(), v.unknown())),
@@ -26,7 +29,13 @@ const workflowSchema = v.looseObject({
       ),
     ),
   }),
-  jobs: v.record(v.string(), v.looseObject({ steps: v.array(stepSchema) })),
+  jobs: v.record(
+    v.string(),
+    v.looseObject({
+      permissions: v.optional(v.record(v.string(), v.string())),
+      steps: v.array(stepSchema),
+    }),
+  ),
 });
 const readWorkflow = async (name: string) =>
   v.parse(
@@ -37,6 +46,7 @@ const readWorkflow = async (name: string) =>
   );
 const auditWorkflow = await readWorkflow("dependency-audit.yml");
 const releaseWorkflow = await readWorkflow("release-tag.yml");
+const catalogWorkflow = await readWorkflow("model-catalog-check.yml");
 
 const step = (
   workflow: v.InferOutput<typeof workflowSchema>,
@@ -88,4 +98,38 @@ test("release audit blocks findings unless a reasoned explicit waiver is supplie
     "Refuse a release with known dependency advisories",
   );
   expect(gate.run).toBe("bash scripts/check-release-dependency-audit.sh");
+});
+
+const githubExpression = (body: string) => `\${{ ${body} }}`;
+
+test("remediation pushes and pull requests authenticate with a repository-scoped app token", () => {
+  const token = step(auditWorkflow, "remediate", "Mint app token");
+  const catalogToken = step(
+    catalogWorkflow,
+    "model-catalog-check",
+    "Mint app token",
+  );
+  expect(token.id).toBe("app-token");
+  expect(token.uses).toBe(catalogToken.uses);
+  expect(token.with).toEqual(catalogToken.with);
+  expect(token.with).toEqual({
+    "app-id": githubExpression("secrets.PROVENANCE_APP_ID"),
+    "private-key": githubExpression("secrets.PROVENANCE_APP_PRIVATE_KEY"),
+    owner: githubExpression("github.repository_owner"),
+    repositories: githubExpression("github.event.repository.name"),
+    "permission-contents": "write",
+    "permission-pull-requests": "write",
+  });
+  expect(auditWorkflow.jobs["remediate"]?.permissions).toEqual({
+    contents: "read",
+  });
+  expect(
+    step(auditWorkflow, "remediate", "Checkout").with?.["persist-credentials"],
+  ).toBe(false);
+  const remediation = step(auditWorkflow, "remediate", "Open one remediation");
+  expect(remediation.env?.["GH_TOKEN"]).toBe(
+    githubExpression("steps.app-token.outputs.token"),
+  );
+  expect(remediation.env?.["GITHUB_TOKEN"]).toBeUndefined();
+  expect(remediation.run).toBe("bash scripts/remediate-dependency-audit.sh");
 });

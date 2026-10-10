@@ -12,12 +12,20 @@ fi
 
 bun --no-env-file audit fix
 if ! git diff --quiet -- bun.lock; then
+  # A source-only checkout has no tracking ref for an abandoned fix branch.
+  # Lease the fetched tip explicitly, or require absence when creating it.
+  fix_ref="refs/heads/$fix_branch"
+  observed_sha="$(git -c credential.helper= -c credential.helper='!gh auth git-credential' ls-remote --heads origin "$fix_ref" | cut -f1)"
+  if [[ -n "$observed_sha" ]]; then
+    git -c credential.helper= -c credential.helper='!gh auth git-credential' fetch --no-tags origin "$fix_ref"
+    observed_sha="$(git rev-parse FETCH_HEAD)"
+  fi
   git config user.name "stella-dependency-audit[bot]"
   git config user.email "stella-dependency-audit[bot]@users.noreply.github.com"
   git checkout -B "$fix_branch"
   git add bun.lock
   git commit -m "fix: resolve dependency audit findings"
-  git -c credential.helper= -c credential.helper='!gh auth git-credential' push --force-with-lease origin "$fix_branch"
+  git -c credential.helper= -c credential.helper='!gh auth git-credential' push "--force-with-lease=$fix_ref:$observed_sha" origin "$fix_branch"
   gh pr create --head "$fix_branch" --base main \
     --title "fix: resolve dependency audit findings" \
     --body "Updates resolved dependencies to address the current high or critical advisory findings."
