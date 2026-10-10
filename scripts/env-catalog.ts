@@ -1318,6 +1318,11 @@ export const DEPLOYMENT_ENV_KEYS = new Set([
 ]);
 
 export const TOOLING_ENV_KEYS = new Set([
+  // CI image resolution and smoke tooling; product defaults remain upstream.
+  "CI_IMAGE_MIRROR_ENABLED",
+  "CI_PLAYWRIGHT_IMAGE",
+  "POSTGRES_IMAGE",
+  "REDIS_IMAGE",
   // The manual checks workflow passes its inputs and result files to its scripts.
   "CHECK_CHECK",
   "CHECK_EXIT_FILE",

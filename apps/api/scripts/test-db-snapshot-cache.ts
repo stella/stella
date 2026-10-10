@@ -1,5 +1,4 @@
 import { TaggedError } from "better-result";
-import { createHash } from "node:crypto";
 import {
   accessSync,
   constants,
@@ -19,6 +18,7 @@ import path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 
 import { compareCodeUnit } from "@stll/collation";
+import { createSha256 } from "@stll/sha256/bun";
 
 const SNAPSHOT_FORMAT = "1";
 const LOCK_TIMEOUT_MS = 5 * 60_000;
@@ -134,7 +134,7 @@ export const snapshotInputPaths = (
 };
 
 export const snapshotKey = (repositoryRoot: string, entryPoint: string) => {
-  const hash = createHash("sha256");
+  const hash = createSha256();
   const canonicalRoot = realpathSync(repositoryRoot);
   hash.update(SNAPSHOT_FORMAT);
   hash.update("\0");
@@ -167,7 +167,7 @@ export const snapshotCacheDir = (env: NodeJS.ProcessEnv) =>
   );
 
 export const snapshotDigest = async (filePath: string) => {
-  const hash = createHash("sha256");
+  const hash = createSha256();
   for await (const chunk of createReadStream(filePath)) {
     hash.update(chunk);
   }
