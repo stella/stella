@@ -6,13 +6,28 @@
  * corpus (Harasta, Masaryk University).
  */
 
-import { REPORTED_PARTY_SUBMISSION_GROUP, type Polarity } from "./consts";
+import {
+  POLARITY_RULE_KIND,
+  REPORTED_PARTY_SUBMISSION_GROUP,
+  type ClassifiablePolarity,
+} from "./consts";
 
-type SeedRule = {
+type SeedRuleBase = {
   pattern: string;
-  polarity: Polarity;
   language: string;
 };
+
+type StanceSeedRule = SeedRuleBase & {
+  polarity: ClassifiablePolarity;
+  kind: typeof POLARITY_RULE_KIND.STANCE;
+};
+
+type FormSeedRule = SeedRuleBase & {
+  polarity: "neutral";
+  kind: typeof POLARITY_RULE_KIND.FORM;
+};
+
+export type SeedRule = StanceSeedRule | FormSeedRule;
 
 type RetiredSeedRule = Pick<SeedRule, "pattern" | "language">;
 
@@ -106,49 +121,184 @@ const CS_GRAND_CHAMBER_DOCKET =
 
 export const SEED_RULES: readonly SeedRule[] = [
   // -- Czech: positive -------------------------------------------
-  { pattern: "v\\s+souladu\\s+s", polarity: "positive", language: "cs" },
-  { pattern: "odkazuje\\s+na", polarity: "positive", language: "cs" },
-  { pattern: "jak\\s+konstatoval", polarity: "positive", language: "cs" },
-  { pattern: "jak\\s+dovodil", polarity: "positive", language: "cs" },
-  { pattern: "ve\\s+smyslu\\s+nálezu", polarity: "positive", language: "cs" },
-  { pattern: "v\\s+návaznosti\\s+na", polarity: "positive", language: "cs" },
-  { pattern: "potvrzuje\\s+závěr", polarity: "positive", language: "cs" },
-  { pattern: "v\\s+intencích", polarity: "positive", language: "cs" },
-  { pattern: "respektuje\\s+závěr", polarity: "positive", language: "cs" },
+  {
+    pattern: "v\\s+souladu\\s+s",
+    polarity: "positive",
+    language: "cs",
+    kind: POLARITY_RULE_KIND.STANCE,
+  },
+  {
+    pattern: "odkazuje\\s+na",
+    polarity: "positive",
+    language: "cs",
+    kind: POLARITY_RULE_KIND.STANCE,
+  },
+  {
+    pattern: "jak\\s+konstatoval",
+    polarity: "positive",
+    language: "cs",
+    kind: POLARITY_RULE_KIND.STANCE,
+  },
+  {
+    pattern: "jak\\s+dovodil",
+    polarity: "positive",
+    language: "cs",
+    kind: POLARITY_RULE_KIND.STANCE,
+  },
+  {
+    pattern: "ve\\s+smyslu\\s+nálezu",
+    polarity: "positive",
+    language: "cs",
+    kind: POLARITY_RULE_KIND.STANCE,
+  },
+  {
+    pattern: "v\\s+návaznosti\\s+na",
+    polarity: "positive",
+    language: "cs",
+    kind: POLARITY_RULE_KIND.STANCE,
+  },
+  {
+    pattern: "potvrzuje\\s+závěr",
+    polarity: "positive",
+    language: "cs",
+    kind: POLARITY_RULE_KIND.STANCE,
+  },
+  {
+    pattern: "v\\s+intencích",
+    polarity: "positive",
+    language: "cs",
+    kind: POLARITY_RULE_KIND.STANCE,
+  },
+  {
+    pattern: "respektuje\\s+závěr",
+    polarity: "positive",
+    language: "cs",
+    kind: POLARITY_RULE_KIND.STANCE,
+  },
 
-  // -- Czech: supportive (implicit reliance) --------------------
-  { pattern: "srov\\.", polarity: "supportive", language: "cs" },
-  { pattern: "\\bviz\\b", polarity: "supportive", language: "cs" },
-  { pattern: "obdobně", polarity: "supportive", language: "cs" },
-  { pattern: "přiměřeně", polarity: "supportive", language: "cs" },
-  { pattern: "k\\s+tomu\\s+blíže", polarity: "supportive", language: "cs" },
-  { pattern: "shodně\\s+též", polarity: "supportive", language: "cs" },
-  { pattern: "srovnej", polarity: "supportive", language: "cs" },
-  { pattern: "judikoval", polarity: "supportive", language: "cs" },
-  { pattern: "odpovídá\\s+závěr", polarity: "supportive", language: "cs" },
-  { pattern: "připomíná", polarity: "supportive", language: "cs" },
-  { pattern: "lze\\s+odkázat", polarity: "supportive", language: "cs" },
-  { pattern: "má\\s+oporu\\s+v", polarity: "supportive", language: "cs" },
-  { pattern: "přiléhavě", polarity: "supportive", language: "cs" },
-  { pattern: "v\\s+judikatuře", polarity: "supportive", language: "cs" },
-  { pattern: "z\\s+judikatury", polarity: "supportive", language: "cs" },
+  // -- Czech: citation form -------------------------------------
+  {
+    pattern: "srov\\.",
+    polarity: "neutral",
+    language: "cs",
+    kind: POLARITY_RULE_KIND.FORM,
+  },
+  {
+    pattern: "\\bviz\\b",
+    polarity: "neutral",
+    language: "cs",
+    kind: POLARITY_RULE_KIND.FORM,
+  },
+  {
+    pattern: "obdobně",
+    polarity: "neutral",
+    language: "cs",
+    kind: POLARITY_RULE_KIND.FORM,
+  },
+  {
+    pattern: "přiměřeně",
+    polarity: "neutral",
+    language: "cs",
+    kind: POLARITY_RULE_KIND.FORM,
+  },
+  {
+    pattern: "k\\s+tomu\\s+blíže",
+    polarity: "neutral",
+    language: "cs",
+    kind: POLARITY_RULE_KIND.FORM,
+  },
+  {
+    pattern: "shodně\\s+též",
+    polarity: "neutral",
+    language: "cs",
+    kind: POLARITY_RULE_KIND.FORM,
+  },
+  {
+    pattern: "srovnej",
+    polarity: "neutral",
+    language: "cs",
+    kind: POLARITY_RULE_KIND.FORM,
+  },
+  {
+    pattern: "např\\.",
+    polarity: "neutral",
+    language: "cs",
+    kind: POLARITY_RULE_KIND.FORM,
+  },
+  {
+    pattern: "\\(sp\\.\\s*zn\\.",
+    polarity: "neutral",
+    language: "cs",
+    kind: POLARITY_RULE_KIND.FORM,
+  },
+  {
+    pattern: "judikoval",
+    polarity: "supportive",
+    language: "cs",
+    kind: POLARITY_RULE_KIND.STANCE,
+  },
+  {
+    pattern: "odpovídá\\s+závěr",
+    polarity: "supportive",
+    language: "cs",
+    kind: POLARITY_RULE_KIND.STANCE,
+  },
+  {
+    pattern: "připomíná",
+    polarity: "supportive",
+    language: "cs",
+    kind: POLARITY_RULE_KIND.STANCE,
+  },
+  {
+    pattern: "lze\\s+odkázat",
+    polarity: "supportive",
+    language: "cs",
+    kind: POLARITY_RULE_KIND.STANCE,
+  },
+  {
+    pattern: "má\\s+oporu\\s+v",
+    polarity: "supportive",
+    language: "cs",
+    kind: POLARITY_RULE_KIND.STANCE,
+  },
+  {
+    pattern: "přiléhavě",
+    polarity: "supportive",
+    language: "cs",
+    kind: POLARITY_RULE_KIND.STANCE,
+  },
+  {
+    pattern: "v\\s+judikatuře",
+    polarity: "supportive",
+    language: "cs",
+    kind: POLARITY_RULE_KIND.STANCE,
+  },
+  {
+    pattern: "z\\s+judikatury",
+    polarity: "supportive",
+    language: "cs",
+    kind: POLARITY_RULE_KIND.STANCE,
+  },
 
   // -- Czech: neutral (procedural chain) -------------------------
   {
     pattern: "proti\\s+(rozsudku|usnesení|rozhodnutí)",
     polarity: "neutral",
     language: "cs",
+    kind: POLARITY_RULE_KIND.STANCE,
   },
   {
     pattern: "veden[éoá]?\\s+(u|pod)",
     polarity: "neutral",
     language: "cs",
+    kind: POLARITY_RULE_KIND.STANCE,
   },
 
   {
     pattern: `(?:stěžovatel|žalob|dovolatel|obviněn|navrhovatel|žalovan)\\p{L}*\\s+${WORDS_BETWEEN}(?:tvrdí|uvedl\\p{L}*|uvádí|namít\\p{L}*|vyjádřil\\p{L}*\\s+přesvědčení),?\\s+že\\s+(?<${REPORTED_PARTY_SUBMISSION_GROUP}>${PARTY_SUBMISSION_TEXT})`,
     polarity: "neutral",
     language: "cs",
+    kind: POLARITY_RULE_KIND.STANCE,
   },
 
   // -- Czech: negative -------------------------------------------
@@ -161,13 +311,25 @@ export const SEED_RULES: readonly SeedRule[] = [
     pattern: `na\\s+rozdíl\\s+od\\s+${WORDS_BETWEEN}${CS_DECISION_ANCHOR}`,
     polarity: "negative",
     language: "cs",
+    kind: POLARITY_RULE_KIND.STANCE,
   },
-  { pattern: "překonán[aouy]?", polarity: "negative", language: "cs" },
-  { pattern: "odchyluje\\s+se", polarity: "negative", language: "cs" },
+  {
+    pattern: "překonán[aouy]?",
+    polarity: "negative",
+    language: "cs",
+    kind: POLARITY_RULE_KIND.STANCE,
+  },
+  {
+    pattern: "odchyluje\\s+se",
+    polarity: "negative",
+    language: "cs",
+    kind: POLARITY_RULE_KIND.STANCE,
+  },
   {
     pattern: `nelze\\s+aplikovat\\s+${WORDS_BETWEEN}${CS_DECISION_ANCHOR}`,
     polarity: "negative",
     language: "cs",
+    kind: POLARITY_RULE_KIND.STANCE,
   },
   // The decision may be named before the cue ("tento rozsudek však nelze
   // aplikovat"); within the same clause the object still binds. The anchor
@@ -178,9 +340,20 @@ export const SEED_RULES: readonly SeedRule[] = [
     pattern: `\\b${CS_DECISION_ANCHOR}\\p{L}*\\s+${WORDS_BETWEEN}nelze\\s+aplikovat`,
     polarity: "negative",
     language: "cs",
+    kind: POLARITY_RULE_KIND.STANCE,
   },
-  { pattern: "odlišuje\\s+se\\s+od", polarity: "negative", language: "cs" },
-  { pattern: "nesprávně\\s+dovodil", polarity: "negative", language: "cs" },
+  {
+    pattern: "odlišuje\\s+se\\s+od",
+    polarity: "negative",
+    language: "cs",
+    kind: POLARITY_RULE_KIND.STANCE,
+  },
+  {
+    pattern: "nesprávně\\s+dovodil",
+    polarity: "negative",
+    language: "cs",
+    kind: POLARITY_RULE_KIND.STANCE,
+  },
   // What a unifying body says when it overrules: it departs, it overcomes,
   // it abandons, it does not share, and the practice "byla změněna" by its
   // ruling. Each cue is bound to the body or to a decision word so the
@@ -190,21 +363,25 @@ export const SEED_RULES: readonly SeedRule[] = [
     pattern,
     polarity: "negative",
     language: "cs",
+    kind: POLARITY_RULE_KIND.STANCE,
   })),
   {
     pattern: `překonáv(?:á|ají)\\s+${WORDS_BETWEEN}${CS_DECISION_ANCHOR}`,
     polarity: "negative",
     language: "cs",
+    kind: POLARITY_RULE_KIND.STANCE,
   },
   {
     pattern: `překonal[aoy]?\\s+${WORDS_BETWEEN}${CS_DECISION_ANCHOR}`,
     polarity: "negative",
     language: "cs",
+    kind: POLARITY_RULE_KIND.STANCE,
   },
   {
     pattern: `(?:opouští|opustil[aoy]?)\\s+${WORDS_BETWEEN}${CS_DECISION_ANCHOR}`,
     polarity: "negative",
     language: "cs",
+    kind: POLARITY_RULE_KIND.STANCE,
   },
   // "byla změněna rozsudkem velkého senátu" or "… rozsudkem ze dne …, sp. zn.
   // 31 Cdo …" is said of a practice. A judgment under review is also "změněn
@@ -214,48 +391,114 @@ export const SEED_RULES: readonly SeedRule[] = [
     pattern: `změněn[aoy]?\\s+(?:rozsudkem|usnesením|nálezem|stanoviskem)\\s+(?:${CS_UNIFYING_BODY}|${CS_GRAND_CHAMBER_DOCKET})`,
     polarity: "negative",
     language: "cs",
+    kind: POLARITY_RULE_KIND.STANCE,
   },
   {
     pattern: `nesdílí\\s+${WORDS_BETWEEN}(?:názor|závěr)\\p{L}*\\s+(?:vyslovený|vyjádřený|formulovaný|přijatý|zaujatý)\\s+${WORDS_BETWEEN}${CS_DECISION_ANCHOR}`,
     polarity: "negative",
     language: "cs",
+    kind: POLARITY_RULE_KIND.STANCE,
   },
   {
     pattern: `nelze\\s+nadále\\s+${WORDS_BETWEEN}${CS_DECISION_ANCHOR}`,
     polarity: "negative",
     language: "cs",
+    kind: POLARITY_RULE_KIND.STANCE,
   },
   {
     pattern: `\\b${CS_DECISION_ANCHOR}\\p{L}*\\s+${WORDS_BETWEEN}nelze\\s+nadále`,
     polarity: "negative",
     language: "cs",
+    kind: POLARITY_RULE_KIND.STANCE,
   },
   {
     pattern: `\\b${CS_DECISION_ANCHOR}\\p{L}*\\s+${WORDS_BETWEEN}nadále\\s+neobstoj`,
     polarity: "negative",
     language: "cs",
+    kind: POLARITY_RULE_KIND.STANCE,
   },
   {
     pattern: "k\\s+závěru\\s+odlišnému\\s+od",
     polarity: "negative",
     language: "cs",
+    kind: POLARITY_RULE_KIND.STANCE,
+  },
+  {
+    pattern: `(?:nepoužit|nepřiléhav|bezcenn)\\p{L}*\\s+${WORDS_BETWEEN}${CS_DECISION_ANCHOR}`,
+    polarity: "negative",
+    language: "cs",
+    kind: POLARITY_RULE_KIND.STANCE,
+  },
+  {
+    pattern: `\\b${CS_DECISION_ANCHOR}\\p{L}*\\s+${WORDS_BETWEEN}(?:se\\s+neuplatní|nedopad|skutkově\\s+odliš)`,
+    polarity: "negative",
+    language: "cs",
+    kind: POLARITY_RULE_KIND.STANCE,
   },
 
   // -- Slovak: positive ------------------------------------------
-  { pattern: "v\\s+súlade\\s+s", polarity: "positive", language: "sk" },
-  { pattern: "odkazuje\\s+na", polarity: "positive", language: "sk" },
-  { pattern: "ako\\s+konštatoval", polarity: "positive", language: "sk" },
-  { pattern: "potvrdzuje\\s+záver", polarity: "positive", language: "sk" },
+  {
+    pattern: "v\\s+súlade\\s+s",
+    polarity: "positive",
+    language: "sk",
+    kind: POLARITY_RULE_KIND.STANCE,
+  },
+  {
+    pattern: "odkazuje\\s+na",
+    polarity: "positive",
+    language: "sk",
+    kind: POLARITY_RULE_KIND.STANCE,
+  },
+  {
+    pattern: "ako\\s+konštatoval",
+    polarity: "positive",
+    language: "sk",
+    kind: POLARITY_RULE_KIND.STANCE,
+  },
+  {
+    pattern: "potvrdzuje\\s+záver",
+    polarity: "positive",
+    language: "sk",
+    kind: POLARITY_RULE_KIND.STANCE,
+  },
 
-  // -- Slovak: supportive (implicit reliance) -------------------
-  { pattern: "porov\\.", polarity: "supportive", language: "sk" },
-  { pattern: "pozri", polarity: "supportive", language: "sk" },
-  { pattern: "obdobne", polarity: "supportive", language: "sk" },
+  // -- Slovak: citation form ------------------------------------
+  {
+    pattern: "porov\\.",
+    polarity: "neutral",
+    language: "sk",
+    kind: POLARITY_RULE_KIND.FORM,
+  },
+  {
+    pattern: "pozri",
+    polarity: "neutral",
+    language: "sk",
+    kind: POLARITY_RULE_KIND.FORM,
+  },
+  {
+    pattern: "obdobne",
+    polarity: "neutral",
+    language: "sk",
+    kind: POLARITY_RULE_KIND.FORM,
+  },
+  {
+    pattern: "napr\\.",
+    polarity: "neutral",
+    language: "sk",
+    kind: POLARITY_RULE_KIND.FORM,
+  },
+  {
+    pattern: "\\(sp\\.\\s*zn\\.",
+    polarity: "neutral",
+    language: "sk",
+    kind: POLARITY_RULE_KIND.FORM,
+  },
 
   {
     pattern: `(?:sťažovateľ|navrhovateľ|žalob|obvinen|dovolateľ|žalovan)\\p{L}*\\s+${WORDS_BETWEEN}(?:tvrdí|uviedol|uvádza|namiet\\p{L}*|vyjadril\\s+presvedčenie),?\\s+že\\s+(?<${REPORTED_PARTY_SUBMISSION_GROUP}>${PARTY_SUBMISSION_TEXT})`,
     polarity: "neutral",
     language: "sk",
+    kind: POLARITY_RULE_KIND.STANCE,
   },
 
   // -- Slovak: negative ------------------------------------------
@@ -263,18 +506,43 @@ export const SEED_RULES: readonly SeedRule[] = [
     pattern: `na\\s+rozdiel\\s+od\\s+${WORDS_BETWEEN}${SK_DECISION_ANCHOR}`,
     polarity: "negative",
     language: "sk",
+    kind: POLARITY_RULE_KIND.STANCE,
   },
-  { pattern: "prekonan[áéý]?", polarity: "negative", language: "sk" },
-  { pattern: "odlišuje\\s+sa\\s+od", polarity: "negative", language: "sk" },
+  {
+    pattern: "prekonan[áéý]?",
+    polarity: "negative",
+    language: "sk",
+    kind: POLARITY_RULE_KIND.STANCE,
+  },
+  {
+    pattern: "odlišuje\\s+sa\\s+od",
+    polarity: "negative",
+    language: "sk",
+    kind: POLARITY_RULE_KIND.STANCE,
+  },
   ...SK_BODY_DEPARTS.map((pattern): SeedRule => ({
     pattern,
     polarity: "negative",
     language: "sk",
+    kind: POLARITY_RULE_KIND.STANCE,
   })),
   {
     pattern: `prekonáva\\s+${WORDS_BETWEEN}${SK_DECISION_ANCHOR}`,
     polarity: "negative",
     language: "sk",
+    kind: POLARITY_RULE_KIND.STANCE,
+  },
+  {
+    pattern: `(?:nepoužit|nepriliehav|bezcenn)\\p{L}*\\s+${WORDS_BETWEEN}${SK_DECISION_ANCHOR}`,
+    polarity: "negative",
+    language: "sk",
+    kind: POLARITY_RULE_KIND.STANCE,
+  },
+  {
+    pattern: `\\b${SK_DECISION_ANCHOR}\\p{L}*\\s+${WORDS_BETWEEN}(?:sa\\s+nevzťahuj|skutkovo\\s+odliš)`,
+    polarity: "negative",
+    language: "sk",
+    kind: POLARITY_RULE_KIND.STANCE,
   },
 ];
 

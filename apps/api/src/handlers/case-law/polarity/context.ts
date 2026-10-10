@@ -15,7 +15,8 @@ const WINDOW_CHARS = 200;
  * letters, so a publisher that serves "á" decomposed (U+0061 U+0301) would
  * silently match none of them: a combining mark is neither the letter nor
  * `\p{L}`. Nothing indexes into a window, so composing it costs no offset; the
- * citation is located in the section's own characters first.
+ * citation is located in the section's own characters first. Evidence offsets
+ * remain in the original text, before normalization.
  */
 export type CitationContexts = readonly [string, ...string[]];
 
@@ -49,6 +50,8 @@ export type CitationWindows = {
    * mention would spend its budget repeating itself.
    */
   contexts: CitationContexts;
+  /** Bounding offsets into the original section texts joined with a newline. */
+  evidenceSpan: { start: number; end: number };
 };
 
 type Span = { start: number; end: number };
@@ -60,6 +63,12 @@ export const extractContexts = (
 ): CitationWindows | null => {
   const section = sectionIndex !== null ? sections[sectionIndex] : undefined;
   const text = section?.text ?? sections.map((s) => s.text).join("\n");
+  const sectionOffset =
+    section && sectionIndex !== null
+      ? sections
+          .slice(0, sectionIndex)
+          .reduce((offset, s) => offset + s.text.length + 1, 0)
+      : 0;
 
   const spans: Span[] = [];
   for (
@@ -96,5 +105,9 @@ export const extractContexts = (
   return {
     mentions: [window(first), ...rest.map(window)],
     contexts: [window(mergedFirst), ...mergedRest.map(window)],
+    evidenceSpan: {
+      start: sectionOffset + first.start,
+      end: sectionOffset + (rest.at(-1) ?? first).end,
+    },
   };
 };

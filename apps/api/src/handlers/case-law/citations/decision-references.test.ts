@@ -28,7 +28,12 @@ import {
   citationRowsOf,
   planDecisionCitations,
 } from "@/api/handlers/case-law/ingestion/pipeline/citations";
-import { POLARITIES, POLARITY } from "@/api/handlers/case-law/polarity/consts";
+import {
+  POLARITIES,
+  POLARITY,
+  POLARITY_RULE_KIND,
+  POLARITY_CLASSIFIER_VERSION,
+} from "@/api/handlers/case-law/polarity/consts";
 import { compileRules } from "@/api/handlers/case-law/polarity/rule-engine";
 import { toSafeId } from "@/api/lib/branded-types";
 
@@ -113,6 +118,7 @@ test.each(vectors.map((vector) => [vector.name, vector] as const))(
           compileRules(
             vector.rules.map((rule) => ({
               ...rule,
+              kind: POLARITY_RULE_KIND.STANCE,
               id: toSafeId<"caseLawPolarityRule">(rule.id),
             })),
           ),
@@ -122,8 +128,39 @@ test.each(vectors.map((vector) => [vector.name, vector] as const))(
       scopedDb: noDatabase,
       sections: vector.sections,
     });
-    const rows: unknown = citationRowsOf(plan.unwrap()).unwrap();
-    expect(rows).toEqual(vector.rows);
+    const rows = citationRowsOf(plan.unwrap()).unwrap();
+    const recordedRows = rows.map(
+      ({
+        polaritySource,
+        polarityClassifierVersion,
+        polarityWindowStart,
+        polarityWindowEnd,
+        polarityConfidence,
+        citedPart,
+        ...row
+      }) => {
+        expect(citedPart).toBe("not-stated");
+        if (row.polarity === null) {
+          expect([
+            polaritySource,
+            polarityClassifierVersion,
+            polarityWindowStart,
+            polarityWindowEnd,
+            polarityConfidence,
+          ]).toEqual([null, null, null, null, null]);
+          return row;
+        }
+        expect(polaritySource).toBe("rule");
+        expect(polarityClassifierVersion).toBe(POLARITY_CLASSIFIER_VERSION);
+        expect(polarityConfidence).toBeGreaterThan(0);
+        expect(polarityWindowStart).toBeGreaterThanOrEqual(0);
+        expect(polarityWindowEnd).toBeLessThanOrEqual(
+          vector.sections.map(({ text }) => text).join("\n").length,
+        );
+        return row;
+      },
+    );
+    expect(recordedRows).toEqual(vector.rows);
   },
 );
 

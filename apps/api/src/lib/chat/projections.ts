@@ -46,6 +46,8 @@ import {
 } from "@/api/lib/business-registries/sanctions-check-vocabulary";
 import {
   CITATION_READ_DIRECTIONS,
+  CITATION_POLARITY_SOURCES,
+  CITED_PARTS,
   CITATION_TREATMENTS,
 } from "@/api/lib/case-law/citation-vocabulary";
 import {
@@ -1710,6 +1712,13 @@ export const READ_CASE_LAW_CITATIONS_PROJECTION = v.strictObject({
       // the classifier never reached and one it could not answer for are both
       // the absence of a reading, never a neutral one.
       polarity: v.picklist(CITATION_TREATMENTS),
+      polarityEvidence: v.strictObject({
+        source: v.nullable(v.picklist(CITATION_POLARITY_SOURCES)),
+        ruleId: v.nullable(passthroughId()),
+        classifierVersion: v.nullable(v.string()),
+        excerpt: v.nullable(v.string()),
+      }),
+      citedPart: v.picklist(CITED_PARTS),
       // Null for a citation the corpus holds no decision for.
       decision: v.nullable(
         v.strictObject({

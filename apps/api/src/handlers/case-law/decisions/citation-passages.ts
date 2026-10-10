@@ -22,7 +22,11 @@ import { findCitationPassage } from "@stll/legal-ast/citation-passage";
 import type { CitationPassageMention } from "@stll/legal-ast/citation-passage";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
-import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import {
+  caseLawCitations,
+  caseLawDecisions,
+  caseLawSources,
+} from "@/api/db/schema";
 import type { DecisionCitationRow } from "@/api/handlers/case-law/decisions/citation-graph";
 import { listDecisionCitationsHandler } from "@/api/handlers/case-law/decisions/citation-graph";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -30,9 +34,14 @@ import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
-import type { CitationReadDirection } from "@/api/lib/case-law/citation-vocabulary";
+import type {
+  CitationReadDirection,
+  CitationPolaritySource,
+  CitedPart,
+} from "@/api/lib/case-law/citation-vocabulary";
 import { GRAPH_DIRECTION } from "@/api/lib/case-law/citation-vocabulary";
 import { readDecisionAnalysisAst } from "@/api/lib/case-law/decision-analysis";
+import type { RedistributableDecisionSubject } from "@/api/lib/case-law/public-subject";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 import { errorTag } from "@/api/lib/errors/utils";
 import { readCorpusTombstones } from "@/api/lib/legal-search/corpus-reads";
@@ -50,8 +59,17 @@ export type CitationPassage = {
   mention: CitationPassageMention;
 };
 
+export type CitationPolarityEvidence = {
+  source: CitationPolaritySource | null;
+  ruleId: SafeId<"caseLawPolarityRule"> | null;
+  classifierVersion: string | null;
+  excerpt: string | null;
+};
+
 export type CitationWithPassage = Omit<DecisionCitationRow, "citationText"> & {
   citationText: string | null;
+  polarityEvidence: CitationPolarityEvidence;
+  citedPart: CitedPart;
   textWithheldReason: DecisionTextWithheldReason | null;
   /**
    * The citing block, or null where there is none to give: the source bars
@@ -134,6 +152,7 @@ const readPassageSourcePointers = async (
  * mention the treatment came from.
  */
 type DecisionTextColumns = {
+  contentHash: string | null;
   documentAst: unknown;
   sections: DecisionSection[] | null;
 };
@@ -148,6 +167,7 @@ const readDecisionTextColumns = async (
         .select({
           id: caseLawDecisions.id,
           documentAst: caseLawDecisions.documentAst,
+          contentHash: caseLawDecisions.contentHash,
           sections: caseLawDecisions.sections,
         })
         .from(caseLawDecisions)
@@ -223,7 +243,7 @@ export const citationPassageIn = ({
 
 /** A citing decision's text, as a passage read needs to see it. */
 type DecisionText = {
-  ast: DocumentAst;
+  ast: DocumentAst | null;
   sections: DecisionSection[] | null;
 };
 
@@ -259,6 +279,13 @@ const readDecisionTextByDecision = async (
     const entries = await Promise.all(
       group.map(async (pointer) => {
         const row = columns.get(String(pointer.id));
+        if (row === undefined) {
+          return null;
+        }
+        if (row.contentHash !== pointer.contentHash) {
+          logger.warn("case_law.citation_polarity.evidence_text_changed");
+          return null;
+        }
         const read = await Result.tryPromise(
           async () =>
             await readDecisionAnalysisAst(
@@ -270,14 +297,15 @@ const readDecisionTextByDecision = async (
           logger.warn("case_law.citation_passage.ast_unavailable", {
             "error.type": errorTag(read.error),
           });
-          return null;
+          return {
+            id: pointer.id,
+            text: { ast: null, sections: row?.sections ?? null },
+          };
         }
-        return read.value === null
-          ? null
-          : {
-              id: pointer.id,
-              text: { ast: read.value, sections: row?.sections ?? null },
-            };
+        return {
+          id: pointer.id,
+          text: { ast: read.value, sections: row?.sections ?? null },
+        };
       }),
     );
     for (const entry of entries) {
@@ -297,62 +325,91 @@ export type ReadDecisionCitationsOptions = {
   limit: number;
 };
 
-/**
- * One page of a decision's citations, each with the paragraph that made it.
- *
- * Null is the publication gate's answer: no such decision for the public, or
- * its source may not be redistributed.
- */
-export const readGatedDecisionCitations = async ({
-  caseLawDb,
+type PrepareDecisionCitationsOptions = {
+  subject: RedistributableDecisionSubject;
+  cursor: string | undefined;
+  direction: CitationReadDirection;
+  limit: number;
+};
+
+/** Gate metadata and offsets together; document bytes are read after it closes. */
+export const prepareDecisionCitations = async ({
+  subject,
   cursor,
-  decisionId,
   direction,
   limit,
-}: ReadDecisionCitationsOptions): Promise<DecisionCitationsRead | null> => {
-  const gated = await withRedistributableSubject(
-    caseLawDb,
-    { kind: "id", id: decisionId },
-    async (subject) => {
-      const page = await listDecisionCitationsHandler({
-        limit,
-        query: {
-          direction: GRAPH_DIRECTION[direction],
-          ...(cursor === undefined ? {} : { cursor }),
-        },
-        subject,
-      });
-      if (!("items" in page)) {
-        return { type: "invalid_cursor" } as const;
-      }
-      // Whose text holds the citing block: this decision for its own outgoing
-      // citations, the citing decision for every incoming one.
-      const citingIds =
-        direction === "cites"
-          ? [decisionId]
-          : [
-              ...new Map(
-                page.items.flatMap((item) =>
-                  item.decision === null
-                    ? []
-                    : [[String(item.decision.id), item.decision.id] as const],
-                ),
-              ).values(),
-            ];
-      return {
-        page,
-        sources: await readPassageSourcePointers(subject.tx, citingIds),
-        type: "page" as const,
-      };
+}: PrepareDecisionCitationsOptions) => {
+  const decisionId = subject.id;
+  const page = await listDecisionCitationsHandler({
+    limit,
+    query: {
+      direction: GRAPH_DIRECTION[direction],
+      ...(cursor === undefined ? {} : { cursor }),
     },
-  );
-  if (gated === null) {
-    return null;
+    subject,
+  });
+  if (!("items" in page)) {
+    return { type: "invalid_cursor" } as const;
   }
+  // Whose text holds the citing block: this decision for its own outgoing
+  // citations, the citing decision for every incoming one.
+  const citingIds =
+    direction === "cites"
+      ? [decisionId]
+      : [
+          ...new Map(
+            page.items.flatMap((item) =>
+              item.decision === null
+                ? []
+                : [[String(item.decision.id), item.decision.id] as const],
+            ),
+          ).values(),
+        ];
+  const sources = await readPassageSourcePointers(subject.tx, citingIds);
+  const evidence =
+    page.items.length === 0
+      ? []
+      : await subject.tx
+          .select({
+            id: caseLawCitations.id,
+            source: caseLawCitations.polaritySource,
+            ruleId: caseLawCitations.polarityRuleId,
+            classifierVersion: caseLawCitations.polarityClassifierVersion,
+            windowStart: caseLawCitations.polarityWindowStart,
+            windowEnd: caseLawCitations.polarityWindowEnd,
+            citedPart: caseLawCitations.citedPart,
+          })
+          .from(caseLawCitations)
+          .where(
+            inArray(
+              caseLawCitations.id,
+              page.items.map(({ id }) => id),
+            ),
+          );
+  return { page, sources, evidence, type: "page" as const };
+};
+
+type PreparedDecisionCitations = Awaited<
+  ReturnType<typeof prepareDecisionCitations>
+>;
+
+type CompleteDecisionCitationsOptions = {
+  caseLawDb: CaseLawPublicReadDb;
+  prepared: PreparedDecisionCitations;
+  decisionId: SafeId<"caseLawDecision">;
+  direction: CitationReadDirection;
+};
+
+/** Resolve both display passages and exact classifier windows through one text owner. */
+export const completeDecisionCitations = async ({
+  caseLawDb,
+  prepared: gated,
+  decisionId,
+  direction,
+}: CompleteDecisionCitationsOptions): Promise<DecisionCitationsRead> => {
   if (gated.type === "invalid_cursor") {
     return gated;
   }
-
   const textByDecision = await readDecisionTextByDecision(
     caseLawDb,
     gated.sources.filter(
@@ -364,6 +421,9 @@ export const readGatedDecisionCitations = async ({
       ({ id, textWithheldReason }) => [String(id), textWithheldReason] as const,
     ),
   );
+  const evidenceByCitation = new Map(
+    gated.evidence.map((row) => [String(row.id), row]),
+  );
   const items = gated.page.items.map((item): CitationWithPassage => {
     const citingId =
       direction === "cites" ? String(decisionId) : String(item.decision?.id);
@@ -372,12 +432,30 @@ export const readGatedDecisionCitations = async ({
     if (textWithheldReason === undefined) {
       return panic(`No source disposition for citing decision ${citingId}`);
     }
+    const evidence = evidenceByCitation.get(String(item.id));
+    if (evidence === undefined) {
+      return panic("Missing polarity evidence for a gated citation");
+    }
     return {
       ...item,
+      citedPart: evidence.citedPart,
+      polarityEvidence: {
+        source: evidence.source,
+        ruleId: evidence.ruleId,
+        classifierVersion: evidence.classifierVersion,
+        excerpt:
+          textWithheldReason !== null
+            ? null
+            : polarityExcerptIn({
+                sections: text?.sections ?? null,
+                windowStart: evidence.windowStart,
+                windowEnd: evidence.windowEnd,
+              }),
+      },
       citationText: textWithheldReason === null ? item.citationText : null,
       textWithheldReason,
       passage:
-        textWithheldReason !== null || text === undefined
+        textWithheldReason !== null || text === undefined || text.ast === null
           ? null
           : citationPassageIn({
               ast: text.ast,
@@ -391,4 +469,63 @@ export const readGatedDecisionCitations = async ({
     page: { items, nextCursor: gated.page.nextCursor },
     type: "page",
   };
+};
+
+/** Null offsets mean no window was recorded; never substitute a nearby mention. */
+type PolarityExcerptOptions = {
+  sections: DecisionSection[] | null;
+  windowStart: number | null;
+  windowEnd: number | null;
+};
+
+export const polarityExcerptIn = ({
+  sections,
+  windowStart,
+  windowEnd,
+}: PolarityExcerptOptions): string | null => {
+  if (sections === null || windowStart === null || windowEnd === null) {
+    return null;
+  }
+  const text = sections.map((section) => section.text).join("\n");
+  if (windowStart < 0 || windowEnd < windowStart || windowEnd > text.length) {
+    logger.warn("case_law.citation_polarity.evidence_window_out_of_bounds");
+    return null;
+  }
+  const windowLength = windowEnd - windowStart;
+  if (windowLength <= PASSAGE_MAX_CHARS) {
+    return text.slice(windowStart, windowEnd);
+  }
+  // Multiple mentions can span the decision; mark the omitted middle explicitly.
+  const omission = "\n[…]\n";
+  const prefixLength = Math.floor((PASSAGE_MAX_CHARS - omission.length) / 2);
+  const suffixLength = PASSAGE_MAX_CHARS - omission.length - prefixLength;
+  return (
+    text.slice(windowStart, windowStart + prefixLength) +
+    omission +
+    text.slice(windowEnd - suffixLength, windowEnd)
+  );
+};
+
+export const readGatedDecisionCitations = async ({
+  caseLawDb,
+  cursor,
+  decisionId,
+  direction,
+  limit,
+}: ReadDecisionCitationsOptions): Promise<DecisionCitationsRead | null> => {
+  const prepared = await withRedistributableSubject(
+    caseLawDb,
+    { kind: "id", id: decisionId },
+    async (subject) =>
+      await prepareDecisionCitations({ subject, cursor, direction, limit }),
+  );
+  if (prepared === null) {
+    return null;
+  }
+  return await completeDecisionCitations({
+    caseLawDb,
+    prepared,
+    decisionId,
+    direction,
+  });
 };

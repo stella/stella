@@ -76,6 +76,15 @@ export const applyCitationReviews = async (
         : reviewed.get(identityOf(row.citingDecisionId, row.citationKey));
     return polarity === undefined
       ? row
-      : { ...row, polarity, polarityRuleId: null };
+      : {
+          ...row,
+          polarity,
+          polarityRuleId: null,
+          polaritySource: "review",
+          polarityClassifierVersion: null,
+          polarityWindowStart: null,
+          polarityWindowEnd: null,
+          polarityConfidence: null,
+        };
   });
 };

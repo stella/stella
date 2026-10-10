@@ -128,6 +128,8 @@ test("citation row projection either fits every column or refuses before SQL", (
       ({ printed, key, hint, identifier }) => {
         const row = citationRowOf(decisionId, {
           verdict: null,
+          windows: null,
+          citedPart: "not-stated",
           reference: {
             index: 0,
             printed,
@@ -184,6 +186,8 @@ const project = ({
 }) =>
   citationRowOf(createSafeId<"caseLawDecision">(), {
     verdict: null,
+    windows: null,
+    citedPart: "not-stated",
     reference: {
       index: 0,
       printed,

@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { desc, eq, sql } from "drizzle-orm";
+import { desc, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 /**
  * A reviewed citation label against every writer of citation polarity: the
@@ -281,6 +281,7 @@ beforeAll(async () => {
   await db.insert(caseLawPolarityRules).values(
     SEED_RULES.filter((seed) => seed.language === "cs").map((seed) => ({
       pattern: seed.pattern,
+      kind: seed.kind,
       polarity: seed.polarity,
       language: seed.language,
       source: RULE_SOURCE.MANUAL,
@@ -550,7 +551,16 @@ describe("reviewed citation labels", () => {
 
     // A verdict read before the review landed is not written over it.
     await persistTightened(scopedDb, [
-      { id: reviewed.id, polarity: POLARITY.NEGATIVE, ruleId },
+      {
+        id: reviewed.id,
+        polarity: POLARITY.NEGATIVE,
+        previousPolarity: POLARITY.NEUTRAL,
+        ruleId,
+        windowStart: 0,
+        windowEnd: 10,
+        confidence: 1,
+        citedPart: "not-stated",
+      },
     ]);
     await persistPolarity(
       reviewed.id,
@@ -558,6 +568,10 @@ describe("reviewed citation labels", () => {
         polarity: POLARITY.NEGATIVE,
         ruleId,
         source: "regex",
+        classifierVersion: "citation-polarity-v2",
+        windowStart: 0,
+        windowEnd: 10,
+        citedPart: "not-stated",
         confidence: 1,
       },
       scopedDb,
@@ -573,12 +587,43 @@ describe("reviewed citation labels", () => {
         polarity: POLARITY.NEUTRAL,
         ruleId: null,
         source: "llm",
+        classifierVersion: "citation-polarity-v2",
+        windowStart: 0,
+        windowEnd: 10,
+        citedPart: "not-stated",
         confidence: 1,
       },
       scopedDb,
     );
     expect(await readCitation("sp. zn. 29 Cdo 2002/2015")).toMatchObject({
       polarity: POLARITY.NEUTRAL,
+    });
+    const evidence = await db
+      .select({
+        id: caseLawCitations.id,
+        source: caseLawCitations.polaritySource,
+        classifierVersion: caseLawCitations.polarityClassifierVersion,
+        windowStart: caseLawCitations.polarityWindowStart,
+        windowEnd: caseLawCitations.polarityWindowEnd,
+        confidence: caseLawCitations.polarityConfidence,
+        citedPart: caseLawCitations.citedPart,
+      })
+      .from(caseLawCitations)
+      .where(inArray(caseLawCitations.id, [reviewed.id, unreviewed.id]));
+    expect(evidence.find(({ id }) => id === reviewed.id)).toMatchObject({
+      source: "review",
+      classifierVersion: null,
+      windowStart: null,
+      windowEnd: null,
+      confidence: null,
+    });
+    expect(evidence.find(({ id }) => id === unreviewed.id)).toMatchObject({
+      source: "llm",
+      classifierVersion: "citation-polarity-v2",
+      windowStart: 0,
+      windowEnd: 10,
+      confidence: 1,
+      citedPart: "not-stated",
     });
   });
 

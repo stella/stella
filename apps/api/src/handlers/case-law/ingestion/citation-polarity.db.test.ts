@@ -168,6 +168,7 @@ beforeAll(async () => {
   await db.insert(caseLawPolarityRules).values(
     SEED_RULES.filter((seed) => seed.language === "cs").map((seed) => ({
       pattern: seed.pattern,
+      kind: seed.kind,
       polarity: seed.polarity,
       language: seed.language,
       source: RULE_SOURCE.MANUAL,

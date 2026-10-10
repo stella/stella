@@ -8,7 +8,6 @@
  */
 
 import { Result } from "better-result";
-import * as v from "valibot";
 
 import { resolveCaching } from "@/api/lib/ai-config";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
@@ -17,8 +16,9 @@ import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispa
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 
 import { CLASSIFIABLE_POLARITIES } from "./consts";
-import type { ClassifiablePolarity } from "./consts";
 import { POLARITY_GUIDANCE } from "./guidance";
+import { classificationSchema } from "./llm-classification-schema";
+import type { ClassificationResult } from "./llm-classification-schema";
 
 const SYSTEM_PROMPT = `You are a legal citation polarity classifier.
 
@@ -35,21 +35,12 @@ Extract the specific phrase (2-5 words) from the text that most
 strongly indicates the polarity. This phrase will be used to generate
 regex rules for future classification.
 
+Set kind to "stance" for a treatment cue, or "form" for citation typography,
+procedure labels, or reference markers. A form phrase must have neutral polarity.
+
 Report confidence honestly. A high-confidence answer can be promoted into
 a regex rule that labels later citations without you, so an uncertain one
 must say so rather than round itself up.`;
-
-const classificationSchema = v.strictObject({
-  polarity: v.picklist(CLASSIFIABLE_POLARITIES),
-  keyPhrase: v.pipe(v.string(), v.minLength(2), v.maxLength(100)),
-  confidence: v.pipe(v.number(), v.minValue(0), v.maxValue(1)),
-});
-
-type ClassificationResult = {
-  polarity: ClassifiablePolarity;
-  keyPhrase: string;
-  confidence: number;
-};
 
 type ClassifyWithLLMOptions = {
   /** Text surrounding the citation (2-3 sentences). */
@@ -115,11 +106,7 @@ ${context}`,
           : AbortSignal.timeout(15_000),
       });
 
-      return {
-        polarity: output.polarity,
-        keyPhrase: output.keyPhrase,
-        confidence: output.confidence,
-      };
+      return output;
     },
     catch: (error) => {
       aiAnalytics.captureError(error);

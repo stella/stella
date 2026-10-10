@@ -61,6 +61,7 @@ import type {
   CaseLawIngestionHandle,
   CaseLawRootHandle,
 } from "@/api/lib/case-law/maintenance-lane";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 
 type Args = {
   limit: number;
@@ -148,13 +149,15 @@ const readIdsFile = async (
 const seedRules = async (rootDb: CaseLawRootHandle) => {
   console.log(`Seeding ${SEED_RULES.length} polarity rules...`);
 
-  await rootDb.transaction(
+  await withAggregateTransaction(
+    rootDb,
     async (tx) =>
       await tx
         .insert(caseLawPolarityRules)
         .values(
           SEED_RULES.map((rule) => ({
             pattern: rule.pattern,
+            kind: rule.kind,
             polarity: rule.polarity,
             language: rule.language,
             source: RULE_SOURCE.MANUAL,
@@ -234,7 +237,8 @@ const main = async () => {
   const limit = onlyIds === null ? args.limit : onlyIds.length;
 
   // Fetch unclassified citations with their decision context
-  const citations = await rootDb.transaction(
+  const citations = await withAggregateTransaction(
+    rootDb,
     async (tx) =>
       await tx
         .select({

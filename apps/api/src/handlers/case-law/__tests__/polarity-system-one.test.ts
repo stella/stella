@@ -165,7 +165,11 @@ describe("classifyCitation with the System One tier", () => {
   test("a confident reading is the label, attributed to the tier, with no rule id", async () => {
     const { client } = fakeClient("negative", 0.92);
     const result = await classifyCitation({
-      windows: { mentions: [context], contexts: [context] },
+      windows: {
+        mentions: [context],
+        contexts: [context],
+        evidenceSpan: { start: 0, end: context.length },
+      },
       citationText: "sp. zn. 21 Cdo 1234/2020",
       language: "cs",
       observedAt: new Date("2026-09-17T00:00:00Z"),
@@ -181,6 +185,10 @@ describe("classifyCitation with the System One tier", () => {
       ruleId: null,
       source: "system-one",
       confidence: 0.92,
+      classifierVersion: "citation-polarity-v2",
+      windowStart: 0,
+      windowEnd: context.length,
+      citedPart: "not-stated",
     });
   });
 

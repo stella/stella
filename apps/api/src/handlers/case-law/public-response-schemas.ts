@@ -15,6 +15,7 @@ import {
   CITATION_TIMELINE_MAX_YEARS,
   LEADING_CITATIONS_PER_TREATMENT,
 } from "@/api/handlers/case-law/decisions/citation-graph";
+import type { CitationWithPassage } from "@/api/handlers/case-law/decisions/citation-passages";
 import type { readCaseLawCoverageHandler } from "@/api/handlers/case-law/decisions/coverage";
 import {
   CASE_LAW_COVERAGE_HEALTH,
@@ -34,7 +35,11 @@ import type {
   listSitemapShardsHandler,
 } from "@/api/handlers/case-law/decisions/sitemap";
 import type { readCaseLawCorpusStatusHandler } from "@/api/handlers/case-law/decisions/status";
-import { CITATION_TREATMENTS } from "@/api/lib/case-law/citation-vocabulary";
+import {
+  CITATION_TREATMENTS,
+  CITATION_POLARITY_SOURCES,
+  CITED_PARTS,
+} from "@/api/lib/case-law/citation-vocabulary";
 import { decisionHeadnotePreviewSchema } from "@/api/lib/case-law/decision-headnote-schema";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { CASE_LAW_SOURCE_ROWS_BOUND } from "@/api/lib/legal-search/ingestion-constants";
@@ -221,14 +226,29 @@ const relatedDecision = t.Object(
   >,
   { additionalProperties: false },
 );
+const polarityEvidence = t.Object(
+  {
+    source: t.Union([t.UnionEnum(CITATION_POLARITY_SOURCES), t.Null()]),
+    ruleId: t.Union([tSafeId("caseLawPolarityRule"), t.Null()]),
+    classifierVersion: nullableBoundedString(256),
+    excerpt: nullableBoundedString(LIMITS.caseLawCitationPassageChars),
+  },
+  { additionalProperties: false },
+);
+
 const citation = t.Object(
   {
     id: tSafeId("caseLawCitation"),
-    citationText: boundedString(16_384),
+    citationText: nullableBoundedString(16_384),
     sectionIndex: numberOrNull,
     treatment: t.UnionEnum(CITATION_TREATMENTS),
+    polarityEvidence,
+    citedPart: t.UnionEnum(CITED_PARTS),
     decision: t.Union([relatedDecision, t.Null()]),
-  } satisfies Record<keyof DecisionCitationRow, TSchema>,
+  } satisfies Record<
+    keyof Omit<CitationWithPassage, "passage" | "textWithheldReason">,
+    TSchema
+  >,
   { additionalProperties: false },
 );
 // A leading citation always names a held decision; only the general list

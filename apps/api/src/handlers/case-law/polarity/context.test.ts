@@ -12,6 +12,10 @@ describe("the windows around a citation", () => {
     expect(extractContexts(sections, "sp. zn. 3 Tdo 759/2020", 1)).toEqual({
       mentions: [sections[1]?.text ?? ""],
       contexts: [sections[1]?.text ?? ""],
+      evidenceSpan: {
+        start: (sections[0]?.text.length ?? 0) + 1,
+        end: sections.map((s) => s.text).join("\n").length,
+      },
     });
   });
 
@@ -99,6 +103,35 @@ describe("the windows around a citation", () => {
     expect(windows).toEqual({
       mentions: [sentence],
       contexts: [sentence],
+      evidenceSpan: { start: 0, end: decomposed.length },
     });
+  });
+  test("evidence offsets recover original text across sections and disjoint windows", () => {
+    const sections = [
+      { text: "Úvod".normalize("NFD") },
+      {
+        text: `${"Předchozí text. ".repeat(30)}CIT${"Další text. ".repeat(70)}CIT konec.`.normalize(
+          "NFD",
+        ),
+      },
+    ];
+    const joined = sections.map((s) => s.text).join("\n");
+    const windows = extractContexts(sections, "CIT", 1);
+    expect(windows?.contexts).toHaveLength(2);
+    const start = windows?.evidenceSpan.start ?? 0;
+    const end = windows?.evidenceSpan.end ?? 0;
+    const excerpt = joined.slice(start, end);
+    const sectionOffset = (sections.at(0)?.text.length ?? 0) + 1;
+    expect(start).toBeGreaterThan(sectionOffset);
+    expect(excerpt.slice(0, 10)).toBe(
+      sections
+        .at(1)
+        ?.text.slice(start - sectionOffset, start - sectionOffset + 10),
+    );
+    expect(excerpt.match(/CIT/gu)).toHaveLength(2);
+    expect(excerpt.endsWith("CIT konec.")).toBe(true);
+    expect(
+      excerpt.normalize("NFC").startsWith(windows?.contexts[0] ?? "missing"),
+    ).toBe(true);
   });
 });

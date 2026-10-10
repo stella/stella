@@ -411,17 +411,21 @@ const CitationRow = ({
           presentations.get(item.decision.id) ??
           panic("Citation list target missing collected identity")
         }
-        passage={{
-          type: "citation",
-          citation: {
-            citationText: item.citationText,
-            decision: cited,
-            id: item.id,
-            sectionIndex: item.sectionIndex,
-            treatment: item.treatment,
-          },
-          textDecisionId,
-        }}
+        passage={
+          item.citationText === null
+            ? undefined
+            : {
+                type: "citation",
+                citation: {
+                  citationText: item.citationText,
+                  decision: cited,
+                  id: item.id,
+                  sectionIndex: item.sectionIndex,
+                  treatment: item.treatment,
+                },
+                textDecisionId,
+              }
+        }
         treatment={item.treatment}
       >
         <BidiText as="span">{citedDecisionLabel(item.decision)}</BidiText>

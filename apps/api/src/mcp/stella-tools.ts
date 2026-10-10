@@ -1263,7 +1263,13 @@ export const STELLA_TOOL_DEFINITIONS = [
       `\`polarity\` is one of ${CITATION_TREATMENTS.join(", ")}: a stance, ` +
       "not a doctrinal act, so it never says followed, distinguished or " +
       "overruled. 'unclassified' means none was read, 'mixed' that mentions " +
-      "disagreed. `passage.text` is at most " +
+      "disagreed. Polarity concerns the cited decision as a whole unless " +
+      "`citedPart` names majority, dissent or concurrence; 'not-stated' means " +
+      "the citing text did not identify a part. `polarityEvidence` gives source, " +
+      "ruleId, classifierVersion and the recorded classifier window as excerpt " +
+      "(null when no offsets are known or text is withheld; long windows omit " +
+      `the middle as […], capped at ${LIMITS.caseLawCitationPassageChars} characters). ` +
+      "`passage.text` is at most " +
       `${LIMITS.caseLawCitationPassageChars} characters centred on the citation, cut when ` +
       "`passage.truncated`; `passage.mention` is 'sole', " +
       "'classified_section' (the mention the polarity came from), or " +
@@ -3617,6 +3623,8 @@ const handleReadCaseLawCitationsTool: TypedMcpToolHandler<
         citationText: item.citationText,
         textWithheldReason: item.textWithheldReason,
         polarity: item.treatment,
+        polarityEvidence: item.polarityEvidence,
+        citedPart: item.citedPart,
         decision:
           item.decision === null
             ? null

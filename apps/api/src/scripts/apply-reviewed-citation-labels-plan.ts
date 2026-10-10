@@ -648,7 +648,7 @@ export const reviewMayReplaceSql = ({
 /** Rows a label changes: any other polarity, or a rule attribution. */
 const citationDiffersSql = sql`c.citing_decision_id = v.citing_decision_id
    AND c.citation_key = v.citation_key
-   AND (c.polarity IS DISTINCT FROM v.polarity OR c.polarity_rule_id IS NOT NULL)`;
+   AND (c.polarity IS DISTINCT FROM v.polarity OR c.polarity_rule_id IS NOT NULL OR c.polarity_source IS DISTINCT FROM 'review')`;
 
 /** Per label, in input order: the stored review and the citation rows it covers. */
 const reviewedLabelStateStatement = (
@@ -805,14 +805,19 @@ const relabelCitationsStatement = (
 ): SQL => sql`
   UPDATE case_law_citations AS c
      SET polarity = r.polarity,
-         polarity_rule_id = NULL
+         polarity_rule_id = NULL,
+         polarity_source = 'review',
+         polarity_classifier_version = NULL,
+         polarity_window_start = NULL,
+         polarity_window_end = NULL,
+         polarity_confidence = NULL
     FROM ${labelValues(labels)}
     JOIN case_law_citation_reviews r
       ON r.citing_decision_id = v.citing_decision_id
      AND r.citation_key = v.citation_key
    WHERE c.citing_decision_id = r.citing_decision_id
      AND c.citation_key = r.citation_key
-     AND (c.polarity IS DISTINCT FROM r.polarity OR c.polarity_rule_id IS NOT NULL)
+     AND (c.polarity IS DISTINCT FROM r.polarity OR c.polarity_rule_id IS NOT NULL OR c.polarity_source IS DISTINCT FROM 'review')
   RETURNING c.id
 `;
 

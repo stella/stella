@@ -1,8 +1,13 @@
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
 
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import { assertProperty } from "@stll/property-testing";
 
-import { citationPassageIn } from "@/api/handlers/case-law/decisions/citation-passages";
+import {
+  citationPassageIn,
+  polarityExcerptIn,
+} from "@/api/handlers/case-law/decisions/citation-passages";
 import { LIMITS } from "@/api/lib/limits";
 
 const astOf = (
@@ -112,4 +117,109 @@ describe("the excerpt a citation travels with", () => {
       }),
     ).toBeNull();
   });
+});
+
+describe("stored polarity evidence windows", () => {
+  test("slice the original joined sections across Unicode and section boundaries", () => {
+    assertProperty(
+      "case-law polarity evidence preserves original joined-section offsets",
+      fc.property(
+        fc.array(
+          fc
+            .array(
+              fc.constantFrom("ě", "😀", "e\u0301", " ", "\n", "\t", "X"),
+              { maxLength: 40 },
+            )
+            .map((characters) => characters.join("")),
+          { minLength: 1, maxLength: 8 },
+        ),
+        fc.nat(),
+        fc.nat(),
+        (texts, first, second) => {
+          const text = texts.join("\n");
+          const start = first % (text.length + 1);
+          const end = start + (second % (text.length - start + 1));
+          const sections = texts.map((sectionText, index) => ({
+            index,
+            text: sectionText,
+            type: "unknown" as const,
+            title: null,
+          }));
+          expect(
+            polarityExcerptIn({ sections, windowStart: start, windowEnd: end }),
+          ).toBe(text.slice(start, end));
+        },
+      ),
+    );
+  });
+
+  test("unknown offsets never substitute a display passage", () => {
+    const sections = [
+      {
+        index: 0,
+        text: "Synthetic citation window",
+        type: "unknown" as const,
+        title: null,
+      },
+    ];
+    expect(
+      polarityExcerptIn({ sections, windowStart: null, windowEnd: null }),
+    ).toBeNull();
+    expect(
+      polarityExcerptIn({ sections: null, windowStart: 0, windowEnd: 2 }),
+    ).toBeNull();
+    expect(
+      polarityExcerptIn({ sections, windowStart: 0, windowEnd: null }),
+    ).toBeNull();
+    expect(
+      polarityExcerptIn({ sections, windowStart: null, windowEnd: 2 }),
+    ).toBeNull();
+  });
+});
+
+test("widely separated polarity mentions return bounded evidence with an explicit omission", () => {
+  const prefix = "Synthetic rejection 😀 ";
+  const suffix = " Separate opinion conclusion.";
+  const original =
+    prefix + "middle ".repeat(LIMITS.caseLawCitationPassageChars) + suffix;
+  const excerpt = polarityExcerptIn({
+    sections: [
+      { index: 0, text: original, type: "argumentation", title: null },
+    ],
+    windowStart: 0,
+    windowEnd: original.length,
+  });
+  expect(excerpt?.length).toBe(LIMITS.caseLawCitationPassageChars);
+  expect(excerpt).toStartWith(prefix);
+  expect(excerpt).toEndWith(suffix);
+  expect(excerpt).toContain("\n[…]\n");
+});
+
+test("every long evidence window stays bounded and preserves both recorded ends", () => {
+  assertProperty(
+    "case-law long polarity evidence excerpts remain bounded",
+    fc.property(
+      fc.integer({
+        min: LIMITS.caseLawCitationPassageChars + 1,
+        max: LIMITS.caseLawCitationPassageChars * 10,
+      }),
+      fc.constantFrom("ě", "😀", "e\u0301", "\t", " "),
+      (length, character) => {
+        const prefix = "Synthetic first mention ";
+        const suffix = " Synthetic last mention";
+        const text = prefix + character.repeat(length) + suffix;
+        const excerpt = polarityExcerptIn({
+          sections: [{ index: 0, text, type: "argumentation", title: null }],
+          windowStart: 0,
+          windowEnd: text.length,
+        });
+        expect(excerpt?.length).toBeLessThanOrEqual(
+          LIMITS.caseLawCitationPassageChars,
+        );
+        expect(excerpt).toStartWith(prefix);
+        expect(excerpt).toEndWith(suffix);
+        expect(excerpt).toContain("\n[…]\n");
+      },
+    ),
+  );
 });

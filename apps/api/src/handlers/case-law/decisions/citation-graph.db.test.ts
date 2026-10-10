@@ -830,3 +830,111 @@ test("citation reads carry withheld text dispositions", async () => {
     },
   });
 });
+
+test("citation evidence reads the persisted classifier window without an AST", async () => {
+  const citingId = createSafeId<"caseLawDecision">();
+  const referenceId = createSafeId<"caseLawCitation">();
+  const first = "Synthetic prefix 😀";
+  const excerpt = "Separate opinion rejects the cited reasoning.";
+  const windowStart = first.length + 1;
+  await db.insert(caseLawDecisions).values({
+    id: citingId,
+    caseNumber: "synthetic-evidence",
+    country: "CZE",
+    court: "Synthetic court",
+    language: "en",
+    sourceId: openSourceId,
+    sections: [
+      { index: 0, type: "header", title: null, text: first },
+      { index: 1, type: "argumentation", title: null, text: excerpt },
+    ],
+  });
+  await db.insert(caseLawCitations).values({
+    id: referenceId,
+    citingDecisionId: citingId,
+    citedDecisionId: subjectId,
+    citationText: "synthetic authority",
+    kind: CITATION_KIND.PRECEDENT,
+    polarity: POLARITY.NEGATIVE,
+    polaritySource: "review",
+    polarityClassifierVersion: "synthetic-v1",
+    polarityWindowStart: windowStart,
+    polarityWindowEnd: windowStart + excerpt.length,
+    citedPart: "dissent",
+  });
+  const read = await readGatedDecisionCitations({
+    caseLawDb,
+    cursor: undefined,
+    decisionId: citingId,
+    direction: "cites",
+    limit: 10,
+  });
+  expect(read).toMatchObject({
+    type: "page",
+    page: {
+      items: [
+        {
+          id: referenceId,
+          citedPart: "dissent",
+          polarityEvidence: {
+            source: "review",
+            ruleId: null,
+            classifierVersion: "synthetic-v1",
+            excerpt,
+          },
+          passage: null,
+        },
+      ],
+    },
+  });
+  let reads = 0;
+  const refreshingDb = Object.assign(
+    async <T>(fn: (tx: CaseLawPublicReadTransaction) => Promise<T>) => {
+      const result = await caseLawDb(fn);
+      if (reads === 0) {
+        await db
+          .update(caseLawDecisions)
+          .set({ contentHash: "synthetic-refreshed-content" })
+          .where(eq(caseLawDecisions.id, citingId));
+      }
+      reads += 1;
+      return result;
+    },
+    caseLawDb,
+  );
+  const refreshed = await readGatedDecisionCitations({
+    caseLawDb: refreshingDb,
+    cursor: undefined,
+    decisionId: citingId,
+    direction: "cites",
+    limit: 10,
+  });
+  expect(refreshed).toMatchObject({
+    type: "page",
+    page: { items: [{ polarityEvidence: { excerpt: null }, passage: null }] },
+  });
+  await db
+    .update(caseLawDecisions)
+    .set({ sourceId: withheldSourceId })
+    .where(eq(caseLawDecisions.id, citingId));
+  const withheld = await readGatedDecisionCitations({
+    caseLawDb,
+    cursor: undefined,
+    decisionId: citingId,
+    direction: "cites",
+    limit: 10,
+  });
+  expect(withheld).toMatchObject({
+    type: "page",
+    page: {
+      items: [
+        {
+          citationText: null,
+          textWithheldReason: "source_licence",
+          polarityEvidence: { source: "review", excerpt: null },
+          citedPart: "dissent",
+        },
+      ],
+    },
+  });
+});

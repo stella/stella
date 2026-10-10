@@ -10,17 +10,23 @@ import { and, asc, eq, gt, isNotNull, ne, sql } from "drizzle-orm";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawCitations, caseLawDecisions } from "@/api/db/schema";
 import { CITATION_KIND } from "@/api/handlers/case-law/citation-kind";
+import { classifyCitedPart } from "@/api/handlers/case-law/polarity/cited-part";
 import {
   POLARITY,
+  POLARITY_CLASSIFIER_VERSION,
   POLARITY_PRECEDENCE,
   isValidPolarity,
 } from "@/api/handlers/case-law/polarity/consts";
 import type { Polarity } from "@/api/handlers/case-law/polarity/consts";
 import { extractContexts } from "@/api/handlers/case-law/polarity/context";
 import { unreviewedCitationSql } from "@/api/handlers/case-law/polarity/reviews";
-import { selectCitationPolarity } from "@/api/handlers/case-law/polarity/rule-engine";
+import {
+  ACTIVE_RULE_SOURCES,
+  selectCitationPolarity,
+} from "@/api/handlers/case-law/polarity/rule-engine";
 import type { CompiledRule } from "@/api/handlers/case-law/polarity/rule-engine";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { CitedPart } from "@/api/lib/case-law/citation-vocabulary";
 import { brandPersistedCaseLawCitationId } from "@/api/lib/safe-id-boundaries";
 
 /** Rows read per statement on a recheck walk. */
@@ -30,6 +36,11 @@ type Tightened = {
   id: SafeId<"caseLawCitation">;
   polarity: Polarity;
   ruleId: SafeId<"caseLawPolarityRule">;
+  previousPolarity: Polarity;
+  windowStart: number;
+  windowEnd: number;
+  confidence: number;
+  citedPart: CitedPart;
 };
 
 /**
@@ -48,15 +59,30 @@ export const persistTightened = async (
     await tx.execute(sql`
       UPDATE ${caseLawCitations} AS c
          SET polarity = v.polarity,
-             polarity_rule_id = v.rule_id
+             polarity_rule_id = v.rule_id,
+             polarity_source = 'rule',
+             polarity_classifier_version = ${POLARITY_CLASSIFIER_VERSION},
+             polarity_window_start = v.window_start,
+             polarity_window_end = v.window_end,
+             polarity_confidence = v.confidence,
+             cited_part = v.cited_part
         FROM (VALUES ${sql.join(
           rows.map(
             (row) =>
-              sql`(${row.id}::uuid, ${row.polarity}::text, ${row.ruleId}::uuid)`,
+              sql`(${row.id}::uuid, ${row.polarity}::text, ${row.ruleId}::uuid, ${row.previousPolarity}::text, ${row.windowStart}::integer, ${row.windowEnd}::integer, ${row.confidence}::double precision, ${row.citedPart}::text)`,
           ),
           sql.raw(","),
-        )}) AS v(id, polarity, rule_id)
+        )}) AS v(id, polarity, rule_id, previous_polarity, window_start, window_end, confidence, cited_part)
        WHERE c.id = v.id
+         AND c.polarity = v.previous_polarity
+         AND EXISTS (
+           SELECT 1 FROM case_law_polarity_rules r
+            WHERE r.id = v.rule_id
+              AND r.source IN (${sql.join(
+                ACTIVE_RULE_SOURCES.map((source) => sql`${source}`),
+                sql.raw(","),
+              )})
+         )
          AND ${unreviewedCitationSql({
            citingDecisionId: sql.raw("c.citing_decision_id"),
            citationKey: sql.raw("c.citation_key"),
@@ -175,6 +201,11 @@ const recheckPage = async (args: RecheckPageArgs): Promise<RecheckResult> => {
       id: citation.id,
       polarity: match.polarity,
       ruleId: match.ruleId,
+      previousPolarity: current,
+      windowStart: windows.evidenceSpan.start,
+      windowEnd: windows.evidenceSpan.end,
+      confidence: match.confidence,
+      citedPart: classifyCitedPart(windows.contexts, language),
     });
   }
   if (!dryRun) {

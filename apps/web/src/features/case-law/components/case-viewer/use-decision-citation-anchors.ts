@@ -21,7 +21,7 @@ export const useDecisionCitationAnchors = (
 
   for (const page of optionalArray(data?.pages)) {
     for (const item of page.items) {
-      if (item.decision !== null) {
+      if (item.decision !== null && item.citationText !== null) {
         anchors.push({
           citationText: item.citationText,
           decision: item.decision,

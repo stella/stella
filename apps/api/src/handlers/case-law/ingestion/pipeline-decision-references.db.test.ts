@@ -45,6 +45,7 @@ import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/typ
 import {
   CITATION_REVIEW_ORIGIN,
   POLARITY,
+  POLARITY_RULE_KIND,
   RULE_SOURCE,
 } from "@/api/handlers/case-law/polarity/consts";
 import { SEED_RULES } from "@/api/handlers/case-law/polarity/seed-rules";
@@ -590,6 +591,7 @@ beforeAll(async () => {
   await db.insert(caseLawPolarityRules).values([
     ...SEED_RULES.map((seed) => ({
       pattern: seed.pattern,
+      kind: seed.kind,
       polarity: seed.polarity,
       language: seed.language,
       source: RULE_SOURCE.MANUAL,
@@ -603,6 +605,7 @@ beforeAll(async () => {
       pattern,
       language,
       polarity: POLARITY.NEUTRAL,
+      kind: POLARITY_RULE_KIND.FORM,
       source: RULE_SOURCE.MANUAL,
     })),
   ]);
