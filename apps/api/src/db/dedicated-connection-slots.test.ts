@@ -192,9 +192,9 @@ describe("dedicated connection lifecycle", () => {
     const { owner } = recordingOwner();
     const job = await owner.openLongRunningSql(workOptions());
     await job.cancelBackend(42);
-    expect(() => job.cancelBackend(43)).toThrow("different backend");
+    expect(async () => job.cancelBackend(43)).toThrow("different backend");
     await job.end();
-    expect(() => job.cancelBackend(42)).toThrow(
+    expect(async () => job.cancelBackend(42)).toThrow(
       "after dedicated connection closed",
     );
     expect(await rejectionOf(job.end())).toHaveProperty(

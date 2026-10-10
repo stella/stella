@@ -171,7 +171,7 @@ export const createDedicatedConnectionOwner = <
       | { type: "started"; attempt: CancellationAttempt } = { type: "idle" };
     return {
       client,
-      cancelBackend: (pid: number) => {
+      cancelBackend: async (pid: number) => {
         if (state !== "open") {
           return panic(
             "Cancellation requested after dedicated connection closed",
