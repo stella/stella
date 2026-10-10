@@ -309,3 +309,12 @@ test("substitutions balance their own parentheses and quotes", () => {
     ),
   ).toEqual([{ file: "scripts/jq.sh", line: 4, source: "! true" }]);
 });
+
+test("a function body brace may start on the next line", () => {
+  expect(
+    check(
+      "scripts/allman.sh",
+      "predicate()\n{\n  ! grep -q x file\n}\nfunction other\n{\n  ! grep -q y file\n}\nif predicate; then echo x; fi",
+    ),
+  ).toEqual([]);
+});

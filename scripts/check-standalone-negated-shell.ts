@@ -353,13 +353,20 @@ const trackCondition = (stack: ConditionState[], word: string) => {
   }
 };
 
+const NEWLINE = new Set(["\n"]);
+
 const opensFunctionBody = (tokens: readonly Token[], index: number) => {
-  const previous = tokens[index - 1];
-  const beforePrevious = tokens[index - 2];
+  // The body brace may sit on its own line after the definition.
+  let start = index;
+  while (isOperator(tokens[start - 1], NEWLINE)) {
+    start -= 1;
+  }
+  const previous = tokens[start - 1];
+  const beforePrevious = tokens[start - 2];
   const posixDefinition =
     isOperator(previous, CLOSE_PAREN) &&
     isOperator(beforePrevious, OPEN_PAREN) &&
-    tokens[index - 3]?.type === "word";
+    tokens[start - 3]?.type === "word";
   const keywordDefinition =
     beforePrevious?.type === "word" &&
     !beforePrevious.quoted &&
