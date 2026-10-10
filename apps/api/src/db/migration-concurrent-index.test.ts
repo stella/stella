@@ -2,6 +2,8 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import nodePath from "node:path";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
+
 import { ONLINE_VALIDATED_INDEX_NAMES } from "./online-migrations";
 
 const MIGRATIONS_DIR = nodePath.resolve(import.meta.dir, "../../drizzle");
@@ -537,7 +539,7 @@ const isUnapprovedProceduralStatement = (
     return false;
   }
 
-  const hash = new Bun.CryptoHasher("sha256").update(statement).digest("hex");
+  const hash = hashSha256Hex(statement);
   return !APPROVED_PROCEDURAL_STATEMENTS.has(`${relativePath}:${hash}`);
 };
 

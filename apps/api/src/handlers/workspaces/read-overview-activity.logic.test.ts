@@ -1,11 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
 import type { MatterActivityFilters } from "@stll/api-contract/matter-activity";
+import { sha256Base64Url as legacyBase64Url } from "@stll/sha256/node";
 
 import { auditLogs } from "@/api/db/schema";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
+import { decodePaginationCursor } from "@/api/lib/pagination";
 import { brandPersistedAuditLogId } from "@/api/lib/safe-id-boundaries";
 
 import {
@@ -284,3 +286,31 @@ describe("activity date bounds", () => {
     expect((upper ?? 0n) - (lower ?? 0n)).toBe(100_000n);
   });
 });
+
+for (const actorId of [null, "", "Žluťoučký kůň 📄", "e\u0301"]) {
+  test(`matter cursor scopes preserve the legacy filter tuple: ${JSON.stringify(actorId)}`, () => {
+    const filters = { ...defaultFilters, actorId };
+    const codec = createTimestampIdCursorCodec({
+      column: auditLogs.createdAt,
+      brandId: brandPersistedAuditLogId,
+    });
+    const timestamp = "2026-08-13T09:10:11.123456Z";
+    const id = "00000000-0000-0000-0000-000000000004";
+    const cursor = bindActivityCursorToFilters({ codec, filters }).encode(
+      timestamp,
+      id,
+    );
+    expect(decodePaginationCursor(cursor)).toEqual([
+      codec.encode(timestamp, id),
+      legacyBase64Url(
+        JSON.stringify([
+          filters.category,
+          filters.action,
+          actorId,
+          filters.from,
+          filters.toExclusive,
+        ]),
+      ),
+    ]);
+  });
+}
