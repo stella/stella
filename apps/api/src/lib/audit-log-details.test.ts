@@ -21,6 +21,9 @@ import {
   LIST_VERIFICATION_FEATURE_ID,
 } from "@/api/lib/feature-access/registry";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
+import { createTestState } from "@/api/tests/helpers/test-state";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const PRINCIPAL = { organizationId: "org_test", userId: "user_test" };
 const CHANGES = { amount: { old: 100, new: 200 } };
@@ -132,23 +135,21 @@ describe("audit detail policy census", () => {
           return;
         }
         case "deployment-feature": {
-          const previous = env[policy.feature];
           const restoreMode = setRuntimeModeForTesting({
             mode: RUNTIME_MODE.strict,
           });
           try {
-            env[policy.feature] = false;
+            testState.setConfig(policy.feature, false);
             expect(projectAuditReadChanges(input)).toEqual({
               changesStatus: "feature_unavailable",
               changes: null,
             });
-            env[policy.feature] = true;
+            testState.setConfig(policy.feature, true);
             expect(projectAuditReadChanges(input)).toEqual({
               changesStatus: "visible",
               changes: CHANGES,
             });
           } finally {
-            env[policy.feature] = previous;
             restoreMode();
           }
           return;
@@ -293,7 +294,6 @@ for (const operation of Object.keys(
   AUDIT_DETAIL_POLICY[AUDIT_RESOURCE_TYPE.LEGAL_LIST_ITEM].operations,
 )) {
   test(`${operation} requires its resource deployment policy as well as enrolment`, () => {
-    const previous = env.FEATURE_LEGAL_LISTS;
     const restoreMode = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
     const featureId = LIST_VERIFICATION_FEATURE_ID;
     const featureAccessSnapshot = createFeatureAccessSnapshot({
@@ -326,7 +326,7 @@ for (const operation of Object.keys(
       ]),
     });
     try {
-      env.FEATURE_LEGAL_LISTS = false;
+      testState.setConfig("FEATURE_LEGAL_LISTS", false);
       expect(
         projectAuditReadChanges({
           resourceType: AUDIT_RESOURCE_TYPE.LEGAL_LIST_ITEM,
@@ -337,7 +337,6 @@ for (const operation of Object.keys(
         }),
       ).toEqual({ changesStatus: "feature_unavailable", changes: null });
     } finally {
-      env.FEATURE_LEGAL_LISTS = previous;
       restoreMode();
     }
   });
