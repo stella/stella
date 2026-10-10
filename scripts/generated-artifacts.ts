@@ -16,11 +16,11 @@ import {
 // imports this module and is itself loaded by oxlint.config.ts under Node.
 const REPO_ROOT = path.join(import.meta.dirname, "..");
 
-export const formattedArtifactsLikeRepository = (
+export const formattedArtifactsLikeRepository = async (
   artifacts: readonly GeneratedArtifact[],
 ): Promise<GeneratedArtifact[]> => formatArtifacts(artifacts, REPO_ROOT);
 
-export const formattedLikeRepository = (
+export const formattedLikeRepository = async (
   source: string,
   extension: string,
 ): Promise<string> => formatSource(source, extension, REPO_ROOT);
