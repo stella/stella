@@ -1835,6 +1835,12 @@ const runModelTurn = async ({
         case EventType.RUN_FINISHED: {
           break;
         }
+        case "ACTIVITY_SNAPSHOT":
+        case "ACTIVITY_DELTA": {
+          // Activity parts remain UI-only; progress payloads must not become
+          // conversational text or executable tool input in this score.
+          break;
+        }
         // Every other chunk type carries nothing this eval scores on: only
         // the first tool call's name/args/input and the final text/usage/error
         // matter here. Listed explicitly (not folded into an implicit
@@ -1856,8 +1862,6 @@ const runModelTurn = async ({
         case EventType.REASONING_ENCRYPTED_VALUE:
         case EventType.REASONING_END:
         case EventType.REASONING_MESSAGE_CHUNK:
-        case EventType.ACTIVITY_SNAPSHOT:
-        case EventType.ACTIVITY_DELTA:
         case EventType.RAW:
         case EventType.SUBAGENT_STARTED:
         case EventType.SUBAGENT_FINISHED:

@@ -17,6 +17,7 @@ import {
 } from "./chat-runtime";
 import type { ChatRuntime } from "./chat-runtime";
 import {
+  chatContextCapabilityFingerprint,
   chatThreadCacheKey,
   invalidateChatThread,
   invalidateChatThreadLists,
@@ -49,55 +50,6 @@ const chatThreadIdentity = ({
         key.workspaceId,
         key.threadId,
       ]);
-
-// Every context capability (getter/handler) that changes what a runtime
-// SENDS. `allowMissingThread` is excluded: it shapes the fetch, not the
-// send, and is already part of the query key.
-type ChatContextQueryOnlyKey = "allowMissingThread";
-type ChatContextCapabilityKey = Exclude<
-  keyof ChatThreadOptionsContext,
-  ChatContextQueryOnlyKey
->;
-
-/**
- * Deterministic encoding of WHICH capabilities a context carries (fixed
- * declaration order, presence only). Registry identity is deliberately
- * STRICTER than cache identity: the pure-data query is context-free, so
- * distinct surfaces may share one cache entry (and the query key must
- * stay stable for invalidation targeting), but a runtime's send path
- * uses exactly the getters present at build time. `contextKind` in the
- * query key only records the FIRST matched kind and ignores getters like
- * `getActiveDecision` entirely, so two surfaces with different
- * capability sets can share a query key; without this fingerprint an
- * idle runtime built by the capability-poorer surface could be reused
- * seed-equal by the richer one, and its sends would silently omit that
- * context.
- */
-const chatContextCapabilityFingerprint = (
-  context: ChatThreadOptionsContext | undefined,
-): string => {
-  const capabilities = {
-    getActiveDecision: context?.getActiveDecision,
-    getActiveDraft: context?.getActiveDraft,
-    getActiveExternal: context?.getActiveExternal,
-    getActiveFile: context?.getActiveFile,
-    getActiveSkill: context?.getActiveSkill,
-    getActiveStatute: context?.getActiveStatute,
-    getActiveTemplate: context?.getActiveTemplate,
-    getContextMatterIds: context?.getContextMatterIds,
-    getDocxEditRepresentation: context?.getDocxEditRepresentation,
-    getEditApplyMode: context?.getEditApplyMode,
-    getSendMode: context?.getSendMode,
-    getUserContext: context?.getUserContext,
-    getDocxSuggestionSurface: context?.getDocxSuggestionSurface,
-  } satisfies {
-    [Key in ChatContextCapabilityKey]-?: ChatThreadOptionsContext[Key];
-  };
-  return Object.entries(capabilities)
-    .filter(([, getter]) => getter !== undefined)
-    .map(([name]) => name)
-    .join(",");
-};
 
 /**
  * Server-authoritative freshness signal a runtime was seeded with,
@@ -400,7 +352,7 @@ const chatRuntimeCleanupInstalledClients = new WeakSet<QueryClient>();
 /**
  * Wire `chatRuntimeRegistry` eviction to the query cache's own GC.
  * Idempotent per `QueryClient` (mirrors `installPDFDocumentCleanup`);
- * Installed on the first runtime acquisition so pure route loaders stay lazy.
+ * Installed when the first runtime is acquired, before an entry is registered.
  */
 const installChatRuntimeCleanup = (queryClient: QueryClient): void => {
   if (chatRuntimeCleanupInstalledClients.has(queryClient)) {

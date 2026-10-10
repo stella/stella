@@ -581,3 +581,45 @@ test("pruning preserves a snapshot leased by another test run", async () => {
   }
   expect(existsSync(path.join(cacheDir, `${firstKey}.tar`))).toBe(false);
 });
+
+test("snapshot failure exits with sanitized stdout and stderr", async () => {
+  const secretValues = [
+    "fixture-snapshot-password-hash",
+    "fixture-snapshot-token",
+  ];
+  const modulePath = path.join(import.meta.dir, "test-db-snapshot-cache.ts");
+  const child = Bun.spawn(
+    [
+      process.execPath,
+      "-e",
+      `import { SnapshotBuildError, exitAfterSnapshotFailure } from ${JSON.stringify(modulePath)};
+const params = ${JSON.stringify(secretValues)};
+const cause = Object.assign(new Error(\`Failed query: insert into account values ($1, $2)\nparams: \${params.join(",")}\`), {
+  name: "DrizzleQueryError",
+  query: "insert into account values ($1, $2)",
+  params,
+  cause: Object.assign(new Error("Constraint failure"), {
+    name: "PostgresError", code: "23505", constraint: "account_token_unique",
+  }),
+});
+exitAfterSnapshotFailure(Object.assign(new SnapshotBuildError({
+  message: \`Snapshot failed: \${params.join(",")}\`, exitCode: 7,
+}), { cause }));`,
+    ],
+    { stdout: "pipe", stderr: "pipe" },
+  );
+  const [exitCode, stdout, stderr] = await Promise.all([
+    child.exited,
+    new Response(child.stdout).text(),
+    new Response(child.stderr).text(),
+  ]);
+  for (const output of [stdout, stderr]) {
+    for (const secret of secretValues) {
+      expect(output).not.toContain(secret);
+    }
+  }
+  expect(exitCode).toBe(7);
+  expect(stderr).toContain("account_token_unique");
+  expect(stderr).toContain("23505");
+  expect(stderr).toContain("insert into ? values ( $1 , $2 )");
+});

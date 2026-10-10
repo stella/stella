@@ -752,7 +752,7 @@ export type ChatThreadOptionsArgs = ChatThreadOptionsInput & {
 
 /**
  * Cache-identity key shared by `chatThreadOptions`' `queryKey` and the
- * runtime registry in `chat-runtime-registry`. Keeping both derivations behind this one
+ * runtime registry. Keeping both derivations behind this one
  * helper guarantees a query cache entry and its registered `ChatRuntime`
  * are always addressed by the exact same (org, thread, allowMissingThread,
  * contextKind) tuple — they can drift in content, never in identity.
@@ -771,6 +771,55 @@ export const chatThreadCacheKey = ({
     allowMissingThread: context?.allowMissingThread,
     contextKind: getChatRuntimeContextKind(context),
   });
+
+// Every context capability (getter/handler) that changes what a runtime
+// SENDS. `allowMissingThread` is excluded: it shapes the fetch, not the
+// send, and is already part of the query key.
+type ChatContextQueryOnlyKey = "allowMissingThread";
+type ChatContextCapabilityKey = Exclude<
+  keyof ChatThreadOptionsContext,
+  ChatContextQueryOnlyKey
+>;
+
+/**
+ * Deterministic encoding of WHICH capabilities a context carries (fixed
+ * declaration order, presence only). Registry identity is deliberately
+ * STRICTER than cache identity: the pure-data query is context-free, so
+ * distinct surfaces may share one cache entry (and the query key must
+ * stay stable for invalidation targeting), but a runtime's send path
+ * uses exactly the getters present at build time. `contextKind` in the
+ * query key only records the FIRST matched kind and ignores getters like
+ * `getActiveDecision` entirely, so two surfaces with different
+ * capability sets can share a query key; without this fingerprint an
+ * idle runtime built by the capability-poorer surface could be reused
+ * seed-equal by the richer one, and its sends would silently omit that
+ * context.
+ */
+export const chatContextCapabilityFingerprint = (
+  context: ChatThreadOptionsContext | undefined,
+): string => {
+  const capabilities = {
+    getActiveDecision: context?.getActiveDecision,
+    getActiveDraft: context?.getActiveDraft,
+    getActiveExternal: context?.getActiveExternal,
+    getActiveFile: context?.getActiveFile,
+    getActiveSkill: context?.getActiveSkill,
+    getActiveStatute: context?.getActiveStatute,
+    getActiveTemplate: context?.getActiveTemplate,
+    getContextMatterIds: context?.getContextMatterIds,
+    getDocxEditRepresentation: context?.getDocxEditRepresentation,
+    getEditApplyMode: context?.getEditApplyMode,
+    getSendMode: context?.getSendMode,
+    getUserContext: context?.getUserContext,
+    getDocxSuggestionSurface: context?.getDocxSuggestionSurface,
+  } satisfies {
+    [Key in ChatContextCapabilityKey]-?: ChatThreadOptionsContext[Key];
+  };
+  return Object.entries(capabilities)
+    .filter(([, getter]) => getter !== undefined)
+    .map(([name]) => name)
+    .join(",");
+};
 
 export const chatThreadOptions = ({
   activeOrganizationId,

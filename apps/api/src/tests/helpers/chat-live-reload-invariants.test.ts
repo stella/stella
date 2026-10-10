@@ -83,6 +83,38 @@ describe("comparing the live view with a reload", () => {
     expect(diffLiveAgainstReload({ live, reload: reloaded })).toEqual([]);
   });
 
+  test("compares activity payloads, type and ownership across reload", () => {
+    const activity = {
+      type: "activity",
+      activityType: "review",
+      content: { stage: "reading", progress: 1 },
+      subagentRunId: "child-run",
+    } satisfies Part;
+    const reload = [assistant("turn", [activity])];
+    expect(
+      diffLiveAgainstReload({
+        live: [
+          assistant("turn", [
+            { ...activity, content: { progress: 1, stage: "reading" } },
+          ]),
+        ],
+        reload,
+      }),
+    ).toEqual([]);
+    for (const parts of [
+      [],
+      [{ ...activity, activityType: "search" }],
+      [{ ...activity, content: { stage: "done", progress: 1 } }],
+      [{ ...activity, subagentRunId: "other-run" }],
+      [activity, activity],
+    ]) {
+      expect(
+        diffLiveAgainstReload({ live: [assistant("turn", parts)], reload })
+          .length,
+      ).toBeGreaterThan(0);
+    }
+  });
+
   test("ignores the key order of a tool output", () => {
     const withOutput = (output: unknown) => [
       assistant("turn", [call("call-1", output)]),

@@ -1,5 +1,7 @@
 import { panic } from "better-result";
 
+import { printError } from "@stll/errors";
+
 import { TEST_BATCH_KIND, type TestBatchKind } from "./test-batch-plan";
 import { testFileDurationWeights } from "./test-timings";
 
@@ -153,7 +155,7 @@ export const runInLanes = async <TBatch extends LaneBatch>({
     try {
       return await runBatch(batch, lane);
     } catch (error) {
-      console.error(error);
+      printError(error);
       return 1;
     }
   };

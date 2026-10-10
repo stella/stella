@@ -46,6 +46,11 @@ type ToolCallView = {
  * object key order.
  */
 type MessageView = {
+  activities: {
+    activityType: string;
+    content: string | null;
+    subagentRunId: string | null;
+  }[];
   id: string;
   reasoning: string[];
   role: UIMessage["role"];
@@ -86,6 +91,7 @@ const toolCallView = (part: ToolCallUIPart): ToolCallView => ({
 });
 
 const messageView = (message: UIMessage): MessageView => {
+  const activities: MessageView["activities"] = [];
   const text: string[] = [];
   const reasoning: string[] = [];
   const toolCalls: ToolCallView[] = [];
@@ -114,6 +120,14 @@ const messageView = (message: UIMessage): MessageView => {
         });
         break;
       }
+      case "activity": {
+        activities.push({
+          activityType: part.activityType,
+          content: jsonValue(part.content),
+          subagentRunId: part.subagentRunId ?? null,
+        });
+        break;
+      }
       case "audio":
       case "document":
       case "image":
@@ -128,6 +142,7 @@ const messageView = (message: UIMessage): MessageView => {
     }
   }
   return {
+    activities,
     id: message.id,
     reasoning,
     role: message.role,
