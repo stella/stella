@@ -40,6 +40,9 @@ wasm-bindgen \
   --out-name scan_engine \
   "${TARGET_DIR}/wasm32-unknown-unknown/release/stella_scan_engine.wasm"
 
+# The engine owns instance recovery; wasm-bindgen's web glue would otherwise return its cached instance.
+perl -0pi -e 's/  if \(wasm !== undefined\) return wasm;\n//g' "${OUTPUT_DIR}/scan_engine.js"
+
 for declaration in "${OUTPUT_DIR}"/*.d.ts; do
   perl -ni -e 'print unless m{^/\* (?:eslint|tslint)-disable \*/$}' "${declaration}"
 done

@@ -276,6 +276,7 @@ export const RESULT_BOUNDARY_GLOBS = [
   // wasm-bindgen reports initialization failures and traps through rejection;
   // this adapter converts that runtime contract to a typed Result.
   "packages/scan-engine/src/scan-engine.ts",
+  "packages/scan-engine/src/scan-engine.worker.ts",
 ] as const;
 
 // Declaration files carry no runtime code. The lint ignores them outright, so

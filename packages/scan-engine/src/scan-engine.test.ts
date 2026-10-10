@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 
-import init, { clean_scan_rgba } from "../generated/scan_engine.js";
+import init, { clean_scan_rgba, initSync } from "../generated/scan_engine.js";
 import { createScanEngine } from "./scan-engine";
 import type { RasterizedScanPage, ScanOptions } from "./types";
 
@@ -126,6 +126,40 @@ describe("committed WebAssembly scan engine", () => {
 });
 
 describe("WebAssembly binding recovery", () => {
+  test("creates a fresh real instance after a WebAssembly trap", async () => {
+    const module = await WebAssembly.compile(wasm);
+    const trappedInstance = initSync({ module });
+
+    expect(() =>
+      trappedInstance.clean_scan_rgba(
+        2_147_483_640,
+        1,
+        1,
+        0,
+        0,
+        300,
+        0,
+        0,
+        0,
+        0,
+      ),
+    ).toThrow(WebAssembly.RuntimeError);
+
+    const freshInstance = initSync({ module });
+    expect(freshInstance.memory).not.toBe(trappedInstance.memory);
+    const result = clean_scan_rgba(
+      1,
+      1,
+      new Uint8Array(onePixelPage.pixels.buffer),
+      300,
+      "binary",
+      false,
+      false,
+    );
+    expect(result.status).toBe("unrecognized");
+    result.free();
+  });
+
   test("retries after the binding loader rejects", async () => {
     let loadCount = 0;
     const load = async () => {

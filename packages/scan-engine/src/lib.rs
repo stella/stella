@@ -293,21 +293,78 @@ pub fn perspective(
     Ok(output)
 }
 
-fn rotate_centered(gray: &GrayImage, angle: f32) -> GrayImage {
+struct RotatedImage {
+    image: GrayImage,
+    offset: Point,
+}
+
+fn page_background(gray: &GrayImage) -> u8 {
+    let mut counts = [0_u32; 256];
+    for pixel in gray.pixels() {
+        counts[usize::from(pixel[0])] += 1;
+    }
+    counts
+        .iter()
+        .enumerate()
+        .max_by_key(|(_, count)| *count)
+        .map_or(255, |(value, _)| value as u8)
+}
+
+fn rotate_centered(gray: &GrayImage, angle: f32) -> RotatedImage {
     let center_x = gray.width() as f32 / 2.0;
     let center_y = gray.height() as f32 / 2.0;
-    let projection = Projection::translate(center_x, center_y)
+    let rotation = Projection::translate(center_x, center_y)
         * Projection::rotate(-angle.to_radians())
         * Projection::translate(-center_x, -center_y);
-    let mut output = GrayImage::new(gray.width(), gray.height());
+    let corners = [
+        (0.0, 0.0),
+        (gray.width() as f32, 0.0),
+        (gray.width() as f32, gray.height() as f32),
+        (0.0, gray.height() as f32),
+    ]
+    .map(|point| rotation * point);
+    let min_x = corners
+        .iter()
+        .map(|point| point.0)
+        .fold(f32::INFINITY, f32::min)
+        .floor()
+        - 1.0;
+    let min_y = corners
+        .iter()
+        .map(|point| point.1)
+        .fold(f32::INFINITY, f32::min)
+        .floor()
+        - 1.0;
+    let max_x = corners
+        .iter()
+        .map(|point| point.0)
+        .fold(f32::NEG_INFINITY, f32::max)
+        .ceil()
+        + 1.0;
+    let max_y = corners
+        .iter()
+        .map(|point| point.1)
+        .fold(f32::NEG_INFINITY, f32::max)
+        .ceil()
+        + 1.0;
+    let projection = Projection::translate(-min_x, -min_y) * rotation;
+    let background = page_background(gray);
+    let mut output = GrayImage::from_pixel(
+        (max_x - min_x) as u32,
+        (max_y - min_y) as u32,
+        Luma([background]),
+    );
     warp_into(
         gray,
         projection,
         Interpolation::Bilinear,
-        Border::Constant(Luma([255])),
+        Border::Constant(Luma([background])),
         &mut output,
     );
-    output
+    RotatedImage {
+        image: output,
+        offset: (-min_x, -min_y),
+    }
 }
 
 fn content_bounds(binary: &GrayImage, dpi: f32) -> Option<ContentBox> {
@@ -394,11 +451,17 @@ pub fn clean_scan(
     } else {
         0.0
     };
-    let straight = if options.deskew {
+    let rotated = if options.deskew {
         rotate_centered(&rectified, skew_degrees)
     } else {
-        rectified
+        RotatedImage {
+            image: rectified,
+            offset: (0.0, 0.0),
+        }
     };
+    let straight = rotated.image;
+    let translated_quad = applied_quad
+        .map(|quad| quad.map(|point| (point.0 + rotated.offset.0, point.1 + rotated.offset.1)));
     // Radius 32 produces the requested 65 by 65 local background window.
     let background = box_filter(&straight, 32, 32);
     let flattened = GrayImage::from_fn(straight.width(), straight.height(), |x, y| {
@@ -416,7 +479,7 @@ pub fn clean_scan(
     if !options.content_crop {
         return Ok(CleanedScan {
             image: selected,
-            applied_quad,
+            applied_quad: translated_quad,
             skew_degrees,
             content_box: content,
         });
@@ -437,7 +500,8 @@ pub fn clean_scan(
     let image = imageops::crop_imm(&selected, x, y, right - x, bottom - y).to_image();
     Ok(CleanedScan {
         image,
-        applied_quad,
+        applied_quad: translated_quad
+            .map(|quad| quad.map(|point| (point.0 - x as f32, point.1 - y as f32))),
         skew_degrees,
         content_box: ContentBox {
             x: content.x - x,

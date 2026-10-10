@@ -3,7 +3,7 @@ use imageproc::geometric_transformations::{Border, Interpolation, rotate_about_c
 
 use crate::{
     CleanOptions, CleanOutput, UnrecognizedReason, clean_scan, content_bounds, deskew_angle,
-    detect_page_quad, perspective, rgba_to_gray,
+    detect_page_quad, perspective, rgba_to_gray, rotate_centered,
 };
 
 fn text_page() -> GrayImage {
@@ -67,6 +67,75 @@ fn deskewed_output_is_straight() {
     assert!(
         remaining.abs() <= 0.5,
         "expected straight output, got {remaining} degrees"
+    );
+}
+
+#[test]
+fn deskew_without_content_crop_preserves_edge_content() {
+    let mut source = text_page();
+    for x in 0..source.width() {
+        source.put_pixel(x, 0, Luma([20]));
+        source.put_pixel(x, source.height() - 1, Luma([20]));
+    }
+    for y in 0..source.height() {
+        source.put_pixel(0, y, Luma([20]));
+        source.put_pixel(source.width() - 1, y, Luma([20]));
+    }
+    assert!((0..source.width()).any(|x| source.get_pixel(x, 0)[0] < 100));
+    assert!((0..source.width()).any(|x| source.get_pixel(x, source.height() - 1)[0] < 100));
+    assert!((0..source.height()).any(|y| source.get_pixel(0, y)[0] < 100));
+    assert!((0..source.height()).any(|y| source.get_pixel(source.width() - 1, y)[0] < 100));
+
+    let before = clean_scan(&source, options(CleanOutput::Grayscale))
+        .expect("unrotated edge content should clean")
+        .image
+        .pixels()
+        .filter(|pixel| pixel[0] < 128)
+        .count();
+    let rotated = rotate_centered(&source, -3.0).image;
+    let result = clean_scan(
+        &rotated,
+        CleanOptions {
+            deskew: true,
+            ..options(CleanOutput::Grayscale)
+        },
+    )
+    .expect("edge content should clean");
+    let after = result.image.pixels().filter(|pixel| pixel[0] < 128).count();
+
+    assert!(result.image.width() > rotated.width());
+    assert!(result.image.height() > rotated.height());
+    assert!(
+        after.abs_diff(before) <= before / 5,
+        "before {before}, after {after}"
+    );
+    assert!(
+        result
+            .image
+            .rows()
+            .next()
+            .expect("top row")
+            .all(|pixel| pixel[0] >= 240)
+    );
+    assert!(
+        result
+            .image
+            .rows()
+            .next_back()
+            .expect("bottom row")
+            .all(|pixel| pixel[0] >= 240)
+    );
+    assert!(
+        result
+            .image
+            .rows()
+            .all(|mut row| row.next().expect("left pixel")[0] >= 240)
+    );
+    assert!(
+        result
+            .image
+            .rows()
+            .all(|mut row| row.next_back().expect("right pixel")[0] >= 240)
     );
 }
 

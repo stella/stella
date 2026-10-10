@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 
-import initWasm, { clean_scan_rgba } from "../generated/scan_engine.js";
+import { clean_scan_rgba, initSync } from "../generated/scan_engine.js";
 import type {
   ContentBox,
   RasterizedScanPage,
@@ -9,6 +9,7 @@ import type {
   ScanResult,
 } from "./types";
 import { ScanEngineError } from "./types";
+import type { WorkerRequest, WorkerResponse } from "./worker-protocol";
 
 type WasmScanResult = {
   free: () => void;
@@ -49,8 +50,88 @@ const loadWasmBindings = async () => {
     new URL("../generated/scan_engine_bg.wasm", import.meta.url),
     { signal: AbortSignal.timeout(WASM_LOAD_TIMEOUT_MS) },
   );
-  await initWasm({ module_or_path: response });
+  const module = await WebAssembly.compile(await response.arrayBuffer());
+  initSync({ module });
   return { clean_scan_rgba };
+};
+
+const createWorkerEngine = (): ScanEngine => {
+  let worker: Worker | undefined;
+  let queue = Promise.resolve();
+
+  const reset = () => {
+    worker?.terminate();
+    worker = undefined;
+  };
+
+  const clean = async (page: RasterizedScanPage, options: ScanOptions) => {
+    const run = async () => {
+      worker ??= new Worker(new URL("scan-engine.worker.ts", import.meta.url), {
+        type: "module",
+      });
+      const activeWorker = worker;
+      const pixels = page.pixels.slice().buffer;
+      const request: WorkerRequest = {
+        page: {
+          width: page.width,
+          height: page.height,
+          pageSize: page.pageSize,
+          dpi: page.dpi,
+          rotation: page.rotation,
+        },
+        pixels,
+        options,
+      };
+      return await new Promise<ScanResult>((resolve, reject) => {
+        activeWorker.addEventListener(
+          "message",
+          ({ data }: MessageEvent<WorkerResponse>) => {
+            if (data.type === "result") {
+              resolve(
+                convertResult(
+                  { ...data.result, free: () => undefined },
+                  options.output,
+                ),
+              );
+              return;
+            }
+            reset();
+            reject(
+              data.errorType === "runtime-trap"
+                ? new WebAssembly.RuntimeError(data.message)
+                : new ScanEngineError({ message: data.message }),
+            );
+          },
+          { once: true },
+        );
+        activeWorker.addEventListener(
+          "error",
+          (event) => {
+            reset();
+            reject(new ScanEngineError({ message: event.message }));
+          },
+          { once: true },
+        );
+        activeWorker.postMessage(request, [pixels]);
+      });
+    };
+    const result = queue.then(run, run);
+    queue = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    return await Result.tryPromise({
+      try: async () => await result,
+      catch: (cause) =>
+        cause instanceof ScanEngineError
+          ? cause
+          : new ScanEngineError({
+              message: "The scan engine could not clean the page",
+              cause,
+            }),
+    });
+  };
+  return { clean };
 };
 
 const readContentBox = (values: Uint32Array): ContentBox => {
@@ -145,16 +226,20 @@ const convertResult = (
   };
 };
 
-export const createScanEngine = (
-  load: WasmLoader = loadWasmBindings,
-): ScanEngine => {
+export const createScanEngine = (load?: WasmLoader): ScanEngine => {
+  if (load === undefined && typeof Worker !== "undefined") {
+    return createWorkerEngine();
+  }
+  // Non-worker runtimes compile once, while the patched initSync glue creates a new
+  // WebAssembly.Instance whenever recovery clears the cached binding promise.
+  const resolvedLoad = load ?? loadWasmBindings;
   let bindings: Promise<WasmBindings> | undefined;
   return {
     clean: async (page: RasterizedScanPage, options: ScanOptions) =>
       await Result.tryPromise({
         try: async () => {
           if (bindings === undefined) {
-            const pending = load().catch((error: unknown) => {
+            const pending = resolvedLoad().catch((error: unknown) => {
               if (bindings === pending) {
                 bindings = undefined;
               }
