@@ -7,6 +7,7 @@ import {
   chatThreads,
   CORRESPONDENCE_REVIEW_RESET_SETTING,
   userFiles,
+  workspaces,
 } from "@/api/db/schema";
 import { runScopedWorkInTransaction } from "@/api/db/scoped";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -210,6 +211,11 @@ export const sweepReviewOrganization = async (
   userId: SafeId<"user">,
 ): Promise<Map<string, number>> => {
   // audit: skip - the reset sweep; the run's totals go to the system audit
+  const workspaceRows = await tx
+    .select({ id: workspaces.id })
+    .from(workspaces)
+    .where(eq(workspaces.organizationId, organizationId));
+  const workspaceIds = workspaceRows.map(({ id }) => id);
   const removed = new Map<string, number>();
   // Chat attachments name no organization; their rows hold their threads
   // (`user_files.thread_id` restricts), and the storage census already
@@ -264,7 +270,7 @@ export const sweepReviewOrganization = async (
         userId,
         workspaceScope: {
           type: WORKSPACE_ACCESS_MODE.explicit,
-          workspaceIds: [],
+          workspaceIds,
         },
         fn: clear,
       });
