@@ -73,6 +73,8 @@ const mountApp = async ({
     () =>
       `<head><meta http-equiv="Content-Security-Policy" content="${MCP_APP_SANDBOX_CONTENT_DIRECTIVES.join("; ")}">`,
   );
+  // setContent preserves host listeners across mounts in the same test.
+  await page.goto("about:blank");
   await page.setContent(
     '<iframe id="app" sandbox="allow-scripts allow-forms" style="width:100%;height:650px;border:0"></iframe>',
   );
@@ -653,7 +655,8 @@ test("filter labels align and date fields remain fixed when opened", async ({
     expect(Math.abs(textLeft - controlLeft)).toBeLessThanOrEqual(0.5);
   }
   const trigger = app.getByRole("button", { name: /^From /u });
-  const label = app.locator('span[id$="-from-label"]');
+  const label = app.locator("form").getByText("From", { exact: true });
+  await expect(label).toBeVisible();
   const beforeTrigger = await trigger.boundingBox();
   const beforeLabel = await label.boundingBox();
   await trigger.click();
