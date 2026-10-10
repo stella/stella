@@ -1815,11 +1815,15 @@ const captureReviewCallback = async ({
     redirect.searchParams.get("state") !== stateValue ||
     !redirect.searchParams.get("code") ||
     redirect.searchParams.has("error") ||
-    (issuer !== undefined && redirect.searchParams.get("iss") !== issuer) ||
     redirect.username !== "" ||
     redirect.password !== ""
   ) {
-    reject("expected the owned loopback callback, matching state and issuer");
+    reject("expected the owned loopback callback and matching state");
+  }
+  if (issuer !== undefined && redirect.searchParams.get("iss") !== issuer) {
+    reject(
+      "expected callback issuer to equal the authorization server issuer exactly",
+    );
   }
   state.lastResponse = undefined;
   // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- the canary's own loopback receiver; origin, path and state checked against the issued redirect before this call; no credentials, redirects manual
@@ -2207,6 +2211,7 @@ const acceptRefreshTokens = ({
     reject("expected an access token and a rotated refresh token");
   }
   state.token = body.access_token;
+  return body;
 };
 
 const discoverRefreshOAuth = async (context: ReviewJourneyContext) => {
@@ -2222,6 +2227,45 @@ const discoverRefreshOAuth = async (context: ReviewJourneyContext) => {
   }
   context.complete();
   return { metadata, advertisedIssuer };
+};
+
+type RefreshReplayOptions = {
+  context: ReviewJourneyContext;
+  authorization: ReviewAuthorization;
+  previous: string;
+  tokens: v.InferOutput<typeof refreshTokenSchema>;
+  round: number;
+};
+const verifyRefreshReplay = async ({
+  context,
+  authorization,
+  previous,
+  tokens,
+  round,
+}: RefreshReplayOptions) => {
+  const { state, request, baseUrl, complete } = context;
+  const reject: (assertion: string) => never = context.reject;
+  state.step = `refresh ${String(round)} replay`;
+  const replay = await request(authorization.tokenEndpoint, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "refresh_token",
+      client_id: authorization.clientId,
+      refresh_token: previous,
+      resource: new URL(MCP_HTTP_PATH, baseUrl).toString(),
+    }).toString(),
+  });
+  if (
+    !v.is(refreshTokenSchema, replay) ||
+    replay.access_token !== tokens.access_token ||
+    replay.refresh_token !== tokens.refresh_token
+  ) {
+    reject(
+      "expected the identical access and refresh token pair within the replay window",
+    );
+  }
+  complete();
 };
 
 export const runRefreshJourney = async (
@@ -2240,16 +2284,19 @@ export const runRefreshJourney = async (
   if (environment === "production" && mode !== "full") {
     return [];
   }
-  if (
-    environment === "production" &&
-    (!email || !password || baseUrl !== configuredBaseUrl)
-  ) {
+  if (environment === "production" && baseUrl !== configuredBaseUrl) {
+    return [
+      skipped(
+        `${REFRESH_JOURNEY_NAME}: sign-in`,
+        "credential withheld: target is not the configured production endpoint",
+      ),
+    ];
+  }
+  if (environment === "production" && (!email || !password)) {
     return [
       failed(
         `${REFRESH_JOURNEY_NAME}: sign-in`,
-        !email || !password
-          ? "missing restricted-account sign-in credentials"
-          : "credential withheld: target is not the configured endpoint",
+        "missing restricted-account sign-in credentials",
       ),
     ];
   }
@@ -2305,7 +2352,6 @@ export const runRefreshJourney = async (
         body: await exchangeReviewToken({ context, authorization, code }),
       });
       complete();
-      const initialRefreshToken = state.refreshToken;
       for (const round of environment === "production"
         ? [1, 2]
         : REFRESH_ROUNDS) {
@@ -2324,8 +2370,19 @@ export const runRefreshJourney = async (
             resource: new URL(MCP_HTTP_PATH, baseUrl).toString(),
           }).toString(),
         });
-        acceptRefreshTokens({ context, body: refreshed, previous });
+        const tokens = acceptRefreshTokens({
+          context,
+          body: refreshed,
+          previous,
+        });
         complete();
+        await verifyRefreshReplay({
+          context,
+          authorization,
+          previous,
+          tokens,
+          round,
+        });
         await initializeReviewMcp(
           context,
           `successor ${String(round)} initialize`,
@@ -2349,25 +2406,6 @@ export const runRefreshJourney = async (
         }
         complete();
       }
-      state.step = "reject reused token";
-      if (!initialRefreshToken) {
-        reject("initial refresh token unavailable");
-      }
-      const reused = await request(authorization.tokenEndpoint, {
-        method: "POST",
-        headers: { "content-type": "application/x-www-form-urlencoded" },
-        expectedStatus: 400,
-        body: new URLSearchParams({
-          grant_type: "refresh_token",
-          client_id: authorization.clientId,
-          refresh_token: initialRefreshToken,
-          resource: new URL(MCP_HTTP_PATH, baseUrl).toString(),
-        }).toString(),
-      });
-      if (!v.is(v.object({ error: v.literal("invalid_grant") }), reused)) {
-        reject("expected invalid_grant for the initial refresh token");
-      }
-      complete();
     },
     catch: (error) => error,
   });

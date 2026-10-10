@@ -12,6 +12,7 @@ import { and, eq, isNotNull } from "drizzle-orm";
 import * as v from "valibot";
 
 import {
+  oauthAccessToken,
   oauthClient,
   oauthRefreshToken,
   oauthResource,
@@ -28,6 +29,8 @@ import {
   refreshOAuthGrant,
   registerOAuthClient,
 } from "@/api/tests/helpers/oauth-grant";
+
+const CLIENT_AUTH_METHODS = ["client_secret_post", "none"] as const;
 
 const runPostgres = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const tokenSchema = v.looseObject({
@@ -110,125 +113,156 @@ if (!runPostgres || !process.env["DATABASE_URL"]) {
       eq(oauthRefreshToken.clientId, clientId),
     );
 
+  const countTokenRows = async (clientId: string) => {
+    const [refreshTokens, accessTokens] = await Promise.all([
+      countRefreshRows(clientId),
+      rootDb.$count(oauthAccessToken, eq(oauthAccessToken.clientId, clientId)),
+    ]);
+    return { refreshTokens, accessTokens };
+  };
+
   describe("OAuth refresh reuse window (postgres)", () => {
-    test.each([1, 2])(
-      "rotates public grants %s times and immediately refuses consumed refresh tokens",
-      async (rotations) => {
-        const { client, grant } = await fixture("none");
-        const consumed = [];
-        let refreshToken = grant.refreshToken;
-        for (let round = 0; round < rotations; round += 1) {
-          consumed.push(refreshToken);
-          const start = performance.now();
-          const response = await refreshOAuthGrant({ client, refreshToken });
-          expect(performance.now() - start).toBeLessThan(10_000);
-          expect(response.status).toBe(200);
-          const tokens = v.parse(tokenSchema, await response.json());
-          expect(tokens.refresh_token).not.toBe(refreshToken);
-          refreshToken = tokens.refresh_token;
-        }
-        const rows = await rootDb
-          .select()
-          .from(oauthRefreshToken)
-          .where(eq(oauthRefreshToken.clientId, client.clientId));
-        expect(rows.filter((row) => row.rotatedAt !== null)).toHaveLength(
-          rotations,
+    test.each(CLIENT_AUTH_METHODS)(
+      "reuses a discarded %s rotation response without minting tokens and preserves its successor",
+      async (method) => {
+        const { client, grant } = await fixture(method);
+        expect(await countRefreshRows(client.clientId)).toBe(1);
+        const discarded = await refreshOAuthGrant({
+          client,
+          refreshToken: grant.refreshToken,
+        });
+        expect(discarded.status).toBe(200);
+        expect(await countRefreshRows(client.clientId)).toBe(2);
+        // Observe a copy for assertions; the retry uses only the original grant.
+        const firstRotation = v.parse(
+          tokenSchema,
+          await discarded.clone().json(),
         );
-        for (const row of rows) {
-          expect(row.rotationReplayExpiresAt).toBeNull();
-          expect(row.rotationReplayResponse).toBeNull();
-        }
-        for (const oldToken of consumed) {
-          const response = await refreshOAuthGrant({
+        const rowsBeforeReplay = await countTokenRows(client.clientId);
+        const retry = await refreshOAuthGrant({
+          client,
+          refreshToken: grant.refreshToken,
+        });
+        expect(retry.status).toBe(200);
+        const tokens = v.parse(tokenSchema, await retry.json());
+        expect(tokens).toEqual(firstRotation);
+        expect(tokens.refresh_token).not.toBe(grant.refreshToken);
+        expect(await countTokenRows(client.clientId)).toEqual(rowsBeforeReplay);
+        expect(await countRefreshRows(client.clientId)).toBe(2);
+        expect(
+          await isOAuthTokenActive({
             client,
-            refreshToken: oldToken,
-          });
-          expect(response.status).toBe(400);
-          expect(await response.json()).toMatchObject({
-            error: "invalid_grant",
-          });
-        }
+            token: tokens.refresh_token,
+            tokenTypeHint: "refresh_token",
+          }),
+        ).toBe(true);
+        expect(
+          (
+            await refreshOAuthGrant({
+              client,
+              refreshToken: tokens.refresh_token,
+            })
+          ).status,
+        ).toBe(200);
+        expect(await countRefreshRows(client.clientId)).toBe(3);
       },
     );
-
-    test("reuses a discarded rotation response and preserves its successor", async () => {
-      const { client, grant } = await fixture();
-      expect(await countRefreshRows(client.clientId)).toBe(1);
-      const discarded = await refreshOAuthGrant({
-        client,
-        refreshToken: grant.refreshToken,
-      });
-      expect(discarded.status).toBe(200);
-      expect(await countRefreshRows(client.clientId)).toBe(2);
-      // Observe a copy for assertions; the retry uses only the original grant.
-      const firstRotation = v.parse(
-        tokenSchema,
-        await discarded.clone().json(),
-      );
-      const retry = await refreshOAuthGrant({
-        client,
-        refreshToken: grant.refreshToken,
-      });
-      expect(retry.status).toBe(200);
-      const tokens = v.parse(tokenSchema, await retry.json());
-      expect(tokens.access_token === firstRotation.access_token).toBe(true);
-      expect(tokens.refresh_token === firstRotation.refresh_token).toBe(true);
-      expect(await countRefreshRows(client.clientId)).toBe(2);
-      expect(
-        await isOAuthTokenActive({
+    test.each(CLIENT_AUTH_METHODS)(
+      "rejects a %s retry after the reuse window and ends the refresh family",
+      async (method) => {
+        const { client, grant } = await fixture(method);
+        const rotation = await refreshOAuthGrant({
           client,
-          token: tokens.refresh_token,
-          tokenTypeHint: "refresh_token",
-        }),
-      ).toBe(true);
-      expect(
-        (
-          await refreshOAuthGrant({
-            client,
-            refreshToken: tokens.refresh_token,
-          })
-        ).status,
-      ).toBe(200);
-      expect(await countRefreshRows(client.clientId)).toBe(3);
-    });
-    test("rejects a retry after the reuse window and ends the refresh family", async () => {
-      const { client, grant } = await fixture();
-      const rotation = await refreshOAuthGrant({
-        client,
-        refreshToken: grant.refreshToken,
-      });
-      expect(rotation.status).toBe(200);
-      const successor = v.parse(tokenSchema, await rotation.json());
-      expect(await countRefreshRows(client.clientId)).toBe(2);
-      const expired = await rootDb
-        .update(oauthRefreshToken)
-        .set({ rotationReplayExpiresAt: new Date(Date.now() - 1000) })
-        .where(
-          and(
-            eq(oauthRefreshToken.clientId, client.clientId),
-            isNotNull(oauthRefreshToken.rotatedAt),
-          ),
-        )
-        .returning({ id: oauthRefreshToken.id });
-      expect(expired).toHaveLength(1);
-      const retry = await refreshOAuthGrant({
-        client,
-        refreshToken: grant.refreshToken,
-      });
-      expect(retry.status).toBe(400);
-      expect(await retry.json()).toMatchObject({ error: "invalid_grant" });
-      expect(await countRefreshRows(client.clientId)).toBe(0);
-      expect(
-        (
-          await refreshOAuthGrant({
-            client,
-            refreshToken: successor.refresh_token,
-          })
-        ).status,
-      ).toBe(400);
-    });
+          refreshToken: grant.refreshToken,
+        });
+        expect(rotation.status).toBe(200);
+        const successor = v.parse(tokenSchema, await rotation.json());
+        expect(await countRefreshRows(client.clientId)).toBe(2);
+        const expired = await rootDb
+          .update(oauthRefreshToken)
+          .set({ rotationReplayExpiresAt: new Date(Date.now() - 1000) })
+          .where(
+            and(
+              eq(oauthRefreshToken.clientId, client.clientId),
+              isNotNull(oauthRefreshToken.rotatedAt),
+            ),
+          )
+          .returning({ id: oauthRefreshToken.id });
+        expect(expired).toHaveLength(1);
+        const retry = await refreshOAuthGrant({
+          client,
+          refreshToken: grant.refreshToken,
+        });
+        expect(retry.status).toBe(400);
+        expect(await retry.json()).toMatchObject({ error: "invalid_grant" });
+        expect(await countTokenRows(client.clientId)).toEqual({
+          refreshTokens: 0,
+          accessTokens: 0,
+        });
+        const successorRetry = await refreshOAuthGrant({
+          client,
+          refreshToken: successor.refresh_token,
+        });
+        expect(successorRetry.status).toBe(400);
+        expect(await successorRetry.json()).toMatchObject({
+          error: "invalid_grant",
+        });
+      },
+    );
+    test.each(
+      CLIENT_AUTH_METHODS.flatMap((ownerMethod) =>
+        CLIENT_AUTH_METHODS.map(
+          (presenterMethod) => [ownerMethod, presenterMethod] as const,
+        ),
+      ),
+    )(
+      "refuses a stored %s rotation replay presented by a different %s client",
+      async (ownerMethod, presenterMethod) => {
+        const { client, grant } = await fixture(ownerMethod);
+        const rotation = await refreshOAuthGrant({
+          client,
+          refreshToken: grant.refreshToken,
+        });
+        expect(rotation.status).toBe(200);
+        const firstRotation = v.parse(tokenSchema, await rotation.json());
+        const otherClient = await registerOAuthClient(
+          undefined,
+          presenterMethod,
+        );
+        cleanup.push(
+          async () =>
+            await rootDb
+              .delete(oauthClient)
+              .where(eq(oauthClient.clientId, otherClient.clientId)),
+        );
+        const ownerRows = await countTokenRows(client.clientId);
+        const presenterRows = await countTokenRows(otherClient.clientId);
+        const refused = await refreshOAuthGrant({
+          client: otherClient,
+          refreshToken: grant.refreshToken,
+        });
+        expect(refused.status).toBe(400);
+        const refusal = await refused.json();
+        expect(refusal).toMatchObject({ error: "invalid_grant" });
+        expect(refusal).not.toHaveProperty("access_token");
+        expect(refusal).not.toHaveProperty("refresh_token");
+        expect(await countTokenRows(client.clientId)).toEqual(ownerRows);
+        expect(await countTokenRows(otherClient.clientId)).toEqual(
+          presenterRows,
+        );
+        const rightfulReplay = await refreshOAuthGrant({
+          client,
+          refreshToken: grant.refreshToken,
+        });
+        expect(rightfulReplay.status).toBe(200);
+        expect(v.parse(tokenSchema, await rightfulReplay.json())).toEqual(
+          firstRotation,
+        );
+        expect(await countTokenRows(client.clientId)).toEqual(ownerRows);
+      },
+    );
     // Both requests read the unrotated row before the conditional update.
-    test.each(["client_secret_post", "none"] as const)(
+    test.each(CLIENT_AUTH_METHODS)(
       "rejects the losing concurrent update and preserves the winning %s rotation",
       async (method) => {
         const { client, grant } = await fixture(method);

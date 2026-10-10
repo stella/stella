@@ -27,6 +27,7 @@ const STEPS = [
   "token",
   ...[1, 2, 3].flatMap((round) => [
     `refresh ${String(round)}`,
+    `refresh ${String(round)} replay`,
     `successor ${String(round)} initialize`,
     `successor ${String(round)} read`,
   ]),
@@ -39,8 +40,6 @@ type FixtureOptions = {
   wrongCallbackState?: boolean;
   callbackIssuer?: string | null;
   metadataIssuer?: string;
-  acceptsReusedToken?: boolean;
-  reuseError?: string;
 };
 
 const createTransport = ({
@@ -50,13 +49,15 @@ const createTransport = ({
   wrongCallbackState,
   callbackIssuer = `${BASE_URL}/api/auth`,
   metadataIssuer = `${BASE_URL}/api/auth`,
-  acceptsReusedToken,
-  reuseError = "invalid_grant",
 }: FixtureOptions = {}) => {
   const requests: { url: URL; headers: Headers; body: string; step: string }[] =
     [];
   let authorizeUrl: URL | undefined;
   let rotation = 0;
+  const rotatedPairs = new Map<
+    string,
+    { access_token: string; refresh_token: string }
+  >();
   const fetcher: CanaryFetcher = async (input, init) => {
     const request = input instanceof Request ? input : undefined;
     const url = new URL(input instanceof Request ? input.url : input);
@@ -148,14 +149,11 @@ const createTransport = ({
       case "/api/auth/oauth2/token": {
         const grant = new URLSearchParams(body);
         if (grant.get("grant_type") === "refresh_token") {
-          if (rotation > 0 && grant.get("refresh_token") === "refresh-0") {
-            step = "reject reused token";
-            response = acceptsReusedToken
-              ? Response.json({
-                  access_token: "reused-access",
-                  refresh_token: "reused-refresh",
-                })
-              : Response.json({ error: reuseError }, { status: 400 });
+          const previous = grant.get("refresh_token");
+          const pair = previous ? rotatedPairs.get(previous) : undefined;
+          if (pair) {
+            step = `refresh ${String(rotation)} replay`;
+            response = Response.json(pair);
             break;
           }
           rotation += 1;
@@ -171,10 +169,15 @@ const createTransport = ({
             sha256Base64Url(verifier ?? ""),
           );
         }
-        response = Response.json({
+        const pair = {
           access_token: `access-${String(rotation)}`,
           refresh_token: `refresh-${String(rotation === repeatRefresh ? rotation - 1 : rotation)}`,
-        });
+        };
+        response = Response.json(pair);
+        const previous = grant.get("refresh_token");
+        if (previous) {
+          rotatedPairs.set(previous, pair);
+        }
         break;
       }
       case "/mcp": {
@@ -285,13 +288,9 @@ describe("per-run OAuth refresh journey", () => {
     const { fetcher, requests } = createTransport();
     const results = await runRefreshJourney(OPTIONS, fetcher);
     expect(results.map(({ name, status }) => [name, status])).toEqual(
-      [
-        ...STEPS.slice(0, 4),
-        "callback",
-        ...STEPS.slice(4),
-        "reject reused token",
-        "revoke",
-      ].map((step) => [`OAuth refresh: ${step}`, "passed"]),
+      [...STEPS.slice(0, 4), "callback", ...STEPS.slice(4), "revoke"].map(
+        (step) => [`OAuth refresh: ${step}`, "passed"],
+      ),
     );
     const authorize = requests.find(({ step }) => step === "authorize");
     expect(authorize?.url.searchParams.get("scope")?.split(" ")).toContain(
@@ -397,7 +396,7 @@ describe("per-run OAuth refresh journey", () => {
     },
   );
 
-  test("signs in once in production, rotates twice, rejects the initial token and revokes the grant", async () => {
+  test("signs in once in production, rotates twice with identical replay pairs and revokes the grant", async () => {
     const { fetcher, requests } = createTransport();
     const results = await runRefreshJourney(PRODUCTION_OPTIONS, fetcher);
     expect(summarize(results)).toEqual({ failed: 0, skipped: 0 });
@@ -412,10 +411,10 @@ describe("per-run OAuth refresh journey", () => {
         "token",
         ...[1, 2].flatMap((round) => [
           `refresh ${String(round)}`,
+          `refresh ${String(round)} replay`,
           `successor ${String(round)} initialize`,
           `successor ${String(round)} read`,
         ]),
-        "reject reused token",
         "revoke",
       ].map((step) => `OAuth refresh: ${step}`),
     );
@@ -503,27 +502,23 @@ describe("per-run OAuth refresh journey", () => {
   );
 
   test.each([
-    { acceptsReusedToken: true },
-    { reuseError: "invalid_request" },
-    { reuseError: "custom_error" },
-  ])(
-    "requires invalid_grant when replaying the initial token: %j",
-    async (options) => {
-      const { fetcher, requests } = createTransport(options);
-      const results = await runRefreshJourney(PRODUCTION_OPTIONS, fetcher);
-      expect(results.filter(({ status }) => status === "failed")).toMatchObject(
-        [{ name: "OAuth refresh: reject reused token" }],
-      );
-      expect(requests.at(-1)?.step).toBe("revoke");
-    },
-  );
+    { access_token: "access-1", refresh_token: "different-refresh" },
+    { access_token: "different-access", refresh_token: "refresh-1" },
+    { access_token: "access-1" },
+    { error: "invalid_grant" },
+  ])("requires the identical replay pair: %j", async (body) => {
+    const { fetcher, requests } = createTransport({
+      responseBody: { step: "refresh 1 replay", body },
+    });
+    const results = await runRefreshJourney(PRODUCTION_OPTIONS, fetcher);
+    expect(results.filter(({ status }) => status === "failed")).toMatchObject([
+      { name: "OAuth refresh: refresh 1 replay" },
+    ]);
+    expect(requests.at(-1)?.step).toBe("revoke");
+  });
 
-  test.each([
-    { email: undefined },
-    { password: undefined },
-    { configuredBaseUrl: "https://other.example" },
-  ])(
-    "fails production with unavailable or mismatched credentials: %j",
+  test.each([{ email: undefined }, { password: undefined }])(
+    "fails production with unavailable credentials on the configured target: %j",
     async (options) => {
       const fetcher: CanaryFetcher = async () => {
         throw new TypeError("must not fetch");
@@ -536,6 +531,35 @@ describe("per-run OAuth refresh journey", () => {
           ),
         ),
       ).toEqual({ failed: 1, skipped: 0 });
+    },
+  );
+
+  test.each([
+    { email: undefined, password: undefined },
+    { email: PRODUCTION_OPTIONS.email, password: PRODUCTION_OPTIONS.password },
+  ])(
+    "skips alternate production targets with an explicit reason: %j",
+    async (credentials) => {
+      const fetcher: CanaryFetcher = async () => {
+        throw new TypeError("must not fetch");
+      };
+      const results = await runRefreshJourney(
+        {
+          ...PRODUCTION_OPTIONS,
+          ...credentials,
+          baseUrl: "https://alternate.example",
+        },
+        fetcher,
+      );
+      expect(results).toEqual([
+        {
+          name: "OAuth refresh: sign-in",
+          status: "skipped",
+          detail:
+            "credential withheld: target is not the configured production endpoint",
+        },
+      ]);
+      expect(summarize(results)).toEqual({ failed: 0, skipped: 1 });
     },
   );
 

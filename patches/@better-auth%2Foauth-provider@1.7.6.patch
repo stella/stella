@@ -177,24 +177,6 @@ index c41408fff2544b24d5e2666209f45b0833fe0853..5a374e48b44a6fb3b04c363a0dfff227
  		resources,
  		createdAt: /* @__PURE__ */ new Date(iat * 1e3),
  		expiresAt: /* @__PURE__ */ new Date(exp * 1e3)
-@@ -1574,7 +1583,7 @@ async function createRefreshToken(ctx, opts, user, referenceId, authorizationCodeId,
- 		revoked: rotatedAt,
- 		rotatedAt
- 	};
--	const reuseInterval = opts.refreshTokenReuseInterval ?? 0;
-+	const reuseInterval = client.tokenEndpointAuthMethod === "none" ? 0 : opts.refreshTokenReuseInterval ?? 0;
- 	if (reuseInterval > 0) rotationUpdate.rotationReplayExpiresAt = /* @__PURE__ */ new Date((iat + reuseInterval) * 1e3);
- 	if (!await ctx.context.adapter.incrementOne({
- 		model: "oauthRefreshToken",
-@@ -1878,7 +1887,7 @@ async function createUserTokens(ctx, opts, params) {
- 		scope: effectiveScopes.join(" "),
- 		id_token: idToken
- 	};
--	if (existingRefreshToken?.id && refreshToken?.id) try {
-+	if (client.tokenEndpointAuthMethod !== "none" && existingRefreshToken?.id && refreshToken?.id) try {
- 		await storeRefreshTokenRotationReplay(ctx, opts, existingRefreshToken, buildRefreshTokenRotationReplayRequest({
- 			effectiveScopes,
- 			requestedResources: params.resources,
 @@ -2134,6 +2143,31 @@
  		error: "invalid_target"
  	});
@@ -234,8 +216,7 @@ index c41408fff2544b24d5e2666209f45b0833fe0853..5a374e48b44a6fb3b04c363a0dfff227
 -	const client = await validateClientCredentials(ctx, opts, client_id, client_secret, requestedScopes ?? scopes, preVerified, "refresh_token", authMethod);
 +	validateClientScopes(client, requestedScopes ?? scopes);
  	if (refreshToken.revoked) {
--		if (isWithinRefreshTokenReuseInterval(refreshToken)) {
-+		if (client.tokenEndpointAuthMethod !== "none" && isWithinRefreshTokenReuseInterval(refreshToken)) {
+ 		if (isWithinRefreshTokenReuseInterval(refreshToken)) {
  			const replay = await getRefreshTokenRotationReplay(ctx, refreshToken, await resolveRefreshTokenRotationReplayRequest(ctx, opts, {
 diff --git a/dist/oauth-1Ud-hvZY.d.mts b/dist/oauth-1Ud-hvZY.d.mts
 index 130fd5d8f3ddd36d1b776338367af5b8cb7f0e79..e44e3a50806c1d72a885841319a68145c274f579 100644

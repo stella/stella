@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
-import { eq } from "drizzle-orm";
+import { and, eq, isNotNull } from "drizzle-orm";
 import { createLocalJWKSet, jwtVerify } from "jose";
 import * as v from "valibot";
 
@@ -23,7 +23,8 @@ await mock.module("@better-auth/cimd/node", () => ({
 const { getAuth } = await import("@/api/lib/auth");
 const { getAuthEndpointUrl, getAuthIssuerUrl } =
   await import("@/api/lib/auth/auth-paths");
-const { oauthRefreshToken } = await import("@/api/db/auth-schema");
+const { oauthRefreshToken, oauthAccessToken } =
+  await import("@/api/db/auth-schema");
 const { rootDb } = await import("@/api/db/root");
 const { getMcpResourceUrl, MCP_MODES } = await import("@/api/mcp/constants");
 const { getMcpAccessTokenVerificationOptions } = await import("@/api/mcp/auth");
@@ -47,7 +48,9 @@ const tokensSchema = v.looseObject({
   scope: v.string(),
 });
 
-const fixture = async (registration: "dynamic" | "metadata") => {
+const fixture = async (
+  registration: "dynamic" | "metadata" | "confidential",
+) => {
   const { browser } = await createHumanSession({
     email: `public-refresh-${Bun.randomUUIDv7()}@example.test`,
     orgName: "Public refresh",
@@ -55,31 +58,57 @@ const fixture = async (registration: "dynamic" | "metadata") => {
   });
   const registeredAt = performance.now();
   const client =
-    registration === "dynamic"
-      ? await registerOAuthClient(undefined, "none")
+    registration !== "metadata"
+      ? await registerOAuthClient(
+          undefined,
+          registration === "confidential" ? "client_secret_post" : "none",
+        )
       : { clientId: DOCUMENT_URL };
   expect(performance.now() - registeredAt).toBeLessThan(10_000);
   const start = performance.now();
   const grant = await grantOAuthClient(browser, client);
   expect(performance.now() - start).toBeLessThan(10_000);
   expect(grant.scope.split(" ")).toContain("offline_access");
-  return { client, grant };
+  return { client, grant, userId: browser.userId };
 };
 
-describe("public resource-bound refresh grants", () => {
+const countTokenRows = async ({
+  clientId,
+  userId,
+}: {
+  clientId: string;
+  userId: string;
+}) => ({
+  refresh: await rootDb.$count(
+    oauthRefreshToken,
+    and(
+      eq(oauthRefreshToken.clientId, clientId),
+      eq(oauthRefreshToken.userId, userId),
+    ),
+  ),
+  access: await rootDb.$count(
+    oauthAccessToken,
+    and(
+      eq(oauthAccessToken.clientId, clientId),
+      eq(oauthAccessToken.userId, userId),
+    ),
+  ),
+});
+
+describe("resource-bound refresh grants", () => {
   test.each([
     ["dynamic", 1],
     ["dynamic", 2],
     ["metadata", 1],
     ["metadata", 2],
+    ["confidential", 1],
+    ["confidential", 2],
   ] as const)(
-    "rotates %s grants %s times and refuses every consumed token immediately",
+    "rotates %s grants %s times and replays each response identically within the window",
     async (registration, rotations) => {
-      const { client, grant } = await fixture(registration);
-      const consumed = [];
+      const { client, grant, userId } = await fixture(registration);
       let refreshToken = grant.refreshToken;
       for (let round = 0; round < rotations; round += 1) {
-        consumed.push(refreshToken);
         const start = performance.now();
         const response = await refreshOAuthGrant({ client, refreshToken });
         expect(performance.now() - start).toBeLessThan(10_000);
@@ -87,27 +116,105 @@ describe("public resource-bound refresh grants", () => {
         const tokens = v.parse(tokensSchema, await response.json());
         expect(tokens.refresh_token).not.toBe(refreshToken);
         expect(tokens.scope.split(" ")).toContain("offline_access");
+        const rowsBefore = await countTokenRows({
+          clientId: client.clientId,
+          userId,
+        });
+        const replay = await refreshOAuthGrant({ client, refreshToken });
+        expect(replay.status).toBe(200);
+        const replayTokens = v.parse(tokensSchema, await replay.json());
+        expect(replayTokens.access_token === tokens.access_token).toBe(true);
+        expect(replayTokens.refresh_token === tokens.refresh_token).toBe(true);
+        expect(
+          await countTokenRows({ clientId: client.clientId, userId }),
+        ).toEqual(rowsBefore);
         refreshToken = tokens.refresh_token;
       }
       const stored = await rootDb
         .select()
         .from(oauthRefreshToken)
-        .where(eq(oauthRefreshToken.clientId, client.clientId));
+        .where(
+          and(
+            eq(oauthRefreshToken.clientId, client.clientId),
+            eq(oauthRefreshToken.userId, userId),
+          ),
+        );
       expect(stored.filter((row) => row.rotatedAt !== null)).toHaveLength(
         rotations,
       );
-      for (const row of stored) {
-        expect(row.rotationReplayExpiresAt).toBeNull();
-        expect(row.rotationReplayResponse).toBeNull();
+      for (const rotated of stored.filter((row) => row.rotatedAt !== null)) {
+        expect(rotated.rotationReplayExpiresAt).not.toBeNull();
+        expect(rotated.rotationReplayResponse).not.toBeNull();
       }
-      for (const oldToken of consumed) {
-        const response = await refreshOAuthGrant({
-          client,
-          refreshToken: oldToken,
-        });
+    },
+  );
+
+  test.each(["dynamic", "metadata", "confidential"] as const)(
+    "expires the %s replay window and ends the whole refresh family",
+    async (registration) => {
+      const { client, grant, userId } = await fixture(registration);
+      const rotation = await refreshOAuthGrant({
+        client,
+        refreshToken: grant.refreshToken,
+      });
+      expect(rotation.status).toBe(200);
+      const successor = v.parse(tokensSchema, await rotation.json());
+      await rootDb
+        .update(oauthRefreshToken)
+        .set({ rotationReplayExpiresAt: new Date(0) })
+        .where(
+          and(
+            eq(oauthRefreshToken.clientId, client.clientId),
+            eq(oauthRefreshToken.userId, userId),
+            isNotNull(oauthRefreshToken.rotatedAt),
+          ),
+        );
+      for (const refreshToken of [
+        grant.refreshToken,
+        successor.refresh_token,
+      ]) {
+        const response = await refreshOAuthGrant({ client, refreshToken });
         expect(response.status).toBe(400);
         expect(await response.json()).toMatchObject({ error: "invalid_grant" });
       }
+      expect(
+        await countTokenRows({ clientId: client.clientId, userId }),
+      ).toEqual({
+        refresh: 0,
+        access: 0,
+      });
+    },
+  );
+
+  test.each(["dynamic", "metadata", "confidential"] as const)(
+    "refuses to replay a %s grant for a different client",
+    async (registration) => {
+      const { client, grant, userId } = await fixture(registration);
+      const rotation = await refreshOAuthGrant({
+        client,
+        refreshToken: grant.refreshToken,
+      });
+      expect(rotation.status).toBe(200);
+      const successor = v.parse(tokensSchema, await rotation.json());
+      const otherClient = await registerOAuthClient(undefined, "none");
+      const rowsBefore = await countTokenRows({
+        clientId: client.clientId,
+        userId,
+      });
+      const response = await refreshOAuthGrant({
+        client: otherClient,
+        refreshToken: grant.refreshToken,
+      });
+      expect(response.status).toBe(400);
+      expect(await response.json()).toMatchObject({ error: "invalid_grant" });
+      expect(
+        await countTokenRows({ clientId: client.clientId, userId }),
+      ).toEqual(rowsBefore);
+      const valid = await refreshOAuthGrant({
+        client,
+        refreshToken: successor.refresh_token,
+      });
+      expect(valid.status).toBe(200);
     },
   );
 
