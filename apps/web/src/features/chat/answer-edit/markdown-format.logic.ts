@@ -18,9 +18,12 @@ type FormatEdit = Extract<
   ChatMessageAcceptedEdit,
   { type: typeof CHAT_MESSAGE_EDIT_TYPE.format }
 >;
-export type AnswerFormatAction = {
-  [Edit in FormatEdit as Edit["format"]]: Omit<Edit, "type" | "start" | "end">;
-}[FormatEdit["format"]];
+// Distribute before omitting: edits sharing "link" still have separate intents.
+export type AnswerFormatAction = FormatEdit extends infer Edit
+  ? Edit extends FormatEdit
+    ? Omit<Edit, "type" | "start" | "end">
+    : never
+  : never;
 
 const parseMarkdown = (source: string) =>
   fromMarkdown(source, {
@@ -68,13 +71,21 @@ const spansMatch = (left: SourceSpan | undefined, right: SourceSpan) =>
   left?.start === right.start && left.end === right.end;
 
 const unsupported = (
-  reason: "ambiguous" | "whole-block-required" | "invalid-url",
+  reason:
+    | "ambiguous"
+    | "whole-block-required"
+    | "invalid-url"
+    | "meaning-changed",
 ) => ({ status: "unsupported", reason }) as const;
 
 // Formatting may create nodes inside the changed span; every container and
 // atomic node outside it must retain its kind, bounds and semantic attributes.
-const outsideFormatNodes = (source: string, span: SourceSpan, delta: number) =>
-  descendants(parseMarkdown(source)).flatMap((node) => {
+const outsideFormatNodes = (
+  tree: MarkdownNode,
+  span: SourceSpan,
+  delta: number,
+) =>
+  descendants(tree).flatMap((node) => {
     const position = sourceSpan(node);
     if (
       !position ||
@@ -101,18 +112,61 @@ const outsideFormatNodes = (source: string, span: SourceSpan, delta: number) =>
     ];
   });
 
-const blockText = (source: string, span: SourceSpan) =>
-  descendants(parseMarkdown(source))
+const decodedText = (tree: MarkdownNode) =>
+  descendants(tree)
     .flatMap((node) => {
-      const position = sourceSpan(node);
-      if (!position || position.start < span.start || position.end > span.end) {
-        return [];
+      switch (node.type) {
+        case "text":
+        case "inlineCode":
+        case "code":
+        case "html":
+          return [node.value];
+        case "image":
+        case "imageReference":
+          return [node.alt ?? ""];
+        case "break":
+          return ["\n"];
+        case "blockquote":
+        case "definition":
+        case "delete":
+        case "emphasis":
+        case "footnoteDefinition":
+        case "footnoteReference":
+        case "heading":
+        case "link":
+        case "linkReference":
+        case "list":
+        case "listItem":
+        case "paragraph":
+        case "root":
+        case "strong":
+        case "table":
+        case "tableCell":
+        case "tableRow":
+        case "thematicBreak":
+        case "yaml":
+          return [];
+        default:
+          node satisfies never;
+          return panic("Unhandled Markdown text node");
       }
-      return node.type === "text" || node.type === "inlineCode"
-        ? [node.value]
-        : [];
     })
     .join("");
+
+// Phrasing children may change during inline formatting; their enclosing block
+// tree must remain intact, including blocks nested in lists or block quotes.
+const blockStructure = (node: MarkdownNode): string => {
+  if (
+    node.type === "paragraph" ||
+    node.type === "heading" ||
+    node.type === "tableCell"
+  ) {
+    return node.type;
+  }
+  return "children" in node
+    ? `${node.type}(${node.children.map(blockStructure).join(",")})`
+    : node.type;
+};
 
 const proposal = ({
   source,
@@ -128,27 +182,25 @@ const proposal = ({
   const candidate =
     source.slice(0, span.start) + replacement + source.slice(span.end);
   const delta = replacement.length - (span.end - span.start);
-  const before = outsideFormatNodes(source, span, 0);
+  const originalTree = parseMarkdown(source);
+  const candidateTree = parseMarkdown(candidate);
+  const before = outsideFormatNodes(originalTree, span, 0);
   const after = outsideFormatNodes(
-    candidate,
+    candidateTree,
     { start: span.start, end: span.start + replacement.length },
     delta,
   );
   if (JSON.stringify(before) !== JSON.stringify(after)) {
     return unsupported("ambiguous");
   }
-  // Block markers can consume text inside the changed span even when every
-  // surrounding node is intact. Compare decoded text in the full document so
-  // reference links retain their definitions during this check.
+  // Check the full document: inline text nodes can merge across the edited
+  // span, and removing syntax can expose new block or inline markers.
   if (
-    action.format === CHAT_MESSAGE_EDIT_FORMAT.style &&
-    blockText(source, span) !==
-      blockText(candidate, {
-        start: span.start,
-        end: span.start + replacement.length,
-      })
+    decodedText(originalTree) !== decodedText(candidateTree) ||
+    (action.format !== CHAT_MESSAGE_EDIT_FORMAT.style &&
+      blockStructure(originalTree) !== blockStructure(candidateTree))
   ) {
-    return unsupported("ambiguous");
+    return unsupported("meaning-changed");
   }
   return {
     status: "proposal" as const,
@@ -497,9 +549,7 @@ const formatLink = (
           nodeSpan.start < changedSpan.end &&
           nodeSpan.end > changedSpan.start
         );
-      }) ||
-      blockText(source, { start: 0, end: source.length }) !==
-        blockText(candidate, { start: 0, end: candidate.length })
+      })
     ) {
       return unsupported("ambiguous");
     }

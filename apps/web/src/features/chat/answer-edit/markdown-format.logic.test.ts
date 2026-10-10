@@ -6,13 +6,18 @@ import type { CompileContext } from "mdast-util-from-markdown";
 import { gfmFromMarkdown } from "mdast-util-gfm";
 import { gfm } from "micromark-extension-gfm";
 
-import { CHAT_MESSAGE_EDIT_STYLES } from "@stll/api-contract/chat-message-revisions";
+import {
+  CHAT_MESSAGE_EDIT_FORMAT,
+  CHAT_MESSAGE_EDIT_STYLES,
+  CHAT_MESSAGE_LINK_INTENT,
+} from "@stll/api-contract/chat-message-revisions";
 import { assertProperty } from "@stll/property-testing";
 
 import {
   formatAnswerSpan,
   selectedMarkdownLinkUrl,
 } from "./markdown-format.logic";
+import type { AnswerFormatAction } from "./markdown-format.logic";
 
 const GENERATED_MIN_SCALARS = 1;
 const GENERATED_MAX_SCALARS = 24;
@@ -388,8 +393,19 @@ const paragraphSpan = (source: string) => {
 };
 
 const renderedText = (node: Parameters<CompileContext["enter"]>[0]): string => {
-  if (node.type === "text" || node.type === "inlineCode") {
+  if (
+    node.type === "text" ||
+    node.type === "inlineCode" ||
+    node.type === "code" ||
+    node.type === "html"
+  ) {
     return node.value;
+  }
+  if (node.type === "break") {
+    return "\n";
+  }
+  if (node.type === "image" || node.type === "imageReference") {
+    return node.alt ?? "";
   }
   return "children" in node ? node.children.map(renderedText).join("") : "";
 };
@@ -569,4 +585,253 @@ test.each([
     }),
   ).toEqual({ status: "unchanged" });
   expect(renderedText(parsedMarkdown(source))).toBe(label);
+});
+
+test.each([
+  { source: "**# Notice**", format: "bold", markerWidth: 2, quoteDepth: 0 },
+  { source: "*> quote*", format: "italic", markerWidth: 1, quoteDepth: 0 },
+  { source: "**- item**", format: "bold", markerWidth: 2, quoteDepth: 0 },
+  { source: "**1. one**", format: "bold", markerWidth: 2, quoteDepth: 0 },
+  { source: "**<div></div>**", format: "bold", markerWidth: 2, quoteDepth: 0 },
+  { source: "> **# Notice**", format: "bold", markerWidth: 2, quoteDepth: 1 },
+] as const)(
+  "unwrapping %j refuses a change in document meaning",
+  ({ source, format, markerWidth, quoteDepth }) => {
+    const original = parsedMarkdown(source);
+    const firstBlock = original.children.at(0);
+    expect(firstBlock?.type).toBe(
+      quoteDepth === 0 ? "paragraph" : "blockquote",
+    );
+    const paragraph =
+      firstBlock?.type === "blockquote"
+        ? firstBlock.children.at(0)
+        : firstBlock;
+    expect(paragraph?.type).toBe("paragraph");
+    if (paragraph?.type === "paragraph") {
+      expect(paragraph.children.at(0)?.type).toBe(
+        format === "bold" ? "strong" : "emphasis",
+      );
+    }
+    const start = quoteDepth * 2 + markerWidth;
+    const end = source.length - markerWidth;
+    expect(renderedText(original)).toBe(source.slice(start, end));
+    expect(
+      formatAnswerSpan({
+        source,
+        start,
+        end,
+        action: { format },
+      }),
+    ).toEqual({ status: "unsupported", reason: "meaning-changed" });
+  },
+);
+
+type BlockTree = { type: string; children?: BlockTree[] };
+const parsedBlockTree = (
+  node: Parameters<CompileContext["enter"]>[0],
+): BlockTree => {
+  if (
+    node.type === "paragraph" ||
+    node.type === "heading" ||
+    node.type === "tableCell"
+  ) {
+    return { type: node.type };
+  }
+  return "children" in node
+    ? { type: node.type, children: node.children.map(parsedBlockTree) }
+    : { type: node.type };
+};
+
+const allFormatActions = {
+  bold: [{ format: CHAT_MESSAGE_EDIT_FORMAT.bold }],
+  italic: [{ format: CHAT_MESSAGE_EDIT_FORMAT.italic }],
+  link: [
+    {
+      format: CHAT_MESSAGE_EDIT_FORMAT.link,
+      intent: CHAT_MESSAGE_LINK_INTENT.set,
+      url: "https://updated.test/",
+    },
+    {
+      format: CHAT_MESSAGE_EDIT_FORMAT.link,
+      intent: CHAT_MESSAGE_LINK_INTENT.remove,
+    },
+  ],
+  style: CHAT_MESSAGE_EDIT_STYLES.map((style) => ({
+    format: CHAT_MESSAGE_EDIT_FORMAT.style,
+    style,
+  })),
+} as const satisfies Record<
+  (typeof CHAT_MESSAGE_EDIT_FORMAT)[keyof typeof CHAT_MESSAGE_EDIT_FORMAT],
+  readonly AnswerFormatAction[]
+>;
+
+const INLINE_FORMATS = [
+  CHAT_MESSAGE_EDIT_FORMAT.bold,
+  CHAT_MESSAGE_EDIT_FORMAT.italic,
+] as const;
+const GENERATED_MAX_QUOTE_DEPTH = 2;
+
+const formattedParagraph = ({
+  body,
+  format,
+  quoteDepth,
+}: {
+  body: string;
+  format: (typeof INLINE_FORMATS)[number];
+  quoteDepth: number;
+}) => {
+  const marker = format === CHAT_MESSAGE_EDIT_FORMAT.bold ? "**" : "*";
+  const source = `${"> ".repeat(quoteDepth)}${marker}${body}${marker}\n\nUntouched [reference](https://untouched.test/).`;
+  const tree = parsedMarkdown(source);
+  const nodes: Parameters<CompileContext["enter"]>[0][] = [];
+  const walk = (node: Parameters<CompileContext["enter"]>[0]) => {
+    nodes.push(node);
+    if ("children" in node) {
+      for (const child of node.children) {
+        walk(child);
+      }
+    }
+  };
+  walk(tree);
+  const owner = nodes.find(
+    (node) =>
+      node.type === (marker === "**" ? "strong" : "emphasis") &&
+      node.position?.start.offset === quoteDepth * 2,
+  );
+  if (owner?.type !== "strong" && owner?.type !== "emphasis") {
+    return undefined;
+  }
+  const start = owner.children.at(0)?.position?.start.offset;
+  const end = owner.children.at(-1)?.position?.end.offset;
+  const paragraph = nodes.find(
+    (node) =>
+      node.type === "paragraph" &&
+      node.position?.start.offset === quoteDepth * 2,
+  );
+  const paragraphStart = paragraph?.position?.start.offset;
+  const paragraphEnd = paragraph?.position?.end.offset;
+  if (
+    start === undefined ||
+    end === undefined ||
+    paragraphStart === undefined ||
+    paragraphEnd === undefined ||
+    start === end
+  ) {
+    return undefined;
+  }
+  return {
+    source,
+    tree,
+    quoteDepth,
+    inlineSpans: nodes.flatMap((node) => {
+      if (
+        node.type !== "strong" &&
+        node.type !== "emphasis" &&
+        node.type !== "link"
+      ) {
+        return [];
+      }
+      const nestedStart = node.children.at(0)?.position?.start.offset;
+      const nestedEnd = node.children.at(-1)?.position?.end.offset;
+      if (
+        nestedStart === undefined ||
+        nestedEnd === undefined ||
+        nestedStart === nestedEnd ||
+        nestedEnd > paragraphEnd
+      ) {
+        return [];
+      }
+      return [{ start: nestedStart, end: nestedEnd }];
+    }),
+    paragraphSpan: { start: paragraphStart, end: paragraphEnd },
+  };
+};
+
+test("every format action preserves document text and inline actions preserve its block tree", () => {
+  const bodies = fc.oneof(
+    fc
+      .string({
+        unit: "grapheme",
+        minLength: GENERATED_MIN_SCALARS,
+        maxLength: GENERATED_MAX_PARAGRAPH_SCALARS,
+      })
+      .filter((body) => !/[\r\n]/u.test(body)),
+    fc.constantFrom(
+      "# Notice",
+      "> quote",
+      "- item",
+      "1. one",
+      "[label](https://example.test/)",
+      "[same](https://updated.test/)",
+      "https://example.test/",
+      "é **nested** 😀",
+      "text `code` &amp; more",
+    ),
+  );
+  const paragraphs = fc
+    .record({
+      body: bodies,
+      format: fc.constantFrom(...INLINE_FORMATS),
+      quoteDepth: fc.integer({ min: 0, max: GENERATED_MAX_QUOTE_DEPTH }),
+    })
+    .map(formattedParagraph)
+    .filter((value) => value !== undefined);
+  const proposals = new Set<string>();
+  const actions = Object.values(allFormatActions).flat();
+  assertProperty(
+    "every format action preserves document text and inline actions preserve its block tree",
+    fc.property(paragraphs, (paragraph) => {
+      let firstBlock: BlockTree = { type: "paragraph" };
+      for (let level = 0; level < paragraph.quoteDepth; level++) {
+        firstBlock = { type: "blockquote", children: [firstBlock] };
+      }
+      const expectedBlocks = {
+        type: "root",
+        children: [firstBlock, { type: "paragraph" }],
+      };
+      expect(parsedBlockTree(paragraph.tree)).toEqual(expectedBlocks);
+      for (const action of actions) {
+        const spans =
+          action.format === CHAT_MESSAGE_EDIT_FORMAT.style
+            ? [paragraph.paragraphSpan]
+            : paragraph.inlineSpans;
+        for (const span of spans) {
+          const result = formatAnswerSpan({
+            source: paragraph.source,
+            ...span,
+            action,
+          });
+          switch (result.status) {
+            case "unsupported":
+              break;
+            case "unchanged":
+              expect(result).toEqual({ status: "unchanged" });
+              expect(renderedText(parsedMarkdown(paragraph.source))).toBe(
+                renderedText(paragraph.tree),
+              );
+              break;
+            case "proposal": {
+              proposals.add(JSON.stringify(action));
+              const candidate =
+                paragraph.source.slice(0, result.start) +
+                result.replacement +
+                paragraph.source.slice(result.end);
+              const parsed = parsedMarkdown(candidate);
+              expect(renderedText(parsed)).toBe(renderedText(paragraph.tree));
+              if (action.format !== CHAT_MESSAGE_EDIT_FORMAT.style) {
+                expect(parsedBlockTree(parsed)).toEqual(expectedBlocks);
+              }
+              break;
+            }
+            default:
+              result satisfies never;
+          }
+        }
+      }
+    }),
+    { numRuns: 300 },
+  );
+  expect(proposals).toEqual(
+    new Set(actions.map((action) => JSON.stringify(action))),
+  );
 });
