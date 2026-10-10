@@ -35,13 +35,13 @@ const runCheck = async (
   today: string,
   warningFormat: "github" | "plain" = "plain",
 ) => {
-  const output = { info: [] as string[], warn: [] as string[] };
-  const info = spyOn(console, "info").mockImplementation((message) =>
-    output.info.push(String(message)),
-  );
-  const warn = spyOn(console, "warn").mockImplementation((message) =>
-    output.warn.push(String(message)),
-  );
+  const output: { info: string[]; warn: string[] } = { info: [], warn: [] };
+  const info = spyOn(console, "info").mockImplementation((message) => {
+    output.info.push(String(message));
+  });
+  const warn = spyOn(console, "warn").mockImplementation((message) => {
+    output.warn.push(String(message));
+  });
   const error = spyOn(console, "error").mockImplementation(() => undefined);
   try {
     const status = await check(advisories, {
