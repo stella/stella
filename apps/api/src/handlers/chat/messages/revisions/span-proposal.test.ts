@@ -78,6 +78,12 @@ describe("Markdown replacement boundaries", () => {
     { source: "Use a | b here", start: 4, end: 5, replacement: "c | d" },
     { source: "  prose | tail", start: 0, end: 1, replacement: "word" },
     { source: "a selected word", start: 2, end: 10, replacement: "new\nblock" },
+    {
+      source: "a selected word",
+      start: 2,
+      end: 10,
+      replacement: "```ts\ncode",
+    },
     { source: "| old | cell |", start: 2, end: 5, replacement: "a | b" },
   ])("accepts prose without inventing structure in $source", (options) => {
     expect(isSpanReplacementBalanced(options)).toBe(true);
@@ -216,7 +222,7 @@ describe("Markdown replacement boundaries", () => {
       }),
     ).toBe(true);
   });
-  test.each(["new\n\nblock", "```ts\ncode"])(
+  test.each(["new\n\nblock", "\n\n```ts\ncode"])(
     "rejects unbalanced or block replacement %s",
     (replacement) => {
       expect(

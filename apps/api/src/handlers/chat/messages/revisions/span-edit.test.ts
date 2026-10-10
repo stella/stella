@@ -39,6 +39,7 @@ const runProposal = async ({
   anonymized = false,
   active = false,
   replacement = "new",
+  source = "The old answer.",
   workspaceAccess = "unscoped",
 } = {}) => {
   state.patchConfig({
@@ -57,7 +58,7 @@ const runProposal = async ({
               role: "assistant",
               revision,
               content: toPersistedChatMessageContentV3({
-                data: [{ type: "text", content: "The old answer." }],
+                data: [{ type: "text", content: source }],
               }),
             },
             thread: {
@@ -184,9 +185,35 @@ describe("answer rewrite endpoint", () => {
       expect(result).toMatchObject({ code: status, response: { message } });
     },
   );
+  test.each([
+    {
+      source: "The old answer.",
+      replacement: "new\nblock",
+      expected: "The new\nblock answer.",
+    },
+    {
+      source: "The old | answer.",
+      replacement: "c | d",
+      expected: "The c | d | answer.",
+    },
+  ])(
+    "returns a successful literal-prose proposal for $replacement",
+    async ({ source, replacement, expected }) => {
+      const { result, modelCalls } = await runProposal({ source, replacement });
+      expect(modelCalls).toBe(1);
+      expect(result).toMatchObject({
+        content: {
+          version: 3,
+          data: [{ type: "text", content: expected }],
+        },
+        replacement,
+        edit: { type: "ai_span", start: 4, end: 7 },
+      });
+    },
+  );
   test("surfaces malformed model Markdown as a retryable proposal failure", async () => {
     const { result, modelCalls } = await runProposal({
-      replacement: "new\nblock",
+      replacement: "new\n\nblock",
     });
     expect(modelCalls).toBe(1);
     expect(result).toMatchObject({
