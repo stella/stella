@@ -27,6 +27,7 @@ import {
 import type { CompiledRule } from "@/api/handlers/case-law/polarity/rule-engine";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CitedPart } from "@/api/lib/case-law/citation-vocabulary";
+import { numericColumnParam } from "@/api/lib/db/column-storage";
 import { brandPersistedCaseLawCitationId } from "@/api/lib/safe-id-boundaries";
 
 /** Rows read per statement on a recheck walk. */
@@ -69,7 +70,7 @@ export const persistTightened = async (
         FROM (VALUES ${sql.join(
           rows.map(
             (row) =>
-              sql`(${row.id}::uuid, ${row.polarity}::text, ${row.ruleId}::uuid, ${row.previousPolarity}::text, ${row.windowStart}::integer, ${row.windowEnd}::integer, ${row.confidence}::double precision, ${row.citedPart}::text)`,
+              sql`(${row.id}::uuid, ${row.polarity}::text, ${row.ruleId}::uuid, ${row.previousPolarity}::text, ${numericColumnParam(caseLawCitations.polarityWindowStart, row.windowStart)}, ${numericColumnParam(caseLawCitations.polarityWindowEnd, row.windowEnd)}, ${numericColumnParam(caseLawCitations.polarityConfidence, row.confidence)}, ${row.citedPart}::text)`,
           ),
           sql.raw(","),
         )}) AS v(id, polarity, rule_id, previous_polarity, window_start, window_end, confidence, cited_part)

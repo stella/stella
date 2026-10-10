@@ -24,6 +24,7 @@ import {
   selectCitationPolarity,
 } from "@/api/handlers/case-law/polarity/rule-engine";
 import type { CompiledRule } from "@/api/handlers/case-law/polarity/rule-engine";
+import { numericColumnParam } from "@/api/lib/db/column-storage";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { brandPersistedCaseLawCitationId } from "@/api/lib/safe-id-boundaries";
 
@@ -307,11 +308,11 @@ export const applyFormRepairs = async ({
         repairs.map(
           ({ candidate, current }) => sql`(
           ${candidate.id}::uuid, ${candidate.citingDecisionId}::uuid,
-          ${candidate.citationText}::text, ${candidate.sectionIndex}::integer,
+          ${candidate.citationText}::text, ${numericColumnParam(caseLawCitations.sectionIndex, candidate.sectionIndex)},
           ${current.row.oldPolarity}::text, ${current.row.oldRuleId}::uuid,
           ${current.row.newRuleId}::uuid, ${current.rulePattern}::text,
-          ${current.windows.evidenceSpan.start}::integer, ${current.windows.evidenceSpan.end}::integer,
-          ${current.confidence}::real, ${classifyCitedPart({ contexts: current.windows.contexts, citationText: candidate.citationText, language: plan.language })}::text
+          ${numericColumnParam(caseLawCitations.polarityWindowStart, current.windows.evidenceSpan.start)}, ${numericColumnParam(caseLawCitations.polarityWindowEnd, current.windows.evidenceSpan.end)},
+          ${numericColumnParam(caseLawCitations.polarityConfidence, current.confidence)}, ${classifyCitedPart({ contexts: current.windows.contexts, citationText: candidate.citationText, language: plan.language })}::text
         )`,
         ),
         sql.raw(","),

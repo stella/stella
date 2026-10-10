@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import type { ScopedDb } from "@/api/db/safe-db";
+import { caseLawCitations } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
@@ -31,9 +32,9 @@ describe.skipIf(!enabled)(
         ) ON COMMIT DROP`);
           await tx.execute(sql`CREATE TEMP TABLE case_law_citations (
           id uuid PRIMARY KEY, citing_decision_id uuid, citation_key text,
-          citation_text text, section_index integer, polarity text, polarity_rule_id uuid,
-          polarity_source text, polarity_classifier_version text, polarity_window_start integer,
-          polarity_window_end integer, polarity_confidence real, cited_part text
+          citation_text text, section_index ${sql.raw(caseLawCitations.sectionIndex.getSQLType())}, polarity text, polarity_rule_id uuid,
+          polarity_source text, polarity_classifier_version text, polarity_window_start ${sql.raw(caseLawCitations.polarityWindowStart.getSQLType())},
+          polarity_window_end ${sql.raw(caseLawCitations.polarityWindowEnd.getSQLType())}, polarity_confidence ${sql.raw(caseLawCitations.polarityConfidence.getSQLType())}, cited_part text
         ) ON COMMIT DROP`);
           await tx.execute(sql`CREATE TEMP TABLE case_law_citation_reviews (
           citing_decision_id uuid, citation_key text
