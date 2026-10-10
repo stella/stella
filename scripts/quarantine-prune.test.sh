@@ -19,7 +19,12 @@ if [[ "$1 $2" == 'pr list' ]]; then
   printf '%s\n' "$LOOKUP_NUMBER"
   exit 0
 fi
-[[ "$*" == 'pr merge 42 --repo stella/stella --auto' ]]
+if [[ "$1 $2" == 'pr view' ]]; then
+  [[ "$*" == 'pr view 42 --repo stella/stella --json headRefOid --jq .headRefOid' ]]
+  printf '%s\n' 0123456789abcdef0123456789abcdef01234567
+  exit 0
+fi
+[[ "$*" == 'pr merge 42 --repo stella/stella --auto --match-head-commit 0123456789abcdef0123456789abcdef01234567' ]]
 echo 'queue:42' >> "$CALLS"
 exit "$QUEUE_STATUS"
 STUB

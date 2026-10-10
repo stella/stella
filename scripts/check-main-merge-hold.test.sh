@@ -61,7 +61,5 @@ hold_line=$(grep -n 'name: Main merge hold' <<<"$verdict_job" | cut -d: -f1)
 # Version Packages delegates only after its own variable gate.
 release_workflow="$script_dir/../.github/workflows/release-pr.yml"
 grep -q "if: needs.gate.outputs.may-version == 'true' && vars.STELLA_MERGE_HOLD == ''" "$release_workflow"
-if grep -q 'auto-merge-command:' "$release_workflow"; then
-  echo 'FAIL release workflow must use the reusable workflow queue behavior' >&2; exit 1
-fi
+grep -q 'auto-merge-command: gh pr merge "$RELEASE_PR_NUMBER" --repo "$GITHUB_REPOSITORY" --auto --match-head-commit' "$release_workflow"
 echo 'check-main-merge-hold.test.sh: ok'
