@@ -381,7 +381,11 @@ const runCheck = (): number => {
     return 0;
   }
 
-  return reportRegressions(regressions, process.env["GITHUB_STEP_SUMMARY"]);
+  return reportRegressions(
+    regressions,
+    process.env["GITHUB_STEP_SUMMARY"],
+    console.log,
+  );
 };
 
 // Growth past the headroom is reported, never blocking: an annotation per
@@ -389,21 +393,22 @@ const runCheck = (): number => {
 const reportRegressions = (
   regressions: readonly GroupDiff[],
   summaryPath: string | undefined,
+  log: (line: string) => void,
 ): number => {
   const headroom = `${Math.round((HEADROOM - 1) * 100)}%`;
-  console.log(
+  log(
     `\nbundle --check: chunk group(s) grew past the ${headroom} headroom ` +
       "(warning only):\n",
   );
   for (const d of regressions) {
     const growth = `${kib(d.baseline)} -> ${kib(d.current)} (+${kib(d.current - d.baseline)}, ${pct(d.current, d.baseline)})`;
-    console.log(`  ${d.key}: ${growth}`);
-    console.log(`      ${perfMeaning(d.key)}.`);
-    console.log(
+    log(`  ${d.key}: ${growth}`);
+    log(`      ${perfMeaning(d.key)}.`);
+    log(
       `::warning title=Bundle size: ${d.key}::${d.key} grew ${growth} over the ${headroom} headroom.`,
     );
   }
-  console.log(
+  log(
     "\nFind what grew (run `ANALYZE=1 bun --filter @stll/web build` for the\n" +
       "visualizer treemap) and trim it, or re-measure with\n" +
       `\`${WRITE_HINT}\` and commit ${BASELINE_REL} with a rationale.`,
@@ -523,11 +528,21 @@ const runSelfTest = (): number => {
   const summaryDir = mkdtempSync(path.join(tmpdir(), "bundle-summary-"));
   const summaryFile = path.join(summaryDir, "summary.md");
   writeFileSync(summaryFile, "");
-  const exitCode = reportRegressions(regressed, summaryFile);
+  const reported: string[] = [];
+  const exitCode = reportRegressions(regressed, summaryFile, (line) => {
+    reported.push(line);
+  });
   const summary = readFileSync(summaryFile, "utf-8");
   rmSync(summaryDir, { recursive: true, force: true });
   if (exitCode !== 0) {
     failures.push(`reportRegressions exited ${exitCode}, want 0`);
+  }
+  if (
+    !reported.some((line) =>
+      line.startsWith("::warning title=Bundle size: entry::"),
+    )
+  ) {
+    failures.push("reportRegressions did not annotate the grown group");
   }
   if (!summary.includes("| entry |") || !summary.includes("headroom")) {
     failures.push(
