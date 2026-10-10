@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * Seed realistic test data for local development.
  *
@@ -21,8 +22,6 @@
  *   - Database running (bun run docker:dev)
  *   - Test user seeded (bun run db:seed-test-user)
  */
-
-import { panic } from "better-result";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type {
@@ -74,6 +73,7 @@ import type {
   PropertyTool,
 } from "@/api/db/schema-validators";
 import { env } from "@/api/env";
+import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
@@ -5545,7 +5545,8 @@ export async function seed(organizationId?: string, userId?: string) {
         updatedAt: marketingAgentCreatedAt,
       }),
   );
-  await db.transaction(
+  await withAggregateTransaction(
+    db,
     async (tx) =>
       await tx.insert(chatMessages).values([
         {
@@ -5554,15 +5555,15 @@ export async function seed(organizationId?: string, userId?: string) {
           workspaceId: marketingAgentWorkspace.id,
           userId: USER_ID,
           role: "user",
-          content: {
-            version: 1,
+          content: toPersistedChatMessageContentV3({
             data: [
               {
                 type: "text",
-                text: "Compare the change-of-control clauses across this matter.",
+                content:
+                  "Compare the change-of-control clauses across this matter.",
               },
             ],
-          },
+          }),
           createdAt: marketingAgentCreatedAt,
         },
         {
@@ -5571,16 +5572,17 @@ export async function seed(organizationId?: string, userId?: string) {
           workspaceId: marketingAgentWorkspace.id,
           userId: USER_ID,
           role: "assistant",
-          content: {
-            version: 1,
+          content: toPersistedChatMessageContentV3({
             data: [
               {
                 type: "text",
-                text: "Across the cited agreements, assignment or a material service change requires written notice. The higher-risk agreements also require consent or termination review before signing.",
+                content:
+                  "Across the cited agreements, assignment or a material service change requires written notice. The higher-risk agreements also require consent or termination review before signing.",
               },
-              {
-                type: "data-stella-source-document",
-                data: {
+            ],
+            metadata: {
+              sourceDocuments: [
+                {
                   entityId: seedId(`${EXPORT_TABLE_MATTER_LABEL}-doc-1`),
                   kind: "document",
                   mimeType:
@@ -5588,29 +5590,23 @@ export async function seed(organizationId?: string, userId?: string) {
                   title: at(EXPORT_REVIEW_DOC_NAMES, 0),
                   workspaceId: marketingAgentWorkspace.id,
                 },
-              },
-              {
-                type: "data-stella-source-document",
-                data: {
+                {
                   entityId: seedId(`${EXPORT_TABLE_MATTER_LABEL}-doc-5`),
                   kind: "document",
                   mimeType: "application/pdf",
                   title: at(EXPORT_REVIEW_DOC_NAMES, 4),
                   workspaceId: marketingAgentWorkspace.id,
                 },
-              },
-              {
-                type: "data-stella-source-document",
-                data: {
+                {
                   entityId: seedId(`${EXPORT_TABLE_MATTER_LABEL}-doc-9`),
                   kind: "document",
                   mimeType: "application/pdf",
                   title: at(EXPORT_REVIEW_DOC_NAMES, 8),
                   workspaceId: marketingAgentWorkspace.id,
                 },
-              },
-            ],
-          },
+              ],
+            },
+          }),
           createdAt: new Date(marketingAgentCreatedAt.getTime() + 2500),
         },
       ]),

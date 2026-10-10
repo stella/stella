@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { toSafeId } from "@/api/lib/branded-types";
 
 import {
-  toChatMessageContent,
+  toPersistedChatMessageContentV3,
   toPersistableChatMessage,
 } from "./chat-message-parts";
 import {
@@ -22,8 +22,7 @@ const chatMessageId = (id: string) => toSafeId<"chatMessage">(id);
 const stored = (message: PersistableChatMessage) => ({
   id: message.id,
   role: message.role,
-  content: toChatMessageContent({
-    version: 2,
+  content: toPersistedChatMessageContentV3({
     data: message.parts,
     metadata: message.metadata,
   }),

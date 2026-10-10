@@ -9,6 +9,7 @@ import {
   chatThreads,
 } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
+import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import { shouldCompactChatMessages } from "@/api/handlers/chat/compaction";
 import type {
   ChatHistorySnapshot,
@@ -93,10 +94,9 @@ const seedThread = async (
     userId: ids.userA1,
     workspaceId: ids.wsA1,
     role: index % 2 === 0 ? ("user" as const) : ("assistant" as const),
-    content: {
-      version: 1 as const,
-      data: [{ type: "text" as const, text: spec.text }],
-    },
+    content: toPersistedChatMessageContentV3({
+      data: [{ type: "text" as const, content: spec.text }],
+    }),
     createdAt: spec.createdAt,
   }));
   if (rows.length > 0) {
@@ -625,10 +625,9 @@ describe("a history snapshot held until the turn's claim", () => {
         await testDb
           .update(chatMessages)
           .set({
-            content: {
-              version: 1 as const,
-              data: [{ type: "text" as const, text: "rewritten" }],
-            },
+            content: toPersistedChatMessageContentV3({
+              data: [{ type: "text" as const, content: "rewritten" }],
+            }),
           })
           .where(eq(chatMessages.id, id));
       };
@@ -637,10 +636,9 @@ describe("a history snapshot held until the turn's claim", () => {
           break;
         case "append":
           await testDb.insert(chatMessages).values({
-            content: {
-              version: 1 as const,
-              data: [{ type: "text" as const, text: "m4" }],
-            },
+            content: toPersistedChatMessageContentV3({
+              data: [{ type: "text" as const, content: "m4" }],
+            }),
             createdAt: new Date(base + 4),
             id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
             role: "user",

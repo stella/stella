@@ -18,11 +18,11 @@ import { assertProperty } from "@stll/property-testing";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
+  toPersistedChatMessageContentV3,
   createChatAttachmentPart,
   chatMessageContentFromMessage,
   chatMessageFromPersisted,
   isChatPart,
-  toChatMessageContent,
   toPersistableChatMessage,
 } from "@/api/handlers/chat/chat-message-parts";
 import {
@@ -1020,8 +1020,7 @@ describe("validateMessage", () => {
       },
       persistedMessage: {
         role: "assistant",
-        content: toChatMessageContent({
-          version: 2,
+        content: toPersistedChatMessageContentV3({
           data: [{ type: "text", content: "Done" }, trustedAudio],
         }),
       },
@@ -1157,8 +1156,7 @@ describe("validateMessage", () => {
       },
       persistedMessage: {
         role: "assistant",
-        content: toChatMessageContent({
-          version: 2,
+        content: toPersistedChatMessageContentV3({
           data: persistedParts,
           metadata: persistedMetadata,
         }),
@@ -1194,8 +1192,7 @@ describe("validateMessage", () => {
       },
       persistedMessage: {
         role: "assistant",
-        content: toChatMessageContent({
-          version: 2,
+        content: toPersistedChatMessageContentV3({
           data: persistedParts,
           metadata: persistedMetadata,
         }),
@@ -1251,8 +1248,7 @@ describe("validateMessage", () => {
       },
       persistedMessage: {
         role: "assistant",
-        content: toChatMessageContent({
-          version: 2,
+        content: toPersistedChatMessageContentV3({
           data: [
             {
               type: "tool-call",
@@ -1661,7 +1657,7 @@ describe("validateMessage", () => {
     ] as const;
     const persistedMessage = {
       role: "assistant" as const,
-      content: toChatMessageContent({ version: 2, data: [...canonicalParts] }),
+      content: toPersistedChatMessageContentV3({ data: [...canonicalParts] }),
     };
     const continuationParts = [
       canonicalParts[0],
@@ -1847,7 +1843,7 @@ describe("validateMessage", () => {
       },
       persistedMessage: {
         role: "assistant",
-        content: toChatMessageContent({ version: 2, data: [canonicalCall] }),
+        content: toPersistedChatMessageContentV3({ data: [canonicalCall] }),
       },
       resume: [
         {
@@ -1910,7 +1906,7 @@ describe("validateMessage", () => {
       },
       persistedMessage: {
         role: "assistant",
-        content: toChatMessageContent({ version: 2, data: [canonicalCall] }),
+        content: toPersistedChatMessageContentV3({ data: [canonicalCall] }),
       },
       safeDb: noDbReads,
       threadId: chatThreadId("thread_ask_user_completion"),

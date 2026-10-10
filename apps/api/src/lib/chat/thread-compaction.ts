@@ -901,8 +901,15 @@ const estimateDeltaPartTokens = (part: unknown): number => {
   return estimateTextTokens(safeStringify(part));
 };
 
-const deltaMessageParts = (message: DeltaMessage): unknown[] =>
-  Array.isArray(message.content.data) ? message.content.data : [];
+const deltaMessageParts = (message: DeltaMessage): unknown[] => {
+  if (message.content.version !== 3) {
+    panic("Stored chat content requires the v3 data backfill");
+  }
+  if (!Array.isArray(message.content.data)) {
+    panic("Stored v3 chat content has invalid data");
+  }
+  return message.content.data;
+};
 
 /**
  * Render the summarized slice for the model. Deliberately the same envelope
@@ -961,8 +968,7 @@ const partTypeTag = (part: unknown): string => {
 };
 
 /**
- * Text of a persisted part, across both persisted content versions (`content`
- * in v2, `text` in the legacy v1 payload). Returns null for non-text parts.
+ * Text of a persisted v3 part. Returns null for non-text parts.
  */
 const persistedTextPartContent = (part: unknown): string | null => {
   if (typeof part !== "object" || part === null || !("type" in part)) {
@@ -974,9 +980,6 @@ const persistedTextPartContent = (part: unknown): string | null => {
   if ("content" in part && typeof part.content === "string") {
     return part.content;
   }
-  if ("text" in part && typeof part.text === "string") {
-    return part.text;
-  }
   return null;
 };
 
@@ -984,7 +987,7 @@ const isPersistedAttachmentPart = (part: unknown): boolean => {
   if (typeof part !== "object" || part === null || !("type" in part)) {
     return false;
   }
-  return part.type === "file" || part.type === "image";
+  return part.type === "document" || part.type === "image";
 };
 
 /**

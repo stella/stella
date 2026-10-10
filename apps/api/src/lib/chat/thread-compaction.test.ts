@@ -1,13 +1,27 @@
 import { describe, expect, test } from "bun:test";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
+import type { Transaction } from "@/api/db/root";
+import type { ScopedDb } from "@/api/db/safe-db";
 import {
   CHAT_COMPACTION_MEMORY_ELIGIBILITIES,
   CHAT_COMPACTION_MEMORY_ELIGIBILITY,
   CHAT_COMPACTION_MEMORY_EXTRACTABLE,
 } from "@/api/db/schema";
 import type { ChatCompactionMemoryEligibility } from "@/api/db/schema";
+import { toSafeId } from "@/api/lib/branded-types";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import {
+  createSelectQueryMock,
+  toSafeDbMock,
+} from "@/api/tests/scoped-db-mock";
 
-import { resolveCheckpointMemoryEligibility } from "./thread-compaction";
+import {
+  resolveCheckpointMemoryEligibility,
+  runChatThreadCompaction,
+} from "./thread-compaction";
 
 const eligibleMessages = [
   { memoryExtractionEligible: true },
@@ -136,3 +150,60 @@ describe("checkpoint memory eligibility", () => {
     expect(extractable).toEqual([CHAT_COMPACTION_MEMORY_ELIGIBILITY.ELIGIBLE]);
   });
 });
+
+test.each([1, 2])(
+  "rejects unmigrated compaction delta version %i",
+  async (version) => {
+    const threadId = toSafeId<"chatThread">(
+      "019ec2c0-0000-7000-8000-000000000001",
+    );
+    const organizationId = toSafeId<"organization">(
+      "019ec2c0-0000-7000-8000-000000000002",
+    );
+    const tx = asTestRaw<Transaction>({
+      select: (selection: unknown) =>
+        createSelectQueryMock(
+          typeof selection === "object" &&
+            selection !== null &&
+            "content" in selection
+            ? [
+                {
+                  id: toSafeId<"chatMessage">(
+                    "019ec2c0-0000-7000-8000-000000000003",
+                  ),
+                  content: {
+                    version,
+                    data: [{ type: "text", content: "unmigrated" }],
+                  },
+                  cursorValue: "2026-10-10T00:00:00.000000Z",
+                  role: "user",
+                  memoryExtractionEligible: true,
+                },
+              ]
+            : [],
+        ),
+    });
+    const scopedDb = asTestRaw<ScopedDb>(
+      async (callback: (db: Transaction) => Promise<unknown>) =>
+        await callback(tx),
+    );
+    expect(
+      await rejectionOf(
+        runChatThreadCompaction({
+          abortSignal: new AbortController().signal,
+          admission: testModelAdmission(organizationId),
+          dataWorkspaceIds: [],
+          orgAIConfig: null,
+          managedAIResidency: "eu",
+          organizationId,
+          preserveTokens: 1,
+          triggerTokens: 1,
+          safeDb: toSafeDbMock(scopedDb),
+          threadId,
+        }),
+      ),
+    ).toMatchObject({
+      message: "Stored chat content requires the v3 data backfill",
+    });
+  },
+);

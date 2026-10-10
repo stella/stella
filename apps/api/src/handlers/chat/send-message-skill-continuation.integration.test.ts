@@ -14,7 +14,7 @@ import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { agentSkills, chatMessages, chatThreads } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
-import { toChatMessageContent } from "@/api/handlers/chat/chat-message-parts";
+import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import type { ChatSendRequest } from "@/api/handlers/chat/chat-schema";
 import {
   claimChatTurnForExecution,
@@ -222,9 +222,8 @@ const seedAwaitingTurn = async (skillCallParts: ChatPart[]) => {
     await safeDb(async (tx) => {
       await tx.insert(chatMessages).values([
         {
-          content: toChatMessageContent({
+          content: toPersistedChatMessageContentV3({
             data: [{ content: "Review this", type: "text" }],
-            version: 2,
           }),
           id: userMessageId,
           role: "user",
@@ -233,9 +232,8 @@ const seedAwaitingTurn = async (skillCallParts: ChatPart[]) => {
           workspaceId: null,
         },
         {
-          content: toChatMessageContent({
+          content: toPersistedChatMessageContentV3({
             data: [...skillCallParts, pendingAskUserCall],
-            version: 2,
           }),
           id: assistantMessageId,
           role: "assistant",

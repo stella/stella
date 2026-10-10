@@ -25,12 +25,9 @@ import {
   isChatPart,
   isProviderVisibleChatPart,
   isServerOwnedChatPart,
-  getChatAttachmentFilename,
-  legacyAiSdkFilePartToTanStack,
   mergeAnonRestorations,
   normalizePersistedChatMessageContent,
   restoreServerOwnedChatParts,
-  toChatMessageContent,
   toPersistedChatMessageContentV3,
   toPersistableChatMessage,
   getAwaitingUserInteraction,
@@ -40,10 +37,12 @@ import {
 import type {
   ChatPart,
   PersistableChatMessageCandidate,
+  PersistedChatMessageContent,
 } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { CHAT_REF_ENCODING } from "@/api/lib/chat/ref-token";
 import { LIMITS } from "@/api/lib/limits";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import { richChatParts, unsafeScriptUrl } from "./__fixtures__/rich-chat-parts";
 
@@ -105,23 +104,6 @@ describe("persisted chat message parts", () => {
       ).toEqual(parts);
     },
   );
-
-  test("gives a legacy file part a sanitized display name", () => {
-    const attachment = (filename: string) =>
-      legacyAiSdkFilePartToTanStack({
-        filename,
-        mediaType: "application/pdf",
-        type: "file",
-        url: "https://files.example/brief.pdf",
-      });
-
-    expect(getChatAttachmentFilename(attachment("brief.pdf"))).toBe(
-      "brief.pdf",
-    );
-    expect(getChatAttachmentFilename(attachment("../brief:v2.pdf"))).toBe(
-      "___brief_v2.pdf",
-    );
-  });
 
   test("stores one canonical parsed tool-call representation", () => {
     const input = { query: "nda" };
@@ -293,52 +275,6 @@ describe("persisted chat message parts", () => {
     });
     expect(normalizePersistedChatMessageContent(persisted).parts).toEqual(
       parts,
-    );
-  });
-
-  test("parses old completed tool arguments once at the legacy read boundary", () => {
-    const legacy = toChatMessageContent({
-      data: [
-        {
-          arguments: '{"query":"contract"}',
-          id: "legacy-search",
-          name: "mcp__external__search",
-          state: "input-complete",
-          type: "tool-call",
-        },
-      ],
-      version: 2,
-    });
-
-    expect(normalizePersistedChatMessageContent(legacy).parts).toEqual([
-      {
-        arguments: '{"query":"contract"}',
-        id: "legacy-search",
-        input: { query: "contract" },
-        name: "mcp__external__search",
-        state: "input-complete",
-        type: "tool-call",
-      },
-    ]);
-  });
-
-  test("preserves malformed legacy arguments when no parsed input exists", () => {
-    const legacy = toChatMessageContent({
-      data: [
-        {
-          arguments: '{"query":',
-          id: "legacy-error",
-          name: "mcp__external__search",
-          output: { error: "Invalid arguments" },
-          state: "error",
-          type: "tool-call",
-        },
-      ],
-      version: 2,
-    });
-
-    expect(normalizePersistedChatMessageContent(legacy).parts).toEqual(
-      legacy.data,
     );
   });
 
@@ -724,8 +660,7 @@ describe("persisted chat message parts", () => {
     const message = chatMessageFromPersisted({
       id: toSafeId<"chatMessage">("019eb9fa-c91f-7000-9b9c-9365977dda78"),
       role: "assistant",
-      content: toChatMessageContent({
-        version: 2,
+      content: toPersistedChatMessageContentV3({
         data: [{ type: "text", content: "Summary" }],
         metadata: {
           serverProvenance: { type: "search-summary", version: 1 },
@@ -759,8 +694,7 @@ describe("persisted chat message parts", () => {
     const message = chatMessageFromPersisted({
       id: toSafeId<"chatMessage">("019eb9fa-c91f-7000-9b9c-9365977dda80"),
       role: "assistant",
-      content: toChatMessageContent({
-        version: 2,
+      content: toPersistedChatMessageContentV3({
         data: [{ type: "text", content: "Summary" }],
         metadata: {
           refContext,
@@ -779,8 +713,7 @@ describe("persisted chat message parts", () => {
     const message = chatMessageFromPersisted({
       id: toSafeId<"chatMessage">("019eb9fa-c91f-7000-9b9c-9365977dda79"),
       role: "assistant",
-      content: toChatMessageContent({
-        version: 2,
+      content: toPersistedChatMessageContentV3({
         data: [{ type: "text", content: "Ahoj" }],
         metadata: {
           usage: {
@@ -1016,4 +949,11 @@ describe("merging a message's anonymization restorations", () => {
     ]);
     expect(merged.conflicts).toBe(1);
   });
+});
+
+test.each([1, 2])("rejects unmigrated persisted version %i", (version) => {
+  const stored = asTestRaw<PersistedChatMessageContent>({ version, data: [] });
+  expect(() => normalizePersistedChatMessageContent(stored)).toThrow(
+    "Stored chat content requires the v3 data backfill",
+  );
 });

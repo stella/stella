@@ -64,18 +64,8 @@ export type PersistedChatPart<TOtherPart> =
   | PersistedToolResultPart
   | TOtherPart;
 
-type PersistedChatMessageContentCandidate<TPart, TMetadata> = {
-  data: TPart[];
-  metadata?: TMetadata | undefined;
-  version: 2;
-};
-
+// Proof for the in-memory version-2 wire envelope, never a stored row.
 export declare const persistedChatMessageContentProof: unique symbol;
-type PersistedChatMessageContentProof = {
-  readonly [persistedChatMessageContentProof]: true;
-};
-type ProvenPersistedChatMessageContent<TContent> = TContent &
-  PersistedChatMessageContentProof;
 
 export declare const persistedChatMessageContentV3Proof: unique symbol;
 type PersistedChatMessageContentV3Proof = {
@@ -194,25 +184,6 @@ const hasOnlyV3ProvenParts = <TPart, TMetadata>(
 ): content is PersistedChatMessageContentV3<TPart, TMetadata> =>
   content.data.every(isPersistablePart);
 
-const hasOnlyProvenParts = <TPart, TMetadata>(
-  content: PersistedChatMessageContentCandidate<TPart, TMetadata>,
-  isPersistablePart: (part: TPart) => boolean,
-): content is ProvenPersistedChatMessageContent<
-  PersistedChatMessageContentCandidate<TPart, TMetadata>
-> => content.data.every(isPersistablePart);
-
-const provePersistedChatMessageContent = <TPart, TMetadata>(
-  content: PersistedChatMessageContentCandidate<TPart, TMetadata>,
-  isPersistablePart: (part: TPart) => boolean,
-): ProvenPersistedChatMessageContent<
-  PersistedChatMessageContentCandidate<TPart, TMetadata>
-> => {
-  if (!hasOnlyProvenParts(content, isPersistablePart)) {
-    panic("Cannot persist chat message content with unsupported parts");
-  }
-  return content;
-};
-
 type PersistedTextChatPart = { content: string; type: "text" };
 
 const isPersistedTextChatPart = (
@@ -226,10 +197,9 @@ const isPersistedTextChatPart = (
   typeof part.content === "string";
 
 export const proveTextOnlyPersistedChatMessageContent = <TMetadata>(
-  content: PersistedChatMessageContentCandidate<
+  content: PersistedChatMessageContentV3Candidate<
     PersistedTextChatPart,
     TMetadata
   >,
-): ProvenPersistedChatMessageContent<
-  PersistedChatMessageContentCandidate<PersistedTextChatPart, TMetadata>
-> => provePersistedChatMessageContent(content, isPersistedTextChatPart);
+): PersistedChatMessageContentV3<PersistedTextChatPart, TMetadata> =>
+  provePersistedChatMessageContentV3(content, isPersistedTextChatPart);

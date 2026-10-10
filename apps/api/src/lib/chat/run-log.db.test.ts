@@ -13,6 +13,7 @@ import {
   chatTurns,
 } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
+import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import { shadowChatRun } from "@/api/handlers/chat/chat-run-shadow";
 import {
   claimChatTurnForExecution,
@@ -89,7 +90,9 @@ const seedRunningTurn = async (): Promise<{
     userId: ids.userA1,
     workspaceId: ids.wsA1,
     role: "user",
-    content: { data: [{ text: "Run", type: "text" }], version: 1 },
+    content: toPersistedChatMessageContentV3({
+      data: [{ content: "Run", type: "text" }],
+    }),
   });
   const acceptance = createChatTurnAcceptance({
     organizationId: ids.orgA,

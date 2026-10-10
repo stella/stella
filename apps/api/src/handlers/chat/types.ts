@@ -252,15 +252,6 @@ export type ChatCompactionSummary = {
   readFiles: string[];
 };
 
-/** Versioned envelope for the chatMessages JSONB column.
- *  Bump the version and add a new variant when the parts
- *  shape changes; migrate in-place by reading the version
- *  and transforming old shapes on read. */
-type LegacyChatMessageContent = {
-  version: 1;
-  data: unknown[];
-};
-
 export type ChatMessageContentCandidate = {
   data: ChatMessage["parts"];
   metadata?: ChatMessageMetadata | undefined;
@@ -286,7 +277,5 @@ export type PersistedChatMessageContentV3 = {
   version: 3;
 };
 
-export type PersistedChatMessageContent =
-  | LegacyChatMessageContent
-  | ChatMessageContent
-  | PersistedChatMessageContentV3;
+/** Stored rows are upgraded to v3 before runtime readers start. */
+export type PersistedChatMessageContent = PersistedChatMessageContentV3;

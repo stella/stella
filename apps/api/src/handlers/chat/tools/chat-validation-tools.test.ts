@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { ActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
-import { toChatMessageContent } from "@/api/handlers/chat/chat-message-parts";
+import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import { validateMessage } from "@/api/handlers/chat/chat-schema";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
@@ -434,7 +434,7 @@ test("pending feature-bound write approvals use current caller access for valida
       message: { id: messageId, role: "assistant", parts: [resumedCall] },
       persistedMessage: {
         role: "assistant",
-        content: toChatMessageContent({ version: 2, data: [canonicalCall] }),
+        content: toPersistedChatMessageContentV3({ data: [canonicalCall] }),
       },
       resume: [
         {

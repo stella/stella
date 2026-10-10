@@ -6,6 +6,7 @@ import { eq, inArray, sql } from "drizzle-orm";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads, chatTurns } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
+import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import {
   bindChatTurnRunId,
   claimChatTurnForExecution,
@@ -115,7 +116,9 @@ const seedRunningTurn = async (member?: Member) => {
   unwrap(
     await as.safeDb(async (tx) => {
       await tx.insert(chatMessages).values({
-        content: { data: [{ text: "Draft it", type: "text" }], version: 1 },
+        content: toPersistedChatMessageContentV3({
+          data: [{ content: "Draft it", type: "text" }],
+        }),
         id: userMessageId,
         role: "user",
         threadId,

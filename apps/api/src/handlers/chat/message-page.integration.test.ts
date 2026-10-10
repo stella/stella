@@ -5,6 +5,7 @@ import { eq, inArray } from "drizzle-orm";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads, userFiles } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
+import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import {
   decodeMessagePageCursor,
   loadChatMessagePage,
@@ -84,10 +85,9 @@ const seedThread = async (
     userId: ids.userA1,
     workspaceId: ids.wsA1,
     role: "user" as const,
-    content: {
-      version: 1 as const,
-      data: [{ type: "text" as const, text: `message ${index}` }],
-    },
+    content: toPersistedChatMessageContentV3({
+      data: [{ type: "text" as const, content: `message ${index}` }],
+    }),
     createdAt,
   }));
   if (rows.length > 0) {
@@ -262,7 +262,7 @@ describe("loadClientMessages", () => {
     seededFileIds.push(fileId);
     const withAttachment = toSafeId<"chatMessage">(Bun.randomUUIDv7());
     await testDb.insert(chatMessages).values({
-      content: {
+      content: toPersistedChatMessageContentV3({
         data: [
           {
             source: {
@@ -273,8 +273,7 @@ describe("loadClientMessages", () => {
             type: "image",
           },
         ],
-        version: 1,
-      },
+      }),
       createdAt: new Date(base + 2),
       id: withAttachment,
       role: "user",

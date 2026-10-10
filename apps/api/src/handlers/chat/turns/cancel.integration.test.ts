@@ -18,6 +18,7 @@ import {
 } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import {
+  toPersistedChatMessageContentV3,
   chatMessageContentFromMessage,
   chatMessageFromPersisted,
   toPersistableChatMessage,
@@ -130,7 +131,9 @@ const seedAcceptedTurn = async () => {
   unwrap(
     await safeDb(async (tx) => {
       await tx.insert(chatMessages).values({
-        content: { data: [{ text: "Draft it", type: "text" }], version: 1 },
+        content: toPersistedChatMessageContentV3({
+          data: [{ content: "Draft it", type: "text" }],
+        }),
         id: userMessageId,
         role: "user",
         threadId,
@@ -788,7 +791,9 @@ describe("the thread a stopped turn belongs to", () => {
     unwrap(
       await safeDb(async (tx) => {
         await tx.insert(chatMessages).values({
-          content: { data: [{ text: "Next", type: "text" }], version: 1 },
+          content: toPersistedChatMessageContentV3({
+            data: [{ content: "Next", type: "text" }],
+          }),
           id: next.userMessageId,
           role: "user",
           threadId,

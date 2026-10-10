@@ -32,8 +32,7 @@ export type WindowedThreadMessage = {
 };
 
 /**
- * Normalize a stored row's content (which may be a legacy v1 payload) into the
- * canonical version-2 `ChatMessageContent` the rest of the chat pipeline reads.
+ * Decode stored v3 content into the version-2 wire envelope used by the chat pipeline.
  */
 const toWindowedMessage = (row: {
   id: SafeId<"chatMessage">;

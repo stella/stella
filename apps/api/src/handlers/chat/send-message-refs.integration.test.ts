@@ -13,7 +13,7 @@ import type { Transaction } from "@/api/db/root";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreadNames, chatThreads } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
-import { toChatMessageContent } from "@/api/handlers/chat/chat-message-parts";
+import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import type { ChatSendRequest } from "@/api/handlers/chat/chat-schema";
 import {
   claimChatTurnForExecution,
@@ -280,7 +280,7 @@ const seedAwaitingTurn = async (bindingStore: BindingStore) => {
     await safeDb(async (tx) => {
       if (bindingStore === BINDING_STORE.mixed) {
         await tx.insert(chatMessages).values({
-          content: toChatMessageContent({
+          content: toPersistedChatMessageContentV3({
             data: [listedPart],
             metadata: {
               refContext: {
@@ -291,7 +291,6 @@ const seedAwaitingTurn = async (bindingStore: BindingStore) => {
               },
               refEncoding: CHAT_REF_ENCODING.PERSISTED_RESOURCE_REFS_V2,
             },
-            version: 2,
           }),
           // Stored before the turn below.
           createdAt: new Date(Date.now() - 60_000),
@@ -304,11 +303,10 @@ const seedAwaitingTurn = async (bindingStore: BindingStore) => {
       }
       await tx.insert(chatMessages).values([
         {
-          content: toChatMessageContent({
+          content: toPersistedChatMessageContentV3({
             data: [
               { content: `Compare with [B](${mentionHref})`, type: "text" },
             ],
-            version: 2,
           }),
           id: userMessageId,
           role: "user",
@@ -317,7 +315,7 @@ const seedAwaitingTurn = async (bindingStore: BindingStore) => {
           workspaceId: null,
         },
         {
-          content: toChatMessageContent({
+          content: toPersistedChatMessageContentV3({
             data: [listedPart, pendingAskUserCall],
             metadata: {
               refContext:
@@ -331,7 +329,6 @@ const seedAwaitingTurn = async (bindingStore: BindingStore) => {
                   : refContext,
               refEncoding: CHAT_REF_ENCODING.PERSISTED_RESOURCE_REFS_V2,
             },
-            version: 2,
           }),
           id: assistantMessageId,
           role: "assistant",

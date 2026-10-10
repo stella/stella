@@ -20,7 +20,6 @@ import {
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import {
   normalizePersistedChatMessageContent,
-  toChatMessageContent,
   toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
 import { readChatRevisionContextChanges } from "@/api/handlers/chat/chat-revision-context";
@@ -227,9 +226,9 @@ if (!databaseUrl || !runPostgres) {
   });
 } else {
   describe("chat message revisions on the migrated schema (postgres)", () => {
-    test.each([1, 2] as const)(
+    test.each([3] as const)(
       "accept preserves normalized v%i metadata in the snapshot and edited message",
-      async (version) => {
+      async () => {
         await withGatedTestClients(databaseUrl, async ({ openClient }) => {
           const db = openClient().db;
           const fixture = await seedFixture(db);
@@ -263,31 +262,10 @@ if (!databaseUrl || !runPostgres) {
                 },
               ],
             } satisfies ChatMessageMetadata;
-            const content =
-              version === 1
-                ? {
-                    version: 1 as const,
-                    data: [
-                      {
-                        type: "text",
-                        text: "Original answer: café\n\nNext paragraph.",
-                      },
-                      {
-                        type: "data-stella-anon-restorations",
-                        data: metadata.anonRestorations,
-                      },
-                      { type: "data-stella-mentions", data: metadata.mentions },
-                      {
-                        type: "data-stella-source-document",
-                        data: metadata.sourceDocuments.at(0),
-                      },
-                    ],
-                  }
-                : toChatMessageContent({
-                    version,
-                    data: normalizePersistedChatMessageContent(original).parts,
-                    metadata,
-                  });
+            const content = toPersistedChatMessageContentV3({
+              data: normalizePersistedChatMessageContent(original).parts,
+              metadata,
+            });
             await db
               .update(chatMessages)
               .set({ content })
@@ -995,8 +973,7 @@ if (!databaseUrl || !runPostgres) {
           await db
             .update(chatMessages)
             .set({
-              content: toChatMessageContent({
-                version: 2,
+              content: toPersistedChatMessageContentV3({
                 data: [
                   { type: "text", content: "Draft answer" },
                   {

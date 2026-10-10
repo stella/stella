@@ -57,6 +57,7 @@ import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import readBilingualRun from "@/api/handlers/bilingual-translations/read-run";
 import readBillingCodes from "@/api/handlers/billing-codes/list";
 import lookupResearchAnswers from "@/api/handlers/case-law/research/answers-lookup";
+import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import exportChatMessage from "@/api/handlers/chat/export/create";
 import forkChatThread from "@/api/handlers/chat/fork/create";
 import readSuggestedChatPrompts from "@/api/handlers/chat/get-suggested-prompts";
@@ -2450,10 +2451,10 @@ beforeAll(async () => {
     chatThreadOfB(chatDeleteThreadB),
     chatThreadOfB(chatSendThreadB),
   ]);
-  const chatText = (text: string) => ({
-    version: 1 as const,
-    data: [{ type: "text" as const, text }],
-  });
+  const chatText = (text: string) =>
+    toPersistedChatMessageContentV3({
+      data: [{ type: "text" as const, content: text }],
+    });
   await testDb.insert(chatThreads).values(chatThreadOfB(chatRevisionThreadB));
   await testDb.insert(chatMessages).values(
     [chatRevisionAcceptMessageB, chatRevisionRevertMessageB].map((id) => ({

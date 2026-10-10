@@ -11,6 +11,10 @@ import {
 } from "../lib/db/migration-history";
 import { BackfillHeldError } from "./backfill-runtime";
 import { BETTER_AUTH_OAUTH_RESOURCE_REPAIR } from "./better-auth-oauth-resource-repair";
+import {
+  CHAT_CONTENT_V3_REPAIR,
+  CHAT_CONTENT_V3_SOURCES,
+} from "./chat-content-v3-backfill";
 import { CORPUS_PROJECTION_CLEANUP_STALL_REPAIR } from "./corpus-projection-cleanup-stall-repair";
 import { CORPUS_PROJECTION_DELETE_RECEIPT_REPAIR } from "./corpus-projection-delete-receipt-repair";
 import { DECISION_DATE_CEILING_REPAIR } from "./decision-date-ceiling-repair";
@@ -33,6 +37,18 @@ const ONLINE_MIGRATIONS_LOCK_SQL =
   "SELECT pg_advisory_lock(hashtext('stella-online-migrations'))";
 const ONLINE_MIGRATIONS_UNLOCK_SQL =
   "SELECT pg_advisory_unlock(hashtext('stella-online-migrations'))";
+
+export const acquireOnlineMigrationLock = async (
+  connection: OnlineMigrationConnection,
+): Promise<void> => {
+  await connection.execute(ONLINE_MIGRATIONS_LOCK_SQL);
+};
+
+export const releaseOnlineMigrationLock = async (
+  connection: OnlineMigrationConnection,
+): Promise<void> => {
+  await connection.execute(ONLINE_MIGRATIONS_UNLOCK_SQL);
+};
 const READ_INDEX_STATE_SQL = `
   SELECT
     index_state.indisready AS "isReady",
@@ -78,6 +94,13 @@ type OnlineIndex = RequiredMigrationIndex & {
 };
 
 export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
+  ...Object.values(CHAT_CONTENT_V3_SOURCES).map(({ table: tableName }) => ({
+    createSql: `CREATE INDEX CONCURRENTLY "${tableName}_content_v3_pending_idx" ON public."${tableName}" (id) WHERE (content -> 'version') IS DISTINCT FROM '3'::jsonb`,
+    definitionBody: `ON public.${tableName} USING btree (id) WHERE ((content -> 'version'::text) IS DISTINCT FROM '3'::jsonb)`,
+    isUnique: false,
+    name: `${tableName}_content_v3_pending_idx`,
+    tableName,
+  })),
   {
     createSql: `CREATE INDEX CONCURRENTLY "apikey_personal_owner_keyset_idx" ON public."apikey" (((metadata::jsonb ->> 'organizationId')), reference_id, created_at DESC, id DESC) WHERE metadata IS NOT NULL AND metadata::jsonb ->> 'kind' = 'personal'`,
     definitionBody:
@@ -470,6 +493,7 @@ export const ONLINE_VALIDATED_INDEX_NAMES: ReadonlySet<string> = new Set([
  * skips the ones already complete, and validates their completion.
  */
 export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
+  CHAT_CONTENT_V3_REPAIR,
   DECISION_DATE_CEILING_REPAIR,
   CORPUS_PROJECTION_DELETE_RECEIPT_REPAIR,
   ...SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS,
@@ -575,7 +599,7 @@ const processOnlineMigrations = async (
   let lockAcquired = false;
 
   try {
-    await connection.execute(ONLINE_MIGRATIONS_LOCK_SQL);
+    await acquireOnlineMigrationLock(connection);
     lockAcquired = true;
 
     if (mode.operation === "repair") {
@@ -612,7 +636,7 @@ const processOnlineMigrations = async (
   } finally {
     try {
       if (lockAcquired && sessionIsActive()) {
-        await connection.execute(ONLINE_MIGRATIONS_UNLOCK_SQL);
+        await releaseOnlineMigrationLock(connection);
       }
     } finally {
       await connection.release();

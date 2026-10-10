@@ -4,7 +4,7 @@ import { inArray } from "drizzle-orm";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
-import { toChatMessageContent } from "@/api/handlers/chat/chat-message-parts";
+import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { readChatThreadNames } from "@/api/lib/chat/thread-names";
@@ -40,7 +40,7 @@ afterAll(async () => {
 });
 
 describe("a thread's names derived from its stored messages", () => {
-  test("hold the tool-call ids of every stored shape the provider reads back", async () => {
+  test("hold the ids of stored tool calls", async () => {
     const base = Date.parse("2026-02-21T00:00:00.000Z");
     const threadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
     await testDb.insert(chatThreads).values({
@@ -62,7 +62,7 @@ describe("a thread's names derived from its stored messages", () => {
     await testDb.insert(chatMessages).values([
       {
         ...row(0),
-        content: toChatMessageContent({
+        content: toPersistedChatMessageContentV3({
           data: [
             {
               type: "tool-call",
@@ -72,48 +72,7 @@ describe("a thread's names derived from its stored messages", () => {
               state: "input-complete",
             },
           ],
-          version: 2,
         }),
-      },
-      {
-        ...row(1),
-        // A turn stored before tool calls had their own part type; it still
-        // reaches the provider as a call under this id.
-        content: {
-          version: 1 as const,
-          data: [
-            {
-              type: "tool-lookup",
-              toolCallId: "call_1",
-              state: "output-available",
-              input: {},
-              output: {},
-            },
-            {
-              type: "dynamic-tool",
-              toolName: "mcp__external__search",
-              toolCallId: "call_2",
-              state: "output-available",
-              input: {},
-              output: {},
-            },
-            {
-              type: "tool-lookup",
-              id: "call_3",
-              state: "output-available",
-              input: {},
-              output: {},
-            },
-            {
-              type: "dynamic-tool",
-              toolName: "mcp__external__search",
-              id: "call_4",
-              state: "output-available",
-              input: {},
-              output: {},
-            },
-          ],
-        },
       },
     ]);
 
@@ -122,8 +81,6 @@ describe("a thread's names derived from its stored messages", () => {
     );
 
     expect(names.source).toBe("messages");
-    expect(new Set(names.toolCallIds)).toEqual(
-      new Set(["call_0", "call_1", "call_2", "call_3", "call_4"]),
-    );
+    expect(new Set(names.toolCallIds)).toEqual(new Set(["call_0"]));
   });
 });
