@@ -28,6 +28,10 @@ const isInputArray = (
   value: StableStringifyInput,
 ): value is readonly StableStringifyInput[] => Array.isArray(value);
 
+// This token is intentionally not valid JSON, so it cannot equal the
+// serialization of any JSON value. Its spelling is a stable fingerprint format.
+const CIRCULAR_REFERENCE_TOKEN = "<circular>";
+
 /**
  * Deterministic serialization for hashing/keying JSON-shaped values:
  * canonical key order via plain UTF-16 code-unit comparison (the order of
@@ -42,12 +46,11 @@ const isInputArray = (
  *
  * Values JSON has no form for are given one rather than dropped: `undefined`
  * (including an explicitly-undefined key, so it stays distinguishable from an
- * absent one), `bigint`, `symbol`, and functions. A cycle serializes as
- * `[circular]` instead of throwing, because a fingerprint of a malformed
- * value is still more useful than a crash on the path that computes it. The
- * visited set is never unwound, so a value that merely appears twice reads as
- * circular as well: callers fingerprint payloads they built, not shared object
- * graphs.
+ * absent one), `bigint`, `symbol`, and functions. A cycle serializes as the
+ * stable, non-JSON token `<circular>` instead of throwing, because a fingerprint
+ * of a malformed value is still more useful than a crash on the path that
+ * computes it. Only ancestors of the current value count as cycles; shared
+ * non-circular references are serialized in full at each location.
  */
 export const stableStringify = (
   value: StableStringifyInput,
@@ -83,12 +86,14 @@ export const stableStringify = (
   }
 
   if (seen.has(value)) {
-    return "[circular]";
+    return CIRCULAR_REFERENCE_TOKEN;
   }
 
   seen.add(value);
   if (isInputArray(value)) {
-    return `[${value.map((item) => stableStringify(item, seen)).join(",")}]`;
+    const serialized = `[${value.map((item) => stableStringify(item, seen)).join(",")}]`;
+    seen.delete(value);
+    return serialized;
   }
 
   const serializedEntries: string[] = [];
@@ -101,5 +106,6 @@ export const stableStringify = (
     );
   }
 
+  seen.delete(value);
   return `{${serializedEntries.join(",")}}`;
 };
