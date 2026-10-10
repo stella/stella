@@ -15,8 +15,10 @@ import * as v from "valibot";
 
 import {
   createPrivateTaskSink,
+  probeSourceFingerprint,
   waiverKey,
   type FixEvidence,
+  type RemovalAssessment,
 } from "./dated-waiver-fix-task";
 import { removeWaiver, runWaiverProbe } from "./dated-waiver-probes";
 import {
@@ -29,6 +31,7 @@ import {
   dueWaivers,
   expiryInstant,
   loadWaivers,
+  trackedPolicyFiles,
   type DatedWaiver,
 } from "./dated-waivers";
 
@@ -63,7 +66,11 @@ type HealingActions = {
     },
   ) => Promise<number | undefined>;
   armRemoval: (number: number) => Promise<void>;
-  resolveFixTask: (entry: DatedWaiver) => Promise<void>;
+  assessRemoval: (
+    entry: DatedWaiver,
+    evidence: FixEvidence,
+  ) => Promise<RemovalAssessment>;
+  resolveFixTask: (entry: DatedWaiver, evidence: FixEvidence) => Promise<void>;
   openFixTask: (
     entry: DatedWaiver,
     evidence: FixEvidence,
@@ -105,8 +112,18 @@ export const applyHealing = async ({
         ) {
           panic("Removal requires all declared probes to pass");
         }
+        const assessment = await actions.assessRemoval(entry, outcome.evidence);
+        if (assessment.status === "blocked") {
+          if (
+            now.getTime() >= at - DAY_MS &&
+            assessment.task.state === "open"
+          ) {
+            await actions.alertExpiry(assessment.task);
+          }
+          break;
+        }
         const number = await actions.openRemoval({ entry, outcome });
-        await actions.resolveFixTask(entry);
+        await actions.resolveFixTask(entry, outcome.evidence);
         if (number !== undefined) {
           await actions.armRemoval(number);
         }
@@ -201,6 +218,31 @@ const boundedOutput = async (
   return output;
 };
 
+// Hash the sources actually edited for the probe plus pinned dependencies.
+// The target waiver is already removed, so changing its deadline is no fix.
+const sourceFingerprint = (
+  entry: DatedWaiver,
+  files: Record<string, string>,
+  checkout: string,
+): string => {
+  const inputs =
+    Object.keys(files).length > 0
+      ? { ...files }
+      : {
+          [entry.source]: readFileSync(
+            path.join(checkout, entry.source),
+            "utf-8",
+          ),
+        };
+  const dependencies = entry.kind === "no-llms-txt" ? [] : trackedPolicyFiles();
+  for (const source of dependencies.filter(
+    (candidate) => path.basename(candidate) === "bun.lock",
+  )) {
+    inputs[source] = readFileSync(path.join(checkout, source), "utf-8");
+  }
+  return probeSourceFingerprint(inputs);
+};
+
 const probeEntry = async (
   entry: DatedWaiver,
   sha: string,
@@ -233,6 +275,7 @@ const probeEntry = async (
             "The declared waiver cannot be safely removed for probing. Fix its owner declaration; no probe was run.",
           runner: process.env["RUNNER_OS"] ?? process.platform,
           sha,
+          sourceFingerprint: sourceFingerprint(entry, {}, checkout),
           run: process.env["GITHUB_RUN_ID"]
             ? `https://github.com/stella/stella/actions/runs/${process.env["GITHUB_RUN_ID"]}`
             : "local",
@@ -292,6 +335,7 @@ const probeEntry = async (
       output: result.output,
       runner: process.env["RUNNER_OS"] ?? process.platform,
       sha,
+      sourceFingerprint: sourceFingerprint(entry, files, checkout),
       run: process.env["GITHUB_RUN_ID"]
         ? `https://github.com/stella/stella/actions/runs/${process.env["GITHUB_RUN_ID"]}`
         : "local",
@@ -347,6 +391,7 @@ const readReport = async (file: string): Promise<HealingReport> => {
             output: v.string(),
             runner: v.string(),
             sha: v.string(),
+            sourceFingerprint: v.string(),
             run: v.string(),
           }),
           files: v.record(v.string(), v.string()),
@@ -359,7 +404,9 @@ const readReport = async (file: string): Promise<HealingReport> => {
       if (
         JSON.stringify(result.evidence.command) !==
           JSON.stringify(owner.probe.command) ||
-        result.evidence.sha !== parsed.sha
+        result.evidence.sha !== parsed.sha ||
+        result.evidence.sourceFingerprint !==
+          sourceFingerprint(owner, result.files, root)
       ) {
         panic("Evidence probe does not match owner");
       }

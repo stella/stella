@@ -8,8 +8,10 @@ import {
   DATED_WAIVER_AUTOFIX_LABEL,
   FIX_TASK_IDENTITY_LABEL,
   EXPIRY_ALERT_LABEL,
+  probeSourceFingerprint,
   waiverKey,
 } from "./dated-waiver-fix-task";
+import type { FixEvidence } from "./dated-waiver-fix-task";
 import {
   applyHealing,
   redactProbeOutput,
@@ -33,6 +35,7 @@ const evidence = {
   output: "PRIVATE FAILURE",
   runner: "Linux",
   sha: "base",
+  sourceFingerprint: "failure-source",
   run: "run-link",
 };
 const green = {
@@ -46,6 +49,7 @@ const scenario = (records: HealingEntry[]) => {
   let taskState: "open" | "closed" = "open";
   let removalNumber: number | undefined = 42;
   const actions = {
+    assessRemoval: async () => ({ status: "eligible" as const }),
     resolveFixTask: async () => {
       effects.push("resolve");
     },
@@ -198,6 +202,8 @@ const taskFixture = ({
     labels: { name: string }[];
   }[] = [];
   const writes: unknown[] = [];
+  let mergedResolution: "none" | "merged" | "unmerged" | "not-included" =
+    "none";
   const ensuredLabels: string[] = [];
   const ensureLabel = async (repo: string, label: string): Promise<void> => {
     expect(repo).toBe("stella/companion");
@@ -220,6 +226,41 @@ const taskFixture = ({
     }
     if (endpoint === "repos/stella/companion/issues/1" && input === undefined) {
       return tasks.at(0);
+    }
+    if (endpoint === "repos/stella/companion/issues/1/timeline") {
+      return mergedResolution !== "none"
+        ? [
+            {
+              event: "cross-referenced",
+              source: {
+                issue: {
+                  number: 55,
+                  repository_url: "https://api.github.com/repos/stella/stella",
+                  pull_request: {
+                    url: "https://api.github.com/repos/stella/stella/pulls/55",
+                  },
+                },
+              },
+            },
+          ]
+        : [];
+    }
+    if (endpoint === "repos/stella/stella/pulls/55") {
+      return {
+        merged_at:
+          mergedResolution === "unmerged" ? null : "2026-10-11T00:00:00Z",
+        merge_commit_sha: "root-cause-fix",
+      };
+    }
+    if (endpoint === "repos/stella/stella/compare/base...root-cause-fix") {
+      return { status: "ahead" };
+    }
+    if (
+      endpoint === "repos/stella/stella/compare/root-cause-fix...resolved-head"
+    ) {
+      return {
+        status: mergedResolution === "not-included" ? "diverged" : "ahead",
+      };
     }
     writes.push(input);
     if (v.is(v.object({ state: v.literal("closed") }), input)) {
@@ -256,7 +297,19 @@ const taskFixture = ({
     }
     return task;
   };
-  return { tasks, writes, request, labels, ensureLabel, ensuredLabels };
+  return {
+    tasks,
+    writes,
+    request,
+    labels,
+    ensureLabel,
+    ensuredLabels,
+    linkMergedResolution: (
+      mode: "merged" | "unmerged" | "not-included" = "merged",
+    ) => {
+      mergedResolution = mode;
+    },
+  };
 };
 
 test("failing evidence is refused before any public issue write", async () => {
@@ -349,10 +402,18 @@ test("successful removal evidence resolves a prior fix task so expiry cannot emi
     ensureLabel: fake.ensureLabel,
   });
   const task = await sink.openFixTask(entry, evidence);
-  await sink.resolveFixTask(entry);
+  await sink.resolveFixTask(entry, {
+    ...evidence,
+    sha: "resolved-head",
+    sourceFingerprint: "fixed-source",
+  });
   expect(fake.tasks.at(0)?.state).toBe("closed");
   const writes = fake.writes.length;
-  await sink.resolveFixTask(entry);
+  await sink.resolveFixTask(entry, {
+    ...evidence,
+    sha: "resolved-head",
+    sourceFingerprint: "fixed-source",
+  });
   await sink.alertExpiry(task);
   expect(fake.writes).toHaveLength(writes);
 });
@@ -409,20 +470,177 @@ test("label provisioning failure blocks task publication", async () => {
   expect(fake.writes).toEqual([]);
 });
 
-test("captured output cannot impersonate another entry's task identity", async () => {
+test("task identity comes from its published header", async () => {
   const fake = taskFixture();
   const sink = await createPrivateTaskSink({
     repo: "stella/companion",
     request: fake.request,
     ensureLabel: fake.ensureLabel,
   });
-  const otherEntry = { ...entry, id: "other" };
-  const injectedMarker = `<!-- dated-waiver:${waiverKey(otherEntry)} -->`;
-  const own = await sink.openFixTask(entry, {
-    ...evidence,
-    output: injectedMarker,
-  });
-  expect(own.body).toContain(injectedMarker);
-  expect(await sink.findTask(otherEntry)).toBeUndefined();
+  const own = await sink.openFixTask(entry, evidence);
+  expect(own.body.split("\n").at(0)).toBe(
+    `<!-- dated-waiver:${waiverKey(entry)} -->`,
+  );
+  expect(await sink.findTask({ ...entry, id: "other" })).toBeUndefined();
   expect((await sink.findTask(entry))?.number).toBe(own.number);
+});
+
+const resolutionScenario = async () => {
+  const fake = taskFixture();
+  const sink = await createPrivateTaskSink({
+    repo: "stella/companion",
+    request: fake.request,
+    ensureLabel: fake.ensureLabel,
+  });
+  const effects: string[] = [];
+  let now = "2026-10-12T00:00:00Z";
+  const actions = {
+    ...sink,
+    openRemoval: async () => {
+      effects.push("remove");
+      return 42;
+    },
+    resolveFixTask: async (owner: DatedWaiver, proof: FixEvidence) => {
+      await sink.resolveFixTask(owner, proof);
+      effects.push("resolve");
+    },
+    armRemoval: async () => {
+      effects.push("arm");
+    },
+  };
+  const run = (status: "red" | "green", proof: FixEvidence) =>
+    applyHealing({
+      now: new Date(now),
+      actions,
+      report: {
+        sha: proof.sha,
+        observedAt: "2026-10-12",
+        entries: [{ entry, outcome: { ...green, status, evidence: proof } }],
+      },
+    });
+  await run("red", { ...evidence, passed: 2 });
+  return {
+    fake,
+    effects,
+    run,
+    sink,
+    advanceToWarning: () => {
+      now = "2026-10-14T00:00:00Z";
+    },
+  };
+};
+
+test("green on the failed commit cannot remove the waiver or close its task", async () => {
+  const healing = await resolutionScenario();
+  const writes = healing.fake.writes.length;
+  await healing.run("green", evidence);
+  expect(healing.effects).toEqual([]);
+  expect(healing.fake.writes).toHaveLength(writes);
+  expect(healing.fake.tasks.at(0)?.state).toBe("open");
+});
+
+test("a changed commit and changed probe source permits removal and task closure", async () => {
+  const healing = await resolutionScenario();
+  await healing.run("green", {
+    ...evidence,
+    sha: "resolved-head",
+    sourceFingerprint: "fixed-source",
+  });
+  expect(healing.effects).toEqual(["remove", "resolve", "arm"]);
+  expect(healing.fake.tasks.at(0)?.state).toBe("closed");
+});
+
+test("an unrelated commit with unchanged probe source remains blocked", async () => {
+  const healing = await resolutionScenario();
+  await healing.run("green", { ...evidence, sha: "unrelated-head" });
+  expect(healing.effects).toEqual([]);
+  expect(healing.fake.tasks.at(0)?.state).toBe("open");
+});
+
+test("a closed task's merged resolution included in the probe commit permits removal", async () => {
+  const healing = await resolutionScenario();
+  const task = healing.fake.tasks.at(0);
+  if (!task) {
+    throw new TypeError("Task fixture missing");
+  }
+  task.state = "closed";
+  healing.fake.linkMergedResolution();
+  await healing.run("green", { ...evidence, sha: "resolved-head" });
+  expect(healing.effects).toEqual(["remove", "resolve", "arm"]);
+  expect(task.state).toBe("closed");
+});
+
+test("missing failure source metadata blocks automatic resolution", async () => {
+  const healing = await resolutionScenario();
+  const task = healing.fake.tasks.at(0);
+  if (!task) {
+    throw new TypeError("Task fixture missing");
+  }
+  task.body = task.body
+    .split("\n")
+    .filter((line) => !line.startsWith("<!-- failure-source:"))
+    .join("\n");
+  await healing.run("green", {
+    ...evidence,
+    sha: "resolved-head",
+    sourceFingerprint: "fixed-source",
+  });
+  expect(healing.effects).toEqual([]);
+  expect(task.state).toBe("open");
+});
+
+test("source fingerprints ignore input order and change with probe contents", () => {
+  const baseline = {
+    "bun.lock": "dependencies",
+    "bunfig.toml": "without waiver",
+  };
+  expect(
+    probeSourceFingerprint({
+      "bunfig.toml": "without waiver",
+      "bun.lock": "dependencies",
+    }),
+  ).toBe(probeSourceFingerprint(baseline));
+  for (const file of Object.keys(baseline)) {
+    expect(
+      probeSourceFingerprint({ ...baseline, [file]: "changed probe input" }),
+    ).not.toBe(probeSourceFingerprint(baseline));
+  }
+});
+
+test("the failed commit remains blocked even if fingerprint metadata differs", async () => {
+  const healing = await resolutionScenario();
+  await healing.run("green", {
+    ...evidence,
+    sourceFingerprint: "fixed-source",
+  });
+  expect(healing.effects).toEqual([]);
+  expect(healing.fake.tasks.at(0)?.state).toBe("open");
+});
+
+test("blocked green evidence signals an unresolved task at T-1", async () => {
+  const healing = await resolutionScenario();
+  healing.advanceToWarning();
+  await healing.run("green", evidence);
+  expect(healing.effects).toEqual([]);
+  expect(healing.fake.tasks.at(0)?.state).toBe("open");
+  expect(healing.fake.tasks.at(0)?.labels).toContainEqual({
+    name: EXPIRY_ALERT_LABEL,
+  });
+});
+
+test("closed tasks require a merged resolution included in the probe commit", async () => {
+  for (const mode of ["no-link", "unmerged", "not-included"] as const) {
+    const healing = await resolutionScenario();
+    const task = healing.fake.tasks.at(0);
+    if (!task) {
+      throw new TypeError("Task fixture missing");
+    }
+    task.state = "closed";
+    if (mode !== "no-link") {
+      healing.fake.linkMergedResolution(mode);
+    }
+    await healing.run("green", { ...evidence, sha: "resolved-head" });
+    expect(healing.effects).toEqual([]);
+    expect(task.state).toBe("closed");
+  }
 });

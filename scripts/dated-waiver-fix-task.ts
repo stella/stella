@@ -1,6 +1,7 @@
 import { panic, Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
+import { compareCodeUnit } from "@stll/collation";
 import { sha256Hex } from "@stll/sha256/bun";
 
 import type { githubRequest } from "./dated-waiver-publish";
@@ -20,8 +21,28 @@ export type FixEvidence = {
   output: string;
   runner: string;
   sha: string;
+  sourceFingerprint: string;
   run: string;
 };
+
+export const probeSourceFingerprint = (
+  files: Readonly<Record<string, string>>,
+): string =>
+  sha256Hex(
+    JSON.stringify(
+      Object.entries(files).toSorted(([left], [right]) =>
+        compareCodeUnit(left, right),
+      ),
+    ),
+  );
+
+const failureSourceSchema = v.object({
+  sha: v.string(),
+  sourceFingerprint: v.string(),
+});
+export type RemovalAssessment =
+  | { status: "eligible" }
+  | { status: "blocked"; task: Pick<FixTask, "number" | "state"> };
 
 const issueSchema = v.object({
   number: v.pipe(v.number(), v.integer(), v.minValue(1)),
@@ -75,6 +96,114 @@ type PrivateTaskOptions = {
   repo: string;
   request: typeof githubRequest;
   ensureLabel?: typeof ensurePrivateTaskLabel;
+};
+
+const readFailureSource = (task: FixTask) => {
+  const header = task.body.split("\n").at(1);
+  const encoded = /^<!-- failure-source:([A-Za-z0-9+/=]+) -->$/u
+    .exec(header ?? "")
+    ?.at(1);
+  if (!encoded) {
+    return undefined;
+  }
+  const parsed = Result.try(() =>
+    JSON.parse(Buffer.from(encoded, "base64").toString("utf-8")),
+  );
+  if (Result.isError(parsed)) {
+    return undefined;
+  }
+  const source = v.safeParse(failureSourceSchema, parsed.value);
+  return source.success ? source.output : undefined;
+};
+type MergedResolutionOptions = {
+  task: FixTask;
+  evidence: FixEvidence;
+  failureSha: string;
+  api: string;
+  request: typeof githubRequest;
+};
+const hasMergedResolution = async ({
+  task,
+  evidence,
+  failureSha,
+  api,
+  request,
+}: MergedResolutionOptions): Promise<boolean> => {
+  if (task.state !== "closed" || evidence.sha === failureSha) {
+    return false;
+  }
+  // Resolution links are read from GitHub timeline events, not issue prose.
+  for (let page = 1; page <= 20; page++) {
+    const events = v.parse(
+      v.array(v.unknown()),
+      await request([
+        `${api}/issues/${task.number}/timeline`,
+        "--method",
+        "GET",
+        "-f",
+        "per_page=100",
+        "-f",
+        `page=${page}`,
+      ]),
+    );
+    for (const event of events) {
+      const reference = v.safeParse(
+        v.object({
+          event: v.literal("cross-referenced"),
+          source: v.object({
+            issue: v.object({
+              number: v.pipe(v.number(), v.integer(), v.minValue(1)),
+              repository_url: v.literal(
+                "https://api.github.com/repos/stella/stella",
+              ),
+              pull_request: v.object({ url: v.string() }),
+            }),
+          }),
+        }),
+        event,
+      );
+      if (!reference.success) {
+        continue;
+      }
+      const number = reference.output.source.issue.number;
+      const pull = v.parse(
+        v.object({
+          merged_at: v.nullable(v.string()),
+          merge_commit_sha: v.nullable(v.string()),
+        }),
+        await request([`repos/stella/stella/pulls/${number}`]),
+      );
+      if (
+        !pull.merged_at ||
+        !pull.merge_commit_sha ||
+        pull.merge_commit_sha === failureSha
+      ) {
+        continue;
+      }
+      const before = v.parse(
+        v.object({ status: v.string() }),
+        await request([
+          `repos/stella/stella/compare/${failureSha}...${pull.merge_commit_sha}`,
+        ]),
+      );
+      if (before.status !== "ahead") {
+        continue;
+      }
+      const included = v.parse(
+        v.object({ status: v.string() }),
+        await request([
+          `repos/stella/stella/compare/${pull.merge_commit_sha}...${evidence.sha}`,
+        ]),
+      );
+      if (included.status === "ahead" || included.status === "identical") {
+        return true;
+      }
+    }
+    if (events.length < 100) {
+      return false;
+    }
+  }
+  panic("Fix-task resolution history exceeds pagination budget");
 };
 
 // Private visibility is established before sending any failing evidence.
@@ -146,6 +275,7 @@ export const createPrivateTaskSink = async ({
     const existing = await findTask(entry);
     const body = [
       `<!-- dated-waiver:${waiverKey(entry)} -->`,
+      `<!-- failure-source:${Buffer.from(JSON.stringify({ sha: evidence.sha, sourceFingerprint: evidence.sourceFingerprint })).toString("base64")} -->`,
       "Fix the root cause. Do not retry the failing job, extend the deadline, or weaken the check.",
       "",
       JSON.stringify(
@@ -209,15 +339,55 @@ export const createPrivateTaskSink = async ({
       { labels: [EXPIRY_ALERT_LABEL] },
     );
   };
-  const resolveFixTask = async (entry: DatedWaiver): Promise<void> => {
+  const assessTask = async (
+    task: FixTask,
+    evidence: FixEvidence,
+  ): Promise<RemovalAssessment> => {
+    const failure = readFailureSource(task);
+    if (!failure) {
+      return { status: "blocked", task };
+    }
+    if (
+      evidence.sha !== failure.sha &&
+      evidence.sourceFingerprint !== failure.sourceFingerprint
+    ) {
+      return { status: "eligible" };
+    }
+    if (
+      await hasMergedResolution({
+        task,
+        evidence,
+        failureSha: failure.sha,
+        api,
+        request,
+      })
+    ) {
+      return { status: "eligible" };
+    }
+    return { status: "blocked", task };
+  };
+  const assessRemoval = async (
+    entry: DatedWaiver,
+    evidence: FixEvidence,
+  ): Promise<RemovalAssessment> => {
+    const task = await findTask(entry);
+    return task ? assessTask(task, evidence) : { status: "eligible" };
+  };
+  const resolveFixTask = async (
+    entry: DatedWaiver,
+    evidence: FixEvidence,
+  ): Promise<void> => {
     const task = await findTask(entry);
     if (task?.state !== "open") {
       return;
+    }
+    if ((await assessTask(task, evidence)).status === "blocked") {
+      panic("Fix task requires resolution evidence");
     }
     await request(
       [`${api}/issues/${task.number}`, "--method", "PATCH", "--input", "-"],
       { state: "closed", state_reason: "completed" },
     );
   };
-  return { openFixTask, findTask, alertExpiry, resolveFixTask };
+  return { openFixTask, findTask, alertExpiry, resolveFixTask, assessRemoval };
 };

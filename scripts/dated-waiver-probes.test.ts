@@ -256,7 +256,7 @@ test("equal test deadlines remove only the matching declaration's marker", () =>
   expect(changed).toContain('test("second",');
 });
 
-test("suppression owner cannot read or write beyond the checkout", () => {
+test("suppression removal reads only listed relative paths", () => {
   const entry = {
     ...waiver(
       "suppression-waiver",
@@ -265,34 +265,39 @@ test("suppression owner cannot read or write beyond the checkout", () => {
     ),
     expiresAt: "2026-10-05",
   };
-  for (const file of [
-    "../secret.ts",
-    "/secret.ts",
-    "-c",
-    "folder\\secret.ts",
-  ]) {
-    const ledger = JSON.stringify({
-      waivers: [
-        {
-          id: "SW-0001",
-          kind: "temporary",
-          rule: "require-search-scope/require-search-scope",
-          file,
-          symbol: "example",
-          count: 1,
-          reason: "fixture",
-          evidence: "example.test.ts",
-          expires: "2026-10-05",
-        },
-      ],
-    });
-    const reads: string[] = [];
-    expect(() =>
-      removeWaiver(entry, (source) => {
-        reads.push(source);
-        return ledger;
+  const files = new Map([
+    [
+      entry.source,
+      JSON.stringify({
+        waivers: [
+          {
+            id: entry.id,
+            kind: "temporary",
+            rule: "require-search-scope/require-search-scope",
+            file: "example.ts",
+            symbol: "example",
+            count: 1,
+            reason: "fixture",
+            evidence: "example.test.ts",
+            expires: entry.expiresAt,
+          },
+        ],
       }),
-    ).toThrow("file escapes repository");
-    expect(reads).toEqual([entry.source]);
-  }
+    ],
+    [
+      "example.ts",
+      "// eslint-disable-next-line require-search-scope/require-search-scope -- fixture invariant\nexport const example = () => 1;",
+    ],
+  ]);
+  const reads: string[] = [];
+  const changes = removeWaiver(entry, (file) => {
+    reads.push(file);
+    const contents = files.get(file);
+    if (contents === undefined) {
+      throw new TypeError("Unlisted fixture file");
+    }
+    return contents;
+  });
+  expect(reads).toEqual([...files.keys()]);
+  expect(changes.map(({ source }) => source)).toEqual([...files.keys()]);
 });

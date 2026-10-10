@@ -22,8 +22,13 @@ or written to a public issue, proposal or step summary. The task requires fixing
 the root cause without retries, date extensions or weakened checks.
 Tasks carry the consumer label `dated-waiver-failure`, declared once as
 `DATED_WAIVER_AUTOFIX_LABEL`; labels are provisioned idempotently before use.
-Successful removal evidence closes an earlier task so it cannot emit a stale
-expiry alert.
+An earlier failure also requires resolution evidence before removal: the probe
+commit and its source fingerprint must differ from the recorded failure, or a
+closed task must link a merged change included in the probe commit. A green run
+on unchanged source keeps the task open and publishes no removal. Fingerprints
+cover the sources with the waiver removed and pinned dependency lockfiles;
+changing the target deadline does not qualify. Eligible removal evidence closes
+an earlier task so it cannot emit a stale expiry alert.
 
 Configure the repository variable `DATED_WAIVER_FIX_REPOSITORY` with the private
 companion repository's name (without its owner). Install the existing provenance
