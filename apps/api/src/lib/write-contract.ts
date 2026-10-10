@@ -142,6 +142,28 @@ export const writeContractRouteKey = (key: string) =>
 
 const contracts = new WeakMap<object, WriteContract>();
 
+// Elysia integer/number schemas transform a union of numeric strings and numbers.
+const isRevisionField = (schema: unknown): boolean => {
+  if (typeof schema !== "object" || schema === null || !(Kind in schema)) {
+    return false;
+  }
+  switch (schema[Kind]) {
+    case "String":
+    case "Integer":
+    case "Number":
+      return true;
+    case "Union":
+      return (
+        "anyOf" in schema &&
+        Array.isArray(schema.anyOf) &&
+        schema.anyOf.length > 0 &&
+        schema.anyOf.every(isRevisionField)
+      );
+    default:
+      return false;
+  }
+};
+
 /** TypeBox unions require the token in every alternative; an intersection may supply it in one conjunct. */
 const requiresField = (schema: unknown, field: string): boolean => {
   if (typeof schema !== "object" || schema === null || !(Kind in schema)) {
@@ -174,11 +196,7 @@ const requiresField = (schema: unknown, field: string): boolean => {
           value.format === "date-time"
         );
       }
-      return (
-        value[Kind] === "String" ||
-        value[Kind] === "Integer" ||
-        value[Kind] === "Number"
-      );
+      return isRevisionField(value);
     }
     case "Union":
       return (

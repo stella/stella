@@ -70,6 +70,34 @@ describe("replacement precondition schemas", () => {
     ).toThrow("must require expectedSnapshotRevision in every branch");
   });
 
+  test("revision protocols accept transformed integer tokens and reject nullable tokens", () => {
+    const revision = {
+      contract: "replace",
+      precondition: {
+        type: "revision",
+        fields: ["expectedGeneration", "expectedSnapshotRevision"],
+      },
+    } as const;
+    expect(() =>
+      assertWriteContract({
+        ...revision,
+        body: t.Object({
+          expectedGeneration: t.Integer({ minimum: 0 }),
+          expectedSnapshotRevision: t.Integer({ minimum: 0 }),
+        }),
+      }),
+    ).not.toThrow();
+    expect(() =>
+      assertWriteContract({
+        ...revision,
+        body: t.Object({
+          expectedGeneration: t.Integer(),
+          expectedSnapshotRevision: t.Union([t.Integer(), t.Null()]),
+        }),
+      }),
+    ).toThrow("must require expectedSnapshotRevision in every branch");
+  });
+
   test("a Replace description cannot declare patch", () => {
     expect(() =>
       assertWriteContract({ contract: "patch", description: "Replace tags" }),
