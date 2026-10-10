@@ -565,3 +565,52 @@ describe.serial("transaction proof ownership", () => {
     }
   });
 });
+
+describe.serial("checked operation ownership", () => {
+  for (const id of [
+    "operation-proof-predicates",
+    "conditional-operation-predicates",
+    "checked-operation-execution",
+    "file-reservation-evidence",
+    "file-reservation-checks",
+    "model-operation-callers",
+  ]) {
+    test(`${id} confines execution to checking owners`, async () => {
+      const entry = OWNERSHIP.find((candidate) => candidate.id === id);
+      if (entry?.enforcement.kind !== "import") {
+        throw new TypeError("Checked operation ownership must confine imports");
+      }
+      const specifier = entry.enforcement.specifiers.at(0);
+      const member = entry.enforcement.names?.at(0);
+      if (!specifier || !member) {
+        throw new TypeError("Checked operation ownership needs a named import");
+      }
+      const source = [
+        `import { ${member} as unchecked } from "${specifier}";`,
+        `import * as core from "${specifier}";`,
+        `export { ${member} } from "${specifier}";`,
+        `const { ${member} } = await import("${specifier}");`,
+      ].join("\n");
+      for (const sourcePath of [
+        "apps/api/src/handlers/example/unchecked.ts",
+        "apps/api/src/mcp/unchecked.ts",
+        "apps/api/src/lib/scheduler/tasks/unchecked.ts",
+      ]) {
+        expect(
+          await lintSingleRule("confine-owner", source, {
+            sourcePath,
+            ruleOptions: { entries: [entry] },
+          }),
+        ).toEqual([1, 2, 3, 4]);
+      }
+      for (const sourcePath of entry.owner) {
+        expect(
+          await lintSingleRule("confine-owner", source, {
+            sourcePath,
+            ruleOptions: { entries: [entry] },
+          }),
+        ).toEqual([]);
+      }
+    });
+  }
+});

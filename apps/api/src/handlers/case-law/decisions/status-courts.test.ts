@@ -140,13 +140,24 @@ test("names a regional tier the corpus holds only a few courts of", () => {
   expect(rows.map((row) => row.type)).toEqual(["court", "court"]);
 });
 
-test("a court with no known abbreviation carries no chip", () => {
+test("a registered regional court carries its citation code", () => {
   const [row] = courtStatusRows({
     activity: activity({}),
     buckets: [bucket("Krajský soud v Brně", 10)],
     country: "CZE",
     courtWeights,
   });
+
+  expect(row).toMatchObject({ type: "court", courtAbbreviation: "KS" });
+});
+
+test("a court with no known abbreviation carries no chip", () => {
+  const row = courtStatusRows({
+    activity: activity({}),
+    buckets: [bucket("Synthetic unregistered court", 10)],
+    country: "CZE",
+    courtWeights,
+  }).at(0);
 
   expect(row).toMatchObject({ type: "court", courtAbbreviation: null });
 });

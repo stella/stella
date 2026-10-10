@@ -225,6 +225,7 @@ type FactDetailsProjection = Pick<
 >;
 
 const UNPROJECTED_FACT_DETAIL_COLUMNS = [
+  "entityFeatureGate", // RLS state is internal to the gate.
   // Scope keys the caller sent in the request.
   "workspaceId",
   "listId",

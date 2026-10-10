@@ -160,6 +160,8 @@ const mount = () => {
               caseNumberType: "case-number",
               country: "CZ",
               court: "Supreme Court",
+              courtAbbreviation: null,
+              sourceUrl: null,
               decisionDate: "2020-01-01",
               decisionType: null,
               ecli: null,

@@ -27,6 +27,7 @@ import { panic } from "better-result";
 
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { subsetTrueType } from "@stll/folio-core/text-shaping";
+import { sha256Bytes as hashSha256Bytes } from "@stll/sha256/bun";
 
 import type { StampFace } from "@/api/lib/files/pdf-signing/stamp-font";
 import {
@@ -165,9 +166,7 @@ const needsActualText = (
 
 /** Six capital letters derived from the subset, so both phases agree. */
 const subsetTag = (face: StampFace, glyphIds: readonly number[]) => {
-  const hash = new Bun.CryptoHasher("sha256")
-    .update(`${face.key}\n${glyphIds.join(",")}`)
-    .digest();
+  const hash = hashSha256Bytes(`${face.key}\n${glyphIds.join(",")}`);
   return Array.from(hash.subarray(0, 6), (byte) =>
     String.fromCodePoint(65 + (byte % 26)),
   ).join("");

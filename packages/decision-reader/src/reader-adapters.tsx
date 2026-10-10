@@ -7,6 +7,7 @@ import type { ReaderCitationTreatment } from "./citation-treatment";
 import type { MissingBodyReason } from "./decision-body-state.logic";
 import type { ReaderMessageKey } from "./reader-message-types";
 import type {
+  CitationAnchorSource,
   CitedDecisionTarget,
   CitedProvisionTarget,
   CitedStatuteTarget,
@@ -30,6 +31,7 @@ export type ReaderDecisionLinkProps = {
   children: ReactNode;
   className?: string | undefined;
   decision: CitedDecisionTarget;
+  citation: CitationAnchorSource;
   treatment: ReaderCitationTreatment;
 };
 

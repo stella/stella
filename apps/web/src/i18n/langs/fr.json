@@ -707,6 +707,15 @@
     },
     "writeOff": "Abandon de créance"
   },
+  "capabilityActions": {
+    "aiMissing": "L’IA n’est pas configurée.",
+    "availabilityUnknown": "La disponibilité n’a pas pu être confirmée.",
+    "deeplMissing": "DeepL n’est pas configuré.",
+    "desktopUnavailable": "Connectez ou mettez à jour stella desktop.",
+    "featureUnavailable": "Cette fonctionnalité n’est pas disponible.",
+    "ocrUnavailable": "L’OCR n’est pas disponible.",
+    "translationMissing": "Aucun service de traduction n’est configuré."
+  },
   "caseLaw": {
     "analysis": {
       "abstract": "Résumé",
@@ -748,6 +757,7 @@
     "citation": {
       "citedAtLeast": "Citée au moins {count} fois",
       "citedSummary": "{count, plural, =0 {Non citée} one {Citée une fois} other {Citée # fois}}",
+      "dateUnavailable": "Date indisponible",
       "decisionCount": "{count, plural, =0 {Aucune décision} one {# décision} other {# décisions}}",
       "lastNegative": "dernière citation négative en {year}",
       "negativeCount": "{count, plural, one {# négative} many {# négatives} other {# négatives}}",
@@ -757,6 +767,7 @@
       "partialSummary": "Les totaux des citations et la chronologie sont partiels.",
       "passageNotFound": "Le passage citant n'a pas été trouvé dans le texte",
       "positiveCount": "{count, plural, one {# positive} many {# positives} other {# positives}}",
+      "referenceLabel": "{court}, {caseNumber}, {date}",
       "showAll": "{count, plural, one {Afficher la décision} many {Afficher les # décisions} other {Afficher les # décisions}}",
       "stripLabel": "Citations par année",
       "treatment": {
@@ -877,9 +888,13 @@
     "pagination": {
       "goToPage": "Aller à la page {page}",
       "label": "Pages de résultats",
+      "pageOfCount": "Page {page} sur {pageCount}",
+      "pageOfEstimatedCount": "Page {page} sur ~{pageCount}",
+      "pageOfEstimatedCountLabel": "Page {page} sur environ {pageCount}",
       "pageWithEstimatedResultCount": "Page n° {page} · environ {count, plural, one {# résultat} other {# résultats}}",
       "pageWithResultCount": "Page n° {page} · {count, plural, one {# résultat} other {# résultats}}",
-      "perPage": "Par page"
+      "perPage": "Par page",
+      "refineForMore": "Affinez votre recherche pour voir d’autres résultats"
     },
     "paragraphRangeNotFound": "{count, plural, one {Le paragraphe {range} est introuvable dans ce texte.} other {Les paragraphes {range} sont introuvables dans ce texte.}}",
     "paragraphRangeSelected": "{count, plural, one {Le paragraphe {range} est surligné.} other {Les paragraphes {range} sont surlignés.}}",
@@ -1187,6 +1202,13 @@
       "previewWaiting": "En attente du contenu…",
       "savePendingReview": "Traitez les suggestions de l’IA en attente avant d’enregistrer le document."
     },
+    "credentialPasteAction": "Utiliser une carte privée",
+    "credentialPasteDescription": "Ce texte ressemble à un identifiant. Utilisez une carte privée pour qu’il n’apparaisse pas dans la conversation. Collez-le à nouveau dans la carte lorsqu’elle s’affiche.",
+    "credentialPasteRequest": "Veuillez demander cet identifiant à l’aide d’une carte privée.",
+    "credentialPasteTitle": "Collage d’identifiant suspendu",
+    "credentialSendAction": "Envoyer quand même",
+    "credentialSendDescription": "Envoyez-le uniquement si vous souhaitez partager cette valeur dans la conversation.",
+    "credentialSendTitle": "Ce message peut contenir un identifiant",
     "deleteThread": "Supprimer la conversation",
     "editMode": {
       "autoDirect": "Automatique · réécrire",
@@ -1325,6 +1347,31 @@
     "removeSuggestion": "(supprimer)",
     "renameThread": "Renommer la conversation",
     "renameUnavailableEmptyThread": "Envoyez d'abord un message, la conversation pourra ensuite être renommée.",
+    "requestSecret": {
+      "checkingTarget": "Vérification des détails du connecteur…",
+      "connectionDisposition": "Connexion : {disposition}",
+      "continuationError": "Votre réponse a été enregistrée, mais la conversation n’a pas pu continuer.",
+      "declined": "Refusé",
+      "description": "L’assistant en a besoin pour continuer",
+      "error": "Impossible d’envoyer l’identifiant. Réessayez.",
+      "kind": {
+        "token": "Jeton d’accès"
+      },
+      "normalConnection": "Connexion standard",
+      "private": "L’assistant ne verra pas cette valeur.",
+      "provideAction": "Fournir",
+      "provided": "Fourni",
+      "purposeByAi": "Objectif rédigé par l’IA : {purpose}",
+      "receiptOnlyConnection": "Connexion privée uniquement",
+      "replaceOrdinaryConnection": "Remplacer la connexion standard par un usage privé uniquement",
+      "retryContinuationAction": "Continuer la conversation",
+      "saveForFuture": "Enregistrer pour les prochaines conversations",
+      "savedAvailabilityError": "Impossible de vérifier si un identifiant est enregistré.",
+      "target": "Cible : {target}",
+      "title": "Demander un identifiant privé",
+      "useSavedAction": "Utiliser l’identifiant enregistré",
+      "valueLabel": "Identifiant"
+    },
     "resend": "Renvoyer",
     "resizeThread": "Redimensionner la conversation",
     "richContentLoading": "Chargement du contenu interactif…",
@@ -1448,6 +1495,7 @@
       "read_story": "Lecture d'une partie du document",
       "remember": "Mémorisation",
       "reply_comment": "Réponse au commentaire",
+      "request_secret": "Demande d’identifiant privé",
       "resolve_comment": "Résolution du commentaire",
       "review_folder_consistency": "Vérification de la cohérence du dossier",
       "run-stella-query": "Lecture des données du dossier",
@@ -1481,6 +1529,7 @@
       "update-entity-fields": "Mise à jour des métadonnées",
       "update_reader_annotation": "Modifier le surlignage ou le commentaire",
       "use-browser": "Utilisation de votre navigateur",
+      "use_connector_secret": "Utilisation de l’identifiant du connecteur",
       "web_search": "Recherche web"
     },
     "toolCall": {
@@ -2819,6 +2868,12 @@
     "editSessionReleased": "Ce document a été ouvert pour modification ailleurs ; cet onglet est donc en lecture seule.",
     "editSessionReleasedUnsaved": "Vos modifications non enregistrées sont conservées ici.",
     "editSessionReopen": "Rouvrir pour modification",
+    "editor": {
+      "outlineDepthAll": "Tous les niveaux",
+      "outlineDepthLabel": "Profondeur du plan",
+      "outlineDepthThree": "1–3",
+      "outlineDepthTwo": "1–2"
+    },
     "evidenceReferences": "Références aux éléments de preuve",
     "evidenceUnavailable": "Cette référence à un élément de preuve ne peut pas être ouverte dans cette affaire.",
     "findReplace": {
@@ -4550,6 +4605,7 @@
       "noMatches": "Aucune connexion ne correspond à « {query} »",
       "notConnected": "Non connectée",
       "permissionCount": "{count, plural, one {# autorisation} other {# autorisations}}",
+      "privateCredentialOnly": "Identifiant privé uniquement",
       "searchPlaceholder": "Rechercher des connexions",
       "title": "Connexions",
       "turnedOff": "Désactivée"
