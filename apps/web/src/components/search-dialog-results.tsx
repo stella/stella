@@ -40,7 +40,10 @@ import { formatHotkeyForPlatform } from "@/lib/hotkeys";
 import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 import { resolveRecentFilePreviewFieldId } from "@/lib/search";
 import type { SearchAISummaryParams } from "@/lib/search";
-import type { RecentFile, RecentSearch } from "@/lib/search-recents";
+import type {
+  RecentFileWithIdentity,
+  RecentSearch,
+} from "@/lib/search-recents";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { entityOptions } from "@/lib/workspaces/queries/entities";
 
@@ -288,10 +291,10 @@ const SummaryBody = ({
 
 type SearchRecentsProps = {
   recentSearches: RecentSearch[];
-  recentFiles: RecentFile[];
+  recentFiles: RecentFileWithIdentity[];
   onSearchClick: (recent: RecentSearch) => void;
-  onFileClick: (file: RecentFile) => void;
-  onFilePreview: (file: RecentFile) => void;
+  onFileClick: (file: RecentFileWithIdentity) => void;
+  onFilePreview: (file: RecentFileWithIdentity) => void;
   previewedFileId: string | null;
 };
 
@@ -466,7 +469,7 @@ export const SearchResultItem = ({
   );
 };
 
-export const RecentFileIcon = ({ file }: { file: RecentFile }) => {
+export const RecentFileIcon = ({ file }: { file: RecentFileWithIdentity }) => {
   if (file.documentIdentity !== undefined) {
     return (
       <DocumentIdentityBadge
@@ -478,7 +481,7 @@ export const RecentFileIcon = ({ file }: { file: RecentFile }) => {
   return <RecentFileTypeIcon file={file} />;
 };
 
-const RecentFileTypeIcon = ({ file }: { file: RecentFile }) => {
+const RecentFileTypeIcon = ({ file }: { file: RecentFileWithIdentity }) => {
   // Recents store identifiers, not thumbnail availability. Observe metadata
   // already loaded by the file view without fetching every recent on open.
   const entityQuery = useQuery({

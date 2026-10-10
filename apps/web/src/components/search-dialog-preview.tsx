@@ -30,7 +30,7 @@ import {
   recentFilePreviewFieldOptions,
   searchPreviewOptions,
 } from "@/lib/search";
-import type { RecentFile } from "@/lib/search-recents";
+import type { RecentFileWithIdentity } from "@/lib/search-recents";
 import { searchTextQueryKey } from "@/lib/search-text";
 import {
   getEmailSearchPreviewTarget,
@@ -77,7 +77,7 @@ type SearchPreviewPanelProps = {
 };
 
 type RecentFilePreviewPanelProps = {
-  file: RecentFile;
+  file: RecentFileWithIdentity;
   locationModifierHeld?: boolean | undefined;
   onOpen: () => void;
   organizationId: string;

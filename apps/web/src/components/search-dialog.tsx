@@ -172,7 +172,7 @@ import {
   recordRecentSearch,
 } from "@/lib/search-recents";
 import type {
-  RecentFile,
+  RecentFileWithIdentity,
   RecentSearch,
   SearchRecentsScope,
 } from "@/lib/search-recents";
@@ -543,7 +543,7 @@ type SearchDialogProps = {
 };
 
 const emptyRecentSearches = (): RecentSearch[] => [];
-const emptyRecentFiles = (): RecentFile[] => [];
+const emptyRecentFiles = (): RecentFileWithIdentity[] => [];
 
 const getRecentsSnapshotKey = (open: boolean, scope: SearchRecentsScope) =>
   open && isSearchRecentsScopeCurrent(scope)
@@ -640,9 +640,8 @@ export const SearchDialog = ({
     read: readFiles,
     getDefaultValue: emptyRecentFiles,
   });
-  const [recentPreviewFile, setRecentPreviewFile] = useState<RecentFile | null>(
-    null,
-  );
+  const [recentPreviewFile, setRecentPreviewFile] =
+    useState<RecentFileWithIdentity | null>(null);
   const [filters, setFilterState] = useState<SearchFilters>(() =>
     initialFiltersForMode(mode, initialWorkspaceId),
   );
@@ -1258,7 +1257,7 @@ export const SearchDialog = ({
     await openEntityInInspector(entityId, label, workspaceId);
   };
 
-  const openRecentFile = (file: RecentFile) => {
+  const openRecentFile = (file: RecentFileWithIdentity) => {
     const location = getRecentFileLocation(file);
     if (locationModifierHeld) {
       navigateAfterClose(async () => {
@@ -2265,9 +2264,9 @@ const SearchFacetsBody = ({
 type SearchPreviewColumnProps = {
   companyHit: ReturnType<typeof useCompanyRegistrySearch>["selectedHit"];
   displayedHit: ComponentProps<typeof SearchPreviewPanel>["hit"] | null;
-  displayedRecentFile: RecentFile | null;
+  displayedRecentFile: RecentFileWithIdentity | null;
   locationModifierHeld: boolean;
-  onOpenRecentFile: (file: RecentFile) => void;
+  onOpenRecentFile: (file: RecentFileWithIdentity) => void;
   onOpenSearchResult: ComponentProps<typeof SearchPreviewPanel>["onOpen"];
   onResize: (clientX: number) => void;
   previewLocatorCandidates: ComponentProps<
@@ -2442,13 +2441,13 @@ const SearchDialogFooter = ({
 type SearchRecentsScreenProps = {
   filters: SearchFilters;
   onApplySavedSearch: (criteria: SavedSearchCriteria) => void;
-  onFileClick: (file: RecentFile) => void;
-  onFilePreview: (file: RecentFile) => void;
+  onFileClick: (file: RecentFileWithIdentity) => void;
+  onFilePreview: (file: RecentFileWithIdentity) => void;
   onSearchClick: (search: RecentSearch) => void;
   open: boolean;
   previewedFileId: string | null;
   query: string;
-  recentFiles: RecentFile[];
+  recentFiles: RecentFileWithIdentity[];
   recentSearches: RecentSearch[];
   visible: boolean;
 };

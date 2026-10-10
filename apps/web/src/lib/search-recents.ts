@@ -32,11 +32,11 @@ export type RecentSearch = {
   searchedAt: string;
 };
 
-export type RecentFile = StoredRecentFile & {
+export type RecentFileWithIdentity = StoredRecentFile & {
   documentIdentity?: DocumentIdentity | undefined;
 };
 
-type RecentFileInput = Omit<RecentFile, "openedAt">;
+type RecentFileInput = Omit<RecentFileWithIdentity, "openedAt">;
 
 const getStorage = (): Storage | null => browserStateStorage("local");
 
@@ -89,7 +89,7 @@ const isRecentDocumentIdentity = (
   }
 };
 
-const isRecentFile = (value: unknown): value is RecentFile =>
+const isRecentFile = (value: unknown): value is RecentFileWithIdentity =>
   isRecord(value) &&
   isResourceId(value["entityId"]) &&
   (value["documentIdentity"] === undefined ||
@@ -180,7 +180,7 @@ export const recordRecentSearch = (
 export const readRecentFiles = (
   scope: SearchRecentsScope,
   storage: Storage | null = getStorage(),
-): RecentFile[] =>
+): RecentFileWithIdentity[] =>
   isSearchRecentsScopeCurrent(scope)
     ? readList(
         scopedKey(RECENT_FILES_STORAGE_KEY, scope),
@@ -193,7 +193,7 @@ export const recordRecentFile = (
   file: RecentFileInput,
   scope: SearchRecentsScope,
   storage: Storage | null = getStorage(),
-): RecentFile[] => {
+): RecentFileWithIdentity[] => {
   if (!isSearchRecentsScopeCurrent(scope)) {
     return [];
   }
