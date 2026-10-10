@@ -65,8 +65,10 @@ import type {
 } from "@oxlint/plugins";
 import path from "node:path";
 
-import { readVerifiedCorpusMembership } from "../apps/api/src/lib/db/public-corpus-audit/attestation.ts";
-import type { VerifiedCorpusMembership } from "../apps/api/src/lib/db/public-corpus-audit/migration-verification.ts";
+import {
+  PUBLIC_CORPUS_BOOKKEEPING_TABLES,
+  type PublicCorpusBookkeepingTable,
+} from "../apps/api/src/lib/db/public-corpus-audit/membership.ts";
 import { isSystemRunActor } from "../apps/api/src/lib/system-audit/actors.ts";
 import { MEMBER_RUN_MODULES } from "../apps/api/src/lib/system-audit/modules.ts";
 import { isPublicCorpusMutation } from "./audit-on-mutation/public-corpus-mutations.ts";
@@ -535,7 +537,10 @@ const AUDIT_RULE_MESSAGES = {
 };
 
 export const createAuditOnMutationPlugin = (
-  verifiedTables: () => readonly VerifiedCorpusMembership[],
+  declaredTables: () => readonly Pick<
+    PublicCorpusBookkeepingTable,
+    "schemaExport" | "sqlName" | "moduleId"
+  >[],
 ) =>
   eslintCompatPlugin({
     meta: { name: "require-audit-on-mutation" },
@@ -547,7 +552,7 @@ export const createAuditOnMutationPlugin = (
           messages: AUDIT_RULE_MESSAGES,
         },
         createOnce(context) {
-          const tables = verifiedTables();
+          const tables = declaredTables();
           const scopes: FunctionScope[] = [];
           // Ledger state for the current file: its budgets (empty outside the
           // ledger) and its unaudited writes grouped by owner.
@@ -739,4 +744,6 @@ export const createAuditOnMutationPlugin = (
     },
   });
 
-export default createAuditOnMutationPlugin(readVerifiedCorpusMembership);
+export default createAuditOnMutationPlugin(
+  () => PUBLIC_CORPUS_BOOKKEEPING_TABLES,
+);

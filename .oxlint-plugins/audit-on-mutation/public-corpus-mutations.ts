@@ -1,4 +1,4 @@
-import type { VerifiedCorpusMembership } from "../../apps/api/src/lib/db/public-corpus-audit/migration-verification.ts";
+import type { PublicCorpusBookkeepingTable } from "../../apps/api/src/lib/db/public-corpus-audit/membership.ts";
 import {
   type ImportedFromOptions,
   isAstNode,
@@ -16,7 +16,7 @@ import {
 
 type Context = ImportedFromOptions["context"];
 type Membership = Pick<
-  VerifiedCorpusMembership,
+  PublicCorpusBookkeepingTable,
   "schemaExport" | "sqlName" | "moduleId"
 >;
 
@@ -93,26 +93,40 @@ export const staticCorpusWriteTargets = (text: string): string[] | null => {
   return targets;
 };
 
-type StaticSqlArgs = { context: Context; node: unknown; depth?: number };
-
-const staticSql = ({
-  context,
-  node,
-  depth = 0,
-}: StaticSqlArgs): string | null => {
+const singleUseInitializer = (context: Context, node: unknown) => {
   const expression = unwrapExpression(node);
-  if (expression === null || depth > 4) {
+  if (!isIdentifierReference(expression)) {
     return null;
   }
+  const variable = resolveVariable(context, expression);
+  const initializer = variable === null ? null : stableInitializer(variable);
+  const definition = variable?.defs.at(0);
+  if (
+    initializer === null ||
+    variable === null ||
+    !isAstNode(definition?.node) ||
+    !isIdentifier(definition.node.id, expression.name) ||
+    variable.references.some(
+      (reference) =>
+        !reference.init &&
+        (reference.identifier.range[0] !== expression.range[0] ||
+          reference.identifier.range[1] !== expression.range[1]),
+    )
+  ) {
+    return null;
+  }
+  return initializer;
+};
+
+type StaticSqlArgs = { context: Context; node: unknown };
+
+const staticSql = ({ context, node }: StaticSqlArgs): string | null => {
+  let expression = unwrapExpression(node);
   if (isIdentifierReference(expression)) {
-    const variable = resolveVariable(context, expression);
-    const init = variable === null ? null : stableInitializer(variable);
-    return init === null
-      ? null
-      : staticSql({ context, node: init, depth: depth + 1 });
+    expression = unwrapExpression(singleUseInitializer(context, expression));
   }
   if (
-    expression.type !== "TaggedTemplateExpression" ||
+    expression?.type !== "TaggedTemplateExpression" ||
     !isImportedFrom({
       context,
       node: expression.tag,
@@ -182,22 +196,9 @@ const containsRead = ({
     return tableFor({ context, node: expression.object, tables }) === undefined;
   }
   if (isIdentifierReference(expression)) {
-    const variable = resolveVariable(context, expression);
-    const initializer = variable === null ? null : stableInitializer(variable);
-    const definition = variable?.defs.at(0);
-    // A stable binding alone does not prove its referenced value is unchanged.
-    // Admit only its declaration and this use; other references are unproven.
+    const initializer = singleUseInitializer(context, expression);
     return (
       initializer === null ||
-      variable === null ||
-      !isAstNode(definition?.node) ||
-      !isIdentifier(definition.node.id, expression.name) ||
-      variable.references.some(
-        (reference) =>
-          !reference.init &&
-          (reference.identifier.range[0] !== expression.range[0] ||
-            reference.identifier.range[1] !== expression.range[1]),
-      ) ||
       containsRead({ context, node: initializer, tables, seen })
     );
   }

@@ -32,13 +32,6 @@ export type OutboundTransportCensusEntry = {
 
 export const OUTBOUND_TRANSPORT_CENSUS = [
   {
-    path: "apps/api/src/scripts/check-public-corpus-audit.ts",
-    class: "operator-configured-infrastructure",
-    reason:
-      "Loads declared schema modules inside the repository schema directory.",
-    transports: ["local:module-loader"],
-  },
-  {
     path: "packages/start-runtime/src/local-module-loader.ts",
     class: "package-owned-client",
     reason:

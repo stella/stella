@@ -3,11 +3,6 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import {
-  corpusDigest,
-  verifyCorpusMigrations,
-  verifiedCorpusMembership,
-} from "../../apps/api/src/lib/db/public-corpus-audit/migration-verification.ts";
 import { staticCorpusWriteTargets } from "../audit-on-mutation/public-corpus-mutations";
 import { lintSingleRule } from "./lint-single-rule";
 
@@ -29,33 +24,7 @@ const table = {
     },
   },
 };
-const owner =
-  "current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.database_backfill_states'::regclass)";
-const migrations = [
-  {
-    file: "fixture.sql",
-    sql: `CREATE TABLE public.database_backfill_states (cursor text);
-ALTER TABLE public.database_backfill_states ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.database_backfill_states FORCE ROW LEVEL SECURITY;
-REVOKE ALL ON public.database_backfill_states FROM stella, PUBLIC;
-CREATE POLICY owner ON public.database_backfill_states FOR ALL TO PUBLIC USING (${owner}) WITH CHECK (${owner});`,
-  },
-];
-const proof = {
-  schemaExport: table.schemaExport,
-  declarationDigest: corpusDigest(table),
-  schemaDigest: "fixture",
-  migrationDigest: corpusDigest(migrations),
-  statementDigest: corpusDigest(
-    verifyCorpusMigrations(table, migrations).relevant,
-  ),
-};
-const members = verifiedCorpusMembership({
-  entries: [table],
-  attestations: [proof],
-  migrations,
-  schemaDigest: "fixture",
-});
+const members = [table];
 
 const prefix = [
   'import { databaseBackfillStates as checkpoint, workspaces } from "@/api/db/schema";',
@@ -123,6 +92,13 @@ describe.serial("corpus mutation provenance", () => {
     expect(
       await lint("return db.update(checkpoint).set({ cursor: 1 }).execute();"),
     ).toEqual([]);
+  });
+  test("a changed SQL value retains the audit requirement", async () => {
+    expect(
+      await lint(
+        "const query = sql`UPDATE public.database_backfill_states SET cursor = NULL`; query.append(otherSql); db.execute(query);",
+      ),
+    ).toEqual([4]);
   });
   test("a static write resolves its admitted target", async () => {
     expect(

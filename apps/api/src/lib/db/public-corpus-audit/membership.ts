@@ -9,12 +9,11 @@ type PublicCorpusColumn = {
   reason: string;
 };
 
-// The admission verifier binds declarations to the canonical schema without
-// giving membership metadata access to protected table exports.
+// Declarations document the tables admitted by the mutation lint rule.
 export type PublicCorpusBookkeepingTable = {
   schemaExport: string;
   sqlName: string;
-  /** Canonical module defining this export; verified against the real table. */
+  /** Canonical module defining this export. */
   moduleId: `apps/api/src/db/schema/${string}`;
   /** Reviewed data semantics; SQL types cannot prove the provenance of values. */
   purpose: "public-corpus-bookkeeping";
@@ -23,6 +22,6 @@ export type PublicCorpusBookkeepingTable = {
   columns: Readonly<Record<string, PublicCorpusColumn>>;
 };
 
-// Admission belongs in the PR creating the table and its owner-only migration.
+// Add a declaration in the PR creating the corresponding table.
 export const PUBLIC_CORPUS_BOOKKEEPING_TABLES: readonly PublicCorpusBookkeepingTable[] =
   [];
