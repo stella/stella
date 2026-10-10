@@ -310,6 +310,113 @@ describe("write contracts cover the mutation route graph", () => {
       expect.stringContaining("Missing write contract debt ID:"),
     );
   });
+  test("stable endpoint wrappers preserve the returned canonical factory contract", () => {
+    const wrappers = [
+      "(dependencies = {}) => createSafeHandler(config, async () => ({}))",
+      "(dependencies = {}) => {const read = dependencies.read; return createSafeHandler(config, async () => ({}));}",
+      '() => {const localConfig = {contract: "patch"}; const endpoint = createSafeHandler(localConfig, async () => ({})); return endpoint;}',
+    ];
+    for (const wrapper of wrappers) {
+      const sources = fixture("{}");
+      sources.set(
+        handler,
+        `import {createSafeHandler} from "@/api/lib/api-handlers"; const config = {contract: "patch"}; const createEndpoint = ${wrapper}; const endpoint = createEndpoint(); export default endpoint;`,
+      );
+      expect(enumerate(sources)).toHaveLength(1);
+      expect(check(sources)).toEqual([]);
+    }
+  });
+  test("wrapper configs cannot resolve missing declarations or shadowed module bindings", () => {
+    const wrappers = [
+      "() => createSafeHandler({}, async () => ({}))",
+      "(config) => createSafeHandler(config, async () => ({}))",
+      '() => {let config = {contract: "patch"}; return createSafeHandler(config, async () => ({}));}',
+      "() => {const config = opaque(); return createSafeHandler(config, async () => ({}));}",
+      "(createSafeHandler) => createSafeHandler(config, async () => ({}))",
+    ];
+    for (const wrapper of wrappers) {
+      const sources = fixture("{}");
+      sources.set(
+        handler,
+        `import {createSafeHandler} from "@/api/lib/api-handlers"; const config = {contract: "patch"}; const createEndpoint = ${wrapper}; export default createEndpoint();`,
+      );
+      expect(enumerate(sources)).toHaveLength(1);
+      expect(check(sources)).toContainEqual(
+        expect.stringContaining("Missing write contract:"),
+      );
+    }
+  });
+  test("divergent or opaque wrapper returns cannot select a convenient declaration", () => {
+    const wrappers = [
+      '(condition) => {if (condition) return createSafeHandler({contract: "patch"}, async () => ({})); return createSafeHandler({contract: "replace"}, async () => ({}));}',
+      '(condition) => condition ? createSafeHandler({contract: "patch"}, async () => ({})) : createSafeHandler({contract: "replace", precondition: {type: "updatedAt", field: "expectedUpdatedAt"}}, async () => ({}))',
+      '(condition) => condition ? createSafeHandler({contract: "patch"}, async () => ({})) : opaque()',
+    ];
+    for (const wrapper of wrappers) {
+      const sources = fixture("{}");
+      sources.set(
+        handler,
+        `import {createSafeHandler} from "@/api/lib/api-handlers"; const createEndpoint = ${wrapper}; export default createEndpoint();`,
+      );
+      expect(check(sources)).toContainEqual(
+        expect.stringContaining("Missing write contract:"),
+      );
+    }
+  });
+  test("conditional local route handlers require matching canonical contracts in both branches", () => {
+    const sources = fixture("{}");
+    sources.set(
+      handler,
+      'import {createSafeHandler} from "@/api/lib/api-handlers"; const config = {contract: "patch"}; export const createEndpoint = () => createSafeHandler(config, async () => ({})); export default createEndpoint();',
+    );
+    sources.set(
+      "apps/api/src/handlers/example/routes.ts",
+      'import endpoint, {createEndpoint} from "./update"; const createRoute = (options) => {const search = options === undefined ? endpoint : createEndpoint(options); return new Elysia().post("/existing", search.handler);}; export const routes = createRoute();',
+    );
+    expect(enumerate(sources)).toHaveLength(1);
+    expect(check(sources)).toEqual([]);
+    sources.set(
+      "apps/api/src/handlers/example/routes.ts",
+      'import endpoint, {createEndpoint} from "./update"; const createRoute = (options) => {const search = options === undefined ? endpoint : opaque(); return new Elysia().post("/existing", search.handler);}; export const routes = createRoute();',
+    );
+    expect(check(sources)).toContainEqual(
+      expect.stringContaining("Missing write contract:"),
+    );
+  });
+  test("explicit wrapper metadata preserves parameter shadows", () => {
+    const sources = fixture("{}");
+    sources.set(
+      handler,
+      'import {createSafeHandler} from "@/api/lib/api-handlers"; const injected = "patch"; const createEndpoint = (injected) => createSafeHandler({contract: injected}, async () => ({})); export default createEndpoint();',
+    );
+    expect(check(sources)).toContainEqual(
+      expect.stringContaining("Missing write contract:"),
+    );
+    sources.set(
+      handler,
+      'import {createSafeHandler} from "@/api/lib/api-handlers"; const token = {type: "updatedAt", field: "expectedUpdatedAt"}; const createEndpoint = (token) => createSafeHandler({contract: "replace", precondition: token}, async () => ({})); export default createEndpoint();',
+    );
+    expect(check(sources)).toContainEqual(
+      expect.stringContaining("Replace route requires precondition:"),
+    );
+  });
+  test("raw metadata cannot fill a partially resolved canonical wrapper", () => {
+    const sources = fixture("{}");
+    sources.set(
+      handler,
+      'import {createSafeHandler} from "@/api/lib/api-handlers"; const createEndpoint = (condition) => condition ? createSafeHandler({contract: "patch"}, async () => ({})) : opaque(); export default createEndpoint();',
+    );
+    expect(check(sources)).toContainEqual(
+      expect.stringContaining("Missing write contract:"),
+    );
+    sources.set(
+      "apps/api/src/lib/write-contract.ts",
+      "export const RAW_WRITE_CONTRACTS = {'apps/api/src/handlers/example/routes.ts|POST|/existing': {contract: 'patch'}} as const;",
+    );
+    expect(() => enumerate(sources)).toThrow(
+      "Raw write contract cannot override a safe handler:",
+    );
+  });
   test("the repository graph has no undeclared HTTP surfaces", () => {
     const load = (file: string) =>
       existsSync(path.join(root, file))

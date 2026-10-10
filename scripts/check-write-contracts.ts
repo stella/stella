@@ -27,7 +27,12 @@ export type WriteContractBaseline = v.InferOutput<
   typeof writeContractBaselineSchema
 >;
 type SourceLoader = (file: string) => string | undefined;
-type LocatedExpression = { file: string; node: ts.Expression };
+type LexicalScope = ReadonlyMap<string, ts.Expression | undefined>;
+type LocatedExpression = {
+  file: string;
+  node: ts.Expression;
+  scope?: LexicalScope;
+};
 export type WriteRegistration = MutationRegistration & {
   contract: string | undefined;
   precondition: string | undefined;
@@ -58,6 +63,9 @@ const modulePath = (file: string, specifier: string) => {
     : `${target.replace(/\.ts$/u, "")}.ts`;
 };
 
+const isConstDeclarationList = (node: ts.VariableDeclarationList) =>
+  node.getFirstToken()?.kind === ts.SyntaxKind.ConstKeyword;
+
 type BindingReference = { file: string; name: string };
 type BindingReferenceOptions = BindingReference & { statement: ts.Statement };
 type BindingOptions = { file: string; name: string; visited?: Set<string> };
@@ -65,6 +73,140 @@ type FactoryBindingOptions = {
   file: string;
   expression: ts.Expression;
   seen?: Set<string>;
+  scope?: LexicalScope;
+};
+
+type SafeCallOptions = {
+  value: LocatedExpression;
+  seen?: Set<string>;
+  handler: string;
+};
+type SafeCall = LocatedExpression & {
+  node: ts.CallExpression;
+  configArgument: (typeof SAFE_HANDLER_FACTORIES)[keyof typeof SAFE_HANDLER_FACTORIES]["configArgument"];
+};
+
+const bindingNames = (name: ts.BindingName): string[] => {
+  if (ts.isIdentifier(name)) {
+    return [name.text];
+  }
+  return name.elements.flatMap((element) =>
+    ts.isBindingElement(element) ? bindingNames(element.name) : [],
+  );
+};
+
+const wrapperScope = ({ node, scope }: LocatedExpression): LexicalScope => {
+  const bindings = new Map(scope);
+  if (!ts.isArrowFunction(node) && !ts.isFunctionExpression(node)) {
+    return bindings;
+  }
+  for (const parameter of node.parameters) {
+    for (const name of bindingNames(parameter.name)) {
+      bindings.set(name, undefined);
+    }
+  }
+  if (!ts.isBlock(node.body)) {
+    return bindings;
+  }
+  for (const statement of node.body.statements) {
+    if (ts.isFunctionDeclaration(statement) && statement.name !== undefined) {
+      bindings.set(statement.name.text, undefined);
+    }
+    if (!ts.isVariableStatement(statement)) {
+      continue;
+    }
+    for (const declaration of statement.declarationList.declarations) {
+      const initializer =
+        ts.isIdentifier(declaration.name) &&
+        isConstDeclarationList(statement.declarationList)
+          ? declaration.initializer
+          : undefined;
+      for (const name of bindingNames(declaration.name)) {
+        bindings.set(name, initializer);
+      }
+    }
+  }
+  return bindings;
+};
+
+const wrapperReturn = (
+  wrapper: ts.ArrowFunction | ts.FunctionExpression,
+): ts.Expression | undefined => {
+  if (
+    wrapper.modifiers?.some(
+      (modifier) => modifier.kind === ts.SyntaxKind.AsyncKeyword,
+    ) ||
+    (ts.isFunctionExpression(wrapper) && wrapper.asteriskToken !== undefined)
+  ) {
+    return undefined;
+  }
+  if (!ts.isBlock(wrapper.body)) {
+    return wrapper.body;
+  }
+  const direct = wrapper.body.statements.filter(ts.isReturnStatement);
+  if (direct.length !== 1) {
+    return undefined;
+  }
+  let returns = 0;
+  const visit = (node: ts.Node) => {
+    if (ts.isFunctionLike(node)) {
+      return;
+    }
+    if (ts.isReturnStatement(node)) {
+      returns += 1;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(wrapper.body);
+  return returns === 1 ? direct.at(0)?.expression : undefined;
+};
+
+type FactoryImportOptions = {
+  file: string;
+  node: ts.Identifier | ts.PropertyAccessExpression;
+  name: string;
+  statement: ts.Statement;
+};
+const factoryImport = ({
+  file,
+  node,
+  name,
+  statement,
+}: FactoryImportOptions) => {
+  if (
+    !ts.isImportDeclaration(statement) ||
+    !ts.isStringLiteral(statement.moduleSpecifier)
+  ) {
+    return undefined;
+  }
+  const target = modulePath(file, statement.moduleSpecifier.text);
+  const imports = statement.importClause?.namedBindings;
+  if (
+    target === undefined ||
+    imports === undefined ||
+    statement.importClause?.isTypeOnly
+  ) {
+    return undefined;
+  }
+  if (ts.isNamedImports(imports) && ts.isIdentifier(node)) {
+    const found = imports.elements.find(
+      (item) => item.name.text === name && !item.isTypeOnly,
+    );
+    if (found !== undefined) {
+      return {
+        module: target,
+        imported: found.propertyName?.text ?? found.name.text,
+      };
+    }
+  }
+  if (
+    ts.isNamespaceImport(imports) &&
+    imports.name.text === name &&
+    ts.isPropertyAccessExpression(node)
+  ) {
+    return { module: target, imported: node.name.text };
+  }
+  return undefined;
 };
 
 class WriteSourceResolver {
@@ -110,7 +252,10 @@ class WriteSourceResolver {
       if (name === "default" && ts.isExportAssignment(statement)) {
         return this.resolve({ file, node: statement.expression }, visited);
       }
-      if (ts.isVariableStatement(statement)) {
+      if (
+        ts.isVariableStatement(statement) &&
+        isConstDeclarationList(statement.declarationList)
+      ) {
         for (const declaration of statement.declarationList.declarations) {
           if (
             ts.isIdentifier(declaration.name) &&
@@ -184,22 +329,34 @@ class WriteSourceResolver {
       : { file: target, name: found.propertyName?.text ?? found.name.text };
   };
   resolve = (
-    { file, node }: LocatedExpression,
+    { file, node, scope }: LocatedExpression,
     visited = new Set<string>(),
   ): LocatedExpression | undefined => {
     const value = unwrap(node);
     if (ts.isIdentifier(value)) {
+      if (scope?.has(value.text)) {
+        const initializer = scope.get(value.text);
+        if (initializer === undefined) {
+          return undefined;
+        }
+        const key = `${file}#local:${value.text}:${initializer.pos}`;
+        if (visited.has(key)) {
+          return undefined;
+        }
+        visited.add(key);
+        return this.resolve({ file, node: initializer, scope }, visited);
+      }
       return this.binding({ file, name: value.text, visited });
     }
     if (ts.isPropertyAccessExpression(value)) {
-      const property = this.fields({ file, node: value.expression }).get(
+      const property = this.fields({ file, node: value.expression, scope }).get(
         value.name.text,
       );
       return property === undefined
         ? undefined
         : this.resolve(property, visited);
     }
-    return { file, node: value };
+    return { file, node: value, scope };
   };
   fields = (
     value: LocatedExpression,
@@ -223,6 +380,7 @@ class WriteSourceResolver {
         const spread = this.resolve({
           file: resolved.file,
           node: property.expression,
+          scope: resolved.scope,
         });
         if (
           spread === undefined ||
@@ -243,12 +401,17 @@ class WriteSourceResolver {
         if (name === undefined) {
           result.clear();
         } else {
-          result.set(name, { file: resolved.file, node: property.initializer });
+          result.set(name, {
+            file: resolved.file,
+            node: property.initializer,
+            scope: resolved.scope,
+          });
         }
       } else if (ts.isShorthandPropertyAssignment(property)) {
         result.set(property.name.text, {
           file: resolved.file,
           node: property.name,
+          scope: resolved.scope,
         });
       }
     }
@@ -272,10 +435,15 @@ class WriteSourceResolver {
       ts.isBinaryExpression(resolved.node) &&
       resolved.node.operatorToken.kind === ts.SyntaxKind.PlusToken
     ) {
-      const left = this.text({ file: resolved.file, node: resolved.node.left });
+      const left = this.text({
+        file: resolved.file,
+        node: resolved.node.left,
+        scope: resolved.scope,
+      });
       const right = this.text({
         file: resolved.file,
         node: resolved.node.right,
+        scope: resolved.scope,
       });
       if (left !== undefined && right !== undefined) {
         return left + right;
@@ -287,6 +455,7 @@ class WriteSourceResolver {
     file,
     expression,
     seen = new Set<string>(),
+    scope,
   }: FactoryBindingOptions):
     | { module: string; imported: string }
     | undefined => {
@@ -304,38 +473,16 @@ class WriteSourceResolver {
       return undefined;
     }
     seen.add(`${file}#${name}`);
+    if (scope?.has(name)) {
+      const initializer = scope.get(name);
+      return initializer === undefined
+        ? undefined
+        : this.factoryBinding({ file, expression: initializer, seen, scope });
+    }
     for (const statement of this.source(file)?.statements ?? []) {
-      if (
-        ts.isImportDeclaration(statement) &&
-        ts.isStringLiteral(statement.moduleSpecifier)
-      ) {
-        const target = modulePath(file, statement.moduleSpecifier.text);
-        const imports = statement.importClause?.namedBindings;
-        if (
-          target === undefined ||
-          imports === undefined ||
-          statement.importClause?.isTypeOnly
-        ) {
-          continue;
-        }
-        if (ts.isNamedImports(imports) && ts.isIdentifier(node)) {
-          const found = imports.elements.find(
-            (item) => item.name.text === name && !item.isTypeOnly,
-          );
-          if (found !== undefined) {
-            return {
-              module: target,
-              imported: found.propertyName?.text ?? found.name.text,
-            };
-          }
-        }
-        if (
-          ts.isNamespaceImport(imports) &&
-          imports.name.text === name &&
-          ts.isPropertyAccessExpression(node)
-        ) {
-          return { module: target, imported: node.name.text };
-        }
+      const imported = factoryImport({ file, node, name, statement });
+      if (imported !== undefined) {
+        return imported;
       }
       if (ts.isVariableStatement(statement) && ts.isIdentifier(node)) {
         const found = statement.declarationList.declarations.find(
@@ -346,11 +493,141 @@ class WriteSourceResolver {
             file,
             expression: found.initializer,
             seen,
+            scope,
           });
         }
       }
     }
     return undefined;
+  };
+  localHandlerBinding = ({
+    file,
+    name,
+  }: BindingReference): LocatedExpression | undefined => {
+    const candidates: LocatedExpression[] = [];
+    const visit = (node: ts.Node) => {
+      if (
+        ts.isVariableDeclaration(node) &&
+        ts.isIdentifier(node.name) &&
+        node.name.text === name &&
+        node.initializer !== undefined &&
+        ts.isVariableDeclarationList(node.parent) &&
+        isConstDeclarationList(node.parent)
+      ) {
+        const wrapper = ts.findAncestor(
+          node,
+          (ancestor) =>
+            ts.isArrowFunction(ancestor) || ts.isFunctionExpression(ancestor),
+        );
+        if (
+          wrapper !== undefined &&
+          (ts.isArrowFunction(wrapper) || ts.isFunctionExpression(wrapper)) &&
+          ts.isBlock(wrapper.body) &&
+          node.parent.parent.parent === wrapper.body &&
+          wrapperReturn(wrapper) !== undefined
+        ) {
+          candidates.push({
+            file,
+            node: node.initializer,
+            scope: wrapperScope({ file, node: wrapper }),
+          });
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    const source = this.source(file);
+    if (source !== undefined) {
+      visit(source);
+    }
+    return candidates.length === 1 ? candidates.at(0) : undefined;
+  };
+  safeCalls = ({
+    value,
+    seen = new Set<string>(),
+    handler,
+  }: SafeCallOptions): SafeCall[] | undefined => {
+    const resolved = this.resolve(value);
+    if (resolved === undefined) {
+      return undefined;
+    }
+    if (ts.isConditionalExpression(resolved.node)) {
+      const left = this.safeCalls({
+        value: {
+          file: resolved.file,
+          node: resolved.node.whenTrue,
+          scope: resolved.scope,
+        },
+        seen: new Set(seen),
+        handler,
+      });
+      const right = this.safeCalls({
+        value: {
+          file: resolved.file,
+          node: resolved.node.whenFalse,
+          scope: resolved.scope,
+        },
+        seen: new Set(seen),
+        handler,
+      });
+      return left === undefined || right === undefined
+        ? undefined
+        : left.concat(right);
+    }
+    if (!ts.isCallExpression(resolved.node)) {
+      return undefined;
+    }
+    const imported = this.factoryBinding({
+      file: resolved.file,
+      expression: resolved.node.expression,
+      scope: resolved.scope,
+    });
+    const factory = Object.entries(SAFE_HANDLER_FACTORIES).find(
+      ([name, definition]) =>
+        imported !== undefined &&
+        name === imported.imported &&
+        modulePath(resolved.file, definition.module) === imported.module,
+    );
+    if (factory !== undefined) {
+      this.safeBoundaries.add(handler);
+      return [
+        {
+          file: resolved.file,
+          node: resolved.node,
+          scope: resolved.scope,
+          configArgument: factory[1].configArgument,
+        },
+      ];
+    }
+    const wrapper = this.resolve({
+      file: resolved.file,
+      node: resolved.node.expression,
+      scope: resolved.scope,
+    });
+    if (
+      wrapper === undefined ||
+      (!ts.isArrowFunction(wrapper.node) &&
+        !ts.isFunctionExpression(wrapper.node))
+    ) {
+      return undefined;
+    }
+    const key = `${wrapper.file}:${wrapper.node.pos}`;
+    if (seen.has(key)) {
+      return undefined;
+    }
+    seen.add(key);
+    const returned = wrapperReturn(wrapper.node);
+    if (returned === undefined) {
+      return undefined;
+    }
+    return this.safeCalls({
+      value: {
+        file: wrapper.file,
+        node: returned,
+        scope: wrapperScope(wrapper),
+      },
+      seen,
+      handler,
+    });
   };
   private readonly safeBoundaries = new Set<string>();
   config = (handler: string): Map<string, LocatedExpression> => {
@@ -358,37 +635,59 @@ class WriteSourceResolver {
     if (match === null || match[1] === undefined) {
       return new Map();
     }
-    const exported = this.binding({
-      file: match[1],
-      name: match[2] ?? "default",
-    });
-    if (exported === undefined || !ts.isCallExpression(exported.node)) {
+    const reference = { file: match[1], name: match[2] ?? "default" };
+    const exported =
+      this.binding(reference) ?? this.localHandlerBinding(reference);
+    if (exported === undefined) {
       return new Map();
     }
-    const imported = this.factoryBinding({
-      file: exported.file,
-      expression: exported.node.expression,
-    });
-    const factory = Object.entries(SAFE_HANDLER_FACTORIES).find(
-      ([name, definition]) =>
-        imported !== undefined &&
-        name === imported.imported &&
-        modulePath(exported.file, definition.module) === imported.module,
-    );
-    if (factory === undefined) {
+    const calls = this.safeCalls({ value: exported, handler });
+    if (calls === undefined || calls.length === 0) {
       return new Map();
     }
     this.safeBoundaries.add(handler);
-    const argument = exported.node.arguments.at(0);
+    const configs = calls.map(this.callConfig);
+    const first = configs.at(0);
+    if (first === undefined) {
+      return new Map();
+    }
+    const signature = this.contractSignature(first);
+    return configs.every(
+      (config) => this.contractSignature(config) === signature,
+    )
+      ? first
+      : new Map();
+  };
+  callConfig = (safe: SafeCall): Map<string, LocatedExpression> => {
+    const argument = safe.node.arguments.at(0);
     if (argument === undefined) {
       return new Map();
     }
-    const options = this.fields({ file: exported.file, node: argument });
-    if (factory[1].configArgument === "options") {
+    const options = this.fields({
+      file: safe.file,
+      node: argument,
+      scope: safe.scope,
+    });
+    if (safe.configArgument === "options") {
       const nested = options.get("config");
       return nested === undefined ? new Map() : this.fields(nested);
     }
     return options;
+  };
+  contractSignature = (config: Map<string, LocatedExpression>) => {
+    const value = config.get("precondition");
+    const precondition =
+      value === undefined
+        ? new Map<string, LocatedExpression>()
+        : this.fields(value);
+    return JSON.stringify({
+      contract: this.text(config.get("contract")),
+      description: this.text(config.get("description")),
+      precondition: [...precondition].map(([name, field]) => [
+        name,
+        this.text(field) ?? this.strings(field),
+      ]),
+    });
   };
   strings = (value: LocatedExpression | undefined): string[] | undefined => {
     if (value === undefined) {
@@ -400,7 +699,11 @@ class WriteSourceResolver {
     }
     const result: string[] = [];
     for (const element of resolved.node.elements) {
-      const literal = this.text({ file: resolved.file, node: element });
+      const literal = this.text({
+        file: resolved.file,
+        node: element,
+        scope: resolved.scope,
+      });
       if (literal === undefined) {
         return undefined;
       }
