@@ -1,0 +1,884 @@
+import { ChatClient } from "@tanstack/ai-client";
+import type { UIMessage } from "@tanstack/ai-client";
+import { describe, expect, expectTypeOf, test } from "bun:test";
+import fc from "fast-check";
+
+import { assertProperty } from "@stll/property-testing";
+import { rejectionOf } from "@stll/property-testing/rejection";
+
+import {
+  ChatReconnectError,
+  createDurableChatTransport,
+} from "./durable-transport";
+
+const RUN_ID = "run-rejoin";
+const THREAD_ID = "thread-rejoin";
+const encoder = new TextEncoder();
+const events = [
+  { type: "RUN_STARTED", runId: RUN_ID, threadId: THREAD_ID },
+  { type: "TEXT_MESSAGE_START", messageId: "answer", role: "assistant" },
+  ...["First", " café", "\n", "العربية", " complete."].map((delta) => ({
+    type: "TEXT_MESSAGE_CONTENT",
+    messageId: "answer",
+    delta,
+  })),
+  { type: "TEXT_MESSAGE_END", messageId: "answer" },
+  { type: "RUN_FINISHED", runId: RUN_ID, threadId: THREAD_ID },
+];
+const response = (from: number, cut: number | undefined) => {
+  let position = from;
+  return new Response(
+    new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (cut !== undefined && position === cut) {
+          controller.error(new TypeError("Connection dropped"));
+          return;
+        }
+        const event = events.at(position);
+        if (event === undefined) {
+          controller.close();
+          return;
+        }
+        controller.enqueue(
+          encoder.encode(`id: ${position}\ndata: ${JSON.stringify(event)}\n\n`),
+        );
+        position += 1;
+      },
+    }),
+    { headers: { "Content-Type": "text/event-stream" } },
+  );
+};
+const requestUrl = (input: RequestInfo | URL): URL =>
+  new URL(input instanceof Request ? input.url : input);
+
+const setup = (cut?: number) => {
+  let calls = 0;
+  let probes = 0;
+  const joinedRunIds: (string | null)[] = [];
+  const fetchClient = Object.assign(
+    async (input: RequestInfo | URL, init?: RequestInit) => {
+      calls += 1;
+      if (init?.method === "GET") {
+        joinedRunIds.push(requestUrl(input).searchParams.get("runId"));
+        const last = new Headers(init.headers).get("Last-Event-ID");
+        return response(last === null ? 0 : Number(last) + 1, undefined);
+      }
+      return response(0, cut);
+    },
+    { preconnect: () => undefined },
+  );
+  const transport = createDurableChatTransport({
+    initialTurn: { type: "settled" },
+    threadId: THREAD_ID,
+    initialMessages: [],
+    sendUrl: "https://chat.test/chat",
+    joinUrl: () => "https://chat.test/join",
+    fetchClient,
+    probe: async () => {
+      probes += 1;
+      return { type: "running", turnId: "turn-rejoin", runId: RUN_ID };
+    },
+    onReconnectChange: () => undefined,
+    onTranscript: () => undefined,
+    onError: (error) => {
+      throw error;
+    },
+    wait: async () => undefined,
+    random: () => 0,
+  });
+  return { transport, calls: () => calls, probes: () => probes, joinedRunIds };
+};
+const collect = async (stream: AsyncIterable<unknown>) => {
+  const chunks: unknown[] = [];
+  for await (const chunk of stream) {
+    chunks.push(chunk);
+  }
+  return chunks;
+};
+describe("durable chat transport", () => {
+  test("restored messages retain the caller's message type", async () => {
+    const initialMessages = [
+      {
+        id: "typed-answer",
+        role: "assistant",
+        parts: [
+          {
+            type: "tool-call",
+            id: "typed-call",
+            name: "lookup",
+            arguments: "{}",
+            state: "input-complete",
+          },
+        ],
+      },
+    ] satisfies UIMessage<[{ name: "lookup" }]>[];
+    const transport = createDurableChatTransport({
+      initialMessages,
+      initialTurn: { type: "settled" },
+      threadId: THREAD_ID,
+      sendUrl: "https://chat.test/chat",
+      joinUrl: () => "https://chat.test/join",
+      fetchClient: fetch,
+      probe: async () => ({ type: "transcript", turnId: "typed-turn" }),
+      onReconnectChange: () => undefined,
+      onTranscript: () => undefined,
+      onError: (error) => {
+        throw error;
+      },
+    });
+    const restored = await transport.persistence.getItem(THREAD_ID);
+    expectTypeOf(restored?.messages).toEqualTypeOf<
+      typeof initialMessages | undefined
+    >();
+    expect(restored?.messages).toBe(initialMessages);
+  });
+  for (const providerRuns of [1, 2]) {
+    for (const ending of ["success", "cancelled", "error"] as const) {
+      test(`a rejoined delivery settles ${providerRuns} distinct provider runs after ${ending}`, async () => {
+        const completed = Promise.withResolvers<undefined>();
+        const errors: Error[] = [];
+        let loading: "waiting" | "started" = "waiting";
+        let joins = 0;
+        const replay = Array.from({ length: providerRuns }, (_, index) => {
+          const runId = `provider-${index}`;
+          expect(runId).not.toBe(RUN_ID);
+          const terminal =
+            index === providerRuns - 1 && ending === "error"
+              ? { type: "RUN_ERROR", runId, message: "Provider failed" }
+              : {
+                  type: "RUN_FINISHED",
+                  runId,
+                  threadId: THREAD_ID,
+                  ...(index === providerRuns - 1 && ending === "cancelled"
+                    ? { outcome: { type: "cancelled" } }
+                    : {}),
+                };
+          return [
+            { type: "RUN_STARTED", runId, threadId: THREAD_ID },
+            {
+              type: "TEXT_MESSAGE_START",
+              messageId: `answer-${index}`,
+              role: "assistant",
+            },
+            {
+              type: "TEXT_MESSAGE_CONTENT",
+              messageId: `answer-${index}`,
+              delta: `Reply ${index}`,
+            },
+            { type: "TEXT_MESSAGE_END", messageId: `answer-${index}` },
+            terminal,
+          ];
+        }).flat();
+        const transport = createDurableChatTransport({
+          initialTurn: { type: "active" },
+          threadId: THREAD_ID,
+          initialMessages: [],
+          sendUrl: "https://chat.test/chat",
+          joinUrl: () => "https://chat.test/join",
+          fetchClient: Object.assign(
+            async (_input: RequestInfo | URL, init?: RequestInit) => {
+              expect(init?.method).toBe("GET");
+              joins += 1;
+              return new Response(
+                replay
+                  .map(
+                    (event, id) =>
+                      `id: ${id}\ndata: ${JSON.stringify(event)}\n\n`,
+                  )
+                  .join(""),
+                { headers: { "Content-Type": "text/event-stream" } },
+              );
+            },
+            { preconnect: () => undefined },
+          ),
+          probe: async () => ({
+            type: "running",
+            turnId: "turn-rejoin",
+            runId: RUN_ID,
+          }),
+          onReconnectChange: () => undefined,
+          onTranscript: () => undefined,
+          onError: (error) => completed.reject(error),
+        });
+        const client = new ChatClient({
+          threadId: THREAD_ID,
+          connection: transport.connection,
+          persistence: transport.persistence,
+          onLoadingChange: (isLoading) => {
+            if (isLoading) {
+              loading = "started";
+            } else if (loading === "started") {
+              completed.resolve(undefined);
+            }
+          },
+          onError: (error) => {
+            errors.push(error);
+          },
+        });
+        client.attach();
+        try {
+          await completed.promise;
+          expect(joins).toBe(1);
+          expect(client.getIsLoading()).toBe(false);
+          expect(client.getSessionGenerating()).toBe(false);
+          expect(client.getMessages().map((message) => message.parts)).toEqual(
+            Array.from({ length: providerRuns }, (_, index) => [
+              { type: "text", content: `Reply ${index}` },
+            ]),
+          );
+          if (ending === "error") {
+            expect(errors).toHaveLength(1);
+            expect(errors.at(0)?.message).toBe("Provider failed");
+          } else {
+            expect(errors).toEqual([]);
+          }
+        } finally {
+          client.dispose();
+        }
+      });
+    }
+  }
+  test("every delivered chunk boundary rejoins without duplicated or missing events", async () => {
+    const uninterrupted = setup();
+    const expected = await collect(
+      uninterrupted.transport.connection.connect([], {}, undefined, {
+        runId: RUN_ID,
+        threadId: THREAD_ID,
+      }),
+    );
+    for (let cut = 1; cut < events.length; cut += 1) {
+      const interrupted = setup(cut);
+      const actual = await collect(
+        interrupted.transport.connection.connect([], {}, undefined, {
+          runId: RUN_ID,
+          threadId: THREAD_ID,
+        }),
+      );
+      expect(actual).toEqual(expected);
+      expect(interrupted.calls()).toBe(2);
+      expect(interrupted.probes()).toBe(1);
+      expect(interrupted.joinedRunIds).toEqual([RUN_ID]);
+    }
+  });
+  test("a changed run reloads the transcript before rejoining from the beginning", async () => {
+    const nextRunId = "run-next";
+    let currentRunId = RUN_ID;
+    let reloads = 0;
+    let posts = 0;
+    const joins: URL[] = [];
+    const cursors: (string | null)[] = [];
+    const transport = createDurableChatTransport({
+      initialTurn: { type: "settled" },
+      threadId: THREAD_ID,
+      initialMessages: [],
+      sendUrl: "https://chat.test/chat",
+      joinUrl: () => "https://chat.test/join",
+      fetchClient: Object.assign(
+        async (input: RequestInfo | URL, init?: RequestInit) => {
+          if (init?.method !== "GET") {
+            posts += 1;
+            currentRunId = nextRunId;
+            // Deliver a nonzero cursor before the old run disconnects.
+            return response(0, 4);
+          }
+          joins.push(requestUrl(input));
+          cursors.push(new Headers(init.headers).get("Last-Event-ID"));
+          return new Response(
+            [
+              { type: "RUN_STARTED", runId: nextRunId, threadId: THREAD_ID },
+              { type: "RUN_FINISHED", runId: nextRunId, threadId: THREAD_ID },
+            ]
+              .map(
+                (event, index) =>
+                  `id: ${index}\ndata: ${JSON.stringify(event)}\n\n`,
+              )
+              .join(""),
+            { headers: { "Content-Type": "text/event-stream" } },
+          );
+        },
+        { preconnect: () => undefined },
+      ),
+      probe: async () => ({
+        type: "running",
+        turnId: "turn-rejoin",
+        runId: currentRunId,
+      }),
+      onReconnectChange: () => undefined,
+      onTranscript: () => {
+        reloads += 1;
+      },
+      onError: (error) => {
+        throw error;
+      },
+      wait: async () => undefined,
+      random: () => 0,
+    });
+    const previous = await collect(
+      transport.connection.connect([], {}, undefined, {
+        runId: RUN_ID,
+        threadId: THREAD_ID,
+      }),
+    );
+    expect(previous.slice(0, 4)).toEqual(events.slice(0, 4));
+    expect(previous.at(-1)).toMatchObject({
+      type: "RUN_FINISHED",
+      runId: RUN_ID,
+    });
+    expect(reloads).toBe(1);
+    expect(joins).toEqual([]);
+    const restored = await transport.persistence.getItem(THREAD_ID);
+    expect(restored?.resume?.resumeState.runId).toBe(nextRunId);
+    const resumed = await collect(transport.connection.joinRun(nextRunId));
+    expect(resumed.at(-1)).toMatchObject({
+      type: "RUN_FINISHED",
+      runId: nextRunId,
+    });
+    expect(joins).toHaveLength(1);
+    expect(joins.at(0)?.searchParams.get("runId")).toBe(nextRunId);
+    expect(joins.at(0)?.searchParams.get("lastEventId")).toBe("-1");
+    expect(cursors).toEqual([null]);
+    expect(posts).toBe(1);
+  });
+  test("chat rejoin preserves events at generated disconnect boundaries", async () => {
+    await assertProperty(
+      "chat rejoin preserves events at generated disconnect boundaries",
+      fc.asyncProperty(
+        fc.integer({ min: 1, max: events.length - 1 }),
+        async (cut) => {
+          const uninterrupted = setup();
+          const interrupted = setup(cut);
+          const run = { runId: RUN_ID, threadId: THREAD_ID };
+          expect(
+            await collect(
+              interrupted.transport.connection.connect([], {}, undefined, run),
+            ),
+          ).toEqual(
+            await collect(
+              uninterrupted.transport.connection.connect(
+                [],
+                {},
+                undefined,
+                run,
+              ),
+            ),
+          );
+          expect(interrupted.calls()).toBe(2);
+        },
+      ),
+      { numRuns: 30 },
+    );
+  });
+  test("server truth restores a running turn without storing transcript text on the device", async () => {
+    const { transport } = setup();
+    const snapshot = await transport.persistence.getItem(THREAD_ID);
+    expect(snapshot).toEqual({
+      messages: [],
+      resume: { resumeState: { threadId: THREAD_ID, runId: RUN_ID } },
+    });
+  });
+  test("settled probe falls back without opening a provider request", async () => {
+    let requests = 0;
+    let reloads = 0;
+    const transport = createDurableChatTransport({
+      initialTurn: { type: "settled" },
+      threadId: THREAD_ID,
+      initialMessages: [],
+      sendUrl: "https://chat.test/chat",
+      joinUrl: () => "https://chat.test/join",
+      fetchClient: Object.assign(
+        async () => {
+          requests += 1;
+          return response(0, undefined);
+        },
+        { preconnect: () => undefined },
+      ),
+      probe: async () => ({ type: "transcript", turnId: "turn-rejoin" }),
+      onReconnectChange: () => undefined,
+      onTranscript: () => {
+        reloads += 1;
+      },
+      onError: (error) => {
+        throw error;
+      },
+    });
+    const chunks = await collect(transport.connection.joinRun(RUN_ID));
+    expect(requests).toBe(0);
+    expect(reloads).toBe(1);
+    expect(chunks.at(-1)).toMatchObject({
+      type: "RUN_FINISHED",
+      runId: RUN_ID,
+    });
+  });
+  test("a preparing turn is probed with jittered backoff until its run is bound", async () => {
+    let probes = 0;
+    const delays: number[] = [];
+    const transport = createDurableChatTransport({
+      initialTurn: { type: "settled" },
+      threadId: THREAD_ID,
+      initialMessages: [],
+      sendUrl: "https://chat.test/chat",
+      joinUrl: () => "https://chat.test/join",
+      fetchClient: Object.assign(async () => response(0, undefined), {
+        preconnect: () => undefined,
+      }),
+      probe: async () => {
+        probes += 1;
+        return probes < 3
+          ? { type: "preparing", turnId: "turn-rejoin" }
+          : { type: "running", turnId: "turn-rejoin", runId: RUN_ID };
+      },
+      random: () => 0,
+      wait: async (delay) => {
+        delays.push(delay);
+      },
+      onReconnectChange: () => undefined,
+      onTranscript: () => undefined,
+      onError: (error) => {
+        throw error;
+      },
+    });
+    expect(await transport.persistence.getItem(THREAD_ID)).toMatchObject({
+      resume: { resumeState: { runId: RUN_ID } },
+    });
+    expect(delays).toEqual([250, 500]);
+    expect(probes).toBe(3);
+  });
+
+  test("parked native approval is restored from the persisted server snapshot", async () => {
+    const resumeSnapshot = {
+      resumeState: { threadId: THREAD_ID, runId: RUN_ID },
+      pendingInterrupts: [
+        {
+          id: "approval",
+          reason: "tool-approval",
+          toolCallId: "call-approval",
+          responseSchema: { type: "boolean" },
+        },
+      ],
+    };
+    const transport = createDurableChatTransport({
+      initialTurn: { type: "settled" },
+      threadId: THREAD_ID,
+      initialMessages: [],
+      sendUrl: "https://chat.test/chat",
+      joinUrl: () => "https://chat.test/join",
+      fetchClient: Object.assign(async () => response(0, undefined), {
+        preconnect: () => undefined,
+      }),
+      probe: async () => ({
+        type: "transcript",
+        turnId: "turn-rejoin",
+        resumeSnapshot,
+      }),
+      onReconnectChange: () => undefined,
+      onTranscript: () => undefined,
+      onError: (error) => {
+        throw error;
+      },
+    });
+    expect(await transport.persistence.getItem(THREAD_ID)).toEqual({
+      messages: [],
+      resume: resumeSnapshot,
+    });
+  });
+
+  test("reloading a parked approval restores its card and resumes the same native turn once", async () => {
+    const requests: unknown[] = [];
+    let reloads = 0;
+    const restored = Promise.withResolvers<undefined>();
+    const completed = Promise.withResolvers<undefined>();
+    let loading: "idle" | "started" = "idle";
+    const resumeSnapshot = {
+      resumeState: { threadId: THREAD_ID, runId: RUN_ID },
+      pendingInterrupts: [
+        {
+          id: "approval_call-approval",
+          reason: "tool_call",
+          toolCallId: "call-approval",
+          metadata: {
+            kind: "approval",
+            toolName: "save-draft",
+            input: { title: "Confidentiality terms" },
+            "tanstack:interruptBinding": {
+              v: 1,
+              kind: "tool-approval",
+              interruptId: "approval_call-approval",
+              interruptedRunId: RUN_ID,
+              generation: 0,
+              toolName: "save-draft",
+              toolCallId: "call-approval",
+              originalArgs: { title: "Confidentiality terms" },
+              inputSchemaHash: "server-owned",
+              approvalSchemaHash: "server-owned",
+              responseSchemaHash: "server-owned",
+            },
+          },
+        },
+      ],
+    };
+    const transport = createDurableChatTransport({
+      initialTurn: { type: "parked", runId: RUN_ID },
+      threadId: THREAD_ID,
+      initialMessages: [
+        {
+          id: "parked-answer",
+          role: "assistant",
+          parts: [
+            {
+              type: "tool-call",
+              id: "call-approval",
+              name: "save-draft",
+              arguments: '{"title":"Confidentiality terms"}',
+              state: "approval-requested",
+            },
+          ],
+        },
+      ],
+      sendUrl: "https://chat.test/chat",
+      joinUrl: () => "https://chat.test/join",
+      fetchClient: Object.assign(
+        async (_input: RequestInfo | URL, init?: RequestInit) => {
+          if (typeof init?.body !== "string") {
+            throw new TypeError("Expected a JSON request body");
+          }
+          const body: unknown = JSON.parse(init.body);
+          requests.push(body);
+          return response(0, undefined);
+        },
+        { preconnect: () => undefined },
+      ),
+      probe: async () => ({
+        type: "transcript",
+        turnId: "turn-rejoin",
+        resumeSnapshot,
+      }),
+      onReconnectChange: () => undefined,
+      onTranscript: () => {
+        reloads += 1;
+      },
+      onError: (error) => {
+        restored.reject(error);
+        completed.reject(error);
+      },
+    });
+    const client = new ChatClient({
+      threadId: THREAD_ID,
+      connection: transport.connection,
+      persistence: transport.persistence,
+      onInterruptStateChange: ({ interrupts }) => {
+        if (interrupts.length === 1) {
+          restored.resolve(undefined);
+        }
+      },
+      onLoadingChange: (isLoading) => {
+        if (isLoading) {
+          loading = "started";
+        }
+        if (!isLoading && loading === "started") {
+          completed.resolve(undefined);
+        }
+      },
+      onError: (error) => {
+        restored.reject(error);
+        completed.reject(error);
+      },
+    });
+    client.attach();
+    try {
+      await restored.promise;
+      expect(reloads).toBe(0);
+      expect(requests).toHaveLength(0);
+      expect(client.getResumeState()).toEqual({
+        threadId: THREAD_ID,
+        runId: RUN_ID,
+      });
+      const approval = client.getInterrupts().at(0);
+      // Dynamic server tools are bound as generic native interrupts, as in web.
+      expect(approval?.kind).toBe("generic");
+      if (approval?.kind !== "generic") {
+        return;
+      }
+      expect(approval.canResolve).toBe(true);
+      expect(client.getMessages().at(-1)?.parts).toMatchObject([
+        { type: "tool-call", state: "approval-requested" },
+      ]);
+      approval.resolveInterrupt({ approved: true });
+      await completed.promise;
+      expect(requests).toHaveLength(1);
+      expect(requests.at(0)).toMatchObject({
+        threadId: THREAD_ID,
+        parentRunId: RUN_ID,
+        resume: [
+          {
+            interruptId: "approval_call-approval",
+            status: "resolved",
+            payload: { approved: true },
+          },
+        ],
+      });
+      expect(client.getInterrupts()).toHaveLength(0);
+      expect(
+        client
+          .getMessages()
+          .some(({ parts }) =>
+            parts.some(
+              (part) =>
+                part.type === "text" && part.content.endsWith(" complete."),
+            ),
+          ),
+      ).toBe(true);
+    } finally {
+      client.detach();
+    }
+  });
+
+  for (const status of [401, 403, 404]) {
+    for (const contentType of ["application/json", "text/plain"]) {
+      test(`a ${status} ${contentType} join refusal stops reconnection immediately`, async () => {
+        const errors: ChatReconnectError[] = [];
+        let joins = 0;
+        let waits = 0;
+        let elapsed = 0;
+        const transport = createDurableChatTransport({
+          initialTurn: { type: "settled" },
+          threadId: THREAD_ID,
+          initialMessages: [],
+          sendUrl: "https://chat.test/chat",
+          joinUrl: () => "https://chat.test/join",
+          fetchClient: Object.assign(
+            async () => {
+              joins += 1;
+              return new Response("refused", {
+                status,
+                headers: { "Content-Type": contentType },
+              });
+            },
+            { preconnect: () => undefined },
+          ),
+          probe: async () => ({
+            type: "running",
+            turnId: "turn-rejoin",
+            runId: RUN_ID,
+          }),
+          onReconnectChange: () => undefined,
+          onTranscript: () => undefined,
+          onError: (error) => {
+            errors.push(error);
+          },
+          now: () => elapsed,
+          wait: async () => {
+            waits += 1;
+            elapsed += 180_000;
+          },
+          random: () => 0,
+        });
+        expect(
+          await rejectionOf(collect(transport.connection.joinRun(RUN_ID))),
+        ).toMatchObject({ message: expect.stringContaining("502") });
+        expect(errors).toHaveLength(1);
+        expect(errors.at(0)).toBeInstanceOf(ChatReconnectError);
+        expect(errors.at(0)).toMatchObject({
+          code: "refused",
+          message: `Chat rejoin failed (${status}).`,
+        });
+        expect(joins).toBe(1);
+        expect(waits).toBe(0);
+      });
+    }
+  }
+
+  test("a malformed JSON join response is surfaced instead of treated as a settled transcript", async () => {
+    const errors: Error[] = [];
+    let reloads = 0;
+    const transport = createDurableChatTransport({
+      initialTurn: { type: "settled" },
+      threadId: THREAD_ID,
+      initialMessages: [],
+      sendUrl: "https://chat.test/chat",
+      joinUrl: () => "https://chat.test/join",
+      fetchClient: Object.assign(
+        async () => Response.json({ type: "unknown-state" }),
+        { preconnect: () => undefined },
+      ),
+      probe: async () => ({
+        type: "running",
+        turnId: "turn-rejoin",
+        runId: RUN_ID,
+      }),
+      onReconnectChange: () => undefined,
+      onTranscript: () => {
+        reloads += 1;
+      },
+      onError: (error) => {
+        errors.push(error);
+      },
+    });
+    expect(
+      await rejectionOf(collect(transport.connection.joinRun(RUN_ID))),
+    ).toMatchObject({
+      message: expect.stringContaining("502"),
+    });
+    expect(errors.at(0)?.message).toBe("Invalid chat rejoin response.");
+    expect(reloads).toBe(0);
+  });
+
+  /** A running probe, then joins answered by `join`; counts every request. */
+  const preparingJoin = (join: (attempt: number) => Response, step: number) => {
+    const counts = { joins: 0, posts: 0, probes: 0, waits: 0 };
+    const errors: ChatReconnectError[] = [];
+    let elapsed = 0;
+    const transport = createDurableChatTransport({
+      initialTurn: { type: "settled" },
+      threadId: THREAD_ID,
+      initialMessages: [],
+      sendUrl: "https://chat.test/chat",
+      joinUrl: () => "https://chat.test/join",
+      fetchClient: Object.assign(
+        async (_input: RequestInfo | URL, init?: RequestInit) => {
+          if (init?.method !== "GET") {
+            counts.posts += 1;
+            return response(0, undefined);
+          }
+          counts.joins += 1;
+          return join(counts.joins);
+        },
+        { preconnect: () => undefined },
+      ),
+      probe: async () => {
+        counts.probes += 1;
+        return { type: "running", turnId: "turn-rejoin", runId: RUN_ID };
+      },
+      onReconnectChange: () => undefined,
+      onTranscript: () => undefined,
+      onError: (error) => {
+        errors.push(error);
+      },
+      now: () => elapsed,
+      wait: async () => {
+        counts.waits += 1;
+        elapsed += step;
+      },
+      random: () => 0,
+    });
+    return { counts, errors, transport };
+  };
+
+  test("a join that finds a continuation preparing re-probes and joins again without sending", async () => {
+    const { counts, errors, transport } = preparingJoin(
+      (attempt) =>
+        attempt === 1
+          ? Response.json({ type: "preparing", turnId: "turn-rejoin" })
+          : response(0, undefined),
+      1000,
+    );
+    const chunks = await collect(transport.connection.joinRun(RUN_ID));
+    expect(chunks.at(-1)).toMatchObject({
+      type: "RUN_FINISHED",
+      runId: RUN_ID,
+    });
+    expect(errors).toEqual([]);
+    expect(counts).toEqual({ joins: 2, posts: 0, probes: 2, waits: 1 });
+  });
+
+  test("a continuation that stays preparing ends in the bounded reconnect timeout", async () => {
+    const { counts, errors, transport } = preparingJoin(
+      () => Response.json({ type: "preparing", turnId: "turn-rejoin" }),
+      60_000,
+    );
+    const failure = await rejectionOf(
+      collect(transport.connection.joinRun(RUN_ID)),
+    );
+    // The SDK wraps a failed fetch; the transport's error is in the chain.
+    const causes = (error: unknown): unknown[] =>
+      error instanceof Error ? [error, ...causes(error.cause)] : [];
+    expect(
+      causes(failure).filter(
+        (cause) =>
+          cause instanceof ChatReconnectError &&
+          cause.message === "Chat reconnection timed out.",
+      ),
+    ).toHaveLength(1);
+    expect(errors).toEqual([]);
+    // Joins at 0, 60s, 120s and 180s; the window closes before a fifth.
+    expect(counts).toEqual({ joins: 4, posts: 0, probes: 4, waits: 3 });
+  });
+  test("loader lifecycle refreshes changed server truth once and retains the same parked turn", async () => {
+    const parkedSnapshot = {
+      resumeState: { threadId: THREAD_ID, runId: RUN_ID },
+      pendingInterrupts: [{ id: "approval", reason: "tool_call" }],
+    };
+    const cases = [
+      {
+        initialTurn: { type: "active" },
+        resumeSnapshot: undefined,
+        expectedReloads: 1,
+      },
+      {
+        initialTurn: { type: "active" },
+        resumeSnapshot: parkedSnapshot,
+        expectedReloads: 1,
+      },
+      {
+        initialTurn: { type: "settled" },
+        resumeSnapshot: undefined,
+        expectedReloads: 0,
+      },
+      {
+        initialTurn: { type: "parked", runId: RUN_ID },
+        resumeSnapshot: undefined,
+        expectedReloads: 1,
+      },
+      {
+        initialTurn: { type: "parked", runId: "previous-run" },
+        resumeSnapshot: parkedSnapshot,
+        expectedReloads: 1,
+      },
+      {
+        initialTurn: { type: "parked", runId: RUN_ID },
+        resumeSnapshot: parkedSnapshot,
+        expectedReloads: 0,
+      },
+    ] as const;
+    for (const { initialTurn, resumeSnapshot, expectedReloads } of cases) {
+      let reloads = 0;
+      const transport = createDurableChatTransport({
+        initialTurn,
+        threadId: THREAD_ID,
+        initialMessages: [
+          {
+            id: "partial",
+            role: "assistant",
+            parts: [{ type: "text", content: "Drafting" }],
+          },
+        ],
+        sendUrl: "https://chat.test/chat",
+        joinUrl: () => "https://chat.test/join",
+        fetchClient: Object.assign(async () => response(0, undefined), {
+          preconnect: () => undefined,
+        }),
+        probe: async () => ({
+          type: "transcript",
+          turnId: "turn-rejoin",
+          ...(resumeSnapshot === undefined
+            ? {}
+            : {
+                resumeSnapshot: {
+                  resumeState: resumeSnapshot.resumeState,
+                  pendingInterrupts: [...resumeSnapshot.pendingInterrupts],
+                },
+              }),
+        }),
+        onReconnectChange: () => undefined,
+        onTranscript: () => {
+          reloads += 1;
+        },
+        onError: (error) => {
+          throw error;
+        },
+      });
+      await transport.persistence.getItem(THREAD_ID);
+      await transport.persistence.getItem(THREAD_ID);
+      expect(reloads).toBe(expectedReloads);
+    }
+  });
+});

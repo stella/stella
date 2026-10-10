@@ -684,7 +684,7 @@ mechanics, and similar), not gaps in coverage.
 | native_tool_ui | 10 |
 | provider_secret | 33 |
 | public_indexing | 9 |
-| realtime_stream | 4 |
+| realtime_stream | 6 |
 | search_ui | 15 |
 | session_token_exchange | 20 |
 | ui_navigation_state | 14 |

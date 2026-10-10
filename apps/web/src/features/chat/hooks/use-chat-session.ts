@@ -372,6 +372,7 @@ export const useChatSession = ({
   const {
     error: runtimeError,
     sessionGenerating,
+    reconnecting,
     status,
     stop: stopState,
     turnAbandoned,
@@ -1520,11 +1521,18 @@ export const useChatSession = ({
       isChatTurnGenerating({
         hasError: error !== undefined,
         messages,
-        requestActive: isChatClientRequestActive(status),
+        requestActive: reconnecting || isChatClientRequestActive(status),
         sessionGenerating,
         stopStatus: stopState.status,
       }),
-    [error, messages, sessionGenerating, status, stopState.status],
+    [
+      error,
+      messages,
+      reconnecting,
+      sessionGenerating,
+      status,
+      stopState.status,
+    ],
   );
   useExternalSyncEffect(() => {
     applySendQueueEvent({ type: "generation-status-synced", isGenerating });
@@ -1673,6 +1681,7 @@ export const useChatSession = ({
 
   return {
     clientStatus: status,
+    reconnecting,
     error,
     messages,
     loadOlder,

@@ -1,5 +1,5 @@
 import type { ModelMessage } from "@tanstack/ai";
-import { ChatClient, fetchServerSentEvents } from "@tanstack/ai-client";
+import { ChatClient } from "@tanstack/ai-client";
 import type {
   ChatClientState,
   ChatInterruptState,
@@ -9,6 +9,7 @@ import type {
   UIMessage,
 } from "@tanstack/ai-client";
 import { panic, Result } from "better-result";
+import * as v from "valibot";
 
 import { CHAT_SEND_MODE, isChatSendMode } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
@@ -18,19 +19,30 @@ import {
   CHAT_TURN_INTENT,
 } from "@stll/api-contract";
 import type { ChatSendRequest } from "@stll/api-contract";
+import {
+  ChatReconnectError,
+  createDurableChatTransport,
+} from "@stll/chat/durable-transport";
+import {
+  chatResumeSnapshotSchema,
+  chatTurnResumeProbeSchema,
+} from "@stll/chat/resume-contract";
 import { sleep } from "@stll/concurrency/sleep";
+import { fetchWithTimeout } from "@stll/fetch";
 
 import type {
   ChatClientTools,
   PersistedChatMessage,
 } from "@/components/chat/chat-ui-tools";
 import {
+  getAwaitedAssistantMessageId,
   hasRunningToolCallInLatestAssistantMessage,
   isChatClientRequestActive,
 } from "@/components/chat/chat-ui-tools";
 import { createBrowserClientTool } from "@/features/chat/browser-control/browser-client-tool";
 import { getBrowserClientCapability } from "@/features/chat/browser-control/browser-extension-bridge";
 import { browserTurnId } from "@/features/chat/browser-control/browser-turn";
+import { keepShownRejoinMessages } from "@/features/chat/chat-rejoin-messages";
 import { keepPostedMessagesInSnapshots } from "@/features/chat/chat-snapshot-history";
 import { api } from "@/lib/api";
 import { apiUrl } from "@/lib/api-url";
@@ -94,6 +106,7 @@ export type ChatStopState =
 type ChatRuntimeSnapshot = {
   error: Error | undefined;
   isLoading: boolean;
+  reconnecting: boolean;
   messages: PersistedChatMessage[];
   sessionGenerating: boolean;
   status: ChatClientState;
@@ -134,8 +147,7 @@ export type ChatRuntime = {
   /** The user's Stop: the server ends the turn as stopped. */
   stop: () => void;
   /** The page leaves the thread: it closes its own request and asks the
-   *  server for nothing, so the turn carries on or ends as that request
-   *  leaves it. */
+   *  server for nothing, so the turn carries on detached. */
   leave: () => void;
   subscribe: (listener: () => void) => () => void;
 };
@@ -225,6 +237,8 @@ const isRejectedChatContinuation = (error: unknown): boolean => {
   return false;
 };
 
+const CHAT_RESUME_PROBE_TIMEOUT_MS = 10_000;
+
 /** How often, and how many times, a Stop the server accepted but has not
  *  settled yet (its run lives on another instance) asks again. */
 const STOP_SETTLE_POLL_MS = 500;
@@ -296,11 +310,14 @@ export const createChatRuntime = ({
   scheduleEmit = scheduleStreamEmit,
 }: CreateChatRuntimeProps): ChatRuntime => {
   const listeners = new Set<() => void>();
+  let subscriberCount = 0;
+  let replayFloor = activeTurnId === null ? undefined : initialMessages;
   let activeToolResultOperation: ActiveToolResultOperation | undefined;
   let toolResultQueue = Promise.resolve();
   let snapshot: ChatRuntimeSnapshot = {
     error: undefined,
     isLoading: false,
+    reconnecting: activeTurnId !== null,
     messages: initialMessages,
     sessionGenerating: false,
     status: "ready",
@@ -313,13 +330,15 @@ export const createChatRuntime = ({
   /** The turn the user last stopped. Its continuations never leave the page:
    *  the server settles it, and a result for it would only be refused. */
   let stoppedTurnId: SafeId<"chatTurn"> | null = null;
+  let stopBeforeHeaders: "none" | "requested" = "none";
   const isStoppedTurn = (): boolean =>
     stoppedTurnId !== null && stoppedTurnId === turnId;
-  /** A new message starts a new turn: until the server names it, Stop can
-   *  only close the request, and a stop of the previous turn is over. */
+  /** A new message starts a new turn. Stop waits for its response headers
+   *  to name the turn; a stop of the previous turn is over. */
   const startTurn = (): void => {
     turnId = null;
     stoppedTurnId = null;
+    stopBeforeHeaders = "none";
     if (snapshot.stop.status !== "idle") {
       setSnapshot({ stop: { status: "idle" } });
     }
@@ -434,17 +453,127 @@ export const createChatRuntime = ({
       const servedTurnId = response.headers.get(CHAT_TURN_ID_HEADER);
       if (servedTurnId !== null) {
         turnId = toSafeId<"chatTurn">(servedTurnId);
+        if (stopBeforeHeaders === "requested") {
+          stopBeforeHeaders = "none";
+          stoppedTurnId = turnId;
+          setSnapshot({
+            stop: { status: "pending", turnId },
+            turnAbandoned: true,
+          });
+          detached(settleStop(turnId), "chat-runtime.stop-before-headers");
+        }
       }
       return response;
     },
     { preconnect: () => undefined },
   ) satisfies typeof globalThis.fetch;
-  const upstreamConnection = fetchServerSentEvents(getChatApiPath(), {
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
-    fetchClient: turnObservingFetchClient,
-  });
+  const turnUrl = (action: "resume" | "join") => {
+    if (turnId === null) {
+      return panic("Cannot rejoin a chat before the server names its turn");
+    }
+    const url = new URL(
+      apiUrl(`/chat/threads/${key.threadId}/turns/${turnId}/${action}`),
+    );
+    if (key.scope === "workspace") {
+      url.searchParams.set("workspaceId", key.workspaceId);
+    }
+    return url.toString();
+  };
+  const loadedResume = v.safeParse(
+    chatResumeSnapshotSchema,
+    initialMessages.at(-1)?.metadata?.resumeSnapshot,
+  );
+  const { connection: upstreamConnection, persistence } =
+    createDurableChatTransport({
+      initialMessages,
+      initialTurn:
+        loadedResume.success &&
+        (loadedResume.output.pendingInterrupts?.length ?? 0) > 0
+          ? { type: "parked", runId: loadedResume.output.resumeState.runId }
+          : {
+              // A turn parked by a release without native resume state is
+              // already whole on the loaded page; reloading cannot change it.
+              type:
+                activeTurnId === null ||
+                getAwaitedAssistantMessageId(initialMessages) !== null
+                  ? "settled"
+                  : "active",
+            },
+      threadId: key.threadId,
+      sendUrl: getChatApiPath(),
+      joinUrl: () => turnUrl("join"),
+      fetchClient: turnObservingFetchClient,
+      onReconnectChange: (reconnecting) => {
+        setSnapshot({ reconnecting });
+      },
+      onError: (error) => {
+        captureRuntimeError(error);
+      },
+      onTranscript: () => {
+        setSnapshot({ turnAbandoned: true });
+        reloadThread();
+      },
+      // The SDK adapter consumes Promise rejections; shared transport catches
+      // typed probe failures with Result and surfaces them through onError.
+      probe: async (signal) => {
+        if (turnId === null) {
+          const resume: unknown =
+            initialMessages.at(-1)?.metadata?.resumeSnapshot;
+          if (resume === undefined) {
+            return { type: "transcript", turnId: "" };
+          }
+          const parsed = v.safeParse(chatResumeSnapshotSchema, resume);
+          if (!parsed.success) {
+            return await Promise.reject(
+              new ChatReconnectError({
+                code: "invalid-response",
+                message: "Invalid chat resume state.",
+              }),
+            );
+          }
+          return {
+            type: "transcript",
+            turnId: "",
+            resumeSnapshot: parsed.output,
+          };
+        }
+        const response = await fetchWithTimeout(turnUrl("resume"), {
+          credentials: "include",
+          ...(signal === undefined || signal === null ? {} : { signal }),
+          timeout: { type: "idle", ms: CHAT_RESUME_PROBE_TIMEOUT_MS },
+        });
+        if (!response.ok) {
+          if (response.status === 404) {
+            return { type: "transcript", turnId };
+          }
+          return await Promise.reject(
+            new ChatReconnectError({
+              ...(response.status === 401 || response.status === 403
+                ? { code: "refused" as const }
+                : {}),
+              message: `Chat resume probe failed (${response.status}).`,
+            }),
+          );
+        }
+        const data: unknown = await response.json();
+        const parsed = v.safeParse(chatTurnResumeProbeSchema, data);
+        if (!parsed.success) {
+          return await Promise.reject(
+            new ChatReconnectError({
+              code: "invalid-response",
+              message: "Invalid chat resume state.",
+            }),
+          );
+        }
+        return parsed.output;
+      },
+    });
   const connection = {
+    joinRun: (runId, signal) =>
+      keepPostedMessagesInSnapshots(
+        snapshot.messages,
+        upstreamConnection.joinRun(runId, signal),
+      ),
     connect: (messages, data, abortSignal, runContext) => {
       if (runContext === undefined) {
         return panic("TanStack connection omitted the AG-UI run context");
@@ -477,9 +606,21 @@ export const createChatRuntime = ({
     turnIdFor: (toolCallId) => browserTurnId(snapshot.messages, toolCallId),
   });
 
+  // The SDK rejoins a persisted in-flight run only while a view tails it, and
+  // drops a resume that lands earlier. Read server truth once one is attached.
+  const viewerAttached = Promise.withResolvers<undefined>();
+  const attachedPersistence = {
+    ...persistence,
+    getItem: async (threadId: string) => {
+      await viewerAttached.promise;
+      return await persistence.getItem(threadId);
+    },
+  } satisfies typeof persistence;
+
   const client = new ChatClient<ChatClientTools, unknown, readonly []>({
     threadId: key.threadId,
     initialMessages,
+    persistence: attachedPersistence,
     connection,
     onError: (error) => {
       // A request of a turn the user stopped fails as the stop's own effect
@@ -512,16 +653,29 @@ export const createChatRuntime = ({
         setSnapshot({ error });
       }
     },
-    onFinish,
+    onFinish: () => {
+      replayFloor = undefined;
+      onFinish();
+    },
     onInterruptStateChange: observeInterruptSubmission,
     onLoadingChange: (isLoading) => {
       setSnapshot({
         isLoading,
-        ...(isLoading ? { turnAbandoned: false } : {}),
+        ...(!isLoading ? { reconnecting: false } : {}),
+        ...(isLoading && stopBeforeHeaders === "none" && !isStoppedTurn()
+          ? { turnAbandoned: false }
+          : {}),
       });
     },
     onMessagesChange: (messages) => {
-      snapshot = { ...snapshot, messages: toPersistedChatMessages(messages) };
+      const persisted = toPersistedChatMessages(messages);
+      snapshot = {
+        ...snapshot,
+        messages:
+          replayFloor === undefined
+            ? persisted
+            : keepShownRejoinMessages(replayFloor, persisted),
+      };
       emitMessagesChange();
     },
     onSessionGeneratingChange: (sessionGenerating) =>
@@ -660,10 +814,17 @@ export const createChatRuntime = ({
     client.stop();
   };
 
+  /** Tails the client first, so a persisted resume read after it rejoins. */
+  const attachClient = () => {
+    client.attach();
+    viewerAttached.resolve(undefined);
+  };
+
   const startClientSend = (
     message: ChatUserMessageInput,
     options: ChatSendMessageOptions | undefined,
   ): ChatRouteHandoffStart => {
+    attachClient();
     supersedePendingInterrupts();
     const stream = client.sendMessage(message, options?.body);
     if (!hasUserMessage(snapshot.messages, message.id)) {
@@ -790,17 +951,17 @@ export const createChatRuntime = ({
 
   const isTurnActive = (): boolean =>
     snapshot.isLoading ||
+    snapshot.reconnecting ||
     snapshot.sessionGenerating ||
     isChatClientRequestActive(snapshot.status) ||
     hasRunningToolCallInLatestAssistantMessage({
       messages: snapshot.messages,
     });
 
-  /** Close the page's request, and reload the thread if a turn was running:
-   *  the server stores what the closed request leaves. */
+  /** Detach delivery and refresh the thread; its server turn keeps running. */
   const closeRequest = (): void => {
     const turnWasActive = isTurnActive();
-    client.stop();
+    client.detach();
     if (turnWasActive) {
       setSnapshot({ turnAbandoned: true });
       reloadThread();
@@ -922,9 +1083,14 @@ export const createChatRuntime = ({
       // already approved would otherwise keep acting on the page.
       browserTool.cancel();
       const stoppedTurn = turnId;
+      if (stoppedTurn === null && isTurnActive()) {
+        // Delivery cancellation no longer ends the accepted server turn.
+        // Keep this request until its headers name the turn to cancel.
+        stopBeforeHeaders = "requested";
+        setSnapshot({ turnAbandoned: true });
+        return;
+      }
       if (!isTurnActive() || stoppedTurn === null) {
-        // Nothing runs, or the server has not named the turn yet and nothing
-        // has streamed: closing the request is all that can stop it.
         closeRequest();
         return;
       }
@@ -945,8 +1111,14 @@ export const createChatRuntime = ({
     leave: closeRequest,
     subscribe: (listener) => {
       listeners.add(listener);
+      subscriberCount += 1;
+      attachClient();
       return () => {
         listeners.delete(listener);
+        subscriberCount -= 1;
+        if (subscriberCount === 0) {
+          client.detach();
+        }
       };
     },
   } satisfies ChatRuntime;

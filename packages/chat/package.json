@@ -30,7 +30,9 @@
     "./composer": "./src/composer.tsx",
     "./model-selector": "./src/model-selector.tsx",
     "./runtime": "./src/runtime.ts",
-    "./stream": "./src/stream.tsx"
+    "./stream": "./src/stream.tsx",
+    "./durable-transport": "./src/durable-transport.ts",
+    "./resume-contract": "./src/resume-contract.ts"
   },
   "publishConfig": {
     "access": "public"
@@ -44,17 +46,24 @@
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/chat",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/chat",
     "format": "bun ../../scripts/run-oxfmt.ts .",
-    "prepack": "bun run build"
+    "prepack": "bun run build",
+    "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src --include='*.test.ts')"
   },
   "dependencies": {
+    "@ag-ui/core": "1.0.0",
     "@stll/ai-catalog": "workspace:^",
     "@stll/ui": "workspace:^",
-    "better-result": "catalog:"
+    "@tanstack/ai-client": "catalog:",
+    "better-result": "catalog:",
+    "valibot": "catalog:",
+    "zod": "^4.5.4"
   },
   "devDependencies": {
+    "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",
     "@types/react": "catalog:react19",
     "bun-types": "catalog:",
+    "fast-check": "catalog:",
     "react": "catalog:react19",
     "tsdown": "catalog:"
   },

@@ -53,6 +53,7 @@ type WebChatSnapshot = {
 };
 
 type WebChatRuntime = {
+  subscribe: (listener: () => void) => () => void;
   addToolResult: (result: {
     output: unknown;
     tool: string;
@@ -284,6 +285,10 @@ export type WebChatClient = {
     content: ContentPart[],
     options?: { sendMode?: ChatSendMode | undefined },
   ) => Promise<void>;
+  /** Waits for a partial live view without waiting for turn settlement. */
+  waitForMessages: (
+    until: (messages: readonly UIMessage[]) => boolean,
+  ) => Promise<void>;
   /** Sends a message and returns once the live view satisfies `until`,
    *  without waiting for the turn to end. */
   startUserMessage: (
@@ -361,12 +366,29 @@ export const createWebChatClient = async ({
       onFinish: () => undefined,
       reloadThread: () => {
         reloading = (async () => {
-          runtime = createRuntime(await reload());
+          const reloadedPage = await reload();
+          releaseSubscription();
+          runtime = createRuntime(reloadedPage);
+          releaseSubscription = disposed
+            ? () => undefined
+            : runtime.subscribe(() => undefined);
           reloading = undefined;
         })();
       },
     });
   let runtime = createRuntime(page);
+  let releaseSubscription = runtime.subscribe(() => undefined);
+  const waitForMessages = async (
+    until: (messages: readonly UIMessage[]) => boolean,
+  ) => {
+    for (let tick = 0; tick < MAX_SETTLE_TICKS; tick += 1) {
+      await nextTick();
+      if (until(messages())) {
+        return;
+      }
+    }
+    panic("The live view never reached the awaited state");
+  };
 
   /** Waits until no request is open and the runtime is idle. */
   const waitForIdle = async () => {
@@ -447,6 +469,7 @@ export const createWebChatClient = async ({
     // Closing a tab drops its page; it asks the server for nothing.
     dispose: () => {
       disposed = true;
+      releaseSubscription();
     },
     messages,
     resend: async () => {
@@ -491,6 +514,7 @@ export const createWebChatClient = async ({
       );
     },
     settle,
+    waitForMessages,
     startUserMessage: async (id, text, until) => {
       void web
         .sendThreadChatMessage(runtime, { content: text, id })
@@ -499,13 +523,7 @@ export const createWebChatClient = async ({
             error instanceof Error ? error : new Error(String(error)),
           );
         });
-      for (let tick = 0; tick < MAX_SETTLE_TICKS; tick += 1) {
-        await nextTick();
-        if (until(messages())) {
-          return;
-        }
-      }
-      panic("The live view never reached the awaited state");
+      await waitForMessages(until);
     },
     stop: async () => {
       runtime.stop();

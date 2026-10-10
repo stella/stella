@@ -243,6 +243,7 @@ export const ChatThreadPage = ({
     stop,
     leave,
     isGenerating,
+    reconnecting,
     turnAbandoned,
     alwaysApprovedTools,
     conversationApprovedTools,
@@ -640,6 +641,14 @@ export const ChatThreadPage = ({
                     </div>
                   ) : (
                     <>
+                      {reconnecting && (
+                        <p
+                          role="status"
+                          className="text-muted-foreground px-4 text-sm"
+                        >
+                          {t("common.reconnecting")}
+                        </p>
+                      )}
                       <ChatThreadMessages
                         approvalPendingMessageId={approvalPendingMessageId}
                         branchSource={{
