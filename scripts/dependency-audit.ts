@@ -34,7 +34,11 @@ import path from "node:path";
 import { compareCodeUnit } from "@stll/collation";
 
 import { BASELINE_PATHS } from "./baseline-paths";
-import { lapsedAcceptances } from "./dependency-audit-acceptance";
+import {
+  expiringAcceptances,
+  lapsedAcceptances,
+  type LapsedAcceptance,
+} from "./dependency-audit-acceptance";
 import { auditablePackages, dependencyChanges } from "./dependency-audit-scope";
 
 const SCRIPTS_DIR = import.meta.dir;
@@ -49,7 +53,7 @@ const markAdvisoryFailure = (): void => {
   }
 };
 
-type Advisory = {
+export type Advisory = {
   id: string;
   severity: string;
   package: string;
@@ -58,13 +62,13 @@ type Advisory = {
   vulnerableVersions: string;
 };
 
-type BaselineEntry = Omit<Advisory, "vulnerableVersions"> & {
+export type BaselineEntry = Omit<Advisory, "vulnerableVersions"> & {
   reason: string;
   expiresOn?: string;
   untilPatched?: unknown;
 };
 
-type Baseline = {
+export type Baseline = {
   note: string;
   auditLevel: string;
   accepted: BaselineEntry[];
@@ -257,6 +261,13 @@ const collectGatedAdvisories = async (): Promise<Advisory[]> => {
 const formatAdvisory = (advisory: Advisory): string =>
   `  ${advisory.severity.toUpperCase().padEnd(8)} ${advisory.id}  ${advisory.package} — ${advisory.title}`;
 
+const formatAcceptanceTerm = (acceptance: BaselineEntry): string => {
+  if (acceptance.expiresOn !== undefined) {
+    return `accepted until ${acceptance.expiresOn}${acceptance.untilPatched === true ? " or until patched" : ""}`;
+  }
+  return acceptance.untilPatched === true ? "until patched" : "accepted";
+};
+
 const report = (advisories: Advisory[]): void => {
   if (advisories.length === 0) {
     console.info("No high/critical advisories.");
@@ -297,7 +308,7 @@ const writeBaseline = async (advisories: Advisory[]): Promise<void> => {
 
 // Diff current advisories against the baseline. `newlyIntroduced` fails the
 // gate; `resolved` only warns (prompt to ratchet the baseline down).
-const diffAgainstBaseline = (
+export const diffAgainstBaseline = (
   advisories: Advisory[],
   baseline: Baseline,
 ): { newlyIntroduced: Advisory[]; resolved: BaselineEntry[] } => {
@@ -333,7 +344,11 @@ const fetchLatestVersion = async (pkg: string): Promise<string | undefined> => {
 const checkLapsedAcceptances = async (
   advisories: Advisory[],
   baseline: Baseline,
-): Promise<number> => {
+  today: string,
+  latestVersion: (
+    pkg: string,
+  ) => Promise<string | undefined> = fetchLatestVersion,
+): Promise<LapsedAcceptance[]> => {
   const packages = new Set(
     baseline.accepted
       .filter(({ untilPatched }) => untilPatched === true)
@@ -342,19 +357,18 @@ const checkLapsedAcceptances = async (
   const latest = new Map(
     await Promise.all(
       [...packages].map(
-        async (pkg) => [pkg, await fetchLatestVersion(pkg)] as const,
+        async (pkg) => [pkg, await latestVersion(pkg)] as const,
       ),
     ),
   );
   const lapsed = lapsedAcceptances({
     accepted: baseline.accepted,
     current: advisories,
-    // UTC calendar date; an acceptance holds through its expiresOn day.
-    today: new Date().toISOString().slice(0, 10),
+    today,
     latestVersion: (pkg) => latest.get(pkg),
   });
   if (lapsed.length === 0) {
-    return 0;
+    return [];
   }
   console.error(
     `${lapsed.length} temporary advisory acceptance(s) lapsed; bump the dependency or re-review the entry in scripts/dependency-audit-baseline.json:`,
@@ -362,29 +376,84 @@ const checkLapsedAcceptances = async (
   for (const entry of lapsed) {
     console.error(`  ${entry.id}  ${entry.package}: ${entry.reason}`);
   }
-  return 1;
+  return lapsed;
 };
 
-const check = async (
+const githubCommandValue = (value: string): string =>
+  value.replaceAll("%", "%25").replaceAll("\r", "%0D").replaceAll("\n", "%0A");
+
+const warnBeforeExpiry = (
   advisories: Advisory[],
-  packages?: ReadonlySet<string>,
+  baseline: Baseline,
+  today: string,
+): void => {
+  for (const entry of expiringAcceptances({
+    accepted: baseline.accepted,
+    current: advisories,
+    today,
+  })) {
+    const message = `${entry.id} for ${entry.package} is accepted until ${entry.expiresOn}; review or remediate it before expiry.`;
+    if (process.env["GITHUB_ACTIONS"] === "true") {
+      console.warn(
+        `::warning title=Dependency audit acceptance expiring::${githubCommandValue(message)}`,
+      );
+      continue;
+    }
+    console.warn(`WARNING: ${message}`);
+  }
+};
+
+type CheckOptions = {
+  baseline?: Baseline;
+  latestVersion?: (pkg: string) => Promise<string | undefined>;
+  now?: () => Date;
+  packages?: ReadonlySet<string>;
+};
+
+export const check = async (
+  advisories: Advisory[],
+  options: CheckOptions = {},
 ): Promise<number> => {
-  const completeBaseline = await readBaseline();
+  const completeBaseline = options.baseline ?? (await readBaseline());
   const baseline =
-    packages === undefined
+    options.packages === undefined
       ? completeBaseline
       : {
           note: completeBaseline.note,
           auditLevel: completeBaseline.auditLevel,
           accepted: completeBaseline.accepted.filter(({ package: pkg }) =>
-            packages.has(pkg),
+            options.packages?.has(pkg),
           ),
         };
   const { newlyIntroduced, resolved } = diffAgainstBaseline(
     advisories,
     baseline,
   );
-  const lapsedStatus = await checkLapsedAcceptances(advisories, baseline);
+  // UTC calendar date; an acceptance holds through its expiresOn day.
+  const today = (options.now?.() ?? new Date()).toISOString().slice(0, 10);
+  warnBeforeExpiry(advisories, baseline, today);
+  const lapsed = await checkLapsedAcceptances(
+    advisories,
+    baseline,
+    today,
+    options.latestVersion,
+  );
+  const lapsedIds = new Set(lapsed.map(({ id }) => id));
+
+  for (const advisory of advisories) {
+    const acceptance = baseline.accepted.find(({ id }) => id === advisory.id);
+    if (acceptance === undefined) {
+      console.info(`${formatAdvisory(advisory)}  NEW`);
+      continue;
+    }
+    if (lapsedIds.has(advisory.id)) {
+      console.info(`${formatAdvisory(advisory)}  LAPSED`);
+      continue;
+    }
+    console.info(
+      `${formatAdvisory(advisory)}  ${formatAcceptanceTerm(acceptance)}`,
+    );
+  }
 
   if (resolved.length > 0) {
     console.warn(
@@ -399,10 +468,10 @@ const check = async (
     console.info(
       `No new high/critical advisories (${baseline.accepted.length} known and accepted).`,
     );
-    if (lapsedStatus !== 0) {
+    if (lapsed.length > 0) {
       markAdvisoryFailure();
     }
-    return lapsedStatus;
+    return lapsed.length > 0 ? 1 : 0;
   }
 
   console.error(
@@ -497,7 +566,7 @@ const checkDiff = async (baseRevision: string): Promise<number> => {
   const advisories = (await collectGatedAdvisories()).filter(
     ({ package: pkg }) => packages.has(pkg),
   );
-  return check(advisories, packages);
+  return check(advisories, { packages });
 };
 
 const checkRelease = async (): Promise<number> => {
@@ -548,14 +617,16 @@ const main = async (): Promise<void> => {
   report(advisories);
 };
 
-try {
-  await main();
-} catch (error) {
-  if (error instanceof AuditCommandError) {
-    // Fail closed: the audit tool itself failed, so we cannot assert the
-    // lockfile is clean. Surface the reason and exit nonzero to block the gate.
-    console.error(error.message);
-    process.exit(1);
+if (import.meta.main) {
+  try {
+    await main();
+  } catch (error) {
+    if (error instanceof AuditCommandError) {
+      // Fail closed: the audit tool itself failed, so we cannot assert the
+      // lockfile is clean. Surface the reason and exit nonzero to block the gate.
+      console.error(error.message);
+      process.exit(1);
+    }
+    throw error;
   }
-  throw error;
 }

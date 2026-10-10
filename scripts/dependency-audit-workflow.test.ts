@@ -32,6 +32,7 @@ const workflowSchema = v.looseObject({
   jobs: v.record(
     v.string(),
     v.looseObject({
+      if: v.optional(v.string()),
       permissions: v.optional(v.record(v.string(), v.string())),
       concurrency: v.optional(
         v.object({ group: v.string(), "cancel-in-progress": v.boolean() }),
@@ -76,15 +77,26 @@ test("pull requests avoid network work when the lockfile is unchanged", () => {
       "steps.lockfile.outputs.changed == 'true'",
     );
   }
-  expect(
-    step(auditWorkflow, "audit", "Audit changed dependency resolutions").run,
-  ).toContain("--check-diff");
+  const pullRequestAudit = step(
+    auditWorkflow,
+    "audit",
+    "Audit changed dependency resolutions",
+  );
+  expect(pullRequestAudit.if).toBe(
+    "github.event_name == 'pull_request' && steps.lockfile.outputs.changed == 'true'",
+  );
+  expect(pullRequestAudit.run).toBe(
+    'bun scripts/dependency-audit.ts --check-diff "$BASE_SHA"',
+  );
 });
 
 test("full audits run on main and every six hours with one stable remediation identity", () => {
   expect(auditWorkflow.on.push?.branches).toEqual(["main"]);
   expect(auditWorkflow.on.schedule).toEqual([{ cron: "0 */6 * * *" }]);
   const remediation = step(auditWorkflow, "remediate", "Open one remediation");
+  expect(auditWorkflow.jobs["remediate"]?.if).toBe(
+    "always() && github.event_name != 'pull_request' && needs.audit.outputs.advisory_failure == 'true'",
+  );
   expect(remediation.env?.["FIX_BRANCH"]).toBe(
     "automation/dependency-audit-fix",
   );
