@@ -1,3 +1,4 @@
+// parser-output-unchanged: defines warning wire metadata and shared detector IDs; does not transform source text or parser AST
 import * as v from "valibot";
 
 export const MARKUP_RESIDUE_RULE_IDS = [

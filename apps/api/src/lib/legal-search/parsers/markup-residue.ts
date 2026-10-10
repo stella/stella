@@ -1,3 +1,4 @@
+// parser-output-unchanged: adds stored-quality warning metadata; existing detector rules, order and parser text/AST remain unchanged
 import { decodeHTMLStrict } from "entities";
 
 import {
