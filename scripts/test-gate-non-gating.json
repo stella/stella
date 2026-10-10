@@ -1,0 +1,27 @@
+[
+  {
+    "file": "apps/visual-preview/browser/render.test.ts",
+    "owningWorkflow": ".github/workflows/visual-preview.yml",
+    "reason": "separate workflow; fold decision pending"
+  },
+  {
+    "file": "apps/visual-preview/src/render-validation.test.ts",
+    "owningWorkflow": ".github/workflows/visual-preview.yml",
+    "reason": "separate workflow; fold decision pending"
+  },
+  {
+    "file": "apps/web/e2e/soak/workspace-replay.playwright.spec.ts",
+    "owningWorkflow": ".github/workflows/nightly-test.yml",
+    "reason": "deployed-environment scenario cannot gate merges"
+  },
+  {
+    "file": "apps/web/e2e/staging/public-knowledge.spec.ts",
+    "owningWorkflow": ".github/workflows/staging-smoke.yml",
+    "reason": "deployed-environment scenario cannot gate merges"
+  },
+  {
+    "file": "apps/web/e2e/staging/staging-smoke.spec.ts",
+    "owningWorkflow": ".github/workflows/staging-smoke.yml",
+    "reason": "deployed-environment scenario cannot gate merges"
+  }
+]

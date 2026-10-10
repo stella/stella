@@ -2848,6 +2848,10 @@ jobs:
         # Worst pilot test 13.62 s; 35 s allows about 2.5x contention headroom.
         run: bun scripts/run-unlisted-script-tests.ts --timeout 35000
 
+      - name: Check test execution paths and disabled states
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun scripts/test-gate.ts
+
       - name: Test release image CI gate
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # Worst pilot test 18.56 s; 50 s allows about 2.5x contention headroom.
