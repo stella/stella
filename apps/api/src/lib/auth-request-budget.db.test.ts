@@ -491,7 +491,7 @@ describe("OAuth handler quotas", () => {
         return await originalFind(input);
       },
     );
-    const pending = Array.from({ length: maximum * 3 }, (_, index) =>
+    const pending = Array.from({ length: maximum * 3 }, async (_, index) =>
       auth.handler(
         request("/oauth2/token", {
           grant_type: "refresh_token",

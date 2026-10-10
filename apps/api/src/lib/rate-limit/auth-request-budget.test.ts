@@ -8,7 +8,7 @@ import {
   resolveAuthRequestBudgetIdentity,
 } from "@/api/lib/rate-limit/auth-request-budget";
 
-const identity = (
+const identity = async (
   options: Partial<Parameters<typeof resolveAuthRequestBudgetIdentity>[0]> = {},
 ) =>
   resolveAuthRequestBudgetIdentity({
