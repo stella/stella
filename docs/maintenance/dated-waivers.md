@@ -27,6 +27,15 @@ A red probe, blocked resolution or lapsed entry retires its pending removal
 proposal: merge-bar disarms it before it is closed with a neutral note. A later
 eligible green run creates a fresh proposal. Failure evidence remains private,
 and a disarm failure propagates so publication cannot report success.
+Entries complete independently: red task evidence is published first; retirement
+and expiry signals are attempted even when another action fails. Green actions
+retain their prerequisites before arming. Every entry is processed, then the run
+fails once with a typed list of failed operations. Public output exposes only
+opaque entry keys and operation names in the `dated-waiver-failed` signal;
+captured diagnostics stay private. Probe setup failures and invalid evidence
+records are carried to the publication boundary so valid siblings still finish.
+Independent module validation and proposal-content reads also aggregate failures
+before any dependent publication write.
 
 Failed probes create or refresh one task per entry in a separate repository whose
 privacy is checked before publication. Failure evidence stays local until it is

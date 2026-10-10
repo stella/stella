@@ -7,6 +7,8 @@ import {
   publishRemoval,
   REMOVAL_TITLE,
   retireRemoval,
+  validateRemovalModules,
+  WaiverPublishFailures,
 } from "./dated-waiver-publish";
 
 const BRANCH = "chore/dated-waiver-0123456789abcdef01234567";
@@ -510,6 +512,115 @@ describe("dated waiver removal publication", () => {
         ),
       ).toMatchObject({ message: expect.stringContaining(fixture.message) });
       expect(calls).toBe(0);
+    }
+  });
+});
+
+describe("independent proposal file failures", () => {
+  test("module parsing reports every invalid file and succeeds exactly when none are invalid", async () => {
+    const modules = ["one.ts", "two.js", "three.mts", "four.tsx"];
+    for (const invalid of [[], ["one.ts"], ["two.js", "four.tsx"], modules]) {
+      const files = Object.fromEntries(
+        modules.map((file) => [
+          file,
+          invalid.includes(file)
+            ? "export const value = (;"
+            : "export const value = 1;",
+        ]),
+      );
+      files["nonmodule.txt"] = "export const value = (;";
+      if (invalid.length === 0) {
+        expect(validateRemovalModules(files)).toBeUndefined();
+        continue;
+      }
+      let githubCalls = 0;
+      const failure = await rejectionOf(
+        publishRemoval({
+          branch: BRANCH,
+          baseSha: "base-sha",
+          baseFiles: {},
+          body: BODY,
+          files,
+          repo: "stella/stella",
+          request: async () => {
+            githubCalls++;
+            throw new TypeError("GitHub must not be contacted");
+          },
+        }),
+      );
+      expect(failure).toBeInstanceOf(WaiverPublishFailures);
+      if (failure instanceof WaiverPublishFailures) {
+        expect(
+          failure.failures.map(({ file, stage }) => ({ file, stage })),
+        ).toEqual(invalid.map((file) => ({ file, stage: "parse" })));
+        expect(
+          failure.failures.every(({ cause }) => cause instanceof Error),
+        ).toBe(true);
+      }
+      expect(githubCalls).toBe(0);
+    }
+  });
+
+  test("every file comparison completes before reporting all failed reads without writes", async () => {
+    const files = {
+      [FILE]: AFTER,
+      "second.ts": "export const second = 2;",
+      "third.ts": "export const third = 3;",
+      "fourth.txt": "plain text",
+    };
+    for (const failed of [
+      [],
+      [FILE],
+      ["second.ts", "fourth.txt"],
+      Object.keys(files),
+    ]) {
+      const github = fakeGithub();
+      await github.publish();
+      github.commits.set("signed-1", files);
+      const writes = github.writes.length;
+      const attempted: string[] = [];
+      const completed: string[] = [];
+      const publish = publishRemoval({
+        branch: BRANCH,
+        baseSha: "base-sha",
+        baseFiles: { [FILE]: BEFORE },
+        body: BODY,
+        files,
+        repo: "stella/stella",
+        request: async (args, input) => {
+          const endpoint = args.at(0) ?? "";
+          if (!endpoint.startsWith(`${API}/contents/`)) {
+            return github.request(args, input);
+          }
+          const file = endpoint.slice(`${API}/contents/`.length);
+          attempted.push(file);
+          // Independent asynchronous completions must all settle before error
+          // aggregation returns control to the caller.
+          await Promise.resolve();
+          completed.push(file);
+          if (failed.includes(file)) {
+            throw new TypeError(`Private comparison diagnostic: ${file}`);
+          }
+          return github.request(args, input);
+        },
+      });
+      if (failed.length === 0) {
+        expect(await publish).toBe(42);
+      } else {
+        const failure = await rejectionOf(publish);
+        expect(failure).toBeInstanceOf(WaiverPublishFailures);
+        if (failure instanceof WaiverPublishFailures) {
+          expect(
+            failure.failures.map(({ file, stage }) => ({ file, stage })),
+          ).toEqual(failed.map((file) => ({ file, stage: "compare" })));
+          expect(failure.message).not.toContain(
+            "Private comparison diagnostic",
+          );
+        }
+      }
+      expect(attempted).toEqual(Object.keys(files));
+      expect(completed).toEqual(Object.keys(files));
+      expect(github.writes).toHaveLength(writes);
     }
   });
 });

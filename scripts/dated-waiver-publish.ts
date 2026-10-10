@@ -1,4 +1,4 @@
-import { panic, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import path from "node:path";
 import ts from "typescript";
 import * as v from "valibot";
@@ -35,6 +35,18 @@ class WaiverPublishError extends TaggedError("WaiverPublishError")<{
   message: string;
 }> {}
 
+type WaiverPublishFailure = {
+  file: string;
+  stage: "parse" | "compare";
+  cause: unknown;
+};
+export class WaiverPublishFailures extends TaggedError(
+  "WaiverPublishFailures",
+)<{
+  message: string;
+  failures: WaiverPublishFailure[];
+}> {}
+
 const MODULE_EXTENSIONS = new Set([
   ".ts",
   ".tsx",
@@ -48,27 +60,39 @@ const MODULE_EXTENSIONS = new Set([
 export const validateRemovalModules = (
   files: Readonly<Record<string, string>>,
 ): void => {
+  const failures: WaiverPublishFailure[] = [];
   for (const [file, content] of Object.entries(files)) {
     if (!MODULE_EXTENSIONS.has(path.extname(file))) {
       continue;
     }
-    const source = ts.createSourceFile(
-      file,
-      content,
-      ts.ScriptTarget.Latest,
-      true,
-    );
-    const options = { allowJs: true, noLib: true, noResolve: true };
-    const host = ts.createCompilerHost(options);
-    host.getSourceFile = (name) => (name === file ? source : undefined);
-    const diagnostics = ts
-      .createProgram([file], options, host)
-      .getSyntacticDiagnostics(source);
-    if (diagnostics.length > 0) {
-      throw new WaiverPublishError({
-        message: `Generated module has syntax diagnostics: ${file}: ${diagnostics.map((diagnostic) => ts.flattenDiagnosticMessageText(diagnostic.messageText, " ")).join("; ")}`,
-      });
+    const parsed = Result.try(() => {
+      const source = ts.createSourceFile(
+        file,
+        content,
+        ts.ScriptTarget.Latest,
+        true,
+      );
+      const options = { allowJs: true, noLib: true, noResolve: true };
+      const host = ts.createCompilerHost(options);
+      host.getSourceFile = (name) => (name === file ? source : undefined);
+      const diagnostics = ts
+        .createProgram([file], options, host)
+        .getSyntacticDiagnostics(source);
+      if (diagnostics.length > 0) {
+        throw new WaiverPublishError({
+          message: `Generated module has syntax diagnostics: ${file}: ${diagnostics.map((diagnostic) => ts.flattenDiagnosticMessageText(diagnostic.messageText, " ")).join("; ")}`,
+        });
+      }
+    });
+    if (Result.isError(parsed)) {
+      failures.push({ file, stage: "parse", cause: parsed.error });
     }
+  }
+  if (failures.length > 0) {
+    throw new WaiverPublishFailures({
+      message: `Generated module has syntax diagnostics: ${failures.map(({ file }) => file).join(", ")}`,
+      failures,
+    });
   }
 };
 
@@ -313,24 +337,44 @@ export const publishRemoval = async ({
     const sameFiles = sameBase
       ? await Promise.all(
           Object.entries(files).map(async ([file, content]) => {
-            const response = v.parse(
-              FILE_CONTENT,
-              await request([
-                `${api}/contents/${file}`,
-                "--method",
-                "GET",
-                "-f",
-                `ref=${proposalHead}`,
-              ]),
-            );
-            return (
-              Buffer.from(response.content, "base64").toString("utf-8") ===
-              content
-            );
+            const comparison = await Result.tryPromise(async () => {
+              const response = v.parse(
+                FILE_CONTENT,
+                await request([
+                  `${api}/contents/${file}`,
+                  "--method",
+                  "GET",
+                  "-f",
+                  `ref=${proposalHead}`,
+                ]),
+              );
+              return (
+                Buffer.from(response.content, "base64").toString("utf-8") ===
+                content
+              );
+            });
+            return { file, comparison };
           }),
         )
       : [];
-    if (sameBase && sameFiles.every(Boolean)) {
+    const failures: WaiverPublishFailure[] = [];
+    for (const { file, comparison } of sameFiles) {
+      if (Result.isError(comparison)) {
+        failures.push({ file, stage: "compare", cause: comparison.error });
+      }
+    }
+    if (failures.length > 0) {
+      throw new WaiverPublishFailures({
+        message: "Removal file comparison failed; diagnostic output withheld.",
+        failures,
+      });
+    }
+    if (
+      sameBase &&
+      sameFiles.every(
+        ({ comparison }) => Result.isOk(comparison) && comparison.value,
+      )
+    ) {
       return reconcileRemovalPr({ body, github });
     }
   }

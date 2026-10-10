@@ -1,6 +1,11 @@
 import { expect, test } from "bun:test";
+import fc from "fast-check";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import * as v from "valibot";
 
+import { assertProperty } from "@stll/property-testing";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {
@@ -17,10 +22,18 @@ import {
   applyHealing,
   armRemovalThroughBar,
   disarmRemovalThroughBar,
+  collectProbeReport,
+  readReport,
+  renderHealingFailureSignal,
+  runHealingBoundary,
   executeProbeCommand,
   redactProbeOutput,
   renderRemovalEvidence,
   type HealingEntry,
+  HealingRunError,
+  HealingError,
+  type HealingFailure,
+  type HealingActions,
 } from "./dated-waiver-healing";
 import {
   createProbeBudget,
@@ -28,7 +41,11 @@ import {
   runWaiverProbe,
 } from "./dated-waiver-probes";
 import { retireRemoval } from "./dated-waiver-publish";
-import { RECHECK_INSTRUCTIONS, type DatedWaiver } from "./dated-waivers";
+import {
+  loadWaivers,
+  RECHECK_INSTRUCTIONS,
+  type DatedWaiver,
+} from "./dated-waivers";
 
 const entry = {
   source: "bunfig.toml",
@@ -95,7 +112,12 @@ const scenario = (records: HealingEntry[]) => {
     },
     run: (now: string) =>
       applyHealing({
-        report: { sha: "base", observedAt: "2026-10-10", entries: records },
+        report: {
+          failures: [],
+          sha: "base",
+          observedAt: "2026-10-10",
+          entries: records,
+        },
         actions,
         now: new Date(now),
       }),
@@ -116,8 +138,8 @@ test("merge bar refusals fail publication instead of reporting a pending arm", a
       await armRemovalThroughBar(number, async () => exit);
     };
     expect(await rejectionOf(run.run("2026-10-10T00:00:00Z"))).toMatchObject({
-      message:
-        "Removal merge bar refused or failed; diagnostic output withheld.",
+      message: "Dated waiver operations failed; diagnostic output withheld.",
+      failures: [{ key: waiverKey(entry), stage: "armRemoval" }],
     });
     expect(run.effects).toEqual(["remove", "resolve"]);
   }
@@ -139,7 +161,8 @@ test("recorded failures publish before an earlier removal's merge bar can refuse
     await armRemovalThroughBar(number, async () => 1);
   };
   expect(await rejectionOf(run.run("2026-10-10T00:00:00Z"))).toMatchObject({
-    message: "Removal merge bar refused or failed; diagnostic output withheld.",
+    message: "Dated waiver operations failed; diagnostic output withheld.",
+    failures: [{ key: waiverKey(entry), stage: "armRemoval" }],
   });
   expect(run.effects).toEqual(["fix", "remove", "resolve"]);
 });
@@ -160,9 +183,8 @@ test("partial and zero-sample greens cannot publish", async () => {
       { entry, outcome: { ...green, evidence: { ...evidence, passed } } },
     ]);
     expect(await rejectionOf(run.run("2026-10-10T00:00:00Z"))).toMatchObject({
-      message: expect.stringContaining(
-        "Removal requires all declared probes to pass",
-      ),
+      message: "Dated waiver operations failed; diagnostic output withheld.",
+      failures: [{ key: waiverKey(entry), stage: "evidence" }],
     });
     expect(run.effects).toEqual([]);
   }
@@ -215,6 +237,7 @@ test("twenty timed-out samples still publish one private fix task within the pha
   await applyHealing({
     now: new Date("2026-10-10T00:00:00Z"),
     report: {
+      failures: [],
       sha: evidence.sha,
       observedAt: "2026-10-10",
       entries: [
@@ -294,9 +317,8 @@ test("expiry lapses without probing, removal, renewal or duplicate fix creation"
 test("premature expired evidence cannot alert before the owner deadline", async () => {
   const expired = scenario([{ entry, outcome: { status: "expired" } }]);
   expect(await rejectionOf(expired.run("2026-10-10T00:00:00Z"))).toMatchObject({
-    message: expect.stringContaining(
-      "Expired waiver evidence precedes its owner deadline",
-    ),
+    message: "Dated waiver operations failed; diagnostic output withheld.",
+    failures: [{ key: waiverKey(entry), stage: "evidence" }],
   });
   expect(expired.effects).toEqual([]);
 });
@@ -652,6 +674,7 @@ const resolutionScenario = async (
       now: new Date(now),
       actions,
       report: {
+        failures: [],
         sha: proof.sha,
         observedAt: "2026-10-12",
         entries: [
@@ -956,6 +979,7 @@ const proposalLifecycle = async (kind: DatedWaiver["kind"] = "no-llms-txt") => {
       actions,
       now: new Date(proof.observedAt),
       report: {
+        failures: [],
         sha: proof.sha,
         observedAt: proof.observedAt,
         entries: [
@@ -1017,7 +1041,13 @@ test("disarm refusals fail the lifecycle and retain the recorded private task", 
     expect(
       await rejectionOf(lifecycle.run("red", { ...evidence, passed: 2 })),
     ).toMatchObject({
-      message: "Removal disarm refused or failed; diagnostic output withheld.",
+      message: "Dated waiver operations failed; diagnostic output withheld.",
+      failures: [
+        {
+          key: waiverKey({ ...entry, kind: "no-llms-txt" }),
+          stage: "retireRemoval",
+        },
+      ],
     });
     expect(lifecycle.fake.tasks.at(0)?.state).toBe("open");
     expect(lifecycle.proposal()?.status).toBe("armed");
@@ -1034,7 +1064,13 @@ test("private task publication failure still retires the pending removal", async
   expect(
     await rejectionOf(lifecycle.run("red", { ...evidence, passed: 2 })),
   ).toMatchObject({
-    message: expect.stringContaining("Private task unavailable"),
+    message: "Dated waiver operations failed; diagnostic output withheld.",
+    failures: [
+      {
+        key: waiverKey({ ...entry, kind: "no-llms-txt" }),
+        stage: "openFixTask",
+      },
+    ],
   });
   expect(lifecycle.proposal()?.status).toBe("closed");
 });
@@ -1052,4 +1088,555 @@ test("expiry retires a pending proposal without creating a replacement fix task"
   expect(lifecycle.fake.tasks).toHaveLength(1);
   expect(lifecycle.fake.tasks.at(0)?.state).toBe("open");
   expect(lifecycle.effects).toEqual(["publish", "arm", "disarm", "close"]);
+});
+
+const RED_FAILURE_PROPERTY =
+  "dated healing preserves every red task across side-effect failure subsets";
+test(RED_FAILURE_PROPERTY, async () => {
+  await assertProperty(
+    RED_FAILURE_PROPERTY,
+    fc.asyncProperty(
+      fc.array(
+        fc.subarray(["openFixTask", "retireRemoval", "alertExpiry"] as const),
+        { minLength: 1, maxLength: 8 },
+      ),
+      async (subsets) => {
+        const owners = subsets.map((_, index) => ({
+          ...entry,
+          id: `waiver-${index}`,
+        }));
+        const tasks = new Map<string, { number: number; state: "open" }>();
+        const alerts = new Set<number>();
+        const retired = new Set<string>();
+        const expected: Pick<HealingFailure, "key" | "stage">[] = [];
+        const fail = (
+          owner: DatedWaiver,
+          stage: "openFixTask" | "retireRemoval" | "alertExpiry",
+        ) => {
+          const subset = subsets.at(
+            owners.findIndex(({ id }) => id === owner.id),
+          );
+          if (!subset) {
+            throw new TypeError("Failure subset fixture missing");
+          }
+          if (subset.includes(stage)) {
+            expected.push({ key: waiverKey(owner), stage });
+            throw new HealingError({ message: "PRIVATE FAILURE" });
+          }
+        };
+        const actions = {
+          ...scenario([]).actions,
+          openFixTask: async (owner: DatedWaiver) => {
+            // A response can fail after durable task creation. Never retry it.
+            const task = { number: tasks.size + 1, state: "open" as const };
+            tasks.set(owner.id, task);
+            fail(owner, "openFixTask");
+            return task;
+          },
+          findTask: async (owner: DatedWaiver) => tasks.get(owner.id),
+          retireRemoval: async (owner: DatedWaiver) => {
+            retired.add(owner.id);
+            fail(owner, "retireRemoval");
+          },
+          alertExpiry: async (task: {
+            number: number;
+            state: "open" | "closed";
+          }) => {
+            alerts.add(task.number);
+            const owner = owners.find(
+              ({ id }) => tasks.get(id)?.number === task.number,
+            );
+            if (!owner) {
+              throw new TypeError("Alert fixture missing");
+            }
+            fail(owner, "alertExpiry");
+          },
+        };
+        const run = applyHealing({
+          actions,
+          now: new Date("2026-10-14T00:00:00Z"),
+          report: {
+            sha: "base",
+            observedAt: evidence.observedAt,
+            failures: [],
+            entries: owners.map((owner) => ({
+              entry: owner,
+              outcome: {
+                ...green,
+                status: "red",
+                evidence: { ...evidence, passed: 2 },
+              },
+            })),
+          },
+        });
+        if (subsets.some((subset) => subset.length > 0)) {
+          const error = await rejectionOf(run);
+          if (!(error instanceof HealingRunError)) {
+            throw new TypeError("Expected typed healing aggregate");
+          }
+          expect(
+            error.failures.map(({ key, stage }) => ({ key, stage })),
+          ).toEqual(expected);
+          expect(
+            JSON.stringify(renderHealingFailureSignal(error)),
+          ).not.toContain("PRIVATE FAILURE");
+          expect(
+            error.failures.every(({ cause }) => cause instanceof Error),
+          ).toBe(true);
+        } else {
+          await run;
+        }
+        expect(tasks.size).toBe(owners.length);
+        expect(alerts.size).toBe(owners.length);
+        expect(retired.size).toBe(owners.length);
+      },
+    ),
+    { seed: 261_017, numRuns: 100 },
+  );
+});
+
+test("two red entries both publish tasks and expiry alerts when the first retirement fails", async () => {
+  const first = { ...entry, id: "first" };
+  const second = { ...entry, id: "second" };
+  const tasks: string[] = [];
+  const alerts: number[] = [];
+  const run = scenario([]);
+  const error = await rejectionOf(
+    applyHealing({
+      now: new Date("2026-10-14T00:00:00Z"),
+      report: {
+        sha: "base",
+        observedAt: evidence.observedAt,
+        failures: [],
+        entries: [first, second].map((owner) => ({
+          entry: owner,
+          outcome: {
+            ...green,
+            status: "red",
+            evidence: { ...evidence, passed: 2 },
+          },
+        })),
+      },
+      actions: {
+        ...run.actions,
+        openFixTask: async (owner) => {
+          tasks.push(owner.id);
+          return { number: tasks.length, state: "open" };
+        },
+        retireRemoval: async (owner) => {
+          if (owner.id === first.id) {
+            throw new HealingError({ message: "Retirement unavailable" });
+          }
+        },
+        alertExpiry: async ({ number }) => {
+          alerts.push(number);
+        },
+      },
+    }),
+  );
+  expect(tasks).toEqual(["first", "second"]);
+  expect(alerts).toEqual([1, 2]);
+  expect(error).toMatchObject({
+    failures: [{ key: waiverKey(first), stage: "retireRemoval" }],
+  });
+});
+
+const GREEN_FAILURE_PROPERTY =
+  "dated healing completes sibling green entries after publication failures";
+test(GREEN_FAILURE_PROPERTY, async () => {
+  await assertProperty(
+    GREEN_FAILURE_PROPERTY,
+    fc.asyncProperty(
+      fc.array(
+        fc.record({
+          stage: fc.constantFrom(
+            "none",
+            "assessRemoval",
+            "openRemoval",
+            "resolveFixTask",
+            "armRemoval",
+          ),
+          retirement: fc.boolean(),
+        }),
+        { minLength: 1, maxLength: 8 },
+      ),
+      async (cases) => {
+        const owners = cases.map((_, index) => ({
+          ...entry,
+          id: `green-${index}`,
+        }));
+        const published = new Set<string>();
+        const resolved = new Set<string>();
+        const armed = new Set<string>();
+        const expected: Pick<HealingFailure, "key" | "stage">[] = [];
+        const fail = (owner: DatedWaiver, stage: HealingFailure["stage"]) => {
+          const config = cases.at(
+            owners.findIndex(({ id }) => id === owner.id),
+          );
+          if (!config) {
+            throw new TypeError("Green fixture missing");
+          }
+          if (
+            config.stage === stage ||
+            (stage === "retireRemoval" && config.retirement)
+          ) {
+            expected.push({ key: waiverKey(owner), stage });
+            throw new HealingError({
+              message: "Private operation unavailable",
+            });
+          }
+        };
+        const actions = {
+          ...scenario([]).actions,
+          assessRemoval: async (owner: DatedWaiver) => {
+            fail(owner, "assessRemoval");
+            return { status: "eligible" as const };
+          },
+          openRemoval: async ({ entry: owner }: HealingEntry) => {
+            published.add(owner.id);
+            fail(owner, "openRemoval");
+            return owners.findIndex(({ id }) => id === owner.id) + 1;
+          },
+          resolveFixTask: async (owner: DatedWaiver) => {
+            expect(published.has(owner.id)).toBe(true);
+            fail(owner, "resolveFixTask");
+            resolved.add(owner.id);
+          },
+          armRemoval: async (number: number) => {
+            const owner = owners.at(number - 1);
+            if (!owner) {
+              throw new TypeError("Proposal fixture missing");
+            }
+            expect(resolved.has(owner.id)).toBe(true);
+            fail(owner, "armRemoval");
+            armed.add(owner.id);
+          },
+          retireRemoval: async (owner: DatedWaiver) => {
+            fail(owner, "retireRemoval");
+          },
+        };
+        const run = applyHealing({
+          actions,
+          now: new Date("2026-10-12"),
+          report: {
+            sha: "base",
+            observedAt: evidence.observedAt,
+            failures: [],
+            entries: owners.map((owner) => ({ entry: owner, outcome: green })),
+          },
+        });
+        if (cases.some(({ stage }) => stage !== "none")) {
+          const error = await rejectionOf(run);
+          if (!(error instanceof HealingRunError)) {
+            throw new TypeError("Expected typed green aggregate");
+          }
+          expect(
+            error.failures.map(({ key, stage }) => ({ key, stage })),
+          ).toEqual(expected);
+        } else {
+          await run;
+        }
+        expect([...armed]).toEqual(
+          owners
+            .filter((_, index) => cases.at(index)?.stage === "none")
+            .map(({ id }) => id),
+        );
+      },
+    ),
+    { seed: 261_018, numRuns: 100 },
+  );
+});
+
+test("blocked and lapsed entries still alert and retire independently", async () => {
+  const blocked = { ...entry, id: "blocked" };
+  const expired = {
+    ...entry,
+    id: "expired",
+    expiresAt: "2026-10-13T00:00:00.000Z",
+  };
+  const alerts: number[] = [];
+  const retired: string[] = [];
+  const actions = {
+    ...scenario([]).actions,
+    findTask: async () => ({ number: 1, state: "open" as const }),
+    assessRemoval: async () => ({
+      status: "blocked" as const,
+      task: { number: 2, state: "open" as const },
+    }),
+    alertExpiry: async ({ number }: { number: number }) => {
+      alerts.push(number);
+      throw new HealingError({ message: "Alert unavailable" });
+    },
+    retireRemoval: async (owner: DatedWaiver) => {
+      retired.push(owner.id);
+      throw new HealingError({ message: "Retirement unavailable" });
+    },
+  };
+  const error = await rejectionOf(
+    applyHealing({
+      actions,
+      now: new Date("2026-10-14"),
+      report: {
+        sha: "base",
+        observedAt: evidence.observedAt,
+        failures: [],
+        entries: [
+          { entry: blocked, outcome: green },
+          { entry: expired, outcome: { status: "expired" } },
+        ],
+      },
+    }),
+  );
+  expect(alerts).toEqual([1, 2]);
+  expect(retired).toEqual(["expired", "blocked"]);
+  expect(error).toMatchObject({
+    failures: [
+      { key: waiverKey(expired), stage: "alertExpiry" },
+      { key: waiverKey(expired), stage: "retireRemoval" },
+      { key: waiverKey(blocked), stage: "alertExpiry" },
+      { key: waiverKey(blocked), stage: "retireRemoval" },
+    ],
+  });
+});
+
+const PROBE_FAILURE_PROPERTY =
+  "dated probe batches preserve every sibling result across setup failures";
+test(PROBE_FAILURE_PROPERTY, async () => {
+  await assertProperty(
+    PROBE_FAILURE_PROPERTY,
+    fc.asyncProperty(
+      fc.array(fc.boolean(), { minLength: 1, maxLength: 8 }),
+      async (cases) => {
+        const owners = cases.map((_, index) => ({
+          ...entry,
+          id: `probe-${index}`,
+        }));
+        const attempted: string[] = [];
+        const report = await collectProbeReport({
+          due: owners,
+          sha: "base",
+          now: new Date("2026-10-12"),
+          probe: async (owner) => {
+            attempted.push(owner.id);
+            if (cases.at(owners.findIndex(({ id }) => id === owner.id))) {
+              throw new HealingError({ message: "Setup unavailable" });
+            }
+            return green;
+          },
+          failedProbe: () => ({
+            ...green,
+            status: "red",
+            evidence: { ...evidence, attempts: 0, passed: 0 },
+          }),
+        });
+        expect(attempted).toEqual(owners.map(({ id }) => id));
+        expect(report.entries).toHaveLength(owners.length);
+        expect(report.failures).toEqual(
+          owners
+            .filter((_, index) => cases.at(index))
+            .map((owner) => ({ key: waiverKey(owner), stage: "probe" })),
+        );
+        const tasks: string[] = [];
+        const actions = {
+          ...scenario([]).actions,
+          openFixTask: async (owner: DatedWaiver) => {
+            tasks.push(owner.id);
+            return { number: tasks.length, state: "open" as const };
+          },
+        };
+        if (report.failures.length > 0) {
+          expect(
+            await rejectionOf(
+              applyHealing({ report, actions, now: new Date("2026-10-12") }),
+            ),
+          ).toMatchObject({ failures: report.failures });
+        } else {
+          await applyHealing({ report, actions, now: new Date("2026-10-12") });
+        }
+        expect(tasks).toEqual(
+          owners.filter((_, index) => cases.at(index)).map(({ id }) => id),
+        );
+      },
+    ),
+    { seed: 261_019, numRuns: 100 },
+  );
+});
+
+test("report binding keeps valid siblings and carries every malformed entry to publication failure", async () => {
+  const owner = (await loadWaivers()).at(0);
+  if (!owner) {
+    throw new TypeError("Committed inventory fixture missing");
+  }
+  const git = Bun.spawnSync(["git", "rev-parse", "HEAD"], {
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  expect(git.exitCode).toBe(0);
+  const sha = new TextDecoder().decode(git.stdout).trim();
+  const directory = mkdtempSync(path.join(tmpdir(), "waiver-report-"));
+  const file = path.join(directory, "report.json");
+  try {
+    writeFileSync(
+      file,
+      JSON.stringify({
+        sha,
+        observedAt: evidence.observedAt,
+        failures: [],
+        entries: [
+          null,
+          { entry: owner, outcome: { status: "expired" } },
+          { entry: null },
+          { entry: owner, outcome: { status: "expired" } },
+          { entry: owner, outcome: { status: "unavailable" } },
+        ],
+      }),
+    );
+    const report = await readReport(file);
+    expect(report.entries).toHaveLength(3);
+    expect(report.failures).toEqual([
+      { key: "evidence-0", stage: "evidence" },
+      { key: "evidence-2", stage: "evidence" },
+      { key: waiverKey(owner), stage: "evidence" },
+    ]);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+const effectCases = {
+  openFixTask: { stage: "openFixTask", outcome: "red" },
+  findTask: { stage: "findTask", outcome: "expired" },
+  alertExpiry: { stage: "alertExpiry", outcome: "red" },
+  retireRemoval: { stage: "retireRemoval", outcome: "red" },
+  assessRemoval: { stage: "assessRemoval", outcome: "green" },
+  openRemoval: { stage: "openRemoval", outcome: "green" },
+  resolveFixTask: { stage: "resolveFixTask", outcome: "green" },
+  armRemoval: { stage: "armRemoval", outcome: "green" },
+} as const satisfies {
+  [Stage in keyof HealingActions]: {
+    stage: Stage;
+    outcome: "green" | "red" | "expired";
+  };
+};
+
+for (const { stage, outcome } of Object.values(effectCases)) {
+  test(`${stage} failures are collected independently for every entry`, async () => {
+    const owners = ["first", "second"].map((id) => ({
+      ...entry,
+      id,
+      expiresAt:
+        outcome === "expired" ? "2026-10-13T00:00:00.000Z" : entry.expiresAt,
+    }));
+    const actions: HealingActions = { ...scenario([]).actions };
+    actions[stage] = async () => {
+      throw new HealingError({ message: "Operation unavailable" });
+    };
+    const error = await rejectionOf(
+      applyHealing({
+        actions,
+        now: new Date("2026-10-14"),
+        report: {
+          sha: "base",
+          observedAt: evidence.observedAt,
+          failures: [],
+          entries: owners.map((owner) => ({
+            entry: owner,
+            outcome:
+              outcome === "expired"
+                ? { status: "expired" }
+                : {
+                    ...green,
+                    status: outcome,
+                    evidence: {
+                      ...evidence,
+                      passed: outcome === "red" ? 2 : 3,
+                    },
+                  },
+          })),
+        },
+      }),
+    );
+    expect(error).toMatchObject({
+      failures: owners.map((owner) => ({ key: waiverKey(owner), stage })),
+    });
+  });
+}
+
+test("unavailable probe evidence retains its owner for safe retirement while siblings complete", async () => {
+  const failed = { ...entry, id: "failed" };
+  const expired = {
+    ...entry,
+    id: "expired",
+    expiresAt: "2026-10-11T00:00:00.000Z",
+  };
+  const healthy = { ...entry, id: "healthy" };
+  const attempted: string[] = [];
+  const report = await collectProbeReport({
+    due: [expired, failed, healthy],
+    sha: "base",
+    now: new Date("2026-10-12"),
+    probe: async (owner) => {
+      attempted.push(owner.id);
+      if (owner.id === failed.id) {
+        throw new HealingError({ message: "Probe unavailable" });
+      }
+      return green;
+    },
+    failedProbe: () => {
+      throw new HealingError({ message: "Evidence unavailable" });
+    },
+  });
+  expect(attempted).toEqual(["failed", "healthy"]);
+  expect(report.entries.map(({ outcome }) => outcome.status)).toEqual([
+    "expired",
+    "unavailable",
+    "green",
+  ]);
+  const retired: string[] = [];
+  const actions = {
+    ...scenario([]).actions,
+    retireRemoval: async (owner: DatedWaiver) => {
+      retired.push(owner.id);
+    },
+  };
+  const error = await rejectionOf(
+    applyHealing({ report, actions, now: new Date("2026-10-12") }),
+  );
+  expect(retired).toEqual(["expired", "failed"]);
+  expect(error).toMatchObject({
+    failures: [
+      { key: waiverKey(failed), stage: "probe" },
+      { key: waiverKey(failed), stage: "evidence" },
+    ],
+  });
+});
+
+test("the job boundary emits every aggregate failure without private causes", async () => {
+  const failures = ["first", "second"].map((id) => ({
+    key: waiverKey({ ...entry, id }),
+    stage: "retireRemoval" as const,
+    cause: new HealingError({ message: "PRIVATE FAILURE" }),
+  }));
+  const completed = await runHealingBoundary(async () => {
+    throw new HealingRunError({ message: "PRIVATE FAILURE", failures });
+  });
+  expect(completed.status).toBe("failed");
+  if (completed.status !== "failed") {
+    throw new TypeError("Expected failed boundary");
+  }
+  expect(JSON.parse(completed.output)).toEqual({
+    signal: "dated-waiver-failed",
+    failures: failures.map(({ key, stage }) => ({ key, stage })),
+  });
+  expect(completed.output).not.toContain("PRIVATE FAILURE");
+  expect(await runHealingBoundary(async () => {})).toEqual({
+    status: "complete",
+  });
+  const unknown = await runHealingBoundary(async () => {
+    throw new TypeError("PRIVATE FAILURE");
+  });
+  expect(unknown).toEqual({
+    status: "failed",
+    output: "Dated waiver healing failed; diagnostic output withheld.",
+  });
 });

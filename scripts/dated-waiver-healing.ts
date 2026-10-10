@@ -51,7 +51,7 @@ export class HealingError extends TaggedError("HealingError")<{
 export type HealingEntry = {
   entry: DatedWaiver;
   outcome:
-    | { status: "expired" }
+    | { status: "expired" | "unavailable" }
     | {
         status: "green" | "red";
         evidence: FixEvidence;
@@ -63,8 +63,9 @@ type HealingReport = {
   sha: string;
   observedAt: string;
   entries: HealingEntry[];
+  failures: HealingFailureSummary[];
 };
-type HealingActions = {
+export type HealingActions = {
   openRemoval: (
     record: HealingEntry & {
       outcome: Extract<HealingEntry["outcome"], { evidence: FixEvidence }>;
@@ -89,6 +90,160 @@ type HealingActions = {
     state: "open" | "closed";
   }) => Promise<void>;
 };
+const FAILURE_STAGES = {
+  probe: "probe",
+  evidence: "evidence",
+  openFixTask: "openFixTask",
+  findTask: "findTask",
+  alertExpiry: "alertExpiry",
+  retireRemoval: "retireRemoval",
+  assessRemoval: "assessRemoval",
+  openRemoval: "openRemoval",
+  resolveFixTask: "resolveFixTask",
+  armRemoval: "armRemoval",
+} as const satisfies Record<
+  keyof HealingActions | "probe" | "evidence",
+  string
+>;
+export type HealingFailure = {
+  key: string;
+  stage: keyof typeof FAILURE_STAGES;
+  cause: unknown;
+};
+type HealingFailureSummary = Pick<HealingFailure, "key" | "stage">;
+export class HealingRunError extends TaggedError("HealingRunError")<{
+  message: string;
+  failures: HealingFailure[];
+}> {}
+
+type HealEntryOptions = {
+  record: HealingEntry;
+  actions: HealingActions;
+  now: Date;
+  failures: HealingFailure[];
+};
+const healEntry = async ({
+  record: { entry, outcome },
+  actions,
+  now,
+  failures,
+}: HealEntryOptions): Promise<void> => {
+  const attempt = async <T>(
+    stage: HealingFailure["stage"],
+    action: () => Promise<T>,
+  ) => {
+    const result = await Result.tryPromise({
+      try: action,
+      catch: (cause) => cause,
+    });
+    if (Result.isError(result)) {
+      failures.push({ key: waiverKey(entry), stage, cause: result.error });
+    }
+    return result;
+  };
+  const checked = await attempt("evidence", async () => {
+    const at = Date.parse(expiryInstant(entry.expiresAt));
+    if (now.getTime() < at && outcome.status === "expired") {
+      panic("Expired waiver evidence precedes its owner deadline");
+    }
+    if (
+      now.getTime() < at &&
+      outcome.status === "green" &&
+      (outcome.evidence.passed !== entry.probe.attempts ||
+        outcome.evidence.attempts !== entry.probe.attempts)
+    ) {
+      panic("Removal requires all declared probes to pass");
+    }
+    return at;
+  });
+  if (Result.isError(checked)) {
+    await attempt("retireRemoval", () => actions.retireRemoval(entry));
+    return;
+  }
+  const at = checked.value;
+  const alert = async (
+    task: { number: number; state: "open" | "closed" } | undefined,
+  ) => {
+    if (task?.state === "open" && now.getTime() >= at - DAY_MS) {
+      await attempt("alertExpiry", () => actions.alertExpiry(task));
+    }
+  };
+  const findAndAlert = async () => {
+    const task = await attempt("findTask", () => actions.findTask(entry));
+    if (Result.isOk(task)) {
+      await alert(task.value);
+    }
+  };
+  // A lapsed entry may only use an existing task; it cannot create a renewal.
+  if (now.getTime() >= at) {
+    await findAndAlert();
+    await attempt("retireRemoval", () => actions.retireRemoval(entry));
+    return;
+  }
+  switch (outcome.status) {
+    case "red": {
+      const task = await attempt("openFixTask", () =>
+        actions.openFixTask(entry, outcome.evidence),
+      );
+      await attempt("retireRemoval", () => actions.retireRemoval(entry));
+      if (Result.isOk(task)) {
+        await alert(task.value);
+      } else {
+        await findAndAlert();
+      }
+      return;
+    }
+    case "green": {
+      const assessment = await attempt("assessRemoval", () =>
+        actions.assessRemoval(entry, outcome.evidence),
+      );
+      if (Result.isError(assessment)) {
+        await findAndAlert();
+        await attempt("retireRemoval", () => actions.retireRemoval(entry));
+        return;
+      }
+      if (assessment.value.status === "blocked") {
+        await alert(assessment.value.task);
+        await attempt("retireRemoval", () => actions.retireRemoval(entry));
+        return;
+      }
+      const proposal = await attempt("openRemoval", () =>
+        actions.openRemoval({ entry, outcome }),
+      );
+      if (Result.isError(proposal)) {
+        await attempt("retireRemoval", () => actions.retireRemoval(entry));
+        return;
+      }
+      const resolved = await attempt("resolveFixTask", () =>
+        actions.resolveFixTask(entry, outcome.evidence),
+      );
+      if (Result.isError(resolved)) {
+        await attempt("retireRemoval", () => actions.retireRemoval(entry));
+        return;
+      }
+      const number = proposal.value;
+      if (number !== undefined) {
+        const armed = await attempt("armRemoval", () =>
+          actions.armRemoval(number),
+        );
+        if (Result.isError(armed)) {
+          await attempt("retireRemoval", () => actions.retireRemoval(entry));
+        }
+      }
+      return;
+    }
+    case "unavailable":
+      await findAndAlert();
+      await attempt("retireRemoval", () => actions.retireRemoval(entry));
+      return;
+    case "expired":
+      return;
+    default:
+      outcome satisfies never;
+      return panic("Unhandled healing result");
+  }
+};
+
 type ApplyHealingOptions = {
   report: HealingReport;
   actions: HealingActions;
@@ -99,73 +254,34 @@ export const applyHealing = async ({
   actions,
   now,
 }: ApplyHealingOptions): Promise<void> => {
-  // Publish recorded failures before removal writes, whose merge bar can refuse.
+  const failures: HealingFailure[] = report.failures.map((failure) => ({
+    ...failure,
+    cause: new HealingError({
+      message: "Recorded waiver operation failed; diagnostic output withheld.",
+    }),
+  }));
+  // Preserve every red entry's evidence before considering green publication.
   const records = [
     ...report.entries.filter(({ outcome }) => outcome.status !== "green"),
     ...report.entries.filter(({ outcome }) => outcome.status === "green"),
   ];
-  for (const { entry, outcome } of records) {
-    const at = Date.parse(expiryInstant(entry.expiresAt));
-    // Publishing may cross the owner's deadline after probing. Every stale
-    // outcome lapses; only an existing unresolved task may emit the alert.
-    if (now.getTime() >= at) {
-      await actions.retireRemoval(entry);
-      const task = await actions.findTask(entry);
-      if (task?.state === "open") {
-        await actions.alertExpiry(task);
-      }
-      continue;
+  for (const record of records) {
+    const completed = await Result.tryPromise(() =>
+      healEntry({ record, actions, now, failures }),
+    );
+    if (Result.isError(completed)) {
+      failures.push({
+        key: waiverKey(record.entry),
+        stage: "evidence",
+        cause: completed.error,
+      });
     }
-    switch (outcome.status) {
-      case "green": {
-        if (
-          outcome.evidence.passed !== entry.probe.attempts ||
-          outcome.evidence.attempts !== entry.probe.attempts
-        ) {
-          panic("Removal requires all declared probes to pass");
-        }
-        const assessment = await actions.assessRemoval(entry, outcome.evidence);
-        if (assessment.status === "blocked") {
-          await actions.retireRemoval(entry);
-          if (
-            now.getTime() >= at - DAY_MS &&
-            assessment.task.state === "open"
-          ) {
-            await actions.alertExpiry(assessment.task);
-          }
-          break;
-        }
-        const number = await actions.openRemoval({ entry, outcome });
-        await actions.resolveFixTask(entry, outcome.evidence);
-        if (number !== undefined) {
-          await actions.armRemoval(number);
-        }
-        break;
-      }
-      case "red": {
-        // Preserve recorded failure evidence even if disarming refuses; retire
-        // stale proposals even when private task publication is unavailable.
-        const taskResult = await Result.tryPromise(() =>
-          actions.openFixTask(entry, outcome.evidence),
-        );
-        await actions.retireRemoval(entry);
-        if (Result.isError(taskResult)) {
-          throw taskResult.error;
-        }
-        const task = taskResult.value;
-        if (now.getTime() >= at - DAY_MS && task.state === "open") {
-          await actions.alertExpiry(task);
-        }
-        break;
-      }
-      case "expired": {
-        return panic("Expired waiver evidence precedes its owner deadline");
-      }
-      default: {
-        outcome satisfies never;
-        panic("Unhandled healing result");
-      }
-    }
+  }
+  if (failures.length > 0) {
+    throw new HealingRunError({
+      message: "Dated waiver operations failed; diagnostic output withheld.",
+      failures,
+    });
   }
 };
 
@@ -198,6 +314,13 @@ export const redactProbeOutput = (
     )
     .slice(0, OUTPUT_LIMIT);
 };
+
+const probeSecrets = () =>
+  Object.entries(process.env)
+    .filter(([name]) =>
+      /TOKEN|SECRET|PASSWORD|KEY|DATABASE_URL|REDIS_URL/iu.test(name),
+    )
+    .flatMap(([, value]) => (value ? [value] : []));
 
 const checkedGit = (args: readonly string[]): string => {
   const proc = Bun.spawnSync(["git", ...args], {
@@ -368,11 +491,7 @@ const probeEntry = async ({
     for (const { source, after } of changes) {
       writeFileSync(path.join(checkout, source), after);
     }
-    const secrets = Object.entries(process.env)
-      .filter(([name]) =>
-        /TOKEN|SECRET|PASSWORD|KEY|DATABASE_URL|REDIS_URL/iu.test(name),
-      )
-      .flatMap(([, value]) => (value ? [value] : []));
+    const secrets = probeSecrets();
     const env = Object.fromEntries(
       Object.entries(process.env).filter(([name]) =>
         /^(PATH|HOME|TMPDIR|TMP|TEMP|SystemRoot|CI|NODE_ENV|NO_COLOR|GITHUB_REPOSITORY)$/u.test(
@@ -412,98 +531,166 @@ const probeEntry = async ({
   }
 };
 
+type CollectProbeOptions = {
+  due: readonly DatedWaiver[];
+  sha: string;
+  now: Date;
+  probe: (entry: DatedWaiver) => Promise<HealingEntry["outcome"]>;
+  failedProbe: (entry: DatedWaiver, cause: unknown) => HealingEntry["outcome"];
+};
+export const collectProbeReport = async ({
+  due,
+  sha,
+  now,
+  probe,
+  failedProbe,
+}: CollectProbeOptions): Promise<HealingReport> => {
+  const entries: HealingEntry[] = [];
+  const failures: HealingFailureSummary[] = [];
+  for (const entry of due) {
+    const outcome = await Result.tryPromise(async () =>
+      now.getTime() >= Date.parse(expiryInstant(entry.expiresAt))
+        ? { status: "expired" as const }
+        : probe(entry),
+    );
+    if (Result.isOk(outcome)) {
+      entries.push({ entry, outcome: outcome.value });
+      continue;
+    }
+    failures.push({ key: waiverKey(entry), stage: "probe" });
+    const fallback = Result.try(() => failedProbe(entry, outcome.error));
+    if (Result.isError(fallback)) {
+      failures.push({ key: waiverKey(entry), stage: "evidence" });
+      entries.push({ entry, outcome: { status: "unavailable" } });
+    } else {
+      entries.push({ entry, outcome: fallback.value });
+    }
+  }
+  return { sha, observedAt: now.toISOString(), entries, failures };
+};
+
+const failureSchema = v.object({
+  key: v.pipe(v.string(), v.regex(/^(?:[a-f0-9]{24}|evidence-[0-9]+)$/u)),
+  stage: v.picklist(Object.values(FAILURE_STAGES)),
+});
 const reportSchema = v.object({
   sha: v.string(),
   observedAt: v.string(),
-  entries: v.array(
-    v.object({
-      entry: v.object({
-        source: v.string(),
-        line: v.number(),
-        id: v.string(),
-        kind: v.string(),
-        expiresAt: v.string(),
-      }),
-      outcome: v.unknown(),
-    }),
-  ),
+  failures: v.array(failureSchema),
+  entries: v.array(v.unknown()),
+});
+const entrySchema = v.object({
+  entry: v.object({
+    source: v.string(),
+    line: v.number(),
+    id: v.string(),
+    kind: v.string(),
+    expiresAt: v.string(),
+  }),
+  outcome: v.unknown(),
 });
 
 // Re-bind runner-local evidence to current owner entries. Serialized input never
 // decides executable commands, branch names, deadlines, or file paths.
-const readReport = async (file: string): Promise<HealingReport> => {
+export const readReport = async (file: string): Promise<HealingReport> => {
   const parsed = v.parse(reportSchema, JSON.parse(readFileSync(file, "utf-8")));
   const current = await loadWaivers();
-  const entries = parsed.entries.map(({ entry, outcome }): HealingEntry => {
-    const owner = current.find(
-      (candidate) =>
-        candidate.source === entry.source &&
-        candidate.kind === entry.kind &&
-        candidate.id === entry.id,
-    );
-    if (!owner || owner.expiresAt !== entry.expiresAt) {
-      panic("Waiver evidence no longer matches owner");
-    }
-    const result = v.parse(
-      v.variant("status", [
-        v.object({ status: v.literal("expired") }),
-        v.object({
-          status: v.picklist(["green", "red"]),
-          evidence: v.object({
-            attempts: v.number(),
-            passed: v.number(),
-            command: v.array(v.string()),
-            output: v.string(),
-            runner: v.string(),
-            sha: v.string(),
-            sourceFingerprint: v.string(),
-            observedAt: v.pipe(v.string(), v.isoTimestamp()),
-            run: v.string(),
-          }),
-          files: v.record(v.string(), v.string()),
-          baseFiles: v.record(v.string(), v.string()),
-        }),
-      ]),
-      outcome,
-    );
-    if (result.status !== "expired") {
-      if (
-        JSON.stringify(result.evidence.command) !==
-          JSON.stringify(owner.probe.command) ||
-        result.evidence.sha !== parsed.sha ||
-        result.evidence.sourceFingerprint !==
-          sourceFingerprint(owner, result.files, root)
-      ) {
-        panic("Evidence probe does not match owner");
-      }
-      if (result.status === "green" || Object.keys(result.files).length > 0) {
-        const changes = removeWaiver(owner, (source) =>
-          readFileSync(path.join(root, source), "utf-8"),
-        );
-        if (
-          JSON.stringify(result.files) !==
-            JSON.stringify(
-              Object.fromEntries(
-                changes.map(({ source, after }) => [source, after]),
-              ),
-            ) ||
-          JSON.stringify(result.baseFiles) !==
-            JSON.stringify(
-              Object.fromEntries(
-                changes.map(({ source, before }) => [source, before]),
-              ),
-            )
-        ) {
-          panic("Removal evidence does not match owner edit");
-        }
-      }
-    }
-    return { entry: owner, outcome: result };
-  });
   if (parsed.sha !== checkedGit(["rev-parse", "HEAD"])) {
     panic("Evidence checkout SHA mismatch");
   }
-  return { sha: parsed.sha, observedAt: parsed.observedAt, entries };
+  const entries: HealingEntry[] = [];
+  const failures = [...parsed.failures];
+  for (const [index, raw] of parsed.entries.entries()) {
+    let owner: DatedWaiver | undefined;
+    const checked = Result.try((): HealingEntry => {
+      const { entry, outcome } = v.parse(entrySchema, raw);
+      owner = current.find(
+        (candidate) =>
+          candidate.source === entry.source &&
+          candidate.kind === entry.kind &&
+          candidate.id === entry.id,
+      );
+      if (!owner || owner.expiresAt !== entry.expiresAt) {
+        panic("Waiver evidence no longer matches owner");
+      }
+      const result = v.parse(
+        v.variant("status", [
+          v.object({ status: v.picklist(["expired", "unavailable"]) }),
+          v.object({
+            status: v.picklist(["green", "red"]),
+            evidence: v.object({
+              attempts: v.number(),
+              passed: v.number(),
+              command: v.array(v.string()),
+              output: v.string(),
+              runner: v.string(),
+              sha: v.string(),
+              sourceFingerprint: v.string(),
+              observedAt: v.pipe(v.string(), v.isoTimestamp()),
+              run: v.string(),
+            }),
+            files: v.record(v.string(), v.string()),
+            baseFiles: v.record(v.string(), v.string()),
+          }),
+        ]),
+        outcome,
+      );
+      if (result.status !== "expired") {
+        if (
+          JSON.stringify(result.evidence.command) !==
+            JSON.stringify(owner.probe.command) ||
+          result.evidence.sha !== parsed.sha ||
+          result.evidence.sourceFingerprint !==
+            sourceFingerprint(owner, result.files, root)
+        ) {
+          panic("Evidence probe does not match owner");
+        }
+        if (result.status === "green" || Object.keys(result.files).length > 0) {
+          const changes = removeWaiver(owner, (source) =>
+            readFileSync(path.join(root, source), "utf-8"),
+          );
+          if (
+            JSON.stringify(result.files) !==
+              JSON.stringify(
+                Object.fromEntries(
+                  changes.map(({ source, after }) => [source, after]),
+                ),
+              ) ||
+            JSON.stringify(result.baseFiles) !==
+              JSON.stringify(
+                Object.fromEntries(
+                  changes.map(({ source, before }) => [source, before]),
+                ),
+              )
+          ) {
+            panic("Removal evidence does not match owner edit");
+          }
+        }
+      }
+      return { entry: owner, outcome: result };
+    });
+    if (Result.isError(checked)) {
+      failures.push({
+        key: owner ? waiverKey(owner) : `evidence-${index}`,
+        stage: "evidence",
+      });
+      if (owner) {
+        entries.push({ entry: owner, outcome: { status: "unavailable" } });
+      }
+    } else {
+      entries.push(checked.value);
+      if (
+        checked.value.outcome.status === "unavailable" &&
+        !failures.some(({ key }) => key === waiverKey(checked.value.entry))
+      ) {
+        failures.push({
+          key: waiverKey(checked.value.entry),
+          stage: "evidence",
+        });
+      }
+    }
+  }
+  return { sha: parsed.sha, observedAt: parsed.observedAt, entries, failures };
 };
 
 const runMergeBar = async (
@@ -557,6 +744,11 @@ export const disarmRemovalThroughBar = async (
   }
 };
 
+export const renderHealingFailureSignal = (error: HealingRunError) => ({
+  signal: "dated-waiver-failed",
+  failures: error.failures.map(({ key, stage }) => ({ key, stage })),
+});
+
 const main = async (): Promise<void> => {
   const fileIndex = process.argv.indexOf("--evidence");
   const file = process.argv.at(fileIndex + 1);
@@ -574,35 +766,46 @@ const main = async (): Promise<void> => {
         )
         .reduce((count, entry) => count + entry.probe.attempts, 0),
     });
-    const entries: HealingEntry[] = [];
-    for (const entry of due) {
-      const expired =
-        now.getTime() >= Date.parse(expiryInstant(entry.expiresAt));
-      entries.push({
-        entry,
-        outcome: expired
-          ? { status: "expired" }
-          : await probeEntry({ entry, sha, budget }),
-      });
-    }
+    const report = await collectProbeReport({
+      due,
+      sha,
+      now,
+      probe: (entry) => probeEntry({ entry, sha, budget }),
+      failedProbe: (entry, cause) => ({
+        status: "red",
+        evidence: {
+          attempts: 0,
+          passed: 0,
+          command: entry.probe.command,
+          output: redactProbeOutput(
+            `Probe setup or cleanup failed; no complete successful probe was recorded.\n${String(cause)}`,
+            probeSecrets(),
+          ),
+          runner: process.env["RUNNER_OS"] ?? process.platform,
+          sha,
+          sourceFingerprint: sourceFingerprint(entry, {}, root),
+          observedAt: new Date().toISOString(),
+          run: process.env["GITHUB_RUN_ID"]
+            ? `https://github.com/stella/stella/actions/runs/${process.env["GITHUB_RUN_ID"]}`
+            : "local",
+        },
+        files: {},
+        baseFiles: {},
+      }),
+    });
     mkdirSync(path.dirname(file), { recursive: true });
-    writeFileSync(
-      file,
-      JSON.stringify({
-        sha,
-        observedAt: now.toISOString(),
-        entries,
-      } satisfies HealingReport),
-      { mode: 0o600 },
-    );
+    writeFileSync(file, JSON.stringify(report), { mode: 0o600 });
     const output = process.env["GITHUB_OUTPUT"];
     if (output) {
-      appendFileSync(output, `write_needed=${entries.length > 0}\n`);
+      appendFileSync(
+        output,
+        `write_needed=${report.entries.length > 0 || report.failures.length > 0}\n`,
+      );
     }
     console.log(
       JSON.stringify({
         signal: "dated-waiver-probed",
-        entries: entries.length,
+        entries: report.entries.length,
       }),
     );
     return;
@@ -654,10 +857,24 @@ const main = async (): Promise<void> => {
   });
 };
 
+export const runHealingBoundary = async (run: () => Promise<void>) => {
+  const result = await Result.tryPromise({ try: run, catch: (cause) => cause });
+  if (Result.isOk(result)) {
+    return { status: "complete" } as const;
+  }
+  return {
+    status: "failed",
+    output:
+      result.error instanceof HealingRunError
+        ? JSON.stringify(renderHealingFailureSignal(result.error))
+        : "Dated waiver healing failed; diagnostic output withheld.",
+  } as const;
+};
+
 if (import.meta.main) {
-  const result = await Result.tryPromise(main);
-  if (Result.isError(result)) {
-    console.error("Dated waiver healing failed; diagnostic output withheld.");
+  const completed = await runHealingBoundary(main);
+  if (completed.status === "failed") {
+    console.error(completed.output);
     process.exitCode = 1;
   }
 }
