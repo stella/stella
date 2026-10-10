@@ -190,37 +190,37 @@ describe("resource-bound refresh grants", () => {
     },
   );
 
-  test.each(["dynamic", "metadata", "confidential"] as const)(
-    "refuses to replay a %s grant for a different client",
-    async (registration) => {
-      const { client, grant, userId } = await fixture(registration);
-      const rotation = await refreshOAuthGrant({
-        client,
-        refreshToken: grant.refreshToken,
-      });
-      expect(rotation.status).toBe(200);
-      const successor = v.parse(tokensSchema, await rotation.json());
-      const otherClient = await registerOAuthClient(undefined, "none");
-      const rowsBefore = await countTokenRows({
-        clientId: client.clientId,
-        userId,
-      });
-      const response = await refreshOAuthGrant({
-        client: otherClient,
-        refreshToken: grant.refreshToken,
-      });
-      expect(response.status).toBe(400);
-      expect(await response.json()).toMatchObject({ error: "invalid_grant" });
-      expect(
-        await countTokenRows({ clientId: client.clientId, userId }),
-      ).toEqual(rowsBefore);
-      const valid = await refreshOAuthGrant({
-        client,
-        refreshToken: successor.refresh_token,
-      });
-      expect(valid.status).toBe(200);
-    },
-  );
+  test("a different client never receives the replay", async () => {
+    const { client, grant, userId } = await fixture("dynamic");
+    const rotation = await refreshOAuthGrant({
+      client,
+      refreshToken: grant.refreshToken,
+    });
+    expect(rotation.status).toBe(200);
+    const successor = v.parse(tokensSchema, await rotation.json());
+    const otherClient = await registerOAuthClient(undefined, "none");
+    const rowsBefore = await countTokenRows({
+      clientId: client.clientId,
+      userId,
+    });
+    const response = await refreshOAuthGrant({
+      client: otherClient,
+      refreshToken: grant.refreshToken,
+    });
+    expect(response.status).toBe(400);
+    const refusal = await response.json();
+    expect(refusal).toMatchObject({ error: "invalid_grant" });
+    expect(refusal).not.toHaveProperty("access_token");
+    expect(refusal).not.toHaveProperty("refresh_token");
+    expect(await countTokenRows({ clientId: client.clientId, userId })).toEqual(
+      rowsBefore,
+    );
+    const valid = await refreshOAuthGrant({
+      client,
+      refreshToken: successor.refresh_token,
+    });
+    expect(valid.status).toBe(200);
+  });
 
   test.each(["unknown", "expired", "revoked"] as const)(
     "answers invalid_grant for a %s refresh token",

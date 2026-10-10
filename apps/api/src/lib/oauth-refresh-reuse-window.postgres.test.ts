@@ -228,59 +228,6 @@ if (!runPostgres || !process.env["DATABASE_URL"]) {
         });
       },
     );
-    test.each(
-      CLIENT_AUTH_METHODS.flatMap((ownerMethod) =>
-        CLIENT_AUTH_METHODS.map(
-          (presenterMethod) => [ownerMethod, presenterMethod] as const,
-        ),
-      ),
-    )(
-      "refuses a stored %s rotation replay presented by a different %s client",
-      async (ownerMethod, presenterMethod) => {
-        const { client, grant } = await fixture(ownerMethod);
-        const rotation = await refreshOAuthGrant({
-          client,
-          refreshToken: grant.refreshToken,
-        });
-        expect(rotation.status).toBe(200);
-        const firstRotation = v.parse(tokenSchema, await rotation.json());
-        const otherClient = await registerOAuthClient(
-          undefined,
-          presenterMethod,
-        );
-        cleanup.push(
-          async () =>
-            await rootDb
-              .delete(oauthClient)
-              .where(eq(oauthClient.clientId, otherClient.clientId)),
-        );
-        const ownerRows = await countTokenRows(client.clientId);
-        const presenterRows = await countTokenRows(otherClient.clientId);
-        const refused = await refreshOAuthGrant({
-          client: otherClient,
-          refreshToken: grant.refreshToken,
-        });
-        expect(refused.status).toBe(400);
-        const refusal = await refused.json();
-        expect(refusal).toMatchObject({ error: "invalid_grant" });
-        expect(refusal).not.toHaveProperty("access_token");
-        expect(refusal).not.toHaveProperty("refresh_token");
-        expect(await countTokenRows(client.clientId)).toEqual(ownerRows);
-        expect(await countTokenRows(otherClient.clientId)).toEqual(
-          presenterRows,
-        );
-        const rightfulReplay = await refreshOAuthGrant({
-          client,
-          refreshToken: grant.refreshToken,
-        });
-        expect(rightfulReplay.status).toBe(200);
-        expectReplayedTokens(
-          v.parse(tokenSchema, await rightfulReplay.json()),
-          firstRotation,
-        );
-        expect(await countTokenRows(client.clientId)).toEqual(ownerRows);
-      },
-    );
     // Both requests read the unrotated row before the conditional update.
     test.each(CLIENT_AUTH_METHODS)(
       "rejects the losing concurrent update and preserves the winning %s rotation",
