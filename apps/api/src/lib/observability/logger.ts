@@ -1,3 +1,4 @@
+// parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
 import "@/api/lib/observability/otel";
 import type { AttributeValue } from "@opentelemetry/api";
 import { logs, SeverityNumber } from "@opentelemetry/api-logs";

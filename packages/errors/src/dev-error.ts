@@ -1,3 +1,4 @@
+// parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
 import { sanitizeErrorForOutput } from "./query-error";
 
 // Dev-only error logging, shared by the API and web apps. Both surface

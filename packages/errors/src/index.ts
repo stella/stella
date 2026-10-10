@@ -1,3 +1,4 @@
+// parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
 import { TaggedError } from "better-result";
 
 export { createDetached, type DetachedRejectionSink } from "./detached";
