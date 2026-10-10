@@ -171,15 +171,13 @@ test("a real slug cache read contributes its resolved canonical decision to answ
     ...second,
     decisionId: second.id,
   });
-  client.setQueryData(
-    decisionBySlugOptions({
-      country:
-        publicCaseLawCountryFromParam(params.country) ??
-        panic("Synthetic citation country must be public"),
-      slug: params.slug,
-    }).queryKey,
-    second,
-  );
+  const slugOptions = decisionBySlugOptions({
+    country:
+      publicCaseLawCountryFromParam(params.country) ??
+      panic("Synthetic citation country must be public"),
+    slug: params.slug,
+  });
+  client.setQueryData(slugOptions.queryKey, second);
   const path = createCaseLawDecisionPath(params);
   const screen = mount(
     client,
@@ -213,6 +211,22 @@ test("a real slug cache read contributes its resolved canonical decision to answ
   expect(
     screen.container.querySelector(`[data-decision-citation="${second.id}"]`),
   ).not.toBeNull();
+  client.setQueryData(slugOptions.queryKey, {
+    ...second,
+    courtAbbreviation: "NSS",
+  });
+  await waitFor(() =>
+    expect(
+      screen.container.querySelectorAll(
+        '[data-citation-presentation="compact"]',
+      ),
+    ).toHaveLength(2),
+  );
+  expect(
+    screen.container.querySelector(`[data-decision-citation="${second.id}"]`)
+      ?.textContent,
+  ).toBe("NSS");
+  expect(client.isFetching()).toBe(0);
 });
 
 test("passive answer links and complete carried source metadata schedule no decision fetch", async () => {

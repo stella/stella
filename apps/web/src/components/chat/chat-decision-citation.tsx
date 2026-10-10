@@ -279,7 +279,14 @@ export const ChatAnswerDecisionProvider = ({
     }
   }
   const queries = useQueries({
-    queries: requests.map(({ options }) => ({ ...options, enabled: false })),
+    // Keep the dynamic observer array clear of queryOptions' optional generic
+    // callbacks; these observers only follow the canonical decision caches.
+    queries: requests.map(({ options }) => ({
+      queryKey: options.queryKey,
+      queryFn: options.queryFn,
+      staleTime: options.staleTime,
+      enabled: false,
+    })),
   });
   for (const [index, request] of requests.entries()) {
     const query = queries.at(index);
