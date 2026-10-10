@@ -57,6 +57,11 @@ const TEST_FILE = /\.(?:test|spec)\.[cm]?[jt]sx?$/u;
 const TEST_SUPPORT =
   /(?:^|\/)(?:__tests__|test|tests|fixtures?|mocks?|test-utils?)(?:\/|[.-])/u;
 const SOURCE_FILE = /\.[cm]?[jt]sx?$/u;
+const NODE_NEXT_SOURCE_EXTENSION_SUBSTITUTIONS = new Map([
+  [".js", [".ts", ".tsx"]],
+  [".mjs", [".mts"]],
+  [".cjs", [".cts"]],
+]);
 
 const parse = (file: string, text: string) =>
   ts.createSourceFile(
@@ -187,6 +192,18 @@ const candidatePaths = (
   }
   if (!unresolved) {
     return [];
+  }
+  const runtimeExtension = path.extname(unresolved);
+  const sourceExtensions =
+    NODE_NEXT_SOURCE_EXTENSION_SUBSTITUTIONS.get(runtimeExtension);
+  if (sourceExtensions !== undefined) {
+    const sourcePath = unresolved.slice(0, -runtimeExtension.length);
+    return [
+      ...sourceExtensions.map(
+        (sourceExtension) => `${sourcePath}${sourceExtension}`,
+      ),
+      unresolved,
+    ];
   }
   return [
     unresolved,

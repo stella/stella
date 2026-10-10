@@ -53,6 +53,7 @@ const RESOURCE_WRITE_ACCOUNT_ACCESS = {
   caseLawResearch: ACCOUNT_ACCESS.sandbox,
   legalReaderAnnotation: ACCOUNT_ACCESS.sandbox,
   savedSearch: ACCOUNT_ACCESS.sandbox,
+  searchHistory: ACCOUNT_ACCESS.sandbox,
 } as const satisfies Record<keyof typeof statements, AccountAccess>;
 
 const requiresStandardResourceWrite = (permissions: Record<string, string[]>) =>

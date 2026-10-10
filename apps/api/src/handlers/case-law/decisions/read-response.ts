@@ -43,6 +43,7 @@ const DECISION_READER_TEXT_BYTES = {
   slug: 256 * 4,
   ecli: 256 * 4,
   court: 512 * 4,
+  courtId: 128 * 4,
   courtAbbreviation: 512 * 4,
   country: 3 * 4,
   language: 8 * 4,
@@ -130,6 +131,7 @@ const languageAlternateSchema = t.Object({
   caseNumber: boundedString(DECISION_READER_TEXT_BYTES.caseNumber),
   country: boundedString(DECISION_READER_TEXT_BYTES.country),
   court: boundedString(DECISION_READER_TEXT_BYTES.court),
+
   decisionDate: nullableBoundedString(DECISION_READER_TEXT_BYTES.decisionDate),
   language: boundedString(DECISION_READER_TEXT_BYTES.language),
   slug: nullableBoundedString(DECISION_READER_TEXT_BYTES.slug),
@@ -165,6 +167,7 @@ export const readDecisionSuccessResponseSchema = t.Object({
     { minItems: 1, maxItems: DECISION_IDENTIFIER_MAX_COUNT },
   ),
   court: boundedString(DECISION_READER_TEXT_BYTES.court),
+  courtId: nullableBoundedString(DECISION_READER_TEXT_BYTES.courtId),
   courtAbbreviation: nullableBoundedString(
     DECISION_READER_TEXT_BYTES.courtAbbreviation,
   ),
@@ -379,6 +382,7 @@ export const projectDecisionReader = (decision: ReadableDecision) => {
         .map(identifier),
     ],
     court: truncateTextBytes(decision.court, text.court),
+    courtId: nullableText(decision.courtId, text.courtId),
     courtAbbreviation: nullableText(
       decision.courtAbbreviation,
       text.courtAbbreviation,

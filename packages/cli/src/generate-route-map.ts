@@ -194,19 +194,41 @@ const unwrapNullableUnion = (schema: PropSchema): PropSchema => {
   return { ...outer, ...valueBranch, type: [...valueTypes, "null"] };
 };
 
+const enumValues = (schema: PropSchema): readonly string[] | undefined => {
+  const values = schema["enum"];
+  if (values !== undefined) {
+    return Array.isArray(values) &&
+      values.every((value) => typeof value === "string")
+      ? values
+      : undefined;
+  }
+  const branches = schema["anyOf"];
+  if (!Array.isArray(branches) || branches.length === 0) {
+    return undefined;
+  }
+  const literals: string[] = [];
+  for (const branch of branches) {
+    if (
+      !isRecordSchema(branch) ||
+      branch["type"] !== "string" ||
+      typeof branch["const"] !== "string"
+    ) {
+      return undefined;
+    }
+    literals.push(branch["const"]);
+  }
+  return [...new Set(literals)];
+};
+
 const typeInfo = (schema: PropSchema): TypeInfo => {
   const types = schemaTypeList(schema["type"]);
   const nullable = types.includes("null");
-  const base = types.find((t) => t !== "null");
+  const base =
+    types.find((type) => type !== "null") ??
+    (types.length === 0 && enumValues(schema) !== undefined
+      ? "string"
+      : undefined);
   return { base, nullable };
-};
-
-const enumValues = (schema: PropSchema): readonly string[] | undefined => {
-  const values = schema["enum"];
-  if (!Array.isArray(values)) {
-    return undefined;
-  }
-  return values.every((v) => typeof v === "string") ? values : undefined;
 };
 
 /** Conditionally include `min`/`max` so an absent bound is omitted, not `undefined`. */

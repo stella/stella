@@ -522,6 +522,7 @@ export const readDecisionHandler = definePublicLawSharedQuery(
       ecli: decision.ecli,
       identifiers: decisionIdentifierProjection(decision.identifiers, decision),
       court: decision.court,
+      courtId: decision.courtId,
       courtAbbreviation: presentation.courtAbbreviation,
       courtTier: presentation.courtTier,
       country: decision.country,
