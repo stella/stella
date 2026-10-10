@@ -90,6 +90,22 @@ export const isSeal = (value: unknown): value is Seal =>
   isDigests(value.content) &&
   isDigests(value.nonContent);
 
+export const parseStoredSeal = (value: unknown): Seal | null => {
+  if (isSeal(value)) {
+    return value;
+  }
+  // Previous seals used schema-qualified table names as their digest keys.
+  // They cannot establish the classified baseline, but must not prevent the
+  // runner from starting and making its reset command available.
+  if (
+    isDigests(value) &&
+    Object.keys(value).every((table) => table.includes("."))
+  ) {
+    return null;
+  }
+  return panic("Stored seed seal is neither classified nor legacy");
+};
+
 const changedTables = (before: Digests, after: Digests) =>
   [...new Set([...Object.keys(before), ...Object.keys(after)])]
     .filter((table) => before[table] !== after[table])
@@ -232,12 +248,7 @@ if (import.meta.main) {
       let sealed: Seal | null = null;
       if (row?.fresh !== true && existsSync(sealPath)) {
         const parsed: unknown = JSON.parse(readFileSync(sealPath, "utf-8"));
-        if (!isSeal(parsed)) {
-          panic(
-            `${sealPath} is not a classified seal; run bun run agent:reset`,
-          );
-        }
-        sealed = parsed;
+        sealed = parseStoredSeal(parsed);
       }
       console.log(
         JSON.stringify(

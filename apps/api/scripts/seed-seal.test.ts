@@ -13,6 +13,7 @@ import {
   checkSeal,
   classifySealTable,
   isSeal,
+  parseStoredSeal,
   readTableDigests,
 } from "./seed-seal";
 import type { Seal } from "./seed-seal";
@@ -112,6 +113,34 @@ describe("seeded content seal", () => {
       { content: {}, nonContent: { table: 1 } },
     ]) {
       expect(isSeal(value)).toBe(false);
+    }
+  });
+
+  test("legacy flat baselines are unsealed so stack startup can finish", () => {
+    for (const legacy of [baseline.content, {}]) {
+      expect(
+        checkSeal({
+          fresh: false,
+          sealed: parseStoredSeal(legacy),
+          current: baseline,
+        }),
+      ).toEqual({ status: "unsealed" });
+    }
+    expect(parseStoredSeal(baseline)).toEqual(baseline);
+  });
+
+  test("malformed baselines still fail loudly instead of being treated as legacy", () => {
+    for (const malformed of [
+      null,
+      [],
+      "legacy",
+      { "public.entities": 1 },
+      { content: "invalid", nonContent: "invalid" },
+      { content: {}, nonContent: { table: 1 } },
+    ]) {
+      expect(() => parseStoredSeal(malformed)).toThrow(
+        "Stored seed seal is neither classified nor legacy",
+      );
     }
   });
 
