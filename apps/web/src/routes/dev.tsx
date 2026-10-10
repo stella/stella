@@ -23,6 +23,9 @@ const visualLayouts = {
   "inspector-pane": ({ children }: LayoutProps) => (
     <div className="flex min-h-0 flex-1 flex-col p-4">{children}</div>
   ),
+  "provision-header": ({ children }: LayoutProps) => (
+    <div className="min-h-0 flex-1 p-4">{children}</div>
+  ),
   "workspace-table": ({ children }: LayoutProps) => (
     <div className="flex min-h-0 flex-1 flex-col p-4">{children}</div>
   ),

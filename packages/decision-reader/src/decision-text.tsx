@@ -48,7 +48,6 @@ import {
   HighlightedText,
   InlineContent,
   WrappedParagraphRun,
-  inlinesToPlainText,
   rangesForPiece,
 } from "./document-ast-text";
 import type { TextAnchor } from "./document-ast-text";
@@ -57,6 +56,7 @@ import { HeadnoteBlock } from "./headnote-block";
 import type { HeadnoteOrigin } from "./headnote-block";
 import type { ProvisionAnchorSpan } from "./provision-anchors";
 import { locateProvisionAnchors } from "./provision-anchors";
+import { provisionCardsOf } from "./provision-card.logic";
 import type { DecisionReaderAdapters } from "./reader-adapters";
 import { useReaderAdapters, useReaderMessages } from "./reader-adapters";
 import { ReaderInsetBox } from "./reader-inset-box";
@@ -403,7 +403,7 @@ const DecisionTopMatterSections = ({
   return (
     // The text is read like the decision it belongs to: the article's serif,
     // size and line-height, inherited. Only the labels are chrome.
-    <ReaderInsetBox className="mb-8">
+    <ReaderInsetBox className="mb-8" density="roomy">
       {legalSentence !== null && (
         <HeadnoteBlock
           defaultOpen
@@ -696,19 +696,11 @@ const buildAnchorsByPieceId = ({
     }
     provisionsByAnchorId.set(
       block.anchorId,
-      spans.map((span) => (
-        <Fragment key={`${span.source.id}:${String(span.start)}`}>
+      provisionCardsOf(spans.map(({ source }) => source)).map((card) => (
+        <Fragment key={card.id}>
           {adapters.renderStatuteLink({
             type: "provision-expansion",
-            label: inlinesToPlainText(block.inlines).slice(
-              span.start,
-              span.end,
-            ),
-            provision: span.source.target,
-            version: {
-              type: "consolidation",
-              validFrom: span.source.target.document.versionValidFrom,
-            },
+            citations: card.citations,
           })}
         </Fragment>
       )),
@@ -1020,17 +1012,23 @@ export const DecisionText = ({
 
   const { anchorsByPieceId, provisionsByAnchorId } = placements;
 
-  const supplementsByAnchorId = new Map(notesByAnchorId);
+  // A block's note keeps its place in the tree whether the provision cards
+  // above it are shown or not, so toggling them never remounts the note.
+  const supplementsByAnchorId = new Map<string, ReactNode>();
+  const supplementedAnchorIds = new Set(notesByAnchorId?.keys());
   if (expandProvisions) {
-    for (const [anchorId, cards] of provisionsByAnchorId) {
-      supplementsByAnchorId.set(
-        anchorId,
-        <>
-          {cards}
-          {notesByAnchorId?.get(anchorId)}
-        </>,
-      );
+    for (const anchorId of provisionsByAnchorId.keys()) {
+      supplementedAnchorIds.add(anchorId);
     }
+  }
+  for (const anchorId of supplementedAnchorIds) {
+    supplementsByAnchorId.set(
+      anchorId,
+      <>
+        {expandProvisions ? provisionsByAnchorId.get(anchorId) : null}
+        {notesByAnchorId?.get(anchorId)}
+      </>,
+    );
   }
 
   // One return, so the attribution line cannot be forgotten on the branch

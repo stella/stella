@@ -641,9 +641,6 @@
   .my-2 {
     margin-block: calc(var(--spacing) * 2);
   }
-  .my-3 {
-    margin-block: calc(var(--spacing) * 3);
-  }
   .my-4 {
     margin-block: calc(var(--spacing) * 4);
   }
@@ -1003,9 +1000,6 @@
   .max-h-40 {
     max-height: calc(var(--spacing) * 40);
   }
-  .max-h-64 {
-    max-height: calc(var(--spacing) * 64);
-  }
   .max-h-\[40vh\] {
     max-height: 40vh;
   }
@@ -1255,6 +1249,9 @@
   .max-w-lg {
     max-width: var(--container-lg);
   }
+  .max-w-max {
+    max-width: max-content;
+  }
   .max-w-md {
     max-width: var(--container-md);
   }
@@ -1308,6 +1305,9 @@
   }
   .grow {
     flex-grow: 1;
+  }
+  .basis-0 {
+    flex-basis: 0px;
   }
   .basis-\[22rem\] {
     flex-basis: 22rem;
@@ -1736,6 +1736,10 @@
     border-inline-start-style: var(--tw-border-style);
     border-inline-start-width: 2px;
   }
+  .border-s-\[3px\] {
+    border-inline-start-style: var(--tw-border-style);
+    border-inline-start-width: 3px;
+  }
   .border-e {
     border-inline-end-style: var(--tw-border-style);
     border-inline-end-width: 1px;
@@ -1822,6 +1826,12 @@
   }
   .border-primary {
     border-color: var(--primary);
+  }
+  .border-primary\/50 {
+    border-color: var(--primary);
+    @supports (color: color-mix(in lab, red, red)) {
+      border-color: color-mix(in oklab, var(--primary) 50%, transparent);
+    }
   }
   .border-sidebar-border {
     border-color: var(--sidebar-border);
@@ -2298,6 +2308,9 @@
   }
   .ps-2 {
     padding-inline-start: calc(var(--spacing) * 2);
+  }
+  .ps-2\.5 {
+    padding-inline-start: calc(var(--spacing) * 2.5);
   }
   .ps-3 {
     padding-inline-start: calc(var(--spacing) * 3);
@@ -4308,6 +4321,12 @@
   }
   .data-checked\:bg-primary[data-checked] {
     background-color: var(--primary);
+  }
+  .data-clipped\:invisible[data-clipped] {
+    visibility: hidden;
+  }
+  .data-clipped\:h-0[data-clipped] {
+    height: 0px;
   }
   :is(.\*\*\:data-current\:w-\[calc\(var\(--popup-width\)-2\*var\(--viewport-inline-padding\)-2px\)\] *)[data-current] {
     width: calc(var(--popup-width) - 2 * var(--viewport-inline-padding) - 2px);

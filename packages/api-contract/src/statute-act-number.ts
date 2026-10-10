@@ -7,7 +7,7 @@
  * row the same two parts whichever way the publisher wrote the title.
  */
 
-import { statuteGazetteAbbreviation } from "@stll/api-contract/statute-gazette";
+import { statuteGazetteAbbreviation } from "./statute-gazette";
 
 /** `…/eli/<country>/<collection>/<year>/<number>`, optionally with a tail. */
 const ELI_ACT_TAIL_RE =

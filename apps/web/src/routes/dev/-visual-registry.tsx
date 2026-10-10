@@ -67,6 +67,13 @@ const visualLoaders = {
       return { default: ProtectedPendingSkeleton };
     },
   },
+  "provision-header": {
+    load: async () => {
+      const { ProvisionHeaderPlayground } =
+        await import("./-components/provision-header-playground");
+      return { default: ProvisionHeaderPlayground };
+    },
+  },
   "workspace-table": {
     load: async () => {
       const { WorkspaceTablePlayground } =

@@ -1,6 +1,8 @@
-import type { ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
+import { useState } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
+import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
 
 import {
@@ -9,6 +11,8 @@ import {
 } from "@stll/api-contract/case-law-text-field";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
+import { CitedProvisionExpansion } from "./cited-provision";
+import type { FullProvisionRead } from "./cited-provision";
 import { DecisionText, prepareDecisionTextPlacements } from "./decision-text";
 import { BlockRenderer } from "./document-ast-text";
 import {
@@ -16,7 +20,11 @@ import {
   ReaderPresentationProvider,
 } from "./reader-adapters";
 import type { DecisionReaderAdapters } from "./reader-adapters";
-import type { ReaderDecision } from "./reader-types";
+import type {
+  CitedProvisionTarget,
+  ProvisionPreviewData,
+  ReaderDecision,
+} from "./reader-types";
 
 export const fakeReaderAdapters = {
   messages: {
@@ -31,13 +39,19 @@ export const fakeReaderAdapters = {
     "caseLaw.reader.headMatter": "Head matter",
     "caseLaw.notesFilter.ai": "AI",
     "common.court": "Court",
-    "statutes.currentWording": "Current wording",
     "statutes.wordingVersionUnknown": "Wording version unknown",
     "statutes.openProvision": "Open provision",
+    "statutes.provisionTextUnavailable": "Text not available",
+    "statutes.showCitedPartOnly": "Show cited part only",
+    "statutes.showFullProvision": "Show full provision",
     sourceAttribution: (source, link) => <>Source: {link(source)}</>,
     dissentByline: (names) => names.join(", "),
-    wordingValidFrom: (date) => `Wording valid from ${date}`,
+    provisionPartTextUnavailable: (provisionLabel) =>
+      `Text of ${provisionLabel} is not available`,
+    provisionEffectiveFrom: (date) => `in force since ${date}`,
     formatValidityDate: (date) => date,
+    provisionActText: ({ statuteTitle }) => statuteTitle,
+    formatLabelList: (labels) => labels.join(", "),
   },
   renderDecisionLink: ({ children, decision, className }) => (
     <a className={className} href={`#decision-${decision.id}`}>
@@ -55,7 +69,11 @@ export const fakeReaderAdapters = {
           <a href={`#${props.provision.payload.anchorId}`}>{props.children}</a>
         );
       case "provision-expansion":
-        return <div data-slot="fake-provision-card">{props.label}</div>;
+        return (
+          <div data-slot="fake-provision-card">
+            {props.citations.map(({ payload }) => payload.provisionLabel)}
+          </div>
+        );
       default:
         props satisfies never;
         throw new TypeError("Unknown fixture link");
@@ -297,3 +315,368 @@ test("a supplied copy adapter preserves existing permalink markup", () => {
     ).toEqual(previousControls);
   }
 });
+
+test("a provision card identifies unavailable parts until its full wording recovers them", () => {
+  const provision = (part: string) =>
+    ({
+      document: {
+        country: "cz",
+        eli: "/eli/cz/sb/2012/89",
+        id: "act",
+        slug: null,
+        versionValidFrom: null,
+      },
+      payload: {
+        anchorId: "par_5",
+        documentId: "act",
+        eli: "/eli/cz/sb/2012/89",
+        highlightAnchorId: `par_5-odst_${part}`,
+        jurisdiction: "CZE",
+        provisionLabel: `§ 5 odst. ${part}`,
+        statuteTitle: "Občanský zákoník",
+        versionCount: 1,
+        versionValidFrom: null,
+      },
+      preview: null,
+    }) satisfies CitedProvisionTarget;
+  const available = provision("1");
+  const missing = provision("2");
+  const wording = {
+    anchorId: "par_5",
+    blocks: [
+      {
+        anchorId: "par_5-odst_1",
+        id: "part-1",
+        text: "Odborná péče se posuzuje podle povolání.",
+      },
+    ],
+    citedAnchorId: "par_5-odst_1",
+    documentId: "act",
+    heading: null,
+    headings: [],
+    language: "cs",
+  };
+  type RenderProvisionOptions = {
+    availableWording: typeof wording | null;
+    missingWording: typeof wording | null;
+    full?: ComponentProps<typeof CitedProvisionExpansion>["full"];
+    showsFull?: boolean;
+  };
+  const render = ({
+    availableWording,
+    missingWording,
+    full = { isPending: false, whole: null },
+    showsFull = false,
+  }: RenderProvisionOptions) =>
+    renderReaderFixture(
+      <CitedProvisionExpansion
+        citations={[available, missing]}
+        full={full}
+        onToggleFull={() => undefined}
+        showsFull={showsFull}
+        wordings={[
+          { target: available, wording: availableWording },
+          { target: missing, wording: missingWording },
+        ]}
+      />,
+    );
+  for (const missingWording of [null, { ...wording, blocks: [] }]) {
+    const markup = render({ availableWording: wording, missingWording });
+    expect(markup).toContain("Odborná péče se posuzuje podle povolání.");
+    expect(markup).toMatch(
+      /data-slot="provision-card-unavailable-part"[^>]*><bdi[^>]*>Text of § 5 odst\. 2 is not available<\/bdi>/u,
+    );
+    expect(markup.indexOf("Odborná péče")).toBeLessThan(
+      markup.indexOf("Text of § 5 odst. 2"),
+    );
+    expect(markup).not.toContain('data-slot="provision-card-unavailable"');
+  }
+  for (const whole of [null, { ...wording, blocks: [] }]) {
+    const markup = render({
+      availableWording: wording,
+      missingWording: null,
+      showsFull: true,
+      full: { isPending: false, whole },
+    });
+    expect(markup).toContain("Odborná péče se posuzuje podle povolání.");
+    expect(markup).toContain("Text of § 5 odst. 2 is not available");
+    expect(markup).toMatch(
+      /data-slot="provision-card-full-unavailable"[^>]*>Text not available<\/span>/u,
+    );
+    expect(markup).toContain('aria-expanded="false"');
+    expect(markup).toContain("Show full provision");
+    expect(markup).not.toContain("Show cited part only");
+  }
+  const fullAvailableBlock = {
+    anchorId: "par_5-odst_1",
+    id: "full-part-1",
+    text: "Odborná péče se posuzuje podle povolání.",
+  };
+  const fullMissingBlock = {
+    anchorId: "par_5-odst_2",
+    id: "full-part-2",
+    text: "Doplněné znění druhého odstavce.",
+  };
+  const fullMissingChildBlock = {
+    anchorId: "par_5-odst_2-pism_a",
+    id: "full-part-2-letter-a",
+    text: "Písmeno citovaného druhého odstavce.",
+  };
+  const uncitedFullBlock = {
+    anchorId: "par_5-odst_3",
+    id: "full-part-3",
+    text: "Necitované znění třetího odstavce.",
+  };
+  for (const missingWording of [null, { ...wording, blocks: [] }]) {
+    const unresolved = render({
+      availableWording: wording,
+      missingWording,
+      showsFull: true,
+      full: {
+        isPending: false,
+        whole: {
+          ...wording,
+          citedAnchorId: null,
+          blocks: [fullAvailableBlock, uncitedFullBlock],
+        },
+      },
+    });
+    expect(unresolved).toContain('aria-expanded="true"');
+    expect(unresolved).toContain("Show cited part only");
+    expect(unresolved).not.toContain(
+      'data-slot="provision-card-full-unavailable"',
+    );
+    expect(unresolved).toContain("Odborná péče se posuzuje podle povolání.");
+    expect(unresolved).toContain("Text of § 5 odst. 2 is not available");
+    expect(unresolved).toContain('data-slot="provision-card-unavailable-part"');
+    expect(unresolved).toMatch(
+      /<span[^>]*data-cited=""[^>]*>Odborná péče se posuzuje podle povolání\.<\/span>/u,
+    );
+    expect(unresolved).toMatch(
+      /<span(?![^>]*data-cited=)[^>]*>Necitované znění třetího odstavce\.<\/span>/u,
+    );
+    const recovered = render({
+      availableWording: wording,
+      missingWording,
+      showsFull: true,
+      full: {
+        isPending: false,
+        whole: {
+          ...wording,
+          citedAnchorId: null,
+          blocks: [
+            fullAvailableBlock,
+            fullMissingBlock,
+            fullMissingChildBlock,
+            uncitedFullBlock,
+          ],
+        },
+      },
+    });
+    expect(recovered).not.toContain(
+      'data-slot="provision-card-unavailable-part"',
+    );
+    expect(recovered).not.toContain("Text of § 5 odst. 2 is not available");
+    expect(recovered).toMatch(
+      /<span[^>]*data-cited=""[^>]*>Odborná péče se posuzuje podle povolání\.<\/span>/u,
+    );
+    expect(recovered).toMatch(
+      /<span[^>]*data-cited=""[^>]*>Doplněné znění druhého odstavce\.<\/span>/u,
+    );
+    expect(recovered).toMatch(
+      /<span[^>]*data-cited=""[^>]*>Písmeno citovaného druhého odstavce\.<\/span>/u,
+    );
+    expect(recovered).toMatch(
+      /<span(?![^>]*data-cited=)[^>]*>Necitované znění třetího odstavce\.<\/span>/u,
+    );
+  }
+  const allUnavailable = render({
+    availableWording: null,
+    missingWording: { ...wording, blocks: [] },
+  });
+  expect(allUnavailable).toContain('data-slot="provision-card-unavailable"');
+  expect(allUnavailable).not.toContain(
+    'data-slot="provision-card-unavailable-part"',
+  );
+});
+
+for (const response of ["error", "null", "empty"] as const) {
+  test(`an unavailable full provision (${response}) can fold back and retry`, async () => {
+    const { GlobalRegistrator } = await import("@happy-dom/global-registrator");
+    GlobalRegistrator.register();
+    const previousActEnvironment = Reflect.get(
+      globalThis,
+      "IS_REACT_ACT_ENVIRONMENT",
+    );
+    Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
+    const { createRoot } = await import("react-dom/client");
+    const { act } = await import("react");
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    const citation = {
+      document: {
+        country: "cz",
+        eli: "/eli/cz/sb/2012/89",
+        id: "act",
+        slug: null,
+        versionValidFrom: null,
+      },
+      payload: {
+        anchorId: "par_5",
+        documentId: "act",
+        eli: "/eli/cz/sb/2012/89",
+        highlightAnchorId: "par_5-odst_1",
+        jurisdiction: "CZE",
+        provisionLabel: "§ 5 odst. 1",
+        statuteTitle: "Občanský zákoník",
+        versionCount: 1,
+        versionValidFrom: null,
+      },
+      preview: null,
+    } satisfies CitedProvisionTarget;
+    const wording = {
+      anchorId: "par_5",
+      blocks: [
+        { anchorId: "par_5-odst_1", id: "part-1", text: "Cited wording." },
+      ],
+      citedAnchorId: "par_5-odst_1",
+      documentId: "act",
+      heading: null,
+      headings: [],
+      language: "cs",
+    } satisfies ProvisionPreviewData;
+    const requests: ReturnType<
+      typeof Promise.withResolvers<ProvisionPreviewData | null>
+    >[] = [];
+    const readFull = async () => {
+      const request = Promise.withResolvers<ProvisionPreviewData | null>();
+      requests.push(request);
+      return request.promise;
+    };
+    const toggles: Promise<void>[] = [];
+    const Card = () => {
+      const [shown, setShown] = useState<"cited" | "full">("cited");
+      const [full, setFull] = useState<FullProvisionRead>({
+        isPending: false,
+        whole: null,
+      });
+      const toggleFull = async () => {
+        if (shown === "full") {
+          setShown("cited");
+          return;
+        }
+        setShown("full");
+        setFull({ isPending: true, whole: null });
+        const result = await Result.tryPromise(readFull);
+        setFull({
+          isPending: false,
+          whole: result.isOk() ? result.value : null,
+        });
+      };
+      // The click handler is synchronous; keep each toggle observable.
+      const onToggleFull = () => {
+        toggles.push(toggleFull());
+      };
+      return (
+        <DecisionReaderProvider adapters={fakeReaderAdapters}>
+          <CitedProvisionExpansion
+            citations={[citation]}
+            full={full}
+            onToggleFull={onToggleFull}
+            showsFull={shown === "full"}
+            wordings={[{ target: citation, wording }]}
+          />
+        </DecisionReaderProvider>
+      );
+    };
+    try {
+      await act(async () => {
+        root.render(<Card />);
+      });
+      const toggle =
+        container.querySelector<HTMLButtonElement>("button[aria-expanded]") ??
+        panic("Missing provision toggle");
+      await act(async () => {
+        toggle.click();
+      });
+      expect(requests).toHaveLength(1);
+      expect(toggle.disabled).toBe(true);
+      expect(toggle.getAttribute("aria-expanded")).toBe("false");
+      expect(container.textContent).toContain("Cited wording.");
+      await act(async () => {
+        const request = requests.at(0) ?? panic("Missing full provision read");
+        switch (response) {
+          case "error":
+            request.reject(new DOMException("Read failed", "NetworkError"));
+            break;
+          case "null":
+            request.resolve(null);
+            break;
+          case "empty":
+            request.resolve({ ...wording, blocks: [] });
+            break;
+          default:
+            response satisfies never;
+        }
+      });
+      expect(toggle.disabled).toBe(false);
+      expect(toggle.textContent).toBe("Show full provision");
+      expect(toggle.getAttribute("aria-expanded")).toBe("false");
+      expect(
+        container.querySelector('[data-slot="provision-card-full-unavailable"]')
+          ?.textContent,
+      ).toBe("Text not available");
+      await act(async () => {
+        toggle.click();
+      });
+      expect(
+        container.querySelector(
+          '[data-slot="provision-card-full-unavailable"]',
+        ),
+      ).toBeNull();
+      expect(container.textContent).toContain("Cited wording.");
+      expect(toggle.disabled).toBe(false);
+      expect(requests).toHaveLength(1);
+      await act(async () => {
+        toggle.click();
+      });
+      expect(requests).toHaveLength(2);
+      expect(toggle.disabled).toBe(true);
+      await act(async () => {
+        const retry = requests.at(1) ?? panic("Missing retry read");
+        retry.resolve({
+          ...wording,
+          blocks: [
+            ...wording.blocks,
+            {
+              anchorId: "par_5-odst_2",
+              id: "part-2",
+              text: "Rest of provision.",
+            },
+          ],
+        });
+      });
+      expect(toggle.disabled).toBe(false);
+      expect(toggle.textContent).toBe("Show cited part only");
+      expect(toggle.getAttribute("aria-expanded")).toBe("true");
+      expect(container.textContent).toContain("Rest of provision.");
+      await Promise.all(toggles);
+    } finally {
+      await act(async () => {
+        root.unmount();
+      });
+      container.remove();
+      if (previousActEnvironment === undefined) {
+        Reflect.deleteProperty(globalThis, "IS_REACT_ACT_ENVIRONMENT");
+      } else {
+        Reflect.set(
+          globalThis,
+          "IS_REACT_ACT_ENVIRONMENT",
+          previousActEnvironment,
+        );
+      }
+      await GlobalRegistrator.unregister();
+    }
+  });
+}

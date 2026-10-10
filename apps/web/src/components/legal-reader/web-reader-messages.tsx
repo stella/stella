@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
 
+import { statuteActLabel } from "@stll/api-contract/statute-act-number";
 import type { ReaderMessages } from "@stll/decision-reader/reader-adapters";
 import { BidiText } from "@stll/ui/bidi-text";
 
@@ -23,9 +24,11 @@ export const useWebReaderMessages = (): ReaderMessages => {
     "caseLaw.reader.headMatter": t("caseLaw.reader.headMatter"),
     "caseLaw.notesFilter.ai": t("caseLaw.notesFilter.ai"),
     "common.court": t("common.court"),
-    "statutes.currentWording": t("statutes.currentWording"),
     "statutes.wordingVersionUnknown": t("statutes.wordingVersionUnknown"),
     "statutes.openProvision": t("statutes.openProvision"),
+    "statutes.provisionTextUnavailable": t("statutes.provisionTextUnavailable"),
+    "statutes.showCitedPartOnly": t("statutes.showCitedPartOnly"),
+    "statutes.showFullProvision": t("statutes.showFullProvision"),
     // Explicit ReactNode: the inferred `t.rich` result carries React 19's
     // Promise<AwaitedReactNode> member, which promise-function-async flags.
     sourceAttribution: (source, link): ReactNode =>
@@ -35,7 +38,16 @@ export const useWebReaderMessages = (): ReaderMessages => {
         bdi: (chunks) => <BidiText>{chunks}</BidiText>,
         names: format.list([...names]),
       }),
-    wordingValidFrom: (date) => t("statutes.wordingValidFrom", { date }),
+    provisionPartTextUnavailable: (provisionLabel) =>
+      t("statutes.provisionPartTextUnavailable", { provisionLabel }),
+    provisionEffectiveFrom: (date) =>
+      t("statutes.provisionEffectiveFrom", { date }),
     formatValidityDate: (date) => formatValidityDate(date, format),
+    provisionActText: ({ eli, statuteTitle }) => {
+      const act = statuteActLabel({ eli, title: statuteTitle });
+      return [act.number, act.name].filter((part) => part !== null).join(", ");
+    },
+    formatLabelList: (labels) =>
+      format.list([...labels], { style: "short", type: "unit" }),
   };
 };

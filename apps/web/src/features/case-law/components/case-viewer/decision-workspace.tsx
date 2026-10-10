@@ -11,7 +11,7 @@ import {
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
-import { BookTextIcon, SparklesIcon, UserRoundIcon } from "@stll/ui/icons";
+import { SparklesIcon, UserRoundIcon } from "@stll/ui/icons";
 import { InspectorRailIconButton } from "@stll/ui/inspector";
 import { Loader } from "@stll/ui/loader";
 import { OutlineRail } from "@stll/ui/outline-rail";
@@ -60,6 +60,7 @@ import { useDecisionAnnotationSurface } from "@/features/case-law/components/cas
 import { useDecisionCitationAnchors } from "@/features/case-law/components/case-viewer/use-decision-citation-anchors";
 import { useDecisionProvisionAnchors } from "@/features/case-law/components/case-viewer/use-decision-provision-anchors";
 import { useDecisionStatuteCitationAnchors } from "@/features/case-law/components/case-viewer/use-decision-statute-citation-anchors";
+import { ReaderProvisionModeToggle } from "@/features/case-law/components/reader-provision-mode-toggle";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 import { useReaderProvisionMode } from "@/hooks/use-reader-provision-mode";
 import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
@@ -144,7 +145,6 @@ const NotesFilterAllIcon = ({ className }: { className?: string }) => (
 export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
   const { decision, decisionId, initialAnchorId } = props;
   const t = useTranslations();
-  const provisions = useReaderProvisionMode();
   const ast = parseDocumentAst(decision.documentAst);
   // The case's citable name, for the legal copy modes.
   const caseName = decisionCaseName({
@@ -164,6 +164,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
     name: caseName,
   } as const satisfies ReaderAnnotationTarget;
   const mainRef = useRef<HTMLDivElement>(null);
+  const provisions = useReaderProvisionMode(mainRef);
   const [notesFilter, setNotesFilter] = useState<NotesFilter>("all");
   const showAiNotes = NOTES_FILTER_SHOWS_AI[notesFilter];
   const annotations = useDecisionAnnotationSurface({
@@ -408,17 +409,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <ChromeHeaderActions>
-        <Button
-          aria-label={t("caseLaw.reader.expandProvisions")}
-          aria-pressed={provisions.expandProvisions}
-          data-pressed={provisions.expandProvisions ? "" : undefined}
-          onClick={provisions.toggle}
-          size="icon-sm"
-          tooltip={t("caseLaw.reader.expandProvisions")}
-          variant="ghost"
-        >
-          <BookTextIcon aria-hidden="true" className="size-4" />
-        </Button>
+        <ReaderProvisionModeToggle mode={provisions} size="page" />
       </ChromeHeaderActions>
       <GuestAnnotationPrompt count={annotations.guestCount} />
       <h1 className="sr-only" data-slot="decision-title">
