@@ -7,7 +7,7 @@ import { RESOURCE_TYPE } from "@stll/api-contract";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
-import { transactionAbortError } from "@/api/db/safe-db";
+import { abortTransaction, transactionAbortError } from "@/api/db/safe-db";
 import { entities, workspaces } from "@/api/db/schema";
 import {
   collectFileCopySources,
@@ -26,7 +26,7 @@ import {
   validateMoveSourceReadLimits,
 } from "@/api/handlers/entities/copy-utils";
 import { entityRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, detached } from "@/api/lib/analytics/capture";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -47,6 +47,7 @@ import {
   type FieldFileRef,
 } from "@/api/lib/files/field-file-refs";
 import { deleteS3Objects } from "@/api/lib/files/utils";
+import { admitFlowReviewTaskDeletion } from "@/api/lib/flows/review-gate-task";
 import { LIMITS } from "@/api/lib/limits";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -587,6 +588,14 @@ const copyToWorkspaceHandler = async function* ({
 
     // For move operations, delete source entities in the same transaction.
     if (deleteSource) {
+      const admission = await admitFlowReviewTaskDeletion(tx, {
+        workspaceId: sourceWorkspaceId,
+        taskEntityIds: sourceEntityIds,
+        userId,
+      });
+      if (admission.isErr()) {
+        abortTransaction(admission.error);
+      }
       // The whole moved subtree goes in one statement. Ordering the deletes
       // bought nothing: `entities.parent_id` is ON DELETE SET NULL, so no
       // child is ever left referencing a removed parent, and every child is
@@ -681,26 +690,13 @@ const copyToWorkspaceHandler = async function* ({
   }
 
   // Sync search indexes
-  Result.tryPromise(
-    async () =>
-      await safeDb(
-        async (tx) =>
-          await dependencies.syncWorkspaceSearchActivity(targetWorkspaceId, tx),
-      ),
-  ).then((searchAttempt) => {
-    const result = searchAttempt.andThen((value) => value);
-    if (result.isErr()) {
-      observeFailure(result.error, { sink: searchRepairFailure });
-    }
-    return result;
-  });
-  if (deleteSource) {
+  detached(
     Result.tryPromise(
       async () =>
         await safeDb(
           async (tx) =>
             await dependencies.syncWorkspaceSearchActivity(
-              sourceWorkspaceId,
+              targetWorkspaceId,
               tx,
             ),
         ),
@@ -710,7 +706,29 @@ const copyToWorkspaceHandler = async function* ({
         observeFailure(result.error, { sink: searchRepairFailure });
       }
       return result;
-    });
+    }),
+    "entities-copy.target-search-repair",
+  );
+  if (deleteSource) {
+    detached(
+      Result.tryPromise(
+        async () =>
+          await safeDb(
+            async (tx) =>
+              await dependencies.syncWorkspaceSearchActivity(
+                sourceWorkspaceId,
+                tx,
+              ),
+          ),
+      ).then((searchAttempt) => {
+        const result = searchAttempt.andThen((value) => value);
+        if (result.isErr()) {
+          observeFailure(result.error, { sink: searchRepairFailure });
+        }
+        return result;
+      }),
+      "entities-copy.source-search-repair",
+    );
   }
 
   // The source workspace event is emitted by the route macro. This explicit

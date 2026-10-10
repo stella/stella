@@ -14,7 +14,10 @@ import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { TASK_STATUS } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { isFeatureEnabled } from "@/api/lib/feature-access/policy";
-import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
+import {
+  lockFeatureRecoveryAdmission,
+  tryLockFeatureRecoveryAdmission,
+} from "@/api/lib/feature-access/recovery-admission-lock";
 import { resolveFlowReviewGate } from "@/api/lib/flows/flow-executor";
 import type { FlowRunActionResult } from "@/api/lib/flows/flow-executor";
 import type { FlowReviewDecision } from "@/api/lib/flows/flow-types";
@@ -144,10 +147,21 @@ export const admitFlowReviewTaskDeletion = async (
   if (!gate) {
     return Result.ok(undefined);
   }
+  // Deletion owners already hold entity locks; never wait on the inverse
+  // feature-admission order used by review workers and grant changes.
+  if (
+    !(await tryLockFeatureRecoveryAdmission({
+      tx,
+      organizationId: gate.organizationId,
+      featureId: "flows",
+    }))
+  ) {
+    return Result.err(new HandlerError({ status: 404, message: "Not found" }));
+  }
   const admission = await admitLinkedFlowAccess(tx, {
     organizationId: gate.organizationId,
     userId,
-    access: "write",
+    access: "read",
   });
   if (admission.isErr()) {
     return admission;

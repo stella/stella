@@ -14,7 +14,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { entityFileRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, detached } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -89,14 +89,6 @@ export const deleteEntitiesHandler = async function* ({
 }: DeleteEntitiesHandlerProps) {
   const txOutcome = yield* Result.await(
     safeDb(async (tx) => {
-      const admission = await admitFlowReviewTaskDeletion(tx, {
-        workspaceId,
-        taskEntityIds: body.entityIds,
-        userId,
-      });
-      if (admission.isErr()) {
-        return { status: "rejected" as const, error: admission.error };
-      }
       await tx.execute(
         sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}))`,
       );
@@ -166,6 +158,15 @@ export const deleteEntitiesHandler = async function* ({
             message: "Entity is read-only",
           }),
         };
+      }
+
+      const admission = await admitFlowReviewTaskDeletion(tx, {
+        workspaceId,
+        taskEntityIds: body.entityIds,
+        userId,
+      });
+      if (admission.isErr()) {
+        return { status: "rejected" as const, error: admission.error };
       }
 
       const removalState = await validateEntityRemovalState({
@@ -358,22 +359,27 @@ export const deleteEntitiesHandler = async function* ({
 
   // Explicit removal for non-PG providers (CASCADE handles PG)
   for (const entity of deletedEntities) {
-    Result.tryPromise(
-      async () =>
-        await safeDb(
-          async (tx) =>
-            await getSearchMaintenance(tx, upsertSearchDocument).removeEntity({
-              entityId: entity.id,
-              workspaceId,
-            }),
-        ),
-    ).then((searchAttempt) => {
-      const result = searchAttempt.andThen((value) => value);
-      if (result.isErr()) {
-        observeFailure(result.error, { sink: searchRepairFailure });
-      }
-      return result;
-    });
+    detached(
+      Result.tryPromise(
+        async () =>
+          await safeDb(
+            async (tx) =>
+              await getSearchMaintenance(tx, upsertSearchDocument).removeEntity(
+                {
+                  entityId: entity.id,
+                  workspaceId,
+                },
+              ),
+          ),
+      ).then((searchAttempt) => {
+        const result = searchAttempt.andThen((value) => value);
+        if (result.isErr()) {
+          observeFailure(result.error, { sink: searchRepairFailure });
+        }
+        return result;
+      }),
+      "entities-delete.search-repair",
+    );
   }
 
   return Result.ok({});

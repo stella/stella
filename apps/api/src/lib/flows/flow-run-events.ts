@@ -102,6 +102,8 @@ export const deliverFlowRunWorkspaceEvent = async ({
       );
       // Deletion clears review links. Without a pre-delete classification,
       // identity-bearing deletion events require admission even if lookup misses.
+      // Future identity-bearing entity delete producers must classify ownership
+      // inside their deleting transaction, before emitting the event.
       if (
         event.type === REALTIME_EVENT_TYPE.RESOURCE_DELETED &&
         event.resource.type === RESOURCE_TYPE.ENTITY
