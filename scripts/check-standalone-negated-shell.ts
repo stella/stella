@@ -327,7 +327,8 @@ const COMMAND_STARTERS = new Set([
 const PIPELINE_ENDS = new Set([";", "&", "&&", "||", "\n", "}", ")", "#"]);
 const OR = new Set(["||"]);
 const AND_OR = new Set(["&&", "||"]);
-const STATEMENT_ENDS = new Set([";", "\n"]);
+// Comments sit between a pipeline and whatever consumes its status.
+const STATEMENT_ENDS = new Set([";", "\n", "#"]);
 const OPEN_PAREN = new Set(["("]);
 const CLOSE_PAREN = new Set([")"]);
 const OPEN_BRACE = new Set(["{"]);

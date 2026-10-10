@@ -324,3 +324,12 @@ test("a function body brace may start on the next line", () => {
     ),
   ).toEqual([]);
 });
+
+test("comments between a negation and its consumer do not hide the consumer", () => {
+  expect(
+    check(
+      "scripts/commented.sh",
+      "if ! grep -q x file # explanation\nthen\n  echo absent\nfi\nf() {\n  ! grep -q y file # last\n}",
+    ),
+  ).toEqual([]);
+});
