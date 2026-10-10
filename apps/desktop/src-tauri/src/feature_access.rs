@@ -75,11 +75,20 @@ fn client() -> Result<&'static DesktopHttpClient, String> {
   Ok(CLIENT.get_or_init(|| client))
 }
 
+fn signed_request(
+  client: &DesktopHttpClient,
+  request: &AccountRequest,
+) -> Result<crate::http_client::DeviceProofRequest, String> {
+  crate::http_client::device_proof_request(
+    client.get(format!("{}{}", request.api_base_url, contract().path)),
+    &request.device_key,
+    Some(&request.credential.key),
+    None,
+  )
+}
+
 async fn fetch(request: &AccountRequest) -> Result<HashSet<DesktopFeature>, String> {
-  let url = format!("{}{}", request.api_base_url, contract().path);
-  let mut response = client()?
-    .get(url)
-    .bearer_auth(&request.credential.key)
+  let mut response = signed_request(client()?, request)?
     .send()
     .await
     .map_err(|_| "feature access request failed".to_string())?;
@@ -241,7 +250,46 @@ mod tests {
   }
 
   #[tokio::test]
-  async fn fetch_sends_the_account_key_and_fails_closed_on_refusal() {
+  async fn the_request_carries_a_verified_device_proof() {
+    let request = AccountRequest::fixture(LinkedAccount {
+      api_base_url: "https://api.example.test".into(),
+      web_origin: "https://my.example.test".into(),
+      identity: crate::types::DesktopAccountIdentity {
+        user_id: "user_fixture".into(),
+        organization_id: "org_fixture".into(),
+      },
+      account: crate::types::LinkedAccountSnapshot {
+        email: "desktop@example.test".into(),
+        name: None,
+        verified_at: chrono::Utc::now().to_rfc3339(),
+      },
+      credential: crate::types::DesktopAccountCredential {
+        key: "stella_dr_good".into(),
+        expires_at: (chrono::Utc::now() + chrono::Duration::hours(1)).to_rfc3339(),
+      },
+      device_key: crate::device_proof::DeviceKey::default(),
+    })
+    .await;
+    let built = signed_request(client().unwrap(), &request)
+      .unwrap()
+      .build()
+      .unwrap();
+    assert_eq!(built.method(), reqwest::Method::GET);
+    assert_eq!(
+      built.url().as_str(),
+      format!("https://api.example.test{}", contract().path)
+    );
+    assert_eq!(built.headers()["authorization"], "Bearer stella_dr_good");
+    crate::device_proof::tests::verify_request(
+      &built,
+      &request.device_key.thumbprint().unwrap(),
+      Some("stella_dr_good"),
+      None,
+    );
+  }
+
+  #[tokio::test]
+  async fn fetch_sends_the_signed_account_key_and_fails_closed_on_refusal() {
     use axum::{Router, http::HeaderMap, http::StatusCode, routing::get};
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -249,11 +297,15 @@ mod tests {
     let router = Router::new().route(
       &contract().path,
       get(|headers: HeaderMap| async move {
+        let signed = headers
+          .get("dpop")
+          .and_then(|value| value.to_str().ok())
+          .is_some_and(|proof| proof.split('.').count() == 3);
         match headers
           .get("authorization")
           .and_then(|value| value.to_str().ok())
         {
-          Some("Bearer stella_dr_good") => (
+          Some("Bearer stella_dr_good") if signed => (
             StatusCode::OK,
             r#"{"features":{"activity-timeline":{"status":"enabled"}}}"#,
           ),
@@ -283,6 +335,7 @@ mod tests {
         key: key.into(),
         expires_at: (chrono::Utc::now() + chrono::Duration::hours(1)).to_rfc3339(),
       },
+      device_key: crate::device_proof::DeviceKey::default(),
     };
 
     assert_eq!(
