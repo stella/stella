@@ -26,12 +26,12 @@ import {
   SIZE_LINT_RULES,
   designLintBacklogOverrides,
 } from "./scripts/design-lint-policy.ts";
-import { PRODUCT_FRONTEND_FILES } from "./scripts/product-frontend-files";
 import { OWNERSHIP, STATUS_TRANSITION_OWNERSHIP } from "./scripts/ownership.ts";
 import { withCanonicalDisableRuleIds } from "./scripts/oxlint-disable-rule-ids.ts";
 import core from "./scripts/oxlint-presets/core.mjs";
 import react from "./scripts/oxlint-presets/react.mjs";
 import shadcn from "./scripts/oxlint-presets/shadcn.mjs";
+import { PRODUCT_FRONTEND_FILES } from "./scripts/product-frontend-files";
 import {
   DECLARATION_FILE_GLOB,
   RESULT_CONVENTION_ENABLED_GLOBS,
@@ -895,7 +895,10 @@ const config = defineConfig({
     },
     tailwindcss: {
       entryPoint: [
-        { files: "packages/mcp-apps/**", use: "packages/mcp-apps/src/shared/style.css" },
+        {
+          files: "packages/mcp-apps/**",
+          use: "packages/mcp-apps/src/shared/style.css",
+        },
         { files: "apps/web/**", use: "apps/web/src/styles/app.css" },
         {
           files: "apps/desktop/**",
@@ -4609,7 +4612,7 @@ const config = defineConfig({
     {
       // The converter's one owner: it wraps `toJsonSchema` so every caller gets
       // internal metadata stripped. Only that restriction is lifted.
-      files: ["packages/api-contract/src/valibot-to-json-schema.ts"],
+      files: ["apps/api/src/lib/json-schema/valibot-to-json-schema.ts"],
       rules: {
         "no-restricted-imports": [
           "error",

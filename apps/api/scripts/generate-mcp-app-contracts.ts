@@ -77,5 +77,7 @@ const artifacts = await formattedArtifactsLikeRepository([
   },
 ]);
 await Promise.all(
-  artifacts.map(({ path: file, contents }) => Bun.write(file, contents)),
+  artifacts.map(
+    async ({ path: file, contents }) => await Bun.write(file, contents),
+  ),
 );
