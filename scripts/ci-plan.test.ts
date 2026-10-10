@@ -1958,6 +1958,25 @@ test("path-scoped platform checks run in the merge group", () => {
   }
 });
 
+test("Docker checks are required at every selected merge-group depth", () => {
+  const job = "docker-checks";
+  expect(thinJobs({ jobs: ciJobs })).toContain(job);
+  expect(jobScopes[job]).toBe("docker_checks_required");
+  expect(fastRequired).not.toContain(job);
+  for (const queueDepth of ["thin", "full"] as const) {
+    expect(
+      runsAtDepth(jobIf(ciJobs[job]), {
+        event: EVENT.mergeGroup,
+        depth: SUITE_DEPTH.full,
+        queueDepth,
+      }),
+    ).toBe(true);
+  }
+  expect(
+    evaluateResult({ event: EVENT.mergeGroup, results: { [job]: "skipped" } }),
+  ).toBe(1);
+});
+
 test("desktop Rust lint is required on PRs and every merge-group depth", () => {
   const lint = "desktop-rust-lint";
   expect(fastRequired).toContain(lint);
@@ -4903,14 +4922,10 @@ type ScopedCheck = {
   requiredOnPr: boolean;
   requiredOnThin: boolean;
 };
-const scopedCoverageViolations = (
-  checks: readonly ScopedCheck[],
-  exceptions: Record<string, string> = {},
-) => {
+const scopedCoverageViolations = (checks: readonly ScopedCheck[]) => {
   const scopes = new Set(checks.map(({ scope }) => scope));
   return [...scopes].filter(
     (scope) =>
-      !Object.hasOwn(exceptions, scope) &&
       !checks.some(
         (check) =>
           check.scope === scope &&
@@ -4987,15 +5002,7 @@ test("path-scoped lint and test areas have required pre-merge coverage", () => {
   });
   expect(checks.length).toBeGreaterThan(0);
   expect(new Set(checks.map(({ scope }) => scope))).toEqual(scopes);
-  // Container suites keep their reviewed full-queue policy; the platform lint
-  // path has no depth exception. A stale exception fails this census.
-  const queueOnlyScopes = {
-    docker_checks_required: "Container suites certify the full queued tree",
-  };
-  expect(scopedCoverageViolations(checks)).toEqual(
-    Object.keys(queueOnlyScopes),
-  );
-  expect(scopedCoverageViolations(checks, queueOnlyScopes)).toEqual([]);
+  expect(scopedCoverageViolations(checks)).toEqual([]);
 });
 
 test("path-scoped coverage rejects event and queue-depth exclusions", () => {
@@ -5016,6 +5023,22 @@ test("path-scoped coverage rejects event and queue-depth exclusions", () => {
       },
     ]),
   ).toEqual([check.scope]);
+  const docker = {
+    name: "docker-checks",
+    scope: "docker_checks_required",
+    condition: jobIf(ciJobs["docker-checks"]),
+    requiredOnPr: false,
+    requiredOnThin: true,
+  };
+  expect(scopedCoverageViolations([docker])).toEqual([]);
+  expect(
+    scopedCoverageViolations([
+      {
+        ...docker,
+        condition: `needs.ci-plan.outputs.queue_depth != 'thin' && (${docker.condition})`,
+      },
+    ]),
+  ).toEqual([docker.scope]);
   const desktop = jobIf(ciJobs["desktop-rust-lint"]);
   expect(
     runsAtDepth(`github.event_name != 'pull_request' && (${desktop})`, {

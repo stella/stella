@@ -4,7 +4,7 @@
       "if": "github.event_name == 'workflow_dispatch' || github.event.pull_request.draft != true"
     },
     "docker-checks": {
-      "if": "needs.ci-plan.outputs.run_required != 'false' && ( github.event_name != 'pull_request' && ( needs.ci-plan.outputs.queue_depth != 'thin' && ((needs.ci-plan.outputs.trusted == 'true'\n || github.event_name == 'workflow_dispatch')\n&& needs.ci-plan.outputs.docker_checks_required == 'true' && (needs.ci-plan.outputs.suite_depth == 'full'\n    || (needs.ci-plan.outputs.suite_depth == 'fast'\n        && needs.ci-plan.outputs.docker_checks_pr_required == 'true'))\n) ) )"
+      "if": "inputs.pr_depth_only != true && inputs.heavy_only != true && (github.event_name == 'merge_group' || needs.ci-plan.outputs.run_required != 'false') && github.event_name != 'pull_request' && (needs.ci-plan.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch') && needs.ci-plan.outputs.docker_checks_required == 'true' && (github.event_name == 'merge_group' || needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.docker_checks_pr_required == 'true'))"
     },
     "parser-version-guard": {
       "if": "needs.ci-plan.outputs.run_required != 'false' && ( inputs.heavy_only != true && (\n  needs.ci-plan.outputs.trusted == 'true'\n  || github.event_name == 'workflow_dispatch'\n) && needs.ci-plan.outputs.package_checks_required == 'true' )"

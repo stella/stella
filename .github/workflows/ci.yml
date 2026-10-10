@@ -1469,20 +1469,15 @@ jobs:
     needs: ci-plan
     if: >-
       inputs.pr_depth_only != true
-      &&
-      needs.ci-plan.outputs.run_required != 'false'
-      && (
-      github.event_name != 'pull_request' && (
-      needs.ci-plan.outputs.queue_depth != 'thin'
-      && ((needs.ci-plan.outputs.trusted == 'true'
-       || github.event_name == 'workflow_dispatch')
+      && inputs.heavy_only != true
+      && (github.event_name == 'merge_group' || needs.ci-plan.outputs.run_required != 'false')
+      && github.event_name != 'pull_request'
+      && (needs.ci-plan.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.docker_checks_required == 'true'
-      && (needs.ci-plan.outputs.suite_depth == 'full'
+      && (github.event_name == 'merge_group'
+          || needs.ci-plan.outputs.suite_depth == 'full'
           || (needs.ci-plan.outputs.suite_depth == 'fast'
               && needs.ci-plan.outputs.docker_checks_pr_required == 'true'))
-      )
-      )
-      )
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     permissions:

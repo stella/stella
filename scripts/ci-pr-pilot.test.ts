@@ -314,6 +314,24 @@ test("docs-only PRs retain Markdown checks in every pilot coverage profile", () 
   }
 });
 
+test("Docker checks retain every queue depth in both coverage profiles", () => {
+  expect(fastJobs(workflow)).not.toContain("docker-checks");
+  for (const profile of ["normal-v1", "pilot-fast-v1"]) {
+    for (const queueDepth of ["thin", "full"]) {
+      const context = conditionContext(profile, "merge_group", "full");
+      context.values["needs.ci-plan.outputs.queue_depth"] = queueDepth;
+      context.values["needs.ci-plan.outputs.run_required"] = "false";
+      expect(
+        evaluate(workflow.jobs["docker-checks"]?.if ?? "false", context),
+      ).toBe(true);
+      context.values["needs.ci-plan.outputs.docker_checks_required"] = "false";
+      expect(
+        evaluate(workflow.jobs["docker-checks"]?.if ?? "false", context),
+      ).toBe(false);
+    }
+  }
+});
+
 test("desktop Rust lint retains both platforms in every PR coverage profile and queue depth", () => {
   expect(fastJobs(workflow)).toContain("desktop-rust-lint");
   expect(fastJobs(workflow)).not.toContain("desktop-rust-tests");
