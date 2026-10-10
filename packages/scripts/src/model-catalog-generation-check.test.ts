@@ -6,6 +6,7 @@ import {
   findNewerGenerationModels,
   type GenerationExclusion,
 } from "./model-catalog-discovery";
+import { checkSnapshotGenerations } from "./model-catalog-generation-check";
 
 const emptyProviderMap = (): Record<FirstPartyModelProvider, string[]> => ({
   anthropic: [],
@@ -96,6 +97,46 @@ describe("model catalog newer-generation guard", () => {
         type: "unparseable",
         provider: "anthropic",
         modelId: "claude-haiku-next",
+      },
+    ]);
+  });
+});
+
+describe("snapshot generation check", () => {
+  // The newest release in this snapshot predates every review and expiry below.
+  const snapshot = {
+    anthropic: {
+      models: { "claude-haiku-5-6": { release_date: "2026-01-01" } },
+    },
+    google: { models: {} },
+    mistral: { models: {} },
+    openai: { models: {} },
+  };
+  const exclusions = new Map([
+    [
+      "anthropic:claude-haiku-5-6" as const,
+      {
+        reviewedOn: "2026-09-01",
+        expiresOn: "2026-09-30",
+        reason: "Awaiting provider adapter support",
+      } as const,
+    ],
+  ]);
+
+  test("an exclusion reviewed after the newest release is valid until it expires", () => {
+    expect(
+      checkSnapshotGenerations({ snapshot, today: "2026-09-15", exclusions }),
+    ).toEqual([]);
+  });
+
+  test("an exclusion expires on the calendar although the snapshot is older", () => {
+    expect(
+      checkSnapshotGenerations({ snapshot, today: "2026-10-10", exclusions }),
+    ).toEqual([
+      {
+        type: "invalid-exclusion",
+        provider: "anthropic",
+        modelId: "claude-haiku-5-6",
       },
     ]);
   });

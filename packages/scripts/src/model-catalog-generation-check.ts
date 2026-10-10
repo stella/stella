@@ -2,8 +2,10 @@ import { panic } from "better-result";
 
 import { FIRST_PARTY_MODEL_PROVIDERS } from "@stll/ai-catalog";
 import type { FirstPartyModelProvider } from "@stll/ai-catalog";
+import { Temporal } from "@stll/time";
 
 import { findNewerGenerationModels } from "./model-catalog-discovery";
+import type { FindNewerGenerationModelsOptions } from "./model-catalog-discovery";
 
 const snapshotPath = new URL(
   "../../ai-catalog/upstream/models.dev.gen.json",
@@ -17,12 +19,9 @@ const fixturePath = new URL(
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
-export const readUpstreamIds = (
+const readUpstreamIds = (
   snapshot: unknown,
-): {
-  asOf: string;
-  upstreamIds: Record<FirstPartyModelProvider, string[]>;
-} => {
+): Record<FirstPartyModelProvider, string[]> => {
   if (!isObject(snapshot)) {
     return panic("models.dev snapshot must be an object");
   }
@@ -32,37 +31,43 @@ export const readUpstreamIds = (
     mistral: [],
     openai: [],
   };
-  let asOf = "";
   for (const provider of FIRST_PARTY_MODEL_PROVIDERS) {
     const providerValue = snapshot[provider];
     if (!isObject(providerValue) || !isObject(providerValue["models"])) {
       return panic(`models.dev snapshot is missing ${provider}.models`);
     }
-    for (const [modelId, modelValue] of Object.entries(
-      providerValue["models"],
-    )) {
-      result[provider].push(modelId);
-      if (!isObject(modelValue)) {
-        continue;
-      }
-      const releaseDate = modelValue["release_date"];
-      if (typeof releaseDate === "string" && releaseDate > asOf) {
-        asOf = releaseDate;
-      }
-    }
+    result[provider].push(...Object.keys(providerValue["models"]));
   }
-  if (asOf === "") {
-    return panic("models.dev snapshot has no first-party release date");
-  }
-  return { asOf, upstreamIds: result };
+  return result;
 };
+
+type CheckSnapshotGenerationsOptions = {
+  snapshot: unknown;
+  // Exclusions expire on the calendar, not on the snapshot's newest release.
+  today: string;
+  exclusions?: FindNewerGenerationModelsOptions["exclusions"];
+};
+
+export const checkSnapshotGenerations = ({
+  snapshot,
+  today,
+  exclusions,
+}: CheckSnapshotGenerationsOptions) =>
+  findNewerGenerationModels({
+    upstreamIds: readUpstreamIds(snapshot),
+    asOf: today,
+    ...(exclusions === undefined ? {} : { exclusions }),
+  });
 
 const main = async () => {
   const selectedPath = process.argv.includes("--self-test")
     ? fixturePath
     : snapshotPath;
   const snapshot: unknown = await Bun.file(selectedPath).json();
-  const failures = findNewerGenerationModels(readUpstreamIds(snapshot));
+  const failures = checkSnapshotGenerations({
+    snapshot,
+    today: Temporal.Now.plainDateISO("UTC").toString(),
+  });
   if (failures.length === 0) {
     console.log(
       "Model generation guard passed: no unreviewed newer generations.",
