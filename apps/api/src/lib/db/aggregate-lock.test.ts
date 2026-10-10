@@ -5,17 +5,106 @@ import { PgDialect } from "drizzle-orm/pg-core";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
+import type { Transaction } from "@/api/db/root";
+import { createSafeId } from "@/api/lib/branded-types";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import {
   AGGREGATE_CHAINS,
   AGGREGATE_LOCKS,
   withAggregateLock,
+  withAutomatedFlowRunCapLock,
 } from "./aggregate-lock";
 import {
   aggregateExecutionRows,
   aggregateFences as fences,
 } from "./aggregate-lock-order.fixture";
+
+test("the flow cap owner opens one transaction and awaits its fence before running the decision", async () => {
+  const events: string[] = [];
+  const tx = asTestRaw<Transaction>({
+    execute: async (statement: SQL) => {
+      events.push("locked");
+      return aggregateExecutionRows(statement);
+    },
+  });
+  const database = asTestRaw<
+    Parameters<typeof withAutomatedFlowRunCapLock>[0]["database"]
+  >({
+    transaction: async (
+      run: (transaction: Transaction) => Promise<unknown>,
+    ) => {
+      events.push("opened");
+      const result = await run(tx);
+      events.push("committed");
+      return result;
+    },
+  });
+  const result = await withAutomatedFlowRunCapLock(
+    { definitionId: createSafeId<"flowDefinition">(), database },
+    async (transaction) => {
+      expect(transaction).toBe(tx);
+      expect(events).toEqual(["opened", "locked"]);
+      events.push("decision");
+      return "started";
+    },
+  );
+  expect(result).toBe("started");
+  expect(events).toEqual(["opened", "locked", "decision", "committed"]);
+});
+
+test("migrated fences retain workspace share mode, signal scope, and flow cap keys", async () => {
+  const fixture = fences();
+  const dialect = new PgDialect();
+  const statements: ReturnType<typeof dialect.sqlToQuery>[] = [];
+  const tx = {
+    execute: async (statement: SQL) => {
+      statements.push(dialect.sqlToQuery(statement));
+      return aggregateExecutionRows(statement);
+    },
+  };
+  await withAggregateLock({ ...fixture.workspace, mode: "share", tx });
+  await withAggregateLock({ ...fixture.signal, tx });
+  await withAggregateLock({ ...fixture.automatedFlowRunCap, tx });
+  const workspace =
+    statements.at(0) ?? panic("Workspace lock was not executed");
+  expect(workspace.sql).toContain("FOR SHARE");
+  expect(workspace.params).toEqual([
+    fixture.workspace.id.id,
+    fixture.workspace.id.organizationId,
+  ]);
+  const signal = statements.at(1) ?? panic("Signal lock was not executed");
+  expect(signal.sql).toContain("FOR UPDATE");
+  expect(signal.params).toEqual([
+    fixture.signal.id.id,
+    fixture.signal.id.organizationId,
+  ]);
+  const cap = statements.at(2) ?? panic("Flow cap lock was not executed");
+  expect(cap.sql).toContain("pg_advisory_xact_lock");
+  expect(cap.params).toEqual([
+    0x0f_10_cc_a9,
+    fixture.automatedFlowRunCap.id,
+    0x0f_10_cc_a9,
+    fixture.automatedFlowRunCap.id,
+  ]);
+});
+
+test("definition admission and automated run caps use separate advisory namespaces", async () => {
+  const fixture = fences();
+  const dialect = new PgDialect();
+  const statements: ReturnType<typeof dialect.sqlToQuery>[] = [];
+  const tx = {
+    execute: async (statement: SQL) => {
+      statements.push(dialect.sqlToQuery(statement));
+      return aggregateExecutionRows(statement);
+    },
+  };
+  await withAggregateLock({ ...fixture.definitionCap, tx });
+  await withAggregateLock({ ...fixture.automatedFlowRunCap, tx });
+  expect(statements.at(0)?.params.at(0)).toBe(0x0f_10_cc_ab);
+  expect(statements.at(1)?.params.at(0)).toBe(0x0f_10_cc_a9);
+});
 
 describe("aggregate acquisition ordering", () => {
   test("locks chat receipts in thread, interaction and receipt order", async () => {

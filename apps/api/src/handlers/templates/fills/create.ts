@@ -5,7 +5,7 @@ import { memberAIAccessError } from "@/api/lib/ai-config-response";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
   ACCOUNT_ACCESS,
-  assertUsageAvailableForHandler,
+  authorizeHandlerUsage,
   createSafeHandler,
 } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
@@ -24,6 +24,7 @@ import {
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
+import { snapshotOperationInput } from "@/api/lib/proofs/checked-transaction";
 import {
   createModelActionAdmitter,
   type AdmittedModelAction,
@@ -108,19 +109,20 @@ const config = {
  */
 const fillTemplateToWorkspace = createSafeHandler(
   config,
-  async function* ({
-    safeDb,
-    scopedDb,
-    session,
-    user,
-    workspaceId,
-    params,
-    body,
-    orgAIConfig,
-    managedAIResidency,
-    orgAIConfigStatus,
-    recordAuditEvent,
-  }) {
+  async function* (context) {
+    const {
+      safeDb,
+      scopedDb,
+      session,
+      user,
+      workspaceId,
+      params,
+      body,
+      orgAIConfig,
+      managedAIResidency,
+      orgAIConfigStatus,
+      recordAuditEvent,
+    } = snapshotOperationInput(context);
     const organizationId = session.activeOrganizationId;
     const { templateId } = params;
 
@@ -214,15 +216,20 @@ const fillTemplateToWorkspace = createSafeHandler(
     // layer (instance-provider rate).
     const checkUsage =
       orgAIConfig || hasTanStackInstanceProvider()
-        ? async () =>
-            await assertUsageAvailableForHandler({
+        ? async () => {
+            const authorization = await authorizeHandlerUsage({
               metering: { actionType: "chat", modelRole: "fast" },
               organizationId,
               orgAIConfig,
               workspaceId,
               userId: user.id,
               safeDb,
-            })
+            });
+            if (Result.isError(authorization)) {
+              return authorization.error;
+            }
+            return await authorization.value.execute(() => null);
+          }
         : undefined;
     const accessError = memberAIAccessError(orgAIConfigStatus);
     const aiFill: AiFillAdmission<HandlerError> = async (fill) =>

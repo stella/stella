@@ -52,6 +52,8 @@ export const AGGREGATE_LOCKS = {
   currentStep: { rank: 300, kind: "row" },
   obligation: { rank: 400, kind: "row" },
   entity: { rank: 500, kind: "row" },
+  signal: { rank: 600, kind: "row" },
+  automatedFlowRunCap: { rank: 700, kind: "advisory" },
   processingClaim: { rank: 600, kind: "row" },
   contactCapacity: { rank: 700, kind: "advisory" },
   personalCatalog: { rank: 700, kind: "advisory" },
@@ -103,6 +105,8 @@ export const AGGREGATE_CHAINS = {
     "entity",
   ],
   desktopRenewal: ["desktopMembership", "desktopCredential"],
+  signal: ["signal"],
+  automatedFlowRunCap: ["automatedFlowRunCap"],
   contactCapacity: ["contactCapacity"],
   personalCatalog: ["personalCatalog"],
   chatRevision: ["chatThread", "chatMessage"],
@@ -188,6 +192,8 @@ type AggregateIdentities = {
   currentStep: { id: SafeId<"flowRunStep">; workspaceId: SafeId<"workspace"> };
   obligation: { id: SafeId<"entity">; workspaceId: SafeId<"workspace"> };
   entity: { id: SafeId<"entity">; workspaceId: SafeId<"workspace"> };
+  signal: { id: SafeId<"signal">; organizationId: SafeId<"organization"> };
+  automatedFlowRunCap: SafeId<"flowDefinition">;
   processingClaim: {
     id: SafeId<"documentProcessingRun">;
     workspaceId: SafeId<"workspace">;
@@ -575,6 +581,14 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
         scopeColumns: ["workspace_id"],
         scopeValues: [options.id.workspaceId],
       };
+    case "signal":
+      return {
+        table: "signals",
+        columns: ["id"],
+        values: [options.id.id],
+        scopeColumns: ["organization_id"],
+        scopeValues: [options.id.organizationId],
+      };
     case "schedulerClaim":
       return {
         table: "scheduler_jobs",
@@ -800,6 +814,12 @@ const rowStatement = (
 };
 const advisoryResource = (options: AdvisoryIdentityOptions) => {
   switch (options.aggregate) {
+    case "automatedFlowRunCap":
+      return {
+        first: sql`${0x0f_10_cc_a9}::integer`,
+        second: sql`hashtext(${options.id})`,
+        order: [options.aggregate, options.id],
+      };
     case "contactCapacity":
       return {
         first: sql`hashtext('contact_capacity')`,
@@ -828,7 +848,7 @@ const advisoryResource = (options: AdvisoryIdentityOptions) => {
       };
     case "definitionCap":
       return {
-        first: sql`${0x0f_10_cc_a9}::integer`,
+        first: sql`${0x0f_10_cc_ab}::integer`,
         second: sql`hashtext(${options.id.definitionId})`,
         order: [options.aggregate, options.id.definitionId],
       };
@@ -1447,3 +1467,22 @@ export const withAggregateRowQuery = async <Row>(
   }
   return await acquire(options.tx);
 };
+
+type AutomatedFlowRunCapLockOptions = {
+  definitionId: SafeId<"flowDefinition">;
+  database: Pick<Transaction, "transaction">;
+};
+
+/** Own the cap transaction so the decision and insert share its advisory fence. */
+export const withAutomatedFlowRunCapLock = async <T>(
+  { definitionId, database }: AutomatedFlowRunCapLockOptions,
+  run: (tx: Transaction) => Promise<T>,
+): Promise<T> =>
+  await withAggregateTransaction(database, async (tx) => {
+    await withAggregateLock({
+      aggregate: "automatedFlowRunCap",
+      id: definitionId,
+      tx,
+    });
+    return await run(tx);
+  });

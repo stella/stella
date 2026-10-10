@@ -100,6 +100,15 @@ export const aggregateFences = () => {
       id: { id: createSafeId<"entity">(), workspaceId },
       mode: "update",
     },
+    signal: {
+      aggregate: "signal",
+      id: { id: createSafeId<"signal">(), organizationId },
+      mode: "update",
+    },
+    automatedFlowRunCap: {
+      aggregate: "automatedFlowRunCap",
+      id: createSafeId<"flowDefinition">(),
+    },
     processingClaim: {
       aggregate: "processingClaim",
       id: { id: createSafeId<"documentProcessingRun">(), workspaceId },

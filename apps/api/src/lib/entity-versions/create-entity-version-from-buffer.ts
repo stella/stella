@@ -266,10 +266,16 @@ export const createEntityVersionFromBuffer = async ({
           organizationId,
           objectKey,
           sizeBytes: bytes.byteLength,
-          write: async () =>
+          content: bytes,
+          write: async ({ content, objectKey: checkedObjectKey }) =>
             await withTimeout(
               async (signal) =>
-                await putS3ObjectWithSignal(objectKey, bytes, mimeType, signal),
+                await putS3ObjectWithSignal(
+                  checkedObjectKey,
+                  content,
+                  mimeType,
+                  signal,
+                ),
               {
                 label: "buffer-version-writer-put",
                 timeoutMs: BUFFER_INTENT_WRITE_TIMEOUT_MS,

@@ -217,7 +217,7 @@ import { captureError, detached } from "@/api/lib/analytics/capture";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import {
   ACCOUNT_ACCESS,
-  assertUsageAvailableForHandler,
+  authorizeHandlerUsage,
   createSafeRootHandler,
 } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -1878,7 +1878,7 @@ const prepareValidatedIncomingMessage = async ({
       const poolCheck = yield* Result.await(
         Result.tryPromise({
           try: async () =>
-            await assertUsageAvailableForHandler({
+            await authorizeHandlerUsage({
               metering: { actionType: "chat" },
               organizationId,
               orgAIConfig,
@@ -1894,10 +1894,12 @@ const prepareValidatedIncomingMessage = async ({
             }),
         }),
       );
-      if (poolCheck !== null) {
-        return Result.err(poolCheck);
+      if (Result.isError(poolCheck)) {
+        return Result.err(poolCheck.error);
       }
-      turnLane = { lane: "pool" };
+      turnLane = await poolCheck.value.execute(
+        async () => await Promise.resolve({ lane: "pool" as const }),
+      );
     } else if (turnLane.lane === "fallback") {
       chatModelOverride = turnLane.forcedModelSelection;
       chatReasoningEffort = undefined;
