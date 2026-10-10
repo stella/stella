@@ -153,7 +153,8 @@ export const readTableDigests = async (db: SealDb): Promise<Seal> => {
       AND table_schema NOT IN ('pg_catalog', 'information_schema')
     ORDER BY 1, 2
   `);
-  const digests: Seal = { content: {}, nonContent: {} };
+  const content: [string, string][] = [];
+  const nonContent: [string, string][] = [];
   for (const { schema, name } of tables) {
     const table = `${schema}.${name}`;
     const classification = classifySealTable(table);
@@ -161,30 +162,36 @@ export const readTableDigests = async (db: SealDb): Promise<Seal> => {
       await readDigest({ db, schema, name, predicate: sql`true` });
     switch (classification.kind) {
       case "content":
-        digests.content[table] = await readAll();
+        content.push([table, await readAll()]);
         break;
       case "operational":
-        digests.nonContent[table] = await readAll();
+        nonContent.push([table, await readAll()]);
         break;
       case "derived-on-read": {
         switch (classification.rows.kind) {
           case "all":
-            digests.nonContent[table] = await readAll();
+            nonContent.push([table, await readAll()]);
             break;
           case "action": {
             const { actionKind } = classification.rows;
-            digests.nonContent[table] = await readDigest({
-              db,
-              schema,
-              name,
-              predicate: sql`action_kind = ${actionKind}`,
-            });
-            digests.content[table] = await readDigest({
-              db,
-              schema,
-              name,
-              predicate: sql`action_kind IS DISTINCT FROM ${actionKind}`,
-            });
+            nonContent.push([
+              table,
+              await readDigest({
+                db,
+                schema,
+                name,
+                predicate: sql`action_kind = ${actionKind}`,
+              }),
+            ]);
+            content.push([
+              table,
+              await readDigest({
+                db,
+                schema,
+                name,
+                predicate: sql`action_kind IS DISTINCT FROM ${actionKind}`,
+              }),
+            ]);
             break;
           }
           default:
@@ -198,7 +205,10 @@ export const readTableDigests = async (db: SealDb): Promise<Seal> => {
         panic("Unhandled seal classification");
     }
   }
-  return digests;
+  return {
+    content: Object.fromEntries(content),
+    nonContent: Object.fromEntries(nonContent),
+  };
 };
 
 type ReadDigestOptions = {
