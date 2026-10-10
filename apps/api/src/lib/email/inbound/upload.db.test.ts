@@ -480,7 +480,7 @@ if (!databaseUrl || !runPostgresTests) {
         mimeType: MSG_MIME_TYPE,
       });
       expect(msgOutcome.isOk() && msgOutcome.value.status).toBe("filed");
-      const content = (sourceEntityId: SafeId<"entity">) =>
+      const content = async (sourceEntityId: SafeId<"entity">) =>
         fixtureScoped()(
           async (tx) =>
             await tx
