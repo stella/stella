@@ -5,7 +5,6 @@ import { t } from "elysia";
 import { desktopMattersResponseSchema } from "@stll/api-contract/desktop-time-entries";
 import type { DesktopMattersResponse } from "@stll/api-contract/desktop-time-entries";
 
-import { readWorkspaceListRows } from "@/api/handlers/workspaces/list-query";
 import {
   ACCOUNT_ACCESS,
   createSafeBoundedPublicHandler,
@@ -14,6 +13,7 @@ import {
 import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
 import { jsonSchemaToTypeBox } from "@/api/lib/json-schema/json-schema-to-typebox";
 import { toJsonSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
+import { readWorkspaceListRows } from "@/api/lib/workspaces/list-query";
 
 import { authorizeDesktopTimeEntries } from "./authorize";
 

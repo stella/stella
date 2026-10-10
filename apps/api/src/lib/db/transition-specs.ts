@@ -1,3 +1,5 @@
+import { DESKTOP_TIME_ENTRY_BATCH_STATUSES } from "@stll/api-contract/desktop-time-entries";
+
 import {
   desktopEditSessions,
   EU_COMPLETION_STATUSES,
@@ -21,6 +23,7 @@ import {
   defineFixedLifecycle,
   defineKeyedTransitions,
   defineLifecycle,
+  defineScopedTransitions,
   defineTransitions,
 } from "@/api/lib/db/transitions";
 import type {
@@ -87,6 +90,15 @@ const PDF_SIGNING_SESSION_TRANSITIONS = defineTransitions(
   { open: ["finalized", "cancelled"], finalized: [], cancelled: [] },
   { terminal: ["finalized", "cancelled"] },
 );
+
+const DESKTOP_TIME_ENTRY_BATCH_RECEIPT_LIFECYCLE = defineScopedTransitions({
+  table: desktopTimeEntryBatches,
+  key: "idempotencyKey",
+  scope: ["organizationId", "userId"],
+  stateColumn: "status",
+  edges: { committed: [], cancelled: [] },
+  initial: DESKTOP_TIME_ENTRY_BATCH_STATUSES,
+});
 
 const WORK_OBLIGATION_TRANSITIONS = defineKeyedTransitions({
   table: workObligations,
@@ -267,10 +279,7 @@ export const TRANSITIONS = {
   corpusIndexProjectionStates: { unmanaged: UNMANAGED_REASONS.projection },
   correspondence: { unmanaged: UNMANAGED_REASONS.userWorkflow },
   desktopEditSessions: DESKTOP_EDIT_SESSION_TRANSITIONS,
-  desktopTimeEntryBatches: {
-    unmanaged:
-      "Receipts are inserted in a terminal state under the batch advisory lock; existing receipts never transition.",
-  },
+  desktopTimeEntryBatches: DESKTOP_TIME_ENTRY_BATCH_RECEIPT_LIFECYCLE,
   documentProcessingRuns: { unmanaged: UNMANAGED_REASONS.workerRun },
   documentReviewFindings: { unmanaged: UNMANAGED_REASONS.userDecision },
   documentReviewRuns: { unmanaged: UNMANAGED_REASONS.workerRun },

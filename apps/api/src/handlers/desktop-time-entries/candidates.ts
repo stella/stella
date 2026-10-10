@@ -21,6 +21,7 @@ import {
   safePublicHandlerResponseSchemasWithStatusText,
 } from "@/api/lib/api-handlers";
 import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
+import { readCursorPage } from "@/api/lib/db/read-bounded";
 import { TASK_STATUS } from "@/api/lib/entity-constants";
 import { jsonSchemaToTypeBox } from "@/api/lib/json-schema/json-schema-to-typebox";
 import { toJsonSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
@@ -58,38 +59,44 @@ export const createDesktopMatterCandidatesEndpoint = (
       const upcomingDeadlineSignal = sql<
         string | null
       >`(select min(${entities.dueDate})::text from ${entities} where ${entities.workspaceId} = ${workspaces.id} and ${entities.kind} = 'task' and (${entities.status} is null or ${entities.status} not in (${TASK_STATUS.DONE}, ${TASK_STATUS.CANCELLED})) and ${entities.dueDate} between current_date and current_date + 7)`;
-      const rows = yield* Result.await(
+      const page = yield* Result.await(
         account.safeDb((tx) =>
-          tx
-            .select({
-              id: workspaces.id,
-              name: workspaces.name,
-              reference: workspaces.reference,
-              color: workspaces.color,
-              clientName: contacts.displayName,
-              lastWorkedAt: lastWorkedAtSignal,
-              newlyAssignedAt: newlyAssignedAtSignal,
-              upcomingDeadline: upcomingDeadlineSignal,
-            })
-            .from(workspaces)
-            .leftJoin(contacts, eq(contacts.id, workspaces.clientId))
-            .where(
-              and(
-                eq(workspaces.organizationId, account.organizationId),
-                eq(workspaces.status, "active"),
+          readCursorPage(
+            tx
+              .select({
+                id: workspaces.id,
+                name: workspaces.name,
+                reference: workspaces.reference,
+                color: workspaces.color,
+                clientName: contacts.displayName,
+                lastWorkedAt: lastWorkedAtSignal,
+                newlyAssignedAt: newlyAssignedAtSignal,
+                upcomingDeadline: upcomingDeadlineSignal,
+              })
+              .from(workspaces)
+              .leftJoin(contacts, eq(contacts.id, workspaces.clientId))
+              .where(
+                and(
+                  eq(workspaces.organizationId, account.organizationId),
+                  eq(workspaces.status, "active"),
+                ),
+              )
+              .orderBy(
+                sql`${lastWorkedAtSignal} desc nulls last`,
+                sql`${newlyAssignedAtSignal} desc nulls last`,
+                sql`${upcomingDeadlineSignal} asc nulls last`,
+                workspaces.id,
               ),
-            )
-            .orderBy(
-              sql`${lastWorkedAtSignal} desc nulls last`,
-              sql`${newlyAssignedAtSignal} desc nulls last`,
-              sql`${upcomingDeadlineSignal} asc nulls last`,
-              workspaces.id,
-            )
-            .limit(DESKTOP_ACTIVITY_REVIEW_LIMIT),
+            {
+              limit: DESKTOP_ACTIVITY_REVIEW_LIMIT,
+              cursorForItem: ({ id }) => String(id),
+            },
+          ),
         ),
       );
       return Result.ok({
-        matters: rows.map(
+        // Matching uses the ranked first page as a shortlist of likely matters.
+        matters: page.items.map(
           ({ lastWorkedAt, newlyAssignedAt, upcomingDeadline, ...matter }) => ({
             ...matter,
             id: String(matter.id),
