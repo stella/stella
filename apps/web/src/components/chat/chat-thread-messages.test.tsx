@@ -89,6 +89,37 @@ const renderedText = (html: string) => {
 };
 
 describe("chat thread messages", () => {
+  test("labels a reloaded user stop without labelling other terminal outcomes", () => {
+    for (const outcome of [
+      { type: "cancelled", reason: "user-stop" },
+      { type: "cancelled", reason: "superseded" },
+      { type: "completed" },
+    ] as const) {
+      const stored = {
+        id: "assistant-terminal",
+        role: "assistant",
+        parts: [{ type: "text", content: "A partial answer" }],
+        metadata: { turnOutcome: outcome },
+      } satisfies ChatUIMessage;
+      const html = renderWithProviders(
+        <ChatThreadMessages
+          approvalPendingMessageId={null}
+          messages={[structuredClone(stored)]}
+          onAskUserSubmit={() => {}}
+          onCreateDocumentResolve={() => {}}
+          onOpenCreatedDocument={() => {}}
+          onResend={() => {}}
+          streamdownComponents={{
+            a: ({ children, ...props }) => <a {...props}>{children}</a>,
+          }}
+        />,
+      );
+      expect(renderedText(html)?.includes(messages.chat.stopped)).toBe(
+        outcome.type === "cancelled" && outcome.reason === "user-stop",
+      );
+    }
+  });
+
   test("renders every reloaded admission refusal with its recovery action", () => {
     for (const code of Object.values(ACTION_ADMISSION_CODES)) {
       const refusal = {

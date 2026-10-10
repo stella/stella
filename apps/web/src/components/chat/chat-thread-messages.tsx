@@ -1129,13 +1129,21 @@ const AssistantMessageActions = ({
   const text = useMemo(() => getMessageText(message), [message]);
   const canRetry = Boolean(onResend) && retryOffered;
   const canFork = Boolean(threadRef) && forkOffered;
+  const outcome = message.metadata?.turnOutcome;
+  const stoppedByUser =
+    outcome?.type === "cancelled" && outcome.reason === "user-stop";
 
-  if (!text && !canRetry && !canFork) {
+  if (!text && !canRetry && !canFork && !stoppedByUser) {
     return null;
   }
 
   return (
     <div className="flex shrink-0 items-center gap-1" data-chat-answer-actions>
+      {stoppedByUser && (
+        <span className="text-muted-foreground px-1.5 text-xs" role="status">
+          {t("chat.stopped")}
+        </span>
+      )}
       {text && (
         <CopyActionButton
           className="text-muted-foreground h-6 px-1.5"
