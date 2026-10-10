@@ -37,9 +37,12 @@ const { cleanup, fireEvent, render, waitFor, within } =
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const { IntlProvider } = await import("use-intl");
+const { FormattingProvider } = await import("@/i18n/formatting-context");
+const { WebReaderPresentationProvider } =
+  await import("@/components/legal-reader/web-reader-presentation");
 const { InspectorFindBar, useInspectorFind } = await import("./inspector-find");
-const { DecisionText } =
-  await import("@/features/case-law/components/case-viewer/decision-text");
+const { WebDecisionReader: DecisionText } =
+  await import("@/components/legal-reader/web-decision-reader");
 const { toSafeId } = await import("@/lib/safe-id");
 const { TEXT_ABSENCE_REASON, TEXT_FIELD_TYPE } =
   await import("@stll/api-contract/case-law-text-field");
@@ -113,9 +116,13 @@ const renderReaders = (readers: ReaderOptions[]) => {
   const view = (options: ReaderOptions[]) => (
     <QueryClientProvider client={client}>
       <IntlProvider locale="en" messages={messages} timeZone="UTC">
-        {options.map((reader) => (
-          <Reader key={reader.name} {...reader} />
-        ))}
+        <FormattingProvider locale="en" timeZone="UTC">
+          <WebReaderPresentationProvider>
+            {options.map((reader) => (
+              <Reader key={reader.name} {...reader} />
+            ))}
+          </WebReaderPresentationProvider>
+        </FormattingProvider>
       </IntlProvider>
     </QueryClientProvider>
   );
@@ -171,7 +178,13 @@ test("a rendered decision paints only CSS find ranges and Escape leaves no searc
   const decision = textDecision();
   const screen = renderReaders([
     {
-      content: <DecisionText decision={decision} decisionId="decision" />,
+      content: (
+        <DecisionText
+          surface="development"
+          decision={decision}
+          decisionId="decision"
+        />
+      ),
       initialQuery: "odpovědnost",
       name: "decision",
     },
@@ -353,6 +366,7 @@ test("a letter-spaced heading still marks a find for the collapsed word", async 
     {
       content: (
         <DecisionText
+          surface="development"
           decision={textDecision({
             documentAst: readerAst([
               {
@@ -405,6 +419,7 @@ test("a run-on caption still marks a find inside a caption line", async () => {
     {
       content: (
         <DecisionText
+          surface="development"
           decision={textDecision({
             documentAst: readerAst([
               {
@@ -471,6 +486,7 @@ test("a hard-wrapped decision finds words inside both drawn paragraphs", async (
     {
       content: (
         <DecisionText
+          surface="development"
           decision={textDecision({
             documentAst: readerAst(
               HARD_WRAPPED_LINES.map((text, index) => ({

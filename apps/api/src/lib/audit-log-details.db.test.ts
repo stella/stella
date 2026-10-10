@@ -1,11 +1,4 @@
-import {
-  afterAll,
-  beforeAll,
-  describe,
-  expect,
-  setDefaultTimeout,
-  test,
-} from "bun:test";
+import { afterAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
@@ -26,13 +19,15 @@ import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
 } from "@/api/lib/audit-log.constants";
+import { createSafeId } from "@/api/lib/branded-types";
 import {
   createFeatureAccessSnapshot,
   decideFeatureAccess,
-} from "@/api/lib/auth/feature-access/policy";
-import { createSafeId } from "@/api/lib/branded-types";
+} from "@/api/lib/feature-access/policy";
+import { featurePrerequisiteClosure } from "@/api/lib/feature-access/prerequisites";
 import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
+import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -62,6 +57,8 @@ const entries = Object.values(AUDIT_RESOURCE_TYPE).flatMap((resourceType) =>
   ),
 );
 const entryIds = entries.map(({ id }) => id);
+const testState = createTestState({ file: import.meta.path, config: env });
+
 const resourcePolicies = ({
   default: policy,
   operations,
@@ -83,7 +80,7 @@ const deploymentFeatures = [
   ),
 ];
 
-beforeAll(async () => {
+testState.beforeAll(async () => {
   ({ testDb, ids } = await getRlsFixture());
   const recordAuditEvent = createBackgroundAuditRecorder({
     organizationId: ids.orgA,
@@ -99,7 +96,7 @@ beforeAll(async () => {
       const event = {
         action: AUDIT_ACTION.UPDATE,
         resourceId: id,
-        metadata,
+        metadata: metadata ?? {},
       };
       const tx = asTestRaw<Transaction>(testDb);
       switch (resourceType) {
@@ -159,11 +156,22 @@ describe("audit query and response projections agree", () => {
               featureId,
               registry: FEATURE_REGISTRY,
               grants: callerEnabled
-                ? {
-                    [featureId]: [
-                      { type: "organization", organizationId: ids.orgA },
-                    ],
-                  }
+                ? Object.fromEntries(
+                    [
+                      ...featurePrerequisiteClosure(
+                        FEATURE_REGISTRY,
+                        featureId,
+                      ),
+                    ].map((id) => [
+                      id,
+                      [
+                        {
+                          type: "organization" as const,
+                          organizationId: ids.orgA,
+                        },
+                      ],
+                    ]),
+                  )
                 : {},
               user: { email: "reviewer@example.test", emailVerified: true },
               membership: true,
@@ -187,15 +195,12 @@ describe("audit query and response projections agree", () => {
             { principal, featureAccessSnapshot: undefined },
           ]
         : [context];
-      const previous = deploymentFeatures.map(
-        (feature) => [feature, env[feature]] as const,
-      );
       const restoreMode = setRuntimeModeForTesting({
         mode: RUNTIME_MODE.strict,
       });
       try {
         for (const feature of deploymentFeatures) {
-          env[feature] = deploymentEnabled;
+          testState.setConfig(feature, deploymentEnabled);
         }
         for (const readContext of contexts) {
           const projected = await testDb
@@ -225,9 +230,6 @@ describe("audit query and response projections agree", () => {
           }
         }
       } finally {
-        for (const [feature, value] of previous) {
-          env[feature] = value;
-        }
         restoreMode();
       }
     },

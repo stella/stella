@@ -1,10 +1,10 @@
 import { useIsFetching, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
+import { missingBodyRetryable } from "@stll/decision-reader/decision-body-state.logic";
+import type { MissingBodyReason } from "@stll/decision-reader/decision-body-state.logic";
 import { Button } from "@stll/ui/button";
 
-import { missingBodyRetryable } from "@/features/case-law/components/case-viewer/decision-body-state.logic";
-import type { MissingBodyReason } from "@/features/case-law/components/case-viewer/decision-body-state.logic";
 import { publicDecisionReadFilter } from "@/features/case-law/queries/decisions";
 import type { TranslationKey } from "@/i18n/types";
 import { detached } from "@/lib/detached";

@@ -53,6 +53,7 @@ import type { Position } from "@/api/lib/workflow/playbook-positions";
 import { findDuplicatePositionSourceId } from "@/api/lib/workflow/playbook-positions-validation";
 
 const config = {
+  actionAdmission: { type: "handler", actionKind: "document-reviews.start" },
   description:
     "Start an asynchronous review of one document against a confirmed list of positions. Returns a run ID to poll.",
   // entity:update because every run processes an existing target document

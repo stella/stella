@@ -15,6 +15,7 @@ import { SQL } from "bun";
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { SQL as SqlFragment } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/bun-sql";
+import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 
 import { databaseRelations } from "@/api/db/database-relations";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
@@ -24,7 +25,10 @@ import type { CorpusSourceDescriptor } from "@/api/lib/legal-search/corpus-sourc
 import { corpusTombstoneReaderForTx } from "@/api/lib/legal-search/corpus-tombstones";
 import type { CorpusTombstoneReader } from "@/api/lib/legal-search/corpus-tombstones";
 
-import type { DecisionAnalysisRow } from "./decision-analysis.logic";
+import type {
+  CourtFilter,
+  DecisionAnalysisRow,
+} from "./decision-analysis.logic";
 
 /** Small pool: these scripts run one decision at a time under an operator. */
 const POOL_SIZE = 4;
@@ -124,7 +128,7 @@ export type CandidateRow = {
   court: string;
   country: string;
   citationCount: number;
-  citationAuthority: number | null;
+  citationAuthority: number;
   /** A publisher's own headnote on the row: the only reporting signal stored. */
   reportedInCollection: boolean;
   /** The stored analysis, to tell a current version 3 row from a stale one. */
@@ -144,13 +148,15 @@ export type CandidateRow = {
  * keeps descending the ranking instead of running out of scan window.
  */
 export type CandidateCursor = {
-  citationAuthority: number | null;
+  citationAuthority: number;
   citationCount: number;
   id: SafeId<"caseLawDecision">;
 };
 
 type ListCandidatesOptions = {
   country?: string | undefined;
+  /** Exact stored court names; absent means every court. */
+  courts?: CourtFilter;
   minCitations: number;
   /** Rows to read in this page. */
   scan: number;
@@ -170,8 +176,8 @@ type ListCandidatesOptions = {
  * them.
  */
 export const listCandidateRows = async (
-  db: AnalysisDatabase,
-  { after, country, minCitations, scan }: ListCandidatesOptions,
+  db: Pick<PgAsyncDatabase<PgQueryResultHKT>, "select">,
+  { after, country, courts, minCitations, scan }: ListCandidatesOptions,
 ): Promise<CandidateRow[]> => {
   const filters: SqlFragment[] = [
     isNull(caseLawDecisions.redactedAt),
@@ -180,19 +186,16 @@ export const listCandidateRows = async (
   if (country !== undefined) {
     filters.push(eq(caseLawDecisions.country, country));
   }
+  if (courts !== undefined) {
+    filters.push(inArray(caseLawDecisions.court, [...courts]));
+  }
   if (after !== undefined) {
-    // The ordering key as one tuple comparison. `NULLS LAST` on the leading
-    // term means an unscored row sorts after every scored one, so the
-    // cursor's null case resumes inside the unscored tail by (count, id).
-    const authority = after.citationAuthority;
+    // The ordering key as one tuple comparison, sound only because every
+    // term of the ORDER BY below sorts DESC: a mixed direction would need
+    // the opposite comparison inside a tie and re-serve or skip rows there.
     filters.push(
-      authority === null
-        ? sql`(${caseLawDecisions.citationAuthority} IS NULL
-              AND (${caseLawDecisions.citationCount}, ${caseLawDecisions.id})
-                  < (${after.citationCount}, ${after.id}))`
-        : sql`(${caseLawDecisions.citationAuthority} IS NULL
-              OR (${caseLawDecisions.citationAuthority}, ${caseLawDecisions.citationCount}, ${caseLawDecisions.id})
-                 < (${authority}, ${after.citationCount}, ${after.id}))`,
+      sql`(${caseLawDecisions.citationAuthority}, ${caseLawDecisions.citationCount}, ${caseLawDecisions.id})
+          < (${after.citationAuthority}, ${after.citationCount}, ${after.id})`,
     );
   }
 
@@ -206,13 +209,10 @@ export const listCandidateRows = async (
     .from(caseLawDecisions)
     .leftJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
     .where(and(...filters))
-    // `NULLS LAST` explicitly: Postgres puts nulls FIRST under `DESC`, so an
-    // unscored decision would otherwise outrank every scored one and a
-    // bounded scan would never reach the top of the ranking.
     .orderBy(
-      sql`${caseLawDecisions.citationAuthority} DESC NULLS LAST`,
+      desc(caseLawDecisions.citationAuthority),
       desc(caseLawDecisions.citationCount),
-      caseLawDecisions.id,
+      desc(caseLawDecisions.id),
     )
     .limit(scan);
 

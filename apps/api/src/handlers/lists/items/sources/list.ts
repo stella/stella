@@ -5,14 +5,16 @@ import { t } from "elysia";
 import { legalListItemSources } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
+import { projectListItemSource } from "@/api/lib/auth/feature-access/list-eligibility";
+import { avtViewAccessStatus } from "@/api/lib/auth/feature-access/view-eligibility";
 import {
   tPaginationCursor,
   tSafeId,
   workspaceParams,
 } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { LIMITS } from "@/api/lib/limits";
-import { projectListSourceVerification } from "@/api/lib/lists/detail-projection";
 import {
   createCursorPage,
   decodePaginationCursor,
@@ -33,11 +35,10 @@ const querySchema = t.Object({
   cursor: t.Optional(tPaginationCursor()),
 });
 const config = {
+  featureAccess: { type: "required", featureId: LEGAL_LISTS_FEATURE_ID },
   description:
     "List the sources attached to one list item with cursor pagination, each " +
-    "with the document version it points at, its locator, its quote, and its " +
-    "verificationDetailsStatus: visible or feature_unavailable. Visible " +
-    "verification includes status, reviewer and time; unavailable fields are null.",
+    "with the document version it points at, its locator, and its quote.",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
@@ -58,10 +59,15 @@ const readItemSources = createSafeHandler(
     workspaceId,
     params,
     query,
+    featureAccessSnapshot,
     session,
     user,
-    featureAccessSnapshot,
   }) {
+    const accessStatus = avtViewAccessStatus({
+      snapshot: featureAccessSnapshot,
+      organizationId: session.activeOrganizationId,
+      userId: user.id,
+    });
     const limit = normalizeTenantPageLimit(
       query.limit ?? LIMITS.legalListSourcesPageSizeDefault,
     );
@@ -124,15 +130,7 @@ const readItemSources = createSafeHandler(
     }
     return Result.ok(
       createCursorPage({
-        rows: result.map((source) =>
-          projectListSourceVerification(source, {
-            featureAccessSnapshot,
-            principal: {
-              organizationId: session.activeOrganizationId,
-              userId: user.id,
-            },
-          }),
-        ),
+        rows: result.map((row) => projectListItemSource(row, accessStatus)),
         limit,
         cursorForItem: (item) => encodePaginationCursor([item.id]),
       }),

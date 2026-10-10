@@ -4,17 +4,19 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "bun:test";
 import { IntlProvider } from "use-intl";
 
-import type { Block } from "@stll/legal-ast/document-ast";
-import { SEARCH_HIT_MARK, textMarkClass } from "@stll/ui/text-mark";
-
 import {
   HEADING_CLASS,
   InlineContent,
-} from "@/components/legal-reader/document-ast-text";
+} from "@stll/decision-reader/document-ast-text";
+import type { Block } from "@stll/legal-ast/document-ast";
+import { SEARCH_HIT_MARK, textMarkClass } from "@stll/ui/text-mark";
+
+import { WebReaderPresentationProvider } from "@/components/legal-reader/web-reader-presentation";
 import { StatuteBlock } from "@/features/statutes/components/statute-text";
 import { compareStatuteBlocks } from "@/features/statutes/statute-compare";
 import { compareText, markSide } from "@/features/statutes/statute-diff-marks";
 import type { StatuteCompareSide } from "@/features/statutes/statute-diff-marks";
+import { FormattingProvider } from "@/i18n/formatting-context";
 import messages from "@/i18n/langs/en.json";
 
 // The comparison sets each cell through the reader's own block renderer, so
@@ -25,7 +27,11 @@ import messages from "@/i18n/langs/en.json";
 const renderWithIntl = (children: ReactNode) =>
   renderToStaticMarkup(
     <IntlProvider locale="en" messages={messages} timeZone="UTC">
-      {children}
+      <FormattingProvider locale="en" timeZone="UTC">
+        <WebReaderPresentationProvider>
+          {children}
+        </WebReaderPresentationProvider>
+      </FormattingProvider>
     </IntlProvider>,
   );
 

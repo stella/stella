@@ -32,11 +32,6 @@ export const readTemplatePackOrganizationContext = async (
     return { countries, hidden: row?.templatePacksHidden ?? false };
   });
 
-export type InstalledPackTemplate = {
-  slug: string;
-  templateId: SafeId<"template">;
-};
-
 /** Templates of one pack already installed in the organization, by slug.
  *  Served by the partial unique index on (organization, packId, slug). */
 export const readInstalledPackTemplates = async (

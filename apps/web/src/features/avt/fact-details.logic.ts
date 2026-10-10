@@ -1,6 +1,5 @@
-import { LIST_DETAILS_STATUS } from "@stll/api-contract/list-details";
-
 import type {
+  EditableFactDetails,
   FactDetails,
   FactDetailsBody,
   ListItem,
@@ -26,7 +25,7 @@ export const orderHeldFirst = <T extends Pick<ListItem, "factDetails">>(
 type FactDetailsBodyArgs = {
   listId: FactDetailsBody["listId"];
   itemEntityId: FactDetailsBody["itemEntityId"];
-  details: FactDetails;
+  details: EditableFactDetails;
 };
 
 /**
@@ -52,9 +51,7 @@ export const toFactDetailsBody = ({
   scoring: details.scoring,
 });
 
-type ItemsPage = {
-  items: Pick<ListItem, "id" | "factDetails" | "factDetailsStatus">[];
-};
+type ItemsPage = { items: Pick<ListItem, "id" | "factDetails">[] };
 
 /** Pages of a list's items with one fact's detail replaced. */
 export const withFactDetails = <P extends ItemsPage>(
@@ -65,13 +62,6 @@ export const withFactDetails = <P extends ItemsPage>(
   pages.map((page) => ({
     ...page,
     items: page.items.map((item) =>
-      item.id === itemEntityId &&
-      item.factDetailsStatus === LIST_DETAILS_STATUS.visible
-        ? {
-            ...item,
-            factDetailsStatus: LIST_DETAILS_STATUS.visible,
-            factDetails: details,
-          }
-        : item,
+      item.id === itemEntityId ? { ...item, factDetails: details } : item,
     ),
   }));

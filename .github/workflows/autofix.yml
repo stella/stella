@@ -223,7 +223,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for path in scripts/autofix-plan.ts scripts/generated-files.ts packages/scripts/src/generated-files.ts; do
+          for path in scripts/autofix-plan.ts scripts/autofix-protected-paths.ts scripts/baseline-paths.ts scripts/generated-files.ts packages/scripts/src/generated-files.ts; do
             if [[ -f "$path" ]]; then
               continue
             fi
@@ -284,6 +284,7 @@ jobs:
             exit 1
           fi
           git diff --name-only -z --diff-filter=ACMR "$BASE_SHA"..."$HEAD_SHA" -- > "$RUNNER_TEMP/autofix-changed-paths"
+          git diff --name-only -z --no-renames --diff-filter=A "$BASE_SHA"..."$HEAD_SHA" -- apps/api/ > "$RUNNER_TEMP/autofix-added-paths"
 
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
@@ -294,13 +295,17 @@ jobs:
       - name: Align Tauri counterparts
         id: tauri
         env:
+          STELLA_LOCAL_AUTOFIX: "true"
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           if git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- \
             scripts/bun-lock-text.ts scripts/check-tauri-package-alignment.ts \
             scripts/fix-tauri-package-alignment.ts scripts/json-text-edit.ts; then
-            mapfile -d '' -t paths < "$RUNNER_TEMP/autofix-changed-paths"
+            paths=()
+            while IFS= read -r -d '' path; do
+              paths+=("$path")
+            done < "$RUNNER_TEMP/autofix-changed-paths"
             required=$(bun --no-install --no-env-file scripts/check-tauri-package-alignment.ts --requires-check "${paths[@]}")
             if [[ "$required" == true ]]; then
               bun --no-install --no-env-file scripts/fix-tauri-package-alignment.ts
@@ -316,21 +321,38 @@ jobs:
           NPM_TOKEN: ""
 
       - name: Prepare environment
+        env:
+          STELLA_LOCAL_AUTOFIX: "true"
         run: |
-          cp apps/api/.env.example apps/api/.env
-          cp apps/web/.env.example apps/web/.env
+          for app in apps/api apps/web; do
+            [[ -f "$app/.env" ]] || cp "$app/.env.example" "$app/.env"
+          done
 
       - name: Regenerate selected files
         if: needs.regenerate-scope.outputs.run == 'true'
         env:
+          STELLA_LOCAL_AUTOFIX: "true"
           GENERATOR_IDS: ${{ needs.regenerate-scope.outputs.ids }}
-        run: bun scripts/autofix-plan.ts run "$GENERATOR_IDS"
+        run: |
+          if [[ -n "$GENERATOR_IDS" ]]; then
+            bun scripts/autofix-plan.ts run "$GENERATOR_IDS"
+          fi
 
       - name: Fix changed files
+        env:
+          STELLA_LOCAL_AUTOFIX: "true"
         shell: bash
         run: |
           set -euo pipefail
-          mapfile -d '' -t changed < "$RUNNER_TEMP/autofix-changed-paths"
+          changed=()
+          while IFS= read -r -d '' path; do
+            changed+=("$path")
+          done < "$RUNNER_TEMP/autofix-changed-paths"
+          bun scripts/autofix-protected-paths.ts > "$RUNNER_TEMP/autofix-protected-paths"
+          protected=()
+          while IFS= read -r pattern; do
+            protected+=("$pattern")
+          done < "$RUNNER_TEMP/autofix-protected-paths"
           format_paths=()
           lint_paths=()
           for path in "${changed[@]}"; do
@@ -339,16 +361,31 @@ jobs:
             if [[ "$path" == .github/workflows/* || "$path" == scripts/ratchet-baseline.json ]]; then
               continue
             fi
+            protected_path=false
+            for pattern in "${protected[@]}"; do
+              if [[ "$path" == $pattern ]]; then
+                protected_path=true
+                break
+              fi
+            done
+            [[ "$protected_path" == false ]] || continue
             format_paths+=("./$path")
-            if [[ "$path" =~ \.([cm]?[jt]s|[jt]sx)$ ]]; then
+            # Astro's checker owns apps/landing types (astro:* modules); the
+            # native compiler cannot build that graph, so it gets no type-aware
+            # fixes. CI's lint job still reports its findings.
+            if [[ "$path" =~ \.([cm]?[jt]s|[jt]sx)$ && "$path" != apps/landing/* ]]; then
               lint_paths+=("./$path")
             fi
           done
 
           if (( ${#lint_paths[@]} > 0 )); then
+            # Type-aware fixes need the complete generated type graph. set -e
+            # aborts on preparation or compiler errors before any fixer runs.
+            bun scripts/ci-generated-sources.ts prepare
+            bun scripts/typecheck-coverage.ts --autofix "${lint_paths[@]}"
             # --fix applies safe fixes only. CI's lint job reports anything left.
             lint_status=0
-            bun --bun oxlint -c oxlint.config.ts --no-error-on-unmatched-pattern --fix "${lint_paths[@]}" || lint_status=$?
+            bun --bun oxlint -c oxlint.config.ts --no-error-on-unmatched-pattern --type-aware --fix "${lint_paths[@]}" || lint_status=$?
             if (( lint_status > 1 )); then
               exit "$lint_status"
             fi
@@ -380,7 +417,25 @@ jobs:
             exit 1
           fi
 
-          mapfile -d '' -t changed < "$RUNNER_TEMP/autofix-changed-paths"
+          # No changed-path or generator grant can authorize decision records.
+          bun scripts/autofix-protected-paths.ts > "$RUNNER_TEMP/autofix-protected-paths"
+          protected=()
+          while IFS= read -r pattern; do
+            protected+=("$pattern")
+          done < "$RUNNER_TEMP/autofix-protected-paths"
+          protected_specs=()
+          for pattern in "${protected[@]}"; do
+            protected_specs+=(":(glob)$pattern")
+          done
+          if ! git diff --quiet "$HEAD_SHA" -- "${protected_specs[@]}" || [[ -n "$(git ls-files --others --exclude-standard -- "${protected_specs[@]}")" ]]; then
+            echo "::error::Autofix cannot modify baselines, ledgers, waivers, allowances or changesets."
+            exit 1
+          fi
+
+          changed=()
+          while IFS= read -r -d '' path; do
+            changed+=("$path")
+          done < "$RUNNER_TEMP/autofix-changed-paths"
           IFS='|' read -r -a generated <<< "$GENERATOR_ALLOWED"
           IFS='|' read -r -a tauri_paths <<< "$TAURI_ALLOWED"
           excludes=()

@@ -547,14 +547,16 @@ const storedContentEntries = OWNERSHIP.filter(({ id }) =>
 
 describe.serial("confine-owner stored content rows", () => {
   test("covers each stored content owner", () => {
-    expect(storedContentEntries.map(({ id }) => id)).toEqual([
-      "stored-file-read",
-      "stored-tenant-file-read",
-      "audited-download-grant",
-      "content-delivery-intent",
-      "content-delivery-receipt",
-      "content-delivery-scope",
-    ]);
+    expect(storedContentEntries.map(({ id }) => id).toSorted()).toEqual(
+      [
+        "stored-file-read",
+        "stored-tenant-file-read",
+        "audited-download-grant",
+        "content-delivery-intent",
+        "content-delivery-receipt",
+        "content-delivery-scope",
+      ].toSorted(),
+    );
   });
 
   for (const entry of storedContentEntries) {
@@ -653,4 +655,71 @@ test("desktop observations are confined to service and membership cleanup", asyn
       }),
     ).toEqual([]);
   }
+});
+
+describe.serial("transaction proof ownership", () => {
+  test("confines minting even inside another proofs directory", async () => {
+    const entry = OWNERSHIP.find(
+      ({ id }) => id === "transaction-proof-minting",
+    );
+    if (entry?.enforcement.kind !== "import") {
+      throw new TypeError("Transaction proof minting must confine imports");
+    }
+    const source = [
+      'import { defineProof as mint } from "@gdp-ts/core"; const second = mint("Second");',
+      'import * as core from "@gdp-ts/core"; const third = core.defineProof("Third");',
+      'export { defineProof } from "@gdp-ts/core";',
+      'export * from "@gdp-ts/core";',
+      'const { defineProof } = await import("@gdp-ts/core");',
+      'import { name, type Named, type Proof } from "@gdp-ts/core";',
+    ].join("\n");
+    for (const sourcePath of [
+      "apps/api/src/lib/signals/proofs/second-mint.ts",
+      "apps/api/src/lib/proofs/second-mint.ts",
+      "apps/api/src/handlers/signals/unchecked.ts",
+    ]) {
+      expect(
+        await lintSingleRule("confine-owner", source, {
+          sourcePath,
+          ruleOptions: { entries: [entry] },
+        }),
+      ).toEqual([1, 2, 3, 4, 5]);
+    }
+    for (const sourcePath of entry.owner) {
+      expect(
+        await lintSingleRule("confine-owner", source, {
+          sourcePath,
+          ruleOptions: { entries: [entry] },
+        }),
+      ).toEqual([]);
+    }
+  });
+
+  test("only predicate owners can invoke the checking boundary", async () => {
+    const entry = OWNERSHIP.find(
+      ({ id }) => id === "transaction-proof-predicates",
+    );
+    if (entry?.enforcement.kind !== "import") {
+      throw new TypeError("Transaction proof predicates must confine imports");
+    }
+    const source = [
+      'import { withCheckedTransaction as mint } from "@/api/lib/proofs/checked-transaction";',
+      'export { withCheckedTransaction } from "@/api/lib/proofs/checked-transaction";',
+      'import type { TransactionProof } from "@/api/lib/proofs/checked-transaction";',
+    ].join("\n");
+    expect(
+      await lintSingleRule("confine-owner", source, {
+        sourcePath: "apps/api/src/handlers/signals/unchecked.ts",
+        ruleOptions: { entries: [entry] },
+      }),
+    ).toEqual([1, 2]);
+    for (const sourcePath of entry.owner) {
+      expect(
+        await lintSingleRule("confine-owner", source, {
+          sourcePath,
+          ruleOptions: { entries: [entry] },
+        }),
+      ).toEqual([]);
+    }
+  });
 });

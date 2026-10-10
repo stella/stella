@@ -8,6 +8,7 @@ import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 
 import {
   createTreemapModel,
+  createTreemapNumberFormatter,
   localizedTierLabel,
   treemapCategoryValue,
   treemapColorDomain,
@@ -23,27 +24,43 @@ export type VisualTreemapOptions = {
   onSelect?: (node: VisualTreemapTree) => void;
 };
 
-// Semantic tokens inherit the authored light/dark theme. Neutral fallbacks
-// match the UI palette when the generated page supplies no theme tokens.
-const colors = {
-  background: "var(--background, light-dark(#fff, #1c1c1c))",
-  foreground: "var(--foreground, light-dark(#262626, #f5f5f5))",
-  muted: "var(--muted, light-dark(#f5f5f5, #262626))",
-  border: "var(--border, light-dark(#e5e5e5, #404040))",
-  primary: "var(--primary, light-dark(#262626, #f5f5f5))",
-  primaryForeground: "var(--primary-foreground, light-dark(#fff, #171717))",
-  negative: "var(--destructive, #ef4444)",
-  positive: "var(--success, #10b981)",
-} as const;
-const categoricalPalette = [8, 17, 26, 35].map(
-  (weight) =>
-    `color-mix(in srgb, ${colors.background}, ${colors.primary} ${weight}%)`,
-);
+const readChartColors = (win: Window, el: HTMLElement) => {
+  const style = win.getComputedStyle(el);
+  const token = (name: string) => {
+    const value = style.getPropertyValue(name).trim();
+    if (!value) {
+      panic(`Missing visual chart token: ${name}`);
+    }
+    return value;
+  };
+  return {
+    background: token("--background"),
+    foreground: token("--foreground"),
+    muted: token("--muted"),
+    border: token("--border"),
+    primaryForeground: token("--primary-foreground"),
+    palette: Array.from({ length: 8 }, (_, index) =>
+      token(`--chart-${index + 1}`),
+    ),
+    primary: token("--chart-1"),
+    negative: token("--chart-6"),
+    positive: token("--chart-2"),
+  };
+};
 
-const createNumericColors = (
-  mode: VisualColorMode,
-  domain: readonly [number, number],
-) => {
+type ChartColors = ReturnType<typeof readChartColors>;
+
+type NumericColorsOptions = {
+  mode: VisualColorMode;
+  domain: readonly [number, number];
+  colors: ChartColors;
+};
+
+const createNumericColors = ({
+  mode,
+  domain,
+  colors,
+}: NumericColorsOptions) => {
   const intensity = scaleLinear()
     .domain(domain)
     .range(mode === "citations" ? [0, 1] : [-1, 1])
@@ -75,6 +92,7 @@ type RenderLegendOptions = {
   unknown: boolean;
   language: string;
   rtl: boolean;
+  colors: ChartColors;
 };
 
 const renderTreemapLegend = ({
@@ -88,6 +106,7 @@ const renderTreemapLegend = ({
   unknown,
   language,
   rtl,
+  colors,
 }: RenderLegendOptions) => {
   const owner = legend.ownerDocument;
   legend.replaceChildren();
@@ -111,7 +130,7 @@ const renderTreemapLegend = ({
     }
     return;
   }
-  const formatter = new Intl.NumberFormat(language);
+  const formatter = createTreemapNumberFormatter(language);
   const low = owner.createElement("span");
   const ramp = owner.createElement("span");
   const high = owner.createElement("span");
@@ -132,6 +151,45 @@ type MountTreemapOptions = {
   opts: VisualTreemapOptions;
 };
 
+const treemapCategories = (
+  model: ReturnType<typeof createTreemapModel>,
+  categoryField: NonNullable<VisualTreemapColor["field"]> | null,
+): string[] => {
+  if (categoryField === "tier") {
+    return [...COURT_TIER_LABELS];
+  }
+  if (categoryField === null) {
+    return [];
+  }
+  return [
+    ...new Set(
+      model
+        .nodes()
+        .map((node) => treemapCategoryValue(node, categoryField))
+        .filter((value) => value !== null),
+    ),
+  ];
+};
+
+const createTreemapLayout = (owner: Document, showLegend: boolean) => {
+  const layout = owner.createElement("div");
+  const surface = owner.createElement("div");
+  const legend = owner.createElement("div");
+  // The fixed chart height includes a wrapping legend. Flex sizing gives
+  // the surface the remaining space; unsized containers keep the aspect ratio.
+  layout.style.cssText =
+    "display:flex;flex-direction:column;inline-size:100%;block-size:100%;min-block-size:0";
+  surface.style.cssText =
+    "flex:1;inline-size:100%;block-size:100%;min-block-size:0;aspect-ratio:16/9";
+  legend.style.cssText =
+    "display:flex;flex-shrink:0;align-items:center;flex-wrap:wrap;gap:0.5rem;font-variant-numeric:tabular-nums;margin-block-start:0.5rem;color:inherit";
+  layout.append(surface);
+  if (showLegend) {
+    layout.append(legend);
+  }
+  return { layout, surface, legend };
+};
+
 const mountTreemap = ({ win, el, opts }: MountTreemapOptions) => {
   if (el.ownerDocument !== win.document) {
     panic("Treemap container must belong to its runtime document");
@@ -140,48 +198,36 @@ const mountTreemap = ({ win, el, opts }: MountTreemapOptions) => {
   let mode = opts.color.mode;
   // Switching into category mode requires an explicitly authored field.
   const categoryField = opts.color.field ?? null;
-  let categories: string[] = [];
-  if (categoryField === "tier") {
-    categories = [...COURT_TIER_LABELS];
-  } else if (categoryField !== null) {
-    categories = [
-      ...new Set(
-        model
-          .nodes()
-          .map((node) => treemapCategoryValue(node, categoryField))
-          .filter((value) => value !== null),
-      ),
-    ];
-  }
-  const categoryScale = scaleOrdinal(categories, categoricalPalette).unknown(
-    colors.muted,
-  );
+  const categories = treemapCategories(model, categoryField);
   let destroyed = false;
   const owner = win.document;
-  const surface = owner.createElement("div");
-  const legend = owner.createElement("div");
-  const inheritedScheme = win.getComputedStyle(el).colorScheme;
-  const colorScheme =
-    inheritedScheme === "normal" ? "light dark" : inheritedScheme;
-  surface.style.colorScheme = colorScheme;
-  surface.style.color = colors.foreground;
-  legend.style.cssText =
-    "display:flex;align-items:center;flex-wrap:wrap;gap:0.5rem;font-variant-numeric:tabular-nums;margin-block-start:0.5rem;color:inherit";
-  legend.style.colorScheme = colorScheme;
-  legend.style.color = colors.foreground;
-  el.append(surface);
-  if (opts.color.legend) {
-    el.append(legend);
-  }
+  const { layout, surface, legend } = createTreemapLayout(
+    owner,
+    opts.color.legend,
+  );
+  el.append(layout);
   const language =
     el.closest("[lang]")?.getAttribute("lang") ||
     owner.documentElement.lang ||
     win.navigator.language;
   const config = () => {
+    const colors = readChartColors(win, el);
+    const categoryScale = scaleOrdinal(categories, colors.palette).unknown(
+      colors.muted,
+    );
+    const colorScheme = win.getComputedStyle(el).colorScheme;
+    surface.style.colorScheme = colorScheme;
+    surface.style.color = colors.foreground;
+    legend.style.colorScheme = colorScheme;
+    legend.style.color = colors.foreground;
     const rows = model.visible();
     const domain =
       mode === "category" ? ([0, 0] as const) : treemapColorDomain(rows, mode);
-    const { intensity, numericFill } = createNumericColors(mode, domain);
+    const { intensity, numericFill } = createNumericColors({
+      mode,
+      domain,
+      colors,
+    });
     const rowFill = (row: (typeof rows)[number]) => {
       if (mode !== "category") {
         return numericFill(
@@ -211,6 +257,7 @@ const mountTreemap = ({ win, el, opts }: MountTreemapOptions) => {
           ),
         language,
         rtl: win.getComputedStyle(el).direction === "rtl",
+        colors,
       });
     }
     const tiles = [
@@ -266,7 +313,7 @@ const mountTreemap = ({ win, el, opts }: MountTreemapOptions) => {
           background: colors.background,
           muted: colors.muted,
           grid: colors.border,
-          palette: [colors.primary],
+          palette: colors.palette,
         },
       }),
       ariaLabel: model.root().label,
@@ -303,6 +350,12 @@ const mountTreemap = ({ win, el, opts }: MountTreemapOptions) => {
     event.preventDefault();
     back();
   };
+  const onThemeChange = () => {
+    if (!destroyed) {
+      host.update({ ...config(), onSelect });
+    }
+  };
+  win.addEventListener("stella-theme-change", onThemeChange);
   surface.addEventListener("keydown", onKeyDown);
   surface.addEventListener("contextmenu", onContextMenu);
   return Object.freeze({
@@ -323,11 +376,11 @@ const mountTreemap = ({ win, el, opts }: MountTreemapOptions) => {
         return;
       }
       destroyed = true;
+      win.removeEventListener("stella-theme-change", onThemeChange);
       surface.removeEventListener("keydown", onKeyDown);
       surface.removeEventListener("contextmenu", onContextMenu);
       host.destroy();
-      surface.remove();
-      legend.remove();
+      layout.remove();
     },
   });
 };

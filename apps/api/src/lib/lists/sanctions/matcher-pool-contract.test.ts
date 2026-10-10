@@ -12,8 +12,13 @@ import type { ParsedList, ScreeningQuery } from "@stll/sanctions";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import { createSanctionsMatcherPool } from "./matcher-pool";
+import type { MatcherWorkOutcome } from "./matcher-pool";
 import type { SanctionsMatcherRequest } from "./matcher-protocol";
+import type { reportSanctionsScreeningFailure } from "./screening-failure";
 import { createMatcherTestClock } from "./test-fixtures/matcher-test-clock";
+
+const outcomeValue = <T>(outcome: MatcherWorkOutcome<T>): T | null =>
+  outcome.status === "completed" ? outcome.value : null;
 
 const personList = (name: string): ParsedList => ({
   version: { source: "eu", publishedAt: "2026-09-20", fileId: null },
@@ -133,12 +138,17 @@ test.each(multilingualCases)(
           limit: 10,
         } as const satisfies SanctionsMatcherRequest;
         expect(
-          await pool.run(async (session) => await session.match(request)),
+          await pool
+            .run(async (session) => await session.match(request))
+            .then(outcomeValue),
         ).toEqual({ status: "screened", result: expected });
         expect(
-          await pool.run(
-            async (session) => await session.match({ ...request, list: null }),
-          ),
+          await pool
+            .run(
+              async (session) =>
+                await session.match({ ...request, list: null }),
+            )
+            .then(outcomeValue),
         ).toEqual({ status: "screened", result: expected });
       }
     } finally {
@@ -150,7 +160,11 @@ test.each(multilingualCases)(
 test.each([1, 2])(
   "pool refuses excess simultaneous waiters and serves admitted callers (size %s)",
   async (size) => {
+    const reports: Parameters<typeof reportSanctionsScreeningFailure>[0][] = [];
     const pool = createSanctionsMatcherPool({
+      reportFailure: (report) => {
+        reports.push(report);
+      },
       size,
       clock: createMatcherTestClock(),
     });
@@ -167,18 +181,20 @@ test.each([1, 2])(
     const active = Array.from(
       { length: size },
       async (_, index) =>
-        await pool.run(async (session) => {
-          signals.push(session.signal);
-          executed.push(index);
-          running += 1;
-          peak = Math.max(peak, running);
-          if (running === size) {
-            activeEntered.resolve(undefined);
-          }
-          await releaseActive.promise;
-          running -= 1;
-          return index;
-        }),
+        await pool
+          .run(async (session) => {
+            signals.push(session.signal);
+            executed.push(index);
+            running += 1;
+            peak = Math.max(peak, running);
+            if (running === size) {
+              activeEntered.resolve(undefined);
+            }
+            await releaseActive.promise;
+            running -= 1;
+            return index;
+          })
+          .then(outcomeValue),
     );
     const pending: Promise<number | null>[] = [];
     try {
@@ -186,23 +202,28 @@ test.each([1, 2])(
       pending.push(
         ...queued.map(
           async (gate, index) =>
-            await pool.run(async (session) => {
-              signals.push(session.signal);
-              executed.push(size + index);
-              running += 1;
-              peak = Math.max(peak, running);
-              gate.entered.resolve(undefined);
-              await gate.release.promise;
-              running -= 1;
-              return size + index;
-            }),
+            await pool
+              .run(async (session) => {
+                signals.push(session.signal);
+                executed.push(size + index);
+                running += 1;
+                peak = Math.max(peak, running);
+                gate.entered.resolve(undefined);
+                await gate.release.promise;
+                running -= 1;
+                return size + index;
+              })
+              .then(outcomeValue),
         ),
       );
-      const refused = pool.run(async () => {
-        executed.push(-1);
-        return -1;
-      });
+      const refused = pool
+        .run(async () => {
+          executed.push(-1);
+          return -1;
+        })
+        .then(outcomeValue);
       expect(await refused).toBeNull();
+      expect(reports.map(({ reason }) => reason)).toEqual(["admission"]);
       expect(signals).toHaveLength(size);
       expect(signals.every((signal) => !signal.aborted)).toBe(true);
       expect(executed).toEqual(
@@ -236,10 +257,16 @@ test("close cancels active and queued leases and prevents respawn", async () => 
   const { port1, port2 } = new MessageChannel();
   const entered = Promise.withResolvers<undefined>();
   const exited = Promise.withResolvers<undefined>();
-  port1.once("message", () => entered.resolve(undefined));
+  port1.once("message", () => {
+    entered.resolve(undefined);
+  });
   let spawned = 0;
   let invoked = 0;
+  const reports: Parameters<typeof reportSanctionsScreeningFailure>[0][] = [];
   const pool = createSanctionsMatcherPool({
+    reportFailure: (report) => {
+      reports.push(report);
+    },
     size: 1,
     clock: createMatcherTestClock(),
     createWorker: () => {
@@ -251,27 +278,33 @@ test("close cancels active and queued leases and prevents respawn", async () => 
           transferList: [port2],
         },
       );
-      worker.once("exit", () => exited.resolve(undefined));
+      worker.once("exit", () => {
+        exited.resolve(undefined);
+      });
       return worker;
     },
   });
-  const active = pool.run(async (session) => {
-    invoked += 1;
-    return await session.match({
-      source: "eu",
-      editionId: "close",
-      list: personList("Čeněk Říha"),
-      query: { name: "Čeněk Říha", entityType: "person" },
-      cutoff: DEFAULT_CUTOFF,
-      limit: 10,
-    });
-  });
+  const active = pool
+    .run(async (session) => {
+      invoked += 1;
+      return await session.match({
+        source: "eu",
+        editionId: "close",
+        list: personList("Čeněk Říha"),
+        query: { name: "Čeněk Říha", entityType: "person" },
+        cutoff: DEFAULT_CUTOFF,
+        limit: 10,
+      });
+    })
+    .then(outcomeValue);
   try {
     await entered.promise;
-    const queued = pool.run(async () => {
-      invoked += 1;
-      return "queued";
-    });
+    const queued = pool
+      .run(async () => {
+        invoked += 1;
+        return "queued";
+      })
+      .then(outcomeValue);
     const began = performance.now();
     await pool.close();
     expect(await active).toBeNull();
@@ -284,13 +317,20 @@ test("close cancels active and queued leases and prevents respawn", async () => 
     await exited.promise;
     expect(invoked).toBe(1);
     expect(
-      await pool.run(async () => {
-        invoked += 1;
-        return "after-close";
-      }),
+      await pool
+        .run(async () => {
+          invoked += 1;
+          return "after-close";
+        })
+        .then(outcomeValue),
     ).toBeNull();
     expect(invoked).toBe(1);
     expect(spawned).toBe(1);
+    expect(reports.map(({ reason }) => reason)).toEqual([
+      "closed",
+      "closed",
+      "closed",
+    ]);
     await pool.close();
   } finally {
     await pool.close();
@@ -308,10 +348,10 @@ test("close waits for actual worker retirement", async () => {
   const pool = createSanctionsMatcherPool({
     clock: createMatcherTestClock(),
     createWorker: () => {
-      const events = { on: () => undefined };
+      const events = { on: () => {} };
       return asTestRaw<Worker>(
         Object.assign(events, {
-          unref: () => events,
+          unref: () => {},
           terminate: async () => {
             retired += 1;
             return await retirement.promise;
@@ -320,13 +360,23 @@ test("close waits for actual worker retirement", async () => {
       );
     },
   });
-  const active = pool.run(async (session) => {
-    entered.resolve(undefined);
-    await new Promise<void>((resolve) => {
-      session.signal.addEventListener("abort", () => resolve(), { once: true });
-    });
-    return "cancelled";
-  });
+  const active = pool
+    .run(async (session) => {
+      entered.resolve(undefined);
+      await new Promise<void>((resolve) => {
+        session.signal.addEventListener(
+          "abort",
+          () => {
+            resolve();
+          },
+          {
+            once: true,
+          },
+        );
+      });
+      return "cancelled";
+    })
+    .then(outcomeValue);
   try {
     await entered.promise;
     const closing = pool.close().then(() => {
@@ -404,14 +454,17 @@ test("real worker honors cutoff and limit on cold and cached requests", async ()
           cutoff,
           limit,
         } as const satisfies SanctionsMatcherRequest;
-        const cold = await pool.run(
-          async (session) => await session.match(request),
-        );
+        const cold = await pool
+          .run(async (session) => await session.match(request))
+          .then(outcomeValue);
         expect(cold).toEqual({ status: "screened", result: expected });
         expect(
-          await pool.run(
-            async (session) => await session.match({ ...request, list: null }),
-          ),
+          await pool
+            .run(
+              async (session) =>
+                await session.match({ ...request, list: null }),
+            )
+            .then(outcomeValue),
         ).toEqual(cold);
       }
     }

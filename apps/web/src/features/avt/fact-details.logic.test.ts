@@ -1,19 +1,17 @@
 import { describe, expect, test } from "bun:test";
 
-import { LIST_DETAILS_STATUS } from "@stll/api-contract/list-details";
-
 import { factId } from "@/features/avt/avt.test-fixtures";
 import {
   orderHeldFirst,
   toFactDetailsBody,
   withFactDetails,
 } from "@/features/avt/fact-details.logic";
-import type { FactDetails } from "@/features/avt/types";
+import type { EditableFactDetails, FactDetails } from "@/features/avt/types";
 import { toSafeId } from "@/lib/safe-id";
 
 const listId = toSafeId<"legalList">("0199a3c4-5b6d-7e8f-9a0b-000000009004");
 
-const details: FactDetails = {
+const details = {
   occurredOn: "2021-07-01",
   occurredOnPrecision: "month",
   evidenceKind: "Bank record",
@@ -21,13 +19,12 @@ const details: FactDetails = {
   confidence: "medium",
   interpretationNote: null,
   scoring: "included",
-};
+} as const satisfies EditableFactDetails;
 
 const item = (suffix: number, factDetails: FactDetails | null) => ({
   id: factId(suffix),
   name: `Fact ${String(suffix)}`,
   factDetails,
-  factDetailsStatus: LIST_DETAILS_STATUS.visible,
 });
 
 describe("fact detail saves", () => {
@@ -63,18 +60,6 @@ describe("fact detail saves", () => {
 
     expect(next.at(0)?.items.at(0)?.factDetails).toEqual(details);
     expect(next.at(0)?.items.at(1)).toBe(pages.at(0)?.items.at(1));
-  });
-
-  test("keep unavailable detail unavailable during an in-flight save", () => {
-    const hidden = {
-      id: factId(1),
-      factDetails: null,
-      factDetailsStatus: LIST_DETAILS_STATUS.featureUnavailable,
-    };
-    const pages = [{ items: [hidden, item(2, details)] }];
-    expect(withFactDetails(pages, factId(1), details).at(0)?.items.at(0)).toBe(
-      hidden,
-    );
   });
 });
 

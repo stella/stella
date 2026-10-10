@@ -2,4 +2,4 @@
 "@stll/cli": patch
 ---
 
-Describe list reader detail availability in the capability catalog.
+Describe caller-aware list activity audit details in the capability catalog.

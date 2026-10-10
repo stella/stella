@@ -14,9 +14,16 @@
 // Usage:
 //   bun scripts/typecheck-coverage.ts
 //   bun scripts/typecheck-coverage.ts --self-test
+//   bun scripts/typecheck-coverage.ts --autofix <changed-source>...
 
 import { panic } from "better-result";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import {
+  type Dirent,
+  existsSync,
+  readFileSync,
+  readdirSync,
+  statSync,
+} from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
@@ -171,6 +178,40 @@ const lines = (output: string): string[] =>
     .map((line) => line.trim())
     .filter(Boolean);
 
+// One complete compile of a candidate project. Its file list decides
+// membership even when the project has errors in sources the targets do not
+// use; the failure only matters for the project that covers a target.
+type ProjectCompile = { files: Set<string>; failure: string | undefined };
+const compileProject = (project: string): ProjectCompile => {
+  const command = [
+    process.execPath,
+    TSC_NATIVE,
+    "--noEmit",
+    "--pretty",
+    "false",
+    "--listFiles",
+    "-p",
+    project,
+  ];
+  const result = Bun.spawnSync(command, {
+    cwd: REPO_ROOT,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const stdout = result.stdout.toString();
+  return {
+    files: new Set(
+      lines(stdout)
+        .filter((line) => !/: error TS\d+:/u.test(line))
+        .map((source) => normalizeRepoPath(path.resolve(REPO_ROOT, source))),
+    ),
+    failure:
+      result.exitCode === 0
+        ? undefined
+        : `Command failed (${result.exitCode}): ${command.join(" ")}\n${result.stderr.toString()}${stdout}`,
+  };
+};
+
 const supplementalProjects = (typecheckCommand: string): string[] => {
   const projects: string[] = [];
   for (const match of typecheckCommand.matchAll(PROJECT_ARGUMENT)) {
@@ -181,6 +222,34 @@ const supplementalProjects = (typecheckCommand: string): string[] => {
   }
   return projects;
 };
+
+// A config that is a symlink to a file counts like a file, as it does for
+// nearestOxcConfig; a dangling link does not.
+const isConfigFile = (directory: string, entry: Dirent): boolean =>
+  entry.isFile() ||
+  (entry.isSymbolicLink() &&
+    (statSync(path.join(REPO_ROOT, directory, entry.name), {
+      throwIfNoEntry: false,
+    })?.isFile() ??
+      false));
+
+const projectsInDirectory = (directory: string): string[] =>
+  readdirSync(path.join(REPO_ROOT, directory), { withFileTypes: true })
+    .filter(
+      (entry) =>
+        /^tsconfig.*\.json$/u.test(entry.name) &&
+        isConfigFile(directory, entry),
+    )
+    .map((entry) => normalizeRepoPath(path.join(directory, entry.name)))
+    .toSorted((left, right) => {
+      if (isConventionalProject(left) !== isConventionalProject(right)) {
+        return isConventionalProject(left) ? -1 : 1;
+      }
+      if (left === right) {
+        return 0;
+      }
+      return left < right ? -1 : 1;
+    });
 
 const typecheckProjects = (): string[] => {
   const projects = new Set<string>();
@@ -438,20 +507,121 @@ const assertProxyTargets = (proxies: readonly OxcProjectProxy[]): void => {
   }
 };
 
+type NearestOxcConfigOptions = {
+  file: string;
+  configExists: (config: string) => boolean;
+};
+
+const nearestOxcConfig = ({
+  file,
+  configExists,
+}: NearestOxcConfigOptions): string | null => {
+  let directory = path.posix.dirname(file);
+  while (true) {
+    const config = path.posix.join(directory, CONVENTIONAL_TSCONFIG);
+    if (configExists(config)) {
+      return config;
+    }
+    if (directory === ".") {
+      return null;
+    }
+    directory = path.posix.dirname(directory);
+  }
+};
+
 const hasDiscoverableAncestorConfig = (
   file: string,
   discoverableConfigFiles: Map<string, Set<string>>,
   configExists: (config: string) => boolean,
 ): boolean => {
-  let directory = path.posix.dirname(file);
-  while (directory !== ".") {
-    const config = `${directory}/${CONVENTIONAL_TSCONFIG}`;
-    if (configExists(config)) {
-      return discoverableConfigFiles.get(config)?.has(file) ?? false;
-    }
-    directory = path.posix.dirname(directory);
+  const config = nearestOxcConfig({ file, configExists });
+  return config === null
+    ? false
+    : (discoverableConfigFiles.get(config)?.has(file) ?? false);
+};
+
+// A changed-file Oxc pass filters compiler diagnostics to its targets. Compile
+// complete candidate projects, including unchanged dependencies, and prove
+// membership before running any fixer. Root sources can belong to siblings of
+// the empty conventional config; search outward from the nearest config.
+const typecheckAutofixFiles = (files: readonly string[]): void => {
+  if (files.length === 0) {
+    panic("Autofix typecheck requires source files");
   }
-  return false;
+  const projects = new Map<string, string[]>();
+  const compiled = new Map<string, ProjectCompile>();
+  const directoryProjects = new Map<string, string[]>();
+  for (const rawFile of files) {
+    const file = normalizeRepoPath(
+      path.relative(REPO_ROOT, path.resolve(REPO_ROOT, rawFile)),
+    );
+    if (file === ".." || file.startsWith("../") || path.isAbsolute(file)) {
+      panic(`Autofix source is outside the repository: ${rawFile}`);
+    }
+    const nearest = nearestOxcConfig({
+      file,
+      configExists: (config) => existsSync(path.join(REPO_ROOT, config)),
+    });
+    if (nearest === null) {
+      panic(`Autofix source has no TypeScript project: ${file}`);
+    }
+    // Start beside the source: a sibling config can sit below the nearest
+    // conventional one.
+    let directory = path.posix.dirname(file);
+    const tried: string[] = [];
+    let coveringProject: string | undefined;
+    while (coveringProject === undefined) {
+      let candidates = directoryProjects.get(directory);
+      if (candidates === undefined) {
+        candidates = projectsInDirectory(directory);
+        directoryProjects.set(directory, candidates);
+      }
+      for (const project of candidates) {
+        tried.push(project);
+        let compile = compiled.get(project);
+        if (compile === undefined) {
+          compile = compileProject(project);
+          compiled.set(project, compile);
+        }
+        if (
+          compile.files.has(normalizeRepoPath(path.resolve(REPO_ROOT, file)))
+        ) {
+          if (compile.failure !== undefined) {
+            panic(compile.failure);
+          }
+          coveringProject = project;
+          break;
+        }
+      }
+      if (coveringProject !== undefined || directory === ".") {
+        break;
+      }
+      directory = path.posix.dirname(directory);
+    }
+    // Lint-rule fixtures are invalid on purpose; the ones no project includes
+    // are skipped, as the coverage check exempts them. A fixture a project
+    // does include (a declaration file) is type-checked like any source.
+    if (coveringProject === undefined && isExempt(file)) {
+      console.log(`Autofix types skipped (exempt fixture): ${file}`);
+      continue;
+    }
+    if (coveringProject === undefined) {
+      panic(
+        `Autofix source is covered by no candidate project: ${file}. Candidates tried: ${tried.join(", ")}`,
+      );
+    }
+    const targets = projects.get(coveringProject);
+    if (targets === undefined) {
+      projects.set(coveringProject, [file]);
+    } else {
+      targets.push(file);
+    }
+  }
+  for (const [project, targets] of projects) {
+    console.log(
+      `Autofix types checked: ${project} (${targets.length} targets)`,
+    );
+  }
 };
 
 const findSourcesWithoutDiscoverableConfig = (
@@ -793,6 +963,10 @@ const selfTest = (): void => {
 };
 
 const main = (): void => {
+  if (process.argv.at(2) === "--autofix") {
+    typecheckAutofixFiles(process.argv.slice(3));
+    return;
+  }
   const options = parseArgs(process.argv.slice(2));
   if (options.selfTest) {
     selfTest();

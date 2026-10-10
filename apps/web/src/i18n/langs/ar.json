@@ -93,6 +93,9 @@
     "weekStartSunday": "الأحد"
   },
   "auth": {
+    "accessReset": {
+      "description": "ستؤدي المتابعة إلى فصل طرق تسجيل الدخول هذه: <identity>{providers}</identity>، وتسجيل الخروج من الأجهزة الأخرى. لم تتحقق هذه الاتصالات من بريدك الإلكتروني. هل تريد المتابعة؟"
+    },
     "betaNoticeTitle": "تجريبي",
     "bootstrapToken": "رمز الإعداد",
     "checkSpamHint": "إذا لم تجده، فتحقّق من مجلد البريد غير المرغوب فيه.",
@@ -108,7 +111,6 @@
     "createOrganizationButton": "إنشاء مؤسسة",
     "emailPlaceholder": "you@example.com",
     "error": {
-      "accountNotLinked": "يسجّل هذا البريد الإلكتروني الدخول بطريقة مختلفة. استخدم طريقة تسجيل الدخول الأصلية أو حاول مرة أخرى.",
       "generic": "حدث خطأ ما أثناء تسجيل دخولك. يُرجى المحاولة مرة أخرى.",
       "title": "تعذّر تسجيل دخولك"
     },
@@ -132,6 +134,13 @@
     "signIn": "تسجيل الدخول",
     "signInBeforeInvitation": "يجب تسجيل الدخول قبل أن تتمكن من قبول دعوة للانضمام إلى مؤسسة.",
     "signInWithPassword": "تسجيل الدخول بكلمة المرور",
+    "socialLink": {
+      "connect": "هل تريد ربط <identity>{provider}</identity> للمرة القادمة؟",
+      "connectButton": "ربط <identity>{provider}</identity>",
+      "emailProof": "سجّل الدخول باستخدام رمز يصلك بالبريد الإلكتروني للمتابعة.",
+      "methodHint": "يستخدم هذا البريد الإلكتروني <identity>{method}</identity> بالفعل. سجّل الدخول باستخدام رمز يصلك بالبريد الإلكتروني للمتابعة.",
+      "skip": "تخطي الآن"
+    },
     "subtitle": "المستندات والاجتهاد القضائي والمراجعة تحت السيطرة. مدعومة بالذكاء الاصطناعي.",
     "twoFactor": {
       "backupCodePlaceholder": "أدخل رمزًا احتياطيًا",
@@ -303,9 +312,7 @@
     },
     "save": {
       "failed": "لم يُحفظ",
-      "failedTitle": "لم يُحفظ تغييرك",
-      "saved": "تم الحفظ",
-      "saving": "جارٍ الحفظ…"
+      "failedTitle": "لم يُحفظ تغييرك"
     },
     "sourceMediumTooltip": "وسيط المصدر وصف محايد، ولا يخفض الثقة من تلقاء نفسه.",
     "states": {
@@ -349,6 +356,7 @@
     },
     "view": {
       "chooseList": "اختيار قائمة",
+      "createList": "إنشاء قائمة",
       "evidenceList": "الوقائع من",
       "noLists": "لا توجد قوائم في هذا الملف القانوني.",
       "pickList": "اختر القائمة التي تُفحص مستندات هذا الملف القانوني في ضوء وقائعها."
@@ -869,10 +877,16 @@
     "pagination": {
       "goToPage": "الانتقال إلى الصفحة {page}",
       "label": "صفحات النتائج",
+      "pageOfCount": "الصفحة {page} من {pageCount}",
+      "pageOfEstimatedCount": "الصفحة {page} من ~{pageCount}",
+      "pageOfEstimatedCountLabel": "الصفحة {page} من نحو {pageCount}",
       "pageWithEstimatedResultCount": "الصفحة {page} · {count, plural, zero {نحو صفر نتيجة} one {نحو نتيجة واحدة} two {نحو نتيجتين} few {نحو # نتائج} many {نحو # نتيجة} other {نحو # نتيجة}}",
       "pageWithResultCount": "الصفحة {page} · {count, plural, zero {لا نتائج} one {نتيجة واحدة} two {نتيجتان} few {# نتائج} many {# نتيجة} other {# نتيجة}}",
-      "perPage": "لكل صفحة"
+      "perPage": "لكل صفحة",
+      "refineForMore": "ضيّق نطاق البحث لعرض مزيد من النتائج"
     },
+    "paragraphRangeNotFound": "{count, plural, zero {لم يتم العثور على الفقرات {range} في هذا النص.} one {لم يتم العثور على الفقرة {range} في هذا النص.} two {لم يتم العثور على الفقرتين {range} في هذا النص.} few {لم يتم العثور على الفقرات {range} في هذا النص.} many {لم يتم العثور على الفقرات {range} في هذا النص.} other {لم يتم العثور على الفقرات {range} في هذا النص.}}",
+    "paragraphRangeSelected": "{count, plural, zero {تم تمييز الفقرات {range}.} one {تم تمييز الفقرة {range}.} two {تم تمييز الفقرتين {range}.} few {تم تمييز الفقرات {range}.} many {تم تمييز الفقرات {range}.} other {تم تمييز الفقرات {range}.}}",
     "provision": {
       "article": "المادة {value}",
       "letter": "البند {value}",
@@ -882,6 +896,7 @@
       "subsection": "الفقرة {value}"
     },
     "reader": {
+      "documentUpdated": "تم تحديث المستند.",
       "expandProvisions": "توسيع الأحكام",
       "headMatter": "الديباجة",
       "sourceAttribution": "بيانات المصدر متاحة بحرية على <link>{source}</link>."
@@ -1050,7 +1065,6 @@
       "toastDescription": "ستتوفّر الدردشة بملء الصفحة مع إطلاق السلاسل المحفوظة.",
       "toastTitle": "العرض الكامل غير متاح بعد"
     },
-    "activateGeneratedView": "التفاعل مع هذا العرض",
     "aiPrompt": "أداة تحرير رسائل الذكاء الاصطناعي",
     "aiThread": "محادثة مع الذكاء الاصطناعي",
     "analyzingSources": "جارٍ تحليل المصادر",
@@ -1270,6 +1284,8 @@
     "officeCitationUnavailable": "لم يعد هذا الاستشهاد متاحًا.",
     "openCitation": "فتح الاستشهاد {label}",
     "openThread": "فتح المحادثة",
+    "overlayLoadFailed": "تعذّر تحميل دردشة المستند.",
+    "overlayUpdated": "تم تحديث stella. أعد تحميل الصفحة لاستخدام دردشة المستند.",
     "pastedChars": "تم اللصق · {count} حرف",
     "pastedText": {
       "expand": "عرض النص الكامل",
@@ -1879,6 +1895,8 @@
     "saveAndLeave": "الحفظ والمغادرة",
     "saveAsPdf": "حفظ كملف PDF",
     "saveChanges": "حفظ التغييرات",
+    "saved": "تم الحفظ",
+    "saving": "جارٍ الحفظ…",
     "scopeThisPage": "(هذه الصفحة)",
     "scrollToBottom": "التمرير إلى الأسفل",
     "scrollToTop": "التمرير إلى الأعلى",
@@ -1913,6 +1931,7 @@
     "type": "النوع",
     "typeNameToConfirm": "اكتب الاسم للتأكيد",
     "unassigned": "غير مُسند",
+    "unavailable": "غير متاح",
     "uncategorized": "غير مصنّف",
     "undo": "تراجع",
     "unexpectedError": "حدث خطأ غير متوقع. يُرجى التواصل مع الدعم.",
@@ -2370,6 +2389,7 @@
       "disposableEmailNotAllowed": "عناوين البريد الإلكتروني المؤقتة غير مسموح بها. استخدم عنوان بريد إلكتروني دائم.",
       "encryptedContent": "لا يمكن استخراج محتوى المستند المشفّر. أزِل كلمة المرور من الملف ثم أعِد المحاولة.",
       "filePropertyTypeImmutable": "لا يمكن تغيير نوع خاصية الملف. احتفظ بالنوع الحالي؛ وأنشئ خاصية مخصصة للقيم الأخرى.",
+      "fileSecurityRejected": "رفض فحص أمني الملف. أزِل المحتوى المُعلَّم ثم ارفع نسخة نظيفة.",
       "forbidden": "ليست لديك صلاحية لتنفيذ ذلك.",
       "hostedCheckoutOpen": "توجد عملية دفع مفتوحة بالفعل لهذه المؤسسة. أكملها، أو ابدأ عملية جديدة بعد انتهاء صلاحيتها.",
       "hostedSubscriptionLive": "لدى هذه المؤسسة اشتراك بالفعل. غيّره من «إدارة الاستخدام المُستضاف».",
@@ -2384,6 +2404,8 @@
       "providerRateLimited": "تم بلوغ حد طلبات مزود الخدمة. حاول مرة أخرى بعد قليل.",
       "thirdPartyBoundaryRefusal": "حاول الطلب استخدام محتوى خارج سياق مساحة العمل المسموح به.",
       "usageLimitExceeded": "تم بلوغ حد الاستخدام.",
+      "verificationActiveLimitReached": "وصلت مؤسستك إلى الحد الأقصى لعمليات التحقق المتزامنة. انتظر حتى تكتمل إحدى عمليات التحقق، ثم حاول مرة أخرى.",
+      "verificationDailyLimitReached": "وصلت مؤسستك إلى الحد اليومي لعمليات التحقق. حاول مرة أخرى بعد منتصف الليل (Europe/Prague).",
       "versionConflict": "غيّر شخص آخر هذا أثناء تحريرك له. أعد التحميل للحصول على النسخة الحالية."
     },
     "failedToAcceptInvitation": "تعذّر قبول الدعوة",
@@ -3568,6 +3590,11 @@
       "askContentLabel": "نوع الإجابة",
       "askQuestionLabel": "السؤال",
       "askQuestionPlaceholder": "ما الذي ينبغي قراءته من كل مستند؟ اتركه فارغًا للإدخال اليدوي.",
+      "autosave": {
+        "failed": "تعذّر الحفظ",
+        "nameMissing": "لم يُحفظ: أضِف اسمًا",
+        "positionsNeedAttention": "لم يُحفظ: {count, plural, zero {لا مواقف تحتاج} one {موقف واحد يحتاج} two {موقفان يحتاجان} few {# مواقف تحتاج} many {# موقفًا يحتاج} other {# موقف يحتاج}} إلى مراجعة"
+      },
       "check": "استخدام قاعدة دقيقة بدلًا من الذكاء الاصطناعي",
       "checkHint": "للشروط القابلة للقياس، مثل: مهلة السداد ≤ 30 يومًا.",
       "checkKind": {
@@ -3597,6 +3624,7 @@
       "deletePlaybook": "حذف دليل المراجعة",
       "deletePosition": "حذف الموقف",
       "deleted": "تم حذف دليل المراجعة",
+      "deletedElsewhere": "تم حذف دليل المراجعة هذا.",
       "derivedAutomatically": "يتم إنشاء سؤال الاستخراج وتنسيق الإجابة من هذا الموقف. لا يلزم أي إعداد.",
       "derivedQuestion": "سؤال الاستخراج",
       "derivedType": "تنسيق الإجابة",
@@ -3649,10 +3677,12 @@
       },
       "noPositions": "لا توجد مواقف بعد. أضِف الأول.",
       "noSettledPosition": "لا يوجد موقف مستقر",
+      "openInPane": "فتح دليل المراجعة",
       "optionPlaceholder": "قيمة الخيار",
       "optionsLabel": "الخيارات",
       "outline": "الهيكل",
       "positionOfTotal": "الموقف {index} من {total}",
+      "positionRemoved": "تمت إزالة الموقف",
       "positions": "المواقف",
       "recent": "المستخدمة مؤخراً",
       "recommended": "بدايات موصى بها",
@@ -3852,6 +3882,16 @@
       "citationWithQuote": "إحالة مع اقتباس",
       "quoteWithCitation": "اقتباس مع الإحالة",
       "textOnly": "النص فقط"
+    }
+  },
+  "lists": {
+    "sources": {
+      "add": "إضافة مصدر",
+      "documentRequired": "اختر مستندًا.",
+      "invalidPage": "أدخل رقم صفحة صحيحًا لا يقل عن 1.",
+      "page": "صفحة PDF (اختياري)",
+      "quote": "مقطع مقتبس (اختياري)",
+      "quoteTooLong": "استخدم {limit} حرف كحد أقصى."
     }
   },
   "markdownEditor": {
@@ -5342,7 +5382,6 @@
       "noLanguagesFound": "لم يتم العثور على لغات",
       "notConfigured": "DeepL غير مُهيّأ لهذه المؤسسة. أضِف مفتاح API الخاص بـ DeepL في إعدادات المؤسسة لتمكين الترجمة.",
       "outputLabel": "نوع الترجمة",
-      "progress": "تقدم الترجمة",
       "progressCount": "اكتمل {completed} من {total}",
       "providerUnavailable": "خدمة الترجمة غير متاحة. حاول مرة أخرى لاحقًا أو تواصل مع المسؤول.",
       "runFailed": "تعذّر إكمال الترجمة.",
@@ -5474,14 +5513,8 @@
     "exportToCsv": "تصدير إلى CSV",
     "fields": {
       "calculating": "جارٍ الحساب...",
-      "currencyLabel": "العملة (اختياري)",
-      "currencyPlaceholder": "مثل USD أو EUR",
-      "editFieldValue": "تعديل قيمة الحقل",
       "errored": "حدث خطأ",
-      "fieldValueLabel": "قيمة الحقل",
-      "fieldValuePlaceholder": "أدخل قيمة الحقل",
       "formatNotSupported": "التنسيق غير مدعوم",
-      "numberPlaceholder": "أدخل رقمًا",
       "selectAValue": "اختر قيمة",
       "selectValues": "اختر القيم"
     },
@@ -5525,6 +5558,7 @@
       "desktopGate": {
         "alreadyInstalled": "هل هو مثبّت بالفعل؟ اربطه",
         "connect": "ربط stella desktop",
+        "connected": "stella desktop مرتبط",
         "editNone": "نزّل stella desktop لتعديل هذا الملف",
         "editOutdated": "حدّث stella desktop للتعديل",
         "editReason": "يفتح التعديل على الحاسوب الملف في تطبيق على حاسوبك عبر stella desktop.",
@@ -5546,6 +5580,7 @@
       "ocrQueueFailed": "تعذّرت جدولة التعرّف على النص",
       "ocrQueued": "تمت إضافة التعرّف على النص إلى دفعة OCR التالية",
       "pdfSigning": {
+        "alreadySigningTitle": "التوقيع جارٍ بالفعل في stella desktop",
         "cancelledBaseVersionDescription": "تغيّر المستند أثناء التوقيع. افتح أحدث إصدار ووقّعه من جديد.",
         "cancelledCertificateDescription": "لا يمكن استخدام الشهادة المختارة للتوقيع. اختر شهادة تسمح بالتوقيع الرقمي.",
         "cancelledCertifiedDescription": "ملف PDF هذا مُصدَّق، ولا يسمح تصديقه بإضافة توقيعات أخرى.",
@@ -5566,6 +5601,9 @@
         "inProgressDescription": "يجري توقيع هذا الملف بالفعل. أكمل ذلك التوقيع أو ألغه في stella desktop أولًا.",
         "noFileDescription": "لا يحتوي هذا المستند على ملف قابل للتوقيع.",
         "notAPdfDescription": "يمكن توقيع ملفات PDF فقط.",
+        "notOpeningConnect": "لا يفتح؟ اربط stella desktop",
+        "notPickedUpDescription": "قد لا يكون stella desktop قيد التشغيل أو غير مرتبط بهذا الحساب. اربطه ثم أعد المحاولة.",
+        "notPickedUpTitle": "لم يفتح stella desktop ملف PDF",
         "placementBox": "موضع الختم",
         "placementConfirm": "فتح stella desktop",
         "placementDescription": "اختر طريقة ظهور التوقيع في ملف PDF.",
@@ -5580,10 +5618,12 @@
         "placementTooSmall": "هذه الصفحة أصغر من أن تتسع للختم. اختر صفحة أخرى.",
         "placementVisible": "ختم مرئي",
         "placementVisibleDescription": "يعرض إطار على الصفحة من وقّع ومتى.",
+        "preparingDescription": "جارٍ تجهيز ملف PDF لـ stella desktop.",
         "readOnlyDescription": "هذا المستند للقراءة فقط.",
         "signedDescription": "تم حفظ التوقيع كالإصدار {versionNumber, number}.",
         "signedDescriptionNoVersion": "تم حفظ التوقيع كإصدار جديد.",
         "signedTitle": "تم توقيع ملف PDF",
+        "signingLabel": "جارٍ التوقيع في stella desktop…",
         "stampLocation": "المكان",
         "stampRejectedDescription": "تعذّر وضع الختم في هذا الموضع. ضعه مرة أخرى ثم أعد المحاولة.",
         "stampSignedBy": "موقّع رقميًا من",

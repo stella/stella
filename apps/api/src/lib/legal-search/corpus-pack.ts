@@ -82,7 +82,7 @@ export type PackMemberInput = {
   bytes: Uint8Array;
 };
 
-export type PackedEntry = {
+type PackedEntry = {
   member: PackFooterMember;
   location: PackedCorpusLocation;
 };

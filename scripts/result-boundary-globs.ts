@@ -100,6 +100,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/lib/mcp-connectors/**/*.ts",
   "apps/api/src/lib/memory/**/*.ts",
   "apps/api/src/lib/observability/**/*.ts",
+  "apps/api/src/lib/proofs/**/*.ts",
   "apps/api/src/lib/properties/**/*.ts",
   "apps/api/src/lib/review-organization/**/*.ts",
   "apps/api/src/lib/s3/**/*.ts",
@@ -139,7 +140,9 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/web/src/features/time-timers/**/*.{ts,tsx}",
   "apps/web/src/features/workspaces/**/*.{ts,tsx}",
   "apps/web/src/lib/deepl/**/*.{ts,tsx}",
+  "apps/web/src/lib/drag-and-drop/**/*.{ts,tsx}",
   "apps/web/src/lib/inbox/**/*.{ts,tsx}",
+  "apps/web/src/lib/law-search-history/**/*.{ts,tsx}",
   "apps/web/src/lib/prompts/**/*.{ts,tsx}",
   "apps/web/src/lib/web-search/**/*.{ts,tsx}",
   "apps/web/src/queries/**/*.{ts,tsx}",
@@ -162,6 +165,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "packages/conditions/src/**/*.ts",
   "packages/country-codes/src/**/*.ts",
   "packages/db-load-gate/src/**/*.ts",
+  "packages/decision-reader/src/**/*.{ts,tsx}",
   "packages/docx-utils/src/**/*.ts",
   "packages/errors/src/**/*.ts",
   "packages/fetch/src/**/*.ts",
@@ -173,6 +177,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "packages/runtime-mode/src/**/*.ts",
   "packages/sanctions/src/**/*.ts",
   "packages/sha256/src/**/*.ts",
+  "packages/start-runtime/src/**/*.ts",
   "packages/template-packs/src/**/*.ts",
   "packages/text-normalize/src/**/*.ts",
   "packages/time/src/**/*.ts",
@@ -222,6 +227,9 @@ export const RESULT_BOUNDARY_GLOBS = [
   // append/read/close failure only from a rejection, and the throw is what
   // rolls back the fenced write transaction.
   "apps/api/src/lib/chat/run-log.ts",
+  // Drizzle rolls back transaction callbacks through rejection; returning a
+  // Result would commit their writes instead of preserving the original refusal.
+  "apps/api/src/lib/db/transaction-abort.ts",
   "apps/api/src/lib/workflow-queue.ts",
   // Adapts admission Results to BullMQ's DelayedError/rejection protocol and
   // reservation callbacks whose rejection rolls back the kickoff transaction.

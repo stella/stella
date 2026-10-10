@@ -12,7 +12,6 @@ import { useSuspenseInfiniteQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
-import { LIST_DETAILS_STATUS } from "@stll/api-contract/list-details";
 import { Button } from "@stll/ui/button";
 import { PencilIcon, ShieldAlertIcon } from "@stll/ui/icons";
 import {
@@ -25,6 +24,8 @@ import {
 import { Textarea } from "@stll/ui/textarea";
 import { cn } from "@stll/ui/utils";
 
+import { ListItemSources } from "@/components/workspaces/list-item-sources";
+import { ListSourceAction } from "@/components/workspaces/list-source-action";
 import { FactDate } from "@/features/avt/fact-date";
 import { factItems, orderHeldFirst } from "@/features/avt/fact-details.logic";
 import { FactSource } from "@/features/avt/fact-source";
@@ -35,7 +36,7 @@ import {
 } from "@/features/avt/state-chip";
 import type {
   FactConfidence,
-  FactDetails,
+  EditableFactDetails,
   ListItem,
 } from "@/features/avt/types";
 import { CONFIDENCE_LABEL_KEYS, FACT_CONFIDENCES } from "@/features/avt/types";
@@ -171,33 +172,28 @@ type FactRowProps = {
 
 const FactRow = ({ workspaceId, listId, fact }: FactRowProps) => {
   const t = useTranslations();
-  const canEdit = usePermissions({ entity: ["update"] });
+  const canUpdate = usePermissions({ entity: ["update"] });
   const { saveDetails } = useFactDetailActions({ workspaceId, listId });
   const saveState = useFactSaveState({ workspaceId, listId }, fact.id);
-  if (fact.factDetailsStatus === LIST_DETAILS_STATUS.featureUnavailable) {
-    return (
-      <li className="space-y-2 p-3">
-        <p className="text-sm" dir="auto">
-          {fact.name}
-        </p>
-        <p className="text-muted-foreground text-xs">
-          {t("common.detailsUnavailable")}
-        </p>
-      </li>
-    );
-  }
+  const [sourcesOpen, setSourcesOpen] = React.useState(false);
   const details = fact.factDetails;
+  const canEdit =
+    canUpdate && (details === null || details.scoring !== undefined);
   const held = details?.scoring === "held";
   const evidenceKind = details?.evidenceKind ?? null;
 
   // The endpoint stores a fact's whole detail, and its confidence is
   // required: a fact nobody has described gets a detail once a reviewer
   // picks a confidence, and the other edits wait for that.
-  const save = (changes: Partial<FactDetails>) => {
-    if (details === null) {
+  const save = (changes: Partial<EditableFactDetails>) => {
+    if (details?.scoring === undefined) {
       return;
     }
-    saveDetails(fact.id, { ...details, ...changes });
+    saveDetails(fact.id, {
+      ...details,
+      ...changes,
+      scoring: changes.scoring ?? details.scoring,
+    });
   };
 
   return (
@@ -216,6 +212,16 @@ const FactRow = ({ workspaceId, listId, fact }: FactRowProps) => {
                 workspaceId={workspaceId}
               />
             )}
+            {fact.firstSource !== null && (
+              <Button
+                size="xs"
+                variant="ghost"
+                onClick={() => setSourcesOpen((open) => !open)}
+                aria-expanded={sourcesOpen}
+              >
+                {t("common.showAll")}
+              </Button>
+            )}
             {evidenceKind !== null && <span>{evidenceKind}</span>}
             <FactDate
               occurredOn={details?.occurredOn ?? null}
@@ -224,16 +230,35 @@ const FactRow = ({ workspaceId, listId, fact }: FactRowProps) => {
             <MediumChip medium={details?.medium ?? null} />
           </div>
           <InterpNote note={details?.interpretationNote ?? null} />
+          <ListSourceAction
+            workspaceId={workspaceId}
+            listId={listId}
+            itemEntityId={fact.id}
+            onCreated={() => setSourcesOpen(true)}
+          />
+          {sourcesOpen && (
+            <ListItemSources
+              workspaceId={workspaceId}
+              listId={listId}
+              itemEntityId={fact.id}
+            />
+          )}
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
           <ConfidenceSelect
             disabled={!canEdit}
-            onChange={(confidence) =>
+            onChange={(confidence) => {
+              const scoring =
+                details === null ? UNDESCRIBED_FACT.scoring : details.scoring;
+              if (scoring === undefined) {
+                return;
+              }
               saveDetails(fact.id, {
                 ...(details ?? UNDESCRIBED_FACT),
+                scoring,
                 confidence,
-              })
-            }
+              });
+            }}
             value={details?.confidence ?? null}
           />
           <Button
@@ -267,7 +292,7 @@ const UNDESCRIBED_FACT = {
   medium: null,
   interpretationNote: null,
   scoring: "included",
-} as const satisfies Omit<FactDetails, "confidence">;
+} as const satisfies Omit<EditableFactDetails, "confidence">;
 
 type ConfidenceSelectProps = {
   value: FactConfidence | null;

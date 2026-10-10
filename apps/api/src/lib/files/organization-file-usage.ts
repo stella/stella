@@ -1,14 +1,12 @@
 import { Panic, panic, Result } from "better-result";
-import { asc, count, eq, sql } from "drizzle-orm";
+import { asc, eq, sql } from "drizzle-orm";
 
 import { Temporal } from "@stll/time";
 
+import type { Transaction } from "@/api/db/root";
 import {
   organizationFileObjects,
   organizationFileUsage,
-  usageEntitlements,
-  usagePolicies,
-  usageSeatAssignments,
 } from "@/api/db/schema";
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -72,6 +70,40 @@ export const organizationFileUsageHandlerError = (
     message: error.message,
     cause: error,
   });
+
+const storageCapacityRow = (row: unknown): [string, bigint | null] => {
+  if (
+    !isRecord(row) ||
+    typeof row["organizationId"] !== "string" ||
+    (row["capacity"] !== null && typeof row["capacity"] !== "string")
+  ) {
+    return panic("Organization storage capacity row is malformed");
+  }
+  return [
+    row["organizationId"],
+    row["capacity"] === null ? null : BigInt(row["capacity"]),
+  ];
+};
+
+/**
+ * The organization's storage capacity in bytes, or null when nothing bounds
+ * it: the `organization_storage_capacity` database function, which reads the
+ * effective policy (a live entitlement's, or the free floor).
+ */
+const readOrganizationStorageCapacity = async (
+  tx: Pick<Transaction, "execute">,
+  organizationId: SafeId<"organization">,
+): Promise<bigint | null> => {
+  const rows = executedRows(
+    await tx.execute(
+      sql`select ${organizationId} as "organizationId", organization_storage_capacity(${organizationId})::text as capacity`,
+    ),
+  );
+  const [, capacity] = storageCapacityRow(
+    rows.at(0) ?? panic("Organization storage capacity row is missing"),
+  );
+  return capacity;
+};
 
 const positiveDifference = (next: bigint, current: bigint): bigint =>
   next > current ? next - current : 0n;
@@ -199,26 +231,8 @@ export const reserveOrganizationFileBytes = async (
           ? positiveDifference(BigInt(sizeBytes), existing.sizeBytes)
           : BigInt(sizeBytes);
 
-        const entitlement = await tx
-          .select({
-            storageBytesPerAssignment: usagePolicies.storageBytesPerAssignment,
-          })
-          .from(usageEntitlements)
-          .innerJoin(
-            usagePolicies,
-            eq(usageEntitlements.usagePolicyId, usagePolicies.id),
-          )
-          .where(eq(usageEntitlements.organizationId, organizationId))
-          .limit(1)
-          .then((rows) => rows.at(0));
-        if (entitlement && entitlement.storageBytesPerAssignment !== null) {
-          const assignments = await tx
-            .select({ value: count() })
-            .from(usageSeatAssignments)
-            .where(eq(usageSeatAssignments.organizationId, organizationId))
-            .then((rows) => rows.at(0)?.value ?? 0);
-          const cap =
-            entitlement.storageBytesPerAssignment * BigInt(assignments);
+        const cap = await readOrganizationStorageCapacity(tx, organizationId);
+        if (cap !== null) {
           const nextBytes =
             counter.committedBytes + counter.reservedBytes + additionalBytes;
           const doesNotGrowExisting =
@@ -720,43 +734,18 @@ const reserveOrganizationFilesBytesOnce = async (
           .where(
             sql`${organizationFileObjects.objectKey} in (select jsonb_array_elements_text(${JSON.stringify([...keys])}::text::jsonb))`,
           );
-        const policies = await tx
-          .select({
-            organizationId: usageEntitlements.organizationId,
-            capacity: usagePolicies.storageBytesPerAssignment,
-          })
-          .from(usageEntitlements)
-          .innerJoin(
-            usagePolicies,
-            eq(usagePolicies.id, usageEntitlements.usagePolicyId),
-          )
-          .where(
-            sql`${usageEntitlements.organizationId} in (select jsonb_array_elements_text(${JSON.stringify(organizationIds)}::text::jsonb))`,
-          );
-        const assignments = await tx
-          .select({
-            organizationId: usageSeatAssignments.organizationId,
-            value: count(),
-          })
-          .from(usageSeatAssignments)
-          .where(
-            sql`${usageSeatAssignments.organizationId} in (select jsonb_array_elements_text(${JSON.stringify(organizationIds)}::text::jsonb))`,
-          )
-          .groupBy(usageSeatAssignments.organizationId);
+        const capacities = await tx.execute(sql`
+          select id as "organizationId", organization_storage_capacity(id)::text as capacity
+          from jsonb_array_elements_text(${JSON.stringify(organizationIds)}::text::jsonb) as ids(id)
+        `);
         const objectByKey = new Map(
           objects.map((object) => [object.objectKey, object]),
         );
         const counterByOrg = new Map(
           counters.map((counter) => [counter.organizationId, counter]),
         );
-        const policyByOrg = new Map(
-          policies.map((policy) => [policy.organizationId, policy.capacity]),
-        );
-        const seatsByOrg = new Map(
-          assignments.map((assignment) => [
-            assignment.organizationId,
-            assignment.value,
-          ]),
+        const capacityByOrg = new Map(
+          executedRows(capacities).map((row) => storageCapacityRow(row)),
         );
         const growthByOrg = new Map<SafeId<"organization">, bigint>();
         const growingOrgs = new Set<SafeId<"organization">>();
@@ -820,15 +809,18 @@ const reserveOrganizationFilesBytesOnce = async (
           if (!counter) {
             return panic("Organization file counter disappeared");
           }
-          const capacity = policyByOrg.get(organizationId);
+          // Null is a valid capacity (unbounded); only a missing row is a fault.
+          const capacity = capacityByOrg.get(organizationId);
+          if (capacity === undefined) {
+            return panic("Organization storage capacity row is missing");
+          }
           if (
-            capacity !== undefined &&
             capacity !== null &&
             growingOrgs.has(organizationId) &&
             counter.committedBytes +
               counter.reservedBytes +
               (growthByOrg.get(organizationId) ?? 0n) >
-              capacity * BigInt(seatsByOrg.get(organizationId) ?? 0)
+              capacity
           ) {
             return abortReservation("capacity_exceeded");
           }

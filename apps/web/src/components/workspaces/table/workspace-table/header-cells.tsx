@@ -1,14 +1,8 @@
 import type { ReactNode } from "react";
 import { useRef, useState } from "react";
 
-import {
-  attachClosestEdge,
-  extractClosestEdge,
-} from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge";
-import {
-  draggable,
-  dropTargetForElements,
-} from "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
+import { attachClosestEdge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge/attach-closest-edge";
+import { extractClosestEdge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge/extract-closest-edge";
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
 import { flexRender } from "@tanstack/react-table";
 
@@ -39,6 +33,10 @@ import type {
   EndFillerInput,
 } from "@/components/workspaces/table/workspace-table/internals-helpers";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import {
+  draggable,
+  dropTargetForElements,
+} from "@/lib/drag-and-drop/element-registration";
 
 type DraggableHeaderCellProps<TRow extends TableRowData> = {
   header: TableHeader<TRow>;

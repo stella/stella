@@ -14,6 +14,9 @@ set -euo pipefail
 
 bun scripts/check-swallowed-item-error-ledger.ts --self-test
 bun scripts/check-swallowed-item-error-ledger.ts
+bun scripts/check-test-state-baseline.ts --base "${RATCHET_BASE_REF:-origin/main}"
+bun scripts/check-concurrency-exceptions.ts
+bun test ./scripts/check-concurrency-exceptions.test.ts
 bun scripts/check-contract-domain-ledger.ts --self-test
 bun scripts/check-contract-domain-ledger.ts
 bun scripts/calendar-day-ledger.ts --self-test
@@ -71,7 +74,10 @@ bun test ./scripts/oxlint-typebox-unsafe.test.ts
 bun test ./scripts/oxlint-additional-guards.test.ts
 bun test ./scripts/check-oxlint-plugin-registry.test.ts
 bun test ./scripts/check-oxlint-fixture-counts.test.ts
-bun test ./.oxlint-plugins/__tests__
+# One isolated worker per core: the rule test files share no state, and run
+# serially they dominate this check.
+bun test --parallel ./.oxlint-plugins/__tests__
+bun scripts/check-desktop-section-sign-glyph.ts
 
 # Directive usage proves each expected hit fires at least once; the count
 # check then proves each fires exactly as often as its fixture line claims.

@@ -13,7 +13,7 @@ import { resolveResponseStatus } from "@/api/lib/observability/response-status";
 
 type MaybePromise<T> = T | Promise<T>;
 
-export type RateLimitCounter = {
+type RateLimitCounter = {
   count: number;
   nextReset: Date;
   start: number;
@@ -24,6 +24,8 @@ export type RateLimitContextConfig = {
 };
 
 export type RateLimitContext = {
+  /** Drop refund identity after response completion, preserving the quota count. */
+  complete: (key: string) => MaybePromise<void>;
   decrement: (key: string) => MaybePromise<void>;
   increment: (
     key: string,
@@ -136,6 +138,10 @@ export class InMemoryRateLimitContext implements RateLimitContext {
     };
   }
 
+  complete(_key: string): void {
+    // In-memory counters retain no refund identities.
+  }
+
   decrement(key: string) {
     const now = Temporal.Now.instant().epochMilliseconds;
     const entry = this.store.get(key);
@@ -171,8 +177,8 @@ type RateLimitResponseSet = Context["set"];
 
 type RateLimitRequestState =
   | { type: "counted"; key: string }
-  | { type: "counted_early_failure" }
-  | { type: "limited" }
+  | { type: "counted_early_failure"; key: string }
+  | { type: "limited"; key: string }
   | { type: "refunded" }
   | { type: "skipped" };
 
@@ -304,7 +310,7 @@ export const rateLimit = ({
 
     if (exceeded) {
       onLimit?.();
-      requestState.set(request, { type: "limited" });
+      requestState.set(request, { type: "limited", key });
       set.status = 429;
       return errorResponse;
     }
@@ -313,7 +319,7 @@ export const rateLimit = ({
       request,
       phase === "before_handler"
         ? { type: "counted", key }
-        : { type: "counted_early_failure" },
+        : { type: "counted_early_failure", key },
     );
     return undefined;
   };
@@ -433,6 +439,18 @@ export const rateLimit = ({
         return panic(`Unhandled state: ${String(state)}`);
       }
     }
+  });
+
+  plugin.onAfterResponse({ as: "scoped" }, async ({ request }) => {
+    const state = requestState.get(request);
+    if (
+      state?.type === "counted" ||
+      state?.type === "counted_early_failure" ||
+      state?.type === "limited"
+    ) {
+      await context.complete(state.key);
+    }
+    requestState.delete(request);
   });
 
   plugin.onStop(async () => {

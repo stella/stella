@@ -675,11 +675,15 @@ jobs:
         env:
           MCP_CANARY_ENVIRONMENT: staging
           MCP_CANARY_BASE_URL: https://api-staging.stll.app
+          MCP_CANARY_CONFIGURED_BASE_URL: https://api-staging.stll.app
           MCP_CANARY_FRONTEND_URL: https://staging.stll.app
           MCP_CANARY_MODE: full
           # Release verification requires every journey, including the
           # authenticated probes, rather than accepting partial coverage.
           MCP_CANARY_REQUIRE_CREDENTIALS: "true"
+          APP_REVIEW_ACCOUNT_EMAIL: ${{ vars.APP_REVIEW_ACCOUNT_EMAIL || 'review@stll.app' }}
+          APP_REVIEW_ORGANIZATION_ID: ${{ vars.STAGING_APP_REVIEW_ORGANIZATION_ID }}
+          REVIEW_ACCOUNT_PASSWORD: ${{ secrets.REVIEW_ACCOUNT_PASSWORD }}
           SMOKE_SESSION_SECRET: ${{ secrets.SMOKE_SESSION_SECRET }}
           E2E_EDGE_HEADER_NAME: x-stella-edge-token
           E2E_EDGE_HEADER_VALUE: ${{ secrets.STAGING_VIEWER_ACCESS_TOKEN }}

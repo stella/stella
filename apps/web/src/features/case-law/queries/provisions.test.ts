@@ -311,9 +311,34 @@ describe("provisions for inline linking", () => {
       previews: [],
       status: { type: "current" },
       generation: "9",
+      nextCursor: null,
     });
     expect(allowsLegacyProvisionFallback(result)).toBe(false);
   });
+});
+
+test("a bounded linking read preserves the continuation instead of reporting completeness", async () => {
+  let calls = 0;
+  globalThis.fetch = Object.assign(
+    async () => {
+      calls += 1;
+      return new Response(
+        JSON.stringify({
+          items: [],
+          previews: [],
+          limit: 100,
+          nextCursor: `page-${calls}`,
+        }),
+        { headers: { "Content-Type": "application/json" } },
+      );
+    },
+    { preconnect: previousFetch.preconnect },
+  );
+  const result = await newQueryClient().query(
+    decisionProvisionsForLinkingOptions("11111111-1111-7111-8111-111111111111"),
+  );
+  expect(calls).toBeGreaterThan(1);
+  expect(result.nextCursor).toBe(`page-${calls}`);
 });
 
 for (const retryMode of ["default", "disabled"] as const) {

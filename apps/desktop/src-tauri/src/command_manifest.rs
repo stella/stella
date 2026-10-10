@@ -2,6 +2,7 @@ macro_rules! with_stella_commands {
   ($consumer:ident) => {
     $consumer! {
       account::account_get_state => "account_get_state",
+      account::account_record_use => "account_record_use",
       account::account_disconnect => "account_disconnect",
       commands::get_state => "get_state",
       registry::registry_copy => "registry_copy",
@@ -20,6 +21,7 @@ macro_rules! with_stella_commands {
       commands::takeover_dialog_respond => "takeover_dialog_respond",
       commands::self_host_connect_dialog_respond => "self_host_connect_dialog_respond",
       commands::pdf_sign_respond => "pdf_sign_respond",
+      commands::fit_static_dialog => "fit_static_dialog",
       commands::copy_diagnostics => "copy_diagnostics",
       commands::email_support => "email_support",
       commands::reveal_support_root => "reveal_support_root",
@@ -41,6 +43,7 @@ macro_rules! with_stella_commands {
       clipboard_commands::clipboard_create_group => "clipboard_create_group",
       clipboard_commands::clipboard_delete_group => "clipboard_delete_group",
       clipboard_commands::clipboard_update_group => "clipboard_update_group",
+      clipboard_commands::clipboard_move_group => "clipboard_move_group",
       clipboard_commands::clipboard_update_item => "clipboard_update_item",
       clipboard_commands::clipboard_set_item_group => "clipboard_set_item_group",
       clipboard_commands::clipboard_set_item_name => "clipboard_set_item_name",
@@ -52,6 +55,8 @@ macro_rules! with_stella_commands {
       clipboard_commands::clipboard_copy_item => "clipboard_copy_item",
       clipboard_commands::clipboard_hide => "clipboard_hide",
       clipboard_commands::clipboard_open_stella => "clipboard_open_stella",
+      desktop_telemetry::get_desktop_telemetry_enabled => "get_desktop_telemetry_enabled",
+      desktop_telemetry::set_desktop_telemetry_enabled => "set_desktop_telemetry_enabled",
       desktop_telemetry::desktop_report_error => "desktop_report_error",
       desktop_telemetry::desktop_report_timing => "desktop_report_timing",
     }

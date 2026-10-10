@@ -126,8 +126,15 @@ const plan = {
   api_image_deps_required: "true",
   run_required: "true",
   trusted: "true",
+  coverage_profile: "normal-v1",
+  pilot_fast_jobs: "[]",
+  queue_required_jobs: "[]",
   suite_depth: "full",
+  service_suites_pr_required: "false",
+  corpus_suites_required: "false",
   fix_tests_on_base_required: "false",
+  api_test_shards: "4",
+  pr_depth_reused: "false",
 };
 const events = [
   { event: "merge_group", message: "ordinary" },
@@ -137,6 +144,17 @@ const events = [
   { event: "schedule", message: "ordinary" },
   { event: "workflow_dispatch", message: "ordinary" },
 ];
+// Main-only jobs gate on `github.ref`, so every modelled event needs the ref
+// GitHub gives it; an unknown ref would leave those conditions unresolved.
+const REF_BY_EVENT: Record<string, string> = {
+  merge_group: "refs/heads/gh-readonly-queue/main/pr-1-0000000",
+  pull_request: "refs/pull/1/merge",
+  push: "refs/heads/main",
+  schedule: "refs/heads/main",
+  workflow_dispatch: "refs/heads/main",
+};
+const refFor = (event: string) =>
+  REF_BY_EVENT[event] ?? panic(`No modelled ref for event ${event}`);
 type ContextOptions = {
   event: (typeof events)[number];
   variable: string;
@@ -154,6 +172,7 @@ const context = ({
 }: ContextOptions) => ({
   github: {
     event_name: event,
+    ref: refFor(event),
     event: {
       head_commit: { message },
       pull_request: {
@@ -165,8 +184,9 @@ const context = ({
   vars: {
     MERGE_QUEUE_DEPTH: variable,
     QUEUE_BROWSER_SUITES: queueBrowserSuites,
+    CI_POSTGRES_PR_SELECTION: "",
   },
-  inputs: { heavy_only: false },
+  inputs: { heavy_only: false, pr_depth_only: false },
   needs: Object.fromEntries(
     needs.map((job) => {
       const outputs: Record<string, string> =
@@ -303,6 +323,75 @@ const expectedPrSelection = ({
       return panic(`Unexpected CI event disposition: ${job}/${disposition}`);
   }
 };
+// Postgres PR selection and corpus coverage are declared exceptions to the
+// historical full-depth gate.
+const expectedServiceSelection = (value: ReturnType<typeof context>) => {
+  const outputs = value.needs["ci-plan"]?.outputs;
+  if (!outputs) {
+    panic("Missing Postgres planner context");
+  }
+  const event = value.github.event_name;
+  return (
+    outputs["run_required"] !== "false" &&
+    (outputs["package_checks_required"] === "true" ||
+      outputs["collab_redis_required"] === "true") &&
+    (outputs["trusted"] === "true" || event === "workflow_dispatch") &&
+    (outputs["corpus_suites_required"] === "true" ||
+      ((event !== "pull_request" ||
+        value.vars.CI_POSTGRES_PR_SELECTION === "on") &&
+        outputs["queue_depth"] !== "thin" &&
+        (outputs["suite_depth"] === "full" ||
+          (outputs["suite_depth"] === "fast" &&
+            outputs["service_suites_pr_required"] === "true"))))
+  );
+};
+
+test("declared Postgres selection preserves every scope, depth, trust and PR opt-in gate", () => {
+  for (const event of events) {
+    for (const suiteDepth of ["full", "fast", "unknown"]) {
+      for (const queueDepth of ["full", "thin"]) {
+        for (const prSwitch of ["", "off", "on"]) {
+          for (const trusted of ["true", "false"]) {
+            for (const required of ["true", "false"]) {
+              for (const prRequired of ["true", "false"]) {
+                for (const runRequired of ["true", "false"]) {
+                  const value = context({ event, variable: "", queueDepth });
+                  value.vars.CI_POSTGRES_PR_SELECTION = prSwitch;
+                  const planner = value.needs["ci-plan"];
+                  if (!planner) {
+                    panic("Missing Postgres planner context");
+                  }
+                  Object.assign(planner.outputs, {
+                    suite_depth: suiteDepth,
+                    trusted,
+                    package_checks_required: required,
+                    collab_redis_required: "false",
+                    service_suites_pr_required: prRequired,
+                    run_required: runRequired,
+                  });
+                  expect(
+                    selected(ci.jobs["service-suites"]?.if, value),
+                    JSON.stringify({
+                      event,
+                      suiteDepth,
+                      queueDepth,
+                      prSwitch,
+                      trusted,
+                      required,
+                      prRequired,
+                      runRequired,
+                    }),
+                  ).toBe(expectedServiceSelection(value));
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+});
+
 const templateValue = (template: string, value: object) =>
   template.replaceAll(/\$\{\{([\s\S]*?)\}\}/gu, (_, expression: string) =>
     String(
@@ -382,13 +471,26 @@ const assertMainConcurrency = (workflow: typeof main) => {
         const cancel = concurrency["cancel-in-progress"];
         expect(
           cancellationValue(cancel, value),
-          event.event === "workflow_dispatch"
-            ? "pinned heavy work is preserved"
+          event.event === "workflow_dispatch" ||
+            (event.event === "push" &&
+              event.message.startsWith("chore: release v"))
+            ? "release heavy work is preserved"
             : "superseded heavy work is cancelled",
-        ).toBe(event.event !== "workflow_dispatch");
+        ).toBe(
+          event.event !== "workflow_dispatch" &&
+            !(
+              event.event === "push" &&
+              event.message.startsWith("chore: release v")
+            ),
+        );
         let expectedGroup = `${main.name}-refs/heads/main`;
         if (event.event === "workflow_dispatch") {
           expectedGroup = `${main.name}-release-${testedSha}`;
+        } else if (
+          event.event === "push" &&
+          event.message.startsWith("chore: release v")
+        ) {
+          expectedGroup = `${main.name}-release-${eventSha}`;
         } else if (
           event.event === "push" &&
           !event.message.startsWith("chore: release v")
@@ -405,11 +507,7 @@ const assertMainConcurrency = (workflow: typeof main) => {
         groups.push(group);
       }
       const [first, second] = groups;
-      if (
-        event.event === "workflow_dispatch" ||
-        (event.event === "push" &&
-          !event.message.startsWith("chore: release v"))
-      ) {
+      if (event.event === "workflow_dispatch" || event.event === "push") {
         expect(first).not.toBe(second);
       } else {
         expect(first).toBe(second);
@@ -642,19 +740,26 @@ test("route smoke certifies planned queue and heavy builds while skipping PRs", 
   }
 });
 
-test("unset and full preserve historical predicates except declared PR and route ownership changes", () => {
+test("unset and full preserve historical predicates except declared PR, Postgres, corpus and route ownership changes", () => {
   const baseline = original("ci.yml");
   const baselineMain = original("main-heavy.yml");
   expect(Object.keys(main.jobs)).toEqual(Object.keys(baselineMain.jobs));
+  const collapsedJobs = new Map([
+    ["code-quality-web", "code-quality-web-rest"],
+    ["code-quality-rest", "code-quality-web-rest"],
+    ["typecheck-baseline", "ci-checks-generated"],
+  ]);
   expect(Object.keys(ci.jobs).toSorted()).toEqual(
     [
       ...new Set([
         ...Object.keys(baseline.jobs).filter(
-          (id) => id !== "merge-group-fail-fast",
+          (id) => id !== "merge-group-fail-fast" && !collapsedJobs.has(id),
         ),
+        "api-test-durations",
         "marketing-screenshots-cancel",
         "ci-generated-sources",
         "ci-checks-docs",
+        "code-quality-web-rest",
       ]),
     ].toSorted(),
   );
@@ -671,13 +776,19 @@ test("unset and full preserve historical predicates except declared PR and route
           continue;
         }
         let expected = selected(body.if, value);
-        if (job === "route-smoke") {
+        if (job === "service-suites") {
+          expected = expectedServiceSelection(value);
+        } else if (job === "route-smoke") {
           expected = expectedRouteSelection(value);
         } else if (event.event === "pull_request") {
-          expected = expectedPrSelection({ job, baseline: expected, value });
+          expected = expectedPrSelection({
+            job: collapsedJobs.get(job) ?? job,
+            baseline: expected,
+            value,
+          });
         }
         expect(
-          selected(ci.jobs[job]?.if, value),
+          selected(ci.jobs[collapsedJobs.get(job) ?? job]?.if, value),
           `${event.event}/${event.message}/${variable}/${proveFix}/${job}`,
         ).toBe(expected);
       }
@@ -759,7 +870,9 @@ test("one variable moves only derived heavy jobs from merge groups to ordinary m
               }
             : value;
         let expected = selected(baseline.jobs[job]?.if, certified);
-        if (job === "route-smoke") {
+        if (job === "service-suites") {
+          expected = expectedServiceSelection(value);
+        } else if (job === "route-smoke") {
           expected = expectedRouteSelection(value);
         } else if (event.event === "pull_request") {
           expected = expectedPrSelection({ job, baseline: expected, value });
@@ -878,9 +991,18 @@ const evaluate = ({
       TRUSTED: "true",
       SUITE_DEPTH: "full",
       HEAVY_ONLY: "false",
+      COVERAGE_PROFILE: "normal-v1",
+      QUEUE_VALIDATION: "false",
+      QUEUE_REQUIRED_JOBS: "[]",
       QUEUE_DEPTH: queueDepth,
       THIN_JOBS: JSON.stringify(THIN_JOBS),
       HEAVY_JOBS: JSON.stringify(heavy),
+      PATCH_ID: "fixture-patch-id",
+      WORKFLOW_VERSION: "fixture-workflow-version",
+      PR_DEPTH_JOBS: "[]",
+      PR_DEPTH_REUSED: "false",
+      PR_DEPTH_ONLY: "false",
+      PR_DEPTH_SOURCE_RUN_ID: "",
       PLAN: JSON.stringify({ ...plan, queue_depth: queueDepth }),
       NEEDS: JSON.stringify(dependencies),
     },
@@ -921,11 +1043,11 @@ test("ignoring queue depth in the result gate breaks intended thin skips", () =>
   ).toBe(1);
 }, 30_000);
 
-test("heavy schedules and pushes supersede while pinned dispatches coalesce by the tested SHA", () => {
+test("heavy schedules and ordinary pushes supersede while release runs coalesce by SHA", () => {
   assertMainConcurrency(main);
 }, 30_000);
 
-test("unconditional SHA isolation, preserving scheduled work or cancelling pinned work violate concurrency", () => {
+test("unconditional SHA isolation, preserving scheduled work or cancelling release work violate concurrency", () => {
   const perSha = structuredClone(main);
   const preserving = structuredClone(main);
   if (!perSha.concurrency || !preserving.concurrency) {
@@ -937,7 +1059,7 @@ test("unconditional SHA isolation, preserving scheduled work or cancelling pinne
   preserving.concurrency["cancel-in-progress"] =
     `\${{ github.event_name != 'schedule' }}`;
   expect(() => assertMainConcurrency(preserving)).toThrow(
-    "superseded heavy work is cancelled",
+    "release heavy work is preserved",
   );
   const cancellingPinned = structuredClone(main);
   const wrongSha = structuredClone(main);
@@ -946,7 +1068,7 @@ test("unconditional SHA isolation, preserving scheduled work or cancelling pinne
   }
   cancellingPinned.concurrency["cancel-in-progress"] = true;
   expect(() => assertMainConcurrency(cancellingPinned)).toThrow(
-    "pinned heavy work is preserved",
+    "release heavy work is preserved",
   );
   wrongSha.concurrency.group = wrongSha.concurrency.group.replace(
     "format('release-{0}', inputs.sha)",
@@ -976,7 +1098,7 @@ test("invalid configuration blocks ordinary heavy selection and publishes no com
     job: "validate",
     name: "Validate merge queue depth",
   });
-  expect(main.jobs["validate"]?.steps?.at(1)).toEqual(validation);
+  expect(main.jobs["validate"]?.steps).toContainEqual(validation);
   expect(validation.env?.["MERGE_QUEUE_DEPTH"]).toBe(
     `\${{ vars.MERGE_QUEUE_DEPTH }}`,
   );

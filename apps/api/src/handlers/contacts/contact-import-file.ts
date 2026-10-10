@@ -64,7 +64,7 @@ const CONTACT_IMPORT_DELIMITER_TYPE = {
   "\t": "tab",
 } as const satisfies Record<CSVDelimiter, string>;
 
-export type ContactImportDelimiter =
+type ContactImportDelimiter =
   | (typeof CONTACT_IMPORT_DELIMITER_TYPE)[CSVDelimiter]
   | typeof CONTACT_IMPORT_LABELED_SOURCE;
 

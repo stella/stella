@@ -1,0 +1,142 @@
+name: Manual checks
+run-name: "Manual checks ${{ inputs.check }} ${{ github.sha }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      check:
+        description: Check to run
+        type: choice
+        required: true
+        options:
+          - typecheck-repo
+          - typecheck-package
+          - lint
+          - test-files
+          - verify-affected
+      target:
+        description: Package name or space-separated test paths
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manual-check-${{ github.ref }}-${{ inputs.check }}
+  cancel-in-progress: true
+
+env:
+  TURBO_CACHE: local:rw,remote:r
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Refuse protected refs
+        env:
+          CHECK_REF: ${{ github.ref }}
+        run: |
+          if [[ "$CHECK_REF" == "refs/heads/main" || "$CHECK_REF" == refs/heads/gh-readonly-queue/* ]]; then
+            echo "::error::Manual checks cannot run on protected refs"
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+          submodules: true
+
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
+
+      # A refused input still produces a result: its exit code and errors are
+      # recorded for the result step like a failed check.
+      - name: Validate input
+        id: validate
+        env:
+          CHECK_CHECK: ${{ inputs.check }}
+          CHECK_TARGET: ${{ inputs.target }}
+          CHECK_LOG_FILE: ${{ runner.temp }}/manual-check.log
+          CHECK_EXIT_FILE: ${{ runner.temp }}/manual-check.exit
+          CHECK_START_FILE: ${{ runner.temp }}/manual-check.start
+        run: |
+          date +%s > "$CHECK_START_FILE"
+          set +e
+          bun scripts/manual-check-input.ts 2>&1 | tee "$CHECK_LOG_FILE"
+          status="${PIPESTATUS[0]}"
+          set -e
+          if [[ "$status" -ne 0 ]]; then
+            echo "$status" > "$CHECK_EXIT_FILE"
+            exit "$status"
+          fi
+
+      - name: Turbo remote cache
+        uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
+        with:
+          server-port: "0"
+
+      - name: Install dependencies
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      - name: Generate sources
+        run: bun run generate
+
+      - name: Run check
+        id: run-check
+        continue-on-error: true
+        env:
+          CHECK_CHECK: ${{ inputs.check }}
+          CHECK_TARGET: ${{ inputs.target }}
+          CHECK_LOG_FILE: ${{ runner.temp }}/manual-check.log
+          CHECK_EXIT_FILE: ${{ runner.temp }}/manual-check.exit
+          CHECK_START_FILE: ${{ runner.temp }}/manual-check.start
+        run: |
+          date +%s > "$CHECK_START_FILE"
+          set +e
+          case "$CHECK_CHECK" in
+            typecheck-repo) bun run typecheck --concurrency=1 && bun run typecheck:repo ;;
+            typecheck-package) bun --filter "$CHECK_TARGET" typecheck ;;
+            lint) bun run lint ;;
+            test-files) bun scripts/run-manual-test-files.ts ;;
+            verify-affected) bun run verify ;;
+          esac 2>&1 | tee "$CHECK_LOG_FILE"
+          echo "${PIPESTATUS[0]}" > "$CHECK_EXIT_FILE"
+
+      - name: Write result
+        if: always() && steps.validate.outcome != 'skipped'
+        env:
+          CHECK_SHA: ${{ github.sha }}
+          CHECK_REF: ${{ github.ref }}
+          CHECK_CHECK: ${{ inputs.check }}
+          CHECK_TARGET: ${{ inputs.target }}
+          CHECK_LOG_FILE: ${{ runner.temp }}/manual-check.log
+          CHECK_EXIT_FILE: ${{ runner.temp }}/manual-check.exit
+          CHECK_START_FILE: ${{ runner.temp }}/manual-check.start
+        run: bun scripts/write-manual-check-result.ts
+
+      - name: Upload result
+        if: always() && steps.validate.outcome != 'skipped'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: manual-check-result
+          path: manual-check-result.json
+
+      - name: Set conclusion
+        if: always() && steps.validate.outcome != 'skipped'
+        env:
+          CHECK_EXIT_FILE: ${{ runner.temp }}/manual-check.exit
+        run: |
+          # No exit file means a setup step failed before the check ran.
+          if [[ ! -s "$CHECK_EXIT_FILE" ]]; then
+            exit 1
+          fi
+          exit "$(cat "$CHECK_EXIT_FILE")"

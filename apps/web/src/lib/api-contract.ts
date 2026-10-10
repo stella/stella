@@ -2,7 +2,6 @@ import type {
   ApprovalRequiredBuiltInChatToolName,
   BuiltInChatToolPolicyKindByName,
   ChatMentionCategory,
-  ChatMentionHrefPrefixMap,
   EntityKind,
   GlobalSearchResultType,
   McpOAuthScope,
@@ -17,6 +16,7 @@ import type { ConditionNode } from "@stll/conditions";
 
 import type {
   ChatAnonRestoration,
+  ChatClientTools,
   ChatMessage,
   ChatPart,
   ChatSourceDocument,
@@ -51,9 +51,9 @@ export type {
   ApprovalRequiredBuiltInChatToolName,
   BuiltInChatToolPolicyKindByName,
   ChatAnonRestoration,
+  ChatClientTools,
   ChatMessage,
   ChatMentionCategory,
-  ChatMentionHrefPrefixMap,
   ChatPart,
   ChatSourceDocument,
   ChatUITools,

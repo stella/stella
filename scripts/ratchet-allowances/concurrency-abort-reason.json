@@ -1,0 +1,5 @@
+{
+  "metric": "lint-suppression-directives",
+  "delta": 1,
+  "reason": "AbortSignal permits arbitrary cancellation reasons. The shared sleep owner preserves the exact reason, matching throwIfAborted and migrated abortable delays, with one narrow prefer-promise-reject-errors exception."
+}

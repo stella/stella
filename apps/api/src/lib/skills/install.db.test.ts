@@ -5,6 +5,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import type { SafeDb } from "@/api/db/safe-db";
 import { agentSkills } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
@@ -52,10 +53,11 @@ const serveSkillFile =
 const fetchPackage = async (url: string, source: string) => {
   const fetched = await fetchSkillPackageFromUrl(
     url,
-    createSkillPackageFetchContext(
-      { deadlineAt: Date.now() + 30_000, maxRequests: 4 },
-      serveSkillFile(source),
-    ),
+    createSkillPackageFetchContext({
+      fetchBytes: serveSkillFile(source),
+      limits: { deadlineAt: Date.now() + 30_000, maxRequests: 4 },
+      permit: grantThirdPartyOutboundPermit(),
+    }),
   );
   if (Result.isError(fetched)) {
     return panic(

@@ -10,6 +10,7 @@ const FIXTURE_DIRECTORY = path.join(PLUGIN_DIRECTORY, "__fixtures__");
 const CONFIG_PATH = "oxlint.config.ts";
 const README_PATH = path.join(PLUGIN_DIRECTORY, "README.md");
 const NON_PLUGIN_MODULES = new Set([
+  "aggregate-lock-sites.ts",
   "budget-ledger.ts",
   "database-access.ts",
   "module-id.ts",

@@ -7,13 +7,13 @@ import { AUDIT_CHANGES_STATUS } from "@stll/api-contract/audit-log";
 import { auditActivityActionSql, auditLogs } from "@/api/db/schema";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log.constants";
 import type { AuditResourceType } from "@/api/lib/audit-log.constants";
-import { isFeatureEnabled } from "@/api/lib/auth/feature-access/policy";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import type { DeploymentFeatureFlag } from "@/api/lib/deployment-feature";
+import { isFeatureEnabled } from "@/api/lib/feature-access/policy";
 import type {
   FeatureAccessPrincipal,
   FeatureAccessSnapshot,
-} from "@/api/lib/auth/feature-access/policy";
-import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
-import type { DeploymentFeatureFlag } from "@/api/lib/deployment-feature";
+} from "@/api/lib/feature-access/policy";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import type { FeatureId } from "@/api/lib/feature-access/registry";
 import { LIST_VERIFICATION_ITEM_OPERATION } from "@/api/lib/lists/item-operations";

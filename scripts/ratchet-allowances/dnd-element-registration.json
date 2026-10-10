@@ -1,0 +1,5 @@
+{
+  "metric": "web-lib-top-level-entries",
+  "delta": 1,
+  "reason": "One shared element-registration owner replaces eleven surface import exceptions and the separate kanban conflict registry."
+}

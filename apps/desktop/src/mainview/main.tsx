@@ -2,6 +2,7 @@ import { lazy, StrictMode, Suspense, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import type { Root as ReactRoot } from "react-dom/client";
 
+import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { panic } from "better-result";
 
@@ -17,6 +18,7 @@ import {
   synchronizeDesktopLanguage,
 } from "../i18n";
 import type { DesktopMessages } from "../i18n";
+import { installAccountActivity } from "../shared/account-activity";
 import { subscribeDesktopEvent } from "../shared/desktop-events";
 import { useSystemTheme } from "../shared/use-system-theme";
 import {
@@ -152,6 +154,19 @@ const telemetryWindow = desktopTelemetryWindowFromLabel(
 const removeDesktopErrorTelemetry =
   installDesktopErrorTelemetry(telemetryWindow);
 
+const removeAccountActivity = installAccountActivity({
+  document,
+  windowLabel: getCurrentWindow().label,
+  recordUse: async () => await invoke("account_record_use"),
+  onFailure: () => {
+    reportDesktopError({
+      code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+      operation: DESKTOP_TELEMETRY_OPERATIONS.runtime,
+      window: telemetryWindow,
+    });
+  },
+});
+
 const existingRoot: unknown = Reflect.get(rootElement, REACT_ROOT_KEY);
 const reactRoot = isReactRoot(existingRoot)
   ? existingRoot
@@ -185,5 +200,8 @@ Reflect.set(rootElement, REACT_ROOT_KEY, reactRoot);
 reactRoot.render(<Root />);
 
 if (import.meta.hot) {
-  import.meta.hot.dispose(removeDesktopErrorTelemetry);
+  import.meta.hot.dispose(() => {
+    removeAccountActivity();
+    removeDesktopErrorTelemetry();
+  });
 }

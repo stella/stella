@@ -93,6 +93,9 @@
     "weekStartSunday": "Sekmadienis"
   },
   "auth": {
+    "accessReset": {
+      "description": "Tęsiant bus atsieti šie prisijungimo būdai: <identity>{providers}</identity>, ir atsijungta kituose įrenginiuose. Šie ryšiai nepatvirtino jūsų el. pašto adreso. Tęsti?"
+    },
     "betaNoticeTitle": "Beta",
     "bootstrapToken": "Sąrankos prieigos raktas",
     "checkSpamHint": "Jei jo nematote, patikrinkite šlamšto aplanką.",
@@ -108,7 +111,6 @@
     "createOrganizationButton": "Sukurti organizaciją",
     "emailPlaceholder": "jus@example.com",
     "error": {
-      "accountNotLinked": "Šis el. paštas prisijungia kitu būdu. Naudokite pradinį prisijungimo būdą arba bandykite dar kartą.",
       "generic": "Prijungiant kažkas nepavyko. Bandykite dar kartą.",
       "title": "Nepavyko jūsų prijungti"
     },
@@ -132,6 +134,13 @@
     "signIn": "Prisijungti",
     "signInBeforeInvitation": "Norėdami priimti kvietimą į organizaciją, pirmiausia turite prisijungti.",
     "signInWithPassword": "Prisijungti slaptažodžiu",
+    "socialLink": {
+      "connect": "Susieti <identity>{provider}</identity> kitam kartui?",
+      "connectButton": "Susieti <identity>{provider}</identity>",
+      "emailProof": "Norėdami tęsti, prisijunkite el. paštu gautu kodu.",
+      "methodHint": "Šis el. pašto adresas jau naudoja <identity>{method}</identity>. Norėdami tęsti, prisijunkite el. paštu gautu kodu.",
+      "skip": "Kol kas praleisti"
+    },
     "subtitle": "Dokumentai, teismų praktika ir peržiūra po kontrole. Su DI pagalba.",
     "twoFactor": {
       "backupCodePlaceholder": "Įveskite atsarginį kodą",
@@ -303,9 +312,7 @@
     },
     "save": {
       "failed": "Neišsaugota",
-      "failedTitle": "Jūsų pakeitimas nebuvo išsaugotas",
-      "saved": "Išsaugota",
-      "saving": "Išsaugoma…"
+      "failedTitle": "Jūsų pakeitimas nebuvo išsaugotas"
     },
     "sourceMediumTooltip": "Šaltinio laikmena yra neutralus apibūdinimas. Ji savaime nemažina patikimumo.",
     "states": {
@@ -349,6 +356,7 @@
     },
     "view": {
       "chooseList": "Pasirinkti sąrašą",
+      "createList": "Sukurti sąrašą",
       "evidenceList": "Faktai iš",
       "noLists": "Šioje byloje nėra sąrašų.",
       "pickList": "Pasirinkite sąrašą, pagal kurio faktus tikrinami šios bylos dokumentai."
@@ -869,10 +877,16 @@
     "pagination": {
       "goToPage": "Eiti į {page} psl.",
       "label": "Rezultatų puslapiai",
+      "pageOfCount": "{page} psl. iš {pageCount}",
+      "pageOfEstimatedCount": "{page} psl. iš ~{pageCount}",
+      "pageOfEstimatedCountLabel": "{page} psl. iš apytiksliai {pageCount}",
       "pageWithEstimatedResultCount": "{page} psl. · apytiksliai {count, plural, one {# rezultatas} few {# rezultatai} many {# rezultato} other {# rezultatų}}",
       "pageWithResultCount": "{page} psl. · {count, plural, one {# rezultatas} few {# rezultatai} many {# rezultato} other {# rezultatų}}",
-      "perPage": "Viename puslapyje"
+      "perPage": "Viename puslapyje",
+      "refineForMore": "Patikslinkite paiešką, kad pamatytumėte daugiau rezultatų"
     },
+    "paragraphRangeNotFound": "{count, plural, one {Pastraipa {range} šiame tekste nerasta.} few {Pastraipos {range} šiame tekste nerastos.} many {Pastraipos {range} šiame tekste nerastos.} other {Pastraipos {range} šiame tekste nerastos.}}",
+    "paragraphRangeSelected": "{count, plural, one {Pastraipa {range} paryškinta.} few {Pastraipos {range} paryškintos.} many {Pastraipos {range} paryškintos.} other {Pastraipos {range} paryškintos.}}",
     "provision": {
       "article": "{value} str.",
       "letter": "{value} papunktis",
@@ -882,6 +896,7 @@
       "subsection": "{value} d."
     },
     "reader": {
+      "documentUpdated": "Dokumentas atnaujintas.",
       "expandProvisions": "Išskleisti nuostatas",
       "headMatter": "Antraštinė dalis",
       "sourceAttribution": "Šaltinio duomenys laisvai prieinami adresu <link>{source}</link>."
@@ -1050,7 +1065,6 @@
       "toastDescription": "Pokalbis per visą puslapį su išsaugomomis gijomis netrukus pasirodys.",
       "toastTitle": "Pilnas rodinys dar negalimas"
     },
-    "activateGeneratedView": "Naudoti šį vaizdą",
     "aiPrompt": "DI pranešimo laukas",
     "aiThread": "DI pokalbis",
     "analyzingSources": "Analizuojami šaltiniai",
@@ -1270,6 +1284,8 @@
     "officeCitationUnavailable": "Ši citata nebepasiekiama.",
     "openCitation": "Atidaryti citatą {label}",
     "openThread": "Atidaryti pokalbį",
+    "overlayLoadFailed": "Nepavyko įkelti dokumento pokalbio.",
+    "overlayUpdated": "stella atnaujinta. Norėdami naudoti dokumento pokalbį, iš naujo įkelkite puslapį.",
     "pastedChars": "Įklijuota · {count} simb.",
     "pastedText": {
       "expand": "Rodyti visą tekstą",
@@ -1879,6 +1895,8 @@
     "saveAndLeave": "Išsaugoti ir išeiti",
     "saveAsPdf": "Išsaugoti kaip PDF",
     "saveChanges": "Išsaugoti pakeitimus",
+    "saved": "Išsaugota",
+    "saving": "Išsaugoma…",
     "scopeThisPage": "(šis puslapis)",
     "scrollToBottom": "Slinkti į apačią",
     "scrollToTop": "Slinkti į viršų",
@@ -1913,6 +1931,7 @@
     "type": "Tipas",
     "typeNameToConfirm": "Įveskite pavadinimą, kad patvirtintumėte",
     "unassigned": "Nepriskirta",
+    "unavailable": "Nepasiekiama",
     "uncategorized": "Nekategorizuota",
     "undo": "Anuliuoti",
     "unexpectedError": "Įvyko netikėta klaida. Susisiekite su palaikymo tarnyba.",
@@ -2370,6 +2389,7 @@
       "disposableEmailNotAllowed": "Laikini el. pašto adresai neleidžiami. Naudokite nuolatinį el. pašto adresą.",
       "encryptedContent": "Užšifruoto dokumento turinio išgauti negalima. Pašalinkite failo slaptažodį ir bandykite dar kartą.",
       "filePropertyTypeImmutable": "Failo savybės tipo keisti negalima. Palikite esamą tipą; kitoms reikšmėms sukurkite pasirinktinę savybę.",
+      "fileSecurityRejected": "Saugumo patikra atmetė failą. Pašalinkite pažymėtą turinį ir įkelkite išvalytą kopiją.",
       "forbidden": "Neturite teisės atlikti šio veiksmo.",
       "hostedCheckoutOpen": "Šiai organizacijai jau atidarytas apmokėjimas. Užbaikite jį arba pradėkite naują, kai jis baigs galioti.",
       "hostedSubscriptionLive": "Ši organizacija jau turi prenumeratą. Pakeiskite ją skiltyje „Tvarkyti prieglobos naudojimą“.",
@@ -2384,6 +2404,8 @@
       "providerRateLimited": "Pasiektas teikėjo užklausų limitas. Netrukus bandykite dar kartą.",
       "thirdPartyBoundaryRefusal": "Užklausa bandė naudoti turinį už leidžiamo darbo srities konteksto ribų.",
       "usageLimitExceeded": "Pasiektas naudojimo limitas.",
+      "verificationActiveLimitReached": "Jūsų organizacija pasiekė vienu metu vykdomų patikrų limitą. Palaukite, kol viena patikra bus baigta, ir bandykite dar kartą.",
+      "verificationDailyLimitReached": "Jūsų organizacija pasiekė dienos patikrų limitą. Bandykite dar kartą po vidurnakčio (Europe/Prague).",
       "versionConflict": "Kažkas kitas tai pakeitė, kol redagavote. Įkelkite iš naujo, kad gautumėte dabartinę versiją."
     },
     "failedToAcceptInvitation": "Nepavyko priimti kvietimo",
@@ -3568,6 +3590,11 @@
       "askContentLabel": "Atsakymo tipas",
       "askQuestionLabel": "Klausimas",
       "askQuestionPlaceholder": "Ką turėtume nuskaityti iš kiekvieno dokumento? Palikite tuščią, jei norite įvesti rankiniu būdu.",
+      "autosave": {
+        "failed": "Nepavyko išsaugoti",
+        "nameMissing": "Neišsaugota: pridėkite pavadinimą",
+        "positionsNeedAttention": "Neišsaugota: {count, plural, one {# pozicija reikalauja} few {# pozicijos reikalauja} other {# pozicijų reikalauja}} dėmesio"
+      },
       "check": "Naudoti tikslią taisyklę vietoje DI",
       "checkHint": "Išmatuojamoms sąlygoms, pavyzdžiui: mokėjimo terminas ≤ 30 dienų.",
       "checkKind": {
@@ -3597,6 +3624,7 @@
       "deletePlaybook": "Ištrinti peržiūros vadovą",
       "deletePosition": "Ištrinti poziciją",
       "deleted": "Peržiūros vadovas ištrintas",
+      "deletedElsewhere": "Šis peržiūros vadovas ištrintas.",
       "derivedAutomatically": "Išgavimo klausimas ir atsakymo formatas sukuriami pagal šią poziciją. Nieko nustatyti nereikia.",
       "derivedQuestion": "Išgavimo klausimas",
       "derivedType": "Atsakymo formatas",
@@ -3649,10 +3677,12 @@
       },
       "noPositions": "Pozicijų dar nėra. Pridėkite pirmąją.",
       "noSettledPosition": "Nusistovėjusios pozicijos nėra",
+      "openInPane": "Atidaryti peržiūros vadovą",
       "optionPlaceholder": "Parinkties reikšmė",
       "optionsLabel": "Parinktys",
       "outline": "Struktūra",
       "positionOfTotal": "Pozicija {index} iš {total}",
+      "positionRemoved": "Pozicija pašalinta",
       "positions": "Pozicijos",
       "recent": "Neseniai naudoti",
       "recommended": "Rekomenduojami ruošiniai",
@@ -3852,6 +3882,16 @@
       "citationWithQuote": "Nuoroda su citata",
       "quoteWithCitation": "Citata su nuoroda",
       "textOnly": "Tik tekstas"
+    }
+  },
+  "lists": {
+    "sources": {
+      "add": "Pridėti šaltinį",
+      "documentRequired": "Pasirinkite dokumentą.",
+      "invalidPage": "Įveskite sveikąjį puslapio numerį, ne mažesnį nei 1.",
+      "page": "PDF puslapis (neprivaloma)",
+      "quote": "Cituojama ištrauka (neprivaloma)",
+      "quoteTooLong": "Įveskite ne daugiau kaip {limit} simbolių."
     }
   },
   "markdownEditor": {
@@ -5342,7 +5382,6 @@
       "noLanguagesFound": "Kalbų nerasta",
       "notConfigured": "DeepL nesukonfigūruotas šiai organizacijai. Norėdami įjungti vertimą, organizacijos nustatymuose pridėkite DeepL API raktą.",
       "outputLabel": "Vertimo tipas",
-      "progress": "Vertimo eiga",
       "progressCount": "Atlikta {completed} iš {total}",
       "providerUnavailable": "Vertimo paslauga nepasiekiama. Bandykite vėliau dar kartą arba susisiekite su administratoriumi.",
       "runFailed": "Vertimo nepavyko užbaigti.",
@@ -5474,14 +5513,8 @@
     "exportToCsv": "Eksportuoti į CSV",
     "fields": {
       "calculating": "Skaičiuojama...",
-      "currencyLabel": "Valiuta (neprivaloma)",
-      "currencyPlaceholder": "pvz. USD, EUR",
-      "editFieldValue": "Redaguoti lauko reikšmę",
       "errored": "Klaida",
-      "fieldValueLabel": "Lauko reikšmė",
-      "fieldValuePlaceholder": "Įveskite lauko reikšmę",
       "formatNotSupported": "Formatas nepalaikomas",
-      "numberPlaceholder": "Įveskite skaičių",
       "selectAValue": "Pasirinkite reikšmę",
       "selectValues": "Pasirinkite reikšmes"
     },
@@ -5525,6 +5558,7 @@
       "desktopGate": {
         "alreadyInstalled": "Jau įdiegta? Prijunkite",
         "connect": "Prijungti stella desktop",
+        "connected": "stella desktop prijungta",
         "editNone": "Atsisiųskite stella desktop, kad galėtumėte redaguoti šį failą",
         "editOutdated": "Atnaujinkite stella desktop, kad galėtumėte redaguoti",
         "editReason": "Redagavimas kompiuteryje atveria failą jūsų kompiuterio programoje per stella desktop.",
@@ -5546,6 +5580,7 @@
       "ocrQueueFailed": "Nepavyko įtraukti teksto atpažinimo į eilę",
       "ocrQueued": "Teksto atpažinimas įtrauktas į kitą OCR paketą",
       "pdfSigning": {
+        "alreadySigningTitle": "Pasirašymas stella desktop jau vyksta",
         "cancelledBaseVersionDescription": "Dokumentas pasikeitė pasirašymo metu. Atidarykite naujausią versiją ir pasirašykite iš naujo.",
         "cancelledCertificateDescription": "Pasirinkto sertifikato negalima naudoti pasirašymui. Pasirinkite tokį, kuris leidžia skaitmeninį parašą.",
         "cancelledCertifiedDescription": "Šis PDF yra sertifikuotas, o jo sertifikavimas neleidžia pridėti daugiau parašų.",
@@ -5566,6 +5601,9 @@
         "inProgressDescription": "Šis failas jau pasirašomas. Pirmiausia užbaikite arba atšaukite tą pasirašymą stella desktop.",
         "noFileDescription": "Šis dokumentas neturi failo, kurį būtų galima pasirašyti.",
         "notAPdfDescription": "Pasirašyti galima tik PDF failus.",
+        "notOpeningConnect": "Neatsidaro? Prijunkite stella desktop",
+        "notPickedUpDescription": "stella desktop gali būti nepaleista arba neprijungta prie šios paskyros. Prijunkite ją ir bandykite dar kartą.",
+        "notPickedUpTitle": "stella desktop neatidarė PDF",
         "placementBox": "Spaudo vieta",
         "placementConfirm": "Atidaryti stella desktop",
         "placementDescription": "Pasirinkite, kaip parašas bus rodomas PDF faile.",
@@ -5580,10 +5618,12 @@
         "placementTooSmall": "Šis puslapis per mažas spaudui. Pasirinkite kitą puslapį.",
         "placementVisible": "Matomas spaudas",
         "placementVisibleDescription": "Rėmelis puslapyje rodo, kas ir kada pasirašė.",
+        "preparingDescription": "PDF ruošiamas stella desktop.",
         "readOnlyDescription": "Šis dokumentas yra tik skaitomas.",
         "signedDescription": "Parašas išsaugotas kaip {versionNumber, number} versija.",
         "signedDescriptionNoVersion": "Parašas išsaugotas kaip nauja versija.",
         "signedTitle": "PDF pasirašytas",
+        "signingLabel": "Pasirašoma stella desktop…",
         "stampLocation": "Vieta",
         "stampRejectedDescription": "Spaudo negalima ten padėti. Padėkite jį iš naujo ir bandykite dar kartą.",
         "stampSignedBy": "Skaitmeniniu parašu pasirašė",

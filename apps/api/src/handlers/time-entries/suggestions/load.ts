@@ -19,9 +19,9 @@ import {
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditResourceType } from "@/api/lib/audit-log";
 import { auditReadChangesSql } from "@/api/lib/audit-log-details";
-import type { FeatureAccessSnapshot } from "@/api/lib/auth/feature-access/policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
 

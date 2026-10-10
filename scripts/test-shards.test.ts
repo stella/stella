@@ -1,15 +1,21 @@
 import { expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
+import * as v from "valibot";
+
+import { compareCodeUnit } from "@stll/collation";
 
 import { listApiTestPaths } from "../apps/api/scripts/api-test-plan";
-import durations from "../apps/api/scripts/test-durations.json" with { type: "json" };
 import {
   parseApiTestShard,
   partitionTestFiles,
 } from "../apps/api/scripts/test-file-shards";
-import { durationSeconds } from "../apps/api/scripts/test-timings";
 import { allApiTests } from "./api-test-impact";
+import {
+  API_TEST_SHARD_IDS,
+  FULL_TEST_JOB_SHARDS,
+  fullTestPlan,
+} from "./api-test-shard-plan";
 import { planCiApiTests } from "./ci-api-test-plan";
 import {
   apiShardValue,
@@ -21,20 +27,15 @@ import {
   TEST_SHARD_PACKAGES,
   workspacePackages,
 } from "./test-shards.ts";
+import { workflowJobSteps, workflowStepByName } from "./workflow-steps";
 
-const workflow = readFileSync(
-  path.join(import.meta.dirname, "../.github/workflows/ci.yml"),
-  "utf-8",
+const workflow = Bun.YAML.parse(
+  readFileSync(
+    path.join(import.meta.dirname, "../.github/workflows/ci.yml"),
+    "utf-8",
+  ),
 );
-
-const ciTestsJob = (): string => {
-  const marker = "\n  ci-tests:\n";
-  const start = workflow.indexOf(marker);
-  expect(start).toBeGreaterThan(-1);
-  const body = workflow.slice(start + marker.length);
-  const next = body.search(/\n {2}[a-z][\w-]*:\n/u);
-  return next === -1 ? body : body.slice(0, next);
-};
+const ciTestsSteps = workflowJobSteps(workflow, "ci-tests");
 
 const packages = workspacePackages();
 const testedPackages = packages
@@ -90,16 +91,23 @@ test("a shard's filters exclude every package it does not own", () => {
 // The workflow matrix is the other half of the shard map: a shard the matrix
 // omits runs nowhere, and its packages would leave CI silently.
 test("the ci-tests matrix runs exactly the declared jobs", () => {
-  expect(ciTestsJob()).toContain(
-    `matrix: \${{ fromJSON(needs.ci-plan.outputs.ci_tests_matrix) }}`,
-  );
+  expect(workflow).toMatchObject({
+    jobs: {
+      "ci-tests": {
+        strategy: {
+          matrix: `\${{ fromJSON(needs.ci-plan.outputs.ci_tests_matrix) }}`,
+        },
+      },
+    },
+  });
   const declared = planCiApiTests({
     event: "merge_group",
     scopeUnknown: false,
     apiInScope: true,
     select: allApiTests,
   }).matrix.shard;
-  expect(declared).toEqual(Object.keys(TEST_JOB_SHARDS));
+  expect(Object.keys(TEST_JOB_SHARDS)).toEqual(declared);
+  expect(declared).toEqual(FULL_TEST_JOB_SHARDS);
 });
 
 test("merged jobs run every suite exactly once and preserve the package partition", () => {
@@ -115,31 +123,35 @@ test("merged jobs run every suite exactly once and preserve the package partitio
 });
 
 test("both suites in the merged leg report a verdict after an earlier failure", () => {
-  const job = ciTestsJob();
   for (const name of ["Test API or rest", "Test web", "Test .claude/mcp"]) {
-    const step = job
-      .split(`      - name: ${name}\n`)
-      .at(1)
-      ?.split("      - name:")
-      .at(0);
-    expect(step).toBeDefined();
-    expect(step).toContain("!cancelled()");
-    expect(step).toContain(
+    const step = workflowStepByName(ciTestsSteps, name);
+    expect(step["if"]).toContain("!cancelled()");
+    expect(step["if"]).toContain(
       "needs.ci-plan.outputs.package_checks_required == 'true'",
     );
   }
-  expect(job).toMatch(
-    /SHARD: \$\{\{ matrix\.shard == 'rest-web' && 'rest' \|\| matrix\.shard \}\}/u,
-  );
-  expect(job).toContain("SHARD: web");
+  expect(
+    workflowStepByName(ciTestsSteps, "Test API or rest")["env"],
+  ).toMatchObject({
+    SHARD: `\${{ matrix.shard == 'rest-web' && 'rest' || matrix.shard }}`,
+  });
+  expect(workflowStepByName(ciTestsSteps, "Test web")["env"]).toMatchObject({
+    SHARD: "web",
+  });
 });
 
 test("exactly one shard runs the .claude/mcp suite", () => {
-  const job = ciTestsJob();
-  expect(job.match(/bun --cwd \.claude\/mcp test/gu)).toHaveLength(1);
-  const gate = /matrix\.shard == '(?<shard>[a-z-]+)'/u.exec(job)?.groups?.[
-    "shard"
-  ];
+  const invocations = ciTestsSteps.flatMap((step) =>
+    typeof step["run"] === "string"
+      ? [...step["run"].matchAll(/bun --cwd \.claude\/mcp test/gu)]
+      : [],
+  );
+  expect(invocations).toHaveLength(1);
+  const step = workflowStepByName(ciTestsSteps, "Test .claude/mcp");
+  expect(step["run"]).toContain("bun --cwd .claude/mcp test");
+  const gate = /matrix\.shard == '(?<shard>[a-z-]+)'/u.exec(
+    typeof step["if"] === "string" ? step["if"] : "",
+  )?.groups?.["shard"];
   if (gate === undefined) {
     throw new Error("the .claude/mcp step is not gated on a shard");
   }
@@ -153,20 +165,94 @@ test("API sub-shards cover every discovered file exactly once, including new fil
   );
   const newFile = "src/new-shard-census.test.ts";
   expect(files).not.toContain(newFile);
-  expect(durations).not.toHaveProperty(newFile);
   const input = [...files, newFile];
-  const selected = TEST_SHARD_IDS.flatMap((id) => {
+  const selected = fullTestPlan().matrix.shard.flatMap((job) => {
+    const id = API_TEST_SHARD_IDS.find((shard) => shard === job);
+    if (id === undefined) {
+      return [];
+    }
     const shard = parseApiTestShard(apiShardValue(id));
     return shard === null
       ? []
       : (partitionTestFiles({
           files: input,
-          durations: durationSeconds(durations),
+          durations: {},
           count: shard.count,
         }).at(shard.index - 1) ?? []);
   });
   expect(selected.toSorted()).toEqual(input.toSorted());
   expect(new Set(selected).size).toBe(input.length);
+});
+
+const FULL_API_SUITE_EXEMPTIONS = {
+  ".github/workflows/api-test-memory.yml/measure/Measure every test in this shard":
+    "The memory profiler uses a dedicated numeric matrix to measure every API file serially.",
+} as const;
+
+const WorkflowCensusSchema = v.object({
+  jobs: v.record(
+    v.string(),
+    v.object({
+      steps: v.optional(
+        v.array(
+          v.object({
+            env: v.optional(v.record(v.string(), v.unknown()), {}),
+            name: v.optional(v.string()),
+            run: v.optional(v.string()),
+          }),
+        ),
+        [],
+      ),
+    }),
+  ),
+});
+
+test("every workflow running the full API suite uses the shared shard plan or has a reason", () => {
+  const workflowsDirectory = path.resolve(
+    import.meta.dirname,
+    "../.github/workflows",
+  );
+  const unshared: string[] = [];
+  for (const filename of readdirSync(workflowsDirectory)
+    .filter((name) => name.endsWith(".yml"))
+    .toSorted(compareCodeUnit)) {
+    const workflowSource = readFileSync(
+      path.join(workflowsDirectory, filename),
+      "utf-8",
+    );
+    const parsed = v.parse(
+      WorkflowCensusSchema,
+      Bun.YAML.parse(workflowSource),
+    );
+    for (const [jobName, job] of Object.entries(parsed.jobs)) {
+      for (const step of job.steps) {
+        if (typeof step.run !== "string" || typeof step.name !== "string") {
+          continue;
+        }
+        const runsFullApiSuite =
+          (/bun run test --(?:\s|$)/u.test(step.run) &&
+            step.env["SHARD"] !== "web") ||
+          /bun --filter[= ]@stll\/api test --(?:\s|$)/u.test(step.run);
+        if (!runsFullApiSuite) {
+          continue;
+        }
+        const shared =
+          step.run.includes("scripts/test-shards.ts --api-shard") &&
+          workflowSource.includes("scripts/api-test-shard-plan.ts");
+        if (!shared) {
+          unshared.push(
+            `.github/workflows/${filename}/${jobName}/${step.name}`,
+          );
+        }
+      }
+    }
+  }
+  expect(unshared.toSorted()).toEqual(
+    Object.keys(FULL_API_SUITE_EXEMPTIONS).toSorted(),
+  );
+  for (const reason of Object.values(FULL_API_SUITE_EXEMPTIONS)) {
+    expect(reason.length).toBeGreaterThan(0);
+  }
 });
 
 test("an in-scope API leg rejects help, empty or another shard's output", () => {

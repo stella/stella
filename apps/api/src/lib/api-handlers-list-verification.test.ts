@@ -1,6 +1,10 @@
+// The STELLA_RUN_POSTGRES_TESTS runner also executes this verification suite.
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-caps";
+
+import { legalListVerificationRuns } from "@/api/db/schema";
 import { env } from "@/api/env";
 import factDetails from "@/api/handlers/lists/items/fact-details/update";
 import sourceReview from "@/api/handlers/lists/items/sources/verification/update";
@@ -13,16 +17,25 @@ import list from "@/api/handlers/lists/verifications/list";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { toSafeId } from "@/api/lib/branded-types";
+import { createSafeId, toSafeId } from "@/api/lib/branded-types";
+import { readVerificationRun } from "@/api/lib/lists/verification/read-run";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { mapHandlerResult } from "@/api/mcp/capability-tools";
 import { CAPABILITY_DISPATCH } from "@/api/mcp/generated/capability-dispatch/lists.verifications.create";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
+import { wireOrgAIConfig } from "@/api/tests/helpers/provider-wire-contract";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
+import {
+  createScopedDbMock,
+  createSelectQueryMock,
+} from "@/api/tests/scoped-db-mock";
 
-const context = (tx: unknown) => ({
+const context = (
+  tx: unknown,
+  options?: Parameters<typeof createScopedDbMock>[1],
+) => ({
   ...createScopedDbMock(tx, {
+    ...options,
     featureAccess: {
       identity: { email: "member@example.test", emailVerified: true },
     },
@@ -51,6 +64,8 @@ const endpoints = {
 describe("verification handler access admission", () => {
   test("every dedicated handler denies empty grants before resource operations", async () => {
     const previous = env.API_FEATURE_ACCESS_GRANTS;
+    const previousDeployment = env.FEATURE_LEGAL_LISTS;
+    env.FEATURE_LEGAL_LISTS = true;
     env.API_FEATURE_ACCESS_GRANTS = {};
     try {
       for (const endpoint of Object.values(endpoints)) {
@@ -58,26 +73,105 @@ describe("verification handler access admission", () => {
           featureId: "list-verification",
           type: "required",
         });
-        for (const runId of ["lvr_existing", "lvr_missing"]) {
-          let operations = 0;
-          const tx = {
-            insert: () => {
-              operations += 1;
-              throw new Error("Resource operation must not run");
-            },
-          };
-          const result = await endpoint.handler(
-            asTestRaw({ ...context(tx), params: { runId }, body: {} }),
-          );
-          expect(result).toMatchObject({
-            code: 404,
-            response: { message: "Not found" },
-          });
-          expect(operations).toBe(0);
-        }
+        let operations = 0;
+        const resourceOperation = () => {
+          operations += 1;
+          throw new Error("Resource operation must not run");
+        };
+        const tx = {
+          select: resourceOperation,
+          insert: resourceOperation,
+          update: resourceOperation,
+          delete: resourceOperation,
+          query: new Proxy({}, { get: resourceOperation }),
+        };
+        const result = await endpoint.handler(
+          asTestRaw({
+            ...context(tx),
+            params: { runId: createSafeId<"legalListVerificationRun">() },
+            body: {},
+          }),
+        );
+        expect(result).toMatchObject({
+          code: 404,
+          response: { message: "Not found" },
+        });
+        expect(operations).toBe(0);
       }
     } finally {
       env.API_FEATURE_ACCESS_GRANTS = previous;
+      env.FEATURE_LEGAL_LISTS = previousDeployment;
+    }
+  });
+
+  test("point admission conceals populated and missing runs before selecting resources", async () => {
+    const previous = env.API_FEATURE_ACCESS_GRANTS;
+    const previousDeployment = env.FEATURE_LEGAL_LISTS;
+    env.FEATURE_LEGAL_LISTS = true;
+    env.API_FEATURE_ACCESS_GRANTS = {};
+    const workspaceId = toSafeId<"workspace">("workspace_a");
+    const storedRun = {
+      id: createSafeId<"legalListVerificationRun">(),
+      organizationId: toSafeId<"organization">("org_a"),
+      workspaceId,
+      entityId: createSafeId<"entity">(),
+      fileFieldId: createSafeId<"field">(),
+      entityVersionId: createSafeId<"entityVersion">(),
+      contentSha256: "a".repeat(64),
+      evidence: { listId: createSafeId<"legalList">(), facts: [] },
+      status: "completed",
+      errorCode: null,
+      requestedBy: "user_a",
+      pipelineVersion: 1,
+      modelRef: null,
+      createdAt: new Date("2026-01-01T00:00:00Z"),
+      startedAt: null,
+      finishedAt: null,
+    } satisfies typeof legalListVerificationRuns.$inferSelect;
+    try {
+      for (const exists of [true, false]) {
+        const runId = exists
+          ? storedRun.id
+          : createSafeId<"legalListVerificationRun">();
+        let selections = 0;
+        const tx = {
+          select: () => ({
+            from: (table: unknown) => {
+              selections += 1;
+              return createSelectQueryMock(
+                table === legalListVerificationRuns && exists
+                  ? [storedRun]
+                  : [],
+              ).from();
+            },
+          }),
+        };
+        const fixture = context(tx);
+        const control = await fixture.scopedDb(
+          async (transaction) =>
+            await readVerificationRun({ tx: transaction, workspaceId, runId }),
+        );
+        if (exists) {
+          expect(control).toMatchObject({
+            id: storedRun.id,
+            status: "completed",
+          });
+        } else {
+          expect(control).toBeNull();
+        }
+        expect(selections).toBeGreaterThan(0);
+        selections = 0;
+        expect(
+          await get.handler(asTestRaw({ ...fixture, params: { runId } })),
+        ).toMatchObject({
+          code: 404,
+          response: { message: "Not found" },
+        });
+        expect(selections).toBe(0);
+      }
+    } finally {
+      env.API_FEATURE_ACCESS_GRANTS = previous;
+      env.FEATURE_LEGAL_LISTS = previousDeployment;
     }
   });
 
@@ -86,6 +180,7 @@ describe("verification handler access admission", () => {
     const previousDeployment = env.FEATURE_LEGAL_LISTS;
     env.FEATURE_LEGAL_LISTS = true;
     env.API_FEATURE_ACCESS_GRANTS = {
+      "legal-lists": [{ type: "organization", organizationId: "org_a" }],
       "list-verification": [
         {
           type: "member",
@@ -133,10 +228,20 @@ test.each(["active", "daily"] as const)(
       grants: env.API_FEATURE_ACCESS_GRANTS,
       deployment: env.FEATURE_LEGAL_LISTS,
       enforcement: env.USAGE_ENFORCEMENT_ENABLED,
+      provider: env.AI_PROVIDER,
+      providerKey: env.OPENROUTER_API_KEY,
+      personalKey: env.REQUIRE_PERSONAL_AI_KEY,
     };
     env.FEATURE_LEGAL_LISTS = true;
     env.USAGE_ENFORCEMENT_ENABLED = false;
+    // The verification model role must be available, so the cap check is
+    // what refuses; configure the instance provider here instead of relying
+    // on whatever another suite in the same process left behind.
+    env.AI_PROVIDER = "openrouter";
+    env.OPENROUTER_API_KEY = "test-openrouter-instance-key";
+    env.REQUIRE_PERSONAL_AI_KEY = false;
     env.API_FEATURE_ACCESS_GRANTS = {
+      "legal-lists": [{ type: "organization", organizationId: "org_a" }],
       "list-verification": [
         {
           type: "member",
@@ -210,7 +315,20 @@ test.each(["active", "daily"] as const)(
         await CAPABILITY_DISPATCH["lists.verifications.create"].load();
       for (const endpoint of [create, capability.default]) {
         const result = await endpoint.handler(
-          asTestRaw({ ...context(tx), body }),
+          asTestRaw({
+            ...context(tx, {
+              visibleResources: {
+                entity: [body.entityId],
+                field: [body.fileFieldId],
+              },
+            }),
+            body,
+            orgAIConfig: wireOrgAIConfig({
+              provider: "openai",
+              apiKey: "test-api-key",
+              chatModel: "gpt-5.6",
+            }),
+          }),
         );
         expect(result).toMatchObject({
           code: 429,
@@ -225,7 +343,7 @@ test.each(["active", "daily"] as const)(
           status: "error",
           error: {
             type: "structured",
-            code: "rate_limited",
+            code: VERIFICATION_RUN_CAP_CODES[reason],
             retryable: true,
             hint:
               reason === "active"
@@ -239,6 +357,9 @@ test.each(["active", "daily"] as const)(
       env.API_FEATURE_ACCESS_GRANTS = previous.grants;
       env.FEATURE_LEGAL_LISTS = previous.deployment;
       env.USAGE_ENFORCEMENT_ENABLED = previous.enforcement;
+      env.AI_PROVIDER = previous.provider;
+      env.OPENROUTER_API_KEY = previous.providerKey;
+      env.REQUIRE_PERSONAL_AI_KEY = previous.personalKey;
     }
   },
 );

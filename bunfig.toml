@@ -15,8 +15,9 @@ publicHoistPattern = ["*"]
 # scripts/check-standalone-lockfiles.ts enforces.
 minimumReleaseAge = 432_000
 minimumReleaseAgeExcludes = [
+  # quarantine exception granted 2026-10-07: @gdp-ts/core can be installed now
+  "@gdp-ts/core", # quarantine-expires: 2026-10-10T13:31:08.275Z
   # TanStack Charts is needed before its quarantine ends.
-  "@tanstack/charts", # quarantine-expires: 2026-10-08T15:09:37.619Z
   # Temporary third-party exceptions must carry the exact instant at which
   # the normal five-day quarantine admits the currently pinned release.
   # Turbo 2.11.2 adds production pruning and devEngines support. Keep every

@@ -10,7 +10,6 @@ import { CHAT_TURN_ID_HEADER, CHAT_TURN_INTENT } from "@stll/api-contract";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatTurns } from "@/api/db/schema";
-import { startChatExecutionAdmission } from "@/api/handlers/chat/chat-execution-admission";
 import { chatMessageFromPersisted } from "@/api/handlers/chat/chat-message-parts";
 import { agUiSendMessageBodySchema } from "@/api/handlers/chat/chat-schema";
 import type {
@@ -48,6 +47,7 @@ import {
 } from "@/api/lib/chat/ref-registry";
 import { readChatThreadNames } from "@/api/lib/chat/thread-names";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { startExecutionAdmission } from "@/api/lib/rate-limit/execution-admission";
 import { createReapOwnerlessChatTurnsTask } from "@/api/lib/scheduler/tasks/chat-turn-reaper";
 import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
 import type { anonymizeTextFields } from "@/api/mcp/anonymization";
@@ -373,7 +373,7 @@ export const createApprovalHarness = ({
       const race = nextAcceptanceRace;
       nextAcceptanceRace = undefined;
       await race?.();
-      return await startChatExecutionAdmission(options);
+      return await startExecutionAdmission(options);
     },
     indexThread: async () => await Promise.resolve(undefined),
     // An approved write reads the member's role again when it runs; read it

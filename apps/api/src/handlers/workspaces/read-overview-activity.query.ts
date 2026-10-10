@@ -40,11 +40,11 @@ import {
   auditReadChangesSql,
 } from "@/api/lib/audit-log-details";
 import type { AuditReadContext } from "@/api/lib/audit-log-details";
-import type { FeatureAccessSnapshot } from "@/api/lib/auth/feature-access/policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import { createCursorPage } from "@/api/lib/pagination";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import {
@@ -79,7 +79,7 @@ const contactSnapshotAuditLogs = alias(
 
 type ActivityCategory = Exclude<MatterActivityCategory, "all">;
 
-const createActivityExpressions = (context: AuditReadContext) => {
+const createEntitySnapshotExpressions = (context: AuditReadContext) => {
   const projectedChanges = auditReadChangesSql(context, auditLogs);
   const projectedVersionChanges = auditReadChangesSql(
     context,
@@ -89,15 +89,6 @@ const createActivityExpressions = (context: AuditReadContext) => {
     context,
     entitySnapshotAuditLogs,
   );
-  const projectedContactChanges = auditReadChangesSql(
-    context,
-    contactSnapshotAuditLogs,
-  );
-  const activityColumns = {
-    action: auditLogs.action,
-    resourceType: auditLogs.resourceType,
-    changes: projectedChanges,
-  };
   const legacyEntityKind = () =>
     sql<string>`coalesce(
     ${auditLogs.metadata} ->> 'kind',
@@ -271,6 +262,37 @@ const createActivityExpressions = (context: AuditReadContext) => {
     ${legacyRelatedEntityKind()}
   )`;
 
+  return {
+    resolvedAuditEntityIdSnapshot,
+    auditEntityNameSnapshot,
+    auditEntityMimeTypeSnapshot,
+    siblingVersionEntityNameSnapshot,
+    siblingDeletedEntityName,
+    siblingDeletedEntityMimeType,
+    legacyResourceKind,
+  };
+};
+
+const createActivityExpressions = (context: AuditReadContext) => {
+  const projectedChanges = auditReadChangesSql(context, auditLogs);
+  const projectedContactChanges = auditReadChangesSql(
+    context,
+    contactSnapshotAuditLogs,
+  );
+  const activityColumns = {
+    action: auditLogs.action,
+    resourceType: auditLogs.resourceType,
+    changes: projectedChanges,
+  };
+  const {
+    resolvedAuditEntityIdSnapshot,
+    auditEntityNameSnapshot,
+    auditEntityMimeTypeSnapshot,
+    siblingVersionEntityNameSnapshot,
+    siblingDeletedEntityName,
+    siblingDeletedEntityMimeType,
+    legacyResourceKind,
+  } = createEntitySnapshotExpressions(context);
   const taskEntityResourceCondition = () =>
     and(
       inArray(auditLogs.resourceType, [

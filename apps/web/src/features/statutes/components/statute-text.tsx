@@ -3,28 +3,28 @@ import type { ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
 
-import type { Block } from "@stll/legal-ast/document-ast";
-import { cn } from "@stll/ui/utils";
-
-import { useInspectorView } from "@/components/inspector/use-inspector-view";
-import { buildAnnotationAnchors } from "@/components/legal-reader/annotations/annotation-anchors";
-import type { AnnotationAnchorSource } from "@/components/legal-reader/annotations/annotation-anchors";
+import { buildAnnotationAnchors } from "@stll/decision-reader/annotation-anchors";
+import type { AnnotationAnchorSource } from "@stll/decision-reader/annotation-anchors";
 import {
   BlockRenderer,
   FulltextFallback,
   READER_BLOCK_CHROME_REVEAL_CLASS,
-} from "@/components/legal-reader/document-ast-text";
+} from "@stll/decision-reader/document-ast-text";
 import type {
   AnchorPresentation,
   TextAnchor,
-} from "@/components/legal-reader/document-ast-text";
+} from "@stll/decision-reader/document-ast-text";
 import {
   holdLanding,
   readerBlockByAnchor,
-} from "@/components/legal-reader/reader-landing";
-import { provisionHeadingLine } from "@/components/legal-reader/reader-outline";
-import type { ProvisionHeadingLine } from "@/components/legal-reader/reader-outline";
-import type { ReaderMarkRange } from "@/components/legal-reader/reader-search";
+} from "@stll/decision-reader/reader-landing";
+import { provisionHeadingLine } from "@stll/decision-reader/reader-outline";
+import type { ProvisionHeadingLine } from "@stll/decision-reader/reader-outline";
+import type { ReaderMarkRange } from "@stll/decision-reader/reader-search";
+import type { Block } from "@stll/legal-ast/document-ast";
+import { cn } from "@stll/ui/utils";
+
+import { useInspectorView } from "@/components/inspector/use-inspector-view";
 import { createProvisionViewTab } from "@/features/statutes/provision-inspector.logic";
 import type { StatuteMasthead as StatuteMastheadData } from "@/features/statutes/statute-reader-blocks";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -35,7 +35,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
  * document states none, in which case the reader offers no provision tab at
  * all: the tab is keyed by it.
  */
-export type StatuteCitationWork = {
+type StatuteCitationWork = {
   eli: string;
   jurisdiction: string;
 };

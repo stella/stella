@@ -11,6 +11,8 @@ import {
 import { featureFlagSchema } from "@/api/env-base-schema";
 import {
   AUTH_CLIENT_ADDRESS_HEADER,
+  FRONTEND_ADDRESS_HEADER,
+  FRONTEND_VERIFY_HEADER,
   ORIGIN_VERIFY_HEADER,
   SIGNUP_RATE_LIMIT_IP_SOURCE,
 } from "@/api/lib/client-ip-config";
@@ -18,7 +20,6 @@ import {
   resolveInboundMailReceiving,
   type InboundMailReceivingInput,
 } from "@/api/lib/email/inbound/receiving-config";
-import { featureAccessGrantsEnvSchema } from "@/api/lib/feature-access/grants-schema";
 import { isTimestampAuthorityUrlList } from "@/api/lib/files/pdf-signing/timestamp-authority-urls";
 import {
   DEFAULT_POLAR_API_VERSION,
@@ -70,6 +71,37 @@ export const resolveEmailProvider = ({
  * etc.). Scripts and CLI tools that only need DB + S3 import
  * envBase from env-base.ts instead.
  */
+// A header an edge sets to the viewer's address; never one the API sets,
+// verifies or reads only beside the frontend verify value.
+const edgeAddressHeaderName = v.pipe(
+  v.string(),
+  v.trim(),
+  v.toLowerCase(),
+  v.regex(/^[a-z0-9-]+$/u, "must be a header name"),
+  v.check(
+    (name) =>
+      name !== AUTH_CLIENT_ADDRESS_HEADER &&
+      name !== ORIGIN_VERIFY_HEADER &&
+      name !== FRONTEND_VERIFY_HEADER &&
+      name !== FRONTEND_ADDRESS_HEADER,
+    "must not be a header the API sets, verifies or reads from the frontend edge",
+  ),
+);
+
+// Comma-separated values an edge proves itself with, each long enough not to
+// be guessed.
+const edgeVerifyValues = v.pipe(
+  v.string(),
+  v.check(
+    (value) =>
+      value
+        .split(",")
+        .map((part) => part.trim())
+        .every((part) => part.length >= 32),
+    "each value must be at least 32 characters",
+  ),
+);
+
 export const envApiServerSchema = {
   ...verificationRunCapEnvSchema,
   VISUAL_PREVIEW_FUNCTION_NAME: v.optional(
@@ -375,19 +407,7 @@ export const envApiServerSchema = {
    * `STELLA_TRUSTED_PROXY_CIDRS`, ahead of the `x-forwarded-for` chain. Set it
    * only when every route to the API adds this header.
    */
-  STELLA_CLIENT_ADDRESS_HEADER: v.optional(
-    v.pipe(
-      v.string(),
-      v.trim(),
-      v.toLowerCase(),
-      v.regex(/^[a-z0-9-]+$/u, "must be a header name"),
-      v.check(
-        (name) =>
-          name !== AUTH_CLIENT_ADDRESS_HEADER && name !== ORIGIN_VERIFY_HEADER,
-        "must not be a header the API sets or verifies itself",
-      ),
-    ),
-  ),
+  STELLA_CLIENT_ADDRESS_HEADER: v.optional(edgeAddressHeaderName),
 
   /**
    * How `STELLA_CLIENT_ADDRESS_HEADER` spells the address: `with-port` (as
@@ -403,19 +423,16 @@ export const envApiServerSchema = {
    * first, then the next one during a rotation). When set, the client address
    * header is read only from requests carrying one of them.
    */
-  STELLA_ORIGIN_VERIFY_SECRET: v.optional(
-    v.pipe(
-      v.string(),
-      v.check(
-        (value) =>
-          value
-            .split(",")
-            .map((part) => part.trim())
-            .every((part) => part.length >= 32),
-        "each value must be at least 32 characters",
-      ),
-    ),
-  ),
+  STELLA_ORIGIN_VERIFY_SECRET: v.optional(edgeVerifyValues),
+
+  /**
+   * Comma-separated values the frontend edge sends in
+   * `x-stella-frontend-verify` (current first, then the next one during a
+   * rotation). From peers in `STELLA_TRUSTED_PROXY_CIDRS` carrying one of
+   * them, the browser's bare address in `x-stella-viewer-address` is read
+   * ahead of every other source; unset, that header is never read.
+   */
+  STELLA_FRONTEND_VERIFY_SECRET: v.optional(edgeVerifyValues),
 
   /**
    * Comma-separated user IDs allowed to publish an in-app announcement to
@@ -662,8 +679,6 @@ export const envApiServerSchema = {
   FEATURE_AI_MEMORY: featureFlagSchema,
   /** Dark-launch first-class legal lists until the end-to-end workflow is complete. */
   FEATURE_LEGAL_LISTS: featureFlagSchema,
-  /** Operator-owned grants keyed by registered feature id; empty hides all. */
-  API_FEATURE_ACCESS_GRANTS: featureAccessGrantsEnvSchema,
   /** Dark-launch governed work obligations and compatibility task behavior. */
   FEATURE_GOVERNED_WORKFLOW: featureFlagSchema,
   /** Enables reviewed GitHub-sourced skills in the authenticated catalogue. */
@@ -804,6 +819,14 @@ export const envApiServerSchema = {
    */
   FEATURE_ORG_ACCESS_STATE: featureFlagSchema,
 
+  /**
+   * Falls every organization whose evaluation or paid access has lapsed back
+   * to the seeded `free` usage policy instead of ending its access. The free
+   * budget is the policy's service actions per `ACTION_ADMISSION_PERIOD_MS`
+   * (one month in production; staging may run a daily period for tests).
+   */
+  FEATURE_FREE_TIER: featureFlagSchema,
+
   /** Enforces organization file byte reservations at storage writes. */
 
   /** Length of an organization's evaluation period, in days. */
@@ -911,7 +934,9 @@ type EnvApiInvariantInput = InboundMailReceivingInput & {
   FEATURE_ORG_ACCESS_STATE?: boolean | undefined;
   FEATURE_ORG_SERVICE_BUDGETS?: boolean | undefined;
   FEATURE_CONFIGURED_ACCESS?: boolean | undefined;
+  FEATURE_FREE_TIER?: boolean | undefined;
   FEATURE_USAGE?: boolean | undefined;
+  USAGE_ENFORCEMENT_ENABLED?: boolean | undefined;
   PAYMENT_RETRY_WINDOW_MS?: number | undefined;
   FRONTEND_URL: string;
   GOTENBERG_URL: string;
@@ -979,6 +1004,38 @@ const managedProviderCheckInvariantViolation = ({
   return null;
 };
 
+type FreeTierInvariantInput = Pick<
+  EnvApiInvariantInput,
+  | "FEATURE_FREE_TIER"
+  | "FEATURE_ORG_ACCESS_STATE"
+  | "FEATURE_ORG_SERVICE_BUDGETS"
+  | "USAGE_ENFORCEMENT_ENABLED"
+>;
+
+/**
+ * The free floor resolves from the access state and draws on the service
+ * budget. Usage enforcement refuses any organization without a usage
+ * entitlement, which a free organization never has, so the two cannot run
+ * together.
+ */
+export const freeTierInvariantViolation = ({
+  FEATURE_FREE_TIER,
+  FEATURE_ORG_ACCESS_STATE,
+  FEATURE_ORG_SERVICE_BUDGETS,
+  USAGE_ENFORCEMENT_ENABLED,
+}: FreeTierInvariantInput): string | null => {
+  if (!FEATURE_FREE_TIER) {
+    return null;
+  }
+  if (USAGE_ENFORCEMENT_ENABLED) {
+    return "FEATURE_FREE_TIER requires USAGE_ENFORCEMENT_ENABLED to be off.";
+  }
+  if (!FEATURE_ORG_ACCESS_STATE || !FEATURE_ORG_SERVICE_BUDGETS) {
+    return "FEATURE_FREE_TIER requires FEATURE_ORG_ACCESS_STATE and FEATURE_ORG_SERVICE_BUDGETS.";
+  }
+  return null;
+};
+
 type ReviewAccountInvariantInput = Pick<
   EnvApiInvariantInput,
   "APP_REVIEW_ACCOUNT_EMAIL" | "APP_REVIEW_ORGANIZATION_ID"
@@ -997,7 +1054,9 @@ const reviewAccountInvariantViolation = ({
 const delegatedInvariantViolation = (
   input: ManagedProviderCheckInvariantInput &
     InboundMailReceivingInput &
-    ReviewAccountInvariantInput,
+    FreeTierInvariantInput &
+    ReviewAccountInvariantInput &
+    Pick<EnvApiInvariantInput, "runtimeMode">,
 ): string | null => {
   const reviewAccountViolation = reviewAccountInvariantViolation(input);
   if (reviewAccountViolation !== null) {
@@ -1006,6 +1065,10 @@ const delegatedInvariantViolation = (
   const managedViolation = managedProviderCheckInvariantViolation(input);
   if (managedViolation !== null) {
     return managedViolation;
+  }
+  const freeTierViolation = freeTierInvariantViolation(input);
+  if (freeTierViolation !== null) {
+    return freeTierViolation;
   }
   const inboundMail = resolveInboundMailReceiving(input);
   return inboundMail.isErr() ? inboundMail.error.message : null;
@@ -1030,7 +1093,9 @@ export const envApiInvariantViolation = ({
   FEATURE_ORG_ACCESS_STATE,
   FEATURE_ORG_SERVICE_BUDGETS,
   FEATURE_CONFIGURED_ACCESS,
+  FEATURE_FREE_TIER,
   FEATURE_USAGE,
+  USAGE_ENFORCEMENT_ENABLED,
   PAYMENT_RETRY_WINDOW_MS,
   FRONTEND_URL,
   GOTENBERG_URL,
@@ -1081,6 +1146,11 @@ export const envApiInvariantViolation = ({
     INBOUND_MAIL_TOPIC_ARN,
     INBOUND_MAIL_BUCKET,
     INBOUND_MAIL_KEY_PREFIX,
+    FEATURE_FREE_TIER,
+    FEATURE_ORG_ACCESS_STATE,
+    FEATURE_ORG_SERVICE_BUDGETS,
+    USAGE_ENFORCEMENT_ENABLED,
+    runtimeMode,
   });
   if (delegatedViolation !== null) {
     return delegatedViolation;

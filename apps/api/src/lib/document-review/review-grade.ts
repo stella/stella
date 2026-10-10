@@ -1,5 +1,7 @@
 import { panic, Result } from "better-result";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
+
 import type { VerdictMatchedRef } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import type { AIRequestServiceTier, OrgAIConfig } from "@/api/lib/ai-config";
@@ -34,6 +36,7 @@ import {
   buildGroundedReviewFix,
   type GroundedReviewFix,
 } from "@/api/lib/grounded-review-fix";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import type { PreparedDocxFile } from "@/api/lib/workflow/generate-batch";
 import type {
   Position,
@@ -107,6 +110,7 @@ export type ReviewFinding = {
 type AiGradingDeps = {
   abortSignal: AbortSignal;
   organizationId: SafeId<"organization">;
+  admission: ModelDispatchAdmission;
   workspaceId: SafeId<"workspace">;
   entityVersionId: SafeId<"entityVersion">;
   orgAIConfig: OrgAIConfig | null;
@@ -291,15 +295,11 @@ const gradeTierMatchPositions = async ({
   emit: (batch: readonly Position[]) => Promise<void>;
 }): Promise<void> => {
   const gradeTierMatchesForReview = deps.gradeTierMatches ?? gradeTierMatches;
-  for (
-    let cursor = 0;
-    cursor < positions.length;
-    cursor += TIER_MATCH_BATCH_SIZE
-  ) {
+  for (const batch of chunkItems(positions, TIER_MATCH_BATCH_SIZE)) {
     if (deps.abortSignal.aborted) {
       break;
     }
-    const batch = positions.slice(cursor, cursor + TIER_MATCH_BATCH_SIZE);
+
     const graded = await gradeTierMatchesForReview({
       items: batch.map((position) => ({
         key: position.sourceId,
@@ -309,6 +309,7 @@ const gradeTierMatchPositions = async ({
       })),
       abortSignal: deps.abortSignal,
       organizationId: deps.organizationId,
+      admission: deps.admission,
       workspaceId: deps.workspaceId,
       entityVersionId: deps.entityVersionId,
       orgAIConfig: deps.orgAIConfig,
@@ -437,14 +438,7 @@ const gradeReferenceStandards = async ({
 }): Promise<void> => {
   const gradeReferencePositionsForReview =
     deps.gradeReferencePositions ?? gradeReferencePositions;
-  const batches: ReferencePair[][] = [];
-  for (
-    let cursor = 0;
-    cursor < pairs.length;
-    cursor += REFERENCE_GRADE_BATCH_SIZE
-  ) {
-    batches.push(pairs.slice(cursor, cursor + REFERENCE_GRADE_BATCH_SIZE));
-  }
+  const batches = chunkItems(pairs, REFERENCE_GRADE_BATCH_SIZE);
 
   await runBatchesWithConcurrency({
     batches,
@@ -459,6 +453,7 @@ const gradeReferenceStandards = async ({
         targetEntityVersionId: deps.entityVersionId,
         referenceEntityVersionIds,
         organizationId: deps.organizationId,
+        admission: deps.admission,
         workspaceId: deps.workspaceId,
         orgAIConfig: deps.orgAIConfig,
         managedAIResidency: deps.managedAIResidency,

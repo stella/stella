@@ -55,6 +55,7 @@ import {
 } from "@/api/mcp/errors";
 import { toMcpTools } from "@/api/mcp/gateway/list-tools";
 import { MCP_INSTRUCTIONS } from "@/api/mcp/instructions";
+import { getMcpWwwAuthenticateHeader } from "@/api/mcp/metadata";
 import {
   createMcpHttpRequestHandler,
   mcpOmittedToolNamesByReason,
@@ -889,6 +890,9 @@ describe("handleMcpHttpRequest", () => {
         "lookup_case_law",
         "read_case_law_decision",
         "read_case_law_citations",
+        "open_case_law_decision",
+        "read_case_law_decision_blocks",
+        "preview_cited_provision",
         "search_legislation",
         "read_statute",
         "read_statute_provisions",
@@ -1282,6 +1286,11 @@ describe("handleMcpHttpRequest", () => {
         },
       ],
       isError: true,
+      _meta: {
+        "mcp/www_authenticate": [
+          getMcpWwwAuthenticateHeader({ error: "insufficient_scope" }),
+        ],
+      },
     });
   });
 
@@ -1377,6 +1386,13 @@ describe("handleMcpHttpRequest", () => {
           "Insufficient permissions. Required scope: stella:documents_write",
       }),
     );
+    // Hosts that read tool-level challenges offer to reconnect in place.
+    expect(body.result.isError).toBe(true);
+    expect(body.result._meta).toEqual({
+      "mcp/www_authenticate": [
+        getMcpWwwAuthenticateHeader({ error: "insufficient_scope" }),
+      ],
+    });
     expect(getMcpToolDefinitionMock).not.toHaveBeenCalled();
     expect(handleMcpToolCallMock).not.toHaveBeenCalled();
   });

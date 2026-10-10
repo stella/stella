@@ -41,14 +41,14 @@ type DocxTranslationErrorReason =
   | "unsupported-review-markup"
   | "invalid-markers";
 
-export type DocxTranslationTextRun = Readonly<{
+type DocxTranslationTextRun = Readonly<{
   markerId: string;
   text: string;
   /** Position among all w:t nodes in the source part; used only for patching. */
   textNodeOrdinal: number;
 }>;
 
-export type DocxTranslationSegment = Readonly<{
+type DocxTranslationSegment = Readonly<{
   segmentId: string;
   partPath: string;
   paragraphIndex: number;

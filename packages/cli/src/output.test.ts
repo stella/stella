@@ -28,54 +28,6 @@ const capture = () => {
   return { out, err, writers };
 };
 
-describe("list reader detail status output", () => {
-  const cases = [
-    {
-      statusKey: "factDetailsStatus",
-      details: { factDetails: null, firstSource: null },
-    },
-    {
-      statusKey: "verificationDetailsStatus",
-      details: { verificationStatus: null, verifiedBy: null, verifiedAt: null },
-    },
-    { statusKey: "changesStatus", details: { changes: null, operation: null } },
-  ];
-  for (const { statusKey, details } of cases) {
-    for (const format of ["json", "jsonl", "table"] as const) {
-      test(`${format} preserves ${statusKey} with unavailable details`, () => {
-        const item = {
-          id: "item",
-          ...details,
-          [statusKey]: "feature_unavailable",
-        };
-        const page = { items: [item], nextCursor: null };
-        const payload = parsePayload({
-          content: [{ type: "text", text: JSON.stringify({ result: page }) }],
-        });
-        const plan = buildRenderPlan({
-          payload,
-          itemsKey: "items",
-          textPath: undefined,
-          singleReadActive: false,
-          columns: undefined,
-        });
-        const { out, err, writers } = capture();
-        renderResult({ plan, format, writers, allActive: false });
-        const output = out.join("");
-        expect(output).toContain(statusKey);
-        expect(output).toContain("feature_unavailable");
-        if (format === "json") {
-          expect(JSON.parse(output)).toEqual(page);
-        }
-        if (format === "jsonl") {
-          expect(JSON.parse(output)).toEqual(item);
-        }
-        expect(err).toEqual([]);
-      });
-    }
-  }
-});
-
 describe("selectFormat (S4)", () => {
   test("table on a TTY, JSON off a TTY by default", () => {
     expect(selectFormat({ flags: {}, isTTY: true })).toBe("table");

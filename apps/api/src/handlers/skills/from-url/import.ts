@@ -5,11 +5,15 @@ import { AGENT_SKILL_SCOPES } from "@/api/db/schema";
 import { skillRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import {
   authorizeSkillInstallScope,
   installSkill,
 } from "@/api/lib/skills/install";
-import { fetchSkillPackageFromUrl } from "@/api/lib/skills/skill-package";
+import {
+  createSkillPackageFetchContext,
+  fetchSkillPackageFromUrl,
+} from "@/api/lib/skills/skill-package";
 
 const importSkillBodySchema = t.Object({
   scope: t.UnionEnum(AGENT_SKILL_SCOPES),
@@ -58,7 +62,14 @@ const importSkillFromUrl = createSafeRootHandler(
       return Result.err(authorization.error);
     }
 
-    const parsed = yield* Result.await(fetchSkillPackageFromUrl(body.url));
+    const parsed = yield* Result.await(
+      fetchSkillPackageFromUrl(
+        body.url,
+        createSkillPackageFetchContext({
+          permit: grantThirdPartyOutboundPermit(),
+        }),
+      ),
+    );
 
     const installResult = await installSkill({
       memberRole,

@@ -352,3 +352,7 @@ that do not belong in a professional legal workspace:
   is sufficient affordance.
 - **No custom cursors or pointer overrides** beyond the standard
   `pointer` for interactive elements.
+- **No restyling `@stll/ui` components through `className`.** A component
+  owns its spacing and typography (`shadcn(no-restyle)`): pick a variant or
+  size, and add one to the component when the design needs a treatment none
+  provides. Margin around it and gap on its parent stay yours.

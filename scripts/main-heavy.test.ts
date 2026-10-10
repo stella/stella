@@ -138,10 +138,11 @@ const assertTriggerBehavior = (validationCondition?: string) => {
   }
 };
 
-test("only release pushes, hourly schedules and dispatches select heavy suites at every queue depth", () => {
+test("only release pushes, schedules and dispatches select heavy suites at every queue depth", () => {
   expect(mainTriggers.schedule).toHaveLength(1);
   const cron = mainTriggers.schedule.at(0)?.cron.split(" ");
-  expect(cron).toEqual(["17", "*", "*", "*", "*"]);
+  expect(cron?.at(0)).toBe("17");
+  expect(cron?.slice(2)).toEqual(["*", "*", "*"]);
   expect(Number(cron?.at(0)) % 5).not.toBe(0);
   expect(
     mainWorkflow.jobs.validate.steps?.find(
@@ -251,10 +252,12 @@ const heavyCheckoutCensus = (workflow: CheckoutWorkflow) => {
     trusted: "true",
     suite_depth: "full",
     queue_depth: "full",
+    coverage_profile: "normal-v1",
+    queue_required_jobs: "[]",
     fix_tests_on_base_required: "false",
   };
   const context = {
-    inputs: { heavy_only: true, sha: "a".repeat(40) },
+    inputs: { heavy_only: true, pr_depth_only: false, sha: "a".repeat(40) },
     github: {
       sha: "b".repeat(40),
       workflow_sha: "c".repeat(40),
@@ -403,7 +406,7 @@ test("source checkouts use the selected event SHA while tooling uses the workflo
   const eventSha = "b".repeat(40);
   const workflowSha = "c".repeat(40);
   const mainContext = {
-    inputs: { heavy_only: true, sha: validatedSha },
+    inputs: { heavy_only: true, pr_depth_only: false, sha: validatedSha },
     github: {
       sha: eventSha,
       workflow_sha: workflowSha,
@@ -429,7 +432,11 @@ test("source checkouts use the selected event SHA while tooling uses the workflo
       ]) {
         expect(
           expressionValue(reference, {
-            inputs: { heavy_only: false, sha: validatedSha },
+            inputs: {
+              heavy_only: false,
+              pr_depth_only: false,
+              sha: validatedSha,
+            },
             github: {
               sha: eventSha,
               workflow_sha: workflowSha,
@@ -452,7 +459,7 @@ test("source checkouts use the selected event SHA while tooling uses the workflo
     ).toBe(validatedSha);
     expect(
       expressionValue(stack?.with?.["expected-sha"], {
-        inputs: { heavy_only: false, sha: validatedSha },
+        inputs: { heavy_only: false, pr_depth_only: false, sha: validatedSha },
         github: { sha: eventSha },
       }),
       job,
@@ -462,7 +469,7 @@ test("source checkouts use the selected event SHA while tooling uses the workflo
   expect(expressionValue(forwarded, mainContext)).toBe(validatedSha);
   expect(
     expressionValue(forwarded, {
-      inputs: { heavy_only: false, sha: validatedSha },
+      inputs: { heavy_only: false, pr_depth_only: false, sha: validatedSha },
     }),
   ).toBe("");
   const marketing = v.parse(
@@ -619,6 +626,7 @@ const concurrencyContext = (
     event_name: event,
     ref: "refs/heads/main",
     run_id: runId,
+    sha,
     event: { head_commit: { message } },
   },
   inputs: { sha, heavy_only: sha !== "" },
@@ -648,15 +656,20 @@ const assertPinnedIsolation = (group: string) => {
     concurrencyGroup(group, concurrencyContext("workflow_dispatch", sha)),
   );
   expect(new Set(pinned).size).toBe(pinned.length);
-  for (const event of ["schedule", "push"]) {
-    for (const message of ["fix: change", "chore: release v1.0.0"]) {
-      expect(pinned).not.toContain(
-        concurrencyGroup(group, concurrencyContext(event, "", 2, message)),
-      );
-    }
-  }
+  expect(pinned).not.toContain(
+    concurrencyGroup(group, concurrencyContext("schedule", "", 2)),
+  );
+  expect(pinned).not.toContain(
+    concurrencyGroup(group, concurrencyContext("push", "", 2)),
+  );
+  expect(pinned).not.toContain(
+    concurrencyGroup(
+      group,
+      concurrencyContext("push", "c".repeat(40), 2, "chore: release v1.0.0"),
+    ),
+  );
 };
-test("pinned heavy gates remain independent of schedules, pushes and other candidate SHAs", () => {
+test("pinned heavy gates remain independent of schedules, ordinary pushes and other candidate SHAs", () => {
   assertPinnedIsolation(mainWorkflow.concurrency.group);
   assertPinnedIsolation(ciWorkflow.concurrency.group);
   for (const sha of ["a".repeat(40), "b".repeat(40)]) {
@@ -686,6 +699,43 @@ test("pinned heavy gates remain independent of schedules, pushes and other candi
       concurrencyContext("schedule", "", 2),
     ),
   );
+});
+test("release pushes coalesce with matching pinned gates without schedule cancellation", () => {
+  const sha = "a".repeat(40);
+  const group = mainWorkflow.concurrency.group;
+  const cancel = mainWorkflow.concurrency["cancel-in-progress"];
+  const schedule = concurrencyContext("schedule", sha);
+  const normalPush = concurrencyContext("push", sha, 2);
+  const releasePush = concurrencyContext(
+    "push",
+    sha,
+    3,
+    "chore: release v0.9.1",
+  );
+  const pinnedDispatch = concurrencyContext("workflow_dispatch", sha, 4);
+
+  const groups = {
+    schedule: concurrencyGroup(group, schedule),
+    normalPush: concurrencyGroup(group, normalPush),
+    releasePush: concurrencyGroup(group, releasePush),
+    pinnedDispatch: concurrencyGroup(group, pinnedDispatch),
+  };
+
+  expect(groups.releasePush).toBe(groups.pinnedDispatch);
+  expect(groups.schedule).not.toBe(groups.releasePush);
+  expect(groups.schedule).not.toBe(groups.normalPush);
+  expect(expressionValue(cancel, releasePush)).toBe(false);
+});
+test("unpinned dispatches share the schedule group and cancel it", () => {
+  const unpinned = concurrencyContext("workflow_dispatch", "", 5);
+  const schedule = concurrencyContext("schedule", "");
+  const group = mainWorkflow.concurrency.group;
+  expect(concurrencyGroup(group, unpinned)).toBe(
+    concurrencyGroup(group, schedule),
+  );
+  expect(
+    expressionValue(mainWorkflow.concurrency["cancel-in-progress"], unpinned),
+  ).toBe(true);
 });
 test("removing the pinned SHA concurrency key violates isolation", () => {
   const changed = mainWorkflow.concurrency.group.replace(

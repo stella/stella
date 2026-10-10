@@ -11,7 +11,11 @@ import {
 } from "@/features/avt/fact-details.logic";
 import type { SaveState } from "@/features/avt/save-state.logic";
 import { readTargetIds, saveStateOf } from "@/features/avt/save-state.logic";
-import type { FactDetails, ListItem } from "@/features/avt/types";
+import type {
+  EditableFactDetails,
+  FactDetails,
+  ListItem,
+} from "@/features/avt/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -30,7 +34,7 @@ const factDetailsMutationKey = ({ workspaceId, listId }: ListScope) =>
 
 type SaveVariables = {
   targetIds: [ListItem["id"]];
-  details: FactDetails;
+  details: EditableFactDetails;
 };
 
 type PreviousDetails = { previous: FactDetails | null };
@@ -107,7 +111,10 @@ export const useFactDetailActions = (scope: ListScope) => {
   });
 
   return {
-    saveDetails: (itemEntityId: ListItem["id"], details: FactDetails) => {
+    saveDetails: (
+      itemEntityId: ListItem["id"],
+      details: EditableFactDetails,
+    ) => {
       save.mutate({ targetIds: [itemEntityId], details });
     },
   };
