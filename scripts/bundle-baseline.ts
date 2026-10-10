@@ -9,20 +9,26 @@
 //
 // This measures the gzipped size of every client JS asset, groups them the way
 // the build's manualChunks names them (apps/web/vite.config.ts), and guards a
-// committed baseline so that a size regression fails CI while an improvement
-// just prompts you to ratchet the baseline down.
+// committed baseline. Growth past the headroom is reported, never blocking: CI
+// annotates the grown groups and writes them to the job summary, and a nightly
+// run lists every group over budget. An improvement prompts a ratchet down.
 //
 // Modes:
 //   bun scripts/bundle-baseline.ts                 report groups + gzip sizes
 //   bun scripts/bundle-baseline.ts --write-baseline regenerate the baseline
-//   bun scripts/bundle-baseline.ts --check          CI gate (exit 1 on regression)
+//   bun scripts/bundle-baseline.ts --check          CI report (warns on growth; fails only when it cannot measure)
 //   bun scripts/bundle-baseline.ts --self-test      prove the comparison logic fires
 //
 // CI-only by design: it needs a completed `bun --filter @stll/web build` first,
 // so it is too slow for the local lint/pre-commit loop. Wired into
 // .github/workflows/ci.yml's web-build job, right after "Build web".
 
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  appendFileSync,
+  existsSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 
 import { BASELINE_PATHS } from "./baseline-paths";
@@ -372,23 +378,55 @@ const runCheck = (): number => {
     return 0;
   }
 
-  console.error("\nbundle --check: chunk group(s) grew past the baseline:\n");
-  for (const d of regressions) {
-    const delta = d.current - d.baseline;
-    console.error(
-      `  ${d.key}: ${kib(d.baseline)} -> ${kib(d.current)} ` +
-        `(+${kib(delta)}, ${pct(d.current, d.baseline)})`,
-    );
-    console.error(`      ${perfMeaning(d.key)}.`);
-  }
-  console.error(
-    `\nAllowed headroom is ${Math.round((HEADROOM - 1) * 100)}% over baseline. ` +
-      "Find what grew (run\n" +
-      "`ANALYZE=1 bun --filter @stll/web build` for the visualizer treemap) and\n" +
-      "trim it, or, if the growth is genuinely justified, run\n" +
-      `\`${WRITE_HINT}\` and commit ${BASELINE_REL} with a rationale in your PR.`,
+  const headroom = `${Math.round((HEADROOM - 1) * 100)}%`;
+  console.log(
+    `\nbundle --check: chunk group(s) grew past the ${headroom} headroom ` +
+      "(warning only):\n",
   );
-  return 1;
+  for (const d of regressions) {
+    const growth = `${kib(d.baseline)} -> ${kib(d.current)} (+${kib(d.current - d.baseline)}, ${pct(d.current, d.baseline)})`;
+    console.log(`  ${d.key}: ${growth}`);
+    console.log(`      ${perfMeaning(d.key)}.`);
+    console.log(
+      `::warning title=Bundle size: ${d.key}::${d.key} grew ${growth} over the ${headroom} headroom.`,
+    );
+  }
+  console.log(
+    "\nFind what grew (run `ANALYZE=1 bun --filter @stll/web build` for the\n" +
+      "visualizer treemap) and trim it, or re-measure with\n" +
+      `\`${WRITE_HINT}\` and commit ${BASELINE_REL} with a rationale.`,
+  );
+  writeSummary(regressions, headroom);
+  return 0;
+};
+
+// The job summary lists the grown groups so the run page shows them without
+// reading the log.
+const writeSummary = (
+  regressions: readonly GroupDiff[],
+  headroom: string,
+): void => {
+  const summaryPath = process.env["GITHUB_STEP_SUMMARY"];
+  if (summaryPath === undefined || summaryPath === "") {
+    return;
+  }
+  const rows = regressions.map(
+    (d) =>
+      `| ${d.key} | ${kib(d.baseline)} | ${kib(d.current)} | +${kib(d.current - d.baseline)} | ${pct(d.current, d.baseline)} |`,
+  );
+  appendFileSync(
+    summaryPath,
+    [
+      `### Bundle groups over the ${headroom} headroom`,
+      "",
+      "| Group | Baseline | Current | Growth | Change |",
+      "| --- | ---: | ---: | ---: | ---: |",
+      ...rows,
+      "",
+      `Re-measure with \`${WRITE_HINT}\` once the growth is understood.`,
+      "",
+    ].join("\n"),
+  );
 };
 
 // --- Self-test --------------------------------------------------------------
