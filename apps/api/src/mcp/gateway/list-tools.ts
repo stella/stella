@@ -194,7 +194,11 @@ export const listGatewayMcpToolDefinitions = async ({
   }
 
   if (hasGrantedScope(scopes, "stella:skills")) {
-    for (const skill of await loadVisibleSkillTools({ context, scopes })) {
+    for (const skill of await loadVisibleSkillTools({
+      context,
+      mode,
+      scopes,
+    })) {
       definitions.push(skillToolDefinition(skill));
     }
   }
@@ -276,7 +280,7 @@ export const getGatewayMcpToolDefinition = async ({
     return undefined;
   }
 
-  const skill = await resolveSkillTool({ context, toolName });
+  const skill = await resolveSkillTool({ context, mode, toolName });
   return skill === null ? undefined : skillToolDefinition(skill);
 };
 

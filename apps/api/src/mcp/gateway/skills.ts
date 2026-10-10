@@ -26,6 +26,7 @@ import {
   collisionSafeToolName,
   namespaceSkillToolName,
 } from "@/api/lib/mcp-upstream/namespace";
+import type { McpMode } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { McpGatewayLoadError } from "@/api/mcp/errors";
 import {
@@ -56,9 +57,11 @@ export type ResolvedSkillTool = AvailableChatSkill & {
  */
 const loadSkillTools = async ({
   context,
+  mode,
   scopes,
 }: {
   context: McpRequestContext;
+  mode: McpMode;
   scopes: readonly string[] | undefined;
 }): Promise<ResolvedSkillTool[]> => {
   // A load fault propagates instead of `[]`, so a transient DB outage is not
@@ -83,7 +86,7 @@ const loadSkillTools = async ({
   const offeredToolNames = new Set(
     listOfferedStaticMcpToolDefinitions({
       context,
-      mode: "default",
+      mode,
       scopes,
       audience: "model",
     }).flatMap(({ additionalScopes = [], name }) =>
@@ -110,12 +113,14 @@ const loadSkillTools = async ({
  */
 export const loadVisibleSkillTools = async ({
   context,
+  mode,
   scopes,
 }: {
   context: McpRequestContext;
+  mode: McpMode;
   scopes?: readonly string[] | undefined;
 }): Promise<ResolvedSkillTool[]> =>
-  (await loadSkillTools({ context, scopes })).filter(
+  (await loadSkillTools({ context, mode, scopes })).filter(
     ({ availability }) =>
       availability.status === SKILL_TOOL_AVAILABILITY_STATUS.available,
   );
@@ -127,12 +132,14 @@ export const loadVisibleSkillTools = async ({
  */
 export const resolveSkillTool = async ({
   context,
+  mode,
   toolName,
 }: {
   context: McpRequestContext;
+  mode: McpMode;
   toolName: string;
 }): Promise<ResolvedSkillTool | null> =>
-  (await loadSkillTools({ context, scopes: context.grantedScopes })).find(
+  (await loadSkillTools({ context, mode, scopes: context.grantedScopes })).find(
     (skill) => skill.exposedName === toolName,
   ) ?? null;
 
