@@ -351,6 +351,33 @@ describe("a failed analysis run", () => {
     return { response: response.unwrap(), starts: starts.count };
   };
 
+  for (const overrideModels of [
+    null,
+    { chat: googleKey.overrideModels.chat },
+  ]) {
+    test(`a ${overrideModels === null ? "default" : "partial"} model configuration attributes failures to the resolved fast provider`, async () => {
+      const decisionId = await insertDecision();
+      const orgAIConfig = { ...googleKey, overrideModels };
+
+      await read({
+        decisionId,
+        model: fakeGoogle(["cut-off"]).model,
+        orgAIConfig,
+      });
+      const poll = await read({
+        decisionId,
+        model: fakeGoogle([]).model,
+        orgAIConfig,
+      });
+      expect(poll.response).toMatchObject({
+        status: "error",
+        code: "answer_incomplete",
+        key: { source: "organization", provider: "google" },
+      });
+      expect(poll.starts).toBe(0);
+    });
+  }
+
   test("an answer cut off on the organization's own key is recorded, told, and not run again by polling", async () => {
     const decisionId = await insertDecision();
     const google = fakeGoogle(["cut-off"]);

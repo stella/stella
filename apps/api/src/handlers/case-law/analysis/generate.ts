@@ -21,7 +21,11 @@ import type {
 } from "@stll/legal-ast/analysis";
 
 import type { ScopedDb } from "@/api/db/safe-db";
-import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
+import {
+  resolveCaching,
+  resolveOrgAIModelForRole,
+  type OrgAIConfig,
+} from "@/api/lib/ai-config";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import {
   classifyAIError,
@@ -191,14 +195,19 @@ const readerKeyOf = ({
 }: {
   orgAIConfig: OrgAIConfig | null;
   organizationId: SafeId<"organization">;
-}): AnalysisReaderKey =>
-  orgAIConfig === null
-    ? { source: "platform" }
+}): AnalysisReaderKey | null => {
+  if (orgAIConfig === null) {
+    return { source: "platform" };
+  }
+  const selection = resolveOrgAIModelForRole(orgAIConfig, "fast");
+  return selection === null
+    ? null
     : {
         source: "organization",
         organizationId,
-        provider: orgAIConfig.overrideModels.fast.provider,
+        provider: selection.provider,
       };
+};
 
 /**
  * Run the AI generation in the background. Updates the DB when done; on
@@ -499,6 +508,9 @@ export const generateAnalysis = async ({
   // reader's key alone, so another reader's run on the shared row neither
   // replaces nor clears it, and this reader never re-runs unasked.
   const applicableFailure = async (): Promise<AnalysisFailureRecord | null> => {
+    if (reader === null) {
+      return null;
+    }
     const failure = await store.readFailure({
       decisionId,
       keyTag: analysisFailureKeyTag(reader, decisionId),
@@ -554,6 +566,9 @@ export const generateAnalysis = async ({
   });
   if (Result.isError(available)) {
     return Result.err(available.error);
+  }
+  if (reader === null) {
+    return panic("An available analysis role must resolve a reader key");
   }
 
   await beforeClaim?.();
