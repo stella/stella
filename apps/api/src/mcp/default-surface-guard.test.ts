@@ -7,22 +7,56 @@ const OPERATION_SELECTOR_NAMES = new Set([
   "capability",
   "capability_id",
   "endpoint",
+  "endpoint_id",
+  "id",
   "method",
   "operation",
   "operation_id",
 ]);
+
+const PASSTHROUGH_INPUT_NAMES = new Set(["body", "input"]);
+const LISTING_SELECTOR_DESCRIPTION =
+  /(?:capability|operation|endpoint)\s+id|id\s+(?:from|returned by)\s+(?:a\s+)?(?:list|listing)/iu;
+const GENERIC_OPERATION_LISTING =
+  /list the (?:automatable )?capabilities beyond the curated tools/iu;
+
+const schemaText = (value: unknown): string => {
+  if (typeof value === "string") {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return value.map(schemaText).join(" ");
+  }
+  if (typeof value !== "object" || value === null) {
+    return "";
+  }
+  return Object.values(value).map(schemaText).join(" ");
+};
+
+const hasOperationSelector = (definition: McpToolDefinition): boolean => {
+  const properties = definition.inputSchema.properties ?? {};
+  const propertyNames = Object.keys(properties);
+  const hasPassthroughInput = propertyNames.some((name) =>
+    PASSTHROUGH_INPUT_NAMES.has(name),
+  );
+
+  return (
+    propertyNames.some((name) => {
+      if (!OPERATION_SELECTOR_NAMES.has(name)) {
+        return LISTING_SELECTOR_DESCRIPTION.test(schemaText(properties[name]));
+      }
+      return name !== "id" || hasPassthroughInput;
+    }) || GENERIC_OPERATION_LISTING.test(definition.description)
+  );
+};
 
 export const defaultSurfaceViolations = (
   definitions: readonly McpToolDefinition[],
 ): string[] => {
   const violations: string[] = [];
   for (const definition of definitions) {
-    const propertyNames = Object.keys(definition.inputSchema.properties ?? {});
-    if (propertyNames.some((name) => OPERATION_SELECTOR_NAMES.has(name))) {
+    if (hasOperationSelector(definition)) {
       violations.push(`${definition.name}: operation selector`);
-    }
-    if (definition.name.startsWith("mcp__")) {
-      violations.push(`${definition.name}: dynamic gateway`);
     }
     const { annotations } = definition;
     if (
@@ -38,28 +72,28 @@ export const defaultSurfaceViolations = (
 };
 
 describe("default MCP purpose-built tool guard", () => {
-  test("allows no generic executor, gateway, or incomplete annotation", () => {
+  test("allows no generic executor or incomplete annotation", () => {
     expect(
       defaultSurfaceViolations(listStaticMcpToolDefinitions("default")),
     ).toEqual([]);
   });
 
-  test("rejects an executor-shaped tool", () => {
-    const [source] = listStaticMcpToolDefinitions("default");
-    if (source === undefined) {
-      throw new Error("default MCP registry must not be empty");
-    }
-    const fake = {
-      ...source,
-      inputSchema: {
-        type: "object",
-        properties: { operation_id: { type: "string" } },
-      },
-      name: "fake_executor",
-    } satisfies McpToolDefinition;
+  test("rejects every real advanced-only static definition", () => {
+    const defaultNames = new Set(
+      listStaticMcpToolDefinitions("default").map(({ name }) => name),
+    );
+    const advancedOnly = listStaticMcpToolDefinitions("advanced").filter(
+      ({ name }) => !defaultNames.has(name),
+    );
 
-    expect(defaultSurfaceViolations([fake])).toEqual([
-      "fake_executor: operation selector",
+    expect(advancedOnly.map(({ name }) => name)).toEqual([
+      "list_capabilities",
+      "describe_capability",
+      "read_capability",
+      "write_capability",
     ]);
+    expect(defaultSurfaceViolations(advancedOnly)).toEqual(
+      advancedOnly.map(({ name }) => `${name}: operation selector`),
+    );
   });
 });

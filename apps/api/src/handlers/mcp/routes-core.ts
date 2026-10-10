@@ -147,17 +147,41 @@ export const createMcpRoute = ({
 
   return new Elysia()
     .options(MCP_ADVANCED_DISCOVERY_PATH, discoveryOptionsHandler)
-    .get(MCP_ADVANCED_DISCOVERY_PATH, readAdvancedMetadata.handler)
+    .get(
+      MCP_ADVANCED_DISCOVERY_PATH,
+      readAdvancedMetadata.handler,
+      readAdvancedMetadata.config,
+    )
     .options(ROOT_MCP_DISCOVERY_PATH, discoveryOptionsHandler)
-    .get(ROOT_MCP_DISCOVERY_PATH, readDefaultMetadata.handler)
+    .get(
+      ROOT_MCP_DISCOVERY_PATH,
+      readDefaultMetadata.handler,
+      readDefaultMetadata.config,
+    )
     .options(MCP_ANONYMIZED_DISCOVERY_PATH, discoveryOptionsHandler)
-    .get(MCP_ANONYMIZED_DISCOVERY_PATH, readAnonymizedMetadata.handler)
+    .get(
+      MCP_ANONYMIZED_DISCOVERY_PATH,
+      readAnonymizedMetadata.handler,
+      readAnonymizedMetadata.config,
+    )
     .options(MCP_DISCOVERY_PATH, discoveryOptionsHandler)
-    .get(MCP_DISCOVERY_PATH, readDefaultMetadata.handler)
+    .get(
+      MCP_DISCOVERY_PATH,
+      readDefaultMetadata.handler,
+      readDefaultMetadata.config,
+    )
     .options(MCP_DOCUMENTS_DISCOVERY_PATH, discoveryOptionsHandler)
-    .get(MCP_DOCUMENTS_DISCOVERY_PATH, readDocumentsMetadata.handler)
+    .get(
+      MCP_DOCUMENTS_DISCOVERY_PATH,
+      readDocumentsMetadata.handler,
+      readDocumentsMetadata.config,
+    )
     .options(MCP_LAW_DISCOVERY_PATH, discoveryOptionsHandler)
-    .get(MCP_LAW_DISCOVERY_PATH, readLawMetadata.handler)
+    .get(
+      MCP_LAW_DISCOVERY_PATH,
+      readLawMetadata.handler,
+      readLawMetadata.config,
+    )
     .all(
       MCP_ADVANCED_HTTP_PATH,
       async ({ request, server, set }) =>

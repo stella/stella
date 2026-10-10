@@ -187,7 +187,7 @@ export const MCP_EXPOSE_HEADERS = [
   REQUEST_ID_HEADER,
 ] as const;
 
-export { getMcpResourceScopes };
+export { getMcpResourceModeConfig, getMcpResourceScopes };
 
 export const getMcpBaseUrl = () => env.PUBLIC_URL ?? env.BETTER_AUTH_URL;
 

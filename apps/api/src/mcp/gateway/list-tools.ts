@@ -26,7 +26,14 @@ import {
   listGatewayExternalMcpTools,
   resolveGatewayExternalMcpTool,
 } from "@/api/mcp/gateway/external-tools";
-import type { ResolvedExternalMcpTool } from "@/api/mcp/gateway/external-tools";
+import type {
+  ExternalGatewayDependencies,
+  ResolvedExternalMcpTool,
+} from "@/api/mcp/gateway/external-tools";
+import {
+  GATEWAY_TOOL_KIND,
+  modeAllowsGatewayTools,
+} from "@/api/mcp/gateway/mode-policy";
 import {
   loadVisibleSkillTools,
   resolveSkillTool,
@@ -61,8 +68,8 @@ import {
 // surface reaches it through this module.
 export { isMcpToolFeatureEnabled };
 
-// Skills and external connector tools are resolved by the dynamic gateway in
-// default mode only; they are never part of the anonymized projection.
+// Skills and external connector tools are resolved by the dynamic gateway;
+// they are never part of the anonymized projection.
 const DYNAMIC_GATEWAY_ANONYMIZED = {
   exposure: "excluded",
   reason: "dynamic_gateway",
@@ -152,10 +159,12 @@ export const listGatewayMcpToolDefinitions = async ({
   context,
   mode,
   scopes,
+  externalGatewayDependencies,
 }: {
   context: McpRequestContext;
   mode: McpMode;
   scopes?: readonly string[];
+  externalGatewayDependencies?: ExternalGatewayDependencies;
 }): Promise<McpToolDefinition[]> => {
   const definitions = listOfferedStaticMcpToolDefinitions({
     context,
@@ -166,12 +175,18 @@ export const listGatewayMcpToolDefinitions = async ({
   // connector discovery runs only on the advanced surface, so a
   // restricted client never discovers a tool its dispatcher rejects and never
   // receives tenant-specific connector metadata.
-  if (mode !== "default" && mode !== "advanced") {
+  if (!modeAllowsGatewayTools(mode, GATEWAY_TOOL_KIND.skill)) {
     return definitions;
   }
 
-  if (mode === "advanced" && hasGrantedScope(scopes, "stella:external_mcps")) {
-    for (const tool of await listGatewayExternalMcpTools({ context })) {
+  if (
+    modeAllowsGatewayTools(mode, GATEWAY_TOOL_KIND.externalMcp) &&
+    hasGrantedScope(scopes, "stella:external_mcps")
+  ) {
+    for (const tool of await listGatewayExternalMcpTools({
+      context,
+      dependencies: externalGatewayDependencies,
+    })) {
       definitions.push(externalToolDefinition(tool));
     }
   }
@@ -198,10 +213,12 @@ export const getGatewayMcpToolDefinition = async ({
   context,
   mode,
   toolName,
+  externalGatewayDependencies,
 }: {
   context: McpRequestContext;
   mode: McpMode;
   toolName: string;
+  externalGatewayDependencies?: ExternalGatewayDependencies;
 }): Promise<McpToolDefinition | undefined> => {
   const staticTool = getStaticMcpToolDefinition(toolName, mode);
   if (staticTool) {
@@ -228,19 +245,23 @@ export const getGatewayMcpToolDefinition = async ({
       : undefined;
   }
   if (
-    (mode !== "default" && mode !== "advanced") ||
+    !modeAllowsGatewayTools(mode, GATEWAY_TOOL_KIND.skill) ||
     !isMcpDescriptorFeatureEnabled({ context, kind: "tools", id: toolName })
   ) {
     return undefined;
   }
 
   if (isExternalMcpToolName(toolName)) {
-    if (mode !== "advanced") {
+    if (
+      !modeAllowsGatewayTools(mode, GATEWAY_TOOL_KIND.externalMcp) ||
+      !hasGrantedScope(context.grantedScopes, "stella:external_mcps")
+    ) {
       return undefined;
     }
     const externalTool = await resolveGatewayExternalMcpTool({
       context,
       toolName,
+      dependencies: externalGatewayDependencies,
     });
     return externalTool === null
       ? undefined
@@ -275,6 +296,13 @@ export const externalToolDefinition = ({
       rawName: cachedTool.rawName,
     }),
   }),
+  annotationReasons: {
+    readOnlyHint:
+      "Only an explicit upstream read-only assertion classifies the connector tool as a read.",
+    destructiveHint:
+      "Unverified upstream writes may modify or delete existing data.",
+    openWorldHint: "The connector executes against an external service.",
+  },
   anonymized: DYNAMIC_GATEWAY_ANONYMIZED,
   consumesServices: true,
   description: externalToolDescription({
@@ -300,6 +328,11 @@ export const skillToolDefinition = (
   annotations: {
     ...SKILL_TOOL_ANNOTATIONS,
     title: toDynamicToolTitle(skill.displayName) || skill.exposedName,
+  },
+  annotationReasons: {
+    readOnlyHint: "Reads the stored skill without modifying it.",
+    destructiveHint: "Skill content retrieval changes no existing data.",
+    openWorldHint: "Reads only stored skill content.",
   },
   anonymized: DYNAMIC_GATEWAY_ANONYMIZED,
   consumesServices: true,

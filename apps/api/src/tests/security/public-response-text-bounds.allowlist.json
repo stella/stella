@@ -1,11 +1,6 @@
 {
   "GET /.well-known/oauth-authorization-server response-schema": "Existing public endpoint has no declared response schema; add a bounded response contract before removing this exception.",
   "GET /.well-known/oauth-authorization-server/api/auth response-schema": "Existing public endpoint has no declared response schema; add a bounded response contract before removing this exception.",
-  "GET /.well-known/oauth-protected-resource response-schema": "Existing public endpoint has no declared response schema; add a bounded response contract before removing this exception.",
-  "GET /.well-known/oauth-protected-resource/mcp response-schema": "Existing public endpoint has no declared response schema; add a bounded response contract before removing this exception.",
-  "GET /.well-known/oauth-protected-resource/mcp-anonymized response-schema": "Existing public endpoint has no declared response schema; add a bounded response contract before removing this exception.",
-  "GET /.well-known/oauth-protected-resource/mcp-documents response-schema": "Existing public endpoint has no declared response schema; add a bounded response contract before removing this exception.",
-  "GET /.well-known/oauth-protected-resource/mcp-law response-schema": "Existing public endpoint has no declared response schema; add a bounded response contract before removing this exception.",
   "GET /.well-known/openid-configuration response-schema": "Existing public endpoint has no declared response schema; add a bounded response contract before removing this exception.",
   "GET /auth.md response-schema": "Existing public endpoint has no declared response schema; add a bounded response contract before removing this exception.",
   "GET /v1/case/decisions/:decisionId 200.documentAst": "Whole official document text by design; bounded per source at ingestion, not at the response; a windowed reader contract is a separate change.",

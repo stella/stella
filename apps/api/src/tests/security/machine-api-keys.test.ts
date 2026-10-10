@@ -158,9 +158,9 @@ describe("machine API key audience binding", () => {
         continue;
       }
       const rejection = await expectRejectedOn(mode);
-      // The same generic rejection every other failure uses: which audience a
-      // credential belongs to is not something a probe gets told.
-      expect(rejection.message).toBe("Invalid or expired API key");
+      expect(rejection.message).toBe(
+        "This API key is bound to the law audience. Use /mcp-law.",
+      );
     }
   });
 
@@ -208,6 +208,45 @@ describe("machine API key audience binding", () => {
     expect(bindable).toEqual(grantable);
     expect(MACHINE_API_KEY_GRANTABLE_AUDIENCES).not.toContain("anonymized");
     expect(MACHINE_API_KEY_GRANTABLE_AUDIENCES).toContain("law");
+    expect(MACHINE_API_KEY_GRANTABLE_AUDIENCES).toContain("advanced");
+  });
+
+  test("advanced, default, and unbound keys retain their exact audience reach", async () => {
+    givenMemberRole("owner");
+
+    givenKey({
+      metadata: {
+        audience: "advanced",
+        organizationId: ORG_ID,
+        scopes: SCOPES,
+      },
+    });
+    expect(
+      (await resolveMachineApiKeySession(CREDENTIAL, { mode: "advanced" }))
+        .organizationId,
+    ).toBe(ORG_ID);
+    expect((await expectRejectedOn("default")).message).toBe(
+      "This API key is bound to the advanced audience. Use /mcp/advanced.",
+    );
+
+    givenKey({
+      metadata: { audience: "default", organizationId: ORG_ID, scopes: SCOPES },
+    });
+    expect(
+      (await resolveMachineApiKeySession(CREDENTIAL, { mode: "default" }))
+        .organizationId,
+    ).toBe(ORG_ID);
+    expect((await expectRejectedOn("advanced")).message).toBe(
+      "This API key is bound to the default audience. Use /mcp.",
+    );
+
+    givenKey();
+    for (const mode of ["default", "advanced"] as const) {
+      expect(
+        (await resolveMachineApiKeySession(CREDENTIAL, { mode }))
+          .organizationId,
+      ).toBe(ORG_ID);
+    }
   });
 
   test("an audience the metadata schema does not know refuses the credential", async () => {

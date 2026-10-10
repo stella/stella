@@ -161,7 +161,7 @@ const cursorFixtures: Readonly<Record<string, string>> = {
   "default.list_time_entries.nextCursor": encodePaginationCursor([DATE, UUID]),
   "default.list_invoices.nextCursor": timestampCursor,
   "default.list_audit_log.nextCursor": timestampCursor,
-  "default.list_capabilities.nextCursor": encodePaginationCursor([
+  "advanced.list_capabilities.nextCursor": encodePaginationCursor([
     longestString(capabilityCatalog.map((entry) => entry.id)),
   ]),
 };
@@ -227,7 +227,7 @@ describe("every registered pagination envelope fits its own next-call input", ()
         (lawDefinition) => lawDefinition === definition,
       )
         ? "law"
-        : "default";
+        : "advanced";
       const output = getStaticMcpToolOutputContract(definition.name, mode);
       if (output === undefined) {
         failures.push(`${mode}.${definition.name}: missing output contract`);

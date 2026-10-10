@@ -220,6 +220,7 @@ const mcpUpdateMatter = async (
     { request },
   );
   return await handleMcpToolCall({
+    mode: "advanced",
     args: {
       capability: "matters.update",
       input: { params: { matterId: fixture.workspaceId }, body },
