@@ -586,7 +586,7 @@ const closeMemberExchanges = async ({
       });
       return changed + (await closeNextOrganization(index + 1));
     };
-    // db-await-in-loop: the guarded application-role update locks, transitions and audits this page before the next batch.
+    // db-await-in-loop: bounded signing pages must lock, transition and audit in organization/session order before the next page.
     await closeNextOrganization(0);
   }
 };
