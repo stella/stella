@@ -1,0 +1,56 @@
+{
+  "name": "@stll/mcp-apps",
+  "version": "0.0.0",
+  "private": true,
+  "description": "MCP app frontends served by the API",
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    "./manifest": "./src/manifest.ts",
+    "./resource-uri": "./src/resource-uri.ts",
+    "./shared/contracts": "./src/shared/contracts.ts",
+    "./document-upload/upload-target": "./src/document-upload/upload-target.ts"
+  },
+  "scripts": {
+    "clean": "git clean -xdf .cache .turbo node_modules",
+    "test": "bun test src scripts",
+    "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
+    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error packages/mcp-apps",
+    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/mcp-apps",
+    "format": "bun ../../scripts/run-oxfmt.ts .",
+    "build": "bun scripts/build-mcp-apps.ts"
+  },
+  "dependencies": {
+    "@base-ui/react": "catalog:",
+    "@stll/agent-input": "workspace:*",
+    "@stll/api-contract": "workspace:*",
+    "@stll/decision-reader": "workspace:*",
+    "@stll/errors": "workspace:*",
+    "@stll/fetch": "workspace:*",
+    "@stll/legal-ast": "workspace:*",
+    "@stll/locales": "workspace:*",
+    "@stll/sha256": "workspace:*",
+    "@stll/ui": "workspace:*",
+    "better-result": "catalog:",
+    "react": "catalog:react19",
+    "react-dom": "catalog:react19",
+    "use-intl": "catalog:",
+    "valibot": "catalog:"
+  },
+  "devDependencies": {
+    "@happy-dom/global-registrator": "20.14.5",
+    "@stll/property-testing": "workspace:*",
+    "@stll/typescript-config": "workspace:*",
+    "@tailwindcss/postcss": "catalog:",
+    "@testing-library/dom": "10.4.2",
+    "@testing-library/react": "16.3.3",
+    "@types/react": "catalog:react19",
+    "@types/react-dom": "catalog:react19",
+    "bun-types": "catalog:",
+    "fast-check": "catalog:",
+    "happy-dom": "20.14.5",
+    "oxc-transform-react": "catalog:",
+    "postcss": "catalog:"
+  }
+}

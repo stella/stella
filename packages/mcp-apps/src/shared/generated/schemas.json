@@ -3,11 +3,7 @@
     "type": "object",
     "properties": {
       "status": {
-        "enum": [
-          "available",
-          "withheld",
-          "unavailable"
-        ],
+        "enum": ["available", "withheld", "unavailable"],
         "type": "string"
       },
       "metadata": {
@@ -20,26 +16,14 @@
             "type": "string"
           },
           "caseNumberType": {
-            "enum": [
-              "case-number",
-              "neutral-citation",
-              "reporter-citation"
-            ],
+            "enum": ["case-number", "neutral-citation", "reporter-citation"],
             "type": "string"
           },
           "courtAbbreviation": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "courtTier": {
-            "enum": [
-              "constitutional",
-              "supreme",
-              "regional",
-              "other"
-            ],
+            "enum": ["constitutional", "supreme", "regional", "other"],
             "type": "string"
           },
           "language": {
@@ -52,22 +36,13 @@
             "type": "string"
           },
           "date": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "ecli": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "appUrl": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           }
         },
         "required": [
@@ -100,11 +75,7 @@
               "type": "number"
             }
           },
-          "required": [
-            "anchorId",
-            "title",
-            "level"
-          ],
+          "required": ["anchorId", "title", "level"],
           "additionalProperties": false
         }
       },
@@ -117,20 +88,13 @@
               "type": "string"
             },
             "number": {
-              "type": [
-                "number",
-                "null"
-              ]
+              "type": ["number", "null"]
             },
             "text": {
               "type": "string"
             }
           },
-          "required": [
-            "anchorId",
-            "number",
-            "text"
-          ],
+          "required": ["anchorId", "number", "text"],
           "additionalProperties": false
         }
       },
@@ -141,26 +105,18 @@
         "type": "object",
         "properties": {
           "code": {
-            "enum": [
-              "source_licence"
-            ],
+            "enum": ["source_licence"],
             "type": "string"
           },
           "message": {
             "type": "string"
           }
         },
-        "required": [
-          "code",
-          "message"
-        ],
+        "required": ["code", "message"],
         "additionalProperties": false
       }
     },
-    "required": [
-      "status",
-      "metadata"
-    ],
+    "required": ["status", "metadata"],
     "additionalProperties": false
   },
   "read_case_law_decision_blocks": {
@@ -176,26 +132,14 @@
             "type": "string"
           },
           "caseNumberType": {
-            "enum": [
-              "case-number",
-              "neutral-citation",
-              "reporter-citation"
-            ],
+            "enum": ["case-number", "neutral-citation", "reporter-citation"],
             "type": "string"
           },
           "courtAbbreviation": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "courtTier": {
-            "enum": [
-              "constitutional",
-              "supreme",
-              "regional",
-              "other"
-            ],
+            "enum": ["constitutional", "supreme", "regional", "other"],
             "type": "string"
           },
           "language": {
@@ -208,22 +152,13 @@
             "type": "string"
           },
           "date": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "ecli": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "appUrl": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           }
         },
         "required": [
@@ -245,19 +180,11 @@
         "type": "object",
         "properties": {
           "status": {
-            "enum": [
-              "available",
-              "withheld",
-              "unavailable"
-            ],
+            "enum": ["available", "withheld", "unavailable"],
             "type": "string"
           },
           "phase": {
-            "enum": [
-              "blocks",
-              "citations",
-              "provisions"
-            ],
+            "enum": ["blocks", "citations", "provisions"],
             "type": "string"
           },
           "items": {
@@ -289,47 +216,32 @@
             }
           },
           "nextCursor": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "limit": {
-            "enum": [
-              60000
-            ],
+            "enum": [60000],
             "type": "number"
           },
           "withheldReason": {
             "type": "object",
             "properties": {
               "code": {
-                "enum": [
-                  "source_licence"
-                ],
+                "enum": ["source_licence"],
                 "type": "string"
               },
               "message": {
                 "type": "string"
               }
             },
-            "required": [
-              "code",
-              "message"
-            ],
+            "required": ["code", "message"],
             "additionalProperties": false
           }
         },
-        "required": [
-          "status"
-        ],
+        "required": ["status"],
         "additionalProperties": false
       }
     },
-    "required": [
-      "metadata",
-      "content"
-    ],
+    "required": ["metadata", "content"],
     "additionalProperties": false,
     "$defs": {
       "0": {
@@ -354,9 +266,7 @@
             "type": "string"
           },
           "anonymized": {
-            "enum": [
-              true
-            ],
+            "enum": [true],
             "type": "boolean"
           },
           "children": {
@@ -376,10 +286,7 @@
             "type": "object",
             "properties": {
               "status": {
-                "enum": [
-                  "identified",
-                  "unresolved"
-                ],
+                "enum": ["identified", "unresolved"],
                 "type": "string"
               },
               "identifiers": {
@@ -409,9 +316,7 @@
                 "type": "string"
               }
             },
-            "required": [
-              "status"
-            ],
+            "required": ["status"],
             "additionalProperties": false
           },
           "pin": {
@@ -442,19 +347,14 @@
                 "additionalProperties": true
               }
             },
-            "required": [
-              "raw",
-              "parts"
-            ],
+            "required": ["raw", "parts"],
             "additionalProperties": false
           },
           "label": {
             "type": "string"
           }
         },
-        "required": [
-          "type"
-        ]
+        "required": ["type"]
       }
     }
   },
@@ -462,10 +362,7 @@
     "type": "object",
     "properties": {
       "appUrl": {
-        "type": [
-          "string",
-          "null"
-        ]
+        "type": ["string", "null"]
       },
       "documentId": {
         "type": "string"
@@ -477,10 +374,7 @@
         "type": "string"
       },
       "citedAnchorId": {
-        "type": [
-          "string",
-          "null"
-        ]
+        "type": ["string", "null"]
       },
       "headings": {
         "type": "array",
@@ -497,19 +391,12 @@
               "type": "string"
             }
           },
-          "required": [
-            "anchorId",
-            "level",
-            "text"
-          ],
+          "required": ["anchorId", "level", "text"],
           "additionalProperties": false
         }
       },
       "heading": {
-        "type": [
-          "object",
-          "null"
-        ],
+        "type": ["object", "null"],
         "properties": {
           "id": {
             "type": "string"
@@ -524,12 +411,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "id",
-          "anchorId",
-          "level",
-          "text"
-        ],
+        "required": ["id", "anchorId", "level", "text"],
         "additionalProperties": false
       },
       "blocks": {
@@ -547,11 +429,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "id",
-            "anchorId",
-            "text"
-          ],
+          "required": ["id", "anchorId", "text"],
           "additionalProperties": false
         }
       }
@@ -572,34 +450,19 @@
     "type": "object",
     "properties": {
       "code": {
-        "enum": [
-          "public_country_unavailable"
-        ],
+        "enum": ["public_country_unavailable"],
         "type": "string"
       },
       "status": {
-        "enum": [
-          "unavailable"
-        ],
+        "enum": ["unavailable"],
         "type": "string"
       },
       "country": {
-        "enum": [
-          "AUT",
-          "CZE",
-          "EU",
-          "HUN",
-          "POL",
-          "SVK",
-          "USA"
-        ],
+        "enum": ["AUT", "CZE", "EU", "HUN", "POL", "SVK", "USA"],
         "type": "string"
       },
       "reason": {
-        "enum": [
-          "pending_public",
-          "withdrawn"
-        ],
+        "enum": ["pending_public", "withdrawn"],
         "type": "string"
       },
       "message": {
@@ -609,17 +472,11 @@
         "type": "string"
       },
       "headnotes": {
-        "enum": [
-          "included",
-          "omitted"
-        ],
+        "enum": ["included", "omitted"],
         "type": "string"
       },
       "facets": {
-        "type": [
-          "object",
-          "null"
-        ],
+        "type": ["object", "null"],
         "properties": {
           "court": {
             "type": "array",
@@ -629,10 +486,7 @@
             }
           },
           "courtYear": {
-            "type": [
-              "object",
-              "null"
-            ],
+            "type": ["object", "null"],
             "additionalProperties": true
           },
           "year": {
@@ -675,31 +529,21 @@
         "additionalProperties": false
       },
       "nextCursor": {
-        "type": [
-          "string",
-          "null"
-        ]
+        "type": ["string", "null"]
       },
       "paginationOutcome": {
         "type": "object",
         "properties": {
           "type": {
-            "enum": [
-              "complete",
-              "truncated"
-            ],
+            "enum": ["complete", "truncated"],
             "type": "string"
           },
           "reason": {
-            "enum": [
-              "exclusion_budget"
-            ],
+            "enum": ["exclusion_budget"],
             "type": "string"
           }
         },
-        "required": [
-          "type"
-        ],
+        "required": ["type"],
         "additionalProperties": false
       },
       "searches": {
@@ -725,11 +569,7 @@
               }
             }
           },
-          "required": [
-            "query",
-            "queryUsed",
-            "warnings"
-          ],
+          "required": ["query", "queryUsed", "warnings"],
           "additionalProperties": false
         }
       },
@@ -739,16 +579,10 @@
           "type": "object",
           "properties": {
             "appUrl": {
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": ["string", "null"]
             },
             "url": {
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": ["string", "null"]
             },
             "source_url": {
               "type": "string"
@@ -769,16 +603,10 @@
               "type": "string"
             },
             "courtAbbreviation": {
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": ["string", "null"]
             },
             "decisionDate": {
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": ["string", "null"]
             },
             "decisionId": {
               "type": "string"
@@ -787,16 +615,10 @@
               "type": "string"
             },
             "decisionType": {
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": ["string", "null"]
             },
             "ecli": {
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": ["string", "null"]
             },
             "language": {
               "type": "string"
@@ -811,24 +633,15 @@
               "type": "number"
             },
             "sourceUrl": {
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": ["string", "null"]
             },
             "snippet": {
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": ["string", "null"]
             },
             "keywords": {
               "anyOf": [
                 {
-                  "type": [
-                    "object",
-                    "null"
-                  ],
+                  "type": ["object", "null"],
                   "additionalProperties": true
                 },
                 {
@@ -839,10 +652,7 @@
             "headnote": {
               "anyOf": [
                 {
-                  "type": [
-                    "object",
-                    "null"
-                  ],
+                  "type": ["object", "null"],
                   "additionalProperties": true
                 },
                 {
@@ -883,11 +693,7 @@
         "type": "object",
         "properties": {
           "type": {
-            "enum": [
-              "exact",
-              "estimate",
-              "not_counted"
-            ],
+            "enum": ["exact", "estimate", "not_counted"],
             "type": "string"
           },
           "count": {
@@ -896,9 +702,7 @@
             "maximum": 9007199254740991
           }
         },
-        "required": [
-          "type"
-        ],
+        "required": ["type"],
         "additionalProperties": false
       },
       "nextStep": {
@@ -911,34 +715,19 @@
     "type": "object",
     "properties": {
       "code": {
-        "enum": [
-          "public_country_unavailable"
-        ],
+        "enum": ["public_country_unavailable"],
         "type": "string"
       },
       "status": {
-        "enum": [
-          "unavailable"
-        ],
+        "enum": ["unavailable"],
         "type": "string"
       },
       "country": {
-        "enum": [
-          "AUT",
-          "CZE",
-          "EU",
-          "HUN",
-          "POL",
-          "SVK",
-          "USA"
-        ],
+        "enum": ["AUT", "CZE", "EU", "HUN", "POL", "SVK", "USA"],
         "type": "string"
       },
       "reason": {
-        "enum": [
-          "pending_public",
-          "withdrawn"
-        ],
+        "enum": ["pending_public", "withdrawn"],
         "type": "string"
       },
       "message": {
@@ -956,16 +745,10 @@
               "type": "string"
             },
             "appUrl": {
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": ["string", "null"]
             },
             "url": {
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": ["string", "null"]
             },
             "source_url": {
               "type": "string"
@@ -974,47 +757,29 @@
               "type": "string"
             },
             "caseNumberType": {
-              "enum": [
-                "case-number",
-                "neutral-citation",
-                "reporter-citation"
-              ],
+              "enum": ["case-number", "neutral-citation", "reporter-citation"],
               "type": "string"
             },
             "court": {
               "type": "string"
             },
             "courtAbbreviation": {
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": ["string", "null"]
             },
             "decisionDate": {
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": ["string", "null"]
             },
             "decisionId": {
               "type": "string"
             },
             "ecli": {
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": ["string", "null"]
             },
             "resourceName": {
               "type": "string"
             },
             "status": {
-              "enum": [
-                "found",
-                "ambiguous",
-                "not_found",
-                "lookup_failed"
-              ],
+              "enum": ["found", "ambiguous", "not_found", "lookup_failed"],
               "type": "string"
             },
             "candidates": {
@@ -1031,10 +796,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "identifier",
-            "status"
-          ],
+          "required": ["identifier", "status"],
           "additionalProperties": false
         }
       }

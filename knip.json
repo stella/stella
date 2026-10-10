@@ -160,6 +160,9 @@
     "packages/legal-ast": {
       "entry": ["src/index.ts", "src/**/*.test.ts"]
     },
+    "packages/mcp-apps": {
+      "entry": ["src/index.ts", "src/**/*.test.ts"]
+    },
     "packages/mcp-kit": {
       "entry": ["src/index.ts", "src/**/*.test.ts"]
     },
