@@ -318,6 +318,9 @@ export const sanitizeErrorForOutput = (value: unknown): unknown => {
       return "[truncated]";
     }
     if (seen.has(input)) {
+      // A repeated reference is projected where it first appeared; its other
+      // holders must not fall back to returning their raw selves.
+      redaction.count += 1;
       return "[circular]";
     }
     seen.add(input);

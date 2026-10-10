@@ -488,6 +488,13 @@ test("a cause chain deeper than the projection limit is not returned raw", () =>
   expect(inspect(output, { depth: 64 })).not.toContain(SECRET);
 });
 
+test("a wrapper sharing an already projected query error is not returned raw", () => {
+  const query = failure("insert into account values ($1)");
+  const wrapper = new Error("Operation failed", { cause: query });
+  const output = sanitizeErrorForOutput([query, wrapper]);
+  expect(inspect(output, { depth: 20 })).not.toContain(SECRET);
+});
+
 test("errors holding query fields in plain records are projected", () => {
   const value = "fixture-plain-record-query-value";
   for (const input of [
