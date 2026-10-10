@@ -74,6 +74,10 @@ describe("Markdown replacement boundaries", () => {
     "**bold**",
     "`code`",
     "[label](https://example.com)",
+    "[label](<https://example.test/a(b>)",
+    "[label](<https://example.test/a)b>)",
+    '[label](https://example.test "Title with (unmatched parenthesis")',
+    "[label](https://example.test 'Title with )unmatched parenthesis')",
   ])("accepts balanced inline replacement %s", (replacement) => {
     expect(
       isSpanReplacementBalanced({
@@ -88,6 +92,8 @@ describe("Markdown replacement boundaries", () => {
     "**open",
     "`open",
     "[label](https://example.com",
+    "[label](<https://example.test/a(b)",
+    '[label](https://example.test "Unclosed title)',
     "new\nblock",
     "```ts\ncode",
   ])("rejects unbalanced or block replacement %s", (replacement) => {

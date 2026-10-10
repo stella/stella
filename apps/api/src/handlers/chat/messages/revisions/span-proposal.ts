@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import { sha256Hex } from "@stll/sha256/bun";
 
 import { preservesMarkdownOutsideSpan } from "@/api/handlers/chat/messages/revisions/span-markdown";
@@ -88,25 +90,21 @@ const isReplacementMarkdownBalanced = (replacement: string) => {
   let fence: { marker: string; length: number } | null = null;
   const inlineLines: string[] = [];
   for (const candidate of replacement.split("\n")) {
-    const match = /^ {0,3}(`{3,}|~{3,})(.*)$/u.exec(candidate);
-    if (!match) {
+    const delimiter = readFenceDelimiter(candidate);
+    if (!delimiter) {
       if (fence === null) {
         inlineLines.push(candidate);
       }
       continue;
     }
-    const marker = match.at(1);
-    if (!marker) {
-      return false;
-    }
     if (fence === null) {
-      fence = { marker: marker.charAt(0), length: marker.length };
+      fence = { marker: delimiter.marker, length: delimiter.length };
       continue;
     }
     if (
-      marker.charAt(0) === fence.marker &&
-      marker.length >= fence.length &&
-      match.at(2)?.trim() === ""
+      delimiter.marker === fence.marker &&
+      delimiter.length >= fence.length &&
+      delimiter.tail.trim() === ""
     ) {
       fence = null;
     }
@@ -114,41 +112,144 @@ const isReplacementMarkdownBalanced = (replacement: string) => {
   if (fence !== null) {
     return false;
   }
-  // Inline code delimiters must pair; escaped delimiters are literal text.
-  const inline = inlineLines.join("\n").replace(/\\./gu, "");
-  const runs = inline.match(/`+/gu) ?? [];
-  const openRuns = new Set<number>();
-  for (const run of runs) {
-    if (openRuns.has(run.length)) {
-      openRuns.delete(run.length);
-    } else {
-      openRuns.add(run.length);
-    }
-  }
-  if (openRuns.size > 0) {
+  const prose = inlineProseWithoutCode(inlineLines.join("\n"));
+  if (prose === null) {
     return false;
   }
-  const prose = inline
-    .replace(/(`+)[\s\S]*?\1/gu, "")
-    .replace(/^[ \t]*(?:[-+*]|\d+[.)]) /gmu, "");
-  const delimiters =
-    prose
-      .replace(/(?<=[\p{L}\p{N}])_(?=[\p{L}\p{N}])/gu, "")
-      .match(/\*+|_+|~~/gu) ?? [];
+  const delimiters = prose
+    .replace(/^[ \t]*(?:[-+*]|\d+[.)]) /gmu, "")
+    .replace(/(?<=[\p{L}\p{N}])_(?=[\p{L}\p{N}])/gu, "");
   const openDelimiters = new Set<string>();
-  for (const delimiter of delimiters) {
+  for (const match of delimiters.matchAll(/\*+|_+|~~/gu)) {
+    const delimiter = match[0];
     if (openDelimiters.has(delimiter)) {
       openDelimiters.delete(delimiter);
     } else {
       openDelimiters.add(delimiter);
     }
   }
-  if (openDelimiters.size > 0) {
-    return false;
+  return openDelimiters.size === 0 && hasClosedLinkDestinations(prose);
+};
+
+const readFenceDelimiter = (line: string) => {
+  let start = 0;
+  while (start < 4 && line.charAt(start) === " ") {
+    start += 1;
   }
-  // CommonMark treats ordinary unmatched punctuation as literal prose. Only
-  // an actual link opener is required to carry a closed destination.
-  return !/\[[^\]]*\]\([^)]*$/u.test(prose);
+  if (start > 3) {
+    return null;
+  }
+  const marker = line.charAt(start);
+  if (marker !== "`" && marker !== "~") {
+    return null;
+  }
+  let end = start + 1;
+  while (line.charAt(end) === marker) {
+    end += 1;
+  }
+  const length = end - start;
+  return length < 3 ? null : { marker, length, tail: line.slice(end) };
+};
+
+// Each backtick run is consumed once. Runs of a different length inside a
+// code span are literal code; only the opening length can close that span.
+const inlineProseWithoutCode = (inline: string) => {
+  const unescaped = inline.replace(/\\./gu, "");
+  const prose: string[] = [];
+  let cursor = 0;
+  let codeStart = 0;
+  let codeLength: number | null = null;
+  for (const match of unescaped.matchAll(/`+/gu)) {
+    const length = match[0].length;
+    if (codeLength === null) {
+      codeStart = match.index;
+      codeLength = length;
+      continue;
+    }
+    if (length !== codeLength) {
+      continue;
+    }
+    prose.push(unescaped.slice(cursor, codeStart), " ");
+    cursor = match.index + length;
+    codeLength = null;
+  }
+  if (codeLength !== null) {
+    return null;
+  }
+  prose.push(unescaped.slice(cursor));
+  return prose.join("");
+};
+
+// CommonMark treats ordinary unmatched punctuation as literal prose. Track
+// destinations only after a closed link label, including nested parentheses.
+const hasClosedLinkDestinations = (prose: string) => {
+  let labelDepth = 0;
+  let destinationDepth = 0;
+  let region: "bare" | "angle" | "single-quoted-title" | "double-quoted-title" =
+    "bare";
+  for (let index = 0; index < prose.length; index += 1) {
+    const character = prose[index];
+    if (destinationDepth > 0) {
+      switch (region) {
+        case "angle":
+          if (character === ">") {
+            region = "bare";
+          }
+          continue;
+        case "single-quoted-title":
+          if (character === "'") {
+            region = "bare";
+          }
+          continue;
+        case "double-quoted-title":
+          if (character === '"') {
+            region = "bare";
+          }
+          continue;
+        case "bare":
+          break;
+        default:
+          region satisfies never;
+          return panic("Unhandled Markdown link destination region");
+      }
+      const previous = prose.charAt(index - 1);
+      const followsWhitespace = /\s/u.test(previous);
+      if (destinationDepth === 1) {
+        if (character === "<" && (previous === "(" || followsWhitespace)) {
+          region = "angle";
+          continue;
+        }
+        if (followsWhitespace && character === "'") {
+          region = "single-quoted-title";
+          continue;
+        }
+        if (followsWhitespace && character === '"') {
+          region = "double-quoted-title";
+          continue;
+        }
+      }
+      if (character === "(") {
+        destinationDepth += 1;
+      } else if (character === ")") {
+        destinationDepth -= 1;
+      }
+      continue;
+    }
+    if (character === "[") {
+      labelDepth += 1;
+      continue;
+    }
+    if (character !== "]" || labelDepth === 0) {
+      continue;
+    }
+    labelDepth -= 1;
+    if (prose[index + 1] === "(") {
+      destinationDepth = 1;
+      region = "bare";
+      index += 1;
+    }
+  }
+  return destinationDepth === 0;
 };
 
 export const spliceSpanProposal = ({

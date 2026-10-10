@@ -115,6 +115,9 @@ export const ChatSelectionToolbar = ({
     (AnswerEditAnchor & SelectionToolbarAnchor) | null
   >(null);
   const [editError, setEditError] = useState(false);
+  const refreshEditedAnswer = useLatestCallback(async () => {
+    await (editing === null ? undefined : onAnswerEdited?.(editing.messageId));
+  });
   const [copied, setCopied] = useState(false);
   // Where the bar stood when its words went to a new chat: the confirmation
   // stays there, where the reader is looking, after the selection is gone.
@@ -204,9 +207,7 @@ export const ChatSelectionToolbar = ({
               setEditing(null);
               setSelected(null);
             }}
-            onAnswerEdited={async () => {
-              await onAnswerEdited?.(editing.messageId);
-            }}
+            onAnswerEdited={refreshEditedAnswer}
           />
         </SelectionToolbar>
         {announcer}
