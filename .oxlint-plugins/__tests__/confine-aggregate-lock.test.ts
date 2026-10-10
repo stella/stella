@@ -12,6 +12,8 @@ test("rejects the planted acquisition outside the aggregate owner", async () => 
     "utf-8",
   ).replace(/^\/\/ oxlint-disable-next-line[^\n]*/gmu, "");
   expect(source).toContain('.for("update")');
+  expect(source).toContain("pg_advisory_xact_lock_shared(");
+  expect(source).toContain("pg_try_advisory_xact_lock_shared(");
   const plantedLine =
     source
       .split("\n")
@@ -24,7 +26,7 @@ test("rejects the planted acquisition outside the aggregate owner", async () => 
       cwd: "scratch",
       sourcePath: "apps/api/src/handlers/planted.ts",
     }),
-  ).toEqual([plantedLine]);
+  ).toEqual([plantedLine, plantedLine, plantedLine]);
   expect(
     await lintSingleRule("confine-aggregate-lock", source, {
       cwd: "scratch",
@@ -32,3 +34,18 @@ test("rejects the planted acquisition outside the aggregate owner", async () => 
     }),
   ).toEqual([]);
 });
+
+for (const primitive of [
+  "pg_advisory_xact_lock_shared",
+  "pg_try_advisory_xact_lock_shared",
+]) {
+  test(`confines ${primitive} in newly added production modules`, async () => {
+    const source = `tx.execute("SELECT ${primitive}(1, 2)");`;
+    expect(
+      await lintSingleRule("confine-aggregate-lock", source, {
+        cwd: "scratch",
+        sourcePath: "packages/new/src/worker.ts",
+      }),
+    ).toEqual([1]);
+  });
+}

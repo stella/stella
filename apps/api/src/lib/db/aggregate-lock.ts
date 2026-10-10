@@ -121,6 +121,8 @@ export const ROW_LOCK_MODES = [
   "update",
 ] as const satisfies readonly LockStrength[];
 export type RowLockMode = (typeof ROW_LOCK_MODES)[number];
+export const ADVISORY_LOCK_MODES = ["shared", "exclusive"] as const;
+type AdvisoryLockMode = (typeof ADVISORY_LOCK_MODES)[number];
 // Coverage follows PostgreSQL row-lock conflict sets; requested SQL still executes.
 const MODE_COVERS = {
   "key share": ["key share"],
@@ -131,10 +133,24 @@ const MODE_COVERS = {
 const modeCovers = (
   held: HeldLock["mode"],
   requested: HeldLock["mode"],
-): boolean =>
-  held === "advisory" || requested === "advisory"
-    ? held === requested
-    : MODE_COVERS[held].some((mode) => mode === requested);
+): boolean => {
+  switch (held) {
+    case "advisory shared":
+      return requested === "advisory shared";
+    case "advisory exclusive":
+      return (
+        requested === "advisory shared" || requested === "advisory exclusive"
+      );
+    default:
+      if (
+        requested === "advisory shared" ||
+        requested === "advisory exclusive"
+      ) {
+        return false;
+      }
+      return MODE_COVERS[held].some((mode) => mode === requested);
+  }
+};
 
 type AggregateIdentities = {
   organization: SafeId<"organization">;
@@ -232,12 +248,18 @@ type WaitingOptions =
 type AggregateLockOptions =
   | (RowIdentityOptions & { mode: RowLockMode } & WaitingOptions)
   | (AdvisoryIdentityOptions & {
-      mode?: undefined;
+      mode?: AdvisoryLockMode;
       wait?: "block" | "nowait";
       tx: ExecuteTransaction;
     });
 
 export class AggregateLockBusy extends TaggedError("AggregateLockBusy")<{
+  message: string;
+  aggregate: AggregateName;
+}> {}
+export class AggregateLockUpgradeRefused extends TaggedError(
+  "AggregateLockUpgradeRefused",
+)<{
   message: string;
   aggregate: AggregateName;
 }> {}
@@ -249,7 +271,7 @@ type HeldLock = {
   rank: number;
   key: string;
   orderKey: string;
-  mode: RowLockMode | "advisory";
+  mode: RowLockMode | `advisory ${AdvisoryLockMode}`;
 };
 type OrderingReservation = Pick<HeldLock, "rank" | "key" | "orderKey">;
 type LockHistory = {
@@ -951,24 +973,88 @@ export const withAggregateLock = async (
   const wait = options.wait ?? "block";
   const history = lockHistory(tx);
   assertAggregateLevelAvailable(history);
-  if (options.mode === undefined) {
+  if (
+    options.mode === undefined ||
+    options.mode === "shared" ||
+    options.mode === "exclusive"
+  ) {
     const resource = advisoryResource(options);
     const logicalKey = JSON.stringify(resource.order);
+    const mode = options.mode ?? "exclusive";
+    const held = allHeldLocks(history);
+    let key = knownAdvisoryKey(history, logicalKey);
+    // Resolve hash aliases before deciding shared coverage or refusing an upgrade.
+    if (
+      key === logicalKey &&
+      held.some(
+        (previous) =>
+          previous.mode === "advisory shared" ||
+          (mode === "shared" && previous.mode === "advisory exclusive"),
+      )
+    ) {
+      history.status = "acquiring";
+      const metadata = executedRows(
+        await tx.execute(
+          sql`SELECT ${resource.first} AS key1, ${resource.second} AS key2`,
+        ),
+      );
+      key = physicalAdvisoryKey(metadata.at(0));
+      completeAcquisition(history);
+    }
     const lock = {
       rank: AGGREGATE_LOCKS[aggregate].rank,
-      key: knownAdvisoryKey(history, logicalKey),
+      key,
       orderKey: logicalKey,
-      mode: "advisory",
+      mode: `advisory ${mode}`,
     } as const;
+    if (
+      mode === "shared" &&
+      held.some(
+        (previous) =>
+          previous.key === key && modeCovers(previous.mode, lock.mode),
+      )
+    ) {
+      history.aliases.set(logicalKey, key);
+      retainReservation(history, lock);
+      return { status: "locked" };
+    }
+    if (
+      mode === "exclusive" &&
+      held.some(
+        (previous) =>
+          previous.key === key && previous.mode === "advisory shared",
+      )
+    ) {
+      return abortTransaction(
+        new AggregateLockUpgradeRefused({
+          aggregate,
+          message:
+            "Take the exclusive advisory mode before holding the shared mode",
+        }),
+      );
+    }
     assertLockOrder(history, lock, wait);
+    const statements = {
+      shared: {
+        block: sql`pg_advisory_xact_lock_shared(${resource.first}, ${resource.second})`,
+        nowait: sql`pg_try_advisory_xact_lock_shared(${resource.first}, ${resource.second})`,
+      },
+      exclusive: {
+        block: sql`pg_advisory_xact_lock(${resource.first}, ${resource.second})`,
+        nowait: sql`pg_try_advisory_xact_lock(${resource.first}, ${resource.second})`,
+      },
+    } as const satisfies Record<
+      AdvisoryLockMode,
+      Record<"block" | "nowait", SQL>
+    >;
     history.status = "acquiring";
     const rows = executedRows(
       await tx.execute(
-        sql`SELECT ${resource.first} AS key1, ${resource.second} AS key2, ${wait === "nowait" ? sql`pg_try_advisory_xact_lock(${resource.first}, ${resource.second})` : sql`pg_advisory_xact_lock(${resource.first}, ${resource.second})`} AS acquired`,
+        sql`SELECT ${resource.first} AS key1, ${resource.second} AS key2, ${statements[mode][wait]} AS acquired`,
       ),
     );
     const row = rows.at(0);
-    const key = physicalAdvisoryKey(row);
+    const physicalKey = physicalAdvisoryKey(row);
     if (
       wait === "nowait" &&
       (!isRecord(row) || typeof row["acquired"] !== "boolean")
@@ -978,8 +1064,8 @@ export const withAggregateLock = async (
     const acquired =
       wait === "block" || (isRecord(row) && row["acquired"] === true);
     if (acquired) {
-      history.aliases.set(logicalKey, key);
-      retainLock(history, { ...lock, key });
+      history.aliases.set(logicalKey, physicalKey);
+      retainLock(history, { ...lock, key: physicalKey });
     }
     completeAcquisition(history);
     return acquired ? { status: "locked" } : busy(aggregate);
