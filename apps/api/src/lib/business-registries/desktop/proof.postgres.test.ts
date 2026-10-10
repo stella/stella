@@ -110,7 +110,7 @@ const withProofDatabase = async (
           sql`GRANT USAGE ON SCHEMA ${sql.identifier(schema)} TO stella`,
         );
         await tx.execute(
-          sql`GRANT SELECT, INSERT, DELETE ON ${sql.identifier(schema)}.desktop_device_proof_replays TO stella`,
+          sql`GRANT SELECT, INSERT, UPDATE, DELETE ON ${sql.identifier(schema)}.desktop_device_proof_replays TO stella`,
         );
       });
       const scoped = (
@@ -374,7 +374,24 @@ describe.skipIf(!enabled)("desktop proof receipts (postgres)", () => {
   test("proof storage and cleanup failures cannot yield account authority", async () => {
     await withProofDatabase(async ({ db, deniedDb, unavailableDb }) => {
       const verified = await (await deviceFixture()).proof();
-      for (const inaccessible of [deniedDb, unavailableDb]) {
+      const deniedPrune = await pruneDesktopProofReceipts({
+        db: deniedDb,
+        now: NOW,
+      });
+      expect(deniedPrune.isOk()).toBe(true);
+      if (deniedPrune.isOk()) {
+        expect(deniedPrune.value).toBe(0);
+      }
+      for (const { inaccessible, message } of [
+        {
+          inaccessible: deniedDb,
+          message: "Desktop account proof verification is unavailable",
+        },
+        {
+          inaccessible: unavailableDb,
+          message: "Desktop account proof cleanup is unavailable",
+        },
+      ]) {
         const denied = await ConsumedDesktopDeviceProof.claim({
           proof: verified,
           db: inaccessible,
@@ -384,7 +401,7 @@ describe.skipIf(!enabled)("desktop proof receipts (postgres)", () => {
         if (denied.isErr()) {
           expect(denied.error).toMatchObject({
             status: 503,
-            message: "Desktop account proof cleanup is unavailable",
+            message,
           });
         }
       }
