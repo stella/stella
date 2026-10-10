@@ -366,3 +366,15 @@ test("run: text inside a block scalar is not a run key", () => {
     },
   ]);
 });
+
+test("operators inside [[ ]] belong to the conditional expression", () => {
+  expect(
+    check(
+      "scripts/conditional.sh",
+      '[[ -f file || ! -d "dir ]]" ]]\necho continued\nif [[ ! -f x ]]; then exit 1; fi',
+    ),
+  ).toEqual([]);
+  expect(
+    check("scripts/conditional-negated.sh", "! [[ -f file ]]\necho continued"),
+  ).toHaveLength(1);
+});

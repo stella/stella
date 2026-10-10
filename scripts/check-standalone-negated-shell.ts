@@ -257,6 +257,37 @@ const readArithmetic = (state: LexState) => {
   });
 };
 
+// `[[ ... ]]` is one conditional command: its `||`, `&&` and `!` are
+// expression operators whose result the command itself returns.
+const readConditionalExpression = (state: LexState) => {
+  const { source } = state;
+  const startLine = state.line;
+  state.index += 2;
+  while (state.index < source.length && !source.startsWith("]]", state.index)) {
+    const char = source[state.index];
+    if (char === "'" || char === '"') {
+      state.index += 1;
+      readQuoted(state, char);
+      continue;
+    }
+    if (char === "\\") {
+      state.index += 2;
+      continue;
+    }
+    if (char === "\n") {
+      state.line += 1;
+    }
+    state.index += 1;
+  }
+  state.index = Math.min(source.length, state.index + 2);
+  state.tokens.push({
+    type: "word",
+    value: "conditional",
+    line: startLine,
+    quoted: true,
+  });
+};
+
 const readNewline = (state: LexState) => {
   state.tokens.push({
     type: "operator",
@@ -308,6 +339,10 @@ const shellTokens = (source: string): Token[] => {
     }
     if (source.startsWith("((", state.index)) {
       readArithmetic(state);
+      continue;
+    }
+    if (/^\[\[\s/u.test(source.slice(state.index, state.index + 3))) {
+      readConditionalExpression(state);
       continue;
     }
     const operator = operatorAt(source, state.index);
