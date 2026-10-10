@@ -49,7 +49,7 @@ const DateRangeFilter = ({
 
   return (
     <div className={cn("flex flex-col gap-1.5", className)}>
-      <div className="flex min-w-0 flex-col gap-1">
+      <div className="flex min-w-0 flex-col gap-1.5">
         <span
           id={`${id}-from-label`}
           className="text-muted-foreground text-xs font-medium"
@@ -80,7 +80,7 @@ const DateRangeFilter = ({
           }}
         />
       </div>
-      <div className="flex min-w-0 flex-col gap-1">
+      <div className="flex min-w-0 flex-col gap-1.5">
         <span
           id={`${id}-to-label`}
           className="text-muted-foreground text-xs font-medium"
