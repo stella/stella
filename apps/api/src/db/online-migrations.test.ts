@@ -1172,6 +1172,12 @@ const createHarness = ({
           if (query.startsWith("SELECT 1 FROM public.")) {
             return emptyRepairTables ? [] : [{ present: 1 }];
           }
+          if (
+            query.trim() ===
+            "SELECT to_regprocedure('public.entity_feature_gate_finish()') IS NOT NULL AS installed"
+          ) {
+            return [{ installed: false }];
+          }
           if (query.includes("database_backfill_states")) {
             if (query.startsWith("INSERT")) {
               const serialized = params.at(2);

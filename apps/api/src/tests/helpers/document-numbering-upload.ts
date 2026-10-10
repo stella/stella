@@ -1,6 +1,8 @@
 import { panic } from "better-result";
 import { expect } from "bun:test";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
+
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import presignUpload from "@/api/handlers/uploads/create";
 import finalizeUpload from "@/api/handlers/uploads/update";
@@ -34,7 +36,7 @@ export const runNumberingUpload = async ({
     name: "numbering-upload.txt",
     mimeType: "text/plain",
     size: bytes.byteLength,
-    sha256Hex: new Bun.CryptoHasher("sha256").update(bytes).digest("hex"),
+    sha256Hex: hashSha256Hex(bytes),
   };
   const body =
     entityId === undefined

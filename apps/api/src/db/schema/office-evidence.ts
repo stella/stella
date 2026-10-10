@@ -9,6 +9,11 @@ import {
 } from "@/api/lib/files/office-evidence-domain";
 
 import {
+  entityFeatureGateChecks,
+  entityFeatureGateColumns,
+  entityFeatureWorkspaceGateColumns,
+} from "../entity-feature-gate-columns";
+import {
   bytea,
   organization,
   p,
@@ -32,6 +37,8 @@ const unavailableStatusSql = sql.raw(`'${OFFICE_EVIDENCE_STATUS.unavailable}'`);
 export const officeFileEvidence = p.pgTable(
   "office_file_evidence",
   {
+    ...entityFeatureGateColumns(),
+    ...entityFeatureWorkspaceGateColumns(),
     organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
@@ -61,6 +68,7 @@ export const officeFileEvidence = p.pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     p
       .uniqueIndex("office_file_evidence_source_uidx")
       .on(

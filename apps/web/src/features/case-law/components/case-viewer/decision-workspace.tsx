@@ -444,55 +444,6 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
             );
           })}
         </div>
-        {showAiNotes && hasAnalysis && analysisTree.length > 0 && (
-          <OutlineRail
-            items={analysisOutline.items}
-            onJump={(id, container) => {
-              const anchorId = analysisOutline.anchorById.get(id);
-              if (anchorId === undefined) {
-                return;
-              }
-              setLandingAnchorId(undefined);
-              const el = container.querySelector<HTMLElement>(
-                `#${CSS.escape(anchorId)}`,
-              );
-              if (!el) {
-                return;
-              }
-              container.scrollTo({
-                top:
-                  el.getBoundingClientRect().top -
-                  container.getBoundingClientRect().top +
-                  container.scrollTop,
-                behavior: "instant",
-              });
-              delete el.dataset["highlight"];
-              forceReflow(el);
-              el.dataset["highlight"] = "";
-            }}
-            resolvePct={(id, container) => {
-              const anchorId = analysisOutline.anchorById.get(id);
-              if (anchorId === undefined || container.scrollHeight <= 0) {
-                return null;
-              }
-              const el = container.querySelector<HTMLElement>(
-                `#${CSS.escape(anchorId)}`,
-              );
-              if (!el) {
-                return null;
-              }
-              const top =
-                el.getBoundingClientRect().top -
-                container.getBoundingClientRect().top +
-                container.scrollTop;
-              return Math.min(
-                99,
-                Math.max(1, (top / container.scrollHeight) * 100),
-              );
-            }}
-            scrollContainerRef={mainRef}
-          />
-        )}
 
         {/* The composer floats over the text here as it does in the inspector's
             reader, bound to the same decision and so to the same conversation.
@@ -511,6 +462,57 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
             aiMode={props.aiMode}
             className="h-full"
           >
+            {/* The outline shares the composer's positioned host so it inherits
+                the published block-end inset as the composer grows. */}
+            {showAiNotes && hasAnalysis && analysisTree.length > 0 && (
+              <OutlineRail
+                items={analysisOutline.items}
+                onJump={(id, container) => {
+                  const anchorId = analysisOutline.anchorById.get(id);
+                  if (anchorId === undefined) {
+                    return;
+                  }
+                  setLandingAnchorId(undefined);
+                  const el = container.querySelector<HTMLElement>(
+                    `#${CSS.escape(anchorId)}`,
+                  );
+                  if (!el) {
+                    return;
+                  }
+                  container.scrollTo({
+                    top:
+                      el.getBoundingClientRect().top -
+                      container.getBoundingClientRect().top +
+                      container.scrollTop,
+                    behavior: "instant",
+                  });
+                  delete el.dataset["highlight"];
+                  forceReflow(el);
+                  el.dataset["highlight"] = "";
+                }}
+                resolvePct={(id, container) => {
+                  const anchorId = analysisOutline.anchorById.get(id);
+                  if (anchorId === undefined || container.scrollHeight <= 0) {
+                    return null;
+                  }
+                  const el = container.querySelector<HTMLElement>(
+                    `#${CSS.escape(anchorId)}`,
+                  );
+                  if (!el) {
+                    return null;
+                  }
+                  const top =
+                    el.getBoundingClientRect().top -
+                    container.getBoundingClientRect().top +
+                    container.scrollTop;
+                  return Math.min(
+                    99,
+                    Math.max(1, (top / container.scrollHeight) * 100),
+                  );
+                }}
+                scrollContainerRef={mainRef}
+              />
+            )}
             <div className="reader-scroll h-full overflow-y-auto" ref={mainRef}>
               {(paragraphLanding.type === "range" ||
                 paragraphLanding.type === "not-found") && (

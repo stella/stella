@@ -13,6 +13,7 @@ import { ElysiaCustomStatusResponse } from "elysia/error";
 
 import { PUBLIC_LAW_PAGE_SIZES } from "@stll/api-contract/limits";
 import { SEARCH_TOTAL_TYPE } from "@stll/api-contract/search";
+import { isDocumentAst } from "@stll/legal-ast/document-ast";
 
 import {
   caseLawDecisions,
@@ -24,10 +25,13 @@ import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
+import { appReaderTextForSource } from "@/api/lib/case-law/app-reader-text";
 import { resetPublicCaseLawConfigForTesting } from "@/api/lib/case-law/public-case-law-config";
+import { APP_READER_TEXT } from "@/api/lib/legal-search/adapter-manifest";
 import { indexDecision } from "@/api/lib/legal-search/case-law-search-index";
 import { createFtsConfigCache } from "@/api/lib/legal-search/fts-config";
 import { executeRowsScopedDb } from "@/api/tests/helpers/pglite-rows-scoped-db";
+import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import {
   createTestPglite,
   withPublicLawReaderRole,
@@ -133,6 +137,51 @@ const searchPage = async (cursor: string | null) => {
   }
   return response;
 };
+
+test(
+  "seeded sources resolve without defects and persist readable paragraph ASTs",
+  async () => {
+    const analytics = installRecordingAnalytics();
+    const db = drizzle({ client });
+    const rows = await db
+      .select({
+        adapterKey: caseLawSources.adapterKey,
+        documentAst: caseLawDecisions.documentAst,
+        fulltext: caseLawDecisions.fulltext,
+      })
+      .from(caseLawDecisions)
+      .innerJoin(
+        caseLawSources,
+        sql`${caseLawSources.id} = ${caseLawDecisions.sourceId}`,
+      );
+
+    try {
+      expect(rows.length).toBeGreaterThan(0);
+      for (const row of rows) {
+        expect(appReaderTextForSource(row.adapterKey)).toBe(
+          APP_READER_TEXT.FULL,
+        );
+        expect(isDocumentAst(row.documentAst)).toBe(true);
+        if (!isDocumentAst(row.documentAst)) {
+          panic(
+            `Synthetic decision from ${row.adapterKey} has no document AST`,
+          );
+        }
+        expect(row.documentAst.blocks.length).toBeGreaterThan(0);
+        expect(
+          row.documentAst.blocks.map(({ plainText }) => plainText).join("\n\n"),
+        ).toBe(
+          row.fulltext ??
+            panic(`Synthetic decision from ${row.adapterKey} has no text`),
+        );
+      }
+      expect(analytics.exceptions()).toEqual([]);
+    } finally {
+      analytics.restore();
+    }
+  },
+  DB_TEST_TIMEOUT_MS,
+);
 
 test(
   "the sample query pages through every Czech fixture decision at the smallest page size",

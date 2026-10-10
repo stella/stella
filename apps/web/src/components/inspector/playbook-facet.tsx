@@ -91,7 +91,7 @@ import {
 } from "@/components/ai-suggestions/document-review-passage-texts";
 import {
   decideReviewFinding,
-  documentReviewPartiesOptions,
+  documentReviewPartiesDetectOptions,
   documentReviewRunOptions,
   documentReviewRunsOptions,
   documentReviewSourcesOptions,
@@ -247,6 +247,7 @@ import {
   playbookDetailOptions,
   playbooksOptions,
 } from "@/lib/knowledge/queries";
+import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import type { EntityVersion } from "@/lib/workspaces/queries/entity-versions";
 import { entityVersionsOptions } from "@/lib/workspaces/queries/entity-versions";
@@ -1584,9 +1585,13 @@ const Launcher = ({
   // The document's own sides, read before a reference is even chosen: the
   // question "whose side are we on" is about the contract on screen, and
   // asking it after the proposal has been paid for is asking it too late.
+  const queryClient = useQueryClient();
   const partiesQuery = useQuery({
-    ...documentReviewPartiesOptions({ workspaceId, ...target }),
-    select: (answer) => answer.parties,
+    ...documentReviewPartiesDetectOptions(
+      { workspaceId, ...target },
+      queryClient,
+    ),
+    select: (answer) => (answer.type === "cached" ? answer.parties : []),
   });
   const parties = useQueryView(partiesQuery);
   const setup: ReviewSetup = {
@@ -4232,15 +4237,20 @@ const ReviewCardActions = ({
         {!readOnly && (
           <FindingFlagMenu flags={item.flags} onSetFlags={onSetFlags} />
         )}
-        <Button
-          className="text-muted-foreground hover:text-foreground ms-auto h-7 px-2"
-          onClick={onAskInChat}
-          size="sm"
-          variant="ghost"
-        >
-          <MessageSquareIcon className="me-1 size-3.5" />
-          {t("common.askInChat")}
-        </Button>
+        <CapabilityAction action={{ capability: "ai" }} surface="control">
+          {(capabilityProps) => (
+            <Button
+              className="text-muted-foreground hover:text-foreground ms-auto h-7 px-2"
+              onClick={onAskInChat}
+              size="sm"
+              variant="ghost"
+              {...capabilityProps}
+            >
+              <MessageSquareIcon className="me-1 size-3.5" />
+              {t("common.askInChat")}
+            </Button>
+          )}
+        </CapabilityAction>
       </div>
     </section>
   );

@@ -1,0 +1,7 @@
+*
+!docker/
+docker/*
+!docker/postgres/
+docker/postgres/*
+!docker/postgres/Dockerfile
+!docker/postgres/init.sql

@@ -707,6 +707,15 @@
     },
     "writeOff": "Dar baixa"
   },
+  "capabilityActions": {
+    "aiMissing": "A IA não está configurada.",
+    "availabilityUnknown": "Não foi possível confirmar a disponibilidade.",
+    "deeplMissing": "O DeepL não está configurado.",
+    "desktopUnavailable": "Conecte ou atualize o stella desktop.",
+    "featureUnavailable": "Este recurso está indisponível.",
+    "ocrUnavailable": "O OCR está indisponível.",
+    "translationMissing": "Nenhum serviço de tradução está configurado."
+  },
   "caseLaw": {
     "analysis": {
       "abstract": "Resumo",
@@ -748,6 +757,7 @@
     "citation": {
       "citedAtLeast": "Citada pelo menos {count} vezes",
       "citedSummary": "{count, plural, =0 {Não citada} one {Citada uma vez} other {Citada # vezes}}",
+      "dateUnavailable": "Data indisponível",
       "decisionCount": "{count, plural, =0 {Nenhuma decisão} one {# decisão} other {# decisões}}",
       "lastNegative": "última citação negativa em {year}",
       "negativeCount": "{count, plural, one {# negativa} many {# negativas} other {# negativas}}",
@@ -757,6 +767,7 @@
       "partialSummary": "Os totais de citações e a linha do tempo são parciais.",
       "passageNotFound": "O trecho citante não foi encontrado no texto",
       "positiveCount": "{count, plural, one {# positiva} many {# positivas} other {# positivas}}",
+      "referenceLabel": "{court}, {caseNumber}, {date}",
       "showAll": "{count, plural, one {Mostrar a decisão} many {Mostrar todas as # decisões} other {Mostrar todas as # decisões}}",
       "stripLabel": "Citações por ano",
       "treatment": {
@@ -877,9 +888,13 @@
     "pagination": {
       "goToPage": "Ir para a página {page}",
       "label": "Páginas de resultados",
+      "pageOfCount": "Página {page} de {pageCount}",
+      "pageOfEstimatedCount": "Página {page} de ~{pageCount}",
+      "pageOfEstimatedCountLabel": "Página {page} de cerca de {pageCount}",
       "pageWithEstimatedResultCount": "Página {page} · cerca de {count, plural, one {# resultado} many {# resultados} other {# resultados}}",
       "pageWithResultCount": "Página {page} · {count, plural, one {# resultado} many {# resultados} other {# resultados}}",
-      "perPage": "Por página"
+      "perPage": "Por página",
+      "refineForMore": "Refine a pesquisa para ver mais resultados"
     },
     "paragraphRangeNotFound": "{count, plural, one {O parágrafo {range} não foi encontrado neste texto.} other {Os parágrafos {range} não foram encontrados neste texto.}}",
     "paragraphRangeSelected": "{count, plural, one {O parágrafo {range} está destacado.} other {Os parágrafos {range} estão destacados.}}",
@@ -1181,6 +1196,13 @@
       "previewWaiting": "Aguardando conteúdo…",
       "savePendingReview": "Resolva as sugestões de IA pendentes antes de salvar o documento."
     },
+    "credentialPasteAction": "Usar um cartão privado",
+    "credentialPasteDescription": "Este texto parece ser uma credencial. Use um cartão privado para que não apareça no chat. Cole o valor novamente no cartão quando ele aparecer.",
+    "credentialPasteRequest": "Solicite esta credencial usando um cartão privado.",
+    "credentialPasteTitle": "Colagem de credencial interrompida",
+    "credentialSendAction": "Enviar mesmo assim",
+    "credentialSendDescription": "Envie somente se quiser compartilhar este valor na conversa.",
+    "credentialSendTitle": "Esta mensagem pode conter uma credencial",
     "deleteThread": "Excluir conversa",
     "editMode": {
       "autoDirect": "Automático · reescrever",
@@ -1319,6 +1341,31 @@
     "removeSuggestion": "(remover)",
     "renameThread": "Renomear conversa",
     "renameUnavailableEmptyThread": "Envie uma mensagem primeiro; depois será possível renomear a conversa.",
+    "requestSecret": {
+      "checkingTarget": "Verificando os detalhes do conector…",
+      "connectionDisposition": "Conexão: {disposition}",
+      "continuationError": "Sua resposta foi salva, mas o chat não pôde continuar.",
+      "declined": "Recusada",
+      "description": "O assistente precisa dela para continuar",
+      "error": "Não foi possível enviar a credencial. Tente novamente.",
+      "kind": {
+        "token": "Token de acesso"
+      },
+      "normalConnection": "Conexão normal",
+      "private": "O assistente não verá este valor.",
+      "provideAction": "Fornecer",
+      "provided": "Fornecida",
+      "purposeByAi": "Finalidade escrita pela IA: {purpose}",
+      "receiptOnlyConnection": "Conexão somente privada",
+      "replaceOrdinaryConnection": "Substituir a conexão normal por uso somente privado",
+      "retryContinuationAction": "Continuar o chat",
+      "saveForFuture": "Salvar para futuras conversas",
+      "savedAvailabilityError": "Não foi possível verificar se há uma credencial salva.",
+      "target": "Destino: {target}",
+      "title": "Solicitar uma credencial privada",
+      "useSavedAction": "Usar credencial salva",
+      "valueLabel": "Credencial"
+    },
     "resend": "Reenviar",
     "resizeThread": "Redimensionar conversa",
     "richContentLoading": "Carregando conteúdo interativo…",
@@ -1442,6 +1489,7 @@
       "read_story": "Lendo uma parte do documento",
       "remember": "Salvando na memória",
       "reply_comment": "Respondendo ao comentário",
+      "request_secret": "Solicitando uma credencial privada",
       "resolve_comment": "Resolvendo comentário",
       "review_folder_consistency": "Verificando a consistência da pasta",
       "run-stella-query": "Lendo dados do caso",
@@ -1475,6 +1523,7 @@
       "update-entity-fields": "Atualizando metadados",
       "update_reader_annotation": "Editar destaque ou comentário",
       "use-browser": "Usando seu navegador",
+      "use_connector_secret": "Usando a credencial do conector",
       "web_search": "Pesquisando na web"
     },
     "toolCall": {
@@ -2813,6 +2862,12 @@
     "editSessionReleased": "Este documento foi aberto para edição em outro lugar, portanto esta aba é somente leitura.",
     "editSessionReleasedUnsaved": "Suas alterações não salvas são mantidas aqui.",
     "editSessionReopen": "Reabrir para edição",
+    "editor": {
+      "outlineDepthAll": "Todos os níveis",
+      "outlineDepthLabel": "Profundidade do sumário",
+      "outlineDepthThree": "1–3",
+      "outlineDepthTwo": "1–2"
+    },
     "evidenceReferences": "Referências de prova",
     "evidenceUnavailable": "Não é possível abrir esta referência de prova neste caso.",
     "findReplace": {
@@ -4544,6 +4599,7 @@
       "noMatches": "Nenhuma conexão corresponde a “{query}”",
       "notConnected": "Não conectada",
       "permissionCount": "{count, plural, one {# permissão} other {# permissões}}",
+      "privateCredentialOnly": "Somente credencial privada",
       "searchPlaceholder": "Buscar conexões",
       "title": "Conexões",
       "turnedOff": "Desativada"

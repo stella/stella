@@ -707,6 +707,15 @@
     },
     "writeOff": "شطب"
   },
+  "capabilityActions": {
+    "aiMissing": "لم يتم إعداد الذكاء الاصطناعي.",
+    "availabilityUnknown": "تعذر التأكد من التوفر.",
+    "deeplMissing": "لم يتم إعداد DeepL.",
+    "desktopUnavailable": "اربط تطبيق stella desktop أو حدّثه.",
+    "featureUnavailable": "هذه الميزة غير متاحة.",
+    "ocrUnavailable": "التعرف الضوئي على الحروف غير متاح.",
+    "translationMissing": "لم يتم إعداد أي خدمة ترجمة."
+  },
   "caseLaw": {
     "analysis": {
       "abstract": "ملخّص",
@@ -748,6 +757,7 @@
     "citation": {
       "citedAtLeast": "ذُكر في {count} استشهادات على الأقل",
       "citedSummary": "{count, plural, =0 {لم يُستشهد به} zero {لم يُستشهد به} one {استُشهد به مرة واحدة} two {استُشهد به مرتين} few {استُشهد به # مرات} many {استُشهد به # مرة} other {استُشهد به # مرة}}",
+      "dateUnavailable": "التاريخ غير متاح",
       "decisionCount": "{count, plural, =0 {لا توجد أحكام} zero {لا توجد أحكام} one {حكم واحد} two {حكمان} few {# أحكام} many {# حكمًا} other {# حكم}}",
       "lastNegative": "آخر استشهاد سلبي في {year}",
       "negativeCount": "{count, plural, zero {لا سلبية} one {سلبي واحد} two {سلبيان} few {# سلبية} many {# سلبيًا} other {# سلبي}}",
@@ -757,6 +767,7 @@
       "partialSummary": "إجماليات الاستشهادات والخط الزمني غير مكتملة.",
       "passageNotFound": "لم يُعثر على المقطع المستشهِد في النص",
       "positiveCount": "{count, plural, zero {لا إيجابية} one {إيجابي واحد} two {إيجابيان} few {# إيجابية} many {# إيجابيًا} other {# إيجابي}}",
+      "referenceLabel": "{court}، {caseNumber}، {date}",
       "showAll": "{count, plural, zero {عرض كل الأحكام} one {عرض الحكم} two {عرض الحكمين} few {عرض كل # أحكام} many {عرض كل # حكمًا} other {عرض كل # حكم}}",
       "stripLabel": "الاستشهادات حسب السنة",
       "treatment": {
@@ -877,9 +888,13 @@
     "pagination": {
       "goToPage": "الانتقال إلى الصفحة {page}",
       "label": "صفحات النتائج",
+      "pageOfCount": "الصفحة {page} من {pageCount}",
+      "pageOfEstimatedCount": "الصفحة {page} من ~{pageCount}",
+      "pageOfEstimatedCountLabel": "الصفحة {page} من نحو {pageCount}",
       "pageWithEstimatedResultCount": "الصفحة {page} · {count, plural, zero {نحو صفر نتيجة} one {نحو نتيجة واحدة} two {نحو نتيجتين} few {نحو # نتائج} many {نحو # نتيجة} other {نحو # نتيجة}}",
       "pageWithResultCount": "الصفحة {page} · {count, plural, zero {لا نتائج} one {نتيجة واحدة} two {نتيجتان} few {# نتائج} many {# نتيجة} other {# نتيجة}}",
-      "perPage": "لكل صفحة"
+      "perPage": "لكل صفحة",
+      "refineForMore": "ضيّق نطاق البحث لعرض مزيد من النتائج"
     },
     "paragraphRangeNotFound": "{count, plural, zero {لم يتم العثور على الفقرات {range} في هذا النص.} one {لم يتم العثور على الفقرة {range} في هذا النص.} two {لم يتم العثور على الفقرتين {range} في هذا النص.} few {لم يتم العثور على الفقرات {range} في هذا النص.} many {لم يتم العثور على الفقرات {range} في هذا النص.} other {لم يتم العثور على الفقرات {range} في هذا النص.}}",
     "paragraphRangeSelected": "{count, plural, zero {تم تمييز الفقرات {range}.} one {تم تمييز الفقرة {range}.} two {تم تمييز الفقرتين {range}.} few {تم تمييز الفقرات {range}.} many {تم تمييز الفقرات {range}.} other {تم تمييز الفقرات {range}.}}",
@@ -1181,6 +1196,13 @@
       "previewWaiting": "في انتظار المحتوى…",
       "savePendingReview": "احسم الاقتراحات قيد المراجعة قبل حفظ المستند."
     },
+    "credentialPasteAction": "استخدام بطاقة خاصة",
+    "credentialPasteDescription": "يبدو هذا النص كبيانات اعتماد. استخدم بطاقة خاصة لإبقائه خارج الدردشة. أعد لصق القيمة في البطاقة عند ظهورها.",
+    "credentialPasteRequest": "يرجى طلب بيانات الاعتماد هذه عبر بطاقة خاصة.",
+    "credentialPasteTitle": "تم إيقاف لصق بيانات الاعتماد",
+    "credentialSendAction": "إرسال على أي حال",
+    "credentialSendDescription": "أرسلها فقط إذا كنت تريد مشاركة هذه القيمة في المحادثة.",
+    "credentialSendTitle": "قد تحتوي هذه الرسالة على بيانات اعتماد",
     "deleteThread": "حذف المحادثة",
     "editMode": {
       "autoDirect": "تلقائي · إعادة كتابة",
@@ -1319,6 +1341,31 @@
     "removeSuggestion": "(إزالة)",
     "renameThread": "إعادة تسمية المحادثة",
     "renameUnavailableEmptyThread": "أرسل رسالة أولاً، ثم يمكن إعادة تسمية المحادثة.",
+    "requestSecret": {
+      "checkingTarget": "جارٍ التحقق من تفاصيل الموصل…",
+      "connectionDisposition": "نوع الاتصال: {disposition}",
+      "continuationError": "تم حفظ إجابتك، لكن تعذّرت متابعة الدردشة.",
+      "declined": "تم الرفض",
+      "description": "يحتاج المساعد إليها للمتابعة",
+      "error": "تعذر إرسال بيانات الاعتماد. حاول مرة أخرى.",
+      "kind": {
+        "token": "رمز وصول"
+      },
+      "normalConnection": "اتصال عادي",
+      "private": "لن يرى المساعد هذه القيمة.",
+      "provideAction": "تقديم",
+      "provided": "تم التقديم",
+      "purposeByAi": "الغرض الذي كتبه الذكاء الاصطناعي: {purpose}",
+      "receiptOnlyConnection": "اتصال خاص فقط",
+      "replaceOrdinaryConnection": "استبدال الاتصال العادي للاستخدام الخاص فقط",
+      "retryContinuationAction": "متابعة الدردشة",
+      "saveForFuture": "حفظ للدردشات المستقبلية",
+      "savedAvailabilityError": "تعذر التحقق من وجود بيانات اعتماد محفوظة.",
+      "target": "الهدف: {target}",
+      "title": "طلب بيانات اعتماد خاصة",
+      "useSavedAction": "استخدام بيانات الاعتماد المحفوظة",
+      "valueLabel": "بيانات الاعتماد"
+    },
     "resend": "إعادة الإرسال",
     "resizeThread": "تغيير حجم المحادثة",
     "richContentLoading": "جارٍ تحميل المحتوى التفاعلي…",
@@ -1442,6 +1489,7 @@
       "read_story": "قراءة جزء من المستند",
       "remember": "الحفظ في الذاكرة",
       "reply_comment": "الرد على التعليق",
+      "request_secret": "طلب بيانات اعتماد خاصة",
       "resolve_comment": "حل التعليق",
       "review_folder_consistency": "مراجعة اتساق المجلد",
       "run-stella-query": "قراءة بيانات الملف",
@@ -1475,6 +1523,7 @@
       "update-entity-fields": "تحديث البيانات الوصفية",
       "update_reader_annotation": "تعديل التمييز أو التعليق",
       "use-browser": "استخدام متصفحك",
+      "use_connector_secret": "استخدام بيانات اعتماد الموصل",
       "web_search": "البحث على الويب"
     },
     "toolCall": {
@@ -2813,6 +2862,12 @@
     "editSessionReleased": "تم فتح هذا المستند للتعديل في مكان آخر، لذا فإن علامة التبويب هذه للقراءة فقط.",
     "editSessionReleasedUnsaved": "تظل تغييراتك غير المحفوظة هنا.",
     "editSessionReopen": "إعادة الفتح للتعديل",
+    "editor": {
+      "outlineDepthAll": "كل المستويات",
+      "outlineDepthLabel": "عمق المخطط",
+      "outlineDepthThree": "1–3",
+      "outlineDepthTwo": "1–2"
+    },
     "evidenceReferences": "مراجع الأدلة",
     "evidenceUnavailable": "لا يمكن فتح مرجع الدليل هذا في هذا الملف القانوني.",
     "findReplace": {
@@ -4544,6 +4599,7 @@
       "noMatches": "لا يوجد اتصال يطابق «{query}»",
       "notConnected": "غير متصل",
       "permissionCount": "{count, plural, zero {لا أذونات} one {إذن واحد} two {إذنان} few {# أذونات} many {# إذنًا} other {# إذن}}",
+      "privateCredentialOnly": "بيانات اعتماد خاصة فقط",
       "searchPlaceholder": "ابحث في الاتصالات",
       "title": "الاتصالات",
       "turnedOff": "متوقف"

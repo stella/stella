@@ -1308,7 +1308,7 @@ describe("dev env factories", () => {
         seeded,
       }).primary.map((step) => step.env?.["LEGAL_SEARCH_PROVIDER"]);
 
-    expect(apiProviders(true)).toEqual(["pg-fts", "pg-fts"]);
+    expect(apiProviders(true)).toEqual(["pg-fts"]);
     expect(apiProviders(false)).toEqual(["corpus-index", "corpus-index"]);
   });
 
@@ -1319,7 +1319,7 @@ describe("dev env factories", () => {
       path.resolve(rootDir, "apps/api/.env"),
       "SCHEDULED_JOBS_MODE=enabled\n",
     );
-    const scheduledJobsModes = (seeded: boolean) =>
+    const primarySteps = (seeded: boolean) =>
       buildPersistentSteps({
         infraOffset: 0,
         infraPorts: infraPortsForOffset(0),
@@ -1327,10 +1327,45 @@ describe("dev env factories", () => {
         ports: portsForOffset(0),
         rootDir,
         seeded,
-      }).primary.map((step) => step.env?.["SCHEDULED_JOBS_MODE"]);
-
-    expect(scheduledJobsModes(true)).toEqual(["disabled", "disabled"]);
+      }).primary;
+    const scheduledJobsModes = (seeded: boolean) =>
+      primarySteps(seeded).map((step) => step.env?.["SCHEDULED_JOBS_MODE"]);
+    // Every process the mode starts hosts background writers; a step missing
+    // from this list would keep writing after the seed. A seeded stack starts
+    // no document-processing worker: with its writers disabled it would exit
+    // at once, which the runner treats as a crash of the whole stack.
+    expect(scheduledJobsModes(true)).toEqual(["disabled"]);
     expect(scheduledJobsModes(false)).toEqual(["enabled", "enabled"]);
+    expect(primarySteps(true).map((step) => step.label)).not.toContain(
+      "Document processing worker",
+    );
+    expect(primarySteps(false).map((step) => step.label)).toContain(
+      "Document processing worker",
+    );
+  });
+
+  test("a developer env that disables background workers starts no document-processing worker", () => {
+    const rootDir = createTempDir();
+    mkdirSync(path.resolve(rootDir, "apps/api"), { recursive: true });
+    writeFileSync(
+      path.resolve(rootDir, "apps/api/.env"),
+      "SCHEDULED_JOBS_MODE=disabled\n",
+    );
+    const { primary } = buildPersistentSteps({
+      infraOffset: 0,
+      infraPorts: infraPortsForOffset(0),
+      mode: "dev:api",
+      ports: portsForOffset(0),
+      rootDir,
+      seeded: false,
+    });
+
+    expect(primary.map((step) => step.env?.["SCHEDULED_JOBS_MODE"])).toEqual([
+      "disabled",
+    ]);
+    expect(primary.map((step) => step.label)).not.toContain(
+      "Document processing worker",
+    );
   });
 
   test("keeps scheduled jobs inside the API process", () => {
@@ -1417,7 +1452,8 @@ describe("dev env factories", () => {
         .map((step) => step.cmd.includes("--watch"));
 
     expect(watching(false)).toEqual([true, true]);
-    expect(watching(true)).toEqual([false, false]);
+    // A seeded stack starts only the API: its document worker is not started.
+    expect(watching(true)).toEqual([false]);
   });
 
   test("prepares API databases by applying migrations", () => {

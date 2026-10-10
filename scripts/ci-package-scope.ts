@@ -1431,19 +1431,19 @@ export const requiresPackageChecks = ({
       changed.some(
         (file) =>
           GLOBAL.test(file) ||
-          (!PROVENANCE.test(file) &&
-            (!MARKDOWN.test(file) || CONTENT.test(file))),
+          PROVENANCE.test(file) ||
+          !MARKDOWN.test(file) ||
+          CONTENT.test(file),
       )
     ) {
       return true;
     }
-    const documents = changed.filter((file) => !PROVENANCE.test(file));
-    if (documents.length === 0) {
+    if (changed.length === 0) {
       return false;
     }
     for (const reader of markdownReaders(root)) {
       if (
-        !documents.some((file) =>
+        !changed.some((file) =>
           reader.inputs.some((input) => matches(file, input)),
         )
       ) {

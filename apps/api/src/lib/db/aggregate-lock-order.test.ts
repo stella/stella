@@ -20,6 +20,34 @@ import {
 } from "./aggregate-lock-order.fixture";
 
 describe("blocking aggregate order regressions", () => {
+  test("chat revision locks scope the thread to its principal and the message to its thread", async () => {
+    const fixture = aggregateFences();
+    const { tx, statements } = aggregateRecorder();
+
+    expect(await withAggregateLock({ ...fixture.chatThread, tx })).toEqual({
+      status: "locked",
+    });
+    expect(await withAggregateLock({ ...fixture.chatMessage, tx })).toEqual({
+      status: "locked",
+    });
+
+    expect(statements).toHaveLength(2);
+    expect(statements.at(0)?.sql).toContain('FROM "public"."chat_threads"');
+    expect(statements.at(0)?.sql).toContain('"organization_id" =');
+    expect(statements.at(0)?.sql).toContain('"user_id" =');
+    expect(statements.at(0)?.params).toEqual([
+      fixture.chatThread.id.id,
+      fixture.chatThread.id.organizationId,
+      fixture.chatThread.id.userId,
+    ]);
+    expect(statements.at(1)?.sql).toContain('FROM "public"."chat_messages"');
+    expect(statements.at(1)?.sql).toContain('"thread_id" =');
+    expect(statements.at(1)?.params).toEqual([
+      fixture.chatMessage.id.id,
+      fixture.chatThread.id.id,
+    ]);
+  });
+
   test("a planted descending blocking request never reaches its SQL acquisition", async () => {
     const { tx, statements } = aggregateRecorder();
     expect(

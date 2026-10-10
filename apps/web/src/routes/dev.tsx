@@ -1,76 +1,38 @@
-import * as React from "react";
+import type { ComponentType, ReactElement } from "react";
 
 import { createFileRoute, redirect } from "@tanstack/react-router";
-import * as v from "valibot";
 
-import { ProtectedPendingSkeleton } from "@/routes/-protected-pending-skeleton";
+import { visualRegistry } from "@/routes/dev/-visual-metadata";
+import type { VisualLayout } from "@/routes/dev/-visual-metadata";
+import {
+  VisualPlayground,
+  visualSearchSchema,
+} from "@/routes/dev/-visual-registry";
 
-const DEV_VISUAL = {
-  controlSizes: "control-sizes",
-  inspectorPane: "inspector-pane",
-  provisionHeader: "provision-header",
-  shellPending: "shell-pending",
-  workspaceTable: "workspace-table",
-} as const;
+type LayoutProps = { children: ReactElement };
 
-const UiPlayground = import.meta.env.DEV
-  ? React.lazy(async () => {
-      const module = await import("@/routes/dev/-components/ui-playground");
-
-      return { default: module.UiPlayground };
-    })
-  : null;
-
-const ControlSizesPlayground = import.meta.env.DEV
-  ? React.lazy(async () => {
-      const module =
-        await import("@/routes/dev/-components/control-sizes-playground");
-
-      return { default: module.ControlSizesPlayground };
-    })
-  : null;
-
-const InspectorPanePlayground = import.meta.env.DEV
-  ? React.lazy(async () => {
-      const module =
-        await import("@/routes/dev/-components/inspector-pane-playground");
-
-      return { default: module.InspectorPanePlayground };
-    })
-  : null;
-
-const ProvisionHeaderPlayground = import.meta.env.DEV
-  ? React.lazy(async () => {
-      const module =
-        await import("@/routes/dev/-components/provision-header-playground");
-
-      return { default: module.ProvisionHeaderPlayground };
-    })
-  : null;
-
-const WorkspaceTablePlayground = import.meta.env.DEV
-  ? React.lazy(async () => {
-      const module =
-        await import("@/routes/dev/-components/workspace-table-playground");
-
-      return { default: module.WorkspaceTablePlayground };
-    })
-  : null;
-
-const searchSchema = v.object({
-  visual: v.optional(
-    v.picklist([
-      DEV_VISUAL.controlSizes,
-      DEV_VISUAL.inspectorPane,
-      DEV_VISUAL.provisionHeader,
-      DEV_VISUAL.shellPending,
-      DEV_VISUAL.workspaceTable,
-    ]),
+const visualLayouts = {
+  plain: ({ children }: LayoutProps) => children,
+  "control-sizes": ({ children }: LayoutProps) => (
+    <div className="min-h-0 flex-1">
+      <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        <div className="grid gap-5 py-5 lg:grid-cols-2">{children}</div>
+      </div>
+    </div>
   ),
-});
+  "inspector-pane": ({ children }: LayoutProps) => (
+    <div className="flex min-h-0 flex-1 flex-col p-4">{children}</div>
+  ),
+  "provision-header": ({ children }: LayoutProps) => (
+    <div className="min-h-0 flex-1 p-4">{children}</div>
+  ),
+  "workspace-table": ({ children }: LayoutProps) => (
+    <div className="flex min-h-0 flex-1 flex-col p-4">{children}</div>
+  ),
+} as const satisfies Record<VisualLayout, ComponentType<LayoutProps>>;
 
 export const Route = createFileRoute("/dev")({
-  validateSearch: searchSchema,
+  validateSearch: visualSearchSchema,
   beforeLoad: () => {
     if (!import.meta.env.DEV) {
       throw redirect({ to: "/" });
@@ -80,86 +42,13 @@ export const Route = createFileRoute("/dev")({
 });
 
 function DevRouteComponent() {
-  const visual = Route.useSearch({ select: (search) => search.visual });
-
-  if (visual === DEV_VISUAL.controlSizes) {
-    if (ControlSizesPlayground === null) {
-      return null;
-    }
-
-    return (
-      <React.Suspense fallback={null}>
-        <main className="bg-background min-h-0 flex-1 overflow-y-auto">
-          <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-            <div className="grid gap-5 py-5 lg:grid-cols-2">
-              <ControlSizesPlayground />
-            </div>
-          </div>
-        </main>
-      </React.Suspense>
-    );
-  }
-
-  // The signed-in shell's loading state, held still so it can be inspected;
-  // in the product it only shows while the shell data loads.
-  if (visual === DEV_VISUAL.shellPending) {
-    return <ProtectedPendingSkeleton />;
-  }
-
-  if (visual === DEV_VISUAL.inspectorPane) {
-    if (InspectorPanePlayground === null) {
-      return null;
-    }
-
-    // No page chrome: the bench sizes its own panes, and anything that
-    // bounded them here would answer the question under test.
-    return (
-      <React.Suspense fallback={null}>
-        <main className="bg-background flex min-h-0 flex-1 flex-col overflow-auto p-4">
-          <InspectorPanePlayground />
-        </main>
-      </React.Suspense>
-    );
-  }
-
-  if (visual === DEV_VISUAL.provisionHeader) {
-    if (ProvisionHeaderPlayground === null) {
-      return null;
-    }
-
-    return (
-      <React.Suspense fallback={null}>
-        <main className="bg-background min-h-0 flex-1 p-4">
-          <ProvisionHeaderPlayground />
-        </main>
-      </React.Suspense>
-    );
-  }
-
-  if (visual === DEV_VISUAL.workspaceTable) {
-    if (WorkspaceTablePlayground === null) {
-      return null;
-    }
-
-    // The results page's chrome, so the bench measures the table in the shape
-    // the product gives it: a bounded column, and a page scroller that only
-    // engages when the viewport is too short to hold the table's minimum.
-    return (
-      <React.Suspense fallback={null}>
-        <main className="bg-background flex min-h-0 flex-1 flex-col overflow-y-auto p-4">
-          <WorkspaceTablePlayground />
-        </main>
-      </React.Suspense>
-    );
-  }
-
-  if (UiPlayground === null) {
-    return null;
-  }
-
+  const visual = Route.useSearch({ select: (search) => search.visual }) ?? "ui";
   return (
-    <React.Suspense fallback={null}>
-      <UiPlayground />
-    </React.Suspense>
+    <main className="bg-background flex min-h-0 flex-1 flex-col overflow-y-auto">
+      <VisualPlayground
+        layout={visualLayouts[visualRegistry[visual].layout]}
+        visual={visual}
+      />
+    </main>
   );
 }
