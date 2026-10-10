@@ -15,6 +15,8 @@ import { v7 as uuidv7 } from "uuid";
 import * as v from "valibot";
 
 import type { ChatSendMode } from "@stll/anonymize-chat";
+import { requiresPerCallChatApproval } from "@stll/api-contract/chat-secret";
+import type { RequestSecretOutput } from "@stll/api-contract/chat-secret";
 import { sleep } from "@stll/concurrency/sleep";
 import { sha256Hex } from "@stll/sha256/browser";
 import { stellaToast } from "@stll/ui/toast";
@@ -22,6 +24,10 @@ import { useIsMobile } from "@stll/ui/use-mobile";
 
 import { useReviewStore } from "@/components/ai-suggestions/review-store";
 import { AnonymizedSpan } from "@/components/chat/anonymized-span";
+import type {
+  RequestSecretDecision,
+  SecretTargetResolution,
+} from "@/components/chat/chat-approval-context";
 import type {
   ApprovalToolName,
   AskUserOutput,
@@ -138,6 +144,7 @@ import {
   APIError,
   internalToolErrorMessage,
   toAPIError,
+  unwrapEden,
 } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { notifyUserError } from "@/lib/errors/user-toast";
@@ -867,6 +874,10 @@ export const useChatSession = ({
   );
   const handleAllowInConversation = useCallback(
     async (id: string, toolName: ApprovalToolName) => {
+      if (requiresPerCallChatApproval(toolName)) {
+        await resolveToolApproval({ id, approved: true });
+        return;
+      }
       if (!isCurrentStorageOwner(conversationGrantsOwner)) {
         return;
       }
@@ -888,6 +899,10 @@ export const useChatSession = ({
   );
   const handleAlwaysAllow = useCallback(
     async (id: string, toolName: ApprovalToolName) => {
+      if (requiresPerCallChatApproval(toolName)) {
+        await resolveToolApproval({ id, approved: true });
+        return;
+      }
       if (!isCurrentStorageOwner(alwaysGrantsOwner)) {
         return;
       }
@@ -943,6 +958,49 @@ export const useChatSession = ({
       });
     },
     [addToolResult],
+  );
+  // Submitting the decision and continuing the chat are separate
+  // steps: once the server commits a decision, the card keeps the
+  // returned receipt (never the value) and retries only the
+  // continuation, so a failed continuation never re-sends the value.
+  const handleRequestSecret = useCallback(
+    async (
+      toolCallId: string,
+      decision: RequestSecretDecision,
+    ): Promise<RequestSecretOutput> =>
+      unwrapEden(
+        await api.chat
+          .threads({ threadId: toSafeId<"chatThread">(conversationId) })
+          .secrets({ toolCallId })
+          .post(decision),
+      ),
+    [conversationId],
+  );
+  const continueRequestSecret = useCallback(
+    async (toolCallId: string, receipt: RequestSecretOutput) => {
+      await addToolResult({
+        tool: "request_secret",
+        toolCallId,
+        output: receipt,
+      });
+    },
+    [addToolResult],
+  );
+  const resolveSecretTarget = useCallback(
+    async (
+      connectorSlug: string,
+      signal: AbortSignal,
+    ): Promise<SecretTargetResolution> => {
+      const thread = api.chat.threads({
+        threadId: toSafeId<"chatThread">(conversationId),
+      });
+      const response = await thread["saved-secret"].get({
+        query: { connectorSlug },
+        fetch: { signal },
+      });
+      return unwrapEden(response);
+    },
+    [conversationId],
   );
 
   /**
@@ -1694,6 +1752,10 @@ export const useChatSession = ({
     handleAllowInConversation,
     handleDeny,
     handleAskUserSubmit,
+    handleRequestSecret,
+    continueRequestSecret,
+    resolveSecretTarget,
+    secretAvailabilityKey: conversationId,
     handleAskUserEditAndRerun,
     handleAlwaysAllow,
     handleCreateDocumentResolve,

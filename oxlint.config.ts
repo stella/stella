@@ -4426,6 +4426,13 @@ const config = defineConfig({
       },
     },
     {
+      files: [
+        "apps/web/src/components/chat/request-secret-card.tsx",
+        "apps/web/src/features/chat/hooks/use-chat-session.ts",
+      ],
+      rules: { "no-secret-in-log-sink/no-secret-in-log-sink": "error" },
+    },
+    {
       files: ["apps/api/src/handlers/**/*.ts"],
       excludeFiles: ["apps/api/src/handlers/**/*.test.ts"],
       rules: {

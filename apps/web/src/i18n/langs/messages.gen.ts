@@ -1190,6 +1190,13 @@ type Messages = {
       "previewWaiting": "Waiting for content…";
       "savePendingReview": "Resolve the pending AI suggestions before saving the document.";
     };
+    "credentialPasteAction": "Use a private card";
+    "credentialPasteDescription": "This text resembles a credential. Use a private card to keep it out of chat. Paste it again in the card when it appears.";
+    "credentialPasteRequest": "Please request this credential using a private card.";
+    "credentialPasteTitle": "Credential paste held";
+    "credentialSendAction": "Send anyway";
+    "credentialSendDescription": "Send only if you intend to share this value in the conversation.";
+    "credentialSendTitle": "This message may contain a credential";
     "deleteThread": "Delete conversation";
     "editMode": {
       "autoDirect": "Auto · rewrite";
@@ -1328,6 +1335,31 @@ type Messages = {
     "removeSuggestion": "(remove)";
     "renameThread": "Rename conversation";
     "renameUnavailableEmptyThread": "Send a message first, then the conversation can be renamed.";
+    "requestSecret": {
+      "checkingTarget": "Checking connector details…";
+      "connectionDisposition": "Connection: {disposition}";
+      "continuationError": "Your answer was saved, but the chat could not continue.";
+      "declined": "Declined";
+      "description": "The assistant needs this to continue";
+      "error": "Could not submit the credential. Try again.";
+      "kind": {
+        "token": "Token";
+      };
+      "normalConnection": "Ordinary connection";
+      "private": "The assistant will not see this value.";
+      "provideAction": "Provide";
+      "provided": "Provided";
+      "purposeByAi": "Purpose written by the AI: {purpose}";
+      "receiptOnlyConnection": "Private-only connection";
+      "replaceOrdinaryConnection": "Replace ordinary connection with private-only use";
+      "retryContinuationAction": "Continue chat";
+      "saveForFuture": "Save for future chats";
+      "savedAvailabilityError": "Could not check for a saved credential.";
+      "target": "Target: {target}";
+      "title": "Request a private credential";
+      "useSavedAction": "Use saved credential";
+      "valueLabel": "Credential";
+    };
     "resend": "Resend";
     "resizeThread": "Resize conversation";
     "richContentLoading": "Loading interactive content…";
@@ -1451,6 +1483,7 @@ type Messages = {
       "read_story": "Reading a document part";
       "remember": "Remembering";
       "reply_comment": "Replying to comment";
+      "request_secret": "Requesting a private credential";
       "resolve_comment": "Resolving comment";
       "review_folder_consistency": "Reviewing folder consistency";
       "run-stella-query": "Reading workspace data";
@@ -1484,6 +1517,7 @@ type Messages = {
       "update-entity-fields": "Updating metadata";
       "update_reader_annotation": "Edit highlight or comment";
       "use-browser": "Using your browser";
+      "use_connector_secret": "Using connector credential";
       "web_search": "Searching the web";
     };
     "toolCall": {
@@ -4553,6 +4587,7 @@ type Messages = {
       "noMatches": "No connections match “{query}”";
       "notConnected": "Not connected";
       "permissionCount": "{count, plural, one {# permission} other {# permissions}}";
+      "privateCredentialOnly": "Private credential only";
       "searchPlaceholder": "Search connections";
       "title": "Connections";
       "turnedOff": "Turned off";

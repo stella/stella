@@ -43,6 +43,11 @@ export const AGGREGATE_LOCKS = {
   desktopCredential: { rank: 80, kind: "row" },
   workspace: { rank: 100, kind: "row" },
   memberCleanup: { rank: 110, kind: "row" },
+  // A chat interaction's fences: the thread, then the turn awaiting input,
+  // then the receipt it produced.
+  chatThread: { rank: 120, kind: "row" },
+  chatTurn: { rank: 130, kind: "row" },
+  chatSecret: { rank: 140, kind: "row" },
   run: { rank: 200, kind: "row" },
   currentStep: { rank: 300, kind: "row" },
   obligation: { rank: 400, kind: "row" },
@@ -87,6 +92,7 @@ export const AGGREGATE_CHAINS = {
     "processingClaim",
   ],
   scoutRun: ["orgFeatureAdmission", "scoutCensus"],
+  chatSecret: ["chatThread", "chatTurn", "chatSecret"],
   memberPrefix: [
     "workspace",
     "memberCleanup",
@@ -159,6 +165,23 @@ type AggregateIdentities = {
         id: string;
         workspaceId: SafeId<"workspace">;
       };
+  chatThread: {
+    id: SafeId<"chatThread">;
+    organizationId: SafeId<"organization">;
+    userId: SafeId<"user">;
+  };
+  chatTurn: {
+    threadId: SafeId<"chatThread">;
+    toolCallId: string;
+    organizationId: SafeId<"organization">;
+    userId: SafeId<"user">;
+  };
+  chatSecret: {
+    id: string;
+    threadId: SafeId<"chatThread">;
+    organizationId: SafeId<"organization">;
+    userId: SafeId<"user">;
+  };
   run: { id: SafeId<"flowRun">; workspaceId: SafeId<"workspace"> };
   currentStep: { id: SafeId<"flowRunStep">; workspaceId: SafeId<"workspace"> };
   obligation: { id: SafeId<"entity">; workspaceId: SafeId<"workspace"> };
@@ -572,6 +595,34 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
         values: [options.id.id],
         scopeColumns: ["organization_id"],
         scopeValues: [options.id.organizationId],
+      };
+    case "chatThread":
+      return {
+        table: "chat_threads",
+        columns: ["id"],
+        values: [options.id.id],
+        scopeColumns: ["organization_id", "user_id"],
+        scopeValues: [options.id.organizationId, options.id.userId],
+      };
+    case "chatTurn":
+      return {
+        table: "chat_turns",
+        columns: ["thread_id", "interaction_tool_call_id"],
+        values: [options.id.threadId, options.id.toolCallId],
+        scopeColumns: ["organization_id", "user_id"],
+        scopeValues: [options.id.organizationId, options.id.userId],
+      };
+    case "chatSecret":
+      return {
+        table: "chat_secrets",
+        columns: ["id"],
+        values: [options.id.id],
+        scopeColumns: ["thread_id", "organization_id", "user_id"],
+        scopeValues: [
+          options.id.threadId,
+          options.id.organizationId,
+          options.id.userId,
+        ],
       };
     case "memberCleanup":
       switch (options.id.type) {

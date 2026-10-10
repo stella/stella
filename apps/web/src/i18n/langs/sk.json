@@ -1187,6 +1187,13 @@
       "previewWaiting": "Čaká sa na obsah…",
       "savePendingReview": "Pred uložením dokumentu vyriešte návrhy AI čakajúce na revíziu."
     },
+    "credentialPasteAction": "Použiť súkromnú kartu",
+    "credentialPasteDescription": "Tento text vyzerá ako prístupový údaj. Použite súkromnú kartu, aby sa nedostal do chatu. Keď sa karta zobrazí, vložte údaj znova do karty.",
+    "credentialPasteRequest": "Požiadajte o tento prístupový údaj pomocou súkromnej karty.",
+    "credentialPasteTitle": "Vloženie prístupového údaja pozastavené",
+    "credentialSendAction": "Napriek tomu odoslať",
+    "credentialSendDescription": "Odošlite ju iba vtedy, ak chcete túto hodnotu zdieľať v konverzácii.",
+    "credentialSendTitle": "Táto správa môže obsahovať prístupový údaj",
     "deleteThread": "Zmazať konverzáciu",
     "editMode": {
       "autoDirect": "Automaticky · prepísať",
@@ -1325,6 +1332,31 @@
     "removeSuggestion": "(odstrániť)",
     "renameThread": "Premenovať konverzáciu",
     "renameUnavailableEmptyThread": "Najprv odošlite správu, potom bude možné konverzáciu premenovať.",
+    "requestSecret": {
+      "checkingTarget": "Overujú sa podrobnosti konektora…",
+      "connectionDisposition": "Pripojenie: {disposition}",
+      "continuationError": "Vaša odpoveď bola uložená, ale chat nemohol pokračovať.",
+      "declined": "Odmietnuté",
+      "description": "Asistent tento údaj potrebuje na pokračovanie",
+      "error": "Prístupový údaj sa nepodarilo odoslať. Skúste to znova.",
+      "kind": {
+        "token": "Prístupový token"
+      },
+      "normalConnection": "Bežné pripojenie",
+      "private": "Asistent túto hodnotu neuvidí.",
+      "provideAction": "Poskytnúť",
+      "provided": "Poskytnuté",
+      "purposeByAi": "Účel napísaný umelou inteligenciou: {purpose}",
+      "receiptOnlyConnection": "Iba súkromné pripojenie",
+      "replaceOrdinaryConnection": "Nahradiť bežné pripojenie súkromným použitím",
+      "retryContinuationAction": "Pokračovať v chate",
+      "saveForFuture": "Uložiť pre budúce chaty",
+      "savedAvailabilityError": "Nepodarilo sa overiť, či sú prihlasovacie údaje uložené.",
+      "target": "Cieľ: {target}",
+      "title": "Žiadosť o súkromný prístupový údaj",
+      "useSavedAction": "Použiť uložený prístupový údaj",
+      "valueLabel": "Prístupový údaj"
+    },
     "resend": "Odoslať znova",
     "resizeThread": "Zmeniť veľkosť konverzácie",
     "richContentLoading": "Načítava sa interaktívny obsah…",
@@ -1448,6 +1480,7 @@
       "read_story": "Čítanie časti dokumentu",
       "remember": "Ukladanie do pamäte",
       "reply_comment": "Odpovedanie na komentár",
+      "request_secret": "Žiadosť o súkromný prístupový údaj",
       "resolve_comment": "Riešenie komentára",
       "review_folder_consistency": "Kontrola konzistentnosti priečinka",
       "run-stella-query": "Čítam dáta spisu",
@@ -1481,6 +1514,7 @@
       "update-entity-fields": "Aktualizácia metadát",
       "update_reader_annotation": "Upraviť zvýraznenie alebo komentár",
       "use-browser": "Používanie vášho prehliadača",
+      "use_connector_secret": "Použitie prístupového údaja konektora",
       "web_search": "Vyhľadávanie na webe"
     },
     "toolCall": {
@@ -4550,6 +4584,7 @@
       "noMatches": "Výrazu „{query}“ nezodpovedá žiadne pripojenie",
       "notConnected": "Nepripojené",
       "permissionCount": "{count, plural, one {# oprávnenie} few {# oprávnenia} many {# oprávnenia} other {# oprávnení}}",
+      "privateCredentialOnly": "Iba súkromné prihlasovacie údaje",
       "searchPlaceholder": "Hľadať pripojenia",
       "title": "Pripojenia",
       "turnedOff": "Vypnuté"
