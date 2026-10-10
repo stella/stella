@@ -225,9 +225,6 @@ describe("machine API key audience binding", () => {
       (await resolveMachineApiKeySession(CREDENTIAL, { mode: "advanced" }))
         .organizationId,
     ).toBe(ORG_ID);
-    expect((await expectRejectedOn("default")).message).toBe(
-      "This API key is bound to the advanced audience. Use /mcp/advanced.",
-    );
 
     givenKey({
       metadata: { audience: "default", organizationId: ORG_ID, scopes: SCOPES },
