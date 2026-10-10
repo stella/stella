@@ -1,5 +1,7 @@
 import { queryOptions, type QueryClient } from "@tanstack/react-query";
 
+import { PROFESSIONAL_USE_STATUS } from "@stll/api-contract/professional-use";
+
 import { rootKeys } from "@/lib/auth-query-options";
 import { STALE_TIME } from "@/lib/consts";
 
@@ -72,9 +74,8 @@ export const refreshAuthQueries = async (queryClient: QueryClient) => {
 };
 
 /**
- * The signed-in account's professional-use state. It only ever moves from
- * `required` to `accepted`, through this browser's own acceptance, which
- * writes the answer into the cache; it never goes stale on its own.
+ * Required accounts recheck on focus: another tab may accept.
+ * Acceptance is permanent; session-change broadcasts invalidate it explicitly.
  */
 export const professionalUseOptions = (userId: string) =>
   queryOptions({
@@ -89,5 +90,8 @@ export const professionalUseOptions = (userId: string) =>
         await api.me["professional-use"].get({ fetch: { signal } }),
       );
     },
-    staleTime: STALE_TIME.INFINITE,
+    staleTime: ({ state }) =>
+      state.data?.status === PROFESSIONAL_USE_STATUS.accepted
+        ? STALE_TIME.INFINITE
+        : 0,
   });

@@ -14,6 +14,7 @@ import {
 } from "@stll/ui/frame";
 
 import { useSignOut } from "@/hooks/use-sign-out";
+import { signalSessionChange } from "@/lib/account/session-signal";
 import { api } from "@/lib/api";
 import { professionalUseOptions } from "@/lib/auth-queries";
 import { unwrapEden } from "@/lib/errors/api";
@@ -47,6 +48,7 @@ export const ProfessionalUsePanel = ({
       ),
     onSuccess: async (state) => {
       queryClient.setQueryData(professionalUseOptions(userId).queryKey, state);
+      signalSessionChange();
       await navigate({ to: redirectTo, replace: true });
     },
     onError: (error) => {

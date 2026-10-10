@@ -1,15 +1,20 @@
 import { QueryClient } from "@tanstack/react-query";
 import { afterAll, describe, expect, test } from "bun:test";
 
+import {
+  PROFESSIONAL_USE_STATEMENT_VERSION,
+  PROFESSIONAL_USE_TERMS_VERSION,
+} from "@stll/api-contract/professional-use";
 import { sleep } from "@stll/concurrency/sleep";
 
 // The session the server reports; changed by "another tab".
 let signedIn: string | null = "user-a";
 let sessionReads = 0;
+let professionalUseAccepted = false;
 
 const originalFetch = globalThis.fetch;
 globalThis.fetch = Object.assign(
-  async (input: string | URL | Request) => {
+  async (input: string | URL | Request, init?: RequestInit) => {
     const url = new URL(input instanceof Request ? input.url : String(input));
     await Promise.resolve();
     if (url.pathname.endsWith("/api/auth/get-session")) {
@@ -24,12 +29,30 @@ globalThis.fetch = Object.assign(
             },
       );
     }
+    if (url.pathname.endsWith("/me/professional-use")) {
+      if (init?.method === "POST") {
+        professionalUseAccepted = true;
+      }
+      return Response.json(
+        professionalUseAccepted
+          ? {
+              status: "accepted",
+              statementVersion: PROFESSIONAL_USE_STATEMENT_VERSION,
+              termsVersion: PROFESSIONAL_USE_TERMS_VERSION,
+              acceptedAt: "2026-10-10T07:00:00.000Z",
+            }
+          : { status: "required" },
+      );
+    }
     return Response.json(null, { status: 404 });
   },
   { preconnect: () => undefined },
 );
 
-const { sessionOptions } = await import("@/lib/auth-queries");
+const { professionalUseOptions, sessionOptions } =
+  await import("@/lib/auth-queries");
+const { api } = await import("@/lib/api");
+const { unwrapEden } = await import("@/lib/errors/api");
 const { installSessionChangeListener } =
   await import("@/lib/account/session-change-listener");
 const { installSessionCacheGuard } = await import("@/lib/session-cache-guard");
@@ -112,6 +135,40 @@ describe("a tab told that the session changed elsewhere", () => {
     await settle();
 
     expect(sessionReads).toBe(readsBefore + 1);
+  });
+
+  test("a tab with cached required reads accepted after another tab accepts", async () => {
+    signedIn = "user-a";
+    professionalUseAccepted = false;
+    const tabA = await createTab();
+    const tabB = await createTab();
+    const options = professionalUseOptions("user-a");
+    await tabA.queryClient.query(options);
+    expect(tabA.queryClient.getQueryData(options.queryKey)?.status).toBe(
+      "required",
+    );
+    expect(
+      tabA.queryClient
+        .getQueryCache()
+        .find({ queryKey: options.queryKey })
+        ?.getObserversCount(),
+    ).toBe(0);
+
+    const accepted = unwrapEden(
+      await api.me["professional-use"].post({
+        statementVersion: PROFESSIONAL_USE_STATEMENT_VERSION,
+      }),
+    );
+    tabB.queryClient.setQueryData(options.queryKey, accepted);
+    // The existing session broadcast delivers the acceptance note to tab A.
+    tabA.receive();
+    await settle();
+
+    expect(tabA.queryClient.getQueryData(options.queryKey)).toEqual(accepted);
+    expect((await tabA.queryClient.query(options)).status).toBe("accepted");
+    expect(tabA.reloads).toEqual([]);
+    tabA.queryClient.clear();
+    tabB.queryClient.clear();
   });
 
   test("the same user still signed in changes nothing", async () => {
