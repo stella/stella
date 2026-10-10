@@ -4,10 +4,8 @@ import { createAuthRateLimitStorage } from "@/api/lib/rate-limit/auth-storage";
 import { createRedisClient } from "@/api/lib/redis-client";
 import { coordinationKey } from "@/api/lib/redis-keys";
 
-if (
-  process.env["STELLA_RUN_VALKEY_TESTS"] !== "true" ||
-  !process.env["REDIS_URL"]
-) {
+const runValkeyTests = process.env["STELLA_RUN_VALKEY_TESTS"] === "true";
+if (!runValkeyTests || !process.env["REDIS_URL"]) {
   describe.skip("auth admission reservations (valkey)", () => {
     test("requires Valkey", () => {});
   });
@@ -58,6 +56,20 @@ if (
       }
       await storage.settle(current.reservation, "rejected");
       expect(await redis.send("HGET", [counter, "count"])).toBe("1");
+      await redis.send("DEL", [counter]);
+      await redis.send("HSET", [
+        counter,
+        "window",
+        "fixture-window",
+        "count",
+        "3",
+      ]);
+      expect(await redis.send("PTTL", [counter])).toBe(-1);
+      expect((await storage.reserve(key, rule)).type).toBe("limited");
+      const ttl = Number(await redis.send("PTTL", [counter]));
+      expect(ttl).toBeGreaterThan(0);
+      expect(ttl).toBeLessThanOrEqual(rule.window * 1000);
+      expect(await redis.send("HGET", [counter, "count"])).toBe("3");
     } finally {
       await redis.send("DEL", [counter]);
       redis.close();

@@ -179,12 +179,13 @@ test.each(["user", "address"] as const)(
     expect(observations).toEqual([]);
     count = API_RATE_LIMITS.skillSource.max + 1;
     expect((await consumeSkillSourceRateLimit(input)).ok).toBe(false);
-    const expected = {
-      name: keyKind === "user" ? "skills.source.user" : "skills.source.address",
-      keyKind,
-      windowMs: API_RATE_LIMITS.skillSource.duration,
-    } as const;
-    expect(observations).toEqual([expected]);
+    const expectedBudget =
+      keyKind === "user"
+        ? ({ name: "skills.source.user", keyKind } as const)
+        : ({ name: "skills.source.address", keyKind } as const);
+    expect(observations).toEqual([
+      { ...expectedBudget, windowMs: API_RATE_LIMITS.skillSource.duration },
+    ]);
     const generator = createSkillSourceRateLimitGenerator(async () =>
       keyKind === "user" ? toSafeId<"user">("source-user") : null,
     );
@@ -192,9 +193,6 @@ test.each(["user", "address"] as const)(
       new Request("https://api.example/v1/skills/discover-url"),
       { requestIP: () => ({ address: "192.0.2.10" }) },
     );
-    expect(skillSourceRateLimitBinding.budget(key)).toEqual({
-      name: expected.name,
-      keyKind,
-    });
+    expect(skillSourceRateLimitBinding.budget(key)).toEqual(expectedBudget);
   },
 );

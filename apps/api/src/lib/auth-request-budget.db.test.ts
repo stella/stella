@@ -302,9 +302,9 @@ describe("OAuth handler quotas", () => {
     expect(charges.size).toBe(2);
   });
 
-  test.each(Object.keys(AUTH_ACCOUNT_REQUEST_BUDGET_RULES))(
+  test.each(Object.entries(AUTH_ACCOUNT_REQUEST_BUDGET_RULES))(
     "isolates %s account quotas at one shared address",
-    async (path) => {
+    async (path, accountRule) => {
       const accounts = new Map<string, number>();
       const addresses = new Set<string>();
       const auth = createAuth(undefined, {
@@ -314,7 +314,7 @@ describe("OAuth handler quotas", () => {
             addresses.add(key);
             return { allowed: true, retryAfter: null };
           }
-          expect(rule).toEqual(AUTH_RATE_LIMITS.signIn);
+          expect(rule).toEqual(accountRule);
           const count = (accounts.get(key) ?? 0) + 1;
           accounts.set(key, count);
           return {
@@ -324,11 +324,7 @@ describe("OAuth handler quotas", () => {
         }),
       });
       for (const email of ["first@example.test", "second@example.test"]) {
-        for (
-          let attempt = 0;
-          attempt <= AUTH_RATE_LIMITS.signIn.max;
-          attempt += 1
-        ) {
+        for (let attempt = 0; attempt <= accountRule.max; attempt += 1) {
           const response = await auth.handler(
             request(path, {
               email,
@@ -337,9 +333,7 @@ describe("OAuth handler quotas", () => {
               type: "sign-in",
             }),
           );
-          expect(response.status === 429).toBe(
-            attempt === AUTH_RATE_LIMITS.signIn.max,
-          );
+          expect(response.status === 429).toBe(attempt === accountRule.max);
         }
       }
       expect(accounts.size).toBe(2);
@@ -523,6 +517,70 @@ describe("OAuth handler quotas", () => {
       lookup.mockRestore();
     }
   });
+
+  test.each(["grant_lookup", "client_quota"] as const)(
+    "settles token admission once after a %s failure",
+    async (failure) => {
+      const { browser } = await createHumanSession({
+        email: `settlement-${Bun.randomUUIDv7()}@example.test`,
+        orgName: "Settlement",
+        orgSlugPrefix: "settlement",
+      });
+      const client = await registerOAuthClient(undefined, "none");
+      const grant = await grantOAuthClient(browser, client);
+      const settled: {
+        reservation: Parameters<
+          ReturnType<typeof createAuthRateLimitStorage>["settle"]
+        >[0];
+        outcome: Parameters<
+          ReturnType<typeof createAuthRateLimitStorage>["settle"]
+        >[1];
+      }[] = [];
+      const storage = withTokenAdmission(async (key) => ({
+        allowed: key.startsWith("/oauth2/token:address:"),
+        retryAfter: 60,
+      }));
+      const auth = createAuth(undefined, {
+        rateLimitEnabled: true,
+        rateLimitStorage: {
+          ...storage,
+          settle: async (reservation, outcome) => {
+            settled.push({ reservation, outcome });
+          },
+        },
+      });
+      const context = await auth.$context;
+      const findOne = context.adapter.findOne.bind(context.adapter);
+      const lookup = spyOn(context.adapter, "findOne").mockImplementation(
+        async (input) => {
+          if (
+            failure === "grant_lookup" &&
+            input.model === "oauthRefreshToken"
+          ) {
+            throw new TypeError("fixture grant lookup failed");
+          }
+          return await findOne(input);
+        },
+      );
+      try {
+        const response = await auth.handler(
+          request("/oauth2/token", {
+            grant_type: "refresh_token",
+            refresh_token: grant.refreshToken,
+            client_id: client.clientId,
+          }),
+        );
+        expect(response.status).toBe(failure === "grant_lookup" ? 500 : 429);
+        expect(settled).toHaveLength(1);
+        expect(settled.at(0)?.outcome).toBe("rejected");
+        expect(settled.at(0)?.reservation.key).toStartWith(
+          "/oauth2/token:address:",
+        );
+      } finally {
+        lookup.mockRestore();
+      }
+    },
+  );
 
   test("refunds successful token responses", async () => {
     const { browser } = await createHumanSession({

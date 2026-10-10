@@ -289,6 +289,15 @@ export const createAuthRequestBudget = ({
   ...policy
 }: CreateAuthRequestBudgetOptions) => {
   const reservations = new WeakMap<object, AuthRateLimitReservation>();
+  const settleRejected = async (ctx: AuthRequestBudgetContext) => {
+    const owner = ctx.request ?? ctx.context;
+    const reservation = reservations.get(owner);
+    if (reservation === undefined) {
+      return;
+    }
+    reservations.delete(owner);
+    await storage.settle(reservation, "rejected");
+  };
   const enforce = async (ctx: AuthRequestBudgetContext) => {
     if (!enabled || !ctx.path || !isAuthRequestBudgetPath(ctx.path)) {
       return Result.ok(undefined);
@@ -419,5 +428,19 @@ export const createAuthRequestBudget = ({
     const accepted = frameworkApi.isAcceptedTokenResponse(returned);
     await storage.settle(reservation, accepted ? "accepted" : "rejected");
   };
-  return Object.assign(enforce, { complete });
+  const check = async (ctx: AuthRequestBudgetContext) => {
+    const outcome = await Result.tryPromise({
+      try: async () => await enforce(ctx),
+      catch: (error: unknown) => error,
+    });
+    if (outcome.isErr()) {
+      await settleRejected(ctx);
+      return outcome;
+    }
+    if (outcome.value.isErr()) {
+      await settleRejected(ctx);
+    }
+    return outcome.value;
+  };
+  return Object.assign(check, { complete });
 };

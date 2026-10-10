@@ -26,6 +26,9 @@ if not window then
   redis.call("PEXPIRE", KEYS[1], windowMs)
 end
 local count = tonumber(redis.call("HGET", KEYS[1], "count"))
+if redis.call("PTTL", KEYS[1]) < 0 then
+  redis.call("PEXPIRE", KEYS[1], windowMs)
+end
 if count >= tonumber(max) then
   return {0, math.max(1, math.ceil(redis.call("PTTL", KEYS[1]) / 1000))}
 end
