@@ -150,6 +150,7 @@ import { errorTag } from "@/api/lib/errors/utils";
 import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
 import { blendedRankSql } from "@/api/lib/legal-search/authority-sql";
 import {
+  caseLawCorpusAppliedRevision,
   caseLawCorpusDocumentCanRecur,
   currentCaseLawCorpusProjection,
 } from "@/api/lib/legal-search/case-law-corpus-projection";
@@ -170,6 +171,7 @@ import {
   type CorpusIndexGroupContract,
 } from "@/api/lib/legal-search/corpus-index-group-contract";
 import { readServingCorpusIndexTargetTx } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
+import { requireCorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";
 import type {
   CorpusIndexScanReport,
   CorpusIndexScanTransport,
@@ -184,6 +186,7 @@ import {
   type CaseLawCorpusQueryFields,
   requireCaseLawDecisionCountField,
 } from "@/api/lib/legal-search/corpus-index-read-contract";
+import type { CorpusProjectionRevision } from "@/api/lib/legal-search/corpus-index-revision-clause";
 import {
   type CorpusFacetQuery,
   type CorpusSearchFacetName,
@@ -1359,6 +1362,9 @@ export const candidateDecisionRowsStatement = (
       // A directory court is ranked by its id, not by its name.
       courtId: caseLawDecisions.courtId,
       languageGroupKey: caseLawDecisions.languageGroupKey,
+      // The copy a page's snippet and anchor are read from.
+      appliedRevision:
+        caseLawCorpusAppliedRevision(generation).as("applied_revision"),
       canRecur:
         sql<boolean>`CASE WHEN ${caseLawCorpusDocumentCanRecur(generation)}
         THEN true ELSE EXISTS (
@@ -1415,6 +1421,9 @@ export const pageDecisionRowsStatement = (
       sourceDescriptor: caseLawSources.descriptor,
       headnote: columns.headnote.as("headnote"),
       keywords: columns.keywords.as("keywords"),
+      // Compared with the revision the page's passages were read from.
+      appliedRevision:
+        caseLawCorpusAppliedRevision(generation).as("applied_revision"),
       // The hit carries every identifier the publisher supplied; a list row
       // does not, so this one column is the search's own.
       identifiers: sql<unknown>`coalesce((
@@ -1666,9 +1675,11 @@ export const rehydrateCaseLawCandidates = async ({
   }
 
   const byId = new Map<string, CandidateDecisionRow>();
+  const revisionById = new Map<string, CorpusProjectionRevision>();
   for (const [id, row] of hydrated) {
-    if (row !== null) {
+    if (row !== null && row.appliedRevision !== null) {
       byId.set(id, row);
+      revisionById.set(id, row.appliedRevision);
     }
   }
   const authorityById = new Map<string, number>();
@@ -1704,6 +1715,7 @@ export const rehydrateCaseLawCandidates = async ({
   // be carried through the scan.
   return {
     context: null,
+    revisionById,
     ranked: representatives.filter((hit) => {
       const token = groupTokenById.get(hit.id);
       if (token === undefined) {
@@ -1858,6 +1870,8 @@ type DecisionHitsPageOptions = {
    */
   passageCountById: ReadonlyMap<string, number>;
   snippetById: ReadonlyMap<string, string>;
+  /** The revision each decision's snippet and anchor were read from. */
+  snippetRevisionById: ReadonlyMap<string, CorpusProjectionRevision>;
   headnotePresentation: SearchDecisionsBody["headnotePresentation"];
   total: SearchTotal;
 };
@@ -1873,6 +1887,7 @@ export const decisionHitsPage = ({
   pageRanked,
   passageCountById,
   snippetById,
+  snippetRevisionById,
   headnotePresentation,
   total,
 }: DecisionHitsPageOptions) => {
@@ -1881,6 +1896,12 @@ export const decisionHitsPage = ({
     if (!row) {
       return [];
     }
+    // A decision refreshed between the candidate read and this one holds a
+    // newer revision than its passages were read from; its excerpt is
+    // withheld rather than shown from the earlier copy.
+    const snippetRevision = snippetRevisionById.get(hit.id);
+    const passageIsCurrent =
+      snippetRevision !== undefined && snippetRevision === row.appliedRevision;
 
     const presentation = courtPresentation(courtWeights, {
       country: row.country,
@@ -1919,12 +1940,12 @@ export const decisionHitsPage = ({
           keywords: row.keywords,
           maxChars: decisionHeadnoteMaxChars(headnotePresentation),
         }),
-        headline: snippetById.get(hit.id) ?? null,
+        headline: passageIsCurrent ? (snippetById.get(hit.id) ?? null) : null,
         // Additive: the anchor of the passage the snippet came from, so a
         // result can open the decision scrolled to what matched. Null on a
         // document-granular generation, on unanchored fallback passages, and
         // on a decision the entry named outright.
-        anchorId: anchorIdById.get(hit.id) ?? null,
+        anchorId: passageIsCurrent ? (anchorIdById.get(hit.id) ?? null) : null,
         citationCount: row.citationCount,
         // The blend's own input, reported beside the result it ranked.
         citationAuthority: hit.citationAuthority,
@@ -2142,7 +2163,7 @@ const readCaseLawSearchFacets = async ({
 const caseLawScanTransport = (sort: SearchSort): CorpusIndexScanTransport => {
   switch (sort) {
     case "relevance":
-      return { type: "scored", fields: ["document_id"] };
+      return { type: "scored" };
     case "newest":
       return NATIVE_SCAN_TRANSPORT;
     default:
@@ -2406,6 +2427,7 @@ export const searchCorpusIndexDecisions = async ({
           pageRanked: identityPage,
           passageCountById: new Map(),
           snippetById: new Map(),
+          snippetRevisionById: new Map(),
           headnotePresentation: body.headnotePresentation,
           // The decisions the lookup found, not the ones this page holds: a
           // docket naming more decisions than fit a page still reports how
@@ -2522,6 +2544,8 @@ export const searchCorpusIndexDecisions = async ({
     scanTransport: caseLawScanTransport(sort),
     rankingMode,
     snippetFields: ["text"],
+    projectionRevisionField: requireCorpusIndexManifest("case_law", generation)
+      .projection.projectionRevisionField,
     extractId: (hit) => {
       const id = hit["document_id"];
       return typeof id === "string" && isUuid(id) ? id : null;
@@ -2577,7 +2601,8 @@ export const searchCorpusIndexDecisions = async ({
   const [searchPage, facetsAndTotal] = await Promise.all([pageRead, facetRead]);
   scanAndFacetsMs = performance.now() - concurrentStartedAt;
 
-  const { anchorIdById, passageCountById, scan, snippetById } = searchPage;
+  const { anchorIdById, passageCountById, revisionById, scan, snippetById } =
+    searchPage;
   const pageRanked = withPinnedDecisions({
     pinned,
     pinnedIds,
@@ -2620,6 +2645,7 @@ export const searchCorpusIndexDecisions = async ({
     pageRanked,
     passageCountById,
     snippetById,
+    snippetRevisionById: revisionById,
     headnotePresentation: body.headnotePresentation,
     total: facetsAndTotal?.total ?? SEARCH_TOTAL_NOT_COUNTED,
   });

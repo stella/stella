@@ -28,7 +28,6 @@ import {
   corpusIndexConfigFromManifest,
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
-import { HIGHLIGHT_COPIES_PER_PASSAGE } from "@/api/lib/legal-search/corpus-index-pagination";
 import { buildLegislationV2ProjectionDocuments } from "@/api/lib/legal-search/corpus-index-projection-builder";
 import type { LegislationV2ProjectionInput } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
 import { corpusFreeTextClause } from "@/api/lib/legal-search/corpus-query";
@@ -172,7 +171,20 @@ const cappedStrictVersions = Array.from(
         .slice(0, 10),
     }),
 );
+/**
+ * A refreshed act: the index still holds the copy its previous revision wrote,
+ * whose text carries a word the current one does not.
+ */
+const refreshed = fixtureVersion({
+  tail: "2003/801",
+  title: "Pravidla nájmu",
+  text: "Nájemné se platí měsíčně předem.",
+});
+const SUPERSEDED_REVISION = createSafeId<"corpusIndexProjectionIntent">();
+const SUPERSEDED_MARKER = "dřívější";
+const SUPERSEDED_TEXT = `Nájemné se platí ročně podle ${SUPERSEDED_MARKER} úpravy.`;
 const VERSIONS = [
+  refreshed,
   strictOld,
   strictCurrent,
   amendment,
@@ -189,6 +201,7 @@ describe.skipIf(!runEngineTests)(
     let restoreSearch: (() => void) | undefined;
     let fixtureIndexCreated = false;
     const searchCalls: Parameters<typeof corpusClient.search>[0][] = [];
+    const highlightedIdsByCall: string[][] = [];
 
     beforeAll(async () => {
       expect(
@@ -287,7 +300,15 @@ describe.skipIf(!runEngineTests)(
         throw created.error;
       }
       fixtureIndexCreated = true;
-      const documents = VERSIONS.flatMap((version) => {
+      const buildFixtureDocuments = ({
+        version,
+        text,
+        revision,
+      }: {
+        version: (typeof VERSIONS)[number];
+        text: string;
+        revision: (typeof VERSIONS)[number]["revision"];
+      }) => {
         const input = {
           family: "legislation",
           documentId: String(version.id),
@@ -307,19 +328,37 @@ describe.skipIf(!runEngineTests)(
         } satisfies LegislationV2ProjectionInput;
         const built = buildLegislationV2ProjectionDocuments({
           input,
-          payload: { text: version.text, ast: null },
-          revision: version.revision,
+          payload: { text, ast: null },
+          revision,
         });
         if (built.isErr()) {
           throw built.error;
         }
         return built.value;
+      };
+      const documents = [
+        ...VERSIONS.flatMap((version) =>
+          buildFixtureDocuments({
+            version,
+            text: version.text,
+            revision: version.revision,
+          }),
+        ),
+        // Postgres records only the current revision as applied; the
+        // superseded copy is what an unapplied delete leaves behind.
+        ...buildFixtureDocuments({
+          version: refreshed,
+          text: SUPERSEDED_TEXT,
+          revision: SUPERSEDED_REVISION,
+        }),
+      ];
+      const ingested = await corpusClient.ingestCommittedBatch({
+        indexId: INDEX_ID,
+        ndjson: `${documents.map((document) => JSON.stringify(document)).join("\n")}\n`,
+        observer: "unobserved",
+        commitTimeoutSecs:
+          MANIFEST.engine.indexConfig.indexing_settings.commit_timeout_secs,
       });
-      const ingested = await corpusClient.ingestCommittedBatch(
-        INDEX_ID,
-        `${documents.map((document) => JSON.stringify(document)).join("\n")}\n`,
-        "unobserved",
-      );
       if (ingested.isErr()) {
         throw ingested.error;
       }
@@ -328,7 +367,24 @@ describe.skipIf(!runEngineTests)(
       const searchSpy = spyOn(corpusClient, "search").mockImplementation(
         async (options) => {
           searchCalls.push(options);
-          return await originalSearch({ ...options, indexId: INDEX_ID });
+          const result = await originalSearch({
+            ...options,
+            indexId: INDEX_ID,
+          });
+          if (options.snippetFields?.includes("text") && result.isOk()) {
+            highlightedIdsByCall.push(
+              result.value.hits.map((hit) => {
+                const id = hit["document_id"];
+                if (typeof id !== "string") {
+                  panic(
+                    "Highlighted legislation passage has no document identity",
+                  );
+                }
+                return id;
+              }),
+            );
+          }
+          return result;
         },
       );
       restoreSearch = () => searchSpy.mockRestore();
@@ -381,8 +437,24 @@ describe.skipIf(!runEngineTests)(
       },
     );
 
+    test("a superseded revision's text never reaches a headline", async () => {
+      const result = await search({
+        query: "nájemné",
+        jurisdiction: "CZE",
+        limit: 10,
+      });
+      const item =
+        result.items.find((hit) => hit.documentId === String(refreshed.id)) ??
+        panic("the refreshed act did not match");
+      expect(item.headline).toContain("měsíčně");
+      for (const hit of result.items) {
+        expect(hit.headline ?? "").not.toContain(SUPERSEDED_MARKER);
+      }
+    });
+
     test("a short exhausted strict page appends relaxed hits and highlights only emitted passages", async () => {
       const callStart = searchCalls.length;
+      const highlightStart = highlightedIdsByCall.length;
       const result = await search({
         query: QUERY,
         jurisdiction: "CZE",
@@ -402,16 +474,33 @@ describe.skipIf(!runEngineTests)(
       );
       expect(relaxedCalls).toHaveLength(1);
       expect(relaxedCalls.at(0)?.snippetFields).toBeUndefined();
+      const strictQuery =
+        calls.at(0)?.query ?? panic("Strict scan did not run");
+      const relaxedQuery =
+        relaxedCalls.at(0)?.query ?? panic("Relaxed scan did not run");
       const highlights = calls.filter((call) =>
         call.snippetFields?.includes("text"),
       );
-      expect(highlights).toHaveLength(2);
+      // Each phase highlights its emitted passages under its own query.
+      expect(highlights.map(({ maxHits }) => maxHits)).toEqual([2, 1]);
+      expect(highlights.at(0)?.query).toStartWith(`(${strictQuery}) AND (`);
+      expect(highlights.at(1)?.query).toStartWith(`(${relaxedQuery}) AND (`);
       for (const highlight of highlights) {
         expect(/\b(?:document_id|chunk_id):/u.test(highlight.query)).toBe(true);
-        expect(highlight.maxHits).toBeLessThanOrEqual(
-          result.items.length * HIGHLIGHT_COPIES_PER_PASSAGE,
-        );
       }
+      expect(
+        highlightedIdsByCall.slice(highlightStart).map((ids) => ids.toSorted()),
+      ).toEqual(
+        ["strict", "relaxed"].map((phase) =>
+          result.items
+            .filter(({ match }) => match.type === phase)
+            .map(({ documentId }) => documentId)
+            .toSorted(),
+        ),
+      );
+      expect(result.items.every(({ headline }) => headline !== null)).toBe(
+        true,
+      );
       expect(calls).toHaveLength(4);
       expect(result.nextCursor).not.toBeNull();
       const cursor = decodeCorpusSearchCursor(

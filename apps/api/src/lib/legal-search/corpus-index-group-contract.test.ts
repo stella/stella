@@ -62,6 +62,8 @@ const EXPECTED_EFFECTIVE_DIGESTS = {
     "2938ba381346438f59c7edd2310be5e473a1756e48aed90deacdca1bd2954633",
   case_law_v7:
     "2051cf7ac46b05d168bdf3f0fc279788facda36cd52cb0d3ca6f4d79969a685a",
+  case_law_v8:
+    "388bdb9499a1f9c0820d9124e87293eb8e55b86141e3f2459a46fbeb3670b92d",
 } as const;
 
 test("every group declared before a group contract keeps its manifest's exact configuration", () => {
@@ -96,7 +98,10 @@ test("every group declared before a group contract keeps its manifest's exact co
 });
 
 test("the effective-contract digest is pinned per generation and apart from the manifest's", () => {
-  for (const manifest of CASE_LAW_MANIFESTS) {
+  for (const manifest of [
+    ...CASE_LAW_MANIFESTS,
+    CORPUS_INDEX_MANIFESTS.case_law_v8,
+  ]) {
     const contract = courtPartitionContract(manifest);
     expect(contract.effectiveDigest).toBe(
       EXPECTED_EFFECTIVE_DIGESTS[manifest.generation],
@@ -448,6 +453,29 @@ test("scoped reads resolve apart from the registry's bridge", () => {
       cursorTarget: null,
     },
   });
+});
+
+test("v8 vouches for the groups it was created with, Hungary among them", () => {
+  const manifest = CORPUS_INDEX_MANIFESTS.case_law_v8;
+  const id = (group: string) => `${manifest.generation}_${group}`;
+  // The manifest routes Austria through the registry's wildcard bridge;
+  // its declared groups use exact index ids.
+  expect(
+    registeredCorpusIndexGroups(manifest).map(
+      ({ indexGroup, contractVersion }) => [indexGroup, contractVersion],
+    ),
+  ).toEqual([
+    ["aut", "base"],
+    ["usa", "court_partition_v1"],
+  ]);
+  const bridged = globalTarget(manifest, { attested: [], enrolled: [] });
+  expect(bridged.route.indexId.split(",")).toEqual([
+    `${id("aut")}*`,
+    id("cs_sk"),
+    id("eu"),
+    id("hun"),
+    id("pol"),
+  ]);
 });
 
 test("the registry records exactly the groups a manifest cannot vouch for", () => {

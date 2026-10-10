@@ -1,5 +1,13 @@
 import { panic, Panic } from "better-result";
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 import fc from "fast-check";
 
 import { SEARCH_PAGE_REACH } from "@stll/api-contract/search";
@@ -8,12 +16,14 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { withPinnedDecisions } from "@/api/handlers/case-law/decisions/search-identity-role";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import type { CorpusIndexHit } from "@/api/lib/legal-search/corpus-index-client";
+import {
+  CORPUS_INDEX_SEARCH_TIMEOUT_MS,
+  type CorpusIndexHit,
+} from "@/api/lib/legal-search/corpus-index-client";
 import type { SearchCursor } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
   corpusIndexLexicalScore,
   CORPUS_INDEX_OFFSET_PAGE_MAX_ROUNDS,
-  HIGHLIGHT_COPIES_PER_PASSAGE,
   readCorpusIndexSearchPage,
 } from "@/api/lib/legal-search/corpus-index-pagination";
 import { corpusSearchGroupToken } from "@/api/lib/legal-search/corpus-search-cursor";
@@ -29,6 +39,10 @@ import {
   stableBlendUpperBound,
 } from "@/api/lib/legal-search/rerank";
 import { LIMITS } from "@/api/lib/limits";
+import {
+  testRevisionOf,
+  testRevisionsFor,
+} from "@/api/tests/helpers/corpus-projection-revisions";
 
 /**
  * Grouping passage hits back into document hits. A passage-granular generation
@@ -68,6 +82,8 @@ let snippetResponseBody: unknown;
  * what a refusal does rather than what a result does.
  */
 let engineFailureStatus: number | null;
+let highlightInFlight: number;
+let peakHighlightInFlight: number;
 
 beforeEach(() => {
   responseBody = { num_hits: 0, hits: [], snippets: [] };
@@ -76,6 +92,8 @@ beforeEach(() => {
   requestDelayMs = 0;
   snippetResponseBody = null;
   engineFailureStatus = null;
+  highlightInFlight = 0;
+  peakHighlightInFlight = 0;
   const stub = async (
     _input: Parameters<typeof fetch>[0],
     init?: Parameters<typeof fetch>[1],
@@ -83,8 +101,19 @@ beforeEach(() => {
     const body: Record<string, unknown> =
       typeof init?.body === "string" ? JSON.parse(init.body) : {};
     requestBodies.push(body);
+    const highlighting = body["snippet_fields"] !== undefined;
+    if (highlighting) {
+      highlightInFlight += 1;
+      peakHighlightInFlight = Math.max(
+        peakHighlightInFlight,
+        highlightInFlight,
+      );
+    }
     if (requestDelayMs > 0) {
       await Bun.sleep(requestDelayMs);
+    }
+    if (highlighting) {
+      highlightInFlight -= 1;
     }
     if (engineFailureStatus !== null) {
       return new Response("engine refused the search", {
@@ -98,7 +127,18 @@ beforeEach(() => {
       return new Response(JSON.stringify(responseBody), { status: 200 });
     }
     const offset = Number(body["start_offset"] ?? 0);
-    const window = engineHits.slice(offset, offset + Number(body["max_hits"]));
+    const matching =
+      body["snippet_fields"] === undefined
+        ? engineHits
+        : engineHits.filter(
+            (hit) =>
+              String(body["query"]).includes(
+                `document_id:"${hit.document_id}"`,
+              ) ||
+              (typeof hit.chunk_id === "string" &&
+                String(body["query"]).includes(`chunk_id:"${hit.chunk_id}"`)),
+          );
+    const window = matching.slice(offset, offset + Number(body["max_hits"]));
     return new Response(
       JSON.stringify({
         num_hits: engineHits.length,
@@ -115,6 +155,7 @@ beforeEach(() => {
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
+  mock.restore();
 });
 
 /**
@@ -161,6 +202,7 @@ const readPage = async (
     order,
     parsedCursor,
     snippetFields: ["text"],
+    projectionRevisionField: "projection_revision",
     extractId: (hit: CorpusIndexHit) =>
       typeof hit["document_id"] === "string" ? hit["document_id"] : null,
     extractSnippet: (snippet) => {
@@ -170,6 +212,7 @@ const readPage = async (
     unseenScoreUpperBound: () => 0,
     rankCandidates: async (candidates) => ({
       context: null,
+      revisionById: testRevisionsFor(candidates),
       groups: recurringDocumentTokens(candidates),
       ranked: candidates
         .filter(
@@ -338,12 +381,14 @@ describe("a page settles within one scan round", () => {
       order: RELEVANCE_ORDER,
       parsedCursor,
       snippetFields: ["text"],
+      projectionRevisionField: "projection_revision",
       extractId: (hit: CorpusIndexHit) =>
         typeof hit["document_id"] === "string" ? hit["document_id"] : null,
       extractSnippet: () => null,
       unseenScoreUpperBound: (score) => stableBlendUpperBound(score, weight),
       rankCandidates: async (candidates) => ({
         context: null,
+        revisionById: testRevisionsFor(candidates),
         groups: recurringDocumentTokens(candidates),
         ranked: blendStableCitationAuthority({
           candidates: candidates.filter(
@@ -465,12 +510,14 @@ describe("the scan is bounded by engine round trips", () => {
       order: RELEVANCE_ORDER,
       parsedCursor,
       snippetFields: ["text"],
+      projectionRevisionField: "projection_revision",
       extractId: (hit: CorpusIndexHit) =>
         typeof hit["document_id"] === "string" ? hit["document_id"] : null,
       extractSnippet: () => null,
       unseenScoreUpperBound: (score) => score + 1,
       rankCandidates: async (candidates) => ({
         context: null,
+        revisionById: testRevisionsFor(candidates),
         groups: recurringDocumentTokens(candidates),
         ranked: candidates
           .filter(
@@ -628,6 +675,7 @@ describe("a passage flood does not strand the reader", () => {
       order: RELEVANCE_ORDER,
       parsedCursor,
       snippetFields: ["text"],
+      projectionRevisionField: "projection_revision",
       extractId: (hit: CorpusIndexHit) =>
         typeof hit["document_id"] === "string" ? hit["document_id"] : null,
       extractSnippet: () => null,
@@ -635,6 +683,7 @@ describe("a passage flood does not strand the reader", () => {
         stableBlendUpperBound(score, DEFAULT_AUTHORITY_WEIGHT),
       rankCandidates: async (candidates) => ({
         context: null,
+        revisionById: testRevisionsFor(candidates),
         groups: recurringDocumentTokens(candidates),
         ranked: blendStableCitationAuthority({
           candidates: candidates.filter(
@@ -730,12 +779,14 @@ describe("residual filters preserve progress past empty scan windows", () => {
       order,
       parsedCursor,
       snippetFields: [],
+      projectionRevisionField: "projection_revision",
       extractId: (hit) =>
         typeof hit["document_id"] === "string" ? hit["document_id"] : null,
       extractSnippet: () => null,
       unseenScoreUpperBound: (score) => score,
       rankCandidates: async (candidates) => ({
         context: null,
+        revisionById: testRevisionsFor(candidates),
         groups: recurringDocumentTokens(
           candidates.filter((candidate) =>
             candidate.id.startsWith("zz-match-"),
@@ -860,12 +911,14 @@ describe("split legislation stays one hit across cursor pages", () => {
         order: RELEVANCE_ORDER,
         parsedCursor,
         snippetFields: [],
+        projectionRevisionField: "projection_revision",
         extractId: (hit: CorpusIndexHit) =>
           typeof hit["document_id"] === "string" ? hit["document_id"] : null,
         extractSnippet: () => null,
         unseenScoreUpperBound: () => 0,
         rankCandidates: async (candidates) => ({
           context: null,
+          revisionById: testRevisionsFor(candidates),
           groups: recurringDocumentTokens(candidates),
           ranked: candidates
             .filter(
@@ -923,6 +976,7 @@ describe("ranker-folded candidates stay folded across pages", () => {
       order: RELEVANCE_ORDER,
       parsedCursor,
       snippetFields: ["text"],
+      projectionRevisionField: "projection_revision",
       extractId: (hit: CorpusIndexHit) =>
         typeof hit["document_id"] === "string" ? hit["document_id"] : null,
       extractSnippet: () => null,
@@ -940,6 +994,7 @@ describe("ranker-folded candidates stay folded across pages", () => {
         const recurring = recurringFixtureIdentities((id) => groupOf(id) ?? id);
         return {
           context: null,
+          revisionById: testRevisionsFor(candidates),
           ranked: representatives.filter(
             (hit) =>
               !parsedCursor?.excludedGroups?.includes(
@@ -1073,11 +1128,15 @@ describe("ranker-folded candidates stay folded across pages", () => {
 describe("only the passages a page emits are highlighted", () => {
   const snippetRequests = (): Record<string, unknown>[] =>
     requestBodies.filter((body) => body["snippet_fields"] !== undefined);
+  /** A page clause, narrowed to the revision the ranker reported as applied. */
+  const current = (clause: string, id: string): string =>
+    `(${clause} AND projection_revision:"${testRevisionOf(id)}")`;
 
-  test("the scan asks for no highlighting and the page round asks for it once", async () => {
+  test("the scan asks for no highlighting and current chunks use one page request", async () => {
     engineHits = Array.from({ length: 5000 }, (_, index) => ({
       chunk_id: `doc-${index}:0`,
       document_id: `doc-${index}`,
+      anchor_id: `anchor-${index}`,
     }));
 
     const page = await readPage(3);
@@ -1087,11 +1146,11 @@ describe("only the passages a page emits are highlighted", () => {
     expect(page.scan.highlightRounds).toBe(1);
     const snippetRequest = snippetRequests().at(0);
     expect(snippetRequest?.["snippet_fields"]).toBe("text");
-    // One passage per emitted hit, with room for the physical copies a
-    // passage mid-refresh has: bounded by the page, not by the scan.
-    expect(snippetRequest?.["max_hits"]).toBe(3 * HIGHLIGHT_COPIES_PER_PASSAGE);
+    for (const request of snippetRequests()) {
+      expect(request["max_hits"]).toBe(3);
+    }
     expect(snippetRequest?.["query"]).toBe(
-      '(text:promlčení) AND (chunk_id:"doc-0:0" OR chunk_id:"doc-1:0" OR chunk_id:"doc-2:0")',
+      `(text:promlčení) AND (${[0, 1, 2].map((i) => current(`chunk_id:"doc-${i}:0"`, `doc-${i}`)).join(" OR ")})`,
     );
   });
 
@@ -1099,6 +1158,7 @@ describe("only the passages a page emits are highlighted", () => {
     engineHits = Array.from({ length: 5000 }, (_, index) => ({
       chunk_id: `doc-${index}:0`,
       document_id: `doc-${index}`,
+      anchor_id: `anchor-${index}`,
     }));
 
     await readPage(3);
@@ -1118,6 +1178,7 @@ describe("only the passages a page emits are highlighted", () => {
     engineHits = Array.from({ length: 5000 }, (_, index) => ({
       chunk_id: `doc-${index}:0`,
       document_id: `doc-${index}`,
+      anchor_id: `anchor-${index}`,
     }));
 
     const first = await readPage(3);
@@ -1135,7 +1196,7 @@ describe("only the passages a page emits are highlighted", () => {
     expect(snippetRequests()).toHaveLength(1);
     expect(second.scan.highlightRounds).toBe(1);
     expect(snippetRequests().at(0)?.["query"]).toBe(
-      '(text:promlčení) AND (chunk_id:"doc-3:0" OR chunk_id:"doc-4:0" OR chunk_id:"doc-5:0")',
+      `(text:promlčení) AND (${[3, 4, 5].map((i) => current(`chunk_id:"doc-${i}:0"`, `doc-${i}`)).join(" OR ")})`,
     );
     for (const hit of second.pageRanked) {
       expect(second.snippetById.get(hit.id)).toBe(`snip ${hit.id}`);
@@ -1153,12 +1214,12 @@ describe("only the passages a page emits are highlighted", () => {
     const page = await readPage();
 
     expect(snippetRequests().at(0)?.["query"]).toBe(
-      '(text:promlčení) AND (document_id:"doc-a" OR document_id:"doc-b")',
+      `(text:promlčení) AND (${current('document_id:"doc-a"', "doc-a")} OR ${current('document_id:"doc-b"', "doc-b")})`,
     );
     expect(page.snippetById.get("doc-a")).toBe("whole doc-a");
   });
 
-  test("the highlighted passage is the one the document ranked by", async () => {
+  test("the best matching passage within the applied revision supplies the snippet", async () => {
     const hits = [
       { document_id: "doc-b", chunk_id: "doc-b:7" },
       { document_id: "doc-a", chunk_id: "doc-a:2" },
@@ -1172,12 +1233,217 @@ describe("only the passages a page emits are highlighted", () => {
 
     const page = await readPage();
 
-    // doc-a matched three passages; only its best is worth highlighting, and
-    // it is the same passage the anchor deep-links to.
+    // The document clause lets the applied revision choose its own best
+    // matching passage, which also supplies the deep-link anchor.
     expect(snippetRequests().at(0)?.["query"]).toBe(
-      '(text:promlčení) AND (chunk_id:"doc-b:7" OR chunk_id:"doc-a:2")',
+      `(text:promlčení) AND (${current('chunk_id:"doc-b:7"', "doc-b")} OR ${current('chunk_id:"doc-a:2"', "doc-a")})`,
     );
     expect(page.snippetById.get("doc-a")).toBe("passage doc-a:2");
+  });
+
+  test("a passage flood cannot take another emitted document's highlight slot", async () => {
+    const hits = [
+      ...Array.from({ length: 40 }, (_, index) => ({
+        document_id: "doc-a",
+        chunk_id: `doc-a:${index}`,
+        anchor_id: `a-${index}`,
+      })),
+      { document_id: "doc-b", chunk_id: "doc-b:0", anchor_id: "b-0" },
+    ];
+    const stub = async (
+      _input: Parameters<typeof fetch>[0],
+      init?: Parameters<typeof fetch>[1],
+    ): Promise<Response> => {
+      const body: Record<string, unknown> =
+        typeof init?.body === "string" ? JSON.parse(init.body) : {};
+      requestBodies.push(body);
+      const query = String(body["query"]);
+      const matching =
+        body["snippet_fields"] === undefined
+          ? hits
+          : hits.filter((hit) =>
+              ["document_id", "chunk_id"].some((field) =>
+                query.includes(
+                  `(${field}:"${field === "document_id" ? hit.document_id : hit.chunk_id}" AND projection_revision:"${testRevisionOf(hit.document_id)}")`,
+                ),
+              ),
+            );
+      const selected = matching.slice(0, Number(body["max_hits"]));
+      return new Response(
+        JSON.stringify({
+          num_hits: matching.length,
+          hits: selected,
+          snippets: selected.map((hit) => ({
+            text: [`passage ${hit.chunk_id}`],
+          })),
+        }),
+        { status: 200 },
+      );
+    };
+    globalThis.fetch = Object.assign(stub, {
+      preconnect: originalFetch.preconnect,
+    });
+    const page = await readPage(2);
+    expect(
+      hits.filter(({ document_id }) => document_id === "doc-a").length,
+    ).toBeGreaterThan(page.pageRanked.length * 4);
+    expect(page.pageRanked.map(({ id }) => id)).toEqual(["doc-a", "doc-b"]);
+    expect(page.snippetById.get("doc-a")).toBe("passage doc-a:0");
+    expect(page.anchorIdById.get("doc-a")).toBe("a-0");
+    expect(page.snippetById.get("doc-b")).toBe("passage doc-b:0");
+    expect(page.anchorIdById.get("doc-b")).toBe("b-0");
+  });
+
+  test.each([25, 100])(
+    "a page of %i current documents uses one highlight call",
+    async (pageSize) => {
+      requestDelayMs = 20;
+      engineHits = Array.from({ length: pageSize }, (_, index) => ({
+        document_id: `doc-${index}`,
+        chunk_id: `doc-${index}:0`,
+        anchor_id: `anchor-${index}`,
+      }));
+      const page = await readPage(pageSize);
+      expect(peakHighlightInFlight).toBe(1);
+      expect(highlightInFlight).toBe(0);
+      expect(snippetRequests()).toHaveLength(1);
+      expect(page.scan.rounds).toBe(1);
+      expect(requestBodies).toHaveLength(2);
+      expect(page.scan.highlightRounds).toBe(1);
+      expect(page.snippetById.size).toBe(pageSize);
+      expect(page.anchorIdById.size).toBe(pageSize);
+    },
+  );
+
+  test.each(["document", "passage"])(
+    "100 current unanchored %s results need no fallback",
+    async (granularity) => {
+      engineHits = Array.from({ length: 100 }, (_, index) => ({
+        document_id: `doc-${index}`,
+        ...(granularity === "passage" ? { chunk_id: `doc-${index}:0` } : {}),
+      }));
+      const page = await readPage(100);
+      expect(page.snippetById.size).toBe(100);
+      expect(page.anchorIdById.size).toBe(0);
+      expect(scanRequestCount()).toBe(1);
+      expect(snippetRequests()).toHaveLength(1);
+      expect(requestBodies).toHaveLength(2);
+      expect(page.scan.highlightRounds).toBe(1);
+    },
+  );
+
+  test.each([0, 1, 12])(
+    "only %i superseded chunks need per-document fallback",
+    async (supersededCount) => {
+      const currentHits = Array.from({ length: 20 }, (_, index) => ({
+        document_id: `doc-${index}`,
+        chunk_id: `doc-${index}:0`,
+        anchor_id: `anchor-${index}`,
+      }));
+      const scanned = currentHits.map((hit, index) => ({
+        ...hit,
+        chunk_id:
+          index < supersededCount ? `${hit.document_id}:5` : hit.chunk_id,
+      }));
+      let inFlight = 0;
+      let peak = 0;
+      const stub = async (
+        _input: Parameters<typeof fetch>[0],
+        init?: Parameters<typeof fetch>[1],
+      ): Promise<Response> => {
+        const body: Record<string, unknown> =
+          typeof init?.body === "string" ? JSON.parse(init.body) : {};
+        requestBodies.push(body);
+        const highlighting = body["snippet_fields"] !== undefined;
+        const query = String(body["query"]);
+        const matching = highlighting
+          ? currentHits.filter((hit) =>
+              ["document_id", "chunk_id"].some((field) =>
+                query.includes(
+                  current(
+                    `${field}:"${field === "document_id" ? hit.document_id : hit.chunk_id}"`,
+                    hit.document_id,
+                  ),
+                ),
+              ),
+            )
+          : scanned;
+        if (highlighting) {
+          inFlight += 1;
+          peak = Math.max(peak, inFlight);
+          await Bun.sleep(10);
+          inFlight -= 1;
+        }
+        const selected = matching.slice(0, Number(body["max_hits"]));
+        return new Response(
+          JSON.stringify({
+            num_hits: matching.length,
+            hits: selected,
+            snippets: selected.map((hit) => ({
+              text: [`current ${hit.document_id}`],
+            })),
+          }),
+        );
+      };
+      globalThis.fetch = Object.assign(stub, {
+        preconnect: originalFetch.preconnect,
+      });
+      const page = await readPage(20);
+      expect(scanRequestCount()).toBe(1);
+      expect(snippetRequests()).toHaveLength(1 + supersededCount);
+      expect(requestBodies).toHaveLength(2 + supersededCount);
+      expect(page.scan.highlightRounds).toBe(1 + supersededCount);
+      expect(peak).toBe(
+        Math.max(
+          1,
+          Math.min(supersededCount, LIMITS.corpusIndexHighlightConcurrency),
+        ),
+      );
+      for (const hit of currentHits) {
+        expect(page.snippetById.get(hit.document_id)).toBe(
+          `current ${hit.document_id}`,
+        );
+        expect(page.anchorIdById.get(hit.document_id)).toBe(hit.anchor_id);
+      }
+    },
+  );
+
+  test("an expired shared highlight deadline prevents further dispatch", async () => {
+    engineHits = Array.from({ length: 6 }, (_, index) => ({
+      document_id: `doc-${index}`,
+    }));
+    let now = 0;
+    const clock = spyOn(performance, "now").mockImplementation(() => now);
+    const engine = globalThis.fetch;
+    const stub = async (
+      input: Parameters<typeof fetch>[0],
+      init?: Parameters<typeof fetch>[1],
+    ): Promise<Response> => {
+      const body: Record<string, unknown> =
+        typeof init?.body === "string" ? JSON.parse(init.body) : {};
+      if (
+        body["snippet_fields"] !== undefined &&
+        snippetRequests().length === 0
+      ) {
+        now = CORPUS_INDEX_SEARCH_TIMEOUT_MS + 1;
+        requestBodies.push(body);
+        return new Response(
+          JSON.stringify({ num_hits: 0, hits: [], snippets: [] }),
+        );
+      }
+      return engine(input, init);
+    };
+    globalThis.fetch = Object.assign(stub, {
+      preconnect: originalFetch.preconnect,
+    });
+    // The batch consumes the shared budget; missing passages do not
+    // receive a fresh timeout for their fallback requests.
+    expect(await rejectionOf(readPage(6))).toMatchObject({
+      status: 503,
+      code: "search_index_unavailable",
+    });
+    expect(snippetRequests()).toHaveLength(1);
+    clock.mockRestore();
   });
 
   test("an empty page asks the engine for nothing to highlight", async () => {
@@ -1191,49 +1457,98 @@ describe("only the passages a page emits are highlighted", () => {
     expect(page.scan.highlightRounds).toBe(0);
   });
 
-  test("a passage the index holds twice does not cost another hit its snippet", async () => {
-    // Mid-refresh: ingestion has appended doc-a's new copy and the engine has
-    // not applied the delete yet, so one clause matches two rows.
+  test("a current revision selects its best passage when the superseded chunk differs", async () => {
+    // Mid-refresh: ingestion has appended doc-a's new revision and the engine
+    // has not applied the delete of the old one, so the scan reaches both.
     const scanned = [
-      { document_id: "doc-a", chunk_id: "doc-a:0" },
-      { document_id: "doc-b", chunk_id: "doc-b:0" },
-      { document_id: "doc-c", chunk_id: "doc-c:0" },
+      { document_id: "doc-a", chunk_id: "doc-a:5", anchor_id: "a-old" },
+      { document_id: "doc-b", chunk_id: "doc-b:0", anchor_id: "b-current" },
+      { document_id: "doc-c", chunk_id: "doc-c:0", anchor_id: "c-current" },
     ];
     responseBody = {
       num_hits: scanned.length,
       hits: scanned,
       snippets: scanned.map(() => ({ text: ["scanned"] })),
     };
-    const highlighted = [
-      { document_id: "doc-a", chunk_id: "doc-a:0" },
-      { document_id: "doc-a", chunk_id: "doc-a:0" },
-      { document_id: "doc-b", chunk_id: "doc-b:0" },
-      { document_id: "doc-c", chunk_id: "doc-c:0" },
+    const supersededRevision = "0b6f3a52-1d7e-4f0a-9c2b-5e8d7a6f4c31";
+    // Every physical copy the index holds, best first: the superseded copy of
+    // doc-a outranks its current one.
+    const copies = [
+      {
+        hit: { document_id: "doc-a", chunk_id: "doc-a:5", anchor_id: "a-old" },
+        revision: supersededRevision,
+        text: "doc-a superseded",
+      },
+      {
+        hit: { document_id: "doc-a", chunk_id: "doc-a:0", anchor_id: "a-new" },
+        revision: testRevisionOf("doc-a"),
+        text: "doc-a current",
+      },
+      {
+        hit: {
+          document_id: "doc-b",
+          chunk_id: "doc-b:0",
+          anchor_id: "b-current",
+        },
+        revision: testRevisionOf("doc-b"),
+        text: "doc-b current",
+      },
+      {
+        hit: {
+          document_id: "doc-c",
+          chunk_id: "doc-c:0",
+          anchor_id: "c-current",
+        },
+        revision: testRevisionOf("doc-c"),
+        text: "doc-c current",
+      },
     ];
-    snippetResponseBody = {
-      num_hits: highlighted.length,
-      hits: highlighted,
-      snippets: [
-        { text: ["doc-a current"] },
-        { text: ["doc-a superseded"] },
-        { text: ["doc-b"] },
-        { text: ["doc-c"] },
-      ],
-    };
+    const scanStub = globalThis.fetch;
+    globalThis.fetch = Object.assign(
+      async (
+        input: Parameters<typeof fetch>[0],
+        init?: Parameters<typeof fetch>[1],
+      ): Promise<Response> => {
+        const body: Record<string, unknown> =
+          typeof init?.body === "string" ? JSON.parse(init.body) : {};
+        if (body["snippet_fields"] === undefined) {
+          return await scanStub(input, init);
+        }
+        requestBodies.push(body);
+        // The engine answers a revision-narrowed clause with that copy only.
+        const query = String(body["query"]);
+        const answered = copies.filter(({ hit, revision }) =>
+          ["document_id", "chunk_id"].some((field) =>
+            query.includes(
+              `(${field}:"${field === "document_id" ? hit.document_id : hit.chunk_id}" AND projection_revision:"${revision}")`,
+            ),
+          ),
+        );
+        return new Response(
+          JSON.stringify({
+            num_hits: answered.length,
+            hits: answered.map(({ hit }) => hit),
+            snippets: answered.map(({ text }) => ({ text: [text] })),
+          }),
+          { status: 200 },
+        );
+      },
+      { preconnect: originalFetch.preconnect },
+    );
 
     const page = await readPage();
 
-    // Room for the overlap, so the duplicate does not push doc-c out of the
-    // answer, and the copy that ranked first is the one the reader sees.
-    expect(snippetRequests().at(0)?.["max_hits"]).toBe(
-      3 * HIGHLIGHT_COPIES_PER_PASSAGE,
-    );
     expect(page.snippetById.get("doc-a")).toBe("doc-a current");
-    expect(page.snippetById.get("doc-b")).toBe("doc-b");
-    expect(page.snippetById.get("doc-c")).toBe("doc-c");
-    for (const hit of page.pageRanked) {
-      expect(page.snippetById.get(hit.id)).toBeDefined();
-    }
+    expect(page.anchorIdById.get("doc-a")).toBe("a-new");
+    // One clause per document, each narrowed to its applied revision.
+    expect(snippetRequests().map((request) => request["query"])).toEqual([
+      `(text:promlčení) AND (${current('chunk_id:"doc-a:5"', "doc-a")} OR ${current('chunk_id:"doc-b:0"', "doc-b")} OR ${current('chunk_id:"doc-c:0"', "doc-c")})`,
+      `(text:promlčení) AND (${current('document_id:"doc-a"', "doc-a")})`,
+    ]);
+    expect(page.snippetById.get("doc-b")).toBe("doc-b current");
+    expect(page.snippetById.get("doc-c")).toBe("doc-c current");
+    expect([...page.snippetById.values()]).not.toContain("doc-a superseded");
+    expect([...page.anchorIdById.values()]).not.toContain("a-old");
   });
 });
 
@@ -1252,6 +1567,7 @@ describe("the reported engine time accounts for every round trip", () => {
     engineHits = Array.from({ length: 5000 }, (_, index) => ({
       chunk_id: `doc-${index}:0`,
       document_id: `doc-${index}`,
+      anchor_id: `anchor-${index}`,
     }));
 
     const page = await readPage(3);
@@ -1268,6 +1584,7 @@ describe("the reported engine time accounts for every round trip", () => {
     engineHits = Array.from({ length: 5000 }, (_, index) => ({
       chunk_id: `doc-${index}:0`,
       document_id: `doc-${index}`,
+      anchor_id: `anchor-${index}`,
     }));
 
     const startedAt = performance.now();
@@ -1442,6 +1759,7 @@ describe("folded acts stay folded across capped windows", () => {
       order: RELEVANCE_ORDER,
       parsedCursor,
       snippetFields: ["text"],
+      projectionRevisionField: "projection_revision",
       extractId: (hit: CorpusIndexHit) =>
         typeof hit["document_id"] === "string" ? hit["document_id"] : null,
       extractSnippet: () => null,
@@ -1476,6 +1794,7 @@ describe("folded acts stay folded across capped windows", () => {
         );
         return {
           context: null,
+          revisionById: testRevisionsFor(candidates),
           ranked: collapsed.ranked,
           groups: collapsed.workTokens.filter(
             (token) =>
@@ -1648,6 +1967,7 @@ describe("a page addressed by offset", () => {
       parsedCursor,
       skip,
       snippetFields: ["text"],
+      projectionRevisionField: "projection_revision",
       extractId: (hit: CorpusIndexHit) =>
         typeof hit["document_id"] === "string" ? hit["document_id"] : null,
       extractSnippet: () => null,
@@ -1669,6 +1989,7 @@ describe("a page addressed by offset", () => {
             authorityById: new Map(authorityById),
             weight: DEFAULT_AUTHORITY_WEIGHT,
           }),
+          revisionById: testRevisionsFor(shown),
         };
       },
     });
