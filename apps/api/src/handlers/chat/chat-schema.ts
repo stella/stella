@@ -537,7 +537,24 @@ const TOOL_RESULT_VALIDATION = {
   ChatToolResultPart["state"],
   "error" | "incomplete" | "output"
 >;
+type DeniedToolOutput = { approved: false; message: string };
+
+// AG-UI history rebuilds a denial as a decision payload, not an execution
+// error. Share its exact boundary check between call and result validation.
+const isDeniedToolOutput = (value: unknown): value is DeniedToolOutput =>
+  isRecord(value) &&
+  Object.keys(value).length === 2 &&
+  value["approved"] === false &&
+  typeof value["message"] === "string" &&
+  value["message"].length > 0;
+
 type ValidatedToolCallPart =
+  | {
+      type: "denied";
+      name: string;
+      output: DeniedToolOutput;
+      part: ChatToolCallPart;
+    }
   | {
       type: "error";
       name: string;
@@ -1618,7 +1635,7 @@ const validateErrorToolCallPart = ({
   if (Result.isError(errorOutputResult)) {
     return Result.err(errorOutputResult.error);
   }
-  const error = errorOutputResult.value;
+  const output = errorOutputResult.value;
   const canonicalInput =
     tool === undefined ? undefined : validateToolCallInput({ part, tool });
   const input =
@@ -1633,12 +1650,33 @@ const validateErrorToolCallPart = ({
       ),
     ),
     ...(input.type === "present" ? { input: input.value } : {}),
-    ...(error === undefined ? {} : { output: { error } }),
+    ...(output.type === "denied" ? { output: output.output } : {}),
+    ...(output.type === "error" && output.error !== undefined
+      ? { output: { error: output.error } }
+      : {}),
   };
   if (!isChatPart(candidate) || candidate.type !== "tool-call") {
     return panic("A failed chat tool call violates the tool-call contract");
   }
-  return Result.ok({ type: "error", name: part.name, error, part: candidate });
+  switch (output.type) {
+    case "denied":
+      return Result.ok({
+        type: "denied",
+        name: part.name,
+        output: output.output,
+        part: candidate,
+      });
+    case "error":
+      return Result.ok({
+        type: "error",
+        name: part.name,
+        error: output.error,
+        part: candidate,
+      });
+    default:
+      output satisfies never;
+      return panic(`Unhandled tool failure output: ${String(output)}`);
+  }
 };
 
 /** `argumentsText` as an input object, when the object's JSON is exactly
@@ -1655,12 +1693,25 @@ const verbatimToolInput = (
     : { type: "absent" };
 };
 
+type ValidatedToolFailureOutput =
+  | { type: "error"; error: string | undefined }
+  | { type: "denied"; output: DeniedToolOutput };
+
 const validateToolCallErrorOutput = (
   part: ChatToolCallPart,
-): Result<string | undefined, HandlerError<400>> => {
+): Result<ValidatedToolFailureOutput, HandlerError<400>> => {
   const output: unknown = part.output;
   if (output === undefined) {
-    return Result.ok(undefined);
+    return Result.ok({ type: "error", error: undefined });
+  }
+  // Denial is an approval decision, not a failed server execution. The SDK
+  // preserves its decision payload on the call and the paired result.
+  if (
+    "approval" in part &&
+    part.approval.approved === false &&
+    isDeniedToolOutput(output)
+  ) {
+    return Result.ok({ type: "denied", output });
   }
   if (
     typeof output !== "object" ||
@@ -1676,7 +1727,7 @@ const validateToolCallErrorOutput = (
       }),
     );
   }
-  return Result.ok(output.error);
+  return Result.ok({ type: "error", error: output.error });
 };
 
 const validateToolResultPart = ({
@@ -1709,7 +1760,7 @@ const validateToolResultPart = ({
   }
 
   if (validation === "error") {
-    if (toolCall.type !== "error") {
+    if (toolCall.type === "schema") {
       return Result.err(
         new HandlerError({
           status: 400,
@@ -1768,11 +1819,34 @@ const validateToolResultPart = ({
 
 const validateToolErrorResult = (
   part: ChatToolResultPart,
-  toolCall: Extract<ValidatedToolCallPart, { type: "error" }>,
+  toolCall: Extract<ValidatedToolCallPart, { type: "error" | "denied" }>,
 ): Result<void, HandlerError<400>> => {
   const contentResult = parseToolResultContent(part.content);
   if (Result.isError(contentResult)) {
     return Result.err(contentResult.error);
+  }
+
+  switch (toolCall.type) {
+    case "denied": {
+      if (
+        part.outcome === "denied" &&
+        part.error === undefined &&
+        deepEquals(contentResult.value, toolCall.output)
+      ) {
+        return Result.ok();
+      }
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: `Invalid chat tool denial result: ${part.toolCallId}`,
+        }),
+      );
+    }
+    case "error":
+      break;
+    default:
+      toolCall satisfies never;
+      return panic(`Unhandled tool failure: ${String(toolCall)}`);
   }
 
   // A denied result rebuilt from AG-UI history carries the approval decision
@@ -1782,14 +1856,7 @@ const validateToolErrorResult = (
     part.outcome === "denied" &&
     "approval" in toolCall.part &&
     toolCall.part.approval.approved === false &&
-    typeof content === "object" &&
-    content !== null &&
-    Object.keys(content).length === 2 &&
-    "approved" in content &&
-    content.approved === false &&
-    "message" in content &&
-    typeof content.message === "string" &&
-    content.message.length > 0 &&
+    isDeniedToolOutput(content) &&
     part.error === undefined
   ) {
     return Result.ok();

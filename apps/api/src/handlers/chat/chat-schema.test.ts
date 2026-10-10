@@ -2278,50 +2278,72 @@ describe("validateMessage", () => {
       { approved: false, message: "User denied this action", extra: true },
       null,
     ];
-    for (const outcome of outcomes) {
-      for (const approved of approvals) {
-        for (const [index, payload] of payloads.entries()) {
-          for (const error of [undefined, "Mismatched error"]) {
-            const result = validateToolCallParts({
-              message: {
-                id: chatMessageId("msg_snapshot_denial"),
-                role: "assistant",
-                parts: [
-                  {
-                    type: "tool-call",
-                    id: "tool-call-1",
-                    name: "mcp__external__create_document",
-                    arguments: JSON.stringify({
-                      name: "Draft",
-                      source: "Text",
-                    }),
-                    input: { name: "Draft", source: "Text" },
-                    output: { error: "Tool execution failed" },
-                    state: "error",
-                    approval: {
-                      id: "approval-1",
-                      needsApproval: true,
-                      ...(approved === undefined ? {} : { approved }),
+    const callOutputs = [
+      { kind: "execution-error", value: { error: "Tool execution failed" } },
+      {
+        kind: "denial",
+        value: { approved: false, message: "User denied this action" },
+      },
+      {
+        kind: "mismatched-denial",
+        value: { approved: false, message: "A different decision" },
+      },
+      { kind: "malformed-denial", value: { approved: false, message: 123 } },
+    ];
+    for (const callOutput of callOutputs) {
+      for (const outcome of outcomes) {
+        for (const approved of approvals) {
+          for (const [index, payload] of payloads.entries()) {
+            for (const error of [undefined, "Mismatched error"]) {
+              const result = validateToolCallParts({
+                message: {
+                  id: chatMessageId("msg_snapshot_denial"),
+                  role: "assistant",
+                  parts: [
+                    {
+                      type: "tool-call",
+                      id: "tool-call-1",
+                      name: "mcp__external__create_document",
+                      arguments: JSON.stringify({
+                        name: "Draft",
+                        source: "Text",
+                      }),
+                      input: { name: "Draft", source: "Text" },
+                      output: callOutput.value,
+                      state: "error",
+                      approval: {
+                        id: "approval-1",
+                        needsApproval: true,
+                        ...(approved === undefined ? {} : { approved }),
+                      },
                     },
-                  },
-                  {
-                    type: "tool-result",
-                    toolCallId: "tool-call-1",
-                    content: JSON.stringify(payload),
-                    ...(error === undefined ? {} : { error }),
-                    ...(outcome === undefined ? {} : { outcome }),
-                    state: "error",
-                  },
-                ],
-              },
-              tools: snapshotApprovalTools,
-            });
-            expect(Result.isOk(result)).toBe(
-              outcome === "denied" &&
-                approved === false &&
-                index === 0 &&
-                error === undefined,
-            );
+                    {
+                      type: "tool-result",
+                      toolCallId: "tool-call-1",
+                      content: JSON.stringify(payload),
+                      ...(error === undefined ? {} : { error }),
+                      ...(outcome === undefined ? {} : { outcome }),
+                      state: "error",
+                    },
+                  ],
+                },
+                tools: snapshotApprovalTools,
+              });
+              expect(Result.isOk(result)).toBe(
+                outcome === "denied" &&
+                  approved === false &&
+                  index === 0 &&
+                  error === undefined &&
+                  (callOutput.kind === "execution-error" ||
+                    callOutput.kind === "denial"),
+              );
+              if (Result.isOk(result)) {
+                expect(
+                  result.value.find((part) => part.type === "tool-call")
+                    ?.output,
+                ).toEqual(callOutput.value);
+              }
+            }
           }
         }
       }
