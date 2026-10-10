@@ -297,10 +297,9 @@ const projectError = ({
   const queryGraph = database || causeRedacted || redaction.count > before;
   let message = ownMessage;
   if (queryGraph) {
-    message =
-      database && input["message"] !== QUERY_WRAPPER_MESSAGE
-        ? "Database query failed (values redacted)"
-        : QUERY_WRAPPER_MESSAGE;
+    message = database
+      ? "Database query failed (values redacted)"
+      : QUERY_WRAPPER_MESSAGE;
   }
   const output =
     input instanceof AggregateError
@@ -329,7 +328,7 @@ const projectError = ({
   }
   if (queryGraph) {
     for (const [key, field] of Object.entries(
-      queryErrorMetadata(input, cause),
+      queryErrorMetadata(input, database ? cause : undefined),
     )) {
       // Schema identifiers are whole tokens, not free text containing values.
       if (projectText(field, "exact") !== field) {
