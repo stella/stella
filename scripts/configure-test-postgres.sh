@@ -49,12 +49,13 @@ fi
 # A previously configured stack may still have the old LOGIN bootstrap role.
 bootstrap_login=$(docker exec "$container" psql -U "$owner" -d "$database" -tAc "SELECT rolcanlogin FROM pg_roles WHERE rolname = 'stella_bootstrap'")
 posture=$(docker exec "$container" psql -U "$owner" -d "$database" -tAc "SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user")
+instrumentation_schema=$(docker exec "$container" psql -U "$owner" -d "$database" -tAc "SELECT coalesce((SELECT extnamespace::regnamespace::text FROM pg_extension WHERE extname = 'pg_stat_statements'), 'missing') WHERE EXISTS (SELECT 1 FROM pg_available_extensions WHERE name = 'pg_stat_statements')")
 if [[ "$posture" == t\|* ]]; then
   docker exec -i "$container" psql -U "$owner" -d "$database" -v ON_ERROR_STOP=1 -v "owner=$owner" < "$repo/docker/postgres/init.sql"
 elif [[ "$bootstrap_login" == t ]]; then
   # Cut over the concrete older container state before accepting a healthy owner.
   docker exec -i "$container" psql -U stella_bootstrap -d "$database" -v ON_ERROR_STOP=1 -v "owner=$owner" < "$repo/docker/postgres/init.sql"
-elif [[ "$posture" == 'f|t' ]]; then
+elif [[ "$posture" == 'f|t' || ( "$posture" == 'f|f' && -n "$instrumentation_schema" && "$instrumentation_schema" != stella_instrumentation ) ]]; then
   { printf 'SET ROLE stella_bootstrap;\n'; cat "$repo/docker/postgres/init.sql"; } |
     docker exec -i --user postgres "$container" psql -U stella_maintenance -d "$database" -v ON_ERROR_STOP=1 -v "owner=$owner"
 elif [[ "$posture" != 'f|f' ]]; then

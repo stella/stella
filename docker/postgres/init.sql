@@ -117,11 +117,21 @@ SELECT format('GRANT stella TO %I WITH ADMIN TRUE, INHERIT FALSE, SET TRUE', :'o
 SELECT format('GRANT pg_read_all_settings, pg_read_all_stats TO %I', :'owner')
 \gexec
 CREATE EXTENSION IF NOT EXISTS unaccent;
+-- Instrumentation is outside the application schema managed by Drizzle.
+CREATE SCHEMA IF NOT EXISTS stella_instrumentation;
+REVOKE ALL ON SCHEMA stella_instrumentation FROM PUBLIC;
+SELECT format('GRANT USAGE ON SCHEMA stella_instrumentation TO %I', :'owner')
+\gexec
 -- Native development toolchains may omit optional statement instrumentation.
-SELECT 'CREATE EXTENSION IF NOT EXISTS pg_stat_statements'
+SELECT 'CREATE EXTENSION IF NOT EXISTS pg_stat_statements SCHEMA stella_instrumentation'
 WHERE EXISTS (SELECT 1 FROM pg_available_extensions WHERE name = 'pg_stat_statements')
 \gexec
--- Statistics are maintenance data, including extensions installed outside public.
+SELECT 'ALTER EXTENSION pg_stat_statements SET SCHEMA stella_instrumentation'
+FROM pg_extension
+WHERE extname = 'pg_stat_statements'
+  AND extnamespace <> 'stella_instrumentation'::regnamespace
+\gexec
+-- Statistics are maintenance data; privileges follow the extension's schema.
 SELECT format('REVOKE SELECT ON %I.%I FROM PUBLIC; GRANT SELECT ON %I.%I TO %I',
   namespace.nspname, relation.relname, namespace.nspname, relation.relname, :'owner')
 FROM pg_class relation

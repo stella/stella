@@ -11,6 +11,22 @@ role="stella_parity_probe_$$"
 psql_probe() {
   docker exec -i "$container" psql -U "$owner" -d "$database" -v ON_ERROR_STOP=1 -tA "$@"
 }
+assert_instrumentation() {
+  [[ "$(psql_probe -c "SELECT
+    (SELECT extnamespace = 'stella_instrumentation'::regnamespace FROM pg_extension WHERE extname = 'pg_stat_statements')
+    AND to_regclass('public.pg_stat_statements') IS NULL
+    AND to_regclass('public.pg_stat_statements_info') IS NULL
+    AND (SELECT count(*) >= 0 FROM stella_instrumentation.pg_stat_statements)
+    AND (SELECT count(*) >= 0 FROM stella_instrumentation.pg_stat_statements_info)
+    AND NOT EXISTS (
+      SELECT 1 FROM pg_class relation
+      CROSS JOIN LATERAL aclexplode(coalesce(relation.relacl, acldefault('r', relation.relowner))) privilege
+      WHERE relation.relnamespace = 'stella_instrumentation'::regnamespace
+        AND relation.relkind = 'v' AND privilege.grantee = 0 AND privilege.privilege_type = 'SELECT'
+    )")" == t ]] || {
+    echo 'Instrumentation must remain readable by its owner outside the application schema.' >&2; exit 1;
+  }
+}
 cleanup() {
   psql_probe -c "DROP TABLE IF EXISTS $probe; DROP FUNCTION IF EXISTS ${probe}_function(); DROP ROLE IF EXISTS $role" >/dev/null
 }
@@ -27,6 +43,7 @@ ALTER TABLE $probe ENABLE ROW LEVEL SECURITY; ALTER TABLE $probe FORCE ROW LEVEL
 CREATE POLICY read_probe ON $probe FOR SELECT USING (true);
 CREATE ROLE $role NOLOGIN; GRANT $role TO \"$owner\" WITH ADMIN TRUE, INHERIT FALSE, SET TRUE" >/dev/null
 bash "$repo/scripts/configure-test-postgres.sh" "$container" "$owner" "$database"
+assert_instrumentation
 [[ "$(psql_probe -c "SELECT relowner = (SELECT oid FROM pg_roles WHERE rolname = current_user) FROM pg_class WHERE oid = '$probe'::regclass")" == t ]] || {
   echo 'Existing table ownership was not transferred.' >&2; exit 1;
 }
@@ -71,9 +88,16 @@ bash "$repo/scripts/configure-test-postgres.sh" "$container" "$owner" "$database
   echo 'A reused healthy owner left the legacy bootstrap login enabled.' >&2; exit 1;
 }
 
+# A healthy non-bypassing owner also needs an older instrumentation installation moved.
+docker exec --user postgres "$container" psql -U stella_maintenance -d "$database" -v ON_ERROR_STOP=1 -c 'SET ROLE stella_bootstrap; ALTER EXTENSION pg_stat_statements SET SCHEMA public' >/dev/null
+[[ "$(psql_probe -c "SELECT extnamespace = 'public'::regnamespace FROM pg_extension WHERE extname = 'pg_stat_statements'")" == t ]] || exit 1
+bash "$repo/scripts/configure-test-postgres.sh" "$container" "$owner" "$database"
+assert_instrumentation
+
 started=$(docker inspect --format '{{.State.StartedAt}}' "$container")
 for replay in 1 2; do
   bash "$repo/scripts/configure-test-postgres.sh" "$container" "$owner" "$database"
+  assert_instrumentation
   [[ "$(docker inspect --format '{{.State.StartedAt}}' "$container")" == "$started" ]] || {
     echo "Replay $replay restarted an already configured Postgres." >&2; exit 1;
   }
