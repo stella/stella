@@ -4,6 +4,7 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 import { sleep } from "@stll/concurrency/sleep";
 
 import { toSafeId } from "@/lib/safe-id";
+import type { provisionPreviewOptions } from "@/lib/statutes/provision-preview";
 
 import { provision } from "./provisions-cited.fixture";
 
@@ -12,6 +13,12 @@ const { act, cleanup, fireEvent, render, screen, waitFor } =
   await import("@testing-library/react");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
+const {
+  RouterContextProvider,
+  createRouter,
+  createRootRoute,
+  createMemoryHistory,
+} = await import("@tanstack/react-router");
 const { IntlProvider } = await import("use-intl");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { TooltipProvider } = await import("@stll/ui/tooltip");
@@ -22,6 +29,7 @@ const messages = (await import("@/i18n/langs/en.json")).default;
 const decisionId = toSafeId<"caseLawDecision">(
   "00000000-0000-4000-8000-000000000002",
 );
+const originalFetch = globalThis.fetch;
 const clients: InstanceType<typeof QueryClient>[] = [];
 
 afterEach(() => {
@@ -30,6 +38,7 @@ afterEach(() => {
     client.clear();
   }
   clients.length = 0;
+  globalThis.fetch = originalFetch;
 });
 afterAll(async () => {
   await act(async () => {
@@ -103,18 +112,25 @@ const mount = (items: ReturnType<typeof provision>[], resolveTitle = false) => {
     ] satisfies ResolvedWorks;
     client.setQueryData(statutesResolveOptions([work]).queryKey, resolved);
   }
+  const appRouter = createRouter({
+    routeTree: createRootRoute(),
+    history: createMemoryHistory({ initialEntries: ["/law"] }),
+    isServer: false,
+  });
   const ui = render(
     <QueryClientProvider client={client}>
       <IntlProvider locale="en" messages={messages} timeZone="UTC">
         <FormattingProvider locale="en" timeZone="UTC">
-          <TooltipProvider>
-            <ProvisionsCited
-              decisionDate="2024-01-01"
-              decisionId={decisionId}
-              expanded
-              isHydrated
-            />
-          </TooltipProvider>
+          <RouterContextProvider router={appRouter}>
+            <TooltipProvider>
+              <ProvisionsCited
+                decisionDate="2024-01-01"
+                decisionId={decisionId}
+                expanded
+                isHydrated
+              />
+            </TooltipProvider>
+          </RouterContextProvider>
         </FormattingProvider>
       </IntlProvider>
     </QueryClientProvider>,
@@ -286,4 +302,58 @@ test("a focused provision reveals its full version basis and decision passage", 
       screen.getByText("The decision applies section 1 of the Civil Code."),
     ).toBeTruthy();
   });
+});
+
+test("a resolved provision fetches wording on focus and retries into a valid statute link", async () => {
+  let requests = 0;
+  globalThis.fetch = Object.assign(
+    async () => {
+      requests += 1;
+      if (requests === 1) {
+        throw new Error("temporary preview failure");
+      }
+      const preview = {
+        documentId: toSafeId<"legislationDocument">(
+          "00000000-0000-4000-8000-000000000003",
+        ),
+        language: "cs",
+        anchorId: "s1",
+        citedAnchorId: "s1",
+        headings: [],
+        heading: null,
+        blocks: [
+          {
+            id: "block-1",
+            anchorId: "s1",
+            text: "Wording of section one",
+          },
+        ],
+      } satisfies Awaited<
+        ReturnType<
+          NonNullable<ReturnType<typeof provisionPreviewOptions>["queryFn"]>
+        >
+      >;
+      return Response.json(preview);
+    },
+    { preconnect: originalFetch.preconnect },
+  );
+
+  mount([civilProvision({ workEli })], true);
+  const chip = screen.getByRole("button", { name: /§ 1/u });
+  expect(requests).toBe(0);
+
+  chip.focus();
+  expect(await screen.findByText(messages.errors.actionFailed)).toBeTruthy();
+  expect(requests).toBe(1);
+
+  fireEvent.click(screen.getByRole("button", { name: messages.common.retry }));
+  expect(await screen.findByText("Wording of section one")).toBeTruthy();
+  expect(requests).toBe(2);
+  const statuteLink = screen.getByRole("link", {
+    name: messages.statutes.openProvision,
+  });
+  expect(statuteLink.getAttribute("href")).toContain(
+    "/law/cze/statutes/40-1964-sb",
+  );
+  expect(statuteLink.getAttribute("href")).toContain("#s1");
 });
