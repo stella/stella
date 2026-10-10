@@ -106,6 +106,21 @@ export const MCP_OAUTH_PROTOCOL_SCOPES = [
   "offline_access",
 ] as const;
 
+/**
+ * Products the consent screen may brand. The server names one only when the
+ * client's registered locations prove it; a client's own name never does.
+ */
+export const VERIFIED_OAUTH_CLIENT_BRANDS = [
+  "stella",
+  "claude",
+  "claude_code",
+  "chatgpt",
+  "codex",
+] as const;
+
+export type VerifiedOAuthClientBrand =
+  (typeof VERIFIED_OAUTH_CLIENT_BRANDS)[number];
+
 export type McpOAuthScope =
   | (typeof MCP_OAUTH_PROTOCOL_SCOPES)[number]
   | McpDefaultResourceScope

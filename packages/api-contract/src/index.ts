@@ -394,12 +394,14 @@ export {
   MCP_LAW_HTTP_PATH,
   MCP_OAUTH_PROTOCOL_SCOPES,
   MCP_WRITE_ONLY_RESOURCE_SCOPES,
+  VERIFIED_OAUTH_CLIENT_BRANDS,
 } from "./mcp";
 export type {
   McpAnonymizedResourceScope,
   McpDefaultResourceScope,
   McpOAuthScope,
   McpWriteOnlyResourceScope,
+  VerifiedOAuthClientBrand,
 } from "./mcp";
 export { OCR_EXPORT_STATUSES } from "./ocr-export";
 export type { OcrExportStatus } from "./ocr-export";

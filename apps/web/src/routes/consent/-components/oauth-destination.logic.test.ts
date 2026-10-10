@@ -8,6 +8,7 @@ const info = (redirectHosts: string[]): OAuthConsentInfo => ({
   redirectHosts,
   clientIdHost: null,
   unverified: false,
+  verifiedBrand: null,
 });
 
 describe("OAuth destination classification", () => {

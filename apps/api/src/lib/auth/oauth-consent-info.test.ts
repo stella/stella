@@ -27,6 +27,7 @@ describe("OAuth consent app details", () => {
       redirectHosts: ["connector.example"],
       clientIdHost: null,
       unverified: true,
+      verifiedBrand: null,
     });
   });
 
@@ -175,5 +176,120 @@ describe("OAuth consent app details", () => {
         ).unverified,
       ).toBe(unverified);
     }
+  });
+
+  const brandOf = (
+    client: Partial<Parameters<typeof getOAuthConsentInfo>[0]>,
+  ) =>
+    getOAuthConsentInfo(
+      {
+        clientId: "example-client",
+        name: "Example connector",
+        redirectUris: [],
+        clientDiscoveryId: null,
+        ...client,
+      },
+      origins,
+    ).verifiedBrand;
+
+  test("brands a client only by its verified location", () => {
+    for (const [redirectUri, brand] of [
+      ["https://claude.ai/api/mcp/auth_callback", "claude"],
+      ["https://chatgpt.com/connector_platform_oauth_redirect", "chatgpt"],
+      ["https://chatgpt.com/connector/oauth/abc123", "chatgpt"],
+      ["https://stella.example/callback", "stella"],
+    ] as const) {
+      expect(brandOf({ redirectUris: [redirectUri] })).toBe(brand);
+    }
+    for (const [clientId, brand] of [
+      ["https://claude.ai/oauth/claude-code-client-metadata", "claude_code"],
+      ["https://chatgpt.com/oauth/client.json", "chatgpt"],
+      ["https://chatgpt.com/oauth/codex/client.json", "codex"],
+      ["https://stella.example/oauth/cli.json", "stella"],
+    ] as const) {
+      expect(
+        brandOf({
+          clientId,
+          redirectUris: ["http://127.0.0.1/callback"],
+          clientDiscoveryId: "cimd",
+        }),
+      ).toBe(brand);
+    }
+  });
+
+  test("a client calling itself a known assistant gets no brand", () => {
+    for (const name of [
+      "Claude",
+      "Claude Code",
+      "ChatGPT",
+      "Codex",
+      "stella",
+    ]) {
+      for (const client of [
+        { name, redirectUris: ["https://connector.example/callback"] },
+        { name, redirectUris: ["http://127.0.0.1:3000/callback"] },
+        {
+          name,
+          clientId: "https://connector.example/claude-code-client-metadata",
+          redirectUris: ["http://127.0.0.1/callback"],
+          clientDiscoveryId: "cimd",
+        },
+      ]) {
+        const info = getOAuthConsentInfo(
+          {
+            clientId: "example-client",
+            clientDiscoveryId: null,
+            ...client,
+          },
+          origins,
+        );
+        expect(info).toMatchObject({
+          client_name: name,
+          unverified: true,
+          verifiedBrand: null,
+        });
+      }
+    }
+  });
+
+  test("a shared platform redirect verifies without naming a product", () => {
+    for (const redirectUri of [
+      "https://global.consent.azure-apim.net/redirect",
+      "https://global.consent.azure-apim.net/redirect/independent-connector-1",
+      "https://teams.microsoft.com/api/platform/v1.0/oAuthRedirect",
+      "https://vertexaisearch.cloud.google.com/oauth-redirect",
+    ]) {
+      expect(
+        getOAuthConsentInfo(
+          {
+            clientId: "example-client",
+            name: "Copilot Studio",
+            redirectUris: [redirectUri],
+            clientDiscoveryId: null,
+          },
+          origins,
+        ),
+      ).toMatchObject({ unverified: false, verifiedBrand: null });
+    }
+  });
+
+  test("names no brand when verified evidence disagrees or is partial", () => {
+    expect(
+      brandOf({
+        redirectUris: [
+          "https://claude.ai/api/mcp/auth_callback",
+          "https://chatgpt.com/connector_platform_oauth_redirect",
+        ],
+      }),
+    ).toBeNull();
+    expect(
+      brandOf({
+        redirectUris: [
+          "https://claude.ai/api/mcp/auth_callback",
+          "https://connector.example/callback",
+        ],
+      }),
+    ).toBeNull();
+    expect(brandOf({ redirectUris: [] })).toBeNull();
   });
 });

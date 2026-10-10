@@ -10,69 +10,169 @@ export type OAuthScopeGroup = "read" | "change" | "other";
 // disclosure. Shared by the consent screen and the connected-apps settings
 // card so both surfaces describe a scope identically.
 const OAUTH_SCOPE_METADATA = {
-  "stella:search": { label: "consent.scopeSearch", group: "read" },
-  "stella:read": { label: "consent.scopeRead", group: "read" },
-  "stella:templates": { label: "consent.scopeTemplates", group: "change" },
+  "stella:search": {
+    label: "consent.scopeSearch",
+    summary: "consent.summarySearch",
+    group: "read",
+    sensitive: false,
+  },
+  "stella:read": {
+    label: "consent.scopeRead",
+    summary: "consent.summaryRead",
+    group: "read",
+    sensitive: false,
+  },
+  "stella:templates": {
+    label: "consent.scopeTemplates",
+    summary: "consent.summaryTemplates",
+    group: "change",
+    sensitive: false,
+  },
   "stella:documents_write": {
     label: "consent.scopeDocumentsWrite",
+    summary: "consent.summaryDocumentsWrite",
     group: "change",
+    sensitive: true,
   },
   "stella:matters_write": {
     label: "consent.scopeMattersWrite",
+    summary: "consent.summaryMattersWrite",
     group: "change",
+    sensitive: false,
   },
   "stella:contacts_write": {
     label: "consent.scopeContactsWrite",
+    summary: "consent.summaryContactsWrite",
     group: "change",
+    sensitive: true,
   },
-  "stella:chat": { label: "consent.scopeChat", group: "change" },
+  "stella:chat": {
+    label: "consent.scopeChat",
+    summary: "consent.summaryChat",
+    group: "change",
+    sensitive: false,
+  },
   "stella:knowledge_write": {
     label: "consent.scopeKnowledgeWrite",
+    summary: "consent.summaryKnowledgeWrite",
     group: "change",
+    sensitive: true,
   },
   "stella:billing_write": {
     label: "consent.scopeBillingWrite",
+    summary: "consent.summaryBillingWrite",
     group: "change",
+    sensitive: true,
   },
-  "stella:admin_read": { label: "consent.scopeAdminRead", group: "read" },
-  "stella:admin_write": { label: "consent.scopeAdminWrite", group: "change" },
-  "stella:skills": { label: "consent.scopeSkills", group: "change" },
+  "stella:admin_read": {
+    label: "consent.scopeAdminRead",
+    summary: "consent.summaryAdminRead",
+    group: "read",
+    sensitive: false,
+  },
+  "stella:admin_write": {
+    label: "consent.scopeAdminWrite",
+    summary: "consent.summaryAdminWrite",
+    group: "change",
+    sensitive: true,
+  },
+  "stella:skills": {
+    label: "consent.scopeSkills",
+    summary: "consent.summarySkills",
+    group: "change",
+    sensitive: false,
+  },
   "stella:external_mcps": {
     label: "consent.scopeExternalMcps",
+    summary: "consent.summaryExternalMcps",
     group: "change",
+    sensitive: false,
   },
-  "stella:feedback": { label: "consent.scopeFeedback", group: "change" },
+  "stella:feedback": {
+    label: "consent.scopeFeedback",
+    summary: "consent.summaryFeedback",
+    group: "change",
+    sensitive: false,
+  },
   "stella:search_anonymized": {
     label: "consent.scopeSearchAnonymized",
+    summary: "consent.summarySearchAnonymized",
     group: "read",
+    sensitive: false,
   },
   "stella:read_anonymized": {
     label: "consent.scopeReadAnonymized",
+    summary: "consent.summaryReadAnonymized",
     group: "read",
+    sensitive: false,
   },
   "stella:templates_anonymized": {
     label: "consent.scopeTemplatesAnonymized",
+    summary: "consent.summaryTemplatesAnonymized",
     group: "change",
+    sensitive: false,
   },
-  "stella:onboarding": { label: "consent.scopeOnboarding", group: "change" },
-  email: { label: "consent.scopeProfile", group: "read" },
-  offline_access: { label: "consent.scopeOfflineAccess", group: "other" },
-  openid: { label: "consent.scopeProfile", group: "read" },
-  profile: { label: "consent.scopeProfile", group: "read" },
+  "stella:onboarding": {
+    label: "consent.scopeOnboarding",
+    summary: "consent.summaryOnboarding",
+    group: "change",
+    sensitive: false,
+  },
+  email: {
+    label: "consent.scopeProfile",
+    summary: "consent.summaryProfile",
+    group: "read",
+    sensitive: false,
+  },
+  offline_access: {
+    label: "consent.scopeOfflineAccess",
+    summary: "consent.summaryOfflineAccess",
+    group: "other",
+    sensitive: false,
+  },
+  openid: {
+    label: "consent.scopeProfile",
+    summary: "consent.summaryProfile",
+    group: "read",
+    sensitive: false,
+  },
+  profile: {
+    label: "consent.scopeProfile",
+    summary: "consent.summaryProfile",
+    group: "read",
+    sensitive: false,
+  },
 } as const satisfies Record<
   McpOAuthScope,
-  { label: TranslationKey; group: OAuthScopeGroup }
+  {
+    label: TranslationKey;
+    /** A short noun for the one-line summary ("documents", "audit log"). */
+    summary: TranslationKey;
+    group: OAuthScopeGroup;
+    /** Deleting data or administering the organization: summarized first. */
+    sensitive: boolean;
+  }
 >;
 
 type OAuthScopeKey = keyof typeof OAUTH_SCOPE_METADATA;
 type OAuthScopeLabel = (typeof OAUTH_SCOPE_METADATA)[OAuthScopeKey]["label"];
-type OAuthScopeTranslator = (key: OAuthScopeLabel) => string;
+type OAuthScopeSummary =
+  (typeof OAUTH_SCOPE_METADATA)[OAuthScopeKey]["summary"];
+type OAuthScopeTranslator = (
+  key: OAuthScopeLabel | OAuthScopeSummary,
+) => string;
 
 const isOAuthScopeKey = (scope: string): scope is OAuthScopeKey =>
   Object.hasOwn(OAUTH_SCOPE_METADATA, scope);
 
 export type OAuthScopeDisplayEntry =
-  | { label: OAuthScopeLabel; group: OAuthScopeGroup; type: "known" }
+  | {
+      label: OAuthScopeLabel;
+      summary: OAuthScopeSummary;
+      group: OAuthScopeGroup;
+      sensitive: boolean;
+      type: "known";
+    }
   | { scope: string; group: "other"; type: "unknown" };
 
 /**
@@ -90,10 +190,10 @@ export const toOAuthScopeDisplayEntries = (
 
   for (const scope of scopes) {
     if (isOAuthScopeKey(scope)) {
-      const { label, group } = OAUTH_SCOPE_METADATA[scope];
+      const { label, summary, group, sensitive } = OAUTH_SCOPE_METADATA[scope];
       if (!seenLabels.has(label)) {
         seenLabels.add(label);
-        entries.push({ label, group, type: "known" });
+        entries.push({ label, summary, group, sensitive, type: "known" });
       }
       continue;
     }
@@ -137,3 +237,26 @@ export const translateOAuthScopeEntry = (
 
   return t(entry.label);
 };
+
+/** The short noun an entry contributes to its group's one-line summary. */
+export const translateOAuthScopeSummary = (
+  t: OAuthScopeTranslator,
+  entry: OAuthScopeDisplayEntry,
+): string => {
+  if (entry.type === "unknown") {
+    return entry.scope;
+  }
+
+  return t(entry.summary);
+};
+
+/**
+ * Orders a group for its summary: sensitive entries first, so deleting data
+ * or administering the organization is read before anything routine.
+ */
+export const orderOAuthScopeSummary = (
+  entries: readonly OAuthScopeDisplayEntry[],
+): OAuthScopeDisplayEntry[] => [
+  ...entries.filter((entry) => entry.type === "known" && entry.sensitive),
+  ...entries.filter((entry) => entry.type !== "known" || !entry.sensitive),
+];
