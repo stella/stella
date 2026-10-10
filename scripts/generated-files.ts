@@ -505,7 +505,7 @@ export const GENERATORS = [
     inputs: [
       "apps/web/src/i18n/glossary.json",
       "packages/scripts/src/glossary-gen.ts",
-      "scripts/generated-artifacts.ts",
+      "packages/scripts/src/generated-artifact-format.ts",
       ".oxfmtrc.json",
     ],
     write: ["bun", "packages/scripts/src/glossary-gen.ts", "apps/web/src/i18n"],

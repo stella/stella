@@ -8,6 +8,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const workflow = readFileSync(
   new URL("../.github/workflows/ci.yml", import.meta.url),
@@ -73,10 +74,10 @@ catch { process.stderr.write("Missing comparison tree"); process.exit(1); } }\n`
     );
     chmodSync(git, 0o755);
     return Bun.spawnSync([process.execPath, "--eval", source], {
-      cwd: new URL("../", import.meta.url).pathname,
+      cwd: fileURLToPath(new URL("../", import.meta.url)),
       env: {
         ...process.env,
-        PATH: `${directory}:${process.env.PATH}`,
+        PATH: `${directory}:${process.env["PATH"] ?? ""}`,
         FIXTURE: directory,
         EVENT_NAME: event,
         BASE_SHA: baseSha,

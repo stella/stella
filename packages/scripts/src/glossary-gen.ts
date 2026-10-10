@@ -18,7 +18,7 @@ import path from "node:path";
 
 import type { UiLocale } from "@stll/locales";
 
-import { formattedLikeRepository } from "../../../scripts/generated-artifacts";
+import { formattedLikeRepository } from "./generated-artifact-format";
 
 const TERMINOLOGY_FILE = "TERMINOLOGY.md";
 export const CI_MARKDOWN_READER_INPUTS = [path.join("**", TERMINOLOGY_FILE)];
@@ -404,6 +404,7 @@ if (import.meta.main) {
     const next = await formattedLikeRepository(
       generate(existing, glossary),
       "md",
+      path.resolve(import.meta.dirname, "../../.."),
     );
 
     const termCount = glossary.verbs.length + glossary.legalConcepts.length;

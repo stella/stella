@@ -803,9 +803,18 @@ test("each CI check leg preserves merge-base setup, supply-chain protection and 
             absorbedBaseline,
           )["timeout-minutes"]
         : 0;
-    expect(timeout).toBe(
-      v.parse(v.number(), originalTimeout) + absorbedTimeout,
-    );
+    const baselineBudget =
+      v.parse(v.number(), originalTimeout) + absorbedTimeout;
+    // Full version-change parity measured 15m in addition to the existing
+    // 25m repository-check budget; later merge bases retain that allowance.
+    const expectedBudget =
+      partitionIds.at(index) === "ci-checks-rest" &&
+      steps.some(
+        ({ name }) => name === "Typecheck parity (all checked projects)",
+      )
+        ? Math.max(baselineBudget, 40)
+        : baselineBudget;
+    expect(timeout).toBe(expectedBudget);
     expect(setupSteps(steps)).toEqual(originalSetup);
     const installIndex = steps.findIndex(
       ({ name }) => name === "Install dependencies",

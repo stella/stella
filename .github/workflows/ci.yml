@@ -2666,8 +2666,8 @@ jobs:
       && needs.ci-plan.outputs.package_checks_required == 'true'
       )
     runs-on: ubuntu-latest
-    # 25m, matching code-quality.
-    timeout-minutes: 25
+    # Version-change parity measured 15m; retain 25m for repository checks.
+    timeout-minutes: 40
     permissions:
       contents: read
       # Release PR state for the release CLI changeset hold.
