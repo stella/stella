@@ -2,6 +2,7 @@
   "entry": 1289,
   "largest-route": 568513,
   "routes": 9507822,
+  "scan-engine-wasm": 51187,
   "total": 10539913,
   "vendor-anonymize-data": 0,
   "vendor-base-ui": 105586,

@@ -6,5 +6,5 @@
     "types": ["bun-types"]
   },
   "include": ["."],
-  "exclude": ["node_modules", "pkg", "target"]
+  "exclude": ["generated/*.js", "node_modules", "target"]
 }

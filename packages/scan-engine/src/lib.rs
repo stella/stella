@@ -7,7 +7,7 @@ use imageproc::{
     contours::find_contours_with_threshold,
     contrast::adaptive_threshold,
     filter::box_filter,
-    geometric_transformations::{Interpolation, Projection, warp_into},
+    geometric_transformations::{Border, Interpolation, Projection, warp_into},
 };
 
 #[cfg(target_arch = "wasm32")]
@@ -222,7 +222,7 @@ pub fn deskew_angle(gray: &GrayImage) -> f32 {
     let width = ((gray.width() as f32 * scale).round() as u32).max(1);
     let height = ((gray.height() as f32 * scale).round() as u32).max(1);
     let small = imageops::resize(gray, width, height, imageops::FilterType::Triangle);
-    let binary = adaptive_threshold(&small, 12);
+    let binary = adaptive_threshold(&small, 12, 0);
     let points: Vec<Point> = binary
         .enumerate_pixels()
         .filter(|(x, y, pixel)| {
@@ -285,9 +285,9 @@ pub fn perspective(
     let mut output = GrayImage::new(width, height);
     warp_into(
         gray,
-        &projection,
+        projection,
         Interpolation::Bilinear,
-        Luma([255]),
+        Border::Constant(Luma([255])),
         &mut output,
     );
     Ok(output)
@@ -302,9 +302,9 @@ fn rotate_centered(gray: &GrayImage, angle: f32) -> GrayImage {
     let mut output = GrayImage::new(gray.width(), gray.height());
     warp_into(
         gray,
-        &projection,
+        projection,
         Interpolation::Bilinear,
-        Luma([255]),
+        Border::Constant(Luma([255])),
         &mut output,
     );
     output
@@ -396,7 +396,7 @@ pub fn clean_scan(
         Luma([(value * 245.0 / base).min(255.0).round() as u8])
     });
     // Radius 20 produces the requested 41 by 41 adaptive threshold window.
-    let binary = adaptive_threshold(&flattened, 20);
+    let binary = adaptive_threshold(&flattened, 20, 0);
     let content = content_bounds(&binary, options.dpi).ok_or(UnrecognizedReason::NoContent)?;
     let selected = match options.output {
         CleanOutput::Grayscale => flattened,

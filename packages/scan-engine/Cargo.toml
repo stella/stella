@@ -34,6 +34,6 @@ strip = true
 incremental = false
 
 [dependencies]
-image = { version = "=0.25.8", default-features = false }
-imageproc = { version = "=0.25.0", default-features = false }
-wasm-bindgen = "=0.2.104"
+image = { version = "=0.25.10", default-features = false }
+imageproc = { version = "=0.27.0", default-features = false }
+wasm-bindgen = "=0.2.126"

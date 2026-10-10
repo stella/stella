@@ -9,5 +9,5 @@ export type {
   ScanEngine,
   ScanOptions,
   ScanResult,
-} from "@stll/scan-engine";
-export { ScanEngineError } from "@stll/scan-engine";
+} from "@stll/scan-engine/types";
+export { ScanEngineError } from "@stll/scan-engine/types";

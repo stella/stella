@@ -1,5 +1,5 @@
 use image::{GrayImage, Luma};
-use imageproc::geometric_transformations::{Interpolation, rotate_about_center};
+use imageproc::geometric_transformations::{Border, Interpolation, rotate_about_center};
 
 use crate::{
     CleanOptions, CleanOutput, UnrecognizedReason, clean_scan, content_bounds, deskew_angle,
@@ -35,7 +35,7 @@ fn deskew_reports_rotation_sign_and_half_degree_accuracy() {
             &source,
             expected.to_radians(),
             Interpolation::Bilinear,
-            Luma([245]),
+            Border::Constant(Luma([245])),
         );
         let actual = deskew_angle(&rotated);
         assert_eq!(actual.signum(), expected.signum());

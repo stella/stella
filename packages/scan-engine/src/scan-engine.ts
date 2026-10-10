@@ -27,9 +27,9 @@ type WasmBindings = {
     ...args: [
       width: number,
       height: number,
-      pixels: Uint8ClampedArray,
+      pixels: Uint8Array,
       dpi: number,
-      output: ScanOptions["output"],
+      output: string,
       contentCrop: boolean,
       deskew: boolean,
     ]
@@ -38,7 +38,7 @@ type WasmBindings = {
 
 type WasmLoader = () => Promise<WasmBindings>;
 
-const WASM_GLUE_PATH = "../pkg/scan_engine.js";
+const WASM_GLUE_PATH = "../generated/scan_engine.js";
 
 const isWasmBindings = (value: unknown): value is WasmBindings =>
   typeof value === "object" &&
@@ -164,7 +164,11 @@ export const createScanEngine = (
           const result = wasm.clean_scan_rgba(
             page.width,
             page.height,
-            page.pixels,
+            new Uint8Array(
+              page.pixels.buffer,
+              page.pixels.byteOffset,
+              page.pixels.byteLength,
+            ),
             page.dpi,
             options.output,
             options.contentCrop === "on",

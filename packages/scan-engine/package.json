@@ -7,17 +7,21 @@
   "type": "module",
   "sideEffects": false,
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/scan-engine.ts",
+    "./types": "./src/types.ts"
   },
   "scripts": {
-    "clean": "git clean -xdf pkg target .cache .turbo node_modules",
+    "clean": "git clean -xdf target .cache .turbo node_modules",
     "test": "bun test src && cargo test",
     "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/scan-engine",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/scan-engine",
     "format": "bun ../../scripts/run-oxfmt.ts .",
     "format:rust": "cargo fmt",
-    "build:wasm": "bash scripts/build-wasm.sh"
+    "build:wasm": "bash scripts/build-wasm.sh",
+    "check:wasm": "bash scripts/build-wasm.sh --check",
+    "generate:fixtures": "bun scripts/generate-fixtures.ts",
+    "check:fixtures": "bun scripts/generate-fixtures.ts --check"
   },
   "dependencies": {
     "better-result": "catalog:"
