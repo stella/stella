@@ -1224,7 +1224,9 @@ for (const locale of ["cs-CZ", "en-GB", "sk-SK"]) {
     await expect(app.locator("html")).toHaveAttribute("lang", locale);
     // <title> is not rendered, so read the frame document's title directly.
     await expect
-      .poll(async () => await app.locator("html").evaluate(() => document.title))
+      .poll(
+        async () => await app.locator("html").evaluate(() => document.title),
+      )
       .toMatch(/\S/u);
     const controls = app.locator(
       'button:visible, input:not([type="hidden"]):visible, select:visible, textarea:visible, [role="button"]:visible, [role="combobox"]:visible',
