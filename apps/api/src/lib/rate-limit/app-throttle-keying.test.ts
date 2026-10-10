@@ -118,11 +118,10 @@ const KEY_REGRESSIONS = {
     ).not.toBe(original);
   },
   skillSourceRateLimitBinding: async () => {
-    const readKey = (userId: string) =>
-      createSkillSourceRateLimitGenerator(async () => toSafeId<"user">(userId))(
-        transportRequest("source-credential"),
-        sharedPeer,
-      );
+    const readKey = async (userId: string) =>
+      await createSkillSourceRateLimitGenerator(async () =>
+        toSafeId<"user">(userId),
+      )(transportRequest("source-credential"), sharedPeer);
     const original = await readKey("user-a");
     expect(await readKey("user-a")).toBe(original);
     expect(await readKey("user-b")).not.toBe(original);
