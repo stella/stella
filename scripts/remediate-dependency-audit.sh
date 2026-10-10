@@ -24,11 +24,11 @@ if ! git diff --quiet -- bun.lock; then
   git config user.email "stella-dependency-audit[bot]@users.noreply.github.com"
   git checkout -B "$fix_branch"
   git add bun.lock
-  git commit -m "fix: resolve dependency audit findings"
+  git commit -m "chore(deps): update resolved dependencies"
   git -c credential.helper= -c credential.helper='!gh auth git-credential' push "--force-with-lease=$fix_ref:$observed_sha" origin "$fix_branch"
   gh pr create --head "$fix_branch" --base main \
-    --title "fix: resolve dependency audit findings" \
-    --body "Updates resolved dependencies to address the current high or critical advisory findings."
+    --title "chore(deps): update resolved dependencies" \
+    --body "Updates resolved dependencies."
   exit 0
 fi
 
