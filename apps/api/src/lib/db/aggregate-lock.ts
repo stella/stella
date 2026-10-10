@@ -197,11 +197,6 @@ type AggregateIdentities = {
     organizationId: SafeId<"organization">;
     userId: SafeId<"user">;
   };
-  chatThread: {
-    id: SafeId<"chatThread">;
-    organizationId: SafeId<"organization">;
-    userId: SafeId<"user">;
-  };
   chatMessage: { id: SafeId<"chatMessage">; threadId: SafeId<"chatThread"> };
 };
 
