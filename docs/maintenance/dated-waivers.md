@@ -25,16 +25,18 @@ Removal proposals include the successful run count, command, runner, source comm
 and workflow run link. Each entry has one stable proposal branch, refreshed from
 current main. Already removed entries produce no proposal; an existing proposal
 is closed with a neutral note.
-Commits are signed through the GitHub API; proposals use `scripts/merge-bar.ts` and respect
-`STELLA_MERGE_HOLD`.
+Commits are signed through the GitHub API; proposals are queued with
+`gh pr merge --auto`, pinned to the published head with `--match-head-commit`.
+When `STELLA_MERGE_HOLD` is set, the proposal is disarmed and arming is skipped.
 Removal commits are always rebuilt from the probed base; only the PR number is
 reused. The reserved branch is force-updated to the freshly signed commit, then
 its head and complete tree are verified against the generated commit before
 publication can arm it. Existing proposal contents never enter the new tree.
-Any merge-bar refusal or execution failure fails the scheduled publication run.
+Any failed arm or disarm fails the scheduled publication run.
 A red probe, blocked resolution or lapsed entry retires its pending removal
-proposal: merge-bar disarms it before it is closed with a neutral note. A later
-eligible green run creates a fresh proposal. Failure evidence remains private,
+proposal: `gh pr merge --disable-auto` disarms it before it is closed with a
+neutral note. A later eligible green run creates a fresh proposal. Failure evidence
+remains private,
 and a disarm failure propagates so publication cannot report success.
 Entries complete independently: red task evidence is published first; retirement
 and expiry signals are attempted even when another action fails. Green actions
