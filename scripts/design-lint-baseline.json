@@ -503,7 +503,6 @@
     "apps/api/scripts/provider-request-schemas.ts": 8,
     "apps/api/scripts/run-tests.ts": 1,
     "apps/api/scripts/seed-dev.ts": 5,
-    "apps/api/scripts/seed-seal.ts": 1,
     "apps/api/src/dev/register-mock-ai.ts": 2,
     "apps/api/src/handlers/agent-auth/routes.ts": 1,
     "apps/api/src/handlers/auth/routes.ts": 1,
