@@ -67,7 +67,7 @@ import {
 import type { PreparedDocxFile } from "@/api/lib/workflow/generate-batch";
 import type { Position } from "@/api/lib/workflow/playbook-positions";
 
-const MODEL_TASK = "pdf";
+const MODEL_TASK = "pdf" as const;
 
 /** The batch path holds a request open with nothing to show, so it fails
  *  before a reviewer gives up on it. */
