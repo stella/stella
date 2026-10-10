@@ -1,36 +1,16 @@
 import type { JWTPayload } from "jose";
 
-export const SERVICE_CLIENT_BUDGET_CEILINGS = {
-  requestsPerMinute: 600,
-  dailyBudget: 100_000,
-} as const;
-
-export const SERVICE_CLIENT_SCOPES = ["stella:law_read"] as const;
-export const SERVICE_CLIENT_PRINCIPAL_CLAIM = "stella_principal";
-export const SERVICE_CLIENT_PRINCIPAL = "service";
-export const SERVICE_CLIENT_VERSION_CLAIM = "stella_client_version";
-export const SERVICE_CLIENT_TYPE = "service";
-
-export type ServiceOAuthPrincipal = {
-  type: "service";
-  clientId: string;
-  organizationId: string;
-  scopes: (typeof SERVICE_CLIENT_SCOPES)[number][];
-  requestsPerMinute: number;
-  dailyBudget: number;
-};
-
-export type ServiceClientBinding = {
-  credentialVersion: number;
-  clientId: string;
-  organizationId: string;
-  disabled: boolean;
-  type: string | null;
-  userId: string | null;
-  clientCredentialsScopes: string[];
-  requestsPerMinute: number;
-  dailyBudget: number;
-};
+import {
+  SERVICE_CLIENT_PRINCIPAL,
+  SERVICE_CLIENT_PRINCIPAL_CLAIM,
+  SERVICE_CLIENT_SCOPES,
+  SERVICE_CLIENT_TYPE,
+  SERVICE_CLIENT_VERSION_CLAIM,
+} from "@/api/lib/service-client-contract";
+import type {
+  ServiceClientBinding,
+  ServiceOAuthPrincipal,
+} from "@/api/lib/service-client-contract";
 
 /** The provider supplies the client subject; it is never a human identity. */
 export const servicePrincipalFromClaims = (

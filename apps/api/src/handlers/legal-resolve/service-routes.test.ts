@@ -110,7 +110,7 @@ test.each(
         },
         mayReadPublicLaw: async (org) => {
           accessReads += 1;
-          expect(org).toBe(principal.organizationId);
+          expect<string>(org).toBe(principal.organizationId);
           return outcome === "not_entitled"
             ? Result.ok(false)
             : Result.err(

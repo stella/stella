@@ -6,8 +6,8 @@ import {
   createServiceOAuthClient,
   changeServiceOAuthClient,
 } from "@/api/db/root";
-import { ServiceClientOperatorError } from "@/api/lib/auth/service-client-operator";
-import { SERVICE_CLIENT_BUDGET_CEILINGS } from "@/api/lib/auth/service-client-policy";
+import { ServiceClientOperatorError } from "@/api/lib/db/service-client-operator";
+import { SERVICE_CLIENT_BUDGET_CEILINGS } from "@/api/lib/service-client-contract";
 import { getMcpResourceUrl } from "@/api/mcp/constants";
 
 const { positionals, values } = parseArgs({

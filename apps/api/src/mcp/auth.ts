@@ -13,14 +13,14 @@ import { getReviewAccountConfig } from "@/api/lib/auth/review-account";
 import { narrowReviewOrganizationScopes } from "@/api/lib/auth/review-account-policy";
 import type { ReviewAccountConfig } from "@/api/lib/auth/review-account-policy";
 import {
-  SERVICE_CLIENT_PRINCIPAL,
-  SERVICE_CLIENT_PRINCIPAL_CLAIM,
-} from "@/api/lib/auth/service-client-policy";
-import {
   isMachineApiKeyCredential,
   machineApiKeyPermissionsSchema,
   parseMachineApiKeyPermissions,
 } from "@/api/lib/machine-api-key-config";
+import {
+  SERVICE_CLIENT_PRINCIPAL,
+  SERVICE_CLIENT_PRINCIPAL_CLAIM,
+} from "@/api/lib/service-client-contract";
 import { isRecord } from "@/api/lib/type-guards";
 import { AGENT_RUN_TOKEN_PURPOSE } from "@/api/mcp/agent-run-token";
 import { resolveMachineApiKeySession as defaultResolveMachineApiKeySession } from "@/api/mcp/api-key-auth";
@@ -68,7 +68,7 @@ export type McpCredentialType = NonNullable<McpSession["credential"]>["type"];
 
 let verifyBearerToken:
   | ReturnType<
-      ReturnType<typeof oauthProviderResourceClient>["getActions"]
+      ReturnType<typeof oauthProviderResourceClient<undefined>>["getActions"]
     >["verifyBearerToken"]
   | undefined;
 

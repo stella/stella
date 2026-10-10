@@ -43,13 +43,13 @@ const jwksSchema = v.object({
   keys: v.array(
     v.looseObject({
       kty: v.string(),
-      kid: v.optional(v.string()),
-      alg: v.optional(v.string()),
-      crv: v.optional(v.string()),
-      x: v.optional(v.string()),
-      y: v.optional(v.string()),
-      n: v.optional(v.string()),
-      e: v.optional(v.string()),
+      kid: v.exactOptional(v.string()),
+      alg: v.exactOptional(v.string()),
+      crv: v.exactOptional(v.string()),
+      x: v.exactOptional(v.string()),
+      y: v.exactOptional(v.string()),
+      n: v.exactOptional(v.string()),
+      e: v.exactOptional(v.string()),
     }),
   ),
 });
@@ -61,7 +61,13 @@ const authenticateIssuedToken = async (token: string) => {
   const keys = createLocalJWKSet(v.parse(jwksSchema, await response.json()));
   return await authenticateLegalResolveToken(token, {
     verifyToken: async (value, { verifyOptions }) =>
-      (await jwtVerify(value, keys, verifyOptions)).payload,
+      (
+        await jwtVerify(
+          value ?? panic("Legal resolve verified a missing bearer token"),
+          keys,
+          verifyOptions,
+        )
+      ).payload,
   });
 };
 let requests = 0;

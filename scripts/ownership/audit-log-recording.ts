@@ -17,7 +17,7 @@ export default {
           "Binds HTTP request metadata and exposes the shared recorder contract.",
       },
       {
-        path: "apps/api/src/lib/auth/legal-resolve-audit.ts",
+        path: "apps/api/src/lib/db/legal-resolve-audit.ts",
         reason:
           "Records the verified resolve principal without request payloads.",
       },

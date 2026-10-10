@@ -1,7 +1,6 @@
+import { SERVICE_CLIENT_PRINCIPAL } from "@/api/lib/service-client-contract";
+import type { ServiceOAuthPrincipal } from "@/api/lib/service-client-contract";
 import type { McpSession } from "@/api/mcp/auth";
-
-import { SERVICE_CLIENT_PRINCIPAL } from "./service-client-policy";
-import type { ServiceOAuthPrincipal } from "./service-client-policy";
 
 /** Service principals exist only at this public-law boundary. */
 export type LegalResolveSession = McpSession | ServiceOAuthPrincipal;

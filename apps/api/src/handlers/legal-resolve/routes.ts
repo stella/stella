@@ -25,10 +25,10 @@ import {
   serviceResolveAuditOutcome,
   serviceResolveAuditCountry,
 } from "@/api/handlers/legal-resolve/service-audit";
-import { isServiceResolveSession } from "@/api/lib/auth/legal-resolve-principal";
-import type { LegalResolveSession } from "@/api/lib/auth/legal-resolve-principal";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
+import { isServiceResolveSession } from "@/api/lib/legal-resolve-principal";
+import type { LegalResolveSession } from "@/api/lib/legal-resolve-principal";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
 import { resolveResponseStatus } from "@/api/lib/observability/response-status";
 import {

@@ -3,16 +3,16 @@ import { Result, TaggedError } from "better-result";
 import type { JWTPayload } from "jose";
 
 import { readServiceOAuthClientBinding } from "@/api/db/root";
-
 import {
   SERVICE_CLIENT_PRINCIPAL,
   SERVICE_CLIENT_PRINCIPAL_CLAIM,
   SERVICE_CLIENT_SCOPES,
   SERVICE_CLIENT_TYPE,
   SERVICE_CLIENT_VERSION_CLAIM,
-  servicePrincipalFromClaims,
-} from "./service-client-policy";
-import type { ServiceOAuthPrincipal } from "./service-client-policy";
+} from "@/api/lib/service-client-contract";
+import type { ServiceOAuthPrincipal } from "@/api/lib/service-client-contract";
+
+import { servicePrincipalFromClaims } from "./service-client-policy";
 
 class ServiceClientUnavailableError extends TaggedError(
   "ServiceClientUnavailableError",

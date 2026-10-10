@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import type { JWTPayload } from "jose";
 
+import type { ServiceClientBinding } from "@/api/lib/service-client-contract";
+
 import { servicePrincipalFromClaims } from "./service-client-policy";
-import type { ServiceClientBinding } from "./service-client-policy";
 
 const binding = {
   credentialVersion: 1,
@@ -24,6 +25,19 @@ const claims = {
   scope: "stella:law_read",
 } satisfies JWTPayload;
 
+/** An undefined change removes the claim, as an issuer that omits it would. */
+const claimsWith = (change: Record<string, unknown>): JWTPayload => {
+  const payload: JWTPayload = { ...claims };
+  for (const [claim, value] of Object.entries(change)) {
+    if (value === undefined) {
+      Reflect.deleteProperty(payload, claim);
+    } else {
+      payload[claim] = value;
+    }
+  }
+  return payload;
+};
+
 describe("service OAuth principal boundary", () => {
   test("carries only the bound organization and client authority", () => {
     expect(servicePrincipalFromClaims(claims, binding)).toEqual({
@@ -38,7 +52,7 @@ describe("service OAuth principal boundary", () => {
       "userId",
     );
   });
-  test.each([
+  test.each<Record<string, unknown>>([
     { sub: undefined },
     { client_id: undefined },
     { org_id: undefined },
@@ -54,11 +68,9 @@ describe("service OAuth principal boundary", () => {
     { scope: "stella:read" },
     { scope: "stella:law_read stella:documents_write" },
   ])("refuses claims outside the live client binding: %j", (change) => {
-    expect(
-      servicePrincipalFromClaims({ ...claims, ...change }, binding),
-    ).toBeNull();
+    expect(servicePrincipalFromClaims(claimsWith(change), binding)).toBeNull();
   });
-  test.each([
+  test.each<Partial<ServiceClientBinding>>([
     { credentialVersion: 2 },
     { disabled: true },
     { type: "web" },

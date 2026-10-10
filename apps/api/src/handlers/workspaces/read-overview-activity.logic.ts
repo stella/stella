@@ -164,6 +164,8 @@ export const ACTIVITY_TARGET_SOURCE_BY_RESOURCE_TYPE = {
   ai_memory: null,
   announcement: null,
   audit_log: null,
+  legal_resolve: null,
+  service_oauth_client: null,
   billing_code: null,
   chat_file: null,
   chat_message: null,

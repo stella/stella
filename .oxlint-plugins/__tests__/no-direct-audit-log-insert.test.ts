@@ -21,7 +21,7 @@ test("allows the audit owner and unrelated inserts", async () => {
     await lintSingleRule(
       "no-direct-audit-log-insert",
       "tx.insert(auditLogs);",
-      { sourcePath: "apps/api/src/lib/audit-log.ts" },
+      { sourcePath: "apps/api/src/lib/db/audit-recording.ts" },
     ),
   ).toEqual([]);
   expect(

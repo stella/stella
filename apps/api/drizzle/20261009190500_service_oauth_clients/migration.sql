@@ -16,4 +16,5 @@ ALTER TABLE "service_oauth_clients" FORCE ROW LEVEL SECURITY;--> statement-break
 CREATE POLICY "service_oauth_clients_owner_access" ON "service_oauth_clients" FOR ALL TO public
   USING (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.service_oauth_clients'::regclass))
   WITH CHECK (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.service_oauth_clients'::regclass));--> statement-breakpoint
-CREATE POLICY "auth_no_stella_access" ON "service_oauth_clients" FOR ALL TO "stella" USING (false) WITH CHECK (false);
+CREATE POLICY "auth_no_stella_access" ON "service_oauth_clients" FOR ALL TO "stella" USING (false) WITH CHECK (false);--> statement-breakpoint
+REVOKE ALL PRIVILEGES ON TABLE "service_oauth_clients" FROM stella;
