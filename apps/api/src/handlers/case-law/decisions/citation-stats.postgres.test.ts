@@ -285,7 +285,7 @@ if (!databaseUrl || !runPostgresTests) {
                     await client`UPDATE case_law_decisions SET decision_date = ${[null, "1966-02-01", "1967-02-01", "2020-02-01", "2026-02-01", "2024-02-01", "2025-02-01"].at(value) ?? null}::date WHERE id = ${decision}::uuid`;
                     break;
                   case 8:
-                    await client`UPDATE case_law_decisions SET country = ${value % 2 ? "USA" : "CZE"} WHERE id = ${decision}::uuid`;
+                    await client`UPDATE case_law_decisions SET country = ${value % 2 ? "USA" : "CZE"}, court_id = ${value % 2 ? "scotus" : null} WHERE id = ${decision}::uuid`;
                     break;
                   case 9:
                     await client`UPDATE case_law_decisions SET source_id = ${member(sources, value % 2)}::uuid WHERE id = ${decision}::uuid`;
@@ -594,9 +594,9 @@ if (!databaseUrl || !runPostgresTests) {
                 expect(outcomes.a.status).toBe("committed");
                 expect(outcomes.b.status).toBe("committed");
                 expect(state.actual).toEqual(state.expected);
-                expect(
-                  await observer`SELECT id FROM case_law_decisions WHERE id = ${deleted}::uuid`,
-                ).toHaveLength(0);
+                const remaining =
+                  await observer`SELECT id FROM case_law_decisions WHERE id = ${deleted}::uuid`;
+                expect(remaining).toHaveLength(0);
               },
               timeoutMs: 10_000,
             });

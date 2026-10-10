@@ -7,11 +7,12 @@ import {
   caseLawDecisionCitationStatsState,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withDecisionCitationStatsLocks } from "@/api/lib/db/aggregate-lock";
 import { boundedAll } from "@/api/lib/db/bounded-all";
 import { logger } from "@/api/lib/observability/logger";
 
 /** Each transaction refreshes a bounded batch that cannot grow with corpus size. */
-export const DECISION_CITATION_STATS_BATCH_MAX = 32;
+const DECISION_CITATION_STATS_BATCH_MAX = 32;
 
 type CitationStatsTransaction = Pick<Transaction, "select"> & {
   execute: (query: SQL) => PromiseLike<unknown>;
@@ -27,27 +28,6 @@ const validateBatch = (decisionIds: CitationStatsOptions["decisionIds"]) => {
   }
 };
 
-/** Lock before comparing so a concurrent writer cannot create false drift. */
-const lockStatsBatch = async ({ tx, decisionIds }: CitationStatsOptions) => {
-  await tx.execute(sql`
-    SELECT id FROM case_law_decisions
-    WHERE id IN (${sql.join(
-      decisionIds.map((id) => sql`${id}::uuid`),
-      sql`, `,
-    )}) ORDER BY id FOR NO KEY UPDATE
-  `);
-  await tx.execute(sql`
-    SELECT pg_advisory_xact_lock(19053, key) FROM (
-      SELECT DISTINCT (hashtextextended('decision-citation-stats:' || id::text, 0) & 127)::integer AS key
-      FROM case_law_decisions WHERE id IN (${sql.join(
-        decisionIds.map((id) => sql`${id}::uuid`),
-        sql`, `,
-      )})
-      ORDER BY key
-    ) anchors
-  `);
-};
-
 /** Recount and compare only: absence of a completed projection is a typed pending result. */
 export const compareDecisionCitationStats = async ({
   tx,
@@ -57,7 +37,7 @@ export const compareDecisionCitationStats = async ({
   if (decisionIds.length === 0) {
     return [];
   }
-  await lockStatsBatch({ tx, decisionIds });
+  await withDecisionCitationStatsLocks({ tx, decisionIds });
   const decision = caseLawDecisions;
   const state = caseLawDecisionCitationStatsState;
   const rows = await boundedAll({
@@ -121,7 +101,7 @@ export const refreshDecisionCitationStats = async ({
   if (decisionIds.length === 0) {
     return;
   }
-  await lockStatsBatch({ tx, decisionIds });
+  await withDecisionCitationStatsLocks({ tx, decisionIds });
   await tx.execute(sql`
     SELECT refresh_decision_citation_stats(id) FROM case_law_decisions
     WHERE id IN (${sql.join(
