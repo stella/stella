@@ -10,7 +10,11 @@ import {
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { DecisionText, prepareDecisionTextPlacements } from "./decision-text";
-import { DecisionReaderProvider } from "./reader-adapters";
+import { BlockRenderer } from "./document-ast-text";
+import {
+  DecisionReaderProvider,
+  ReaderPresentationProvider,
+} from "./reader-adapters";
 import type { DecisionReaderAdapters } from "./reader-adapters";
 import type { ReaderDecision } from "./reader-types";
 
@@ -145,8 +149,15 @@ const decision = {
 
 test("a decision renders numbered anchored text and resolved marks without reading data", () => {
   let reads = 0;
+  const renderedCitations: string[] = [];
   const adapters = {
     ...fakeReaderAdapters,
+    renderDecisionLink: ({ citation, ...props }) => {
+      renderedCitations.push(citation.id);
+      expect(citation.decision).toBe(props.decision);
+      expect(citation.treatment).toBe(props.treatment);
+      return fakeReaderAdapters.renderDecisionLink({ citation, ...props });
+    },
     loadProvisionPreview: async () => {
       reads += 1;
       return {
@@ -238,4 +249,51 @@ test("a decision renders numbered anchored text and resolved marks without readi
   expect(markup).toContain('href="https://court.example/decision"');
   expect(placements.failures).toEqual([]);
   expect(reads).toBe(0);
+  expect(renderedCitations).toEqual(["citation"]);
+});
+
+const permalinkFixture = (variant: "case-law" | "statute") =>
+  ast.blocks.map((block) => (
+    <BlockRenderer
+      activeMatchIndex={-1}
+      block={block}
+      key={block.id}
+      rangesByPieceId={{}}
+      variant={variant}
+    />
+  ));
+
+test("readers without a copy adapter expose no permalink control", () => {
+  for (const variant of ["case-law", "statute"] as const) {
+    const markup = renderToStaticMarkup(
+      <ReaderPresentationProvider
+        adapters={{ messages: fakeReaderAdapters.messages }}
+      >
+        {permalinkFixture(variant)}
+      </ReaderPresentationProvider>,
+    );
+    expect(markup).toContain('data-anchor="h-1"');
+    expect(markup).toContain('data-anchor="p-7"');
+    expect(markup).toContain("Odůvodnění");
+    expect(markup).not.toContain('aria-label="Copy link"');
+    expect(markup).not.toContain('href="#h-1"');
+    expect(markup).not.toContain('href="#p-7"');
+    expect(markup).not.toContain("¶");
+  }
+});
+
+test("a supplied copy adapter preserves existing permalink markup", () => {
+  // Serialized copy controls before the optional adapter: placement and browser href stay exact.
+  const anchorClass =
+    "text-foreground-disabled hover:text-foreground focus-visible:ring-ring rounded-sm px-1 leading-[inherit] no-underline focus-visible:ring-2 focus-visible:outline-none print:hidden opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100";
+  const previousControls = [
+    `<a aria-label="Copy link" class="${anchorClass} ms-1" data-reader-chrome="" href="#h-1">¶</a>`,
+    `<a aria-label="Copy link" class="${anchorClass} absolute end-full top-0 me-1" data-reader-chrome="" href="#p-7">¶</a>`,
+  ];
+  for (const variant of ["case-law", "statute"] as const) {
+    const markup = renderReaderFixture(permalinkFixture(variant));
+    expect(
+      Array.from(markup.match(/<a aria-label="Copy link"[^>]*>¶<\/a>/gu) ?? []),
+    ).toEqual(previousControls);
+  }
 });

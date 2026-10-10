@@ -6,6 +6,9 @@ import { compareCodeUnit } from "../packages/collation/src/collation";
 
 const GITHUB_URL = new URL("../.github/", import.meta.url);
 const PULL_SCRIPT = "scripts/pull-base-images.sh";
+const CI_IMAGE_SCRIPT = "scripts/ci-service-images.ts";
+const CI_BUILD =
+  /\bbun\s+[^\n]*scripts\/ci-service-images\.ts["']?\s+--build\s/u;
 const BUILD_PUSH_ACTION = "docker/build-push-action@";
 const CHECKOUT_ACTION = "actions/checkout@";
 /** Checkout ref expressions that are the running workflow's own revision. */
@@ -122,7 +125,10 @@ const buildSite = (step: Step): BuildSite | null => {
       buildxPlatforms: String(step.with?.["platforms"] ?? ""),
     };
   }
-  if (step.run === undefined || !DOCKER_BUILD.test(step.run)) {
+  if (
+    step.run === undefined ||
+    (!DOCKER_BUILD.test(step.run) && !CI_BUILD.test(step.run))
+  ) {
     return null;
   }
   const words = commandLine(step).split(" ");
@@ -141,6 +147,9 @@ const expectedPull = ({ file, buildxPlatforms }: BuildSite) =>
 
 const pullsFor = (step: Step, site: BuildSite) => {
   const command = commandLine(step);
+  if (command.includes(`${CI_IMAGE_SCRIPT} --pull ${site.file}`)) {
+    return true;
+  }
   return (
     command.includes(expectedPull(site)) &&
     command.includes(" --buildx ") === (site.buildxPlatforms !== null)
@@ -213,7 +222,11 @@ describe("image builds and pulls", () => {
           !scriptFromWorkflowRevision({
             steps,
             index: pullIndex,
-            script: PULL_SCRIPT,
+            script: commandLine(steps[pullIndex] ?? {}).includes(
+              CI_IMAGE_SCRIPT,
+            )
+              ? CI_IMAGE_SCRIPT
+              : PULL_SCRIPT,
           })
         ) {
           problems.push(

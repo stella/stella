@@ -107,6 +107,48 @@ test("definition admission and automated run caps use separate advisory namespac
 });
 
 describe("aggregate acquisition ordering", () => {
+  test("locks chat receipts in thread, interaction and receipt order", async () => {
+    const fixture = fences();
+    const statements: SQL[] = [];
+    const tx = {
+      execute: async (statement: SQL) => {
+        statements.push(statement);
+        return aggregateExecutionRows(statement);
+      },
+    };
+    await withAggregateLock({ ...fixture.chatThread, tx });
+    await withAggregateLock({ ...fixture.chatTurn, tx });
+    await withAggregateLock({ ...fixture.chatSecret, tx });
+    const dialect = new PgDialect();
+    const queries = statements.map((statement) =>
+      dialect.sqlToQuery(statement),
+    );
+    expect(queries.map(({ sql }) => sql)).toEqual([
+      expect.stringContaining('"chat_threads"'),
+      expect.stringContaining('"chat_turns"'),
+      expect.stringContaining('"chat_secrets"'),
+    ]);
+    expect(queries.map(({ params }) => params)).toEqual([
+      [
+        fixture.chatThread.id.id,
+        fixture.chatThread.id.organizationId,
+        fixture.chatThread.id.userId,
+      ],
+      [
+        fixture.chatTurn.id.threadId,
+        fixture.chatTurn.id.toolCallId,
+        fixture.chatTurn.id.organizationId,
+        fixture.chatTurn.id.userId,
+      ],
+      [
+        fixture.chatSecret.id.id,
+        fixture.chatSecret.id.threadId,
+        fixture.chatSecret.id.organizationId,
+        fixture.chatSecret.id.userId,
+      ],
+    ]);
+  });
+
   test("every declared chain ascends and the chains cover every registered aggregate", () => {
     const exercised = new Set(Object.values(AGGREGATE_CHAINS).flat());
     expect(Object.keys(AGGREGATE_LOCKS).toSorted()).toEqual(

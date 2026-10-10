@@ -5,8 +5,8 @@
  *
  * The answer is deterministic for a document version's content, so it is
  * cached per `entityVersionId` (see `document_review_parties`): the first
- * call for a version detects it, every later call for the same version
- * reads the cached row without a model call.
+ * explicit detection request for a version detects it; cached requests only
+ * read the row and never dispatch model work.
  */
 
 import { panic, Result } from "better-result";
@@ -30,6 +30,8 @@ import {
 } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
+import type { ReviewParty } from "@/api/lib/document-review/contract";
 import {
   detectReviewParties,
   REVIEW_PARTIES_PROMPT_VERSION,
@@ -42,13 +44,32 @@ import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models"
 
 const TIMEOUT_MS = 60_000;
 
+/** What a read answers: cached parties, or (cached mode only) none yet. */
+type ReviewPartiesAnswer =
+  | {
+      type: "cached";
+      entityVersionId: SafeId<"entityVersion">;
+      parties: ReviewParty[];
+    }
+  | { type: "not-detected"; entityVersionId: SafeId<"entityVersion"> };
+
+const cachedPartiesAnswer = (
+  entityVersionId: SafeId<"entityVersion">,
+  parties: ReviewParty[],
+): ReviewPartiesAnswer => ({ type: "cached", entityVersionId, parties });
+
+const notDetectedAnswer = (
+  entityVersionId: SafeId<"entityVersion">,
+): ReviewPartiesAnswer => ({ type: "not-detected", entityVersionId });
+
 const documentReviewPartiesBodySchema = t.Object({
   target: documentReviewTargetSchema,
+  mode: t.Union([t.Literal("cached"), t.Literal("detect")]),
 });
 
 const config = {
   description:
-    "Detect a target document's parties ahead of any position proposal, so the review launcher can show which side the reviewer acts for before choosing references.",
+    "Read cached document parties, or explicitly detect them for the review launcher. Cached mode never runs detection.",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
@@ -241,7 +262,11 @@ export const createReviewParties = ({
     );
     const cachedRow = cached.at(0);
     if (cachedRow !== undefined) {
-      return Result.ok({ entityVersionId, parties: cachedRow.parties });
+      return Result.ok(cachedPartiesAnswer(entityVersionId, cachedRow.parties));
+    }
+
+    if (body.mode === "cached") {
+      return Result.ok(notDetectedAnswer(entityVersionId));
     }
 
     yield* requireTanStackAIAvailableForRole({
@@ -341,10 +366,9 @@ export const createReviewParties = ({
             );
           }
 
-          return Result.ok({
-            entityVersionId: checked.entityVersionId,
-            parties,
-          });
+          return Result.ok(
+            cachedPartiesAnswer(checked.entityVersionId, parties),
+          );
         }),
     );
   });

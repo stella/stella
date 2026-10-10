@@ -58,9 +58,10 @@ const readReleaseSmokeSource = async () => {
   const releaseWorkflow = await Bun.file(
     new URL("../.github/workflows/release.yml", import.meta.url),
   ).text();
-  const scriptPath = /run: bash (scripts\/smoke-api-image\.sh)\s/u
-    .exec(releaseWorkflow)
-    ?.at(1);
+  const scriptPath =
+    /(?:^|\n)\s*(?:run: )?bash (scripts\/smoke-api-image\.sh)\s/u
+      .exec(releaseWorkflow)
+      ?.at(1);
   if (!scriptPath) {
     throw new TypeError("Release must invoke the shared API image smoke");
   }

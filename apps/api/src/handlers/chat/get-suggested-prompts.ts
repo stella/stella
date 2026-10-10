@@ -85,7 +85,10 @@ export const latestAssistantTurnAwaitsUser = (
     if (part.state === "approval-requested") {
       return true;
     }
-    return part.name === "ask-user" && ASK_USER_STATE_AWAITS_USER[part.state];
+    return (
+      (part.name === "ask-user" || part.name === "request_secret") &&
+      ASK_USER_STATE_AWAITS_USER[part.state]
+    );
   });
 };
 

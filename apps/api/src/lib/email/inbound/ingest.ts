@@ -9,6 +9,7 @@ import type {
   CorrespondenceProvenance,
   ParsedCorrespondence,
 } from "@stll/api-contract/correspondence";
+import { createSha256 } from "@stll/sha256/bun";
 
 import type { AttachmentScanVerdict } from "@/api/lib/email/inbound/acceptance";
 import { parseInboundAddressToken } from "@/api/lib/email/inbound/address";
@@ -410,7 +411,7 @@ export const ingestInboundMail = async ({
       };
     }
   }
-  const deliveryKey = new Bun.CryptoHasher("sha256")
+  const deliveryKey = createSha256()
     .update(String(raw.byteLength))
     .update(raw.subarray(0, INBOUND_MAIL_LIMITS.rawBytes))
     .digest("hex");

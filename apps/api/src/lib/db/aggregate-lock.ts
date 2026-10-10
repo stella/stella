@@ -14,12 +14,21 @@ import type {
   LockConfig,
   LockStrength,
 } from "drizzle-orm/pg-core/query-builders/select.types";
+import * as v from "valibot";
 
+import { compareCodeUnit } from "@stll/collation";
+
+import { organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
+import { workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
+import {
+  brandPersistedOrganizationId,
+  brandPersistedWorkspaceId,
+} from "@/api/lib/safe-id-boundaries";
 import { isRecord } from "@/api/lib/type-guards";
 
 /** Registered blocking chains share one physical transaction order. */
@@ -34,6 +43,11 @@ export const AGGREGATE_LOCKS = {
   desktopCredential: { rank: 80, kind: "row" },
   workspace: { rank: 100, kind: "row" },
   memberCleanup: { rank: 110, kind: "row" },
+  // A chat interaction's fences: the thread, then the turn awaiting input,
+  // then the receipt it produced.
+  chatThread: { rank: 120, kind: "row" },
+  chatTurn: { rank: 130, kind: "row" },
+  chatSecret: { rank: 140, kind: "row" },
   run: { rank: 200, kind: "row" },
   currentStep: { rank: 300, kind: "row" },
   obligation: { rank: 400, kind: "row" },
@@ -80,6 +94,7 @@ export const AGGREGATE_CHAINS = {
     "processingClaim",
   ],
   scoutRun: ["orgFeatureAdmission", "scoutCensus"],
+  chatSecret: ["chatThread", "chatTurn", "chatSecret"],
   memberPrefix: [
     "workspace",
     "memberCleanup",
@@ -154,6 +169,23 @@ type AggregateIdentities = {
         id: string;
         workspaceId: SafeId<"workspace">;
       };
+  chatThread: {
+    id: SafeId<"chatThread">;
+    organizationId: SafeId<"organization">;
+    userId: SafeId<"user">;
+  };
+  chatTurn: {
+    threadId: SafeId<"chatThread">;
+    toolCallId: string;
+    organizationId: SafeId<"organization">;
+    userId: SafeId<"user">;
+  };
+  chatSecret: {
+    id: string;
+    threadId: SafeId<"chatThread">;
+    organizationId: SafeId<"organization">;
+    userId: SafeId<"user">;
+  };
   run: { id: SafeId<"flowRun">; workspaceId: SafeId<"workspace"> };
   currentStep: { id: SafeId<"flowRunStep">; workspaceId: SafeId<"workspace"> };
   obligation: { id: SafeId<"entity">; workspaceId: SafeId<"workspace"> };
@@ -346,7 +378,8 @@ const assertLockOrder = (
     allOrderingReservations(history).some(
       (previous) =>
         lock.rank < previous.rank ||
-        (lock.rank === previous.rank && lock.orderKey < previous.orderKey),
+        (lock.rank === previous.rank &&
+          compareCodeUnit(lock.orderKey, previous.orderKey) < 0),
     )
   ) {
     panic("Aggregate lock rank inversion");
@@ -361,7 +394,8 @@ const retainReservation = (
     key: reservation.key,
     rank: Math.max(previous?.rank ?? reservation.rank, reservation.rank),
     orderKey:
-      previous !== undefined && previous.orderKey > reservation.orderKey
+      previous !== undefined &&
+      compareCodeUnit(previous.orderKey, reservation.orderKey) > 0
         ? previous.orderKey
         : reservation.orderKey,
   });
@@ -377,7 +411,7 @@ const retainLock = (history: LockHistory, lock: HeldLock): void => {
           ...lock,
           rank: Math.max(previous.rank, lock.rank),
           orderKey:
-            previous.orderKey > lock.orderKey
+            compareCodeUnit(previous.orderKey, lock.orderKey) > 0
               ? previous.orderKey
               : lock.orderKey,
           mode: modeCovers(previous.mode, lock.mode)
@@ -576,6 +610,34 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
         scopeColumns: ["organization_id"],
         scopeValues: [options.id.organizationId],
       };
+    case "chatThread":
+      return {
+        table: "chat_threads",
+        columns: ["id"],
+        values: [options.id.id],
+        scopeColumns: ["organization_id", "user_id"],
+        scopeValues: [options.id.organizationId, options.id.userId],
+      };
+    case "chatTurn":
+      return {
+        table: "chat_turns",
+        columns: ["thread_id", "interaction_tool_call_id"],
+        values: [options.id.threadId, options.id.toolCallId],
+        scopeColumns: ["organization_id", "user_id"],
+        scopeValues: [options.id.organizationId, options.id.userId],
+      };
+    case "chatSecret":
+      return {
+        table: "chat_secrets",
+        columns: ["id"],
+        values: [options.id.id],
+        scopeColumns: ["thread_id", "organization_id", "user_id"],
+        scopeValues: [
+          options.id.threadId,
+          options.id.organizationId,
+          options.id.userId,
+        ],
+      };
     case "memberCleanup":
       switch (options.id.type) {
         case "organization-member":
@@ -603,14 +665,123 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
       return panic("Unknown row aggregate");
   }
 };
-const rowLock = (options: RowIdentityOptions, mode: RowLockMode): HeldLock => {
-  const { table, values } = rowResource(options);
+type PhysicalRowLockOptions = {
+  aggregate: RowIdentityOptions["aggregate"];
+  table: string;
+  values: readonly (string | number)[];
+  mode: RowLockMode;
+};
+const physicalRowLock = ({
+  aggregate,
+  table,
+  values,
+  mode,
+}: PhysicalRowLockOptions): HeldLock => {
   const key = JSON.stringify(["row", table, ...values]);
   return {
-    rank: AGGREGATE_LOCKS[options.aggregate].rank,
+    rank: AGGREGATE_LOCKS[aggregate].rank,
     key,
-    orderKey: JSON.stringify([options.aggregate, table, ...values]),
+    orderKey: JSON.stringify([aggregate, table, ...values]),
     mode,
+  };
+};
+const rowLock = (options: RowIdentityOptions, mode: RowLockMode): HeldLock => {
+  const { table, values } = rowResource(options);
+  return physicalRowLock({ aggregate: options.aggregate, table, values, mode });
+};
+
+// A batch is ordered twice: by SQL (COLLATE "C", byte order) and by the
+// history (code-unit order). The two agree on the ASCII ID alphabet, so batch
+// IDs outside it are refused. Single-row locks have no SQL ordering.
+const assertBatchIdAlphabet = (id: string): void => {
+  if (!/^[A-Za-z0-9_-]+$/u.test(id)) {
+    panic("Aggregate parent batch IDs must use the ASCII ID alphabet");
+  }
+};
+
+const parentRowSchema = v.object({ id: v.string() });
+type AggregateParentBatchOptions = {
+  tx: ExecuteTransaction;
+  organizationIds: readonly SafeId<"organization">[];
+  workspaceIds?: readonly SafeId<"workspace">[];
+  mode: RowLockMode;
+};
+
+/**
+ * Parent batches ascend by registered rank, then immutable primary key.
+ * Workspace batches need no organization ID: rank decides lock order, while
+ * the transaction's RLS scope decides which rows are visible.
+ */
+export const withAggregateParentBatch = async ({
+  tx,
+  organizationIds,
+  workspaceIds = [],
+  mode,
+}: AggregateParentBatchOptions) => {
+  const history = lockHistory(tx);
+  assertAggregateLevelAvailable(history);
+  for (const id of [...organizationIds, ...workspaceIds]) {
+    assertBatchIdAlphabet(id);
+  }
+  const acquire = async (
+    aggregate: "organization" | "workspace",
+    requestedIds: readonly string[],
+  ) => {
+    // PostgreSQL returns UUIDs in canonical lowercase; normalize first so the
+    // returned rows match their declared lock identities.
+    const canonicalIds =
+      aggregate === "workspace"
+        ? requestedIds.map((id) => id.toLowerCase())
+        : requestedIds;
+    const ids = [...new Set(canonicalIds)].toSorted(compareCodeUnit);
+    if (ids.length === 0) {
+      return [];
+    }
+    assertAggregateLevelAvailable(history);
+    const table = aggregate === "organization" ? organization : workspaces;
+    // UUID columns cannot carry a collation; their canonical text is ASCII.
+    const orderedId =
+      aggregate === "organization" ? sql`${table.id}` : sql`${table.id}::text`;
+    const locks = new Map(
+      ids.map((id) => [
+        id,
+        physicalRowLock({
+          aggregate,
+          table: getTableName(table),
+          values: [id],
+          mode,
+        }),
+      ]),
+    );
+    for (const lock of locks.values()) {
+      assertLockOrder(history, lock, "block");
+    }
+    history.status = "acquiring";
+    const rows = executedRows(
+      await tx.execute(sql`
+    SELECT id FROM ${table}
+    WHERE ${table.id} IN (${sql.join(
+      ids.map((id) => sql`${id}`),
+      sql`, `,
+    )})
+    ORDER BY ${orderedId} COLLATE "C" ${sql.raw(`FOR ${mode.toUpperCase()}`)}
+  `),
+    );
+    const returnedIds = rows.map((row) => v.parse(parentRowSchema, row).id);
+    for (const id of returnedIds) {
+      retainLock(
+        history,
+        locks.get(id) ?? panic("Parent batch returned an undeclared row"),
+      );
+    }
+    completeAcquisition(history);
+    return returnedIds;
+  };
+  const organizations = await acquire("organization", organizationIds);
+  const matters = await acquire("workspace", workspaceIds);
+  return {
+    organizationIds: new Set(organizations.map(brandPersistedOrganizationId)),
+    workspaceIds: new Set(matters.map(brandPersistedWorkspaceId)),
   };
 };
 const rowStatement = (

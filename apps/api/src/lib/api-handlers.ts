@@ -2365,7 +2365,10 @@ const logAndCaptureSafeError = ({
   // which rejection fired.
   Object.assign(attributes, identityFields(evidence));
 
-  if (isLocalDevOpen() && env.DEBUG_UNREDACTED_ERRORS) {
+  const privateInputRequest = /\/chat\/threads\/[^/]+\/secrets\/[^/]+$/u.test(
+    new URL(request.url).pathname,
+  );
+  if (isLocalDevOpen() && env.DEBUG_UNREDACTED_ERRORS && !privateInputRequest) {
     Object.assign(attributes, unredactedErrorFields(error));
   }
 

@@ -8,6 +8,7 @@ import {
   RESOURCE_TYPE,
   toChatResourceHref,
 } from "@stll/api-contract";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -832,9 +833,7 @@ export const uploadEntityHandler = async function* ({
   }
 
   const fileBuffer = await file.arrayBuffer();
-  const sha256Hex = new Bun.CryptoHasher("sha256")
-    .update(fileBuffer)
-    .digest("hex");
+  const sha256Hex = hashSha256Hex(new Uint8Array(fileBuffer));
 
   if (
     generatedDraft !== undefined &&
@@ -867,9 +866,7 @@ export const uploadEntityHandler = async function* ({
     await storedDocumentBytes(fileBuffer);
   const storedSizeBytes = storedBytes.byteLength;
   const storedSha256Hex =
-    strippedArchive === null
-      ? sha256Hex
-      : new Bun.CryptoHasher("sha256").update(storedBytes).digest("hex");
+    strippedArchive === null ? sha256Hex : hashSha256Hex(storedBytes);
 
   const encryption = uploadFileEncryption(
     await detectFileEncryption({ mimeType: file.type, scanned }),

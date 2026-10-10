@@ -102,6 +102,9 @@
       // imports it through @stll/ui/icons; the app keeps the dependency so
       // vite's `resolve.dedupe` and icon chunking resolve one copy.
       "ignoreDependencies": [
+        // The gitignored API contract imports schema interfaces by name to
+        // preserve ClientTool generic identity; CI checks that generated output.
+        "@standard-schema/spec",
         // Dynamically imported from the inline bootstrap in index.html.
         "react-grab",
         "lucide-react",

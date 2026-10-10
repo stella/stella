@@ -4,6 +4,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
 import { isChatFileMimeType } from "@stll/api-contract/chat-file-types";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { chatThreads, userFiles } from "@/api/db/schema";
@@ -724,9 +725,7 @@ export const uploadUserFile = async ({
     }
 
     const sanitizedFileName = sanitizeFilename(file.fileName);
-    const sha256Hex = new Bun.CryptoHasher("sha256")
-      .update(file.bytes)
-      .digest("hex");
+    const sha256Hex = hashSha256Hex(file.bytes);
     const id = createSafeId<"userFile">();
 
     const s3Key = createUserFileKey({

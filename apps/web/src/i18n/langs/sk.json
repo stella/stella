@@ -707,6 +707,15 @@
     },
     "writeOff": "Odpísať"
   },
+  "capabilityActions": {
+    "aiMissing": "AI nie je nakonfigurovaná.",
+    "availabilityUnknown": "Dostupnosť sa nepodarilo overiť.",
+    "deeplMissing": "DeepL nie je nakonfigurovaný.",
+    "desktopUnavailable": "Pripojte alebo aktualizujte stella desktop.",
+    "featureUnavailable": "Táto funkcia nie je k dispozícii.",
+    "ocrUnavailable": "OCR nie je k dispozícii.",
+    "translationMissing": "Nie je nakonfigurovaná žiadna služba prekladu."
+  },
   "caseLaw": {
     "analysis": {
       "abstract": "Abstrakt",
@@ -748,6 +757,7 @@
     "citation": {
       "citedAtLeast": "Citované najmenej {count}-krát",
       "citedSummary": "{count, plural, =0 {Necitované} one {Citované raz} few {Citované #-krát} other {Citované #-krát}}",
+      "dateUnavailable": "Dátum neuvedený",
       "decisionCount": "{count, plural, =0 {Žiadne rozhodnutia} one {# rozhodnutie} few {# rozhodnutia} other {# rozhodnutí}}",
       "lastNegative": "posledná negatívna citácia v roku {year}",
       "negativeCount": "{count, plural, one {# negatívna} few {# negatívne} many {# negatívnych} other {# negatívnych}}",
@@ -757,6 +767,7 @@
       "partialSummary": "Súčty citácií a časová os sú neúplné.",
       "passageNotFound": "Citujúcu pasáž sa v texte nepodarilo nájsť",
       "positiveCount": "{count, plural, one {# pozitívna} few {# pozitívne} many {# pozitívnych} other {# pozitívnych}}",
+      "referenceLabel": "{court}, {caseNumber}, {date}",
       "showAll": "{count, plural, one {Zobraziť # rozhodnutie} few {Zobraziť všetky # rozhodnutia} many {Zobraziť všetkých # rozhodnutí} other {Zobraziť všetkých # rozhodnutí}}",
       "stripLabel": "Citácie podľa rokov",
       "treatment": {
@@ -877,9 +888,13 @@
     "pagination": {
       "goToPage": "Prejsť na stránku {page}",
       "label": "Stránky výsledkov",
+      "pageOfCount": "Stránka {page} z {pageCount}",
+      "pageOfEstimatedCount": "Stránka {page} z ~{pageCount}",
+      "pageOfEstimatedCountLabel": "Stránka {page} z približne {pageCount}",
       "pageWithEstimatedResultCount": "Stránka {page} · približne {count, plural, one {# výsledok} few {# výsledky} other {# výsledkov}}",
       "pageWithResultCount": "Stránka {page} · {count, plural, one {# výsledok} few {# výsledky} other {# výsledkov}}",
-      "perPage": "Na stránku"
+      "perPage": "Na stránku",
+      "refineForMore": "Spresnite vyhľadávanie, aby ste videli ďalšie výsledky"
     },
     "paragraphRangeNotFound": "{count, plural, one {Odsek {range} sa v tomto texte nenašiel.} few {Odseky {range} sa v tomto texte nenašli.} other {Odseky {range} sa v tomto texte nenašli.}}",
     "paragraphRangeSelected": "{count, plural, one {Odsek {range} je zvýraznený.} few {Odseky {range} sú zvýraznené.} other {Odseky {range} sú zvýraznené.}}",
@@ -892,6 +907,7 @@
       "subsection": "ods. {value}"
     },
     "reader": {
+      "documentUpdated": "Dokument bol aktualizovaný.",
       "expandProvisions": "Rozbaliť ustanovenia",
       "headMatter": "Úvodná časť",
       "sourceAttribution": "Zdroj údajov je voľne dostupný na <link>{source}</link>."
@@ -1180,6 +1196,13 @@
       "previewWaiting": "Čaká sa na obsah…",
       "savePendingReview": "Pred uložením dokumentu vyriešte návrhy AI čakajúce na revíziu."
     },
+    "credentialPasteAction": "Použiť súkromnú kartu",
+    "credentialPasteDescription": "Tento text vyzerá ako prístupový údaj. Použite súkromnú kartu, aby sa nedostal do chatu. Keď sa karta zobrazí, vložte údaj znova do karty.",
+    "credentialPasteRequest": "Požiadajte o tento prístupový údaj pomocou súkromnej karty.",
+    "credentialPasteTitle": "Vloženie prístupového údaja pozastavené",
+    "credentialSendAction": "Napriek tomu odoslať",
+    "credentialSendDescription": "Odošlite ju iba vtedy, ak chcete túto hodnotu zdieľať v konverzácii.",
+    "credentialSendTitle": "Táto správa môže obsahovať prístupový údaj",
     "deleteThread": "Zmazať konverzáciu",
     "editMode": {
       "autoDirect": "Automaticky · prepísať",
@@ -1318,6 +1341,31 @@
     "removeSuggestion": "(odstrániť)",
     "renameThread": "Premenovať konverzáciu",
     "renameUnavailableEmptyThread": "Najprv odošlite správu, potom bude možné konverzáciu premenovať.",
+    "requestSecret": {
+      "checkingTarget": "Overujú sa podrobnosti konektora…",
+      "connectionDisposition": "Pripojenie: {disposition}",
+      "continuationError": "Vaša odpoveď bola uložená, ale chat nemohol pokračovať.",
+      "declined": "Odmietnuté",
+      "description": "Asistent tento údaj potrebuje na pokračovanie",
+      "error": "Prístupový údaj sa nepodarilo odoslať. Skúste to znova.",
+      "kind": {
+        "token": "Prístupový token"
+      },
+      "normalConnection": "Bežné pripojenie",
+      "private": "Asistent túto hodnotu neuvidí.",
+      "provideAction": "Poskytnúť",
+      "provided": "Poskytnuté",
+      "purposeByAi": "Účel napísaný umelou inteligenciou: {purpose}",
+      "receiptOnlyConnection": "Iba súkromné pripojenie",
+      "replaceOrdinaryConnection": "Nahradiť bežné pripojenie súkromným použitím",
+      "retryContinuationAction": "Pokračovať v chate",
+      "saveForFuture": "Uložiť pre budúce chaty",
+      "savedAvailabilityError": "Nepodarilo sa overiť, či sú prihlasovacie údaje uložené.",
+      "target": "Cieľ: {target}",
+      "title": "Žiadosť o súkromný prístupový údaj",
+      "useSavedAction": "Použiť uložený prístupový údaj",
+      "valueLabel": "Prístupový údaj"
+    },
     "resend": "Odoslať znova",
     "resizeThread": "Zmeniť veľkosť konverzácie",
     "richContentLoading": "Načítava sa interaktívny obsah…",
@@ -1441,6 +1489,7 @@
       "read_story": "Čítanie časti dokumentu",
       "remember": "Ukladanie do pamäte",
       "reply_comment": "Odpovedanie na komentár",
+      "request_secret": "Žiadosť o súkromný prístupový údaj",
       "resolve_comment": "Riešenie komentára",
       "review_folder_consistency": "Kontrola konzistentnosti priečinka",
       "run-stella-query": "Čítam dáta spisu",
@@ -1474,6 +1523,7 @@
       "update-entity-fields": "Aktualizácia metadát",
       "update_reader_annotation": "Upraviť zvýraznenie alebo komentár",
       "use-browser": "Používanie vášho prehliadača",
+      "use_connector_secret": "Použitie prístupového údaja konektora",
       "web_search": "Vyhľadávanie na webe"
     },
     "toolCall": {
@@ -4543,6 +4593,7 @@
       "noMatches": "Výrazu „{query}“ nezodpovedá žiadne pripojenie",
       "notConnected": "Nepripojené",
       "permissionCount": "{count, plural, one {# oprávnenie} few {# oprávnenia} many {# oprávnenia} other {# oprávnení}}",
+      "privateCredentialOnly": "Iba súkromné prihlasovacie údaje",
       "searchPlaceholder": "Hľadať pripojenia",
       "title": "Pripojenia",
       "turnedOff": "Vypnuté"

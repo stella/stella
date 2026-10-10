@@ -30,7 +30,10 @@ const COUNTER_FAILURE = failureSink({
   expected: [],
 });
 
-type DemoActionCounter = Pick<RateLimitContext, "increment" | "decrement">;
+type DemoActionCounter = Pick<
+  RateLimitContext,
+  "complete" | "increment" | "decrement"
+>;
 
 export type DemoActionBudget = {
   resolveDemoUserId: () => Promise<SafeId<"user"> | undefined>;
@@ -112,6 +115,16 @@ const refund = async (counter: DemoActionCounter, key: string) => {
   }
 };
 
+const complete = async (counter: DemoActionCounter, key: string) => {
+  const completed = await Result.tryPromise({
+    try: async () => await counter.complete(key),
+    catch: (cause: unknown) => cause,
+  });
+  if (Result.isError(completed)) {
+    observeFailure(completed.error, { sink: COUNTER_FAILURE });
+  }
+};
+
 /**
  * Counts each action the configured demo account starts per UTC day. A nested
  * same-caller admission belongs to its enclosing action and is not counted
@@ -166,37 +179,42 @@ export const withDemoActionBudget = async <T>(
       }),
   });
   if (Result.isError(counted)) {
+    await complete(counter, key);
     return counted;
   }
-  if (counted.value.count > DEMO_ACCOUNT_DAILY_ACTION_BUDGET.max) {
-    await refund(counter, key);
-    return Result.err(
-      new ActionAdmissionError({
-        message: "Daily action limit reached",
-        reason: "daily_exhausted",
-        retryAtMs: dayEndMs,
-      }),
-    );
-  }
-
-  const executionScope: DemoActionScope = {
-    organizationId,
-    userId,
-    status: "active",
-  };
-  const execution: { phase: "waiting" | "started" } = { phase: "waiting" };
   try {
-    return await demoActionScope.run(
-      executionScope,
-      async () =>
-        await run(() => {
-          execution.phase = "started";
-        }),
-    );
-  } finally {
-    executionScope.status = "settled";
-    if (execution.phase === "waiting") {
+    if (counted.value.count > DEMO_ACCOUNT_DAILY_ACTION_BUDGET.max) {
       await refund(counter, key);
+      return Result.err(
+        new ActionAdmissionError({
+          message: "Daily action limit reached",
+          reason: "daily_exhausted",
+          retryAtMs: dayEndMs,
+        }),
+      );
     }
+
+    const executionScope: DemoActionScope = {
+      organizationId,
+      userId,
+      status: "active",
+    };
+    const execution: { phase: "waiting" | "started" } = { phase: "waiting" };
+    try {
+      return await demoActionScope.run(
+        executionScope,
+        async () =>
+          await run(() => {
+            execution.phase = "started";
+          }),
+      );
+    } finally {
+      executionScope.status = "settled";
+      if (execution.phase === "waiting") {
+        await refund(counter, key);
+      }
+    }
+  } finally {
+    await complete(counter, key);
   }
 };

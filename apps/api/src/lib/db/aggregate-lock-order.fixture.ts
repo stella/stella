@@ -17,6 +17,8 @@ export const aggregateFences = () => {
   const organizationId = mintAuthProviderId<"organization">();
   const workspaceId = createSafeId<"workspace">();
   const definitionId = createSafeId<"flowDefinition">();
+  const threadId = createSafeId<"chatThread">();
+  const userId = mintAuthProviderId<"user">();
   return {
     organization: {
       aggregate: "organization",
@@ -61,6 +63,21 @@ export const aggregateFences = () => {
     memberCleanup: {
       aggregate: "memberCleanup",
       id: { type: "organization-member", id: "member-claim", organizationId },
+      mode: "update",
+    },
+    chatThread: {
+      aggregate: "chatThread",
+      id: { id: threadId, organizationId, userId },
+      mode: "update",
+    },
+    chatTurn: {
+      aggregate: "chatTurn",
+      id: { threadId, organizationId, userId, toolCallId: "test-call" },
+      mode: "update",
+    },
+    chatSecret: {
+      aggregate: "chatSecret",
+      id: { id: Bun.randomUUIDv7(), threadId, organizationId, userId },
       mode: "update",
     },
     run: {

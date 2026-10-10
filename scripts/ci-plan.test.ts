@@ -25,6 +25,7 @@ import queuedJob from "./__fixtures__/ci-cancellation/queued-job.json" with { ty
 import supersessionAnnotations from "./__fixtures__/ci-cancellation/supersession.json" with { type: "json" };
 import timeoutAnnotations from "./__fixtures__/ci-cancellation/timeout.json" with { type: "json" };
 import { selectApiTestImpact } from "./api-test-impact";
+import { FULL_TEST_JOB_SHARDS } from "./api-test-shard-plan";
 import { requiresMalwareScan } from "./check-standalone-lockfiles";
 import { planCiApiTests } from "./ci-api-test-plan";
 import { CANONICAL_CANCEL_STEP } from "./ci-cancellation-contract";
@@ -38,9 +39,29 @@ import { extractPlanSelector } from "./ci-plan-selector";
 import { routeSmokeAffected } from "./detect-route-smoke-changes";
 import { serviceSuiteCliOutput } from "./detect-service-suite-changes";
 import { GENERATORS } from "./generated-files";
-import { evaluate } from "./github-expression";
-import { mainHeavyJobs, queueAdmittedJobs } from "./main-heavy-plan";
+import {
+  type Context,
+  evaluate as evaluateExpression,
+} from "./github-expression";
+import {
+  mainHeavyJobs,
+  prDepthJobs,
+  queueAdmittedJobs,
+} from "./main-heavy-plan";
+import { TEST_JOB_SHARDS, type TestShardId } from "./test-shards";
 import { flattenWorkflowSteps } from "./workflow-steps";
+
+// Ordinary events never run the main PR-depth caller and reuse nothing unless
+// a case says so; cases that exercise either set the value explicitly.
+const ORDINARY_EVENT_VALUES = {
+  "inputs.pr_depth_only": false,
+  "needs.ci-plan.outputs.pr_depth_reused": "false",
+};
+const evaluate = (source: string, context: Context) =>
+  evaluateExpression(source, {
+    ...context,
+    values: { ...ORDINARY_EVENT_VALUES, ...context.values },
+  });
 
 const workflow = readFileSync(
   new URL("../.github/workflows/ci.yml", import.meta.url),
@@ -1107,6 +1128,10 @@ const resultGateCase = ({
       QUEUE_VALIDATION: "false",
       QUEUE_REQUIRED_JOBS: "[]",
       PR_ACTION: "synchronize",
+      PR_DEPTH_ONLY: "false",
+      PR_DEPTH_REUSED: plannedOutputs["pr_depth_reused"] ?? "false",
+      PR_DEPTH_SOURCE_RUN_ID: plannedOutputs["pr_depth_source_run_id"] ?? "99",
+      PR_DEPTH_JOBS: JSON.stringify(prDepthJobs({ jobs: ciJobs })),
       QUEUE_DEPTH: "full",
       HEAVY_ONLY: String(heavyOnly),
       HEAVY_JOBS: JSON.stringify(mainHeavyJobNames),
@@ -1246,6 +1271,12 @@ test("the result gate evaluates every job in the workflow", () => {
 });
 
 test("each job's plan scope is the ci-plan output its `if:` selects it by", () => {
+  const declaredAdditionalScopes = {
+    "service-suites": [
+      "corpus_suites_required",
+      "Corpus changes start the shared service job without opting PRs into Postgres or Valkey steps.",
+    ],
+  } as const satisfies Record<string, readonly [string, string]>;
   expect(new Set(Object.keys(jobScopes))).toEqual(new Set(gatedJobs));
   for (const job of gatedJobs) {
     const selectedBy = [
@@ -1254,8 +1285,12 @@ test("each job's plan scope is the ci-plan output its `if:` selects it by", () =
       ),
     ].map((match) => match[1]);
     const scope = jobScopes[job];
+    const additionalScope = Object.entries(declaredAdditionalScopes)
+      .find(([name]) => name === job)?.[1]
+      .at(0);
     expect(selectedBy, job).toEqual([
       ...(scope === null ? [] : [scope]),
+      ...(additionalScope === undefined ? [] : [additionalScope]),
       ...(fastJobScopes[job] ? [fastJobScopes[job]] : []),
     ]);
   }
@@ -1312,6 +1347,45 @@ test("a full-depth run passes jobs whose scope was not planned only when skipped
 // A pull request always plans `fast`; a manual run plans the depth it was
 // dispatched with. Both can be superseded by a newer run.
 const FAST_DEPTH_EVENTS = [EVENT.pullRequest, EVENT.workflowDispatch] as const;
+
+test("ci-result accepts only PR-depth skips backed by this run's reuse decision", () => {
+  const depthJobs = prDepthJobs({ jobs: ciJobs });
+  const skipped = Object.fromEntries(depthJobs.map((job) => [job, "skipped"]));
+  expect(
+    evaluateResult({
+      event: EVENT.mergeGroup,
+      results: skipped,
+      plannedOutputs: {
+        pr_depth_reused: "true",
+        pr_depth_source_run_id: "99",
+      },
+    }),
+  ).toBe(0);
+  for (const outcome of ["skipped", "failure", "cancelled"] as const) {
+    expect(
+      evaluateResult({
+        event: EVENT.mergeGroup,
+        results: { ...skipped, [depthJobs.at(0) ?? "missing"]: outcome },
+      }),
+    ).toBe(1);
+  }
+  const ignoredReuse = resultStep.run.replace(
+    'elif $pr_reused == "true" and ($pr_jobs | index($job)) then',
+    "elif false then",
+  );
+  expect(ignoredReuse).not.toBe(resultStep.run);
+  expect(
+    evaluateResult({
+      event: EVENT.mergeGroup,
+      results: skipped,
+      plannedOutputs: {
+        pr_depth_reused: "true",
+        pr_depth_source_run_id: "99",
+      },
+      outcomeScript: ignoredReuse,
+    }),
+  ).toBe(1);
+});
 
 test("CI result rejects a failed check leg after independent guards finish", () => {
   for (const event of [EVENT.mergeGroup, EVENT.pullRequest]) {
@@ -1531,6 +1605,9 @@ test("a run that passes as superseded records no completion evidence", () => {
           HEAD_SHA: "a".repeat(40),
           BASE_SHA: "b".repeat(40),
           HEAD_REPO_ID: "456",
+          PATCH_ID: "c".repeat(40),
+          WORKFLOW_VERSION: "d".repeat(40),
+          PR_DEPTH_JOBS: JSON.stringify(prDepthJobs({ jobs: ciJobs })),
         },
       };
     })) {
@@ -1966,6 +2043,40 @@ const jobSteps = (job: unknown) =>
     job,
   ).steps;
 
+const MATRIX_SHARD_ENV = `\${{ matrix.shard == 'rest-web' && 'rest' || matrix.shard }}`;
+
+const missingFullTestShards = (source: string) => {
+  const steps = jobSteps(workflowJobs(source)["full-test"]);
+  return FULL_TEST_JOB_SHARDS.flatMap((jobShard) =>
+    TEST_JOB_SHARDS[jobShard]
+      .filter((suite: TestShardId) => {
+        const matchingStep = steps.find((step) => {
+          if (
+            !step.run?.includes('scripts/test-shards.ts --filters "$SHARD"') ||
+            !step.run.includes(
+              `bun run test -- --concurrency=2 "\${shard_args[@]}"`,
+            )
+          ) {
+            return false;
+          }
+          const configuredShard = step.env?.["SHARD"];
+          let actualShard = configuredShard;
+          if (configuredShard === MATRIX_SHARD_ENV) {
+            actualShard = jobShard === "rest-web" ? "rest" : jobShard;
+          }
+          if (actualShard !== suite) {
+            return false;
+          }
+          const gatedShard = /matrix\.shard == '(?<shard>[a-z0-9-]+)'/u.exec(
+            step.if ?? "",
+          )?.groups?.["shard"];
+          return gatedShard === undefined || gatedShard === jobShard;
+        });
+        return matchingStep === undefined;
+      })
+      .map((suite: TestShardId) => [jobShard, suite].join("/")),
+  );
+};
 test("UI playground scope covers the component directories rendered by its table bench", () => {
   const bench = readFileSync(
     new URL(
@@ -3017,8 +3128,7 @@ mkdir -p out-runner/full
 test("every parallel quality and guard leg fails closed at full depth", () => {
   for (const job of [
     "code-quality-api",
-    "code-quality-web",
-    "code-quality-rest",
+    "code-quality-web-rest",
     "ci-checks-generated",
     "ci-checks-policy",
     "ci-checks-rest",
@@ -3082,16 +3192,22 @@ test("folded service suites preserve both scopes and independent verdicts", () =
     ["Run Valkey-gated API suites", "valkey_suites_required"],
     ["Run cross-replica collaboration suite", "collaboration_suite_required"],
   ] as const;
+  const nonCorpusGate =
+    "(github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && needs.ci-plan.outputs.queue_depth != 'thin' && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true'))";
   for (const suite of suites) {
     const scope = suiteScopes.find(([name]) => name === suite.name)?.[1];
     if (scope === undefined) {
       throw new TypeError(`No service scope for ${suite.name}`);
     }
     const predicate = `needs.ci-plan.outputs.${scope} == 'true'`;
+    if (scope === "corpus_suites_required") {
+      expect(suite.if).toBe(`\${{ !cancelled() && ${predicate} }}`);
+      continue;
+    }
     expect(suite.if).toBe(
       scope === "postgres_suites_required"
-        ? predicate
-        : `\${{ !cancelled() && ${predicate} }}`,
+        ? `${predicate} && ${nonCorpusGate}`
+        : `\${{ !cancelled() && ${predicate} && ${nonCorpusGate} }}`,
     );
   }
   const collab = suites.find(({ run }) => run?.includes("@stll/collab"));
@@ -3690,7 +3806,7 @@ test("an unreadable PR diff requires route smoke while manual and queue runs ret
     rmSync(directory, { recursive: true, force: true });
   }
 });
-test("service-suite scopes remain planned while pull requests skip execution", () => {
+test("service-suite scopes run on pull requests only for selected corpus coverage", () => {
   const scope = "service_suites_pr_required";
   const condition = jobIf(ciJobs["service-suites"]);
   expect(condition).toContain("needs.ci-plan.outputs.suite_depth == 'fast'");
@@ -3731,19 +3847,20 @@ test("service-suite scopes remain planned while pull requests skip execution", (
     cases.map(({ file, required }) => ({
       file,
       files: [file],
-      outputs: [scope],
+      outputs: [scope, "corpus_suites_required"],
       required,
     })),
   ).map(({ item: { file, required }, plan: values }) => ({
     file,
     required,
     selected: values.at(0) === "true",
+    corpusSelected: values.at(1) === "true",
   }));
   for (const { file, required, selected } of planned) {
     expect(selected, file).toBe(required);
   }
   // Evaluate the actual job condition with planner outputs at both depths.
-  const conditions = planned.flatMap(({ file, selected }) =>
+  const conditions = planned.flatMap(({ file, selected, corpusSelected }) =>
     ["fast", "full"].map((suiteDepth) => ({
       label: `${file} ${suiteDepth}`,
       executable: condition
@@ -3753,12 +3870,16 @@ test("service-suite scopes remain planned while pull requests skip execution", (
           () => `'${String(selected)}'`,
         )
         .replaceAll(
+          "needs.ci-plan.outputs.corpus_suites_required",
+          () => `'${String(corpusSelected)}'`,
+        )
+        .replaceAll(
           "needs.ci-plan.outputs.suite_depth",
           () => `'${suiteDepth}'`,
         )
         .replaceAll("needs.ci-plan.outputs.trusted", "'true'")
         .replaceAll("github.event_name", "'pull_request'"),
-      exitCode: 1,
+      exitCode: selected && corpusSelected ? 0 : 1,
     })),
   );
   for (const { item, exitCode } of runBashBatch(
@@ -3981,7 +4102,7 @@ test("image scopes remain planned while pull requests skip execution", () => {
   }
 }, 30_000);
 
-test("each folded service step follows its own dependency scope at PR depth", () => {
+test("each folded service step follows its own dependency scope and execution depth", () => {
   const scopes = [
     "postgres_suites_required",
     "corpus_suites_required",
@@ -3999,7 +4120,7 @@ test("each folded service step follows its own dependency scope at PR depth", ()
     ({ name }) => name === "Run cross-replica collaboration suite",
   );
   expect(collaboration?.if).toBe(
-    `\${{ !cancelled() && needs.ci-plan.outputs.collaboration_suite_required == 'true' }}`,
+    `\${{ !cancelled() && needs.ci-plan.outputs.collaboration_suite_required == 'true' && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && needs.ci-plan.outputs.queue_depth != 'thin' && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true')) }}`,
   );
   const planned = Object.fromEntries(
     scopes.map((scope, index) => [scope, timePlan.at(index)]),
@@ -4008,20 +4129,23 @@ test("each folded service step follows its own dependency scope at PR depth", ()
     predicate: string,
     values: Record<string, string | undefined>,
   ) =>
-    Bun.spawnSync([
-      "bash",
-      "-c",
-      `[[ ${predicate
-        .replace(/^\$\{\{\s*/u, "")
-        .replace(/\s*\}\}$/u, "")
-        .replaceAll("!cancelled()", "true")
-        .replaceAll("always()", "true")
-        .replace(
-          /needs\.ci-plan\.outputs\.(\w+)/gu,
-          (_, scope: string) => `'${String(values[scope])}'`,
-        )} ]]`,
-    ]).exitCode;
-  expect(evaluateStep(collaboration?.if ?? "false", planned)).toBe(0);
+    evaluate(predicate, {
+      values: {
+        ...Object.fromEntries(
+          Object.entries(values).map(([scope, value]) => [
+            `needs.ci-plan.outputs.${scope}`,
+            value,
+          ]),
+        ),
+        "github.event_name": EVENT.mergeGroup,
+        "vars.CI_POSTGRES_PR_SELECTION": "off",
+        "needs.ci-plan.outputs.queue_depth": "full",
+        "needs.ci-plan.outputs.suite_depth": "full",
+        "needs.ci-plan.outputs.service_suites_pr_required": "true",
+      },
+      status: { always: true, success: true, failure: false, cancelled: false },
+    });
+  expect(evaluateStep(collaboration?.if ?? "false", planned)).toBe(true);
   for (const [name, scope] of [
     ["Run Postgres-gated API suites", "postgres_suites_required"],
     ["Start corpus engine", "corpus_suites_required"],
@@ -4038,7 +4162,7 @@ test("each folded service step follows its own dependency scope at PR depth", ()
         scopes.map((key) => [key, String(key === selected)]),
       );
       expect(evaluateStep(predicate, values), `${name}: ${selected}`).toBe(
-        scope === selected ? 0 : 1,
+        scope === selected,
       );
     }
   }
@@ -4056,7 +4180,79 @@ test("each folded service step follows its own dependency scope at PR depth", ()
   ]);
 });
 
-test("pull requests leave corpus engine suites to full-depth runs", () => {
+test("corpus bypasses non-corpus service depth and PR opt-in gates", () => {
+  const steps = jobSteps(ciJobs["service-suites"]);
+  const conditions = Object.fromEntries(
+    [
+      "Run Postgres-gated API suites",
+      "Run corpus engine suites",
+      "Run Valkey-gated API suites",
+      "Run cross-replica collaboration suite",
+    ].map((name) => [
+      name,
+      steps.find((step) => step.name === name)?.if ?? "false",
+    ]),
+  );
+  const commonValues = {
+    "needs.ci-plan.outputs.postgres_suites_required": "true",
+    "needs.ci-plan.outputs.corpus_suites_required": "true",
+    "needs.ci-plan.outputs.valkey_suites_required": "true",
+    "needs.ci-plan.outputs.collaboration_suite_required": "true",
+    "needs.ci-plan.outputs.service_suites_pr_required": "true",
+    "needs.ci-plan.outputs.suite_depth": "full",
+    "vars.CI_POSTGRES_PR_SELECTION": "off",
+  };
+
+  const thinMergeGroup = {
+    ...commonValues,
+    "github.event_name": EVENT.mergeGroup,
+    "needs.ci-plan.outputs.queue_depth": "thin",
+  };
+  expect(
+    evaluate(conditions["Run corpus engine suites"] ?? "false", {
+      values: thinMergeGroup,
+      status: { cancelled: false },
+    }),
+  ).toBe(true);
+  expect(
+    evaluate(conditions["Run Postgres-gated API suites"] ?? "false", {
+      values: thinMergeGroup,
+      status: { cancelled: false },
+    }),
+  ).toBe(false);
+  expect(
+    evaluate(conditions["Run Valkey-gated API suites"] ?? "false", {
+      values: thinMergeGroup,
+      status: { cancelled: false },
+    }),
+  ).toBe(false);
+  expect(
+    evaluate(conditions["Run cross-replica collaboration suite"] ?? "false", {
+      values: thinMergeGroup,
+      status: { cancelled: false },
+    }),
+  ).toBe(false);
+
+  const pullRequest = {
+    ...commonValues,
+    "github.event_name": EVENT.pullRequest,
+    "needs.ci-plan.outputs.queue_depth": "full",
+  };
+  expect(
+    evaluate(conditions["Run corpus engine suites"] ?? "false", {
+      values: pullRequest,
+      status: { cancelled: false },
+    }),
+  ).toBe(true);
+  expect(
+    evaluate(conditions["Run Postgres-gated API suites"] ?? "false", {
+      values: pullRequest,
+      status: { cancelled: false },
+    }),
+  ).toBe(false);
+});
+
+test("pull requests and merge groups preserve corpus engine detector scope at every depth", () => {
   const scopes = [
     "postgres_suites_required",
     "corpus_suites_required",
@@ -4066,7 +4262,7 @@ test("pull requests leave corpus engine suites to full-depth runs", () => {
   const changed = ["apps/api/src/handlers/example.test.ts"];
   expect(runSelector(changed, scopes)).toEqual([
     "true",
-    "false",
+    "true",
     "true",
     "true",
   ]);
@@ -4076,6 +4272,34 @@ test("pull requests leave corpus engine suites to full-depth runs", () => {
     "true",
     "true",
   ]);
+  expect(runSelector(["docs/guide.md"], scopes)).toEqual([
+    "false",
+    "false",
+    "false",
+    "false",
+  ]);
+  const condition = jobIf(ciJobs["service-suites"]);
+  for (const [suiteDepth, queueDepth] of [
+    ["fast", "full"],
+    ["full", "full"],
+    ["fast", "thin"],
+    ["full", "thin"],
+  ] as const) {
+    const executable = condition
+      .replaceAll("needs.ci-plan.outputs.run_required", "'true'")
+      .replaceAll("needs.ci-plan.outputs.service_suites_required", "'true'")
+      .replaceAll("needs.ci-plan.outputs.corpus_suites_required", "'true'")
+      .replaceAll("needs.ci-plan.outputs.service_suites_pr_required", "'true'")
+      .replaceAll("needs.ci-plan.outputs.trusted", "'true'")
+      .replaceAll("needs.ci-plan.outputs.suite_depth", () => `'${suiteDepth}'`)
+      .replaceAll("needs.ci-plan.outputs.queue_depth", () => `'${queueDepth}'`)
+      .replaceAll("vars.CI_POSTGRES_PR_SELECTION", "'off'")
+      .replaceAll("github.event_name", "'merge_group'");
+    expect(
+      Bun.spawnSync(["bash", "-c", `[[ ${executable} ]]`]).exitCode,
+      `${suiteDepth} ${queueDepth}`,
+    ).toBe(0);
+  }
 });
 
 test("an empty full-depth diff preserves the original API service-suite selection", () => {
@@ -4112,7 +4336,7 @@ test("the production service-scope capture rejects crashed or malformed detector
         exit: "0",
         expected: 0,
         event: "pull_request",
-        scopes: "false false false false",
+        scopes: "false true false false",
       },
       { output: "false false false false", exit: "0", expected: 0 },
       { output: "true true true true", exit: "1", expected: 1 },
@@ -4187,6 +4411,7 @@ type DepthContext = {
   proveFix?: boolean;
   /** The QUEUE_BROWSER_SUITES repository variable; GitHub reads unset as ''. */
   queueBrowserSuites?: string;
+  corpusRequired?: boolean;
 };
 const runsAtDepth = (
   condition: string,
@@ -4197,6 +4422,7 @@ const runsAtDepth = (
     queueDepth = "full",
     proveFix = false,
     queueBrowserSuites = "",
+    corpusRequired = false,
   }: DepthContext,
 ) => {
   const selectedQueueDepth = event === EVENT.mergeGroup ? queueDepth : "full";
@@ -4209,6 +4435,7 @@ const runsAtDepth = (
           ? ["prove-fix"]
           : [],
         "inputs.heavy_only": heavyOnly === true,
+        "inputs.pr_depth_only": false,
         "needs.ci-plan.outputs.coverage_profile": "normal-v1",
         "needs.ci-plan.outputs.pilot_fast_jobs": "[]",
         "needs.ci-plan.outputs.suite_depth": depth,
@@ -4216,6 +4443,7 @@ const runsAtDepth = (
         "vars.QUEUE_BROWSER_SUITES": queueBrowserSuites,
         "vars.CI_POSTGRES_PR_SELECTION": "off",
         "needs.ci-plan.outputs.postgres_pr_required": "false",
+        "needs.ci-plan.outputs.corpus_suites_required": String(corpusRequired),
         "needs.ci-plan.outputs.ci_browser_required": browserPlanOutput({
           event,
           depth,
@@ -4458,6 +4686,14 @@ test("thin merge groups intentionally skip heavy jobs while full parity stays en
     }
   }
   expect(parityViolations(parityJobs, queueOnlyJobs)).toEqual([]);
+  expect(
+    runsAtDepth(jobIf(ciJobs["service-suites"]), {
+      event: EVENT.mergeGroup,
+      depth: SUITE_DEPTH.full,
+      queueDepth: "thin",
+      corpusRequired: true,
+    }),
+  ).toBe(true);
 });
 
 test("parity treats absent or false heavy-only input as ordinary event execution", () => {
@@ -4663,6 +4899,7 @@ test("the exact docs-only README change plans only Markdown checks in PRs and me
     const values = {
       "github.event_name": event,
       "inputs.heavy_only": false,
+      "inputs.pr_depth_only": false,
       "github.event.pull_request.labels.*.name": [],
       "needs.ci-plan.outputs.trusted": "true",
       "needs.ci-plan.outputs.run_required": "true",
@@ -4756,6 +4993,7 @@ test("mixed documentation and code changes retain the complete code plan", () =>
     const values = {
       "github.event_name": event,
       "inputs.heavy_only": false,
+      "inputs.pr_depth_only": false,
       "needs.ci-plan.outputs.trusted": "true",
       "needs.ci-plan.outputs.run_required": "true",
       "needs.ci-plan.outputs.coverage_profile": "normal-v1",
@@ -4914,15 +5152,27 @@ test("a crashed API planner widens the real workflow outputs", () => {
   }
 });
 
-test("nightly full tests retain the unrestricted API suite and selection enters its cache key", () => {
+test("nightly full tests use the shared full-depth shard plan and selection enters its cache key", () => {
   const nightly = readFileSync(
     new URL("../.github/workflows/nightly-test.yml", import.meta.url),
     "utf-8",
   );
   const steps = jobSteps(workflowJobs(nightly)["full-test"]);
   const full = steps.find((step) => step.name === "Full test suite");
-  expect(full?.run).toBe("bun run test -- --concurrency=2");
+  expect(nightly).toContain(
+    `matrix: \${{ fromJSON(needs.full-test-plan.outputs.matrix) }}`,
+  );
+  expect(full?.run).toContain("scripts/test-shards.ts --filters");
+  expect(full?.run).toContain("scripts/test-shards.ts --api-shard");
+  expect(full?.run).toContain(
+    `bun run test -- --concurrency=2 "\${shard_args[@]}"`,
+  );
   expect(full?.env?.["TURBO_FORCE"]).toBe("true");
+  expect(missingFullTestShards(nightly)).toEqual([]);
+  const planner = jobSteps(workflowJobs(nightly)["full-test-plan"]).find(
+    (step) => step.name === "Plan full test shards",
+  );
+  expect(planner?.run).toContain("scripts/api-test-shard-plan.ts");
   expect(nightly).not.toContain("API_TEST_FILES:");
   const turbo = readFileSync(
     new URL("../turbo.json", import.meta.url),
@@ -4942,6 +5192,19 @@ test("nightly full tests retain the unrestricted API suite and selection enters 
   );
 });
 
+test("the nightly shard census rejects a planted missing web suite", () => {
+  const nightly = readFileSync(
+    new URL("../.github/workflows/nightly-test.yml", import.meta.url),
+    "utf-8",
+  );
+  const planted = nightly.replace(
+    /\n {6}- name: Full web test suite\n[\s\S]*?(?=\n\n {2}# The production client build)/u,
+    "",
+  );
+  expect(planted).not.toBe(nightly);
+  expect(missingFullTestShards(planted)).toEqual(["rest-web/web"]);
+});
+
 test("API planning only loads dependencies after installation and emits install-free fallbacks", () => {
   const steps = jobSteps(ciJobs["ci-plan"]);
   const select = steps.find(
@@ -4953,7 +5216,7 @@ test("API planning only loads dependencies after installation and emits install-
   const plan = steps.find(
     (step) => step.name === "Plan API test files and shards",
   );
-  expect(plan?.run).not.toContain("bun ");
+  expect(plan?.run).toContain("bun scripts/api-test-shard-plan.ts");
   const directory = mkdtempSync(nodePath.join(tmpdir(), "api-plan-output-"));
   const output = nodePath.join(directory, "output");
   try {
@@ -5039,6 +5302,7 @@ test("Postgres plans are visible on PRs while execution requires explicit opt-in
           "needs.ci-plan.outputs.queue_depth": "full",
           "needs.ci-plan.outputs.service_suites_required": "true",
           "needs.ci-plan.outputs.service_suites_pr_required": "true",
+          "needs.ci-plan.outputs.corpus_suites_required": "false",
           "needs.ci-plan.outputs.postgres_suites_required": "true",
           "needs.ci-plan.outputs.trusted": "true",
           "needs.ci-plan.outputs.suite_depth":
@@ -5052,7 +5316,9 @@ test("Postgres plans are visible on PRs while execution requires explicit opt-in
         expect(evaluate(jobCondition, { values })).toBe(
           event !== EVENT.pullRequest || enabled,
         );
-        expect(evaluate(runner?.if ?? "false", { values })).toBe(true);
+        expect(evaluate(runner?.if ?? "false", { values })).toBe(
+          event !== EVENT.pullRequest || prSwitch === "on",
+        );
         expect(evaluate(runnerSelection, { values })).toBe(
           event === EVENT.mergeGroup || enabled ? selection : '{"mode":"all"}',
         );
@@ -5158,6 +5424,7 @@ test("full Postgres failures trigger selector replay only on main-heavy", () => 
           evaluate(missCheck?.if ?? "false", {
             values: {
               "inputs.heavy_only": heavyOnly,
+              "inputs.pr_depth_only": false,
               "steps.postgres-tests.outcome": outcome,
             },
             status: { always: true, success: false, failure: true, cancelled },

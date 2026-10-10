@@ -90,6 +90,7 @@ const TASK_LIST_ENTITY_SELECTION = {
 // Columns a task-list row leaves out. The list is a summary; `list_tasks`
 // detail mode and `tasks.get` return the full task.
 const UNPROJECTED_TASK_LIST_COLUMNS = [
+  "entityFeatureGate", // RLS state is internal to the gate.
   // Tenant scope: the row names its matter through the joined workspace.
   "workspaceId",
   // Always "task" here, fixed by the query.

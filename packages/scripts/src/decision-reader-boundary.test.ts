@@ -189,6 +189,44 @@ test("reader production dependencies contain only rendering and data contracts",
   ).toEqual([]);
 });
 
+test("shared decision identity exports resolve to context-free package owners", () => {
+  for (const module of ["court-name", "decision-identity"]) {
+    const resolved = Bun.resolveSync(
+      `@stll/decision-reader/${module}`,
+      path.join(repositoryRoot, "apps/web"),
+    );
+    expect(resolved).toBe(path.join(packageRoot, "src", `${module}.tsx`));
+    expect(
+      boundaryViolations(resolved, readFileSync(resolved, "utf-8")),
+    ).toEqual([]);
+    expect(lifecycleViolations(readFileSync(resolved, "utf-8"))).toEqual([]);
+  }
+});
+
+test("reader catalogue types compile without DOM or JSX dependencies", () => {
+  const entry = Bun.resolveSync(
+    "@stll/decision-reader/reader-message-types",
+    path.join(repositoryRoot, "apps/api"),
+  );
+  const program = ts.createProgram({
+    rootNames: [entry],
+    options: {
+      lib: ["lib.esnext.d.ts"],
+      types: [],
+      noEmit: true,
+      strict: true,
+      skipLibCheck: true,
+    },
+  });
+  expect(
+    ts
+      .getPreEmitDiagnostics(program)
+      .map((diagnostic) =>
+        ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"),
+      ),
+  ).toEqual([]);
+});
+
 test("reader production imports stay inside its context-free boundary", () => {
   for (const relativeFile of new Bun.Glob(
     "src/**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}",
@@ -369,20 +407,66 @@ test("removed reader stylesheet imports reject CSS import forms", () => {
   ).toEqual([]);
 });
 
+// Owns source entry definitions: a module painting decision text delegates its
+// renderer to the shared package. The metafile guard owns shipped reachability.
 const mcpReaderRequiresSharedPackage = (file: string, source: string) => {
-  const readerEntry =
+  const tree = ts.createSourceFile(
+    file,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
+  const readerPath =
     /(?:^|\/)(?:decision-reader|decision-text|document-ast-text)(?:\/|\.)/u.test(
       file,
-    ) ||
-    /<(?:\w+\.)?(?:DecisionText|DecisionReader|DocumentAstText)(?:\s|\/|>)/u.test(
-      source,
     );
-  return (
-    readerEntry &&
-    !moduleSpecifiers(source).some((specifier) =>
-      specifier.startsWith("@stll/decision-reader/"),
-    )
-  );
+  const imports = new Set<string>();
+  const namespaces = new Set<string>();
+  for (const statement of tree.statements) {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteral(statement.moduleSpecifier) ||
+      !statement.moduleSpecifier.text.startsWith("@stll/decision-reader/") ||
+      statement.importClause?.phaseModifier === ts.SyntaxKind.TypeKeyword
+    ) {
+      continue;
+    }
+    const bindings = statement.importClause?.namedBindings;
+    if (bindings && ts.isNamedImports(bindings)) {
+      for (const binding of bindings.elements) {
+        if (!binding.isTypeOnly) {
+          imports.add(binding.name.text);
+        }
+      }
+    }
+    if (bindings && ts.isNamespaceImport(bindings)) {
+      namespaces.add(bindings.name.text);
+    }
+  }
+  const rendered = { reader: false, shared: false };
+  const visit = (node: ts.Node) => {
+    if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
+      const name = node.tagName.getText(tree);
+      const rendersNative =
+        /^(?:article|p|h[1-6]|table|blockquote|figure|pre)$/u.test(name);
+      const readerElement =
+        /^(?:\w+\.)?(?:DecisionText|DecisionReader|DocumentAstText|BlockRenderer|InlineContent|DecisionIdentity|CourtName)$/u.test(
+          name,
+        );
+      rendered.reader ||= (readerPath && rendersNative) || readerElement;
+      rendered.shared ||=
+        imports.has(name) ||
+        (ts.isPropertyAccessExpression(node.tagName) &&
+          ts.isIdentifier(node.tagName.expression) &&
+          namespaces.has(node.tagName.expression.text));
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(tree);
+  // The build's metafile guard owns reachability. This source guard owns modules
+  // that paint reader UI; data modules and bootstraps delegate that rendering.
+  return rendered.reader && !rendered.shared;
 };
 
 test("MCP decision reader entries use the shared rendering package", () => {
@@ -402,6 +486,21 @@ test("MCP decision reader entries use the shared rendering package", () => {
   }
 });
 
+test("copying the production renderer into an app entry violates source ownership", () => {
+  const entry = "apps/api/src/mcp/apps/decision-reader/app.tsx";
+  const productionEntry = readFileSync(
+    path.join(repositoryRoot, entry),
+    "utf-8",
+  );
+  expect(mcpReaderRequiresSharedPackage(entry, productionEntry)).toBe(false);
+  const copiedRenderer = readFileSync(
+    path.join(packageRoot, "src/document-ast-text.tsx"),
+    "utf-8",
+  );
+  expect(copiedRenderer).toContain("export const BlockRenderer");
+  expect(mcpReaderRequiresSharedPackage(entry, copiedRenderer)).toBe(true);
+});
+
 test("MCP reader ownership guard distinguishes reader entries from result snippets", () => {
   const file = "apps/api/src/mcp/apps/decision-reader/app.tsx";
   expect(
@@ -414,6 +513,36 @@ test("MCP reader ownership guard distinguishes reader entries from result snippe
     mcpReaderRequiresSharedPackage(
       file,
       'import { DecisionText } from "@stll/decision-reader/decision-text";',
+    ),
+  ).toBe(false);
+  expect(
+    mcpReaderRequiresSharedPackage(
+      file,
+      'import { DecisionText } from "@stll/decision-reader/decision-text"; const App = () => <article>Clone</article>;',
+    ),
+  ).toBe(true);
+  expect(
+    mcpReaderRequiresSharedPackage(
+      file,
+      'import { BlockRenderer as SharedBlock } from "@stll/decision-reader/document-ast-text"; const App = () => <SharedBlock />;',
+    ),
+  ).toBe(false);
+  expect(
+    mcpReaderRequiresSharedPackage(
+      "apps/api/src/mcp/apps/decision-reader/model.ts",
+      'import { blockSchema } from "@stll/legal-ast/document-ast"; export const readBlock = (value) => v.parse(blockSchema, value);',
+    ),
+  ).toBe(false);
+  expect(
+    mcpReaderRequiresSharedPackage(
+      file,
+      'import { ReaderView } from "./view"; createRoot(root).render(<ReaderView host={host} />);',
+    ),
+  ).toBe(false);
+  expect(
+    mcpReaderRequiresSharedPackage(
+      "apps/api/src/mcp/apps/decision-reader/messages.tsx",
+      'import type { ReaderMessages } from "@stll/decision-reader/reader-adapters"; const messages = { dissentByline: (text) => <bdi>{text}</bdi> };',
     ),
   ).toBe(false);
   expect(
