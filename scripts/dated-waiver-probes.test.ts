@@ -128,7 +128,7 @@ test("release-age and audit removals retain every other date and never write lat
       entry: waiver(
         "release-age-exception",
         "docker-compose.yml",
-        "docker-compose.yml:2",
+        "command: bun install --minimum-release-age 0",
       ),
       content:
         "command: bun install --minimum-release-age 0\n# release-age-quarantine-exception: 2026-10-05T00:00:00.000Z\n# retained: 2026-10-06T00:00:00.000Z",
@@ -536,7 +536,11 @@ test("a first-line release-age marker has no preceding command anchor", () => {
 });
 
 test("release-age exception removal requires an integral line within its owner", () => {
-  const entry = waiver("release-age-exception", "docker-compose.yml");
+  const entry = waiver(
+    "release-age-exception",
+    "docker-compose.yml",
+    "command: bun install --minimum-release-age 0",
+  );
   const contents = `command: bun install --minimum-release-age 0\n# release-age-quarantine-exception: ${entry.expiresAt}`;
   for (const line of [
     -1,
@@ -555,4 +559,13 @@ test("release-age exception removal requires an integral line within its owner",
   expect(
     removeWaiver(entry, reader({ [entry.source]: contents })).at(0)?.after,
   ).toBe("command: bun install");
+  expect(() =>
+    removeWaiver(
+      {
+        ...entry,
+        id: "command: bun install --production --minimum-release-age 0",
+      },
+      reader({ [entry.source]: contents }),
+    ),
+  ).toThrow("Release-age exception anchor missing");
 });

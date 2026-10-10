@@ -160,6 +160,9 @@ const removeReleaseAgeException = (
       `Release-age exception has no removable zero-age override: ${entry.id}`,
     );
   }
+  if (previous.trim() !== entry.id) {
+    panic(`Release-age exception anchor missing: ${entry.id}`);
+  }
   lines[entry.line - 2] = previous.replace(
     /\s*--minimum-release-age(?:=|\s+)0\b/u,
     "",

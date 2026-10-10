@@ -37,6 +37,11 @@ records are carried to the publication boundary so valid siblings still finish.
 Independent module validation and proposal-content reads also aggregate failures
 before any dependent publication write.
 
+Waiver keys combine kind, owner file and semantic identity; line numbers are edit
+locators only. Release-age exceptions use their covered zero-age command, so
+unrelated line shifts or sibling removals retain task and proposal history.
+Two entries with the same identity in one owner file fail as ambiguous.
+
 Failed probes create or refresh one task per entry in a separate repository whose
 privacy is checked before publication. Failure evidence stays local until it is
 attached to that private task. It is never uploaded as a public workflow artifact

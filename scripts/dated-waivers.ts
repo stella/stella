@@ -188,9 +188,23 @@ export const collectWaivers = ({
     panic(exceptions.errors.join("\n"));
   }
   for (const entry of exceptions.entries) {
+    // The command owns the waiver; line numbers only locate the annotation.
+    const command = releaseAgeSources[entry.source]
+      ?.split("\n")
+      .at(entry.line - 2)
+      ?.trim();
+    if (
+      entry.line < 2 ||
+      !command ||
+      !/--minimum-release-age(?:=|\s+)0\b/u.test(command)
+    ) {
+      panic(
+        `Release-age exception has no covered zero-age command: ${entry.source}:${entry.line}`,
+      );
+    }
     entries.push({
       ...entry,
-      id: `${entry.source}:${entry.line}`,
+      id: command,
       kind: "release-age-exception",
       probe: {
         command: ["bun", "scripts/check-lockfile-release-ages.ts", "--all"],

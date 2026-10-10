@@ -43,6 +43,7 @@ import {
 import { retireRemoval } from "./dated-waiver-publish";
 import {
   loadWaivers,
+  collectWaivers,
   RECHECK_INSTRUCTIONS,
   type DatedWaiver,
 } from "./dated-waivers";
@@ -888,8 +889,11 @@ test("later full-green external recovery removes and closes the same-source task
   expect(healing.fake.tasks.at(0)?.state).toBe("closed");
 });
 
-const proposalLifecycle = async (kind: DatedWaiver["kind"] = "no-llms-txt") => {
-  const owner = { ...entry, kind };
+const lifecycleOwner = {
+  ...entry,
+  kind: "no-llms-txt",
+} as const satisfies DatedWaiver;
+const proposalLifecycle = async (owner: DatedWaiver = lifecycleOwner) => {
   const fake = taskFixture();
   const sink = await createPrivateTaskSink({
     repo: "stella/companion",
@@ -989,7 +993,7 @@ const proposalLifecycle = async (kind: DatedWaiver["kind"] = "no-llms-txt") => {
           }),
       }),
   };
-  const run = async (status: "green" | "red", proof = evidence) =>
+  const run = async (status: "green" | "red", proof: FixEvidence = evidence) =>
     applyHealing({
       actions,
       now: new Date(proof.observedAt),
@@ -1014,6 +1018,74 @@ const proposalLifecycle = async (kind: DatedWaiver["kind"] = "no-llms-txt") => {
   };
 };
 
+test("shifted exceptions reconcile their failed task and armed proposal before accepting recovery", async () => {
+  const annotation = `# release-age-quarantine-exception: ${entry.expiresAt}`;
+  const earlier = `command: bun install --minimum-release-age 0\n${annotation}`;
+  const covered = `command: bun install --production --minimum-release-age 0\n${annotation}`;
+  const inventory = (contents: string) =>
+    collectWaivers({
+      read: () => '{"waivers":[]}',
+      docs: [],
+      audit: [],
+      bunfigs: [],
+      releaseAgeSources: { "docker-compose.yml": contents },
+    });
+  const owner = inventory(`${earlier}\n${covered}`).find(
+    ({ line }) => line === 4,
+  );
+  const shifted = inventory(`\n${covered}`).at(0);
+  if (!owner || !shifted) {
+    throw new TypeError("Exception lifecycle fixture missing");
+  }
+  expect(shifted.line).not.toBe(owner.line);
+  const proof = { ...evidence, command: owner.probe.command };
+  const lifecycle = await proposalLifecycle(owner);
+  await lifecycle.run("green", proof);
+  lifecycle.refuseDisarm(1);
+  expect(
+    await rejectionOf(lifecycle.run("red", { ...proof, passed: 2 })),
+  ).toBeInstanceOf(HealingRunError);
+  expect(lifecycle.proposal()?.status).toBe("armed");
+  expect(lifecycle.fake.tasks).toHaveLength(1);
+  lifecycle.refuseDisarm(0);
+  const runShifted = async (status: "green" | "red", observedAt: string) =>
+    applyHealing({
+      actions: lifecycle.actions,
+      now: new Date(observedAt),
+      report: {
+        sha: proof.sha,
+        observedAt,
+        failures: [],
+        entries: [
+          {
+            entry: shifted,
+            outcome: {
+              ...green,
+              status,
+              evidence: {
+                ...proof,
+                observedAt,
+                passed: status === "red" ? 2 : 3,
+              },
+            },
+          },
+        ],
+      },
+    });
+  await runShifted("green", proof.observedAt);
+  expect(lifecycle.proposal()?.status).toBe("closed");
+  expect(lifecycle.proposal()?.number).toBe(1);
+  expect(lifecycle.fake.tasks).toHaveLength(1);
+  expect(lifecycle.fake.tasks.at(0)?.state).toBe("open");
+  await runShifted("red", proof.observedAt);
+  expect(lifecycle.fake.tasks).toHaveLength(1);
+  expect(lifecycle.fake.tasks.at(0)?.state).toBe("open");
+  await runShifted("green", "2026-10-13T00:00:00.000Z");
+  expect(lifecycle.proposal()?.number).toBe(2);
+  expect(lifecycle.proposal()?.status).toBe("armed");
+  expect(lifecycle.fake.tasks.at(0)?.state).toBe("closed");
+});
+
 test("green then red disarms and closes the proposal while preserving one open fix task", async () => {
   const lifecycle = await proposalLifecycle();
   await lifecycle.run("green");
@@ -1036,7 +1108,10 @@ test("green then red disarms and closes the proposal while preserving one open f
 });
 
 test("blocked repository resolution retires an earlier armed proposal", async () => {
-  const lifecycle = await proposalLifecycle("quarantined-test");
+  const lifecycle = await proposalLifecycle({
+    ...entry,
+    kind: "quarantined-test",
+  });
   await lifecycle.run("green");
   await lifecycle.actions.openFixTask(repositoryEntry, {
     ...evidence,

@@ -1,6 +1,10 @@
 import { expect, test } from "bun:test";
+import fc from "fast-check";
+
+import { assertProperty } from "@stll/property-testing";
 
 import { DOC_SOURCE_EXCLUSIONS } from "../.claude/mcp/doc-sources";
+import { waiverKey } from "./dated-waiver-fix-task";
 import {
   collectWaivers,
   DAY_MS,
@@ -9,6 +13,7 @@ import {
   expiryInstant,
   loadWaivers,
   readTestQuarantines,
+  RECHECK_INSTRUCTIONS,
   uncoveredExpirySources,
 } from "./dated-waivers";
 
@@ -50,7 +55,7 @@ const inventory = () =>
     bunfigs: ["bunfig.toml"],
     releaseAgeSources: {
       "docker-compose.yml":
-        "# release-age-quarantine-exception: 2026-10-05T01:00:00.000Z",
+        "command: bun install --minimum-release-age 0\n# release-age-quarantine-exception: 2026-10-05T01:00:00.000Z",
     },
   });
 
@@ -193,4 +198,74 @@ test("literal metacharacters are escaped and duplicate test identities fail clos
       quarantineSources: { "a.test.ts": `${contents}\n${contents}` },
     }),
   ).toThrow("Duplicate dated waiver identity");
+});
+
+const exceptionInventory = (contents: string) =>
+  collectWaivers({
+    read,
+    docs: [],
+    audit: [],
+    bunfigs: [],
+    releaseAgeSources: { "docker-compose.yml": contents },
+  }).filter(({ kind }) => kind === "release-age-exception");
+
+test("all waiver kinds retain their keys when unrelated lines shift their locators", () => {
+  const quarantined =
+    '// test-quarantine-expires: 2026-10-05\ntest.skip("case", () => {});';
+  const entriesAt = (prefix: string) =>
+    collectWaivers({
+      read: (file) => prefix + read(file),
+      docs: [doc],
+      audit: [{ id: "GHSA-test", package: "pkg", expiresOn: "2026-10-03" }],
+      bunfigs: ["bunfig.toml"],
+      releaseAgeSources: {
+        "docker-compose.yml": `${prefix}command: bun install --minimum-release-age 0\n# release-age-quarantine-exception: 2026-10-05T01:00:00.000Z`,
+      },
+      quarantineSources: {
+        "a.test.ts": `${prefix}${quarantined}`,
+      },
+    });
+  const original = entriesAt("");
+  expect(Object.keys(RECHECK_INSTRUCTIONS).toSorted()).toEqual(
+    original.map(({ kind }) => kind).toSorted(),
+  );
+  assertProperty(
+    "dated-waiver-line-independent-identity",
+    fc.property(fc.integer({ min: 1, max: 30 }), (lines) => {
+      const shifted = entriesAt("\n".repeat(lines));
+      expect(shifted.map(waiverKey)).toEqual(original.map(waiverKey));
+      expect(shifted.map(({ line }) => line)).toEqual(
+        original.map(({ line }) => line + lines),
+      );
+    }),
+    { seed: 261_020, numRuns: 40 },
+  );
+});
+
+test("exception identity survives sibling removal and rejects ambiguous covered commands", () => {
+  const marker = "# release-age-quarantine-exception: 2026-10-05T01:00:00.000Z";
+  const first = `command: bun install --minimum-release-age 0\n${marker}`;
+  const second = `command: bun install --production --minimum-release-age 0\n${marker}`;
+  const before = exceptionInventory(`${first}\n${second}`);
+  const after = exceptionInventory(second);
+  const retained = before.find(({ id }) => id === after.at(0)?.id);
+  expect(retained).toBeDefined();
+  if (!retained || !after.at(0)) {
+    throw new TypeError("Retained exception fixture missing");
+  }
+  expect(after.map(waiverKey)).toEqual([waiverKey(retained)]);
+  expect(
+    exceptionInventory(`${second}\n${first}`).map(waiverKey).toSorted(),
+  ).toEqual(before.map(waiverKey).toSorted());
+  expect(() => exceptionInventory(`${first}\n${first}`)).toThrow(
+    "Duplicate dated waiver identity",
+  );
+  expect(() =>
+    exceptionInventory(
+      `${first}\n${first.replace("2026-10-05", "2026-10-06")}`,
+    ),
+  ).toThrow("Duplicate dated waiver identity");
+  expect(() => exceptionInventory(marker)).toThrow(
+    "Release-age exception has no covered zero-age command",
+  );
 });
