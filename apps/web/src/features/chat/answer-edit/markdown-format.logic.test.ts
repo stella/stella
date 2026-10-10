@@ -1,7 +1,12 @@
+import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 import { fromMarkdown } from "mdast-util-from-markdown";
+import type { CompileContext } from "mdast-util-from-markdown";
+import { gfmFromMarkdown } from "mdast-util-gfm";
+import { gfm } from "micromark-extension-gfm";
 
+import { CHAT_MESSAGE_EDIT_STYLES } from "@stll/api-contract/chat-message-revisions";
 import { assertProperty } from "@stll/property-testing";
 
 import {
@@ -11,6 +16,10 @@ import {
 
 const GENERATED_MIN_SCALARS = 1;
 const GENERATED_MAX_SCALARS = 24;
+const GENERATED_MAX_PARAGRAPH_SCALARS = 60;
+const headingStyles = CHAT_MESSAGE_EDIT_STYLES.filter((style) =>
+  style.startsWith("heading-"),
+);
 const words = fc
   .array(fc.constantFrom("a", "č", "é", "ع", "中", "😀", "𐐷"), {
     minLength: GENERATED_MIN_SCALARS,
@@ -157,15 +166,14 @@ test("links serialize destinations without escaping the Markdown destination", (
     const link =
       paragraph?.type === "paragraph" ? paragraph.children.at(0) : undefined;
     expect(link?.type).toBe("link");
-    if (link?.type === "link") {
+    expect(result.edit.format).toBe("link");
+    if (link?.type === "link" && result.edit.format === "link") {
       expect(link.children).toMatchObject([{ type: "text", value: "label" }]);
-      expect(link.url).toBe(
-        result.edit.format === "link" ? result.edit.url : undefined,
-      );
+      expect(link.url).toBe(result.edit.url);
     }
   }
   for (const url of [
-    `${"java"}script:alert(1)`,
+    ["javascript", "alert(1)"].join(":"),
     "data:text/plain,x",
     "/relative",
     "https://",
@@ -353,3 +361,139 @@ test("list conversions retain every item and refuse tasks, nested lists and mult
     ).toBe("unsupported");
   }
 });
+
+const parsedMarkdown = (source: string) =>
+  fromMarkdown(source, {
+    extensions: [gfm()],
+    mdastExtensions: [gfmFromMarkdown()],
+  });
+
+const paragraphSpan = (source: string) => {
+  const position = parsedMarkdown(source).children.at(0)?.position;
+  if (
+    position?.start.offset === undefined ||
+    position.end.offset === undefined
+  ) {
+    return panic("Expected a positioned paragraph");
+  }
+  return { start: position.start.offset, end: position.end.offset };
+};
+
+const renderedText = (node: Parameters<CompileContext["enter"]>[0]): string => {
+  if (node.type === "text" || node.type === "inlineCode") {
+    return node.value;
+  }
+  return "children" in node ? node.children.map(renderedText).join("") : "";
+};
+
+test.each([
+  " a",
+  "Notice #",
+  "Notice ##",
+  "#Notice",
+  "\\# Notice",
+  "Notice \\#",
+  "Notice \\\\#",
+  "Notice `#`",
+  "Notice &#35;",
+])("heading conversion retains visible punctuation in %s", (source) => {
+  for (const style of headingStyles) {
+    const result = formatAnswerSpan({
+      source,
+      ...paragraphSpan(source),
+      action: { format: "style", style },
+    });
+    expect(result.status).toBe("proposal");
+    if (result.status !== "proposal") {
+      return;
+    }
+    const converted = parsedMarkdown(result.replacement);
+    expect(converted.children.at(0)?.type).toBe("heading");
+    expect(renderedText(converted)).toBe(renderedText(parsedMarkdown(source)));
+  }
+});
+
+test("heading conversion preserves rendered text for arbitrary single-line paragraphs", () => {
+  const paragraphs = fc
+    .oneof(
+      fc.string({
+        unit: "grapheme",
+        minLength: GENERATED_MIN_SCALARS,
+        maxLength: GENERATED_MAX_PARAGRAPH_SCALARS,
+      }),
+      fc
+        .array(
+          fc.constantFrom(
+            "a",
+            "#",
+            " ",
+            "\\",
+            "*",
+            "_",
+            "`",
+            "[",
+            "]",
+            "(",
+            ")",
+            "&",
+            ";",
+            "<",
+            ">",
+            "é",
+            "😀",
+          ),
+          {
+            minLength: GENERATED_MIN_SCALARS,
+            maxLength: GENERATED_MAX_PARAGRAPH_SCALARS,
+          },
+        )
+        .map((parts) => parts.join("")),
+    )
+    .filter((source) => {
+      const tree = parsedMarkdown(source);
+      return (
+        source.trim().length > 0 &&
+        !/[\r\n]/u.test(source) &&
+        tree.children.length === 1 &&
+        tree.children.at(0)?.type === "paragraph"
+      );
+    });
+  assertProperty(
+    "heading conversion preserves rendered text for arbitrary single-line paragraphs",
+    fc.property(
+      paragraphs,
+      fc.constantFrom(...headingStyles),
+      (source, style) => {
+        const result = formatAnswerSpan({
+          source,
+          ...paragraphSpan(source),
+          action: { format: "style", style },
+        });
+        expect(result.status).toBe("proposal");
+        if (result.status !== "proposal") {
+          return;
+        }
+        const converted = parsedMarkdown(result.replacement);
+        expect(converted.children.at(0)?.type).toBe("heading");
+        expect(renderedText(converted)).toBe(
+          renderedText(parsedMarkdown(source)),
+        );
+      },
+    ),
+    { numRuns: 300 },
+  );
+});
+
+test.each(["# # Notice", "# - Notice", "# > Notice", "# 1. Notice"])(
+  "block conversion refuses markers that would consume inline content in %s",
+  (source) => {
+    expect(
+      formatAnswerSpan({
+        source,
+        start: 0,
+        end: source.length,
+        action: { format: "style", style: "paragraph" },
+      }).status,
+    ).toBe("unsupported");
+  },
+);

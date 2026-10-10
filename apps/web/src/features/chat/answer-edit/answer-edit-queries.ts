@@ -29,6 +29,5 @@ export const answerRevisionHistoryOptions = (
           }),
       ),
     getNextPageParam: (page) => page.nextCursor ?? undefined,
-    maxPages: 3,
     retry: false,
   });

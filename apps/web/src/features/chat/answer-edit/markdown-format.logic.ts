@@ -100,6 +100,19 @@ const outsideFormatNodes = (source: string, span: SourceSpan, delta: number) =>
     ];
   });
 
+const blockText = (source: string, span: SourceSpan) =>
+  descendants(parseMarkdown(source))
+    .flatMap((node) => {
+      const position = sourceSpan(node);
+      if (!position || position.start < span.start || position.end > span.end) {
+        return [];
+      }
+      return node.type === "text" || node.type === "inlineCode"
+        ? [node.value]
+        : [];
+    })
+    .join("");
+
 const proposal = ({
   source,
   span,
@@ -121,6 +134,19 @@ const proposal = ({
     delta,
   );
   if (JSON.stringify(before) !== JSON.stringify(after)) {
+    return unsupported("ambiguous");
+  }
+  // Block markers can consume text inside the changed span even when every
+  // surrounding node is intact. Compare decoded text in the full document so
+  // reference links retain their definitions during this check.
+  if (
+    action.format === CHAT_MESSAGE_EDIT_FORMAT.style &&
+    blockText(source, span) !==
+      blockText(candidate, {
+        start: span.start,
+        end: span.start + replacement.length,
+      })
+  ) {
     return unsupported("ambiguous");
   }
   return {
@@ -302,7 +328,11 @@ const formatBlock = (
     case "heading-5":
     case "heading-6":
       replacement = contents
-        .map((text) => `${"#".repeat(Number(style.slice(-1)))} ${text}`)
+        .map((text) => {
+          // An unescaped final hash could become an ATX closing marker.
+          const content = text.replace(/(^|[^\\])((?:\\\\)*)#$/u, "$1$2\\#");
+          return `${"#".repeat(Number(style.slice(-1)))} ${content}`;
+        })
         .join("\n\n");
       break;
     default:
