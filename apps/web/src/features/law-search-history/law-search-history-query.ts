@@ -108,10 +108,16 @@ const importLocalLawHistory = async ({
     userKey: scopedKey,
     canRemove: () => !signal.aborted && isCurrentScope(),
     importEntries: async (entries) => {
+      const clock = unwrapEden(
+        await api["search-history"]["import-clock"].get(
+          historyMutationRequest(scope, signal),
+        ),
+      );
       unwrapEden(
         await api["search-history"].import.post(
           {
             entries,
+            clock,
             clientNow: Temporal.Now.instant().toString({
               fractionalSecondDigits: 3,
             }),

@@ -6,7 +6,11 @@ import { assertProperty } from "@stll/property-testing";
 
 import { LIMITS } from "@/api/lib/limits";
 
-import { readImportClock, readImportUsedAt } from "./import-used-at";
+import {
+  importUseCutoffLowerBound,
+  readImportClock,
+  readImportUsedAt,
+} from "./import-used-at";
 
 const NOW = new Date("2026-01-02T03:04:05.000Z");
 
@@ -85,4 +89,38 @@ test("correction rejects entries shifted below PostgreSQL storage bounds", () =>
       NOW,
     ) ?? panic("Expected fixture clock");
   expect(readImportUsedAt("-004713-11-24T00:00:00Z", clock)).toBeNull();
+});
+
+test("import cutoff lower bounds never advance a use across request delays or server clock differences", () => {
+  assertProperty(
+    "import cutoff lower bounds never advance a use across request delays or server clock differences",
+    fc.property(
+      fc.integer({ min: -23 * 60 * 60 * 1000, max: 23 * 60 * 60 * 1000 }),
+      fc.integer({ min: 0, max: 1000 }),
+      fc.integer({ min: 0, max: 100_000 }),
+      fc.integer({ min: -1000, max: 1000 }),
+      fc.integer({ min: 0, max: 1_000_000 }),
+      (deviceSkewMs, handshakeMs, transitMs, appClockSkewMs, ageMs) => {
+        const anchorMs = NOW.getTime();
+        const capturedMs = anchorMs + handshakeMs;
+        const handledMs = capturedMs + transitMs + appClockSkewMs;
+        const clock =
+          readImportClock(
+            new Date(capturedMs + deviceSkewMs).toISOString(),
+            new Date(handledMs),
+          ) ?? panic("Expected bounded import clock");
+        const usedAt =
+          readImportUsedAt(
+            new Date(capturedMs + deviceSkewMs - ageMs).toISOString(),
+            clock,
+          ) ?? panic("Expected a past local use");
+        const lowerBound = importUseCutoffLowerBound(
+          usedAt,
+          handledMs - anchorMs,
+        );
+        expect(lowerBound.getTime()).toBeLessThanOrEqual(capturedMs - ageMs);
+        expect(lowerBound).toEqual(new Date(anchorMs - ageMs));
+      },
+    ),
+  );
 });

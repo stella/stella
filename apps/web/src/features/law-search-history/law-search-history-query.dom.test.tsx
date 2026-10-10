@@ -1,6 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
 
+import { Temporal } from "@stll/time";
+
 import messages from "@/i18n/langs/en.json";
 import { MEMBER_SESSION } from "@/lib/account/auth-session.test-fixtures";
 import { browserStateStorage } from "@/lib/account/browser-storage";
@@ -40,6 +42,12 @@ test("server history stays visible while a local import recovers", async () => {
   const recovery = Promise.withResolvers<undefined>();
   const importBodies: unknown[] = [];
   let imported = false;
+  let clockRequests = 0;
+  const clockSource = spyOn(Temporal.Now, "instant").mockImplementation(() =>
+    Temporal.Instant.from("2026-01-01T12:00:00Z").add({
+      seconds: clockRequests,
+    }),
+  );
   const transport = spyOn(globalThis, "fetch").mockImplementation(
     Object.assign(
       async (
@@ -49,6 +57,13 @@ test("server history stays visible while a local import recovers", async () => {
         const url = new URL(
           input instanceof Request ? input.url : String(input),
         );
+        if (url.pathname.endsWith("/import-clock")) {
+          clockRequests += 1;
+          return Response.json({
+            issuedAt: "2026-01-01T12:00:00.000Z",
+            signature: "a".repeat(64),
+          });
+        }
         if (url.pathname.endsWith("/import")) {
           importBodies.push(
             typeof init?.body === "string" ? JSON.parse(init.body) : null,
@@ -109,9 +124,11 @@ test("server history stays visible while a local import recovers", async () => {
     expect(storage.getItem(scopedKey)).toBe(local);
     expect(storage.getItem(LAW_HISTORY_STORAGE_KEY)).toBe(legacy);
     expect(importBodies.at(-1)).toMatchObject({
-      clientNow: expect.stringMatching(
-        /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u,
-      ),
+      clock: {
+        issuedAt: "2026-01-01T12:00:00.000Z",
+        signature: "a".repeat(64),
+      },
+      clientNow: "2026-01-01T12:00:02.000Z",
       entries: [
         { entry: { query: "Local query" } },
         { entry: { query: "Earlier query" } },
@@ -135,6 +152,7 @@ test("server history stays visible while a local import recovers", async () => {
     await act(async () => cleanup());
     client.clear();
     transport.mockRestore();
+    clockSource.mockRestore();
     storage.removeItem(scopedKey);
     storage.removeItem(LAW_HISTORY_STORAGE_KEY);
   }

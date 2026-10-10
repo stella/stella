@@ -42,6 +42,7 @@ import clear from "./clear";
 import deleteEntry from "./delete";
 import { prepareSearchHistoryRows, upsertSearchHistoryRows } from "./entries";
 import importEntries from "./import";
+import importClock from "./import-clock";
 import list from "./list";
 import record from "./upsert";
 
@@ -169,6 +170,20 @@ const identity = (fixture: HistoryFixture) => ({
   user: { id: fixture.userId },
 });
 
+const getImportClock = async (fixture: HistoryFixture) => {
+  const result = await importClock.handler(
+    createTestHandlerContext<Parameters<typeof importClock.handler>[0]>(
+      identity(fixture),
+    ),
+  );
+  if (result instanceof ElysiaCustomStatusResponse) {
+    return panic(
+      `Expected import clock success, received status ${result.code}`,
+    );
+  }
+  return result;
+};
+
 const readHistory = async (
   fixture: HistoryFixture,
   query: Parameters<typeof list.handler>[0]["query"] = {},
@@ -271,7 +286,11 @@ if (!databaseUrl || !enabled) {
           Parameters<typeof importEntries.handler>[0]
         >({
           ...identity(fixture),
-          body: { entries, clientNow: NOW.toISOString() },
+          body: {
+            entries,
+            clientNow: NOW.toISOString(),
+            clock: await getImportClock(fixture),
+          },
         });
         expect(await importEntries.handler(context)).toEqual({
           entries: 1,
@@ -316,6 +335,7 @@ if (!databaseUrl || !enabled) {
             {
               ...identity(fixture),
               body: {
+                clock: await getImportClock(fixture),
                 clientNow: NOW.toISOString(),
                 entries: [
                   {
@@ -358,6 +378,7 @@ if (!databaseUrl || !enabled) {
             {
               ...identity(fixture),
               body: {
+                clock: await getImportClock(fixture),
                 clientNow: NOW.toISOString(),
                 entries: [
                   {
@@ -416,6 +437,7 @@ if (!databaseUrl || !enabled) {
             {
               ...identity(fixture),
               body: {
+                clock: await getImportClock(fixture),
                 clientNow: NOW.toISOString(),
                 entries: [
                   {
@@ -504,6 +526,7 @@ if (!databaseUrl || !enabled) {
             {
               ...identity(fixture),
               body: {
+                clock: await getImportClock(fixture),
                 clientNow: NOW.toISOString(),
                 entries: [
                   {
@@ -636,6 +659,7 @@ if (!databaseUrl || !enabled) {
             {
               ...identity(fixture),
               body: {
+                clock: await getImportClock(fixture),
                 clientNow: NOW.toISOString(),
                 entries: [
                   {
@@ -725,7 +749,11 @@ if (!databaseUrl || !enabled) {
               Parameters<typeof importEntries.handler>[0]
             >({
               ...identity(fixture),
-              body: { entries, clientNow: NOW.toISOString() },
+              body: {
+                entries,
+                clientNow: NOW.toISOString(),
+                clock: await getImportClock(fixture),
+              },
             }),
           ),
         ).toEqual({ entries: 4, skipped: 2, rejected: 2 });
@@ -943,6 +971,7 @@ if (!databaseUrl || !enabled) {
             {
               ...identity(fixture),
               body: {
+                clock: await getImportClock(fixture),
                 clientNow: NOW.toISOString(),
                 entries: [
                   {
@@ -982,6 +1011,7 @@ if (!databaseUrl || !enabled) {
             {
               ...identity(fixture),
               body: {
+                clock: await getImportClock(fixture),
                 clientNow: NOW.toISOString(),
                 entries: [
                   {
@@ -1013,6 +1043,7 @@ if (!databaseUrl || !enabled) {
             {
               ...identity(fixture),
               body: {
+                clock: await getImportClock(fixture),
                 clientNow: NOW.toISOString(),
                 entries: [
                   {
@@ -1118,6 +1149,7 @@ if (!databaseUrl || !enabled) {
             >({
               ...identity(fixture),
               body: {
+                clock: await getImportClock(fixture),
                 clientNow: NOW.toISOString(),
                 entries: [
                   {

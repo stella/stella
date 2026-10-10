@@ -36,6 +36,7 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 import clear from "./clear";
 import deleteEntry from "./delete";
 import importEntries from "./import";
+import importClock from "./import-clock";
 import list from "./list";
 import record from "./upsert";
 
@@ -110,6 +111,32 @@ const identity = (fixture: HistoryFixture) => ({
   user: { id: fixture.userId },
 });
 
+const acquireClock = async (fixture: HistoryFixture) => {
+  const result = await importClock.handler(
+    createTestHandlerContext<Parameters<typeof importClock.handler>[0]>(
+      identity(fixture),
+    ),
+  );
+  if (result instanceof ElysiaCustomStatusResponse) {
+    return panic(
+      `Expected import clock success, received status ${result.code}`,
+    );
+  }
+  return result;
+};
+
+const acquireClockAfter = async (fixture: HistoryFixture, cutoff: Date) => {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const clock = await acquireClock(fixture);
+    if (Date.parse(clock.issuedAt) > cutoff.getTime()) {
+      return clock;
+    }
+    // Both clocks must differ despite the issued clock's millisecond rounding.
+    await Bun.sleep(1);
+  }
+  return panic("Expected an import clock strictly after the database cutoff");
+};
+
 const readHistory = async (fixture: HistoryFixture) => {
   const result = await list.handler(
     createTestHandlerContext<Parameters<typeof list.handler>[0]>({
@@ -158,6 +185,30 @@ const clearHistoryCutoff = async (fixture: HistoryFixture) => {
   return owner.clearedAt;
 };
 
+const deleteHistoryCutoff = async (fixture: HistoryFixture, query: string) => {
+  const original = await recordQuery(fixture, query);
+  await deleteEntry.handler(
+    createTestHandlerContext<Parameters<typeof deleteEntry.handler>[0]>({
+      ...identity(fixture),
+      params: { entryId: original.id },
+    }),
+  );
+  const tombstone = (
+    await fixture.db
+      .select({ deletedAt: searchHistoryTombstones.deletedAt })
+      .from(searchHistoryTombstones)
+      .where(
+        and(
+          eq(searchHistoryTombstones.organizationId, fixture.organizationId),
+          eq(searchHistoryTombstones.userId, fixture.userId),
+        ),
+      )
+  ).at(0);
+  return (
+    tombstone?.deletedAt ?? panic("Expected the search history deletion cutoff")
+  );
+};
+
 const expectNoImportWrites = async (fixture: HistoryFixture) => {
   for (const table of [
     searchHistoryEntries,
@@ -180,7 +231,13 @@ describe("search history import clock integration", () => {
       const query = "Earlier local query";
       await recordQuery(fixture, query);
       const cutoff = await clearHistoryCutoff(fixture);
-      const serverNow = new Date(cutoff.getTime() + 10_000);
+      const clock = await acquireClock(fixture);
+      const serverNow = new Date(
+        Math.max(
+          cutoff.getTime() + 10_000,
+          Date.parse(clock.issuedAt) + 10_000,
+        ),
+      );
       const clientNow = new Date(serverNow.getTime() + DEVICE_CLOCK_AHEAD_MS);
       const localUsedAt = new Date(
         cutoff.getTime() - 1000 + DEVICE_CLOCK_AHEAD_MS,
@@ -192,6 +249,7 @@ describe("search history import clock integration", () => {
         createTestHandlerContext<Parameters<typeof importEntries.handler>[0]>({
           ...identity(fixture),
           body: {
+            clock,
             clientNow: clientNow.toISOString(),
             entries: [
               {
@@ -233,10 +291,16 @@ describe("search history import clock integration", () => {
           )
       ).at(0);
       if (!tombstone) {
-        return panic("Expected the search history deletion cutoff");
+        panic("Expected the search history deletion cutoff");
       }
       const cutoff = tombstone.deletedAt;
-      const serverNow = new Date(cutoff.getTime() + 10_000);
+      const clock = await acquireClock(fixture);
+      const serverNow = new Date(
+        Math.max(
+          cutoff.getTime() + 10_000,
+          Date.parse(clock.issuedAt) + 10_000,
+        ),
+      );
       const clientNow = new Date(serverNow.getTime() + DEVICE_CLOCK_AHEAD_MS);
       const localUsedAt = new Date(
         cutoff.getTime() - 1000 + DEVICE_CLOCK_AHEAD_MS,
@@ -248,6 +312,7 @@ describe("search history import clock integration", () => {
         createTestHandlerContext<Parameters<typeof importEntries.handler>[0]>({
           ...identity(fixture),
           body: {
+            clock,
             clientNow: clientNow.toISOString(),
             entries: [
               {
@@ -267,12 +332,12 @@ describe("search history import clock integration", () => {
   test("keeps a post-clear use from an ahead-clock device with its corrected timestamp", async () => {
     await withHistory(async (fixture) => {
       const cutoff = await clearHistoryCutoff(fixture);
-      const serverNow = new Date(cutoff.getTime() + 10_000);
-      const clientNow = new Date(serverNow.getTime() + DEVICE_CLOCK_AHEAD_MS);
-      const correctedUsedAt = new Date(cutoff.getTime() + 1000);
-      const localUsedAt = new Date(
-        correctedUsedAt.getTime() + DEVICE_CLOCK_AHEAD_MS,
-      );
+      const clock = await acquireClockAfter(fixture, cutoff);
+      const anchorMs = Date.parse(clock.issuedAt);
+      const serverNow = new Date(anchorMs + 500);
+      const clientNow = new Date(anchorMs + DEVICE_CLOCK_AHEAD_MS);
+      const correctedUsedAt = serverNow;
+      const localUsedAt = clientNow;
       expect(localUsedAt.getTime()).toBeGreaterThan(serverNow.getTime());
       setSystemTime(serverNow);
 
@@ -280,6 +345,7 @@ describe("search history import clock integration", () => {
         createTestHandlerContext<Parameters<typeof importEntries.handler>[0]>({
           ...identity(fixture),
           body: {
+            clock,
             clientNow: clientNow.toISOString(),
             entries: [
               {
@@ -306,7 +372,13 @@ describe("search history import clock integration", () => {
   test("rejects a local use that remains in the future after clock correction", async () => {
     await withHistory(async (fixture) => {
       const cutoff = await clearHistoryCutoff(fixture);
-      const serverNow = new Date(cutoff.getTime() + 10_000);
+      const clock = await acquireClock(fixture);
+      const serverNow = new Date(
+        Math.max(
+          cutoff.getTime() + 10_000,
+          Date.parse(clock.issuedAt) + 10_000,
+        ),
+      );
       const clientNow = new Date(serverNow.getTime() + DEVICE_CLOCK_AHEAD_MS);
       const localUsedAt = new Date(clientNow.getTime() + 1000);
       expect(localUsedAt.getTime()).toBeGreaterThan(clientNow.getTime());
@@ -316,6 +388,7 @@ describe("search history import clock integration", () => {
         createTestHandlerContext<Parameters<typeof importEntries.handler>[0]>({
           ...identity(fixture),
           body: {
+            clock,
             clientNow: clientNow.toISOString(),
             entries: [
               {
@@ -332,9 +405,191 @@ describe("search history import clock integration", () => {
     });
   });
 
+  for (const barrier of ["clear", "delete"] as const) {
+    for (const transitMs of [500, 90_000]) {
+      test(`${barrier} prevents a delayed import from restoring an earlier use after ${transitMs} milliseconds`, async () => {
+        await withHistory(async (fixture) => {
+          const query = "Earlier delayed query";
+          const cutoff =
+            barrier === "clear"
+              ? await clearHistoryCutoff(fixture)
+              : await deleteHistoryCutoff(fixture, query);
+          const clock = await acquireClock(fixture);
+          const clientNow = new Date(
+            Math.max(Date.parse(clock.issuedAt), cutoff.getTime()) + 100,
+          );
+          const usedAt = new Date(cutoff.getTime() - 100);
+          const serverNow = new Date(clientNow.getTime() + transitMs);
+          const unboundedUsedAt = new Date(usedAt.getTime() + transitMs);
+          expect(unboundedUsedAt.getTime()).toBeGreaterThan(cutoff.getTime());
+          expect(clientNow.getTime()).toBeGreaterThan(
+            Date.parse(clock.issuedAt),
+          );
+          setSystemTime(serverNow);
+          const imported = await importEntries.handler(
+            createTestHandlerContext<
+              Parameters<typeof importEntries.handler>[0]
+            >({
+              ...identity(fixture),
+              body: {
+                clock,
+                clientNow: clientNow.toISOString(),
+                entries: [
+                  {
+                    entry: { kind: "search", query },
+                    usedAt: usedAt.toISOString(),
+                  },
+                ],
+              },
+            }),
+          );
+          expect(imported).toEqual({ entries: 0, skipped: 1, rejected: 0 });
+          expect((await readHistory(fixture)).items).toEqual([]);
+        });
+      });
+    }
+  }
+
+  test("skips an ambiguous post-clear use when its clock interval overlaps the cutoff", async () => {
+    await withHistory(async (fixture) => {
+      const cutoff = await clearHistoryCutoff(fixture);
+      const clock = await acquireClock(fixture);
+      const clientNow = new Date(
+        Math.max(Date.parse(clock.issuedAt), cutoff.getTime()) + 300,
+      );
+      const usedAt = new Date(cutoff.getTime() + 100);
+      const serverNow = new Date(clientNow.getTime() + 500);
+      const lowerMs =
+        usedAt.getTime() + Date.parse(clock.issuedAt) - clientNow.getTime();
+      expect(usedAt.getTime()).toBeGreaterThan(cutoff.getTime());
+      expect(lowerMs).toBeLessThanOrEqual(cutoff.getTime());
+      setSystemTime(serverNow);
+      const imported = await importEntries.handler(
+        createTestHandlerContext<Parameters<typeof importEntries.handler>[0]>({
+          ...identity(fixture),
+          body: {
+            clock,
+            clientNow: clientNow.toISOString(),
+            entries: [
+              {
+                entry: { kind: "search", query: "Recent ambiguous query" },
+                usedAt: usedAt.toISOString(),
+              },
+            ],
+          },
+        }),
+      );
+      expect(imported).toEqual({ entries: 0, skipped: 1, rejected: 0 });
+      expect((await readHistory(fixture)).items).toEqual([]);
+    });
+  });
+
+  test("keeps a clearly post-clear use despite more than seventy-five seconds of transit", async () => {
+    await withHistory(async (fixture) => {
+      const cutoff = await clearHistoryCutoff(fixture);
+      const clock = await acquireClockAfter(fixture, cutoff);
+      const clientNow = new Date(Date.parse(clock.issuedAt) + 100);
+      const serverNow = new Date(clientNow.getTime() + 90_000);
+      setSystemTime(serverNow);
+      const imported = await importEntries.handler(
+        createTestHandlerContext<Parameters<typeof importEntries.handler>[0]>({
+          ...identity(fixture),
+          body: {
+            clock,
+            clientNow: clientNow.toISOString(),
+            entries: [
+              {
+                entry: { kind: "search", query: "Later delayed query" },
+                usedAt: clientNow.toISOString(),
+              },
+            ],
+          },
+        }),
+      );
+      expect(imported).toEqual({ entries: 1, skipped: 0, rejected: 0 });
+      expect((await readHistory(fixture)).items).toMatchObject([
+        {
+          query: "Later delayed query",
+          useCount: 1,
+          firstUsedAt: serverNow.toISOString(),
+          lastUsedAt: serverNow.toISOString(),
+        },
+      ]);
+    });
+  });
+
+  test("rejects an import clock signed for another member in the same organization", async () => {
+    await withHistory(async (fixture) => {
+      await withHistory(async (other) => {
+        await fixture.db.insert(member).values({
+          id: Bun.randomUUIDv7(),
+          organizationId: fixture.organizationId,
+          userId: other.userId,
+          role: "member",
+          createdAt: INITIAL_MEMBERSHIP_CREATED_AT,
+        });
+        const clock = await acquireClock({
+          db: fixture.db,
+          organizationId: fixture.organizationId,
+          userId: other.userId,
+        });
+        const response = await importEntries.handler(
+          createTestHandlerContext<Parameters<typeof importEntries.handler>[0]>(
+            {
+              ...identity(fixture),
+              body: {
+                clock,
+                clientNow: new Date().toISOString(),
+                entries: [
+                  {
+                    entry: { kind: "search", query: "Owner-bound query" },
+                    usedAt: new Date().toISOString(),
+                  },
+                ],
+              },
+            },
+          ),
+        );
+        expect(response).toBeInstanceOf(ElysiaCustomStatusResponse);
+        if (response instanceof ElysiaCustomStatusResponse) {
+          expect(response.code).toBe(400);
+        }
+        await expectNoImportWrites(fixture);
+      });
+    });
+  });
+
+  test("rejects a modified import clock signature without writing history", async () => {
+    await withHistory(async (fixture) => {
+      const authentic = await acquireClock(fixture);
+      const signature = `${authentic.signature.startsWith("0") ? "1" : "0"}${authentic.signature.slice(1)}`;
+      const response = await importEntries.handler(
+        createTestHandlerContext<Parameters<typeof importEntries.handler>[0]>({
+          ...identity(fixture),
+          body: {
+            clock: { issuedAt: authentic.issuedAt, signature },
+            clientNow: new Date().toISOString(),
+            entries: [
+              {
+                entry: { kind: "search", query: "Signed clock query" },
+                usedAt: new Date().toISOString(),
+              },
+            ],
+          },
+        }),
+      );
+      expect(response).toBeInstanceOf(ElysiaCustomStatusResponse);
+      if (response instanceof ElysiaCustomStatusResponse) {
+        expect(response.code).toBe(400);
+      }
+      await expectNoImportWrites(fixture);
+    });
+  });
+
   for (const direction of [-1, 1]) {
     test(`rejects the whole import when the device clock is more than one day ${direction === 1 ? "ahead" : "behind"}`, async () => {
       await withHistory(async (fixture) => {
+        const clock = await acquireClock(fixture);
         const serverNow = new Date();
         setSystemTime(serverNow);
         const clientNow = new Date(
@@ -346,6 +601,7 @@ describe("search history import clock integration", () => {
             {
               ...identity(fixture),
               body: {
+                clock,
                 clientNow: clientNow.toISOString(),
                 entries: [
                   {
@@ -368,10 +624,12 @@ describe("search history import clock integration", () => {
 
   test("rejects the whole import when the device clock is malformed", async () => {
     await withHistory(async (fixture) => {
+      const clock = await acquireClock(fixture);
       const response = await importEntries.handler(
         createTestHandlerContext<Parameters<typeof importEntries.handler>[0]>({
           ...identity(fixture),
           body: {
+            clock,
             clientNow: "invalid",
             entries: [
               {

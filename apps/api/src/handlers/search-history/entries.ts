@@ -36,6 +36,8 @@ import type {
   UnprojectedColumns,
 } from "@/api/lib/projection-totality";
 
+import { importUseCutoffLowerBound } from "./import-used-at";
+
 const documentIdSchema = t.String({
   minLength: 1,
   maxLength: LIMITS.searchHistoryTitleMaxLength,
@@ -435,16 +437,13 @@ type SearchHistoryInsert = Awaited<
 type UpsertSearchHistoryRowsOptions = {
   tx: Transaction;
   rows: readonly SearchHistoryInsert[];
-  mode: "record" | "import";
   recordAuditEvent: AuditRecorder;
-};
+} & ({ mode: "record" } | { mode: "import"; importClockMarginMs: number });
 
-export const upsertSearchHistoryRows = async ({
-  tx,
-  rows,
-  mode,
-  recordAuditEvent,
-}: UpsertSearchHistoryRowsOptions) => {
+export const upsertSearchHistoryRows = async (
+  options: UpsertSearchHistoryRowsOptions,
+) => {
+  const { tx, rows, mode, recordAuditEvent } = options;
   if (rows.length === 0) {
     return { entries: [], skipped: 0 };
   }
@@ -502,13 +501,30 @@ export const upsertSearchHistoryRows = async ({
   for (const row of rows) {
     const key = `${row.kind}:${row.lookupKey}`;
     const tombstone = deletedAt.get(key);
+    // The browser obtains the signed database clock before capturing clientNow.
+    // Subtract the observed serverNow-issuedAt interval before cutoff checks:
+    // uses whose possible time overlaps a barrier are deliberately not restored.
+    let cutoffUsedAt = row.lastUsedAt;
+    switch (options.mode) {
+      case "record":
+        break;
+      case "import":
+        cutoffUsedAt = importUseCutoffLowerBound(
+          row.lastUsedAt,
+          options.importClockMarginMs,
+        );
+        break;
+      default:
+        options satisfies never;
+        return panic("Unhandled search history write mode");
+    }
     if (
       mode === "import" &&
-      (row.lastUsedAt <= memberSince ||
-        (state.clearedAt !== null && row.lastUsedAt <= state.clearedAt) ||
+      (cutoffUsedAt <= memberSince ||
+        (state.clearedAt !== null && cutoffUsedAt <= state.clearedAt) ||
         (state.tombstoneCutoffAt !== null &&
-          row.lastUsedAt <= state.tombstoneCutoffAt) ||
-        (tombstone !== undefined && row.lastUsedAt <= tombstone))
+          cutoffUsedAt <= state.tombstoneCutoffAt) ||
+        (tombstone !== undefined && cutoffUsedAt <= tombstone))
     ) {
       skipped += row.useCount;
       continue;

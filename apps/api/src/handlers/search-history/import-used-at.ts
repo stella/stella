@@ -69,3 +69,14 @@ export const readImportUsedAt = (
       .epochMilliseconds,
   );
 };
+
+/** Anchor subtraction cancels transit and any application/database clock difference. */
+export const importUseCutoffLowerBound = (
+  usedAt: Date,
+  importClockMarginMs: number,
+) =>
+  new Date(
+    Temporal.Instant.fromEpochMilliseconds(usedAt.getTime()).subtract({
+      milliseconds: importClockMarginMs,
+    }).epochMilliseconds,
+  );

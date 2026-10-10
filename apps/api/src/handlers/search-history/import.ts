@@ -15,6 +15,11 @@ import {
   upsertSearchHistoryRows,
 } from "./entries";
 import type { SearchHistoryUse } from "./entries";
+import {
+  readSearchHistoryDatabaseClock,
+  searchHistoryImportClockSchema,
+  verifySearchHistoryImportClock,
+} from "./import-clock";
 import { readImportClock, readImportUsedAt } from "./import-used-at";
 import {
   assertSearchHistoryScope,
@@ -29,11 +34,12 @@ const config = {
   mcp: { type: "internal", reason: "search_ui" },
   body: t.Object(
     {
+      clock: searchHistoryImportClockSchema,
       clientNow: t.String({
         format: "date-time",
         maxLength: 64,
         description:
-          "The importing device's current clock, captured when sending this request. Used to correct entry timestamps; clocks differing by more than one day are rejected.",
+          "The importing device's current clock, captured after obtaining clock from search-history/import-clock and immediately before sending this request. Used to correct entry timestamps; clocks differing by more than one day are rejected.",
       }),
       entries: t.Array(
         t.Object(
@@ -77,6 +83,21 @@ const importSearchHistory = createSafeRootHandler(
         }),
       );
     }
+    const databaseNow = yield* Result.await(
+      safeDb(readSearchHistoryDatabaseClock),
+    );
+    const issuedAtMs = yield* Result.await(
+      verifySearchHistoryImportClock({
+        organizationId: session.activeOrganizationId,
+        userId: user.id,
+        clock: body.clock,
+        databaseNow,
+      }),
+    );
+    // D spans the signed DB-clock issuance through receipt; clientNow is
+    // captured inside that interval. Subtracting D gives usedAt+issuedAt-clientNow,
+    // so cutoff eligibility never relies on a request-duration assumption.
+    const importClockMarginMs = clock.serverNowMs - issuedAtMs;
     const uses: SearchHistoryUse[] = [];
     for (const kept of body.entries) {
       const entry = readSearchHistoryEntryInput(kept.entry);
@@ -106,6 +127,7 @@ const importSearchHistory = createSafeRootHandler(
             tx,
             rows,
             mode: "import",
+            importClockMarginMs,
             recordAuditEvent,
           }),
       ),

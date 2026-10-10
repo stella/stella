@@ -3,6 +3,7 @@ import Elysia from "elysia";
 import clearSearchHistory from "@/api/handlers/search-history/clear";
 import deleteSearchHistoryEntry from "@/api/handlers/search-history/delete";
 import importSearchHistory from "@/api/handlers/search-history/import";
+import importClock from "@/api/handlers/search-history/import-clock";
 import listSearchHistory from "@/api/handlers/search-history/list";
 import upsertSearchHistory from "@/api/handlers/search-history/upsert";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
@@ -19,6 +20,10 @@ export const searchHistoryRoute = new Elysia({ prefix: "/search-history" })
     body: upsertSearchHistory.config.body,
     query: upsertSearchHistory.config.query,
     permissions: upsertSearchHistory.config.permissions,
+  })
+  .get("/import-clock", importClock.handler, {
+    query: importClock.config.query,
+    permissions: importClock.config.permissions,
   })
   .post("/import", importSearchHistory.handler, {
     body: importSearchHistory.config.body,
