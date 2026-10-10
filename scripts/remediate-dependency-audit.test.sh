@@ -50,6 +50,13 @@ exec "$TEST_REAL_GIT" "${args[@]}"
 STUB
 chmod +x "$fixture/bin/gh" "$fixture/bin/bun" "$fixture/bin/git"
 export PATH="$fixture/bin:$PATH" TEST_CALLS="$fixture/calls" TEST_REMOTE="$fixture/remote.git"
+# `! command` never trips `set -e`, so refutations exit explicitly.
+refute_call() {
+  if grep -Eq "$1" "$TEST_CALLS"; then
+    echo "Unexpected call matching: $1" >&2
+    exit 1
+  fi
+}
 cd "$fixture/repo"
 git init -q
 git config user.name test
@@ -63,28 +70,31 @@ git init --bare -q "$TEST_REMOTE"
 git remote add origin "$TEST_REMOTE"
 
 TEST_OPEN_PRS=1 bash "$subject"
-! rg -q '^bun |^git push |^gh pr create ' "$TEST_CALLS"
+refute_call '^bun |^git push |^gh pr create '
 : > "$TEST_CALLS"
 TEST_OPEN_PRS=0 bash "$subject"
-[[ "$(rg -c '^bun ' "$TEST_CALLS")" == 1 ]]
-! rg -q '^gh issue |^git push |^gh pr create ' "$TEST_CALLS"
+[[ "$(grep -Ec '^bun ' "$TEST_CALLS")" == 1 ]]
+refute_call '^gh issue |^git push |^gh pr create '
 : > "$TEST_CALLS"
 TEST_OPEN_PRS=0 TEST_FIX_AVAILABLE=true bash "$subject"
-[[ "$(rg -c '^git push ' "$TEST_CALLS")" == 1 ]]
-[[ "$(rg -c '^gh pr create ' "$TEST_CALLS")" == 1 ]]
+[[ "$(grep -Ec '^git push ' "$TEST_CALLS")" == 1 ]]
+[[ "$(grep -Ec '^gh pr create ' "$TEST_CALLS")" == 1 ]]
 [[ "$(git --git-dir="$TEST_REMOTE" show refs/heads/automation/dependency-audit-fix:bun.lock)" == updated ]]
-! rg -q '^gh issue ' "$TEST_CALLS"
+refute_call '^gh issue '
 
 # Match a source-only checkout with an abandoned remote remediation branch.
 git commit --allow-empty -qm 'abandoned remediation'
 git -c credential.helper= -c credential.helper='!gh auth git-credential' push origin automation/dependency-audit-fix
 git checkout --detach "$initial_sha"
 git update-ref -d refs/remotes/origin/automation/dependency-audit-fix
-! git show-ref --verify --quiet refs/remotes/origin/automation/dependency-audit-fix
+if git show-ref --verify --quiet refs/remotes/origin/automation/dependency-audit-fix; then
+  echo 'The remote-tracking remediation branch must be absent.' >&2
+  exit 1
+fi
 : > "$TEST_CALLS"
 TEST_OPEN_PRS=0 TEST_FIX_AVAILABLE=true bash "$subject"
-[[ "$(rg -c '^git push ' "$TEST_CALLS")" == 1 ]]
-[[ "$(rg -c '^gh pr create ' "$TEST_CALLS")" == 1 ]]
+[[ "$(grep -Ec '^git push ' "$TEST_CALLS")" == 1 ]]
+[[ "$(grep -Ec '^gh pr create ' "$TEST_CALLS")" == 1 ]]
 [[ "$(git --git-dir="$TEST_REMOTE" show refs/heads/automation/dependency-audit-fix:bun.lock)" == updated ]]
 
 # A remote update after observation must survive a rejected lease.
@@ -96,5 +106,5 @@ if TEST_OPEN_PRS=0 TEST_FIX_AVAILABLE=true TEST_CONCURRENT_SHA="$initial_sha" ba
   exit 1
 fi
 [[ "$(git --git-dir="$TEST_REMOTE" rev-parse refs/heads/automation/dependency-audit-fix)" == "$initial_sha" ]]
-! rg -q '^gh pr create ' "$TEST_CALLS"
+refute_call '^gh pr create '
 echo 'ok   remediation deduplicates pull requests, authenticates remote operations and leases existing branches safely'
