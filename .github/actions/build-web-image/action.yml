@@ -125,6 +125,12 @@ runs:
           exit 1
         fi
 
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+      with:
+        bun-version-file: ${{ inputs.source-path }}/package.json
+        no-cache: true
+
     - name: Set up ARM64 runtime emulation
       uses: docker/setup-qemu-action@1f40c72289eff860ee54a304f1438e3cff362e0a # v4.3.0
       with:
@@ -140,12 +146,18 @@ runs:
         username: ${{ github.actor }}
         password: ${{ github.token }}
 
-    - name: Pull web base images
+    - name: Resolve web base images
+      id: base-contexts
       shell: bash
       env:
+        CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
         DOCKERFILE: ${{ inputs.source-path }}/apps/web/Dockerfile
         TOOLING_PATH: ${{ inputs.tooling-path }}
-      run: bash "${TOOLING_PATH}/scripts/pull-base-images.sh" --buildx linux/arm64 "$DOCKERFILE"
+      run: |
+        echo 'contexts<<CI_IMAGE_CONTEXTS' >> "$GITHUB_OUTPUT"
+        bun --no-install "${TOOLING_PATH}/scripts/ci-service-images.ts" --pull "$DOCKERFILE"
+        bun --no-install "${TOOLING_PATH}/scripts/ci-service-images.ts" --build-contexts "$DOCKERFILE" >> "$GITHUB_OUTPUT"
+        echo 'CI_IMAGE_CONTEXTS' >> "$GITHUB_OUTPUT"
 
     - name: Build and push web image
       id: build
@@ -153,6 +165,7 @@ runs:
       with:
         context: ${{ inputs.source-path }}
         file: ${{ inputs.source-path }}/apps/web/Dockerfile
+        build-contexts: ${{ steps.base-contexts.outputs.contexts }}
         platforms: linux/arm64
         push: true
         tags: ghcr.io/${{ github.repository_owner }}/stella-web:candidate-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.target-environment }}

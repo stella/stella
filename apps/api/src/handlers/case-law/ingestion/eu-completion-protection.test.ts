@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { TextField } from "@stll/api-contract/case-law-text-field";
+import { sha256Hex as legacyHex } from "@stll/sha256/node";
 
 import {
   ecjCompletionFingerprint,
@@ -21,6 +22,7 @@ import {
   type RawIngestionResult,
 } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import { sortDeep } from "@/api/lib/sort-deep";
 
 type ProtectOptions = Omit<
   Parameters<typeof protectEcjCompletion>[0],
@@ -676,3 +678,38 @@ describe("full-refetch preserves every stored envelope part", () => {
     ).toEqual({ type: "accepted" });
   });
 });
+
+for (const text of ["", "Článek\u0000📄", "e\u0301"]) {
+  test(`completion recovery fingerprints preserve the legacy canonical state: ${JSON.stringify(text)}`, () => {
+    const existing = {
+      ...stored(),
+      sourceRaw: text,
+      metadata: { z: text, a: "" },
+    };
+    const judges: DecisionJudgeInput[] = [
+      { nameAsPrinted: text, role: "panel-member" },
+    ];
+    const state = {
+      statements: Object.fromEntries(
+        ECJ_COMPLETION_PROTECTED_COLUMNS.map((key) => [key, existing[key]]),
+      ),
+      metadata: existing.metadata,
+      judges,
+      sections: existing.sections,
+      documentAst: existing.documentAst,
+      sourceRaw: existing.sourceRaw,
+      sourceRawS3Key: existing.sourceRawS3Key,
+      sourceRawContentType: existing.sourceRawContentType,
+      sourceHash: existing.sourceHash,
+      parserVersion: existing.parserVersion,
+      textS3Key: existing.textS3Key,
+      normalizedS3Key: existing.normalizedS3Key,
+      astS3Key: existing.astS3Key,
+      contentHash: existing.contentHash,
+      redactedAt: existing.redactedAt?.toISOString() ?? null,
+    };
+    expect(ecjCompletionFingerprint({ existing, judges })).toBe(
+      legacyHex(JSON.stringify(sortDeep(state))),
+    );
+  });
+}

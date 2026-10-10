@@ -102,6 +102,7 @@
     "./segmented-icon-toggle": "./src/components/segmented-icon-toggle.tsx",
     "./select": "./src/components/select.tsx",
     "./split-button": "./src/components/split-button.tsx",
+    "./switch": "./src/components/switch.tsx",
     "./separator": "./src/components/separator.tsx",
     "./sheet": "./src/components/sheet.tsx",
     "./sidebar": "./src/components/sidebar.tsx",

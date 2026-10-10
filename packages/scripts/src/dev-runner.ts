@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { Result, panic, TaggedError } from "better-result";
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import {
   copyFileSync,
   existsSync,
@@ -16,6 +16,7 @@ import {
 import { createServer, Socket } from "node:net";
 import path from "node:path";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import { isSealTrusted, parseSealStatus } from "./agent-evidence";
@@ -260,10 +261,7 @@ const legacyDockerProjectName = (infraOffset: number) =>
     : `${SHARED_DOCKER_PROJECT_BASE}-${String(infraOffset)}`;
 
 const worktreeProjectHash = (worktreePath: string) =>
-  createHash("sha256")
-    .update(worktreePath)
-    .digest("hex")
-    .slice(0, DOCKER_PROJECT_WORKTREE_HASH_LENGTH);
+  hashSha256Hex(worktreePath).slice(0, DOCKER_PROJECT_WORKTREE_HASH_LENGTH);
 
 export const dockerProjectName = ({
   infraOffset,
@@ -1092,7 +1090,8 @@ const ensureDockerServices = async ({
   // one-shot setup container is polled separately and must exit successfully.
   markStarted();
   runStep({
-    cmd: dockerComposeCommand({ args: ["up", "-d"], dockerProject }),
+    // Refresh the seed image on reconciliation; healthy stacks return above.
+    cmd: dockerComposeCommand({ args: ["up", "-d", "--build"], dockerProject }),
     cwd: rootDir,
     env: dockerComposeEnv(infraPorts),
     label: "Starting Docker services",

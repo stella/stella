@@ -7,6 +7,7 @@ import { Schema } from "@tiptap/pm/model";
 import type { Command } from "@tiptap/pm/state";
 import { EditorState } from "@tiptap/pm/state";
 import { EditorView } from "@tiptap/pm/view";
+import { Result } from "better-result";
 
 import { fetchWithTimeout } from "@stll/fetch";
 import {
@@ -108,22 +109,15 @@ const parseSSE = (raw: string): SSEEvent[] => {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
+const parseJson = (data: string): unknown => JSON.parse(data);
+
 const readStringField = (data: string, field: string): string | null => {
-  try {
-    const payload: unknown = JSON.parse(data);
-    if (!isRecord(payload)) {
-      return null;
-    }
-    const value = payload[field];
-    if (typeof value === "string") {
-      return value;
-    }
-    return null;
-  } catch {
-    // Malformed payload: an isolated parse miss is not a
-    // user-visible failure in the playground.
+  const parsed = Result.try(() => parseJson(data));
+  if (Result.isError(parsed) || !isRecord(parsed.value)) {
     return null;
   }
+  const value = parsed.value[field];
+  return typeof value === "string" ? value : null;
 };
 
 type Status = "idle" | "thinking" | "streaming" | "error";
@@ -138,7 +132,7 @@ const startStream = async (
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ prefix, language: "en" }),
     signal,
-    timeoutMs: 15_000,
+    timeout: { type: "idle", ms: 15_000 },
   });
   return response;
 };
@@ -307,7 +301,7 @@ export const AutocompletePlayground = () => {
         setErrorMessage(message);
       };
 
-      try {
+      const result = await Result.tryPromise(async () => {
         const response = await startStream(prefix, controller.signal);
         if (!response.ok || response.body === null) {
           fail(`HTTP ${response.status}`);
@@ -343,15 +337,12 @@ export const AutocompletePlayground = () => {
           live.dispatch(finishAutocompleteSuggestion(live.state.tr, requestId));
         }
         setStatus("idle");
-      } catch (error) {
-        if (controller.signal.aborted) {
-          return;
-        }
-        fail(userErrorFromThrown(error, "request failed"));
-      } finally {
-        if (inflightRef.current === controller) {
-          inflightRef.current = null;
-        }
+      });
+      if (inflightRef.current === controller) {
+        inflightRef.current = null;
+      }
+      if (Result.isError(result) && !controller.signal.aborted) {
+        fail(userErrorFromThrown(result.error, "request failed"));
       }
     };
 
