@@ -1129,7 +1129,6 @@
     "apps/web/src/components/breadcrumbs/workspace-breadcrumb.tsx": 1,
     "apps/web/src/components/chat-editor-provider.tsx": 1,
     "apps/web/src/components/chat/ask-user-card.tsx": 1,
-    "apps/web/src/components/chat/tool-call-card.tsx": 1,
     "apps/web/src/components/docx/use-edit-session.ts": 1,
     "apps/web/src/components/docx/use-folio-collaboration-room.ts": 2,
     "apps/web/src/components/entity-views/entity-views.tsx": 1,
