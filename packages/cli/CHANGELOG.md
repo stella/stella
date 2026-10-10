@@ -1,5 +1,23 @@
 # @stll/cli
 
+## 4.2.0
+
+### Minor Changes
+
+- [#5490](https://github.com/stella/stella/pull/5490) [`2e1697d`](https://github.com/stella/stella/commit/2e1697d58821199e3dade6a6fa341853bca5f027) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add a read capability for retained chat answer revisions.
+
+### Patch Changes
+
+- [#5451](https://github.com/stella/stella/pull/5451) [`88b3ed5`](https://github.com/stella/stella/commit/88b3ed5e6ecebad991d68f4644ca3df6e4973bd2) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Always include `textVersion` in case-law decision reads, and report incomplete docket identifiers with an `incomplete_identifier` status and their `missing` components.
+
+- [#5347](https://github.com/stella/stella/pull/5347) [`c7f973a`](https://github.com/stella/stella/commit/c7f973adced14ab6250f4a0edfa553303998bc27) Thanks [@jan-kubica](https://github.com/jan-kubica)! - List chat threads with the case-law decision each chat is about, when there is one.
+
+- [#5492](https://github.com/stella/stella/pull/5492) [`d1718f7`](https://github.com/stella/stella/commit/d1718f7d2cbe0e3283246825293708f884e7f04e) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Recognise the `stella:law_read` scope for reading public statutes and case law.
+
+- [#5209](https://github.com/stella/stella/pull/5209) [`f75f04d`](https://github.com/stella/stella/commit/f75f04d77c8c4a757f256b71104a07c1f12c85ca) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Describe caller-aware list activity audit details in the capability catalog.
+- Updated dependencies [[`281be96`](https://github.com/stella/stella/commit/281be96c485b45905f5b4647a7aa9d5fad5adab9)]:
+  - @stll/stable-stringify@0.2.2
+
 ## 4.1.0
 
 ### Minor Changes

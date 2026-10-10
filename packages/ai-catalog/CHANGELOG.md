@@ -1,5 +1,15 @@
 # @stll/ai-catalog
 
+## 0.7.0
+
+### Minor Changes
+
+- [#5330](https://github.com/stella/stella/pull/5330) [`65edbfb`](https://github.com/stella/stella/commit/65edbfb9c7100778054b2db7e285385978483564) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Declare reasoning replay formats, request settings, and compatible provenances for every offered and retained model.
+
+### Patch Changes
+
+- [#5515](https://github.com/stella/stella/pull/5515) [`37ddc2b`](https://github.com/stella/stella/commit/37ddc2b337d710c8611eb70c35f0450a25213adf) Thanks [@stella-provenance-updater](https://github.com/apps/stella-provenance-updater)! - Add Claude Haiku 5.5 routes with model rates and request capabilities.
+
 ## 0.6.1
 
 ### Patch Changes
