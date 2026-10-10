@@ -1,5 +1,7 @@
 import * as v from "valibot";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
+
 import { hostedUsageWebhookEventSchema } from "@/api/lib/hosted-usage-provider/event-schemas";
 import type { HostedUsageWebhookEvent } from "@/api/lib/hosted-usage-provider/event-schemas";
 
@@ -36,7 +38,7 @@ export const minimalWebhookRecord = ({
   payload,
   event,
 }: WebhookRecordOptions): Record<string, unknown> => {
-  const digest = new Bun.CryptoHasher("sha256").update(rawBody).digest("hex");
+  const digest = hashSha256Hex(rawBody);
   // Parse again at the persistence boundary: callers cannot bypass stripping by
   // supplying an object whose inferred type permits additional runtime fields.
   const known =

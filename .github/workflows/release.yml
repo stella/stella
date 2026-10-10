@@ -161,14 +161,24 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # The release source may predate the retry helper.
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: package.json
+          no-cache: true
+
+      # The release source may predate the workflow tooling.
       - name: Checkout workflow tooling
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.workflow_sha }}
           path: .workflow-tooling
           persist-credentials: false
-          sparse-checkout: scripts/retry.sh
+          sparse-checkout: |
+            scripts/retry.sh
+            scripts/ci-service-images.ts
+            scripts/ci-service-images.json
+            packages/scripts/src/child-exit-status.ts
           sparse-checkout-cone-mode: false
 
       # Smoke the artifact that was actually pushed (with its release build
@@ -185,6 +195,21 @@ jobs:
           fi
           bash .workflow-tooling/scripts/retry.sh docker pull "${IMAGE}@${IMAGE_DIGEST}"
           docker tag "${IMAGE}@${IMAGE_DIGEST}" stella-api:smoke
+
+      - name: Pull smoke service images
+        env:
+          CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
+        run: |
+          set -euo pipefail
+          POSTGRES_IMAGE="$(bun .workflow-tooling/scripts/ci-service-images.ts --image docker.io/library/postgres:18.6@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280)"
+          REDIS_IMAGE="$(bun .workflow-tooling/scripts/ci-service-images.ts --image docker.io/library/redis:8@sha256:298e5b3bc566bade82f46ad5511777a4a07a294097ce16ada2f6a42be5239df5)"
+          bash .workflow-tooling/scripts/retry.sh docker pull "$POSTGRES_IMAGE"
+          bash .workflow-tooling/scripts/retry.sh docker pull "$REDIS_IMAGE"
+          printf 'POSTGRES_IMAGE=%s\nREDIS_IMAGE=%s\n' "$POSTGRES_IMAGE" "$REDIS_IMAGE" >> "$GITHUB_ENV"
+
+      - name: Log out of GitHub Container Registry
+        if: always()
+        run: docker logout ghcr.io
 
       # CI rehearses this same runtime contract before a VERSION bump merges.
       - name: Smoke release artifact
@@ -237,6 +262,12 @@ jobs:
           # The API image ships the bundled template-pack content.
           submodules: true
 
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: package.json
+          no-cache: true
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
@@ -257,15 +288,21 @@ jobs:
           path: .workflow-tooling
           persist-credentials: false
           sparse-checkout: |
-            scripts/pull-base-images.sh
+            scripts/ci-service-images.ts
+            scripts/ci-service-images.json
+            packages/scripts/src/child-exit-status.ts
             scripts/retry.sh
           sparse-checkout-cone-mode: false
 
-      - name: Pull API base images
+      - name: Resolve API base images
+        id: base-contexts
         env:
-          PLATFORM: ${{ matrix.platform }}
+          CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
         run: |
-          bash .workflow-tooling/scripts/pull-base-images.sh --buildx "$PLATFORM" apps/api/Dockerfile
+          echo 'contexts<<CI_IMAGE_CONTEXTS' >> "$GITHUB_OUTPUT"
+          bun .workflow-tooling/scripts/ci-service-images.ts --pull apps/api/Dockerfile
+          bun .workflow-tooling/scripts/ci-service-images.ts --build-contexts apps/api/Dockerfile >> "$GITHUB_OUTPUT"
+          echo 'CI_IMAGE_CONTEXTS' >> "$GITHUB_OUTPUT"
           rm -rf .workflow-tooling
 
       - name: Build and push by digest
@@ -274,6 +311,7 @@ jobs:
         with:
           context: .
           file: apps/api/Dockerfile
+          build-contexts: ${{ steps.base-contexts.outputs.contexts }}
           platforms: ${{ matrix.platform }}
           outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
           cache-from: |
@@ -289,6 +327,10 @@ jobs:
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           subject-digest: ${{ steps.build.outputs.digest }}
+
+      - name: Log out of GitHub Container Registry
+        if: always()
+        run: docker logout ghcr.io
 
   prepare-web-image:
     name: Build and publish web image
@@ -411,6 +453,10 @@ jobs:
       # Keep current workflow tooling separate from the selected release source.
       # The action code comes from the workflow revision; the browser build
       # contract remains bound to the release source and fails closed when absent.
+      - name: Log out of GitHub Container Registry
+        if: always()
+        run: docker logout ghcr.io
+
       - name: Checkout workflow tooling
         if: steps.existing.outputs.reused != 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -517,6 +563,10 @@ jobs:
             exit 1
           fi
           echo "digest=${digest}" >> "$GITHUB_OUTPUT"
+
+      - name: Log out of GitHub Container Registry
+        if: always()
+        run: docker logout ghcr.io
 
   manifest:
     name: Assemble multi-arch manifest and GitHub release
@@ -681,6 +731,10 @@ jobs:
           publish_tag "$API_IMAGE" "$RELEASE_REF" "$API_IMAGE_DIGEST"
           publish_tag "$API_IMAGE" "sha-${SHA:0:7}" "$API_IMAGE_DIGEST"
           publish_tag "$WEB_IMAGE" "$RELEASE_REF" "$WEB_IMAGE_DIGEST"
+
+      - name: Log out of GitHub Container Registry
+        if: always()
+        run: docker logout ghcr.io
 
       - name: Create release manifest
         env:
@@ -961,6 +1015,10 @@ jobs:
           docker buildx imagetools create \
             --tag "${WEB_IMAGE}:latest" \
             "${WEB_IMAGE}@${WEB_IMAGE_DIGEST}"
+
+      - name: Log out of GitHub Container Registry
+        if: always()
+        run: docker logout ghcr.io
 
   promote-staging:
     # Auto-promote release-candidate tags (vX.Y.Z-rc.N) to staging.

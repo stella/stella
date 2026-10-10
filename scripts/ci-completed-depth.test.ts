@@ -1,6 +1,5 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
-import { createHash } from "node:crypto";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
@@ -9,6 +8,7 @@ import { deflateRawSync, inflateRawSync } from "node:zlib";
 import * as v from "valibot";
 
 import { assertProperty } from "@stll/property-testing";
+import { createSha256 } from "@stll/sha256/node";
 
 import { pilotQueueJobs } from "./ci-pr-pilot-plan";
 import { contextWithPlanOutputs, evaluate } from "./github-expression";
@@ -64,7 +64,7 @@ const pr = {
   base: { sha: "b".repeat(40) },
   labels,
 };
-const scope = createHash("sha256")
+const scope = createSha256()
   .update(JSON.stringify([pr.title, pr.body, false]))
   .digest("hex");
 const marker = (depth: string, profile = "normal-v1", version = 6) =>
@@ -149,6 +149,8 @@ const zipEvidence = (
   return Buffer.concat([entries, central, fileName, end]);
 };
 type LookupOptions = {
+  /** This run's patch id; empty for a pull request without a net change. */
+  currentPatchId?: string;
   depth?: string;
   profile?: string;
   action?: string;
@@ -187,6 +189,7 @@ const decide = async ({
     : evidenceFor(depth, profile),
   archive = zipEvidence(JSON.stringify(evidence)),
   downloadFailure = false,
+  currentPatchId = patchId,
 }: LookupOptions = {}) => {
   const outputs = new Map<string, string>();
   const requests: unknown[] = [];
@@ -194,7 +197,12 @@ const decide = async ({
     Buffer,
     require: (name: string) => {
       if (name === "node:crypto") {
-        return { createHash };
+        return {
+          createHash: (algorithm: string) => {
+            expect(algorithm).toBe("sha256");
+            return createSha256();
+          },
+        };
       }
       if (name === "node:zlib") {
         return { inflateRawSync };
@@ -207,7 +215,7 @@ const decide = async ({
         COVERAGE_PROFILE: profile,
         QUEUE_DEPTH: queueDepth,
         GITHUB_RUN_ATTEMPT: "1",
-        PATCH_ID: patchId,
+        PATCH_ID: currentPatchId,
         WORKFLOW_VERSION: pr.head.sha,
         PR_DEPTH_JOBS: JSON.stringify(prDepth),
       },
@@ -678,6 +686,23 @@ test("only exact green PR-depth evidence reuses checks", async () => {
     pull: { ...pr, base: { sha: "c".repeat(40) } },
   });
   expect(moved.outputs.get("pr_depth_reused")).toBe("true");
+});
+
+test("a change without a patch id never reuses, even against empty evidence", async () => {
+  const empty = { ...evidenceFor("fast"), patch_id: "" };
+  const group = await decide({
+    event: "merge_group",
+    queueDepth: "full",
+    artifacts: [artifact("fast")],
+    evidence: empty,
+    currentPatchId: "",
+  });
+  expect(group.outputs.get("pr_depth_reused")).toBeUndefined();
+  const pull = await decide({
+    evidence: { ...evidenceFor("full"), patch_id: "" },
+    currentPatchId: "",
+  });
+  expect(pull.outputs.get("run_required")).toBe("true");
 });
 
 test("a marker whose contents do not prove a complete run is ignored", async () => {

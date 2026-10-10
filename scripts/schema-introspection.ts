@@ -69,15 +69,20 @@ const nonDatabaseMethodReceiver = (source: ts.SourceFile) => {
     const declarations = checker.getSymbolAtLocation(node)?.declarations;
     const declaration =
       declarations?.length === 1 ? declarations.at(0) : undefined;
+    if (
+      declaration === undefined ||
+      !ts.isImportSpecifier(declaration) ||
+      !ts.isImportDeclaration(declaration.parent.parent.parent) ||
+      !ts.isStringLiteralLike(declaration.parent.parent.parent.moduleSpecifier)
+    ) {
+      return false;
+    }
+    const name = (declaration.propertyName ?? declaration.name).text;
+    const specifier = declaration.parent.parent.parent.moduleSpecifier.text;
     return (
-      declaration !== undefined &&
-      ts.isImportSpecifier(declaration) &&
-      (declaration.propertyName ?? declaration.name).text === "createHash" &&
-      ts.isImportDeclaration(declaration.parent.parent.parent) &&
-      ts.isStringLiteralLike(
-        declaration.parent.parent.parent.moduleSpecifier,
-      ) &&
-      declaration.parent.parent.parent.moduleSpecifier.text === "node:crypto"
+      (name === "createHash" && specifier === "node:crypto") ||
+      (name === "createSha256" &&
+        ["@stll/sha256/bun", "@stll/sha256/node"].includes(specifier))
     );
   };
   const typedCollection = (
@@ -157,7 +162,7 @@ const nonDatabaseMethodReceiver = (source: ts.SourceFile) => {
       );
     }
     if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
-      return method === "update" && importedCryptoHash(node.expression);
+      return method === "update" && hashFactoryReceiver(node.expression, seen);
     }
     const symbolNode = ts.isPropertyAccessExpression(node) ? node.name : node;
     const declarations = checker.getSymbolAtLocation(symbolNode)?.declarations;
@@ -176,6 +181,21 @@ const nonDatabaseMethodReceiver = (source: ts.SourceFile) => {
       );
     }
     return typedCollection(declaration, method);
+  };
+  const hashFactoryReceiver = (node: ts.Identifier, seen: Set<ts.Node>) => {
+    if (importedCryptoHash(node)) {
+      return true;
+    }
+    const factory = checker.getSymbolAtLocation(node)?.declarations;
+    const declaration = factory?.length === 1 ? factory.at(0) : undefined;
+    return (
+      declaration !== undefined &&
+      ts.isVariableDeclaration(declaration) &&
+      declaration.initializer !== undefined &&
+      ts.isArrowFunction(declaration.initializer) &&
+      !ts.isBlock(declaration.initializer.body) &&
+      known({ node: declaration.initializer.body, method: "update", seen })
+    );
   };
   return known;
 };

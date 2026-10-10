@@ -14,7 +14,7 @@ const { QueryClient, QueryClientProvider, useQuery, keepPreviousData } =
   await import("@tanstack/react-query");
 const { prefetchDecisionFacetsAfterSearch, useDecisionBrowseFacets } =
   await import("./decision-filter-facets");
-const { decisionFacetsOptions, decisionsInfiniteOptions } =
+const { decisionFacetsOptions, decisionsPageOptions } =
   await import("./queries/decisions");
 const { APIError, shouldRetryAPIRequest } = await import("@/lib/errors/api");
 
@@ -367,10 +367,9 @@ test("the shared 429 retry policy recovers the facet GET instead of caching rate
   expect(requests).toHaveLength(2);
   expect(decisionFacetsOptions("CZ").retry).toBe(shouldRetryAPIRequest);
   expect(
-    decisionsInfiniteOptions({
-      country: "CZ",
-      search: "fixture query",
-      excerpt: "short",
+    decisionsPageOptions({
+      filters: { country: "CZ", search: "fixture query", excerpt: "short" },
+      page: 1,
     }).retry,
   ).toBe(shouldRetryAPIRequest);
   for (const request of requests) {

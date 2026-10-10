@@ -869,6 +869,13 @@
         "$TURBO_ROOT$/scripts/**"
       ]
     },
+    "@stll/api-contract#test": {
+      "dependsOn": [],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/packages/ui/src/styles/theme.css"
+      ]
+    },
     "@stll/catalogue#test": {
       "dependsOn": [],
       "inputs": [

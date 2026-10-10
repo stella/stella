@@ -19,6 +19,8 @@ mod clipboard_window;
 mod commands;
 mod config;
 mod deep_link;
+mod desktop_crash;
+mod desktop_crash_native;
 mod desktop_telemetry;
 mod diagnostics;
 #[cfg(test)]
@@ -68,6 +70,9 @@ use tokio::sync::Mutex;
 
 pub fn run() {
   logging::init();
+
+  let desktop_telemetry = desktop_telemetry::DesktopTelemetry::start();
+  let crash_monitor = desktop_crash::DesktopCrashMonitor::start(&desktop_telemetry);
 
   i18n::init();
 
@@ -129,6 +134,8 @@ pub fn run() {
     .manage(clipboard_window::ClipboardStartupTrace::default())
     .manage(feature_gate::FeatureGates::default())
     .manage::<activity::ActivityAppState>(Arc::clone(&activity_manager))
+    .manage(crash_monitor)
+    .manage(desktop_telemetry.clone())
     .setup(move |app| {
       let handle = app.handle().clone();
       #[cfg(target_os = "macos")]
@@ -145,9 +152,6 @@ pub fn run() {
             .as_ref()
             .is_some_and(|urls| !urls.is_empty()),
         );
-      let desktop_telemetry = desktop_telemetry::DesktopTelemetry::start();
-      app.manage(desktop_telemetry.clone());
-
       // Clipboard history initializes on a dedicated thread because the OS
       // keychain can block on authorization and the watcher runs continuously.
       {
@@ -474,6 +478,7 @@ pub fn run() {
       }
       tauri::RunEvent::Exit => {
         activity::flush_on_exit(app);
+        desktop_crash::clean_exit(app);
         #[cfg(target_os = "macos")]
         if let Some(clipboard) = app.try_state::<ClipboardAppState>()
           && let Ok(mut clipboard) = clipboard.lock()
