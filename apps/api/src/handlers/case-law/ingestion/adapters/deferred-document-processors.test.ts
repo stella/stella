@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -6,12 +6,50 @@ import {
   listDeferredDocumentDrains,
 } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import { DEFERRED_DOCUMENT_PROCESSORS } from "@/api/handlers/case-law/ingestion/adapters/deferred-document-processors";
+import { toSafeId } from "@/api/lib/branded-types";
 import {
   DEFERRED_DOCUMENT_ADAPTER_KEYS,
   isDeferredDocumentAdapterKey,
 } from "@/api/lib/legal-search/adapter-manifest";
 
+class ProcessorDatabaseProbeError extends TaggedError(
+  "ProcessorDatabaseProbeError",
+)<{
+  message: string;
+}> {}
+
 describe("deferred-document adapters", () => {
+  test("every registry processor enters the durable document operation before fetching", async () => {
+    for (const {
+      adapterKey,
+      processDocument,
+    } of listDeferredDocumentDrains()) {
+      const observedSources = new Set<string>();
+      const failure = new ProcessorDatabaseProbeError({
+        message: "Document database unavailable",
+      });
+      const result = await Result.tryPromise({
+        try: async () =>
+          await processDocument({
+            decisionId: toSafeId<"caseLawDecision">("processor-probe"),
+            onDocumentObservation: ({ source }) => {
+              observedSources.add(source);
+            },
+            scopedDb: async () => {
+              throw failure;
+            },
+            signal: new AbortController().signal,
+          }),
+        catch: (error) => error,
+      });
+      expect(Result.isError(result)).toBe(true);
+      if (Result.isError(result)) {
+        expect(result.error).toBe(failure);
+      }
+      expect([...observedSources]).toEqual([adapterKey]);
+    }
+  });
+
   test("the read-through and drain sets follow every registered adapter's document stage", () => {
     const drains = listDeferredDocumentDrains();
     const drainsOf = (key: string) =>
