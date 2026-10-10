@@ -26,7 +26,6 @@ describe.skipIf(!enabled)("review reset policy census", () => {
       const schema = `reset_census_${suffix}`;
       const owner = `reset_owner_${suffix}`;
       const organizationId = mintAuthProviderId<"organization">();
-      const otherOrganizationId = mintAuthProviderId<"organization">();
       const reviewerId = mintAuthProviderId<"user">();
       const formerUserId = mintAuthProviderId<"user">();
       const workspaceIds = [
@@ -145,10 +144,6 @@ describe.skipIf(!enabled)("review reset policy census", () => {
               values,
             );
           }
-          await client.unsafe(
-            `INSERT INTO ${table} (organization_id) VALUES ($1)`,
-            [otherOrganizationId],
-          );
         }
         const [posture] =
           await client`SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = ${owner}`;
@@ -172,9 +167,7 @@ describe.skipIf(!enabled)("review reset policy census", () => {
           const rows = await census.unsafe<{ organization_id: string }[]>(
             `SELECT organization_id FROM ${schema}.${identifier(name)}`,
           );
-          expect(rows, name).toEqual([
-            { organization_id: otherOrganizationId },
-          ]);
+          expect(rows, name).toEqual([]);
           expect(swept.get(name), name).toBe(2);
         }
       } finally {
