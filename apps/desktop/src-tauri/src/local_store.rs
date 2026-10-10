@@ -106,7 +106,7 @@ impl EncryptedJsonFile {
   pub fn persist<T: Serialize>(&self, value: &T) -> Result<(), String> {
     let label = self.label;
     if let Some(parent) = self.path.parent() {
-      fs::create_dir_all(parent)
+      create_private_dir(parent)
         .map_err(|error| format!("{label} store directory failed: {error}"))?;
     }
     let plaintext = serde_json::to_vec(value)
@@ -260,9 +260,16 @@ pub fn debug_build_is_memory_only(_env: &str) -> bool {
 mod tests {
   use super::*;
 
+  /// A store path in its own fresh directory, so `persist` restricts that
+  /// directory rather than the shared temp directory.
   fn unique_path() -> PathBuf {
     std::env::temp_dir()
-      .join(format!("stella-local-store-{}.json", uuid::Uuid::new_v4()))
+      .join(format!("stella-local-store-{}", uuid::Uuid::new_v4()))
+      .join("store.json")
+  }
+
+  fn remove_store(path: &Path) {
+    fs::remove_dir_all(path.parent().unwrap()).unwrap();
   }
 
   #[test]
@@ -293,8 +300,16 @@ mod tests {
         fs::metadata(&path).unwrap().permissions().mode() & 0o777,
         0o600
       );
+      assert_eq!(
+        fs::metadata(path.parent().unwrap())
+          .unwrap()
+          .permissions()
+          .mode()
+          & 0o777,
+        0o700
+      );
     }
-    fs::remove_file(path).unwrap();
+    remove_store(&path);
   }
 
   #[test]
@@ -330,7 +345,7 @@ mod tests {
         .unwrap(),
       Some(1)
     );
-    fs::remove_file(path).unwrap();
+    remove_store(&path);
   }
 
   #[test]
@@ -360,7 +375,7 @@ mod tests {
         .unwrap(),
       Some(42)
     );
-    fs::remove_file(path).unwrap();
+    remove_store(&path);
   }
 
   #[test]
