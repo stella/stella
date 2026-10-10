@@ -218,10 +218,7 @@ try {
   });
 } catch (error) {
   const outputError = sanitizeErrorForOutput(error);
-  const type =
-    outputError instanceof Error
-      ? outputError.constructor.name
-      : "UnknownError";
+  const type = outputError instanceof Error ? outputError.name : "UnknownError";
   process.stderr.write(`ocr-searchable-pdf-worker error: ${type}\n`);
   process.exit(1);
 }

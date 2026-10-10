@@ -369,9 +369,7 @@ try {
   if (result.isErr()) {
     const outputError = sanitizeErrorForOutput(result.error);
     const outputErrorType =
-      outputError instanceof Error
-        ? outputError.constructor.name
-        : "UnknownError";
+      outputError instanceof Error ? outputError.name : "UnknownError";
     process.stderr.write(`extraction-worker error: ${outputErrorType}\n`);
     process.exit(1);
   }
@@ -381,10 +379,7 @@ try {
   process.exit(0);
 } catch (error) {
   const outputError = sanitizeErrorForOutput(error);
-  const type =
-    outputError instanceof Error
-      ? outputError.constructor.name
-      : "UnknownError";
+  const type = outputError instanceof Error ? outputError.name : "UnknownError";
   process.stderr.write(`extraction-worker error: ${type}\n`);
   process.exit(1);
 }

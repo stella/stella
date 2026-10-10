@@ -54,6 +54,11 @@ test("ordinary errors retain their diagnostics in a fresh projection", () => {
     throw new TypeError("Expected an error output projection");
   }
   expect(projected.name).toBe(ordinary.name);
+  // Worker exit diagnostics report this name as the error type.
+  expect(sanitizeErrorForOutput(new TypeError("bad input"))).toHaveProperty(
+    "name",
+    "TypeError",
+  );
   expect(projected.message).toBe(ordinary.message);
   expect(projected.stack).toBe(ordinary.stack);
   expect(projected).toMatchObject({

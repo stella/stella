@@ -24,10 +24,7 @@ try {
   process.exit(0);
 } catch (error) {
   const outputError = sanitizeErrorForOutput(error);
-  const type =
-    outputError instanceof Error
-      ? outputError.constructor.name
-      : "UnknownError";
+  const type = outputError instanceof Error ? outputError.name : "UnknownError";
   process.stderr.write(`pdf-worker error: ${type}\n`);
   // Keep in sync with PDF_WORKER_PARSE_ERROR_EXIT_CODE in pdf-utils.ts.
   process.exit(65);
