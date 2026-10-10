@@ -65,11 +65,11 @@ test("highlights the complete range, reveals folded text, focuses and scrolls to
   expect(first.hasAttribute("tabindex")).toBe(false);
 });
 
-test("valid missing ranges scroll to the start instead of retaining a stale passage", () => {
+test("valid missing ranges hold the start instead of retaining a stale passage", () => {
   const { container } = fixture();
   const scroll = mock(() => {});
   container.scrollTo = scroll;
-  applyDecisionParagraphLanding(container, {
+  const release = applyDecisionParagraphLanding(container, {
     type: "not-found",
     range: { from: 48, to: 53 },
   });
@@ -77,6 +77,32 @@ test("valid missing ranges scroll to the start instead of retaining a stale pass
   expect(
     container.querySelectorAll<HTMLElement>("[data-reader-landing]").length,
   ).toBe(0);
+  // The router restores the previous position after a hash navigation renders.
+  container.dispatchEvent(new Event("scroll"));
+  expect(scroll).toHaveBeenCalledTimes(2);
+  // Once the reader scrolls on their own, the start is no longer held.
+  container.ownerDocument.dispatchEvent(new Event("wheel"));
+  container.dispatchEvent(new Event("scroll"));
+  expect(scroll).toHaveBeenCalledTimes(2);
+  release?.();
+});
+
+test("a range landing lands again when something else scrolls the reader", () => {
+  const { container, first } = fixture();
+  const scroll = mock(() => {});
+  first.scrollIntoView = scroll;
+  const release = applyDecisionParagraphLanding(container, {
+    type: "range",
+    range: { from: 48, to: 49 },
+    anchorIds: ["p-12", "p-13"],
+    firstAnchorId: "p-12",
+  });
+  expect(scroll).toHaveBeenCalledTimes(1);
+  container.ownerDocument.dispatchEvent(new Event("scroll"));
+  expect(scroll).toHaveBeenCalledTimes(2);
+  release?.();
+  container.ownerDocument.dispatchEvent(new Event("scroll"));
+  expect(scroll).toHaveBeenCalledTimes(2);
 });
 
 for (const landing of [

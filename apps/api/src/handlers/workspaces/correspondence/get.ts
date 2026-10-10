@@ -52,6 +52,7 @@ const CORRESPONDENCE_DETAIL_COLUMNS = {
 };
 
 const UNPROJECTED_DETAIL_COLUMNS = [
+  "entityFeatureGate", // RLS state is internal to the gate.
   "organizationId", // Tenant scope comes from the authorized session.
   "workspaceId", // Matter scope comes from the authorized route.
   "contentHash", // Internal content fingerprint for ingestion.

@@ -877,9 +877,13 @@
     "pagination": {
       "goToPage": "Mine leheküljele {page}",
       "label": "Tulemuste leheküljed",
+      "pageOfCount": "Lehekülg {page}/{pageCount}",
+      "pageOfEstimatedCount": "Lehekülg {page}/~{pageCount}",
+      "pageOfEstimatedCountLabel": "Lehekülg {page}, kokku ligikaudu {pageCount}",
       "pageWithEstimatedResultCount": "Lehekülg {page} · ligikaudu {count, plural, one {# tulemus} other {# tulemust}}",
       "pageWithResultCount": "Lehekülg {page} · {count, plural, one {# tulemus} other {# tulemust}}",
-      "perPage": "Lehekülje kohta"
+      "perPage": "Lehekülje kohta",
+      "refineForMore": "Täpsustage otsingut, et näha rohkem tulemusi"
     },
     "paragraphRangeNotFound": "{count, plural, one {Lõiku {range} sellest tekstist ei leitud.} other {Lõike {range} sellest tekstist ei leitud.}}",
     "paragraphRangeSelected": "{count, plural, one {Lõik {range} on esile tõstetud.} other {Lõigud {range} on esile tõstetud.}}",
@@ -892,6 +896,7 @@
       "subsection": "lg {value}"
     },
     "reader": {
+      "documentUpdated": "Dokumenti on uuendatud.",
       "expandProvisions": "Laienda sätteid",
       "headMatter": "Päis",
       "sourceAttribution": "Lähteandmed on vabalt kättesaadavad aadressil <link>{source}</link>."
@@ -3876,6 +3881,16 @@
       "citationWithQuote": "Viide tsitaadiga",
       "quoteWithCitation": "Tsitaat viitega",
       "textOnly": "Ainult tekst"
+    }
+  },
+  "lists": {
+    "sources": {
+      "add": "Lisa allikas",
+      "documentRequired": "Vali dokument.",
+      "invalidPage": "Sisesta täisarvuline leheküljenumber, mis on vähemalt 1.",
+      "page": "PDF-i lehekülg (valikuline)",
+      "quote": "Tsiteeritud lõik (valikuline)",
+      "quoteTooLong": "Kasuta kuni {limit} tähemärki."
     }
   },
   "markdownEditor": {

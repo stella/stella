@@ -35,6 +35,14 @@
       "types": "./src/case-law-heading.ts",
       "import": "./src/case-law-heading.ts"
     },
+    "./case-law-normalize": {
+      "types": "./src/case-law-normalize.ts",
+      "import": "./src/case-law-normalize.ts"
+    },
+    "./case-law-reader": {
+      "types": "./src/case-law-reader.ts",
+      "import": "./src/case-law-reader.ts"
+    },
     "./citation-passage": {
       "types": "./src/citation-passage.ts",
       "import": "./src/citation-passage.ts"
@@ -122,6 +130,7 @@
     "format": "bun ../../scripts/run-oxfmt.ts ."
   },
   "dependencies": {
+    "@stll/sha256": "workspace:*",
     "@stll/text-normalize": "workspace:*",
     "better-result": "catalog:",
     "valibot": "catalog:"
