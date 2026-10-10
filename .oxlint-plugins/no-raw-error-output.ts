@@ -480,6 +480,10 @@ const isRawError = (options: RawErrorOptions, node: AstNode): boolean => {
   if (isSafeTransform(context, node)) {
     return false;
   }
+  if (node.type === "SpreadElement") {
+    // Spread call arguments and array elements print what they spread.
+    return isAstNode(node.argument) && isRawError(options, node.argument);
+  }
   if (node.type === "Identifier") {
     return isRawErrorIdentifier(options, node);
   }

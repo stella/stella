@@ -13,9 +13,10 @@ test("rejects caught errors and stable aliases passed to process output sinks", 
   process.stdout.write(\`failed: \${failure.message}\`);
   Bun.write(Bun.stderr, caught.stack);
   Bun.write(Bun.stdout, { cause: caught.cause });
+  console.error(...[failure]);
 }`,
     ),
-  ).toEqual([3, 4, 5, 6, 7]);
+  ).toEqual([3, 4, 5, 6, 7, 8]);
 });
 
 test("rejects error and cause identifiers, including Result.error members", async () => {
