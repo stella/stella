@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
+import { sha256Hex as hashContent } from "@stll/sha256/node";
+
 import {
-  hashContent,
   normalizeMetadataValues,
   parseCeDate,
   stripHtml,

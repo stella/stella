@@ -13,10 +13,10 @@
  * then read the documents in bounded groups once it has closed. Nothing a
  * citation count could multiply is read while the gate's transaction is open.
  */
-
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { eq, inArray } from "drizzle-orm";
 
+import type { DecisionTextWithheldReason } from "@stll/api-contract/case-law-text-field";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { findCitationPassage } from "@stll/legal-ast/citation-passage";
 import type { CitationPassageMention } from "@stll/legal-ast/citation-passage";
@@ -36,7 +36,7 @@ import { readDecisionAnalysisAst } from "@/api/lib/case-law/decision-analysis";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 import { errorTag } from "@/api/lib/errors/utils";
 import { readCorpusTombstones } from "@/api/lib/legal-search/corpus-reads";
-import { allowsDerivedAi } from "@/api/lib/legal-search/corpus-source";
+import { decisionTextWithheldReason } from "@/api/lib/legal-search/corpus-source";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
@@ -50,7 +50,9 @@ export type CitationPassage = {
   mention: CitationPassageMention;
 };
 
-export type CitationWithPassage = DecisionCitationRow & {
+export type CitationWithPassage = Omit<DecisionCitationRow, "citationText"> & {
+  citationText: string | null;
+  textWithheldReason: DecisionTextWithheldReason | null;
   /**
    * The citing block, or null where there is none to give: the source bars
    * derived AI use, the decision's document is not parsed, its object could
@@ -92,6 +94,7 @@ type PassageSourcePointer = {
   id: SafeId<"caseLawDecision">;
   astS3Key: string | null;
   contentHash: string | null;
+  textWithheldReason: DecisionTextWithheldReason | null;
 };
 
 const readPassageSourcePointers = async (
@@ -114,9 +117,10 @@ const readPassageSourcePointers = async (
   // The same split the decision read makes: redistribution decides whether a
   // citation may be listed at all, derived AI whether its text may travel
   // with it.
-  return rows.flatMap(({ descriptor, ...row }) =>
-    allowsDerivedAi(descriptor) ? [row] : [],
-  );
+  return rows.map(({ descriptor, ...row }) => ({
+    ...row,
+    textWithheldReason: decisionTextWithheldReason(descriptor),
+  }));
 };
 
 /**
@@ -351,16 +355,29 @@ export const readGatedDecisionCitations = async ({
 
   const textByDecision = await readDecisionTextByDecision(
     caseLawDb,
-    gated.sources,
+    gated.sources.filter(
+      ({ textWithheldReason }) => textWithheldReason === null,
+    ),
+  );
+  const withholdingByDecision = new Map(
+    gated.sources.map(
+      ({ id, textWithheldReason }) => [String(id), textWithheldReason] as const,
+    ),
   );
   const items = gated.page.items.map((item): CitationWithPassage => {
     const citingId =
       direction === "cites" ? String(decisionId) : String(item.decision?.id);
     const text = textByDecision.get(citingId);
+    const textWithheldReason = withholdingByDecision.get(citingId);
+    if (textWithheldReason === undefined) {
+      return panic(`No source disposition for citing decision ${citingId}`);
+    }
     return {
       ...item,
+      citationText: textWithheldReason === null ? item.citationText : null,
+      textWithheldReason,
       passage:
-        text === undefined
+        textWithheldReason !== null || text === undefined
           ? null
           : citationPassageIn({
               ast: text.ast,

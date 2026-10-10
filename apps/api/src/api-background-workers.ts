@@ -3,6 +3,7 @@ import { initReportExportWorker } from "@/api/handlers/reports/report-export-que
 import { initAccountDeletionCleanupWorker } from "@/api/lib/account-deletion-cleanup-queue";
 import { initBilingualRunWorker } from "@/api/lib/bilingual/run-queue";
 import { createBullMqWorkerHost } from "@/api/lib/bullmq-queue";
+import type { BullMqWorkerHostMode } from "@/api/lib/bullmq-queue";
 import { initDocumentDeadlineScoutWorker } from "@/api/lib/document-deadline-scout-worker";
 import { initDocumentReviewRunWorker } from "@/api/lib/document-review/run-queue";
 import { initDocumentTranslationRunWorker } from "@/api/lib/document-translation/run-queue";
@@ -21,8 +22,8 @@ import { initWorkflowWorkers } from "@/api/lib/workflow-queue";
  * the worker that drains it being started and closed here. The host owns the
  * root connection and hands it to every worker.
  */
-export const initApiBackgroundWorkers = () =>
-  createBullMqWorkerHost("api", { db: rootDb }, [
+export const initApiBackgroundWorkers = (mode: BullMqWorkerHostMode) =>
+  createBullMqWorkerHost("api", { db: rootDb }, mode, [
     initAccountDeletionCleanupWorker,
     initBilingualRunWorker,
     initDocumentDeadlineScoutWorker,

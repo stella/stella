@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 
+import type { Transaction } from "@/api/db/root";
 import { chatThreads } from "@/api/db/schema";
 import { chatMessageFromPersisted } from "@/api/handlers/chat/chat-message-parts";
 import {
@@ -22,10 +23,48 @@ import {
   createSafeRootHandler,
 } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { SafeId } from "@/api/lib/branded-types";
 import { THREAD_STORED_CONTENT_SEND_MODE } from "@/api/lib/chat/thread-stored-content-send-mode";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
+
+type CacheThreadRecapOptions = {
+  tx: Transaction;
+  threadId: SafeId<"chatThread">;
+  userId: SafeId<"user">;
+  compactionEpoch: number;
+  lastMessageId: SafeId<"chatMessage">;
+  recap: string;
+};
+
+/** An edit may settle while recap generation runs outside the transaction. */
+export const cacheThreadRecapOnTx = async ({
+  tx,
+  threadId,
+  userId,
+  compactionEpoch,
+  lastMessageId,
+  recap,
+}: CacheThreadRecapOptions) =>
+  // audit: skip - derived recap cache maintenance; no user-authored state change
+  await tx
+    .update(chatThreads)
+    .set({
+      recapText: recap,
+      recapMessageId: lastMessageId,
+      recapPromptVersion: RECAP_PROMPT_VERSION,
+      recapGeneratedAt: new Date(),
+      updatedAt: sql`${chatThreads.updatedAt}`,
+    })
+    .where(
+      and(
+        eq(chatThreads.id, threadId),
+        eq(chatThreads.userId, userId),
+        eq(chatThreads.compactionEpoch, compactionEpoch),
+      ),
+    )
+    .returning({ id: chatThreads.id });
 
 const config = {
   permissions: { chat: ["create"] },
@@ -78,6 +117,7 @@ const getThreadRecap = createSafeRootHandler(config, async function* (ctx) {
           userId: { eq: user.id },
         },
         columns: {
+          compactionEpoch: true,
           workspaceId: true,
           recapText: true,
           recapMessageId: true,
@@ -179,24 +219,16 @@ const getThreadRecap = createSafeRootHandler(config, async function* (ctx) {
 
   // Cache best-effort: a write failure should not fail the read, so
   // the recap still reaches the user (it just regenerates next time).
-  const persistResult = await safeDb((tx) =>
-    // audit: skip — derived recap cache maintenance; no user-authored state change
-    tx
-      .update(chatThreads)
-      .set({
-        recapText: recap,
-        recapMessageId: lastMessage.id,
-        recapPromptVersion: RECAP_PROMPT_VERSION,
-        recapGeneratedAt: new Date(),
-        // Caching a recap is not thread activity. Pin updatedAt to its
-        // current value (an explicit value skips the column's
-        // $onUpdate) so reopening an old thread doesn't float it to
-        // the top of the updatedAt-ordered thread list.
-        updatedAt: sql`${chatThreads.updatedAt}`,
-      })
-      .where(
-        and(eq(chatThreads.id, threadId), eq(chatThreads.userId, user.id)),
-      ),
+  const persistResult = await safeDb(
+    async (tx) =>
+      await cacheThreadRecapOnTx({
+        tx,
+        threadId,
+        userId: user.id,
+        compactionEpoch: thread.compactionEpoch,
+        lastMessageId: lastMessage.id,
+        recap,
+      }),
   );
   if (Result.isError(persistResult)) {
     captureError(persistResult.error, { threadId });

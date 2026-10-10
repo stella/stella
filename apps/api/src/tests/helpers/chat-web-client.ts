@@ -450,6 +450,10 @@ export const createWebChatClient = async ({
     },
     messages,
     resend: async () => {
+      // A failed turn refetches the stored page before the user retries.
+      if (runtime.getSnapshot().error !== undefined) {
+        runtime = createRuntime(await reload());
+      }
       await act(async () => await runtime.reload());
     },
     runtimeState: () => {

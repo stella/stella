@@ -406,7 +406,7 @@ describe("detect-e2e-changes", () => {
     expect(plan).toContain("persist-credentials: false");
     for (const stepName of [
       "Checkout",
-      "Resolve browser image",
+      "Resolve available CI images",
       "Plan release marketing screenshots",
       "Setup Bun for dependency scope",
       "Check changed file scope",
@@ -418,7 +418,7 @@ describe("detect-e2e-changes", () => {
     }
     expect(
       requiredExpression(
-        workflowStepValue(plan, "Resolve browser image")["if"],
+        workflowStepValue(plan, "Resolve available CI images")["if"],
       ),
     ).toBe(
       "steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')",
@@ -452,7 +452,7 @@ describe("detect-e2e-changes", () => {
     );
     expect(requiredExpression(collabRedis["if"])).toBe(
       githubExpression(
-        "!cancelled() && needs.ci-plan.outputs.collaboration_suite_required == 'true'",
+        "!cancelled() && needs.ci-plan.outputs.collaboration_suite_required == 'true' && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && needs.ci-plan.outputs.queue_depth != 'thin' && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true'))",
       ),
     );
     expect(requiredExpression(collabRedis["run"])).toBe(
@@ -582,9 +582,26 @@ describe("detect-e2e-changes", () => {
     });
     const stackIndex = stackSteps.findIndex((step) => step.id === "stack");
     expect(stackIndex).toBeGreaterThanOrEqual(0);
+    const cleanupSteps = stackSteps.filter((step) =>
+      step.name?.startsWith("Log out of "),
+    );
+    expect(cleanupSteps.map(({ name }) => name)).toEqual([
+      "Log out of GitHub Container Registry",
+      "Log out of Docker Hub",
+    ]);
+    for (const cleanup of cleanupSteps) {
+      expect(cleanup.if, cleanup.name).toStartWith("always()");
+      const cleanupIndex = stackSteps.indexOf(cleanup);
+      expect(cleanupIndex, cleanup.name).toBeGreaterThan(stackIndex);
+      expect(cleanupIndex, cleanup.name).toBeLessThan(
+        stackSteps.findIndex(
+          (step) => step.name === "Prepare API runtime sources",
+        ),
+      );
+    }
     const afterStack = stackSteps
       .slice(stackIndex + 1)
-      .filter((step) => step.name !== "Log out of Docker Hub");
+      .filter((step) => !cleanupSteps.includes(step));
     expect(afterStack.length).toBeGreaterThan(0);
     const assertReady = (steps: typeof afterStack) => {
       for (const step of steps) {
@@ -1309,7 +1326,7 @@ describe("detect-e2e-changes", () => {
       `image: ${githubExpression("needs.ci-plan.outputs.playwright_image")}`,
     );
     expect(workflowJob("ci-plan")).toContain(
-      "cat .github/actions/setup-playwright/image.txt",
+      "bun scripts/ci-service-images.ts --resolve",
     );
     const ciBrowser = workflowJob("ci-browser");
     const bunSetup = workflowStepValue(ciBrowser, "Setup Bun");
@@ -1691,13 +1708,63 @@ test("browser image runner preserves argv, cwd, verdict and only browser inputs,
     '#!/usr/bin/env bash\ncase "$*" in\n  "-p process.execPath") echo /native/bun ;;\n  "pm cache") printf "%s\\n" "$BUN_INSTALL_CACHE_DIR" ;;\n  *) exit 4 ;;\nesac\n',
     { mode: 0o755 },
   );
+  const credentialFile = path.join(directory, "registry-credential");
+  const dockerCalls = path.join(directory, "docker-calls");
+  mkdirSync(path.join(root, "scripts"), { recursive: true });
+  writeFileSync(
+    path.join(root, "scripts/retry.sh"),
+    '#!/usr/bin/env bash\n"$@"\n',
+  );
   writeFileSync(
     path.join(directory, "docker"),
-    '#!/usr/bin/env bash\nprintf "%s\\n" "$@"\nexit 17\n',
+    `#!/usr/bin/env bash
+set -euo pipefail
+case "$1" in
+  image)
+    [[ "$2" == inspect ]]
+    echo inspect >> "$DOCKER_CALLS"
+    [[ "$DOCKER_IMAGE_CACHED" == true ]]
+    ;;
+  pull)
+    echo pull >> "$DOCKER_CALLS"
+    exit "${shellExpansion("DOCKER_PULL_STATUS:-0")}"
+    ;;
+  logout)
+    [[ "$2" == ghcr.io ]]
+    echo logout >> "$DOCKER_CALLS"
+    rm -f "$DOCKER_CREDENTIAL_FILE"
+    ;;
+  run)
+    [[ ! -f "$DOCKER_CREDENTIAL_FILE" ]] || exit 99
+    echo run >> "$DOCKER_CALLS"
+    printf '%s\\n' "$@"
+    exit 17
+    ;;
+  *) exit 98 ;;
+esac
+`,
     { mode: 0o755 },
   );
+  const runnerEnv = {
+    PATH: `${directory}:${process.env["PATH"] ?? ""}`,
+    GITHUB_WORKSPACE: root,
+    BUN_INSTALL_CACHE_DIR: cache,
+    CI: "true",
+    E2E_EXECUTION_PROFILE: "network-baseline",
+    E2E_EDGE_HEADER_VALUE: "fixture",
+    GH_TOKEN: "must-not-forward",
+    DOCKER_CALLS: dockerCalls,
+    DOCKER_CREDENTIAL_FILE: credentialFile,
+  };
   try {
-    for (const offline of [false, true]) {
+    for (const { offline, cached } of [
+      { offline: false, cached: true },
+      { offline: false, cached: false },
+      { offline: true, cached: true },
+      { offline: true, cached: false },
+    ]) {
+      writeFileSync(credentialFile, "fixture");
+      writeFileSync(dockerCalls, "");
       const result = Bun.spawnSync(
         [
           "bash",
@@ -1712,20 +1779,18 @@ test("browser image runner preserves argv, cwd, verdict and only browser inputs,
         ],
         {
           cwd: path.join(root, "apps/web"),
-          env: {
-            PATH: `${directory}:${process.env["PATH"] ?? ""}`,
-            GITHUB_WORKSPACE: root,
-            BUN_INSTALL_CACHE_DIR: cache,
-            CI: "true",
-            E2E_EXECUTION_PROFILE: "network-baseline",
-            E2E_EDGE_HEADER_VALUE: "fixture",
-            GH_TOKEN: "must-not-forward",
-          },
+          env: { ...runnerEnv, DOCKER_IMAGE_CACHED: String(cached) },
           stdout: "pipe",
           stderr: "pipe",
         },
       );
       expect(result.exitCode, new TextDecoder().decode(result.stderr)).toBe(17);
+      expect(existsSync(credentialFile)).toBe(false);
+      expect(readFileSync(dockerCalls, "utf-8").trim().split("\n")).toEqual(
+        cached
+          ? ["inspect", "logout", "run"]
+          : ["inspect", "pull", "logout", "run"],
+      );
       const args = new TextDecoder().decode(result.stdout).trim().split("\n");
       expect(args.at(args.indexOf("--network") + 1)).toBe(
         offline ? "none" : "host",
@@ -1757,6 +1822,36 @@ test("browser image runner preserves argv, cwd, verdict and only browser inputs,
         "--",
         "--grep=spaces and $literal",
       ]);
+    }
+    for (const failure of ["validation", "pull"]) {
+      writeFileSync(credentialFile, "fixture");
+      writeFileSync(dockerCalls, "");
+      if (failure === "validation") {
+        writeFileSync(path.join(root, imageFile), "unpinned-browser:latest\n");
+      } else {
+        writeFileSync(
+          path.join(root, imageFile),
+          readFileSync(
+            path.resolve(import.meta.dirname, "..", imageFile),
+            "utf-8",
+          ),
+        );
+      }
+      const result = Bun.spawnSync(["bash", runner, "bun", "test:e2e"], {
+        cwd: path.join(root, "apps/web"),
+        env: {
+          ...runnerEnv,
+          DOCKER_IMAGE_CACHED: "false",
+          DOCKER_PULL_STATUS: "23",
+        },
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      expect(result.exitCode).toBe(failure === "validation" ? 1 : 23);
+      expect(existsSync(credentialFile)).toBe(false);
+      expect(readFileSync(dockerCalls, "utf-8").trim().split("\n")).toEqual(
+        failure === "validation" ? ["logout"] : ["inspect", "pull", "logout"],
+      );
     }
   } finally {
     rmSync(directory, { recursive: true, force: true });

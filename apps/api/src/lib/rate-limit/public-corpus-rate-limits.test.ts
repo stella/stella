@@ -62,6 +62,7 @@ const createBindings = () => {
           );
           return context.increment(key, duration, requestTime);
         },
+        complete: (key) => context.complete(key),
         decrement: (key) => context.decrement(key),
         kill: () => context.kill(),
       },

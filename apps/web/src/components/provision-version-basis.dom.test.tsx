@@ -3,6 +3,10 @@ import type { ComponentProps } from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import {
+  createCaseLawDecisionPath,
+  createCaseLawDecisionRouteParams,
+} from "@stll/api-contract/case-law-decision-route";
 import { STATED_DATE_RELATIONS } from "@stll/api-contract/provision-applied-version";
 import { DECISION_DATE_VERSION_BASIS } from "@stll/api-contract/provision-version-basis";
 import type { ProvisionVersionBasis } from "@stll/api-contract/provision-version-basis";
@@ -10,12 +14,13 @@ import type { ProvisionVersionBasis } from "@stll/api-contract/provision-version
 import { toSafeId } from "@/lib/safe-id";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
-const { cleanup, render, fireEvent, within } =
+const { act, cleanup, render, fireEvent, within } =
   await import("@testing-library/react");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const router = await import("@tanstack/react-router");
-const { IntlProvider } = await import("use-intl");
+const { IntlProvider, createTranslator } = await import("use-intl");
+const { env } = await import("@/env");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { buildFormattingLocale } = await import("@/i18n/i18n-store");
 const { ProvisionsCited } =
@@ -27,12 +32,14 @@ const { decisionProvisionsInfiniteOptions } =
 const en = (await import("@/i18n/langs/en.json")).default;
 const ar = (await import("@/i18n/langs/ar.json")).default;
 const clients: InstanceType<typeof QueryClient>[] = [];
-afterEach(() => {
-  cleanup();
-  for (const client of clients) {
-    client.clear();
-  }
-  clients.length = 0;
+afterEach(async () => {
+  await act(async () => {
+    cleanup();
+    for (const client of clients) {
+      client.clear();
+    }
+    clients.length = 0;
+  });
 });
 afterAll(async () => {
   await GlobalRegistrator.unregister();
@@ -46,6 +53,8 @@ const decision = {
   caseNumber: "1 C 1/2020",
   country: "CZE",
   court: "Supreme Court",
+  courtAbbreviation: null,
+  sourceUrl: null,
   language: "cs",
   languageAlternates: [],
   slug: "decision",
@@ -63,9 +72,9 @@ const decision = {
   },
 } satisfies ComponentProps<typeof CitingDecisionItem>["decision"];
 
-for (const [locale, messages, year] of [
-  ["en", en, "2014"],
-  ["ar", ar, "٢٠١٤"],
+for (const [locale, messages] of [
+  ["en", en],
+  ["ar", ar],
 ] as const) {
   const formattingLocale = buildFormattingLocale({
     lang: locale,
@@ -75,6 +84,46 @@ for (const [locale, messages, year] of [
     numberingSystem: "auto",
     weekStart: "auto",
   });
+  const translate = createTranslator({
+    locale,
+    messages: {
+      caseLaw: {
+        citation: {
+          referenceLabel: messages.caseLaw.citation.referenceLabel,
+        },
+        viewer: {
+          appliedVersionStatedAmendment:
+            messages.caseLaw.viewer.appliedVersionStatedAmendment,
+          appliedVersionStatedDate:
+            messages.caseLaw.viewer.appliedVersionStatedDate,
+        },
+      },
+    },
+  });
+  const formatDate = (date: string) =>
+    new Intl.DateTimeFormat(formattingLocale, {
+      dateStyle: "medium",
+      timeZone: "UTC",
+    }).format(new Date(`${date}T00:00:00Z`));
+  const reference = translate("caseLaw.citation.referenceLabel", {
+    court: decision.court,
+    caseNumber: decision.caseNumber,
+    date: formatDate(decision.decisionDate),
+  });
+  const readerUrl = new URL(
+    createCaseLawDecisionPath(
+      createCaseLawDecisionRouteParams({
+        caseNumber: decision.caseNumber,
+        country: decision.country,
+        court: decision.court,
+        decisionId: decision.decisionId,
+        language: decision.language,
+        languageAlternates: decision.languageAlternates,
+        slug: decision.slug,
+      }),
+    ),
+    env.VITE_PUBLIC_APP_URL,
+  ).href;
   const cases = [
     {
       basis: DECISION_DATE_VERSION_BASIS,
@@ -91,7 +140,10 @@ for (const [locale, messages, year] of [
         expression: null,
         evidence: { kind: "stated_version", start: 0, end: 10 },
       },
-      label: "303/2013 Sb.",
+      label: translate.markup("caseLaw.viewer.appliedVersionStatedAmendment", {
+        amendment: "303/2013 Sb.",
+        reference: (chunks) => chunks,
+      }),
     },
     ...STATED_DATE_RELATIONS.map(
       (relation) =>
@@ -103,7 +155,10 @@ for (const [locale, messages, year] of [
             expression: null,
             evidence: { kind: "stated_date", start: 0, end: 10 },
           },
-          label: year,
+          label: translate("caseLaw.viewer.appliedVersionStatedDate", {
+            date: formatDate("2014-01-01"),
+            relation,
+          }),
         }) as const,
     ),
   ] as const satisfies readonly {
@@ -211,9 +266,17 @@ for (const [locale, messages, year] of [
           </IntlProvider>
         </QueryClientProvider>,
       );
-      expect(
-        ui.getByRole("link", { name: /1 C 1\/2020/u }).textContent,
-      ).toContain(label);
+      const chip = ui.getByRole("button", { name: reference });
+      expect(chip.getAttribute("href")).toBe(readerUrl);
+      expect(chip.textContent).not.toContain(label);
+      const citingBasis = ui.getByText(
+        (_, element) =>
+          element !== null &&
+          element.classList.contains("text-2xs") &&
+          element.textContent === label,
+      );
+      expect(citingBasis.textContent).toBe(label);
+      expect(chip.contains(citingBasis)).toBe(false);
       fireEvent.click(
         ui.getByRole("button", {
           name: messages.caseLaw.viewer.provisionsCited,
@@ -224,7 +287,7 @@ for (const [locale, messages, year] of [
           (_, element) =>
             element !== null &&
             element.classList.contains("text-2xs") &&
-            element.textContent.includes(label),
+            element.textContent === label,
         ),
       ).toHaveLength(2);
       expect(

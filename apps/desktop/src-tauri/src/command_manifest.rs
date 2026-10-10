@@ -21,6 +21,7 @@ macro_rules! with_stella_commands {
       commands::takeover_dialog_respond => "takeover_dialog_respond",
       commands::self_host_connect_dialog_respond => "self_host_connect_dialog_respond",
       commands::pdf_sign_respond => "pdf_sign_respond",
+      commands::fit_static_dialog => "fit_static_dialog",
       commands::copy_diagnostics => "copy_diagnostics",
       commands::email_support => "email_support",
       commands::reveal_support_root => "reveal_support_root",
@@ -71,6 +72,8 @@ macro_rules! with_stella_commands {
       activity_commands::activity_set_app_detail_capture => "activity_set_app_detail_capture",
       activity_commands::activity_open_accessibility_settings => "activity_open_accessibility_settings",
       activity_commands::activity_copy_text => "activity_copy_text",
+      desktop_telemetry::get_desktop_telemetry_enabled => "get_desktop_telemetry_enabled",
+      desktop_telemetry::set_desktop_telemetry_enabled => "set_desktop_telemetry_enabled",
       desktop_telemetry::desktop_report_error => "desktop_report_error",
       desktop_telemetry::desktop_report_timing => "desktop_report_timing",
     }
