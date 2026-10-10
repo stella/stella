@@ -50,26 +50,33 @@ const inventory = () =>
     bunfigs: ["bunfig.toml"],
     releaseAgeSources: {
       "docker-compose.yml":
-        "# release-age-quarantine-exception: 2026-10-05T00:00:00.000Z",
+        "# release-age-quarantine-exception: 2026-10-05T01:00:00.000Z",
     },
   });
 
-test("owner inventory preserves every deadline and declares concrete stress commands", () => {
+test("owner inventory orders preserved deadlines by expiry and declares concrete stress commands", () => {
   const entries = inventory();
-  expect(entries.map(({ kind }) => kind)).toEqual([
-    "release-age-exclusion",
-    "dependency-audit",
-    "release-age-exception",
-    "suppression-waiver",
-    "no-llms-txt",
+  expect(entries.map(({ kind, expiresAt }) => ({ kind, expiresAt }))).toEqual([
+    {
+      kind: "release-age-exclusion",
+      expiresAt: "2026-10-02T01:02:03.000Z",
+    },
+    { kind: "dependency-audit", expiresAt: "2026-10-03" },
+    { kind: "suppression-waiver", expiresAt: "2026-10-04" },
+    {
+      kind: "release-age-exception",
+      expiresAt: "2026-10-05T01:00:00.000Z",
+    },
+    { kind: "no-llms-txt", expiresAt: doc.expiresAt },
   ]);
-  expect(entries.map(({ expiresAt }) => expiresAt)).toEqual([
-    "2026-10-02T01:02:03.000Z",
-    "2026-10-03",
-    "2026-10-05T00:00:00.000Z",
-    "2026-10-04",
-    doc.expiresAt,
-  ]);
+  // Date-only waivers lapse at the following UTC midnight. Keep this fixture's
+  // exact timestamp later so its order exercises expiry rather than tie breaks.
+  let previous = Number.NEGATIVE_INFINITY;
+  for (const { expiresAt } of entries) {
+    const deadline = Date.parse(expiryInstant(expiresAt));
+    expect(deadline).toBeGreaterThan(previous);
+    previous = deadline;
+  }
   expect(
     entries.find(({ kind }) => kind === "release-age-exclusion")?.probe.command,
   ).toEqual([
