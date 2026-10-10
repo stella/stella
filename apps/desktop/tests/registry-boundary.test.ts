@@ -90,6 +90,7 @@ describe("unified registry search boundary", () => {
 const accountBearerOwners = {
   "account.rs": "_lease: tokio::sync::MutexGuard<'static, ()>",
   "registry.rs": "saved: &account::AccountRequest",
+  "feature_access.rs": "request: &AccountRequest",
   "presence.rs": "account: &crate::account::AccountRequest",
   "handoff.rs": "account: Option<&'a crate::account::AccountRequest>",
   "deep_link.rs": "crate::account::request_account(&state).await?",
