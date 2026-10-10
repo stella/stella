@@ -34,6 +34,10 @@ import type { InferSelectModel } from "drizzle-orm";
 import type { Context } from "elysia";
 import Elysia, { t } from "elysia";
 
+import {
+  PROFESSIONAL_USE_REQUIRED_CODE,
+  PROFESSIONAL_USE_STATUS,
+} from "@stll/api-contract/professional-use";
 import { BETTER_AUTH_ORGANIZATION_OPTIONS } from "@stll/auth-model";
 import {
   ac,
@@ -50,6 +54,7 @@ import { member, user as authUser } from "@/api/db/auth-schema";
 import { rootDb, rlsDb } from "@/api/db/root";
 import {
   featureEnrolments,
+  userProfessionalUseAcceptances,
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
@@ -113,6 +118,17 @@ import {
 } from "@/api/lib/auth/oauth-registration-policy";
 import { resolveEmailAndPasswordOptions } from "@/api/lib/auth/password-sign-in-options";
 import {
+  acceptProfessionalUse,
+  professionalUseColumns,
+  professionalUseStateOf,
+  readCreationAcceptance,
+  readUserProfessionalUse,
+  recordOrganizationProfessionalUse,
+  recordUserProfessionalUseAtCreation,
+  requireUserCreationOrigin,
+} from "@/api/lib/auth/professional-use";
+import type { UserProfessionalUseState } from "@/api/lib/auth/professional-use";
+import {
   admitOpenClient,
   authorizationClientId,
   requireAuthRetention,
@@ -163,6 +179,7 @@ import { AUTH_CLIENT_ADDRESS_HEADER } from "@/api/lib/client-ip";
 import { verifyConfirmationOtp } from "@/api/lib/confirmation-otp";
 import { tUuid } from "@/api/lib/custom-schema";
 import { findAccountIdByEmail } from "@/api/lib/db/account-row";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import { getDemoAccountOtpOverride } from "@/api/lib/demo-account-otp";
 import { detectedCountryFromRequestContext } from "@/api/lib/detected-country";
@@ -1267,6 +1284,23 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
         organizationId,
         now: new Date(),
       }),
+    // Insert-once on the owner connection, audited in the same transaction.
+    // A creator who has not accepted yet records nothing here; the
+    // organization is recorded when an owner accepts.
+    recordProfessionalUse: async ({
+      organizationId,
+      userId,
+    }: NewMembership) => {
+      await withAggregateTransaction(
+        rootDb,
+        async (tx) =>
+          await recordOrganizationProfessionalUse({
+            tx,
+            organizationId,
+            userId,
+          }),
+      );
+    },
     // Idempotent via the (organization_id, key) unique. Runs on the owner
     // connection (`rootDb`), which bypasses RLS the same way the org row's
     // own creation did.
@@ -1742,6 +1776,9 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
       user: {
         create: {
           before: async (user, ctx) => {
+            // Refuses a creation path that has not decided whether it shows
+            // the professional-use statement, before the row is written.
+            requireUserCreationOrigin(ctx?.path);
             await reviewDatabaseHooks.userCreateBefore(user, ctx);
             const data = Result.gen(function* () {
               yield* checkNewAccountEmailAllowedForCreation({
@@ -1766,6 +1803,17 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
               data: detectedCountry
                 ? { ...data.value, detectedCountry }
                 : data.value,
+            });
+          },
+          // Creating the account where the professional-use statement is
+          // shown, from a request naming the current version, is the
+          // acceptance; otherwise the account accepts on its first
+          // interactive sign-in. Insert-once on the owner connection that
+          // wrote the user row.
+          after: async (user, ctx) => {
+            await recordUserProfessionalUseAtCreation(rootDb, {
+              userId: brandPersistedUserId(user.id),
+              acceptance: await readCreationAcceptance(ctx, getOAuthState),
             });
           },
         },
@@ -2330,6 +2378,7 @@ const getSessionAndMemberAuthorization = async ({
             emailVerified: authorization.emailVerified,
             userDeleted: authorization.userDeleted,
             enrolledFeatureIds: authorization.enrolledFeatureIds,
+            professionalUse: authorization.professionalUse,
           };
         })
       : Result.ok(null);
@@ -2354,6 +2403,27 @@ export const AUTH_REJECTION_BODY = {
   500: { code: "internal_error", message: "Could not verify your session." },
 } as const satisfies Record<
   AuthRejectionStatus,
+  { code: string; message: string }
+>;
+
+/**
+ * The rejection a signed-in account gets until it accepts the
+ * professional-use statement; the web app answers it with the prompt.
+ */
+const PROFESSIONAL_USE_REJECTION_BODY = {
+  code: PROFESSIONAL_USE_REQUIRED_CODE,
+  message: "Accept the professional-use statement in stella to continue.",
+} as const;
+
+const VALIDATE_AUTH_REJECTION_BODY = {
+  401: AUTH_REJECTION_BODY[401],
+  403: PROFESSIONAL_USE_REJECTION_BODY,
+  500: AUTH_REJECTION_BODY[500],
+} as const satisfies Record<
+  Extract<
+    Awaited<ReturnType<typeof resolveValidateAuth>>,
+    { ok: false }
+  >["statusCode"],
   { code: string; message: string }
 >;
 
@@ -2429,6 +2499,11 @@ type MemberAuthorization = {
   emailVerified: boolean;
   userDeleted: boolean;
   enrolledFeatureIds: readonly string[];
+  /**
+   * The account's professional-use state, read in the same statement: a
+   * signed-in session requires `accepted`.
+   */
+  professionalUse: UserProfessionalUseState;
 };
 
 // Bounded by the enrolment primary key (user, organization, feature) and the
@@ -2446,6 +2521,58 @@ const featureAccessColumns = {
 
 const ACTIVE_WORKSPACE_STATUS = "active";
 
+const memberWorkspaceAccess = (db: MemberAuthorizationDb) => {
+  const membershipExists = exists(
+    db
+      .select({ id: workspaceMembers.id })
+      .from(workspaceMembers)
+      .where(
+        and(
+          eq(workspaceMembers.workspaceId, workspaces.id),
+          eq(workspaceMembers.userId, member.userId),
+        ),
+      ),
+  );
+  // sql-perf-allow: bounded by one target workspace and organization membership keys
+  return or(
+    membershipExists,
+    and(
+      inArray(member.role, CLIENT_MATTER_ADMIN_ROLES),
+      isNotNull(workspaces.clientId),
+    ),
+  );
+};
+
+type WorkspaceMemberLookup = {
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+  workspaceId: SafeId<"workspace">;
+};
+
+/** Recheck a worker's matter membership inside its RLS transaction. */
+export const resolveWorkspaceMemberAccess = async (
+  { organizationId, userId, workspaceId }: WorkspaceMemberLookup,
+  db: MemberAuthorizationDb,
+): Promise<AccessibleWorkspace | null> => {
+  const row = await db
+    .select({ id: workspaces.id, status: workspaces.status })
+    .from(member)
+    .innerJoin(
+      workspaces,
+      and(
+        eq(workspaces.id, workspaceId),
+        eq(workspaces.organizationId, member.organizationId),
+        memberWorkspaceAccess(db),
+      ),
+    )
+    .where(
+      and(eq(member.userId, userId), eq(member.organizationId, organizationId)),
+    )
+    .limit(1)
+    .then((rows) => rows.at(0));
+  return row ?? null;
+};
+
 export const resolveMemberAuthorization = async (
   { organizationId, userId, workspaceId }: MemberAuthorizationLookup,
   db: MemberAuthorizationDb,
@@ -2457,9 +2584,14 @@ export const resolveMemberAuthorization = async (
         role: member.role,
         email: authUser.email,
         ...featureAccessColumns,
+        ...professionalUseColumns,
       })
       .from(member)
       .innerJoin(authUser, eq(authUser.id, member.userId))
+      .leftJoin(
+        userProfessionalUseAcceptances,
+        eq(userProfessionalUseAcceptances.userId, member.userId),
+      )
       .where(
         and(
           eq(member.userId, userId),
@@ -2478,21 +2610,11 @@ export const resolveMemberAuthorization = async (
           emailVerified: row.emailVerified,
           userDeleted: row.userDeleted,
           enrolledFeatureIds: row.enrolledFeatureIds,
+          professionalUse: professionalUseStateOf(row),
         }
       : null;
   }
 
-  const membershipExists = exists(
-    db
-      .select({ id: workspaceMembers.id })
-      .from(workspaceMembers)
-      .where(
-        and(
-          eq(workspaceMembers.workspaceId, workspaces.id),
-          eq(workspaceMembers.userId, member.userId),
-        ),
-      ),
-  );
   const row = await db
     .select({
       memberId: member.id,
@@ -2501,22 +2623,20 @@ export const resolveMemberAuthorization = async (
       workspaceId: workspaces.id,
       workspaceStatus: workspaces.status,
       ...featureAccessColumns,
+      ...professionalUseColumns,
     })
     .from(member)
     .innerJoin(authUser, eq(authUser.id, member.userId))
+    .leftJoin(
+      userProfessionalUseAcceptances,
+      eq(userProfessionalUseAcceptances.userId, member.userId),
+    )
     .leftJoin(
       workspaces,
       and(
         eq(workspaces.id, workspaceId),
         eq(workspaces.organizationId, member.organizationId),
-        // sql-perf-allow: bounded by one workspaceId and one member per user and organization
-        or(
-          membershipExists,
-          and(
-            inArray(member.role, CLIENT_MATTER_ADMIN_ROLES),
-            isNotNull(workspaces.clientId),
-          ),
-        ),
+        memberWorkspaceAccess(db),
       ),
     )
     .where(
@@ -2533,6 +2653,7 @@ export const resolveMemberAuthorization = async (
     emailVerified: row.emailVerified,
     userDeleted: row.userDeleted,
     enrolledFeatureIds: row.enrolledFeatureIds,
+    professionalUse: professionalUseStateOf(row),
   };
   if (row.workspaceId === null || row.workspaceStatus === null) {
     return {
@@ -2563,6 +2684,25 @@ export const resolveCredentialMemberAuthorization = async (
   lookup: MemberAuthorizationLookup,
 ): Promise<MemberAuthorization | null> =>
   await resolveMemberAuthorization(lookup, rootDb);
+
+/**
+ * The signed-in account's own professional-use state, read on the owner
+ * connection: the request role has no access to acceptances.
+ */
+export const readAccountProfessionalUse = async (
+  userId: SafeId<"user">,
+): Promise<UserProfessionalUseState> =>
+  await readUserProfessionalUse(rootDb, userId);
+
+/** The signed-in account accepts the professional-use statement. */
+export const acceptAccountProfessionalUse = async (
+  userId: SafeId<"user">,
+): Promise<UserProfessionalUseState> => {
+  await withAggregateTransaction(rootDb, async (tx) => {
+    await acceptProfessionalUse({ tx, userId });
+  });
+  return await readUserProfessionalUse(rootDb, userId);
+};
 
 /**
  * Whether the caller still belongs to the organization their session is
@@ -2637,17 +2777,6 @@ export const resolveWorkspaceRealtimeAudience = async (
     return new Set<SafeId<"user">>();
   }
 
-  const membershipExists = exists(
-    db
-      .select({ id: workspaceMembers.id })
-      .from(workspaceMembers)
-      .where(
-        and(
-          eq(workspaceMembers.workspaceId, workspaces.id),
-          eq(workspaceMembers.userId, member.userId),
-        ),
-      ),
-  );
   const rows = await db
     .select({ userId: member.userId })
     .from(member)
@@ -2657,14 +2786,7 @@ export const resolveWorkspaceRealtimeAudience = async (
         eq(workspaces.id, workspaceId),
         eq(workspaces.organizationId, member.organizationId),
         eq(workspaces.status, ACTIVE_WORKSPACE_STATUS),
-        // sql-perf-allow: bounded by one workspaceId and LIMITS.organizationMembersCount members
-        or(
-          membershipExists,
-          and(
-            inArray(member.role, CLIENT_MATTER_ADMIN_ROLES),
-            isNotNull(workspaces.clientId),
-          ),
-        ),
+        memberWorkspaceAccess(db),
       ),
     )
     .where(inArray(member.userId, uniqueUserIds))
@@ -2797,6 +2919,19 @@ const resolveValidateAuth = async ({
   const authorization = memberAuthorizationResult.value;
   if (!authorization) {
     return { ok: false as const, statusCode: 401 as const };
+  }
+  // A signed-in session uses the product only once the account has accepted
+  // the professional-use statement. An account created where it was not
+  // shown (agent provisioning, the operator command) accepts on its first
+  // interactive sign-in. MCP and machine credentials never resolve here.
+  switch (authorization.professionalUse.status) {
+    case PROFESSIONAL_USE_STATUS.accepted:
+      break;
+    case PROFESSIONAL_USE_STATUS.required:
+      return { ok: false as const, statusCode: 403 as const };
+    default:
+      authorization.professionalUse satisfies never;
+      return panic("Unhandled professional-use state");
   }
   const { role } = authorization;
   const memberRole = sessionMemberRole(role);
@@ -3061,7 +3196,7 @@ export const createAuthMacro = ({
         if (!result.ok) {
           return status(
             result.statusCode,
-            AUTH_REJECTION_BODY[result.statusCode],
+            VALIDATE_AUTH_REJECTION_BODY[result.statusCode],
           );
         }
 

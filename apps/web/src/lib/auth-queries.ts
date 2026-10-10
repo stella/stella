@@ -1,5 +1,7 @@
 import { queryOptions, type QueryClient } from "@tanstack/react-query";
 
+import { PROFESSIONAL_USE_STATUS } from "@stll/api-contract/professional-use";
+
 import { rootKeys } from "@/lib/auth-query-options";
 import { STALE_TIME } from "@/lib/consts";
 
@@ -70,3 +72,26 @@ export const refreshAuthQueries = async (queryClient: QueryClient) => {
   const { signalSessionChange } = await import("@/lib/account/session-signal");
   signalSessionChange();
 };
+
+/**
+ * Required accounts recheck on focus: another tab may accept.
+ * Acceptance is permanent; session-change broadcasts invalidate it explicitly.
+ */
+export const professionalUseOptions = (userId: string) =>
+  queryOptions({
+    retry: BOOT_QUERY_RETRY,
+    queryKey: ["professional-use", userId],
+    queryFn: async ({ signal }) => {
+      const [{ api }, { unwrapEden }] = await Promise.all([
+        import("@/lib/api"),
+        import("@/lib/errors/api"),
+      ]);
+      return unwrapEden(
+        await api.me["professional-use"].get({ fetch: { signal } }),
+      );
+    },
+    staleTime: ({ state }) =>
+      state.data?.status === PROFESSIONAL_USE_STATUS.accepted
+        ? STALE_TIME.INFINITE
+        : 0,
+  });

@@ -82,6 +82,43 @@ describe("sign-in panel options", () => {
       hasAboveEmailOptions: true,
     });
   });
+
+  test.each([
+    [
+      { emailOtp: true, localPassword: false, bootstrap: false },
+      false,
+      "offered",
+    ],
+    [
+      { emailOtp: false, localPassword: false, bootstrap: true },
+      false,
+      "offered",
+    ],
+    [
+      { emailOtp: false, localPassword: true, bootstrap: false },
+      true,
+      "offered",
+    ],
+    [
+      { emailOtp: false, localPassword: true, bootstrap: false },
+      false,
+      "not_offered",
+    ],
+  ] as const)(
+    "account creation for %o with a social provider %p is %s",
+    (capabilities, google, expected) => {
+      expect(
+        resolveSignInOptions({
+          authCapabilities: {
+            ...capabilities,
+            reviewPasswordSignIn: false,
+            social: { google, microsoft: false },
+          },
+          socialProviderFlags: { google: true, microsoft: false },
+        }).accountCreation,
+      ).toBe(expected);
+    },
+  );
 });
 
 const everyOption = resolveSignInOptions({

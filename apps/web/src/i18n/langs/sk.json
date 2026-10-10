@@ -128,6 +128,11 @@
     "orSignInWithEmail": "alebo sa prihláste e-mailom",
     "organizationNamePlaceholder": "Moja organizácia",
     "password": "Heslo",
+    "professionalUse": {
+      "description": "Pri zakladaní vášho účtu sa vám toto vyhlásenie nezobrazilo. Ak chcete pokračovať, prijmite ho.",
+      "title": "Potvrďte profesionálne použitie"
+    },
+    "professionalUseStatement": "Vytvorením účtu potvrdzujete, že stellu používate na profesionálne účely, a beriete na vedomie, že stella je nástroj pre právnych profesionálov a nenahrádza právne poradenstvo.",
     "rateLimitExceeded": "Príliš veľa pokusov. Skúste to znova neskôr.",
     "resendCode": "Poslať kód znova na <email>{emailAddress}</email>",
     "selectOrganization": "Vyberte organizáciu",

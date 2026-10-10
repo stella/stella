@@ -28,7 +28,9 @@ import { featureEnrolments } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { seedDefaultSkills } from "@/api/lib/agent-skills/default-skills";
 import { sessionCookieName } from "@/api/lib/auth/auth-cookie-name";
+import { acceptProfessionalUse } from "@/api/lib/auth/professional-use";
 import { toSafeId } from "@/api/lib/branded-types";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { assertConfiguredBetterAuthOAuthPolicy } from "@/api/lib/db/assert-better-auth-oauth-policy";
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { ensureDefaultDocumentTypes } from "@/api/lib/document-types/defaults";
@@ -110,7 +112,7 @@ const ensureUserExists = async ({
   email: string;
   image?: string;
 }) =>
-  db.transaction(async (transaction) => {
+  withAggregateTransaction(db, async (transaction) => {
     await transaction
       .insert(user)
       .values({
@@ -143,6 +145,14 @@ const ensureUserExists = async ({
       .update(user)
       .set({ email, emailVerified: true, image, name, updatedAt: now })
       .where(eq(user.id, resolvedId));
+
+    // A seeded account stands for one that registered, which accepted the
+    // professional-use statement there; without it every seeded session would
+    // stop at the acceptance prompt.
+    await acceptProfessionalUse({
+      tx: transaction,
+      userId: toSafeId<"user">(resolvedId),
+    });
 
     return resolvedId;
   });

@@ -15,6 +15,7 @@ import {
   pendingDeletionTasksOptions,
   sessionsOptions,
 } from "@/lib/account/queries";
+import { professionalUseOptions } from "@/lib/auth-queries";
 import { inboxCountOptions } from "@/lib/inbox/queries";
 import {
   chatUnavailableSkillsOptions,
@@ -371,6 +372,12 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     calls: ['api.me["oauth-connections"].get'],
     files: ["routes/_protected.settings/-queries/connections.ts"],
     keys: () => [connectedAppsOptions(USER).queryKey],
+  },
+  "me/professional-use.ts": {
+    kind: "keyed",
+    calls: ['api.me["professional-use"].get'],
+    files: ["lib/auth-queries.ts"],
+    keys: () => [professionalUseOptions(USER).queryKey],
   },
   "me/pending-tasks.ts": {
     kind: "keyed",

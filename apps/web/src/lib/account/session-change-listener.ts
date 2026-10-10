@@ -1,6 +1,6 @@
 import type { QueryClient } from "@tanstack/react-query";
 
-import { sessionOptions } from "@/lib/auth-queries";
+import { professionalUseOptions, sessionOptions } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
 import { signedInUserId } from "@/lib/session-cache-guard";
 
@@ -62,6 +62,12 @@ export const installSessionChangeListener = (
     );
     if (before !== undefined && after === undefined) {
       reload();
+    }
+    if (after !== undefined) {
+      await queryClient.invalidateQueries({
+        queryKey: professionalUseOptions(after).queryKey,
+        refetchType: "all",
+      });
     }
   };
 

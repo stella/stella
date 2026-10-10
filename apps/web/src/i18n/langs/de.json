@@ -128,6 +128,11 @@
     "orSignInWithEmail": "oder mit E-Mail anmelden",
     "organizationNamePlaceholder": "Meine Organisation",
     "password": "Passwort",
+    "professionalUse": {
+      "description": "Bei der Einrichtung Ihres Kontos wurde Ihnen diese Erklärung nicht angezeigt. Nehmen Sie sie an, um fortzufahren.",
+      "title": "Berufliche Nutzung bestätigen"
+    },
+    "professionalUseStatement": "Mit der Erstellung eines Kontos bestätigen Sie, dass Sie stella für berufliche Zwecke nutzen, und nehmen zur Kenntnis, dass stella ein Werkzeug für Rechtsfachleute ist und keine Rechtsberatung ersetzt.",
     "rateLimitExceeded": "Zu viele Versuche. Bitte versuchen Sie es später erneut.",
     "resendCode": "Code erneut an <email>{emailAddress}</email> senden",
     "selectOrganization": "Organisation auswählen",

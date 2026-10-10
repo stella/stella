@@ -327,6 +327,10 @@ describe("createPolarSetupSession", () => {
     // The Polar request body must not leak the neutral contract's field names.
     expect("policy_refs" in body).toBe(false);
     expect("account_ref" in body).toBe(false);
+    // Every checkout is a business purchase; Polar's form collects the tax
+    // id, so none is preset.
+    expect(body["is_business_customer"]).toBe(true);
+    expect("customer_tax_id" in body).toBe(false);
   });
 
   test("surfaces non-2xx as HostedUsageProviderApiError", async () => {

@@ -392,6 +392,10 @@ describe("policy coverage", () => {
     // every privilege is revoked from stella (asserted in
     // rls-table-grants.test.ts), so there is no org policy to require.
     "feedback_reports",
+    // Professional-use acceptances are written once at organization creation
+    // on the owner connection and deny the request role entirely
+    // (asserted in rls-table-grants.test.ts).
+    "organization_professional_use_acceptances",
     // A notification is addressed to a person, not to a matter: recipient and
     // organization are what admit the row, and its nullable workspace_id is a
     // link pointer the client resolves through the ordinary authorized routes,

@@ -1,5 +1,10 @@
 import { panic } from "better-result";
 
+import {
+  PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD,
+  PROFESSIONAL_USE_STATEMENT_VERSION,
+} from "@stll/api-contract/professional-use";
+
 import { getAuth } from "@/api/lib/auth";
 import { readDevOtp } from "@/api/lib/dev-otp-store";
 
@@ -31,8 +36,25 @@ export type HumanBrowser = {
   setActiveOrganization: (organizationId: string) => Promise<void>;
 };
 
+type SignInHumanOptions = {
+  /**
+   * The professional-use statement version the sign-in page displayed, as
+   * the web client sends it; `null` sends none. Decides whether a new
+   * account is created accepted.
+   */
+  displayedStatementVersion: string | null;
+};
+
 /** Sign a verified user in (password-less email OTP), creating them if new. */
-export const signInHuman = async (email: string): Promise<HumanBrowser> => {
+export const signInHuman = async (
+  email: string,
+  options?: SignInHumanOptions,
+): Promise<HumanBrowser> => {
+  // The web client names the version its sign-in page displays.
+  const displayedStatementVersion =
+    options === undefined
+      ? PROFESSIONAL_USE_STATEMENT_VERSION
+      : options.displayedStatementVersion;
   const auth = getAuth();
   await auth.api.sendVerificationOTP({ body: { email, type: "sign-in" } });
   const otp = readDevOtp(email);
@@ -42,7 +64,15 @@ export const signInHuman = async (email: string): Promise<HumanBrowser> => {
     );
   }
   const signInRes = await auth.api.signInEmailOTP({
-    body: { email, otp },
+    body:
+      displayedStatementVersion === null
+        ? { email, otp }
+        : {
+            email,
+            otp,
+            [PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD]:
+              displayedStatementVersion,
+          },
     asResponse: true,
   });
   const jar = new Map(responseCookiePairs(signInRes));

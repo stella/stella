@@ -571,12 +571,6 @@
   },
   {
     "file": "apps/api/scripts/seed-test-user.ts",
-    "fingerprint": "aaa48ca801ddcc093d6f0bb26c3f31b7881479615f380019022ed2d430adaccd",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/scripts/seed-test-user.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
-  },
-  {
-    "file": "apps/api/scripts/seed-test-user.ts",
     "fingerprint": "ac1fb42437c81817c61afa9547974f963ce6c826d331cfd61223dec8b1a3ea6c",
     "count": 1,
     "reason": "transaction-boundary in apps/api/scripts/seed-test-user.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
