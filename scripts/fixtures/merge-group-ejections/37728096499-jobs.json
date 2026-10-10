@@ -2327,22 +2327,6 @@
           "completed_at": "2000-01-01T00:09:27Z"
         },
         {
-          "name": "Test merge bar freshness, arm guard and disarm",
-          "status": "completed",
-          "conclusion": "cancelled",
-          "number": 130,
-          "started_at": "2000-01-01T00:09:27Z",
-          "completed_at": "2000-01-01T00:09:29Z"
-        },
-        {
-          "name": "Test merge queue jump-reset recovery",
-          "status": "completed",
-          "conclusion": "skipped",
-          "number": 131,
-          "started_at": "2000-01-01T00:09:29Z",
-          "completed_at": "2000-01-01T00:09:29Z"
-        },
-        {
           "name": "Check migration identity against the base branch",
           "status": "completed",
           "conclusion": "skipped",

@@ -3180,14 +3180,6 @@
           "completed_at": "2000-01-01T00:02:22Z"
         },
         {
-          "name": "Test merge bar freshness, arm guard and disarm",
-          "status": "completed",
-          "conclusion": "skipped",
-          "number": 130,
-          "started_at": "2000-01-01T00:02:22Z",
-          "completed_at": "2000-01-01T00:02:22Z"
-        },
-        {
           "name": "Check migration identity against the base branch",
           "status": "completed",
           "conclusion": "skipped",
