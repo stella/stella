@@ -40,7 +40,8 @@ export const isConnectionFailure = (cause: unknown): boolean => {
   const messages: string[] = [];
   let current = cause;
   while (
-    (Error.isError(current) || current instanceof Error) &&
+    ((typeof Error.isError === "function" && Error.isError(current)) ||
+      current instanceof Error) &&
     !visited.has(current)
   ) {
     visited.add(current);
