@@ -10,7 +10,11 @@ import {
   desktopTimeEntryBatchResponseSchema,
 } from "@stll/api-contract/desktop-time-entries";
 
-import { desktopTimeEntryBatches, timeEntries } from "@/api/db/schema";
+import {
+  auditLogs,
+  desktopTimeEntryBatches,
+  timeEntries,
+} from "@/api/db/schema";
 import { env } from "@/api/env";
 import { DEFAULT_TIME_POLICY } from "@/api/lib/billing-time";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -94,6 +98,9 @@ const createBatchHarness = (existingEntries = 0) => {
   let missingMatter = false;
   let rateReads = 0;
   const writes: unknown[] = [];
+  // Every insert in arrival order, so a test can place audit rows relative
+  // to the entry and receipt writes of the same transaction.
+  const inserts: string[] = [];
   const { scopedDb } = createScopedDbMock(
     {
       execute: async (statement: SQL) => aggregateExecutionRows(statement),
@@ -114,7 +121,16 @@ const createBatchHarness = (existingEntries = 0) => {
       $count: async () => existingEntries,
       insert: (table: unknown) => ({
         values: (row: unknown) => {
+          if (table === auditLogs) {
+            inserts.push(
+              ...(Array.isArray(row) ? row : [row]).map(() => "audit"),
+            );
+          }
+          if (table === timeEntries) {
+            inserts.push("entry");
+          }
           if (table === desktopTimeEntryBatches) {
+            inserts.push("receipt");
             receipt = v.parse(receiptSchema, row);
           }
           if (table === timeEntries) {
@@ -203,6 +219,7 @@ const createBatchHarness = (existingEntries = 0) => {
     send,
     status,
     writes,
+    inserts,
     rateReads: () => rateReads,
     revokeMatter: () => {
       missingMatter = true;
@@ -308,6 +325,24 @@ test("recovery cancels a noncommitted batch after rejection and fences delayed o
   expect(await (await status()).json()).toEqual({ type: "cancelled" });
   expect((await send(BODY)).status).toBe(409);
   expect(writes).toHaveLength(0);
+});
+
+test("entry creation is audited in the batch transaction; a cancellation receipt writes no entry or audit row", async () => {
+  const committed = createBatchHarness();
+  expect((await committed.send(BODY)).status).toBe(200);
+  // The audit skip in batch status covers only the receipt: the committed
+  // batch audits its entries before the receipt closes the transaction.
+  expect(committed.inserts).toContain("audit");
+  expect(committed.inserts.indexOf("entry")).toBeLessThan(
+    committed.inserts.lastIndexOf("audit"),
+  );
+  expect(committed.inserts.at(-1)).toBe("receipt");
+
+  const cancelled = createBatchHarness();
+  expect(await (await cancelled.status()).json()).toEqual({
+    type: "cancelled",
+  });
+  expect(cancelled.inserts).toEqual(["receipt"]);
 });
 
 test("recovery preserves a committed batch and returns its exact receipt without new writes", async () => {
