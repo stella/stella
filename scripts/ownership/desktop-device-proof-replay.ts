@@ -45,6 +45,11 @@ export default {
         reason:
           "Builds verified proof authorities for handler fixtures with an injected receipt store.",
       },
+      {
+        path: "apps/api/src/tests/helpers/desktop-device-proof.test.ts",
+        reason:
+          "Checks that the fixture produces real consumed proof authority with the signed credential binding.",
+      },
     ],
   },
 } as const satisfies OwnershipEntry;
