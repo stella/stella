@@ -10,6 +10,7 @@ import { count, desc, gte, sql } from "drizzle-orm";
  *   bun apps/api/scripts/ingestion-status.ts
  */
 
+import { sanitizeQueryErrorText } from "@stll/errors";
 import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
 import {
@@ -168,7 +169,9 @@ await runScriptWithErrorOutput(async () => {
     }
 
     if (lastEvent?.errorMessage) {
-      console.log(`  Error:    ${lastEvent.errorMessage.slice(0, 120)}`);
+      console.log(
+        `  Error:    ${sanitizeQueryErrorText(lastEvent.errorMessage).slice(0, 120)}`,
+      );
     }
 
     console.log();

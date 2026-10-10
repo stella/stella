@@ -6,6 +6,7 @@ import {
   sanitizeErrorForOutput,
   sanitizeErrorAttributesForOutput,
   errorOutputLogger,
+  sanitizeQueryErrorText,
 } from "./query-error";
 import { QUERY_ERROR_OUTPUT_FIELDS } from "./query-field-policy";
 import { runScriptWithErrorOutput } from "./script-error";
@@ -48,6 +49,12 @@ for (const literal of [
     expect(error.params).toEqual([SECRET]);
   });
 }
+
+test("stored query error text keeps no parameter values", () => {
+  const stored = failure("insert into account values ($1)").message;
+  expect(stored).toContain(SECRET);
+  expect(sanitizeQueryErrorText(stored)).not.toContain(SECRET);
+});
 
 test("query output excludes multiline parameter values", () => {
   const parameter = "fixture-first-value\nfixture-second-value";

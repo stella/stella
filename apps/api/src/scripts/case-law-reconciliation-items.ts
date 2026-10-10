@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 
+import { sanitizeQueryErrorText } from "@stll/errors";
 import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
 import { caseLawSources } from "@/api/db/schema";
@@ -179,7 +180,7 @@ Adapter keys: ${listAdapterKeys().join(", ")}`;
       const next = item.nextAttemptAt?.toISOString() ?? "-";
       const seen = item.firstSeenAt.toISOString();
       console.log(
-        `${item.status.padEnd(8)} ${item.slice.padEnd(12)} attempts=${attempts} firstSeen=${seen} next=${next} lastError=${item.lastError ?? "-"} ${item.identityKey}`,
+        `${item.status.padEnd(8)} ${item.slice.padEnd(12)} attempts=${attempts} firstSeen=${seen} next=${next} lastError=${item.lastError === null ? "-" : sanitizeQueryErrorText(item.lastError)} ${item.identityKey}`,
       );
     }
     // The whole backlog is reachable by walking this cursor, so a page that
