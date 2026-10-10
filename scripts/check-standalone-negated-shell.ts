@@ -647,6 +647,14 @@ const trackCase = ({ cases, token, next, reserved }: TrackCaseOptions) => {
   return isOperator(token, OPEN_PAREN);
 };
 
+// `time` (and its `-p`) prefix a pipeline, so the next word is still a command.
+const startsTimedPipeline = (
+  token: Token,
+  reserved: boolean,
+  timePrefix: boolean,
+): boolean =>
+  reserved && (token.value === "time" || (timePrefix && token.value === "-p"));
+
 const shellFindings = ({ file, lineOffset, source }: ShellSource) => {
   const findings: StandaloneNegationFinding[] = [];
   const lines = source.split("\n");
@@ -698,11 +706,9 @@ const shellFindings = ({ file, lineOffset, source }: ShellSource) => {
         source: (lines[token.line - 1] ?? "").trim(),
       });
     }
-    const startsTimedPipeline =
-      reserved &&
-      (token.value === "time" || (timePrefix && token.value === "-p"));
-    commandPosition = startsTimedPipeline || startsCommand(token, reserved);
-    timePrefix = startsTimedPipeline;
+    const timed = startsTimedPipeline(token, reserved, timePrefix);
+    commandPosition = timed || startsCommand(token, reserved);
+    timePrefix = timed;
   }
   return findings;
 };
