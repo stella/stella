@@ -5,7 +5,7 @@
 // oxlint-disable-next-line no-crypto-random-uuid/no-crypto-random-uuid -- fixture: randomUUID imports must use the runtime owner instead
 import { randomUUID as makeRandomUuid } from "node:crypto";
 // MUST flag: UUID package generators belong behind the runtime owner.
-// oxlint-disable-next-line no-crypto-random-uuid/no-crypto-random-uuid -- fixture: direct v4 and v7 imports must be rejected
+// oxlint-disable-next-line no-crypto-random-uuid/no-crypto-random-uuid -- x2 fixture: direct v4 and v7 imports must be rejected
 import { v4, v7 as makeUuidV7 } from "uuid";
 
 // MUST flag: imported aliases remain traceable at their call site.

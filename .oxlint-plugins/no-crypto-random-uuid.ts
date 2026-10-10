@@ -26,17 +26,22 @@ export default eslintCompatPlugin({
           noDirectUuidGeneratorImport:
             "Do not import {{generator}} directly from 'uuid'. " +
             "Use the UUID owner for this runtime instead.",
+          noDirectUuidGeneratorCall:
+            "Do not call {{generator}} from the 'uuid' module directly. " +
+            "Use the UUID owner for this runtime instead.",
         },
       },
       createOnce(context) {
         const randomUuidAliases = new Set();
         const cryptoAliases = new Set(["crypto"]);
+        const uuidModuleAliases = new Set<string>();
 
         return {
           before() {
             randomUuidAliases.clear();
             cryptoAliases.clear();
             cryptoAliases.add("crypto");
+            uuidModuleAliases.clear();
           },
           ImportDeclaration(node) {
             if (typeof node.source.value !== "string") {
@@ -45,6 +50,13 @@ export default eslintCompatPlugin({
 
             if (node.source.value === "uuid") {
               for (const specifier of node.specifiers) {
+                if (
+                  specifier.type === "ImportNamespaceSpecifier" ||
+                  specifier.type === "ImportDefaultSpecifier"
+                ) {
+                  uuidModuleAliases.add(specifier.local.name);
+                  continue;
+                }
                 const importedName = getImportedName(specifier);
                 if (
                   importedName !== null &&
@@ -93,6 +105,22 @@ export default eslintCompatPlugin({
               context.report({
                 node,
                 messageId: "noCryptoRandomUuid",
+              });
+              return;
+            }
+
+            if (
+              callee.type === "MemberExpression" &&
+              !callee.computed &&
+              isIdentifier(callee.object) &&
+              uuidModuleAliases.has(callee.object.name) &&
+              isIdentifier(callee.property) &&
+              DIRECT_UUID_GENERATORS.has(callee.property.name)
+            ) {
+              context.report({
+                node,
+                messageId: "noDirectUuidGeneratorCall",
+                data: { generator: callee.property.name },
               });
               return;
             }

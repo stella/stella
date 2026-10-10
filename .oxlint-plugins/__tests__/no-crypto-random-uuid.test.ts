@@ -19,9 +19,13 @@ test("rejects ambient crypto UUIDs and direct UUID package generators", async ()
         "randomUUID();",
         'import { v4, v7 as makeV7, v5 } from "uuid";',
         "v4(); makeV7(); v5();",
+        'import * as uuid from "uuid";',
+        "uuid.v4(); uuid.v7(); uuid.validate(value);",
+        'import uuidDefault from "uuid";',
+        "uuidDefault.v7();",
       ].join("\n"),
     ),
-  ).toEqual([1, 2, 3, 4, 6, 8, 9, 10, 11, 11]);
+  ).toEqual([1, 2, 3, 4, 6, 8, 9, 10, 11, 11, 14, 14, 16]);
 });
 
 test("allows ordered Bun identifiers and unrelated random UUID methods", async () => {
