@@ -1,6 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { sleep } from "@stll/concurrency/sleep";
+
 import type { DecisionCitationSummary } from "@/features/case-law/citation-treatment";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -37,9 +39,7 @@ afterAll(async () => {
   // The expanded box mounts ProvisionsCited, whose scheduled render work must
   // run before the DOM globals go away.
   await act(async () => {
-    await new Promise((resolve) => {
-      setTimeout(resolve, 0);
-    });
+    await sleep(0);
   });
   await GlobalRegistrator.unregister();
 });
