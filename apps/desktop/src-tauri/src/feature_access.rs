@@ -75,17 +75,23 @@ fn client() -> Result<&'static DesktopHttpClient, String> {
   Ok(CLIENT.get_or_init(|| client))
 }
 
-async fn fetch(request: &AccountRequest) -> Result<HashSet<DesktopFeature>, String> {
-  let url = format!("{}{}", request.api_base_url, contract().path);
-  let mut response = crate::http_client::device_proof_request(
-    client()?.get(url),
+fn signed_request(
+  client: &DesktopHttpClient,
+  request: &AccountRequest,
+) -> Result<crate::http_client::DeviceProofRequest, String> {
+  crate::http_client::device_proof_request(
+    client.get(format!("{}{}", request.api_base_url, contract().path)),
     &request.device_key,
     Some(&request.credential.key),
     None,
-  )?
-  .send()
-  .await
-  .map_err(|_| "feature access request failed".to_string())?;
+  )
+}
+
+async fn fetch(request: &AccountRequest) -> Result<HashSet<DesktopFeature>, String> {
+  let mut response = signed_request(client()?, request)?
+    .send()
+    .await
+    .map_err(|_| "feature access request failed".to_string())?;
   if !response.status().is_success() {
     return Err(format!(
       "feature access request was refused: {}",
@@ -241,6 +247,45 @@ mod tests {
     }
     assert!(enabled_features(b"{}").is_err());
     assert!(enabled_features(b"not json").is_err());
+  }
+
+  #[tokio::test]
+  async fn the_request_carries_a_verified_device_proof() {
+    let request = AccountRequest::fixture(LinkedAccount {
+      api_base_url: "https://api.example.test".into(),
+      web_origin: "https://my.example.test".into(),
+      identity: crate::types::DesktopAccountIdentity {
+        user_id: "user_fixture".into(),
+        organization_id: "org_fixture".into(),
+      },
+      account: crate::types::LinkedAccountSnapshot {
+        email: "desktop@example.test".into(),
+        name: None,
+        verified_at: chrono::Utc::now().to_rfc3339(),
+      },
+      credential: crate::types::DesktopAccountCredential {
+        key: "stella_dr_good".into(),
+        expires_at: (chrono::Utc::now() + chrono::Duration::hours(1)).to_rfc3339(),
+      },
+      device_key: crate::device_proof::DeviceKey::default(),
+    })
+    .await;
+    let built = signed_request(client().unwrap(), &request)
+      .unwrap()
+      .build()
+      .unwrap();
+    assert_eq!(built.method(), reqwest::Method::GET);
+    assert_eq!(
+      built.url().as_str(),
+      format!("https://api.example.test{}", contract().path)
+    );
+    assert_eq!(built.headers()["authorization"], "Bearer stella_dr_good");
+    crate::device_proof::tests::verify_request(
+      &built,
+      &request.device_key.thumbprint().unwrap(),
+      Some("stella_dr_good"),
+      None,
+    );
   }
 
   #[tokio::test]
