@@ -4,12 +4,12 @@ import {
   COURT_TIER_LABELS,
   type CourtTierLabel,
 } from "@stll/api-contract/case-law-court-tiers";
+import { courtAbbreviation } from "@stll/api-contract/court-abbreviations";
 import { DAY_IN_MS, Temporal } from "@stll/time";
 
 import { withSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
-import { courtAbbreviation } from "@/api/lib/case-law/court-abbreviations";
 import {
   courtTierLabelFromMap,
   type CourtWeightMap,

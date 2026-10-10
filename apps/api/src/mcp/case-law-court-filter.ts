@@ -2,11 +2,11 @@ import { panic, Result } from "better-result";
 
 import type { VocabularyEntry } from "@stll/agent-input";
 import { normalizeVocabularyValue } from "@stll/agent-input";
+import { courtAbbreviation } from "@stll/api-contract/court-abbreviations";
 import { Temporal } from "@stll/time";
 
 import { readCourtNames } from "@/api/handlers/case-law/decisions/shelf-courts";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
-import { courtAbbreviation } from "@/api/lib/case-law/court-abbreviations";
 import type { AgentCaseLawSearchWarning } from "@/api/lib/case-law/search-warnings";
 import {
   filterDroppedWarning,

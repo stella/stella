@@ -5,6 +5,7 @@ import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import { Input } from "@stll/ui/input";
 import { Skeleton } from "@stll/ui/skeleton";
 
@@ -17,6 +18,7 @@ import { useFormatter } from "@/i18n/formatting-context";
 import type { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
+import { decisionDocumentIdentity } from "@/lib/legal/document-identity";
 import type { PublicLawData } from "@/lib/public-law-api";
 
 /** One decision citing the provision, as the citing-decisions read answers it. */
@@ -47,9 +49,15 @@ export const CitingDecisionItem = ({
         slug: decision.slug,
       }}
     >
-      <BidiText as="span" className="text-foreground text-xs font-medium">
-        {decision.caseNumber}
-      </BidiText>
+      <span className="inline-flex min-w-0 items-center gap-1.5">
+        <DocumentIdentityBadge
+          identity={decisionDocumentIdentity(decision)}
+          title={`${decision.caseNumber} · ${decision.court}`}
+        />
+        <BidiText as="span" className="text-foreground text-xs font-medium">
+          {decision.caseNumber}
+        </BidiText>
+      </span>
       <span className="text-muted-foreground text-2xs">
         {decided === null ? decision.court : `${decision.court} · ${decided}`}
       </span>

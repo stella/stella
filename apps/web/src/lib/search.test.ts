@@ -593,6 +593,7 @@ describe("search preview targets", () => {
         resource: SEARCH_TEST_RESOURCES.caseLawDecision,
         resourceName: toResourceName(SEARCH_TEST_RESOURCES.caseLawDecision),
         type: "case-law",
+        courtAbbreviation: null,
         decisionId: "decision_1",
         caseNumber: "1 T 1/2026",
         identifiers: [
@@ -653,6 +654,7 @@ describe("search preview dates", () => {
     resource: SEARCH_TEST_RESOURCES.caseLawDecision,
     resourceName: toResourceName(SEARCH_TEST_RESOURCES.caseLawDecision),
     type: "case-law",
+    courtAbbreviation: null,
     title: "1 T 1/2026 - Court",
     updatedAt: "2026-07-29T12:00:00.000Z",
     decisionId: "decision_1",

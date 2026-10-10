@@ -143,6 +143,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/web/src/lib/drag-and-drop/**/*.{ts,tsx}",
   "apps/web/src/lib/inbox/**/*.{ts,tsx}",
   "apps/web/src/lib/law-search-history/**/*.{ts,tsx}",
+  "apps/web/src/lib/legal/**/*.{ts,tsx}",
   "apps/web/src/lib/prompts/**/*.{ts,tsx}",
   "apps/web/src/lib/web-search/**/*.{ts,tsx}",
   "apps/web/src/queries/**/*.{ts,tsx}",

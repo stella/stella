@@ -7,6 +7,7 @@ import { useTranslations } from "use-intl";
 import { provisionVersionAsOf } from "@stll/api-contract/provision-version-basis";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import { ChevronRightIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
@@ -41,6 +42,7 @@ import { useHydrated } from "@/hooks/use-hydrated";
 import { optionalArray } from "@/lib/arrays";
 import { decisionDateToIso } from "@/lib/decision-date";
 import { detached } from "@/lib/detached";
+import { statuteDocumentIdentity } from "@/lib/legal/statute-act-number";
 import type { SafeId } from "@/lib/safe-id";
 import type { StatuteLinkTarget } from "@/lib/statute-route";
 import { createStatuteLinkTarget } from "@/lib/statute-route";
@@ -281,6 +283,10 @@ const WorkReferences = ({
           references: group.provisions,
         }) && <QueryViewFeedback view={versionsView} />}
       <p className="text-muted-foreground flex min-w-0 items-baseline gap-1.5 text-[calc(0.7rem*var(--reader-text-scale))] tracking-wide">
+        <DocumentIdentityBadge
+          identity={statuteDocumentIdentity(group.workEli)}
+          title={statute?.title ?? group.title}
+        />
         <BidiText as="span" className="shrink-0">
           {group.title}
         </BidiText>

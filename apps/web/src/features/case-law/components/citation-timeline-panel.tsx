@@ -3,6 +3,7 @@ import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import { PopoverClose, PopoverTitle } from "@stll/ui/popover";
 import { Skeleton } from "@stll/ui/skeleton";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
@@ -46,8 +47,9 @@ import { CitationTreatmentBar } from "@/features/case-law/components/citation-tr
 import { decisionLeadingCitationsOptions } from "@/features/case-law/queries/citations";
 import type { LeadingCitation } from "@/features/case-law/queries/citations";
 import { useFormatter } from "@/i18n/formatting-context";
-import { citedDecisionLabel } from "@/lib/cited-decision-label";
 import { detached } from "@/lib/detached";
+import { citedDecisionLabel } from "@/lib/legal/cited-decision-label";
+import { decisionDocumentIdentity } from "@/lib/legal/document-identity";
 
 /** The panel's own width, minus its padding: the plot is drawn at this size. */
 const CHART_WIDTH = 350;
@@ -293,6 +295,10 @@ const CitingDecisionRow = ({ row }: { row: LeadingCitation }) => {
           />
         }
       >
+        <DocumentIdentityBadge
+          identity={decisionDocumentIdentity(row.decision)}
+          title={`${row.decision.caseNumber} · ${row.decision.court}`}
+        />
         <span className="flex min-w-0 flex-1 flex-col">
           <BidiText
             as="span"

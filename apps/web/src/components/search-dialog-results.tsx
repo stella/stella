@@ -8,10 +8,9 @@ import { useTranslations } from "use-intl";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { CommandItem } from "@stll/ui/command";
+import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import {
-  FileTextIcon,
   HistoryIcon,
-  LandmarkIcon,
   MessageSquareIcon,
   MessagesSquareIcon,
   UserIcon,
@@ -445,6 +444,18 @@ export const SearchResultItem = ({
 };
 
 export const RecentFileIcon = ({ file }: { file: RecentFile }) => {
+  if (file.documentIdentity !== undefined) {
+    return (
+      <DocumentIdentityBadge
+        identity={file.documentIdentity}
+        title={file.title}
+      />
+    );
+  }
+  return <RecentFileTypeIcon file={file} />;
+};
+
+const RecentFileTypeIcon = ({ file }: { file: RecentFile }) => {
   // Recents store identifiers, not thumbnail availability. Observe metadata
   // already loaded by the file view without fetching every recent on open.
   const entityQuery = useQuery({
@@ -466,7 +477,12 @@ export const RecentFileIcon = ({ file }: { file: RecentFile }) => {
   const content = field?.content.type === "file" ? field.content : null;
   const mimeType = content?.mimeType ?? file.mimeType;
   if (!mimeType) {
-    return <FileTextIcon className="text-muted-foreground size-4 shrink-0" />;
+    return (
+      <DocumentIdentityBadge
+        identity={{ kind: "unknown" }}
+        title={file.title}
+      />
+    );
   }
   return (
     <DocumentIcon
@@ -487,7 +503,6 @@ export const RecentFileIcon = ({ file }: { file: RecentFile }) => {
 
 const NON_ENTITY_KIND_ICONS = {
   contact: UserIcon,
-  "case-law": LandmarkIcon,
   chat: MessagesSquareIcon,
 } as const;
 
@@ -512,8 +527,17 @@ export const SearchHitIcon = ({ hit }: { hit: GlobalSearchHit }) => {
           matter={{ id: hit.workspaceId, color: hit.color }}
         />
       );
-    case "contact":
     case "case-law":
+      return (
+        <DocumentIdentityBadge
+          identity={{
+            kind: "decision",
+            courtAbbreviation: hit.courtAbbreviation,
+          }}
+          title={hit.title}
+        />
+      );
+    case "contact":
     case "chat": {
       const Icon = NON_ENTITY_KIND_ICONS[hit.type];
       return <Icon className="text-muted-foreground mt-0.5 size-4 shrink-0" />;

@@ -363,6 +363,10 @@
   }
 }
 @layer utilities {
+  .\@container\/document-identity {
+    container-type: inline-size;
+    container-name: document-identity;
+  }
   .\@container\/provision {
     container-type: inline-size;
     container-name: provision;
@@ -1031,6 +1035,9 @@
   .min-h-1 {
     min-height: var(--spacing);
   }
+  .min-h-3\.5 {
+    min-height: calc(var(--spacing) * 3.5);
+  }
   .min-h-7 {
     min-height: calc(var(--spacing) * 7);
   }
@@ -1172,6 +1179,9 @@
   .w-\[44rem\] {
     width: 44rem;
   }
+  .w-\[52px\] {
+    width: 52px;
+  }
   .w-\[140\%\] {
     width: 140%;
   }
@@ -1276,9 +1286,6 @@
   }
   .min-w-7 {
     min-width: calc(var(--spacing) * 7);
-  }
-  .min-w-8 {
-    min-width: calc(var(--spacing) * 8);
   }
   .min-w-12 {
     min-width: calc(var(--spacing) * 12);
@@ -2459,6 +2466,9 @@
   }
   .text-\[9px\] {
     font-size: 9px;
+  }
+  .text-\[10px\] {
+    font-size: 10px;
   }
   .text-\[13px\] {
     font-size: 13px;
@@ -5167,6 +5177,46 @@
     }
     .md\:data-\[position\*\=right\]\:w-\[calc\(100\%-var\(--toast-inset\)\*2-min\(var\(--stella-toast-right-offset\,0px\)\,calc\(100vw-var\(--toast-inset\)\*2-10rem\)\)\)\][data-position*="right"] {
       width: calc(100% - var(--toast-inset) * 2 - min(var(--stella-toast-right-offset,0px), calc(100vw - var(--toast-inset) * 2 - 10rem)));
+    }
+  }
+  @container document-identity (width >= 6ch) {
+    .\@\[6ch\]\/document-identity\:hidden {
+      display: none;
+    }
+    .\@\[6ch\]\/document-identity\:inline {
+      display: inline;
+    }
+  }
+  @container document-identity (width >= 7ch) {
+    .\@\[7ch\]\/document-identity\:hidden {
+      display: none;
+    }
+    .\@\[7ch\]\/document-identity\:inline {
+      display: inline;
+    }
+  }
+  @container document-identity (width >= 8ch) {
+    .\@\[8ch\]\/document-identity\:hidden {
+      display: none;
+    }
+    .\@\[8ch\]\/document-identity\:inline {
+      display: inline;
+    }
+  }
+  @container document-identity (width >= 9ch) {
+    .\@\[9ch\]\/document-identity\:hidden {
+      display: none;
+    }
+    .\@\[9ch\]\/document-identity\:inline {
+      display: inline;
+    }
+  }
+  @container document-identity (width >= 10ch) {
+    .\@\[10ch\]\/document-identity\:hidden {
+      display: none;
+    }
+    .\@\[10ch\]\/document-identity\:inline {
+      display: inline;
     }
   }
   @container (width >= 42rem) {

@@ -280,6 +280,7 @@ describe("search dialog case-law routes", () => {
   ): CaseLawGlobalSearchHit => ({
     id: `case-law:${decisionId}`,
     type: "case-law",
+    courtAbbreviation: null,
     resource: decisionResource,
     resourceName: toResourceName(decisionResource),
     decisionId,

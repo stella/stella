@@ -17,6 +17,7 @@ import { useTranslations } from "use-intl";
 
 import type { LegislationListValidity } from "@stll/api-contract/legislation-status";
 import { BidiText } from "@stll/ui/bidi-text";
+import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import {
   CalendarClockIcon,
   CalendarIcon,
@@ -50,7 +51,6 @@ import {
   useOpenStatuteTab,
 } from "@/features/statutes/open-statute-tab";
 import type { StatuteListItem } from "@/features/statutes/queries/statutes";
-import { statuteActLabel } from "@/features/statutes/statute-act-number";
 import {
   STATUTE_COLUMN_IDS,
   STATUTE_COLUMN_LABEL_KEYS,
@@ -68,6 +68,10 @@ import {
 } from "@/features/statutes/statute-format";
 import { statuteTabId } from "@/features/statutes/statute-inspector.logic";
 import { useFormatter } from "@/i18n/formatting-context";
+import {
+  statuteActLabel,
+  statuteDocumentIdentity,
+} from "@/lib/legal/statute-act-number";
 
 /** The icon each statute column wears in its header menu and the chooser. */
 export const STATUTE_COLUMN_ICONS = {
@@ -310,6 +314,10 @@ const StatuteActCell = ({ statute }: { statute: StatuteListItem }) => {
       onClick={openStatute.onLinkClick(statute)}
       {...statuteListLinkTarget(statute)}
     >
+      <DocumentIdentityBadge
+        identity={statuteDocumentIdentity(statute.eli)}
+        title={statute.title}
+      />
       {number !== null && (
         <BidiText
           as="span"

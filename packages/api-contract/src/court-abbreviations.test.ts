@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { courtAbbreviation } from "@/api/lib/case-law/court-abbreviations";
+import { courtAbbreviation } from "./court-abbreviations";
 
 type Case = {
   name: string;

@@ -1,4 +1,3 @@
-// parser-output-unchanged: The apex abbreviation list feeds search tool text only, not parsed records.
 /**
  * The short form a lawyer writes a court as: ÚS, NS, NSS, KS, SN, NSA, CJEU.
  *

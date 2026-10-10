@@ -3,6 +3,7 @@ import { and, asc, eq, gt, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import { isEntityKind, resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { courtAbbreviation } from "@stll/api-contract/court-abbreviations";
 import { compareCodeUnit } from "@stll/collation";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { Temporal } from "@stll/time";
@@ -388,6 +389,12 @@ const mapCaseLawHit = (row: RawRow): ScoredGlobalSearchHit => {
     ...globalSearchIdentity(resource),
     id: `case-law:${decisionId}`,
     type: "case-law",
+    courtAbbreviation:
+      courtAbbreviation({
+        court: String(row["court"]),
+        country: String(row["country"]),
+        ecli: toNullableString(row["ecli"]),
+      }) ?? null,
     decisionId,
     caseNumber: String(row["case_number"]),
     identifiers: decisionIdentifierProjection(row["identifiers"], {

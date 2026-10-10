@@ -2,9 +2,9 @@ import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
+import { apexCourtAbbreviations } from "@stll/api-contract/court-abbreviations";
 
 import { envBaseServerSchema } from "@/api/env-base-schema";
-import { apexCourtAbbreviations } from "@/api/lib/case-law/court-abbreviations";
 import { CASE_LAW_SEARCH_GUIDANCE_MODES } from "@/api/lib/case-law/search-guidance-mode";
 import { LIMITS } from "@/api/lib/limits";
 import { searchCaseLawTexts } from "@/api/mcp/case-law-search-guidance";
