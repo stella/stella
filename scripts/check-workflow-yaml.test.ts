@@ -14,7 +14,7 @@ const FIXTURES = path.join(import.meta.dirname, "__fixtures__/workflow-yaml");
 
 describe("workflow YAML validation", () => {
   test("every repository workflow and composite action is valid", async () => {
-    expect(await checkWorkflowYaml(ROOT)).toBeUndefined();
+    await checkWorkflowYaml(ROOT);
   });
 
   test("malformed workflow YAML reports its file", async () => {

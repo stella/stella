@@ -53,28 +53,31 @@ export const validateCompositeAction = (value: unknown, file: string): void => {
   requireNonemptyString(value, "name", file);
   requireNonemptyString(value, "description", file);
 
-  const runs = value.runs;
-  if (!isRecord(runs) || runs.using !== "composite") {
+  const runs = value["runs"];
+  if (!isRecord(runs) || runs["using"] !== "composite") {
     throw new WorkflowYamlError({
       message: `${file}: runs.using must be composite`,
       file,
     });
   }
-  if (!Array.isArray(runs.steps)) {
+  if (!Array.isArray(runs["steps"])) {
     throw new WorkflowYamlError({
       message: `${file}: runs.steps must be a sequence`,
       file,
     });
   }
 
-  for (const [index, step] of runs.steps.entries()) {
+  for (const [index, step] of runs["steps"].entries()) {
     if (!isRecord(step)) {
       throw new WorkflowYamlError({
         message: `${file}: runs.steps[${index}] must be a mapping`,
         file,
       });
     }
-    if ("run" in step && (typeof step.shell !== "string" || !step.shell)) {
+    if (
+      "run" in step &&
+      (typeof step["shell"] !== "string" || !step["shell"])
+    ) {
       throw new WorkflowYamlError({
         message: `${file}: runs.steps[${index}] has run but no shell`,
         file,
