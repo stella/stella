@@ -16,14 +16,6 @@ const SHELL_FILE = /\.(?:sh|bash)$/u;
 const WORKFLOW_FILE =
   /^\.github\/(?:workflows\/[^/]+\.ya?ml|actions\/.+\/action\.ya?ml)$/u;
 const BASH_SHEBANG = /^#![^\n]*\b(?:\/|\s)bash(?:\s|$)/u;
-const NEGATED_STATEMENT = /^\s*!\s+\S/u;
-const LIST_CONTINUATION = /(?:&&|\|\|)\s*$/u;
-// `<<<` is a here-string, not a heredoc.
-const HEREDOC_START = /(?<!<)<<-?(?!<)\s*['"]?([A-Za-z_][A-Za-z0-9_]*)['"]?/u;
-const CONDITION_START = /^\s*(?:if|while|until)(?:\s|$)/u;
-const CONDITION_END = /(?:^|[;\s])(?:then|do)(?:[;\s]|$)/u;
-const FUNCTION_START = /^\s*[A-Za-z_][A-Za-z0-9_]*\s*\(\s*\)\s*\{\s*(?:#.*)?$/u;
-const FUNCTION_END = /^\s*\}\s*(?:[;&|].*)?(?:#.*)?$/u;
 const RUN_BLOCK = /^(\s*)(?:-\s+)?run:\s*[|>]([+-]?)(?:\s*#.*)?$/u;
 const RUN_INLINE = /^\s*(?:-\s+)?run:\s*(?![|>])(\S.*)$/u;
 
@@ -39,115 +31,384 @@ type ShellSource = {
   readonly source: string;
 };
 
-const meaningful = (line: string): boolean => {
-  const trimmed = line.trim();
-  return trimmed !== "" && !trimmed.startsWith("#");
+type Token = {
+  readonly type: "word" | "operator";
+  readonly value: string;
+  readonly line: number;
+  readonly quoted: boolean;
 };
 
-// Only `||` consumes a failed negation (a non-final `&&` command skips errexit
-// too); operators inside quotes or comments do not count.
-const consumesStatus = (line: string): boolean => {
-  let quote: string | undefined;
-  for (let index = 0; index < line.length; index += 1) {
-    const char = line[index];
-    if (quote === "'") {
-      if (char === "'") {
-        quote = undefined;
-      }
-      continue;
+const OPERATORS = [
+  "<<<",
+  "<<-",
+  "<<",
+  "&&",
+  "||",
+  "|&",
+  ";",
+  "&",
+  "|",
+  "(",
+  ")",
+  "{",
+  "}",
+] as const;
+const COMMAND_SEPARATORS = new Set([
+  ";",
+  "&",
+  "&&",
+  "||",
+  "|",
+  "|&",
+  "\n",
+  "(",
+  "{",
+]);
+
+type Heredoc = { readonly delimiter: string; readonly stripTabs: boolean };
+
+type LexState = {
+  readonly source: string;
+  readonly tokens: Token[];
+  readonly heredocs: Heredoc[];
+  index: number;
+  line: number;
+  heredocOperator: "<<" | "<<-" | undefined;
+};
+
+const operatorAt = (source: string, index: number) => {
+  for (const candidate of OPERATORS) {
+    if (source.startsWith(candidate, index)) {
+      return candidate;
     }
+  }
+  return undefined;
+};
+
+// `$(...)` and backticks are opaque words: their contents are not analysed.
+const skipSubstitution = (state: LexState, closing: "`" | ")") => {
+  const { source } = state;
+  let depth = 1;
+  while (state.index < source.length && depth > 0) {
+    const char = source[state.index];
     if (char === "\\") {
-      index += 1;
+      state.index +=
+        source[state.index + 1] === "\n"
+          ? 2
+          : Math.min(2, source.length - state.index);
       continue;
     }
-    if (quote === '"') {
-      if (char === '"') {
-        quote = undefined;
-      }
+    if (char === "\n") {
+      state.line += 1;
+    }
+    if (closing === ")" && char === "$" && source[state.index + 1] === "(") {
+      depth += 1;
+      state.index += 2;
       continue;
     }
-    if (char === "'" || char === '"') {
-      quote = char;
-      continue;
+    if (char === closing) {
+      depth -= 1;
     }
-    if (char === "#" && (index === 0 || /\s/u.test(line[index - 1] ?? ""))) {
-      return false;
-    }
-    if (char === "|" && line[index + 1] === "|") {
-      return true;
-    }
+    state.index += 1;
   }
-  return false;
 };
 
-const isFinalFunctionStatus = (
-  lines: readonly string[],
-  index: number,
-): boolean => {
-  let functionDepth = 0;
-  for (let cursor = 0; cursor <= index; cursor += 1) {
-    const line = lines[cursor] ?? "";
-    if (FUNCTION_START.test(line)) {
-      functionDepth += 1;
-    } else if (FUNCTION_END.test(line) && functionDepth > 0) {
-      functionDepth -= 1;
+const skipHeredocBody = (state: LexState, heredoc: Heredoc) => {
+  const { source } = state;
+  while (state.index <= source.length) {
+    const end = source.indexOf("\n", state.index);
+    const bodyLine = source.slice(
+      state.index,
+      end === -1 ? source.length : end,
+    );
+    const compared = heredoc.stripTabs
+      ? bodyLine.replace(/^\t+/u, "")
+      : bodyLine;
+    state.index = end === -1 ? source.length : end + 1;
+    if (end !== -1) {
+      state.line += 1;
+    }
+    if (compared === heredoc.delimiter) {
+      return;
     }
   }
-  if (functionDepth === 0) {
-    return false;
-  }
-  for (let cursor = index + 1; cursor < lines.length; cursor += 1) {
-    const line = lines[cursor] ?? "";
-    if (!meaningful(line)) {
+};
+
+const readQuoted = (state: LexState, quote: "'" | '"') => {
+  const { source } = state;
+  let value = "";
+  while (state.index < source.length && source[state.index] !== quote) {
+    if (quote === '"' && source[state.index] === "\\") {
+      value += source[state.index + 1] ?? "";
+      state.index += 2;
       continue;
     }
-    return FUNCTION_END.test(line);
+    if (source[state.index] === "\n") {
+      state.line += 1;
+    }
+    value += source[state.index] ?? "";
+    state.index += 1;
   }
-  return false;
+  state.index += source[state.index] === quote ? 1 : 0;
+  return value;
+};
+
+const endsWord = (source: string, index: number) => {
+  const char = source[index] ?? "";
+  return /\s/u.test(char) || operatorAt(source, index) !== undefined;
+};
+
+// Reads one word part at the cursor; returns undefined at the end of the word.
+const readWordPart = (
+  state: LexState,
+): { text: string; quoted: boolean } | undefined => {
+  const { source } = state;
+  const char = source[state.index] ?? "";
+  const next = source[state.index + 1];
+  if (char === "\\") {
+    state.index += 2;
+    if (next === "\n") {
+      state.line += 1;
+      return { text: "", quoted: true };
+    }
+    return { text: next ?? "", quoted: true };
+  }
+  if (char === "'" || char === '"') {
+    state.index += 1;
+    return { text: readQuoted(state, char), quoted: true };
+  }
+  if (char === "$" && next === "'") {
+    state.index += 2;
+    return { text: readQuoted(state, "'"), quoted: true };
+  }
+  if (char === "`" || (char === "$" && next === "(")) {
+    state.index += char === "`" ? 1 : 2;
+    skipSubstitution(state, char === "`" ? "`" : ")");
+    return { text: "substitution", quoted: true };
+  }
+  if (endsWord(source, state.index)) {
+    return undefined;
+  }
+  state.index += 1;
+  return { text: char, quoted: false };
+};
+
+const readWord = (state: LexState) => {
+  const startLine = state.line;
+  let value = "";
+  let quoted = false;
+  while (state.index < state.source.length) {
+    const part = readWordPart(state);
+    if (part === undefined) {
+      break;
+    }
+    value += part.text;
+    quoted ||= part.quoted;
+  }
+  state.tokens.push({ type: "word", value, line: startLine, quoted });
+  if (state.heredocOperator !== undefined) {
+    state.heredocs.push({
+      delimiter: value,
+      stripTabs: state.heredocOperator === "<<-",
+    });
+    state.heredocOperator = undefined;
+  }
+};
+
+const readNewline = (state: LexState) => {
+  state.tokens.push({
+    type: "operator",
+    value: "\n",
+    line: state.line,
+    quoted: false,
+  });
+  state.index += 1;
+  state.line += 1;
+  for (const heredoc of state.heredocs.splice(0)) {
+    skipHeredocBody(state, heredoc);
+  }
+};
+
+const shellTokens = (source: string): Token[] => {
+  const state: LexState = {
+    source,
+    tokens: [],
+    heredocs: [],
+    index: 0,
+    line: 1,
+    heredocOperator: undefined,
+  };
+  while (state.index < source.length) {
+    const char = source[state.index] ?? "";
+    if (char === "\\" && source[state.index + 1] === "\n") {
+      state.index += 2;
+      state.line += 1;
+      continue;
+    }
+    if (char === "\n") {
+      readNewline(state);
+      continue;
+    }
+    if (/\s/u.test(char)) {
+      state.index += 1;
+      continue;
+    }
+    if (char === "#") {
+      state.tokens.push({
+        type: "operator",
+        value: "#",
+        line: state.line,
+        quoted: false,
+      });
+      const end = source.indexOf("\n", state.index);
+      state.index = end === -1 ? source.length : end;
+      continue;
+    }
+    const operator = operatorAt(source, state.index);
+    if (operator === undefined) {
+      readWord(state);
+      continue;
+    }
+    state.tokens.push({
+      type: "operator",
+      value: operator,
+      line: state.line,
+      quoted: false,
+    });
+    state.index += operator.length;
+    state.heredocOperator =
+      operator === "<<" || operator === "<<-" ? operator : undefined;
+  }
+  return state.tokens;
+};
+
+const CONDITION_OPENERS = new Set(["if", "while", "until"]);
+const CONDITION_BODIES = new Set(["then", "do"]);
+const CONDITION_CLOSERS = new Set(["fi", "done"]);
+const COMMAND_STARTERS = new Set([
+  "if",
+  "elif",
+  "while",
+  "until",
+  "then",
+  "do",
+  "else",
+]);
+const PIPELINE_ENDS = new Set([";", "&", "&&", "||", "\n", "}", ")", "#"]);
+
+type ConditionState = "condition" | "body";
+
+const trackCondition = (stack: ConditionState[], word: string) => {
+  if (word === "elif" && stack.at(-1) === "body") {
+    stack[stack.length - 1] = "condition";
+    return;
+  }
+  if (CONDITION_OPENERS.has(word)) {
+    stack.push("condition");
+    return;
+  }
+  if (CONDITION_BODIES.has(word) && stack.at(-1) === "condition") {
+    stack[stack.length - 1] = "body";
+    return;
+  }
+  if (CONDITION_CLOSERS.has(word)) {
+    stack.pop();
+  }
+};
+
+const opensFunctionBody = (tokens: readonly Token[], index: number) => {
+  const previous = tokens[index - 1];
+  const beforePrevious = tokens[index - 2];
+  const posixDefinition =
+    previous?.value === ")" &&
+    beforePrevious?.value === "(" &&
+    tokens[index - 3]?.type === "word";
+  const keywordDefinition =
+    beforePrevious?.value === "function" && previous?.type === "word";
+  return posixDefinition || keywordDefinition;
+};
+
+type NegationContext = {
+  readonly file: string;
+  readonly tokens: readonly Token[];
+  readonly index: number;
+  readonly inCondition: boolean;
+  readonly braces: readonly { functionBody: boolean }[];
+};
+
+// A negated pipeline is an assertion only when something consumes its status.
+const negationConsumed = ({
+  file,
+  tokens,
+  index,
+  inCondition,
+  braces,
+}: NegationContext) => {
+  let end = index + 1;
+  while (end < tokens.length && !PIPELINE_ENDS.has(tokens[end]?.value ?? "")) {
+    end += 1;
+  }
+  let tail = end;
+  while ([";", "\n"].includes(tokens[tail]?.value ?? "")) {
+    tail += 1;
+  }
+  const finalInFunction =
+    braces.at(-1)?.functionBody === true && tokens[tail]?.value === "}";
+  const finalInScript =
+    !braces.some(({ functionBody }) => functionBody) &&
+    index > 0 &&
+    tail === tokens.length &&
+    !WORKFLOW_FILE.test(file);
+  const inAndOrList = ["&&", "||"].includes(tokens[index - 1]?.value ?? "");
+  return (
+    inCondition ||
+    tokens[end]?.value === "||" ||
+    ((finalInFunction || finalInScript) && !inAndOrList)
+  );
 };
 
 const shellFindings = ({ file, lineOffset, source }: ShellSource) => {
   const findings: StandaloneNegationFinding[] = [];
   const lines = source.split("\n");
-  let conditionOpen = false;
-  let heredocEnd: string | undefined;
-  let previousMeaningful = "";
+  const tokens = shellTokens(source);
+  const conditions: ConditionState[] = [];
+  const braces: { functionBody: boolean }[] = [];
+  let commandPosition = true;
 
-  for (let index = 0; index < lines.length; index += 1) {
-    const line = lines[index] ?? "";
-    if (heredocEnd !== undefined) {
-      if (line.trim() === heredocEnd) {
-        heredocEnd = undefined;
-      }
-      continue;
+  for (const [index, token] of tokens.entries()) {
+    const reserved = token.type === "word" && !token.quoted && commandPosition;
+    if (reserved) {
+      trackCondition(conditions, token.value);
     }
-
-    const heredoc = HEREDOC_START.exec(line);
-    const candidate = NEGATED_STATEMENT.test(line);
-    const allowed =
-      LIST_CONTINUATION.test(previousMeaningful) ||
-      consumesStatus(line) ||
-      conditionOpen ||
-      isFinalFunctionStatus(lines, index);
-    if (candidate && !allowed) {
+    if (token.value === "{") {
+      braces.push({ functionBody: opensFunctionBody(tokens, index) });
+    } else if (token.value === "}") {
+      braces.pop();
+    }
+    const negation =
+      token.type === "word" &&
+      token.value === "!" &&
+      !token.quoted &&
+      commandPosition;
+    if (
+      negation &&
+      !negationConsumed({
+        file,
+        tokens,
+        index,
+        inCondition: conditions.at(-1) === "condition",
+        braces,
+      })
+    ) {
       findings.push({
         file,
-        line: lineOffset + index + 1,
-        source: line.trim(),
+        line: lineOffset + token.line,
+        source: (lines[token.line - 1] ?? "").trim(),
       });
     }
-
-    if (meaningful(line)) {
-      if (CONDITION_START.test(line) && !CONDITION_END.test(line)) {
-        conditionOpen = true;
-      } else if (conditionOpen && CONDITION_END.test(line)) {
-        conditionOpen = false;
-      }
-      previousMeaningful = line;
-    }
-    if (heredoc !== null) {
-      heredocEnd = heredoc[1];
-    }
+    commandPosition =
+      (reserved && COMMAND_STARTERS.has(token.value)) ||
+      (token.type === "operator" && COMMAND_SEPARATORS.has(token.value));
   }
   return findings;
 };
@@ -156,7 +417,7 @@ const workflowShellSources = (file: string, source: string): ShellSource[] => {
   const lines = source.split("\n");
   const blocks: ShellSource[] = [];
   for (let index = 0; index < lines.length; index += 1) {
-    const inline = RUN_INLINE.exec(lines[index] ?? "");
+    const inline = (lines[index] ?? "").match(RUN_INLINE);
     if (inline !== null) {
       const value: unknown = Bun.YAML.parse(`run: ${inline[1] ?? ""}`);
       const command =
@@ -168,7 +429,7 @@ const workflowShellSources = (file: string, source: string): ShellSource[] => {
       }
       continue;
     }
-    const match = RUN_BLOCK.exec(lines[index] ?? "");
+    const match = (lines[index] ?? "").match(RUN_BLOCK);
     if (match === null) {
       continue;
     }

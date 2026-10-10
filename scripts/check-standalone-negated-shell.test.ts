@@ -56,8 +56,6 @@ if test -f file &&
   ! grep -q x file; then
   exit 1
 fi
-test -f file ||
-  ! grep -q x file
 all_success() {
   ! grep -qv ' = success$' <<< "$1"
 }
@@ -92,7 +90,9 @@ test("does not exempt a non-final standalone negation inside a function", () => 
 });
 
 test("checks Bash shebang files and ignores non-shell and heredoc content", () => {
-  expect(check("scripts/no-extension", "#!/bin/bash\n! false")).toHaveLength(1);
+  expect(
+    check("scripts/no-extension", "#!/bin/bash\n! false\necho continued"),
+  ).toHaveLength(1);
   expect(check("scripts/example.ts", "! command")).toEqual([]);
   expect(
     check(
@@ -101,6 +101,75 @@ test("checks Bash shebang files and ignores non-shell and heredoc content", () =
     ),
   ).toEqual([]);
   expect(
-    check("scripts/here-string.sh", 'cat <<< "text"\n! false\n! true'),
-  ).toHaveLength(2);
+    check("scripts/here-string.sh", 'cat <<< "text"\n! false\necho x'),
+  ).toHaveLength(1);
+});
+
+test("rejects negations separated from a consumer or hidden in an and-or list", () => {
+  for (const source of [
+    "true &&\n ! true\necho continued",
+    "a || ! b",
+    "! true; echo ok || exit 1",
+  ]) {
+    expect(check("scripts/lists.sh", source), source).toHaveLength(1);
+  }
+});
+
+test("recognizes condition lists across physical lines", () => {
+  expect(
+    check(
+      "scripts/condition.sh",
+      "if test -f f &&\n ! grep -q x f; then\n  echo absent\nfi",
+    ),
+  ).toEqual([]);
+});
+
+test("allows only final standalone pipelines to supply enclosing status", () => {
+  expect(
+    check("scripts/function.sh", 'all_success() { ! grep -qv x <<< "$1"; }'),
+  ).toEqual([]);
+  expect(check("scripts/final.sh", "echo start\n! grep -q x f")).toEqual([]);
+});
+
+test("does not interpret heredoc-like text in quotes or comments", () => {
+  for (const source of [
+    'echo "<<EOF"\n! true\necho x',
+    "# <<EOF\n! true\necho x",
+  ]) {
+    expect(check("scripts/not-heredoc.sh", source), source).toHaveLength(1);
+  }
+});
+
+test("skips quoted and multiple real heredoc bodies", () => {
+  const source = `cat <<'FIRST' <<-SECOND
+! fixture one
+FIRST
+\t! fixture two
+\tSECOND
+echo complete`;
+  expect(check("scripts/heredocs.sh", source)).toEqual([]);
+});
+
+test("treats substitutions and backticks as opaque words", () => {
+  const source = `echo "$(printf '! hidden')"
+echo \`printf '! hidden'\`
+echo $'! hidden'
+! false
+echo continued`;
+  expect(check("scripts/substitutions.sh", source)).toEqual([
+    {
+      file: "scripts/substitutions.sh",
+      line: 4,
+      source: "! false",
+    },
+  ]);
+});
+
+test("recognizes loop conditions and function-keyword bodies", () => {
+  expect(
+    check(
+      "scripts/reserved.sh",
+      "while ! ready; do sleep 1; done\nfunction absent { ! grep -q x file; }",
+    ),
+  ).toEqual([]);
 });
