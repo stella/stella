@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import {
@@ -13,6 +13,7 @@ import {
   dbTestBatchSize,
   hasModuleScopeProcessEnvMutation,
   isDbTest,
+  measuredTestRssTable,
   SOLO_TEST_PATHS,
   splitMemoryBoundedBatches,
   splitSoloTests,
@@ -132,6 +133,7 @@ const readModuleMockHelpers = (apiRoot: string) =>
 
 /** One execution class's batches, before labelling and path selection. */
 export type ComposedTestBatches = {
+  dbTestPaths: ReadonlySet<string>;
   isolate: boolean;
   kind: TestBatchKind;
   maxPeakRssMb: number;
@@ -193,16 +195,21 @@ export const planApiTestBatches = async ({
   const heavyLogicTests: string[] = [];
   const dbTests: string[] = [];
   const moduleMockTests: ModuleMockTest[] = [];
+  const dbTestPaths = new Set<string>();
   for (const { source, testPath } of classifiedTests) {
+    // Record the class before any skip: memory estimates use every file's class.
+    const dbBacked = isDbTest(testPath, source);
+    if (dbBacked) {
+      dbTestPaths.add(testPath);
+    }
     if (
       propertyOnly &&
       !PROPERTY_TEST_MARKERS.some((marker) => source.includes(marker))
     ) {
       continue;
     }
-
     const batchKind = classifyTestBatch({
-      dbBacked: isDbTest(testPath, source),
+      dbBacked,
       heavyLogic:
         HEAVY_LOGIC_SOURCE_MARKERS.some((marker) => source.includes(marker)) ||
         HEAVY_LOGIC_PATH_MARKERS.some((marker) => testPath.includes(marker)) ||
@@ -232,6 +239,31 @@ export const planApiTestBatches = async ({
     }
   }
 
+  // Unmeasured files are estimated from the whole profile split by class, so
+  // every measured file needs its class, not only the files this run plans (a
+  // shard, a subset or property-only mode would otherwise count measured db
+  // files as ordinary and skew both estimates).
+  const plannedPaths = new Set(testPaths);
+  const profileDbPaths = await Promise.all(
+    Object.keys(measuredTestRssTable().files)
+      .filter(
+        (file) =>
+          !plannedPaths.has(file) && existsSync(path.join(apiRoot, file)),
+      )
+      .map(async (file) => ({
+        file,
+        dbBacked: isDbTest(
+          file,
+          await Bun.file(path.join(apiRoot, file)).text(),
+        ),
+      })),
+  );
+  for (const { file, dbBacked } of profileDbPaths) {
+    if (dbBacked) {
+      dbTestPaths.add(file);
+    }
+  }
+
   // A fresh process per test batch makes module memory reclaimable. One
   // process for the full suite grows until the hosted runner terminates it.
   // `evals/` unit tests get their own batches after the `src/` ones so adding
@@ -248,6 +280,7 @@ export const planApiTestBatches = async ({
   );
   const composed: ComposedTestBatches[] = [
     {
+      dbTestPaths,
       isolate: false,
       kind: TEST_BATCH_KIND.regular,
       maxPeakRssMb: MAX_LOGIC_BATCH_PEAK_RSS_MB,
@@ -257,6 +290,7 @@ export const planApiTestBatches = async ({
       ],
     },
     {
+      dbTestPaths,
       isolate: false,
       kind: TEST_BATCH_KIND.heavyLogic,
       maxPeakRssMb: MAX_HEAVY_LOGIC_BATCH_PEAK_RSS_MB,
@@ -266,12 +300,14 @@ export const planApiTestBatches = async ({
       ),
     },
     {
+      dbTestPaths,
       isolate: false,
       kind: TEST_BATCH_KIND.db,
       maxPeakRssMb: MAX_DB_BATCH_PEAK_RSS_MB,
       testBatches: composeTestBatches(dbTests, dbTestBatchSize(propertyOnly)),
     },
     {
+      dbTestPaths,
       isolate: true,
       kind: TEST_BATCH_KIND.moduleMock,
       maxPeakRssMb: MAX_DB_BATCH_PEAK_RSS_MB,
@@ -292,6 +328,7 @@ export const planApiTestBatches = async ({
         : splitMemoryBoundedBatches({
             batches: splitSoloTests(group.testBatches, SOLO_TEST_PATHS),
             budgetMb: group.maxPeakRssMb,
+            dbTestPaths,
           });
   }
   return composed;
