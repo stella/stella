@@ -21,7 +21,8 @@ if [[ "$1 $2" == 'pr list' ]]; then
 fi
 if [[ "$1 $2" == 'pr view' ]]; then
   [[ "$*" == 'pr view 42 --repo stella/stella --json headRefOid --jq .headRefOid' ]]
-  printf '%s\n' 0123456789abcdef0123456789abcdef01234567
+  echo view >> "$CALLS"
+  printf '%s\n' "$VIEW_HEAD"
   exit 0
 fi
 [[ "$*" == 'pr merge 42 --repo stella/stella --auto --match-head-commit 0123456789abcdef0123456789abcdef01234567' ]]
@@ -32,7 +33,8 @@ chmod +x "$fixture_root/gh"
 export PATH="$fixture_root:$PATH"
 export CALLS="$fixture_root/calls" GITHUB_STEP_SUMMARY="$fixture_root/summary"
 export GITHUB_REPOSITORY=stella/stella PRUNE_BRANCH=chore/prune-quarantine-excludes
-export PR_NUMBER='' MERGE_HOLD='' LOOKUP_NUMBER=42 QUEUE_STATUS=0
+export PR_NUMBER='' MERGE_HOLD='' LOOKUP_NUMBER=42 QUEUE_STATUS=0 WRITTEN_HEAD=''
+export VIEW_HEAD=0123456789abcdef0123456789abcdef01234567
 
 assert_calls() {
   [[ "$(cat "$CALLS")" == "$1" ]] || {
@@ -48,7 +50,7 @@ run_step() {
 # A fresh action output avoids a redundant lookup.
 PR_NUMBER=42
 run_step
-assert_calls 'queue:42'
+assert_calls $'view\nqueue:42'
 # A held proposal remains untouched, then is armed on the unchanged next run.
 PR_NUMBER=''
 MERGE_HOLD=maintenance
@@ -56,7 +58,7 @@ run_step
 assert_calls ''
 MERGE_HOLD=''
 run_step
-assert_calls $'lookup\nqueue:42'
+assert_calls $'lookup\nview\nqueue:42'
 # A vanished proposal cannot pass an empty number to the gate.
 LOOKUP_NUMBER=''
 run_step
@@ -66,6 +68,22 @@ assert_calls lookup
 LOOKUP_NUMBER=42
 QUEUE_STATUS=1
 run_step
-assert_calls $'lookup\nqueue:42'
+assert_calls $'lookup\nview\nqueue:42'
 [[ $(cat "$GITHUB_STEP_SUMMARY") == *'Could not enqueue removal PR #42'* ]]
+# A push after this job wrote its commit is never queued.
+QUEUE_STATUS=0
+PR_NUMBER=42
+WRITTEN_HEAD=fedcba9876543210fedcba9876543210fedcba98
+run_step
+assert_calls view
+[[ $(cat "$GITHUB_STEP_SUMMARY") == *'moved past the commit this job wrote'* ]]
+# The written head itself is queued.
+WRITTEN_HEAD=$VIEW_HEAD
+run_step
+assert_calls $'view\nqueue:42'
+# A failed or malformed lookup queues nothing.
+WRITTEN_HEAD=''
+VIEW_HEAD=''
+if run_step; then echo 'FAIL empty head lookup was accepted' >&2; exit 1; fi
+assert_calls view
 echo 'quarantine prune queue scenarios passed'

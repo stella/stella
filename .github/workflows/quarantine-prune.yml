@@ -109,6 +109,7 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           PR_NUMBER: ${{ steps.removal-pr.outputs.pull-request-number }}
+          WRITTEN_HEAD: ${{ steps.removal-pr.outputs.commit-sha }}
           MERGE_HOLD: ${{ vars.STELLA_MERGE_HOLD }}
         run: |
           set -euo pipefail
@@ -132,9 +133,18 @@ jobs:
             exit 0
           fi
 
-          # Queue only the head this job wrote; a later push must not ride along.
+          # Queue only the head this job wrote (or, for an unchanged proposal,
+          # the head it just compared); a later push must not ride along.
           head="$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json headRefOid --jq .headRefOid)"
-          [[ "$head" =~ ^[0-9a-f]{40}$ ]]
+          if [[ ! "$head" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Could not read the head of removal PR #$PR_NUMBER; not queued."
+            exit 1
+          fi
+          if [[ -n "$WRITTEN_HEAD" && "$head" != "$WRITTEN_HEAD" ]]; then
+            echo "::warning::Removal PR #$PR_NUMBER moved past the commit this job wrote; not queued."
+            echo "Removal PR #$PR_NUMBER moved past the commit this job wrote; not queued." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
           if gh pr merge "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --auto --match-head-commit "$head"; then
             echo "Removal PR #$PR_NUMBER entered the merge queue." >> "$GITHUB_STEP_SUMMARY"
           else
