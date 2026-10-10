@@ -508,7 +508,7 @@ const handleCompatSearchTool: McpToolHandler<
     query,
   });
   if (corpus.type === "failed") {
-    return errorResult(corpus.message);
+    return corpus.result;
   }
 
   // Matter hits first, then decisions, then statutes: a caller asking this

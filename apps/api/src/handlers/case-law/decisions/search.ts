@@ -169,7 +169,10 @@ import {
   courtPartitionsForCourtFilter,
   type CorpusIndexGroupContract,
 } from "@/api/lib/legal-search/corpus-index-group-contract";
-import { readServingCorpusIndexTargetTx } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
+import {
+  readServingCorpusIndexTargetTx,
+  type ServingCorpusIndexTargetError,
+} from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
 import type {
   CorpusIndexScanReport,
   CorpusIndexScanTransport,
@@ -245,10 +248,9 @@ import type {
   RankedHit,
   ScoredCandidate,
 } from "@/api/lib/legal-search/rerank";
+import { searchIndexUnavailableResponse } from "@/api/lib/legal-search/search-index-unavailable";
 import { LIMITS } from "@/api/lib/limits";
-import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
-import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   definePublicLawSharedQuery,
   PUBLIC_LAW_SHARED_QUERY,
@@ -257,12 +259,6 @@ import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limit
 import { escapeAndHighlight } from "@/api/lib/search/highlight";
 
 import { projectCaseLawSearchResponse } from "./search-response";
-
-/** A scoped search reached an index group that is not attested yet. */
-const corpusIndexGroupNotReady = failureSink({
-  event: "case_law.search.index_group_not_ready",
-  expected: [],
-});
 
 const toNullableString = (x: unknown): string | null => {
   if (x === null || x === undefined) {
@@ -1995,6 +1991,7 @@ type ReadCaseLawSearchFacetsOptions = {
   indexId: string;
   /** Null when the request has no query the facets could be counted under. */
   queryFor: CorpusFacetQuery | null;
+  readSourceRegistry: typeof readCaseLawSourceRegistry;
   /** Where each aggregation came from, once the engine read has settled. */
   recordCacheOutcome: (outcome: CorpusAggregateCacheOutcome) => void;
   timeDbRead: TimeDbRead;
@@ -2025,6 +2022,7 @@ const readCaseLawSearchFacets = async ({
   decisionCountField,
   indexId,
   queryFor,
+  readSourceRegistry,
   recordCacheOutcome,
   timeDbRead,
   totalQuery,
@@ -2043,9 +2041,7 @@ const readCaseLawSearchFacets = async ({
   // no facets rather than facets that might still advertise a revoked source.
   // The same read carries the display names, so labelling the buckets costs no
   // further round trip once the counts are back.
-  const registry = await timeDbRead(
-    async () => await readCaseLawSourceRegistry(),
-  );
+  const registry = await timeDbRead(async () => await readSourceRegistry());
   if (Result.isError(registry)) {
     logger.warn("case_law.search_facets.unavailable", {
       "error.type": errorTag(registry.error),
@@ -2154,6 +2150,8 @@ const caseLawScanTransport = (sort: SearchSort): CorpusIndexScanTransport => {
 type SearchCorpusIndexDependencies = {
   readServingTarget?: () => ReturnType<typeof readServingCorpusIndexTargetTx>;
   configuredVariant?: CorpusIndexQueryVariant;
+  loadCourtWeights?: typeof loadPublicCourtWeights;
+  readSourceRegistry?: typeof readCaseLawSourceRegistry;
 };
 
 type CorpusIndexRequestConfigurationOptions = {
@@ -2173,6 +2171,9 @@ const corpusIndexRequestConfiguration = ({
   sort: body.sort ?? DEFAULT_SEARCH_SORT,
   configuredVariant:
     dependencies.configuredVariant ?? envBase.CORPUS_INDEX_QUERY_VARIANT,
+  loadCourtWeights: dependencies.loadCourtWeights ?? loadPublicCourtWeights,
+  readSourceRegistry:
+    dependencies.readSourceRegistry ?? readCaseLawSourceRegistry,
   readServingTarget:
     dependencies.readServingTarget ??
     (async () =>
@@ -2184,6 +2185,22 @@ const corpusIndexRequestConfiguration = ({
           }),
       )),
 });
+
+/**
+ * The answer to a serving-target read that reaches no index. No serving
+ * generation is the search index being unavailable, so it answers the typed
+ * retryable 503 every REST route and MCP tool resolves.
+ */
+const servingTargetRefusal = (failure: ServingCorpusIndexTargetError) => {
+  switch (failure._tag) {
+    case "CorpusServingGenerationAbsentError":
+    case "CorpusIndexGroupNotReadyError":
+      return searchIndexUnavailableResponse(failure);
+    default:
+      failure satisfies never;
+      return panic(`Unhandled serving target failure: ${String(failure)}`);
+  }
+};
 
 const cursorMatchesCorpusReadTarget = (
   cursor: CorpusSearchCursor | null,
@@ -2203,12 +2220,18 @@ export const searchCorpusIndexDecisions = async ({
   observer,
   dependencies = {},
 }: SearchCorpusIndexDecisionsOptions) => {
-  const { readServingTarget, configuredVariant, limit, sort } =
-    corpusIndexRequestConfiguration({
-      body,
-      caseLawDb,
-      dependencies,
-    });
+  const {
+    readServingTarget,
+    configuredVariant,
+    limit,
+    loadCourtWeights,
+    readSourceRegistry,
+    sort,
+  } = corpusIndexRequestConfiguration({
+    body,
+    caseLawDb,
+    dependencies,
+  });
   const startedAt = performance.now();
   // Only the first page of a result set describes it (its total, its facets,
   // the decisions a reference pins above it); a page reached by cursor or by
@@ -2279,8 +2302,7 @@ export const searchCorpusIndexDecisions = async ({
     readServingTarget,
   );
   if (Result.isError(target)) {
-    observeFailure(target.error, { sink: corpusIndexGroupNotReady });
-    return status(503, { message: "Search is temporarily unavailable" });
+    return servingTargetRefusal(target.error);
   }
   const { serving, route, contract } = target.value;
   const rankingMode = corpusQueryRankingMode({
@@ -2306,7 +2328,7 @@ export const searchCorpusIndexDecisions = async ({
   // loader caches for a minute, but the ranking must see one registry across a
   // whole page. The timer brackets the query rather than the call, so a
   // request served from the cache reports no read instead of a phantom one.
-  const courtWeights = await loadPublicCourtWeights({
+  const courtWeights = await loadCourtWeights({
     onRead: async (run) =>
       await dbTimer.time(CASE_LAW_SEARCH_DB_READ.courtWeights, run),
   });
@@ -2563,6 +2585,7 @@ export const searchCorpusIndexDecisions = async ({
         decisionCountField,
         indexId,
         queryFor: facetQueries(),
+        readSourceRegistry,
         recordCacheOutcome: (outcome) => {
           facetCache = outcome;
         },
