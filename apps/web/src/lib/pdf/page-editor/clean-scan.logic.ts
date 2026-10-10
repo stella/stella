@@ -78,6 +78,20 @@ const applyPage = (page: CleanScanPageReview): CleanScanPageReview => {
   }
 };
 
+const rejectPage = (page: CleanScanPageReview): CleanScanPageReview => {
+  switch (page.type) {
+    case "preview":
+      return { type: "rejected", pageId: page.pageId, scan: page.scan };
+    case "pending":
+    case "applied":
+    case "rejected":
+    case "unrecognized":
+      return page;
+    default:
+      return panic("Unhandled clean scan review state", page satisfies never);
+  }
+};
+
 const recordTransition = (
   review: CleanScanReview,
   pages: readonly CleanScanPageReview[],
@@ -101,6 +115,28 @@ export const applyOne = (
 
 export const applyAll = (review: CleanScanReview): CleanScanReview =>
   recordTransition(review, review.pages.map(applyPage));
+
+export const rejectOne = (
+  review: CleanScanReview,
+  pageId: string,
+): CleanScanReview =>
+  recordTransition(
+    review,
+    review.pages.map((page) =>
+      page.pageId === pageId ? rejectPage(page) : page,
+    ),
+  );
+
+export const setPageReview = (
+  review: CleanScanReview,
+  pageReview: CleanScanPageReview,
+): CleanScanReview =>
+  recordTransition(
+    review,
+    review.pages.map((page) =>
+      page.pageId === pageReview.pageId ? pageReview : page,
+    ),
+  );
 
 export const undoCleanScanReview = (
   review: CleanScanReview,

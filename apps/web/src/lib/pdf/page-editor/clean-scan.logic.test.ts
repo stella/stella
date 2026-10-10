@@ -5,7 +5,9 @@ import {
   applyAll,
   applyOne,
   createCleanScanReview,
+  rejectOne,
   reviewPage,
+  setPageReview,
   targetPageBox,
   undoCleanScanReview,
 } from "./clean-scan.logic";
@@ -121,6 +123,48 @@ describe("clean scan page review", () => {
       { type: "applied", pageId: "selected", scan },
       { type: "preview", pageId: "other", scan },
     ]);
+  });
+
+  test("rejects only the selected preview and undo restores it", () => {
+    const scan = cleanedResult("grayscale");
+    if (scan.type !== "cleaned") {
+      throw new Error("Expected cleaned scan fixture");
+    }
+    const before = {
+      ...createCleanScanReview([]),
+      pages: [
+        { type: "preview", pageId: "selected", scan },
+        { type: "preview", pageId: "other", scan },
+      ],
+    } satisfies ReturnType<typeof createCleanScanReview>;
+
+    const rejected = rejectOne(before, "selected");
+
+    expect(rejected.pages).toEqual([
+      { type: "rejected", pageId: "selected", scan },
+      { type: "preview", pageId: "other", scan },
+    ]);
+    expect(undoCleanScanReview(rejected)).toEqual(before);
+  });
+
+  test("stores a completed page review and undo restores pending", () => {
+    const scan = cleanedResult("binary");
+    if (scan.type !== "cleaned") {
+      throw new Error("Expected cleaned scan fixture");
+    }
+    const before = createCleanScanReview(["selected", "other"]);
+
+    const reviewed = setPageReview(before, {
+      type: "preview",
+      pageId: "selected",
+      scan,
+    });
+
+    expect(reviewed.pages).toEqual([
+      { type: "preview", pageId: "selected", scan },
+      { type: "pending", pageId: "other" },
+    ]);
+    expect(undoCleanScanReview(reviewed)).toEqual(before);
   });
 
   test.each([

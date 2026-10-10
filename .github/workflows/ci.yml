@@ -174,6 +174,7 @@ jobs:
       published_exports_required: ${{ steps.changed-files.outputs.published_exports_required }}
       release_typecheck_required: ${{ steps.changed-files.outputs.release_typecheck_required }}
       route_smoke_required: ${{ steps.changed-files.outputs.route_smoke_required }}
+      scan_engine_wasm_required: ${{ steps.changed-files.outputs.scan_engine_wasm_required }}
       route_tree_required: ${{ steps.changed-files.outputs.route_tree_required }}
       stack_redaction_browsers_required: ${{ steps.changed-files.outputs.stack_redaction_browsers_required }}
       web_api_types_required: ${{ steps.changed-files.outputs.web_api_types_required }}
@@ -828,6 +829,7 @@ jobs:
               echo "published_exports_required=true"
               echo "release_typecheck_required=$release_typecheck_required"
               echo "route_tree_required=true"
+              echo "scan_engine_wasm_required=true"
               echo "stack_redaction_browsers_required=true"
               echo "web_api_types_required=true"
               echo "web_build_required=true"
@@ -876,6 +878,7 @@ jobs:
               echo "release_typecheck_required=false"
               echo "route_smoke_required=false"
               echo "route_tree_required=false"
+              echo "scan_engine_wasm_required=false"
               echo "stack_redaction_browsers_required=false"
               echo "web_api_types_required=false"
               echo "web_build_required=false"
@@ -956,6 +959,7 @@ jobs:
             route_smoke_required=$(bun scripts/detect-route-smoke-changes.ts "${changed_files[@]}")
           fi
           route_tree_required=false
+          scan_engine_wasm_required=false
           stack_redaction_browsers_required=false
           web_api_types_required=false
           web_build_required=false
@@ -1092,6 +1096,11 @@ jobs:
                 web_image_smoke_required=true
                 ;;
             esac
+            case "$file" in
+              packages/scan-engine/*)
+                scan_engine_wasm_required=true
+                ;;
+            esac
             # The web API types determinism guard compiles the API and wire
             # programs; mirror the complete cached generator input contract.
             case "$file" in
@@ -1203,6 +1212,7 @@ jobs:
             echo "release_typecheck_required=$release_typecheck_required"
             echo "route_smoke_required=$route_smoke_required"
             echo "route_tree_required=$route_tree_required"
+            echo "scan_engine_wasm_required=$scan_engine_wasm_required"
             echo "stack_redaction_browsers_required=$stack_redaction_browsers_required"
             echo "web_api_types_required=$web_api_types_required"
             echo "web_build_required=$web_build_required"
@@ -7494,6 +7504,65 @@ jobs:
               run_id: context.runId,
             });
 
+  scan-engine-wasm-drift:
+    needs: ci-plan
+    if: >-
+      inputs.pr_depth_only != true
+      && needs.ci-plan.outputs.run_required != 'false'
+      && needs.ci-plan.outputs.scan_engine_wasm_required == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
+
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: "package.json"
+
+      - name: Install dependencies
+        run: bun scripts/ci-install.ts "$RUNNER_TEMP/bun-install/scan-engine-wasm.log" --frozen-lockfile --ignore-scripts --filter @stll/scan-engine
+        env:
+          NPM_TOKEN: ""
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with:
+          toolchain: 1.89.0
+          targets: wasm32-unknown-unknown
+
+      - name: Restore Rust build cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/bin/wasm-bindgen
+            ~/.cargo/bin/wasm-bindgen-test-runner
+            packages/scan-engine/target
+          key: scan-engine-wasm-${{ runner.os }}-${{ hashFiles('packages/scan-engine/Cargo.lock', 'packages/scan-engine/rust-toolchain.toml') }}
+
+      - name: Check generated WebAssembly
+        run: bun --cwd=packages/scan-engine run check:wasm
+
+      - name: Save Rust build cache
+        if: success()
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/bin/wasm-bindgen
+            ~/.cargo/bin/wasm-bindgen-test-runner
+            packages/scan-engine/target
+          key: scan-engine-wasm-${{ runner.os }}-${{ hashFiles('packages/scan-engine/Cargo.lock', 'packages/scan-engine/rust-toolchain.toml') }}
+
   # Rust checks for the Tauri desktop crate. ci-checks only runs
   # `cargo fmt --check` (a parse-only pass that needs no compile);
   # check/clippy/doc must run where the desktop crate actually builds
@@ -7846,6 +7915,7 @@ jobs:
         marketing-screenshots,
         migration-upgrade-rehearsal,
         route-smoke,
+        scan-engine-wasm-drift,
         e2e-production-shard,
         e2e-vite-canary,
         e2e-landing,
@@ -7936,6 +8006,7 @@ jobs:
             "desktop-clippy": "desktop_rust_checks_required",
             "e2e-landing": "e2e_landing_required",
             "route-smoke": "route_smoke_required",
+            "scan-engine-wasm-drift": "scan_engine_wasm_required",
             "e2e-production-shard": "e2e_production_required",
             "e2e-vite-canary": "e2e_core_required",
             "fix-tests-on-base": "fix_tests_on_base_required",

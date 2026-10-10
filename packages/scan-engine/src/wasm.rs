@@ -1,7 +1,6 @@
-use image::GrayImage;
 use wasm_bindgen::prelude::*;
 
-use crate::{CleanOptions, CleanOutput, UnrecognizedReason, clean_scan, gray_image};
+use crate::{CleanOptions, CleanOutput, UnrecognizedReason, clean_scan, rgba_to_gray};
 
 #[wasm_bindgen]
 pub struct WasmScanResult {
@@ -69,27 +68,6 @@ fn unrecognized(reason: UnrecognizedReason) -> WasmScanResult {
         content_box: Vec::new(),
         applied_quad: Vec::new(),
     }
-}
-
-fn rgba_to_gray(width: u32, height: u32, pixels: &[u8]) -> Result<GrayImage, UnrecognizedReason> {
-    let expected = width
-        .checked_mul(height)
-        .and_then(|count| count.checked_mul(4))
-        .and_then(|count| usize::try_from(count).ok())
-        .ok_or(UnrecognizedReason::InvalidDimensions)?;
-    if pixels.len() != expected {
-        return Err(UnrecognizedReason::InvalidPixelBuffer);
-    }
-    let gray = pixels
-        .chunks_exact(4)
-        .map(|pixel| {
-            let luminance = 0.2126 * f32::from(pixel[0])
-                + 0.7152 * f32::from(pixel[1])
-                + 0.0722 * f32::from(pixel[2]);
-            luminance.round() as u8
-        })
-        .collect::<Vec<_>>();
-    gray_image(width, height, &gray)
 }
 
 #[wasm_bindgen]

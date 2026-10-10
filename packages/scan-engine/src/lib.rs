@@ -17,7 +17,7 @@ pub type Point = (f32, f32);
 pub type Quad = [Point; 4];
 
 const MAX_DIMENSION_AREA: u32 = 40_000_000;
-const MAX_DESKEW_DEGREES: i32 = 60;
+const MAX_DESKEW_TENTHS: i32 = 60;
 const DESKEW_TENTHS: f32 = 0.1;
 const CROP_PADDING_MM: f32 = 3.0;
 
@@ -237,7 +237,7 @@ pub fn deskew_angle(gray: &GrayImage) -> f32 {
         .collect();
     let mut best_angle = 0.0;
     let mut best_score = 0_u64;
-    for step in -MAX_DESKEW_DEGREES..=MAX_DESKEW_DEGREES {
+    for step in -MAX_DESKEW_TENTHS..=MAX_DESKEW_TENTHS {
         let angle = step as f32 * DESKEW_TENTHS;
         let slope = angle.to_radians().tan();
         let mut rows = vec![0_u32; binary.height() as usize + 200];
@@ -325,9 +325,14 @@ fn content_bounds(binary: &GrayImage, dpi: f32) -> Option<ContentBox> {
             }
             visited[index] = true;
             let mut queue = VecDeque::from([(x, y)]);
-            let mut component = Vec::new();
+            let mut component_size = 0;
+            let mut component_bounds = (x, y, x, y);
             while let Some((current_x, current_y)) = queue.pop_front() {
-                component.push((current_x, current_y));
+                component_size += 1;
+                component_bounds.0 = component_bounds.0.min(current_x);
+                component_bounds.1 = component_bounds.1.min(current_y);
+                component_bounds.2 = component_bounds.2.max(current_x);
+                component_bounds.3 = component_bounds.3.max(current_y);
                 for (next_x, next_y) in [
                     (current_x.saturating_sub(1), current_y),
                     (current_x.saturating_add(1), current_y),
@@ -344,17 +349,14 @@ fn content_bounds(binary: &GrayImage, dpi: f32) -> Option<ContentBox> {
                     }
                 }
             }
-            if component.len() < minimum_component {
+            if component_size < minimum_component {
                 continue;
             }
-            for (component_x, component_y) in component {
-                let current =
-                    bounds.get_or_insert((component_x, component_y, component_x, component_y));
-                current.0 = current.0.min(component_x);
-                current.1 = current.1.min(component_y);
-                current.2 = current.2.max(component_x);
-                current.3 = current.3.max(component_y);
-            }
+            let current = bounds.get_or_insert(component_bounds);
+            current.0 = current.0.min(component_bounds.0);
+            current.1 = current.1.min(component_bounds.1);
+            current.2 = current.2.max(component_bounds.2);
+            current.3 = current.3.max(component_bounds.3);
         }
     }
     bounds.map(|(left, top, right, bottom)| ContentBox {
@@ -374,7 +376,16 @@ pub fn clean_scan(
     }
     let applied_quad = detect_page_quad(gray);
     let rectified = if let Some(quad) = applied_quad {
-        perspective(gray, quad, gray.width(), gray.height())?
+        let edge_length = |start: Point, end: Point| {
+            ((end.0 - start.0).powi(2) + (end.1 - start.1).powi(2)).sqrt()
+        };
+        let width = ((edge_length(quad[0], quad[1]) + edge_length(quad[3], quad[2])) * 0.5)
+            .round()
+            .max(1.0) as u32;
+        let height = ((edge_length(quad[0], quad[3]) + edge_length(quad[1], quad[2])) * 0.5)
+            .round()
+            .max(1.0) as u32;
+        perspective(gray, quad, width, height)?
     } else {
         gray.clone()
     };
@@ -428,8 +439,36 @@ pub fn clean_scan(
         image,
         applied_quad,
         skew_degrees,
-        content_box: content,
+        content_box: ContentBox {
+            x: content.x - x,
+            y: content.y - y,
+            width: content.width,
+            height: content.height,
+        },
     })
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+fn rgba_to_gray(width: u32, height: u32, pixels: &[u8]) -> Result<GrayImage, UnrecognizedReason> {
+    let expected = width
+        .checked_mul(height)
+        .and_then(|count| count.checked_mul(4))
+        .and_then(|count| usize::try_from(count).ok())
+        .ok_or(UnrecognizedReason::InvalidDimensions)?;
+    if pixels.len() != expected {
+        return Err(UnrecognizedReason::InvalidPixelBuffer);
+    }
+    let gray = pixels
+        .chunks_exact(4)
+        .map(|pixel| {
+            let alpha = f32::from(pixel[3]) / 255.0;
+            let luminance = 0.2126 * f32::from(pixel[0])
+                + 0.7152 * f32::from(pixel[1])
+                + 0.0722 * f32::from(pixel[2]);
+            (luminance * alpha + 255.0 * (1.0 - alpha)).round() as u8
+        })
+        .collect::<Vec<_>>();
+    gray_image(width, height, &gray)
 }
 
 #[cfg(test)]

@@ -2,11 +2,14 @@
 set -euo pipefail
 
 readonly WASM_BINDGEN_VERSION="0.2.126"
-readonly CRATE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+CRATE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+readonly CRATE_DIR
 readonly COMMITTED_OUTPUT_DIR="${CRATE_DIR}/generated"
 readonly CHECK_MODE="${1:-}"
-readonly RESOLVED_CARGO_HOME="$(cd "${CARGO_HOME:-${HOME}/.cargo}" && pwd)"
-readonly RUSTC_SYSROOT="$(rustc --print sysroot)"
+RESOLVED_CARGO_HOME="$(cd "${CARGO_HOME:-${HOME}/.cargo}" && pwd)"
+readonly RESOLVED_CARGO_HOME
+RUSTC_SYSROOT="$(rustc --print sysroot)"
+readonly RUSTC_SYSROOT
 TARGET_DIR="${CARGO_TARGET_DIR:-${CRATE_DIR}/target}"
 if [[ "${TARGET_DIR}" != /* ]]; then
   TARGET_DIR="${CRATE_DIR}/${TARGET_DIR}"
@@ -24,7 +27,7 @@ fi
 
 cd "${CRATE_DIR}"
 RUSTFLAGS="${RUSTFLAGS:-} --remap-path-prefix=${RESOLVED_CARGO_HOME}=/cargo --remap-path-prefix=${RUSTC_SYSROOT}=/rustc --remap-path-prefix=${CRATE_DIR}=/scan-engine" \
-  cargo build --target wasm32-unknown-unknown --release
+  cargo build --target wasm32-unknown-unknown --release --locked
 
 if ! command -v wasm-bindgen >/dev/null 2>&1 || [[ "$(wasm-bindgen --version)" != "wasm-bindgen ${WASM_BINDGEN_VERSION}" ]]; then
   cargo install wasm-bindgen-cli --version "=${WASM_BINDGEN_VERSION}" --locked

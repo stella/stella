@@ -11,6 +11,7 @@ import type {
 import { ScanEngineError } from "./types";
 
 type WasmScanResult = {
+  free: () => void;
   readonly status: string;
   readonly reason: string;
   readonly pixels: Uint8Array;
@@ -22,7 +23,7 @@ type WasmScanResult = {
 };
 
 type WasmBindings = {
-  default: () => Promise<unknown>;
+  default: (input?: { module_or_path: URL }) => Promise<unknown>;
   clean_scan_rgba: (
     ...args: [
       width: number,
@@ -38,8 +39,6 @@ type WasmBindings = {
 
 type WasmLoader = () => Promise<WasmBindings>;
 
-const WASM_GLUE_PATH = "../generated/scan_engine.js";
-
 const isWasmBindings = (value: unknown): value is WasmBindings =>
   typeof value === "object" &&
   value !== null &&
@@ -49,13 +48,18 @@ const isWasmBindings = (value: unknown): value is WasmBindings =>
   typeof value.clean_scan_rgba === "function";
 
 const loadWasmBindings = async () => {
-  const imported: unknown = await import(WASM_GLUE_PATH);
+  const imported: unknown = await import("../generated/scan_engine.js");
   if (!isWasmBindings(imported)) {
     throw new ScanEngineError({
       message: "The scan engine WebAssembly module has an invalid interface",
     });
   }
-  await imported.default();
+  await imported.default({
+    module_or_path: new URL(
+      "../generated/scan_engine_bg.wasm",
+      import.meta.url,
+    ),
+  });
   return imported;
 };
 
@@ -159,22 +163,42 @@ export const createScanEngine = (
     clean: async (page: RasterizedScanPage, options: ScanOptions) =>
       await Result.tryPromise({
         try: async () => {
-          bindings ??= load();
+          if (bindings === undefined) {
+            const pending = load().catch((error: unknown) => {
+              if (bindings === pending) {
+                bindings = undefined;
+              }
+              throw error;
+            });
+            bindings = pending;
+          }
           const wasm = await bindings;
-          const result = wasm.clean_scan_rgba(
-            page.width,
-            page.height,
-            new Uint8Array(
-              page.pixels.buffer,
-              page.pixels.byteOffset,
-              page.pixels.byteLength,
-            ),
-            page.dpi,
-            options.output,
-            options.contentCrop === "on",
-            options.deskew === "on",
-          );
-          return convertResult(result, options.output);
+          try {
+            let result: WasmScanResult | undefined;
+            try {
+              result = wasm.clean_scan_rgba(
+                page.width,
+                page.height,
+                new Uint8Array(
+                  page.pixels.buffer,
+                  page.pixels.byteOffset,
+                  page.pixels.byteLength,
+                ),
+                page.dpi,
+                options.output,
+                options.contentCrop === "on",
+                options.deskew === "on",
+              );
+              return convertResult(result, options.output);
+            } finally {
+              result?.free();
+            }
+          } catch (error) {
+            if (error instanceof WebAssembly.RuntimeError) {
+              bindings = undefined;
+            }
+            throw error;
+          }
         },
         catch: (cause) =>
           cause instanceof ScanEngineError

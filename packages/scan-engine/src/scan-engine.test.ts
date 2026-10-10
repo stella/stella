@@ -57,7 +57,41 @@ const options = {
   deskew: "on",
 } satisfies ScanOptions;
 
+const onePixelPage = {
+  pixels: new Uint8ClampedArray([255, 255, 255, 255]),
+  width: 1,
+  height: 1,
+  pageSize: { widthPoints: 1, heightPoints: 1 },
+  dpi: 300,
+  rotation: 0,
+} satisfies RasterizedScanPage;
+
+const createCleanedWasmResult = (free: () => void) => ({
+  status: "cleaned",
+  reason: "",
+  pixels: new Uint8Array([255]),
+  width: 1,
+  height: 1,
+  skew_degrees: 0,
+  content_box: new Uint32Array([0, 0, 1, 1]),
+  applied_quad: new Float32Array(),
+  free,
+});
+
 describe("committed WebAssembly scan engine", () => {
+  test("loads the committed bindings through the default loader", async () => {
+    const result = await createScanEngine().clean(
+      readPgm("blank.pgm"),
+      options,
+    );
+
+    expect(result.isOk()).toBe(true);
+    expect(result.unwrap()).toEqual({
+      type: "unrecognized",
+      reason: "no-content",
+    });
+  });
+
   test("keeps a blank page unrecognized", async () => {
     const result = await createScanEngine(loadRealWasm).clean(
       readPgm("blank.pgm"),
@@ -88,5 +122,62 @@ describe("committed WebAssembly scan engine", () => {
     expect(
       cleaned.image.pixels.every((pixel) => pixel === 0 || pixel === 255),
     ).toBe(true);
+  });
+});
+
+describe("WebAssembly binding recovery", () => {
+  test("retries after the binding loader rejects", async () => {
+    let loadCount = 0;
+    const load = async () => {
+      loadCount += 1;
+      if (loadCount === 1) {
+        throw new Error("temporary load failure");
+      }
+      return {
+        default: async () => undefined,
+        clean_scan_rgba: () => createCleanedWasmResult(() => undefined),
+      };
+    };
+    const engine = createScanEngine(load);
+
+    expect((await engine.clean(onePixelPage, options)).isErr()).toBe(true);
+    expect((await engine.clean(onePixelPage, options)).isOk()).toBe(true);
+    expect(loadCount).toBe(2);
+  });
+
+  test("reloads bindings after a trapped WebAssembly instance", async () => {
+    let loadCount = 0;
+    const load = async () => {
+      loadCount += 1;
+      const currentLoad = loadCount;
+      return {
+        default: async () => undefined,
+        clean_scan_rgba: () => {
+          if (currentLoad === 1) {
+            throw new WebAssembly.RuntimeError("trapped instance");
+          }
+          return createCleanedWasmResult(() => undefined);
+        },
+      };
+    };
+    const engine = createScanEngine(load);
+
+    expect((await engine.clean(onePixelPage, options)).isErr()).toBe(true);
+    expect((await engine.clean(onePixelPage, options)).isOk()).toBe(true);
+    expect(loadCount).toBe(2);
+  });
+
+  test("frees a WebAssembly result after copying its values", async () => {
+    let freeCount = 0;
+    const engine = createScanEngine(async () => ({
+      default: async () => undefined,
+      clean_scan_rgba: () =>
+        createCleanedWasmResult(() => {
+          freeCount += 1;
+        }),
+    }));
+
+    expect((await engine.clean(onePixelPage, options)).isOk()).toBe(true);
+    expect(freeCount).toBe(1);
   });
 });
