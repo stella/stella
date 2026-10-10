@@ -172,7 +172,7 @@ export const dispatchGatewayToolCall = async ({
 
   let resolved: ResolvedSkillTool | null;
   try {
-    resolved = await dependencies.resolveSkillTool({ context, toolName });
+    resolved = await dependencies.resolveSkillTool({ context, mode, toolName });
   } catch (error) {
     return loadFaultResult({ dependencies, error });
   }

@@ -156,6 +156,11 @@ describe("dispatchGatewayToolCall", () => {
       message: expect.stringContaining("save_playbook"),
       hint: expect.stringContaining("stella:knowledge_write"),
     });
+    expect(resolveSkillToolMock).toHaveBeenCalledWith({
+      context: expect.objectContaining({ grantedScopes: ["stella:skills"] }),
+      mode: "default",
+      toolName: "skill__alpha",
+    });
     expect(readSkillToolMock).not.toHaveBeenCalled();
     expect(recordSkillReadAuditMock).not.toHaveBeenCalled();
   });
