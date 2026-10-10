@@ -381,6 +381,45 @@ test.each([
   },
 );
 
+test.each([
+  "await import(target)",
+  "require(target)",
+  "import loaded = require(target)",
+])("dynamic module allowances remain exact for %s", (source) => {
+  const directory = mkdtempSync(path.join(tmpdir(), "offline-dynamic-"));
+  try {
+    const entry = path.join(directory, "check.ts");
+    writeFileSync(entry, source);
+    const options = { entries: [entry], repositoryRoot: directory };
+    expect(offlineImportGraphViolations(options).at(0)?.message).toContain(
+      "Dynamic module target cannot be enumerated",
+    );
+    const allowance = {
+      capability: "dynamic-module",
+      file: "check.ts",
+      reason: "This fixture represents a bounded local module owner.",
+    };
+    expect(
+      offlineImportGraphViolations({ ...options, allowances: [allowance] }),
+    ).toEqual([]);
+    writeFileSync(entry, `import './other'; ${source}`);
+    writeFileSync(path.join(directory, "other.ts"), source);
+    expect(
+      offlineImportGraphViolations({ ...options, allowances: [allowance] }).at(
+        0,
+      )?.message,
+    ).toContain("other.ts:");
+    writeFileSync(entry, "export const value = 1;");
+    expect(
+      offlineImportGraphViolations({ ...options, allowances: [allowance] }).at(
+        0,
+      )?.message,
+    ).toContain("Stale offline import allowance");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("offline closure follows workspace symlinks and excludes external packages", () => {
   const directory = mkdtempSync(path.join(tmpdir(), "offline-workspace-"));
   try {

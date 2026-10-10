@@ -8,5 +8,10 @@
     "capability": "fetch",
     "file": "packages/scripts/src/model-catalog-snapshot.ts",
     "reason": "The snapshot module owns scheduled refresh transport; check mode reads committed inputs and the preload denies runtime transport."
+  },
+  {
+    "capability": "dynamic-module",
+    "file": "packages/start-runtime/src/local-module-loader.ts",
+    "reason": "Corpus verification confines module loads to the schema directory, already enumerated through its static schema catalog import; the offline preload remains active during evaluation."
   }
 ]
