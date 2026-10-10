@@ -1,3 +1,4 @@
+// parser-output-unchanged: This change only classifies failed listing fetches as source unreachable and does not change parser output.
 // parser-output-unchanged: completion batches use the shared owner with identical items and cursor boundaries; parsed content is unchanged.
 import { panic, Result } from "better-result";
 // parser-output-unchanged: Retry exhaustion holds the cursor; successful pages produce unchanged parsed decisions.
