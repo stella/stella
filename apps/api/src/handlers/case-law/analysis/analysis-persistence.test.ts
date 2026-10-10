@@ -5,7 +5,7 @@ import type { DecisionAnalysis } from "@stll/legal-ast/analysis";
 import { toSafeId } from "@/api/lib/branded-types";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 
-import { persistGeneratedAnalysis } from "./generate";
+import { persistGeneratedAnalysis } from "./analysis-persistence";
 
 describe("persisting a generated case-law analysis", () => {
   test("does not report a valid generated output as incomplete when saving fails", async () => {

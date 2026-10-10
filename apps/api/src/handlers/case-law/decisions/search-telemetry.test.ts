@@ -240,7 +240,7 @@ describe("incomplete search-answer counters", () => {
         ...window,
       }),
     ).toBe(1);
-    // Every drop sits on a later page than the one requested.
+    // Surviving candidates still fill the requested page.
     expect(
       countDroppedIdentityCandidates({
         candidateCount: 9,

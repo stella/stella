@@ -2226,7 +2226,7 @@ type CountDroppedIdentityCandidatesOptions = {
   limit: number;
 };
 
-/** Identity candidates the requested page window lost to rehydration. */
+/** Page shortfall from candidate rehydration, before the language-group fold. */
 export const countDroppedIdentityCandidates = ({
   candidateCount,
   rehydratedCandidateCount,
@@ -2465,6 +2465,11 @@ export const searchCorpusIndexDecisions = async ({
             SEARCH_TOTAL_TYPE.EXACT,
             identityRanking.ranked.length,
           ),
+        });
+        reportCaseLawIncompleteAnswer({
+          surface: "search",
+          reason: "identity_row_dropped",
+          count: identityPage.length - page.hits.length,
         });
         report(page.hits.length, emptyCorpusIndexScan());
         // An entry that names decisions dropped nothing to find them, so the

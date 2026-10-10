@@ -49,6 +49,7 @@ import {
 
 import { resolveAnalysisInput } from "./analysis-input";
 import { analysisOutputSchema, buildDecisionAnalysis } from "./analysis-output";
+import { persistGeneratedAnalysis } from "./analysis-persistence";
 import { allowsDerivedAiAnalysis } from "./analysis-update";
 import { refreshSignificance } from "./significance-run";
 
@@ -164,6 +165,7 @@ const runGeneration = async ({
     analysis,
     contentHash,
     decisionId,
+    persistence: analysisStore(),
     onFailure: async (error) =>
       await handleGenerationFailure({
         aiAnalytics,
@@ -197,33 +199,6 @@ const handleGenerationFailure = async ({
         decisionId,
       });
     });
-};
-
-type PersistGeneratedAnalysisOptions = {
-  analysis: DecisionAnalysis;
-  contentHash: string | null;
-  decisionId: SafeId<"caseLawDecision">;
-  onFailure: (error: unknown) => Promise<void>;
-  persistence?: AnalysisPersistence;
-};
-
-type AnalysisPersistence = Pick<ReturnType<typeof analysisStore>, "save">;
-
-export const persistGeneratedAnalysis = async ({
-  analysis,
-  contentHash,
-  decisionId,
-  onFailure,
-  persistence = analysisStore(),
-}: PersistGeneratedAnalysisOptions) => {
-  const saved = await Result.tryPromise({
-    try: async () =>
-      await persistence.save({ analysis, contentHash, decisionId }),
-    catch: (error) => error,
-  });
-  if (Result.isError(saved)) {
-    await onFailure(saved.error);
-  }
 };
 
 type GenerateAnalysisResponse = {
