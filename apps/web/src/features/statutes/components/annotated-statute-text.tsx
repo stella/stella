@@ -1,6 +1,7 @@
 import type { ComponentProps, RefObject } from "react";
 
-import type { AnnotationAnchorSource } from "@/components/legal-reader/annotations/annotation-anchors";
+import type { AnnotationAnchorSource } from "@stll/decision-reader/annotation-anchors";
+
 import { AnnotationToolbar } from "@/components/legal-reader/annotations/annotation-toolbar";
 import { GuestAnnotationPrompt } from "@/components/legal-reader/annotations/guest-annotation-prompt";
 import type { ReaderAnnotationTarget } from "@/components/legal-reader/annotations/reader-annotation-target";

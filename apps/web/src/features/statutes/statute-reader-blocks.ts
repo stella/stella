@@ -1,3 +1,7 @@
+import {
+  parseProvisionDesignation,
+  statuteOutlineFromHeadings,
+} from "@stll/decision-reader/reader-outline";
 import { withInferredCzechSignatureRoles } from "@stll/legal-ast/czech-document-roles";
 import {
   hasInlineChildren,
@@ -11,11 +15,6 @@ import type {
   ParagraphBlock,
   ParagraphListDepth,
 } from "@stll/legal-ast/document-ast";
-
-import {
-  parseProvisionDesignation,
-  statuteOutlineFromHeadings,
-} from "@/components/legal-reader/reader-outline";
 
 export type StatuteMasthead = {
   anchorId: string;

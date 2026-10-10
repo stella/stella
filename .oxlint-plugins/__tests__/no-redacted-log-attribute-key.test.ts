@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { QUERY_ERROR_OUTPUT_FIELDS } from "../../packages/errors/src/query-field-policy.ts";
 import { lintSingleRule } from "./lint-single-rule";
 
 describe("no-redacted-log-attribute-key", () => {
@@ -10,6 +11,25 @@ describe("no-redacted-log-attribute-key", () => {
         'logger.info("queued", { queueName: "jobs" });',
       ),
     ).toEqual([1]);
+  });
+  test("reports normalized query field names from the shared policy", async () => {
+    const keys = QUERY_ERROR_OUTPUT_FIELDS.flatMap((field) => {
+      const separated = field.replace(/([a-z])(?=[a-z])/gu, "$1_");
+      return [
+        field,
+        field.toUpperCase(),
+        separated,
+        `database.${separated.toUpperCase()}`,
+      ];
+    });
+    const source = keys
+      .map(
+        (key) => `logger.info("query.failed", { ${JSON.stringify(key)}: 1 });`,
+      )
+      .join("\n");
+    expect(
+      await lintSingleRule("no-redacted-log-attribute-key", source),
+    ).toEqual(keys.map((_, index) => index + 1));
   });
   test("reports unreviewed failure correlation keys", async () => {
     expect(

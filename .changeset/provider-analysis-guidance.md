@@ -1,4 +1,4 @@
 ---
 ---
 
-Expose typed provider setup guidance and explicit analysis poll/retry modes.
+Expose typed provider setup guidance and redacted diagnostics for failed analysis runs.

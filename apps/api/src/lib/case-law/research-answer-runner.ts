@@ -4,7 +4,7 @@ import { and, eq, exists, inArray, sql } from "drizzle-orm";
 import type { CaseLawResearchAnswerFailureReason } from "@stll/api-contract";
 import { declareFailureClass } from "@stll/errors";
 import type { FailureReason } from "@stll/errors";
-import { parseUsableDocumentAst } from "@stll/legal-ast/document-ast";
+import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
 import { Temporal } from "@stll/time";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -23,6 +23,7 @@ import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
+import { reportCaseLawIncompleteAnswer } from "@/api/lib/case-law/incomplete-answer-telemetry";
 import type {
   ResearchAnswerClaim,
   ResearchAnswerCell,
@@ -670,7 +671,7 @@ const readDecisionBlocks = async (
     read: readCorpusAst,
     fallback: () => parsePersistedCorpusAst(decision.documentAst),
   });
-  const ast = stored === null ? null : parseUsableDocumentAst(stored);
+  const ast = stored === null ? null : parseCaseLawDecisionAst(stored);
   return ast === null ? null : ast.blocks;
 };
 
@@ -757,17 +758,21 @@ export const retrieveResearchPassages = async ({
             cause,
           }),
       );
-    return Result.ok(
-      response.hits.flatMap((hit) => {
-        const anchorId = hit["anchor_id"];
-        const text = hit["text"];
-        return typeof anchorId === "string" &&
-          anchorId.length > 0 &&
-          typeof text === "string"
-          ? [{ anchorId, excerpt: text }]
-          : [];
-      }),
-    );
+    const passages = response.hits.flatMap((hit) => {
+      const anchorId = hit["anchor_id"];
+      const text = hit["text"];
+      return typeof anchorId === "string" &&
+        anchorId.length > 0 &&
+        typeof text === "string"
+        ? [{ anchorId, excerpt: text }]
+        : [];
+    });
+    reportCaseLawIncompleteAnswer({
+      surface: "research",
+      reason: "retrieved_passage_invalid",
+      count: response.hits.length - passages.length,
+    });
+    return Result.ok(passages);
   });
   if (searched.isErr()) {
     observeFailure(searched.error, {

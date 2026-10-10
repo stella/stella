@@ -7,23 +7,82 @@ import {
 } from "@stll/api-contract/generated-visual";
 import {
   VISUAL_GUEST_MARKER_ATTRIBUTE,
+  VISUAL_RENDER_ID_SCRIPT_ID,
   VISUAL_SANDBOX_LIMITS,
+  visualGuestPortMessageSchema,
   visualLinkSchema,
 } from "@stll/api-contract/visual-sandbox";
+import {
+  VISUAL_THEME_SCRIPT_ID,
+  visualThemeSchema,
+  type VisualTheme,
+} from "@stll/api-contract/visual-theme";
 
-import { createVisualMessageHandler } from "../bridge";
+import { createVisualMessageHandler, visualGuestPortFrom } from "../bridge";
 import { composeVisualDocument } from "../srcdoc";
 import { parseVisualOuterConfig, whenVisualDocumentReady } from "./boot";
 import { createVisualCharts } from "./charts";
 import { createVisualGuestApi } from "./guest-api";
+import {
+  captureGestureEventReader,
+  createVisualGestureGate,
+} from "./guest-gesture";
+import { createVisualThemeHandler } from "./guest-theme";
 import { isolateVisualGuest } from "./isolation";
-import { installVisualPresentation } from "./presentation";
+import { applyVisualTheme, installVisualPresentation } from "./presentation";
 import { visualShellReadyMessage } from "./shell-ready";
 
 const bootGuest = (): void => {
+  // This runs before any page script. Every message to the shell travels on
+  // a private port whose sender is captured here, so page script can neither
+  // reach the port nor replace how it sends. The shell binds only the first
+  // port a view hands over for its render and ignores view messages sent to
+  // the window.
+  const channel = new MessageChannel();
+  const send = channel.port1.postMessage.bind(channel.port1);
+  const gesture = createVisualGestureGate({
+    now: performance.now.bind(performance),
+    readEvent: captureGestureEventReader({
+      event: Event.prototype,
+      uiEvent: UIEvent.prototype,
+      keyboardEvent: KeyboardEvent.prototype,
+    }),
+  });
+  gesture.listen(window);
   try {
+    const renderIdElement = document.querySelector(
+      `#${VISUAL_RENDER_ID_SCRIPT_ID}`,
+    );
+    if (!renderIdElement) {
+      panic("The visual document has no render id");
+    }
+    const renderId = v.parse(
+      visualGuestPortMessageSchema.entries.renderId,
+      JSON.parse(renderIdElement.textContent),
+    );
+    window.parent.postMessage(
+      { kind: "port", renderId } satisfies v.InferOutput<
+        typeof visualGuestPortMessageSchema
+      >,
+      "*",
+      [channel.port2],
+    );
     isolateVisualGuest();
     installVisualPresentation(document);
+    const themeElement = document.querySelector(`#${VISUAL_THEME_SCRIPT_ID}`);
+    if (themeElement) {
+      applyVisualTheme(
+        document,
+        v.parse(visualThemeSchema, JSON.parse(themeElement.textContent)),
+      );
+    }
+    window.addEventListener(
+      "message",
+      createVisualThemeHandler({
+        parentWindow: window.parent,
+        onTheme: (theme) => applyVisualTheme(document, theme),
+      }),
+    );
     const dataElement = document.querySelector(`#${VISUAL_DATA_SCRIPT_ID}`);
     if (!dataElement) {
       panic("The visual document has no data payload");
@@ -36,7 +95,8 @@ const bootGuest = (): void => {
       value: Object.freeze({
         ...createVisualGuestApi({
           data,
-          postMessage: (message) => window.parent.postMessage(message, "*"),
+          postMessage: (message) => send(message),
+          takeGesture: gesture.take,
           measureSize: () => ({
             width: Math.max(
               1,
@@ -88,8 +148,8 @@ const bootGuest = (): void => {
       visualLinkSchema,
       Reflect.apply(getAttribute, anchor, ["data-stella-link"]),
     );
-    if (parsed.success) {
-      window.parent.postMessage({ kind: "open-link", url: parsed.output }, "*");
+    if (parsed.success && gesture.take()) {
+      send({ kind: "open-link", url: parsed.output });
     }
   };
   document.addEventListener("click", requestLink);
@@ -99,19 +159,16 @@ const bootGuest = (): void => {
     }
   });
   const reportSize = () =>
-    window.parent.postMessage(
-      {
-        kind: "resize",
-        height: Math.max(
-          1,
-          Math.min(
-            VISUAL_SANDBOX_LIMITS.height,
-            Math.ceil(document.documentElement.scrollHeight),
-          ),
+    send({
+      kind: "resize",
+      height: Math.max(
+        1,
+        Math.min(
+          VISUAL_SANDBOX_LIMITS.height,
+          Math.ceil(document.documentElement.scrollHeight),
         ),
-      },
-      "*",
-    );
+      ),
+    });
   whenVisualDocumentReady(document, () => {
     for (const anchor of document.querySelectorAll("a[data-stella-link]")) {
       anchor.setAttribute("role", "link");
@@ -137,7 +194,12 @@ const bootOuter = (runtime: string) => {
   } = { current: { type: "initializing" } };
   window.addEventListener("message", (event: MessageEvent<unknown>) => {
     if (boot.current.type === "ready") {
-      boot.current.receive(event);
+      boot.current.receive({
+        source: event.source,
+        origin: event.origin,
+        data: event.data,
+        ports: event.ports.map(visualGuestPortFrom),
+      });
     }
   });
   const parsedConfig = parseVisualOuterConfig(config.textContent);
@@ -149,18 +211,46 @@ const bootOuter = (runtime: string) => {
   inner.setAttribute("sandbox", "allow-scripts");
   inner.setAttribute("referrerpolicy", "no-referrer");
   document.body.append(inner);
+  let latestTheme: VisualTheme | undefined;
+  const sendTheme = () => {
+    if (latestTheme) {
+      inner.contentWindow?.postMessage(
+        { kind: "theme", theme: latestTheme },
+        "*",
+      );
+    }
+  };
+  inner.addEventListener("load", sendTheme);
   const receive = createVisualMessageHandler({
     parentWindow: window.parent,
     innerWindow: inner.contentWindow,
     outerOrigin: window.location.origin,
     origins,
-    onRender: ({ title, html, data }) => {
+    onRender: ({ renderId, title, html, data, theme }) => {
+      latestTheme = theme;
       inner.title = title;
       // safe-html: sanitizeVisualHtml output validated at the message boundary, composed with Stella's bundled runtime and fixed policy.
-      inner.srcdoc = composeVisualDocument({ html, data, runtime, policy });
+      inner.srcdoc = composeVisualDocument({
+        html,
+        data,
+        renderId,
+        runtime,
+        policy,
+        theme,
+      });
+    },
+    onTheme: (theme) => {
+      latestTheme = theme;
+      sendTheme();
     },
     onGuestMessage: (message, hostOrigin) =>
       window.parent.postMessage(message, hostOrigin),
+    // An engine without the API fails closed: the view still renders, but
+    // its actions never reach the app.
+    hasUserActivation: () =>
+      "userActivation" in navigator && navigator.userActivation.isActive,
+    now: () => performance.now(),
+    createRenderId: () => crypto.randomUUID(),
   });
   boot.current = { type: "ready", receive };
   const reportReady = () => {

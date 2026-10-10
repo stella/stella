@@ -1,7 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
+import { appReaderTextForSource } from "@/api/lib/case-law/app-reader-text";
 import { decisionSourceAttributionUrl } from "@/api/lib/case-law/source-attribution";
-import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import {
+  ADAPTER_MANIFESTS,
+  APP_READER_TEXT,
+} from "@/api/lib/legal-search/adapter-manifest";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
@@ -17,6 +21,30 @@ beforeEach(() => {
 
 afterEach(() => {
   analytics.restore();
+});
+
+describe("decision reader source policy", () => {
+  test("registered sources use their reader policy without reporting a defect", () => {
+    expect(appReaderTextForSource(ADAPTER_KEYS.CZ_NS)).toBe(
+      APP_READER_TEXT.FULL,
+    );
+    expect(analytics.exceptions()).toEqual([]);
+  });
+
+  test("unregistered sources report a defect and keep reader text withheld", () => {
+    expect(appReaderTextForSource("cz-unregistered-reader")).toBe(
+      APP_READER_TEXT.METADATA_ONLY,
+    );
+    expect(
+      analytics.exceptions().map((event) => event.properties),
+    ).toMatchObject([
+      {
+        "error.class": "DatabaseError",
+        source: "case-law-app-reader-text",
+        adapterKey: "cz-unregistered-reader",
+      },
+    ]);
+  });
 });
 
 describe("decisionSourceAttributionUrl", () => {

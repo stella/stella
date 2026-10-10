@@ -5826,7 +5826,7 @@ test("provider diagnostic matches the wire and persisted terminal outcome", asyn
     providerDiagnostic,
   });
   const response = result.finish?.responseMessage;
-  expect(response?.metadata?.turnOutcome).toMatchObject({
+  expect(response?.metadata.turnOutcome).toMatchObject({
     type: "failed",
     providerDiagnostic,
   });
@@ -5839,7 +5839,5 @@ test("provider diagnostic matches the wire and persisted terminal outcome", asyn
       metadata: response.metadata,
     }),
   );
-  expect(reloaded.metadata?.turnOutcome).toEqual(
-    response.metadata?.turnOutcome,
-  );
+  expect(reloaded.metadata.turnOutcome).toEqual(response.metadata.turnOutcome);
 });

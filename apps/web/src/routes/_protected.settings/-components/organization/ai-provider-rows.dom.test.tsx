@@ -1,16 +1,9 @@
-import type { ComponentProps } from "react";
-
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
-import {
-  PROVIDER_SETUP_ERROR_CATALOGUE,
-  PROVIDER_SETUP_ERROR_CODE,
-} from "@stll/api-contract/provider-setup";
 import { sleep } from "@stll/concurrency/sleep";
 
 import type { ProviderCredentialDraft } from "@/components/ai-config-role-models.logic";
-import arabicMessages from "@/i18n/langs/ar.json";
 import messages from "@/i18n/langs/en.json";
 
 GlobalRegistrator.register({
@@ -22,7 +15,6 @@ const { act, cleanup, fireEvent, render, screen, waitFor } =
 const { IntlProvider } = await import("use-intl");
 const { createProviderCredentialDraft } =
   await import("@/components/ai-config-role-models.logic");
-const { APIError } = await import("@/lib/errors/api");
 const { AIProviderRows } = await import("./ai-provider-rows");
 const labels = messages.organization.aiConfig;
 const VALID_KEY = `sk-or-v1-${"a".repeat(32)}1234`;
@@ -36,59 +28,29 @@ afterAll(async () => {
 
 type MountOptions = {
   initial?: ProviderCredentialDraft[];
-  saveError?: InstanceType<typeof APIError>;
-  locale?: "en" | "ar";
+  disabled?: boolean;
+  setupErrorCode?: string;
 };
 const mount = ({
   initial = [createProviderCredentialDraft("openrouter")],
-  saveError,
-  locale = "en",
+  disabled = false,
+  setupErrorCode,
 }: MountOptions = {}) => {
-  const saved: ProviderCredentialDraft[] = [];
+  const changes: ProviderCredentialDraft[][] = [];
   const removed: ProviderCredentialDraft[] = [];
   const Harness = () => {
     const [providers, setProviders] = useState(initial);
-    const [storedProviders, setStoredProviders] = useState(
-      initial.filter((provider) => provider.apiKeyMasked !== undefined),
-    );
-    const onSave: ComponentProps<typeof AIProviderRows>["onSave"] = async (
-      draft,
-    ) => {
-      saved.push(draft);
-      if (saveError) {
-        throw saveError;
-      }
-      const storedProvider = {
-        ...draft,
-        apiKey: "",
-        apiKeyMasked: MASKED_KEY,
-        replacingKey: false,
-      };
-      setStoredProviders((current) => [
-        ...current.filter((provider) => provider.provider !== draft.provider),
-        storedProvider,
-      ]);
-      setProviders((current) =>
-        current.map((candidate) =>
-          candidate.provider === draft.provider
-            ? {
-                ...draft,
-                apiKey: "",
-                apiKeyMasked: MASKED_KEY,
-                replacingKey: false,
-              }
-            : candidate,
-        ),
-      );
-    };
     return (
       <AIProviderRows
         providers={providers}
-        storedProviders={storedProviders}
-        disabled={false}
-        onChange={setProviders}
-        onSave={onSave}
-        onRemove={async (draft) => {
+        storedProviders={initial}
+        disabled={disabled}
+        setupErrorCode={setupErrorCode}
+        onChange={(next) => {
+          changes.push(next);
+          setProviders(next);
+        }}
+        onRemove={(draft) => {
           removed.push(draft);
           setProviders((current) =>
             current.filter(
@@ -100,80 +62,76 @@ const mount = ({
     );
   };
   const view = render(
-    <IntlProvider
-      locale={locale}
-      messages={locale === "ar" ? arabicMessages : messages}
-      timeZone="UTC"
-    >
+    <IntlProvider locale="en" messages={messages} timeZone="UTC">
       <Harness />
     </IntlProvider>,
   );
-  return { saved, removed, view };
+  return { changes, removed, view };
 };
 const enterKey = (value = VALID_KEY) =>
   fireEvent.change(screen.getByLabelText(labels.apiKey), { target: { value } });
-const saveWithButton = () =>
-  fireEvent.click(screen.getByRole("button", { name: messages.common.save }));
-
 describe("BYOK provider rows", () => {
-  test("Save verifies the supplied key and collapses without retaining the key", async () => {
-    const { saved, view } = mount();
+  test("editing stages the supplied key without a row Save action", () => {
+    const { changes } = mount();
     enterKey();
-    saveWithButton();
-    expect(await screen.findByRole("status")).toHaveProperty(
-      "textContent",
-      labels.savedVerified,
-    );
-    expect(saved).toHaveLength(1);
-    expect(saved.at(0)?.apiKey).toBe(VALID_KEY);
-    expect(screen.getByText(MASKED_KEY)).toBeDefined();
-    expect(screen.queryByLabelText(labels.apiKey)).toBeNull();
-    expect(view.container.innerHTML).not.toContain(VALID_KEY);
-    expect(screen.queryByText(messages.common.unsavedChanges)).toBeNull();
-  });
-  test("Enter in the key input saves without clicking Save", async () => {
-    const { saved } = mount();
-    enterKey();
-    fireEvent.keyDown(screen.getByLabelText(labels.apiKey), {
-      key: "Enter",
-      code: "Enter",
-    });
-    await screen.findByText(labels.savedVerified);
-    expect(saved).toHaveLength(1);
-  });
-  test("unusual format is advisory and the provider still receives the key", async () => {
-    const { saved } = mount();
-    enterKey("invalid-key");
-    expect(screen.getByRole("note").textContent).toContain(
-      "Save to check it with the provider",
-    );
-    saveWithButton();
-    await screen.findByText(labels.savedVerified);
-    expect(saved.at(0)?.apiKey).toBe("invalid-key");
-  });
-  test("provider refusal preserves its complete reason and leaves the key editable", async () => {
-    const reason = `OpenRouter: key disabled. ${"Full provider explanation. ".repeat(30)}Final recovery instruction.`;
-    const { saved } = mount({
-      saveError: new APIError({
-        status: 401,
-        message: "Localized wrapper",
-        rawMessage: reason,
-        code: "provider_key_disabled",
-      }),
-    });
-    enterKey();
-    saveWithButton();
-    expect((await screen.findByRole("alert")).textContent).toContain(reason);
-    expect(saved).toHaveLength(1);
+    expect(changes.at(-1)?.at(0)?.apiKey).toBe(VALID_KEY);
     expect(screen.getByLabelText(labels.apiKey)).toHaveProperty(
       "value",
       VALID_KEY,
     );
-    expect(screen.queryByText(MASKED_KEY)).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: messages.common.save }),
+    ).toBeNull();
+    expect(screen.getByText(messages.common.unsavedChanges)).toBeDefined();
+    fireEvent.keyDown(screen.getByLabelText(labels.apiKey), {
+      key: "Enter",
+      code: "Enter",
+    });
+    expect(changes).toHaveLength(1);
     expect(screen.queryByRole("status")).toBeNull();
   });
+  test("unusual key format remains advisory while staging the key", () => {
+    const { changes } = mount();
+    enterKey("invalid-key");
+    expect(screen.getByRole("note").textContent).toContain(
+      "Save to check it with the provider",
+    );
+    expect(changes.at(-1)?.at(0)?.apiKey).toBe("invalid-key");
+  });
+  test("adding a provider emits a draft change", () => {
+    const { changes } = mount();
+    fireEvent.click(screen.getByRole("button", { name: labels.addProvider }));
+    expect(changes.at(-1)).toHaveLength(2);
+    expect(changes.at(-1)?.at(0)?.provider).toBe("openrouter");
+    expect(screen.getAllByLabelText(labels.apiKey)).toHaveLength(2);
+  });
+  test("removing an unsaved provider stages removal immediately", () => {
+    const { removed } = mount();
+    fireEvent.click(
+      screen.getByRole("button", { name: labels.removeProvider }),
+    );
+    expect(removed.at(0)?.provider).toBe("openrouter");
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+  });
+  test("pending persistence disables draft controls", () => {
+    const { changes, removed } = mount({ disabled: true });
+    expect(screen.getByLabelText(labels.apiKey)).toHaveProperty(
+      "disabled",
+      true,
+    );
+    expect(
+      screen.getByRole("button", { name: labels.addProvider }),
+    ).toHaveProperty("disabled", true);
+    const remove = screen.getByRole("button", { name: labels.removeProvider });
+    expect(remove.getAttribute("aria-disabled")).toBe("true");
+    fireEvent.click(remove);
+    fireEvent.keyDown(remove, { key: "Enter", code: "Enter" });
+    fireEvent.keyDown(remove, { key: " ", code: "Space" });
+    expect(changes).toEqual([]);
+    expect(removed).toEqual([]);
+  });
   test("Replace reopens a saved row with an empty concealed input", () => {
-    mount({
+    const { changes } = mount({
       initial: [
         {
           ...createProviderCredentialDraft("openrouter"),
@@ -186,11 +144,12 @@ describe("BYOK provider rows", () => {
     const input = screen.getByLabelText(labels.apiKey);
     expect(input).toHaveProperty("value", "");
     expect(input).toHaveProperty("type", "password");
+    expect(changes.at(-1)?.at(0)?.replacingKey).toBe(true);
     expect(
-      screen.getByRole("button", { name: messages.common.save }),
-    ).toBeDefined();
+      screen.queryByRole("button", { name: messages.common.save }),
+    ).toBeNull();
   });
-  test("Remove deletes the saved provider row", async () => {
+  test("Remove stages removal after confirmation", async () => {
     const { removed } = mount({
       initial: [
         {
@@ -220,8 +179,8 @@ describe("BYOK provider rows", () => {
     enterKey("");
     expect(screen.queryByText(messages.common.unsavedChanges)).toBeNull();
   });
-  test("a saved workspace ID can be edited while keeping the stored key", async () => {
-    const { saved } = mount({
+  test("a saved workspace ID can be edited while keeping the stored key", () => {
+    const { changes } = mount({
       initial: [
         {
           ...createProviderCredentialDraft("anthropic"),
@@ -236,29 +195,8 @@ describe("BYOK provider rows", () => {
       target: { value: "wrkspc_new" },
     });
     expect(screen.getByText(messages.common.unsavedChanges)).toBeDefined();
-    saveWithButton();
-    await screen.findByText(labels.savedVerified);
-    expect(saved.at(0)?.apiKey).toBe("");
-    expect(saved.at(0)?.anthropicWorkspaceId).toBe("wrkspc_new");
-  });
-  test("replacing a saved key retains its provider and a clean workspace ID", () => {
-    mount({
-      initial: [
-        {
-          ...createProviderCredentialDraft("anthropic"),
-          apiKeyMasked: "sk-ant-usr-****1234",
-          anthropicWorkspaceId: "wrkspc_existing",
-          replacingKey: false,
-        },
-      ],
-    });
-    fireEvent.click(screen.getByRole("button", { name: labels.replaceKey }));
-    expect(screen.getByRole("combobox")).toHaveProperty("disabled", true);
-    expect(screen.queryByText(messages.common.unsavedChanges)).toBeNull();
-    expect(screen.getByLabelText(labels.anthropicWorkspaceId)).toHaveProperty(
-      "value",
-      "wrkspc_existing",
-    );
+    expect(changes.at(-1)?.at(0)?.apiKey).toBe("");
+    expect(changes.at(-1)?.at(0)?.anthropicWorkspaceId).toBe("wrkspc_new");
   });
   test("canceling removal preserves the saved row", async () => {
     const { removed } = mount({
@@ -280,97 +218,20 @@ describe("BYOK provider rows", () => {
     expect(removed).toEqual([]);
     expect(screen.getByText(MASKED_KEY)).toBeDefined();
   });
-  test("Arabic locale exposes translated controls and preserves the Latin credential mask", async () => {
-    mount({ locale: "ar" });
-    fireEvent.change(
-      screen.getByLabelText(arabicMessages.organization.aiConfig.apiKey),
-      { target: { value: VALID_KEY } },
-    );
-    fireEvent.click(
-      screen.getByRole("button", { name: arabicMessages.common.save }),
-    );
-    expect(await screen.findByRole("status")).toHaveProperty(
-      "textContent",
-      arabicMessages.organization.aiConfig.savedVerified,
-    );
-    expect(screen.getByText(MASKED_KEY).tagName).toBe("BDI");
-  });
-  test("subscription token reaches the provider and renders its exact rejection with guidance", async () => {
-    const reason =
-      "Anthropic: Subscription tokens are not supported by this API.";
-    const token = `sk-ant-oat-${"fixture".repeat(5)}`;
-    const { saved } = mount({
+  test("parent setup error exposes the Anthropic workspace recovery field", () => {
+    const { changes } = mount({
       initial: [createProviderCredentialDraft("anthropic")],
-      saveError: new APIError({
-        status: 400,
-        message: reason,
-        rawMessage: reason,
-        code: PROVIDER_SETUP_ERROR_CODE.anthropicSubscriptionToken,
-      }),
+      setupErrorCode: "ai_config_anthropic_workspace_required",
     });
-    enterKey(token);
-    expect(screen.getByRole("note").textContent).toContain(
-      "Save to check it with the provider",
-    );
-    saveWithButton();
-    const alert = await screen.findByRole("alert");
-    expect(alert.textContent).toContain(reason);
-    expect(alert.textContent).toContain(labels.anthropicSubscriptionToken);
-    expect(
-      screen.getByRole("link", { name: labels.providerSetupConsole }),
-    ).toHaveProperty(
-      "href",
-      PROVIDER_SETUP_ERROR_CATALOGUE[
-        PROVIDER_SETUP_ERROR_CODE.anthropicSubscriptionToken
-      ].url,
-    );
-    expect(saved.at(0)?.apiKey).toBe(token);
-    expect(screen.getByLabelText(labels.apiKey)).toHaveProperty("value", token);
-  });
-  for (const code of Object.values(PROVIDER_SETUP_ERROR_CODE)) {
-    test(`known provider setup error ${code} renders full reason and fix link`, async () => {
-      mount({
-        saveError: new APIError({
-          status: 400,
-          message: "Wrapper",
-          rawMessage: `Provider: full diagnostic for ${code}`,
-          code,
-        }),
-      });
-      enterKey();
-      saveWithButton();
-      const alert = await screen.findByRole("alert");
-      expect(alert.textContent).toContain(
-        `Provider: full diagnostic for ${code}`,
-      );
-      expect(alert.querySelector("a")?.getAttribute("href")).toBe(
-        PROVIDER_SETUP_ERROR_CATALOGUE[code].url,
-      );
-      expect(screen.getByLabelText(labels.apiKey)).toBeDefined();
-    });
-  }
-  test("user-scoped Anthropic key displays workspace guidance with its exact provider error", async () => {
-    mount({
-      initial: [createProviderCredentialDraft("anthropic")],
-      saveError: new APIError({
-        status: 400,
-        message: "Workspace required",
-        rawMessage: "Anthropic: workspace_id_required",
-        code: "ai_config_anthropic_workspace_required",
-      }),
-    });
-    enterKey("sk-ant-usr-recordedfixture1234567890");
     fireEvent.change(screen.getByLabelText(labels.anthropicWorkspaceId), {
       target: { value: "wrkspc_fixture" },
     });
-    saveWithButton();
-    expect((await screen.findByRole("alert")).textContent).toContain(
-      labels.anthropicWorkspaceRequired,
-    );
-    expect(
-      screen
-        .getByRole("link", { name: labels.anthropicWorkspaces })
-        .getAttribute("href"),
-    ).toBe("https://console.anthropic.com/settings/workspaces");
+    expect(changes.at(-1)?.at(0)?.anthropicWorkspaceId).toBe("wrkspc_fixture");
+  });
+  test("user-scoped Anthropic keys expose the workspace field", () => {
+    mount({ initial: [createProviderCredentialDraft("anthropic")] });
+    expect(screen.queryByLabelText(labels.anthropicWorkspaceId)).toBeNull();
+    enterKey("sk-ant-usr-recordedfixture1234567890");
+    expect(screen.getByLabelText(labels.anthropicWorkspaceId)).toBeDefined();
   });
 });

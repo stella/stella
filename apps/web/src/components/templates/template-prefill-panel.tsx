@@ -1,11 +1,8 @@
 import { useState } from "react";
 
-import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
-import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
-import { Checkbox } from "@stll/ui/checkbox";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { openFilePicker } from "@stll/ui/file-picker";
 import {
@@ -20,17 +17,14 @@ import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
-import { QueryViewFeedback } from "@/components/query-view-feedback";
+import { MatterDocumentPicker } from "@/components/workspaces/matter-document-picker";
 import { resolveAppTimeZone } from "@/i18n/time-zone";
 import { api } from "@/lib/api";
-import { optionalArray } from "@/lib/arrays";
 import { DOCX_MIME, PDF_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
-import { workspaceFilesOptions } from "@/lib/workspaces/queries/entities";
 
 /**
  * "Prefill from documents" affordance on the template fill form: a drop
@@ -56,8 +50,6 @@ const ACCEPTED_MIME_TYPES: readonly string[] = Object.freeze([
   DOCX_MIME,
   PDF_MIME,
 ]);
-const MAX_MATTER_DOCUMENTS = 30;
-const MAX_PICKED_DOCUMENTS = 5;
 
 type TemplatePrefillPanelProps = {
   templateId: string;
@@ -254,75 +246,5 @@ export const TemplatePrefillPanel = ({
         </div>
       )}
     </section>
-  );
-};
-
-type MatterDocumentPickerProps = {
-  workspaceId: string;
-  pickedEntityIds: string[];
-  onChange: (entityIds: string[]) => void;
-};
-
-/** Bounded checkbox list over the matter's stored DOCX/PDF documents. */
-const MatterDocumentPicker = ({
-  workspaceId,
-  pickedEntityIds,
-  onChange,
-}: MatterDocumentPickerProps) => {
-  const t = useTranslations();
-  const filesQuery = useQuery(workspaceFilesOptions(workspaceId));
-  const filesView = useQueryView(filesQuery);
-  useQueryViewError(filesView);
-  const files = filesView.type === "items" ? filesView.items : undefined;
-
-  const availableFiles = optionalArray(files);
-  const documents = availableFiles
-    .filter((f) => f.mimeType === DOCX_MIME || f.mimeType === PDF_MIME)
-    .slice(0, MAX_MATTER_DOCUMENTS);
-
-  if (documents.length === 0) {
-    return <QueryViewFeedback view={filesView} />;
-  }
-
-  const toggle = (entityId: string) => {
-    if (pickedEntityIds.includes(entityId)) {
-      onChange(pickedEntityIds.filter((id) => id !== entityId));
-      return;
-    }
-    if (pickedEntityIds.length >= MAX_PICKED_DOCUMENTS) {
-      return;
-    }
-    onChange([...pickedEntityIds, entityId]);
-  };
-
-  return (
-    <div className="flex flex-col gap-1.5">
-      <QueryViewFeedback view={filesView} />
-      <span className="text-muted-foreground text-xs font-medium">
-        {t("templates.prefillMatterDocuments")}
-      </span>
-      <div className="flex max-h-36 flex-col gap-1 overflow-y-auto rounded-lg border p-2">
-        {documents.map((doc) => {
-          const checked = pickedEntityIds.includes(doc.entityId);
-          return (
-            <label
-              className="flex cursor-pointer items-center gap-2 text-sm"
-              key={doc.entityId}
-            >
-              <Checkbox
-                checked={checked}
-                disabled={
-                  !checked && pickedEntityIds.length >= MAX_PICKED_DOCUMENTS
-                }
-                onCheckedChange={() => toggle(doc.entityId)}
-              />
-              <BidiText as="span" className="min-w-0 truncate">
-                {doc.name ?? doc.fileName}
-              </BidiText>
-            </label>
-          );
-        })}
-      </div>
-    </div>
   );
 };

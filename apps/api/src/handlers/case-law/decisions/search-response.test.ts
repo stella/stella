@@ -6,6 +6,7 @@ import fc from "fast-check";
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import { DECISION_TYPE_KIND_OTHER } from "@stll/api-contract/case-law-decision-types";
 import {
+  SEARCH_PAGE_REACH,
   SEARCH_PAGINATION_COMPLETE,
   SEARCH_TOTAL_NOT_COUNTED,
 } from "@stll/api-contract/search";
@@ -48,6 +49,7 @@ const responseWithText = (text: string): SearchResponse => {
     decisionDate: text,
     decisionType: text,
     sourceUrl: text,
+    keywords: null,
     headnote: {
       type: "keywords",
       items: Array.from(
@@ -56,6 +58,7 @@ const responseWithText = (text: string): SearchResponse => {
       ),
       omitted: 0,
     },
+    textWithheldReason: null,
     headline: `<mark>${escapeSearchHtml(text)}</mark>`,
     anchorId: text,
     citationCount: Number.MAX_VALUE,
@@ -85,6 +88,7 @@ const responseWithText = (text: string): SearchResponse => {
     total: SEARCH_TOTAL_NOT_COUNTED,
     nextCursor: text,
     paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+    pageReach: SEARCH_PAGE_REACH.REACHED,
     queryUsed: text,
     warnings: [{ code: "function_words_optional", message: text, hint: text }],
   };
@@ -210,3 +214,41 @@ test.each([false, true])(
     );
   },
 );
+
+test("expanded search preserves the full headnote reading and separate classifications", () => {
+  const fixture = responseWithText("ř");
+  const hit = fixture.hits.at(0);
+  if (hit === undefined) {
+    throw new Error("Missing search hit");
+  }
+  const text = "The court requires proof of causation. ".repeat(80).trim();
+  expect(text.length).toBeGreaterThan(LIMITS.caseLawHeadnoteMaxChars * 4);
+  expect(text.length).toBeLessThan(LIMITS.mcpCaseLawHeadnoteMaxChars);
+  const response = projectCaseLawSearchResponse(
+    {
+      ...fixture,
+      hits: [
+        {
+          ...hit,
+          headnote: { type: "present", text, truncated: false },
+          keywords: {
+            type: "keywords",
+            items: ["Compensation", "Causation"],
+            omitted: 0,
+          },
+        },
+      ],
+    },
+    LIMITS.mcpCaseLawHeadnoteMaxChars,
+  );
+  expect(response.hits.at(0)?.headnote).toEqual({
+    type: "present",
+    text,
+    truncated: false,
+  });
+  expect(response.hits.at(0)?.keywords).toEqual({
+    type: "keywords",
+    items: ["Compensation", "Causation"],
+    omitted: 0,
+  });
+});

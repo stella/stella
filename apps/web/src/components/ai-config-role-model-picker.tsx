@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
@@ -17,8 +19,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
-import { cn } from "@stll/ui/utils";
 
+import { AIConfigModelRow } from "@/components/ai-config-model-row";
 import {
   getDefaultModelSelection,
   getModelOptionsForRole,
@@ -47,6 +49,7 @@ type AIConfigRoleModelPickerProps = {
     overrides: RoleModelOverrides;
     onReset: (role: RoleValue) => void;
   };
+  children?: ReactNode;
 };
 
 export const AIConfigRoleModelPicker = ({
@@ -57,6 +60,7 @@ export const AIConfigRoleModelPicker = ({
   providers,
   roleModels,
   customization,
+  children,
 }: AIConfigRoleModelPickerProps) => {
   const t = useTranslations("organization");
   const translate = useTranslations();
@@ -105,19 +109,11 @@ export const AIConfigRoleModelPicker = ({
             : null;
 
           return (
-            <div
-              className={cn(
-                "grid border-t first:border-t-0 sm:items-center",
-                compact
-                  ? "gap-2 p-2 sm:grid-cols-[7.5rem_8.5rem_minmax(0,1fr)]"
-                  : "gap-3 p-3 sm:grid-cols-[minmax(10rem,0.65fr)_minmax(11rem,0.75fr)_minmax(14rem,1.35fr)]",
-              )}
+            <AIConfigModelRow
               key={row.role}
+              label={roleLabel}
+              compact={compact}
             >
-              <span className="min-w-0 truncate text-sm font-medium">
-                {roleLabel}
-              </span>
-
               {providerOptions.length > 0 && (
                 <>
                   <Select
@@ -235,9 +231,10 @@ export const AIConfigRoleModelPicker = ({
                   )}
                 </div>
               )}
-            </div>
+            </AIConfigModelRow>
           );
         })}
+        {children}
       </div>
     </Field>
   );

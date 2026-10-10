@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 5,
+  "reason": "The public chat transport directly owns the TanStack client, Valibot resume validation and AG-UI interrupt schema (with its Zod peer). Fast-check exercises durable replay at disconnect boundaries. These five declarations use existing installed dependencies and keep the publishable chat package independent of the private API contract."
+}

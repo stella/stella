@@ -77,6 +77,9 @@ const TOOL_COVERAGE = {
   case_law_coverage: excluded(PUBLIC_CORPUS),
   read_case_law_decision: excluded(PUBLIC_CORPUS),
   read_case_law_citations: excluded(PUBLIC_CORPUS),
+  open_case_law_decision: excluded(PUBLIC_CORPUS),
+  read_case_law_decision_blocks: excluded(PUBLIC_CORPUS),
+  preview_cited_provision: excluded(PUBLIC_CORPUS),
   set_practice_jurisdictions: RUN,
   search_legislation: excluded(PUBLIC_CORPUS),
   read_statute: excluded(PUBLIC_CORPUS),
@@ -472,6 +475,7 @@ describe("every MCP tool's real output passes its output contract", () => {
     const seeded: Seeded = { userId: caller.userId };
     for (const step of STEPS) {
       const result = await handleMcpToolCall({
+        mode: "advanced",
         args: step.args(seeded),
         context: await requestContext(caller),
         toolName: step.tool,

@@ -1,7 +1,12 @@
 import { expect, test } from "bun:test";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import * as ts from "typescript";
+
+import {
+  containsJsxTag,
+  sourceFileIndex,
+} from "@stll/scripts/src/source-file-index";
 
 const SOURCE_ROOT = import.meta.dirname;
 const DESKTOP_SOURCE_ROOT = path.resolve(SOURCE_ROOT, "../../desktop/src");
@@ -21,38 +26,21 @@ type Component = {
   key: string;
   file: string;
   node: ts.Node;
+  source: ts.SourceFile;
   tags: Set<string>;
   dialogChildren: Set<string>;
   imports: Map<string, { file: string; name: string }>;
   hasDirtySignal: boolean;
 };
 
-const sourcePaths = (directory: string): string[] => {
-  const files: string[] = [];
-  for (const entry of readdirSync(directory, { withFileTypes: true })) {
-    const filename = path.join(directory, entry.name);
-    if (entry.isDirectory()) {
-      files.push(...sourcePaths(filename));
-      continue;
-    }
-    if (
-      /\.tsx?$/u.test(entry.name) &&
-      !/\.(test|spec)\.tsx?$/u.test(entry.name)
-    ) {
-      files.push(filename);
-    }
-  }
-  return files;
-};
-
-const jsxTags = (node: ts.Node): Set<string> => {
+const jsxTags = (node: ts.Node, source: ts.SourceFile): Set<string> => {
   const tags = new Set<string>();
   const visit = (current: ts.Node) => {
     if (
       ts.isJsxOpeningElement(current) ||
       ts.isJsxSelfClosingElement(current)
     ) {
-      tags.add(current.tagName.getText());
+      tags.add(current.tagName.getText(source));
     }
     ts.forEachChild(current, visit);
   };
@@ -73,20 +61,20 @@ const isEditableControl = (component: Component, tag: string) => {
 const inventory = () => {
   const components = new Map<string, Component>();
   const dialogHosts: ts.Node[] = [];
-  for (const file of [
-    ...sourcePaths(SOURCE_ROOT),
-    ...sourcePaths(DESKTOP_SOURCE_ROOT),
-  ]) {
+  for (const entry of [
+    ...sourceFileIndex(SOURCE_ROOT),
+    ...sourceFileIndex(DESKTOP_SOURCE_ROOT),
+  ].filter(
+    ({ relativePath, sourceText }) =>
+      relativePath.endsWith(".tsx") &&
+      !/\.(test|spec)\.tsx$/u.test(relativePath) &&
+      containsJsxTag(sourceText),
+  )) {
+    const file = entry.filePath;
     const sourceRoot = file.startsWith(DESKTOP_SOURCE_ROOT)
       ? DESKTOP_SOURCE_ROOT
       : SOURCE_ROOT;
-    const source = ts.createSourceFile(
-      file,
-      readFileSync(file, "utf-8"),
-      ts.ScriptTarget.Latest,
-      true,
-      file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
-    );
+    const source = entry.sourceFile(false);
     const imports = new Map<string, { file: string; name: string }>();
     for (const statement of source.statements) {
       if (
@@ -143,7 +131,7 @@ const inventory = () => {
           ts.isJsxOpeningElement(current) ||
           ts.isJsxSelfClosingElement(current)
         ) {
-          const primitive = imports.get(current.tagName.getText());
+          const primitive = imports.get(current.tagName.getText(source));
           if (
             primitive?.file === "@stll/ui/dialog" &&
             primitive.name === "DialogFormState"
@@ -158,14 +146,14 @@ const inventory = () => {
             current.attributes.properties.some(
               (attribute) =>
                 ts.isJsxAttribute(attribute) &&
-                attribute.name.getText() === "dirty",
+                attribute.name.getText(source) === "dirty",
             )
           ) {
             hasDirtySignal = true;
           }
         }
         const root = ts.isJsxElement(current)
-          ? imports.get(current.openingElement.tagName.getText())
+          ? imports.get(current.openingElement.tagName.getText(source))
           : undefined;
         if (
           ts.isJsxElement(current) &&
@@ -173,7 +161,7 @@ const inventory = () => {
           root.name === "Dialog"
         ) {
           dialogHosts.push(current);
-          for (const tag of jsxTags(current)) {
+          for (const tag of jsxTags(current, source)) {
             dialogChildren.add(tag);
           }
         }
@@ -185,8 +173,9 @@ const inventory = () => {
         key,
         file,
         node,
+        source,
         imports,
-        tags: jsxTags(node),
+        tags: jsxTags(node, source),
         dialogChildren,
         hasDirtySignal,
       });
@@ -243,10 +232,13 @@ const inventory = () => {
           node.attributes.properties.some(
             (attribute) =>
               ts.isJsxAttribute(attribute) &&
-              attribute.name.getText() === "dirty",
+              attribute.name.getText(component.source) === "dirty",
           )
         ) {
-          const target = resolve(component, node.tagName.getText());
+          const target = resolve(
+            component,
+            node.tagName.getText(component.source),
+          );
           if (target?.hasDirtySignal) {
             component.hasDirtySignal = true;
             propagation.changed = true;
@@ -260,7 +252,7 @@ const inventory = () => {
   const owners = new Map<string, Component>();
   const visited = new Set<string>();
   const walk = (component: Component, tags: Set<string>) => {
-    const source = component.node.getText();
+    const source = component.node.getText(component.source);
     const hasForm =
       component.hasDirtySignal ||
       tags.has("form") ||
@@ -290,12 +282,12 @@ const inventory = () => {
       if (ts.isJsxElement(node)) {
         const target = resolve(
           component,
-          node.openingElement.tagName.getText(),
+          node.openingElement.tagName.getText(component.source),
         );
         if (target && target.dialogChildren.size > 0) {
           const children = new Set<string>();
           for (const child of node.children) {
-            for (const tag of jsxTags(child)) {
+            for (const tag of jsxTags(child, component.source)) {
               children.add(tag);
             }
           }
@@ -308,7 +300,11 @@ const inventory = () => {
     };
     visit(component.node);
   }
-  return { owners, hostCount: dialogHosts.length };
+  return {
+    owners,
+    hostCount: dialogHosts.length,
+    componentKeys: new Set([...components.values()].map(({ key }) => key)),
+  };
 };
 
 // These editors save immediately or only choose/search; closing loses no draft.
@@ -420,9 +416,14 @@ const NON_DRAFT_OWNERS = new Map<
 ]);
 
 test("every form reachable from a shared dialog provides semantic dirtiness and discard", () => {
-  const { owners, hostCount } = inventory();
+  const { owners, hostCount, componentKeys } = inventory();
   expect(hostCount).toBeGreaterThan(0);
   expect(owners.size).toBeGreaterThan(0);
+  expect(
+    componentKeys.has(
+      "__fixtures__/inventory-prefilter/identifier-starts.tsx#UnicodeAliases",
+    ),
+  ).toBe(true);
   const uncovered: string[] = [];
   for (const [key, component] of owners) {
     if (NON_DRAFT_OWNERS.has(key)) {

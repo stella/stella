@@ -1,10 +1,17 @@
 import { queryOptions } from "@tanstack/react-query";
-import type { QueryClient } from "@tanstack/react-query";
-import { panic, Result } from "better-result";
+import { panic } from "better-result";
+import * as v from "valibot";
 
-import { ANALYSIS_REQUEST_MODE } from "@stll/api-contract/case-law-analysis";
-import type { AnalysisRequestMode } from "@stll/api-contract/case-law-analysis";
-import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
+import {
+  CASE_LAW_ANALYSIS_FAILURE_CODES,
+  CASE_LAW_ANALYSIS_UNAVAILABLE_CODES,
+  type CaseLawAnalysisFailureCode as AnalysisFailureCode,
+  type CaseLawAnalysisUnavailableCode,
+} from "@stll/api-contract";
+import {
+  providerDiagnosticSchema,
+  type ProviderDiagnostic,
+} from "@stll/api-contract/provider-setup";
 import { fetchWithTimeout } from "@stll/fetch";
 import {
   type DecisionAnalysis,
@@ -15,42 +22,100 @@ import {
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 import { apiUrl } from "@/lib/api-url";
 import { STALE_TIME } from "@/lib/consts";
-import type { APIError } from "@/lib/errors/api";
-import { toAPIError } from "@/lib/errors/api";
-import type { ClientOperationError } from "@/lib/errors/client";
-import { parseProviderDiagnostic } from "@/lib/errors/provider-diagnostic";
-import { readQueryResult } from "@/lib/errors/query-result";
+
+/** Whose AI key the failed run called the provider with. */
+export type AnalysisFailureKey =
+  | { source: "organization"; provider: string }
+  | { source: "platform" };
+
+/**
+ * Why the reader has no analysis: the server will not make one, the last run
+ * failed (and how, with whose key), or the answer itself could not be read.
+ */
+export type AnalysisError =
+  | { kind: "unavailable"; code: CaseLawAnalysisUnavailableCode }
+  | {
+      kind: "failed";
+      code: AnalysisFailureCode;
+      key: AnalysisFailureKey;
+      providerDiagnostic?: ProviderDiagnostic;
+    }
+  | { kind: "unreadable" };
 
 type AnalysisResponse =
   | { status: "done"; analysis: DecisionAnalysis }
   | { status: "generating"; tree: DecisionAnalysis["tree"] }
-  | { status: "error"; providerDiagnostic?: ProviderDiagnostic };
+  | { status: "error"; error: AnalysisError };
 
 export type AnalysisQueryResult =
   | { kind: "done"; analysis: DecisionAnalysis }
   | { kind: "generating"; tree: DecisionAnalysis["tree"] }
-  | { kind: "error"; providerDiagnostic?: ProviderDiagnostic };
+  | { kind: "error"; error: AnalysisError };
 
 const POLL_INTERVAL_MS = 2000;
 
+const UNREADABLE: AnalysisError = { kind: "unreadable" };
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
+
+const isMember = <T extends string>(
+  members: readonly T[],
+  value: unknown,
+): value is T => members.some((member) => member === value);
 
 const completeAnalysis = (
   analysis: PersistedDecisionAnalysis | null,
 ): DecisionAnalysis | null =>
   analysis !== null && !("status" in analysis) ? analysis : null;
 
+const parseFailureKey = (value: unknown): AnalysisFailureKey | null => {
+  if (!isRecord(value)) {
+    return null;
+  }
+  const source = value["source"];
+  if (source === "platform") {
+    return { source: "platform" };
+  }
+  const provider = value["provider"];
+  return source === "organization" &&
+    typeof provider === "string" &&
+    provider.length > 0
+    ? { source: "organization", provider }
+    : null;
+};
+
 /**
- * The analysis endpoint's answer, or null for one the reader cannot use. A
- * failure that carries a malformed provider diagnostic is an error of its
- * own: the guidance is validated, never shown as it came.
+ * The error a response names, read deliberately: an unknown code or a failure
+ * without its key is unreadable, never a guess at one of the known messages.
  */
+const parseAnalysisError = (value: Record<string, unknown>): AnalysisError => {
+  const code = value["code"];
+  if (isMember(CASE_LAW_ANALYSIS_UNAVAILABLE_CODES, code)) {
+    return { kind: "unavailable", code };
+  }
+  if (isMember(CASE_LAW_ANALYSIS_FAILURE_CODES, code)) {
+    const key = parseFailureKey(value["key"]);
+    if (key === null) {
+      return UNREADABLE;
+    }
+    const diagnostic = value["providerDiagnostic"];
+    if (diagnostic === undefined) {
+      return { kind: "failed", code, key };
+    }
+    const parsed = v.safeParse(providerDiagnosticSchema, diagnostic);
+    return parsed.success
+      ? { kind: "failed", code, key, providerDiagnostic: parsed.output }
+      : UNREADABLE;
+  }
+  return UNREADABLE;
+};
+
 export const parseAnalysisResponse = (
   value: unknown,
-): Result<AnalysisResponse | null, ClientOperationError> => {
+): AnalysisResponse | null => {
   if (!isRecord(value)) {
-    return Result.ok(null);
+    return null;
   }
 
   const status = value["status"];
@@ -59,42 +124,44 @@ export const parseAnalysisResponse = (
     const analysis = completeAnalysis(
       parsePersistedDecisionAnalysis(value["analysis"]),
     );
-    return Result.ok(analysis === null ? null : { status: "done", analysis });
+    return analysis === null ? null : { status: "done", analysis };
   }
 
   if (status === "generating") {
     // The run holds only a sentinel on the row; the tree arrives whole.
-    return Result.ok({ status: "generating", tree: [] });
+    return { status: "generating", tree: [] };
   }
 
   if (status === "error") {
-    const diagnostic = value["providerDiagnostic"];
-    if (diagnostic === undefined) {
-      return Result.ok({ status: "error" });
-    }
-    return parseProviderDiagnostic(diagnostic).map(
-      (providerDiagnostic): AnalysisResponse => ({
-        status: "error",
-        providerDiagnostic,
-      }),
-    );
+    return { status: "error", error: parseAnalysisError(value) };
   }
 
-  return Result.ok(null);
+  return null;
 };
 
-const isTerminal = (result: AnalysisQueryResult | undefined): boolean =>
-  result?.kind === "done" || result?.kind === "error";
+/** A settled result is final until the reader asks again; polling stops. */
+export const isTerminalAnalysisResult = (
+  result: AnalysisQueryResult | undefined,
+): boolean => result?.kind === "done" || result?.kind === "error";
 
-type AnalysisPollState = {
-  state: { data: AnalysisQueryResult | undefined; error: unknown };
+const queryResultOf = (
+  parsed: AnalysisResponse | null,
+): AnalysisQueryResult => {
+  if (parsed === null) {
+    return { kind: "error", error: UNREADABLE };
+  }
+  switch (parsed.status) {
+    case "done":
+      return { kind: "done", analysis: parsed.analysis };
+    case "generating":
+      return { kind: "generating", tree: parsed.tree };
+    case "error":
+      return { kind: "error", error: parsed.error };
+    default:
+      parsed satisfies never;
+      return panic("Unhandled analysis response");
+  }
 };
-
-/** Poll while a run is in flight; a settled run or a failed read stops it. */
-export const analysisRefetchInterval = ({
-  state,
-}: AnalysisPollState): number | false =>
-  state.error !== null || isTerminal(state.data) ? false : POLL_INTERVAL_MS;
 
 /**
  * The AI analysis of one decision: the only place the reader holds it, as the
@@ -118,124 +185,44 @@ export type DecisionAnalysisKey = {
   decisionUpdatedAt: PublicCaseLawDecision["updatedAt"];
 };
 
-export type DecisionAnalysisRequestKey = DecisionAnalysisKey & {
-  organizationId: string;
-};
-
-/** Whether two requests are for the same organization, decision and version. */
-export const isSameAnalysisRequest = (
-  left: DecisionAnalysisRequestKey | undefined,
-  right: DecisionAnalysisRequestKey,
-): boolean =>
-  left !== undefined &&
-  left.organizationId === right.organizationId &&
-  left.decisionId === right.decisionId &&
-  left.decisionUpdatedAt === right.decisionUpdatedAt;
-
-type DecisionAnalysisRequestOptions = {
-  decisionId: DecisionAnalysisKey["decisionId"];
-  mode: AnalysisRequestMode;
-  signal: AbortSignal;
-};
-
-const analysisQueryResult = (
-  parsed: AnalysisResponse | null,
-): AnalysisQueryResult => {
-  if (parsed === null) {
-    return { kind: "error" };
-  }
-  switch (parsed.status) {
-    case "done":
-      return { kind: "done", analysis: parsed.analysis };
-    case "generating":
-      return { kind: "generating", tree: parsed.tree };
-    case "error":
-      return {
-        kind: "error",
-        ...(parsed.providerDiagnostic === undefined
-          ? {}
-          : { providerDiagnostic: parsed.providerDiagnostic }),
-      };
-    default:
-      parsed satisfies never;
-      return panic("Unhandled analysis response");
-  }
-};
-
-/** Both background polling and an explicit retry use the same transport/parser. */
-export const requestDecisionAnalysis = async ({
-  decisionId,
-  mode,
-  signal,
-}: DecisionAnalysisRequestOptions): Promise<
-  Result<AnalysisQueryResult, APIError | ClientOperationError>
-> => {
-  const url = new URL(apiUrl(`/case/decisions/${decisionId}/analysis`));
-  url.searchParams.set("mode", mode);
-  const response = await fetchWithTimeout(url, {
-    credentials: "include",
-    signal,
-    // The answer is small; a stalled response fails without capping a slow
-    // but progressing one.
-    timeout: { type: "idle", ms: 15_000 },
-  });
-
-  const data: unknown = await response.json();
-  if (!response.ok) {
-    return Result.err(toAPIError({ status: response.status, value: data }));
-  }
-  return parseAnalysisResponse(data).map(analysisQueryResult);
-};
-
+/**
+ * `retry` asks for a new run after a failed one. A plain read keeps answering
+ * the failure, so polling never restarts the run that just failed; the
+ * reader's explicit Retry fetches this same query with `retry`, and its answer
+ * (normally `generating`) replaces the cached failure, resuming polling. It
+ * travels in the query's `meta`, not its key: both reads hold the one
+ * analysis, and the observer's own next poll reads plainly again.
+ */
 export const decisionAnalysisOptions = ({
   decisionId,
   decisionUpdatedAt,
-  organizationId,
-}: DecisionAnalysisRequestKey) =>
+  retry = false,
+}: DecisionAnalysisKey & { retry?: boolean }) =>
   queryOptions({
-    queryKey: [
-      "case-law-decision-analysis",
-      organizationId,
-      decisionId,
-      { decisionUpdatedAt },
-    ],
-    queryFn: async ({ signal }) =>
-      readQueryResult(
-        await requestDecisionAnalysis({
-          decisionId,
-          mode: ANALYSIS_REQUEST_MODE.poll,
+    queryKey: ["case-law-decision-analysis", decisionId, { decisionUpdatedAt }],
+    meta: { retry },
+    queryFn: async ({ meta, signal }): Promise<AnalysisQueryResult> => {
+      const path: `/${string}` = `/case/decisions/${decisionId}/analysis`;
+      const response = await fetchWithTimeout(
+        apiUrl(meta?.["retry"] === true ? `${path}?retry=true` : path),
+        {
+          credentials: "include",
           signal,
-        }),
-      ),
-    refetchInterval: analysisRefetchInterval,
-    retry: false,
+          timeoutMs: 15_000,
+        },
+      );
+      const data: unknown = await response.json();
+      return queryResultOf(parseAnalysisResponse(data));
+    },
+    refetchInterval: ({ state }) =>
+      isTerminalAnalysisResult(state.data) ? false : POLL_INTERVAL_MS,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
     // A finished analysis changes only when regenerated, so it is never asked
-    // again; an in-flight run is read on the next poll. A failed run
-    // starts again only through the explicit retry request.
+    // again; a run in flight or a failed one is, on the next poll or retry.
     staleTime: ({ state }) =>
       state.data?.kind === "done" ? STALE_TIME.INFINITE : 0,
     // Held past the reader leaving the decision, so coming back to it draws
     // the analysis without asking again.
     gcTime: STALE_TIME.FIVETEEN.MINUTES,
   });
-
-type WriteDecisionAnalysisOptions = {
-  queryClient: QueryClient;
-  /** The identity the answered request was made for, never the current render's. */
-  requestKey: DecisionAnalysisRequestKey;
-  result: AnalysisQueryResult;
-};
-
-/** The one cache write for an analysis answer, filed under its request's own key. */
-export const writeDecisionAnalysis = ({
-  queryClient,
-  requestKey,
-  result,
-}: WriteDecisionAnalysisOptions): void => {
-  queryClient.setQueryData(
-    decisionAnalysisOptions(requestKey).queryKey,
-    () => result,
-  );
-};

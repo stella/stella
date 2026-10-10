@@ -8,6 +8,8 @@ import { Loader } from "@stll/ui/loader";
 import { ACCOUNT_GATE_OUTCOME } from "@/components/auth/require-account.logic";
 import { useRequireAccount } from "@/components/auth/use-require-account";
 import { openPublicLawChat } from "@/components/public-law-ask";
+import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 
 type PublicLawSearchProps = {
   maxLength: number;
@@ -102,28 +104,37 @@ const PublicLawRefine = ({
 }: PublicLawSearchRefine & { disabled: boolean }) => {
   const t = useTranslations();
   const ensureAccount = useRequireAccount();
+  const user = useMaybeAuthenticatedUser();
 
   return (
-    <Button
-      aria-label={t("search.aiRefine")}
-      disabled={disabled || isPending}
-      onClick={() => {
-        if (ensureAccount() !== ACCOUNT_GATE_OUTCOME.allowed) {
-          return;
-        }
-        onRefine();
-      }}
-      size="icon-sm"
-      title={t("search.aiRefine")}
-      type="button"
-      variant="muted"
+    <CapabilityAction
+      action={{ capability: user === null ? null : "ai" }}
+      surface="control"
     >
-      {isPending ? (
-        <Loader label={t("search.aiRefine")} size="sm" />
-      ) : (
-        <AiActionIcon aria-hidden="true" className="size-4" />
+      {(capabilityProps) => (
+        <Button
+          aria-label={t("search.aiRefine")}
+          disabled={disabled || isPending}
+          onClick={() => {
+            if (ensureAccount() !== ACCOUNT_GATE_OUTCOME.allowed) {
+              return;
+            }
+            onRefine();
+          }}
+          size="icon-sm"
+          title={t("search.aiRefine")}
+          type="button"
+          variant="muted"
+          {...capabilityProps}
+        >
+          {isPending ? (
+            <Loader label={t("search.aiRefine")} size="sm" />
+          ) : (
+            <AiActionIcon aria-hidden="true" className="size-4" />
+          )}
+        </Button>
       )}
-    </Button>
+    </CapabilityAction>
   );
 };
 
@@ -141,22 +152,31 @@ export const PublicLawAskInChat = ({
 }) => {
   const t = useTranslations();
   const ensureAccount = useRequireAccount();
+  const user = useMaybeAuthenticatedUser();
 
   return (
-    <Button
-      className="text-muted-foreground"
-      onClick={() => {
-        if (ensureAccount() !== ACCOUNT_GATE_OUTCOME.allowed) {
-          return;
-        }
-        openPublicLawChat({ label, prompt });
-      }}
-      size="sm"
-      type="button"
-      variant="ghost"
+    <CapabilityAction
+      action={{ capability: user === null ? null : "ai" }}
+      surface="control"
     >
-      <MessageSquareTextIcon aria-hidden="true" className="size-3.5" />
-      {t("common.askInChat")}
-    </Button>
+      {(capabilityProps) => (
+        <Button
+          className="text-muted-foreground"
+          onClick={() => {
+            if (ensureAccount() !== ACCOUNT_GATE_OUTCOME.allowed) {
+              return;
+            }
+            openPublicLawChat({ label, prompt });
+          }}
+          size="sm"
+          type="button"
+          variant="ghost"
+          {...capabilityProps}
+        >
+          <MessageSquareTextIcon aria-hidden="true" className="size-3.5" />
+          {t("common.askInChat")}
+        </Button>
+      )}
+    </CapabilityAction>
   );
 };

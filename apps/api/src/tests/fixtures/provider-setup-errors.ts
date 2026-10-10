@@ -1,7 +1,7 @@
 import { PROVIDER_SETUP_ERROR_CODE } from "@stll/api-contract/provider-setup";
 import type { ProviderSetupErrorCode } from "@stll/api-contract/provider-setup";
 
-import type { identifyProviderSetupError } from "@/api/lib/provider-error-catalogue";
+import type { identifyProviderSetupError } from "@/api/lib/errors/provider-error-catalogue";
 
 /** Static provider response shapes derived from the providers' error references. */
 export const PROVIDER_SETUP_ERROR_FIXTURES = {

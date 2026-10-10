@@ -18,7 +18,7 @@ import * as v from "valibot";
 
 import {
   AI_PROVIDERS,
-  ANTHROPIC_ADAPTIVE_THINKING_MODELS,
+  getModelReasoningCapabilities,
   BYOK_MODEL_OPTIONS,
   DEFAULT_MODELS,
   FALLBACK_CHAT_MODEL_BY_PROVIDER,
@@ -39,6 +39,7 @@ import type {
   ResolvedReasoningEffort,
   TanStackAIProvider,
 } from "@stll/ai-catalog";
+import { createSha256 } from "@stll/sha256/bun";
 
 import { env } from "@/api/env";
 import {
@@ -51,13 +52,13 @@ import {
 } from "@/api/lib/ai-config";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import { orgAIConfigStatusError } from "@/api/lib/ai-config-response";
-import { anthropicClientOptions } from "@/api/lib/anthropic-config";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
   AIDataClass,
   AIRequestPolicy,
   ManagedAIResidency,
 } from "@/api/lib/chat/ai-data-policy";
+import { anthropicClientOptions } from "@/api/lib/chat/anthropic-config";
 import {
   getManagedOpenRouterConfiguration,
   type ManagedOpenRouterCredential,
@@ -1367,7 +1368,7 @@ export const clearByokAdapterCache = () => {
 };
 
 const byokCacheKey = (config: OrgAIProviderConfig): string => {
-  const hasher = new Bun.CryptoHasher("sha256");
+  const hasher = createSha256();
   hasher.update(config.provider);
   hasher.update(config.apiKey);
   switch (config.provider) {
@@ -1512,18 +1513,16 @@ const deterministicSamplingForModel = (
 ): { temperature: 0 } | Record<never, never> =>
   shouldEmitTemperature(modelId) ? { temperature: 0 } : {};
 
-const usesAnthropicAdaptiveThinking = (modelId: string): boolean =>
-  ANTHROPIC_ADAPTIVE_THINKING_MODELS.some((adaptiveModelId) =>
-    modelId.includes(adaptiveModelId),
-  );
-
 const anthropicThinkingForModel = (
   modelId: string,
 ): StellaAnthropicThinking => {
-  if (usesAnthropicAdaptiveThinking(modelId)) {
+  const capability = getModelReasoningCapabilities(modelId);
+  if (capability === null || capability.anthropicThinking === "none") {
+    return { type: "disabled" };
+  }
+  if (capability.anthropicThinking === "adaptive") {
     return { type: "adaptive" };
   }
-
   return {
     type: "enabled",
     budget_tokens: ANTHROPIC_LEGACY_THINKING_BUDGET_TOKENS,
@@ -1640,14 +1639,24 @@ const tanStackOpenAIModelOptionsForRole = ({
   modelId,
   reasoningEffort,
 }: TanStackModelOptionsForRoleInput<"openai">): StellaOpenAITextProviderOptions => {
+  const capability = getModelReasoningCapabilities(modelId);
+  const replayOptions: StellaOpenAITextProviderOptions = {
+    include: capability?.openAIIncludeEncryptedContent
+      ? ["reasoning.encrypted_content"]
+      : [],
+    ...(capability?.openAIStore === false ? { store: false } : {}),
+  };
   if (role !== "reasoning" && reasoningEffort === undefined) {
-    return deterministicSamplingForModel(modelId);
+    return { ...deterministicSamplingForModel(modelId), ...replayOptions };
   }
   const effort = resolveReasoningEffort({
     modelId,
     requested: reasoningEffort ?? "medium",
   });
-  return effort === null ? {} : { reasoning: { effort } };
+  return {
+    ...replayOptions,
+    ...(effort === null ? {} : { reasoning: { effort } }),
+  };
 };
 
 /**

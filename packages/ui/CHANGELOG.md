@@ -1,5 +1,11 @@
 # @stll/ui
 
+## 0.44.1
+
+### Patch Changes
+
+- [#5244](https://github.com/stella/stella/pull/5244) [`b225fd8`](https://github.com/stella/stella/commit/b225fd8575d7896a11ae2c644201f7920e03cd9b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add shared chart palette tokens for theme-aware generated views.
+
 ## 0.44.0
 
 ### Minor Changes

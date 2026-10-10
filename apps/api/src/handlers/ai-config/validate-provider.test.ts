@@ -47,9 +47,9 @@ test("workspace probe schema requires a safe nonempty header value", () => {
   ).toBe(true);
   for (const anthropicWorkspaceId of [
     "",
-    "wrk\r\nInjected",
+    "wrk.fixture",
     "wrk_fixture\n",
-    "wrk_fixture\r\n",
+    "wrk\tfixture",
     "wrk with space",
     "wrk/path",
   ]) {
@@ -62,6 +62,9 @@ test("workspace probe schema requires a safe nonempty header value", () => {
 test("non-Anthropic workspace id is rejected before the provider probe", async () => {
   const result = await validateProvider.handler(
     createTestHandlerContext<Context>({
+      audit: NO_AUDIT,
+      safeDb: NO_DB,
+      scopedDb: NO_DB,
       body: {
         provider: "google",
         apiKey: "fixture-key",

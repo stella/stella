@@ -17,6 +17,7 @@ const schema = v.object({
           v.looseObject({
             id: v.optional(v.string()),
             name: v.string(),
+            if: v.optional(v.string()),
             run: v.optional(v.string()),
             env: v.optional(v.record(v.string(), v.string())),
             with: v.optional(v.looseObject({ script: v.optional(v.string()) })),
@@ -85,6 +86,7 @@ const decide = async ({
 }: Options = {}) => {
   const outputs = new Map<string, string>();
   const calls: unknown[] = [];
+  const notices: string[] = [];
   await new Script(`(async () => {${policy}\n})()`).runInNewContext({
     Buffer,
     Date,
@@ -98,6 +100,7 @@ const decide = async ({
     core: {
       setOutput: (key: string, value: string) => outputs.set(key, value),
       info: () => {},
+      notice: (message: string) => notices.push(message),
     },
     require: (name: string) => {
       if (name === "node:path") {
@@ -152,21 +155,35 @@ const decide = async ({
       },
     },
   });
-  return { outputs, calls };
+  return { outputs, calls, notices };
 };
 
+test("coverage decisions emit one observable profile annotation", async () => {
+  for (const options of [{}, { variable: "off" }, { failure: true }]) {
+    const { outputs, notices } = await decide(options);
+    const profile = outputs.get("coverage_profile");
+    expect(profile).toBeString();
+    expect(notices).toEqual([`coverage_profile=${profile ?? ""}`]);
+  }
+});
+
 const conditionContext = (profile: string, event: string, depth: string) => {
-  const values: Record<string, string | boolean> = {
+  const values: Record<string, string | boolean | string[]> = {
     "github.event_name": event,
     "github.event.pull_request.draft": false,
+    "github.event.pull_request.labels.*.name": [],
     "inputs.heavy_only": false,
+    "inputs.pr_depth_only": false,
     "vars.CI_POSTGRES_PR_SELECTION": "",
+    "vars.QUEUE_BROWSER_SUITES": "",
     "needs.ci-plan.outputs.coverage_profile": profile,
     "needs.ci-plan.outputs.run_required": "true",
+    "needs.ci-plan.outputs.pr_depth_reused": "false",
     "needs.ci-plan.outputs.pilot_fast_jobs": JSON.stringify(fastJobs(workflow)),
     "needs.ci-plan.outputs.suite_depth": depth,
     "needs.ci-plan.outputs.queue_depth": "full",
     "needs.ci-plan.outputs.trusted": "true",
+    "needs.ci-plan.outputs.e2e_production_required": "true",
   };
   for (const name of Object.keys(workflow.jobs)) {
     values[`needs.${name}.result`] = "success";
@@ -181,11 +198,17 @@ const conditionContext = (profile: string, event: string, depth: string) => {
     }
     values[`needs.ci-plan.outputs.${scope}`] = "true";
   }
+  values["needs.ci-plan.outputs.corpus_suites_required"] = "false";
   return {
     values,
-    status: { success: true, failure: false, cancelled: false },
+    status: { always: true, success: true, failure: false, cancelled: false },
   };
 };
+
+const DECLARED_NORMAL_PLAN_CHANGES = new Set([
+  "e2e-production-shard",
+  "web-build",
+]);
 
 test("off and unset preserve today's job plan across every event and depth", async () => {
   expect(Object.keys(original.jobs).toSorted()).toEqual(
@@ -214,6 +237,17 @@ test("off and unset preserve today's job plan across every event and depth", asy
         for (const depth of ["fast", "full"]) {
           const context = conditionContext("normal-v1", event, depth);
           for (const [name, job] of Object.entries(original.jobs)) {
+            if (DECLARED_NORMAL_PLAN_CHANGES.has(name)) {
+              const actual = evaluate(
+                workflow.jobs[name]?.if ?? "true",
+                context,
+              );
+              const baseline = evaluate(job.if ?? "true", context);
+              expect(actual, name).toBe(
+                event === "pull_request" ? true : baseline,
+              );
+              continue;
+            }
             expect(
               evaluate(workflow.jobs[name]?.if ?? "true", context),
               name,
@@ -223,6 +257,10 @@ test("off and unset preserve today's job plan across every event and depth", asy
       }
     }
   }
+  expect([...DECLARED_NORMAL_PLAN_CHANGES]).toEqual([
+    "e2e-production-shard",
+    "web-build",
+  ]);
 });
 
 test("Postgres PR execution follows explicit opt-in in either pilot profile", () => {
@@ -235,6 +273,26 @@ test("Postgres PR execution follows explicit opt-in in either pilot profile", ()
       ).toBe(selection === "on");
     }
   }
+});
+
+test("corpus-only PRs start only corpus service steps", () => {
+  const context = conditionContext("normal-v1", "pull_request", "fast");
+  for (const key of Object.keys(context.values)) {
+    if (key.endsWith("_required")) {
+      context.values[key] = "false";
+    }
+  }
+  context.values["needs.ci-plan.outputs.run_required"] = "true";
+  context.values["needs.ci-plan.outputs.service_suites_required"] = "true";
+  context.values["needs.ci-plan.outputs.corpus_suites_required"] = "true";
+  const service = workflow.jobs["service-suites"];
+  expect(evaluate(service?.if ?? "false", context)).toBe(true);
+  const selectedSteps = (service?.steps ?? [])
+    .filter((step) => evaluate(step.if ?? "true", context))
+    .map((step) => step.name);
+  expect(selectedSteps).toContain("Run corpus engine suites");
+  expect(selectedSteps).not.toContain("Run Postgres-gated API suites");
+  expect(selectedSteps).not.toContain("Run Valkey-gated API suites");
 });
 
 test("docs-only PRs retain Markdown checks in every pilot coverage profile", () => {
@@ -253,6 +311,49 @@ test("docs-only PRs retain Markdown checks in every pilot coverage profile", () 
       .filter(([, job]) => evaluate(job.if ?? "true", context) === true)
       .map(([name]) => name);
     expect(scheduled).toEqual(["ci-checks-docs"]);
+  }
+});
+
+test("Docker checks retain every queue depth in both coverage profiles", () => {
+  expect(fastJobs(workflow)).not.toContain("docker-checks");
+  for (const profile of ["normal-v1", "pilot-fast-v1"]) {
+    for (const queueDepth of ["thin", "full"]) {
+      const context = conditionContext(profile, "merge_group", "full");
+      context.values["needs.ci-plan.outputs.queue_depth"] = queueDepth;
+      context.values["needs.ci-plan.outputs.run_required"] = "false";
+      expect(
+        evaluate(workflow.jobs["docker-checks"]?.if ?? "false", context),
+      ).toBe(true);
+      context.values["needs.ci-plan.outputs.docker_checks_required"] = "false";
+      expect(
+        evaluate(workflow.jobs["docker-checks"]?.if ?? "false", context),
+      ).toBe(false);
+    }
+  }
+});
+
+test("desktop Rust lint retains both platforms in every PR coverage profile and queue depth", () => {
+  expect(fastJobs(workflow)).toContain("desktop-rust-lint");
+  expect(fastJobs(workflow)).not.toContain("desktop-rust-tests");
+  for (const profile of ["normal-v1", "pilot-fast-v1"]) {
+    for (const event of ["pull_request", "merge_group"]) {
+      for (const queueDepth of ["thin", "full"]) {
+        const context = conditionContext(
+          profile,
+          event,
+          event === "pull_request" ? "fast" : "full",
+        );
+        context.values["needs.ci-plan.outputs.queue_depth"] = queueDepth;
+        expect(
+          evaluate(workflow.jobs["desktop-rust-lint"]?.if ?? "false", context),
+        ).toBe(true);
+        context.values["needs.ci-plan.outputs.desktop_rust_checks_required"] =
+          "false";
+        expect(
+          evaluate(workflow.jobs["desktop-rust-lint"]?.if ?? "false", context),
+        ).toBe(false);
+      }
+    }
   }
 });
 

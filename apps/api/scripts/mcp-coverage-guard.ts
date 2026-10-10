@@ -119,6 +119,12 @@ const TOOLS_WITHOUT_ENUMERABLE_ENDPOINT: Record<string, string> = {
     "inline endpoint: apps/api/src/handlers/case-law/public-routes.ts GET /case/decisions/:decisionId",
   read_case_law_citations:
     "no dedicated endpoint: MCP handler reads the citation graph with its citing passages directly (apps/api/src/handlers/case-law/decisions/citation-passages.ts)",
+  open_case_law_decision:
+    "no dedicated endpoint: MCP reader entry over the public decision read the inline GET /case/decisions/:decisionId uses (apps/api/src/handlers/case-law/decisions/reader.ts)",
+  read_case_law_decision_blocks:
+    "no dedicated endpoint: app-only MCP reader page stream over the same public decision read, citations and provision previews (apps/api/src/handlers/case-law/decisions/reader.ts)",
+  preview_cited_provision:
+    "no dedicated endpoint: app-only MCP preview over the existing consolidated provision preview service (apps/api/src/mcp/decision-reader-tools.ts)",
   read_provision_history:
     "inline endpoint: apps/api/src/handlers/legislation/public-routes.ts GET /law/statutes/:documentId/provisions/:anchor/history",
   read_statute_provisions:

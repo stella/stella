@@ -131,6 +131,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "chat-turn-reaper.ts",
     "Ends chat turns whose lease expired; reads no content.",
   ),
+  "chat.purgeSecrets": platform(
+    "chat-secret-retention.ts",
+    "Clears expired encrypted chat payloads while retaining request receipts.",
+  ),
   "chat.sweepRunLogs": platform(
     "chat-run-log-retention.ts",
     "Retention sweep of closed run logs.",

@@ -18,6 +18,7 @@ import {
   offlineCheckExceptionGrowth,
   offlineImportGraphViolations,
   offlineCheckViolations,
+  parseOfflineImportAllowances,
   parseOfflineCheckExceptions,
   usesOfflineCheckPreload,
 } from "./offline-check-policy";
@@ -273,6 +274,12 @@ test.each([
     "node:dgram.createSocket",
     "import dgram from 'node:dgram'; dgram.createSocket('udp4');",
   ],
+  [
+    "node:child_process.exec",
+    "import childProcess from 'node:child_process'; childProcess.exec('curl https://example.invalid');",
+  ],
+  ["Bun.spawn", "Bun.spawn(['curl', 'https://example.invalid']);"],
+  ["Bun.$", "await Bun.$`curl https://example.invalid`;"],
 ])(
   "offline check denies %s with the shared typed error",
   (_transport, code) => {
@@ -282,6 +289,7 @@ test.each([
     expect(planted.stderr.toString()).toContain(
       "network disabled in offline check",
     );
+    expect(planted.stderr.toString()).toContain("[eval]");
   },
 );
 
@@ -296,7 +304,7 @@ test("offline check enumerates every DNS resolver and lookup entry point", () =>
         try {
           target[key]('localhost', () => {});
         } catch (error) {
-          if (error._tag !== 'OfflineCheckNetworkError' || error.message !== 'network disabled in offline check') throw error;
+          if (error._tag !== 'OfflineCheckNetworkError' || !error.message.startsWith('network disabled in offline check:')) throw error;
           denied++;
           continue;
         }
@@ -423,6 +431,47 @@ test("offline closure follows workspace symlinks and excludes external packages"
   }
 });
 
+test("offline import allowances are reasoned, exact, and cannot hide a new capability", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "offline-allowlist-"));
+  try {
+    const entry = path.join(directory, "check.ts");
+    writeFileSync(entry, "await fetch('https://example.invalid');");
+    expect(
+      offlineImportGraphViolations({
+        allowances: [
+          {
+            capability: "fetch",
+            file: "check.ts",
+            reason: "Refresh transport is dormant during verification.",
+          },
+        ],
+        entries: [entry],
+        repositoryRoot: directory,
+      }),
+    ).toEqual([]);
+    const stale = offlineImportGraphViolations({
+      allowances: [
+        {
+          capability: "Bun.spawn",
+          file: "check.ts",
+          reason: "Planted stale entry.",
+        },
+      ],
+      entries: [entry],
+      repositoryRoot: directory,
+    });
+    expect(stale.map(({ message }) => message)).toEqual([
+      "Offline check import graph: check.ts: Raw fetch must remain in the snapshot transport owner",
+      "Stale offline import allowance: check.ts:Bun.spawn",
+    ]);
+    expect(() => parseOfflineImportAllowances([{ file: "check.ts" }])).toThrow(
+      "Every offline import allowance needs a file, capability, and reason",
+    );
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("every protected blocking check has a transport-safe local import closure", () => {
   const checks = enumerateOfflineChecks(
     Bun.YAML.parse(
@@ -434,6 +483,17 @@ test("every protected blocking check has a transport-safe local import closure",
   );
   expect(entries.length).toBeGreaterThan(0);
   expect(
-    offlineImportGraphViolations({ entries, repositoryRoot: root }),
+    offlineImportGraphViolations({
+      allowances: parseOfflineImportAllowances(
+        JSON.parse(
+          readFileSync(
+            path.join(root, "scripts/offline-check-import-allowlist.json"),
+            "utf-8",
+          ),
+        ),
+      ),
+      entries,
+      repositoryRoot: root,
+    }),
   ).toEqual([]);
 });

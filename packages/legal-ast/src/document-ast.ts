@@ -1,3 +1,4 @@
+// parser-output-unchanged: Validation actions are named for schema publication; accepted AST values are identical.
 import { panic } from "better-result";
 /**
  * Canonical legal-document AST shared by legal corpus readers and parsers.
@@ -601,11 +602,12 @@ const HTTPS_PROTOCOL = "https:";
 const isHttpsUrl = (src: string): boolean =>
   URL.canParse(src) && new URL(src).protocol === HTTPS_PROTOCOL;
 
-const imageSrcSchema = v.pipe(
-  v.string(),
-  v.url(),
-  v.check(isHttpsUrl, "Image src must be an https URL"),
+const imageSrcHttpsCheck = v.check(
+  isHttpsUrl,
+  "Image src must be an https URL",
 );
+
+const imageSrcSchema = v.pipe(v.string(), v.url(), imageSrcHttpsCheck);
 
 /** A span of more than one cell. A span of one is the default, so it is
  * absent rather than written as 1. */
@@ -644,6 +646,18 @@ const paragraphNoteSchema = v.variant("type", [
   }),
 ]);
 
+const paragraphNumberFinite = v.finite();
+
+/**
+ * Actions JSON Schema cannot express. A JSON number is always finite, and the
+ * https rule reads the parsed URL; a converter publishes the remaining number
+ * and URL string while both actions still run at runtime.
+ */
+export const DOCUMENT_AST_RUNTIME_ONLY_ACTIONS = [
+  paragraphNumberFinite,
+  imageSrcHttpsCheck,
+] as const;
+
 const paragraphEntries = {
   id: v.string(),
   anchorId: v.string(),
@@ -651,7 +665,7 @@ const paragraphEntries = {
   role: v.optional(v.picklist(PARAGRAPH_ROLES)),
   note: v.optional(paragraphNoteSchema),
   listDepth: v.optional(v.picklist([1, 2, 3, 4])),
-  number: v.optional(v.pipe(v.number(), v.finite())),
+  number: v.optional(v.pipe(v.number(), paragraphNumberFinite)),
   inlines: inlineArraySchema,
 };
 
@@ -687,7 +701,7 @@ const tableCellSchema: v.GenericSchema<TableCell> = v.object({
   plainText: v.string(),
 });
 
-const blockSchema: v.GenericSchema<Block> = v.variant("type", [
+export const blockSchema: v.GenericSchema<Block> = v.variant("type", [
   v.object({ ...headingEntries, plainText: v.string() }),
   v.object({ ...paragraphEntries, plainText: v.string() }),
   v.object({ ...imageEntries, plainText: v.string() }),

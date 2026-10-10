@@ -16,8 +16,8 @@ while [[ $# -gt 0 ]]; do
 done
 [[ -n "$repo" ]] || { echo "::error::--repo is required" >&2; exit 2; }
 
-# A release commit needs success on both of these, on that exact commit.
-required_contexts='["staging/verified","main/heavy"]'
+# A release commit needs success on all of these, on that exact commit.
+required_contexts='["staging/verified","main/heavy","main/pr-depth"]'
 
 release_states() {
   # Statuses arrive newest first. A later failure invalidates an earlier success.
@@ -42,7 +42,7 @@ if [[ -z "$sha" ]]; then
       break
     fi
   done <<< "$candidates"
-  [[ -n "$sha" ]] || { echo "::error::No commit on main carries success on both staging/verified and main/heavy" >&2; exit 1; }
+  [[ -n "$sha" ]] || { echo "::error::No commit on main carries success on staging/verified, main/heavy and main/pr-depth" >&2; exit 1; }
 fi
 
 candidate=$(bash "$script_dir/check-release-candidate.sh" "$sha")
@@ -52,7 +52,7 @@ done <<< "$candidate"
 states=$(release_states "$sha")
 if ! all_success "$states"; then
   missing=$(grep -v ' = success$' <<< "$states" | paste -sd ',' - | sed 's/,/, /g')
-  echo "::error::RELEASE_STATUS_NOT_GREEN: release SHA $sha needs success on staging/verified and main/heavy; it carries $missing" >&2
+  echo "::error::RELEASE_STATUS_NOT_GREEN: release SHA $sha needs success on staging/verified, main/heavy and main/pr-depth; it carries $missing" >&2
   exit 1
 fi
 bash "$script_dir/check-release-main-health.sh" "$repo" "$sha"

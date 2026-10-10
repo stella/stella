@@ -6,7 +6,6 @@ import { TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
 import { consumeValidateProviderRateLimit } from "@/api/handlers/ai-config/validate-provider-rate-limit";
 import { supportsRegion } from "@/api/lib/ai-config";
 import { probeProvider } from "@/api/lib/ai-provider-probe";
-import { ANTHROPIC_WORKSPACE_ID_PATTERN } from "@/api/lib/anthropic-config";
 import {
   ACCOUNT_ACCESS,
   createSafeSessionHandler,
@@ -14,6 +13,7 @@ import {
 import type { SessionHandlerConfig } from "@/api/lib/api-handlers";
 import { isActiveOrganizationMember } from "@/api/lib/auth";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
+import { ANTHROPIC_WORKSPACE_ID_PATTERN } from "@/api/lib/chat/anthropic-config";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { logger } from "@/api/lib/observability/logger";
 

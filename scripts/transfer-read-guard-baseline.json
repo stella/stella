@@ -1960,13 +1960,6 @@
     "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
   },
   {
-    "file": "apps/web/src/components/dev/autocomplete-playground.tsx",
-    "function": "module/startStream",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
     "file": "apps/web/src/components/docx/use-edit-session.ts",
     "function": "module/useEditSession/open",
     "kind": "numeric-timeout",
@@ -2130,6 +2123,20 @@
   {
     "file": "apps/web/src/components/workspaces/row-actions.tsx",
     "function": "module/downloadOcrExport",
+    "kind": "total-timeout-body",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/features/case-law/queries/decision-analysis.ts",
+    "function": "module/decisionAnalysisOptions",
+    "kind": "numeric-timeout",
+    "count": 1,
+    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+  },
+  {
+    "file": "apps/web/src/features/case-law/queries/decision-analysis.ts",
+    "function": "module/decisionAnalysisOptions",
     "kind": "total-timeout-body",
     "count": 1,
     "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."

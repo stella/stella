@@ -1,218 +1,159 @@
-import { panic, Result, TaggedError } from "better-result";
-import * as v from "valibot";
+/**
+ * How a reader's last analysis run of a decision failed, and for how long
+ * that answers the reader. Pure; `analysis-store-core.ts` keeps the records,
+ * one per decision and reader key, apart from the decision row every reader
+ * shares, so one reader's failure is never replaced by another reader's run.
+ */
 
-import { PROVIDER_SETUP_ERROR_CODE } from "@stll/api-contract/provider-setup";
-import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
+import { panic } from "better-result";
+
+import type {
+  CaseLawAnalysisFailureCode,
+  CaseLawAnalysisKeySource,
+} from "@stll/api-contract";
+import type { AnalysisInputFingerprint } from "@stll/legal-ast/analysis";
+import { sha256Hex } from "@stll/sha256/bun";
 
 import type { SafeId } from "@/api/lib/branded-types";
-import { withCommandTimeout } from "@/api/lib/rate-limit/redis-command-timeout";
-import { createRedisClient } from "@/api/lib/redis-client";
-import {
-  coordinationKey,
-  coordinationSetArguments,
-  type CoordinationKey,
-} from "@/api/lib/redis-keys";
+import type { RedactedProviderDiagnostic } from "@/api/lib/errors/redacted-provider-diagnostic";
 
-const FAILURE_TTL_SECONDS = 600;
-const COMMAND_TIMEOUT_MS = 500;
-const CLEAR_OBSERVED_FAILURE = `
-local failure = redis.call('GET', KEYS[1])
-if failure and cjson.decode(failure).failureId == ARGV[1] then
-  return redis.call('DEL', KEYS[1])
-end
-return 0
-`;
 /**
- * The fields a recorded failure may carry: which provider refused and the
- * catalogue code for its refusal. It has no field for the provider's own
- * text, so that text is never recorded here; readers get the catalogue
- * guidance for the code instead.
+ * How long a failed run's record answers the reader whose key it ran with.
+ * Within it, that reader is told why (and offered a retry) instead of the
+ * next poll starting the same run again; past it, the next open of the
+ * decision simply runs anew.
  */
-const failureGuidanceSchema = v.strictObject({
-  provider: v.string(),
-  code: v.nullable(v.picklist(Object.values(PROVIDER_SETUP_ERROR_CODE))),
-});
-type AnalysisFailureGuidance = v.InferOutput<typeof failureGuidanceSchema>;
+export const ANALYSIS_FAILURE_HOLD_MS = 15 * 60 * 1000;
 
-const failureSchema = v.strictObject({
-  failureId: v.pipe(v.string(), v.uuid()),
-  status: v.literal("error"),
-  guidance: v.optional(failureGuidanceSchema),
-});
+/** The key a reader runs the analysis with. */
+export type AnalysisReaderKey =
+  | {
+      source: "organization";
+      organizationId: SafeId<"organization">;
+      provider: string;
+    }
+  | { source: "platform" };
 
-/** A terminal failure as it is recorded and read back. */
-export type AnalysisFailureRecord = v.InferOutput<typeof failureSchema>;
+const PLATFORM_KEY_TAG = "platform";
 
-/** The guidance a diagnostic leaves in a recorded failure. */
-export const analysisFailureGuidance = ({
-  provider,
+/**
+ * The key a failure record is filed under: the platform's one tag, or a tag
+ * derived from the organization and the decision for an organization's own
+ * key.
+ */
+export const analysisFailureKeyTag = (
+  reader: AnalysisReaderKey,
+  decisionId: SafeId<"caseLawDecision">,
+): string => {
+  switch (reader.source) {
+    case "organization":
+      return sha256Hex(
+        `case-law-analysis-failure:${reader.organizationId}:${decisionId}`,
+      );
+    case "platform":
+      return PLATFORM_KEY_TAG;
+    default:
+      reader satisfies never;
+      return panic("Unhandled analysis reader key");
+  }
+};
+
+/** One reader's failed run, as stored. */
+export type AnalysisFailureRecord = {
+  code: CaseLawAnalysisFailureCode;
+  inputFingerprint: AnalysisInputFingerprint;
+  keySource: CaseLawAnalysisKeySource;
+  /** The organization's provider; null for the platform's key. */
+  provider: string | null;
+  recordedAt: Date;
+  providerDiagnostic?: RedactedProviderDiagnostic | undefined;
+};
+
+export const analysisFailureRecord = ({
   code,
-}: Pick<ProviderDiagnostic, "code" | "provider">): AnalysisFailureGuidance => ({
-  provider,
+  fingerprint,
+  now,
+  reader,
+  providerDiagnostic,
+}: {
+  code: CaseLawAnalysisFailureCode;
+  fingerprint: AnalysisInputFingerprint;
+  now: Date;
+  reader: AnalysisReaderKey;
+  providerDiagnostic?: RedactedProviderDiagnostic | undefined;
+}): AnalysisFailureRecord => ({
   code,
+  inputFingerprint: fingerprint,
+  keySource: reader.source,
+  provider: reader.source === "organization" ? reader.provider : null,
+  recordedAt: now,
+  ...(providerDiagnostic === undefined ? {} : { providerDiagnostic }),
 });
 
-export class AnalysisFailureStoreError extends TaggedError(
-  "AnalysisFailureStoreError",
-)<{
-  message: string;
-  cause?: unknown;
-}> {}
+/**
+ * What a plain (non-retry) claim must not take the row over: a failure filed
+ * under this reader's key, over the input being claimed, with the key the
+ * reader runs with today, recorded after `heldSince`. The row store checks it
+ * in the claim statement itself, so a failure filed between a request's read
+ * and its claim still stops the claim.
+ */
+export type FailureClaimGuard = {
+  keyTag: string;
+  keySource: CaseLawAnalysisKeySource;
+  provider: string | null;
+  heldSince: Date;
+};
 
-type AnalysisFailureScope = {
-  organizationId: SafeId<"organization">;
+export const failureClaimGuard = ({
+  decisionId,
+  now,
+  reader,
+}: {
   decisionId: SafeId<"caseLawDecision">;
-  fingerprint: string;
-};
-type RedisLike = {
-  connect: () => Promise<void>;
-  send: (command: string, args: string[]) => Promise<unknown>;
-};
-type AnalysisFailureStoreOptions = {
-  createRedis?: () => RedisLike;
-  commandTimeoutMs?: number;
-};
+  now: Date;
+  reader: AnalysisReaderKey;
+}): FailureClaimGuard => ({
+  keyTag: analysisFailureKeyTag(reader, decisionId),
+  keySource: reader.source,
+  provider: reader.source === "organization" ? reader.provider : null,
+  heldSince: new Date(now.getTime() - ANALYSIS_FAILURE_HOLD_MS),
+});
 
-/** Terminal failure shared by the organization's readers until retry or expiry. */
-export const createAnalysisFailureStore = ({
-  createRedis = () =>
-    createRedisClient({
-      storeClass: "cache",
-      overrides: {
-        connectionTimeout: COMMAND_TIMEOUT_MS,
-        enableOfflineQueue: false,
-      },
-    }),
-  commandTimeoutMs = COMMAND_TIMEOUT_MS,
-}: AnalysisFailureStoreOptions = {}) => {
-  let redis: RedisLike | undefined;
-  const command = async (
-    options:
-      | { name: "SET"; key: CoordinationKey; value: string }
-      | { name: "GET"; key: CoordinationKey }
-      | { name: "clear"; key: CoordinationKey; expected: string },
-  ) => {
-    const result = await Result.tryPromise({
-      try: async () =>
-        await withCommandTimeout({
-          command: (async () => {
-            redis ??= createRedis();
-            await redis.connect();
-            switch (options.name) {
-              case "SET":
-                return await redis.send(
-                  "SET",
-                  coordinationSetArguments({
-                    key: options.key,
-                    value: options.value,
-                    ttl: { unit: "seconds", value: FAILURE_TTL_SECONDS },
-                  }),
-                );
-              case "GET":
-                return await redis.send(options.name, [options.key]);
-              case "clear":
-                return await redis.send("EVAL", [
-                  CLEAR_OBSERVED_FAILURE,
-                  "1",
-                  options.key,
-                  options.expected,
-                ]);
-              default:
-                options satisfies never;
-                return panic("Unhandled analysis failure command");
-            }
-          })(),
-          commandTimeoutMs,
-          label: "case-law-analysis-failure",
-        }),
-      catch: (cause) =>
-        new AnalysisFailureStoreError({
-          message: "Analysis failure delivery is unavailable",
-          cause,
-        }),
-    });
-    return result;
-  };
-  const keyFor = ({
-    organizationId,
-    decisionId,
-    fingerprint,
-  }: AnalysisFailureScope) =>
-    coordinationKey({
-      scope: "case-law-analysis-failure",
-      slot: `${organizationId}:${decisionId}`,
-      suffix: fingerprint,
-    });
-  return {
-    write: async (
-      scope: AnalysisFailureScope,
-      guidance: AnalysisFailureGuidance | undefined,
-    ) => {
-      // Fields are copied one by one, so a wider object passed as guidance
-      // (a whole diagnostic) still writes only these.
-      const failure = {
-        failureId: Bun.randomUUIDv7(),
-        status: "error",
-        ...(guidance === undefined
-          ? {}
-          : {
-              guidance: { provider: guidance.provider, code: guidance.code },
-            }),
-      } as const;
-      const result = await command({
-        name: "SET",
-        key: keyFor(scope),
-        value: JSON.stringify(failure),
-      });
-      return result.map(() => undefined);
-    },
-    clear: async (scope: AnalysisFailureScope, expectedFailureId: string) =>
-      (
-        await command({
-          name: "clear",
-          key: keyFor(scope),
-          expected: expectedFailureId,
-        })
-      ).map((removed) => removed === 1),
-    read: async (scope: AnalysisFailureScope) => {
-      const result = await command({ name: "GET", key: keyFor(scope) });
-      if (Result.isError(result)) {
-        return Result.err(result.error);
-      }
-      if (result.value === null) {
-        return Result.ok(null);
-      }
-      if (typeof result.value !== "string") {
-        return Result.err(
-          new AnalysisFailureStoreError({
-            message: "Invalid analysis failure delivery",
-          }),
-        );
-      }
-      const reply = result.value;
-      const decoded = Result.try((): unknown => JSON.parse(reply));
-      if (decoded.isErr()) {
-        return Result.err(
-          new AnalysisFailureStoreError({
-            message: "Invalid analysis failure delivery",
-          }),
-        );
-      }
-      const parsed = v.safeParse(failureSchema, decoded.value);
-      if (!parsed.success) {
-        return Result.err(
-          new AnalysisFailureStoreError({
-            message: "Invalid analysis failure delivery",
-          }),
-        );
-      }
-      return Result.ok(parsed.output);
-    },
-  };
-};
+/** The guard's verdict over one stored record, for a store held in memory. */
+export const failureMatchesGuard = ({
+  failure,
+  fingerprint,
+  guard,
+}: {
+  failure: AnalysisFailureRecord;
+  fingerprint: AnalysisInputFingerprint;
+  guard: FailureClaimGuard;
+}): boolean =>
+  failure.inputFingerprint === fingerprint &&
+  failure.keySource === guard.keySource &&
+  failure.provider === guard.provider &&
+  failure.recordedAt.getTime() > guard.heldSince.getTime();
 
-let store: ReturnType<typeof createAnalysisFailureStore> | undefined;
-export const analysisFailureStore = () => {
-  store ??= createAnalysisFailureStore();
-  return store;
-};
+/**
+ * Whether a stored failure still answers its reader for the document as it
+ * reads now: over the same input, within its hold, and with the key the
+ * reader would run with today. An organization that switched its provider
+ * since the failure runs on the new one rather than hearing the old one's
+ * failure.
+ */
+export const failureStillHolds = ({
+  failure,
+  fingerprint,
+  now,
+  reader,
+}: {
+  failure: AnalysisFailureRecord;
+  fingerprint: AnalysisInputFingerprint;
+  now: Date;
+  reader: AnalysisReaderKey;
+}): boolean =>
+  failure.inputFingerprint === fingerprint &&
+  failure.keySource === reader.source &&
+  failure.provider ===
+    (reader.source === "organization" ? reader.provider : null) &&
+  now.getTime() - failure.recordedAt.getTime() < ANALYSIS_FAILURE_HOLD_MS;

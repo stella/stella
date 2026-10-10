@@ -177,7 +177,6 @@ describe("answering a stored or in-flight analysis", () => {
     const { response, statements } = await runWithQueryCounter(
       async (queries) => {
         const result = await generateAnalysis({
-          mode: "poll",
           admitModelAction: async () => {
             modelActions.push("admit");
             return panic("A stored answer must not admit a model action");
@@ -192,6 +191,7 @@ describe("answering a stored or in-flight analysis", () => {
           orgAIConfig,
           orgAIConfigStatus,
           promptCachingEnabled: false,
+          retry: false,
         });
         return { response: result, statements: queries.count };
       },
@@ -270,11 +270,10 @@ describe("answering a stored or in-flight analysis", () => {
     }
 
     for (const { response, statements } of answers) {
-      expect(response.status).toBe("done");
-      if (response.status !== "done") {
-        throw new TypeError("Expected completed analysis");
-      }
-      expect(response.analysis.inputFingerprint).toBe(fingerprint);
+      expect(response).toMatchObject({
+        status: "done",
+        analysis: { inputFingerprint: fingerprint },
+      });
       expect(statements).toBe(STORED_ANSWER_STATEMENTS);
     }
   });

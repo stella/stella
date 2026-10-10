@@ -27,6 +27,7 @@ import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { snapshotOperationInput } from "@/api/lib/proofs/checked-transaction";
 import {
   requireChatToolModelAdmission,
   type ModelDispatchAdmission,
@@ -172,18 +173,19 @@ const buildTemplateAiAnalytics = ({
  * grant; the authoring-only `suggest_template_fields` tool lives in
  * `createTemplateAuthoringTools`.
  */
-export const createTemplateTools = ({
-  modelAdmission,
-  scopedDb,
-  safeDb,
-  organizationId,
-  userId,
-  orgAIConfig,
-  managedAIResidency,
-  recordAuditEvent,
-  thirdPartyBoundary,
-  dependencies = defaultTemplateToolDependencies,
-}: CreateTemplateToolsArgs) => {
+export const createTemplateTools = (options: CreateTemplateToolsArgs) => {
+  const {
+    modelAdmission,
+    scopedDb,
+    safeDb,
+    organizationId,
+    userId,
+    orgAIConfig,
+    managedAIResidency,
+    recordAuditEvent,
+    thirdPartyBoundary,
+    dependencies = defaultTemplateToolDependencies,
+  } = snapshotOperationInput(options);
   // Model-backed collaborators for the manifest's AI fields, shared with the
   // web fill routes so AI placeholders behave identically: a generator for
   // AI-fillable fields (FieldMeta.aiPrompt), a decider for AI-decided boolean
@@ -301,6 +303,15 @@ export const createTemplateTools = ({
           value: await fill(aiCollaborators(unrestoredFields)),
         }),
       });
+      if ("usageRejection" in result) {
+        return raiseChatToolError(
+          new ChatToolError({
+            kind: "limit",
+            message: "Template filling was refused by usage admission.",
+            cause: result.usageRejection,
+          }),
+        );
+      }
       if ("requiredFieldsRejection" in result) {
         // A required, non-AI-fillable field was omitted or empty: reject
         // instead of inventing a value or leaving a raw {{marker}} in the

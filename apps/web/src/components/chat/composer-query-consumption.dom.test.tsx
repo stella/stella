@@ -28,6 +28,8 @@ const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
 const { ChatThreadTestRouter } = await import("@/lib/chat-thread-test-router");
+const { aiAvailabilityOptions } =
+  await import("@/lib/organization/ai-config-queries");
 const { contextMentionSearchKey } = await import("./composer-plus-menu.logic");
 const { toChatThreadId, getChatThreadKey } =
   await import("@/lib/chat-thread-ref");
@@ -70,12 +72,21 @@ const host = {
   onClose: () => {},
   side: "top",
 } as const;
-const createClient = () =>
-  new QueryClient({
+const createClient = () => {
+  const client = new QueryClient({
     defaultOptions: {
       queries: { retry: false, retryOnMount: false, staleTime: Infinity },
     },
   });
+  client.setQueryData(aiAvailabilityOptions({ organizationId }).queryKey, {
+    available: true,
+    deferredServiceTierAvailable: false,
+    instanceProvisioned: false,
+    mockAnswers: false,
+    orgConfigured: true,
+  });
+  return client;
+};
 const markFailed = (
   client: InstanceType<typeof QueryClient>,
   queryKey: readonly unknown[],

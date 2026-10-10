@@ -64,7 +64,6 @@ export const providerSetupGuidance = (code: string | undefined) => {
   for (const knownCode of Object.values(PROVIDER_SETUP_ERROR_CODE)) {
     if (code === knownCode) {
       return {
-        code: knownCode,
         ...PROVIDER_SETUP_GUIDANCE[knownCode],
         ...PROVIDER_SETUP_ERROR_CATALOGUE[knownCode],
       };

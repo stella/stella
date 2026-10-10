@@ -1,5 +1,0 @@
-{
-  "metric": "throw-outside-boundary",
-  "delta": 1,
-  "reason": "Settings mutation callbacks propagate original typed API errors through their Promise rejection boundary so provider rows can render complete messages and setup guidance. Local model validation follows the same expected-error contract."
-}

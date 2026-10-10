@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * Seed a test user with a valid session for local development.
  *
@@ -17,11 +18,11 @@
  * The script is idempotent: running it again refreshes the
  * session expiry without duplicating data.
  */
-
-import { panic } from "better-result";
 import { and, eq, inArray, or } from "drizzle-orm";
 import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
+
+import { printError } from "@stll/errors";
 
 import { member, organization, session, user } from "@/api/db/auth-schema";
 import { featureEnrolments } from "@/api/db/schema";
@@ -41,6 +42,7 @@ import {
   DEFAULT_TEST_USER_COLLEAGUE_COUNT,
   DEFAULT_USER_ID,
   getSeedColleagues,
+  seedMemberId,
 } from "./seed-utils";
 
 const db = openMaintenanceDb({ readOnly: false });
@@ -92,12 +94,8 @@ const getSeedOrganizationIdentity = (organizationId: string) => {
   };
 };
 
-const buildMemberId = (organizationId: string, userId: string): string => {
-  const hash = new Bun.CryptoHasher("sha256")
-    .update(`${organizationId}:${userId}`)
-    .digest("hex");
-  return `seed-member-${hash.slice(0, 24)}`;
-};
+const buildMemberId = (organizationId: string, userId: string): string =>
+  seedMemberId({ organizationId, userId });
 
 // Better Auth may create the local test email before this seed runs, using its
 // own generated user id. Resolve by either unique identity so the seed
@@ -508,7 +506,7 @@ async function seed() {
 
 if (import.meta.main) {
   seed().catch((error: unknown) => {
-    console.error("Seed failed:", error);
+    printError("Seed failed:", error);
     process.exit(1);
   });
 }

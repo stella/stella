@@ -4,6 +4,10 @@ import * as v from "valibot";
 import { DAY_IN_MS } from "@stll/time";
 
 import { envBaseServerSchema } from "@/api/env-base-schema";
+import {
+  documentProcessingEnvInvariantViolation,
+  scheduledJobsModeSchema,
+} from "@/api/env-document-processing-worker-schema";
 
 import {
   envApiInvariantViolation,
@@ -79,21 +83,23 @@ const environment = {
 } as const satisfies Parameters<typeof envApiInvariantViolation>[0];
 
 test("scheduled jobs default to enabled and can be disabled only in local development and tests", () => {
-  const schema = envApiServerSchema.SCHEDULED_JOBS_MODE;
-  expect(v.parse(schema, undefined)).toBe("enabled");
-  expect(v.parse(schema, "disabled")).toBe("disabled");
-  expect(v.safeParse(schema, "false").success).toBe(false);
+  expect(v.parse(scheduledJobsModeSchema, undefined)).toBe("enabled");
+  expect(v.parse(scheduledJobsModeSchema, "disabled")).toBe("disabled");
+  expect(v.safeParse(scheduledJobsModeSchema, "false").success).toBe(false);
+  const workerEnvironment = {
+    contentEncryptionKey: "a".repeat(64),
+    redisUrl: "redis://localhost:6379",
+    scheduledJobsMode: "disabled",
+  } as const;
   expect(
-    envApiInvariantViolation({
-      ...environment,
-      SCHEDULED_JOBS_MODE: "disabled",
+    documentProcessingEnvInvariantViolation({
+      ...workerEnvironment,
+      runtimeMode: { mode: "strict" },
     }),
   ).toContain("only supported in local development and tests");
   expect(
-    envApiInvariantViolation({
-      ...environment,
-      SCHEDULED_JOBS_MODE: "disabled",
-      nodeEnv: "development",
+    documentProcessingEnvInvariantViolation({
+      ...workerEnvironment,
       runtimeMode: { mode: "open" },
     }),
   ).toBeNull();

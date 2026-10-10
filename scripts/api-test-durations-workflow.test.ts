@@ -18,6 +18,7 @@ const durationJobConditionMatches = (eventName: string) => {
   const job = Reflect.get(jobs ?? {}, "api-test-durations");
   const condition = String(Reflect.get(job ?? {}, "if"));
   const values: Record<string, boolean> = {
+    "inputs.pr_depth_only != true": true,
     "needs.ci-plan.outputs.run_required != 'false'": true,
     "github.ref == 'refs/heads/main'": true,
     "github.event_name != 'pull_request'": eventName !== "pull_request",

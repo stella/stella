@@ -15,11 +15,32 @@ import {
   renderModelRatesModule,
 } from "./model-catalog-rates-gen";
 import {
+  CatalogSnapshotRefreshTimeoutError,
   MODEL_CATALOG_INPUT_DIR,
+  refreshModelCatalogInputs,
   reduceModelsDevInput,
   reduceOpenRouterInput,
   serializeCatalogInput,
 } from "./model-catalog-snapshot";
+
+test("catalog refresh returns a typed failure when its total deadline expires", async () => {
+  const result = await refreshModelCatalogInputs({
+    fetcher: async (_url, signal) => {
+      await new Promise((_resolve, reject) => {
+        signal.addEventListener("abort", () => reject(new Error("aborted")), {
+          once: true,
+        });
+      });
+      return undefined;
+    },
+    timeoutMs: 1,
+  });
+  expect(result.isErr()).toBe(true);
+  if (result.isErr()) {
+    expect(result.error).toBeInstanceOf(CatalogSnapshotRefreshTimeoutError);
+    expect(result.error.message).toContain("1ms total deadline");
+  }
+});
 
 const root = path.resolve(import.meta.dir, "../../..");
 const generators = [

@@ -10,17 +10,17 @@ import { PROVIDER_SETUP_ERROR_CODE } from "@stll/api-contract/provider-setup";
 import type { ProviderSetupErrorCode } from "@stll/api-contract/provider-setup";
 
 import { env } from "@/api/env";
-import { anthropicWorkspaceHeaders } from "@/api/lib/anthropic-config";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import {
   AZURE_FOUNDRY_DEFAULT_API_VERSION,
   normalizeAzureFoundryBaseURL,
 } from "@/api/lib/azure-foundry";
+import { anthropicWorkspaceHeaders } from "@/api/lib/chat/anthropic-config";
 import { PROVIDER_DATA_POLICY } from "@/api/lib/chat/provider-data-policy";
-import { sanitizeCredentialText } from "@/api/lib/credential-text";
+import { identifyProviderSetupError } from "@/api/lib/errors/provider-error-catalogue";
 import { PROVIDER_ERROR_TEXT_MAX_BYTES } from "@/api/lib/errors/redacted-provider-diagnostic";
 import { normalizeHuggingFaceBaseURL } from "@/api/lib/huggingface";
-import { identifyProviderSetupError } from "@/api/lib/provider-error-catalogue";
+import { sanitizeCredentialText } from "@/api/lib/observability/credential-text";
 import type {
   SafeOutboundFetchResponse,
   SafeOutboundFetchBody,

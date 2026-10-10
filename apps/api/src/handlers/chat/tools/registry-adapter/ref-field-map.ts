@@ -161,6 +161,10 @@ export type ProjectionDataByName<TMap, TNames extends keyof TMap> = {
  * exhaustive by construction: a read tool with no entry here cannot compile.
  */
 export const READ_TOOL_REF_FIELD_MAP = {
+  // Host reader navigation and widget data are served by MCP; chat uses its decision text read.
+  open_case_law_decision: { chatProjectable: false },
+  read_case_law_decision_blocks: { chatProjectable: false },
+  preview_cited_provision: { chatProjectable: false },
   // --- OpenAI-compat shims: not projected to chat ---------------------------
   // `fetch`/`search` duplicate read_content_across_matters /
   // search_across_matters and additionally emit `url` (and `metadata`) fields

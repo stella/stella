@@ -7,8 +7,8 @@ import {
   type ProviderDiagnostic,
 } from "@stll/api-contract/provider-setup";
 
-import { sanitizeCredentialText } from "@/api/lib/credential-text";
-import { identifyProviderSetupError } from "@/api/lib/provider-error-catalogue";
+import { identifyProviderSetupError } from "@/api/lib/errors/provider-error-catalogue";
+import { sanitizeCredentialText } from "@/api/lib/observability/credential-text";
 import { isRecord } from "@/api/lib/type-guards";
 
 const credentials = new WeakMap<object, readonly string[]>();

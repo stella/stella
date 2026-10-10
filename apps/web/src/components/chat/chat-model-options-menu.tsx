@@ -5,6 +5,7 @@ import { useTranslations } from "use-intl";
 
 import type { ReasoningEffort } from "@stll/ai-catalog";
 import { groupReasoningEfforts } from "@stll/chat/model-selector";
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { ChevronDownIcon, InfoIcon } from "@stll/ui/icons";
@@ -41,7 +42,6 @@ import { modelOptionsOptions } from "@/features/chat/queries";
 import type { ChatModelBenchmarkOption } from "@/features/chat/queries";
 import type { TranslationKey } from "@/i18n/types";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
-import { sanitizeHref } from "@/lib/sanitize-href";
 import { useQueryView } from "@/lib/use-query-view";
 
 export const CHAT_MODEL_MENU_POPUP_CLASS_NAME =

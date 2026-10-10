@@ -1,134 +1,92 @@
-import {
-  useIsMutating,
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
-import { panic } from "better-result";
 /**
  * Hook to manage decision analysis state.
  *
  * Draws a finished analysis from the analysis query's cache. Otherwise
- * enables the eligible observer and polls until complete. Explicit requests
- * retry failures.
+ * enables the eligible observer and polls until the run settles: done, or an
+ * error the server names. Explicit requests retry failures.
  */
 
-import { ANALYSIS_REQUEST_MODE } from "@stll/api-contract/case-law-analysis";
-import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { panic } from "better-result";
+
 import type { DecisionAnalysis } from "@stll/legal-ast/analysis";
 
 import {
+  type AnalysisError,
   type AnalysisQueryResult,
-  type DecisionAnalysisRequestKey,
-  analysisRefetchInterval,
+  type DecisionAnalysisKey,
   decisionAnalysisOptions,
-  isSameAnalysisRequest,
-  requestDecisionAnalysis,
-  writeDecisionAnalysis,
 } from "@/features/case-law/queries/decision-analysis";
-import { providerDiagnosticFromThrown } from "@/lib/errors/provider-diagnostic";
-import { readQueryResult } from "@/lib/errors/query-result";
+import { detached } from "@/lib/detached";
 
 export type AnalysisState =
   | { status: "idle" }
   | { status: "generating"; tree: DecisionAnalysis["tree"] }
   | { status: "done"; analysis: DecisionAnalysis }
-  | { status: "error"; providerDiagnostic?: ProviderDiagnostic };
-
-/**
- * This view's own explicit retry that failed in transport. It is the view's
- * state only while nothing newer reached the shared result: another view's
- * retry or a poll that answered since supersedes it.
- */
-type RetryFailure = {
-  error: unknown;
-  /** When this view asked for the retry. */
-  submittedAt: number;
-  /** When the shared result last changed. */
-  resultUpdatedAt: number;
-};
-
-/** Whether a failed retry is still this view's latest word on the analysis. */
-const isCurrentRetryFailure = (
-  retryFailure: RetryFailure | undefined,
-): retryFailure is RetryFailure =>
-  retryFailure !== undefined &&
-  retryFailure.submittedAt >= retryFailure.resultUpdatedAt;
+  | { status: "error"; error: AnalysisError };
 
 type AnalysisQuerySnapshot = {
   hasQueryError: boolean;
   isFetching: boolean;
   result: AnalysisQueryResult | undefined;
-  queryError?: unknown;
-  retryFailure?: RetryFailure | undefined;
 };
+
+const UNREADABLE: AnalysisError = { kind: "unreadable" };
 
 /** Resolve retained query data into one unambiguous reader state. */
 export const analysisStateFromQuery = ({
   hasQueryError,
   isFetching,
   result,
-  queryError,
-  retryFailure,
 }: AnalysisQuerySnapshot): Exclude<AnalysisState, { status: "idle" }> => {
-  // A finished analysis wins over everything, this view's failed retry too.
-  if (result?.kind === "done") {
-    return { status: "done", analysis: result.analysis };
-  }
-
-  const retryFailed = isCurrentRetryFailure(retryFailure);
-
   // TanStack Query retains the settled error result while a manual refetch is
   // in flight. Fetching must win, otherwise Retry appears to do nothing and
   // leaves the adjacent layer controls visually stuck beside a stale error.
-  if (
-    isFetching &&
-    (result?.kind === "error" || hasQueryError || retryFailed)
-  ) {
+  if (isFetching && (result?.kind === "error" || hasQueryError)) {
     return { status: "generating", tree: [] };
-  }
-
-  if (retryFailed) {
-    const diagnostic = providerDiagnosticFromThrown(retryFailure.error);
-    return {
-      status: "error",
-      ...(diagnostic === undefined ? {} : { providerDiagnostic: diagnostic }),
-    };
-  }
-
-  // A failed poll retains its previous progress data, but polling has stopped.
-  // Surface the settled failure so the reader can inspect it and retry.
-  if (hasQueryError && !isFetching && result?.kind !== "error") {
-    const diagnostic = providerDiagnosticFromThrown(queryError);
-    return {
-      status: "error",
-      ...(diagnostic === undefined ? {} : { providerDiagnostic: diagnostic }),
-    };
   }
 
   if (result !== undefined) {
     switch (result.kind) {
+      case "done":
+        return { status: "done", analysis: result.analysis };
       case "generating":
         return { status: "generating", tree: result.tree };
       case "error":
-        return {
-          status: "error",
-          ...(result.providerDiagnostic === undefined
-            ? {}
-            : { providerDiagnostic: result.providerDiagnostic }),
-        };
+        return { status: "error", error: result.error };
       default:
         result satisfies never;
         return panic(`Unhandled analysis result: ${String(result)}`);
     }
   }
 
-  return { status: "generating", tree: [] };
+  return hasQueryError
+    ? { status: "error", error: UNREADABLE }
+    : { status: "generating", tree: [] };
 };
 
-type UseDecisionAnalysisOptions = DecisionAnalysisRequestKey & {
-  enabled: boolean;
+/**
+ * How Retry answers an error: a failed run asks the server for a new one (a
+ * plain read keeps answering the failure), an unreadable answer reads again,
+ * and a decision the server will never analyse offers no retry at all.
+ */
+export type AnalysisRetry = "new-run" | "read-again" | "none";
+
+export const analysisRetryOf = (error: AnalysisError): AnalysisRetry => {
+  switch (error.kind) {
+    case "failed":
+      return "new-run";
+    case "unreadable":
+      return "read-again";
+    case "unavailable":
+      return "none";
+    default:
+      error satisfies never;
+      return panic("Unhandled analysis error");
+  }
 };
+
+type UseDecisionAnalysisOptions = DecisionAnalysisKey & { enabled: boolean };
 
 export const useDecisionAnalysis = ({
   enabled,
@@ -136,82 +94,61 @@ export const useDecisionAnalysis = ({
 }: UseDecisionAnalysisOptions) => {
   const queryClient = useQueryClient();
   const options = decisionAnalysisOptions(key);
-  const mutationKey = [...options.queryKey, "retry"];
-  const retrying = useIsMutating({ mutationKey, exact: true }) > 0;
-  // The retry carries the identity it was asked for as its variables, and
-  // only those name the request and the cache entry it settles: TanStack
-  // hands a pending mutation the newest render's callbacks, so a key read
-  // from the render would file one organization's or decision's answer
-  // under another's.
-  const retry = useMutation({
-    mutationKey,
-    retry: false,
-    mutationFn: async (requestKey: DecisionAnalysisRequestKey) => {
-      await queryClient.cancelQueries({
-        queryKey: decisionAnalysisOptions(requestKey).queryKey,
-        exact: true,
-      });
-      return readQueryResult(
-        await requestDecisionAnalysis({
-          decisionId: requestKey.decisionId,
-          mode: ANALYSIS_REQUEST_MODE.retry,
-          signal: AbortSignal.timeout(15_000),
-        }),
-      );
-    },
-    onSuccess: (result, requestKey) => {
-      writeDecisionAnalysis({ queryClient, requestKey, result });
-    },
-  });
   // Disabled, the observer still reads the cache, so an analysis finished
-  // earlier is drawn without asking for a run. An explicit retry owns the
-  // transport until it settles; polling resumes only with the normal options.
-  const query = useQuery({
-    ...options,
-    enabled: enabled && !retrying,
-    refetchInterval: (current) =>
-      retrying ? false : analysisRefetchInterval(current),
+  // earlier is drawn without asking for a run.
+  const query = useQuery({ ...options, enabled });
+  // The same query fetched with `retry`: its answer (normally `generating`)
+  // replaces the cached failure, and the observer resumes polling from it.
+  const retry = useMutation({
+    mutationFn: async () =>
+      // `staleTime: 0`: a cached failure, however fresh, never answers the
+      // reader's explicit request to run again.
+      await queryClient.query({
+        ...decisionAnalysisOptions({ ...key, retry: true }),
+        staleTime: 0,
+      }),
   });
-  // A failed retry is this view's state only for the identity it was for.
-  const retryFailure =
-    retry.isError && isSameAnalysisRequest(retry.variables, key)
-      ? {
-          error: retry.error,
-          submittedAt: retry.submittedAt,
-          resultUpdatedAt: query.dataUpdatedAt,
-        }
-      : undefined;
-  const state: AnalysisState =
-    !enabled && query.data?.kind !== "done"
-      ? { status: "idle" }
-      : analysisStateFromQuery({
-          hasQueryError: query.isError,
-          isFetching: query.isFetching || retrying,
-          result: query.data,
-          queryError: query.error,
-          retryFailure,
-        });
+  const finishedAnalysis =
+    query.data?.kind === "done" ? query.data.analysis : null;
+  const refetch = query.refetch;
 
-  // A retry is for a failed run, including one whose stale poll is still in
-  // flight; a finished analysis is never retried.
-  const failed =
-    query.data?.kind === "error" ||
-    query.isError ||
-    isCurrentRetryFailure(retryFailure);
+  const state: AnalysisState = (() => {
+    if (finishedAnalysis !== null) {
+      return { status: "done", analysis: finishedAnalysis };
+    }
+    if (!enabled) {
+      return { status: "idle" };
+    }
+    // A retry that could not be sent leaves the failure it answered in the
+    // cache, so the next Retry asks for a new run again.
+    if (retry.isPending) {
+      return { status: "generating", tree: [] };
+    }
+    return analysisStateFromQuery({
+      hasQueryError: query.isError,
+      isFetching: query.isFetching,
+      result: query.data,
+    });
+  })();
+
   const generate = () => {
-    if (
-      !enabled ||
-      query.data?.kind === "done" ||
-      !failed ||
-      queryClient.isMutating({ mutationKey, exact: true }) > 0
-    ) {
+    if (!enabled || state.status !== "error") {
       return;
     }
-    retry.mutate({
-      decisionId: key.decisionId,
-      decisionUpdatedAt: key.decisionUpdatedAt,
-      organizationId: key.organizationId,
-    });
+    const action = analysisRetryOf(state.error);
+    switch (action) {
+      case "new-run":
+        retry.mutate();
+        return;
+      case "read-again":
+        detached(refetch(), "use-decision-analysis.refetch");
+        return;
+      case "none":
+        return;
+      default:
+        action satisfies never;
+        panic("Unhandled analysis retry");
+    }
   };
 
   return { state, generate };

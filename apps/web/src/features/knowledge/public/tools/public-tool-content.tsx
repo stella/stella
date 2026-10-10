@@ -7,6 +7,7 @@ import {
   type LoadedCatalogueEntry,
   type LoadedEntryByKind,
 } from "@stll/catalogue";
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { Button } from "@stll/ui/button";
 
 import {
@@ -14,7 +15,6 @@ import {
   githubSkillTreeUrl,
 } from "@/features/knowledge/public/tools/tool-detail.logic";
 import { publicToolDownloadPath } from "@/lib/knowledge/public-tools-path";
-import { sanitizeHref } from "@/lib/sanitize-href";
 
 const ToolMarkdown = lazy(async () => ({
   default: (await import("@/features/knowledge/public/tools/tool-markdown"))

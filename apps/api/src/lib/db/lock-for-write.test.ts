@@ -7,6 +7,11 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { lockForWrite } from "@/api/lib/db/lock-for-write";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
+import {
+  canonicalParentLockStatement,
+  referenceParentLocks,
+} from "./parent-lock-reference.fixture";
+
 test.each(["array", "rows"] as const)(
   "returns live parents from the %s driver result shape",
   async (shape) => {
@@ -48,5 +53,79 @@ test.each(["array", "rows"] as const)(
     for (const query of queries) {
       expect(query.sql).toContain("FOR KEY SHARE");
     }
+  },
+);
+
+test("adds only byte collation to the reference statements for independent sorted parent batches", async () => {
+  const options = {
+    organizationIds: [
+      toSafeId<"organization">("org_z"),
+      toSafeId<"organization">("org_a"),
+      toSafeId<"organization">("org_z"),
+    ],
+    workspaceIds: [
+      toSafeId<"workspace">("workspace_z"),
+      toSafeId<"workspace">("workspace_a"),
+      toSafeId<"workspace">("workspace_z"),
+    ],
+  };
+  const record = () => {
+    const queries: ReturnType<PgDialect["sqlToQuery"]>[] = [];
+    const tx = asTestRaw<Pick<Transaction, "execute">>({
+      execute: async (query: SQL) => {
+        queries.push(new PgDialect().sqlToQuery(query));
+        return [];
+      },
+    });
+    return { tx, queries };
+  };
+  const reference = record();
+  const delegated = record();
+  await referenceParentLocks(reference.tx, options);
+  await lockForWrite(delegated.tx, options);
+  expect(delegated.queries).toEqual(
+    reference.queries.map((query) => ({
+      ...query,
+      sql: canonicalParentLockStatement(query.sql),
+    })),
+  );
+  expect(delegated.queries).toHaveLength(2);
+});
+
+test.each(["empty", "organization-only", "workspace-only"] as const)(
+  "preserves the %s parent batch statements",
+  async (selection) => {
+    const options = {
+      organizationIds:
+        selection === "organization-only"
+          ? [toSafeId<"organization">("org_live")]
+          : [],
+      workspaceIds:
+        selection === "workspace-only"
+          ? [toSafeId<"workspace">("workspace_live")]
+          : [],
+    };
+    const record = () => {
+      const queries: ReturnType<PgDialect["sqlToQuery"]>[] = [];
+      const tx = asTestRaw<Pick<Transaction, "execute">>({
+        execute: async (query: SQL) => {
+          queries.push(new PgDialect().sqlToQuery(query));
+          return [];
+        },
+      });
+      return { tx, queries };
+    };
+    const reference = record();
+    const delegated = record();
+    expect(await lockForWrite(delegated.tx, options)).toEqual(
+      await referenceParentLocks(reference.tx, options),
+    );
+    expect(delegated.queries).toEqual(
+      reference.queries.map((query) => ({
+        ...query,
+        sql: canonicalParentLockStatement(query.sql),
+      })),
+    );
+    expect(delegated.queries).toHaveLength(selection === "empty" ? 0 : 1);
   },
 );

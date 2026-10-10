@@ -28,6 +28,19 @@ export const parsePinnedSeeds = (
     );
   }
   const entries: Record<string, PinnedSeed[]> = {};
+  const keys = Object.keys(value).filter((key) => !key.startsWith("$"));
+  if (
+    keys.some((key, index) => {
+      const previous = keys.at(index - 1);
+      return index > 0 && previous !== undefined && previous >= key;
+    })
+  ) {
+    return Result.err(
+      new PropertyTestConfigError(
+        "Property seed keys must be sorted and duplicate-free",
+      ),
+    );
+  }
   for (const [key, seeds] of Object.entries(value)) {
     if (key.startsWith("$")) {
       continue;

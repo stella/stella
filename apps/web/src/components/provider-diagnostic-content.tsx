@@ -1,10 +1,10 @@
 import { useTranslations } from "use-intl";
 
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { CopyButton } from "@stll/ui/copy-button";
 
 import { providerSetupGuidance } from "@/lib/errors/provider-setup-guidance";
-import { sanitizeHref } from "@/lib/sanitize-href";
 
 type ProviderDiagnosticMessageProps = {
   diagnostic: ProviderDiagnostic;

@@ -707,6 +707,15 @@
     },
     "writeOff": "شطب"
   },
+  "capabilityActions": {
+    "aiMissing": "لم يتم إعداد الذكاء الاصطناعي.",
+    "availabilityUnknown": "تعذر التأكد من التوفر.",
+    "deeplMissing": "لم يتم إعداد DeepL.",
+    "desktopUnavailable": "اربط تطبيق stella desktop أو حدّثه.",
+    "featureUnavailable": "هذه الميزة غير متاحة.",
+    "ocrUnavailable": "التعرف الضوئي على الحروف غير متاح.",
+    "translationMissing": "لم يتم إعداد أي خدمة ترجمة."
+  },
   "caseLaw": {
     "analysis": {
       "abstract": "ملخّص",
@@ -717,6 +726,13 @@
         "holding": "المبدأ القانوني",
         "procedural-history": "التاريخ الإجرائي",
         "reasoning": "التسبيب"
+      },
+      "errors": {
+        "answerIncomplete": "{source, select, organization {أعاد مفتاح {provider} الخاص بمؤسستك إجابة غير مكتملة.} other {أعاد نموذج الذكاء الاصطناعي إجابة غير مكتملة.}}",
+        "providerRefused": "{source, select, organization {رفض {provider} الطلب المُرسل بمفتاح مؤسستك. تحقّق من المفتاح وحصّته والفوترة في إعدادات المؤسسة.} other {رفض مزوّد الذكاء الاصطناعي الطلب.}}",
+        "providerUnavailable": "{source, select, organization {{provider} غير متاح حالياً لمفتاح مؤسستك.} other {مزوّد الذكاء الاصطناعي غير متاح حالياً.}}",
+        "timedOut": "{source, select, organization {لم يُجب {provider} في الوقت المحدد باستخدام مفتاح مؤسستك.} other {لم يُجب نموذج الذكاء الاصطناعي في الوقت المحدد.}}",
+        "unavailable": "تحليل الذكاء الاصطناعي غير متاح لهذا الحكم."
       },
       "generate": "توليد خلاصات الحكم بالذكاء الاصطناعي",
       "holdingAnchor": "الانتقال إلى الفقرة",
@@ -748,6 +764,7 @@
     "citation": {
       "citedAtLeast": "ذُكر في {count} استشهادات على الأقل",
       "citedSummary": "{count, plural, =0 {لم يُستشهد به} zero {لم يُستشهد به} one {استُشهد به مرة واحدة} two {استُشهد به مرتين} few {استُشهد به # مرات} many {استُشهد به # مرة} other {استُشهد به # مرة}}",
+      "dateUnavailable": "التاريخ غير متاح",
       "decisionCount": "{count, plural, =0 {لا توجد أحكام} zero {لا توجد أحكام} one {حكم واحد} two {حكمان} few {# أحكام} many {# حكمًا} other {# حكم}}",
       "lastNegative": "آخر استشهاد سلبي في {year}",
       "negativeCount": "{count, plural, zero {لا سلبية} one {سلبي واحد} two {سلبيان} few {# سلبية} many {# سلبيًا} other {# سلبي}}",
@@ -757,6 +774,7 @@
       "partialSummary": "إجماليات الاستشهادات والخط الزمني غير مكتملة.",
       "passageNotFound": "لم يُعثر على المقطع المستشهِد في النص",
       "positiveCount": "{count, plural, zero {لا إيجابية} one {إيجابي واحد} two {إيجابيان} few {# إيجابية} many {# إيجابيًا} other {# إيجابي}}",
+      "referenceLabel": "{court}، {caseNumber}، {date}",
       "showAll": "{count, plural, zero {عرض كل الأحكام} one {عرض الحكم} two {عرض الحكمين} few {عرض كل # أحكام} many {عرض كل # حكمًا} other {عرض كل # حكم}}",
       "stripLabel": "الاستشهادات حسب السنة",
       "treatment": {
@@ -877,10 +895,16 @@
     "pagination": {
       "goToPage": "الانتقال إلى الصفحة {page}",
       "label": "صفحات النتائج",
+      "pageOfCount": "الصفحة {page} من {pageCount}",
+      "pageOfEstimatedCount": "الصفحة {page} من ~{pageCount}",
+      "pageOfEstimatedCountLabel": "الصفحة {page} من نحو {pageCount}",
       "pageWithEstimatedResultCount": "الصفحة {page} · {count, plural, zero {نحو صفر نتيجة} one {نحو نتيجة واحدة} two {نحو نتيجتين} few {نحو # نتائج} many {نحو # نتيجة} other {نحو # نتيجة}}",
       "pageWithResultCount": "الصفحة {page} · {count, plural, zero {لا نتائج} one {نتيجة واحدة} two {نتيجتان} few {# نتائج} many {# نتيجة} other {# نتيجة}}",
-      "perPage": "لكل صفحة"
+      "perPage": "لكل صفحة",
+      "refineForMore": "ضيّق نطاق البحث لعرض مزيد من النتائج"
     },
+    "paragraphRangeNotFound": "{count, plural, zero {لم يتم العثور على الفقرات {range} في هذا النص.} one {لم يتم العثور على الفقرة {range} في هذا النص.} two {لم يتم العثور على الفقرتين {range} في هذا النص.} few {لم يتم العثور على الفقرات {range} في هذا النص.} many {لم يتم العثور على الفقرات {range} في هذا النص.} other {لم يتم العثور على الفقرات {range} في هذا النص.}}",
+    "paragraphRangeSelected": "{count, plural, zero {تم تمييز الفقرات {range}.} one {تم تمييز الفقرة {range}.} two {تم تمييز الفقرتين {range}.} few {تم تمييز الفقرات {range}.} many {تم تمييز الفقرات {range}.} other {تم تمييز الفقرات {range}.}}",
     "provision": {
       "article": "المادة {value}",
       "letter": "البند {value}",
@@ -890,6 +914,7 @@
       "subsection": "الفقرة {value}"
     },
     "reader": {
+      "documentUpdated": "تم تحديث المستند.",
       "expandProvisions": "توسيع الأحكام",
       "headMatter": "الديباجة",
       "sourceAttribution": "بيانات المصدر متاحة بحرية على <link>{source}</link>."
@@ -970,10 +995,14 @@
     "viewer": {
       "abstract": "الملخّص",
       "appliedVersionNotStated": "الصيغة المطبقة غير مذكورة",
+      "appliedVersionNotStatedCompact": "النسخة غير مذكورة",
       "appliedVersionStatedAmendment": "الصيغة المعدلة بموجب <reference>{amendment}</reference>",
+      "appliedVersionStatedAmendmentCompact": "المذكور: <reference>{amendment}</reference>",
       "appliedVersionStatedDate": "{relation, select, on {الصيغة السارية في {date}} until {الصيغة السارية حتى {date}} from {الصيغة السارية اعتبارًا من {date}} other {الصيغة السارية في {date}}}",
+      "appliedVersionStatedDateCompact": "{relation, select, on {المذكور: {date}} until {المذكور: حتى {date}} from {المذكور: ابتداءً من {date}} other {المذكور: {date}}}",
       "caseFileMayHoldOthers": "قد يتضمّن ملف هذه الدعوى قرارات أخرى أيضًا.",
       "citedBy": "مستشهَد به في",
+      "citedDecisionPassage": "مقطع من القرار",
       "cites": "يستشهد بـ",
       "dissentByline": "رأي مخالف: <bdi>{names}</bdi>",
       "judgeRole": {
@@ -1000,7 +1029,9 @@
       "textPending": "لا يزال جارٍ جلب نص الحكم",
       "textReadFailed": "تعذّر تحميل نص الحكم",
       "textUnavailable": "لا يتوفر نص لهذا الحكم",
-      "versionAtDecisionDateInferred": "الصيغة في تاريخ القرار (مستنتجة)"
+      "versionAtDecisionDateInferred": "الصيغة في تاريخ القرار (مستنتجة)",
+      "versionBasisInferredCompact": "تاريخ القرار · مستنتج",
+      "versionBasisInferredExplanation": "تُستنتج النسخة من تاريخ القرار. لا يحدد القرار الصياغة التي تنطبق."
     }
   },
   "catalogue": {
@@ -1058,7 +1089,6 @@
       "toastDescription": "ستتوفّر الدردشة بملء الصفحة مع إطلاق السلاسل المحفوظة.",
       "toastTitle": "العرض الكامل غير متاح بعد"
     },
-    "activateGeneratedView": "التفاعل مع هذا العرض",
     "aiPrompt": "أداة تحرير رسائل الذكاء الاصطناعي",
     "aiThread": "محادثة مع الذكاء الاصطناعي",
     "analyzingSources": "جارٍ تحليل المصادر",
@@ -1067,6 +1097,18 @@
     "anonymizedModeEnabled": "وضع الذكاء الاصطناعي المجهّل مفعّل",
     "anonymizedSpan": {
       "tooltip": "يُرسَل إلى النموذج بصيغة {placeholder}."
+    },
+    "answerEdit": {
+      "acceptFailed": "تعذّر حفظ التعديل. حاول مرة أخرى.",
+      "ask": "طلب تعديلات",
+      "failed": "تعذّر إعداد التعديل. حاول مرة أخرى.",
+      "instruction": "صِف التعديل",
+      "instructionRequired": "صِف كيفية تعديل النص المحدد.",
+      "invalidSelection": "لا يمكن تعديل هذا التحديد. حدد مقطعًا متصلًا من النص.",
+      "proposal": "التعديل المقترح",
+      "requesting": "جارٍ إعداد التعديلات…",
+      "stale": "تغيّرت هذه الإجابة. حدد النص مرة أخرى.",
+      "submit": "طلب تعديل"
     },
     "applyMode": {
       "description": "يُخزّن Word مَن أجرى كل تغيير. وسنتذكّر اختيارك.",
@@ -1179,6 +1221,13 @@
       "previewWaiting": "في انتظار المحتوى…",
       "savePendingReview": "احسم الاقتراحات قيد المراجعة قبل حفظ المستند."
     },
+    "credentialPasteAction": "استخدام بطاقة خاصة",
+    "credentialPasteDescription": "يبدو هذا النص كبيانات اعتماد. استخدم بطاقة خاصة لإبقائه خارج الدردشة. أعد لصق القيمة في البطاقة عند ظهورها.",
+    "credentialPasteRequest": "يرجى طلب بيانات الاعتماد هذه عبر بطاقة خاصة.",
+    "credentialPasteTitle": "تم إيقاف لصق بيانات الاعتماد",
+    "credentialSendAction": "إرسال على أي حال",
+    "credentialSendDescription": "أرسلها فقط إذا كنت تريد مشاركة هذه القيمة في المحادثة.",
+    "credentialSendTitle": "قد تحتوي هذه الرسالة على بيانات اعتماد",
     "deleteThread": "حذف المحادثة",
     "editMode": {
       "autoDirect": "تلقائي · إعادة كتابة",
@@ -1284,7 +1333,9 @@
     "pastedText": {
       "expand": "عرض النص الكامل",
       "fromClipboard": "تم لصق {count, plural, zero {# حرف} one {# حرف} two {# حرفين} few {# أحرف} many {# حرفاً} other {# حرف}}",
-      "fromPromptFallback": "مهارة"
+      "fromPromptFallback": "مهارة",
+      "showInTextField": "عرض في حقل النص",
+      "title": "نص ملصق"
     },
     "placeholder": "اكتب سؤالك هنا، / للمهارات، @ لإضافة سياق",
     "promptImprovementStrategies": {
@@ -1317,6 +1368,31 @@
     "removeSuggestion": "(إزالة)",
     "renameThread": "إعادة تسمية المحادثة",
     "renameUnavailableEmptyThread": "أرسل رسالة أولاً، ثم يمكن إعادة تسمية المحادثة.",
+    "requestSecret": {
+      "checkingTarget": "جارٍ التحقق من تفاصيل الموصل…",
+      "connectionDisposition": "نوع الاتصال: {disposition}",
+      "continuationError": "تم حفظ إجابتك، لكن تعذّرت متابعة الدردشة.",
+      "declined": "تم الرفض",
+      "description": "يحتاج المساعد إليها للمتابعة",
+      "error": "تعذر إرسال بيانات الاعتماد. حاول مرة أخرى.",
+      "kind": {
+        "token": "رمز وصول"
+      },
+      "normalConnection": "اتصال عادي",
+      "private": "لن يرى المساعد هذه القيمة.",
+      "provideAction": "تقديم",
+      "provided": "تم التقديم",
+      "purposeByAi": "الغرض الذي كتبه الذكاء الاصطناعي: {purpose}",
+      "receiptOnlyConnection": "اتصال خاص فقط",
+      "replaceOrdinaryConnection": "استبدال الاتصال العادي للاستخدام الخاص فقط",
+      "retryContinuationAction": "متابعة الدردشة",
+      "saveForFuture": "حفظ للدردشات المستقبلية",
+      "savedAvailabilityError": "تعذر التحقق من وجود بيانات اعتماد محفوظة.",
+      "target": "الهدف: {target}",
+      "title": "طلب بيانات اعتماد خاصة",
+      "useSavedAction": "استخدام بيانات الاعتماد المحفوظة",
+      "valueLabel": "بيانات الاعتماد"
+    },
     "resend": "إعادة الإرسال",
     "resizeThread": "تغيير حجم المحادثة",
     "richContentLoading": "جارٍ تحميل المحتوى التفاعلي…",
@@ -1440,6 +1516,7 @@
       "read_story": "قراءة جزء من المستند",
       "remember": "الحفظ في الذاكرة",
       "reply_comment": "الرد على التعليق",
+      "request_secret": "طلب بيانات اعتماد خاصة",
       "resolve_comment": "حل التعليق",
       "review_folder_consistency": "مراجعة اتساق المجلد",
       "run-stella-query": "قراءة بيانات الملف",
@@ -1473,6 +1550,7 @@
       "update-entity-fields": "تحديث البيانات الوصفية",
       "update_reader_annotation": "تعديل التمييز أو التعليق",
       "use-browser": "استخدام متصفحك",
+      "use_connector_secret": "استخدام بيانات اعتماد الموصل",
       "web_search": "البحث على الويب"
     },
     "toolCall": {
@@ -1713,6 +1791,7 @@
     "description": "الوصف",
     "details": "التفاصيل",
     "detailsHiddenFeatureUnavailable": "التفاصيل مخفية: الميزة غير مفعّلة",
+    "detailsUnavailable": "التفاصيل غير متاحة",
     "disconnect": "قطع الاتصال",
     "dismiss": "تجاهل",
     "displayName": "الاسم المعروض",
@@ -1981,6 +2060,7 @@
     "scopeExternalMcps": "استخدام تكاملاتك المتصلة",
     "scopeFeedback": "إرسال ملاحظات حول المنتج إلى مشرفي stella",
     "scopeKnowledgeWrite": "إنشاء بنودك وتعديلها وحذفها وتشغيل أدلّة المراجعة",
+    "scopeLawRead": "قراءة التشريعات العامة وأحكام القضاء",
     "scopeMattersWrite": "إنشاء وتعديل ملفاتك ومهامك",
     "scopeOfflineAccess": "إبقاء تسجيل دخولك نشطًا دون الحاجة إلى موافقة متكررة",
     "scopeOnboarding": "ضبط الولايات القضائية للممارسة لمؤسستك",
@@ -1992,11 +2072,38 @@
     "scopeSkills": "استخدام مهارات stella المحفوظة لديك",
     "scopeTemplates": "سرد قوالب مستنداتك وتعبئتها وإنشاؤها",
     "scopeTemplatesAnonymized": "سرد النسخ المُخفاة الهوية من قوالب مستنداتك وتعبئتها وإنشاؤها",
+    "sensitiveAccess": "يتضمن وصولًا يمكنه حذف البيانات أو تغيير مؤسستك",
+    "showAllPermissions": "{count, plural, zero {عرض الأذونات} one {عرض الإذن} two {عرض الإذنين} few {عرض الأذونات الـ#} many {عرض الأذونات الـ#} other {عرض الأذونات الـ#}}",
     "signedInAs": "تم تسجيل الدخول باسم <email>{accountEmail}</email>",
+    "summaryAdminRead": "سجل التدقيق",
+    "summaryAdminWrite": "أعضاء المؤسسة وإعداداتها، بما في ذلك حذفها",
+    "summaryBillingWrite": "إدخالات الوقت، بما في ذلك حذفها",
+    "summaryChat": "الدردشات، بما في ذلك حذفها",
+    "summaryContactsWrite": "جهات الاتصال، بما في ذلك حذفها",
+    "summaryDocumentsWrite": "المستندات، بما في ذلك حذفها",
+    "summaryExternalMcps": "التكاملات المتصلة",
+    "summaryFeedback": "الملاحظات",
+    "summaryKnowledgeWrite": "البنود وأدلّة المراجعة، بما في ذلك حذف البنود",
+    "summaryLawRead": "التشريعات العامة وأحكام القضاء",
+    "summaryLineChange": "<group>يمكنه تغيير:</group> {items} ({count})",
+    "summaryLineOther": "<group>وأيضًا:</group> {items}",
+    "summaryLineRead": "<group>يمكنه قراءة:</group> {items} ({count})",
+    "summaryMattersWrite": "الملفات والمهام، بما في ذلك حذفها",
+    "summaryOfflineAccess": "البقاء مسجّل الدخول",
+    "summaryOnboarding": "الولايات القضائية للممارسة",
+    "summaryProfile": "الملف الشخصي",
+    "summaryRead": "المستندات والملفات القانونية وجهات الاتصال",
+    "summaryReadAnonymized": "المستندات والملفات المُخفاة الهوية",
+    "summarySearch": "البحث",
+    "summarySearchAnonymized": "البحث المُخفى الهوية",
+    "summarySkills": "المهارات، بما في ذلك حذفها",
+    "summaryTemplates": "قوالب المستندات، بما في ذلك حذفها",
+    "summaryTemplatesAnonymized": "قوالب المستندات المُخفاة الهوية",
     "title": "التفويض بالوصول",
     "unverifiedApp": "تطبيق غير موثّق",
     "unverifiedExplanation": "لم تتحقق stella من الجهة التي تنشر هذا التطبيق.",
-    "useAnotherAccount": "استخدم حسابًا آخر"
+    "useAnotherAccount": "استخدم حسابًا آخر",
+    "verifiedPublisher": "تطبيق موثَّق من {publisher}"
   },
   "contacts": {
     "alsoPartyIn": "يظهر أيضاً كطرف في {count, plural, zero {# ملف قانوني آخر} one {ملف قانوني آخر واحد} two {ملفين قانونيين آخرين} few {# ملفات قانونية أخرى} many {# ملفًا قانونيًا آخر} other {# ملف قانوني آخر}}",
@@ -2815,6 +2922,12 @@
     "editSessionReleased": "تم فتح هذا المستند للتعديل في مكان آخر، لذا فإن علامة التبويب هذه للقراءة فقط.",
     "editSessionReleasedUnsaved": "تظل تغييراتك غير المحفوظة هنا.",
     "editSessionReopen": "إعادة الفتح للتعديل",
+    "editor": {
+      "outlineDepthAll": "كل المستويات",
+      "outlineDepthLabel": "عمق المخطط",
+      "outlineDepthThree": "1–3",
+      "outlineDepthTwo": "1–2"
+    },
     "evidenceReferences": "مراجع الأدلة",
     "evidenceUnavailable": "لا يمكن فتح مرجع الدليل هذا في هذا الملف القانوني.",
     "findReplace": {
@@ -3831,7 +3944,9 @@
   },
   "lawHome": {
     "clearRecent": "مسح السجل الأخير",
+    "clearRecentConfirmation": "هل تريد حذف جميع عمليات البحث والأحكام والتشريعات الأخيرة الخاصة بك في هذه المؤسسة؟ لا يمكن التراجع عن هذا الإجراء.",
     "enteringIntoForce": "يدخل حيز النفاذ قريبًا",
+    "importFailed": "تعذّر استيراد السجل المحلي. ما يزال محفوظًا على هذا الجهاز.",
     "inForceFrom": "نافذ اعتبارًا من {date}",
     "noRecent": "لا يوجد نشاط حديث",
     "noSignals": "لا توجد إشارات بعد",
@@ -3878,6 +3993,16 @@
       "citationWithQuote": "إحالة مع اقتباس",
       "quoteWithCitation": "اقتباس مع الإحالة",
       "textOnly": "النص فقط"
+    }
+  },
+  "lists": {
+    "sources": {
+      "add": "إضافة مصدر",
+      "documentRequired": "اختر مستندًا.",
+      "invalidPage": "أدخل رقم صفحة صحيحًا لا يقل عن 1.",
+      "page": "صفحة PDF (اختياري)",
+      "quote": "مقطع مقتبس (اختياري)",
+      "quoteTooLong": "استخدم {limit} حرف كحد أقصى."
     }
   },
   "markdownEditor": {
@@ -4052,12 +4177,11 @@
       "customModelDescription": "معرّف هذا النموذج غير موجود في كتالوج stella. سيُمرَّر إلى المزوّد المحدد كما هو مكتوب.",
       "customModelHint": "لا تطابق في الكتالوج. اكتب أي معرّف نموذج؛ تُحفظ المعرّفات المخصصة كما هي مكتوبة.",
       "decision": {
-        "add": "إضافة نموذج قرار",
-        "description": "الأسئلة ذات الإجابة المحددة، مثل فئات المستندات وقطبية الاستشهادات، تُوجَّه إلى هذا النموذج؛ وبدونه يجيب عنها النموذج التوليدي.",
+        "description": "أسئلة ذات إجابات محددة (فئات المستندات، قطبية الاستشهادات)",
+        "generativeFallback": "يستخدم النموذج التوليدي للمهمة.",
         "incomplete": "أدخل مفتاح API ونموذجًا لنموذج القرار، أو أزِله.",
         "instanceProvided": "توفّر stella بالفعل نموذج قرار؛ أضف نموذجك الخاص فقط لاستخدام نموذج آخر.",
-        "label": "نموذج القرار",
-        "modelId": "معرّف النموذج"
+        "label": "اتخاذ القرارات"
       },
       "defaultModel": "الافتراضي: {model}",
       "defaultModelOption": "الافتراضي",
@@ -4184,7 +4308,6 @@
       "member": "عضو",
       "owner": "المالك"
     },
-    "settings": "إعدادات المؤسسة",
     "settingsDescription": "عدّل اسم مؤسستك والمعرّف",
     "switchOrganization": "تبديل المؤسسة"
   },
@@ -4551,6 +4674,7 @@
       "noMatches": "لا يوجد اتصال يطابق «{query}»",
       "notConnected": "غير متصل",
       "permissionCount": "{count, plural, zero {لا أذونات} one {إذن واحد} two {إذنان} few {# أذونات} many {# إذنًا} other {# إذن}}",
+      "privateCredentialOnly": "بيانات اعتماد خاصة فقط",
       "searchPlaceholder": "ابحث في الاتصالات",
       "title": "الاتصالات",
       "turnedOff": "متوقف"
@@ -4723,7 +4847,17 @@
     "amendedTimes": "{count, plural, =0 {لم يُعدَّل} zero {لم يُعدَّل} one {عُدِّل مرة واحدة} two {عُدِّل مرتين} few {عُدِّل # مرات} many {عُدِّل # مرة} other {عُدِّل # مرة}}",
     "asOf": "النص النافذ في",
     "backToList": "جميع التشريعات",
+    "citingDecisionHideSnippet": "طيّ المقطع",
+    "citingDecisionMentionCount": "استُشهد به {count}×",
+    "citingDecisionOlderVersion": "نسخة أقدم",
+    "citingDecisionShowSnippet": "إظهار المقطع كاملًا",
+    "citingDecisionsCourtPlaceholder": "كل المحاكم",
     "citingDecisionsFilterPlaceholder": "تصفية الأحكام المحمَّلة",
+    "citingDecisionsSnapshotCapped": "{count} من القرارات المعروضة (ضمن أفضل {limit} قرارًا حسب عدد مرات ذكر هذا النص).",
+    "citingDecisionsSortCitations": "مرات ذكر هذا الحكم لهذا النص",
+    "citingDecisionsSortDate": "تاريخ القرار",
+    "citingDecisionsYear": "سنة القرار",
+    "citingDecisionsYearPlaceholder": "كل السنوات",
     "columns": {
       "act": "التشريع",
       "amendments": "التعديلات",
@@ -4765,6 +4899,7 @@
     "inForceSince": "نافذ منذ {date}",
     "ineligibleVersion": "{range} ({label})",
     "leadingDecisions": "القرارات الرائدة",
+    "leadingDecisionsExplanation": "أول إشارة في كل قرار، مرتبة حسب حجية الاستشهاد: الاستشهادات الواردة الموزونة، مع مراعاة مرتبة المحكمة ودلالة الاستشهاد وحداثته.",
     "noVersionInForce": "لم تكن أي نسخة من هذا النص نافذة في التاريخ المحدد.",
     "openEnded": "الآن",
     "openProvision": "فتح الحكم",
@@ -5402,11 +5537,7 @@
       "apiKeyPlaceholder": "00000000-0000-0000-0000-000000000000:fx",
       "currentKey": "المفتاح المخزَّن",
       "description": "هيّئ مفتاح API الخاص بـ DeepL لتمكين ترجمة المستندات. المفاتيح المجانية ومفاتيح Pro كلاهما مدعوم.",
-      "removed": "تمت إزالة مفتاح DeepL",
-      "removedDescription": "الترجمة معطّلة حتى تتم إضافة مفتاح جديد.",
       "removing": "جارٍ الإزالة…",
-      "saved": "تم حفظ مفتاح DeepL",
-      "savedDescription": "الترجمات متاحة الآن.",
       "tierFree": "مجاني",
       "tierPro": "Pro",
       "title": "ترجمة DeepL"

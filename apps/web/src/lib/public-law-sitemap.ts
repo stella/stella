@@ -35,7 +35,7 @@ import {
   isPublicToolsCrawlAllowed,
   isPublicToolsSitemapEnabled,
 } from "@/lib/public-tools-launch";
-import { isPublicStatuteCountry } from "@/lib/statute-route";
+import { isPublicStatuteCountry } from "@/lib/statutes/statute-route";
 import { createPublicCrawlRules } from "@/public-crawl-policy";
 
 const LAW_SITEMAP_PATH = "/sitemaps/law.xml";

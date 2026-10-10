@@ -22,6 +22,7 @@ import type {
   readsSharedPublicLawCorpus,
 } from "@/api/handlers/case-law/decisions/get-deferred-document";
 import type { lookupDecisionsByIdentity } from "@/api/handlers/case-law/decisions/lookup-by-identity";
+import type { readDecisionReaderSource } from "@/api/handlers/case-law/decisions/reader";
 import type { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
 import type { resolveAnnotationTarget } from "@/api/handlers/legal-reader/annotations/document-blocks";
 import type {
@@ -30,6 +31,7 @@ import type {
 } from "@/api/handlers/legislation/by-eli";
 import type { readPublicLegislationHandler } from "@/api/handlers/legislation/get";
 import type { readProvisionHistoryHandler } from "@/api/handlers/legislation/provision-history";
+import type { readProvisionPreviewHandler } from "@/api/handlers/legislation/provision-preview";
 import type { readLegislationProvisionVersions } from "@/api/handlers/legislation/provision-versions";
 import type { searchLegislationHandler } from "@/api/handlers/legislation/search";
 import type { listStatuteVersionsHandler } from "@/api/handlers/legislation/versions";
@@ -165,6 +167,8 @@ export type McpRequestContext = {
     readGatedDecisionCitationDigest?: typeof readGatedDecisionCitationDigest;
     lookupDecisionsByIdentity?: typeof lookupDecisionsByIdentity;
     readGatedDecisionWithDocument?: typeof readGatedDecisionWithDocument;
+    readDecisionReaderSource?: typeof readDecisionReaderSource;
+    readProvisionPreviewHandler?: typeof readProvisionPreviewHandler;
     readsSharedPublicLawCorpus?: typeof readsSharedPublicLawCorpus;
     searchLegislationHandler?: typeof searchLegislationHandler;
     resolveStatuteExpression?: typeof resolveStatuteExpression;

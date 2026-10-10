@@ -6,7 +6,12 @@ import {
   BYOK_DEFAULT_MODELS,
   resolveWorkingBYOKModelForRole,
 } from "@stll/ai-catalog";
-import type { AIProvider, BYOKProvider, ModelRole } from "@stll/ai-catalog";
+import type {
+  AIProvider,
+  BYOKProvider,
+  ModelRole,
+  DecisionModelProvider,
+} from "@stll/ai-catalog";
 
 import type { UsageServiceTier } from "@/api/db/schema";
 
@@ -97,8 +102,8 @@ export type OrgAIConfig = {
   decision: OrgDecisionModelConfig | null;
 };
 
-export const DECISION_MODEL_PROVIDERS = ["typesafe"] as const;
-export type DecisionModelProvider = (typeof DECISION_MODEL_PROVIDERS)[number];
+export { DECISION_MODEL_PROVIDERS } from "@stll/ai-catalog";
+export type { DecisionModelProvider };
 
 export type OrgDecisionModelConfig = {
   provider: DecisionModelProvider;
@@ -116,7 +121,7 @@ export type StandardOrgAIProviderConfig = {
   region?: DataRegion | undefined;
 };
 
-export type AnthropicOrgAIProviderConfig = {
+type AnthropicOrgAIProviderConfig = {
   provider: "anthropic";
   apiKey: string;
   /** Stored in the encrypted configuration alongside the key. */
@@ -166,7 +171,7 @@ export const normalizeProviderRegion = (
   return "global";
 };
 
-export const normalizeOrgAIProviderConfig = (
+const normalizeOrgAIProviderConfig = (
   config: OrgAIProviderConfig,
 ): OrgAIProviderConfig => {
   switch (config.provider) {
