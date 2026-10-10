@@ -258,6 +258,7 @@
     "moveGroupEarlier": "Déplacer vers la gauche",
     "moveGroupLater": "Déplacer vers la droite",
     "moreOptions": "Plus d’options",
+    "moreItemActions": "Plus d’actions pour l’élément {number}",
     "noResults": "Aucun extrait correspondant",
     "noResultsDescription": "Voulez-vous plutôt rechercher « {query} » dans les registres ?",
     "noGroup": "Aucun groupe",

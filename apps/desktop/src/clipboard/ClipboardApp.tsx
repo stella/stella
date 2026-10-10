@@ -338,6 +338,13 @@ const revealCard = ({ rail, id, focus }: CardRevealOptions) => {
   });
 };
 
+type ClipboardOpenMenuOptions = {
+  anchor: "button" | "pointer";
+  event: ReactMouseEvent<HTMLElement>;
+  item: ClipboardItem;
+  index: number;
+};
+
 type ClipboardCardProps = {
   active: boolean;
   ageReferenceTime: number;
@@ -346,11 +353,8 @@ type ClipboardCardProps = {
   groupName: string | null;
   index: number;
   item: ClipboardItem;
-  onOpenMenu: (
-    event: ReactMouseEvent<HTMLElement>,
-    item: ClipboardItem,
-    index: number,
-  ) => void;
+  menuOpen: boolean;
+  onOpenMenu: (options: ClipboardOpenMenuOptions) => void;
   onCopy: (item: ClipboardItem, format?: ClipboardCopyFormat) => void;
   onRename: (id: string, name: string) => void;
   onSelect: (index: number) => void;
@@ -451,6 +455,7 @@ const ClipboardCard = ({
   groupName,
   index,
   item,
+  menuOpen,
   onOpenMenu,
   onCopy,
   onRename,
@@ -643,7 +648,9 @@ const ClipboardCard = ({
         className="flex min-h-0 flex-1 flex-col self-stretch text-start focus-visible:outline-none"
         data-clipboard-card-trigger=""
         onClick={() => onCopy(item, "original")}
-        onContextMenu={(event) => onOpenMenu(event, item, index)}
+        onContextMenu={(event) =>
+          onOpenMenu({ anchor: "pointer", event, item, index })
+        }
         onFocus={() => onSelect(index)}
         type="button"
       >
@@ -669,6 +676,27 @@ const ClipboardCard = ({
           ) : null}
         </div>
       </button>
+
+      <Button
+        aria-expanded={menuOpen}
+        aria-haspopup="menu"
+        aria-label={t("moreItemActions", { number: index + 1 })}
+        className={cn(
+          "bg-background/90 text-muted-foreground hover:text-foreground focus-visible:ring-ring absolute end-2 top-2 flex size-6 items-center justify-center rounded-md opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:ring-2 focus-visible:outline-none motion-safe:transition-opacity motion-safe:duration-150",
+          (active || menuOpen) && "opacity-100",
+        )}
+        data-clipboard-more-trigger=""
+        onClick={(event) =>
+          onOpenMenu({ anchor: "button", event, item, index })
+        }
+        onFocus={() => onSelect(index)}
+        size="icon-xs"
+        tooltip={t("moreItemActions", { number: index + 1 })}
+        type="button"
+        variant="ghost"
+      >
+        <EllipsisVerticalIcon aria-hidden="true" className="size-3.5" />
+      </Button>
 
       <footer className="clipboard-card-footer flex h-12 shrink-0 items-center gap-2 px-4">
         {editingName ? null : (
@@ -1019,7 +1047,11 @@ const ClipboardDialog = ({
 
 type ClipboardContextMenuState =
   | { type: "closed" }
-  | { item: ClipboardItem; type: "open"; x: number; y: number };
+  | {
+      anchor: HTMLElement | { getBoundingClientRect: () => DOMRect };
+      item: ClipboardItem;
+      type: "open";
+    };
 
 type ClipboardDragState =
   | { type: "idle" }
@@ -1066,9 +1098,6 @@ const ClipboardContextMenu = ({
   sourceAppExclusions,
 }: ClipboardContextMenuProps) => {
   const t = useTranslations("clipboard");
-  const anchor = {
-    getBoundingClientRect: () => new DOMRect(menu.x, menu.y, 0, 0),
-  };
   const sourceApp = menu.item.sourceApp;
   const sourceAppCanBeExcluded =
     sourceApp !== null &&
@@ -1088,7 +1117,7 @@ const ClipboardContextMenu = ({
       open
     >
       <MenuTrigger nativeButton={false} render={<span className="sr-only" />} />
-      <MenuPopup anchor={anchor} className="w-56" finalFocus={false}>
+      <MenuPopup anchor={menu.anchor} className="w-56" finalFocus={false}>
         {menu.item.type === "formattedText" ? (
           <MenuSub>
             <MenuSubTrigger className="min-h-11 rounded-xl">
@@ -1935,19 +1964,26 @@ const ClipboardApp = () => {
     });
   };
 
-  const openContextMenu = (
-    event: ReactMouseEvent<HTMLElement>,
-    item: ClipboardItem,
-    index: number,
-  ) => {
+  const openContextMenu = ({
+    anchor,
+    event,
+    item,
+    index,
+  }: ClipboardOpenMenuOptions) => {
     event.preventDefault();
+    event.stopPropagation();
+    const { clientX, clientY } = event;
     contextMenuTriggerRef.current = event.currentTarget;
     setSelectedIndex(index);
     setContextMenu({
       item,
       type: "open",
-      x: event.clientX,
-      y: event.clientY,
+      anchor:
+        anchor === "button"
+          ? event.currentTarget
+          : {
+              getBoundingClientRect: () => new DOMRect(clientX, clientY, 0, 0),
+            },
     });
   };
 
@@ -2720,6 +2756,10 @@ const ClipboardApp = () => {
                             index={index}
                             item={item}
                             key={item.id}
+                            menuOpen={
+                              contextMenu.type === "open" &&
+                              contextMenu.item.id === item.id
+                            }
                             onOpenMenu={openContextMenu}
                             onCopy={copyItem}
                             onRename={(id, name) =>

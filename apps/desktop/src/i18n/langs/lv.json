@@ -258,6 +258,7 @@
     "moveGroupEarlier": "Pārvietot pa kreisi",
     "moveGroupLater": "Pārvietot pa labi",
     "moreOptions": "Vairāk iespēju",
+    "moreItemActions": "Vairāk darbību vienumam {number}",
     "noResults": "Nav atbilstošu izgriezumu",
     "noResultsDescription": "Vai tā vietā meklēt “{query}” reģistros?",
     "noGroup": "Bez grupas",

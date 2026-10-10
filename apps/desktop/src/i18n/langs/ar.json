@@ -258,6 +258,7 @@
     "moveGroupEarlier": "نقل إلى اليمين",
     "moveGroupLater": "نقل إلى اليسار",
     "moreOptions": "المزيد من الخيارات",
+    "moreItemActions": "مزيد من الإجراءات للعنصر {number}",
     "noResults": "لا توجد مقتطفات مطابقة",
     "noResultsDescription": "هل تريد البحث عن «{query}» في السجلات بدلاً من ذلك؟",
     "noGroup": "بلا مجموعة",

@@ -258,6 +258,7 @@
     "moveGroupEarlier": "Posunout doleva",
     "moveGroupLater": "Posunout doprava",
     "moreOptions": "Další možnosti",
+    "moreItemActions": "Další akce pro položku {number}",
     "noResults": "Žádné odpovídající výstřižky",
     "noResultsDescription": "Chcete místo toho hledat „{query}“ v rejstřících?",
     "noGroup": "Bez skupiny",

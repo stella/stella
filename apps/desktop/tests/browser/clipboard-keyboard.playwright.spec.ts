@@ -1323,3 +1323,105 @@ test("creates a group from a clip with inline preset and custom colors", async (
     name: "Client intake renamed",
   });
 });
+
+for (const language of ["en", "ar"] as const) {
+  test(`clip more button reveals without shifting and shares the context menu (${language})`, async ({
+    page,
+  }) => {
+    const cards = await openClipboard(page, language);
+    const card = page.locator('[data-clipboard-id="clip-2"]');
+    const more = card.locator("[data-clipboard-more-trigger]");
+    await expect(more).toHaveCSS("opacity", "0");
+    const before = await more.boundingBox();
+    expect(before).not.toBeNull();
+    await card.hover();
+    await expect(more).toHaveCSS("opacity", "1");
+    expect(await more.boundingBox()).toEqual(before);
+    const placement = await more.evaluate((button) => {
+      const cardBounds = button.closest("article")?.getBoundingClientRect();
+      if (!cardBounds) {
+        throw new TypeError("More button has no clip card");
+      }
+      const bounds = button.getBoundingClientRect();
+      return {
+        width: bounds.width,
+        height: bounds.height,
+        top: bounds.top - cardBounds.top,
+        left: bounds.left - cardBounds.left,
+        right: cardBounds.right - bounds.right,
+        nested: button.parentElement?.closest("button") !== null,
+      };
+    });
+    expect(placement.width).toBeGreaterThanOrEqual(24);
+    expect(placement.height).toBeGreaterThanOrEqual(24);
+    expect(placement.top).toBe(8);
+    expect(language === "ar" ? placement.left : placement.right).toBe(8);
+    expect(placement.nested).toBe(false);
+    await expect(more).toHaveCSS("transition-property", "opacity");
+
+    await cards.nth(1).click({ button: "right" });
+    const menu = page.getByRole("menu");
+    await expect(menu).toBeVisible();
+    const secondaryClickItems = await menu
+      .getByRole("menuitem")
+      .allTextContents();
+    await page.keyboard.press("Escape");
+    await expect(menu).toBeHidden();
+    await more.click({ position: { x: 1, y: 1 } });
+    await expect(menu).toBeVisible();
+    await expect(more).toHaveAttribute("aria-expanded", "true");
+    expect(await menu.getByRole("menuitem").allTextContents()).toEqual(
+      secondaryClickItems,
+    );
+    expect(await invocationCount(page, "clipboard_copy_item")).toBe(0);
+    expect(await invocationCount(page, "clipboard_hide")).toBe(0);
+    await page.keyboard.press("Escape");
+    await expect(menu).toBeHidden();
+    await expect(more).toBeFocused();
+    await expect(more).toHaveAttribute("aria-expanded", "false");
+    const menuPosition = page.locator('[data-slot="menu-positioner"]');
+    await more.click({ position: { x: 1, y: 1 } });
+    await expect(menu).toBeVisible();
+    const firstPosition = await menuPosition.boundingBox();
+    expect(firstPosition).not.toBeNull();
+    await page.keyboard.press("Escape");
+    await expect(menu).toBeHidden();
+    await more.click({ position: { x: 18, y: 18 } });
+    await expect(menu).toBeVisible();
+    await expect
+      .poll(async () => await menuPosition.boundingBox())
+      .toEqual(firstPosition);
+    await page.keyboard.press("Escape");
+    await expect(more).toBeFocused();
+    expect(await invocationCount(page, "clipboard_copy_item")).toBe(0);
+    expect(await invocationCount(page, "clipboard_hide")).toBe(0);
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await expect(more).toHaveCSS("transition-duration", "0s");
+  });
+
+  test(`clip more button opens by Tab and Enter and restores focus on Escape (${language})`, async ({
+    browserName,
+    page,
+  }) => {
+    const cards = await openClipboard(page, language);
+    const more = page.locator(
+      '[data-clipboard-id="clip-1"] [data-clipboard-more-trigger]',
+    );
+    const messages = language === "ar" ? arMessages : enMessages;
+    await expect(more).toHaveAccessibleName(
+      messages.clipboard.moreItemActions.replace("{number}", "1"),
+    );
+    await expect(more).toHaveAttribute("aria-haspopup", "menu");
+    await expect(more).toHaveCSS("opacity", "1");
+    await cards.first().press(browserName === "webkit" ? "Alt+Tab" : "Tab");
+    await expect(more).toBeFocused();
+    await more.press("Enter");
+    await expect(page.getByRole("menu")).toBeVisible();
+    await expect(more).toHaveAttribute("aria-expanded", "true");
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("menu")).toBeHidden();
+    await expect(more).toBeFocused();
+    expect(await invocationCount(page, "clipboard_copy_item")).toBe(0);
+    expect(await invocationCount(page, "clipboard_hide")).toBe(0);
+  });
+}

@@ -258,6 +258,7 @@
     "moveGroupEarlier": "Perkelti į kairę",
     "moveGroupLater": "Perkelti į dešinę",
     "moreOptions": "Daugiau parinkčių",
+    "moreItemActions": "Daugiau elemento {number} veiksmų",
     "noResults": "Atitinkančių iškarpų nėra",
     "noResultsDescription": "Ar norite „{query}“ ieškoti registruose?",
     "noGroup": "Be grupės",
