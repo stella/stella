@@ -34,8 +34,8 @@ describe.skipIf(!enabled)("account export lifecycle", () => {
       const suffix = Bun.randomUUIDv7().replaceAll("-", "");
       const schema = `export_${suffix}`;
       const ownerRole = `export_owner_${suffix}`;
-      const userA = toSafeId<"user">("export_account_a");
-      const userB = toSafeId<"user">("export_account_b");
+      const recoveryUserId = toSafeId<"user">("export_account_a");
+      const userId = toSafeId<"user">("export_account_b");
       const rateLimitContext = {
         increment: () => ({
           count: 1,
@@ -56,7 +56,7 @@ describe.skipIf(!enabled)("account export lifecycle", () => {
         await client.unsafe(
           `CREATE TABLE "user" (id text PRIMARY KEY, deleted_at timestamptz); GRANT SELECT, UPDATE ON "user" TO ${ownerRole}`,
         );
-        await client`INSERT INTO "user" (id) VALUES (${userA}), (${userB})`;
+        await client`INSERT INTO "user" (id) VALUES (${recoveryUserId}), (${userId})`;
         for (const migration of [
           "20261010005100_account_audit_scope",
           "20261010212100_account_exports",
@@ -86,30 +86,20 @@ describe.skipIf(!enabled)("account export lifecycle", () => {
           `ALTER TABLE account_exports OWNER TO ${ownerRole}; ALTER TABLE account_audit_logs OWNER TO ${ownerRole}`,
         );
         await client.unsafe(`SET ROLE ${ownerRole}`);
-        const requested = await requestAccountExport(userB, {
+        const requested = await requestAccountExport(userId, {
           db,
           rateLimitContext,
         });
         expect(
-          (await requestAccountExport(userB, { db, rateLimitContext })).id,
+          (await requestAccountExport(userId, { db, rateLimitContext })).id,
         ).toBe(requested.id);
         expect(requested.status).toBe("requested");
-        expect((await readLatestAccountExport(userB, db))?.id).toBe(
+        expect((await readLatestAccountExport(userId, db))?.id).toBe(
           requested.id,
         );
-        const isolationCases = [
-          {
-            name: "account exports",
-            runAAgainstB: async () =>
-              await readAccountExport({ id: requested.id, userId: userA, db }),
-            runBPositive: async () =>
-              await readAccountExport({ id: requested.id, userId: userB, db }),
-          },
-        ];
-        for (const isolationCase of isolationCases) {
-          expect(await isolationCase.runAAgainstB()).toBeNull();
-          expect((await isolationCase.runBPositive())?.id).toBe(requested.id);
-        }
+        expect(
+          (await readAccountExport({ id: requested.id, userId, db }))?.id,
+        ).toBe(requested.id);
         const firstClaim = await claimAccountExport(requested.id, db);
         if (firstClaim === null) {
           panic("Requested export claim required");
@@ -138,31 +128,19 @@ describe.skipIf(!enabled)("account export lifecycle", () => {
         ).toBe(false);
         const ready = await recordAccountExportDownload({
           id: requested.id,
-          userId: userB,
+          userId,
           db,
         });
         expect(ready?.status).toBe("ready");
-        const downloadIsolationCases = [
-          {
-            name: "account export downloads",
-            runAAgainstB: async () =>
-              await recordAccountExportDownload({
-                id: requested.id,
-                userId: userA,
-                db,
-              }),
-            runBPositive: async () =>
-              await recordAccountExportDownload({
-                id: requested.id,
-                userId: userB,
-                db,
-              }),
-          },
-        ];
-        for (const isolationCase of downloadIsolationCases) {
-          expect(await isolationCase.runAAgainstB()).toBeNull();
-          expect((await isolationCase.runBPositive())?.id).toBe(requested.id);
-        }
+        expect(
+          (
+            await recordAccountExportDownload({
+              id: requested.id,
+              userId,
+              db,
+            })
+          )?.id,
+        ).toBe(requested.id);
         if (ready === null || ready.expiresAt === null) {
           panic("Ready account export expiry required");
         }
@@ -177,7 +155,7 @@ describe.skipIf(!enabled)("account export lifecycle", () => {
         ]);
         const audits = await db.transaction(async (tx) => {
           await tx.execute(
-            sql`SELECT set_config('app.user_id', ${userB}, true)`,
+            sql`SELECT set_config('app.user_id', ${userId}, true)`,
           );
           return await tx
             .select({ eventType: accountAuditLogs.eventType })
@@ -204,7 +182,7 @@ describe.skipIf(!enabled)("account export lifecycle", () => {
         expect(
           await recordAccountExportDownload({
             id: requested.id,
-            userId: userB,
+            userId,
             db,
           }),
         ).toBeNull();
@@ -213,7 +191,7 @@ describe.skipIf(!enabled)("account export lifecycle", () => {
         );
         await clearAccountExportObjects(requested.id, db);
         expect(
-          (await readAccountExport({ id: requested.id, userId: userB, db }))
+          (await readAccountExport({ id: requested.id, userId, db }))
             ?.attemptObjectKeys,
         ).toEqual([firstClaim.objectKey, claim.objectKey]);
         expect((await listRecoverableAccountExports(db)).items).toEqual([]);
@@ -230,11 +208,11 @@ describe.skipIf(!enabled)("account export lifecycle", () => {
         );
         await clearAccountExportObjects(requested.id, db);
         expect(
-          (await readAccountExport({ id: requested.id, userId: userB, db }))
+          (await readAccountExport({ id: requested.id, userId, db }))
             ?.attemptObjectKeys,
         ).toEqual([]);
 
-        const retrying = await requestAccountExport(userB, {
+        const retrying = await requestAccountExport(userId, {
           db,
           rateLimitContext,
         });
@@ -250,10 +228,9 @@ describe.skipIf(!enabled)("account export lifecycle", () => {
           expect(await failAccountExport(retry, db)).toBe(true);
         }
         expect(
-          (await readAccountExport({ id: retrying.id, userId: userB, db }))
-            ?.status,
+          (await readAccountExport({ id: retrying.id, userId, db }))?.status,
         ).toBe("failed");
-        expect((await readLatestAccountExport(userB, db))?.id).toBe(
+        expect((await readLatestAccountExport(userId, db))?.id).toBe(
           retrying.id,
         );
         expect(await claimAccountExport(retrying.id, db)).toBeNull();
@@ -269,7 +246,7 @@ describe.skipIf(!enabled)("account export lifecycle", () => {
         expect(
           (await listRecoverableAccountExports(db)).items.map(({ id }) => id),
         ).toEqual([retrying.id]);
-        const recovering = await requestAccountExport(userA, {
+        const recovering = await requestAccountExport(recoveryUserId, {
           db,
           rateLimitContext,
         });

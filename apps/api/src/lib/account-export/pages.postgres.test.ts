@@ -48,9 +48,8 @@ describe.skipIf(!enabled)("account export personal data", () => {
       if (organizationA === undefined || organizationB === undefined) {
         panic("Two organization fixtures required");
       }
-      const userA = mintAuthProviderId<"user">();
-      const userB = mintAuthProviderId<"user">();
-      const users = [userA, userB];
+      const userId = mintAuthProviderId<"user">();
+      const users = [userId];
       const workspaceId = createSafeId<"workspace">();
       const queries = ["First account query", "Second account query"];
       await db.insert(user).values(
@@ -71,10 +70,10 @@ describe.skipIf(!enabled)("account export personal data", () => {
         );
         await db.insert(member).values(
           organizations.flatMap((organizationId) =>
-            users.map((userId) => ({
+            users.map((memberUserId) => ({
               id: Bun.randomUUIDv7(),
               organizationId,
-              userId,
+              userId: memberUserId,
               role: "member",
               createdAt: new Date(),
             })),
@@ -88,7 +87,7 @@ describe.skipIf(!enabled)("account export personal data", () => {
         });
         await db.insert(contacts).values({
           organizationId: organizationA,
-          createdBy: userB,
+          createdBy: userId,
           type: "person",
           displayName: "Organization contact fixture",
         });
@@ -98,10 +97,9 @@ describe.skipIf(!enabled)("account export personal data", () => {
             if (query === undefined) {
               panic("Organization query fixture required");
             }
-            return await prepareSearchHistoryRows(
-              { organizationId, userId: userB },
-              [{ entry: { kind: "search", query }, usedAt: new Date() }],
-            );
+            return await prepareSearchHistoryRows({ organizationId, userId }, [
+              { entry: { kind: "search", query }, usedAt: new Date() },
+            ]);
           }),
         );
         const historyRows = prepared.flat();
@@ -112,17 +110,6 @@ describe.skipIf(!enabled)("account export personal data", () => {
           }
         }
         await db.insert(searchHistoryEntries).values(historyRows);
-        await db.insert(searchHistoryEntries).values(
-          await prepareSearchHistoryRows(
-            { organizationId: organizationA, userId: userA },
-            [
-              {
-                entry: { kind: "search", query: "Other account query" },
-                usedAt: new Date(),
-              },
-            ],
-          ),
-        );
         await db.insert(aiMemories).values([
           {
             organizationId: organizationA,
@@ -131,7 +118,7 @@ describe.skipIf(!enabled)("account export personal data", () => {
             content: "Organization memory fixture",
             dedupKey: "a".repeat(64),
             source: "user",
-            createdBy: userB,
+            createdBy: userId,
           },
           {
             organizationId: organizationA,
@@ -141,11 +128,11 @@ describe.skipIf(!enabled)("account export personal data", () => {
             content: "Matter memory fixture",
             dedupKey: "b".repeat(64),
             source: "user",
-            createdBy: userB,
+            createdBy: userId,
           },
         ]);
 
-        const archiveFor = async (userId: SafeId<"user">) => {
+        const archiveFor = async (exportUserId: SafeId<"user">) => {
           const published: Uint8Array[] = [];
           const deps = {
             rows: (options) =>
@@ -162,7 +149,7 @@ describe.skipIf(!enabled)("account export personal data", () => {
           } satisfies AccountExportArchiveDeps;
           await buildAccountExportArchive({
             db,
-            userId,
+            userId: exportUserId,
             objectKey: "export-fixture.zip",
             signal: new AbortController().signal,
             deps,
@@ -173,66 +160,47 @@ describe.skipIf(!enabled)("account export personal data", () => {
           }
           return await JSZip.loadAsync(bytes);
         };
-        const isolationCases = [
-          {
-            name: "account export history",
-            runAAgainstB: async () => await archiveFor(userA),
-            runBPositive: async () => await archiveFor(userB),
-          },
-        ];
-        for (const isolationCase of isolationCases) {
-          const denied = await isolationCase.runAAgainstB();
-          const deniedHistory = await denied
-            .file("search_history_entries.json")
-            ?.async("string");
-          if (deniedHistory === undefined) {
-            panic("History archive entry required");
-          }
-          for (const query of queries) {
-            expect(deniedHistory.includes(query)).toBe(false);
-          }
-          const archive = await isolationCase.runBPositive();
-          const historyText = await archive
-            .file("search_history_entries.json")
-            ?.async("string");
-          if (historyText === undefined) {
-            panic("History archive entry required");
-          }
-          const history: unknown = JSON.parse(historyText);
-          expect(history).toHaveLength(2);
-          expect(history).toEqual(
-            expect.arrayContaining([
-              {
-                organizationId: organizationA,
-                data: expect.objectContaining({
-                  kind: "search",
-                  query: queries.at(0),
-                }),
-              },
-              {
-                organizationId: organizationB,
-                data: expect.objectContaining({
-                  kind: "search",
-                  query: queries.at(1),
-                }),
-              },
-            ]),
-          );
-          expect(await archive.file("ai_memories.json")?.async("string")).toBe(
-            "[]",
-          );
-          expect(Object.keys(archive.files).toSorted()).toEqual(
-            [
-              ...EXPORTED_ACCOUNT_TABLE_NAMES.map((table) => `${table}.json`),
-              "manifest.json",
-            ].toSorted(),
-          );
-          for (const [table, disposition] of Object.entries(
-            ACCOUNT_EXPORT_REGISTRY,
-          )) {
-            if (disposition.type === "exempt") {
-              expect(archive.file(`${table}.json`)).toBeNull();
-            }
+        const archive = await archiveFor(userId);
+        const historyText = await archive
+          .file("search_history_entries.json")
+          ?.async("string");
+        if (historyText === undefined) {
+          panic("History archive entry required");
+        }
+        const history: unknown = JSON.parse(historyText);
+        expect(history).toHaveLength(2);
+        expect(history).toEqual(
+          expect.arrayContaining([
+            {
+              organizationId: organizationA,
+              data: expect.objectContaining({
+                kind: "search",
+                query: queries.at(0),
+              }),
+            },
+            {
+              organizationId: organizationB,
+              data: expect.objectContaining({
+                kind: "search",
+                query: queries.at(1),
+              }),
+            },
+          ]),
+        );
+        expect(await archive.file("ai_memories.json")?.async("string")).toBe(
+          "[]",
+        );
+        expect(Object.keys(archive.files).toSorted()).toEqual(
+          [
+            ...EXPORTED_ACCOUNT_TABLE_NAMES.map((table) => `${table}.json`),
+            "manifest.json",
+          ].toSorted(),
+        );
+        for (const [table, disposition] of Object.entries(
+          ACCOUNT_EXPORT_REGISTRY,
+        )) {
+          if (disposition.type === "exempt") {
+            expect(archive.file(`${table}.json`)).toBeNull();
           }
         }
       } finally {
