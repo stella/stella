@@ -99,6 +99,8 @@ const axes = [
   ["steps.check.outputs.trusted", ["", "false", "true"]],
   ["steps.completed-depth.outputs.run_required", ["", "false", "true"]],
   ["github.event.pull_request.draft", [false, true]],
+  ["github.event.pull_request.head.repo.fork", [false, true]],
+  ["github.token", ["", "fixture-token"]],
   ["steps.pilot.outputs.coverage_profile", ["normal-v1", "pilot-fast-v1"]],
   ["steps.changed-files.outputs.package_checks_required", ["false", "true"]],
   ["steps.changed-files.outputs.api_scope_unknown", ["false", "true"]],
@@ -132,6 +134,13 @@ const contexts = combinations
       return false;
     }
     if (event !== "pull_request" && values["github.event.pull_request.draft"]) {
+      return false;
+    }
+    if (
+      values["github.event.pull_request.head.repo.fork"] &&
+      (event !== "pull_request" ||
+        values["steps.check.outputs.trusted"] === "true")
+    ) {
       return false;
     }
     if (

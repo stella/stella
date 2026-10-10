@@ -667,7 +667,7 @@ jobs:
         run: bun scripts/ci-service-images.ts --resolve >> "$GITHUB_OUTPUT"
 
       - name: Log out of GitHub Container Registry
-        if: always()
+        if: always() && steps.completed-depth.outputs.run_required != 'false'
         run: docker logout ghcr.io
 
       - name: Install heavy planner dependencies
