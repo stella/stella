@@ -26,6 +26,8 @@ const recordingOwner = ({
   let active = 0;
   let peak = 0;
   let opens = 0;
+  let cancellationClients = 0;
+  let cancellationQueries = 0;
   const failure = new TypeError("Dedicated transport failed");
   const cancellationGate = Promise.withResolvers<undefined>();
   const owner = createDedicatedConnectionOwner({
@@ -40,11 +42,17 @@ const recordingOwner = ({
         options.connection?.["statement_timeout"] === 500
           ? "cancellation"
           : "work";
+      if (kind === "cancellation") {
+        cancellationClients += 1;
+      }
       active += 1;
       peak = Math.max(peak, active);
       let state: "open" | "closed" = "open";
       return {
         unsafe: async () => {
+          if (kind === "cancellation") {
+            cancellationQueries += 1;
+          }
           if (kind === "cancellation" && mode === "blockCancellation") {
             await cancellationGate.promise;
           }
@@ -70,7 +78,13 @@ const recordingOwner = ({
   });
   return {
     owner,
-    stats: () => ({ active, peak, opens }),
+    stats: () => ({
+      active,
+      peak,
+      opens,
+      cancellationClients,
+      cancellationQueries,
+    }),
     failure,
     cancellationGate,
   };
@@ -91,9 +105,8 @@ describe("dedicated connection lifecycle", () => {
     await Promise.all(
       Array.from({ length: 100 }, async () => {
         const job = await owner.openLongRunningSql(workOptions());
-        const cancellation = job.cancelBackend(42);
-        expect(job.cancelBackend(42)).toBe(cancellation);
-        await cancellation;
+        await Promise.all([job.cancelBackend(42), job.cancelBackend(42)]);
+        await job.cancelBackend(42);
         await job.end();
       }),
     );
@@ -101,6 +114,8 @@ describe("dedicated connection lifecycle", () => {
       active: 0,
       peak: DEDICATED_CONNECTIONS_PER_PROCESS,
       opens: 200,
+      cancellationClients: 100,
+      cancellationQueries: 100,
     });
   });
 
@@ -192,10 +207,14 @@ describe("dedicated connection lifecycle", () => {
     const { owner } = recordingOwner();
     const job = await owner.openLongRunningSql(workOptions());
     await job.cancelBackend(42);
-    expect(async () => job.cancelBackend(43)).toThrow("different backend");
+    expect(await rejectionOf(job.cancelBackend(43))).toHaveProperty(
+      "message",
+      expect.stringContaining("different backend"),
+    );
     await job.end();
-    expect(async () => job.cancelBackend(42)).toThrow(
-      "after dedicated connection closed",
+    expect(await rejectionOf(job.cancelBackend(42))).toHaveProperty(
+      "message",
+      expect.stringContaining("after dedicated connection closed"),
     );
     expect(await rejectionOf(job.end())).toHaveProperty(
       "message",
