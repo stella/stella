@@ -189,6 +189,31 @@ test("adjacent literal skipped tests declare twenty samples and lapse at expiry"
   ).toThrow("Invalid dated waiver expiry");
 });
 
+test("quarantine inventory is not derailed by template and regex syntax", () => {
+  const contents = [
+    ["const interpolated = `value $", "{x} suffix`;"].join(""),
+    "const backticks = /``/u;",
+    "// test-quarantine-expires: 2026-10-05",
+    'test.skip("still inventoried", () => {});',
+  ].join("\n");
+
+  expect(
+    readTestQuarantines({ "a.test.ts": contents }).map(({ id }) => id),
+  ).toEqual(["still inventoried"]);
+});
+
+test("marker text in templates and strings is ignored", () => {
+  const contents = [
+    [
+      "const interpolated = `value $",
+      "{x} // test-quarantine-expires: 2026-10-05`;",
+    ].join(""),
+    'const quoted = "// test-quarantine-expires: 2026-10-06";',
+  ].join("\n");
+
+  expect(readTestQuarantines({ "a.test.ts": contents })).toEqual([]);
+});
+
 test("literal metacharacters are escaped and duplicate test identities fail closed", () => {
   const contents =
     '// test-quarantine-expires: 2026-10-05T00:00:00.000Z\ntest.skip("case [x] (a)?", () => {});';

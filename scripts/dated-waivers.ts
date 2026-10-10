@@ -265,28 +265,30 @@ export const readTestQuarantines = (
       true,
     );
     const consumed = new Set<number>();
-    const scanner = ts.createScanner(
-      ts.ScriptTarget.Latest,
-      false,
-      ts.LanguageVariant.Standard,
-      contents,
-    );
     const markers = new Map<number, string>();
-    let token = scanner.scan();
-    while (token !== ts.SyntaxKind.EndOfFileToken) {
-      if (
-        token === ts.SyntaxKind.SingleLineCommentTrivia ||
-        token === ts.SyntaxKind.MultiLineCommentTrivia
-      ) {
+    const recordedComments = new Set<number>();
+    const recordComments = (
+      ranges: readonly ts.CommentRange[] | undefined,
+    ): void => {
+      for (const range of ranges ?? []) {
+        if (recordedComments.has(range.pos)) {
+          continue;
+        }
+        recordedComments.add(range.pos);
         const match = /test-quarantine-expires:\s*(\S+)/u.exec(
-          scanner.getTokenText(),
+          contents.slice(range.pos, range.end),
         );
         if (match) {
-          markers.set(scanner.getTokenStart(), match.at(1) ?? "");
+          markers.set(range.pos, match.at(1) ?? "");
         }
       }
-      token = scanner.scan();
-    }
+    };
+    const collectComments = (node: ts.Node): void => {
+      recordComments(ts.getLeadingCommentRanges(contents, node.getFullStart()));
+      recordComments(ts.getTrailingCommentRanges(contents, node.getEnd()));
+      ts.forEachChild(node, collectComments);
+    };
+    collectComments(ast);
     if (markers.size === 0) {
       continue;
     }
