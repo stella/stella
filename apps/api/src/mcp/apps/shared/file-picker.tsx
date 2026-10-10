@@ -2,12 +2,14 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 
 import { DirectionProvider } from "@base-ui/react/direction-provider";
+import type { App } from "@modelcontextprotocol/ext-apps";
 import { panic } from "better-result";
 
 import { Button } from "@stll/ui/button";
 import { Field, FieldLabel } from "@stll/ui/field";
 import { FileInput } from "@stll/ui/file-input";
 
+import { applyHostStyles } from "./bridge";
 import { appLocale, isAppMessageKey } from "./locale";
 import "./generated/style.css";
 
@@ -150,9 +152,15 @@ export const mountFilePicker = () => {
       files.clear();
       render();
     },
-    setLocale: (hostLocale: string | undefined) => {
-      locale = appLocale(hostLocale);
-      render();
+    applyHostContext: (context: ReturnType<App["getHostContext"]>) => {
+      if (!context) {
+        return;
+      }
+      if (context.locale !== undefined) {
+        locale = appLocale(context.locale);
+        render();
+      }
+      applyHostStyles(context);
     },
     onFilesChanged: (callback: () => void) =>
       container.addEventListener("fileschanged", callback),

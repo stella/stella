@@ -1,9 +1,4 @@
-import {
-  App,
-  applyDocumentTheme,
-  applyHostFonts,
-  applyHostStyleVariables,
-} from "@modelcontextprotocol/ext-apps";
+import { App } from "@modelcontextprotocol/ext-apps";
 import { panic, TaggedError } from "better-result";
 
 import {
@@ -16,6 +11,7 @@ import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-exec
 import { fetchWithTimeout } from "@stll/fetch";
 
 import { hashUploadFile } from "../file-content-hash";
+import { parseAppToolPayload } from "../shared/bridge";
 import { mountFilePicker } from "../shared/file-picker";
 import { createUploadTargetController } from "./upload-target";
 
@@ -27,6 +23,7 @@ class UploadAppError extends TaggedError("UploadAppError")<{
 
 const picker = mountFilePicker();
 const t = picker.translate;
+const applyHostContext = picker.applyHostContext;
 const uploadButton = document.querySelector<HTMLButtonElement>("#upload");
 if (!uploadButton) {
   panic("Document upload app markup is incomplete");
@@ -34,23 +31,6 @@ if (!uploadButton) {
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
-
-type AppToolResult = Awaited<ReturnType<App["callServerTool"]>>;
-
-const parsePayload = (result: AppToolResult): unknown => {
-  if (result.structuredContent !== undefined) {
-    return result.structuredContent;
-  }
-  const text = result.content.find((part) => part.type === "text")?.text;
-  if (text === undefined) {
-    return undefined;
-  }
-  try {
-    return JSON.parse(text);
-  } catch {
-    return undefined;
-  }
-};
 
 const targetController = createUploadTargetController({
   hasSelectedFile: () => Boolean(picker.getFile("file")),
@@ -82,7 +62,7 @@ const callCapability = async (
       message: message ?? t("capabilityFailed", { capability }),
     });
   }
-  const payload = parsePayload(result);
+  const payload = parseAppToolPayload(result);
   return isRecord(payload) && "result" in payload ? payload["result"] : payload;
 };
 
@@ -122,24 +102,6 @@ const parseReservation = (
 
 const app = new App({ name: "stella document upload", version: "1.0.0" });
 
-const applyHostContext = (context: ReturnType<App["getHostContext"]>) => {
-  if (!context) {
-    return;
-  }
-  if (context.locale !== undefined) {
-    picker.setLocale(context.locale);
-  }
-  if (context.theme) {
-    applyDocumentTheme(context.theme);
-    document.documentElement.classList.toggle("dark", context.theme === "dark");
-  }
-  if (context.styles?.variables) {
-    applyHostStyleVariables(context.styles.variables);
-  }
-  if (context.styles?.css?.fonts) {
-    applyHostFonts(context.styles.css.fonts);
-  }
-};
 app.addEventListener("hostcontextchanged", applyHostContext);
 app.addEventListener("toolinput", ({ arguments: toolArguments }) => {
   const { entity_id: entityId } = toolArguments ?? {};
