@@ -141,4 +141,33 @@ describe("reader answer evidence", () => {
       invalidCitationCount: 0,
     });
   });
+  test("malformed markers remain literal while complete markers retain their provenance", () => {
+    const citation = { decisionId, paragraphId: "p-2" };
+    const marker = `[[${decisionId}#p-2]]`;
+    const malformed = "[[]] [[unfinished\n[[single] text ";
+    const result = validateReaderAnswerCitations({
+      content: `${malformed}${marker} [[[invented]] ${marker}`,
+      allowed: [citation],
+    });
+    expect(result).toEqual({
+      content: `${malformed}${marker}  ${marker}`,
+      citations: [citation],
+      invalidCitationCount: 1,
+    });
+  });
+
+  test("repeated unmatched openings and long failed markers preserve content", () => {
+    const content = `${"[[ ".repeat(100_000)}\n[[${"x".repeat(200_000)}] tail`;
+    expect(validateReaderAnswerCitations({ content, allowed: [] })).toEqual({
+      content,
+      citations: [],
+      invalidCitationCount: 0,
+    });
+    expect(
+      validateReaderAnswerCitations({
+        content: `${"[".repeat(200_000)}]]`,
+        allowed: [],
+      }),
+    ).toEqual({ content: "", citations: [], invalidCitationCount: 1 });
+  });
 });

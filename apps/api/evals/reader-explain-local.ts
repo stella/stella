@@ -47,7 +47,7 @@ if (mode === "prompts") {
             `${path.resolve(capturePath)}.tool-trace.jsonl`,
           ],
         },
-        instruction: `${scenario.instruction} Explain the selection in this decision's context in English. If related case law helps, call fetch_related_decision_excerpts; execute its command with the local shell tool to replay bounded captured corpus excerpts. Cite by decisionId and paragraphId. Return JSON with caseId, harness (codex or claude), answer, citations.`,
+        instruction: `${scenario.instruction} Explain the selection in this decision's context in English. If related case law helps, call fetch_related_decision_excerpts; execute its command with the local shell tool to replay bounded captured corpus excerpts. Cite by decisionId and paragraphId. Return JSON with caseId, harness (a nonempty local run label), answer, citations.`,
       }),
     );
   }

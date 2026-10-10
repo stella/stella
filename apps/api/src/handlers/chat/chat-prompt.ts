@@ -103,6 +103,15 @@ import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { formatDecisionForPrompt } from "@/api/lib/case-law/analysis-prompt";
 import { readDecisionAnalysisAst } from "@/api/lib/case-law/decision-analysis";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
+import {
+  chatCacheStablePrefixSchema,
+  chatOrganizationPromptLayerSchema,
+} from "@/api/lib/chat/chat-prompt-layers";
+import type {
+  ChatCacheStablePrefix,
+  ChatOrganizationPromptLayer,
+  ChatSafePromptLayers,
+} from "@/api/lib/chat/chat-prompt-layers";
 import { estimateTextTokens } from "@/api/lib/chat/compaction-tokens";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { formatDateInTimeZone } from "@/api/lib/date-format";
@@ -144,6 +153,11 @@ import {
 } from "@/api/lib/prompt-safety";
 import { readS3ArrayBuffer } from "@/api/lib/s3";
 import type { McpFeatureAccessContext } from "@/api/mcp/feature-access";
+
+export type {
+  ChatCacheStablePrefix,
+  ChatSafePromptLayers,
+} from "@/api/lib/chat/chat-prompt-layers";
 
 const TITLE_MAX_LENGTH = 80;
 const ACTIVE_DECISION_MAX_CHARS = 12_000;
@@ -479,14 +493,6 @@ type PromptSkillMetadata = SkillMetadata & {
   source: AvailableChatSkill["source"];
 };
 
-const chatCacheStablePrefixSchema = v.pipe(
-  v.string(),
-  v.brand("ChatCacheStablePrefix"),
-);
-const chatOrganizationPromptLayerSchema = v.pipe(
-  v.string(),
-  v.brand("ChatOrganizationPromptLayer"),
-);
 const chatUserPromptSectionSchema = v.pipe(
   v.string(),
   v.brand("ChatUserPromptSection"),
@@ -502,10 +508,6 @@ const chatUntrustedPromptSuffixSchema = v.pipe(
 );
 const chatFullPromptSchema = v.pipe(v.string(), v.brand("ChatFullPrompt"));
 
-export type ChatCacheStablePrefix = v.InferOutput<
-  typeof chatCacheStablePrefixSchema
->;
-
 export type ChatSafePrompt = v.InferOutput<typeof chatSafePromptSchema>;
 
 // The system prompt's layers, in prompt order: static (the cache-stable
@@ -517,13 +519,6 @@ export type ChatSafePrompt = v.InferOutput<typeof chatSafePromptSchema>;
 // turn's data is a user or volatile section, which neither the static nor the
 // organization slot of `ChatSafePromptLayers` accepts.
 
-/** Text every user of one organization is told: its practice jurisdictions,
- *  and the fixed anonymized-mode guidance. Empty, or starts with the section
- *  separator. */
-type ChatOrganizationPromptLayer = v.InferOutput<
-  typeof chatOrganizationPromptLayerSchema
->;
-
 /** A section built from one user's data: their profile, their skills. */
 type ChatUserPromptSection = v.InferOutput<typeof chatUserPromptSectionSchema>;
 
@@ -532,13 +527,6 @@ type ChatUserPromptSection = v.InferOutput<typeof chatUserPromptSectionSchema>;
 type ChatVolatilePromptSection = v.InferOutput<
   typeof chatVolatilePromptSectionSchema
 >;
-
-/** The cacheable layers: the prompt's safe half, split where the cache
- *  boundaries sit. `safePrompt` is their concatenation. */
-export type ChatSafePromptLayers = {
-  readonly organization: ChatOrganizationPromptLayer;
-  readonly static: ChatCacheStablePrefix;
-};
 
 export type ChatUntrustedPromptSuffix = v.InferOutput<
   typeof chatUntrustedPromptSuffixSchema

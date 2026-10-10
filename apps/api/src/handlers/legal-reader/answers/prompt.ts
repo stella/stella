@@ -82,18 +82,51 @@ export const validateReaderAnswerCitations = ({
   );
   const citations = new Map<string, ReaderAnswerCitation>();
   let invalidCitationCount = 0;
-  const validatedContent = content.replace(
-    /\[\[([^\]\n]+)\]\]/gu,
-    (_marker, key: string) => {
+  const parts: string[] = [];
+  let untouchedStart = 0;
+  let markerStart: number | undefined;
+  let cursor = 0;
+  // A failed marker's nested openings share its same closing delimiter, so
+  // scanning each character once avoids retrying every opening bracket.
+  while (cursor < content.length) {
+    const character = content[cursor];
+    if (markerStart === undefined) {
+      if (character === "[" && content[cursor + 1] === "[") {
+        markerStart = cursor;
+        cursor += 2;
+        continue;
+      }
+      cursor++;
+      continue;
+    }
+    if (character !== "]" && character !== "\n") {
+      cursor++;
+      continue;
+    }
+    if (
+      character === "]" &&
+      content[cursor + 1] === "]" &&
+      cursor > markerStart + 2
+    ) {
+      parts.push(content.slice(untouchedStart, markerStart));
+      const key = content.slice(markerStart + 2, cursor);
       const citation = allowedByKey.get(key);
       if (citation === undefined) {
         invalidCitationCount++;
-        return "";
+      } else {
+        citations.set(key, citation);
+        parts.push(content.slice(markerStart, cursor + 2));
       }
-      citations.set(key, citation);
-      return `[[${key}]]`;
-    },
-  );
+      cursor += 2;
+      untouchedStart = cursor;
+    } else {
+      cursor++;
+    }
+    markerStart = undefined;
+  }
+  parts.push(content.slice(untouchedStart));
+  const validatedContent = parts.join("");
+
   return {
     content: validatedContent,
     citations: [...citations.values()],

@@ -1,4 +1,4 @@
-import { chatSystemPrompts } from "@/api/handlers/chat/chat-request";
+import { chatSystemPrompts } from "@/api/lib/chat/chat-request";
 // oxlint-disable-next-line no-ad-hoc-chat-request/no-ad-hoc-chat-request
 import { systemPromptsPatch } from "@/api/lib/tanstack-ai-generate";
 

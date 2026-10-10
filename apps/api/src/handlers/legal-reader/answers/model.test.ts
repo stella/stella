@@ -4,6 +4,11 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import type { OrgAIConfig } from "@/api/lib/ai-config";
+import { SERVER_ANALYTICS_EVENTS } from "@/api/lib/analytics/server-analytics";
+import type {
+  ServerAnalytics,
+  ServerAnalyticsCaptureParams,
+} from "@/api/lib/analytics/server-analytics";
 import { createSafeId } from "@/api/lib/branded-types";
 import { ReaderAnswerCorpusError } from "@/api/lib/case-law/reader-answer-corpus";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -191,7 +196,7 @@ const modelFixture = ({
   keySource = "instance",
 }: ModelFixtureOptions) => {
   const turns: number[] = [];
-  const errors: unknown[] = [];
+  const events: ServerAnalyticsCaptureParams[] = [];
   const model = {
     adapter: adapterFixture({ mode, turns, toolCalls }),
     keySource,
@@ -199,15 +204,14 @@ const modelFixture = ({
     modelOptions: {},
     provider: "openai",
   } satisfies ResolvedTanStackTextModel;
-  const createAnalytics: NonNullable<
-    Parameters<typeof runReaderAnswerModel>[1]
-  >["createAnalytics"] = () => ({
-    captureError: (error) => {
-      errors.push(error);
+  const analytics = {
+    capture: (event) => {
+      events.push(event);
     },
-    middleware: {},
-  });
-  return { model, turns, errors, createAnalytics };
+    identifyOrganizationGroup: () => undefined,
+    flush: async () => undefined,
+  } satisfies ServerAnalytics;
+  return { model, turns, events, analytics };
 };
 
 describe("reader answer real SDK model boundary", () => {
@@ -242,7 +246,7 @@ describe("reader answer real SDK model boundary", () => {
 
           return fixture.model;
         },
-        createAnalytics: fixture.createAnalytics,
+        analytics: fixture.analytics,
         readRelated: async (options) => {
           reads++;
           expect(options.decisionId).toBe(input.decisionId);
@@ -271,7 +275,6 @@ describe("reader answer real SDK model boundary", () => {
       completionTokens: 6,
       totalTokens: 36,
     });
-    expect(fixture.errors).toEqual([]);
   });
 
   test("BYOK selection and metering are passed to the existing resolver and analytics", async () => {
@@ -283,9 +286,19 @@ describe("reader answer real SDK model boundary", () => {
     } satisfies OrgAIConfig;
     const fixture = modelFixture({ mode: "success", keySource: "byok" });
     let resolved = false;
-    let analyticsConfigured = false;
+    let meteringAttempts = 0;
     const run = runReaderAnswerModel(
-      { ...input, orgAIConfig },
+      {
+        ...input,
+        orgAIConfig,
+        metering: {
+          ...input.metering,
+          safeDb: async () => {
+            meteringAttempts++;
+            return input.metering.safeDb(async () => Result.ok(undefined));
+          },
+        },
+      },
       {
         resolveModel: async (options) => {
           resolved = true;
@@ -293,12 +306,7 @@ describe("reader answer real SDK model boundary", () => {
           expect(options.modelId).toBe(input.modelId);
           return fixture.model;
         },
-        createAnalytics: (options) => {
-          analyticsConfigured = true;
-          expect(options.orgAIConfig).toBe(orgAIConfig);
-          expect(options.usageMetering).toBe(input.metering);
-          return { captureError: () => undefined, middleware: {} };
-        },
+        analytics: fixture.analytics,
       },
     );
     const result = await run;
@@ -307,7 +315,17 @@ describe("reader answer real SDK model boundary", () => {
     }
     expect(result.value.content).toBe("Explained.");
     expect(resolved).toBe(true);
-    expect(analyticsConfigured).toBe(true);
+    expect(meteringAttempts).toBe(1);
+    const completed = fixture.events.find(
+      ({ event }) => event === SERVER_ANALYTICS_EVENTS.aiGenerationCompleted,
+    );
+    expect(completed).toBeDefined();
+    if (completed?.event === SERVER_ANALYTICS_EVENTS.aiGenerationCompleted) {
+      expect(completed.properties.model_key_source).toBe("byok");
+      expect(completed.groups?.organization).toBe(
+        input.metering.organizationId,
+      );
+    }
   });
 
   test("a recoverable corpus failure lets the model finish without invented evidence", async () => {
@@ -327,7 +345,7 @@ describe("reader answer real SDK model boundary", () => {
       },
       {
         resolveModel: async () => fixture.model,
-        createAnalytics: fixture.createAnalytics,
+        analytics: fixture.analytics,
         readRelated: async () => Result.err(failure),
       },
     );
@@ -336,7 +354,7 @@ describe("reader answer real SDK model boundary", () => {
     }
     expect(result.value.content).toBe("Context. Explained.");
     expect(evidence).toEqual([]);
-    expect(fixture.errors).toEqual([failure]);
+    expect(fixture.turns).toEqual([1, 2]);
   });
 
   for (const modelId of [undefined, "us.deepseek.r1-v1:0"]) {
@@ -349,7 +367,7 @@ describe("reader answer real SDK model boundary", () => {
             ...fixture.model,
             modelId: "us.deepseek.r1-v1:0",
           }),
-          createAnalytics: fixture.createAnalytics,
+          analytics: fixture.analytics,
         },
       );
       const result = await run;
@@ -362,7 +380,7 @@ describe("reader answer real SDK model boundary", () => {
         });
       }
       expect(fixture.turns).toEqual([]);
-      expect(fixture.errors).toHaveLength(1);
+      expect(fixture.events).toEqual([]);
     });
   }
 
@@ -376,7 +394,7 @@ describe("reader answer real SDK model boundary", () => {
       const fixture = modelFixture({ mode });
       const run = runReaderAnswerModel(inputFixture(), {
         resolveModel: async () => fixture.model,
-        createAnalytics: fixture.createAnalytics,
+        analytics: fixture.analytics,
       });
       const result = await run;
       expect(result.isErr()).toBe(true);
@@ -388,7 +406,7 @@ describe("reader answer real SDK model boundary", () => {
               : "Reader answer generation did not complete",
         });
       }
-      expect(fixture.errors).toHaveLength(1);
+      expect(fixture.turns).toEqual([1]);
     });
   }
 
@@ -396,7 +414,7 @@ describe("reader answer real SDK model boundary", () => {
     const fixture = modelFixture({ mode: "empty" });
     const run = runReaderAnswerModel(inputFixture(), {
       resolveModel: async () => fixture.model,
-      createAnalytics: fixture.createAnalytics,
+      analytics: fixture.analytics,
       async *streamRun() {
         yield {
           type: EventType.RUN_STARTED,

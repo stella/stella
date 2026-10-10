@@ -8,14 +8,15 @@ import type {
   ReaderAnswerUsage,
 } from "@stll/api-contract/reader-answers";
 
-import { chatRequestOptions } from "@/api/handlers/chat/chat-request";
 import { getTemperatureForRole, resolveCaching } from "@/api/lib/ai-config";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
+import type { ServerAnalytics } from "@/api/lib/analytics/server-analytics";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import { readReaderAnswerRelated } from "@/api/lib/case-law/reader-answer-corpus";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
+import { chatRequestOptions } from "@/api/lib/chat/chat-request";
 import {
   guardModelMessages,
   guardModelToolSchemas,
@@ -27,6 +28,8 @@ import {
   runFinishedOutcomeOf,
 } from "@/api/lib/chat/tanstack-chat-runtime";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import type { AdmittedModelAction } from "@/api/lib/rate-limit/model-action-admission";
 import {
   resolveTanStackTextModel,
@@ -61,7 +64,7 @@ export type ReaderAnswerModelRunner = (
 
 type ReaderAnswerModelDependencies = {
   resolveModel?: typeof resolveTanStackTextModel;
-  createAnalytics?: typeof createTanStackAIAnalyticsCallbacks;
+  analytics?: ServerAnalytics;
   readRelated?: typeof readReaderAnswerRelated;
   streamRun?: typeof streamTanStackChatRun;
 };
@@ -69,13 +72,21 @@ type ReaderAnswerModelDependencies = {
 const READER_ANSWER_TOOL_CALLS = 3;
 const READER_ANSWER_MODEL_STEPS = 4;
 const READER_ANSWER_OUTPUT_TOKENS = 4096;
+const MODEL_FAILURE = failureSink({
+  event: "reader_answer.model_failed",
+  expected: [],
+});
+const CORPUS_FAILURE = failureSink({
+  event: "reader_answer.related_corpus_unavailable",
+  expected: [],
+});
 
 /** The same admitted, policy-aware model resolver and chat request/runtime as chat. */
 export const runReaderAnswerModel = async (
   input: ReaderAnswerModelInput,
   {
     resolveModel = resolveTanStackTextModel,
-    createAnalytics = createTanStackAIAnalyticsCallbacks,
+    analytics: analyticsTransport,
     readRelated = readReaderAnswerRelated,
     streamRun = streamTanStackChatRun,
   }: ReaderAnswerModelDependencies = {},
@@ -85,7 +96,10 @@ export const runReaderAnswerModel = async (
     role: "chat",
     scopeKey: null,
   });
-  const analytics = createAnalytics({
+  const analytics = createTanStackAIAnalyticsCallbacks({
+    ...(analyticsTransport === undefined
+      ? {}
+      : { analytics: analyticsTransport }),
     dataClass: "customer",
     feature: "case-law.reader-answer",
     modelRole: "chat",
@@ -109,7 +123,7 @@ export const runReaderAnswerModel = async (
     catch: (error) => error,
   });
   if (resolved.isErr()) {
-    analytics.captureError(resolved.error);
+    observeFailure(resolved.error, { sink: MODEL_FAILURE });
     return Result.err(resolved.error);
   }
   const model = resolved.value;
@@ -119,7 +133,7 @@ export const runReaderAnswerModel = async (
       message:
         "Choose a model that supports streaming tools for reader answers",
     });
-    analytics.captureError(error);
+    observeFailure(error, { sink: MODEL_FAILURE });
     return Result.err(error);
   }
   let toolCalls = 0;
@@ -144,7 +158,7 @@ export const runReaderAnswerModel = async (
       query,
     });
     if (Result.isError(read)) {
-      analytics.captureError(read.error);
+      observeFailure(read.error, { sink: CORPUS_FAILURE });
       return { status: "unavailable", excerpts: [] };
     }
     input.onEvidence(
@@ -254,7 +268,7 @@ export const runReaderAnswerModel = async (
   input.signal.removeEventListener("abort", abort);
   const result = streamed.isErr() ? Result.err(streamed.error) : streamed.value;
   if (Result.isError(result)) {
-    analytics.captureError(result.error);
+    observeFailure(result.error, { sink: MODEL_FAILURE });
   }
   return result;
 };

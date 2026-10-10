@@ -10,7 +10,7 @@ export default {
     "apps/api/src/handlers/case-law/decisions/search-expand.ts",
     "apps/api/src/handlers/case-law/decisions/search-refine.ts",
     "apps/api/src/handlers/case-law/polarity/llm-classifier.ts",
-    "apps/api/src/handlers/chat/chat-request.ts",
+    "apps/api/src/lib/chat/chat-request.ts",
     "apps/api/src/handlers/chat/chat-turn-run.ts",
     "apps/api/src/handlers/chat/compaction.ts",
     "apps/api/src/handlers/chat/generate-thread-title.ts",

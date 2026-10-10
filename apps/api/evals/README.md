@@ -112,11 +112,11 @@ bun run evals/reader-explain-local.ts prompts /absolute/path/corpus-capture.json
 bun run evals/reader-explain-local.ts score /absolute/path/corpus-capture.json /absolute/path/local-results.jsonl /absolute/path/corpus-capture.json.tool-trace.jsonl
 ```
 
-Run each emitted prompt through the local Codex or Claude harness, making the
+Run each emitted prompt through a local coding-agent harness, making the
 emitted `fetch_related_decision_excerpts.command` available as a local shell
 operation. The `tool` mode replays at most eight captured related paragraphs;
 prompts include bounded context from the selected decision.
-Record each result as JSONL with `caseId`, `harness: "codex" | "claude"`, `answer`,
+Record each result as JSONL with `caseId`, `harness` (a nonempty local run label), `answer`,
 `citations: [{decisionId, paragraphId}]`. The tool command appends its actual
 returned citations to a local trace; scoring reads this trace separately from
 model output, so a model cannot claim it fetched a paragraph it never retrieved.

@@ -1,20 +1,14 @@
 import { Result } from "better-result";
 
-import type { ReaderAnswerFollowUp } from "@stll/api-contract/reader-answers";
-
 import { prepareReaderAnswer } from "@/api/handlers/legal-reader/answers/operation";
-import type { PrepareReaderAnswerOptions } from "@/api/handlers/legal-reader/answers/operation";
+import { readerAnswerRequest } from "@/api/handlers/legal-reader/answers/request";
 import {
   answerParamsSchema,
   followUpBodySchema,
 } from "@/api/handlers/legal-reader/answers/schema";
-import { streamReaderAnswer } from "@/api/handlers/legal-reader/answers/stream";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import type { SafeId } from "@/api/lib/branded-types";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
-import { createModelActionAdmitter } from "@/api/lib/rate-limit/model-action-admission";
-import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
 
 const config = {
   permissions: { legalReaderAnnotation: ["update"] },
@@ -26,75 +20,21 @@ const config = {
   body: followUpBodySchema,
 } satisfies HandlerConfig;
 
-export const followUpReaderAnswerHandler = async function* (
-  options: Omit<PrepareReaderAnswerOptions, "command"> & {
-    answerId: SafeId<"legalReaderAnswer">;
-    body: ReaderAnswerFollowUp;
-  },
-) {
-  const { body, answerId, ...scope } = options;
-  return yield* Result.await(
-    prepareReaderAnswer({
-      ...scope,
-      command: { type: "follow-up", answerId, body },
-    }),
-  );
-};
-
 const followUpReaderAnswer = createSafeRootHandler(
   config,
-  async function* ({
-    body,
-    params,
-    recordAuditEvent,
-    safeDb,
-    scopedDb,
-    session,
-    user,
-    orgAIConfig,
-    orgAIConfigStatus,
-    managedAIResidency,
-    request,
-    usageLane,
-  }) {
-    const available = requireTanStackAIAvailableForRole({
-      role: "chat",
-      orgConfig: orgAIConfig,
-      configStatus: orgAIConfigStatus,
-      dataClass: "customer",
-    });
-    if (Result.isError(available)) {
-      return available;
-    }
-    const scope = {
-      organizationId: session.activeOrganizationId,
-      userId: user.id,
-      safeDb,
-      recordAuditEvent,
-    };
+  async function* (ctx) {
+    const request = yield* readerAnswerRequest(ctx);
     const prepared = yield* Result.await(
       prepareReaderAnswer({
-        ...scope,
-        command: { type: "follow-up", body, answerId: params.answerId },
+        ...request.scope,
+        command: {
+          type: "follow-up",
+          body: ctx.body,
+          answerId: ctx.params.answerId,
+        },
       }),
     );
-    return Result.ok(
-      streamReaderAnswer({
-        ...scope,
-        prepared,
-        orgAIConfig,
-        managedAIResidency,
-        requestSignal: request.signal,
-        ...(usageLane === undefined ? {} : { usageLane }),
-        admitModelAction: createModelActionAdmitter({
-          organizationId: scope.organizationId,
-          userId: scope.userId,
-          organizationStateDb: scopedDb,
-          actionKind: "chat.send",
-          scope: "independent",
-        }),
-      }),
-    );
+    return Result.ok(request.stream(prepared));
   },
 );
 declareAggregateMutation(followUpReaderAnswer.handler, {

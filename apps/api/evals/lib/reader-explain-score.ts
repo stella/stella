@@ -29,7 +29,7 @@ export const explainCorpusCaptureSchema = v.object({
 
 export const explainLocalResultSchema = v.object({
   caseId: v.string(),
-  harness: v.picklist(["codex", "claude"]),
+  harness: v.pipe(v.string(), v.minLength(1)),
   answer: v.pipe(v.string(), v.minLength(1)),
   citations: v.array(citationSchema),
 });

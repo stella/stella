@@ -21,9 +21,11 @@ import {
   validateReaderAnswerCitations,
 } from "@/api/handlers/legal-reader/answers/prompt";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
-import { captureError } from "@/api/lib/analytics/capture";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import type { ModelActionAdmitter } from "@/api/lib/rate-limit/model-action-admission";
 import {
   CACHE_CONTROL_HEADER,
@@ -31,6 +33,15 @@ import {
   SSE_MEDIA_TYPE,
 } from "@/api/lib/security-headers";
 import type { UsageLaneDecision } from "@/api/lib/usage/lane-routing";
+
+const READER_ANSWER_GENERATION_FAILURE = failureSink({
+  event: "reader_answer.generation_failed",
+  expected: [],
+});
+const READER_ANSWER_PERSISTENCE_FAILURE = failureSink({
+  event: "reader_answer.persistence_failed",
+  expected: [],
+});
 
 type StreamOwnerPredicateOptions = {
   tx: Transaction;
@@ -158,7 +169,6 @@ export const streamReaderAnswer = ({
             });
             const saved = yield* Result.await(
               scope.safeDb(async (tx) => {
-                // audit: skip - settlement of an already audited reader turn
                 const rows = await tx
                   .update(legalReaderAnswerMessages)
                   .set({
@@ -171,6 +181,13 @@ export const streamReaderAnswer = ({
                   })
                   .where(streamOwnerPredicate({ tx, scope, prepared }))
                   .returning({ id: legalReaderAnswerMessages.id });
+                if (rows.length > 0) {
+                  await scope.recordAuditEvent(tx, {
+                    action: AUDIT_ACTION.UPDATE,
+                    resourceType: AUDIT_RESOURCE_TYPE.CASE_LAW_READER_ANSWER,
+                    resourceId: prepared.answer.id,
+                  });
+                }
                 return rows.length > 0;
               }),
             );
@@ -195,14 +212,15 @@ export const streamReaderAnswer = ({
       );
       const outcome = admitted.andThen((settlement) => settlement);
       if (Result.isError(outcome)) {
-        captureError(outcome.error, { source: "reader-answer-stream" });
+        observeFailure(outcome.error, {
+          sink: READER_ANSWER_GENERATION_FAILURE,
+        });
         const partial = validateReaderAnswerCitations({
           content: partialContent,
           allowed,
         });
         const failed = await scope.safeDb(async (tx) => {
-          // audit: skip - failure settlement of an already audited reader turn
-          await tx
+          const rows = await tx
             .update(legalReaderAnswerMessages)
             .set({
               status: "failed",
@@ -210,11 +228,19 @@ export const streamReaderAnswer = ({
               citations: partial.citations,
               updatedAt: new Date(),
             })
-            .where(streamOwnerPredicate({ tx, scope, prepared }));
+            .where(streamOwnerPredicate({ tx, scope, prepared }))
+            .returning({ id: legalReaderAnswerMessages.id });
+          if (rows.length > 0) {
+            await scope.recordAuditEvent(tx, {
+              action: AUDIT_ACTION.UPDATE,
+              resourceType: AUDIT_RESOURCE_TYPE.CASE_LAW_READER_ANSWER,
+              resourceId: prepared.answer.id,
+            });
+          }
         });
         if (Result.isError(failed)) {
-          captureError(failed.error, {
-            source: "reader-answer-failure-persistence",
+          observeFailure(failed.error, {
+            sink: READER_ANSWER_PERSISTENCE_FAILURE,
           });
         }
         emit({

@@ -55,10 +55,6 @@ import type {
   ChatSafePromptLayers,
   ChatUntrustedPromptSuffix,
 } from "@/api/handlers/chat/chat-prompt";
-import {
-  chatAttemptRequestOptions,
-  chatSystemPrompts,
-} from "@/api/handlers/chat/chat-request";
 import { shadowChatRun } from "@/api/handlers/chat/chat-run-shadow";
 import {
   CHAT_RUN_MODE,
@@ -151,6 +147,10 @@ import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack
 import type { TanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
+import {
+  chatAttemptRequestOptions,
+  chatSystemPrompts,
+} from "@/api/lib/chat/chat-request";
 import {
   chatToolMapToArray,
   type ChatTool,

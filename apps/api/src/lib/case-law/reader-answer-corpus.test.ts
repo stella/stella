@@ -144,6 +144,42 @@ describe("private reader answer corpus excerpts", () => {
     }
   });
 
+  test("returns the strongest matching window beyond the paragraph prefix", async () => {
+    const decisionId = createSafeId<"caseLawDecision">();
+    const relatedId = createSafeId<"caseLawDecision">();
+    const relevant = "liability damages negligence";
+    const text = `Civil ${"İstanbul background ".repeat(900)}${relevant} ${"reasoning ".repeat(200)}`;
+    expect(text.indexOf(relevant)).toBeGreaterThan(
+      READER_ANSWER_RELATED_LIMITS.excerptChars,
+    );
+    const result = await readReaderAnswerRelated(
+      {
+        decisionId,
+        paragraphId: "paragraph-0",
+        direction: "cited",
+        query: "damages negligence",
+      },
+      {
+        readRelatedIds: async () => [relatedId],
+        readDecision: async ({ decisionId: id }) =>
+          source({
+            decisionId: id,
+            texts: [id === decisionId ? "Civil liability" : text],
+          }),
+      },
+    );
+    if (result.isErr()) {
+      throw result.error;
+    }
+    expect(result.value).toHaveLength(1);
+    expect(result.value.at(0)?.decisionId).toBe(relatedId);
+    expect(result.value.at(0)?.paragraphId).toBe("paragraph-0");
+    expect(result.value.at(0)?.text).toContain(relevant);
+    expect(result.value.at(0)?.text.length).toBeLessThanOrEqual(
+      READER_ANSWER_RELATED_LIMITS.excerptChars,
+    );
+  });
+
   test("missing anchor cannot trigger graph or related reads", async () => {
     const decisionId = createSafeId<"caseLawDecision">();
     let graphReads = 0;

@@ -43,7 +43,7 @@ if (!scenario) {
 }
 const result = {
   caseId: scenario.id,
-  harness: "codex" as const,
+  harness: "local",
   answer: "Explanation grounded in the returned precedent.",
   citations: [{ decisionId: "precedent", paragraphId: "returned" }],
   toolReturnedCitations: [{ decisionId: "precedent", paragraphId: "returned" }],

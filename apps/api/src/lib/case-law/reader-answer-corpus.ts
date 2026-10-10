@@ -71,11 +71,15 @@ const readRelatedDecisionIds = async (
       // Interleave both directions so an outgoing page cannot crowd out citing decisions.
       const ids = new Set<SafeId<"caseLawDecision">>();
       const outgoingIds =
-        outgoing?.items.flatMap((row) =>
-          row.citedDecisionId === null ? [] : [row.citedDecisionId],
-        ) ?? [];
+        outgoing === null
+          ? []
+          : outgoing.items.flatMap((row) =>
+              row.citedDecisionId === null ? [] : [row.citedDecisionId],
+            );
       const incomingIds =
-        incoming?.items.map((row) => row.citingDecisionId) ?? [];
+        incoming === null
+          ? []
+          : incoming.items.map((row) => row.citingDecisionId);
       for (
         let index = 0;
         index < Math.max(outgoingIds.length, incomingIds.length);
@@ -150,8 +154,13 @@ export type ReadReaderAnswerRelatedOptions = {
   query: string;
 };
 
+const READER_ANSWER_WORD_PATTERN = /[\p{L}\p{N}]{3,}/gu;
 const queryTerms = (text: string) =>
-  new Set(text.toLowerCase().match(/[\p{L}\p{N}]{3,}/gu));
+  new Set(
+    Array.from(text.matchAll(READER_ANSWER_WORD_PATTERN), (match) =>
+      match[0].toLowerCase(),
+    ),
+  );
 
 /** User-derived ranking lives only in this call; no cache receives the query or excerpts. */
 export const readReaderAnswerRelated = async (
@@ -161,23 +170,26 @@ export const readReaderAnswerRelated = async (
     ...dependencies
   }: ReaderAnswerCorpusDependencies = {},
 ) =>
-  Result.tryPromise({
-    try: async (): Promise<ReaderAnswerRelatedExcerpt[]> => {
-      const origin = await readReaderAnswerDecision(decisionId, dependencies);
-      if (origin.isErr()) {
-        throw origin.error;
-      }
-      const anchor = origin.value?.paragraphs.find(
+  (
+    await Result.gen(async function* () {
+      const origin = yield* await readReaderAnswerDecision(
+        decisionId,
+        dependencies,
+      );
+      const anchor = origin?.paragraphs.find(
         (paragraph) => paragraph.paragraphId === paragraphId,
       );
       if (anchor === undefined) {
-        return [];
+        return Result.ok([]);
       }
-      const ids = await readRelatedIds(
-        decisionId,
-        direction,
-        dependencies.caseLawDb,
-      );
+      const ids = yield* await Result.tryPromise({
+        try: async () =>
+          await readRelatedIds(decisionId, direction, dependencies.caseLawDb),
+        catch: (cause) => cause,
+      });
+      if (ids === null) {
+        return Result.ok([]);
+      }
       const terms = queryTerms(
         `${anchor.text.slice(0, READER_ANSWER_RELATED_LIMITS.queryChars)} ${query.slice(0, READER_ANSWER_RELATED_LIMITS.queryChars)}`,
       );
@@ -187,18 +199,12 @@ export const readReaderAnswerRelated = async (
         order: number;
       }[] = [];
       // Only the fixed candidate budget enters the reader; every target is admitted independently.
-      for (const id of (ids ?? []).slice(
-        0,
-        READER_ANSWER_RELATED_LIMITS.decisions,
-      )) {
-        const read = await readReaderAnswerDecision(id, dependencies);
-        if (read.isErr()) {
-          throw read.error;
-        }
-        if (read.value === null) {
+      for (const id of ids.slice(0, READER_ANSWER_RELATED_LIMITS.decisions)) {
+        const read = yield* await readReaderAnswerDecision(id, dependencies);
+        if (read === null) {
           continue;
         }
-        for (const paragraph of read.value.paragraphs) {
+        for (const paragraph of read.paragraphs) {
           if (paragraph.text.trim().length === 0) {
             continue;
           }
@@ -209,13 +215,66 @@ export const readReaderAnswerRelated = async (
               score++;
             }
           }
+          const matches = Array.from(
+            paragraph.text.matchAll(READER_ANSWER_WORD_PATTERN),
+          ).filter((match) => terms.has(match[0].toLowerCase()));
+          const windowTerms = new Map<string, number>();
+          let left = 0;
+          let right = 0;
+          let excerptStart = 0;
+          let excerptScore = 0;
+          for (const match of matches) {
+            const start = Math.min(
+              Math.max(
+                0,
+                match.index - READER_ANSWER_RELATED_LIMITS.excerptChars / 2,
+              ),
+              Math.max(
+                0,
+                paragraph.text.length -
+                  READER_ANSWER_RELATED_LIMITS.excerptChars,
+              ),
+            );
+            const end = start + READER_ANSWER_RELATED_LIMITS.excerptChars;
+            while (true) {
+              const next = matches.at(right);
+              if (next === undefined || next.index + next[0].length > end) {
+                break;
+              }
+              const term = next[0].toLowerCase();
+              windowTerms.set(term, (windowTerms.get(term) ?? 0) + 1);
+              right++;
+            }
+            while (left < right) {
+              const previous =
+                matches.at(left) ??
+                panic("Excerpt window cursor exceeds its matched tokens");
+              if (previous.index >= start) {
+                break;
+              }
+              const term = previous[0].toLowerCase();
+              const remaining =
+                (windowTerms.get(term) ??
+                  panic("Excerpt window is missing a counted term")) - 1;
+              if (remaining === 0) {
+                windowTerms.delete(term);
+              } else {
+                windowTerms.set(term, remaining);
+              }
+              left++;
+            }
+            if (windowTerms.size > excerptScore) {
+              excerptStart = start;
+              excerptScore = windowTerms.size;
+            }
+          }
           ranked.push({
             excerpt: {
-              decisionId: read.value.decisionId,
+              decisionId: read.decisionId,
               paragraphId: paragraph.paragraphId,
               text: paragraph.text.slice(
-                0,
-                READER_ANSWER_RELATED_LIMITS.excerptChars,
+                excerptStart,
+                excerptStart + READER_ANSWER_RELATED_LIMITS.excerptChars,
               ),
             },
             score,
@@ -227,21 +286,27 @@ export const readReaderAnswerRelated = async (
         (left, right) => right.score - left.score || left.order - right.order,
       );
       const seen = new Set<string>();
-      return ranked
-        .filter(({ excerpt }) => {
-          const key = JSON.stringify([excerpt.decisionId, excerpt.paragraphId]);
-          if (seen.has(key)) {
-            return false;
-          }
-          seen.add(key);
-          return true;
-        })
-        .slice(0, READER_ANSWER_RELATED_LIMITS.paragraphs)
-        .map(({ excerpt }) => excerpt);
-    },
-    catch: (cause) =>
+      return Result.ok(
+        ranked
+          .filter(({ excerpt }) => {
+            const key = JSON.stringify([
+              excerpt.decisionId,
+              excerpt.paragraphId,
+            ]);
+            if (seen.has(key)) {
+              return false;
+            }
+            seen.add(key);
+            return true;
+          })
+          .slice(0, READER_ANSWER_RELATED_LIMITS.paragraphs)
+          .map(({ excerpt }) => excerpt),
+      );
+    })
+  ).mapError(
+    (cause) =>
       new ReaderAnswerCorpusError({
         message: "Could not read related decision excerpts",
         cause,
       }),
-  });
+  );

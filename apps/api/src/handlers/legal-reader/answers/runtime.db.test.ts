@@ -12,6 +12,7 @@ import type { ReaderAnswerCommand } from "@/api/handlers/legal-reader/answers/op
 import { streamReaderAnswer } from "@/api/handlers/legal-reader/answers/stream";
 import type { ReaderAnswerStreamOptions } from "@/api/handlers/legal-reader/answers/stream";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
@@ -122,6 +123,46 @@ const message = async (prepared: ReaderAnswerStreamOptions["prepared"]) =>
   ).at(0);
 
 describe("reader answer turn lifecycle", () => {
+  test.each(["complete", "failed"] as const)(
+    "audits a %s settlement inside the message transaction",
+    async (status) => {
+      const prepared = await create();
+      let auditCalls = 0;
+      await complete(prepared, {
+        runModel: async () =>
+          status === "complete"
+            ? Result.ok({
+                content: "The explanation",
+                model: "fixture-model",
+                usage: null,
+              })
+            : Result.err(
+                new HandlerError({
+                  status: 502,
+                  message: "Provider unavailable",
+                }),
+              ),
+        recordAuditEvent: async (tx, event) => {
+          auditCalls++;
+          expect(event).toMatchObject({
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.CASE_LAW_READER_ANSWER,
+            resourceId: prepared.answer.id,
+          });
+          const saved = (
+            await tx
+              .select({ status: legalReaderAnswerMessages.status })
+              .from(legalReaderAnswerMessages)
+              .where(eq(legalReaderAnswerMessages.id, prepared.messageId))
+          ).at(0);
+          expect(saved?.status).toBe(status);
+        },
+      });
+      expect(auditCalls).toBe(1);
+      expect((await message(prepared))?.status).toBe(status);
+    },
+  );
+
   test("rejects offset spans outside the paragraph even when JavaScript slicing clamps them", async () => {
     const text = "The holding follows.";
     const invalidAnchors = [
