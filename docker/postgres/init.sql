@@ -117,10 +117,20 @@ SELECT format('GRANT stella TO %I WITH ADMIN TRUE, INHERIT FALSE, SET TRUE', :'o
 SELECT format('GRANT pg_read_all_settings, pg_read_all_stats TO %I', :'owner')
 \gexec
 CREATE EXTENSION IF NOT EXISTS unaccent;
-CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
--- Statistics are maintenance data; corpus readers retain only their grants.
-REVOKE SELECT ON pg_stat_statements, pg_stat_statements_info FROM PUBLIC;
-SELECT format('GRANT SELECT ON pg_stat_statements, pg_stat_statements_info TO %I', :'owner')
+-- Native development toolchains may omit optional statement instrumentation.
+SELECT 'CREATE EXTENSION IF NOT EXISTS pg_stat_statements'
+WHERE EXISTS (SELECT 1 FROM pg_available_extensions WHERE name = 'pg_stat_statements')
+\gexec
+-- Statistics are maintenance data, including extensions installed outside public.
+SELECT format('REVOKE SELECT ON %I.%I FROM PUBLIC; GRANT SELECT ON %I.%I TO %I',
+  namespace.nspname, relation.relname, namespace.nspname, relation.relname, :'owner')
+FROM pg_class relation
+JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
+JOIN pg_depend dependency ON dependency.classid = 'pg_class'::regclass
+  AND dependency.objid = relation.oid AND dependency.deptype = 'e'
+JOIN pg_extension extension ON dependency.refclassid = 'pg_extension'::regclass
+  AND dependency.refobjid = extension.oid
+WHERE extension.extname = 'pg_stat_statements' AND relation.relkind IN ('r', 'v')
 \gexec
 
 SELECT format('ALTER ROLE %I NOSUPERUSER NOBYPASSRLS CREATEROLE CREATEDB', :'owner')
