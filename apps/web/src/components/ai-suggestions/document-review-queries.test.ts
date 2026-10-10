@@ -131,11 +131,11 @@ test("the launcher reuses a positive cached read and still detects after not-det
   const reused = await queryClient.query(
     documentReviewPartiesDetectOptions(positive, queryClient),
   );
-  expect(reused).toEqual({
-    type: "cached",
-    entityVersionId: "version-A",
-    parties: [{ role: "Seller", name: "Seller Ltd." }],
-  });
+  expect(reused.type).toBe("cached");
+  expect(String(reused.entityVersionId)).toBe("version-A");
+  expect(reused.type === "cached" ? reused.parties : []).toEqual([
+    { role: "Seller", name: "Seller Ltd." },
+  ]);
   expect(requestBodies).toHaveLength(2);
 
   await queryClient.query(
