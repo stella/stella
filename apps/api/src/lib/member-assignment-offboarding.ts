@@ -527,7 +527,6 @@ const closeMemberExchanges = async ({
     if (signing.length === 0) {
       break;
     }
-    // db-await-in-loop: the guarded application-role update locks, transitions and audits this page before the next batch.
     const byOrganization = Map.groupBy(
       signing,
       (signingSession) => signingSession.organizationId,
@@ -587,6 +586,7 @@ const closeMemberExchanges = async ({
       });
       return changed + (await closeNextOrganization(index + 1));
     };
+    // db-await-in-loop: the guarded application-role update locks, transitions and audits this page before the next batch.
     await closeNextOrganization(0);
   }
 };
