@@ -7,7 +7,10 @@ import path from "node:path";
 
 import { assertProperty } from "@stll/property-testing";
 
-import type { OutboundTransportCensusEntry } from "./outbound-transport-census";
+import {
+  OUTBOUND_TRANSPORT_CENSUS,
+  type OutboundTransportCensusEntry,
+} from "./outbound-transport-census";
 import {
   isOutboundProductionModule,
   outboundTransportReferences,
@@ -570,6 +573,64 @@ describe("outbound transport ownership", () => {
     expect(errors.length).toBeGreaterThan(0);
     expect(errors.join("\n")).toContain(API_SOURCE);
     expect(errors.join("\n")).toContain("stale transport entry");
+  });
+
+  test("MCP outbound owners require existing transport sources and total census coverage", () => {
+    const sources = new Map(
+      [
+        ...readOutboundProductionSources(
+          path.resolve(import.meta.dirname, ".."),
+        ),
+      ].filter(([file]) => file.startsWith("packages/mcp-apps/src/")),
+    );
+    const census = OUTBOUND_TRANSPORT_CENSUS.filter(({ path: file }) =>
+      file.startsWith("packages/mcp-apps/src/"),
+    );
+    const owners = [...sources].filter(
+      ([file, text]) => outboundTransportReferences({ file, text }).length > 0,
+    );
+    expect(owners.length).toBeGreaterThan(0);
+    expect(owners.map(([file]) => file).toSorted()).toEqual(
+      census.map(({ path: file }) => file).toSorted(),
+    );
+    expect(
+      validateOutboundTransportCensus({ sources, census, grantOwners: [] }),
+    ).toEqual([]);
+
+    for (const [file, text] of owners) {
+      const observed = outboundTransportReferences({ file, text }).join(", ");
+      const missingSource = new Map(sources);
+      missingSource.delete(file);
+      expect(
+        validateOutboundTransportCensus({
+          sources: missingSource,
+          census,
+          grantOwners: [],
+        }),
+      ).toContain(`${file}: stale transport entry or empty reason`);
+
+      const inactiveSource = new Map(sources);
+      inactiveSource.set(file, "export const ready = true;");
+      expect(
+        validateOutboundTransportCensus({
+          sources: inactiveSource,
+          census,
+          grantOwners: [],
+        }).join("\n"),
+      ).toContain(
+        `${file}: stale transport entry (observed ; declared ${observed})`,
+      );
+
+      expect(
+        validateOutboundTransportCensus({
+          sources,
+          census: census.filter(({ path: owner }) => owner !== file),
+          grantOwners: [],
+        }),
+      ).toContain(
+        `${file}: transport census differs (observed ${observed}; declared )`,
+      );
+    }
   });
 
   test("rejects unknown transport names and census classes", () => {
