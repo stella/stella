@@ -114,7 +114,7 @@ describe("chat thread messages", () => {
           }}
         />,
       );
-      expect(renderedText(html)?.includes(messages.chat.stopped)).toBe(
+      expect(renderedText(html).includes(messages.chat.stopped)).toBe(
         outcome.type === "cancelled" && outcome.reason === "user-stop",
       );
     }
