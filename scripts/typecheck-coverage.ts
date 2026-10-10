@@ -911,6 +911,29 @@ const selfTest = (): void => {
     "must accept a dedicated Oxc proxy for a co-located test project",
   );
 
+  const generatedProject = "packages/example/src/generated/tsconfig.json";
+  const generatedSources = new Set([
+    "packages/example/src/generated/contracts.js",
+    "packages/example/src/generated/contracts.d.ts",
+  ]);
+  assert(
+    projectAccountingErrors(
+      ["packages/example/tsconfig.json", generatedProject],
+      [],
+      [],
+    ).length === 0,
+    "must discover a supplemental conventional project without a proxy",
+  );
+  assert(
+    findSourcesWithoutDiscoverableConfig(
+      generatedSources,
+      generatedSources,
+      new Map([[generatedProject, generatedSources]]),
+      (config) => config === generatedProject,
+    ).length === 0,
+    "must cover generated runtime JS and its declaration in their nearest conventional project",
+  );
+
   const sourceMaskedByUnregisteredConfig = findSourcesWithoutDiscoverableConfig(
     new Set(["apps/example/scripts/unregistered.ts"]),
     new Set(["apps/example/scripts/unregistered.ts"]),
