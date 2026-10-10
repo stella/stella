@@ -108,8 +108,8 @@ internal `block.id`; `publisherParagraph` is the court’s printed paragraph
 number and only locates the captured anchor. From `apps/api`:
 
 ```sh
-bun run evals/reader-explain-local.ts prompts /absolute/path/corpus-capture.json > /absolute/path/prompts.jsonl
-bun run evals/reader-explain-local.ts score /absolute/path/corpus-capture.json /absolute/path/local-results.jsonl <tracePath-from-prompts>
+bun run eval:reader-explain prompts /absolute/path/corpus-capture.json > /absolute/path/prompts.jsonl
+bun run eval:reader-explain score /absolute/path/corpus-capture.json /absolute/path/local-results.jsonl <tracePath-from-prompts>
 ```
 
 Run each emitted prompt through a local coding-agent harness, making the

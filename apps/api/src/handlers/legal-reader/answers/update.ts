@@ -27,7 +27,7 @@ const config = {
   params: answerParamsSchema,
   body: answerVisibilityBodySchema,
 } satisfies HandlerConfig;
-export const updateReaderAnswerHandler = async (
+const updateReaderAnswerHandler = async (
   scope: AnnotationAuthorScope & {
     answerId: SafeId<"legalReaderAnswer">;
     body: { visibility: ReaderAnnotationVisibility };

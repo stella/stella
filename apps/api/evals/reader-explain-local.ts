@@ -22,7 +22,7 @@ if (
   (mode === "tool" && !toolRunId)
 ) {
   panic(
-    "Usage: bun run evals/reader-explain-local.ts prompts <corpus-capture.json> | score <corpus-capture.json> <local-results.jsonl> <tool-trace.jsonl> | tool <corpus-capture.json> <case-id> <tool-trace.jsonl> <run-id>",
+    "Usage: bun run eval:reader-explain prompts <corpus-capture.json> | score <corpus-capture.json> <local-results.jsonl> <tool-trace.jsonl> | tool <corpus-capture.json> <case-id> <tool-trace.jsonl> <run-id>",
   );
 }
 const corpus = v.parse(

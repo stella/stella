@@ -23,7 +23,7 @@ export class ReaderAnswerCorpusError extends TaggedError(
   "ReaderAnswerCorpusError",
 )<{ message: string; cause: unknown }> {}
 
-export type ReaderAnswerParagraph = { paragraphId: string; text: string };
+type ReaderAnswerParagraph = { paragraphId: string; text: string };
 export type ReaderAnswerDecision = {
   decisionId: SafeId<"caseLawDecision">;
   paragraphs: ReaderAnswerParagraph[];
