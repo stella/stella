@@ -1,7 +1,10 @@
 import { panic } from "better-result";
+import { and, inArray, notInArray, or, sql } from "drizzle-orm";
+import type { SQLWrapper } from "drizzle-orm";
 
 import { AUDIT_CHANGES_STATUS } from "@stll/api-contract/audit-log";
 
+import { auditActivityActionSql, auditLogs } from "@/api/db/schema";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log.constants";
 import type { AuditResourceType } from "@/api/lib/audit-log.constants";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
@@ -11,8 +14,12 @@ import type {
   FeatureAccessPrincipal,
   FeatureAccessSnapshot,
 } from "@/api/lib/feature-access/policy";
-import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
+import {
+  LEGAL_LISTS_FEATURE_ID,
+  LIST_VERIFICATION_FEATURE_ID,
+} from "@/api/lib/feature-access/registry";
 import type { FeatureId } from "@/api/lib/feature-access/registry";
+import { LIST_VERIFICATION_ITEM_OPERATION } from "@/api/lib/lists/item-operations";
 
 export type ChatAuditResourceType =
   | typeof AUDIT_RESOURCE_TYPE.CHAT_THREAD
@@ -172,9 +179,20 @@ type AuditDetailPolicy =
   | { type: "caller-feature"; featureId: FeatureId }
   | { type: "deployment-feature"; feature: DeploymentFeatureFlag };
 
-type AuditResourceDetailPolicy = {
+export type AuditResourceDetailPolicy = {
   default: AuditDetailPolicy;
   operations: Readonly<Record<string, AuditDetailPolicy>>;
+};
+
+// The indexed relationship classifier reads workspace changes without a feature predicate.
+type AuditDetailPolicies = Record<
+  AuditResourceType,
+  AuditResourceDetailPolicy
+> & {
+  [AUDIT_RESOURCE_TYPE.WORKSPACE]: {
+    readonly default: { readonly type: "ungated" };
+    readonly operations: Readonly<Record<string, never>>;
+  };
 };
 
 const UNGATED_AUDIT_DETAILS = {
@@ -250,18 +268,20 @@ export const AUDIT_DETAIL_POLICY = {
   [AUDIT_RESOURCE_TYPE.PERSONAL_API_KEY]: UNGATED_AUDIT_DETAILS,
   [AUDIT_RESOURCE_TYPE.MACHINE_API_KEY]: UNGATED_AUDIT_DETAILS,
   [AUDIT_RESOURCE_TYPE.LEGAL_LIST]: {
-    default: { type: "deployment-feature", feature: "FEATURE_LEGAL_LISTS" },
+    default: { type: "caller-feature", featureId: LEGAL_LISTS_FEATURE_ID },
     operations: {},
   },
   [AUDIT_RESOURCE_TYPE.LEGAL_LIST_GENERATION]: {
-    default: { type: "deployment-feature", feature: "FEATURE_LEGAL_LISTS" },
+    default: { type: "caller-feature", featureId: LEGAL_LISTS_FEATURE_ID },
     operations: {},
   },
   [AUDIT_RESOURCE_TYPE.LEGAL_LIST_ITEM]: {
-    default: { type: "deployment-feature", feature: "FEATURE_LEGAL_LISTS" },
+    default: { type: "caller-feature", featureId: LEGAL_LISTS_FEATURE_ID },
     operations: {
-      fact_details_set: VERIFICATION_AUDIT_DETAILS,
-      source_verification_changed: VERIFICATION_AUDIT_DETAILS,
+      [LIST_VERIFICATION_ITEM_OPERATION.factDetailsSet]:
+        VERIFICATION_AUDIT_DETAILS,
+      [LIST_VERIFICATION_ITEM_OPERATION.sourceVerificationChanged]:
+        VERIFICATION_AUDIT_DETAILS,
     },
   },
   [AUDIT_RESOURCE_TYPE.LEGAL_LIST_VERIFICATION]: {
@@ -302,7 +322,11 @@ export const AUDIT_DETAIL_POLICY = {
     },
     operations: {},
   },
-} as const satisfies Record<AuditResourceType, AuditResourceDetailPolicy>;
+} as const satisfies AuditDetailPolicies;
+
+/** Preserve the indexed action expression; only ungated workspace changes affect it. */
+export const auditReadActivityActionSql = () =>
+  auditActivityActionSql(auditLogs);
 
 type AuditReadChanges =
   | {
@@ -321,6 +345,11 @@ type ProjectAuditReadChangesOptions = {
   featureAccessSnapshot: FeatureAccessSnapshot | undefined;
   principal: FeatureAccessPrincipal;
 };
+
+export type AuditReadContext = Pick<
+  ProjectAuditReadChangesOptions,
+  "featureAccessSnapshot" | "principal"
+>;
 
 const isClassifiedAuditResource = (
   resourceType: string,
@@ -354,6 +383,65 @@ const isAuditPolicyEnabled = ({
   }
 };
 
+type AuditReadColumns = {
+  changes: SQLWrapper;
+  resourceType: SQLWrapper;
+  metadata: SQLWrapper;
+};
+
+/** Apply the same feature policy before a query derives values from changes. */
+export const auditReadChangesSql = (
+  context: AuditReadContext,
+  columns: AuditReadColumns = auditLogs,
+) => {
+  const unrestrictedResources: string[] = [];
+  const operationConditions = [];
+  for (const resourceType of Object.values(AUDIT_RESOURCE_TYPE)) {
+    const policy = AUDIT_DETAIL_POLICY[resourceType];
+    const operations = Object.entries(policy.operations);
+    if (isAuditPolicyEnabled({ policy: policy.default, ...context })) {
+      if (operations.length === 0) {
+        unrestrictedResources.push(resourceType);
+        continue;
+      }
+      operationConditions.push(
+        and(
+          sql`${columns.resourceType} = ${resourceType}`,
+          notInArray(
+            sql<string>`coalesce(${columns.metadata} ->> 'operation', '')`,
+            operations.map(([operation]) => operation),
+          ),
+        ),
+      );
+    }
+    const visibleOperations = operations
+      .filter(([, operationPolicy]) =>
+        isAuditPolicyEnabled({ policy: operationPolicy, ...context }),
+      )
+      .map(([operation]) => operation);
+    if (visibleOperations.length > 0) {
+      operationConditions.push(
+        and(
+          sql`${columns.resourceType} = ${resourceType}`,
+          inArray(
+            sql<string>`${columns.metadata} ->> 'operation'`,
+            visibleOperations,
+          ),
+        ),
+      );
+    }
+  }
+  const visible =
+    or(
+      inArray(columns.resourceType, unrestrictedResources),
+      ...operationConditions,
+    ) ?? sql`false`;
+  return sql<Record<
+    string,
+    unknown
+  > | null>`case when ${visible} then ${columns.changes} else null end`;
+};
+
 /** Read projection shared by audit pages and exports; stored details remain intact. */
 export const projectAuditReadChanges = ({
   resourceType,
@@ -369,18 +457,11 @@ export const projectAuditReadChanges = ({
   const operationPolicy = Object.entries(resourcePolicy.operations).find(
     ([operation]) => operation === metadata?.["operation"],
   )?.[1];
-  const enabled =
-    isAuditPolicyEnabled({
-      policy: resourcePolicy.default,
-      featureAccessSnapshot,
-      principal,
-    }) &&
-    (operationPolicy === undefined ||
-      isAuditPolicyEnabled({
-        policy: operationPolicy,
-        featureAccessSnapshot,
-        principal,
-      }));
+  const enabled = isAuditPolicyEnabled({
+    policy: operationPolicy ?? resourcePolicy.default,
+    featureAccessSnapshot,
+    principal,
+  });
   if (!enabled) {
     return {
       changesStatus: AUDIT_CHANGES_STATUS.featureUnavailable,

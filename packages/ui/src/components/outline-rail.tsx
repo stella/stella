@@ -1,10 +1,9 @@
 /**
- * Outline rail — the shared right-edge navigation rail.
+ * Outline navigation: an embedded panel, a host-owned rail, or a disclosure.
  *
- * Always-visible thin column of ticks (width tapering by nesting level).
- * Hovering reveals a single popover panel with the outline as a collapsible
- * tree; the entry currently in view is emphasised. Click a tick or a row to
- * jump.
+ * Embedded presentations fill their host track. The standalone disclosure
+ * owns a toggle above a thin column of ticks; hovering or pressing it reveals
+ * the collapsible tree. Click a tick or a row to jump.
  *
  * Generic over the position source: callers supply `resolvePct` (vertical % for
  * a tick) and `onJump`. Active tracking is derived from `resolvePct` by default,
@@ -28,9 +27,11 @@ import {
 
 import { Temporal } from "temporal-polyfill/full";
 
-import { ChevronRightIcon as ChevronRight } from "../icons";
+import { ChevronRightIcon as ChevronRight, PanelLeftIcon } from "../icons";
+import { DOCUMENT_PANEL_SAFE_BOTTOM } from "../lib/panel-inset";
 import { cn } from "../lib/utils";
 import { DirectionalIcon } from "./directional-icon";
+import { ScrollArea } from "./scroll-area";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./tooltip";
 
 /**
@@ -78,11 +79,17 @@ export type OutlineRailProps = {
    *  filter that narrows the tree to nothing cannot take its own control
    *  away; the caller decides whether the document has an outline at all. */
   header?: ReactNode;
+  /** Name a trailing annotation for assistive technology and its tooltip. */
+  formatMetaLabel?: (meta: string) => string;
   /** Depth from which entries start collapsed. Their ancestors still open on
    *  their own while one of their descendants is active, so a deep outline
    *  reads as the chain down to where the reader is rather than as every
    *  branch at once. Omitted: everything starts expanded. */
   collapsedFromLevel?: number;
+  /** `panel` and `rail` fill a host-owned track; `popover` owns its disclosure. */
+  presentation?: "panel" | "rail" | "popover";
+  /** A host that already reserves docked chrome passes zero. */
+  bottomInset?: number;
   topOffset?: number;
   panelWidth?: number;
   ariaLabel?: string;
@@ -90,12 +97,11 @@ export type OutlineRailProps = {
 
 type TreeNode = { item: OutlineItem; index: number; children: TreeNode[] };
 
-const RAIL_WIDTH = 20;
+export const OUTLINE_CONTROL_MIN_SIZE = 32;
+const OUTLINE_CONTROL_TARGET_CLASS =
+  "relative pointer-coarse:after:absolute pointer-coarse:after:size-full pointer-coarse:after:min-h-11 pointer-coarse:after:min-w-11";
+const RAIL_WIDTH = OUTLINE_CONTROL_MIN_SIZE;
 const PANEL_GAP = 6;
-// Popover row height (~29.9px). Parent rows stick at multiples of this so the
-// ancestor chain stacks at the top; set a hair UNDER the real height so stacked
-// headers slightly overlap (opaque) rather than leave a sub-pixel gap.
-const ROW_H = 29;
 const TICK_BASE_WIDTH = 6;
 const TICK_LEVEL_STEP = 2;
 const TICK_MAX_LEVEL = 5;
@@ -195,7 +201,10 @@ export const OutlineRail = ({
   onJump,
   activeId,
   header,
+  formatMetaLabel,
   collapsedFromLevel,
+  presentation = "popover",
+  bottomInset,
   topOffset = 0,
   panelWidth = 300,
   ariaLabel = "Outline",
@@ -216,10 +225,10 @@ export const OutlineRail = ({
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const panelId = useId();
   const triggerId = useId();
-  const panelOpen = hovered || pinned;
+  const panelOpen = presentation === "panel" || hovered || pinned;
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const manualLockUntil = useRef(0);
-  const panelRef = useRef<HTMLElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   // Hold onJump and the scroll-time resolver in refs so the active-tracking
   // scroll listener reads the latest without re-subscribing. recalc instead
   // depends on resolvePct directly, so ticks recompute when the resolver's
@@ -445,9 +454,18 @@ export const OutlineRail = ({
     if (activeIndex === -1 || !panelOpen) {
       return;
     }
-    panelRef.current
-      ?.querySelector(`[${ACTIVE_ROW_ATTRIBUTE}]`)
-      ?.scrollIntoView({ block: "nearest" });
+    const panel = panelRef.current;
+    const row = panel?.querySelector(`[${ACTIVE_ROW_ATTRIBUTE}]`);
+    if (!panel || !(row instanceof HTMLElement)) {
+      return;
+    }
+    const panelBox = panel.getBoundingClientRect();
+    const rowBox = row.getBoundingClientRect();
+    if (rowBox.top < panelBox.top) {
+      panel.scrollTop += rowBox.top - panelBox.top;
+    } else if (rowBox.bottom > panelBox.bottom) {
+      panel.scrollTop += rowBox.bottom - panelBox.bottom;
+    }
   }, [activeIndex, panelOpen]);
 
   const openPanel = useCallback(() => {
@@ -469,7 +487,7 @@ export const OutlineRail = ({
   // until this render commits, so the move cannot happen in the click.
   useEffect(() => {
     if (pinned) {
-      panelRef.current?.focus();
+      panelRef.current?.closest("nav")?.focus();
     }
   }, [pinned]);
 
@@ -505,37 +523,28 @@ export const OutlineRail = ({
         <div
           className={cn(
             "flex items-center rounded-md pe-2.5",
-            // Leaf rows highlight over the panel's own bg (no occlusion needed).
-            !hasChildren && highlighted && "bg-accent",
+            highlighted && "bg-accent",
           )}
           {...(isActive ? { [ACTIVE_ROW_ATTRIBUTE]: "" } : {})}
           onMouseEnter={() => setHoveredId(node.item.id)}
           onMouseLeave={() => setHoveredId(null)}
-          style={
-            hasChildren
-              ? {
-                  position: "sticky",
-                  top: node.item.level * ROW_H,
-                  zIndex: 40 - node.item.level,
-                  // Sticky parents must be fully opaque so scrolled content can't
-                  // bleed through; layer the (possibly translucent) accent over a
-                  // solid popover fill when highlighted.
-                  background: highlighted
-                    ? "linear-gradient(var(--color-accent), var(--color-accent)), var(--color-popover)"
-                    : "var(--color-popover)",
-                }
-              : undefined
-          }
         >
           {hasChildren ? (
             <button
               aria-expanded={!isCollapsed}
               aria-label={isCollapsed ? "Expand" : "Collapse"}
-              className="text-muted-foreground hover:text-foreground flex size-5 shrink-0 items-center justify-center"
+              className={cn(
+                "text-muted-foreground hover:text-foreground flex shrink-0 items-center justify-center",
+                OUTLINE_CONTROL_TARGET_CLASS,
+              )}
+              style={{
+                minWidth: OUTLINE_CONTROL_MIN_SIZE,
+                minHeight: OUTLINE_CONTROL_MIN_SIZE,
+                marginInlineStart: indent - 4,
+              }}
               onClick={(event) =>
                 toggleCollapse(node.item.id, event.currentTarget.parentElement)
               }
-              style={{ marginInlineStart: indent - 4 }}
               type="button"
             >
               <Chevron open={!isCollapsed} />
@@ -586,11 +595,35 @@ export const OutlineRail = ({
             </TooltipTrigger>
             <TooltipPopup>{outlineEntryText(node.item)}</TooltipPopup>
           </Tooltip>
-          {node.item.meta !== undefined && (
-            <span className="text-foreground-placeholder text-2xs shrink-0 ps-2 tabular-nums">
-              {node.item.meta}
-            </span>
-          )}
+          {node.item.meta !== undefined &&
+            (formatMetaLabel ? (
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <button
+                      aria-label={formatMetaLabel(node.item.meta)}
+                      className={cn(
+                        "text-foreground-placeholder text-2xs shrink-0 tabular-nums",
+                        OUTLINE_CONTROL_TARGET_CLASS,
+                      )}
+                      style={{
+                        minWidth: OUTLINE_CONTROL_MIN_SIZE,
+                        minHeight: OUTLINE_CONTROL_MIN_SIZE,
+                      }}
+                      onClick={() => jumpTo(node.item.id)}
+                      type="button"
+                    />
+                  }
+                >
+                  {node.item.meta}
+                </TooltipTrigger>
+                <TooltipPopup>{formatMetaLabel(node.item.meta)}</TooltipPopup>
+              </Tooltip>
+            ) : (
+              <span className="text-foreground-placeholder text-2xs shrink-0 ps-2 tabular-nums">
+                {node.item.meta}
+              </span>
+            ))}
         </div>
         {hasChildren && !isCollapsed && (
           <ul className="m-0 list-none p-0">{node.children.map(renderNode)}</ul>
@@ -630,170 +663,236 @@ export const OutlineRail = ({
   return (
     <div
       aria-label={ariaLabel}
-      className="absolute end-0 z-20 max-lg:hidden"
+      className={OUTLINE_PRESENTATION_CLASS[presentation]}
       role="group"
-      style={{ top: topOffset, bottom: 0, width: RAIL_WIDTH }}
+      style={{
+        marginBlockEnd: bottomInset ?? DOCUMENT_PANEL_SAFE_BOTTOM,
+        ...(presentation === "popover"
+          ? { top: topOffset, bottom: 0, width: RAIL_WIDTH }
+          : {}),
+      }}
     >
-      {/* The panel is revealed by hover, which a keyboard cannot perform, and
-          it is `inert` until then, so no control inside it can be the way in.
-          This one sits outside the panel and stays out of the layout until it
-          takes focus, leaving the rail as drawn for pointer readers. */}
-      <button
-        aria-controls={panelId}
-        aria-expanded={panelOpen}
-        className="focus-visible:ring-ring bg-popover text-popover-foreground sr-only end-0 top-2 z-30 -translate-x-6 text-xs focus:not-sr-only focus:absolute focus:w-max focus:rounded-md focus:border focus:px-2 focus:py-1 focus-visible:ring-2 focus-visible:outline-none"
-        id={triggerId}
-        onClick={() => {
-          if (pinned) {
-            closePanel();
-            return;
+      {/* The disclosure owns a normal-size row above the ticks; a host-owned
+          rail supplies its own toggle in that same flow. */}
+      {presentation === "popover" && (
+        <button
+          aria-controls={panelId}
+          aria-expanded={panelOpen}
+          className={cn(
+            "focus-visible:ring-ring bg-popover text-popover-foreground flex shrink-0 items-center justify-center self-start rounded-md focus-visible:ring-2 focus-visible:outline-none",
+            "pointer-coarse:my-1.5",
+            OUTLINE_CONTROL_TARGET_CLASS,
+          )}
+          aria-label={ariaLabel}
+          style={{
+            minWidth: OUTLINE_CONTROL_MIN_SIZE,
+            minHeight: OUTLINE_CONTROL_MIN_SIZE,
+          }}
+          id={triggerId}
+          onClick={() => {
+            if (pinned) {
+              closePanel();
+              return;
+            }
+            setPinned(true);
+            openPanel();
+          }}
+          type="button"
+        >
+          <PanelLeftIcon aria-hidden className="size-4 rtl:-scale-x-100" />
+        </button>
+      )}
+      {presentation !== "panel" && (
+        <div
+          className="relative min-h-0 flex-1"
+          data-outline-ticks
+          style={
+            presentation === "popover"
+              ? { height: `calc(100% - ${OUTLINE_CONTROL_MIN_SIZE}px)` }
+              : undefined
           }
-          setPinned(true);
-          openPanel();
-        }}
-        type="button"
-      >
-        {ariaLabel}
-      </button>
-      <div
-        className="relative h-full"
-        onMouseEnter={openPanel}
-        onMouseLeave={scheduleClose}
-        onWheel={(event) => {
-          scrollContainerRef.current?.scrollBy(0, event.deltaY);
-        }}
-      >
-        {visibleTicks.map(({ item, pct }) => {
-          const isActive = active === item.id;
-          const isHovered = hoveredId === item.id;
-          return (
-            <Tooltip key={item.id}>
-              <TooltipTrigger
-                render={
-                  <button
-                    aria-current={isActive ? "true" : undefined}
-                    aria-label={item.label}
-                    className={cn(
-                      "absolute end-0 rounded-full transition-[width,height,opacity] duration-150",
-                      isHovered || isActive
-                        ? "opacity-100"
-                        : "opacity-45 hover:opacity-90",
-                    )}
-                    onClick={() => jumpTo(item.id)}
-                    onMouseEnter={() => setHoveredId(item.id)}
-                    onMouseLeave={() => setHoveredId(null)}
-                    style={{
-                      top: `${pct}%`,
-                      transform: "translateY(-50%)",
-                      width: isHovered
-                        ? tickWidth(item.level) + 8
-                        : tickWidth(item.level),
-                      height: tickHeight(isHovered, isActive),
-                      background: tickBackground(item.color, isHovered),
-                    }}
-                    type="button"
-                  />
+          onMouseEnter={openPanel}
+          onMouseLeave={scheduleClose}
+          onWheel={(event) => {
+            scrollContainerRef.current?.scrollBy(0, event.deltaY);
+          }}
+        >
+          {visibleTicks.map(({ item, pct }) => {
+            const isActive = active === item.id;
+            const isHovered = hoveredId === item.id;
+            return (
+              <Tooltip key={item.id}>
+                <TooltipTrigger
+                  render={
+                    <button
+                      aria-current={isActive ? "true" : undefined}
+                      aria-label={item.label}
+                      className={cn(
+                        "absolute end-0 rounded-full transition-[width,height,opacity] duration-150",
+                        isHovered || isActive
+                          ? "opacity-100"
+                          : "opacity-45 hover:opacity-90",
+                      )}
+                      onClick={() => jumpTo(item.id)}
+                      onMouseEnter={() => setHoveredId(item.id)}
+                      onMouseLeave={() => setHoveredId(null)}
+                      style={{
+                        top: `clamp(2px, ${pct}%, calc(100% - 2px))`,
+                        transform: "translateY(-50%)",
+                        width: isHovered
+                          ? tickWidth(item.level) + 8
+                          : tickWidth(item.level),
+                        height: tickHeight(isHovered, isActive),
+                        background: tickBackground(item.color, isHovered),
+                      }}
+                      type="button"
+                    />
+                  }
+                />
+                <TooltipPopup>{item.label}</TooltipPopup>
+              </Tooltip>
+            );
+          })}
+          {ghostItem && ghostPct !== undefined && (
+            <span
+              aria-hidden
+              className="absolute end-0 rounded-full opacity-100"
+              style={{
+                top: `clamp(2px, ${ghostPct}%, calc(100% - 2px))`,
+                transform: "translateY(-50%)",
+                width: tickWidth(ghostItem.level) + 8,
+                height: 4,
+                background: ghostItem.color
+                  ? `var(${ghostItem.color})`
+                  : "var(--option-blue)",
+              }}
+            />
+          )}
+        </div>
+      )}
+
+      {presentation !== "rail" && (
+        // oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- hover-reveal disclosure on a nav landmark; panel visibility gated by inert/aria-hidden
+        <nav
+          aria-label={ariaLabel}
+          aria-hidden={!panelOpen}
+          id={panelId}
+          inert={panelOpen ? undefined : true}
+          tabIndex={-1}
+          className={cn(
+            "bg-popover text-popover-foreground flex min-h-0 flex-col",
+            presentation === "popover" &&
+              "border-border absolute rounded-xl border shadow-lg transition-[opacity,transform] duration-150",
+            outlinePanelVisibilityClass(presentation, panelOpen),
+          )}
+          // A control in the header is reachable by keyboard once the panel is
+          // open, and typing in it moves the pointer nowhere: hold the panel
+          // open for as long as focus is inside it, or `inert` would take the
+          // focused control away mid-keystroke.
+          onBlurCapture={(event) => {
+            // Focus returns to the disclosure before its click runs; let that
+            // click close the pinned panel instead of clearing and reopening it.
+            if (
+              event.relatedTarget instanceof HTMLElement &&
+              event.relatedTarget.id === triggerId
+            ) {
+              return;
+            }
+            // A panel latched open by keyboard releases when focus leaves it;
+            // the hover path keeps its grace period so a click inside the panel
+            // (blur, then focus) does not flicker it shut.
+            if (pinned && !event.currentTarget.contains(event.relatedTarget)) {
+              closePanel();
+              return;
+            }
+            scheduleClose();
+          }}
+          onFocusCapture={openPanel}
+          onKeyDown={(event) => {
+            if (event.key !== "Escape") {
+              return;
+            }
+            // Closing makes this panel inert, which would leave focus nowhere.
+            // Hand it back to the control that opened it, before that happens.
+            const trigger = event.currentTarget.ownerDocument.querySelector(
+              `#${CSS.escape(triggerId)}`,
+            );
+            if (trigger instanceof HTMLElement) {
+              trigger.focus();
+            }
+            closePanel();
+          }}
+          onMouseEnter={openPanel}
+          onMouseLeave={scheduleClose}
+          onWheel={(event) => {
+            // The panel is a lens over the document, not a modal: a wheel it
+            // cannot use must still scroll the text behind it. A short outline
+            // has no overflow to consume at all, and a long one stops consuming
+            // at its own ends — and the document's scroller is a sibling, not an
+            // ancestor, so the browser's own scroll chaining never reaches it.
+            const panel = panelRef.current;
+            if (!panel) {
+              return;
+            }
+            const room = panel.scrollHeight - panel.clientHeight;
+            const consumes =
+              room > WHEEL_EDGE_TOLERANCE &&
+              (event.deltaY < 0
+                ? panel.scrollTop > WHEEL_EDGE_TOLERANCE
+                : panel.scrollTop < room - WHEEL_EDGE_TOLERANCE);
+
+            if (consumes) {
+              return;
+            }
+
+            scrollContainerRef.current?.scrollBy(0, event.deltaY);
+          }}
+          style={
+            presentation === "popover"
+              ? {
+                  top: 0,
+                  insetInlineEnd: RAIL_WIDTH + PANEL_GAP,
+                  width: `min(${panelWidth}px, calc(100vw - ${RAIL_WIDTH + PANEL_GAP + 16}px))`,
+                  height: "calc(100% - 24px)",
                 }
-              />
-              <TooltipPopup>{item.label}</TooltipPopup>
-            </Tooltip>
-          );
-        })}
-        {ghostItem && ghostPct !== undefined && (
-          <span
-            aria-hidden
-            className="absolute end-0 rounded-full opacity-100"
-            style={{
-              top: `${ghostPct}%`,
-              transform: "translateY(-50%)",
-              width: tickWidth(ghostItem.level) + 8,
-              height: 4,
-              background: ghostItem.color
-                ? `var(${ghostItem.color})`
-                : "var(--option-blue)",
-            }}
-          />
-        )}
-      </div>
-
-      {/* oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- hover-reveal disclosure on a nav landmark; onMouseEnter/Leave drive a supplementary pointer affordance, panel visibility gated by inert/aria-hidden */}
-      <nav
-        aria-hidden={!panelOpen}
-        id={panelId}
-        inert={panelOpen ? undefined : true}
-        tabIndex={-1}
-        className={cn(
-          "border-border bg-popover text-popover-foreground absolute overflow-y-auto rounded-xl border pb-2 shadow-lg transition-[opacity,transform] duration-150",
-          panelOpen
-            ? "translate-x-0 opacity-100"
-            : "pointer-events-none translate-x-2 opacity-0",
-        )}
-        // A control in the header is reachable by keyboard once the panel is
-        // open, and typing in it moves the pointer nowhere: hold the panel
-        // open for as long as focus is inside it, or `inert` would take the
-        // focused control away mid-keystroke.
-        onBlurCapture={(event) => {
-          // A panel latched open by keyboard releases when focus leaves it;
-          // the hover path keeps its grace period so a click inside the panel
-          // (blur, then focus) does not flicker it shut.
-          if (pinned && !event.currentTarget.contains(event.relatedTarget)) {
-            closePanel();
-            return;
+              : undefined
           }
-          scheduleClose();
-        }}
-        onFocusCapture={openPanel}
-        onKeyDown={(event) => {
-          if (event.key !== "Escape") {
-            return;
-          }
-          // Closing makes this panel inert, which would leave focus nowhere.
-          // Hand it back to the control that opened it, before that happens.
-          const trigger = event.currentTarget.ownerDocument.querySelector(
-            `#${CSS.escape(triggerId)}`,
-          );
-          if (trigger instanceof HTMLElement) {
-            trigger.focus();
-          }
-          closePanel();
-        }}
-        onMouseEnter={openPanel}
-        onMouseLeave={scheduleClose}
-        onWheel={(event) => {
-          // The panel is a lens over the document, not a modal: a wheel it
-          // cannot use must still scroll the text behind it. A short outline
-          // has no overflow to consume at all, and a long one stops consuming
-          // at its own ends — and the document's scroller is a sibling, not an
-          // ancestor, so the browser's own scroll chaining never reaches it.
-          const panel = event.currentTarget;
-          const room = panel.scrollHeight - panel.clientHeight;
-          const consumes =
-            room > WHEEL_EDGE_TOLERANCE &&
-            (event.deltaY < 0
-              ? panel.scrollTop > WHEEL_EDGE_TOLERANCE
-              : panel.scrollTop < room - WHEEL_EDGE_TOLERANCE);
-
-          if (consumes) {
-            return;
-          }
-
-          scrollContainerRef.current?.scrollBy(0, event.deltaY);
-        }}
-        ref={panelRef}
-        style={{
-          top: 0,
-          insetInlineEnd: RAIL_WIDTH + PANEL_GAP,
-          width: panelWidth,
-          maxHeight: "calc(100% - 24px)",
-        }}
-      >
-        {header !== undefined && (
-          <div className="bg-popover sticky top-0 z-50 border-b p-2">
-            {header}
-          </div>
-        )}
-        <ul className="m-0 list-none p-0">{tree.map(renderNode)}</ul>
-      </nav>
+        >
+          {header !== undefined && (
+            <div className="bg-popover z-50 shrink-0 border-b p-2">
+              {header}
+            </div>
+          )}
+          <ScrollArea
+            axis="vertical"
+            className="min-h-0 flex-1"
+            viewportRef={panelRef}
+          >
+            <ul className="m-0 list-none p-0 pb-2">{tree.map(renderNode)}</ul>
+          </ScrollArea>
+        </nav>
+      )}
     </div>
   );
 };
+
+const OUTLINE_PRESENTATION_CLASS = {
+  popover: "absolute end-0 z-20 flex flex-col pointer-coarse:min-w-11",
+  panel: "relative flex min-h-0 w-full flex-1 flex-col",
+  rail: "relative flex min-h-0 w-full flex-1 flex-col",
+} as const satisfies Record<
+  NonNullable<OutlineRailProps["presentation"]>,
+  string
+>;
+
+function outlinePanelVisibilityClass(
+  presentation: NonNullable<OutlineRailProps["presentation"]>,
+  open: boolean,
+): string {
+  if (presentation === "panel") {
+    return "flex-1";
+  }
+  return open
+    ? "translate-x-0 opacity-100"
+    : "pointer-events-none translate-x-2 opacity-0";
+}

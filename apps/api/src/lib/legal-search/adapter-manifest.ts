@@ -1,4 +1,6 @@
-// parser-output-unchanged: scheduling, identity-resolution and app-reader text policy declarations do not change parsed decision output.
+// parser-output-unchanged: manifest policy and derived deferred-document keys do not change parsed decision output.
+import { panic } from "better-result";
+
 import {
   type CaseLawJurisdiction,
   isCaseLawJurisdiction,
@@ -7,6 +9,7 @@ import {
   DECISION_DOCKET_GRAMMARS,
   type DecisionDocketGrammar,
 } from "@stll/api-contract/decision-docket-grammar";
+import type { DocumentStage } from "@stll/legal-atlas/document-fetch-diagnostics";
 
 import {
   CZ_ECLI_COURTS,
@@ -71,7 +74,7 @@ export type StatedEcliIdentity =
 
 type AdapterManifest<TKey extends string> = {
   readonly key: TKey;
-  readonly documentStage: "inline" | "deferred";
+  readonly documentStage: DocumentStage;
   /** The feed's English label, for operators and logs. */
   readonly name: string;
   /**
@@ -769,3 +772,34 @@ export type DeferredDocumentAdapterKey = {
     ? TKey
     : never;
 }[keyof typeof ADAPTER_MANIFESTS];
+
+type AdapterManifestEntry =
+  (typeof ADAPTER_MANIFESTS)[keyof typeof ADAPTER_MANIFESTS];
+
+const deferredDocumentKeys = (
+  manifest: AdapterManifestEntry,
+): DeferredDocumentAdapterKey[] => {
+  switch (manifest.documentStage) {
+    case "deferred":
+      return [manifest.key];
+    case "inline":
+      return [];
+    default: {
+      manifest satisfies never;
+      return panic("Unexpected adapter document stage");
+    }
+  }
+};
+
+/**
+ * Adapters whose crawl stores metadata only and leaves the document to the
+ * deferred-document queue, derived from the manifests so a source declared
+ * `deferred` is read through and drained without being listed anywhere else.
+ */
+export const DEFERRED_DOCUMENT_ADAPTER_KEYS =
+  Object.values(ADAPTER_MANIFESTS).flatMap(deferredDocumentKeys);
+
+export const isDeferredDocumentAdapterKey = (
+  key: string,
+): key is DeferredDocumentAdapterKey =>
+  DEFERRED_DOCUMENT_ADAPTER_KEYS.some((deferred) => deferred === key);

@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 
+import { DOCX_OUTLINE_DEPTH_STORAGE_KEY } from "@/components/docx/docx-outline-depth.logic";
 import { READER_PROVISION_MODE_STORAGE_KEY } from "@/components/legal-reader/reader-provision-mode.logic";
 import {
   LAW_HISTORY_STORAGE_KEY,
@@ -134,6 +135,13 @@ export const USER_STORAGE_FAMILIES: readonly UserStorageFamily[] = [
   {
     area: "local",
     prefix: READER_PROVISION_MODE_STORAGE_KEY,
+    owner: "scoped",
+    retention: "kept-for-owner",
+  },
+  // The user's preferred heading depth in DOCX outlines.
+  {
+    area: "local",
+    prefix: DOCX_OUTLINE_DEPTH_STORAGE_KEY,
     owner: "scoped",
     retention: "kept-for-owner",
   },

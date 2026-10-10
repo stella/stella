@@ -1,0 +1,6 @@
+{
+  "metric": "direct-root-connection-imports",
+  "file": "apps/api/src/lib/business-registries/desktop/proof-store.ts",
+  "delta": 1,
+  "reason": "The import-confined device proof owner claims verified request receipts atomically in its denied dedicated table and prunes only its own expired receipts with a bounded indexed transaction. Receipts commit independently of subsequent business operations."
+}

@@ -12,9 +12,9 @@
  *
  * The other eight columns and the tuple header measured 80 bytes, so this
  * budget caps an index row at about 2080 and leaves some 600 in reserve.
- * Enforced at the table rather than in the ingestion pipeline: a value this
- * long is a publisher's, not a caller's, and failing the write is the correct
- * outcome. Truncating it would change what a court is called.
+ * Enforced at the table and before ingestion writes: a value this long is a
+ * publisher's, and must be refused rather than truncated, which would change
+ * what a court is called.
  */
 import type { Column, SQL } from "drizzle-orm";
 import { sql } from "drizzle-orm";
@@ -23,6 +23,22 @@ export const CASE_LAW_SEARCH_CANDIDATE_ROW_BOUND_CONSTRAINT =
   "case_law_decisions_search_candidate_row_bound";
 
 export const CASE_LAW_SEARCH_CANDIDATE_ROW_MAX_BYTES = 2000;
+
+type SearchCandidateRowValues = {
+  court: string;
+  decisionType: string | undefined;
+  languageGroupKey: string;
+};
+
+export const fitsSearchCandidateRow = ({
+  court,
+  decisionType,
+  languageGroupKey,
+}: SearchCandidateRowValues): boolean =>
+  Buffer.byteLength(court, "utf-8") +
+    Buffer.byteLength(languageGroupKey, "utf-8") +
+    Buffer.byteLength(decisionType ?? "", "utf-8") <=
+  CASE_LAW_SEARCH_CANDIDATE_ROW_MAX_BYTES;
 
 type SearchCandidateRowColumns = {
   court: Column;

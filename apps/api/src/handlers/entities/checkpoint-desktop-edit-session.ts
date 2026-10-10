@@ -266,9 +266,10 @@ export const checkpointDesktopEditSessionHandler = async ({
         objectKey: key,
         sizeBytes: checkpointBytes.byteLength,
         contentSha256Hex: sha256Hex,
-        write: async () =>
+        content: checkpointBytes,
+        write: async ({ content, objectKey }) =>
           await writeS3ObjectWithRetry(
-            { data: checkpointBytes, key },
+            { data: content, key: objectKey },
             {
               type: "fixed-key",
               reason: "Row-locked per-session checkpoint slot",

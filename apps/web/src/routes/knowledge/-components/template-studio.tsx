@@ -87,7 +87,6 @@ import {
   slugify,
 } from "@/routes/knowledge/-components/template-studio-model";
 import { buildOutline } from "@/routes/knowledge/-components/template-studio-outline";
-import { useFitToWidth } from "@/routes/knowledge/-components/template-studio-preview";
 import {
   TemplateStudioSelectionGesture,
   useTemplateStudioSelectionGesture,
@@ -302,7 +301,6 @@ export const TemplateStudioPage = ({
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const editorRef = useRef<DocxEditorRef>(null);
   const editorViewRef = useRef<EditorView | null>(null);
-  const { containerRef, fitZoom } = useFitToWidth();
 
   const init = useTemplateStudioStore((s) => s.init);
   const reset = useTemplateStudioStore((s) => s.reset);
@@ -1818,14 +1816,14 @@ export const TemplateStudioPage = ({
       {/* `relative` so the floating AI bar, stepper, and selection-gesture
           popover anchor over the doc. */}
       <div className="relative min-h-0 flex-1" ref={overlayHostRef}>
-        <div className="h-full overflow-auto" ref={containerRef}>
+        <div className="h-full overflow-auto">
           <Suspense fallback={null}>
             <DocxEditor
               ref={editorRef}
               autoOpenReviewSidebar={false}
               className="h-full"
               documentBuffer={docBuffer}
-              initialZoom={fitZoom}
+              initialZoom="fit-width"
               loadingIndicator={null}
               onChange={handleEditorChange}
               onEditorViewReady={(view) => {

@@ -1,4 +1,5 @@
 import { Result } from "better-result";
+import type { Static } from "elysia";
 
 import { isDocumentTranslationDeepLSupportedMimeType } from "@stll/api-contract/document-translation";
 
@@ -8,7 +9,7 @@ import { memberAIAccessError } from "@/api/lib/ai-config-response";
 import { captureError } from "@/api/lib/analytics/capture";
 import {
   ACCOUNT_ACCESS,
-  assertUsageAvailableForHandler,
+  authorizeHandlerUsage,
   createSafeHandler,
 } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
@@ -27,6 +28,7 @@ import {
   readEntityVersionFile,
   resolveEntityVersionFile,
 } from "@/api/lib/entity-versions/load-entity-version-file-buffer";
+import type { EntityVersionFile } from "@/api/lib/entity-versions/load-entity-version-file-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
@@ -58,202 +60,224 @@ type CreateDocumentTranslationRunResult =
   | { type: "commentPolicyRequired" }
   | { type: "started"; runId: SafeId<"documentTranslationRun"> };
 
-const createDocumentTranslationRun = createSafeHandler<
-  typeof config,
-  CreateDocumentTranslationRunResult
->(
-  config,
-  async function* ({
-    body,
-    orgAIConfig,
-    orgAIConfigStatus,
-    recordAuditEvent,
-    safeDb,
-    session,
-    user,
-    workspaceId,
-  }) {
-    if (!isExecutableTranslationCombination(body.output, body.engine)) {
-      return Result.err(
-        new HandlerError({
-          status: 422,
-          message: "Bilingual output is available with the AI engine only",
-        }),
-      );
-    }
-    // The translation derives a new document, so a read-only source is fine.
-    const source = yield* Result.await(
-      resolveEntityVersionFile({
-        safeDb,
-        workspaceId,
-        entityId: body.entityId,
-        fileFieldId: body.fieldId,
-        allowReadOnly: true,
+const validateTranslationSource = (
+  body: Static<typeof createDocumentTranslationRunBodySchema>,
+  source: EntityVersionFile,
+) => {
+  if (
+    body.engine === DOCUMENT_TRANSLATION_ENGINE.AI &&
+    body.entityVersionId !== source.entityVersionId
+  ) {
+    return Result.err(
+      new HandlerError({
+        status: 409,
+        message:
+          "The document changed after translation was prepared. Reopen the translation dialog.",
       }),
     );
-    if (
-      body.engine === DOCUMENT_TRANSLATION_ENGINE.AI &&
-      body.entityVersionId !== source.entityVersionId
-    ) {
-      return Result.err(
-        new HandlerError({
-          status: 409,
-          message:
-            "The document changed after translation was prepared. Reopen the translation dialog.",
-        }),
-      );
-    }
-    if (
-      body.engine === DOCUMENT_TRANSLATION_ENGINE.AI &&
-      source.mimeType !== DOCX_MIME_TYPE
-    ) {
-      return Result.err(
-        new HandlerError({
-          status: 422,
-          message: "Stella AI translation currently supports DOCX files only",
-        }),
-      );
-    }
-    if (
-      body.engine === DOCUMENT_TRANSLATION_ENGINE.DEEPL &&
-      !isDocumentTranslationDeepLSupportedMimeType(source.mimeType)
-    ) {
-      return Result.err(
-        new HandlerError({
-          status: 422,
-          message: `DeepL does not support ${source.mimeType}`,
-        }),
-      );
-    }
-    if (
-      body.output === DOCUMENT_TRANSLATION_OUTPUT.BILINGUAL &&
-      source.mimeType !== DOCX_MIME_TYPE
-    ) {
-      return Result.err(
-        new HandlerError({
-          status: 422,
-          message: "Bilingual output requires a DOCX file",
-        }),
-      );
-    }
-    if (
-      body.commentPolicy !== undefined &&
-      source.mimeType !== DOCX_MIME_TYPE
-    ) {
-      return Result.err(
-        new HandlerError({
-          status: 422,
-          message: "Comment translation policy requires a DOCX file",
-        }),
-      );
-    }
+  }
+  if (
+    body.engine === DOCUMENT_TRANSLATION_ENGINE.AI &&
+    source.mimeType !== DOCX_MIME_TYPE
+  ) {
+    return Result.err(
+      new HandlerError({
+        status: 422,
+        message: "Stella AI translation currently supports DOCX files only",
+      }),
+    );
+  }
+  if (
+    body.engine === DOCUMENT_TRANSLATION_ENGINE.DEEPL &&
+    !isDocumentTranslationDeepLSupportedMimeType(source.mimeType)
+  ) {
+    return Result.err(
+      new HandlerError({
+        status: 422,
+        message: `DeepL does not support ${source.mimeType}`,
+      }),
+    );
+  }
+  if (
+    body.output === DOCUMENT_TRANSLATION_OUTPUT.BILINGUAL &&
+    source.mimeType !== DOCX_MIME_TYPE
+  ) {
+    return Result.err(
+      new HandlerError({
+        status: 422,
+        message: "Bilingual output requires a DOCX file",
+      }),
+    );
+  }
+  if (body.commentPolicy !== undefined && source.mimeType !== DOCX_MIME_TYPE) {
+    return Result.err(
+      new HandlerError({
+        status: 422,
+        message: "Comment translation policy requires a DOCX file",
+      }),
+    );
+  }
+  return Result.ok(undefined);
+};
 
-    const organizationId = session.activeOrganizationId;
-    if (
-      source.mimeType === DOCX_MIME_TYPE &&
-      body.commentPolicy === undefined
-    ) {
-      const buffer = await readEntityVersionFile(source, organizationId);
-      const inspection = Result.isError(buffer)
-        ? buffer
-        : (
-            await Result.tryPromise({
-              try: async () => await inspectDocxComments(buffer.value),
-              catch: (cause) => cause,
-            })
-          ).andThen((inspected) => inspected);
-      if (Result.isError(inspection)) {
-        captureError(inspection.error, { entityId: body.entityId });
+export const createDocumentTranslationRunHandler = ({
+  authorizeUsage = authorizeHandlerUsage,
+  handoff = handoffCommittedDocumentTranslationRun,
+}: {
+  authorizeUsage?: typeof authorizeHandlerUsage;
+  handoff?: typeof handoffCommittedDocumentTranslationRun;
+} = {}) =>
+  createSafeHandler<typeof config, CreateDocumentTranslationRunResult>(
+    config,
+    async function* ({
+      body,
+      orgAIConfig,
+      orgAIConfigStatus,
+      recordAuditEvent,
+      safeDb,
+      session,
+      user,
+      workspaceId,
+    }) {
+      if (!isExecutableTranslationCombination(body.output, body.engine)) {
         return Result.err(
           new HandlerError({
             status: 422,
-            message: "The DOCX file could not be inspected for comments",
+            message: "Bilingual output is available with the AI engine only",
           }),
         );
       }
-      if (inspection.value.hasComments) {
-        return Result.ok({ type: "commentPolicyRequired" as const });
-      }
-    }
+      // The translation derives a new document, so a read-only source is fine.
+      const source = yield* Result.await(
+        resolveEntityVersionFile({
+          safeDb,
+          workspaceId,
+          entityId: body.entityId,
+          fileFieldId: body.fieldId,
+          allowReadOnly: true,
+        }),
+      );
+      yield* validateTranslationSource(body, source);
 
-    if (body.engine === DOCUMENT_TRANSLATION_ENGINE.AI) {
-      const accessError = memberAIAccessError(orgAIConfigStatus);
-      if (accessError) {
-        return Result.err(accessError);
+      const organizationId = session.activeOrganizationId;
+      if (
+        source.mimeType === DOCX_MIME_TYPE &&
+        body.commentPolicy === undefined
+      ) {
+        const buffer = await readEntityVersionFile(source, organizationId);
+        const inspection = Result.isError(buffer)
+          ? buffer
+          : (
+              await Result.tryPromise({
+                try: async () => await inspectDocxComments(buffer.value),
+                catch: (cause) => cause,
+              })
+            ).andThen((inspected) => inspected);
+        if (Result.isError(inspection)) {
+          captureError(inspection.error, { entityId: body.entityId });
+          return Result.err(
+            new HandlerError({
+              status: 422,
+              message: "The DOCX file could not be inspected for comments",
+            }),
+          );
+        }
+        if (inspection.value.hasComments) {
+          return Result.ok({ type: "commentPolicyRequired" as const });
+        }
       }
-      const usageError = await assertUsageAvailableForHandler({
-        metering: { actionType: "doc_review", modelRole: "chat" },
+
+      if (body.engine === DOCUMENT_TRANSLATION_ENGINE.AI) {
+        const accessError = memberAIAccessError(orgAIConfigStatus);
+        if (accessError) {
+          return Result.err(accessError);
+        }
+      }
+      const authorization = await authorizeUsage({
+        metering:
+          body.engine === DOCUMENT_TRANSLATION_ENGINE.AI
+            ? { actionType: "doc_review", modelRole: "chat" }
+            : null,
         organizationId,
         orgAIConfig,
         workspaceId,
         userId: user.id,
         safeDb,
+        body,
+        source,
+        recordAuditEvent,
+        handoff,
       });
-      if (usageError !== null) {
-        return Result.err(usageError);
+      if (Result.isError(authorization)) {
+        return Result.err(authorization.error);
       }
-    }
+      return await authorization.value.execute(
+        async ({ proof }) =>
+          await Result.gen(async function* () {
+            const checked = proof.input.value;
+            const runId = createSafeId<"documentTranslationRun">();
+            const inserted = yield* Result.await(
+              checked.safeDb(async (tx) => {
+                const created = await tx
+                  .insert(documentTranslationRuns)
+                  .values({
+                    id: runId,
+                    organizationId: checked.organizationId,
+                    workspaceId: checked.workspaceId,
+                    entityId: checked.body.entityId,
+                    fileFieldId: checked.body.fieldId,
+                    entityVersionId: checked.source.entityVersionId,
+                    sourceFileId: checked.source.fileId,
+                    sourceFileName: checked.source.fileName,
+                    sourceMimeType: checked.source.mimeType,
+                    output: checked.body.output,
+                    engine: checked.body.engine,
+                    commentPolicy: checked.body.commentPolicy,
+                    // The worker sends no source hint when this discriminator is set.
+                    sourceLang: "auto",
+                    targetLang: checked.body.targetLang,
+                    requestedBy: checked.userId,
+                  })
+                  .onConflictDoNothing()
+                  .returning({ id: documentTranslationRuns.id });
+                if (!created.at(0)) {
+                  return false;
+                }
+                await checked.recordAuditEvent(tx, {
+                  action: AUDIT_ACTION.EXECUTE,
+                  resourceType: AUDIT_RESOURCE_TYPE.DOCUMENT_TRANSLATION_RUN,
+                  resourceId: runId,
+                  metadata: {
+                    entityId: checked.body.entityId,
+                    output: checked.body.output,
+                    engine: checked.body.engine,
+                    targetLang: checked.body.targetLang,
+                    commentPolicy: checked.body.commentPolicy ?? null,
+                  },
+                });
+                return true;
+              }),
+            );
+            if (!inserted) {
+              return Result.err(
+                new HandlerError({
+                  status: 409,
+                  message:
+                    "A translation of this document is already in progress",
+                }),
+              );
+            }
 
-    const runId = createSafeId<"documentTranslationRun">();
-    const inserted = yield* Result.await(
-      safeDb(async (tx) => {
-        const created = await tx
-          .insert(documentTranslationRuns)
-          .values({
-            id: runId,
-            organizationId,
-            workspaceId,
-            entityId: body.entityId,
-            fileFieldId: body.fieldId,
-            entityVersionId: source.entityVersionId,
-            sourceFileId: source.fileId,
-            sourceFileName: source.fileName,
-            sourceMimeType: source.mimeType,
-            output: body.output,
-            engine: body.engine,
-            commentPolicy: body.commentPolicy,
-            // The worker sends no source hint when this discriminator is set.
-            sourceLang: "auto",
-            targetLang: body.targetLang,
-            requestedBy: user.id,
-          })
-          .onConflictDoNothing()
-          .returning({ id: documentTranslationRuns.id });
-        if (!created.at(0)) {
-          return false;
-        }
-        await recordAuditEvent(tx, {
-          action: AUDIT_ACTION.EXECUTE,
-          resourceType: AUDIT_RESOURCE_TYPE.DOCUMENT_TRANSLATION_RUN,
-          resourceId: runId,
-          metadata: {
-            entityId: body.entityId,
-            output: body.output,
-            engine: body.engine,
-            targetLang: body.targetLang,
-            commentPolicy: body.commentPolicy ?? null,
-          },
-        });
-        return true;
-      }),
-    );
-    if (!inserted) {
-      return Result.err(
-        new HandlerError({
-          status: 409,
-          message: "A translation of this document is already in progress",
-        }),
+            await checked.handoff({
+              runId,
+              organizationId: checked.organizationId,
+              workspaceId: checked.workspaceId,
+              userId: checked.userId,
+            });
+            return Result.ok({ type: "started" as const, runId });
+          }),
       );
-    }
+    },
+  );
 
-    await handoffCommittedDocumentTranslationRun({
-      runId,
-      organizationId,
-      workspaceId,
-      userId: user.id,
-    });
-    return Result.ok({ type: "started" as const, runId });
-  },
-);
-
-export default createDocumentTranslationRun;
+export default createDocumentTranslationRunHandler();

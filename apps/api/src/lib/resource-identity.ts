@@ -95,6 +95,7 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
     type: "resource",
     resourceType: RESOURCE_TYPE.CHAT_MESSAGE,
   },
+  chatMessageRevision: { type: "non_resource", reason: "subresource" },
   chatTurn: { type: "non_resource", reason: "workflow" },
   chatThreadCompaction: { type: "non_resource", reason: "projection" },
   chatThread: {
