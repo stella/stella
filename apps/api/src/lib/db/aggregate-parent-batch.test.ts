@@ -20,7 +20,9 @@ const otherOrganizationId = toSafeId<"organization">("org_z");
 test("mixed-case parent IDs use the same byte order in SQL and history", async () => {
   const ids = ["a", "B", "b", "A"].map((id) => toSafeId<"organization">(id));
   const sorted = ids.toSorted(compareCodeUnit);
-  expect(sorted).toEqual(["A", "B", "a", "b"]);
+  expect(sorted).toEqual(
+    ["A", "B", "a", "b"].map((id) => toSafeId<"organization">(id)),
+  );
   const queries: ReturnType<PgDialect["sqlToQuery"]>[] = [];
   const tx = {
     execute: async (query: SQL) => {
