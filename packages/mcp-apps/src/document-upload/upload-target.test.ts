@@ -1,16 +1,16 @@
 import { describe, expect, mock, test } from "bun:test";
 
-import { createUploadTargetController } from "@/api/mcp/apps/document-upload/upload-target";
+import type { UploadTarget } from "./upload-target";
+import { createUploadTargetController } from "./upload-target";
 
 describe("document upload target lifecycle", () => {
   test("a new tool input invalidates the prior target until its result arrives", () => {
-    let hasSelectedFile = true;
     const setLabel = mock((_label: string) => undefined);
-    const setUploadEnabled = mock((_enabled: boolean) => undefined);
+    const setTarget = mock((_target: UploadTarget | null) => undefined);
     const controller = createUploadTargetController({
-      hasSelectedFile: () => hasSelectedFile,
+      formatLabel: (id) => `Document ${id}`,
       setLabel,
-      setUploadEnabled,
+      setTarget,
     });
 
     controller.handleToolInput("old-document");
@@ -22,26 +22,28 @@ describe("document upload target lifecycle", () => {
       entityId: "old-document",
       workspaceId: "old-workspace",
     });
-    expect(setUploadEnabled).toHaveBeenLastCalledWith(true);
+    expect(setTarget).toHaveBeenLastCalledWith(controller.snapshot());
 
     controller.handleToolInput("new-document");
     expect(controller.snapshot()).toBeUndefined();
     expect(setLabel).toHaveBeenLastCalledWith("Document new-document");
-    expect(setUploadEnabled).toHaveBeenLastCalledWith(false);
+    expect(setTarget).toHaveBeenLastCalledWith(null);
 
-    hasSelectedFile = false;
     controller.handleToolResult({
       entityId: "new-document",
       workspaceId: "new-workspace",
     });
-    expect(setUploadEnabled).toHaveBeenLastCalledWith(false);
+    expect(setTarget).toHaveBeenLastCalledWith({
+      entityId: "new-document",
+      workspaceId: "new-workspace",
+    });
   });
 
   test("an upload snapshot cannot be retargeted by a later tool result", () => {
     const controller = createUploadTargetController({
-      hasSelectedFile: () => true,
+      formatLabel: (id) => `Document ${id}`,
       setLabel: () => undefined,
-      setUploadEnabled: () => undefined,
+      setTarget: () => undefined,
     });
     controller.handleToolInput("first-document");
     controller.handleToolResult({
@@ -67,11 +69,11 @@ describe("document upload target lifecycle", () => {
   });
 
   test("a late result for an older input cannot retarget the upload", () => {
-    const setUploadEnabled = mock((_enabled: boolean) => undefined);
+    const setTarget = mock((_target: UploadTarget | null) => undefined);
     const controller = createUploadTargetController({
-      hasSelectedFile: () => true,
+      formatLabel: (id) => `Document ${id}`,
       setLabel: () => undefined,
-      setUploadEnabled,
+      setTarget,
     });
 
     controller.handleToolInput("first-document");
@@ -82,7 +84,7 @@ describe("document upload target lifecycle", () => {
     });
 
     expect(controller.snapshot()).toBeUndefined();
-    expect(setUploadEnabled).toHaveBeenLastCalledWith(false);
+    expect(setTarget).toHaveBeenLastCalledWith(null);
 
     controller.handleToolResult({
       entityId: "second-document",
@@ -92,6 +94,6 @@ describe("document upload target lifecycle", () => {
       entityId: "second-document",
       workspaceId: "second-workspace",
     });
-    expect(setUploadEnabled).toHaveBeenLastCalledWith(true);
+    expect(setTarget).toHaveBeenLastCalledWith(controller.snapshot());
   });
 });

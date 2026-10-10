@@ -14,31 +14,26 @@ const parseTarget = (value: unknown): UploadTarget | undefined => {
   return { entityId, workspaceId };
 };
 
-export const createUploadTargetController = ({
-  hasSelectedFile,
-  setLabel,
-  setUploadEnabled,
-}: {
-  hasSelectedFile: () => boolean;
+type UploadTargetControllerOptions = {
+  formatLabel: (documentId: string) => string;
   setLabel: (label: string) => void;
-  setUploadEnabled: (enabled: boolean) => void;
-}) => {
+  setTarget: (target: UploadTarget | null) => void;
+};
+
+export const createUploadTargetController = ({
+  formatLabel,
+  setLabel,
+  setTarget,
+}: UploadTargetControllerOptions) => {
   let activeEntityId: string | undefined;
   let target: UploadTarget | undefined;
-  const refreshUploadEnabled = (): void => {
-    setUploadEnabled(target !== undefined && hasSelectedFile());
-  };
-
   return {
-    handleFileChange(): void {
-      refreshUploadEnabled();
-    },
     handleToolInput(entityId: unknown): void {
       target = undefined;
       activeEntityId = typeof entityId === "string" ? entityId : undefined;
-      setUploadEnabled(false);
+      setTarget(null);
       if (activeEntityId !== undefined) {
-        setLabel(`Document ${activeEntityId}`);
+        setLabel(formatLabel(activeEntityId));
       }
     },
     handleToolResult(value: unknown): void {
@@ -47,8 +42,8 @@ export const createUploadTargetController = ({
         return;
       }
       target = next;
-      setLabel(`Document ${next.entityId}`);
-      refreshUploadEnabled();
+      setLabel(formatLabel(next.entityId));
+      setTarget(next);
     },
     snapshot(): UploadTarget | undefined {
       return target === undefined ? undefined : { ...target };
