@@ -188,7 +188,7 @@ const fakeGithub = ({ failure }: FakeOptions = {}) => {
     }
     throw new TypeError(`Unexpected GitHub call: ${endpoint}`);
   };
-  const publish = (body = BODY) =>
+  const publish = async (body = BODY) =>
     publishRemoval({
       branch: BRANCH,
       baseSha: "base-sha",
@@ -246,7 +246,7 @@ describe("dated waiver removal publication", () => {
       "bun.lock": "updated probe dependency",
     });
     const body = "Verified 20/20 probes at new-main-sha.";
-    const publishFresh = () =>
+    const publishFresh = async () =>
       publishRemoval({
         branch: BRANCH,
         baseSha: "new-main-sha",
@@ -316,7 +316,7 @@ describe("dated waiver removal publication", () => {
   test("an existing proposal closes once with a neutral note when removal is already on main", async () => {
     const github = fakeGithub();
     await github.publish();
-    const publishNoop = () =>
+    const publishNoop = async () =>
       publishRemoval({
         branch: BRANCH,
         baseSha: "base-sha",
@@ -631,7 +631,7 @@ describe("retiring an ineligible removal proposal", () => {
     await github.publish();
     const disarmed: number[] = [];
     const writes = github.writes.length;
-    const retire = () =>
+    const retire = async () =>
       retireRemoval({
         branch: BRANCH,
         repo: "stella/stella",
@@ -707,7 +707,7 @@ describe("retiring an ineligible removal proposal", () => {
     const github = fakeGithub({ failure: "update" });
     await github.publish();
     const disarmed: number[] = [];
-    const retire = () =>
+    const retire = async () =>
       retireRemoval({
         branch: BRANCH,
         repo: "stella/stella",

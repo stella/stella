@@ -110,7 +110,7 @@ const scenario = (records: HealingEntry[]) => {
     alreadyRemoved: () => {
       removalNumber = undefined;
     },
-    run: (now: string) =>
+    run: async (now: string) =>
       applyHealing({
         report: {
           failures: [],
@@ -217,7 +217,7 @@ test("twenty timed-out samples still publish one private fix task within the pha
   };
   const budget = createProbeBudget({ attempts: 20, now: () => clock });
   const result = await runWaiverProbe(timeoutEntry, {
-    run: (command) =>
+    run: async (command) =>
       budget.run(command, async ({ timeoutMs }) => {
         clock += timeoutMs;
         return { passed: false, output: "Probe attempt timed out." };
@@ -270,7 +270,7 @@ test("twenty hanging Bun commands become recorded timeout failures", async () =>
   };
   let launched = 0;
   const result = await runWaiverProbe(hanging, {
-    run: (command) => {
+    run: async (command) => {
       launched += 1;
       return executeProbeCommand({
         command,
@@ -669,7 +669,7 @@ const resolutionScenario = async (
       effects.push("arm");
     },
   };
-  const run = (status: "red" | "green", proof: FixEvidence) =>
+  const run = async (status: "red" | "green", proof: FixEvidence) =>
     applyHealing({
       now: new Date(now),
       actions,
@@ -969,12 +969,12 @@ const proposalLifecycle = async (kind: DatedWaiver["kind"] = "no-llms-txt") => {
         return 0;
       });
     },
-    retireRemoval: (waiver: DatedWaiver) =>
+    retireRemoval: async (waiver: DatedWaiver) =>
       retireRemoval({
         branch: `chore/dated-waiver-${waiverKey(waiver)}`,
         repo: "stella/stella",
         request,
-        disarm: (number) =>
+        disarm: async (number) =>
           disarmRemovalThroughBar(number, async (pr, mode) => {
             expect(mode).toBe("disarm");
             if (!proposal) {
@@ -989,7 +989,7 @@ const proposalLifecycle = async (kind: DatedWaiver["kind"] = "no-llms-txt") => {
           }),
       }),
   };
-  const run = (status: "green" | "red", proof = evidence) =>
+  const run = async (status: "green" | "red", proof = evidence) =>
     applyHealing({
       actions,
       now: new Date(proof.observedAt),

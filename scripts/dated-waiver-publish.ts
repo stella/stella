@@ -269,7 +269,7 @@ export const publishRemoval = async ({
     );
   };
   const github = {
-    list: () => listRemovalPrs({ branch, repo, request }),
+    list: async () => listRemovalPrs({ branch, repo, request }),
     create: async (prBody: string): Promise<number> =>
       v.parse(
         CREATED_PR,
