@@ -313,6 +313,8 @@ export const sanitizeErrorForOutput = (value: unknown): unknown => {
       return input;
     }
     if (depth > MAX_ERROR_DEPTH) {
+      // Whatever lies below is unread, so the ancestors must be projected.
+      redaction.count += 1;
       return "[truncated]";
     }
     if (seen.has(input)) {

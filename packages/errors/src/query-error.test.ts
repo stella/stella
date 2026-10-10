@@ -478,6 +478,16 @@ test("binary query parameters are redacted when diagnostics carry their bytes", 
   ]);
 });
 
+test("a cause chain deeper than the projection limit is not returned raw", () => {
+  let error: Error = failure("insert into account values ($1)");
+  for (let level = 0; level < 34; level += 1) {
+    error = new Error(`wrapper ${level}`, { cause: error });
+  }
+  const output = sanitizeErrorForOutput(error);
+  expect(output).not.toBe(error);
+  expect(inspect(output, { depth: 64 })).not.toContain(SECRET);
+});
+
 test("errors holding query fields in plain records are projected", () => {
   const value = "fixture-plain-record-query-value";
   for (const input of [
