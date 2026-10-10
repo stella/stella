@@ -112,7 +112,7 @@ test("worktree Compose commands build that checkout's Postgres image", async () 
     },
   });
   expect(path.resolve(worktree, ".", "docker/postgres/Dockerfile")).toBe(
-    `${worktree}/docker/postgres/Dockerfile`,
+    path.join(worktree, "docker", "postgres", "Dockerfile"),
   );
 });
 
