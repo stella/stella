@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * The pieces of `read_case_law_decision`'s answer that are pure functions of
  * a read: page arithmetic, the text version, the compact metadata block, the
@@ -7,9 +8,8 @@
  * one projection MCP and chat share is built from the same functions.
  */
 
-import { panic } from "better-result";
-
 import type { DecisionTextWithheldReason } from "@stll/api-contract/case-law-text-field";
+import { createSha256 } from "@stll/sha256/bun";
 
 import type { DecisionCitationDigest } from "@/api/handlers/case-law/decisions/citation-digest";
 import type { RankedRelatedDecision } from "@/api/handlers/case-law/decisions/citation-graph";
@@ -82,10 +82,7 @@ const TEXT_VERSION_CHARS = 12;
  * so page numbers it holds may now address other passages.
  */
 export const decisionTextVersion = (text: string): string =>
-  new Bun.CryptoHasher("sha256")
-    .update(text)
-    .digest("base64url")
-    .slice(0, TEXT_VERSION_CHARS);
+  createSha256().update(text).digest("base64url").slice(0, TEXT_VERSION_CHARS);
 
 /**
  * Ordinal order for keys, ISO dates and ids: none of them is language, so no
