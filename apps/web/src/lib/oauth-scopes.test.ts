@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { createTranslator } from "use-intl";
+import * as v from "valibot";
 
+import en from "@/i18n/langs/en.json";
 import {
   groupOAuthScopeDisplayEntries,
   orderOAuthScopeSummary,
@@ -51,7 +56,7 @@ describe("OAuth scope display groups", () => {
         label: "consent.scopeTemplates",
         summary: "consent.summaryTemplates",
         group: "change",
-        sensitive: false,
+        sensitive: true,
         type: "known",
       },
       {
@@ -109,6 +114,7 @@ describe("OAuth scope display groups", () => {
   test("summarizes deleting and administering first", () => {
     const { change } = groupOAuthScopeDisplayEntries(
       toOAuthScopeDisplayEntries([
+        "stella:onboarding",
         "stella:templates",
         "stella:matters_write",
         "stella:documents_write",
@@ -121,24 +127,44 @@ describe("OAuth scope display groups", () => {
         entry.type === "known" ? entry.summary : entry.scope,
       ),
     ).toEqual([
-      "consent.summaryDocumentsWrite",
-      "consent.summaryAdminWrite",
       "consent.summaryTemplates",
       "consent.summaryMattersWrite",
+      "consent.summaryDocumentsWrite",
       "consent.summarySkills",
+      "consent.summaryAdminWrite",
+      "consent.summaryOnboarding",
     ]);
   });
 
-  test("marks every scope that deletes data or administers the organization", () => {
-    const sensitive = toOAuthScopeDisplayEntries([
-      "stella:documents_write",
-      "stella:contacts_write",
-      "stella:knowledge_write",
-      "stella:billing_write",
-      "stella:admin_write",
-      "stella:read",
-      "stella:matters_write",
-    ]).filter((entry) => entry.type === "known" && entry.sensitive);
-    expect(sensitive).toHaveLength(5);
+  test("every destructive capability scope discloses sensitive access and deletion", () => {
+    const catalog = path.resolve(
+      import.meta.dir,
+      "../../../../packages/cli/capabilities",
+    );
+    const capabilitySchema = v.object({
+      scope: v.string(),
+      destructive: v.boolean(),
+    });
+    const destructiveScopes = new Set<string>();
+    for (const file of new Bun.Glob("*.json").scanSync({ cwd: catalog })) {
+      const capability = v.parse(
+        capabilitySchema,
+        JSON.parse(readFileSync(path.join(catalog, file), "utf-8")),
+      );
+      if (capability.destructive) {
+        destructiveScopes.add(capability.scope);
+      }
+    }
+    expect(destructiveScopes.size).toBeGreaterThan(0);
+    for (const scope of destructiveScopes) {
+      const [entry] = toOAuthScopeDisplayEntries([scope]);
+      expect(entry?.type).toBe("known");
+      if (entry?.type !== "known") {
+        continue;
+      }
+      expect(entry.sensitive).toBe(true);
+      const t = createTranslator({ locale: "en", messages: en });
+      expect(translateOAuthScopeSummary(t, entry)).toContain("delet");
+    }
   });
 });

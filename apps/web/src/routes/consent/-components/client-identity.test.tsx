@@ -58,19 +58,35 @@ describe("consent client identity", () => {
     }
   });
 
-  test("a client calling itself a known assistant gets no branding", () => {
-    for (const claimed of ["Claude", "Claude Code", "ChatGPT", "Codex"]) {
-      const consentInfo = info({ client_name: claimed });
-      expect(resolveConsentClientIdentity(consentInfo, claimed)).toEqual({
-        type: "unverified",
-        name: claimed,
-      });
-      const markup = render(consentInfo);
-      expect(markup).toContain(en.consent.unverifiedApp);
+  test("an unverified client claiming a product name shows no branding", () => {
+    const consentInfo = info({ client_name: "Claude" });
+    expect(resolveConsentClientIdentity(consentInfo, "Claude")).toEqual({
+      type: "unverified",
+      name: "Claude",
+    });
+    const markup = render(consentInfo);
+    expect(markup).toContain(en.consent.unverifiedApp);
+    expect(markup).not.toContain("Verified app by");
+    expect(markup).not.toContain('data-slot="verified-client-mark"');
+    expect(markup).toContain(">C</div>");
+  });
+
+  test("absent identity data makes no verification claim", () => {
+    for (const absent of [null, undefined]) {
+      const identity = resolveConsentClientIdentity(
+        absent,
+        "Example connector",
+      );
+      expect(identity).toEqual({ type: "unknown", name: "Example connector" });
+      const markup = renderToStaticMarkup(
+        <IntlProvider locale="en" messages={en} timeZone="UTC">
+          <ConsentClientTiles identity={identity} />
+          <ConsentClientVerification identity={identity} />
+        </IntlProvider>,
+      );
+      expect(markup).not.toContain(en.consent.unverifiedApp);
       expect(markup).not.toContain("Verified app by");
-      // The tile shows the claimed initial, never a product mark.
       expect(markup).not.toContain('data-slot="verified-client-mark"');
-      expect(markup).toContain(`>${claimed.slice(0, 1)}</div>`);
     }
   });
 

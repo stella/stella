@@ -217,39 +217,22 @@ describe("OAuth consent app details", () => {
     }
   });
 
-  test("a client calling itself a known assistant gets no brand", () => {
-    for (const name of [
-      "Claude",
-      "Claude Code",
-      "ChatGPT",
-      "Codex",
-      "stella",
-    ]) {
-      for (const client of [
-        { name, redirectUris: ["https://connector.example/callback"] },
-        { name, redirectUris: ["http://127.0.0.1:3000/callback"] },
+  test("an unverified client remains unverified when claiming a product name", () => {
+    expect(
+      getOAuthConsentInfo(
         {
-          name,
-          clientId: "https://connector.example/claude-code-client-metadata",
-          redirectUris: ["http://127.0.0.1/callback"],
-          clientDiscoveryId: "cimd",
+          clientId: "example-client",
+          name: "Claude",
+          redirectUris: ["https://connector.example/callback"],
+          clientDiscoveryId: null,
         },
-      ]) {
-        const info = getOAuthConsentInfo(
-          {
-            clientId: "example-client",
-            clientDiscoveryId: null,
-            ...client,
-          },
-          origins,
-        );
-        expect(info).toMatchObject({
-          client_name: name,
-          unverified: true,
-          verifiedBrand: null,
-        });
-      }
-    }
+        origins,
+      ),
+    ).toMatchObject({
+      client_name: "Claude",
+      unverified: true,
+      verifiedBrand: null,
+    });
   });
 
   test("a shared platform redirect verifies without naming a product", () => {

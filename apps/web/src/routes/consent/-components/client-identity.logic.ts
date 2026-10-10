@@ -22,7 +22,8 @@ export type ConsentClientIdentity =
       publisher: string;
     }
   | { type: "verified_unbranded"; name: string }
-  | { type: "unverified"; name: string };
+  | { type: "unverified"; name: string }
+  | { type: "unknown"; name: string };
 
 /**
  * Who the consent screen says is asking. Only the server's verified brand
@@ -34,7 +35,10 @@ export const resolveConsentClientIdentity = (
   info: OAuthConsentInfo | null | undefined,
   claimedName: string,
 ): ConsentClientIdentity => {
-  if (!info || info.unverified) {
+  if (!info) {
+    return { type: "unknown", name: claimedName };
+  }
+  if (info.unverified) {
     return { type: "unverified", name: claimedName };
   }
   if (info.verifiedBrand === null) {

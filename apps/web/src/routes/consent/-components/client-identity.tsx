@@ -54,6 +54,8 @@ export const ConsentClientVerification = ({
           {t("consent.verifiedPublisher", { publisher: identity.publisher })}
         </p>
       );
+    case "unknown":
+      return null;
     case "verified_unbranded":
       // The location is known, but it does not identify the publisher, so
       // nothing is claimed about who made the app.

@@ -2070,9 +2070,9 @@ type Messages = {
     "showAllPermissions": "{count, plural, one {Show the permission} other {Show all # permissions}}";
     "signedInAs": "Signed in as <email>{accountEmail}</email>";
     "summaryAdminRead": "audit log";
-    "summaryAdminWrite": "organization members and settings";
+    "summaryAdminWrite": "organization members and settings, including deleting them";
     "summaryBillingWrite": "time entries, including deleting them";
-    "summaryChat": "chats";
+    "summaryChat": "chats, including deleting them";
     "summaryContactsWrite": "contacts, including deleting them";
     "summaryDocumentsWrite": "documents, including deleting them";
     "summaryExternalMcps": "connected integrations";
@@ -2082,7 +2082,7 @@ type Messages = {
     "summaryLineChange": "<group>Can change:</group> {items} ({count})";
     "summaryLineOther": "<group>Also:</group> {items}";
     "summaryLineRead": "<group>Can read:</group> {items} ({count})";
-    "summaryMattersWrite": "matters and tasks";
+    "summaryMattersWrite": "matters and tasks, including deleting them";
     "summaryOfflineAccess": "staying signed in";
     "summaryOnboarding": "practice jurisdictions";
     "summaryProfile": "profile";
@@ -2090,8 +2090,8 @@ type Messages = {
     "summaryReadAnonymized": "anonymized documents and matters";
     "summarySearch": "search";
     "summarySearchAnonymized": "anonymized search";
-    "summarySkills": "skills";
-    "summaryTemplates": "templates";
+    "summarySkills": "skills, including deleting them";
+    "summaryTemplates": "templates, including deleting them";
     "summaryTemplatesAnonymized": "anonymized templates";
     "title": "Authorize access";
     "unverifiedApp": "Unverified app";

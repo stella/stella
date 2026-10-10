@@ -32,7 +32,7 @@ const OAUTH_SCOPE_METADATA = {
     label: "consent.scopeTemplates",
     summary: "consent.summaryTemplates",
     group: "change",
-    sensitive: false,
+    sensitive: true,
   },
   "stella:documents_write": {
     label: "consent.scopeDocumentsWrite",
@@ -44,7 +44,7 @@ const OAUTH_SCOPE_METADATA = {
     label: "consent.scopeMattersWrite",
     summary: "consent.summaryMattersWrite",
     group: "change",
-    sensitive: false,
+    sensitive: true,
   },
   "stella:contacts_write": {
     label: "consent.scopeContactsWrite",
@@ -56,7 +56,7 @@ const OAUTH_SCOPE_METADATA = {
     label: "consent.scopeChat",
     summary: "consent.summaryChat",
     group: "change",
-    sensitive: false,
+    sensitive: true,
   },
   "stella:knowledge_write": {
     label: "consent.scopeKnowledgeWrite",
@@ -86,7 +86,7 @@ const OAUTH_SCOPE_METADATA = {
     label: "consent.scopeSkills",
     summary: "consent.summarySkills",
     group: "change",
-    sensitive: false,
+    sensitive: true,
   },
   "stella:external_mcps": {
     label: "consent.scopeExternalMcps",
