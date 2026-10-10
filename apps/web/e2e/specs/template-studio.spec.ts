@@ -8,69 +8,95 @@ import { expect, test } from "../helpers/test";
 const DOCX_MIME =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 const DOCX_PATH = path.resolve(import.meta.dirname, "../fixtures/simple.docx");
+const FIT_DOCX_PATH = path.resolve(
+  import.meta.dirname,
+  "../fixtures/template-fit.docx",
+);
 const TEMPLATE_STUDIO_TEST_TIMEOUT_MS = 120_000;
 
 test.describe("Template Studio", () => {
   test("fits the page to the viewport when the outline opens and the window narrows", async ({
     page,
+    request,
   }) => {
     test.setTimeout(TEMPLATE_STUDIO_TEST_TIMEOUT_MS);
-    await page.setViewportSize({ width: 1280, height: 1000 });
-    await page.goto("/knowledge/templates", { waitUntil: "domcontentloaded" });
-    const template = page.getByRole("button", {
-      name: /^Supply Agreement(?: |$)/u,
-    });
-    await expect(template).toBeVisible({ timeout: 45_000 });
-    await template.click();
-    const editor = page.getByTestId("folio-editor");
-    await expect(editor.locator("[data-page-number]").first()).toBeVisible({
-      timeout: 45_000,
-    });
-    await expect(
-      page
-        .locator('[data-slot="inspector"]')
-        .getByRole("button", { name: "Close", exact: true }),
-    ).toBeVisible();
+    let templateId: string | null = null;
+    try {
+      const templateName = `Template Studio Fit E2E ${randomUUID()}`;
+      const uploadedTemplate = await apiUploadTemplate(request, {
+        file: {
+          name: "template-studio-fit-e2e.docx",
+          mimeType: DOCX_MIME,
+          buffer: await readFile(FIT_DOCX_PATH),
+        },
+        name: templateName,
+      });
+      templateId = uploadedTemplate.id;
 
-    const viewport = editor.locator("[data-folio-scroll]");
-    const expectPageFits = async () => {
+      await page.setViewportSize({ width: 1280, height: 1000 });
+      await page.goto("/knowledge/templates", {
+        waitUntil: "domcontentloaded",
+      });
+      const template = page.getByRole("button", {
+        name: templateName,
+        exact: true,
+      });
+      await expect(template).toBeVisible({ timeout: 45_000 });
+      await template.click();
+      const editor = page.getByTestId("folio-editor");
+      await expect(editor.locator("[data-page-number]").first()).toBeVisible({
+        timeout: 45_000,
+      });
+      await expect(
+        page
+          .locator('[data-slot="inspector"]')
+          .getByRole("button", { name: "Close", exact: true }),
+      ).toBeVisible();
+
+      const viewport = editor.locator("[data-folio-scroll]");
+      const expectPageFits = async () => {
+        await expect
+          .poll(async () => {
+            const viewportBox = await viewport.boundingBox();
+            const documentPage = await editor
+              .locator("[data-page-number]")
+              .first()
+              .boundingBox();
+            return viewportBox && documentPage
+              ? documentPage.width <= viewportBox.width
+              : false;
+          })
+          .toBe(true);
+      };
+      await expectPageFits();
+      const closedViewport = await viewport.boundingBox();
+      if (!closedViewport) {
+        throw new Error("Template viewport did not mount");
+      }
+      await page.getByTestId("toolbar-outline-toggle").click();
+      await expect(
+        page.getByTestId("folio-outline").locator("select"),
+      ).toBeVisible();
       await expect
-        .poll(async () => {
-          const viewportBox = await viewport.boundingBox();
-          const documentPage = await editor
-            .locator("[data-page-number]")
-            .first()
-            .boundingBox();
-          return viewportBox && documentPage
-            ? documentPage.width <= viewportBox.width
-            : false;
-        })
-        .toBe(true);
-    };
-    await expectPageFits();
-    const closedViewport = await viewport.boundingBox();
-    if (!closedViewport) {
-      throw new Error("Template viewport did not mount");
-    }
-    await page.getByTestId("toolbar-outline-toggle").click();
-    await expect(
-      page.getByTestId("folio-outline").locator("select"),
-    ).toBeVisible();
-    await expect
-      .poll(async () => (await viewport.boundingBox())?.width)
-      .toBeLessThan(closedViewport.width);
-    await expectPageFits();
+        .poll(async () => (await viewport.boundingBox())?.width)
+        .toBeLessThan(closedViewport.width);
+      await expectPageFits();
 
-    await page.mouse.move(0, 0);
-    await page.setViewportSize({ width: 600, height: 1000 });
-    const inspectorBack = page.getByRole("button", {
-      name: "Back",
-      exact: true,
-    });
-    await expect(inspectorBack).toBeVisible();
-    await inspectorBack.click();
-    await expect(inspectorBack).toBeHidden();
-    await expectPageFits();
+      await page.mouse.move(0, 0);
+      await page.setViewportSize({ width: 600, height: 1000 });
+      const inspectorBack = page.getByRole("button", {
+        name: "Back",
+        exact: true,
+      });
+      await expect(inspectorBack).toBeVisible();
+      await inspectorBack.click();
+      await expect(inspectorBack).toBeHidden();
+      await expectPageFits();
+    } finally {
+      if (templateId !== null) {
+        await apiDelete(request, `/templates/${templateId}`);
+      }
+    }
   });
 
   test("persists document edits and conditions across reload", async ({
