@@ -25,7 +25,7 @@ describe.skipIf(!enabled)("query perf gate on PostgreSQL under RLS", () => {
   test("both document-search profiles pass and a correlated policy exceeds each buffer budget", async () => {
     const databaseUrl = process.env["DATABASE_URL"];
     if (databaseUrl === undefined) {
-      return panic("DATABASE_URL required for query perf");
+      panic("DATABASE_URL required for query perf");
     }
     const mode = v.parse(
       v.picklist(["compare", "record"]),
@@ -41,7 +41,7 @@ describe.skipIf(!enabled)("query perf gate on PostgreSQL under RLS", () => {
       (baseline.seedId !== QUERY_PERF_SEED_ID ||
         baseline.settingsDigest !== SETTINGS_DIGEST)
     ) {
-      return panic(
+      panic(
         "Query perf baseline seed or planner settings differ; record and review a new baseline",
       );
     }

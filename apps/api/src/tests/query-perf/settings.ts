@@ -60,8 +60,8 @@ export const assertPlannerSettings = async (tx: TransactionOf<GatedTestDb>) => {
     row.row_security !== "on" ||
     row.version < 180_000 ||
     row.version >= 190_000 ||
-    !row["role_enforces_rls"] ||
-    !row["tables_enforce_rls"]
+    !row.role_enforces_rls ||
+    !row.tables_enforce_rls
   ) {
     panic(
       "Query perf requires PostgreSQL 18 as stella with row security enabled",

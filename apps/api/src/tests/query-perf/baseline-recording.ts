@@ -39,7 +39,7 @@ export const completeQueryPerfRun = async ({
     await appendFile(outputPath, "baseline_recorded=true\n");
   }
   if (mode === "compare") {
-    return panic(
+    panic(
       `Missing query performance baselines: ${missing.join(", ")}. Commit the validated query-perf-baseline-record artifact, then rerun comparison.`,
     );
   }

@@ -185,9 +185,10 @@ test("dedicated query recording dispatch schedules one measurement job", () => {
   const postgres =
     serviceImages.find(({ name }) => name === "postgres") ??
     panic("Missing canonical PostgreSQL image");
-  expect(
-    `docker.io/library/${queryServices.jobs["query-perf"]?.services?.["postgres"]?.image}`,
-  ).toBe(postgres.source);
+  const queryPostgresImage =
+    queryServices.jobs["query-perf"]?.services?.["postgres"]?.image ??
+    panic("Missing query performance PostgreSQL image");
+  expect(`docker.io/library/${queryPostgresImage}`).toBe(postgres.source);
   expect(
     evaluateExpression(
       services.jobs["service-suites"]?.services?.["postgres"]?.image ??

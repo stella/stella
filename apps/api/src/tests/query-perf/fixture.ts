@@ -30,6 +30,10 @@ export const withQueryPerfFixture = async <T>({
     adminUrl.toString(),
     async ({ openClient }) => {
       const { db: admin } = openClient();
+      // An interrupted run can leave the fixed-name clone behind.
+      await admin.execute(
+        sql`DROP DATABASE IF EXISTS ${sql.identifier(fixtureName)} WITH (FORCE)`,
+      );
       await admin.execute(
         sql`CREATE DATABASE ${sql.identifier(fixtureName)} TEMPLATE ${sql.identifier(template)}`,
       );

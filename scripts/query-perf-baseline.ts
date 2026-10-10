@@ -4,8 +4,9 @@ import { readFileSync, readdirSync, existsSync } from "node:fs";
 import path from "node:path";
 
 import { parseQueryPerfBaselineFile } from "../apps/api/src/tests/query-perf/baseline";
+import { BASELINE_PATHS } from "./baseline-paths";
 
-const BASELINE_PATH = "apps/api/src/tests/query-perf/baseline.json";
+const BASELINE_PATH = BASELINE_PATHS.queryPerf;
 const ALLOWANCE_DIRECTORY = "scripts/query-perf-allowances";
 const root = path.resolve(import.meta.dir, "..");
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -18,7 +19,7 @@ const git = (args: string[], repositoryRoot = root) => {
   });
   if (result.status !== 0) {
     return panic(
-      `Query perf baseline git ${args.at(0)} failed: ${result.stderr}`,
+      `Query perf baseline git ${args.join(" ")} failed: ${result.stderr}`,
     );
   }
   return result.stdout;
@@ -159,7 +160,7 @@ export const checkQueryPerfBaseline = ({
         continue;
       }
       if (!/^[a-z0-9]+(?:-[a-z0-9]+)*\.json$/u.test(name)) {
-        return panic("Query perf allowances must use slug.json filenames");
+        panic("Query perf allowances must use slug.json filenames");
       }
       const file = `${ALLOWANCE_DIRECTORY}/${name}`;
       const current = readFileSync(path.join(repositoryRoot, file), "utf-8");
@@ -176,7 +177,7 @@ export const checkQueryPerfBaseline = ({
   }
   const violations = queryPerfBaselineViolations({ base, head, allowances });
   if (violations.length !== 0) {
-    return panic(violations.join("\n"));
+    panic(violations.join("\n"));
   }
 };
 
