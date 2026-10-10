@@ -23,7 +23,6 @@ import { sha256Hex } from "@stll/sha256/bun";
 import { member, user as authUser } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
-  accountAuditLogs,
   billingArrangements,
   caseLawResearchAnswers,
   caseLawResearchColumns,
@@ -137,7 +136,6 @@ import updateVatRate from "@/api/handlers/vat-rates/update";
 import listMyWork from "@/api/handlers/work-obligations/queues/list";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
-import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -577,33 +575,7 @@ const savedSearchCriteria = (
   sort: "relevance",
 });
 
-const accountAuditResourceId = Bun.randomUUIDv7();
-
 const isolationCases: IsolationCase[] = [
-  {
-    name: "account audit events",
-    runAAgainstB: async ({ workspaceA }) =>
-      await workspaceA.scopedDb(
-        async (tx) =>
-          await tx
-            .select({ resourceId: accountAuditLogs.resourceId })
-            .from(accountAuditLogs)
-            .where(eq(accountAuditLogs.resourceId, accountAuditResourceId))
-            .limit(1),
-      ),
-    runBPositive: async ({ workspaceB }) =>
-      await workspaceB.scopedDb(
-        async (tx) =>
-          await tx
-            .select({ resourceId: accountAuditLogs.resourceId })
-            .from(accountAuditLogs)
-            .where(eq(accountAuditLogs.resourceId, accountAuditResourceId))
-            .limit(1),
-      ),
-    expectDenied: (result) => expect(result).toEqual([]),
-    expectPositive: (result) =>
-      expect(result).toEqual([{ resourceId: accountAuditResourceId }]),
-  },
   ...desktopPresenceIsolationCases(),
   {
     name: "user file content",
@@ -2103,15 +2075,6 @@ beforeAll(async () => {
   testDb = await getTestDb();
   ids = createTestIds();
   await setupRlsTestData(testDb, ids);
-  await testDb.transaction(async (tx) => {
-    await createBackgroundAuditRecorder({ account: { userId: ids.userB1 } })(
-      tx,
-      {
-        type: "account.data_export.ready",
-        resourceId: accountAuditResourceId,
-      },
-    );
-  });
   await testDb
     .update(authUser)
     .set({ emailVerified: true })

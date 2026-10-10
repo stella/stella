@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { eq, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import { accountAuditLogs } from "@/api/db/schema";
@@ -8,6 +9,10 @@ import {
 } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import {
+  getRlsFixture,
+  releaseRlsFixture,
+} from "@/api/tests/security/rls-fixture";
 
 const userId = asTestRaw<SafeId<"user">>("account-user");
 
@@ -27,6 +32,56 @@ const captureWrites = () => {
 };
 
 describe("account audit scope", () => {
+  test("an authenticated application transaction records its own account event", async () => {
+    const { ids, scopedQuery } = await getRlsFixture();
+    try {
+      const resourceId = Bun.randomUUIDv7();
+      const recorder = createAuditRecorder({
+        account: { userId: ids.userA1 },
+        request: new Request("https://example.test/account"),
+        server: null,
+      });
+      await scopedQuery(
+        [ids.wsA1],
+        ids.orgA,
+        async (tx) => {
+          expect(
+            (await tx.execute(sql`SELECT current_user AS role`)).rows,
+          ).toEqual([{ role: "stella" }]);
+          await recorder(tx, {
+            type: "account.data_export.requested",
+            resourceId,
+          });
+        },
+        ids.userA1,
+      );
+      const rows = await scopedQuery(
+        [ids.wsA1],
+        ids.orgA,
+        async (tx) =>
+          await tx
+            .select({
+              userId: accountAuditLogs.userId,
+              eventType: accountAuditLogs.eventType,
+              resourceId: accountAuditLogs.resourceId,
+            })
+            .from(accountAuditLogs)
+            .where(eq(accountAuditLogs.resourceId, resourceId))
+            .limit(1),
+        ids.userA1,
+      );
+      expect(rows).toEqual([
+        {
+          userId: ids.userA1,
+          eventType: "account.data_export.requested",
+          resourceId,
+        },
+      ]);
+    } finally {
+      await releaseRlsFixture();
+    }
+  });
+
   test("records account ownership and request provenance without event content", async () => {
     const { tx, writes } = captureWrites();
     const recorder = createAuditRecorder({
