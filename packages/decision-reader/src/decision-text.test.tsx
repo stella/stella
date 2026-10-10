@@ -554,13 +554,14 @@ for (const response of ["error", "null", "empty"] as const) {
       requests.push(request);
       return request.promise;
     };
+    const toggles: Promise<void>[] = [];
     const Card = () => {
       const [shown, setShown] = useState<"cited" | "full">("cited");
       const [full, setFull] = useState<FullProvisionRead>({
         isPending: false,
         whole: null,
       });
-      const onToggleFull = async () => {
+      const toggleFull = async () => {
         if (shown === "full") {
           setShown("cited");
           return;
@@ -572,6 +573,10 @@ for (const response of ["error", "null", "empty"] as const) {
           isPending: false,
           whole: result.isOk() ? result.value : null,
         });
+      };
+      // The click handler is synchronous; keep each toggle observable.
+      const onToggleFull = () => {
+        toggles.push(toggleFull());
       };
       return (
         <DecisionReaderProvider adapters={fakeReaderAdapters}>
@@ -656,6 +661,7 @@ for (const response of ["error", "null", "empty"] as const) {
       expect(toggle.textContent).toBe("Show cited part only");
       expect(toggle.getAttribute("aria-expanded")).toBe("true");
       expect(container.textContent).toContain("Rest of provision.");
+      await Promise.all(toggles);
     } finally {
       await act(async () => {
         root.unmount();
