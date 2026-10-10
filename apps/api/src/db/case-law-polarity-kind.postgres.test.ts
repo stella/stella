@@ -73,12 +73,11 @@ describe.skipIf(!enabled)("persisted polarity rule kinds", () => {
         );
         expect(constraints.length).toBe(6);
         expect(
-          constraints.filter((constraint) => constraint.convalidated === true)
-            .length,
+          constraints.filter((constraint) => constraint.convalidated).length,
         ).toBe(0);
         expect(
           constraints
-            .filter((constraint) => constraint.convalidated === false)
+            .filter((constraint) => !constraint.convalidated)
             .map((constraint) => constraint.conname)
             .toSorted(),
         ).toEqual([
@@ -101,9 +100,7 @@ describe.skipIf(!enabled)("persisted polarity rule kinds", () => {
         );
         expect(validatedConstraints.length).toBe(6);
         expect(
-          validatedConstraints.every(
-            (constraint) => constraint.convalidated === true,
-          ),
+          validatedConstraints.every((constraint) => constraint.convalidated),
         ).toBe(true);
         const rows = await tx.unsafe<
           {
