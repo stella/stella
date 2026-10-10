@@ -41,6 +41,22 @@ const withoutDescriptions = (value: unknown): unknown => {
 };
 
 describe("MCP tool registry", () => {
+  test("offers generic capability tools only on the advanced surface", () => {
+    const executorNames = CAPABILITY_TOOL_SET.definitions.map(
+      ({ name }) => name,
+    );
+    expect(
+      executorNames.every(
+        (name) => getStaticMcpToolDefinition(name, "default") === undefined,
+      ),
+    ).toBe(true);
+    expect(
+      executorNames.every(
+        (name) => getStaticMcpToolDefinition(name, "advanced") !== undefined,
+      ),
+    ).toBe(true);
+  });
+
   test("anonymizing tools declare at least one text field", () => {
     for (const tool of DEFAULT_MCP_TOOL_DEFINITIONS) {
       const { anonymized } = tool;

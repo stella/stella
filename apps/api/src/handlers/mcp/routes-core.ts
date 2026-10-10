@@ -1,6 +1,7 @@
 import Elysia from "elysia";
 
 import {
+  readAdvancedMetadata,
   readAnonymizedMetadata,
   readDefaultMetadata,
   readDocumentsMetadata,
@@ -8,6 +9,8 @@ import {
 } from "@/api/handlers/mcp/read-discovery-metadata";
 import { resolveRateLimitClientAddress } from "@/api/lib/client-ip";
 import {
+  MCP_ADVANCED_DISCOVERY_PATH,
+  MCP_ADVANCED_HTTP_PATH,
   MCP_ANONYMIZED_DISCOVERY_PATH,
   MCP_ANONYMIZED_HTTP_PATH,
   MCP_DISCOVERY_PATH,
@@ -76,11 +79,13 @@ const applyHeaders = ({
  * the MCP route serves, and the route's own preflight branch is unreachable.
  */
 const MCP_PREFLIGHT_HEADERS_BY_PATH = new Map<string, () => Headers>([
+  [MCP_ADVANCED_HTTP_PATH, createMcpPreflightHeaders],
   [MCP_HTTP_PATH, createMcpPreflightHeaders],
   [MCP_ANONYMIZED_HTTP_PATH, createMcpPreflightHeaders],
   [MCP_DOCUMENTS_HTTP_PATH, createMcpPreflightHeaders],
   [MCP_LAW_HTTP_PATH, createMcpPreflightHeaders],
   [ROOT_MCP_DISCOVERY_PATH, createMcpDiscoveryPreflightHeaders],
+  [MCP_ADVANCED_DISCOVERY_PATH, createMcpDiscoveryPreflightHeaders],
   [MCP_DISCOVERY_PATH, createMcpDiscoveryPreflightHeaders],
   [MCP_ANONYMIZED_DISCOVERY_PATH, createMcpDiscoveryPreflightHeaders],
   [MCP_DOCUMENTS_DISCOVERY_PATH, createMcpDiscoveryPreflightHeaders],
@@ -141,6 +146,8 @@ export const createMcpRoute = ({
   };
 
   return new Elysia()
+    .options(MCP_ADVANCED_DISCOVERY_PATH, discoveryOptionsHandler)
+    .get(MCP_ADVANCED_DISCOVERY_PATH, readAdvancedMetadata.handler)
     .options(ROOT_MCP_DISCOVERY_PATH, discoveryOptionsHandler)
     .get(ROOT_MCP_DISCOVERY_PATH, readDefaultMetadata.handler)
     .options(MCP_ANONYMIZED_DISCOVERY_PATH, discoveryOptionsHandler)
@@ -151,6 +158,22 @@ export const createMcpRoute = ({
     .get(MCP_DOCUMENTS_DISCOVERY_PATH, readDocumentsMetadata.handler)
     .options(MCP_LAW_DISCOVERY_PATH, discoveryOptionsHandler)
     .get(MCP_LAW_DISCOVERY_PATH, readLawMetadata.handler)
+    .all(
+      MCP_ADVANCED_HTTP_PATH,
+      async ({ request, server, set }) =>
+        await handleMcpTransportRoute({
+          options: {
+            clientIp: resolveRateLimitClientAddress({
+              request,
+              server: server ?? null,
+            }),
+            mode: "advanced",
+          },
+          request,
+          set,
+        }),
+      { parse: "none" },
+    )
     .all(
       MCP_HTTP_PATH,
       async ({ request, server, set }) =>

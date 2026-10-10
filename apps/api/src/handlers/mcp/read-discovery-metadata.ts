@@ -39,6 +39,9 @@ const readMetadata = async function* (
 export const readDefaultMetadata = createSafePublicHandler(config, ({ set }) =>
   readMetadata("default", set),
 );
+export const readAdvancedMetadata = createSafePublicHandler(config, ({ set }) =>
+  readMetadata("advanced", set),
+);
 export const readAnonymizedMetadata = createSafePublicHandler(
   config,
   ({ set }) => readMetadata("anonymized", set),

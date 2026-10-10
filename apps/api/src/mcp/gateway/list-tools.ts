@@ -162,15 +162,15 @@ export const listGatewayMcpToolDefinitions = async ({
     mode,
     scopes,
   }).map((definition) => projectFeatureToolDefinition(definition, context));
-  // Every restricted surface is a pure static projection. Dynamic
-  // connector/skill discovery runs only on the default surface, so a
+  // Restricted surfaces are pure static projections. Dynamic
+  // connector discovery runs only on the advanced surface, so a
   // restricted client never discovers a tool its dispatcher rejects and never
   // receives tenant-specific connector metadata.
-  if (mode !== "default") {
+  if (mode !== "default" && mode !== "advanced") {
     return definitions;
   }
 
-  if (hasGrantedScope(scopes, "stella:external_mcps")) {
+  if (mode === "advanced" && hasGrantedScope(scopes, "stella:external_mcps")) {
     for (const tool of await listGatewayExternalMcpTools({ context })) {
       definitions.push(externalToolDefinition(tool));
     }
@@ -228,13 +228,16 @@ export const getGatewayMcpToolDefinition = async ({
       : undefined;
   }
   if (
-    mode !== "default" ||
+    (mode !== "default" && mode !== "advanced") ||
     !isMcpDescriptorFeatureEnabled({ context, kind: "tools", id: toolName })
   ) {
     return undefined;
   }
 
   if (isExternalMcpToolName(toolName)) {
+    if (mode !== "advanced") {
+      return undefined;
+    }
     const externalTool = await resolveGatewayExternalMcpTool({
       context,
       toolName,
