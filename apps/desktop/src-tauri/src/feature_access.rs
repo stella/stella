@@ -77,12 +77,16 @@ fn client() -> Result<&'static DesktopHttpClient, String> {
 
 async fn fetch(request: &AccountRequest) -> Result<HashSet<DesktopFeature>, String> {
   let url = format!("{}{}", request.api_base_url, contract().path);
-  let mut response = client()?
-    .get(url)
-    .bearer_auth(&request.credential.key)
-    .send()
-    .await
-    .map_err(|_| "feature access request failed".to_string())?;
+  let auth = request.request_auth();
+  let mut response = crate::http_client::device_proof_request(
+    client()?.get(url),
+    auth.device_key,
+    Some(auth.credential_key),
+    None,
+  )?
+  .send()
+  .await
+  .map_err(|_| "feature access request failed".to_string())?;
   if !response.status().is_success() {
     return Err(format!(
       "feature access request was refused: {}",
