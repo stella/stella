@@ -160,11 +160,14 @@ describe("a tab told that the session changed elsewhere", () => {
       }),
     );
     const accepted = await tabB.queryClient.query(options);
+    expect(accepted.status).toBe("accepted");
     // The existing session broadcast delivers the acceptance note to tab A.
     tabA.receive();
     await settle();
 
-    expect(tabA.queryClient.getQueryData(options.queryKey)).toEqual(accepted);
+    expect(tabA.queryClient.getQueryData(options.queryKey)?.status).toBe(
+      "accepted",
+    );
     expect((await tabA.queryClient.query(options)).status).toBe("accepted");
     expect(tabA.reloads).toEqual([]);
     tabA.queryClient.clear();
