@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -777,10 +777,6 @@ describe("API deployment health receipt", () => {
       desktopResolveStart,
       desktopBuildStart,
     );
-    const desktopBuild = releaseDesktopWorkflow.slice(
-      desktopBuildStart,
-      desktopVerifyStart,
-    );
     const desktopVerify = releaseDesktopWorkflow.slice(
       desktopVerifyStart,
       desktopManifestStart,
@@ -805,18 +801,31 @@ describe("API deployment health receipt", () => {
       "github.event.workflow_run.conclusion == 'success'",
     );
     expect(desktopResolve).not.toContain('["success", "failure"]');
-    const psGalleryPreflight = desktopBuild.indexOf(
-      "Ensure PSGallery is registered (Windows only)",
+    const desktopWindowsBuildAction = readFileSync(
+      new URL(
+        "../.github/actions/desktop-windows-build/action.yml",
+        import.meta.url,
+      ),
+      "utf-8",
     );
-    const azureSigning = desktopBuild.indexOf("azure/trusted-signing-action@");
+    const psGalleryPreflight = desktopWindowsBuildAction.indexOf(
+      "Ensure PSGallery is registered",
+    );
+    const azureSigning = desktopWindowsBuildAction.indexOf(
+      "azure/trusted-signing-action@",
+    );
     expect(psGalleryPreflight).toBeGreaterThanOrEqual(0);
     expect(azureSigning).toBeGreaterThan(psGalleryPreflight);
-    expect(desktopBuild).toContain(
+    expect(desktopWindowsBuildAction).toContain(
       "Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue",
     );
-    expect(desktopBuild).toContain("if (-not $repository) {");
-    expect(desktopBuild).toContain("Register-PSRepository -Default");
-    expect(desktopBuild).toContain("https://www.powershellgallery.com/api/v2");
+    expect(desktopWindowsBuildAction).toContain("if (-not $repository) {");
+    expect(desktopWindowsBuildAction).toContain(
+      "Register-PSRepository -Default",
+    );
+    expect(desktopWindowsBuildAction).toContain(
+      "https://www.powershellgallery.com/api/v2",
+    );
     expect(desktopVerify).toContain("API_DEPLOYMENT_PROBE_PATH: ready");
     expect(desktopVerify).toContain("API_DEPLOYMENT_PROBE_PATH: version.json");
     expect(desktopManifest).toContain(

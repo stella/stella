@@ -1,5 +1,9 @@
 name: Build API image from protected history
 
+defaults:
+  run:
+    shell: bash
+
 run-name: Build API image (${{ inputs.source_sha }})
 
 on:

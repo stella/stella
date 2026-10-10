@@ -1,6 +1,9 @@
 name: Release Desktop App
 
 # release-chain-alert
+defaults:
+  run:
+    shell: bash
 
 # Build, sign, and publish the Tauri desktop app for each release tag.
 # Runs after release.yml succeeds so the GitHub Release object already
@@ -267,21 +270,27 @@ jobs:
             rust_targets: aarch64-apple-darwin,x86_64-apple-darwin
 
     steps:
-      - name: Checkout GitHub API tooling
+      - name: Checkout release workflow tooling
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ github.repository }}
           ref: ${{ github.workflow_sha }}
           path: .gh-retry
           persist-credentials: false
-          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout: |
+            scripts/gh-retry.sh
+            scripts/desktop-release-step.ts
+            .github/actions/desktop-windows-build/
           sparse-checkout-cone-mode: false
 
-      - name: Preserve GitHub API tooling across source checkouts
-        shell: bash
+      - name: Preserve release workflow tooling across source checkouts
         run: |
           cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
           echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/release-tooling/scripts" "$RUNNER_TEMP/release-tooling/actions"
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/desktop-release-step.ts" "$RUNNER_TEMP/release-tooling/scripts/desktop-release-step.ts"
+          cp -R "$GITHUB_WORKSPACE/.gh-retry/.github/actions/desktop-windows-build" "$RUNNER_TEMP/release-tooling/actions/desktop-windows-build"
+          echo "RELEASE_TOOLING=$RUNNER_TEMP/release-tooling" >> "$GITHUB_ENV"
 
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -291,6 +300,11 @@ jobs:
           ref: ${{ needs.resolve.outputs.release_sha }}
           persist-credentials: false
 
+      - name: Restore desktop build action
+        run: |
+          mkdir -p .release-tooling
+          cp -R "$RELEASE_TOOLING/actions/desktop-windows-build" .release-tooling/desktop-windows-build
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
@@ -298,7 +312,6 @@ jobs:
           no-cache: true
 
       - name: Install dependencies
-        shell: bash
         run: bun ci --ignore-scripts
         env:
           # Signing-key secrets are loaded into later steps in this job.
@@ -315,46 +328,13 @@ jobs:
           toolchain: stable
           targets: ${{ matrix.rust_targets }}
 
-      - name: Stamp release version into tauri.conf.json + Cargo.toml
-        shell: bash
+      # The updater endpoint is baked into the binary per channel so prerelease
+      # installations never poll or overwrite the production update feed.
+      - name: Stamp desktop release metadata
         env:
           VERSION: ${{ needs.resolve.outputs.app_version }}
-        run: |
-          # tauri.conf.json: replace `"version": "..."` on a single line.
-          node -e "
-            const fs = require('fs');
-            const path = 'apps/desktop/src-tauri/tauri.conf.json';
-            const conf = JSON.parse(fs.readFileSync(path, 'utf8'));
-            conf.version = process.env.VERSION;
-            fs.writeFileSync(path, JSON.stringify(conf, null, 2) + '\n');
-          "
-          # Cargo.toml: replace the package version line in-place.
-          node -e "
-            const fs = require('fs');
-            const path = 'apps/desktop/src-tauri/Cargo.toml';
-            const toml = fs.readFileSync(path, 'utf8');
-            const out = toml.replace(/^version = \"[^\"]+\"/m, 'version = \"' + process.env.VERSION + '\"');
-            fs.writeFileSync(path, out);
-          "
-
-      # The updater endpoint is baked into the binary at build time.
-      # Without per-channel pinning, every build (stable + rc + beta)
-      # would poll the same endpoint, defeating the channel split on
-      # the publish side. Stamp the channel-specific URL into the
-      # config so an rc-built install only ever sees rc updates.
-      - name: Pin updater endpoint to release channel
-        shell: bash
-        env:
           CHANNEL: ${{ needs.resolve.outputs.channel }}
-        run: |
-          channel_dir="${CHANNEL:-prod}"
-          endpoint="https://downloads.stll.app/desktop/$channel_dir/latest.json"
-          conf=apps/desktop/src-tauri/tauri.conf.json
-          jq --arg e "$endpoint" \
-            '.plugins.updater.endpoints = [$e]' \
-            "$conf" > "$conf.tmp"
-          mv "$conf.tmp" "$conf"
-          echo "Updater endpoint set to: $endpoint"
+        run: bun "$RELEASE_TOOLING/scripts/desktop-release-step.ts" stamp
 
       # ─── Windows: Azure Trusted Signing ────────────────────
       # trusted-signing-cli is invoked by Tauri's bundler via
@@ -366,165 +346,24 @@ jobs:
       # baptiste0928/cargo-install caches ~/.cargo/bin/<binary>
       # keyed on tool + version + runner image, so subsequent runs
       # short-circuit the ~5 min source compile.
-      - name: Install trusted-signing-cli (Windows only)
+      - name: Build and sign Windows artifacts
         if: matrix.os == 'windows'
-        uses: baptiste0928/cargo-install@8195d4f734a149db85385bb4102b42efcd373759 # v3.5.0
+        uses: ./.release-tooling/desktop-windows-build
         with:
-          crate: trusted-signing-cli
-          version: "0.10.0"
-          locked: true
-
-      # windows-latest currently resolves to windows-2025, which
-      # ships only newer Windows SDKs. trusted-signing-cli falls
-      # back to a hard-coded SDK path that no longer exists on the
-      # image, exiting silently before any signing happens. Resolve
-      # signtool.exe at runtime and pass SIGNTOOL_PATH to the build.
-      # Per tauri-apps/tauri#13991.
-      - name: Locate signtool.exe (Windows only)
-        id: signtool
-        if: matrix.os == 'windows'
-        shell: pwsh
-        run: |
-          $st = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\10.*\x64\signtool.exe" |
-                Sort-Object Name -Descending |
-                Select-Object -First 1
-          if (-not $st) { throw "signtool.exe not found under Windows Kits 10 bin" }
-
-          $path = $st.FullName
-          $pattern = '^C:\\Program Files \(x86\)\\Windows Kits\\10\\bin\\10\.\d+\.\d+\.\d+\\x64\\signtool\.exe$'
-          if ($path -notmatch $pattern) { throw "Unexpected signtool.exe path: $path" }
-          if ($path.Contains("`r") -or $path.Contains("`n")) { throw "Unexpected newline in signtool.exe path" }
-
-          Write-Host "Using $path"
-          "path=$path" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
-
-      # Tauri spawns bundle.windows.signCommand directly via
-      # Command::new (no shell), so %VAR%-style env interpolation
-      # isn't applied — placeholders arrive at trusted-signing-cli
-      # as literal strings and the auth call fails. Substitute the
-      # values at build time so the spawned process gets the real
-      # endpoint/account/profile.
-      #
-      # Shape mirrors Yaak's proven Trusted Signing config: single-
-      # token args only, %1 placeholder, and no `-d` description.
-      # trusted-signing-cli doesn't require -d; including a multi-
-      # word value invites shell-quoting failures because Tauri
-      # parses signCommand with shlex::split and forwards each
-      # token verbatim — embedded \" survives literally and signtool
-      # then treats the second word as a separate file path.
-      - name: Inline Azure values into bundle.windows.signCommand
-        if: matrix.os == 'windows'
-        shell: bash
-        env:
-          AZURE_ENDPOINT: ${{ secrets.AZURE_ENDPOINT }}
-          AZURE_CODE_SIGNING_ACCOUNT: ${{ secrets.AZURE_CODE_SIGNING_ACCOUNT }}
-          AZURE_CERT_PROFILE: ${{ secrets.AZURE_CERT_PROFILE }}
-        run: |
-          conf=apps/desktop/src-tauri/tauri.conf.json
-          cmd="trusted-signing-cli -e $AZURE_ENDPOINT -a $AZURE_CODE_SIGNING_ACCOUNT -c $AZURE_CERT_PROFILE %1"
-          jq --arg c "$cmd" '.bundle.windows.signCommand = $c' "$conf" > "$conf.tmp"
-          mv "$conf.tmp" "$conf"
-
-      - name: Build (Windows)
-        if: matrix.os == 'windows'
-        shell: bash
-        working-directory: apps/desktop
+          dry-run: "false"
+          target: ${{ matrix.target }}
+          release-sha: ${{ needs.resolve.outputs.release_sha }}
+          script-path: ${{ env.RELEASE_TOOLING }}/scripts/desktop-release-step.ts
+          azure-endpoint: ${{ secrets.AZURE_ENDPOINT }}
+          azure-account: ${{ secrets.AZURE_CODE_SIGNING_ACCOUNT }}
+          azure-profile: ${{ secrets.AZURE_CERT_PROFILE }}
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          # OAuth triple consumed by trusted-signing-cli (invoked
-          # via tauri.conf.json bundle.windows.signCommand).
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-          AZURE_ENDPOINT: ${{ secrets.AZURE_ENDPOINT }}
-          AZURE_CODE_SIGNING_ACCOUNT: ${{ secrets.AZURE_CODE_SIGNING_ACCOUNT }}
-          AZURE_CERT_PROFILE: ${{ secrets.AZURE_CERT_PROFILE }}
-          SIGNTOOL_PATH: ${{ steps.signtool.outputs.path }}
-          # SPA origins the shipped distribution build trusts at runtime.
-          # Read at compile time by config.rs via option_env!(); builds
-          # without this variable default to loopback-only.
-          STELLA_DESKTOP_DEFAULT_ORIGINS: "https://my.stll.app,https://app.stll.app"
-          # Public browser-ingestion configuration, compiled into the desktop
-          # adapter. The adapter accepts fixed error codes only and creates no
-          # person profile, persistence, autocapture, or session recording.
-          VITE_POSTHOG_HOST: "https://eu.i.posthog.com"
           VITE_POSTHOG_KEY: ${{ secrets.VITE_POSTHOG_KEY }}
-          STELLA_COMMIT_SHA: ${{ needs.resolve.outputs.release_sha }}
-        # `--verbose --verbose` surfaces the per-line stdout/stderr
-        # Tauri captures from signCommand but otherwise hides behind
-        # log::debug. Without it, a trusted-signing-cli failure
-        # bubbles up as the opaque "failed to run trusted-signing-cli"
-        # with no SignTool error attached. Per the Tauri maintainer
-        # in tauri-apps/tauri#11778 + tauri-apps/tauri#13991.
-        # NSIS only (no MSI). MSI uses a 4-part 16-bit Windows
-        # installer version that can't represent semver prerelease
-        # suffixes. NSIS has no such constraint and is what most
-        # OSS Tauri apps ship (Yaak, etc.).
-        #
-        # Do NOT add `updater` to --bundles. In Tauri 2 the updater
-        # archives are emitted as a side effect of building the
-        # platform installer when bundle.createUpdaterArtifacts is
-        # true; passing the (no-longer-existing) `updater` bundle
-        # name explicitly silently bypasses that side effect, so
-        # only the .exe lands and no .nsis.zip is created.
-        run: bun run build -- --target ${{ matrix.target }} --bundles nsis --verbose --verbose
-
-      # GitHub-hosted Windows runners can start without the default PSGallery
-      # registration. The Azure action installs ArtifactSigning from PSGallery
-      # and otherwise fails before authentication or signing begins.
-      - name: Ensure PSGallery is registered (Windows only)
-        if: matrix.os == 'windows'
-        shell: pwsh
-        run: |
-          $expectedSourceLocation = "https://www.powershellgallery.com/api/v2"
-          $repository = Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue
-
-          if (-not $repository) {
-            Register-PSRepository -Default
-            $repository = Get-PSRepository -Name PSGallery -ErrorAction Stop
-          }
-
-          if ($repository.SourceLocation.TrimEnd("/") -ne $expectedSourceLocation) {
-            throw "PSGallery has an unexpected source location: $($repository.SourceLocation)"
-          }
-
-      - name: Sign Windows installers via Azure Trusted Signing
-        if: matrix.os == 'windows'
-        uses: azure/trusted-signing-action@c7ab2a863ab5f9a846ddb8265964877ef296ee82 # v2.0.0
-        with:
-          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
-          endpoint: ${{ secrets.AZURE_ENDPOINT }}
-          trusted-signing-account-name: ${{ secrets.AZURE_CODE_SIGNING_ACCOUNT }}
-          certificate-profile-name: ${{ secrets.AZURE_CERT_PROFILE }}
-          files-folder: apps/desktop/src-tauri/target/${{ matrix.target }}/release/bundle
-          files-folder-filter: exe
-          files-folder-recurse: true
-          file-digest: SHA256
-          timestamp-rfc3161: http://timestamp.acs.microsoft.com
-          timestamp-digest: SHA256
-
-      - name: Re-sign updater zip for Tauri after binary signing
-        if: matrix.os == 'windows'
-        working-directory: apps/desktop
-        shell: bash
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        # Tauri's bundler signs the update package alongside the binary.
-        # Azure resigns the binary (changing its hash), so the .sig that
-        # the bundler produced is no longer valid. Run the signer over
-        # the resigned installer to refresh its .sig file.
-        run: |
-          bundle_dir="src-tauri/target/${{ matrix.target }}/release/bundle"
-          for installer in "$bundle_dir"/msi/*.msi "$bundle_dir"/nsis/*-setup.exe; do
-            [[ -f "$installer" ]] || continue
-            zip="$installer.zip"
-            (cd "$(dirname "$installer")" && bun x @tauri-apps/cli signer sign "$(basename "$installer")")
-            (cd "$(dirname "$zip")" && bun x @tauri-apps/cli signer sign "$(basename "$zip")") 2>/dev/null || true
-          done
 
       # ─── macOS: Developer ID + App Store Connect notarization ─
       - name: Import Apple Developer ID certificate into temporary keychain
@@ -536,7 +375,6 @@ jobs:
 
       - name: Build, sign, and notarize (macOS)
         if: matrix.os == 'macos'
-        shell: bash
         working-directory: apps/desktop
         env:
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
@@ -576,7 +414,6 @@ jobs:
       - name: Verify macOS update identity
         if: matrix.os == 'macos'
         working-directory: apps/desktop
-        shell: bash
         env:
           TARGET: ${{ matrix.target }}
         run: |
@@ -597,7 +434,6 @@ jobs:
       - name: Build styled DMG without Finder automation
         if: matrix.os == 'macos'
         working-directory: apps/desktop
-        shell: bash
         env:
           TARGET: ${{ matrix.target }}
         run: |
@@ -635,7 +471,6 @@ jobs:
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_KEY_BASE64: ${{ secrets.APPLE_API_KEY }}
           APPLE_API_KEY_PATH: ${{ runner.temp }}/apple-api.p8
-        shell: bash
         run: |
           printf '%s' "$APPLE_API_KEY_BASE64" | base64 -d > "$APPLE_API_KEY_PATH"
           bundle_dir="src-tauri/target/${{ matrix.target }}/release/bundle"
@@ -662,28 +497,13 @@ jobs:
         # Stella-windows-x64-setup.exe` regardless of the release
         # version. The .sig files for updater archives keep their
         # ordering so latest.json continues to find them.
-        shell: bash
         run: bash scripts/rename-desktop-artifacts.sh "apps/desktop/src-tauri/target/${{ matrix.target }}/release/bundle"
 
       - name: Upload installers to GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
-        shell: bash
-        run: |
-          bundle_dir="apps/desktop/src-tauri/target/${{ matrix.target }}/release/bundle"
-          # `mapfile` is bash 4+; macOS runners ship system bash 3.2,
-          # so use a portable while-read loop to populate the array.
-          artifacts=()
-          while IFS= read -r f; do
-            artifacts+=("$f")
-          done < <(find "$bundle_dir" -type f -name 'Stella-*')
-          if [[ ${#artifacts[@]} -eq 0 ]]; then
-            echo "::error::No desktop artifacts found under $bundle_dir"
-            exit 1
-          fi
-          printf '  uploading %s\n' "${artifacts[@]}"
-          bash "$GH_RETRY_SCRIPT" release upload "$RELEASE_REF" "${artifacts[@]}" --clobber
+        run: bun "$RELEASE_TOOLING/scripts/desktop-release-step.ts" upload "apps/desktop/src-tauri/target/${{ matrix.target }}/release/bundle"
 
   verify-production:
     # Build the signed desktop artifacts first, then confirm that production
@@ -765,7 +585,6 @@ jobs:
           RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
           APP_VERSION: ${{ needs.resolve.outputs.app_version }}
           REPO: ${{ github.repository }}
-        shell: bash
         run: bash scripts/build-updater-manifest.sh > latest.json && bash "$GH_RETRY_SCRIPT" release upload "$RELEASE_REF" latest.json --clobber
 
       # Mirror the manifest to the downloads CDN so the in-app

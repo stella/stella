@@ -1,5 +1,9 @@
 name: OpenSSF Scorecard
 
+defaults:
+  run:
+    shell: bash
+
 on:
   # Weekly scan to catch drift
   schedule:

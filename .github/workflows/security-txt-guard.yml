@@ -1,5 +1,9 @@
 name: security.txt Expiry Guard
 
+defaults:
+  run:
+    shell: bash
+
 # RFC 9116 requires an Expires: field; clients SHOULD ignore the file
 # past that date. Fail when the value is within 30 days so the file gets
 # bumped before scanners and Scorecard start treating it as stale.

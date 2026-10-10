@@ -570,6 +570,19 @@ test("the lockfile release-age guard follows every tracked lockfile", () => {
   }
 });
 
+test("desktop Windows dry run follows release inputs and skips unrelated changes", () => {
+  const output = "desktop_windows_dry_run_required";
+  for (const file of [
+    ".github/workflows/release-desktop.yml",
+    ".github/actions/desktop-windows-build/action.yml",
+    "scripts/desktop-release-step.ts",
+    "apps/desktop/src-tauri/tauri.conf.json",
+  ]) {
+    expect(runSelector([file], [output]), file).toEqual(["true"]);
+  }
+  expect(runSelector(["docs/guide.md"], [output])).toEqual(["false"]);
+});
+
 const MatrixEntry = v.object({ runner: v.string(), platform: v.string() });
 
 const platformsOf = (plan: readonly string[]) =>

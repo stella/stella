@@ -1,5 +1,9 @@
 name: Scheduled run alerts
 
+defaults:
+  run:
+    shell: bash
+
 on:
   # Deliberate delivery test after configuring or rotating webhook credentials.
   workflow_dispatch:

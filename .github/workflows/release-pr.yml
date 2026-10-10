@@ -1,5 +1,9 @@
 name: Version packages PR
 
+defaults:
+  run:
+    shell: bash
+
 on:
   push:
     branches: [main]
