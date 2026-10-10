@@ -11,6 +11,7 @@ import {
   parseBrowserControlCommand,
 } from "@stll/api-contract/browser-control";
 import type { BrowserControlCommand } from "@stll/api-contract/browser-control";
+import { requiresPerCallChatApproval } from "@stll/api-contract/chat-secret";
 import { Button } from "@stll/ui/button";
 import { CheckIcon, GlobeIcon, PencilIcon, XIcon } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
@@ -50,6 +51,7 @@ import {
   humanizeIdentifier,
 } from "@/components/chat/tool-approval-summary";
 import type { ReaderAnnotationMark } from "@/components/chat/tool-approval-summary";
+import type { ToolCallAction } from "@/components/chat/tool-call-card";
 import { readerAnnotationKeys } from "@/components/legal-reader/annotations/reader-annotations-query";
 import { MatterIcon } from "@/components/matter-icon";
 import {
@@ -69,7 +71,7 @@ import type { DocxEditRepresentation } from "@/lib/chat-edit-mode";
 import { DOCX_EDIT_REPRESENTATION } from "@/lib/chat-edit-mode";
 import { detached } from "@/lib/detached";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
-import { useQueryView } from "@/lib/use-query-view";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 
 type UpdateEntityFieldsInput = ChatUITools["update-entity-fields"]["input"];
@@ -395,6 +397,7 @@ const SuggestChangesApplyResult = ({
 // -- Main card --
 
 type ToolApprovalCardProps = {
+  action?: ToolCallAction | undefined;
   /** Threaded through for the `suggest_changes` approval summary; see
    *  `ChatThreadMessagesProps.activeFileName`. */
   activeFileName?: string | undefined;
@@ -422,6 +425,7 @@ const AutomaticApprovalResponse = ({ respond }: { respond: () => void }) => {
 };
 
 export const ToolApprovalCard = ({
+  action,
   activeFileName,
   isAwaitingUser,
   isTurnActive,
@@ -490,6 +494,7 @@ export const ToolApprovalCard = ({
     useBrowserCommandAutoApproved(browserCommand);
   const shouldAutoApprove =
     !isBlocked &&
+    !requiresPerCallChatApproval(name) &&
     (hasAutomaticApproval({
       alwaysApprovedTools,
       canAlwaysAllow,
@@ -570,6 +575,17 @@ export const ToolApprovalCard = ({
             className="text-destructive ms-auto size-3.5 shrink-0"
             role="img"
           />
+        )}
+        {action !== undefined && (
+          <Button
+            className="-me-1 shrink-0"
+            onClick={action.onClick}
+            size="xs"
+            type="button"
+            variant="ghost"
+          >
+            {action.label}
+          </Button>
         )}
       </div>
 
@@ -750,13 +766,16 @@ type SummaryMatter = { color: string | null; id: string; name: string };
 const useMattersById = (): ReadonlyMap<string, SummaryMatter> => {
   const { activeOrganizationId } = useChatApproval();
   const user = useMaybeAuthenticatedUser();
-  const { data } = useQuery({
+  const dataQuery = useQuery({
     ...workspacesNavigationOptions({
       organizationId: activeOrganizationId,
       userId: user?.id ?? SIGNED_OUT_QUERY_OWNER,
     }),
     enabled: user !== null,
   });
+  const dataView = useQueryView(dataQuery);
+  useQueryViewError(dataView);
+  const data = dataView.type === "items" ? dataView.items : undefined;
   const byId = new Map<string, SummaryMatter>();
   if (!data) {
     return byId;
@@ -849,7 +868,9 @@ const getToolApprovalState = ({
   // grant can auto-approve a later call.
   const isApprovalOnce = isApprovalOnceChatToolName(name);
   const canAllowInConversation =
-    !isApprovalOnce && !isNonPersistentGrantChatToolName(name);
+    !requiresPerCallChatApproval(name) &&
+    !isApprovalOnce &&
+    !isNonPersistentGrantChatToolName(name);
   const externalMcpProviderName = getExternalMcpProviderName(name);
 
   return {

@@ -11,21 +11,31 @@ import {
   legalListClaims,
   legalListClaimReviewEvents,
   legalListVerificationRuns,
+  legalListVerificationBlocks,
 } from "@/api/db/schema";
 import { markRlsDatabase } from "@/api/db/scoped";
 import { env } from "@/api/env";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
-import type { FeatureAccessGrants } from "@/api/lib/feature-access/grants-schema";
-import { completeVerificationRun } from "@/api/lib/lists/verification/run-persistence";
+import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
+import {
+  completeVerificationRun,
+  failVerificationRun,
+} from "@/api/lib/lists/verification/run-persistence";
 import {
   processListVerificationRun,
   reconcileQueuedListVerificationRuns,
   reconcileStuckListVerificationRuns,
 } from "@/api/lib/lists/verification/run-queue";
+import {
+  resetMetricLineSinkForTesting,
+  setMetricLineSinkForTesting,
+} from "@/api/lib/observability/request-metrics";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import { createRootRunActor } from "@/api/lib/root-scoped-db";
 import { brandPersistedListVerificationRunId } from "@/api/lib/safe-id-boundaries";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
+import { addEntityFeatureFixtureColumns } from "@/api/tests/helpers/entity-feature-fixture-columns";
+import { organizationFeatureGrants } from "@/api/tests/helpers/feature-grants";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -57,9 +67,9 @@ describe.skipIf(!enabled)("list verification row security", () => {
 
       const previousDeployment = env.FEATURE_LEGAL_LISTS;
       env.FEATURE_LEGAL_LISTS = true;
-      const grants = {
-        "list-verification": [{ type: "organization", organizationId }],
-      } satisfies FeatureAccessGrants;
+      const grants = organizationFeatureGrants(organizationId, [
+        LIST_VERIFICATION_FEATURE_ID,
+      ]);
       const jobData = { runId, organizationId, workspaceId, userId };
       await client.unsafe(`CREATE SCHEMA ${schema}`);
       try {
@@ -130,6 +140,12 @@ describe.skipIf(!enabled)("list verification row security", () => {
             }
           });
         }
+        await addEntityFeatureFixtureColumns(db, [
+          legalListVerificationRuns,
+          legalListClaims,
+          legalListClaimReviewEvents,
+          legalListVerificationBlocks,
+        ]);
         const posture = await client<
           { name: string; enabled: boolean; forced: boolean }[]
         >`
@@ -163,6 +179,58 @@ describe.skipIf(!enabled)("list verification row security", () => {
           evidence: { listId: createSafeId<"legalList">(), facts: [] },
         } satisfies typeof legalListVerificationRuns.$inferInsert;
         await db.insert(legalListVerificationRuns).values(runFixture);
+        const failureLines: string[] = [];
+        setMetricLineSinkForTesting((line) => {
+          failureLines.push(line);
+        });
+        try {
+          for (const errorCode of [
+            "extraction_failed",
+            "grading_failed",
+            "no_text",
+            "access_revoked",
+          ] as const) {
+            const failureRun = {
+              ...runFixture,
+              id: createSafeId<"legalListVerificationRun">(),
+              entityId: createSafeId<"entity">(),
+            };
+            await db.insert(legalListVerificationRuns).values(failureRun);
+            await db.transaction(async (tx) => {
+              const args = { tx, run: failureRun, errorCode };
+              expect(await failVerificationRun(args)).toBe(true);
+              expect(await failVerificationRun(args)).toBe(false);
+              expect(
+                await failVerificationRun({
+                  ...args,
+                  run: {
+                    ...failureRun,
+                    id: createSafeId<"legalListVerificationRun">(),
+                  },
+                }),
+              ).toBe(false);
+            });
+            await db
+              .delete(legalListVerificationRuns)
+              .where(eq(legalListVerificationRuns.id, failureRun.id));
+          }
+          expect(failureLines.map((line) => JSON.parse(line))).toEqual(
+            [
+              "extraction_failed",
+              "grading_failed",
+              "no_text",
+              "access_revoked",
+            ].map((errorCode) =>
+              expect.objectContaining({
+                event: `list_verification_run.${errorCode}`,
+                errorCode,
+                VerificationRunFailures: 1,
+              }),
+            ),
+          );
+        } finally {
+          resetMetricLineSinkForTesting();
+        }
         const claim = {
           id: claimId,
           runId,

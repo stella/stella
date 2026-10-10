@@ -1,5 +1,7 @@
 import { describe, expect, mock, test } from "bun:test";
 
+import { sleep } from "@stll/concurrency/sleep";
+
 const listenMock = mock();
 
 // The module registry is shared across test files, so the replacement keeps
@@ -17,9 +19,7 @@ const noop = () => {};
 
 /** Lets the subscription promise and any teardown promise settle. */
 const settle = async () => {
-  await new Promise((resolve) => {
-    setTimeout(resolve, 0);
-  });
+  await sleep(0);
 };
 
 describe("subscribeDesktopEvent", () => {

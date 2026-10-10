@@ -39,7 +39,18 @@
     "openInStella": "فتح في stella",
     "openOriginalSource": "فتح المصدر الأصلي",
     "from": "من",
-    "to": "إلى"
+    "to": "إلى",
+    "expandPassages": "توسيع المقاطع",
+    "collapsePassages": "طيّ المقاطع",
+    "matchedPassages": "المقتطف المطابق",
+    "headnoteExcerpt": "مقتطف من خلاصة الحكم",
+    "headnote": "خلاصة الحكم",
+    "headnoteNotStated": "لم يرد في الحكم",
+    "keywords": "الكلمات الأساسية",
+    "keywordsOmitted": "{count} أخرى",
+    "headnoteOmitted": "حُذفت خلاصات الأحكام لتقليل حجم هذه الصفحة. افتح القرار للاطلاع على التفاصيل.",
+    "chooseFile": "اختيار ملف",
+    "noFileChosen": "لم يتم اختيار أي ملف"
   },
   "cs": {
     "constitutional": "Ústavní soudy",
@@ -81,7 +92,18 @@
     "openInStella": "Otevřít ve stelle",
     "openOriginalSource": "Otevřít originál",
     "from": "Od",
-    "to": "Do"
+    "to": "Do",
+    "expandPassages": "Rozbalit pasáže",
+    "collapsePassages": "Sbalit pasáže",
+    "matchedPassages": "Odpovídající výňatek",
+    "headnoteExcerpt": "Výňatek právní věty",
+    "headnote": "Právní věta",
+    "headnoteNotStated": "Rozhodnutí neuvádí",
+    "keywords": "Klíčová slova",
+    "keywordsOmitted": "Dalších {count}",
+    "headnoteOmitted": "Právní věty jsou vynechány, aby stránka zůstala malá. Podrobnosti najdete po otevření rozhodnutí.",
+    "chooseFile": "Vybrat soubor",
+    "noFileChosen": "Žádný soubor nebyl vybrán"
   },
   "de": {
     "constitutional": "Verfassungsgerichte",
@@ -123,7 +145,18 @@
     "openInStella": "In stella öffnen",
     "openOriginalSource": "Originalquelle öffnen",
     "from": "Von",
-    "to": "Bis"
+    "to": "Bis",
+    "expandPassages": "Passagen ausklappen",
+    "collapsePassages": "Passagen einklappen",
+    "matchedPassages": "Passender Auszug",
+    "headnoteExcerpt": "Leitsatzauszug",
+    "headnote": "Leitsatz",
+    "headnoteNotStated": "In der Entscheidung nicht angegeben",
+    "keywords": "Stichwörter",
+    "keywordsOmitted": "{count} weitere",
+    "headnoteOmitted": "Leitsätze wurden ausgelassen, um die Seite klein zu halten. Öffnen Sie die Entscheidung für weitere Einzelheiten.",
+    "chooseFile": "Datei auswählen",
+    "noFileChosen": "Keine Datei ausgewählt"
   },
   "en": {
     "constitutional": "Constitutional courts",
@@ -165,7 +198,18 @@
     "openInStella": "Open in stella",
     "openOriginalSource": "Open original source",
     "from": "From",
-    "to": "To"
+    "to": "To",
+    "expandPassages": "Expand passages",
+    "collapsePassages": "Collapse passages",
+    "matchedPassages": "Matched excerpt",
+    "headnoteExcerpt": "Headnote excerpt",
+    "headnote": "Headnote",
+    "headnoteNotStated": "Not stated in the decision",
+    "keywords": "Keywords",
+    "keywordsOmitted": "{count} more",
+    "headnoteOmitted": "Headnotes omitted to keep this page small. Open the decision for details.",
+    "chooseFile": "Choose file",
+    "noFileChosen": "No file selected"
   },
   "et": {
     "constitutional": "Põhiseaduslikkuse järelevalve kohtud",
@@ -207,7 +251,18 @@
     "openInStella": "Ava stellas",
     "openOriginalSource": "Ava algallikas",
     "from": "Alates",
-    "to": "Kuni"
+    "to": "Kuni",
+    "expandPassages": "Laienda lõike",
+    "collapsePassages": "Ahenda lõike",
+    "matchedPassages": "Vastav väljavõte",
+    "headnoteExcerpt": "Õigusliku seisukoha väljavõte",
+    "headnote": "Lühikokkuvõte",
+    "headnoteNotStated": "Lahendis pole märgitud",
+    "keywords": "Märksõnad",
+    "keywordsOmitted": "Veel {count}",
+    "headnoteOmitted": "Õiguslikud seisukohad on lehe mahu vähendamiseks välja jäetud. Üksikasju leiate kohtulahendist.",
+    "chooseFile": "Vali fail",
+    "noFileChosen": "Faili pole valitud"
   },
   "fr": {
     "constitutional": "Juridictions constitutionnelles",
@@ -249,7 +304,18 @@
     "openInStella": "Ouvrir dans stella",
     "openOriginalSource": "Ouvrir la source d’origine",
     "from": "Du",
-    "to": "Au"
+    "to": "Au",
+    "expandPassages": "Développer les passages",
+    "collapsePassages": "Réduire les passages",
+    "matchedPassages": "Extrait correspondant",
+    "headnoteExcerpt": "Extrait du sommaire",
+    "headnote": "Sommaire",
+    "headnoteNotStated": "Non précisé dans la décision",
+    "keywords": "Mots clés",
+    "keywordsOmitted": "{count} de plus",
+    "headnoteOmitted": "Les sommaires sont omis pour limiter la taille de cette page. Ouvrez la décision pour plus de détails.",
+    "chooseFile": "Choisir un fichier",
+    "noFileChosen": "Aucun fichier sélectionné"
   },
   "hu": {
     "constitutional": "Alkotmánybíróságok",
@@ -291,7 +357,18 @@
     "openInStella": "Megnyitás a Stellában",
     "openOriginalSource": "Eredeti forrás megnyitása",
     "from": "Mettől",
-    "to": "Meddig"
+    "to": "Meddig",
+    "expandPassages": "Részletek kibontása",
+    "collapsePassages": "Részletek összecsukása",
+    "matchedPassages": "Egyező részlet",
+    "headnoteExcerpt": "A döntvényi összefoglaló kivonata",
+    "headnote": "Jogi tétel",
+    "headnoteNotStated": "A határozat nem tartalmazza",
+    "keywords": "Kulcsszavak",
+    "keywordsOmitted": "További {count}",
+    "headnoteOmitted": "A döntvényi összefoglalók az oldal méretének csökkentése érdekében kimaradtak. A részletekért nyissa meg a határozatot.",
+    "chooseFile": "Fájl kiválasztása",
+    "noFileChosen": "Nincs kiválasztott fájl"
   },
   "lv": {
     "constitutional": "Konstitucionālās tiesas",
@@ -333,7 +410,18 @@
     "openInStella": "Atvērt lietotnē stella",
     "openOriginalSource": "Atvērt sākotnējo avotu",
     "from": "No",
-    "to": "Līdz"
+    "to": "Līdz",
+    "expandPassages": "Izvērst fragmentus",
+    "collapsePassages": "Sakļaut fragmentus",
+    "matchedPassages": "Atbilstošais izvilkums",
+    "headnoteExcerpt": "Tēzes izvilkums",
+    "headnote": "Kopsavilkums",
+    "headnoteNotStated": "Nolēmumā nav norādīts",
+    "keywords": "Atslēgvārdi",
+    "keywordsOmitted": "Vēl {count}",
+    "headnoteOmitted": "Tēzes ir izlaistas, lai samazinātu šīs lapas apjomu. Lai skatītu sīkāku informāciju, atveriet nolēmumu.",
+    "chooseFile": "Izvēlēties failu",
+    "noFileChosen": "Nav izvēlēts neviens fails"
   },
   "lt": {
     "constitutional": "Konstituciniai teismai",
@@ -375,7 +463,18 @@
     "openInStella": "Atverti programoje stella",
     "openOriginalSource": "Atverti pirminį šaltinį",
     "from": "Nuo",
-    "to": "Iki"
+    "to": "Iki",
+    "expandPassages": "Išskleisti ištraukas",
+    "collapsePassages": "Suskleisti ištraukas",
+    "matchedPassages": "Atitinkanti ištrauka",
+    "headnoteExcerpt": "Tezės ištrauka",
+    "headnote": "Santrauka",
+    "headnoteNotStated": "Sprendime nenurodyta",
+    "keywords": "Raktažodžiai",
+    "keywordsOmitted": "Dar {count}",
+    "headnoteOmitted": "Tezės praleistos, kad šis puslapis būtų mažesnis. Daugiau informacijos rasite atidarę sprendimą.",
+    "chooseFile": "Pasirinkti failą",
+    "noFileChosen": "Failas nepasirinktas"
   },
   "pl": {
     "constitutional": "Trybunały konstytucyjne",
@@ -417,7 +516,18 @@
     "openInStella": "Otwórz w stelli",
     "openOriginalSource": "Otwórz źródło oryginalne",
     "from": "Od",
-    "to": "Do"
+    "to": "Do",
+    "expandPassages": "Rozwiń fragmenty",
+    "collapsePassages": "Zwiń fragmenty",
+    "matchedPassages": "Pasujący fragment",
+    "headnoteExcerpt": "Fragment tezy",
+    "headnote": "Teza",
+    "headnoteNotStated": "Orzeczenie tego nie wskazuje",
+    "keywords": "Słowa kluczowe",
+    "keywordsOmitted": "Jeszcze {count}",
+    "headnoteOmitted": "Tezy pominięto, aby ograniczyć rozmiar tej strony. Otwórz orzeczenie, aby zobaczyć szczegóły.",
+    "chooseFile": "Wybierz plik",
+    "noFileChosen": "Nie wybrano pliku"
   },
   "pt-BR": {
     "constitutional": "Tribunais constitucionais",
@@ -459,7 +569,18 @@
     "openInStella": "Abrir no stella",
     "openOriginalSource": "Abrir fonte original",
     "from": "De",
-    "to": "Para"
+    "to": "Até",
+    "expandPassages": "Expandir trechos",
+    "collapsePassages": "Recolher trechos",
+    "matchedPassages": "Trecho correspondente",
+    "headnoteExcerpt": "Trecho da ementa",
+    "headnote": "Ementa",
+    "headnoteNotStated": "Não consta na decisão",
+    "keywords": "Palavras-chave",
+    "keywordsOmitted": "Mais {count}",
+    "headnoteOmitted": "As ementas foram omitidas para limitar o tamanho desta página. Abra a decisão para consultar os detalhes.",
+    "chooseFile": "Escolher arquivo",
+    "noFileChosen": "Nenhum arquivo selecionado"
   },
   "sk": {
     "constitutional": "Ústavné súdy",
@@ -501,7 +622,18 @@
     "openInStella": "Otvoriť v stelle",
     "openOriginalSource": "Otvoriť originál",
     "from": "Od",
-    "to": "Do"
+    "to": "Do",
+    "expandPassages": "Rozbaliť pasáže",
+    "collapsePassages": "Zbaliť pasáže",
+    "matchedPassages": "Zodpovedajúci úryvok",
+    "headnoteExcerpt": "Úryvok právnej vety",
+    "headnote": "Právna veta",
+    "headnoteNotStated": "Rozhodnutie neuvádza",
+    "keywords": "Kľúčové slová",
+    "keywordsOmitted": "Ďalších {count}",
+    "headnoteOmitted": "Právne vety sú vynechané, aby stránka zostala malá. Podrobnosti nájdete po otvorení rozhodnutia.",
+    "chooseFile": "Vybrať súbor",
+    "noFileChosen": "Nebol vybraný žiadny súbor"
   },
   "es": {
     "constitutional": "Tribunales constitucionales",
@@ -543,6 +675,17 @@
     "openInStella": "Abrir en stella",
     "openOriginalSource": "Abrir fuente original",
     "from": "Desde",
-    "to": "Hasta"
+    "to": "Hasta",
+    "expandPassages": "Ampliar los pasajes",
+    "collapsePassages": "Contraer los pasajes",
+    "matchedPassages": "Extracto coincidente",
+    "headnoteExcerpt": "Extracto del sumario",
+    "headnote": "Sumario",
+    "headnoteNotStated": "La resolución no lo indica",
+    "keywords": "Palabras clave",
+    "keywordsOmitted": "{count} más",
+    "headnoteOmitted": "Se omiten los sumarios para limitar el tamaño de esta página. Abra la resolución para consultar los detalles.",
+    "chooseFile": "Elegir archivo",
+    "noFileChosen": "Ningún archivo seleccionado"
   }
 }

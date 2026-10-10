@@ -1,6 +1,9 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
+
 import type { PropertyContent } from "@/api/db/schema-validators";
 import { resolveCaching } from "@/api/lib/ai-config";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
@@ -69,9 +72,7 @@ const canonicalRulesInput = (position: TierStandardPosition) => {
 };
 
 export const computeRulesHash = (position: TierStandardPosition): string =>
-  new Bun.CryptoHasher("sha256")
-    .update(JSON.stringify(canonicalRulesInput(position)))
-    .digest("hex");
+  hashSha256Hex(JSON.stringify(canonicalRulesInput(position)));
 
 const buildDeriveAskUserMessage = (position: TierStandardPosition): string => {
   const { tiers } = position.standard;
@@ -289,12 +290,7 @@ export const deriveAutoAsks = async (
   }
 
   const admitted = await deps.admitModelAction(async ({ admission }) => {
-    for (
-      let cursor = 0;
-      cursor < pending.length;
-      cursor += DERIVE_ASK_CONCURRENCY
-    ) {
-      const chunk = pending.slice(cursor, cursor + DERIVE_ASK_CONCURRENCY);
+    for (const chunk of chunkItems(pending, DERIVE_ASK_CONCURRENCY)) {
       const derived = await Promise.all(
         chunk.map(async ({ index, position, hash }) => ({
           index,

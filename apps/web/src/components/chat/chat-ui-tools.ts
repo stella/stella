@@ -3,7 +3,7 @@
  * source of truth) and provides frontend-only helpers.
  */
 
-import type { ChatClientState, UIMessage } from "@tanstack/ai-client";
+import type { ChatClientState } from "@tanstack/ai-client";
 import { panic } from "better-result";
 
 import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
@@ -23,6 +23,7 @@ import { toAPIError } from "@/lib/errors/api";
 
 export type {
   ChatAnonRestoration,
+  ChatClientTools,
   ChatMessage,
   ChatUITools,
 } from "@/lib/api-contract";
@@ -97,17 +98,15 @@ export type ChatAttachmentPart = Extract<
     placeholder?: string | undefined;
   };
 };
-export type ChatClientTools =
-  ChatMessage extends UIMessage<infer TTools> ? TTools : never;
 export type ChatMessageMetadata = NonNullable<ChatMessage["metadata"]>;
 export type SharedChatUITools = Pick<ChatUITools, "ask-user">;
 export type AskUserOutput = SharedChatUITools["ask-user"]["output"];
-// `create-document` is client-executed and renders its own draft UI, not the
-// approval flow. Keep it out of the approval set so `NeedsMatterCard` renders
-// instead of `ToolApprovalCard`.
+// These tools have dedicated user-input cards or draft UI instead of the
+// approval flow. Keep them out of the approval set so their owning cards
+// handle the interaction.
 type BuiltInApprovalToolName = Exclude<
   keyof ChatUITools,
-  "ask-user" | "create-document"
+  "ask-user" | "create-document" | "request_secret"
 >;
 export type ApprovalToolName = BuiltInApprovalToolName | `mcp__${string}`;
 const MCP_CONNECTOR_APPROVAL_GRANT_PREFIX = "mcp-connector:";
@@ -156,6 +155,7 @@ const isChatToolCallState = (
   Object.hasOwn(TOOL_CALL_STATE_IS_RUNNING, value);
 const USER_INPUT_TOOL_NAMES = {
   "ask-user": true,
+  request_secret: true,
 } as const satisfies Record<string, true>;
 
 // folio-agents tools a DOCX surface auto-runs against its bridge with no
@@ -215,6 +215,8 @@ const CHAT_TOOL_TITLE_KEYS = {
   show_visual: "chat.generatedView",
   add_comment: "chat.tool.add_comment",
   "ask-user": "chat.tool.ask-user",
+  request_secret: "chat.tool.request_secret",
+  use_connector_secret: "chat.tool.use_connector_secret",
   boe_find_related_laws: "chat.tool.boe_find_related_laws",
   boe_get_law: "chat.tool.boe_get_law",
   boe_get_law_block: "chat.tool.boe_get_law_block",
@@ -341,6 +343,7 @@ const PUBLIC_OFFICIAL_CHAT_TOOL_NAMES = {
 const EXTERNAL_INPUT_CHAT_TOOL_NAMES = {
   boe_search_legislation: true,
   fetch_url: true,
+  use_connector_secret: true,
   "use-browser": true,
   web_search: true,
 } as const satisfies Record<ExternalInputToolName, true>;
@@ -398,8 +401,7 @@ const CHAT_TOOL_GRANT_POLICY_KIND = {
   approveOnce: "approve-once",
   /**
    * May never be auto-approved by a stored grant or any shared auto-approve
-   * path — stronger than `approveOnce` (see
-   * {@link isNonPersistentGrantChatToolName}). The one exception is the
+   * path, which is stronger than `approveOnce`. The one exception is the
    * opt-in browser page-read allowance for `use-browser`.
    */
   neverAuto: "never-auto",
@@ -426,6 +428,7 @@ const MANUAL_CHAT_TOOL_GRANT_POLICY = {
   reply_comment: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
   resolve_comment: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
   "search-all-past-chats": CHAT_TOOL_GRANT_POLICY_KIND.grantable,
+  use_connector_secret: CHAT_TOOL_GRANT_POLICY_KIND.approveOnce,
   // Only the server-executed apply variant ever requests approval; it writes
   // a new document version, so each call is approved on its own.
   suggest_changes: CHAT_TOOL_GRANT_POLICY_KIND.approveOnce,
@@ -465,15 +468,9 @@ const getChatToolGrantPolicy = (toolName: string): ChatToolGrantPolicy =>
 export const isApprovalOnceChatToolName = (toolName: ApprovalToolName) =>
   getChatToolGrantPolicy(toolName) !== CHAT_TOOL_GRANT_POLICY_KIND.grantable;
 
-/**
- * Chat tools that no stored grant may cover and no shared auto-approve path
- * may run — the public-official and DOCX-batch paths in
- * `hasAutomaticApproval` included. The browser tool's opt-in page-read
- * allowance (`isBrowserCommandAutoApproved`) is the only tool-specific
- * exception.
- */
+/** Chat tools that require per-call approval instead of a persistent grant. */
 export const isNonPersistentGrantChatToolName = (toolName: string): boolean =>
-  getChatToolGrantPolicy(toolName) === CHAT_TOOL_GRANT_POLICY_KIND.neverAuto;
+  getChatToolGrantPolicy(toolName) !== CHAT_TOOL_GRANT_POLICY_KIND.grantable;
 
 /**
  * Chat tools whose approval card renders the shared registry-write summary
@@ -521,6 +518,7 @@ const REGISTRY_WRITE_SUMMARY_TOOL_NAMES = {
   "update-current-skill-resource": false,
   "update-entity-fields": false,
   update_reader_annotation: true,
+  use_connector_secret: false,
   "use-browser": false,
   web_search: false,
 } as const satisfies Record<
@@ -586,7 +584,8 @@ export const isApprovalToolName = (
   return (
     isChatToolName(toolName) &&
     toolName !== "ask-user" &&
-    toolName !== "create-document"
+    toolName !== "create-document" &&
+    toolName !== "request_secret"
   );
 };
 
@@ -1199,18 +1198,24 @@ export const consumeDocumentDeletionToolCalls = ({
 export type PlaybookSaveMessage = DocumentDeletionMessage;
 
 /**
- * Consume the successful `save_playbook` calls this session has not handled.
+ * Consume the successful `save_playbook` calls this session has not handled,
+ * returning whether caches changed and the latest playbook to follow. A
+ * newly completed older call still changed caches even when a later call
+ * was already handled and must remain the pane's target.
  * A refused save returns an error envelope with no `playbookId`, and wrote
  * nothing, so it is not a reason to refetch.
  */
 export const consumePlaybookSaveToolCalls = ({
   handledToolCallIds,
+  historicalToolCallIds,
   messages,
 }: {
   handledToolCallIds: Set<string>;
+  historicalToolCallIds?: ReadonlySet<string>;
   messages: readonly PlaybookSaveMessage[];
-}): boolean => {
-  let hasSave = false;
+}): { playbookId: string | null } | null => {
+  let latestPlaybookId: string | null = null;
+  let hasNewSaves = false;
 
   for (const message of messages) {
     if (message.role !== "assistant") {
@@ -1224,19 +1229,43 @@ export const consumePlaybookSaveToolCalls = ({
         part["state"] !== "complete" ||
         typeof part["id"] !== "string" ||
         !isJsonObject(part["output"]) ||
-        typeof part["output"]["playbookId"] !== "string" ||
-        handledToolCallIds.has(part["id"])
+        typeof part["output"]["playbookId"] !== "string"
       ) {
+        continue;
+      }
+      if (handledToolCallIds.has(part["id"])) {
+        latestPlaybookId = null;
         continue;
       }
 
       handledToolCallIds.add(part["id"]);
-      hasSave = true;
+      hasNewSaves = true;
+      latestPlaybookId = historicalToolCallIds?.has(part["id"])
+        ? null
+        : part["output"]["playbookId"];
     }
   }
 
-  return hasSave;
+  return hasNewSaves ? { playbookId: latestPlaybookId } : null;
 };
+
+/** The playbook a tool call saved, if it is a completed `save_playbook`
+ *  that succeeded. */
+export const savedPlaybookId = ({
+  name,
+  state,
+  output,
+}: {
+  name: string;
+  state: string;
+  output?: unknown;
+}): string | null =>
+  name === SAVE_PLAYBOOK_TOOL_NAME &&
+  state === "complete" &&
+  isJsonObject(output) &&
+  typeof output["playbookId"] === "string"
+    ? output["playbookId"]
+    : null;
 
 type ReaderAnnotationWriteToolName = Extract<
   BuiltInChatToolName,

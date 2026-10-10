@@ -5,6 +5,7 @@ import type { MCPClient } from "@tanstack/ai-mcp";
 import { panic, Result } from "better-result";
 import { and, asc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
 
+import { sleep } from "@stll/concurrency/sleep";
 import { Temporal } from "@stll/time";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -13,6 +14,7 @@ import {
   mcpConnectors,
   mcpOAuthClients,
   mcpUserConnections,
+  MCP_RESPONSE_DISPOSITION,
 } from "@/api/db/schema";
 import type {
   CachedMcpToolDefinition,
@@ -25,6 +27,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { getCuratedMcpOAuthApproval } from "@/api/lib/mcp-connectors/catalog-metadata";
 import {
+  approvedMcpAuthorizationReview,
   recordMcpAuthorizationReview,
   resolveMcpIssuerBinding,
 } from "@/api/lib/mcp-upstream/authorization-review";
@@ -152,6 +155,7 @@ const DEFAULT_OUTBOUND_FETCH_DEPENDENCIES: OutboundFetchDependencies = {
 };
 
 type RawConnectionRow = {
+  responseDisposition: typeof mcpUserConnections.$inferSelect.responseDisposition;
   accessTokenEncrypted: Buffer | null;
   accessTokenIv: Buffer | null;
   allowedTools: string[] | null;
@@ -179,6 +183,7 @@ type RawConnectionRow = {
 };
 
 type McpConnectionBase = {
+  responseDisposition: typeof MCP_RESPONSE_DISPOSITION.normal;
   allowedTools: string[] | null;
   connectorId: SafeId<"mcpConnector">;
   description: string;
@@ -241,6 +246,7 @@ const bindMcpConnection = (
 };
 
 const selectConnectionFields = {
+  responseDisposition: mcpUserConnections.responseDisposition,
   userConnectionId: mcpUserConnections.id,
   connectorId: mcpConnectors.id,
   slug: mcpConnectors.slug,
@@ -310,10 +316,11 @@ export const loadActiveMcpConnectionsForUser = async ({
           eq(mcpUserConnections.userId, userId),
           eq(mcpUserConnections.enabled, true),
           eq(mcpUserConnections.status, "connected"),
-          or(
-            isNull(mcpConnectorAuthorizationReviews.status),
-            eq(mcpConnectorAuthorizationReviews.status, "approved"),
+          eq(
+            mcpUserConnections.responseDisposition,
+            MCP_RESPONSE_DISPOSITION.normal,
           ),
+          approvedMcpAuthorizationReview,
         ),
       )
       .orderBy(asc(mcpUserConnections.createdAt), asc(mcpUserConnections.id))
@@ -376,10 +383,11 @@ export const loadMcpConnectionById = async ({
           eq(mcpUserConnections.organizationId, organizationId),
           eq(mcpUserConnections.userId, userId),
           eq(mcpUserConnections.status, "connected"),
-          or(
-            isNull(mcpConnectorAuthorizationReviews.status),
-            eq(mcpConnectorAuthorizationReviews.status, "approved"),
+          eq(
+            mcpUserConnections.responseDisposition,
+            MCP_RESPONSE_DISPOSITION.normal,
           ),
+          approvedMcpAuthorizationReview,
         ),
       )
       .limit(1),
@@ -414,7 +422,15 @@ const normalizeConnectionRows = async ({
 }: NormalizeConnectionRowsOptions): Promise<LoadedMcpConnection[]> => {
   const loaded: LoadedMcpConnection[] = [];
   const needsReauthIds: SafeId<"mcpUserConnection">[] = [];
-  for (const rawRow of rows) {
+  // Receipt-only connections never enter discovery, including direct connection loads.
+  const normalRows = rows.filter(
+    (
+      row,
+    ): row is RawConnectionRow & {
+      responseDisposition: typeof MCP_RESPONSE_DISPOSITION.normal;
+    } => row.responseDisposition === MCP_RESPONSE_DISPOSITION.normal,
+  );
+  for (const rawRow of normalRows) {
     const normalized = normalizeMcpConnectionRow(rawRow);
     switch (normalized.type) {
       case "loaded":
@@ -761,6 +777,29 @@ const createSafeMcpFetch = (
 
   return safeFetch;
 };
+
+type BearerMcpClientOptions = {
+  url: string;
+  credential: string;
+  permit: ThirdPartyOutboundPermit;
+  safeFetch: typeof safeOutboundFetchStream;
+};
+
+/** A one-off client for a credential the caller resolved; nothing is cached. */
+export const createBearerMcpClient = async ({
+  url,
+  credential,
+  permit,
+  safeFetch,
+}: BearerMcpClientOptions): Promise<MCPClient> =>
+  await createMCPClient({
+    transport: {
+      type: "http",
+      url,
+      headers: { Authorization: `Bearer ${credential}` },
+      fetch: createSafeMcpFetch(safeFetch, permit),
+    },
+  });
 
 const mcpRequestTimeoutMs = (
   body: SafeOutboundFetchBody | undefined,
@@ -1177,9 +1216,7 @@ const resolveMcpTokenDuringRefresh = async ({
   }
   for (let attempt = 0; attempt < MCP_REFRESH_WAIT_ATTEMPTS; attempt += 1) {
     await (dependencies.wait?.(MCP_REFRESH_WAIT_INTERVAL_MS) ??
-      new Promise<void>((resolve) => {
-        setTimeout(resolve, MCP_REFRESH_WAIT_INTERVAL_MS);
-      }));
+      sleep(MCP_REFRESH_WAIT_INTERVAL_MS));
     // db-await-in-loop: bounded wait for a concurrent refresh; each attempt re-reads one row after a pause
     const refreshedRow = await loadMcpConnectionById({
       connectionId: row.userConnectionId,
@@ -1530,9 +1567,12 @@ type NormalizedConnectionRow =
   | { type: "unusable" };
 
 const normalizeMcpConnectionRow = (
-  rawRow: RawConnectionRow,
+  rawRow: RawConnectionRow & {
+    responseDisposition: typeof MCP_RESPONSE_DISPOSITION.normal;
+  },
 ): NormalizedConnectionRow => {
   const base = {
+    responseDisposition: rawRow.responseDisposition,
     allowedTools: rawRow.allowedTools,
     connectorId: rawRow.connectorId,
     description: rawRow.description,

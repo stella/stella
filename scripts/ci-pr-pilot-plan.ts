@@ -7,9 +7,7 @@ export const PILOT_FAST_ROOTS = [
   "ci-checks-rest",
   "ci-tests",
   "code-quality-api",
-  "code-quality-web",
-  "code-quality-rest",
-  "typecheck-baseline",
+  "code-quality-web-rest",
 ] as const;
 export const PILOT_DEFERRED = [
   "docker-checks",
@@ -38,6 +36,7 @@ export const PILOT_DEFERRED = [
   "windows-scripts",
   "desktop-clippy",
   "dependency-malware",
+  "api-test-durations",
 ] as const;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>

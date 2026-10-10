@@ -15,6 +15,7 @@
  * source. Without this, uncommon sizing and glass classes are omitted. */
 @source "../clipboard/**/*.{ts,tsx}";
 @source "../registry/**/*.{ts,tsx}";
+@source "../activity/**/*.{ts,tsx}";
 
 html,
 body,
@@ -182,6 +183,7 @@ body:has(.clipboard-editor-window) .font-sans {
     );
 }
 
+.clipboard-group-chip[data-dragging],
 .clipboard-card[data-dragging] {
   opacity: 0.48;
 }

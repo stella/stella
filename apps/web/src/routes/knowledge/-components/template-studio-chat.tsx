@@ -668,12 +668,17 @@ const TemplateStudioChatInner = ({
     handleApprove,
     handleAllowInConversation,
     handleDeny,
+    handleRequestSecret,
+    continueRequestSecret,
+    resolveSecretTarget,
+    secretAvailabilityKey,
     handleAskUserSubmit,
     handleAskUserEditAndRerun,
     handleAlwaysAllow,
     handleCreateDocumentResolve,
     handleOpenCreateDocumentDraft,
     handleOpenCreatedDocument,
+    handleOpenPlaybook,
     createDocumentMattersView,
     addToolResult,
     streamdownComponents,
@@ -683,6 +688,7 @@ const TemplateStudioChatInner = ({
     conversationId: threadRef.threadId,
     getSendMode,
     initialOlderCursor: data.olderCursor,
+    playbookPane: "on-request",
     threadRef,
   });
   const { ensureAIAvailable, openIfAIUnavailable } = useAIKeyGate();
@@ -1329,6 +1335,10 @@ const TemplateStudioChatInner = ({
           handleAlwaysAllow,
           handleApprove: handleApproveForTemplate,
           handleDeny,
+          handleRequestSecret,
+          continueRequestSecret,
+          resolveSecretTarget,
+          secretAvailabilityKey,
         }}
       >
         {threadVisible && (
@@ -1346,6 +1356,7 @@ const TemplateStudioChatInner = ({
               onCreateDocumentResolve={handleCreateDocumentResolve}
               onOpenCreateDocumentDraft={handleOpenCreateDocumentDraft}
               onOpenCreatedDocument={handleOpenCreatedDocument}
+              onOpenPlaybook={handleOpenPlaybook}
               onResend={resendLatestMessage}
               queuedMessageActions={{
                 remove: removeQueuedMessage,

@@ -1,18 +1,26 @@
 import { useState } from "react";
 
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { provisionVersionAsOf } from "@stll/api-contract/provision-version-basis";
+import {
+  Accordion,
+  AccordionItem,
+  AccordionPanel,
+  AccordionTrigger,
+} from "@stll/ui/accordion";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { ChevronRightIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import { ProvisionVersionBasisLabel } from "@/components/provision-version-basis";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
+import { ProvisionReferenceChip } from "@/features/case-law/components/case-viewer/provision-reference-chip";
 import {
   groupProvisionsByWork,
+  summarizeProvisionVersions,
   type ProvisionGroup,
   type WorkGroup,
 } from "@/features/case-law/components/case-viewer/provisions-cited.logic";
@@ -41,8 +49,7 @@ import { optionalArray } from "@/lib/arrays";
 import { decisionDateToIso } from "@/lib/decision-date";
 import { detached } from "@/lib/detached";
 import type { SafeId } from "@/lib/safe-id";
-import type { StatuteLinkTarget } from "@/lib/statute-route";
-import { createStatuteLinkTarget } from "@/lib/statute-route";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 /**
  * The statutes a decision applies, as the decision itself states them.
@@ -64,6 +71,9 @@ export const ProvisionsCited = ({
 }) => {
   const t = useTranslations();
   const [localOpen, setLocalOpen] = useState(false);
+  const [collapsedGroups, setCollapsedGroups] = useState(
+    () => new Set<string>(),
+  );
   const open = expanded ?? localOpen;
   const renderPart = useProvisionPartRenderer();
 
@@ -79,6 +89,9 @@ export const ProvisionsCited = ({
   const groups = groupProvisionsByWork(
     optionalArray(data?.pages).flatMap((page) => page.items),
   );
+  const expandedGroups = groups
+    .filter(({ key }) => !collapsedGroups.has(key))
+    .map(({ key }) => key);
 
   // Existing links select an inferred version at the decision date;
   // every work on the panel resolves in one read.
@@ -97,10 +110,14 @@ export const ProvisionsCited = ({
       });
     }
   }
-  const { data: resolved } = useQuery({
+  const resolvedQuery = useQuery({
     ...statutesResolveOptions([...citedWorkByGroup.values()]),
     enabled: open && citedWorkByGroup.size > 0,
   });
+  const resolvedView = useQueryView(resolvedQuery);
+  useQueryViewError(resolvedView);
+  const resolved =
+    resolvedView.type === "items" ? resolvedView.items : undefined;
   const statuteByWork = statuteByCitedWork(resolved);
   const inconsistentWorks = publisherInconsistentCitedWorks(resolved);
 
@@ -138,26 +155,40 @@ export const ProvisionsCited = ({
           </Button>
         </div>
       )}
-      {groups.map((group) => {
-        const citedWork = citedWorkByGroup.get(group.key);
-        return (
-          <WorkReferences
-            decisionAsOf={decisionAsOf}
-            group={group}
-            key={group.key}
-            publisherInconsistent={
-              citedWork !== undefined &&
-              inconsistentWorks.has(citedWorkAtDateKey(citedWork))
-            }
-            renderPart={renderPart}
-            statute={
-              citedWork === undefined
-                ? undefined
-                : statuteByWork.get(citedWorkAtDateKey(citedWork))
-            }
-          />
-        );
-      })}
+      <Accordion
+        multiple
+        value={expandedGroups}
+        onValueChange={(values) => {
+          setCollapsedGroups(
+            new Set(
+              groups
+                .filter(({ key }) => !values.includes(key))
+                .map(({ key }) => key),
+            ),
+          );
+        }}
+      >
+        {groups.map((group) => {
+          const citedWork = citedWorkByGroup.get(group.key);
+          return (
+            <WorkReferences
+              decisionAsOf={decisionAsOf}
+              group={group}
+              key={group.key}
+              publisherInconsistent={
+                citedWork !== undefined &&
+                inconsistentWorks.has(citedWorkAtDateKey(citedWork))
+              }
+              renderPart={renderPart}
+              statute={
+                citedWork === undefined
+                  ? undefined
+                  : statuteByWork.get(citedWorkAtDateKey(citedWork))
+              }
+            />
+          );
+        })}
+      </Accordion>
       {hasNextPage && (
         <Button
           className="w-fit"
@@ -225,7 +256,7 @@ const WorkReferences = ({
   statute: ResolvedCitedStatute | undefined;
 }) => {
   const t = useTranslations();
-  const { data: versions } = useQuery({
+  const versionsQuery = useQuery({
     ...statuteVersionsOptions(statute?.id ?? ""),
     enabled:
       statute !== undefined &&
@@ -234,6 +265,10 @@ const WorkReferences = ({
         references: group.provisions,
       }),
   });
+  const versionsView = useQueryView(versionsQuery);
+  useQueryViewError(versionsView);
+  const versions =
+    versionsView.type === "items" ? versionsView.items : undefined;
 
   /**
    * The consolidation a reference was made against, or null while it is not
@@ -263,120 +298,63 @@ const WorkReferences = ({
     return pickVersionAt(optionalArray(versions), asOf);
   };
 
+  const { basis, exceptions } = summarizeProvisionVersions(group.provisions);
+  let title = group.title;
+  if (statute !== undefined) {
+    title = statute.title.includes(group.title)
+      ? statute.title
+      : `${group.title}, ${statute.title}`;
+  }
+
   return (
-    <div className="flex flex-col gap-1">
-      <p className="text-muted-foreground flex min-w-0 items-baseline gap-1.5 text-[calc(0.7rem*var(--reader-text-scale))] tracking-wide">
-        <BidiText as="span" className="shrink-0">
-          {group.title}
-        </BidiText>
-        {/* The act's name once its record is in: a number alone asks the
-            reader to know that 89/2012 Sb. is the civil code. */}
-        {statute !== undefined && (
-          <BidiText as="span" className="truncate" title={statute.title}>
-            {statute.title}
+    <AccordionItem value={group.key}>
+      {statute !== undefined &&
+        referencesOutsideVersion(statute, {
+          decisionAsOf,
+          references: group.provisions,
+        }) && <QueryViewFeedback view={versionsView} />}
+      <div className="flex min-w-0 flex-wrap items-center gap-x-2">
+        <AccordionTrigger className="min-w-0 flex-1" size="compact">
+          <BidiText as="span" className="min-w-0 text-pretty">
+            {title}
           </BidiText>
+        </AccordionTrigger>
+        <Button
+          className="max-w-full text-start"
+          size="xs"
+          variant="muted"
+          data-version-basis="group"
+          tooltip={
+            basis.type === "inferred" ? (
+              t("caseLaw.viewer.versionBasisInferredExplanation")
+            ) : (
+              <ProvisionVersionBasisLabel basis={basis} />
+            )
+          }
+        >
+          <ProvisionVersionBasisLabel basis={basis} compact />
+        </Button>
+      </div>
+      <AccordionPanel size="compact">
+        {statute === undefined && publisherInconsistent && (
+          <p className="text-muted-foreground mb-2 text-xs">
+            {t("statutes.publisherWindowInconsistent")}
+          </p>
         )}
-      </p>
-      {statute === undefined && publisherInconsistent && (
-        <p className="text-muted-foreground text-xs">
-          {t("statutes.publisherWindowInconsistent")}
-        </p>
-      )}
-      {/* References flow like prose: a code's thirty sections read on three
-          lines, not thirty. A reference showing its passages takes the row. */}
-      <ul className="m-0 flex list-none flex-wrap gap-x-3 gap-y-0.5 p-0">
-        {group.provisions.map((provision) => {
-          const document = documentFor(provision);
-
-          return (
-            <ProvisionRowItem
+        <div className="flex flex-wrap gap-1.5">
+          {group.provisions.map((provision) => (
+            <ProvisionReferenceChip
+              document={documentFor(provision)}
               key={provision.key}
-              linkTarget={
-                document === null
-                  ? null
-                  : createStatuteLinkTarget({
-                      country: document.country,
-                      documentId: document.id,
-                      eli: document.eli,
-                      slug: document.slug,
-                      versionValidFrom: document.versionValidFrom,
-                    })
-              }
+              label={formatProvisionReference(provision, renderPart)}
               provision={provision}
-              renderPart={renderPart}
+              versionMarker={
+                exceptions.has(provision.key) ? "exception" : "group"
+              }
             />
-          );
-        })}
-      </ul>
-    </div>
-  );
-};
-
-/**
- * One provision the decision applies, and — when it applies it more than
- * once — how many times, with the passages behind that count.
- */
-const ProvisionRowItem = ({
-  linkTarget,
-  provision,
-  renderPart,
-}: {
-  linkTarget: StatuteLinkTarget | null;
-  provision: ProvisionGroup;
-  renderPart: RenderProvisionPart;
-}) => {
-  const t = useTranslations();
-  const [showPassages, setShowPassages] = useState(false);
-  const label = formatProvisionReference(provision, renderPart);
-  const count = provision.occurrences.length;
-
-  return (
-    <li className={cn("flex min-w-0 flex-col", showPassages && "basis-full")}>
-      {/* A full reference ("§ 2958 odst. 1 písm. b) bod 2 věta druhá") is
-          wider than the inspector's reading column, so the row wraps at its
-          spaces instead of scrolling the pane sideways. */}
-      <span className="flex min-w-0 flex-wrap items-baseline gap-1.5">
-        {linkTarget === null ? (
-          <span className="text-foreground-strong-muted text-xs">{label}</span>
-        ) : (
-          <Link
-            className="text-primary text-xs hover:underline"
-            hash={provision.anchor}
-            {...linkTarget}
-          >
-            {label}
-          </Link>
-        )}
-        <ProvisionVersionBasisLabel basis={provision.versionBasis} />
-        {count > 1 && (
-          <button
-            aria-expanded={showPassages}
-            aria-label={t("caseLaw.viewer.provisionMentionsLabel", {
-              count,
-            })}
-            // Coarse pointers get the same 44px box the shared button
-            // primitive draws, without the chrome a button would put in a
-            // dense list of references.
-            className="text-muted-foreground hover:text-foreground relative text-[calc(0.7rem*var(--reader-text-scale))] tabular-nums pointer-coarse:after:absolute pointer-coarse:after:size-full pointer-coarse:after:min-h-11 pointer-coarse:after:min-w-11"
-            onClick={() => setShowPassages(!showPassages)}
-            type="button"
-          >
-            {t("caseLaw.viewer.provisionMentions", { count })}
-          </button>
-        )}
-      </span>
-      {showPassages && (
-        <ul className="border-border/60 m-0 flex list-none flex-col gap-1 border-s ps-2 pt-1 pb-1">
-          {provision.occurrences.map((occurrence) => (
-            <li
-              className="text-muted-foreground text-[calc(0.7rem*var(--reader-text-scale))] leading-snug"
-              key={occurrence.spanStart}
-            >
-              <BidiText as="span">{occurrence.sentenceText}</BidiText>
-            </li>
           ))}
-        </ul>
-      )}
-    </li>
+        </div>
+      </AccordionPanel>
+    </AccordionItem>
   );
 };

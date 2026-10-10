@@ -1,3 +1,4 @@
+import { Panic, Result, UnhandledException } from "better-result";
 /**
  * Integration test for the Workflows run pipeline: an `ai` step, a
  * `review-gate` step, and a `create-document` step chained through the
@@ -12,8 +13,6 @@
  * transitions, RLS-scoped reads and writes, the DOCX compiler, and entity
  * creation — is the real production code.
  */
-
-import { Panic, Result, UnhandledException } from "better-result";
 import {
   afterAll,
   beforeAll,
@@ -29,6 +28,7 @@ import { and, asc, eq } from "drizzle-orm";
 
 import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
 import { inspectDocxPackage } from "@stll/folio-core/server";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
 import { parseTimeZoneId } from "@stll/time";
 
 import { member, organization, user } from "@/api/db/auth-schema";
@@ -56,6 +56,7 @@ import readTaskById from "@/api/handlers/tasks/get";
 import transitionWorkObligation from "@/api/handlers/work-obligations/transition";
 import updateWorkObligation from "@/api/handlers/work-obligations/update";
 import { removeWorkspaceMemberHandler } from "@/api/handlers/workspaces/members/remove";
+import { authorizeHandlerRunSize } from "@/api/lib/api-handlers";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
@@ -354,6 +355,17 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
       createSafeDb(testDb, [workspaceId], organizationId, userId),
     );
     const started = await startFlowRun({
+      admit: async () =>
+        await authorizeHandlerRunSize({
+          metering: null,
+          orgAIConfig: null,
+          organizationId,
+          workspaceId,
+          userId,
+          safeDb,
+          estimatedUnits: 0,
+          confirmedUnits: undefined,
+        }),
       safeDb,
       organizationId,
       workspaceId,
@@ -433,8 +445,7 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
       workspaceId,
       user: { id: userId },
       session: { activeOrganizationId: organizationId },
-      recordAuditEvent,
-      createAuditRecorder: () => recordAuditEvent,
+      audit: recordAuditEvent,
       orgAIConfig: null,
       managedAIResidency: "eu",
       request: new Request("https://example.test/review-task"),
@@ -1196,6 +1207,17 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
     );
 
     const started = await startFlowRun({
+      admit: async () =>
+        await authorizeHandlerRunSize({
+          metering: null,
+          orgAIConfig: null,
+          organizationId,
+          workspaceId,
+          userId,
+          safeDb,
+          estimatedUnits: 0,
+          confirmedUnits: undefined,
+        }),
       safeDb,
       organizationId,
       workspaceId,
@@ -1363,9 +1385,7 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
       throw new Error(`no object was stored at ${documentKey}`);
     }
     expect(stored.contentType).toBe(DOCX_MIME_TYPE);
-    expect(
-      new Bun.CryptoHasher("sha256").update(stored.bytes).digest("hex"),
-    ).toBe(fileContent.sha256Hex);
+    expect(hashSha256Hex(stored.bytes)).toBe(fileContent.sha256Hex);
 
     // The step renders the AI step's Markdown on stella's house preset:
     // "BodyText" is absent from folio's default style catalog, so its
@@ -1394,6 +1414,17 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
       createSafeDb(testDb, [workspaceId], organizationId, userId),
     );
     const started = await startFlowRun({
+      admit: async () =>
+        await authorizeHandlerRunSize({
+          metering: null,
+          orgAIConfig: null,
+          organizationId,
+          workspaceId,
+          userId,
+          safeDb,
+          estimatedUnits: 0,
+          confirmedUnits: undefined,
+        }),
       safeDb,
       workspaceId,
       organizationId,
@@ -1467,6 +1498,17 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
       createSafeDb(testDb, [workspaceId], organizationId, userId),
     );
     const started = await startFlowRun({
+      admit: async () =>
+        await authorizeHandlerRunSize({
+          metering: null,
+          orgAIConfig: null,
+          organizationId,
+          workspaceId,
+          userId,
+          safeDb,
+          estimatedUnits: 0,
+          confirmedUnits: undefined,
+        }),
       safeDb,
       organizationId,
       workspaceId,
@@ -1553,6 +1595,17 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
         createSafeDb(testDb, [workspaceId], organizationId, reviewer),
       );
       const started = await startFlowRun({
+        admit: async () =>
+          await authorizeHandlerRunSize({
+            metering: null,
+            orgAIConfig: null,
+            organizationId,
+            workspaceId,
+            userId,
+            safeDb: reviewerDb,
+            estimatedUnits: 0,
+            confirmedUnits: undefined,
+          }),
         safeDb: reviewerDb,
         workspaceId,
         organizationId,
@@ -1679,6 +1732,17 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
       createSafeDb(testDb, [workspaceId], organizationId, userId),
     );
     const started = await startFlowRun({
+      admit: async () =>
+        await authorizeHandlerRunSize({
+          metering: null,
+          orgAIConfig: null,
+          organizationId,
+          workspaceId,
+          userId,
+          safeDb,
+          estimatedUnits: 0,
+          confirmedUnits: undefined,
+        }),
       safeDb,
       workspaceId,
       organizationId,
@@ -1725,6 +1789,17 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
       createSafeDb(testDb, [workspaceId], organizationId, userId),
     );
     const started = await startFlowRun({
+      admit: async () =>
+        await authorizeHandlerRunSize({
+          metering: null,
+          orgAIConfig: null,
+          organizationId,
+          workspaceId,
+          userId,
+          safeDb,
+          estimatedUnits: 0,
+          confirmedUnits: undefined,
+        }),
       safeDb,
       organizationId,
       workspaceId,
@@ -1803,6 +1878,17 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
       createSafeDb(testDb, [workspaceId], organizationId, userId),
     );
     const started = await startFlowRun({
+      admit: async () =>
+        await authorizeHandlerRunSize({
+          metering: null,
+          orgAIConfig: null,
+          organizationId,
+          workspaceId,
+          userId,
+          safeDb,
+          estimatedUnits: 0,
+          confirmedUnits: undefined,
+        }),
       safeDb,
       organizationId,
       workspaceId,
@@ -1888,6 +1974,17 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
         createSafeDb(testDb, [workspaceId], organizationId, userId),
       );
       const started = await startFlowRun({
+        admit: async () =>
+          await authorizeHandlerRunSize({
+            metering: null,
+            orgAIConfig: null,
+            organizationId,
+            workspaceId,
+            userId,
+            safeDb,
+            estimatedUnits: 0,
+            confirmedUnits: undefined,
+          }),
         safeDb,
         organizationId,
         workspaceId,
@@ -2015,6 +2112,17 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
       createSafeDb(testDb, [workspaceId], organizationId, userId),
     );
     const started = await startFlowRun({
+      admit: async () =>
+        await authorizeHandlerRunSize({
+          metering: null,
+          orgAIConfig: null,
+          organizationId,
+          workspaceId,
+          userId,
+          safeDb,
+          estimatedUnits: 0,
+          confirmedUnits: undefined,
+        }),
       safeDb,
       organizationId,
       workspaceId,
@@ -2117,6 +2225,17 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
       createSafeDb(testDb, [workspaceId], organizationId, userId),
     );
     const started = await startFlowRun({
+      admit: async () =>
+        await authorizeHandlerRunSize({
+          metering: null,
+          orgAIConfig: null,
+          organizationId,
+          workspaceId,
+          userId,
+          safeDb,
+          estimatedUnits: 0,
+          confirmedUnits: undefined,
+        }),
       safeDb,
       organizationId,
       workspaceId,

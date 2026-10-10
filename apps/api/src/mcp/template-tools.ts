@@ -16,7 +16,7 @@ import {
 } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import { assertUsageAvailableForHandler } from "@/api/lib/api-handlers";
+import { authorizeHandlerUsage } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -54,6 +54,7 @@ import {
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
 import { projectionPayload } from "@/api/lib/projection-totality";
+import { snapshotOperationInput } from "@/api/lib/proofs/checked-transaction";
 import {
   createModelActionAdmitter,
   type AdmittedModelAction,
@@ -628,7 +629,7 @@ export const CREATE_TEMPLATE_TOOL_DEFINITION = defineValibotMcpTool({
   },
   annotations: {
     title: "Create template",
-    destructiveHint: false,
+    destructiveHint: true,
     idempotentHint: false,
     openWorldHint: false,
     readOnlyHint: false,
@@ -720,7 +721,7 @@ export const CONFIGURE_TEMPLATE_FIELDS_TOOL_DEFINITION = defineValibotMcpTool({
   },
   annotations: {
     title: "Configure template fields",
-    destructiveHint: false,
+    destructiveHint: true,
     idempotentHint: true,
     openWorldHint: false,
     readOnlyHint: false,
@@ -902,7 +903,7 @@ const SAVE_FILLED_TEMPLATE_TOOL_DEFINITION = defineValibotMcpTool({
   inputSchema: saveFilledTemplateArgsSchema,
   annotations: {
     title: "Save filled template",
-    destructiveHint: false,
+    destructiveHint: true,
     idempotentHint: false,
     openWorldHint: true,
     readOnlyHint: false,
@@ -1299,9 +1300,10 @@ const deferOrgAIConfig = (context: McpRequestContext) => {
       organizationId: context.organizationId,
       userId: context.userId,
     };
-    pending ??=
+    pending ??= (
       context.testDependencies?.loadOrgAIConfig?.(reader) ??
-      context.scopedDb(async (tx) => await loadOrgAIConfig(tx, reader));
+      context.scopedDb(async (tx) => await loadOrgAIConfig(tx, reader))
+    ).then((result) => result.map((config) => snapshotOperationInput(config)));
     return await pending;
   };
 };
@@ -1346,7 +1348,7 @@ const assertTemplateFillUsage = async ({
   if (!orgAIConfig && !hasTanStackInstanceProvider()) {
     return null;
   }
-  return await assertUsageAvailableForHandler({
+  const authorization = await authorizeHandlerUsage({
     metering: { actionType: "chat", modelRole: "fast" },
     organizationId: context.organizationId,
     orgAIConfig,
@@ -1354,6 +1356,10 @@ const assertTemplateFillUsage = async ({
     userId: context.userId,
     safeDb: context.safeDb,
   });
+  if (Result.isError(authorization)) {
+    return authorization.error;
+  }
+  return await authorization.value.execute(() => null);
 };
 
 /**
@@ -1400,7 +1406,8 @@ const admitTemplateFillAi = ({
 
 const handleFillTemplateTool: McpToolHandler<
   v.InferInput<typeof FILL_TEMPLATE_OUTPUT_SCHEMA>
-> = async ({ args, context }) => {
+> = async (options) => {
+  const { args, context } = snapshotOperationInput(options);
   const hasPermission = hasEffectiveAuthority(context, {
     template: ["use"],
   });
@@ -1717,7 +1724,8 @@ const validateFilledTemplateDestination = async ({
 
 const handleSaveFilledTemplateTool: McpToolHandler<
   v.InferInput<typeof SAVE_FILLED_TEMPLATE_OUTPUT_SCHEMA>
-> = async ({ args, context }) => {
+> = async (options) => {
+  const { args, context } = snapshotOperationInput(options);
   const parsed = v.safeParse(saveFilledTemplateArgsSchema, args);
   if (!parsed.success) {
     return validationErrorResult(parsed.issues);

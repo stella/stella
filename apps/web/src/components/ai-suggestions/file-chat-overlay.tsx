@@ -1554,12 +1554,17 @@ const FileChatOverlayInner = ({
     handleApprove,
     handleAllowInConversation,
     handleDeny,
+    handleRequestSecret,
+    continueRequestSecret,
+    resolveSecretTarget,
+    secretAvailabilityKey,
     handleAskUserSubmit,
     handleAskUserEditAndRerun,
     handleAlwaysAllow,
     handleCreateDocumentResolve,
     handleOpenCreateDocumentDraft,
     handleOpenCreatedDocument,
+    handleOpenPlaybook,
     createDocumentMattersView,
     addToolResult,
     streamdownComponents,
@@ -1572,6 +1577,7 @@ const FileChatOverlayInner = ({
     getEditApplyMode,
     getSendMode,
     initialOlderCursor: data.olderCursor,
+    playbookPane: "on-request",
     threadRef,
     workspaceId,
   });
@@ -2507,6 +2513,10 @@ const FileChatOverlayInner = ({
           handleAlwaysAllow: handleAlwaysAllowWithFolioAgentCommentExecution,
           handleApprove: handleApproveWithDocxUnlock,
           handleDeny,
+          handleRequestSecret,
+          continueRequestSecret,
+          resolveSecretTarget,
+          secretAvailabilityKey,
           handleRetryAfterAuthorNameSet: resendLatestMessage,
           blockedApprovalTools,
         }}
@@ -2541,6 +2551,7 @@ const FileChatOverlayInner = ({
               onLoadOlder={loadOlder}
               onOpenCreateDocumentDraft={handleOpenCreateDocumentDraft}
               onOpenCreatedDocument={handleOpenCreatedDocument}
+              onOpenPlaybook={handleOpenPlaybook}
               onResend={resendLatestMessage}
               queuedMessageActions={{
                 remove: removeQueuedMessage,

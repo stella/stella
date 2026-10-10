@@ -33,6 +33,7 @@ import type {
 } from "@stll/api-contract";
 import { EML_MIME_TYPE } from "@stll/api-contract/email-mime-types";
 import { mapWithConcurrency } from "@stll/concurrency";
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { deriveBlockId } from "@stll/folio-core/server";
 import { childExitStatus } from "@stll/scripts/src/child-exit-status";
 
@@ -72,9 +73,10 @@ import type {
   PropertyContent,
   PropertyTool,
 } from "@/api/db/schema-validators";
+import { env } from "@/api/env";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { chunked } from "@/api/lib/chunked";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { DEFAULT_DOCUMENT_TYPES } from "@/api/lib/document-types/defaults";
 import { parseEmail, parsedEmailToText } from "@/api/lib/files/email-to-html";
@@ -91,6 +93,7 @@ import type {
 import { requireLocalDevOpen } from "@/api/runtime-mode";
 
 import { seedCaseLaw } from "./seed-case-law";
+import { writeSeedRecentFiles } from "./seed-recents";
 import { seedTemplates } from "./seed-templates";
 import {
   ensureSeedColleaguesInOrganization,
@@ -106,6 +109,7 @@ import {
   DEFAULT_USER_ID,
   pickAuthor,
   seedId,
+  seedFileIdentity,
 } from "./seed-utils";
 
 const db = openMaintenanceDb({ readOnly: false });
@@ -5771,7 +5775,7 @@ export async function seed(organizationId?: string, userId?: string) {
   }
 
   // Chunks keep input order, so a folder lands before the documents in it.
-  for (const chunk of chunked(entityRows, SEED_INSERT_CHUNK_SIZE)) {
+  for (const chunk of chunkItems(entityRows, SEED_INSERT_CHUNK_SIZE)) {
     await db.transaction(
       async (tx) =>
         await tx
@@ -5788,7 +5792,7 @@ export async function seed(organizationId?: string, userId?: string) {
           }),
     );
   }
-  for (const chunk of chunked(plainVersionRows, SEED_INSERT_CHUNK_SIZE)) {
+  for (const chunk of chunkItems(plainVersionRows, SEED_INSERT_CHUNK_SIZE)) {
     await db.transaction(
       async (tx) =>
         await tx.insert(entityVersions).values(chunk).onConflictDoNothing(),
@@ -5830,7 +5834,7 @@ export async function seed(organizationId?: string, userId?: string) {
   }
 
   // Link currentVersionId
-  for (const chunk of chunked(allEntities, SEED_INSERT_CHUNK_SIZE)) {
+  for (const chunk of chunkItems(allEntities, SEED_INSERT_CHUNK_SIZE)) {
     await db.transaction(
       async (tx) =>
         await tx
@@ -5933,9 +5937,7 @@ export async function seed(organizationId?: string, userId?: string) {
         docText = parsedEmailToText(parsedResult.value);
       }
 
-      const sha256Hex = new Bun.CryptoHasher("sha256")
-        .update(content)
-        .digest("hex");
+      const { sha256Hex, sizeBytes } = seedFileIdentity(content);
 
       const fileId = seedId(`${wsLabel}-file-${j}`);
       const s3Key = `${ORG_ID}/${wsId}/${fileId}.${format.extension}`;
@@ -5956,7 +5958,7 @@ export async function seed(organizationId?: string, userId?: string) {
         id: fileId,
         fileName,
         mimeType: format.mimeType,
-        sizeBytes: content.length,
+        sizeBytes,
         encrypted: false,
         sha256Hex,
         pdfFileId,
@@ -5987,6 +5989,7 @@ export async function seed(organizationId?: string, userId?: string) {
           `${wsLabel}-supplier-agreement-base-file`,
         );
         const baseContent = await createSupplierAgreementDocx("reject");
+        const baseIdentity = seedFileIdentity(baseContent);
         await writeS3ObjectWithRetry(
           {
             data: new Uint8Array(baseContent),
@@ -6000,11 +6003,9 @@ export async function seed(organizationId?: string, userId?: string) {
           id: baseFileId,
           fileName: "Supplier_Agreement_v3.docx",
           mimeType: DOCX_MIME,
-          sizeBytes: baseContent.byteLength,
+          sizeBytes: baseIdentity.sizeBytes,
           encrypted: false,
-          sha256Hex: new Bun.CryptoHasher("sha256")
-            .update(baseContent)
-            .digest("hex"),
+          sha256Hex: baseIdentity.sha256Hex,
           pdfFileId: null,
         } as const satisfies FieldContent;
         await db.transaction(
@@ -6127,7 +6128,7 @@ export async function seed(organizationId?: string, userId?: string) {
     const wsEntities = allEntities.filter((e) => e.workspaceId === plan.wsId);
     allFields.push(...buildFields(plan.wsLabel, wsEntities));
   }
-  for (const chunk of chunked(allFields, SEED_INSERT_CHUNK_SIZE)) {
+  for (const chunk of chunkItems(allFields, SEED_INSERT_CHUNK_SIZE)) {
     await db.transaction(
       async (tx) =>
         await tx
@@ -6153,7 +6154,7 @@ export async function seed(organizationId?: string, userId?: string) {
       ...buildExportReviewJustifications(plan.wsId, plan.wsLabel, wsEntities),
     );
   }
-  for (const chunk of chunked(allJustifications, SEED_INSERT_CHUNK_SIZE)) {
+  for (const chunk of chunkItems(allJustifications, SEED_INSERT_CHUNK_SIZE)) {
     await db.transaction(
       async (tx) =>
         await tx
@@ -6436,6 +6437,7 @@ export async function seed(organizationId?: string, userId?: string) {
   }
 
   console.log("\nDone. Dev data seeded successfully.");
+  return { organizationId: ORG_ID, userId: USER_ID, workspaceIds: allWsIds };
 }
 
 // Allow running as a CLI script
@@ -6540,7 +6542,7 @@ if (import.meta.main) {
       `Resolved seed target ${target.organizationId} for user ${target.userId} (${target.label}); restarting with org-scoped IDs`,
     );
     const child = Bun.spawn({
-      cmd: [process.execPath, import.meta.path],
+      cmd: [process.execPath, import.meta.path, ...process.argv.slice(2)],
       env: {
         ...process.env,
         STELLA_SEED_ID_NAMESPACE: `org:${target.organizationId}`,
@@ -6559,7 +6561,59 @@ if (import.meta.main) {
   );
 
   seed(target.organizationId, target.userId)
-    .then(() => process.exit(0))
+    .then(async ({ organizationId, userId, workspaceIds }) => {
+      if (process.argv.includes("--seed-recents")) {
+        const seededFiles = await withAggregateTransaction(
+          db,
+          async (tx) =>
+            await tx
+              .select({
+                entityId: entities.id,
+                workspaceId: workspaces.id,
+                workspaceName: workspaces.name,
+                title: entities.name,
+                fileFieldId: fields.id,
+                filePropertyId: fields.propertyId,
+                content: fields.content,
+                openedAt: entities.createdAt,
+              })
+              .from(fields)
+              .innerJoin(
+                entityVersions,
+                eq(fields.entityVersionId, entityVersions.id),
+              )
+              .innerJoin(
+                entities,
+                eq(entities.currentVersionId, entityVersions.id),
+              )
+              .innerJoin(workspaces, eq(entities.workspaceId, workspaces.id))
+              .where(
+                and(
+                  eq(workspaces.organizationId, organizationId),
+                  inArray(workspaces.id, workspaceIds),
+                ),
+              ),
+        );
+        writeSeedRecentFiles({
+          path: `${import.meta.dir}/../../../.playwright/storage-state.json`,
+          origin: new URL(env.FRONTEND_URL).origin,
+          organizationId,
+          userId,
+          files: seededFiles.flatMap(({ content, openedAt, ...file }) =>
+            content.type === "file"
+              ? [
+                  {
+                    ...file,
+                    mimeType: content.mimeType,
+                    openedAt: openedAt.toISOString(),
+                  },
+                ]
+              : [],
+          ),
+        });
+      }
+      process.exit(0);
+    })
     .catch((error: unknown) => {
       console.error("Seed failed:", error);
       process.exit(1);

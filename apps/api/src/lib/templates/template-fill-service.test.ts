@@ -27,7 +27,11 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import type { ModelActionAdmitter } from "@/api/lib/rate-limit/model-action-admission";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_AUDIT,
+  NO_DB,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 import { readTestJson } from "@/api/tests/helpers/test-tool-set";
@@ -2021,6 +2025,8 @@ test("stored web discovery, description and effective fill declarations agree fo
           createTestHandlerContext<
             Parameters<typeof discoverEndpoint.handler>[0]
           >({
+            audit: NO_AUDIT,
+            safeDb: NO_DB,
             scopedDb,
             session: { activeOrganizationId: organizationId },
             body,
@@ -3806,4 +3812,50 @@ test("template fills surface malformed paragraph markers as a typed refusal", as
   expect(result.storedTemplateError).toBeInstanceOf(HandlerError);
   expect(result.storedTemplateError.status).toBe(422);
   expect(result.storedTemplateError.retryable).toBe(false);
+});
+
+test("pending template admission retains nested execution values", async () => {
+  const entered = Promise.withResolvers<undefined>();
+  const proceed = Promise.withResolvers<undefined>();
+  const values = { person: { name: "Authorized" } };
+  const file = await makeDocx(WRAP(P('{{ summary | ai("Summarize") }}')));
+  const filling = fillTemplateDocx({
+    source: { name: "Summary", fileName: "summary.docx", file },
+    values,
+    organizationId,
+    thirdPartyOutboundPermit: undefined,
+    scopedDb: stubScopedDb(),
+    requiredFields: "enforce",
+    useRecording: "caller",
+    aiFill: async (fill) =>
+      await runAdmittedAiFill({
+        admitModelAction: async (run) =>
+          Result.ok(
+            await run({
+              signal: new AbortController().signal,
+              admission: testModelAdmission(organizationId, "templates.fill"),
+            }),
+          ),
+        collaborators: async () => ({
+          generateAiValue: async ({ values: checkedValues }) => {
+            expect(checkedValues["person"]).toEqual({ name: "Authorized" });
+            return { type: "drafted", value: "Authorized summary" };
+          },
+        }),
+        preflight: async () => {
+          entered.resolve(undefined);
+          await proceed.promise;
+          return null;
+        },
+        fill,
+      }),
+  });
+  await entered.promise;
+  values.person.name = "Changed";
+  proceed.resolve(undefined);
+  const filled = await filling;
+  if ("usageRejection" in filled) {
+    throw new TypeError("Expected admitted template fixture");
+  }
+  expect(await filledTexts(filled)).toEqual(["Authorized summary"]);
 });

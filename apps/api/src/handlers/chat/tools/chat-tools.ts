@@ -62,6 +62,7 @@ import {
   createRememberTool,
   REMEMBER_TOOL_NAME,
 } from "@/api/handlers/chat/tools/remember-tool";
+import { createSecretTools } from "@/api/handlers/chat/tools/secret-tools";
 import { createShowVisualTools } from "@/api/handlers/chat/tools/show-visual-tools";
 import {
   createSpawnSubagentsTool,
@@ -88,7 +89,6 @@ import { createSkillTools } from "@/api/lib/agent-skills/skill-tools";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
-import type { FeatureAccessSnapshot } from "@/api/lib/auth/feature-access/policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import { availableRegistryHandlersForOrg } from "@/api/lib/business-registries/credentials";
 import type {
@@ -110,6 +110,7 @@ import type {
   DocumentWriteAccess,
   NewDocumentVersionOperation,
 } from "@/api/lib/entities/authorize-document-write";
+import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import { CHAT_ONLY_FEATURE_TOOL_DEFINITIONS } from "@/api/lib/feature-access/registry";
 import { FIELD_VALUE_WRITE_PERMISSIONS } from "@/api/lib/fields/write-field";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
@@ -360,8 +361,10 @@ type RegistryWriteTools = ChatRegistryWriteToolMap;
 type SubagentTools = ReturnType<typeof createSpawnSubagentsTool>;
 type RememberTools = ReturnType<typeof createRememberTools>;
 type ShowVisualTools = ReturnType<typeof createShowVisualTools>;
+type SecretTools = ReturnType<typeof createSecretTools>;
 
 type BuiltInChatTools = OrgTools &
+  SecretTools &
   ChatExecutionTools &
   SkillTools &
   CurrentSkillEditTools &
@@ -390,7 +393,7 @@ export type ChatTools = BuiltInChatTools;
 
 export type ChatBuiltinApprovalToolName = Exclude<
   keyof ChatUIToolsFor<BuiltInChatTools>,
-  "ask-user" | "create-document"
+  "ask-user" | "create-document" | "request_secret"
 >;
 
 type BuiltInChatToolPolicyName =
@@ -628,6 +631,7 @@ const createCreateDocumentTools = () => ({
 type CreateWorkspaceDocumentChatToolsProps = Pick<
   GetChatToolsProps,
   | "memberRole"
+  | "delegationDepth"
   | "organizationId"
   | "recordAuditEvent"
   | "refRegistry"
@@ -769,6 +773,43 @@ const honouredSkillDeclarations = ({
         excludedChatTools: activeSkillContext.excludedChatTools,
       };
 
+type CreateSecretToolsForTurnProps = Pick<
+  GetChatToolsProps,
+  | "delegationDepth"
+  | "memberRole"
+  | "organizationId"
+  | "purpose"
+  | "safeDb"
+  | "threadId"
+  | "thirdPartyBoundary"
+  | "userId"
+>;
+
+const createSecretToolsForTurn = ({
+  delegationDepth,
+  memberRole,
+  organizationId,
+  purpose,
+  safeDb,
+  threadId,
+  thirdPartyBoundary,
+  userId,
+}: CreateSecretToolsForTurnProps): ChatToolMap => {
+  if ((delegationDepth ?? 0) > 0) {
+    return {};
+  }
+  if (purpose === CHAT_TOOL_SET_PURPOSE.validation) {
+    return createSecretTools({ safeDb, organizationId, userId, threadId });
+  }
+  if (thirdPartyBoundary.type !== "raw") {
+    return {};
+  }
+  if (!hasMemberPermission(memberRole, { integration: ["create"] })) {
+    return {};
+  }
+  return createSecretTools({ safeDb, organizationId, userId, threadId });
+};
+
 export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   const {
     featureAccessSnapshot,
@@ -826,6 +867,16 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     accessibleWorkspaceIds: toolWorkspaceIds,
     organizationId,
     scopedDb,
+  });
+  const secretTools = createSecretToolsForTurn({
+    delegationDepth: props.delegationDepth,
+    memberRole,
+    organizationId,
+    purpose,
+    safeDb,
+    threadId,
+    thirdPartyBoundary,
+    userId,
   });
   // The nested review request sends the selected documents to the configured
   // model. Until that request accepts the chat anonymization boundary, do not
@@ -1223,6 +1274,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
         ? {}
         : createShowVisualTools(props.visualTools)),
       ...orgTools,
+      ...secretTools,
       ...executionTools,
       ...skillTools,
       ...businessRegistryTools,

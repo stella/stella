@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * The pieces of `read_case_law_decision`'s answer that are pure functions of
  * a read: page arithmetic, the text version, the compact metadata block, the
@@ -7,7 +8,8 @@
  * one projection MCP and chat share is built from the same functions.
  */
 
-import { panic } from "better-result";
+import type { DecisionTextWithheldReason } from "@stll/api-contract/case-law-text-field";
+import { createSha256 } from "@stll/sha256/bun";
 
 import type { DecisionCitationDigest } from "@/api/handlers/case-law/decisions/citation-digest";
 import type { RankedRelatedDecision } from "@/api/handlers/case-law/decisions/citation-graph";
@@ -18,6 +20,7 @@ import { documentMorphologyLanguage } from "@/api/lib/legal-search/morphology/co
 import { stemLegalTerm } from "@/api/lib/legal-search/morphology/stem";
 import { LIMITS } from "@/api/lib/limits";
 import { isRecord } from "@/api/lib/type-guards";
+import { printedParagraphLabel } from "@/api/mcp/case-law-decision-outline";
 import type { LocatedDecisionBlock } from "@/api/mcp/case-law-decision-outline";
 import { resolveTextWindowBounds } from "@/api/mcp/tool-utils";
 
@@ -79,10 +82,36 @@ const TEXT_VERSION_CHARS = 12;
  * so page numbers it holds may now address other passages.
  */
 export const decisionTextVersion = (text: string): string =>
-  new Bun.CryptoHasher("sha256")
-    .update(text)
-    .digest("base64url")
-    .slice(0, TEXT_VERSION_CHARS);
+  createSha256().update(text).digest("base64url").slice(0, TEXT_VERSION_CHARS);
+
+/**
+ * Split one fixed text budget without stranding the shares of short texts.
+ * The first pass is even; the second gives the remainder to truncated texts
+ * in input order. This order is part of the batch-read contract.
+ */
+export const decisionTextAllowances = (
+  lengths: readonly number[],
+  cap: number,
+): number[] => {
+  if (lengths.length === 0) {
+    return [];
+  }
+  const share = Math.floor(cap / lengths.length);
+  const allowances = lengths.map((length) => Math.min(length, share));
+  let remaining = cap - allowances.reduce((sum, value) => sum + value, 0);
+  // Unused shares only complete documents, in input order. A document that
+  // stays truncated keeps exactly the even share, so its later pages use the
+  // same window whatever its siblings' lengths are on that request.
+  for (const [index, length] of lengths.entries()) {
+    const allowance = allowances[index] ?? 0;
+    const needed = length - allowance;
+    if (needed > 0 && needed <= remaining) {
+      allowances[index] = length;
+      remaining -= needed;
+    }
+  }
+  return allowances;
+};
 
 /**
  * Ordinal order for keys, ISO dates and ids: none of them is language, so no
@@ -242,13 +271,31 @@ export const citationSummaryOutput = (
   const cited = new Map<
     string,
     | { caseNumber: string; decisionId: string; url?: string }
-    | { citation: string }
+    | { citation: string; textWithheldReason: null }
+    | { citation: null; textWithheldReason: DecisionTextWithheldReason }
   >();
   for (const row of digest.cites) {
     if (row.decision === null) {
-      const key = `text:${row.citationText.trim().toLowerCase()}`;
+      if (row.textWithheldReason !== null) {
+        const key = `withheld:${row.textWithheldReason}`;
+        if (!cited.has(key)) {
+          cited.set(key, {
+            citation: null,
+            textWithheldReason: row.textWithheldReason,
+          });
+        }
+        continue;
+      }
+      const citationText = row.citationText;
+      if (citationText === null) {
+        return panic("Available citation text must be present");
+      }
+      const key = `text:${citationText.trim().toLowerCase()}`;
       if (!cited.has(key)) {
-        cited.set(key, { citation: row.citationText.trim() });
+        cited.set(key, {
+          citation: citationText.trim(),
+          textWithheldReason: null,
+        });
       }
       continue;
     }
@@ -286,6 +333,9 @@ export const citationSummaryOutput = (
 /** One paragraph of the served text, numbered from 1 in document order. */
 export type DecisionParagraph = {
   anchorId: string | null;
+  number?: number | undefined;
+  headingPath: string[];
+  label: string | null;
   text: string;
 };
 
@@ -301,10 +351,27 @@ export const decisionParagraphs = ({
   text: string;
 }): DecisionParagraph[] =>
   located !== null && located.length > 0
-    ? located.map((block) => ({ anchorId: block.anchorId, text: block.text }))
+    ? located.map(
+        ({ anchorId, headingPath, label, number, text: blockText }) => ({
+          anchorId,
+          headingPath,
+          label,
+          text: blockText,
+          ...(number === undefined ? {} : { number }),
+        }),
+      )
     : text.split(/\r?\n/u).flatMap((line) => {
         const trimmed = line.trim();
-        return trimmed === "" ? [] : [{ anchorId: null, text: trimmed }];
+        return trimmed === ""
+          ? []
+          : [
+              {
+                anchorId: null,
+                headingPath: [],
+                label: printedParagraphLabel(trimmed),
+                text: trimmed,
+              },
+            ];
       });
 
 /** Matched paragraphs one call returns; `hitCount` says how many there were. */
@@ -326,7 +393,7 @@ const termMatcher = (language: string) => {
 
 export type QueryParagraph = DecisionParagraph & {
   /** 1-based position among the decision's paragraphs. */
-  paragraph: number;
+  position: number;
   /** True on a matching paragraph; a neighbour shown for context has none. */
   hit: boolean;
 };
@@ -406,7 +473,12 @@ export const paragraphsMatching = ({
         return {
           anchorId: paragraph.anchorId,
           text: paragraph.text.slice(0, length),
-          paragraph: index + 1,
+          ...(paragraph.number === undefined
+            ? {}
+            : { number: paragraph.number }),
+          position: index + 1,
+          label: paragraph.label,
+          headingPath: paragraph.headingPath,
           hit: hitSet.has(index),
         };
       }),

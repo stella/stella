@@ -3385,6 +3385,61 @@ describe("outgoing chat stream message ids", () => {
     }
   });
 
+  test("grades an unnamed provider 400 as a request it built and logs its structural fields", async () => {
+    const messageId = toSafeId<"chatMessage">(
+      "11111111-1111-4111-8111-111111111111",
+    );
+    const errorSpy = spyOn(logger, "error");
+    try {
+      const stream = processServerChatStream({
+        abortSignal: new AbortController().signal,
+        deadlineSignal: new AbortController().signal,
+        getResponseMessage: () => null,
+        initialMessages: [],
+        mapMessageId: createChatMessageIdMapper(() => messageId),
+        onFinish: () => undefined,
+        processor: new StreamProcessor(),
+        source: streamChunks([
+          { type: EventType.RUN_STARTED, runId: "run-1", threadId: "thread-1" },
+          {
+            type: EventType.RUN_ERROR,
+            message:
+              "Invalid value for 'input[3]'. Please save the contact REQUEST-CONTENT-SENTINEL.",
+            rawEvent: {
+              code: "invalid_value",
+              message:
+                "Invalid value for 'input[3]'. Please save the contact REQUEST-CONTENT-SENTINEL.",
+              param: "input[3]",
+              status: 400,
+              type: "invalid_request_error",
+            },
+          },
+        ]),
+      });
+
+      await collectChunks(stream);
+
+      expect(errorSpy).toHaveBeenCalledWith(
+        "chat.stream_failed",
+        expect.objectContaining({
+          kind: "unknown",
+          "error.provider.code": "invalid_value",
+          "error.provider.param": "input[3]",
+          "error.provider.reason": "unrecognized",
+          "error.provider.status": "400",
+          "error.provider.type": "invalid_request_error",
+          "failure.shadow_grade": "defect",
+          "failure.shadow_reason": "provider_request_rejected",
+        }),
+      );
+      expect(JSON.stringify(errorSpy.mock.calls)).not.toContain(
+        "REQUEST-CONTENT-SENTINEL",
+      );
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+
   test("names the template of a refused OpenAI request, never its text", async () => {
     const messageId = toSafeId<"chatMessage">(
       "11111111-1111-4111-8111-111111111111",

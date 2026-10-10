@@ -1,0 +1,26 @@
+{
+  "identifier": "activity",
+  "description": "Local activity timeline through restricted native commands",
+  "windows": ["activity"],
+  "permissions": [
+    "allow-account-record-use",
+    "allow-get-desktop-language",
+    "allow-set-desktop-language",
+    "allow-desktop-report-error",
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
+    "allow-activity-get-day",
+    "allow-activity-set-capture-details",
+    "allow-activity-set-browser-title-capture",
+    "allow-activity-set-app-detail-capture",
+    "allow-activity-open-accessibility-settings",
+    "allow-activity-set-recording-status",
+    "allow-activity-set-retention",
+    "allow-activity-exclude-app",
+    "allow-activity-remove-app-exclusion",
+    "allow-activity-delete-day",
+    "allow-activity-delete-all",
+    "allow-activity-delete-other-account-history",
+    "allow-activity-copy-text"
+  ]
+}

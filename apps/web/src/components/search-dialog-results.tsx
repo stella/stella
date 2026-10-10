@@ -38,9 +38,11 @@ import { useFormatter } from "@/i18n/formatting-context";
 import type { api } from "@/lib/api";
 import type { GlobalSearchHit } from "@/lib/api-contract";
 import { formatHotkeyForPlatform } from "@/lib/hotkeys";
+import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 import { resolveRecentFilePreviewFieldId } from "@/lib/search";
 import type { SearchAISummaryParams } from "@/lib/search";
 import type { RecentFile, RecentSearch } from "@/lib/search-recents";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { entityOptions } from "@/lib/workspaces/queries/entities";
 
 type SearchSummaryData = NonNullable<
@@ -93,28 +95,38 @@ export const CommandActionItem = ({
   switch (navigation.type) {
     case "command":
       return (
-        <CommandItem
-          data-command-action-id={action.id}
-          data-command-action-index={navigation.index}
-          index={navigation.index}
-          onClick={() => onSelect(action.id)}
-          size="row"
-          value={entry}
-        >
-          {content}
-        </CommandItem>
+        <CapabilityAction action={action} surface="control">
+          {(capabilityProps) => (
+            <CommandItem
+              data-command-action-id={action.id}
+              data-command-action-index={navigation.index}
+              index={navigation.index}
+              onClick={() => onSelect(action.id)}
+              size="row"
+              value={entry}
+              {...capabilityProps}
+            >
+              {content}
+            </CommandItem>
+          )}
+        </CapabilityAction>
       );
     case "button":
       return (
-        <Button
-          data-command-action-id={action.id}
-          data-search-empty-row=""
-          onClick={() => onSelect(action.id)}
-          size="row"
-          variant="ghost"
-        >
-          {content}
-        </Button>
+        <CapabilityAction action={action} surface="control">
+          {(capabilityProps) => (
+            <Button
+              data-command-action-id={action.id}
+              data-search-empty-row=""
+              onClick={() => onSelect(action.id)}
+              size="row"
+              variant="ghost"
+              {...capabilityProps}
+            >
+              {content}
+            </Button>
+          )}
+        </CapabilityAction>
       );
     default:
       navigation satisfies never;
@@ -143,26 +155,33 @@ export const SearchSummaryItem = ({
     }
 
     return (
-      <Button
-        className="mb-2 h-auto w-full items-start justify-start gap-3 rounded-md px-2.5 py-2.5 text-start whitespace-normal sm:h-auto"
-        disabled={isPending}
-        onClick={onClick}
-        variant={isError ? "destructive-outline" : "outline"}
-      >
-        <span className="bg-background text-foreground mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md border">
-          {isPending ? (
-            <Loader className="size-3.5" size="sm" variant="decorative" />
-          ) : (
-            <AiActionIcon className="size-3.5" />
-          )}
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-medium">{title}</span>
-          <span className="text-muted-foreground line-clamp-2 text-xs font-normal">
-            {body}
-          </span>
-        </span>
-      </Button>
+      <CapabilityAction action={{ capability: "ai" }} surface="control">
+        {(capabilityProps) => (
+          <Button
+            className="mb-2 h-auto w-full items-start justify-start gap-3 rounded-md px-2.5 py-2.5 text-start whitespace-normal sm:h-auto"
+            disabled={isPending}
+            onClick={onClick}
+            variant={isError ? "destructive-outline" : "outline"}
+            {...capabilityProps}
+          >
+            <span className="bg-background text-foreground mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md border">
+              {isPending ? (
+                <Loader className="size-3.5" size="sm" variant="decorative" />
+              ) : (
+                <AiActionIcon className="size-3.5" />
+              )}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-medium">
+                {title}
+              </span>
+              <span className="text-muted-foreground line-clamp-2 text-xs font-normal">
+                {body}
+              </span>
+            </span>
+          </Button>
+        )}
+      </CapabilityAction>
     );
   }
 
@@ -186,21 +205,26 @@ export const SearchSummaryItem = ({
         </span>
       </div>
       <div className="border-border/70 mt-2 border-t pt-2">
-        <Button
-          aria-busy={isOpeningChat || undefined}
-          className="h-auto gap-2 px-1.5 py-1"
-          disabled={isOpeningChat}
-          onClick={onOpenChat}
-          size="sm"
-          variant="ghost"
-        >
-          {isOpeningChat ? (
-            <Loader className="size-3.5" size="sm" variant="decorative" />
-          ) : (
-            <MessageSquareIcon className="size-3.5" />
+        <CapabilityAction action={{ capability: "ai" }} surface="control">
+          {(capabilityProps) => (
+            <Button
+              aria-busy={isOpeningChat || undefined}
+              className="h-auto gap-2 px-1.5 py-1"
+              disabled={isOpeningChat}
+              onClick={onOpenChat}
+              size="sm"
+              variant="ghost"
+              {...capabilityProps}
+            >
+              {isOpeningChat ? (
+                <Loader className="size-3.5" size="sm" variant="decorative" />
+              ) : (
+                <MessageSquareIcon className="size-3.5" />
+              )}
+              {t("search.continueInChat")}
+            </Button>
           )}
-          {t("search.continueInChat")}
-        </Button>
+        </CapabilityAction>
       </div>
     </div>
   );
@@ -446,10 +470,13 @@ export const SearchResultItem = ({
 export const RecentFileIcon = ({ file }: { file: RecentFile }) => {
   // Recents store identifiers, not thumbnail availability. Observe metadata
   // already loaded by the file view without fetching every recent on open.
-  const { data: entity } = useQuery({
+  const entityQuery = useQuery({
     ...entityOptions(file.workspaceId, file.entityId),
     enabled: false,
   });
+  const entityView = useQueryView(entityQuery);
+  useQueryViewError(entityView);
+  const entity = entityView.type === "items" ? entityView.items : undefined;
   const fieldId = entity
     ? resolveRecentFilePreviewFieldId({
         fields: entity.fields,

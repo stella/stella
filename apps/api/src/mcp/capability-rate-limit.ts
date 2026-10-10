@@ -1,5 +1,5 @@
 /**
- * Gateway-side rate limit for `invoke_capability`. Most capabilities are keyed
+ * Gateway-side rate limit for capability executors. Most capabilities are keyed
  * per (organization, capability id); outbound skill-source capabilities consume
  * the REST routes' shared client-IP budget instead.
  *

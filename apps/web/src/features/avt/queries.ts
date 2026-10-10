@@ -1,6 +1,8 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import { panic } from "better-result";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
+
 import type { VerificationRunStatus } from "@/features/avt/types";
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
@@ -92,14 +94,7 @@ export const latestVerificationsOptions = (key: LatestVerificationsKey) =>
   queryOptions({
     queryKey: avtKeys.latest(key),
     queryFn: async ({ signal }) => {
-      const chunks: DocumentFile[][] = [];
-      for (
-        let start = 0;
-        start < key.documents.length;
-        start += LATEST_READ_CHUNK
-      ) {
-        chunks.push(key.documents.slice(start, start + LATEST_READ_CHUNK));
-      }
+      const chunks = chunkItems(key.documents, LATEST_READ_CHUNK);
       const pages = await Promise.all(
         chunks.map(async (documents) =>
           unwrapEden(

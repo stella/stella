@@ -1743,6 +1743,23 @@ const savePlaybookRefusedResult = (issues: readonly PlaybookMergeIssue[]) =>
   });
 
 /**
+ * Carries the current token so a call that only adds positions can retry
+ * without a read: an editor autosaving between model turns makes this routine.
+ */
+const savePlaybookConflictResult = (currentUpdatedAt: string) =>
+  structuredErrorResult({
+    code: "conflict",
+    message:
+      "The playbook changed since it was read, so nothing was saved. Its " +
+      `current updatedAt is ${currentUpdatedAt}`,
+    hint:
+      "If this call only adds positions, call save_playbook again with " +
+      `expected_updated_at ${currentUpdatedAt}. ` +
+      "If it changes or removes stored positions, someone may have edited " +
+      `them: ${SAVE_PLAYBOOK_REREAD_HINT}`,
+  });
+
+/**
  * The two refusals of the shared create and update paths an agent can act on,
  * given the step that acts on them; anything else takes the common sink.
  */
@@ -1768,6 +1785,43 @@ const savePlaybookFailureResult = (error: unknown) => {
     });
   }
   return internalFailureResult(error);
+};
+
+const loadOrgSettings = async (context: McpRequestContext) => {
+  const reader = {
+    organizationId: context.organizationId,
+    userId: context.userId,
+  };
+  return await (context.testDependencies?.loadOrgSettingsForAuth?.(reader) ??
+    context.scopedDb(async (tx) => await loadOrgSettingsForAuth(tx, reader)));
+};
+
+type SavePlaybookUpdateFailureOptions = {
+  context: McpRequestContext;
+  error: unknown;
+  playbookId: ReturnType<typeof brandPersistedPlaybookDefinitionId>;
+};
+
+/** A stale token is answered with the token now stored, read after the refusal. */
+const savePlaybookUpdateFailureResult = async ({
+  context,
+  error,
+  playbookId,
+}: SavePlaybookUpdateFailureOptions) => {
+  if (!HandlerError.is(error) || error.status !== 409) {
+    return savePlaybookFailureResult(error);
+  }
+  const current = await Result.gen(() =>
+    getPlaybookDefinitionHandler({
+      safeDb: context.safeDb,
+      organizationId: context.organizationId,
+      playbookId,
+    }),
+  );
+  if (Result.isError(current)) {
+    return internalFailureResult(current.error);
+  }
+  return savePlaybookConflictResult(current.value.updatedAt);
 };
 
 /**
@@ -1826,10 +1880,6 @@ const handleSavePlaybookTool: TypedMcpToolHandler<
   const organizationId = context.organizationId;
   // A call that only renames, rescopes, or removes names no positions.
   const positions = input.positions ?? NO_POSITION_INPUTS;
-  const reader = { organizationId, userId: context.userId };
-  const loadOrgSettings = async () =>
-    await (context.testDependencies?.loadOrgSettingsForAuth?.(reader) ??
-      context.scopedDb(async (tx) => await loadOrgSettingsForAuth(tx, reader)));
 
   if (input.playbook_id === undefined) {
     if (!hasEffectiveAuthority(context, { playbook: ["create"] })) {
@@ -1865,7 +1915,7 @@ const handleSavePlaybookTool: TypedMcpToolHandler<
     if (merged.issues.length > 0 && merged.written.length === 0) {
       return savePlaybookRefusedResult(merged.issues);
     }
-    const orgSettings = await loadOrgSettings();
+    const orgSettings = await loadOrgSettings(context);
     const scope = toPlaybookScope({ stored: null, input: input.scope });
     const created = await Result.gen(() =>
       createPlaybookDefinitionHandler({
@@ -1979,7 +2029,7 @@ const handleSavePlaybookTool: TypedMcpToolHandler<
     return toolDataResult(payload);
   }
 
-  const orgSettings = await loadOrgSettings();
+  const orgSettings = await loadOrgSettings(context);
   const updated = await Result.gen(() =>
     updatePlaybookDefinitionHandler({
       admitModelAction: playbookDerivationAdmitter(context),
@@ -2001,7 +2051,11 @@ const handleSavePlaybookTool: TypedMcpToolHandler<
     }),
   );
   if (Result.isError(updated)) {
-    return savePlaybookFailureResult(updated.error);
+    return await savePlaybookUpdateFailureResult({
+      context,
+      error: updated.error,
+      playbookId,
+    });
   }
   const payload = projectionPayload(SAVE_PLAYBOOK_PROJECTION, {
     playbookId,
@@ -2207,7 +2261,7 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
     },
     annotations: {
       title: "Save clause",
-      destructiveHint: false,
+      destructiveHint: true,
       idempotentHint: false,
       openWorldHint: false,
       readOnlyHint: false,
@@ -2311,7 +2365,7 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
     },
     annotations: {
       title: "Save playbook",
-      destructiveHint: false,
+      destructiveHint: true,
       idempotentHint: false,
       openWorldHint: false,
       readOnlyHint: false,
@@ -2341,7 +2395,7 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
     inputSchema: runPlaybookArgsSchema,
     annotations: {
       title: "Run playbook",
-      destructiveHint: false,
+      destructiveHint: true,
       idempotentHint: false,
       openWorldHint: false,
       readOnlyHint: false,

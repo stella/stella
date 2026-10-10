@@ -62,6 +62,7 @@
         "scripts/*.ts",
         // Compiler contract tests are checked by the API typecheck script.
         "contracts/**/*.ts",
+        "src/**/*.type-test.ts",
         "src/scripts/*.ts",
         "src/dev/register-mock-ai.ts",
         "src/lib/__fixtures__/*.ts",
@@ -101,6 +102,9 @@
       // imports it through @stll/ui/icons; the app keeps the dependency so
       // vite's `resolve.dedupe` and icon chunking resolve one copy.
       "ignoreDependencies": [
+        // The gitignored API contract imports schema interfaces by name to
+        // preserve ClientTool generic identity; CI checks that generated output.
+        "@standard-schema/spec",
         // Dynamically imported from the inline bootstrap in index.html.
         "react-grab",
         "lucide-react",
@@ -147,6 +151,9 @@
         "src/heavy-work-slot.ts",
         "src/**/*.test.ts"
       ]
+    },
+    "packages/decision-reader": {
+      "entry": ["src/**/*.test.{ts,tsx}"]
     },
     "packages/legal-atlas": {
       "entry": ["src/index.ts", "src/**/*.test.ts"]

@@ -1,10 +1,14 @@
+// parser-output-unchanged: registering desktop activity access leaves existing ingestion features and parsed records unchanged.
+import type { DesktopFeatureId } from "@stll/api-contract/desktop-feature-access";
 import { VISUAL_PREVIEW_TOOL_NAME } from "@stll/api-contract/visual-preview";
 
 import type { DeploymentFeatureFlag } from "@/api/lib/deployment-feature";
+import { defineFeatureRegistry } from "@/api/lib/feature-access/prerequisites";
 
 type FeatureDefinition = {
   enrolment: "invitation" | "self-serve";
   deploymentFeature?: DeploymentFeatureFlag;
+  prerequisites?: readonly string[];
   ownership?: {
     handlerDirectories: readonly string[];
     tableSchemaFiles: readonly string[];
@@ -26,11 +30,28 @@ type FeatureDefinition = {
 
 export type FeatureRegistry = Readonly<Record<string, FeatureDefinition>>;
 
+export const LEGAL_LISTS_FEATURE_ID = "legal-lists";
+
 export const SELF_SERVE_FEATURE_IDS = ["time-billing"] as const;
 export const LIST_VERIFICATION_FEATURE_ID = "list-verification";
 export const GENERATED_VIEWS_FEATURE_ID = "generated-views";
 
-export const FEATURE_REGISTRY = {
+export const FEATURE_REGISTRY = defineFeatureRegistry({
+  [LEGAL_LISTS_FEATURE_ID]: {
+    enrolment: "invitation",
+    deploymentFeature: "FEATURE_LEGAL_LISTS",
+    ownership: {
+      handlerDirectories: ["apps/api/src/handlers/lists"],
+      tableSchemaFiles: [],
+      coreModules: [],
+    },
+  },
+
+  // The desktop client gates this feature from its desktop feature access
+  // decision; no API source belongs to it.
+  "activity-timeline": {
+    enrolment: "invitation",
+  },
   [GENERATED_VIEWS_FEATURE_ID]: {
     enrolment: "invitation",
     deploymentFeature: "FEATURE_GENERATED_VIEWS",
@@ -97,6 +118,7 @@ export const FEATURE_REGISTRY = {
     },
   },
   [LIST_VERIFICATION_FEATURE_ID]: {
+    prerequisites: [LEGAL_LISTS_FEATURE_ID],
     enrolment: "invitation",
     ownership: {
       handlerDirectories: [
@@ -126,7 +148,7 @@ export const FEATURE_REGISTRY = {
   Record<
     (typeof SELF_SERVE_FEATURE_IDS)[number],
     FeatureDefinition & { enrolment: "self-serve" }
-  >;
+  >);
 
 export type FeatureId = keyof typeof FEATURE_REGISTRY;
 
@@ -146,5 +168,9 @@ true satisfies Exclude<
   SelfServeFeatureId,
   (typeof SELF_SERVE_FEATURE_IDS)[number]
 > extends never
+  ? true
+  : never;
+
+true satisfies Exclude<DesktopFeatureId, FeatureId> extends never
   ? true
   : never;

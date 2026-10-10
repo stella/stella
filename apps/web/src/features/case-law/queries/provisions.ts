@@ -3,6 +3,7 @@ import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import { LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT } from "@stll/api-contract/legislation-expression";
 import type { ProvisionLinkStatus } from "@stll/api-contract/provision-link-status";
 import type { ProvisionVersionBasis } from "@stll/api-contract/provision-version-basis";
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
 import { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
@@ -267,14 +268,7 @@ export const statutesResolveOptions = (works: readonly CitedWorkAtDate[]) => {
   return queryOptions({
     queryKey: decisionProvisionKeys.statutesResolve(sorted),
     queryFn: async ({ signal }) => {
-      const chunks: CitedWorkAtDate[][] = [];
-      for (
-        let start = 0;
-        start < sorted.length;
-        start += STATUTES_RESOLVE_CHUNK_SIZE
-      ) {
-        chunks.push(sorted.slice(start, start + STATUTES_RESOLVE_CHUNK_SIZE));
-      }
+      const chunks = chunkItems(sorted, STATUTES_RESOLVE_CHUNK_SIZE);
       const answers = await Promise.all(
         chunks.map(
           async (chunk) => await fetchStatutesResolveChunk(chunk, signal),

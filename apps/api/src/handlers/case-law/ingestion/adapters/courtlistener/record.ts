@@ -1,3 +1,4 @@
+import { panic, Result } from "better-result";
 /**
  * The CourtListener record contract: one cluster with every row of the pinned
  * snapshot that belongs to it, as the loader assembles it.
@@ -7,11 +8,11 @@
  * joins and completeness the loader claims. Any failure rejects the cluster
  * with one reason; nothing is truncated, defaulted or partially accepted.
  */
-
-import { panic, Result } from "better-result";
 import * as v from "valibot";
 
-import { hashContent } from "@/api/handlers/case-law/ingestion/adapters/utils";
+// parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
+import { sha256Hex as hashContent } from "@stll/sha256/bun";
+
 import { isoCalendarDay } from "@/api/lib/dates";
 import { isRecord } from "@/api/lib/type-guards";
 

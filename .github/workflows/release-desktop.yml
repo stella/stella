@@ -1,4 +1,8 @@
 name: Release Desktop App
+# The desktop release canary finds a tag's in-flight run by this name.
+run-name: Release Desktop App ${{ github.event.workflow_run.head_branch || inputs.release_ref }}
+
+# release-chain-alert
 
 # Build, sign, and publish the Tauri desktop app for each release tag.
 # Runs after release.yml succeeds so the GitHub Release object already
@@ -276,6 +280,7 @@ jobs:
           sparse-checkout-cone-mode: false
 
       - name: Preserve GitHub API tooling across source checkouts
+        shell: bash
         run: |
           cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
           echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
@@ -295,6 +300,7 @@ jobs:
           no-cache: true
 
       - name: Install dependencies
+        shell: bash
         run: bun ci --ignore-scripts
         env:
           # Signing-key secrets are loaded into later steps in this job.
@@ -423,6 +429,7 @@ jobs:
 
       - name: Build (Windows)
         if: matrix.os == 'windows'
+        shell: bash
         working-directory: apps/desktop
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -531,6 +538,7 @@ jobs:
 
       - name: Build, sign, and notarize (macOS)
         if: matrix.os == 'macos'
+        shell: bash
         working-directory: apps/desktop
         env:
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}

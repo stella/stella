@@ -15,11 +15,19 @@ import { v7 as uuidv7 } from "uuid";
 import * as v from "valibot";
 
 import type { ChatSendMode } from "@stll/anonymize-chat";
+import { requiresPerCallChatApproval } from "@stll/api-contract/chat-secret";
+import type { RequestSecretOutput } from "@stll/api-contract/chat-secret";
+import { sleep } from "@stll/concurrency/sleep";
 import { sha256Hex } from "@stll/sha256/browser";
 import { stellaToast } from "@stll/ui/toast";
+import { useIsMobile } from "@stll/ui/use-mobile";
 
 import { useReviewStore } from "@/components/ai-suggestions/review-store";
 import { AnonymizedSpan } from "@/components/chat/anonymized-span";
+import type {
+  RequestSecretDecision,
+  SecretTargetResolution,
+} from "@/components/chat/chat-approval-context";
 import type {
   ApprovalToolName,
   AskUserOutput,
@@ -28,6 +36,7 @@ import type {
   ToolApprovalGrant,
 } from "@/components/chat/chat-ui-tools";
 import {
+  consumePlaybookSaveToolCalls,
   getExternalMcpConnectorApprovalGrant,
   getAwaitedAssistantMessageId,
   getChatAssistantTurnError,
@@ -72,8 +81,8 @@ import {
   terminalizeUnsettledCreateDocumentDraft,
 } from "@/components/chat/create-document-draft.logic";
 import { openEntityInInspector } from "@/components/chat/entity-open";
-import "@/components/chat/create-document-draft-inspector";
 import type { CreateDocumentDestination } from "@/components/chat/needs-matter-card";
+import "@/components/chat/create-document-draft-inspector";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
@@ -94,7 +103,12 @@ import {
   setCreateDocumentDraftInspectorTabStatus,
 } from "@/features/chat/hooks/use-chat-session-created-document.logic";
 import { reconcileDocumentDeletionToolCalls } from "@/features/chat/hooks/use-chat-session-document-deletion.logic";
-import { reconcilePlaybookSaveToolCalls } from "@/features/chat/hooks/use-chat-session-playbook-save.logic";
+import {
+  followReconciledPlaybookSave,
+  playbookPaneReaction,
+  reconcilePlaybookSaveToolCalls,
+} from "@/features/chat/hooks/use-chat-session-playbook-save.logic";
+import type { PlaybookPaneMode } from "@/features/chat/hooks/use-chat-session-playbook-save.logic";
 import { reconcileReaderAnnotationWriteToolCalls } from "@/features/chat/hooks/use-chat-session-reader-annotation-write.logic";
 import {
   createInitialSendQueueState,
@@ -131,14 +145,24 @@ import {
   APIError,
   internalToolErrorMessage,
   toAPIError,
+  unwrapEden,
 } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { fileOptions } from "@/lib/files/queries";
-import { knowledgeKeys, mcpConnectorsOptions } from "@/lib/knowledge/queries";
+import {
+  isPlaybookDraftViewPayload,
+  PLAYBOOK_DRAFT_VIEW,
+  playbookDraftTabId,
+} from "@/lib/knowledge/playbook-draft-view";
+import {
+  knowledgeKeys,
+  mcpConnectorsOptions,
+  playbookDetailOptions,
+} from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
 import { readStoredJson, writeStoredJson } from "@/lib/stored-json";
-import { useQueryView } from "@/lib/use-query-view";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { downloadFile } from "@/lib/utils";
 import {
   workspacesKeys,
@@ -175,6 +199,8 @@ type UseChatSessionOptions = {
    * here — only the live transition matters.
    */
   onError?: ((error: Error) => void) | undefined;
+  /** Whether a playbook this thread saves opens beside it by itself. */
+  playbookPane: PlaybookPaneMode;
   threadRef: ChatThreadRef;
   workspaceId?: string | undefined;
 };
@@ -201,6 +227,12 @@ type PreparedCreateDocumentDraft = {
 type OpenCreateDocumentDraftOptions = {
   draft: CreateDocumentDraft;
   mode: "automatic" | "explicit";
+};
+
+type FollowPlaybookSaveOptions = {
+  playbookId: string;
+  /** The thread pane that was current when the save was reconciled. */
+  paneTabId: string;
 };
 
 const prepareCreateDocumentDraft = async (
@@ -283,6 +315,7 @@ export const useChatSession = ({
   getSendMode,
   initialOlderCursor,
   onError,
+  playbookPane,
   threadRef,
   workspaceId,
 }: UseChatSessionOptions) => {
@@ -290,7 +323,11 @@ export const useChatSession = ({
   const t = useTranslations();
   const { activeOrganizationId: organizationId, id: userId } =
     useAuthenticatedUser();
-  const { data: mcpCatalog } = useQuery(mcpConnectorsOptions(organizationId));
+  const mcpCatalogQuery = useQuery(mcpConnectorsOptions(organizationId));
+  const mcpCatalogView = useQueryView(mcpCatalogQuery);
+  useQueryViewError(mcpCatalogView);
+  const mcpCatalog =
+    mcpCatalogView.type === "items" ? mcpCatalogView.items : undefined;
   const mcpConnectorIdentities =
     mcpCatalog?.connectors ?? EMPTY_MCP_CONNECTOR_IDENTITIES;
   const readConversationGrants = useCallback(
@@ -533,9 +570,7 @@ export const useChatSession = ({
               });
             },
             wait: async () => {
-              await new Promise<void>((resolve) => {
-                setTimeout(resolve, 250);
-              });
+              await sleep(250);
             },
           });
           if (settleResult.status === "failed") {
@@ -585,6 +620,7 @@ export const useChatSession = ({
   const [seededChat, setSeededChat] = useState(chat);
   const isLoadingOlderRef = useRef(false);
   const olderCursorRef = useRef(olderCursor);
+  const historicalPlaybookSaveToolCallIdsRef = useRef(new Set<string>());
   // Render-current runtime identity for the stale-response guard below. A fresh
   // runtime means the thread was rehydrated — a thread switch OR a same-thread
   // refetch (sending a message rebuilds the runtime from a newer first page) —
@@ -652,6 +688,12 @@ export const useChatSession = ({
       (message) => !existingIds.has(message.id),
     );
     if (prepend.length > 0) {
+      // Record provenance before publishing the page to the live runtime.
+      // Reconciliation still refreshes caches for these saves.
+      consumePlaybookSaveToolCalls({
+        handledToolCallIds: historicalPlaybookSaveToolCallIdsRef.current,
+        messages: prepend,
+      });
       setMessages([...prepend, ...current]);
     }
     olderCursorRef.current = older.olderCursor;
@@ -840,6 +882,10 @@ export const useChatSession = ({
   );
   const handleAllowInConversation = useCallback(
     async (id: string, toolName: ApprovalToolName) => {
+      if (requiresPerCallChatApproval(toolName)) {
+        await resolveToolApproval({ id, approved: true });
+        return;
+      }
       if (!isCurrentStorageOwner(conversationGrantsOwner)) {
         return;
       }
@@ -861,6 +907,10 @@ export const useChatSession = ({
   );
   const handleAlwaysAllow = useCallback(
     async (id: string, toolName: ApprovalToolName) => {
+      if (requiresPerCallChatApproval(toolName)) {
+        await resolveToolApproval({ id, approved: true });
+        return;
+      }
       if (!isCurrentStorageOwner(alwaysGrantsOwner)) {
         return;
       }
@@ -916,6 +966,49 @@ export const useChatSession = ({
       });
     },
     [addToolResult],
+  );
+  // Submitting the decision and continuing the chat are separate
+  // steps: once the server commits a decision, the card keeps the
+  // returned receipt (never the value) and retries only the
+  // continuation, so a failed continuation never re-sends the value.
+  const handleRequestSecret = useCallback(
+    async (
+      toolCallId: string,
+      decision: RequestSecretDecision,
+    ): Promise<RequestSecretOutput> =>
+      unwrapEden(
+        await api.chat
+          .threads({ threadId: toSafeId<"chatThread">(conversationId) })
+          .secrets({ toolCallId })
+          .post(decision),
+      ),
+    [conversationId],
+  );
+  const continueRequestSecret = useCallback(
+    async (toolCallId: string, receipt: RequestSecretOutput) => {
+      await addToolResult({
+        tool: "request_secret",
+        toolCallId,
+        output: receipt,
+      });
+    },
+    [addToolResult],
+  );
+  const resolveSecretTarget = useCallback(
+    async (
+      connectorSlug: string,
+      signal: AbortSignal,
+    ): Promise<SecretTargetResolution> => {
+      const thread = api.chat.threads({
+        threadId: toSafeId<"chatThread">(conversationId),
+      });
+      const response = await thread["saved-secret"].get({
+        query: { connectorSlug },
+        fetch: { signal },
+      });
+      return unwrapEden(response);
+    },
+    [conversationId],
   );
 
   /**
@@ -1059,20 +1152,136 @@ export const useChatSession = ({
     );
   }, [getContextMatterIds, messages, queryClient, workspaceId]);
 
-  // A chat `save_playbook` writes an org-level playbook from any surface, so
-  // an open playbooks list or editor refetches once per completed save.
+  const playbookPaneTabId = playbookDraftTabId(threadRef.threadId);
+  /** The tab label for a playbook: its cached name, until the pane reads it. */
+  const playbookPaneLabel = useCallback(
+    (playbookId: string) => {
+      const detail = queryClient.getQueryData(
+        playbookDetailOptions(organizationId, playbookId).queryKey,
+      );
+      return detail !== undefined && "name" in detail && detail.name !== ""
+        ? detail.name
+        : t("knowledge.playbooks.review.playbookLabel");
+    },
+    [organizationId, queryClient, t],
+  );
+
+  const isMobile = useIsMobile();
+  const openedPlaybookPaneIdsRef = useRef(new Set<string>());
+  const playbookPaneShown = useInspectorTabsStore((state) =>
+    state.tabs.some(({ id }) => id === playbookPaneTabId),
+  );
+  // A pane restored with the inspector counts as opened, so closing it keeps
+  // the next save from reopening it.
   useExternalSyncEffect(() => {
+    if (playbookPaneShown) {
+      openedPlaybookPaneIdsRef.current.add(playbookPaneTabId);
+    }
+  }, [playbookPaneShown, playbookPaneTabId]);
+  /** Opens (or focuses) this thread's playbook pane on `playbookId`. */
+  const handleOpenPlaybook = useCallback(
+    (playbookId: string) => {
+      openedPlaybookPaneIdsRef.current.add(playbookPaneTabId);
+      useInspectorTabsStore.getState().openView({
+        type: PLAYBOOK_DRAFT_VIEW,
+        id: playbookPaneTabId,
+        label: playbookPaneLabel(playbookId),
+        payload: { type: "playbook", playbookId },
+      });
+    },
+    [playbookPaneLabel, playbookPaneTabId],
+  );
+
+  /**
+   * Moves or opens this thread's pane as `playbookPaneReaction` decides. A
+   * save that finishes after the page moved to another thread is dropped.
+   */
+  const followPlaybookSave = useLatestCallback(
+    ({ playbookId, paneTabId }: FollowPlaybookSaveOptions) => {
+      if (paneTabId !== playbookPaneTabId) {
+        return;
+      }
+      const inspector = useInspectorTabsStore.getState();
+      const tab = inspector.tabs.find(({ id }) => id === playbookPaneTabId);
+      const reaction = playbookPaneReaction({
+        mode: playbookPane,
+        isMobile,
+        openedThisSession: openedPlaybookPaneIdsRef.current.has(paneTabId),
+        shownPlaybookId:
+          tab?.type === "view" &&
+          tab.viewType === PLAYBOOK_DRAFT_VIEW &&
+          isPlaybookDraftViewPayload(tab.payload)
+            ? tab.payload.playbookId
+            : null,
+        savedPlaybookId: playbookId,
+      });
+      switch (reaction) {
+        case "none":
+          return;
+        case "open":
+          handleOpenPlaybook(playbookId);
+          return;
+        case "update":
+          inspector.updateView({
+            id: playbookPaneTabId,
+            label: playbookPaneLabel(playbookId),
+            payload: { type: "playbook", playbookId },
+          });
+          return;
+        default:
+          reaction satisfies never;
+          panic(`Unhandled playbook pane reaction: ${String(reaction)}`);
+      }
+    },
+  );
+
+  // A chat `save_playbook` writes an org-level playbook from any surface, so
+  // an open playbooks list or editor refetches once per completed save. The
+  // pane follows only the newest save: a refetch that settles after a later
+  // save's is dropped.
+  const playbookSaveSequenceRef = useRef(0);
+  const observedPlaybookSaveRuntimesRef = useRef(new WeakSet<object>());
+  useExternalSyncEffect(() => {
+    const source = observedPlaybookSaveRuntimesRef.current.has(chat)
+      ? "live"
+      : "history";
+    observedPlaybookSaveRuntimesRef.current.add(chat);
+    const reconciliation = reconcilePlaybookSaveToolCalls({
+      handledToolCallIds: handledPlaybookSaveToolCallIdsRef.current,
+      historicalToolCallIds: historicalPlaybookSaveToolCallIdsRef.current,
+      messages,
+      organizationId,
+      playbookKeys: knowledgeKeys.playbooks,
+      queryClient,
+      source,
+    });
+    if (reconciliation === null) {
+      return;
+    }
+    const paneTabId = playbookPaneTabId;
+    if (reconciliation.playbookId !== null) {
+      playbookSaveSequenceRef.current += 1;
+    }
+    const sequence = playbookSaveSequenceRef.current;
+    const requestedChat = chat;
     detached(
-      reconcilePlaybookSaveToolCalls({
-        handledToolCallIds: handledPlaybookSaveToolCallIdsRef.current,
-        messages,
-        organizationId,
-        playbookKeys: knowledgeKeys.playbooks,
-        queryClient,
+      followReconciledPlaybookSave({
+        reconciliation,
+        isCurrent: () =>
+          seededChatRef.current === requestedChat &&
+          playbookSaveSequenceRef.current === sequence,
+        follow: (playbookId) => followPlaybookSave({ playbookId, paneTabId }),
       }),
       "use-chat-session.reconcile-playbook-save-tool-calls",
     );
-  }, [messages, organizationId, queryClient]);
+  }, [
+    chat,
+    followPlaybookSave,
+    messages,
+    organizationId,
+    playbookPaneTabId,
+    queryClient,
+  ]);
 
   // A chat highlight or comment on the open decision or statute writes outside
   // the reader's own mutations, so its margin refetches once per completed write.
@@ -1552,11 +1761,16 @@ export const useChatSession = ({
     handleAllowInConversation,
     handleDeny,
     handleAskUserSubmit,
+    handleRequestSecret,
+    continueRequestSecret,
+    resolveSecretTarget,
+    secretAvailabilityKey: conversationId,
     handleAskUserEditAndRerun,
     handleAlwaysAllow,
     handleCreateDocumentResolve,
     handleOpenCreateDocumentDraft,
     handleOpenCreatedDocument,
+    handleOpenPlaybook,
     createDocumentMattersView,
     addToolResult,
     streamdownComponents,

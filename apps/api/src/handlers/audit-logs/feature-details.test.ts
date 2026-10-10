@@ -5,12 +5,16 @@ import {
   AUDIT_RESOURCE_TYPE,
 } from "@/api/lib/audit-log.constants";
 import type { AuditResourceType } from "@/api/lib/audit-log.constants";
+import { toSafeId } from "@/api/lib/branded-types";
 import {
   createFeatureAccessSnapshot,
   decideFeatureAccess,
-} from "@/api/lib/auth/feature-access/policy";
-import { toSafeId } from "@/api/lib/branded-types";
-import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
+} from "@/api/lib/feature-access/policy";
+import { featurePrerequisiteClosure } from "@/api/lib/feature-access/prerequisites";
+import {
+  FEATURE_REGISTRY,
+  LEGAL_LISTS_FEATURE_ID,
+} from "@/api/lib/feature-access/registry";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { mapHandlerResult } from "@/api/mcp/capability-tools";
 import type { McpRequestContext } from "@/api/mcp/context";
@@ -119,29 +123,46 @@ const contextFor = ({
         ? enrolledTimeBillingSnapshot(PRINCIPAL)
         : createFeatureAccessSnapshot({
             ...PRINCIPAL,
-            decisions: new Map([
-              [
-                featureId,
-                enrolled
-                  ? decideFeatureAccess({
-                      ...PRINCIPAL,
-                      registry: FEATURE_REGISTRY,
-                      grants: {
-                        [featureId]: [
-                          {
-                            type: "organization",
-                            organizationId: PRINCIPAL.organizationId,
+            decisions: new Map(
+              (featureId === "list-verification"
+                ? ([LEGAL_LISTS_FEATURE_ID, featureId] as const)
+                : ([featureId] as const)
+              ).map(
+                (id) =>
+                  [
+                    id,
+                    enrolled || id === LEGAL_LISTS_FEATURE_ID
+                      ? decideFeatureAccess({
+                          ...PRINCIPAL,
+                          registry: FEATURE_REGISTRY,
+                          grants: Object.fromEntries(
+                            [
+                              ...featurePrerequisiteClosure(
+                                FEATURE_REGISTRY,
+                                id,
+                              ),
+                            ].map((grantFeatureId) => [
+                              grantFeatureId,
+                              [
+                                {
+                                  type: "organization" as const,
+                                  organizationId: PRINCIPAL.organizationId,
+                                },
+                              ],
+                            ]),
+                          ),
+                          featureId: id,
+                          user: {
+                            email: "test@example.test",
+                            emailVerified: true,
                           },
-                        ],
-                      },
-                      featureId,
-                      user: { email: "test@example.test", emailVerified: true },
-                      membership: true,
-                      enrolments: [{ ...PRINCIPAL, featureId }],
-                    })
-                  : { status: "hidden" },
-              ],
-            ]),
+                          membership: true,
+                          enrolments: [{ ...PRINCIPAL, featureId: id }],
+                        })
+                      : { status: "hidden" },
+                  ] as const,
+              ),
+            ),
           }),
   };
 };

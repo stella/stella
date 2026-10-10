@@ -12,7 +12,11 @@ import readEndpoint from "@/api/handlers/desktop-presence/read";
 import { reportDesktopPresence } from "@/api/handlers/desktop-presence/service";
 import { removeOrganizationMemberInTransaction } from "@/api/lib/member-assignment-offboarding";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_AUDIT,
+  NO_DB,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -44,6 +48,8 @@ test("organization removal clears only the departing member's presence and rejoi
   const readPresence = async () => {
     const result = await readEndpoint.handler(
       createTestHandlerContext<Parameters<typeof readEndpoint.handler>[0]>({
+        audit: NO_AUDIT,
+        safeDb: NO_DB,
         scopedDb,
         user: { id: userId },
         session: { activeOrganizationId: organizationId },

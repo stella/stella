@@ -12,7 +12,9 @@ import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-sto
 import { usePermissions } from "@/hooks/use-permissions";
 import { useTimeBillingPreviewEnabled } from "@/hooks/use-time-billing-preview";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { useActionCapabilities } from "@/lib/organization/feature-access/capability-actions";
 import { useEffectiveShortcutGroups } from "@/lib/use-effective-shortcuts";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import { useCreateTask } from "@/lib/workspaces/mutations/tasks";
 import { entitySummariesCountOptions } from "@/lib/workspaces/queries/entities";
@@ -41,6 +43,7 @@ type UseCommandActionsResult = {
 
 export function useCommandActions(open: boolean): UseCommandActionsResult {
   const t = useTranslations();
+  const { capabilities, role } = useActionCapabilities("ai");
   const user = useAuthenticatedUser();
   const previewEnabled = useTimeBillingPreviewEnabled();
   const canCreateTimeEntry = usePermissions({ timeEntry: ["create"] });
@@ -56,15 +59,25 @@ export function useCommandActions(open: boolean): UseCommandActionsResult {
   });
   const { mutate: createTask, isPending: isCreatingTask } = useCreateTask();
   const canCreateEntity = usePermissions({ entity: ["create"] });
-  const { data: entityCount } = useQuery({
+  const entityCountQuery = useQuery({
     ...entitySummariesCountOptions(workspaceId ?? ""),
     enabled: open && workspaceId !== undefined && canCreateEntity,
   });
-  const { data: workflow } = useQuery({
+  const entityCountView = useQueryView(entityCountQuery);
+  useQueryViewError(entityCountView);
+  const entityCount =
+    entityCountView.type === "items" ? entityCountView.items : undefined;
+  const workflowQuery = useQuery({
     ...workflowOptions({ key: { workspaceId: workspaceId ?? "" } }),
     enabled: open && workspaceId !== undefined && canCreateEntity,
   });
+  const workflowView = useQueryView(workflowQuery);
+  useQueryViewError(workflowView);
+  const workflow =
+    workflowView.type === "items" ? workflowView.items : undefined;
   const canCreateTask =
+    entityCountQuery.status === "success" &&
+    workflowQuery.status === "success" &&
     canCreateEntity &&
     workspaceId !== undefined &&
     entityCount !== undefined &&
@@ -135,42 +148,53 @@ export function useCommandActions(open: boolean): UseCommandActionsResult {
 
   const resolvedActions = useMemo(
     () =>
-      COMMAND_ACTIONS.filter((action) => action.isAvailable(context)).map(
-        (action) => {
-          const resolved: ResolvedCommandAction = {
-            id: action.id,
-            group: action.group,
-            titleKey: action.titleKey,
-            icon: action.icon,
-            isAvailable: action.isAvailable,
-            run: action.run,
-            title: t(action.titleKey),
-            keywordLabels: action.keywords
-              ? action.keywords.map((keyword) => t(keyword))
-              : [],
-          };
-          if (action.keywords) {
-            resolved.keywords = action.keywords;
-          }
-          if (action.shortcutId === undefined) {
-            return resolved;
-          }
-          resolved.shortcutId = action.shortcutId;
-          const hotkey = effectiveHotkeys.get(action.shortcutId);
-          if (!hotkey) {
-            panic(`No effective hotkey for command action "${action.id}"`);
-          }
-          resolved.hotkey = hotkey;
+      COMMAND_ACTIONS.filter(
+        (action) =>
+          action.isAvailable(context) &&
+          (action.capability === null ||
+            capabilities[action.capability].type === "available" ||
+            role === "admin"),
+      ).map((action) => {
+        const resolved: ResolvedCommandAction = {
+          id: action.id,
+          capability: action.capability,
+          group: action.group,
+          titleKey: action.titleKey,
+          icon: action.icon,
+          isAvailable: action.isAvailable,
+          run: action.run,
+          title: t(action.titleKey),
+          keywordLabels: action.keywords
+            ? action.keywords.map((keyword) => t(keyword))
+            : [],
+        };
+        if (action.keywords) {
+          resolved.keywords = action.keywords;
+        }
+        if (action.shortcutId === undefined) {
           return resolved;
-        },
-      ),
-    [context, effectiveHotkeys, t],
+        }
+        resolved.shortcutId = action.shortcutId;
+        const hotkey = effectiveHotkeys.get(action.shortcutId);
+        if (!hotkey) {
+          panic(`No effective hotkey for command action "${action.id}"`);
+        }
+        resolved.hotkey = hotkey;
+        return resolved;
+      }),
+    [capabilities, context, effectiveHotkeys, role, t],
   );
 
   const executeAction = (actionId: string) => {
     const action = resolvedActions.find((a) => a.id === actionId);
     if (!action) {
       panic(`Unknown command action "${actionId}"`);
+    }
+    if (
+      action.capability !== null &&
+      capabilities[action.capability].type !== "available"
+    ) {
+      return;
     }
     action.run(context);
   };

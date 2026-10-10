@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
@@ -11,7 +11,15 @@ import {
 } from "./outbound-transport-census.ts";
 import { parseSource } from "./parse-memo.ts";
 
-const GLOBAL_ROOTS = new Set(["globalThis", "self", "window", "Bun"]);
+const INDIRECT_TRANSPORT = "indirect:transport";
+const LOCAL_MODULE_LOADER_OWNER =
+  "packages/start-runtime/src/local-module-loader.ts";
+export const LOCAL_MODULE_CAPABILITIES: ReadonlySet<string> = new Set([
+  "local:module-import",
+  "local:module-loader",
+]);
+
+const GLOBAL_ROOTS = new Set(["globalThis", "self", "window", "global", "Bun"]);
 const GLOBAL_TRANSPORT_NAMES = new Set([
   "fetch",
   "WebSocket",
@@ -21,7 +29,6 @@ const GLOBAL_TRANSPORT_NAMES = new Set([
 const NETWORK_MODULES = new Set([
   "@stll/fetch",
   "bun",
-  "apps/api/src/lib/fetch",
   "undici",
   "http",
   "https",
@@ -92,6 +99,7 @@ const unwrap = (expression: ts.Expression): ts.Expression => {
   if (
     ts.isParenthesizedExpression(expression) ||
     ts.isAsExpression(expression) ||
+    ts.isTypeAssertionExpression(expression) ||
     ts.isSatisfiesExpression(expression) ||
     ts.isNonNullExpression(expression)
   ) {
@@ -106,10 +114,48 @@ const memberName = (
   if (ts.isPropertyAccessExpression(node)) {
     return node.name.text;
   }
-  if (ts.isStringLiteralLike(node.argumentExpression)) {
-    return node.argumentExpression.text;
+  const argument = unwrap(node.argumentExpression);
+  if (ts.isStringLiteralLike(argument)) {
+    return argument.text;
   }
   return undefined;
+};
+
+const bindingMemberName = (element: ts.BindingElement) => {
+  if (element.dotDotDotToken) {
+    return undefined;
+  }
+  const name = element.propertyName ?? element.name;
+  if (ts.isIdentifier(name) || ts.isStringLiteralLike(name)) {
+    return name.text;
+  }
+  if (!ts.isComputedPropertyName(name)) {
+    return undefined;
+  }
+  const value = unwrap(name.expression);
+  return ts.isStringLiteralLike(value) ? value.text : undefined;
+};
+
+const assignmentMemberName = (element: ts.ObjectLiteralElementLike) => {
+  if (ts.isSpreadAssignment(element)) {
+    return undefined;
+  }
+  const name = element.name;
+  if (ts.isIdentifier(name) || ts.isStringLiteralLike(name)) {
+    return name.text;
+  }
+  if (!ts.isComputedPropertyName(name)) {
+    return undefined;
+  }
+  const value = unwrap(name.expression);
+  return ts.isStringLiteralLike(value) ? value.text : undefined;
+};
+
+const objectLiteralExpression = (
+  expression: ts.Expression,
+): ts.ObjectLiteralExpression | undefined => {
+  const value = unwrap(expression);
+  return ts.isObjectLiteralExpression(value) ? value : undefined;
 };
 
 const bindingNames = (name: ts.BindingName): string[] => {
@@ -154,12 +200,10 @@ const dynamicLoadNames = (node: ts.CallExpression): string[] | null => {
     if (parent.name.elements.some((element) => element.dotDotDotToken)) {
       return null;
     }
-    return parent.name.elements.flatMap((element) => {
-      const name = element.propertyName ?? element.name;
-      return ts.isIdentifier(name) || ts.isStringLiteralLike(name)
-        ? [name.text]
-        : [];
-    });
+    const names = parent.name.elements.map(bindingMemberName);
+    return names.some((name) => name === undefined)
+      ? null
+      : names.filter((name) => name !== undefined);
   }
   if (
     ts.isPropertyAccessExpression(parent) ||
@@ -255,6 +299,49 @@ const lookupBinding = ({
   }
 };
 
+type ReflectedGlobalMemberOptions = {
+  scopes: BindingScopes;
+  node: ts.Expression;
+};
+
+const reflectedGlobalMember = ({
+  scopes,
+  node,
+}: ReflectedGlobalMemberOptions) => {
+  const value = unwrap(node);
+  if (!ts.isCallExpression(value)) {
+    return undefined;
+  }
+  const callee = unwrap(value.expression);
+  if (
+    !(
+      ts.isPropertyAccessExpression(callee) ||
+      ts.isElementAccessExpression(callee)
+    ) ||
+    memberName(callee) !== "get"
+  ) {
+    return undefined;
+  }
+  const receiver = unwrap(callee.expression);
+  if (
+    !ts.isIdentifier(receiver) ||
+    receiver.text !== "Reflect" ||
+    lookupBinding({ scopes, node: receiver, name: receiver.text }) !== undefined
+  ) {
+    return undefined;
+  }
+  const target = value.arguments.at(0);
+  if (!target) {
+    return undefined;
+  }
+  const key = value.arguments.at(1);
+  const member = key && unwrap(key);
+  return {
+    target,
+    name: member && ts.isStringLiteralLike(member) ? member.text : undefined,
+  };
+};
+
 type GlobalObjectNameOptions = {
   scopes: BindingScopes;
   node: ts.Expression;
@@ -271,6 +358,18 @@ const globalObjectName = ({
     return undefined;
   }
   seen.add(value);
+  const reflected = reflectedGlobalMember({ scopes, node: value });
+  if (reflected) {
+    const root = globalObjectName({ scopes, node: reflected.target, seen });
+    if (!root) {
+      return undefined;
+    }
+    // An unknown reflected member may return another global root.
+    if (reflected.name === undefined) {
+      return root;
+    }
+    return GLOBAL_ROOTS.has(reflected.name) ? reflected.name : undefined;
+  }
   if (
     ts.isPropertyAccessExpression(value) ||
     ts.isElementAccessExpression(value)
@@ -292,6 +391,48 @@ const globalObjectName = ({
   return globalObjectName({ scopes, node: initializer, seen });
 };
 
+type ObjectIdentityOptions = {
+  scopes: BindingScopes;
+  node: ts.Expression;
+  seen?: Set<ts.Expression>;
+};
+
+const isReflectObject = ({
+  scopes,
+  node,
+  seen = new Set<ts.Expression>(),
+}: ObjectIdentityOptions): boolean => {
+  const value = unwrap(node);
+  if (seen.has(value)) {
+    return false;
+  }
+  seen.add(value);
+  if (ts.isIdentifier(value)) {
+    const initializer = lookupBinding({
+      scopes,
+      node: value,
+      name: value.text,
+    });
+    if (initializer === undefined) {
+      return value.text === "Reflect";
+    }
+    return (
+      initializer !== null &&
+      isReflectObject({ scopes, node: initializer, seen })
+    );
+  }
+  if (
+    ts.isPropertyAccessExpression(value) ||
+    ts.isElementAccessExpression(value)
+  ) {
+    return (
+      globalObjectName({ scopes, node: value.expression }) !== undefined &&
+      memberName(value) === "Reflect"
+    );
+  }
+  return false;
+};
+
 type RegisterGlobalOptions = {
   capabilities: Set<string>;
   object: string | undefined;
@@ -303,7 +444,11 @@ const registerGlobal = ({
   object,
   name,
 }: RegisterGlobalOptions): void => {
-  if (!object || !name) {
+  if (!object) {
+    return;
+  }
+  if (name === undefined) {
+    capabilities.add(INDIRECT_TRANSPORT);
     return;
   }
   if (
@@ -337,6 +482,14 @@ const registerModule = ({
     (names === null || names.includes(PERMIT_GRANT))
   ) {
     capabilities.add("permit:grant");
+  }
+  if (
+    module === "@stll/start-runtime/local-module-loader" ||
+    module === canonicalModuleId(LOCAL_MODULE_LOADER_OWNER, file) ||
+    module.endsWith(`/${canonicalModuleId(LOCAL_MODULE_LOADER_OWNER, file)}`)
+  ) {
+    capabilities.add("local:module-loader");
+    return;
   }
   const bunClientNames = ["S3Client", "SQL", "RedisClient", "connect", "fetch"];
   if (
@@ -416,12 +569,16 @@ type VisitModuleLoadOptions = {
   node: ts.Node;
   scopes: BindingScopes;
   register: ModuleRegistration;
+  file: string;
+  capabilities: Set<string>;
 };
 
 const visitModuleLoad = ({
   node,
   scopes,
   register,
+  file,
+  capabilities,
 }: VisitModuleLoadOptions): void => {
   if (
     ts.isImportDeclaration(node) &&
@@ -452,24 +609,42 @@ const visitModuleLoad = ({
   if (
     ts.isImportEqualsDeclaration(node) &&
     !node.isTypeOnly &&
-    ts.isExternalModuleReference(node.moduleReference) &&
-    ts.isStringLiteralLike(node.moduleReference.expression)
+    ts.isExternalModuleReference(node.moduleReference)
   ) {
-    register(node.moduleReference.expression.text, null);
+    const specifier = unwrap(node.moduleReference.expression);
+    if (ts.isStringLiteralLike(specifier)) {
+      register(specifier.text, null);
+    }
+    return;
+  }
+  if (!ts.isCallExpression(node)) {
+    return;
+  }
+  const callee = unwrap(node.expression);
+  if (
+    callee.kind !== ts.SyntaxKind.ImportKeyword &&
+    !(
+      ts.isIdentifier(callee) &&
+      callee.text === "require" &&
+      lookupBinding({ scopes, node: callee, name: callee.text }) === undefined
+    )
+  ) {
+    return;
+  }
+  const specifier = node.arguments.at(0);
+  const value = specifier && unwrap(specifier);
+  if (value && ts.isStringLiteralLike(value)) {
+    register(value.text, dynamicLoadNames(node));
     return;
   }
   if (
-    ts.isCallExpression(node) &&
-    (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
-      (ts.isIdentifier(node.expression) &&
-        node.expression.text === "require" &&
-        lookupBinding({ scopes, node, name: "require" }) === undefined))
+    callee.kind === ts.SyntaxKind.ImportKeyword &&
+    file === LOCAL_MODULE_LOADER_OWNER
   ) {
-    const specifier = node.arguments.at(0);
-    if (specifier && ts.isStringLiteralLike(specifier)) {
-      register(specifier.text, dynamicLoadNames(node));
-    }
+    capabilities.add("local:module-import");
+    return;
   }
+  capabilities.add(INDIRECT_TRANSPORT);
 };
 
 const isGlobalNamePosition = (node: ts.Identifier): boolean => {
@@ -497,6 +672,77 @@ type VisitGlobalReferenceOptions = {
   capabilities: Set<string>;
 };
 
+type DestructuredMember = { member: string | undefined; isRest: boolean };
+type GlobalDestructuring = {
+  members: DestructuredMember[];
+  value: ts.Expression;
+  isAssignment: boolean;
+};
+
+const globalDestructuring = (
+  node: ts.Node,
+): GlobalDestructuring | undefined => {
+  if (
+    ts.isVariableDeclaration(node) &&
+    ts.isObjectBindingPattern(node.name) &&
+    node.initializer
+  ) {
+    return {
+      members: node.name.elements.map((element) => ({
+        member: bindingMemberName(element),
+        isRest: element.dotDotDotToken !== undefined,
+      })),
+      value: node.initializer,
+      isAssignment: false,
+    };
+  }
+  if (
+    !ts.isBinaryExpression(node) ||
+    node.operatorToken.kind !== ts.SyntaxKind.EqualsToken
+  ) {
+    return undefined;
+  }
+  const pattern = objectLiteralExpression(node.left);
+  if (!pattern) {
+    return undefined;
+  }
+  return {
+    members: pattern.properties.map((element) => ({
+      member: assignmentMemberName(element),
+      isRest: ts.isSpreadAssignment(element),
+    })),
+    value: node.right,
+    isAssignment: true,
+  };
+};
+
+const visitGlobalDestructuring = ({
+  node,
+  scopes,
+  capabilities,
+}: VisitGlobalReferenceOptions): void => {
+  const destructuring = globalDestructuring(node);
+  if (!destructuring) {
+    return;
+  }
+  const object = globalObjectName({ scopes, node: destructuring.value });
+  if (object && destructuring.isAssignment) {
+    capabilities.add(INDIRECT_TRANSPORT);
+  }
+  for (const { member, isRest } of destructuring.members) {
+    if (
+      object &&
+      (isRest ||
+        member === undefined ||
+        member === "Reflect" ||
+        GLOBAL_ROOTS.has(member))
+    ) {
+      capabilities.add(INDIRECT_TRANSPORT);
+    }
+    registerGlobal({ capabilities, object, name: member });
+  }
+};
+
 const visitGlobalReference = ({
   node,
   scopes,
@@ -506,29 +752,57 @@ const visitGlobalReference = ({
     ts.isPropertyAccessExpression(node) ||
     ts.isElementAccessExpression(node)
   ) {
+    const object = globalObjectName({ scopes, node: node.expression });
+    const name = memberName(node);
+    if (object && name === undefined) {
+      capabilities.add(INDIRECT_TRANSPORT);
+    }
     registerGlobal({
       capabilities,
-      object: globalObjectName({ scopes, node: node.expression }),
-      name: memberName(node),
+      object,
+      name,
     });
+  }
+  visitGlobalDestructuring({ node, scopes, capabilities });
+  if (ts.isCallExpression(node)) {
+    const callee = unwrap(node.expression);
+    if (
+      (ts.isPropertyAccessExpression(callee) ||
+        ts.isElementAccessExpression(callee)) &&
+      isReflectObject({ scopes, node: callee.expression })
+    ) {
+      const target = node.arguments.at(0);
+      const object = target
+        ? globalObjectName({ scopes, node: target })
+        : undefined;
+      if (object) {
+        capabilities.add(INDIRECT_TRANSPORT);
+        const key = node.arguments.at(1);
+        const value = key && unwrap(key);
+        registerGlobal({
+          capabilities,
+          object,
+          name: value && ts.isStringLiteralLike(value) ? value.text : undefined,
+        });
+      }
+    }
   }
   if (
     ts.isVariableDeclaration(node) &&
-    ts.isObjectBindingPattern(node.name) &&
-    node.initializer
+    ts.isIdentifier(node.name) &&
+    node.initializer &&
+    (globalObjectName({ scopes, node: node.initializer }) !== undefined ||
+      isReflectObject({ scopes, node: node.initializer }))
   ) {
-    for (const element of node.name.elements) {
-      const name = element.propertyName ?? element.name;
-      const member =
-        ts.isIdentifier(name) || ts.isStringLiteralLike(name)
-          ? name.text
-          : undefined;
-      registerGlobal({
-        capabilities,
-        object: globalObjectName({ scopes, node: node.initializer }),
-        name: member,
-      });
-    }
+    capabilities.add(INDIRECT_TRANSPORT);
+  }
+  if (
+    ts.isBinaryExpression(node) &&
+    node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+    (globalObjectName({ scopes, node: node.right }) !== undefined ||
+      isReflectObject({ scopes, node: node.right }))
+  ) {
+    capabilities.add(INDIRECT_TRANSPORT);
   }
   if (
     ts.isIdentifier(node) &&
@@ -560,7 +834,13 @@ const visitSource = (source: ts.SourceFile, context: VisitContext): void => {
     if (ts.isTypeNode(node)) {
       return;
     }
-    visitModuleLoad({ node, scopes: context.scopes, register });
+    visitModuleLoad({
+      node,
+      scopes: context.scopes,
+      register,
+      file: context.file,
+      capabilities: context.capabilities,
+    });
     visitGlobalReference({
       node,
       scopes: context.scopes,
@@ -630,8 +910,8 @@ export const validateOutboundTransportCensus = ({
     }
   }
   for (const [file, text] of sources) {
-    if (!isApiProductionModule(file)) {
-      problems.push(`${file}: source belongs to an API production module`);
+    if (!isOutboundProductionModule(file)) {
+      problems.push(`${file}: source belongs to a production transport module`);
       continue;
     }
     const references = outboundTransportReferences({ file, text });
@@ -642,6 +922,11 @@ export const validateOutboundTransportCensus = ({
           `${file}: permit creation belongs to a listed direct boundary`,
         );
       }
+    }
+    if (references.includes(INDIRECT_TRANSPORT)) {
+      problems.push(
+        `${file}: indirect acquisition belongs to the bounded local module owner`,
+      );
     }
     const transports = references.filter(
       (reference) => reference !== "permit:grant",
@@ -687,8 +972,32 @@ export const isApiProductionModule = (
       (segment) => EXCLUDED_DIRECTORIES.has(segment) || segment.startsWith("."),
     );
 
-/** Walk every API source module, including operator scripts and client bundles. */
-export const readApiProductionSources = (
+const ADDITIONAL_EXCLUDED_DIRECTORIES = new Set([
+  ...EXCLUDED_DIRECTORIES,
+  "test",
+  "__tests__",
+  "fixtures",
+  "scripts",
+]);
+
+export const isOutboundProductionModule = (
+  file: string,
+): file is OutboundTransportCensusEntry["path"] =>
+  isApiProductionModule(file) ||
+  (/^(?:apps\/(?:collab|web)|packages\/[^/]+)\/src\//u.test(file) &&
+    /\.[cm]?[jt]sx?$/u.test(file) &&
+    !/\.(?:test|type-test|spec|d)\.[cm]?[jt]sx?$/u.test(file) &&
+    !file
+      .split("/")
+      .slice(3)
+      .some(
+        (segment) =>
+          ADDITIONAL_EXCLUDED_DIRECTORIES.has(segment) ||
+          segment.startsWith("."),
+      ));
+
+/** Preserve the API inventory and include the other production source roots. */
+export const readOutboundProductionSources = (
   repoRoot: string,
 ): Map<string, string> => {
   const sources = new Map<string, string>();
@@ -699,21 +1008,67 @@ export const readApiProductionSources = (
       const file = `${relative}/${entry.name}`;
       if (entry.isDirectory()) {
         if (
-          !EXCLUDED_DIRECTORIES.has(entry.name) &&
+          !(
+            file.startsWith("apps/api/")
+              ? EXCLUDED_DIRECTORIES
+              : ADDITIONAL_EXCLUDED_DIRECTORIES
+          ).has(entry.name) &&
           !entry.name.startsWith(".")
         ) {
           walk(file);
         }
         continue;
       }
-      if (!isApiProductionModule(file)) {
-        continue;
+      if (isOutboundProductionModule(file)) {
+        sources.set(file, readFileSync(path.join(repoRoot, file), "utf-8"));
       }
-      sources.set(file, readFileSync(path.join(repoRoot, file), "utf-8"));
     }
   };
-  walk("apps/api");
+  const roots = ["apps/api", "apps/collab/src", "apps/web/src"];
+  const packagesRoot = path.join(repoRoot, "packages");
+  if (existsSync(packagesRoot)) {
+    for (const entry of readdirSync(packagesRoot, { withFileTypes: true })) {
+      if (entry.isDirectory() && !entry.name.startsWith(".")) {
+        roots.push(`packages/${entry.name}/src`);
+      }
+    }
+  }
+  for (const root of roots) {
+    if (existsSync(path.join(repoRoot, root))) {
+      walk(root);
+    }
+  }
   return sources;
+};
+
+/** The API's own sources: the scope the third-party permit guards read. */
+export const readApiProductionSources = (
+  repoRoot: string,
+): Map<string, string> =>
+  new Map(
+    [...readOutboundProductionSources(repoRoot)].filter(([file]) =>
+      file.startsWith("apps/api/"),
+    ),
+  );
+
+/** Local transport module identities must resolve to an inventoried source. */
+export const validateOutboundTransportModulePaths = (
+  sources: ReadonlyMap<string, string>,
+  modules: Iterable<string> = NETWORK_MODULES,
+): string[] => {
+  const sourceModules = new Set(
+    [...sources.keys()].map((file) => canonicalModuleId(file, file)),
+  );
+  const problems: string[] = [];
+  for (const module of modules) {
+    if (
+      /^(?:apps|packages)\//u.test(module) &&
+      !sourceModules.has(canonicalModuleId(module, module))
+    ) {
+      problems.push(`${module}: transport owner path does not exist in scope`);
+    }
+  }
+  return problems;
 };
 
 if (import.meta.main) {
@@ -722,11 +1077,15 @@ if (import.meta.main) {
     process.exit(1);
   }
   const repoRoot = path.resolve(import.meta.dir, "..");
-  const problems = validateOutboundTransportCensus({
-    sources: readApiProductionSources(repoRoot),
-    census: OUTBOUND_TRANSPORT_CENSUS,
-    grantOwners: OUTBOUND_PERMIT_GRANT_OWNERS,
-  });
+  const sources = readOutboundProductionSources(repoRoot);
+  const problems = validateOutboundTransportModulePaths(sources);
+  problems.push(
+    ...validateOutboundTransportCensus({
+      sources,
+      census: OUTBOUND_TRANSPORT_CENSUS,
+      grantOwners: OUTBOUND_PERMIT_GRANT_OWNERS,
+    }),
+  );
   for (const problem of problems) {
     console.error(problem);
   }

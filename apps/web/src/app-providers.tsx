@@ -12,6 +12,7 @@ import { DialogProvider } from "@stll/ui/dialog";
 import { ToastProvider } from "@stll/ui/toast";
 import { TooltipProvider } from "@stll/ui/tooltip";
 
+import { WebReaderPresentationProvider } from "@/components/legal-reader/web-reader-presentation";
 import { DefaultPendingComponent } from "@/components/route-components";
 import { ThemeProvider } from "@/components/theme-provider";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
@@ -182,7 +183,11 @@ export const AppProviders = ({
         >
           <ThemeProvider>
             <TooltipProvider>
-              <ToastProvider>{children}</ToastProvider>
+              <ToastProvider>
+                <WebReaderPresentationProvider>
+                  {children}
+                </WebReaderPresentationProvider>
+              </ToastProvider>
             </TooltipProvider>
           </ThemeProvider>
         </HotkeysProvider>

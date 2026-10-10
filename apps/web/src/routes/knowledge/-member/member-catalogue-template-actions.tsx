@@ -25,6 +25,7 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 import type { TemplateIntent } from "@/lib/knowledge/catalogue-intent";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { organizationListOptions } from "@/lib/organization/queries";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { UseTemplateDialog } from "@/routes/knowledge/-components/use-template-dialog";
 
 type MemberCatalogueTemplateActionsProps = {
@@ -62,7 +63,11 @@ export const MemberCatalogueTemplateActions = ({
 }: MemberCatalogueTemplateActionsProps) => {
   const t = useTranslations();
   const { id: userId } = useAuthenticatedUser();
-  const { data: organizations } = useQuery(organizationListOptions(userId));
+  const organizationsQuery = useQuery(organizationListOptions(userId));
+  const organizationsView = useQueryView(organizationsQuery);
+  useQueryViewError(organizationsView);
+  const organizations =
+    organizationsView.type === "items" ? organizationsView.items : undefined;
   const organizationName =
     organizations?.find(({ id }) => id === activeOrganizationId)?.name ?? "";
   const templateActions =

@@ -198,3 +198,22 @@ test("returns configuration errors for invalid registry and seed-list shapes", (
     }
   }
 });
+
+test("rejects property seed keys outside canonical order", () => {
+  const entry = {
+    seed: 123,
+    note: "Regression coverage",
+    date: "2026-09-30",
+  };
+  const result = parsePinnedSeeds({
+    "z.test.ts::z": [entry],
+    "a.test.ts::a": [entry],
+  });
+
+  expect(result.isErr()).toBe(true);
+  if (result.isErr()) {
+    expect(result.error.message).toBe(
+      "Property seed keys must be sorted and duplicate-free",
+    );
+  }
+});

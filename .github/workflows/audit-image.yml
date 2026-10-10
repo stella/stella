@@ -1,0 +1,45 @@
+name: Audit image
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/audit-image.yml
+      - .dockerignore
+      - .gitmodules
+      - docker/audit/**
+      - bun.lock
+      - "**/bun.lock"
+      - package.json
+      - "**/package.json"
+      - Cargo.lock
+      - "**/Cargo.lock"
+      - Cargo.toml
+      - "**/Cargo.toml"
+      - rust-toolchain*
+      - "**/rust-toolchain*"
+  # The image builds the whole repository, so every merge to main builds it;
+  # pull requests build it only when its dependency or toolchain inputs change.
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build audit image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Pull base images
+        run: bash scripts/pull-base-images.sh docker/audit/Dockerfile
+      - name: Build audit image
+        run: docker build --progress=plain --file docker/audit/Dockerfile --tag audit-image:test .

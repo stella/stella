@@ -15,6 +15,7 @@ import {
   TEXT_ABSENCE_REASON,
   TEXT_FIELD_TYPE,
 } from "@stll/api-contract/case-law-text-field";
+import { editorialSupplementBlocks } from "@stll/decision-reader/decision-text.logic";
 import type { DecisionAnalysis } from "@stll/legal-ast/analysis";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type {
@@ -23,9 +24,9 @@ import type {
   ParagraphRole,
 } from "@stll/legal-ast/document-ast";
 
+import { WebDecisionReader as DecisionText } from "@/components/legal-reader/web-decision-reader";
+import { WebReaderPresentationProvider } from "@/components/legal-reader/web-reader-presentation";
 import { AiHeadnotes } from "@/features/case-law/components/case-viewer/analysis/ai-headnotes";
-import { DecisionText } from "@/features/case-law/components/case-viewer/decision-text";
-import { editorialSupplementBlocks } from "@/features/case-law/components/case-viewer/decision-text.logic";
 import { FormattingProvider } from "@/i18n/formatting-context";
 import messages from "@/i18n/langs/en.json";
 import { toSafeId } from "@/lib/safe-id";
@@ -89,19 +90,23 @@ const textDecision = (overrides: Partial<TextDecision> = {}): TextDecision => ({
 const renderDecision = (abstract: string): string =>
   renderToStaticMarkup(
     <IntlProvider locale="en" messages={messages} timeZone="UTC">
-      <DecisionText
-        surface="development"
-        decision={textDecision({
-          sourceAttributionUrl: "https://rozhodnuti.nsoud.cz/detail/1",
-          textFields: {
-            abstract: { text: abstract, type: TEXT_FIELD_TYPE.PRESENT },
-            headnote: absent,
-            legalSentence: absent,
-            summary: absent,
-          },
-        })}
-        decisionId="dec-1"
-      />
+      <FormattingProvider locale="en" timeZone="UTC">
+        <WebReaderPresentationProvider>
+          <DecisionText
+            surface="development"
+            decision={textDecision({
+              sourceAttributionUrl: "https://rozhodnuti.nsoud.cz/detail/1",
+              textFields: {
+                abstract: { text: abstract, type: TEXT_FIELD_TYPE.PRESENT },
+                headnote: absent,
+                legalSentence: absent,
+                summary: absent,
+              },
+            })}
+            decisionId="dec-1"
+          />
+        </WebReaderPresentationProvider>
+      </FormattingProvider>
     </IntlProvider>,
   );
 
@@ -130,12 +135,14 @@ const renderStorageFulltext = async (
               caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
               country: "CZE",
               court: "Test court",
+              courtAbbreviation: null,
               ecli: null,
               language: "cs",
               languageAlternates: [],
               slug: "2-as-2-2025",
               decisionDate: "2025-01-01",
               decisionType: "Judgment",
+              sourceUrl: null,
             },
           },
         ]}
@@ -184,9 +191,13 @@ const renderStorageFulltext = async (
   return renderToStaticMarkup(
     <IntlProvider locale="en" messages={messages} timeZone="UTC">
       <FormattingProvider locale="en" timeZone="UTC">
-        <QueryClientProvider client={new QueryClient()}>
-          <RouterProvider router={router} />
-        </QueryClientProvider>
+        <WebReaderPresentationProvider>
+          <FormattingProvider locale="en" timeZone="UTC">
+            <QueryClientProvider client={new QueryClient()}>
+              <RouterProvider router={router} />
+            </QueryClientProvider>
+          </FormattingProvider>
+        </WebReaderPresentationProvider>
       </FormattingProvider>
     </IntlProvider>,
   );
@@ -236,26 +247,30 @@ describe("a decision whose text did not resolve", () => {
   const renderBodyless = (): string =>
     renderToStaticMarkup(
       <IntlProvider locale="en" messages={messages} timeZone="UTC">
-        <QueryClientProvider client={new QueryClient()}>
-          <DecisionText
-            surface="development"
-            decision={textDecision({
-              documentAst: null,
-              documentPending: true,
-              documentReadFailed: true,
-              textFields: {
-                abstract: {
-                  text: "Analytická právní věta o náhradě škody.",
-                  type: TEXT_FIELD_TYPE.PRESENT,
-                },
-                headnote: absent,
-                legalSentence: absent,
-                summary: absent,
-              },
-            })}
-            decisionId="dec-1"
-          />
-        </QueryClientProvider>
+        <FormattingProvider locale="en" timeZone="UTC">
+          <WebReaderPresentationProvider>
+            <QueryClientProvider client={new QueryClient()}>
+              <DecisionText
+                surface="development"
+                decision={textDecision({
+                  documentAst: null,
+                  documentPending: true,
+                  documentReadFailed: true,
+                  textFields: {
+                    abstract: {
+                      text: "Analytická právní věta o náhradě škody.",
+                      type: TEXT_FIELD_TYPE.PRESENT,
+                    },
+                    headnote: absent,
+                    legalSentence: absent,
+                    summary: absent,
+                  },
+                })}
+                decisionId="dec-1"
+              />
+            </QueryClientProvider>
+          </WebReaderPresentationProvider>
+        </FormattingProvider>
       </IntlProvider>,
     );
 
@@ -346,12 +361,16 @@ const renderLandedDecision = ({
 }): string =>
   renderToStaticMarkup(
     <IntlProvider locale="en" messages={messages} timeZone="UTC">
-      <DecisionText
-        surface="development"
-        decision={textDecision({ documentAst: landingAst, language: "en" })}
-        decisionId="dec-1"
-        landingAnchorId={landingAnchorId}
-      />
+      <FormattingProvider locale="en" timeZone="UTC">
+        <WebReaderPresentationProvider>
+          <DecisionText
+            surface="development"
+            decision={textDecision({ documentAst: landingAst, language: "en" })}
+            decisionId="dec-1"
+            landingAnchorId={landingAnchorId}
+          />
+        </WebReaderPresentationProvider>
+      </FormattingProvider>
     </IntlProvider>,
   );
 
@@ -399,27 +418,34 @@ const renderTopMatter = ({
 } = {}): string =>
   renderToStaticMarkup(
     <IntlProvider locale="en" messages={messages} timeZone="UTC">
-      <DecisionText
-        surface="development"
-        aiHeadnotes={
-          analysis === undefined ? null : (
-            <AiHeadnotes analysis={analysis} onAnchorClick={() => undefined} />
-          )
-        }
-        decision={textDecision({
-          courtAbbreviation,
-          courtTier,
-          documentAst,
-          textFields: {
-            abstract: presentOr(fields.abstract),
-            headnote: absent,
-            legalSentence: presentOr(fields.legalSentence),
-            summary: presentOr(fields.summary),
-          },
-        })}
-        decisionId="dec-1"
-        notesByAnchorId={notesByAnchorId}
-      />
+      <FormattingProvider locale="en" timeZone="UTC">
+        <WebReaderPresentationProvider>
+          <DecisionText
+            surface="development"
+            aiHeadnotes={
+              analysis === undefined ? null : (
+                <AiHeadnotes
+                  analysis={analysis}
+                  onAnchorClick={() => undefined}
+                />
+              )
+            }
+            decision={textDecision({
+              courtAbbreviation,
+              courtTier,
+              documentAst,
+              textFields: {
+                abstract: presentOr(fields.abstract),
+                headnote: absent,
+                legalSentence: presentOr(fields.legalSentence),
+                summary: presentOr(fields.summary),
+              },
+            })}
+            decisionId="dec-1"
+            notesByAnchorId={notesByAnchorId}
+          />
+        </WebReaderPresentationProvider>
+      </FormattingProvider>
     </IntlProvider>,
   );
 
@@ -701,14 +727,18 @@ const lineParagraph = (line: string, index: number): ParagraphBlock => ({
 const renderWrappedDecision = (lines: readonly string[]): string =>
   renderToStaticMarkup(
     <IntlProvider locale="en" messages={messages} timeZone="UTC">
-      <DecisionText
-        decision={textDecision({
-          documentAst: { ...ast, blocks: lines.map(lineParagraph) },
-        })}
-        surface="development"
-        decisionId="dec-1"
-        landingAnchorId="p-3"
-      />
+      <FormattingProvider locale="en" timeZone="UTC">
+        <WebReaderPresentationProvider>
+          <DecisionText
+            decision={textDecision({
+              documentAst: { ...ast, blocks: lines.map(lineParagraph) },
+            })}
+            surface="development"
+            decisionId="dec-1"
+            landingAnchorId="p-3"
+          />
+        </WebReaderPresentationProvider>
+      </FormattingProvider>
     </IntlProvider>,
   );
 
@@ -761,19 +791,23 @@ describe("a letter-spaced heading", () => {
   const render = (): string =>
     renderToStaticMarkup(
       <IntlProvider locale="en" messages={messages} timeZone="UTC">
-        <DecisionText
-          decision={textDecision({
-            documentAst: {
-              ...ast,
-              blocks: [
-                headingBlock(SPACED, 1),
-                lineParagraph("Žalobce se domáhal určení.", 2),
-              ],
-            },
-          })}
-          surface="development"
-          decisionId="dec-1"
-        />
+        <FormattingProvider locale="en" timeZone="UTC">
+          <WebReaderPresentationProvider>
+            <DecisionText
+              decision={textDecision({
+                documentAst: {
+                  ...ast,
+                  blocks: [
+                    headingBlock(SPACED, 1),
+                    lineParagraph("Žalobce se domáhal určení.", 2),
+                  ],
+                },
+              })}
+              surface="development"
+              decisionId="dec-1"
+            />
+          </WebReaderPresentationProvider>
+        </FormattingProvider>
       </IntlProvider>,
     );
 
@@ -801,13 +835,17 @@ describe("quotation marks the publisher printed escaped", () => {
   test("are drawn without the backslash, which stays in the anchored text", () => {
     const markup = renderToStaticMarkup(
       <IntlProvider locale="en" messages={messages} timeZone="UTC">
-        <DecisionText
-          decision={textDecision({
-            documentAst: { ...ast, blocks: [lineParagraph(ESCAPED, 1)] },
-          })}
-          surface="development"
-          decisionId="dec-1"
-        />
+        <FormattingProvider locale="en" timeZone="UTC">
+          <WebReaderPresentationProvider>
+            <DecisionText
+              decision={textDecision({
+                documentAst: { ...ast, blocks: [lineParagraph(ESCAPED, 1)] },
+              })}
+              surface="development"
+              decisionId="dec-1"
+            />
+          </WebReaderPresentationProvider>
+        </FormattingProvider>
       </IntlProvider>,
     );
     const paragraph = markup.slice(markup.indexOf('data-anchor="p-1"'));
@@ -863,11 +901,15 @@ describe("a caption stored run on", () => {
   const render = (country: string): string =>
     renderToStaticMarkup(
       <IntlProvider locale="en" messages={messages} timeZone="UTC">
-        <DecisionText
-          decision={textDecision({ country, documentAst: runOnCaptionAst })}
-          surface="development"
-          decisionId="dec-1"
-        />
+        <FormattingProvider locale="en" timeZone="UTC">
+          <WebReaderPresentationProvider>
+            <DecisionText
+              decision={textDecision({ country, documentAst: runOnCaptionAst })}
+              surface="development"
+              decisionId="dec-1"
+            />
+          </WebReaderPresentationProvider>
+        </FormattingProvider>
       </IntlProvider>,
     );
 

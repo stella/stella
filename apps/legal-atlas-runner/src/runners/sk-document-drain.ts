@@ -1,3 +1,4 @@
+import { panic, Result } from "better-result";
 /**
  * The continuous walk over the Slovak decisions waiting on their PDF.
  *
@@ -18,8 +19,7 @@
  * and the priority handling can be exercised on their own.
  */
 
-import { panic, Result } from "better-result";
-
+import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import {
   DOCUMENT_FETCH_EVENT,
   documentFetchErrorOutcome,
@@ -254,7 +254,10 @@ export const runSkDocumentDrain = async ({
       switch (queued.type) {
         case "exhausted":
           delayMs = idleMs;
-          idleMs = Math.min(idleMs * 2, timing.idleSleepMaxMs);
+          idleMs = backoffDelay(1, {
+            baseMs: idleMs,
+            maxMs: timing.idleSleepMaxMs,
+          });
           break;
         case "budget-spent":
           break;
@@ -284,10 +287,10 @@ export const runSkDocumentDrain = async ({
       summary.failed += 1;
       summary.lastError = error;
       summary.lastErrorDiagnostic = skDocumentErrorDiagnostics(error);
-      delayMs = Math.min(
-        timing.fetchDelayMs * 2 ** consecutiveFailures,
-        timing.failureBackoffMaxMs,
-      );
+      delayMs = backoffDelay(consecutiveFailures, {
+        baseMs: timing.fetchDelayMs,
+        maxMs: timing.failureBackoffMaxMs,
+      });
     }
 
     if (now() >= summaryDueAt) {

@@ -3576,7 +3576,7 @@
         "safety_identifier": {
           "anyOf": [
             {
-              "maxLength": 64,
+              "maxLength": 128,
               "type": "string"
             },
             {
@@ -4730,6 +4730,83 @@
       "enum": ["server", "client"],
       "type": "string"
     },
+    "ToolSearchOutputFunctionToolParam": {
+      "properties": {
+        "allowed_callers": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/CallableToolAllowedCaller"
+              },
+              "minItems": 1,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "async": {
+          "type": "boolean"
+        },
+        "defer_loading": {
+          "type": "boolean"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "name": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^(?![\\s\\S]*[\\r\\n])[a-zA-Z0-9_.-]+$",
+          "type": "string"
+        },
+        "output_schema": {
+          "anyOf": [
+            {
+              "additionalProperties": {},
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "parameters": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EmptyModelParam"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "strict": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "enum": ["function"],
+          "type": "string"
+        }
+      },
+      "required": ["name", "type"],
+      "type": "object"
+    },
     "ToolSearchOutputItemParam": {
       "properties": {
         "call_id": {
@@ -4769,7 +4846,7 @@
         },
         "tools": {
           "items": {
-            "$ref": "#/$defs/Tool"
+            "$ref": "#/$defs/ToolSearchOutputTool"
           },
           "type": "array"
         },
@@ -4780,6 +4857,89 @@
       },
       "required": ["type", "tools"],
       "type": "object"
+    },
+    "ToolSearchOutputNamespaceToolParam": {
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "name": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "tools": {
+          "items": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ToolSearchOutputFunctionToolParam"
+              },
+              {
+                "$ref": "#/$defs/CustomToolParam"
+              }
+            ]
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "type": {
+          "enum": ["namespace"],
+          "type": "string"
+        }
+      },
+      "required": ["type", "name", "description", "tools"],
+      "type": "object"
+    },
+    "ToolSearchOutputTool": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/FunctionTool"
+        },
+        {
+          "$ref": "#/$defs/FileSearchTool"
+        },
+        {
+          "$ref": "#/$defs/ComputerTool"
+        },
+        {
+          "$ref": "#/$defs/ComputerUsePreviewTool"
+        },
+        {
+          "$ref": "#/$defs/WebSearchTool"
+        },
+        {
+          "$ref": "#/$defs/MCPTool"
+        },
+        {
+          "$ref": "#/$defs/CodeInterpreterTool"
+        },
+        {
+          "$ref": "#/$defs/ProgrammaticToolCallingParam"
+        },
+        {
+          "$ref": "#/$defs/ImageGenTool"
+        },
+        {
+          "$ref": "#/$defs/LocalShellToolParam"
+        },
+        {
+          "$ref": "#/$defs/FunctionShellToolParam"
+        },
+        {
+          "$ref": "#/$defs/CustomToolParam"
+        },
+        {
+          "$ref": "#/$defs/ToolSearchOutputNamespaceToolParam"
+        },
+        {
+          "$ref": "#/$defs/ToolSearchToolParam"
+        },
+        {
+          "$ref": "#/$defs/WebSearchPreviewTool"
+        },
+        {
+          "$ref": "#/$defs/ApplyPatchToolParam"
+        }
+      ]
     },
     "ToolSearchToolParam": {
       "properties": {

@@ -28,6 +28,7 @@ jobs:
         with:
           persist-credentials: false
           sparse-checkout: |
+            scripts/gh-retry.sh
             scripts/release-pull-requests.sh
             scripts/release-pending.sh
           sparse-checkout-cone-mode: false

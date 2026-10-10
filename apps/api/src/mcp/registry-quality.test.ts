@@ -1,10 +1,13 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
 import {
   MCP_TOOL_NAME_MAX_LENGTH,
   MCP_TOOL_NAME_PATTERN,
 } from "@stll/api-contract/mcp-tool-name";
+import type { PermissionInput } from "@stll/permissions";
 import { propertyConfig } from "@stll/property-testing";
 
 import { SKILL_SLUG_MAX_LENGTH } from "@/api/handlers/skills/slug";
@@ -39,6 +42,7 @@ import {
   defineMcpToolOutput,
   deriveUncompactedMcpOutputSchema,
 } from "@/api/mcp/valibot-tool-definition";
+import { selectableOperations } from "@/api/mcp/write-tool-authority";
 import {
   compileWireSchema,
   createWireSchemaValidator,
@@ -263,6 +267,26 @@ const anonymizedTools: readonly McpToolDefinition[] =
   ANONYMIZED_MCP_TOOL_DEFINITIONS;
 
 describe("MCP registry access coherence", () => {
+  test("catalog-delegated writes use only the write executor on every audience", () => {
+    for (const { definitions } of SURFACES) {
+      const delegated = definitions.filter(
+        (tool) =>
+          tool.access === "write" && tool.permissions.type === "delegated",
+      );
+      for (const tool of delegated) {
+        expect(tool.name).toBe(MCP_CAPABILITY_EXECUTORS.write);
+        expect(tool.readClass).toBeUndefined();
+      }
+      for (const tool of definitions) {
+        if (tool.name === MCP_CAPABILITY_EXECUTORS.read) {
+          expect(tool.access).toBe("read");
+          expect(tool.annotations.readOnlyHint).toBe(true);
+          expect(tool.annotations.destructiveHint).toBe(false);
+        }
+      }
+    }
+  });
+
   test('every access: "write" tool carries readOnlyHint false', () => {
     for (const tool of defaultTools) {
       if (tool.access === "write") {
@@ -792,33 +816,88 @@ const getInputProperties = (
   isRecord(tool.inputSchema.properties) ? tool.inputSchema.properties : {};
 
 describe("destructive write-tool behavior", () => {
-  const writeTools: readonly McpToolDefinition[] =
-    DEFAULT_MCP_TOOL_DEFINITIONS.filter((tool) => tool.access === "write");
+  const writeTools = DEFAULT_MCP_TOOL_DEFINITIONS.filter(
+    (tool) => tool.access === "write",
+  );
 
-  test("every destructiveHint write tool declares its executable behavior", () => {
-    const offenders = writeTools
-      .filter((tool) => tool.annotations.destructiveHint)
-      .filter((tool) => tool.destructiveBehavior === undefined)
-      .map((tool) => tool.name);
-    expect(offenders).toEqual([]);
-  });
+  type WriteHintMetadata = Pick<
+    Extract<McpToolDefinition, { access: "write" }>,
+    "name" | "permissions" | "annotations" | "nonDestructiveReason"
+  >;
 
-  test("non-destructive tools declare no behavior except an outbound send", () => {
-    const offenders = writeTools
-      .filter((tool) => !tool.annotations.destructiveHint)
+  const needsUpdateDeleteHint = (tool: WriteHintMetadata) => {
+    const authority = tool.permissions;
+    let grants: readonly PermissionInput[];
+    switch (authority.type) {
+      case "all":
+        grants = [authority.permissions];
+        break;
+      case "input":
+        grants = selectableOperations(authority.select).map(
+          ({ permissions }) => permissions,
+        );
+        break;
+      case "any":
+        grants = authority.alternatives;
+        break;
+      case "delegated":
+        return true;
+      default:
+        authority satisfies never;
+        return panic(`Unhandled tool authority: ${String(authority)}`);
+    }
+    return grants.some((grant) =>
+      Object.values(grant).some((actions) =>
+        actions.some(
+          (action) =>
+            action === "delete" ||
+            (action === "update" && tool.nonDestructiveReason === undefined),
+        ),
+      ),
+    );
+  };
+
+  const updateDeleteHintOffenders = (tools: readonly WriteHintMetadata[]) =>
+    tools
       .filter(
         (tool) =>
-          tool.destructiveBehavior !== undefined &&
-          tool.destructiveBehavior.type !== "outbound",
+          needsUpdateDeleteHint(tool) && !tool.annotations.destructiveHint,
       )
       .map((tool) => tool.name);
-    expect(offenders).toEqual([]);
+
+  test("every update or delete grant advertises a destructive hint", () => {
+    expect(updateDeleteHintOffenders(writeTools)).toEqual([]);
+  });
+
+  test("the grant-derived guard detects incorrect metadata regardless of tool wording", () => {
+    const guardedTools = writeTools.filter(needsUpdateDeleteHint);
+    const mutations = guardedTools.map((tool, index) => ({
+      name: `unrelated_${index}`,
+      permissions: tool.permissions,
+      annotations: { ...tool.annotations, destructiveHint: false },
+    }));
+    expect(guardedTools.some((tool) => tool.name === "compare_documents")).toBe(
+      true,
+    );
+    expect(updateDeleteHintOffenders(mutations)).toEqual(
+      mutations.map((tool) => tool.name),
+    );
+  });
+
+  test("every grant exception states the handler's non-modifying behavior", () => {
+    for (const tool of writeTools) {
+      if (!("nonDestructiveReason" in tool)) {
+        continue;
+      }
+      expect(tool.nonDestructiveReason.trim().length).toBeGreaterThan(0);
+      expect(tool.annotations.destructiveHint).toBe(false);
+    }
   });
 
   test("an outbound send is never advertised as a destructive operation", () => {
     // The two facts are independent and must not be conflated: `outbound`
-    // gates the confirmation prompt, `destructiveHint` tells a client to
-    // render the call as a deletion. A send destroys nothing.
+    // gates the confirmation prompt, `destructiveHint` tells a client the call
+    // can change existing stored data. A send destroys nothing.
     const offenders = defaultTools
       .filter(
         (tool) =>

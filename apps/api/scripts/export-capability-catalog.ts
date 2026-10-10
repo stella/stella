@@ -1025,7 +1025,7 @@ const collectClassGuardErrors = ({
   });
   for (const { routeFile, id } of routeHooks.violations) {
     errors.push(
-      `route-hook: capability "${id}" is mounted under a route-level hook (onBeforeHandle, beforeHandle, onRequest or deploymentFeatureGate) in ${routeFile} that invoke_capability bypasses (a hook that only checks a FEATURE_ flag passes when the catalog entry carries that feature tag). Move the gate into the handler config (like case-law.ingestion.get), or add "${id}" to ROUTE_HOOK_WAIVERS with a justification`,
+      `route-hook: capability "${id}" is mounted under a route-level hook (onBeforeHandle, beforeHandle, onRequest or deploymentFeatureGate) in ${routeFile} that capability executors bypass (a hook that only checks a FEATURE_ flag passes when the catalog entry carries that feature tag). Move the gate into the handler config (like case-law.ingestion.get), or add "${id}" to ROUTE_HOOK_WAIVERS with a justification`,
     );
   }
   for (const { routeFile, route } of routeHooks.childRouteMounts) {
@@ -1288,7 +1288,7 @@ const buildCatalog = async (): Promise<BuildResult> => {
       exportName: endpoint.exportName,
     });
     if (!isWellFormedCapabilityId(id)) {
-      // Capability ids are public (CLI command paths, `invoke_capability`
+      // Capability ids are public (CLI command paths, capability executors
       // arguments), so an id segment must never be an internal identifier. The
       // only way to produce a non-kebab segment is a NAMED export, whose TS
       // identifier gets suffixed onto the path-derived id.
@@ -1299,7 +1299,7 @@ const buildCatalog = async (): Promise<BuildResult> => {
     }
     if (!isAllowedActionVerb(id)) {
       // The final id segment is the PUBLIC action verb (`stella contacts list`,
-      // `invoke_capability contacts.list`). Keeping it inside a small canonical
+      // `read_capability contacts.list`). Keeping it inside a small canonical
       // set plus a reviewed domain list is what stops the surface drifting back
       // into synonym soup (`read` vs `list` vs `get` for the same shape).
       errors.push(
@@ -1772,8 +1772,12 @@ const computeCliCommandPaths = async (
   return { cliCommandPathById, errors };
 };
 
-const main = async (): Promise<number> => {
-  const checkMode = process.argv.includes("--check");
+// Repeated calls rescan handler files; already imported modules remain warm.
+// Callers must start a new process when changing an existing handler's source.
+export const exportCapabilityCatalog = async (
+  mode: "write" | "check",
+): Promise<number> => {
+  const checkMode = mode === "check";
   if (
     !hasPreparedGeneratedSources(new URL("../../../", import.meta.url).pathname)
   ) {
@@ -1852,7 +1856,6 @@ const main = async (): Promise<number> => {
     internalWaiverCounts,
   });
 
-  const mode = checkMode ? "check" : "write";
   const catalogDrift = await syncCapabilityShards({
     directory: CATALOG_PATH,
     shards: catalogShards,
@@ -1899,4 +1902,10 @@ const main = async (): Promise<number> => {
 // The handler graph transitively opens a Redis subscriber (lib/sse.ts) at import
 // time and never unrefs it, so this one-off script's event loop would hang. The
 // work is done here; exit explicitly like export-mcp-tool-registry.ts.
-process.exit(await main());
+if (import.meta.main) {
+  process.exit(
+    await exportCapabilityCatalog(
+      process.argv.includes("--check") ? "check" : "write",
+    ),
+  );
+}

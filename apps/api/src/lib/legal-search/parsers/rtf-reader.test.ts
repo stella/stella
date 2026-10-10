@@ -61,6 +61,7 @@ const runContentText = (item: RunContent): string => {
     case "symbol":
     case "footnoteRef":
     case "endnoteRef":
+    case "noteMarker":
     case "fieldChar":
     case "instrText":
     case "softHyphen":

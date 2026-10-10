@@ -700,7 +700,7 @@ const BUN_VALUE_FLAGS = new Set([
   "-p",
   "-r",
 ]);
-const SOURCE_FILE = /\.(?:[cm]?[jt]s|[jt]sx)$/u;
+export const SOURCE_FILE = /\.(?:[cm]?[jt]s|[jt]sx)$/u;
 const TEST_FILE = /[._](?:test|spec)\.(?:[cm]?[jt]s|[jt]sx)$/u;
 
 /** A directory only known at run time; never covered by a repository path. */
@@ -793,26 +793,73 @@ type ResolvedPath =
   | { readonly type: "file"; readonly path: string }
   | { readonly type: "invalid"; readonly reason: string };
 
+type CheckoutSource = {
+  readonly prefix: string;
+  readonly sparse: readonly string[] | undefined;
+  readonly condition: readonly string[];
+};
+
+const includedInSparseCheckout = (
+  file: string,
+  patterns: readonly string[],
+) => {
+  let included = false;
+  for (const rawPattern of patterns) {
+    const excluded = rawPattern.startsWith("!");
+    const pattern = rawPattern
+      .replace(/^!/u, "")
+      .replace(/^\//u, "")
+      .replace(/\/$/u, "");
+    if (
+      file === pattern ||
+      file.startsWith(`${pattern}/`) ||
+      new Bun.Glob(pattern).match(file)
+    ) {
+      included = !excluded;
+    }
+  }
+  return included;
+};
+
 type ResolveRepoPathOptions = {
   readonly cwd: string;
   readonly root: string;
   readonly target: string;
+  readonly checkouts: readonly CheckoutSource[];
 };
 
 const resolveRepoPath = ({
   cwd,
   root,
   target,
+  checkouts,
 }: ResolveRepoPathOptions): ResolvedPath => {
   if (isComputed(target) || isComputed(cwd)) {
     return { reason: `${target} is computed at run time`, type: "invalid" };
   }
-  const joined = path.posix.normalize(path.posix.join(cwd, target));
+  const runtimePath = path.posix.normalize(path.posix.join(cwd, target));
+  const checkout = checkouts.findLast(({ prefix }) =>
+    runtimePath.startsWith(`${prefix}/`),
+  );
+  const joined =
+    checkout === undefined
+      ? runtimePath
+      : runtimePath.slice(checkout.prefix.length + 1);
   if (joined.startsWith("../") || path.posix.isAbsolute(joined)) {
     return { reason: `${target} is outside the repository`, type: "invalid" };
   }
   if (!existsSync(path.join(root, joined))) {
     return { reason: `${joined} does not exist`, type: "invalid" };
+  }
+  if (checkout?.sparse !== undefined) {
+    const unavailable = importProblems({
+      root,
+      entries: [joined],
+      sparseCheckout: checkout.sparse,
+    }).filter((problem) => problem.includes("outside sparse checkout"));
+    if (unavailable.length > 0) {
+      return { reason: unavailable.join("; "), type: "invalid" };
+    }
   }
   return { path: joined, type: "file" };
 };
@@ -832,6 +879,7 @@ type Expansion = {
 
 type ClassifyContext = {
   readonly root: string;
+  readonly checkouts: CheckoutSource[];
   /** Package scripts being expanded, to stop a script that calls itself. */
   readonly expanding: ReadonlySet<string>;
 };
@@ -862,6 +910,7 @@ const classifyBunTest = ({
       const preload = resolveRepoPath({
         cwd,
         root: context.root,
+        checkouts: context.checkouts,
         target: value ?? "",
       });
       if (preload.type === "invalid") {
@@ -872,7 +921,12 @@ const classifyBunTest = ({
     } else if (/^--?[a-z][\w-]*(?:=\S+)?$/u.test(arg)) {
       flagTakesValue = !arg.includes("=");
     } else if (TEST_FILE.test(arg)) {
-      const file = resolveRepoPath({ cwd, root: context.root, target: arg });
+      const file = resolveRepoPath({
+        cwd,
+        root: context.root,
+        checkouts: context.checkouts,
+        target: arg,
+      });
       if (file.type === "invalid") {
         return unclassified(`test file ${file.reason}`);
       }
@@ -988,6 +1042,7 @@ const expandPackageScript = ({
   const nested: ClassifyContext = {
     expanding: new Set([...context.expanding, key]),
     root: context.root,
+    checkouts: context.checkouts,
   };
   // Bun runs a script's pre and post hooks around it.
   return [`pre${name}`, name, `post${name}`].flatMap((hook) => {
@@ -1031,7 +1086,7 @@ type BunFlags =
   | { readonly type: "classified"; readonly classification: Classification };
 
 /** Reads the flags before Bun's subcommand, script or file. */
-const parseBunFlags = ({
+export const parseBunFlags = ({
   args,
   context,
   cwd,
@@ -1093,6 +1148,7 @@ const parseBunFlags = ({
         const preload = resolveRepoPath({
           cwd,
           root: context.root,
+          checkouts: context.checkouts,
           target: value,
         });
         if (preload.type === "invalid") {
@@ -1216,6 +1272,7 @@ const classifyBun = ({
     const file = resolveRepoPath({
       cwd: dir,
       root: context.root,
+      checkouts: context.checkouts,
       target: subcommand,
     });
     if (file.type !== "invalid" && file.path === "scripts/ci-install.ts") {
@@ -1520,7 +1577,7 @@ const walkParallelSteps = ({
     }) => {
       const branch = walkSteps({
         cancelled: branchCancelled,
-        context,
+        context: { ...context, checkouts: [...context.checkouts] },
         defaults,
         initial: installs,
         job,
@@ -1546,6 +1603,64 @@ type WalkWorkflowStepOptions = {
   readonly pending: Map<string, InstallRecord[]>;
 };
 
+const updateCheckoutSources = (
+  step: Record<string, unknown>,
+  context: ClassifyContext,
+) => {
+  const uses = step["uses"];
+  const condition = conditionOperands(step["if"]);
+  const checkoutOptions = step["with"];
+  if (typeof uses !== "string" || !/^actions\/checkout@\S+$/u.test(uses)) {
+    return;
+  }
+  const repository = isRecord(checkoutOptions)
+    ? checkoutOptions["repository"]
+    : undefined;
+  const prefix = isRecord(checkoutOptions)
+    ? checkoutOptions["path"]
+    : undefined;
+  // Every checkout replaces its target, including unpinned or default-path
+  // checkouts that cannot establish a trusted source mapping themselves.
+  const replacementPath =
+    typeof prefix === "string" ? path.posix.normalize(prefix) : ".";
+  for (let index = context.checkouts.length - 1; index >= 0; index -= 1) {
+    const checkout = context.checkouts[index];
+    if (
+      checkout &&
+      (isComputed(replacementPath) ||
+        replacementPath === "." ||
+        checkout.prefix === replacementPath ||
+        checkout.prefix.startsWith(`${replacementPath}/`) ||
+        replacementPath.startsWith(`${checkout.prefix}/`))
+    ) {
+      context.checkouts.splice(index, 1);
+    }
+  }
+  if (
+    /^actions\/checkout@[a-f0-9]{40}$/u.test(uses) &&
+    (repository === undefined || repository === `\${{ github.repository }}`) &&
+    typeof prefix === "string" &&
+    !isComputed(prefix) &&
+    !path.posix.isAbsolute(prefix) &&
+    !prefix.split("/").includes("..")
+  ) {
+    const sparse = isRecord(checkoutOptions)
+      ? checkoutOptions["sparse-checkout"]
+      : undefined;
+    context.checkouts.push({
+      prefix: path.posix.normalize(prefix),
+      sparse:
+        typeof sparse === "string"
+          ? sparse
+              .split("\n")
+              .map((line) => line.trim())
+              .filter(Boolean)
+          : undefined,
+      condition,
+    });
+  }
+};
+
 const walkWorkflowStep = ({
   context,
   defaults,
@@ -1561,6 +1676,7 @@ const walkWorkflowStep = ({
   const uses = step["uses"];
   const label = `${prefix}${stepTitle(step, position)}`;
   const condition = conditionOperands(step["if"]);
+  updateCheckoutSources(step, context);
   const stepInstalls: InstallRecord[] = [];
   const installStart = installs.length;
   const covered = new Set(
@@ -1586,7 +1702,13 @@ const walkWorkflowStep = ({
       return invocations;
     }
     const result = walkCommands({
-      context,
+      context: {
+        root: context.root,
+        expanding: context.expanding,
+        checkouts: context.checkouts.filter((checkout) =>
+          impliesCondition({ install: checkout.condition, step: condition }),
+        ),
+      },
       cwd: stepCwd(step["working-directory"] ?? defaults.workingDirectory),
       events: lexShell(run),
       installed: covered,
@@ -1743,7 +1865,6 @@ export const installFreeInvocations = ({
   root,
   workflow: workflowFile,
 }: InstallFreeInvocationsOptions): InstallFreeInvocation[] => {
-  const context: ClassifyContext = { expanding: new Set(), root };
   const workflow = readYaml({ file: workflowFile, root });
   const jobs = isRecord(workflow) ? workflow["jobs"] : undefined;
   if (!isRecord(jobs)) {
@@ -1758,6 +1879,11 @@ export const installFreeInvocations = ({
   }
   const workflowDefaults = runDefaults(workflow);
   return Object.entries(jobs).flatMap(([id, job]) => {
+    const context: ClassifyContext = {
+      expanding: new Set(),
+      root,
+      checkouts: [],
+    };
     if (!isRecord(job)) {
       return [];
     }
@@ -1818,7 +1944,7 @@ const resolveRelative = ({
   cwd: from,
   root,
   target: specifier,
-}: ResolveRepoPathOptions): string | undefined => {
+}: Omit<ResolveRepoPathOptions, "checkouts">): string | undefined => {
   const base = path.posix.normalize(path.posix.join(from, specifier));
   return [
     base,
@@ -1909,6 +2035,7 @@ type ImportClosureOptions = {
   readonly entries: readonly string[];
   /** Inline code, evaluated in `cwd`. */
   readonly code?: { readonly cwd: string; readonly source: string };
+  readonly sparseCheckout?: readonly string[];
 };
 
 /**
@@ -1920,6 +2047,7 @@ export const importProblems = ({
   code,
   entries,
   root,
+  sparseCheckout,
 }: ImportClosureOptions): string[] => {
   const problems: string[] = [];
   const seen = new Set<string>();
@@ -1964,6 +2092,13 @@ export const importProblems = ({
       continue;
     }
     seen.add(file);
+    if (
+      sparseCheckout !== undefined &&
+      !includedInSparseCheckout(file, sparseCheckout)
+    ) {
+      problems.push(`${file} is outside sparse checkout`);
+      continue;
+    }
     const extension = path.posix.extname(file);
     if (extension === ".json") {
       continue;
