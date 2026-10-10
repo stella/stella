@@ -409,6 +409,9 @@ const AND_OR = new Set(["&&", "||"]);
 const STATEMENT_ENDS = new Set([";", "\n", "#"]);
 const OPEN_PAREN = new Set(["("]);
 const CLOSE_PAREN = new Set([")"]);
+const SEMICOLON = new Set([";"]);
+const PIPES = new Set(["|", "|&"]);
+const ARM_ENDS = new Set([";", "&"]);
 const OPEN_BRACE = new Set(["{"]);
 const CLOSE_BRACE = new Set(["}"]);
 
@@ -466,7 +469,12 @@ type NegationContext = {
   readonly tokens: readonly Token[];
   readonly index: number;
   readonly inCondition: boolean;
-  readonly braces: readonly { functionBody: boolean }[];
+  readonly groups: readonly GroupFrame[];
+};
+
+type GroupFrame = {
+  readonly close: ")" | "}";
+  readonly functionBody: boolean;
 };
 
 const GROUP_OPENERS = new Set(["(", "{"]);
@@ -493,24 +501,36 @@ const pipelineEnd = (tokens: readonly Token[], index: number) => {
 const isConditionEnd = (token: Token | undefined) =>
   token?.type === "word" && !token.quoted && CONDITION_ENDS.has(token.value);
 
-// A negated pipeline is an assertion only when something consumes its status.
-const negationConsumed = ({
+type StatusConsumptionContext = Omit<NegationContext, "groups"> & {
+  readonly groups: readonly GroupFrame[];
+  readonly end: number;
+};
+
+// The first operator at or after `from`; redirections between a group and a
+// pipe are words, so they do not hide the pipe.
+const followingOperator = (tokens: readonly Token[], from: number) =>
+  tokens.slice(from).find((token) => token.type === "operator");
+
+const statusConsumed = ({
   file,
   tokens,
   index,
   inCondition,
-  braces,
-}: NegationContext) => {
-  const end = pipelineEnd(tokens, index);
+  groups,
+  end,
+}: StatusConsumptionContext): boolean => {
   let tail = end;
   while (isOperator(tokens[tail], STATEMENT_ENDS)) {
     tail += 1;
   }
+  const enclosingGroup = groups.at(-1);
   const finalInFunction =
-    braces.at(-1)?.functionBody === true &&
-    isOperator(tokens[tail], CLOSE_BRACE);
+    enclosingGroup?.functionBody === true &&
+    tokens[tail]?.type === "operator" &&
+    tokens[tail]?.value === enclosingGroup.close;
   const finalInScript =
-    !braces.some(({ functionBody }) => functionBody) &&
+    !groups.some(({ functionBody }) => functionBody) &&
+    groups.length === 0 &&
     index > 0 &&
     tail === tokens.length &&
     !WORKFLOW_FILE.test(file);
@@ -536,11 +556,46 @@ const negationConsumed = ({
     listTail += 1;
   }
   const controlsCondition = inCondition && isConditionEnd(tokens[listTail]);
-  return (
+  if (
     controlsCondition ||
     isOperator(tokens[end], OR) ||
     ((finalInFunction || finalInScript) && !inAndOrList)
-  );
+  ) {
+    return true;
+  }
+
+  if (
+    enclosingGroup === undefined ||
+    enclosingGroup.functionBody ||
+    tokens[tail]?.type !== "operator" ||
+    tokens[tail]?.value !== enclosingGroup.close ||
+    // Without pipefail a pipeline returns its last command's status, so a
+    // group that feeds a pipe hands nothing on.
+    isOperator(followingOperator(tokens, tail + 1), PIPES)
+  ) {
+    return false;
+  }
+
+  return statusConsumed({
+    file,
+    tokens,
+    index: tail,
+    inCondition,
+    groups: groups.slice(0, -1),
+    end: pipelineEnd(tokens, tail),
+  });
+};
+
+// A negated pipeline is an assertion only when something consumes its status.
+const negationConsumed = ({
+  file,
+  tokens,
+  index,
+  inCondition,
+  groups,
+}: NegationContext) => {
+  const end = pipelineEnd(tokens, index);
+  return statusConsumed({ file, tokens, index, inCondition, groups, end });
 };
 
 // Whether the token after this one is in command position.
@@ -548,23 +603,88 @@ const startsCommand = (token: Token, reserved: boolean): boolean =>
   (reserved && COMMAND_STARTERS.has(token.value)) ||
   (token.type === "operator" && COMMAND_SEPARATORS.has(token.value));
 
+type CasePhase = "word" | "pattern" | "body";
+
+type TrackCaseOptions = {
+  readonly cases: CasePhase[];
+  readonly token: Token;
+  readonly next: Token | undefined;
+  readonly reserved: boolean;
+};
+
+// Advances the innermost `case` frame; true when the token is pattern syntax.
+const trackCase = ({ cases, token, next, reserved }: TrackCaseOptions) => {
+  const phase = cases.at(-1);
+  // In the pattern phase `case` is a pattern word; only `esac` ends the frame.
+  if (reserved && token.value === "case" && phase !== "pattern") {
+    cases.push("word");
+    return false;
+  }
+  if (reserved && token.value === "esac") {
+    cases.pop();
+    return false;
+  }
+  if (phase === "word" && token.type === "word" && token.value === "in") {
+    cases[cases.length - 1] = "pattern";
+    return false;
+  }
+  if (
+    phase === "body" &&
+    isOperator(token, SEMICOLON) &&
+    // `;;`, `;&` and `;;&` all end an arm.
+    isOperator(next, ARM_ENDS)
+  ) {
+    cases[cases.length - 1] = "pattern";
+    return false;
+  }
+  if (phase !== "pattern") {
+    return false;
+  }
+  if (isOperator(token, CLOSE_PAREN)) {
+    cases[cases.length - 1] = "body";
+    return true;
+  }
+  return isOperator(token, OPEN_PAREN);
+};
+
+// `time` (and its `-p`) prefix a pipeline, so the next word is still a command.
+const startsTimedPipeline = (
+  token: Token,
+  reserved: boolean,
+  timePrefix: boolean,
+): boolean =>
+  reserved && (token.value === "time" || (timePrefix && token.value === "-p"));
+
 const shellFindings = ({ file, lineOffset, source }: ShellSource) => {
   const findings: StandaloneNegationFinding[] = [];
   const lines = source.split("\n");
   const tokens = shellTokens(source);
   const conditions: ConditionState[] = [];
-  const braces: { functionBody: boolean }[] = [];
+  const groups: GroupFrame[] = [];
+  // One frame per open `case`: its word, then patterns, then an arm body.
+  const cases: CasePhase[] = [];
   let commandPosition = true;
+  let timePrefix = false;
 
   for (const [index, token] of tokens.entries()) {
-    const reserved = token.type === "word" && !token.quoted && commandPosition;
+    const reserved: boolean =
+      token.type === "word" && !token.quoted && commandPosition;
     if (reserved) {
       trackCondition(conditions, token.value);
     }
-    if (isOperator(token, OPEN_BRACE)) {
-      braces.push({ functionBody: opensFunctionBody(tokens, index) });
-    } else if (isOperator(token, CLOSE_BRACE)) {
-      braces.pop();
+    if (trackCase({ cases, token, next: tokens[index + 1], reserved })) {
+      // Pattern syntax: a `(` before or `)` after a case pattern is no group.
+    } else if (isOperator(token, OPEN_BRACE)) {
+      groups.push({
+        close: "}",
+        functionBody: opensFunctionBody(tokens, index),
+      });
+    } else if (isOperator(token, OPEN_PAREN)) {
+      groups.push({ close: ")", functionBody: false });
+    } else if (isOperator(token, CLOSE_BRACE) && groups.at(-1)?.close === "}") {
+      groups.pop();
+    } else if (isOperator(token, CLOSE_PAREN) && groups.at(-1)?.close === ")") {
+      groups.pop();
     }
     const negation =
       token.type === "word" &&
@@ -578,7 +698,7 @@ const shellFindings = ({ file, lineOffset, source }: ShellSource) => {
         tokens,
         index,
         inCondition: conditions.at(-1) === "condition",
-        braces,
+        groups,
       })
     ) {
       findings.push({
@@ -587,7 +707,9 @@ const shellFindings = ({ file, lineOffset, source }: ShellSource) => {
         source: (lines[token.line - 1] ?? "").trim(),
       });
     }
-    commandPosition = startsCommand(token, reserved);
+    const timed = startsTimedPipeline(token, reserved, timePrefix);
+    commandPosition = timed || startsCommand(token, reserved);
+    timePrefix = timed;
   }
   return findings;
 };
