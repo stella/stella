@@ -134,25 +134,18 @@ const modeCovers = (
   held: HeldLock["mode"],
   requested: HeldLock["mode"],
 ): boolean => {
-  switch (held) {
-    case "advisory shared":
-      return requested === "advisory shared";
-    case "advisory exclusive":
-      return (
-        requested === "advisory shared" || requested === "advisory exclusive"
-      );
-    case "key share":
-    case "share":
-    case "no key update":
-    case "update":
-      if (
-        requested === "advisory shared" ||
-        requested === "advisory exclusive"
-      ) {
-        return false;
-      }
-      return MODE_COVERS[held].some((mode) => mode === requested);
+  if (held === "advisory shared") {
+    return requested === "advisory shared";
   }
+  if (held === "advisory exclusive") {
+    return (
+      requested === "advisory shared" || requested === "advisory exclusive"
+    );
+  }
+  if (requested === "advisory shared" || requested === "advisory exclusive") {
+    return false;
+  }
+  return MODE_COVERS[held].some((mode) => mode === requested);
 };
 
 type AggregateIdentities = {
