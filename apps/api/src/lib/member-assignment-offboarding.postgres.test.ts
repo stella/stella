@@ -1269,7 +1269,7 @@ if (!databaseUrl || !runPostgresTests) {
                 async (tx) => await fn(asTestRaw<Transaction>(tx)),
               ),
           );
-          const remove = () =>
+          const remove = async () =>
             Result.gen(() =>
               removeWorkspaceMemberHandler({
                 safeDb,
