@@ -1,5 +1,4 @@
 import { panic, Result } from "better-result";
-import { and, eq, inArray } from "drizzle-orm";
 /**
  * Seed templates & clauses (Knowledge section).
  *
@@ -24,13 +23,11 @@ import { filtersFromFieldConfig } from "@stll/template-conditions";
 import type { NamedCondition } from "@stll/template-conditions";
 
 import {
-  chatThreads,
   clauseCategories,
   clauses,
   clauseVariants,
   clauseVersions,
   templateCategories,
-  templateChatThreads,
   templateClauses,
   templates,
   templateVersions,
@@ -47,7 +44,7 @@ import { writeScannedObject } from "@/api/lib/file-scan/stored-object";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { requireLocalDevOpen } from "@/api/runtime-mode";
 
-import { buildTemplateChatSeedRows } from "./seed-template-chat-threads";
+import { seedTemplateChatThreads } from "./seed-template-chat-threads";
 import { ensureTestUsers } from "./seed-test-user";
 import {
   ALL_TEST_USER_IDS,
@@ -2572,63 +2569,20 @@ export async function seedTemplates(
   // Seed the lazy template → chat association so read-only fixtures can open
   // templates without creating chat state. Existing associations are never
   // repointed; on-conflict-do-nothing preserves a user's current thread.
-  const templateChatSeedRows = buildTemplateChatSeedRows({
-    organizationId: ORG_ID,
-    templates: TEMPLATES.map((template) => ({
-      id: scopedSeedId(template.label),
-      label: template.label,
-      name: template.name,
-    })),
-    authorIds,
-  });
-  await withAggregateTransaction(db, async (tx) => {
-    const existingMappings = await tx
-      .select({
-        templateId: templateChatThreads.templateId,
-        userId: templateChatThreads.userId,
-      })
-      .from(templateChatThreads)
-      .where(
-        and(
-          eq(templateChatThreads.organizationId, ORG_ID),
-          inArray(
-            templateChatThreads.templateId,
-            templateChatSeedRows.mappings.map(({ templateId }) => templateId),
-          ),
-          inArray(
-            templateChatThreads.userId,
-            templateChatSeedRows.mappings.map(({ userId }) => userId),
-          ),
-        ),
-      );
-    const existingScopes = new Set(
-      existingMappings.map(
-        ({ templateId, userId }) => `${templateId}:${userId}`,
-      ),
-    );
-    const newMappings = templateChatSeedRows.mappings.filter(
-      ({ templateId, userId }) =>
-        !existingScopes.has(`${templateId}:${userId}`),
-    );
-    const newThreadIds = new Set(
-      newMappings.map(({ chatThreadId }) => chatThreadId),
-    );
-    const newThreads = templateChatSeedRows.threads.filter(({ id }) =>
-      newThreadIds.has(id),
-    );
-    if (newMappings.length === 0) {
-      return;
-    }
-
-    await tx.insert(chatThreads).values(newThreads).onConflictDoNothing();
-    await tx
-      .insert(templateChatThreads)
-      .values(newMappings)
-      .onConflictDoNothing();
-  });
-  console.log(
-    `    Template Studio chats: ${templateChatSeedRows.mappings.length}`,
+  const templateChatCount = await withAggregateTransaction(
+    db,
+    async (tx) =>
+      await seedTemplateChatThreads(tx, {
+        organizationId: ORG_ID,
+        templates: TEMPLATES.map((template) => ({
+          id: scopedSeedId(template.label),
+          label: template.label,
+          name: template.name,
+        })),
+        authorIds,
+      }),
   );
+  console.log(`    Template Studio chats: ${templateChatCount}`);
 
   // ── 6. Template-clause links ────────────────────────
   for (const link of TEMPLATE_CLAUSE_LINKS) {

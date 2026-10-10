@@ -1,9 +1,22 @@
 import { describe, expect, test } from "bun:test";
+import { and, eq } from "drizzle-orm";
 
-import { CHAT_THREAD_TITLE_MAX_LENGTH } from "@/api/db/schema";
+import {
+  CHAT_THREAD_TITLE_MAX_LENGTH,
+  chatThreads,
+  templateChatThreads,
+} from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import {
+  getRlsFixture,
+  releaseRlsFixture,
+} from "@/api/tests/security/rls-fixture";
 
-import { buildTemplateChatSeedRows } from "./seed-template-chat-threads";
+import {
+  buildTemplateChatSeedRows,
+  seedTemplateChatThreads,
+} from "./seed-template-chat-threads";
 
 const organizationId = toSafeId<"organization">("org_seed");
 const templates = [
@@ -72,5 +85,79 @@ describe("seeded Template Studio chat associations", () => {
     expect(new Set(reversed.mappings.map(({ id }) => id))).toEqual(
       new Set(rows.mappings.map(({ id }) => id)),
     );
+  });
+  test("seeding twice preserves an existing association without creating orphan threads", async () => {
+    const { testDb, ids } = await getRlsFixture();
+    try {
+      const input = {
+        organizationId: ids.orgA,
+        templates: [
+          {
+            id: ids.templateA,
+            label: "existing-template",
+            name: "Seeded template",
+          },
+        ],
+        authorIds: [ids.userA1, ids.userA2],
+      };
+      const rows = buildTemplateChatSeedRows(input);
+      const existingScope = and(
+        eq(templateChatThreads.organizationId, ids.orgA),
+        eq(templateChatThreads.templateId, ids.templateA),
+        eq(templateChatThreads.userId, ids.userA1),
+      );
+      const readExistingAssociation = async () =>
+        await testDb.select().from(templateChatThreads).where(existingScope);
+      const readThreads = async () =>
+        await testDb
+          .select()
+          .from(chatThreads)
+          .where(eq(chatThreads.organizationId, ids.orgA))
+          .orderBy(chatThreads.id);
+      const beforeAssociation = await readExistingAssociation();
+      expect(beforeAssociation).toHaveLength(1);
+      expect(beforeAssociation.at(0)?.chatThreadId).toBe(
+        ids.chatThreadGlobalA1,
+      );
+      const existingSeedThread = rows.threads.find(
+        ({ userId }) => userId === ids.userA1,
+      );
+      expect(existingSeedThread).toBeDefined();
+      expect(existingSeedThread?.id).not.toBe(ids.chatThreadGlobalA1);
+      const beforeThreads = await readThreads();
+      const newSeedThread = rows.threads.find(
+        ({ userId }) => userId === ids.userA2,
+      );
+      expect(newSeedThread).toBeDefined();
+      for (let pass = 0; pass < 2; pass += 1) {
+        await withAggregateTransaction(
+          testDb,
+          async (tx) => await seedTemplateChatThreads(tx, input),
+        );
+        expect(await readExistingAssociation()).toEqual(beforeAssociation);
+        const afterThreads = await readThreads();
+        expect(
+          afterThreads.filter(({ id }) => id !== newSeedThread?.id),
+        ).toEqual(beforeThreads);
+        expect(afterThreads).toHaveLength(beforeThreads.length + 1);
+        expect(
+          afterThreads.some(({ id }) => id === existingSeedThread?.id),
+        ).toBe(false);
+        const newAssociation = await testDb
+          .select()
+          .from(templateChatThreads)
+          .where(
+            and(
+              eq(templateChatThreads.organizationId, ids.orgA),
+              eq(templateChatThreads.templateId, ids.templateA),
+              eq(templateChatThreads.userId, ids.userA2),
+            ),
+          );
+        expect(newAssociation).toHaveLength(1);
+        expect(newAssociation.at(0)?.chatThreadId).toBe(newSeedThread?.id);
+      }
+    } finally {
+      await releaseRlsFixture();
+    }
   });
 });
