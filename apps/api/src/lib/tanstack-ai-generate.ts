@@ -22,6 +22,7 @@ import type {
   TanStackAIProvider,
 } from "@stll/ai-catalog";
 import { classifyFailure } from "@stll/errors";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import type {
   AIRequestServiceTier,
@@ -90,6 +91,11 @@ import {
   providerSafeJsonSchemaOptionsForTanStackProvider,
   type ProviderSafeJsonSchemaProjectionOptions,
 } from "@/api/lib/provider-safe-json-schema";
+import {
+  admittedDispatchSignal,
+  assertModelDispatchScope,
+  type ModelDispatchScope,
+} from "@/api/lib/rate-limit/model-dispatch-admission";
 import { checkStructuredOutputBudget } from "@/api/lib/structured-output-budget";
 import {
   joinLayeredSystemPrompt,
@@ -143,7 +149,6 @@ type GenerateTanStackBaseOptions = {
         options: Parameters<typeof resolveTanStackTextModel>[0],
       ) => ResolvedTanStackTextModel | Promise<ResolvedTanStackTextModel>)
     | undefined;
-  organizationId: SafeId<"organization"> | null;
   orgAIConfig: OrgAIConfig | null | undefined;
   reasoningEffort?: ReasoningEffort | undefined;
   role: ModelRole;
@@ -158,7 +163,8 @@ type GenerateTanStackBaseOptions = {
    */
   tenantWorkspaceIds: readonly SafeId<"workspace">[];
   temperature?: number | undefined;
-} & AIRequestPolicy;
+} & AIRequestPolicy &
+  ModelDispatchScope;
 
 type TanStackTextForRoleOptions = GenerateTanStackBaseOptions &
   GenerateTanStackInputOptions;
@@ -208,11 +214,13 @@ export type TanStackStructuredOutputEvent<TOutput> =
       type: "complete";
     };
 
-type ResolveTextModelOptions = Pick<
-  GenerateTanStackBaseOptions,
-  "modelId" | "organizationId" | "orgAIConfig" | "reasoningEffort" | "role"
-> &
-  AIRequestPolicy;
+type ResolveTextModelOptions = {
+  modelId?: string | undefined;
+  orgAIConfig: OrgAIConfig | null | undefined;
+  reasoningEffort?: ReasoningEffort | undefined;
+  role: ModelRole;
+} & AIRequestPolicy &
+  ModelDispatchScope;
 
 const CANCELLED_GENERATION_MESSAGE = "AI generation was cancelled";
 
@@ -272,12 +280,14 @@ const finishAccepted = (
 export const generateTanStackTextForRole = async (
   options: GenerateTanStackTextForRoleOptions,
 ): Promise<string> => {
+  // Checked before the model resolves: a dispatch on a settled proof panics.
+  const abortSignal = admittedDispatchSignal(options);
   const model = await (options.resolveTextModel ?? resolveTanStackTextModel)(
     options,
   );
   const requestMessages = guardedMessagesFromInput(options);
-  const abortController = options.abortSignal
-    ? abortControllerFromSignal(options.abortSignal)
+  const abortController = abortSignal
+    ? abortControllerFromSignal(abortSignal)
     : undefined;
   // Assigned from the stream callback, which control-flow analysis cannot
   // see; a property keeps the declared union instead of the initial branch.
@@ -302,7 +312,7 @@ export const generateTanStackTextForRole = async (
       output += delta;
     }
   } catch (error) {
-    if (isAbortRejection({ error, signal: options.abortSignal })) {
+    if (isAbortRejection({ error, signal: abortSignal })) {
       throw cancelledGenerationError();
     }
 
@@ -315,10 +325,7 @@ export const generateTanStackTextForRole = async (
   // this the same cancellation is sometimes an error and sometimes a truncated
   // answer the caller cannot tell from a whole one. A reported finish
   // separates the two: that run completed before the signal fired.
-  if (
-    run.finish.kind === "unfinished" &&
-    options.abortSignal?.aborted === true
-  ) {
+  if (run.finish.kind === "unfinished" && abortSignal?.aborted === true) {
     throw cancelledGenerationError();
   }
 
@@ -335,12 +342,14 @@ export const generateTanStackTextForRole = async (
 export const streamTanStackTextForRole = async function* (
   options: TanStackTextForRoleOptions,
 ): AsyncIterable<string> {
+  // Checked before the model resolves: a dispatch on a settled proof panics.
+  const abortSignal = admittedDispatchSignal(options);
   const model = await (options.resolveTextModel ?? resolveTanStackTextModel)(
     options,
   );
   const requestMessages = guardedMessagesFromInput(options);
-  const abortController = options.abortSignal
-    ? abortControllerFromSignal(options.abortSignal)
+  const abortController = abortSignal
+    ? abortControllerFromSignal(abortSignal)
     : undefined;
 
   yield* streamTanStackTextDeltas({
@@ -405,9 +414,56 @@ export type TanStackTextRun = {
  * caller owns the model resolution and must dispatch through
  * {@link textAdapterWithNormalizedStops}.
  */
+/**
+ * The proof a direct chat run was admitted under. The run's abort follows the
+ * admitted action, so model work never outlives the lease that admitted it.
+ */
+type AdmittedChatRunOptions = StreamChatChunksOptions & {
+  model: ResolvedTanStackTextModel;
+  admission: ModelDispatchScope["admission"];
+};
+
+const admittedChatRunOptions = ({
+  admission,
+  abortController,
+  ...options
+}: AdmittedChatRunOptions): StreamChatChunksOptions & {
+  model: ResolvedTanStackTextModel;
+} => {
+  const controller = admittedAbortController(admission, abortController);
+  return controller === undefined
+    ? options
+    : { ...options, abortController: controller };
+};
+
+const admittedAbortController = (
+  admission: ModelDispatchScope["admission"],
+  abortController: AbortController | undefined,
+): AbortController | undefined => {
+  switch (admission.type) {
+    case "organization": {
+      // Checks the proof still admits work, then joins its signal.
+      const signal = admittedDispatchSignal({
+        organizationId: admission.organizationId,
+        admission,
+        abortSignal: abortController?.signal,
+      });
+      return signal === undefined
+        ? abortController
+        : abortControllerFromSignal(signal);
+    }
+    case "no-organization":
+      return abortController;
+    default:
+      admission satisfies never;
+      return panic("Unhandled model dispatch admission");
+  }
+};
+
 export const collectTanStackTextRun = async (
-  options: StreamChatChunksOptions & { model: ResolvedTanStackTextModel },
+  admitted: AdmittedChatRunOptions,
 ): Promise<TanStackTextRun> => {
+  const options = admittedChatRunOptions(admitted);
   // Assigned from the loop below; a property keeps the declared union instead
   // of narrowing to the initial branch.
   const run: { finish: TextRunFinish } = { finish: { kind: "unfinished" } };
@@ -929,12 +985,14 @@ export const generateTanStackObjectForRole = async <
 }: GenerateTanStackObjectForRoleOptions<TSchema>): Promise<
   v.InferOutput<TSchema>
 > => {
+  // Checked before the model resolves: a dispatch on a settled proof panics.
+  const abortSignal = admittedDispatchSignal(options);
   const model = await (options.resolveTextModel ?? resolveTanStackTextModel)(
     options,
   );
   const requestMessages = guardedMessagesFromInput(options);
-  const abortController = options.abortSignal
-    ? abortControllerFromSignal(options.abortSignal)
+  const abortController = abortSignal
+    ? abortControllerFromSignal(abortSignal)
     : undefined;
   guardStructuredOutputBudget({ model, outputSchema });
   const tanStackOutputSchema = toTanStackValibotSchema(
@@ -980,7 +1038,7 @@ export const generateTanStackObjectForRole = async <
     // A cancelled run ends without a structured result, and the SDK reports
     // that as a plain error rather than an abort. The caller's signal is what
     // tells the two apart, as for text generation.
-    if (options.abortSignal?.aborted === true) {
+    if (abortSignal?.aborted === true) {
       throw cancelledGenerationError();
     }
     throw generated.error;
@@ -998,12 +1056,14 @@ export const streamTanStackObjectForRole = async function* <
 }: GenerateTanStackObjectForRoleOptions<TSchema>): AsyncIterable<
   TanStackStructuredOutputEvent<v.InferOutput<TSchema>>
 > {
+  // Checked before the model resolves: a dispatch on a settled proof panics.
+  const abortSignal = admittedDispatchSignal(options);
   const model = await (options.resolveTextModel ?? resolveTanStackTextModel)(
     options,
   );
   const requestMessages = guardedMessagesFromInput(options);
-  const abortController = options.abortSignal
-    ? abortControllerFromSignal(options.abortSignal)
+  const abortController = abortSignal
+    ? abortControllerFromSignal(abortSignal)
     : undefined;
 
   yield* streamTanStackStructuredOutput({
@@ -1210,16 +1270,22 @@ const isStructuredOutputPartial = <TOutput>(
   typeof value === "object" && value !== null;
 
 export const resolveTanStackTextModel = async (
-  {
+  options: ResolveTextModelOptions,
+  credentials = getManagedOpenRouterCredentialProvider(),
+): Promise<ResolvedTanStackTextModel> => {
+  // Every inference path resolves its model here with the proof that its
+  // action was admitted; the type requires the proof, this binds it to the
+  // organization the model serves.
+  assertModelDispatchScope(options);
+  const {
+    admission: _admission,
     modelId,
     organizationId,
     orgAIConfig,
     reasoningEffort,
     role,
     ...policy
-  }: ResolveTextModelOptions,
-  credentials = getManagedOpenRouterCredentialProvider(),
-): Promise<ResolvedTanStackTextModel> => {
+  } = options;
   // Every inference path (chat, subagents, field generators, workflow
   // batches) resolves its model here, so this is the one seam where a
   // request is classified `ai` for the split latency SLO — a new AI
@@ -1338,10 +1404,7 @@ export const abortControllerFromSignal = (
 const PROVIDER_CACHE_KEY_MAX = 64;
 
 const hashCacheScopeKey = (raw: string): string =>
-  new Bun.CryptoHasher("sha256")
-    .update(raw)
-    .digest("hex")
-    .slice(0, PROVIDER_CACHE_KEY_MAX);
+  hashSha256Hex(raw).slice(0, PROVIDER_CACHE_KEY_MAX);
 
 /**
  * The request's system prompt. A layered prompt (a chat turn's) is split at
@@ -1692,12 +1755,10 @@ const tanStackRunErrorChunk = (
  *
  * @yields The run's chunks, with each `RUN_ERROR` projected.
  */
-export const streamTanStackChatRun = async function* ({
-  model,
-  ...options
-}: StreamChatChunksOptions & {
-  model: ResolvedTanStackTextModel;
-}): AsyncIterable<TanStackChatRunChunk> {
+export const streamTanStackChatRun = async function* (
+  admitted: AdmittedChatRunOptions,
+): AsyncIterable<TanStackChatRunChunk> {
+  const { model, ...options } = admittedChatRunOptions(admitted);
   try {
     for await (const chunk of streamChatChunks(options)) {
       yield chunk.type === EventType.RUN_ERROR
@@ -1714,8 +1775,7 @@ export const streamTanStackChatRun = async function* ({
 };
 
 type GenerateTanStackChatObjectOptions<TSchema extends v.GenericSchema> =
-  StreamChatChunksOptions & {
-    model: ResolvedTanStackTextModel;
+  AdmittedChatRunOptions & {
     outputSchema: TSchema;
   };
 
@@ -1727,12 +1787,12 @@ type GenerateTanStackChatObjectOptions<TSchema extends v.GenericSchema> =
 export const generateTanStackChatObject = async <
   TSchema extends v.GenericSchema,
 >({
-  model,
   outputSchema,
-  ...options
+  ...admitted
 }: GenerateTanStackChatObjectOptions<TSchema>): Promise<
   v.InferOutput<TSchema>
 > => {
+  const { model, ...options } = admittedChatRunOptions(admitted);
   const result = await Result.tryPromise({
     try: async () =>
       await generateChatObject({

@@ -90,6 +90,7 @@ import { useSuggestedSkills } from "@/lib/prompts/use-suggested-skills";
 import { runReservedChatCommand } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
 import { usageEntitlementOptions } from "@/lib/usage-queries";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { ChatThreadFilesButton } from "@/routes/_protected.chat/-components/chat-file-stack";
 import { ChatForkedFromBanner } from "@/routes/_protected.chat/-components/chat-forked-from-banner";
 import { ChatThreadRecap } from "@/routes/_protected.chat/-components/chat-thread-recap";
@@ -129,10 +130,17 @@ export const ChatThreadPage = ({
   // Entitlement state is manager-only on the server. Skip the query
   // for non-managers so the chat shell doesn't fire a request they
   // can't read; the limit modal's "Manage" CTA is admin-only anyway.
-  const { data: currentUserRole } = useQuery({
+  const currentUserRoleQuery = useQuery({
     ...roleOptions,
     staleTime: Number.POSITIVE_INFINITY,
   });
+  const currentUserRoleView = useQueryView(currentUserRoleQuery);
+  useQueryViewError(currentUserRoleView);
+  const currentUserRole =
+    currentUserRoleView.type === "items" &&
+    currentUserRoleView.refetchError === undefined
+      ? currentUserRoleView.items
+      : undefined;
   const canManageOrganization =
     hasOrganizationManagementAccess(currentUserRole);
 
@@ -204,12 +212,19 @@ export const ChatThreadPage = ({
   // chat handler as a usage-state modal instead of an inline
   // stack trace. `useQuery` (not Suspense) keeps the chat shell
   // rendering while the entitlement state loads.
-  const { data: usageEntitlementData } = useQuery({
+  const usageEntitlementDataQuery = useQuery({
     ...usageEntitlementOptions({ organizationId: activeOrganizationId }),
     enabled: env.VITE_FEATURE_USAGE && canManageOrganization,
   });
+  const usageEntitlementDataView = useQueryView(usageEntitlementDataQuery);
+  useQueryViewError(usageEntitlementDataView);
+  const usageEntitlementData =
+    usageEntitlementDataView.type === "items"
+      ? usageEntitlementDataView.items
+      : undefined;
   const usageLimit = useUsageLimit({
     hasHostedEntitlement:
+      canManageOrganization &&
       usageEntitlementData?.entitlement?.source === "hosted",
   });
 
@@ -234,12 +249,17 @@ export const ChatThreadPage = ({
     handleApprove,
     handleAllowInConversation,
     handleDeny,
+    handleRequestSecret,
+    continueRequestSecret,
+    resolveSecretTarget,
+    secretAvailabilityKey,
     handleAskUserSubmit,
     handleAskUserEditAndRerun,
     handleAlwaysAllow,
     handleCreateDocumentResolve,
     handleOpenCreateDocumentDraft,
     handleOpenCreatedDocument,
+    handleOpenPlaybook,
     createDocumentMattersView,
     streamdownComponents,
     approvalPendingMessageId,
@@ -249,6 +269,7 @@ export const ChatThreadPage = ({
     getContextMatterIds,
     getSendMode,
     initialOlderCursor: data.olderCursor,
+    playbookPane: "auto-open",
     onError: (nextError) => {
       usageLimit.handle(nextError);
     },
@@ -571,6 +592,10 @@ export const ChatThreadPage = ({
             handleAlwaysAllow,
             handleApprove,
             handleDeny,
+            handleRequestSecret,
+            continueRequestSecret,
+            resolveSecretTarget,
+            secretAvailabilityKey,
           }}
         >
           <div className="relative flex w-full flex-1 flex-col overflow-hidden">
@@ -644,6 +669,7 @@ export const ChatThreadPage = ({
                           handleOpenCreateDocumentDraft
                         }
                         onOpenCreatedDocument={handleOpenCreatedDocument}
+                        onOpenPlaybook={handleOpenPlaybook}
                         onResend={resendLatestMessage}
                         onSendWithoutAnonymization={sendWithoutAnonymization}
                         queuedMessageActions={{

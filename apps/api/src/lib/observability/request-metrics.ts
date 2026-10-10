@@ -3,6 +3,7 @@ import { panic } from "better-result";
 import type { AIProvider, TanStackAIProvider } from "@stll/ai-catalog";
 import { Temporal } from "@stll/time";
 
+import type { VerificationRunErrorCode } from "@/api/lib/lists/verification/contract";
 import type { PublicCorpusClass } from "@/api/public-corpus-policy";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
@@ -31,6 +32,77 @@ const METRIC_NAMESPACE = "Stella/Api";
 const METRIC_NAME = "RequestDuration";
 const FAILURE_METRIC_NAME = "RequestTransientFailures";
 
+/** Reasoning items dropped per turn; the adapter ledger excludes SDK rereads. */
+export const emitReasoningReplayDroppedMetric = ({
+  count,
+  ...dimensions
+}: {
+  fromProvider: TanStackAIProvider | "unknown";
+  toProvider: TanStackAIProvider;
+  reason:
+    | "missing-provenance"
+    | "incompatible-provenance"
+    | "unpaired-reasoning"
+    | "continuation-thinking-disabled";
+  count: number;
+}): void => {
+  const name = "chat.reasoning_replay_dropped";
+  writeMetricLine({
+    ...dimensions,
+    [name]: count,
+    _aws: {
+      Timestamp: Temporal.Now.instant().epochMilliseconds,
+      CloudWatchMetrics: [
+        {
+          Namespace: METRIC_NAMESPACE,
+          Dimensions: [["fromProvider", "toProvider", "reason"]],
+          Metrics: [{ Name: name, Unit: "Count" }],
+        },
+      ],
+    },
+  });
+};
+
+/** Counts observed failure transitions; a later transaction rollback does not
+ * retract telemetry. Only the failure class is a metric dimension. */
+export const emitVerificationRunFailureMetric = (
+  errorCode: VerificationRunErrorCode,
+): void => {
+  switch (errorCode) {
+    case "extraction_failed":
+    case "grading_failed":
+    case "no_text":
+    case "access_revoked":
+      writeMetricLine({
+        event: `list_verification_run.${errorCode}`,
+        errorCode,
+        _aws: {
+          Timestamp: Temporal.Now.instant().epochMilliseconds,
+          CloudWatchMetrics: [
+            {
+              Namespace: METRIC_NAMESPACE,
+              Dimensions: [["errorCode"]],
+              Metrics: [{ Name: "VerificationRunFailures", Unit: "Count" }],
+            },
+          ],
+        },
+        VerificationRunFailures: 1,
+      });
+      return;
+    case "pin_unresolved":
+    case "pin_content_changed":
+    case "unsupported_format":
+    case "ai_unavailable":
+    case "enqueue_failed":
+    case "run_limit_reached":
+    case "internal":
+      return;
+    default:
+      errorCode satisfies never;
+      panic("Unknown verification failure code");
+  }
+};
+
 export const emitAdmissionStorePolicyMetric = (refused: boolean): void => {
   const name = "AdmissionStoreEvictionPolicyRefused";
   writeMetricLine({
@@ -45,6 +117,41 @@ export const emitAdmissionStorePolicyMetric = (refused: boolean): void => {
       ],
     },
     [name]: refused ? 1 : 0,
+  });
+};
+
+const EVENT_LOOP_DELAY_METRIC = {
+  max: "EventLoopDelayMax",
+  p99: "EventLoopDelayP99",
+} as const;
+
+/**
+ * One reporting window of the process's event-loop delay. Undimensioned: the
+ * process is the unit, and a task or route id would only multiply series.
+ */
+export const emitEventLoopDelayMetric = ({
+  maxMs,
+  p99Ms,
+}: {
+  maxMs: number;
+  p99Ms: number;
+}): void => {
+  writeMetricLine({
+    _aws: {
+      Timestamp: Temporal.Now.instant().epochMilliseconds,
+      CloudWatchMetrics: [
+        {
+          Namespace: METRIC_NAMESPACE,
+          Dimensions: [[]],
+          Metrics: [
+            { Name: EVENT_LOOP_DELAY_METRIC.max, Unit: "Milliseconds" },
+            { Name: EVENT_LOOP_DELAY_METRIC.p99, Unit: "Milliseconds" },
+          ],
+        },
+      ],
+    },
+    [EVENT_LOOP_DELAY_METRIC.max]: maxMs,
+    [EVENT_LOOP_DELAY_METRIC.p99]: p99Ms,
   });
 };
 

@@ -1,3 +1,4 @@
+// parser-output-unchanged: readGatedResponse export removed; its implementation and internal calls are unchanged.
 // parser-output-unchanged: Typed gate refusals retain their scope and retry metadata; successful response bodies and decision parsing are unchanged.
 /**
  * The typed way a case-law adapter reads its publisher.
@@ -111,7 +112,7 @@ type GatedReadOptions = {
  * established. {@link readPublisher} is this read over the shared gate; an
  * adapter whose publisher has a gate of its own passes that gate's request.
  */
-export const readGatedResponse = async ({
+const readGatedResponse = async ({
   request,
   signal,
   refusalScope,

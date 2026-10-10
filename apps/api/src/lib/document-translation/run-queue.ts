@@ -1,6 +1,7 @@
 import { Result, panic } from "better-result";
 import { and, asc, eq, inArray, isNull, lt, sql } from "drizzle-orm";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { Temporal } from "@stll/time";
 
 import type { rootDb } from "@/api/db/root";
@@ -109,6 +110,8 @@ import {
 import { startNonOverlappingInterval } from "@/api/lib/non-overlapping-interval";
 import { logger } from "@/api/lib/observability/logger";
 import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
+import { runBackgroundJob } from "@/api/lib/rate-limit/queued-action-admission";
 import { createBullMqConnection } from "@/api/lib/redis-client";
 import { createRootRunActor } from "@/api/lib/root-scoped-db";
 import type { RootRunActor } from "@/api/lib/root-scoped-db";
@@ -375,10 +378,15 @@ const loadPinnedSource = async (
     : Result.ok(bytes.value);
 };
 
-const createAIContext = async (
-  actor: RunActor,
-  run: ClaimedRun,
-): Promise<Result<BilingualAIContext, HandlerError>> => {
+const createAIContext = async ({
+  actor,
+  admission,
+  run,
+}: {
+  actor: RunActor;
+  admission: ModelDispatchAdmission;
+  run: ClaimedRun;
+}): Promise<Result<BilingualAIContext, HandlerError>> => {
   const settings = await actor.writeDb(
     async (tx) => await loadOrgAISettings(tx, actor),
   );
@@ -388,6 +396,7 @@ const createAIContext = async (
   const { orgAIConfig, managedAIResidency, promptCachingEnabled } =
     settings.value;
   return Result.ok({
+    admission,
     organizationId: actor.organizationId,
     workspaceId: actor.workspaceId,
     orgAIConfig,
@@ -494,16 +503,18 @@ const translateCommentsWithAI = async (
     }
   }
   const pending = comments.filter((comment) => comment.text !== "");
-  const translateNextBatch = async (
-    index: number,
-  ): Promise<Result<void, DocumentTranslationRunErrorCode>> => {
-    if (index >= pending.length) {
+  const itemBatches = chunkItems(
+    pending,
+    DOCUMENT_TRANSLATION_LIMITS.batchSize,
+  )[Symbol.iterator]();
+  const translateNextBatch = async (): Promise<
+    Result<void, DocumentTranslationRunErrorCode>
+  > => {
+    const nextBatch = itemBatches.next();
+    if (nextBatch.done) {
       return Result.ok();
     }
-    const batch = pending.slice(
-      index,
-      index + DOCUMENT_TRANSLATION_LIMITS.batchSize,
-    );
+    const batch = nextBatch.value;
     const response = await Result.tryPromise({
       try: async () =>
         await translateTaggedSegments({
@@ -530,11 +541,9 @@ const translateCommentsWithAI = async (
       }
       translated.set(comment.id, text);
     }
-    return await translateNextBatch(
-      index + DOCUMENT_TRANSLATION_LIMITS.batchSize,
-    );
+    return await translateNextBatch();
   };
-  const result = await translateNextBatch(0);
+  const result = await translateNextBatch();
   return Result.isError(result) ? result : Result.ok(translated);
 };
 
@@ -659,16 +668,18 @@ const translateDocxWithAI = async (
   await setTotal(actor, segments.length);
 
   const translated = new Map<string, string>();
+  const itemBatches = chunkItems(
+    segments,
+    DOCUMENT_TRANSLATION_LIMITS.batchSize,
+  )[Symbol.iterator]();
   const translateNextBatch = async (
     index: number,
   ): Promise<Result<void, DocumentTranslationRunErrorCode>> => {
-    if (index >= segments.length) {
+    const nextBatch = itemBatches.next();
+    if (nextBatch.done) {
       return Result.ok();
     }
-    const batch = segments.slice(
-      index,
-      index + DOCUMENT_TRANSLATION_LIMITS.batchSize,
-    );
+    const batch = nextBatch.value;
     const preceding = segments
       .slice(0, index)
       .slice(-DOCUMENT_TRANSLATION_LIMITS.contextUnits);
@@ -991,10 +1002,15 @@ const translateBilingualWithAI = async (
   });
 };
 
-const executeRun = async (
-  actor: RunActor,
-  run: ClaimedRun,
-): Promise<DocumentTranslationRunErrorCode | null> => {
+const executeRun = async ({
+  actor,
+  admission,
+  run,
+}: {
+  actor: RunActor;
+  admission: ModelDispatchAdmission;
+  run: ClaimedRun;
+}): Promise<DocumentTranslationRunErrorCode | null> => {
   const loaded = await loadPinnedSource(actor, run);
   if (Result.isError(loaded)) {
     return loaded.error;
@@ -1072,7 +1088,7 @@ const executeRun = async (
   } else {
     const context = Result.flatten(
       await Result.tryPromise({
-        try: async () => await createAIContext(actor, run),
+        try: async () => await createAIContext({ actor, admission, run }),
         catch: (cause) => cause,
       }),
     );
@@ -1237,14 +1253,9 @@ const executeRun = async (
   return null;
 };
 
-const processRunJob = async (
-  data: DocumentTranslationRunJobData,
-): Promise<void> => {
-  await processDocumentTranslationRun(brandActor(data));
-};
-
 export const processDocumentTranslationRun = async (
   actor: RunActor,
+  admission: ModelDispatchAdmission,
 ): Promise<void> => {
   const run = await claimRun(actor);
   if (run === null) {
@@ -1257,7 +1268,7 @@ export const processDocumentTranslationRun = async (
     return;
   }
   const result = await Result.tryPromise({
-    try: async () => await executeRun(actor, run),
+    try: async () => await executeRun({ actor, admission, run }),
     catch: (cause) => cause,
   });
   if (Result.isError(result)) {
@@ -1345,7 +1356,20 @@ export const initDocumentTranslationRunWorker = ({
 }: BullMqWorkerContext) => {
   const worker = new BullMqWorker<DocumentTranslationRunJobData>(
     QUEUE_NAME,
-    async (job) => await processRunJob(job.data),
+    async (job) => {
+      const actor = brandActor(job.data);
+      // The run's period action was drawn when it was queued; the job takes
+      // a background slot. The run bounds its own time.
+      await runBackgroundJob({
+        actionKind: "document-translation.background",
+        organizationId: actor.organizationId,
+        userId: actor.userId,
+        job,
+        signal: new AbortController().signal,
+        run: async (_signal, admission) =>
+          await processDocumentTranslationRun(actor, admission),
+      });
+    },
     {
       connection: createBullMqConnection({
         storeClass: "durable-coordination",

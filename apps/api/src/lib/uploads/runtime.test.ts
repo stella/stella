@@ -1,10 +1,15 @@
 import { describe, expect, test } from "bun:test";
 
+import { sha256Base64ToHex, sha256HexToBase64 } from "@stll/sha256";
+import {
+  sha256Hex as hashSha256Hex,
+  createSha256,
+  sha256Base64 as hashSha256Base64,
+} from "@stll/sha256/bun";
+
 import { toSafeId } from "@/api/lib/branded-types";
 import {
   legacyTmpUploadKey,
-  sha256Base64ToHex,
-  sha256HexToBase64,
   tmpUploadKey,
   tmpUploadKeys,
 } from "@/api/lib/uploads/runtime";
@@ -31,23 +36,19 @@ describe("tmp upload keys", () => {
 
 describe("SHA-256 hex <-> base64 (S3 checksum integrity gate)", () => {
   test("round-trips an arbitrary digest back to lowercase hex", () => {
-    const hex = new Bun.CryptoHasher("sha256")
-      .update("the quick brown fox")
-      .digest("hex");
+    const hex = hashSha256Hex("the quick brown fox");
     expect(sha256Base64ToHex(sha256HexToBase64(hex))).toBe(hex);
   });
 
   test("hex->base64 matches Bun's own base64 digest", () => {
-    const hasher = new Bun.CryptoHasher("sha256").update("payload bytes");
+    const hasher = createSha256().update("payload bytes");
     const hex = hasher.digest("hex");
-    const expectedBase64 = new Bun.CryptoHasher("sha256")
-      .update("payload bytes")
-      .digest("base64");
+    const expectedBase64 = hashSha256Base64("payload bytes");
     expect(sha256HexToBase64(hex)).toBe(expectedBase64);
   });
 
   test("produced hex is the canonical 64-char lowercase form", () => {
-    const base64 = new Bun.CryptoHasher("sha256").update("x").digest("base64");
+    const base64 = hashSha256Base64("x");
     const hex = sha256Base64ToHex(base64);
     expect(hex).toMatch(/^[0-9a-f]{64}$/u);
   });

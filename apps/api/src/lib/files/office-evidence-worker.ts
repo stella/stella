@@ -1,12 +1,13 @@
+import {
+  materializePptxPresentation,
+  materializeXlsxWorkbook,
+} from "@silurus/ooxml/node";
 /**
  * Isolated, bounded XLSX/PPTX locator extraction worker.
  * stdin is the original OOXML file; stdout is one JSON result.
  */
 
-import {
-  materializePptxPresentation,
-  materializeXlsxWorkbook,
-} from "@silurus/ooxml/node";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import { OFFICE_EVIDENCE_LIMITS } from "@/api/lib/files/office-evidence-domain";
 import {
@@ -53,10 +54,10 @@ const createBlockId = (
   locatorKey: string,
   text: string,
 ): string =>
-  `${format}-${new Bun.CryptoHasher("sha256")
-    .update(`${format}\0${locatorKey}\0${text}`)
-    .digest("hex")
-    .slice(0, 16)}`;
+  `${format}-${hashSha256Hex(`${format}\0${locatorKey}\0${text}`).slice(
+    0,
+    16,
+  )}`;
 
 const extractXlsxBlocks = async (
   bytes: Uint8Array,

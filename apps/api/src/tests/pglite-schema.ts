@@ -326,6 +326,40 @@ const TREE_PARENT_CYCLE_GUARD_MIGRATION_PATH = nodePath.join(
   "20261004003000_tree_parent_cycle_guard",
   "migration.sql",
 );
+const ENTITY_FEATURE_GATE_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261009112500_entity_feature_row_gates",
+  "migration.sql",
+);
+
+/** Replay the committed gate migration's transactional setup against pushed schema. */
+export const installPgliteEntityFeatureGateMaintenance = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    ENTITY_FEATURE_GATE_MIGRATION_PATH,
+  );
+  const commitIndex = statements.findIndex((statement) =>
+    /^COMMIT\b/iu.test(executableSql(statement)),
+  );
+  if (commitIndex === -1) {
+    panic("Entity feature gate migration has no initial transaction commit");
+  }
+
+  for (const statement of statements.slice(0, commitIndex)) {
+    const executable = executableSql(statement);
+    if (
+      executable.length === 0 ||
+      /^SET\s+(?:lock_timeout|statement_timeout)\b/iu.test(executable)
+    ) {
+      continue;
+    }
+    if (/\bCONCURRENTLY\b/iu.test(executable)) {
+      panic("PGlite gate setup must not replay concurrent index statements");
+    }
+    await db.execute(sql.raw(statement));
+  }
+};
 
 /** Install the self-referencing tree triggers omitted by declarative schema push. */
 export const installPgliteTreeParentGuards = async (
@@ -367,6 +401,27 @@ const CHAT_RUN_LOG_MIGRATION_PATH = nodePath.join(
   "migration.sql",
 );
 
+/** Apply the revision migration's forced boundary, which schema push omits. */
+export const installPgliteChatMessageRevisionsRls = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statement = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261009190430_chat_message_revisions",
+      "migration.sql",
+    ),
+  ).find((candidate) =>
+    executableSql(candidate).startsWith(
+      'ALTER TABLE "chat_message_revisions" FORCE ROW LEVEL SECURITY',
+    ),
+  );
+  if (statement === undefined) {
+    panic("Chat message revision FORCE RLS migration statement is missing");
+  }
+  await db.execute(sql.raw(statement));
+};
+
 /** Schema push omits FORCE RLS, so mirror the migration's forced policies. */
 export const installPgliteChatRunLogRls = async (
   db: PgliteSchemaDb,
@@ -393,6 +448,26 @@ export const installPgliteChatRunLogRls = async (
     panic("Chat run log entries FORCE RLS migration statement is missing");
   }
   await db.execute(sql.raw(entriesStatement));
+};
+
+/** Apply the committed setting omitted by schema push. */
+export const installPgliteChatSecretRls = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    nodePath.join(DRIZZLE_DIR, "20261008090000_chat_secrets", "migration.sql"),
+  );
+  for (const table of ["chat_secrets"]) {
+    const statement = statements.find((candidate) =>
+      executableSql(candidate).startsWith(
+        `ALTER TABLE "${table}" FORCE ROW LEVEL SECURITY`,
+      ),
+    );
+    if (statement === undefined) {
+      panic("Chat secret FORCE RLS migration statement is missing");
+    }
+    await db.execute(sql.raw(statement));
+  }
 };
 
 const PDF_SIGNING_TOKEN_SCOPE_STATEMENT_PREFIXES = [
@@ -647,13 +722,15 @@ export const installPgliteWorkspaceContactCapacity = async (
 
 const ORGANIZATION_MEMBER_CAPACITY_STATEMENT_PREFIXES = [
   "CREATE FUNCTION",
+  "CREATE OR REPLACE FUNCTION",
   "REVOKE ALL ON FUNCTION",
+  "GRANT EXECUTE ON FUNCTION",
   "CREATE TRIGGER",
 ] as const;
 
 /**
- * Install membership capacity, ownership and matter-membership reference
- * guards omitted by schema push.
+ * Install membership capacity, ownership, matter-membership reference and
+ * effective-policy functions omitted by schema push.
  */
 export const installPgliteOrganizationMemberCapacity = async (
   db: PgliteSchemaDb,
@@ -671,6 +748,15 @@ export const installPgliteOrganizationMemberCapacity = async (
       nodePath.join(
         DRIZZLE_DIR,
         "20261004001000_matter_membership_organization_membership",
+        "migration.sql",
+      ),
+    ),
+    // The effective-policy owner replaces the capacity function above and
+    // adds the storage capacity read.
+    ...readMigrationStatements(
+      nodePath.join(
+        DRIZZLE_DIR,
+        "20261005090300_organization_effective_policy",
         "migration.sql",
       ),
     ),

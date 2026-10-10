@@ -43,7 +43,7 @@ type CallbackRedirectInput =
   | { status: "connected" }
   | { status: "error"; reason: string };
 
-export const buildCallbackRedirectUrl = (
+const buildCallbackRedirectUrl = (
   frontendUrl: string,
   input: CallbackRedirectInput,
 ): string => {

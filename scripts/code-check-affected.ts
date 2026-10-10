@@ -65,6 +65,9 @@ export const OXLINT_CONFIGURATION_CACHE_INPUTS = [
   "$TURBO_ROOT$/.oxlint-plugins/**",
   "$TURBO_ROOT$/scripts/oxlint-presets/**",
   "$TURBO_ROOT$/scripts/ownership.ts",
+  "$TURBO_ROOT$/scripts/ownership/*.ts",
+  "$TURBO_ROOT$/scripts/ownership-loader.ts",
+  "$TURBO_ROOT$/scripts/ownership-types.ts",
   "$TURBO_ROOT$/scripts/sha256-owners.ts",
   "$TURBO_ROOT$/scripts/sha256-migration-ledger.json",
   "$TURBO_ROOT$/scripts/status-write-shapes.ts",
@@ -85,6 +88,10 @@ export const OXLINT_CONFIGURATION_CACHE_INPUTS = [
   "$TURBO_ROOT$/scripts/derived-attributes.ts",
   "$TURBO_ROOT$/scripts/source-fingerprint-baseline.json",
   "$TURBO_ROOT$/scripts/audit-mutation-ledger-scope.ts",
+  "$TURBO_ROOT$/scripts/test-state-baseline.json",
+  "$TURBO_ROOT$/scripts/check-test-state-baseline.ts",
+  "$TURBO_ROOT$/scripts/baseline-paths.ts",
+  "$TURBO_ROOT$/scripts/ledger-membership.ts",
 ] as const;
 export const LINT_ONLY_CACHE_INPUTS = [
   ...OXLINT_CONFIGURATION_CACHE_INPUTS,

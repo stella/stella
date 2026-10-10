@@ -85,6 +85,7 @@ const loadSkillTools = async ({
       context,
       mode: "default",
       scopes,
+      audience: "model",
     }).flatMap(({ additionalScopes = [], name }) =>
       additionalScopes.every((scope) => hasGrantedScope(scopes, scope))
         ? [name]

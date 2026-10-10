@@ -3,7 +3,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { ConfigurationError } from "@/api/lib/errors/tagged-errors";
 
-export type OrgAIConfigRow = {
+type OrgAIConfigRow = {
   aiConfigEncrypted: string | null | undefined;
   aiConfigIv: string | null | undefined;
 };

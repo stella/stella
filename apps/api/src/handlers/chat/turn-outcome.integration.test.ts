@@ -51,7 +51,12 @@ import type { OracleViolation } from "@/api/tests/helpers/chat-oracles";
 import { createPromptPrefixLedger } from "@/api/tests/helpers/chat-prompt-prefix";
 import type { ScriptedTurn } from "@/api/tests/helpers/chat-round-trip";
 import { TURN_STATUS_CLAIM } from "@/api/tests/helpers/chat-turn-outcome";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_AUDIT,
+  NO_DB,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import {
   cassetteForModel,
   planCombinationRun,
@@ -316,8 +321,8 @@ const SCRIPTED_CALL = {
 
 /**
  * The thread as the position leaves it for the turn under test, written by
- * the production send path on a scripted model (the history does not depend
- * on the provider that answers next).
+ * the production send path on a scripted adapter. Its configured model must
+ * match the recorded provider: a continuation keeps the model that began it.
  */
 const prepareThread = async (
   combination: TurnCombination,
@@ -330,6 +335,7 @@ const prepareThread = async (
     const harness = createApprovalHarness({
       profile,
       ids,
+      organizationAIConfig: orgConfigOf(provider, { fallback: false }),
       safeDb,
       scopedDb,
       testDb,
@@ -390,6 +396,7 @@ const prepareThread = async (
         orgAIConfig: orgConfigOf(provider, { fallback: false }),
         managedAIResidency: "eu" as const,
         organizationId: ids.orgA,
+        admission: testModelAdmission(ids.orgA),
         preserveTokens: 1,
         safeDb,
         threadId,
@@ -715,6 +722,7 @@ const SURFACE_SHOWS = {
     const recap = await generateThreadRecapText({
       messages: chatMessagesOf(TRANSCRIPT),
       organizationId: ids.orgA,
+      admission: testModelAdmission(ids.orgA),
       orgAIConfig,
       managedAIResidency: "eu" as const,
       promptCachingEnabled: false,
@@ -727,6 +735,8 @@ const SURFACE_SHOWS = {
     const answer: unknown = await getSuggestedPrompts.handler(
       asTestRaw<Parameters<typeof getSuggestedPrompts.handler>[0]>(
         createTestHandlerContext({
+          audit: NO_AUDIT,
+          scopedDb: NO_DB,
           memberRole: sessionMemberRole("owner"),
           orgAIConfig,
           orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
@@ -761,6 +771,7 @@ const SURFACE_SHOWS = {
         workspaceId: null,
       },
       organizationId: ids.orgA,
+      admission: testModelAdmission(ids.orgA),
       orgAIConfig,
       managedAIResidency: "eu" as const,
       role: "fast",
@@ -816,6 +827,96 @@ const runSurface = async (
   });
 
 // --- Tests --------------------------------------------------------------------
+
+const checkPinnedContinuationFallback = async (
+  selection: "automatic" | "explicit",
+) => {
+  const provider = "openai";
+  const threadId = newThreadId();
+  await prepareThread(
+    { provider, position: "after-approval", shape: "text" },
+    threadId,
+  );
+  const primaryModel = chatModelOf(cassettes, provider);
+  const fallbackModel = otherModelOf(provider);
+  expect(fallbackModel).not.toBe(primaryModel);
+  if (selection === "explicit") {
+    await testDb
+      .update(chatThreads)
+      .set({ chatModel: `${provider}::${primaryModel}` })
+      .where(eq(chatThreads.id, threadId));
+  }
+  const seam = replayedHarnessModel({
+    prompts: createPromptPrefixLedger(),
+    provider,
+    replay,
+  });
+  const harness = createApprovalHarness({
+    ids,
+    model: seam,
+    organizationAIConfig: orgConfigOf(provider, { fallback: true }),
+    safeDb,
+    scopedDb,
+    testDb,
+  });
+  const client = await harness.openWebClient(threadId);
+  try {
+    const before = await harness.readThreadMessages(threadId);
+    expect(
+      before.some(
+        ({ metadata }) => metadata?.turnModel?.model === primaryModel,
+      ),
+    ).toBe(true);
+    replay.takeFindings();
+    const answer = cassetteFor(cassettes, provider, "text");
+    replay.answerSideCalls(
+      silentAnswerOf(
+        provider,
+        answersFor(provider, answer.exchanges, primaryModel),
+      ).exchanges.at(0),
+    );
+    replay.serve(
+      answersFor(
+        provider,
+        selection === "automatic" ? answer.exchanges : [],
+        fallbackModel,
+      ),
+    );
+    await client.approve(CALL_UNDER_TEST, true);
+    const sent = seam.sentRequests();
+    expect(sent.some(({ model }) => model === primaryModel)).toBe(true);
+    expect(sent.some(({ model }) => model === fallbackModel)).toBe(
+      selection === "automatic",
+    );
+    expect(
+      await harness.checkWebClient({
+        client,
+        expected: { runFailure: selection === "explicit" },
+        threadId,
+      }),
+    ).toEqual([]);
+    const [turn] = await testDb
+      .select({ status: chatTurns.status })
+      .from(chatTurns)
+      .where(eq(chatTurns.threadId, threadId))
+      .orderBy(desc(chatTurns.createdAt), desc(chatTurns.id))
+      .limit(1);
+    expect(turn?.status).toBe(
+      selection === "automatic" ? "completed" : "failed",
+    );
+  } finally {
+    client.dispose();
+    await harness.close();
+    replay.answerSideCalls(undefined);
+    replay.takeFindings();
+  }
+};
+
+test.each(["automatic", "explicit"] as const)(
+  "an empty pinned continuation follows %s model selection for fallback",
+  checkPinnedContinuationFallback,
+  TURN_TIMEOUT_MS,
+);
 
 /** What a combination's turn owes: its settlement, and no violation. */
 const expectedResultOf = (combination: TurnCombination): TurnResult => {

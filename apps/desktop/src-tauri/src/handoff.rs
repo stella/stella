@@ -94,7 +94,7 @@ struct RequestOptions<'a> {
   target: Target,
   api_base_url: &'a str,
   token: &'a str,
-  credential: Option<&'a str>,
+  credential: Option<crate::registry::RegistryRequestAuth<'a>>,
 }
 
 fn request(
@@ -105,7 +105,7 @@ fn request(
     token,
     credential,
   }: RequestOptions<'_>,
-) -> reqwest::RequestBuilder {
+) -> Result<crate::http_client::DeviceProofRequest, String> {
   let builder = client
     .post(format!("{api_base_url}{}", target.path()))
     .header(PROTOCOL_HEADER, PROTOCOL_VERSION.to_string())
@@ -114,8 +114,13 @@ fn request(
     })
     .timeout(REDEEM_TIMEOUT);
   match credential {
-    Some(credential) => builder.bearer_auth(credential),
-    None => builder,
+    Some(auth) => crate::http_client::device_proof_request(
+      builder,
+      auth.device_key,
+      Some(auth.credential_key),
+      None,
+    ),
+    None => crate::http_client::unsigned_request(builder),
   }
 }
 
@@ -123,6 +128,7 @@ async fn attempt<T: serde::de::DeserializeOwned>(
   options: RequestOptions<'_>,
 ) -> Result<T, Failure> {
   let response = request(options)
+    .map_err(Failure::Terminal)?
     .send()
     .await
     .map_err(Failure::from_request_error)?;
@@ -141,7 +147,7 @@ struct LinkedRequestOptions<'a> {
   target: Target,
   api_base_url: &'a str,
   token: &'a str,
-  account: Option<crate::account::LinkedAccount>,
+  account: Option<&'a crate::account::AccountRequest>,
 }
 
 async fn attempt_linked<T: serde::de::DeserializeOwned>(
@@ -160,13 +166,11 @@ async fn attempt_linked<T: serde::de::DeserializeOwned>(
     target,
     api_base_url,
     token,
-    credential: account
-      .as_ref()
-      .map(|account| account.credential.key.as_str()),
+    credential: account.map(|account| account.request_auth()),
   })
   .await?;
   match account {
-    Some(account) => Ok((redeemed, account)),
+    Some(account) => Ok((redeemed, (**account).clone())),
     None => Err(Failure::AccountRequired),
   }
 }
@@ -257,14 +261,14 @@ pub(crate) async fn redeem<T: serde::de::DeserializeOwned>(
   .map_err(|e| e.to_string())?;
   loop {
     let account_state = app.state::<crate::account::AccountState>();
-    let result = match crate::account::current(&account_state).await {
+    let result = match crate::account::foreground_account(&account_state).await {
       Ok(account) => {
         attempt_linked(LinkedRequestOptions {
           client: &client,
           target,
           api_base_url,
           token,
-          account,
+          account: account.as_ref(),
         })
         .await
       }
@@ -287,6 +291,7 @@ mod tests {
   use super::*;
   #[test]
   fn both_redeems_send_protocol_bearer_and_token_in_body() {
+    let device_key = crate::device_proof::DeviceKey::fixture();
     let client = DesktopHttpClient::new(HttpClientOptions::default()).unwrap();
     for target in [Target::DesktopEdit, Target::PdfSigning] {
       let req = request(RequestOptions {
@@ -294,14 +299,25 @@ mod tests {
         target,
         api_base_url: "https://api.example.test",
         token: "secret-token",
-        credential: Some("account-key"),
+        credential: Some(crate::registry::RegistryRequestAuth {
+          api_base_url: "",
+          credential_key: "account-key",
+          device_key: &device_key,
+        }),
       })
+      .unwrap()
       .build()
       .unwrap();
       assert_eq!(req.method(), reqwest::Method::POST);
       assert_eq!(req.url().path(), target.path());
       assert_eq!(req.headers()[PROTOCOL_HEADER], "1");
       assert_eq!(req.headers()["authorization"], "Bearer account-key");
+      crate::device_proof::tests::verify_request(
+        &req,
+        &device_key.thumbprint().unwrap(),
+        Some("account-key"),
+        None,
+      );
       assert_eq!(
         serde_json::from_slice::<serde_json::Value>(
           req.body().unwrap().as_bytes().unwrap()
@@ -407,7 +423,11 @@ mod tests {
           target,
           api_base_url: &origin,
           token,
-          credential: Some("account-key"),
+          credential: Some(crate::registry::RegistryRequestAuth {
+            api_base_url: "",
+            credential_key: "account-key",
+            device_key: &crate::device_proof::DeviceKey::fixture(),
+          }),
         })
         .await;
         assert_eq!(result, Err(expected));
@@ -417,12 +437,17 @@ mod tests {
         target,
         api_base_url: &origin,
         token: "valid",
-        credential: Some("account-key"),
+        credential: Some(crate::registry::RegistryRequestAuth {
+          api_base_url: "",
+          credential_key: "account-key",
+          device_key: &crate::device_proof::DeviceKey::fixture(),
+        }),
       })
       .await
       .unwrap();
       assert_eq!(result, serde_json::json!({"id":"redeemed"}));
       let account = crate::account::LinkedAccount {
+        device_key: crate::device_proof::DeviceKey::fixture(),
         api_base_url: origin.clone(),
         web_origin: "https://web.example.test".into(),
         account: crate::types::LinkedAccountSnapshot {
@@ -439,13 +464,14 @@ mod tests {
           expires_at: "2027-01-01T00:00:00Z".into(),
         },
       };
+      let account = crate::account::AccountRequest::fixture(account).await;
       let (redeemed, linked) =
         attempt_linked::<serde_json::Value>(LinkedRequestOptions {
           client: &client,
           target,
           api_base_url: &origin,
           token: "valid",
-          account: Some(account),
+          account: Some(&account),
         })
         .await
         .unwrap();
@@ -630,7 +656,11 @@ mod tests {
       target: Target::DesktopEdit,
       api_base_url: &origin,
       token: "token",
-      credential: Some("key"),
+      credential: Some(crate::registry::RegistryRequestAuth {
+        api_base_url: "",
+        credential_key: "key",
+        device_key: &crate::device_proof::DeviceKey::fixture(),
+      }),
     })
     .await
     .unwrap_err();
@@ -681,6 +711,7 @@ mod tests {
       for account in [
         None,
         Some(crate::account::LinkedAccount {
+          device_key: crate::device_proof::DeviceKey::fixture(),
           api_base_url: "https://other.example.test".into(),
           web_origin: "https://web.example.test".into(),
           account: crate::types::LinkedAccountSnapshot {
@@ -698,12 +729,16 @@ mod tests {
           },
         }),
       ] {
+        let account = match account {
+          Some(account) => Some(crate::account::AccountRequest::fixture(account).await),
+          None => None,
+        };
         let result = attempt_linked::<serde_json::Value>(LinkedRequestOptions {
           client: &client,
           target,
           api_base_url: &origin,
           token: "token",
-          account,
+          account: account.as_ref(),
         })
         .await;
         assert!(matches!(result, Err(Failure::AccountRequired)));

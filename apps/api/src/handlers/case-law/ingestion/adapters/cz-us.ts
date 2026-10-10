@@ -1,12 +1,16 @@
+// parser-output-unchanged: array partitions use the shared owner with identical items and boundaries; parsed content is unchanged.
 // parser-output-unchanged: Read scope passes through the gate; successful decision text and parsing are unchanged.
 import { Result, TaggedError, panic } from "better-result";
 import * as cheerio from "cheerio";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { classifyFailure } from "@stll/errors";
 import { DECISION_IDENTIFIER_MAX_COUNT } from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
+// parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
+import { sha256Hex as hashContent } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import {
@@ -57,7 +61,6 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import {
   adapterCatch,
-  hashContent,
   parseCeDate,
   stripHtml,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
@@ -2664,8 +2667,12 @@ const fetchListedDecisions = async (
 ): Promise<CzUsPageItems> => {
   const decisions: IngestionResult[] = [];
   let failed = 0;
-  for (let start = 0; start < listed.length; start += DOCUMENT_CONCURRENCY) {
-    const batch = listed.slice(start, start + DOCUMENT_CONCURRENCY);
+  for (const [batchIndex, batch] of chunkItems(
+    listed,
+    DOCUMENT_CONCURRENCY,
+  ).entries()) {
+    const start = batchIndex * DOCUMENT_CONCURRENCY;
+
     const built = await Promise.all(
       batch.map(
         async (item) =>

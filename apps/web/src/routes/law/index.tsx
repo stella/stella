@@ -52,14 +52,13 @@ import { openDecisionMatch } from "@/features/case-law/open-decision-match";
 import { latestDecisionsOptions } from "@/features/case-law/queries/decisions";
 import { openStatuteMatch } from "@/features/statutes/open-statute-match";
 import { legislationShelfOptions } from "@/features/statutes/queries/statutes";
-import { formatValidityDate } from "@/features/statutes/statute-format";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter, useLocale } from "@/i18n/formatting-context";
 import { getMessageLocale, getTranslator } from "@/i18n/i18n-store";
 import { resolveCaseLawRouteCountry } from "@/lib/case-law-route";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { recordLawSearch } from "@/lib/law-search-history";
+import { recordLawSearch } from "@/lib/law-search-history/law-search-history";
 import { pageTitle } from "@/lib/page-title";
 import {
   createLegalCollectionJsonLd,
@@ -67,6 +66,8 @@ import {
   createPublicLawHead,
 } from "@/lib/public-law-seo";
 import { ensureRouteQueryData } from "@/lib/react-query";
+import { formatValidityDate } from "@/lib/statutes/statute-format";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import {
   type LawScope,
   lawHomeDescriptor,
@@ -299,10 +300,13 @@ function LawHome() {
       : requestedScope;
 
   const { data: latest } = useSuspenseQuery(latestDecisionsOptions(scope));
-  const { data: shelf } = useQuery({
+  const shelfQuery = useQuery({
     ...legislationShelfOptions(scope),
     enabled: statuteCountry !== null,
   });
+  const shelfView = useQueryView(shelfQuery);
+  useQueryViewError(shelfView);
+  const shelf = shelfView.type === "items" ? shelfView.items : undefined;
 
   /**
    * The one dispatch every entry takes, whether typed and submitted or

@@ -1,6 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, describe, expect, test } from "bun:test";
 
+import { sleep } from "@stll/concurrency/sleep";
+
 declare global {
   // Set by the testing library; off while a store update runs outside `act`.
   var IS_REACT_ACT_ENVIRONMENT: boolean | undefined;
@@ -77,9 +79,7 @@ describe("useLatestCallback", () => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = false;
     try {
       store.set(1);
-      await new Promise((resolve) => {
-        setTimeout(resolve, 0);
-      });
+      await sleep(0);
     } finally {
       globalThis.IS_REACT_ACT_ENVIRONMENT = true;
     }

@@ -105,6 +105,7 @@ const acceptedRow = (
     id: text(fields, "id"),
     sourceName: text(fields, "sourceName"),
     canonicalName: text(fields, "canonicalName"),
+    shortCode: text(fields, "shortCode"),
     rawJurisdiction: text(fields, "rawJurisdiction"),
     classification: oneOf(US_COURT_CLASSIFICATIONS, fields, "classification"),
     system: oneOf(US_COURT_SYSTEMS, fields, "system"),

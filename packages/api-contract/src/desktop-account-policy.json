@@ -1,4 +1,7 @@
 {
   "keyPrefix": "stella_dr_",
-  "credentialLifetimeSeconds": 604800
+  "credentialLifetimeSeconds": 2592000,
+  "rotationIntervalSeconds": 30,
+  "clockSkewSeconds": 300,
+  "linkProtocol": 5
 }

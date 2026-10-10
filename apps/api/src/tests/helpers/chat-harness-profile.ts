@@ -4,7 +4,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 
 import { queryCountLogger } from "@/api/lib/db-query-counter";
 
-export const CHAT_HARNESS_PHASES = [
+const CHAT_HARNESS_PHASES = [
   "fixture",
   "prepare",
   "clientSetup",

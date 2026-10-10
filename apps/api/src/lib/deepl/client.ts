@@ -1,4 +1,6 @@
 import * as v from "valibot";
+
+import { backoffDelay } from "@stll/concurrency/backoff-delay";
 /**
  * DeepL document-translation REST client.
  *
@@ -14,7 +16,6 @@ import * as v from "valibot";
  * upstream / timeout) so the calling handler can map them to
  * actionable HTTP responses.
  */
-
 import { fetchWithTimeout, type FetchWithTimeoutInit } from "@stll/fetch";
 import { Temporal } from "@stll/time";
 
@@ -59,14 +60,14 @@ export const maskDeepLKey = (key: string): string => {
 };
 
 /** Mirrors DeepL's `Formality` API parameter. */
-export type DeepLFormality =
+type DeepLFormality =
   | "default"
   | "more"
   | "less"
   | "prefer_more"
   | "prefer_less";
 
-export type TranslateDocumentInput = {
+type TranslateDocumentInput = {
   apiKey: string;
   /** Source bytes — must be DOCX, PDF, PPTX, XLSX, TXT, HTML, or XLIFF. */
   file: Uint8Array | ArrayBuffer;
@@ -82,12 +83,12 @@ export type TranslateDocumentInput = {
   pollBudgetMs?: number | undefined;
 };
 
-export type TranslateDocumentResult = {
+type TranslateDocumentResult = {
   bytes: Uint8Array;
   billedCharacters: number | null;
 };
 
-export type TranslateTextBatchInput = {
+type TranslateTextBatchInput = {
   apiKey: string;
   texts: readonly string[];
   targetLang: string;
@@ -389,8 +390,6 @@ const downloadResult = async (
   return await readDeepLBytes(response);
 };
 
-const delay = async (ms: number) => await Bun.sleep(ms);
-
 /**
  * Translate a document via DeepL. Uploads, polls until the job
  * is `done` (or `error`), then downloads the translated bytes.
@@ -416,9 +415,11 @@ export const translateDocument = async (
       });
     }
 
-    await delay(pollDelay);
+    await Bun.sleep(pollDelay);
     pollDelay = Math.min(
-      Math.round(pollDelay * POLL_BACKOFF_FACTOR),
+      Math.round(
+        backoffDelay(1, { baseMs: pollDelay, factor: POLL_BACKOFF_FACTOR }),
+      ),
       POLL_MAX_DELAY_MS,
     );
 

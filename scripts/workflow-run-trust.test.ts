@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { Script } from "node:vm";
 
 import { definitelyFalse } from "./github-expression";
 import {
@@ -18,8 +19,16 @@ import {
 // it when that job was skipped.
 
 const WORKFLOWS_URL = new URL("../.github/workflows/", import.meta.url);
-/** workflow_run workflows today. Fewer means the scan broke. */
-const MINIMUM_WORKFLOW_RUN_WORKFLOWS = 5;
+const RELEASE_CHAIN_MARKER = "# release-chain-alert";
+const PROMOTE_DISPATCH_ACTION = "uses: ./.github/actions/promote-dispatch";
+// Pin the current scan so missing or newly added entry points need review.
+const WORKFLOW_RUN_WORKFLOWS = [
+  "bot-refresh-auto-merge.yml",
+  "cla.yml",
+  "publish-npm.yml",
+  "release-desktop.yml",
+  "scheduled-run-alerts.yml",
+] as const;
 
 // A source check holds when the job's condition is false, whatever every
 // other value is, as soon as ONE of these three facts about the triggering run
@@ -168,10 +177,10 @@ const trustProblems = (workflow: unknown): string[] => {
 const allWorkflows = () => {
   const root = fileURLToPath(WORKFLOWS_URL);
   return [...new Bun.Glob("*.{yml,yaml}").scanSync({ cwd: root })].map(
-    (file) => ({
-      file,
-      workflow: Bun.YAML.parse(readFileSync(`${root}/${file}`, "utf-8")),
-    }),
+    (file) => {
+      const source = readFileSync(`${root}/${file}`, "utf-8");
+      return { file, source, workflow: Bun.YAML.parse(source) };
+    },
   );
 };
 
@@ -190,13 +199,139 @@ const GATE = [
 describe("workflow_run trust", () => {
   test("every workflow_run workflow checks where its triggering run came from", () => {
     const workflows = workflowRunWorkflows();
-    expect(workflows.length).toBeGreaterThanOrEqual(
-      MINIMUM_WORKFLOW_RUN_WORKFLOWS,
-    );
+    expect(workflows.map(({ file }) => file).toSorted()).toEqual([
+      ...WORKFLOW_RUN_WORKFLOWS,
+    ]);
     const problems = workflows.flatMap(({ file, workflow }) =>
       trustProblems(workflow).map((problem) => `${file}: ${problem}`),
     );
     expect(problems).toEqual([]);
+  });
+
+  test("every release-chain workflow is covered by failed-run alerts", () => {
+    const workflows = allWorkflows();
+    const alerting = workflows.find(
+      ({ file }) => file === "scheduled-run-alerts.yml",
+    )?.workflow;
+    if (!isRecord(alerting) || !isRecord(alerting["on"])) {
+      expect.unreachable("scheduled run alerts require workflow_run triggers");
+    }
+    const workflowRun = alerting["on"]["workflow_run"];
+    const jobs = alerting["jobs"];
+    if (
+      !isRecord(workflowRun) ||
+      !Array.isArray(workflowRun["workflows"]) ||
+      !isRecord(jobs) ||
+      !isRecord(jobs["notify"])
+    ) {
+      expect.unreachable("scheduled run alerts require a notify job");
+    }
+    const alertedNames = workflowRun["workflows"];
+    const condition = conditionOf(jobs["notify"]);
+    const releaseChain = workflows.filter(
+      ({ source }) =>
+        source.includes(RELEASE_CHAIN_MARKER) ||
+        source.includes(PROMOTE_DISPATCH_ACTION),
+    );
+
+    for (const { file, workflow } of releaseChain) {
+      if (!isRecord(workflow) || typeof workflow["name"] !== "string") {
+        expect.unreachable(`${file} requires a workflow name`);
+      }
+      expect(alertedNames, file).toContain(workflow["name"]);
+      for (const event of triggers(workflow["on"])) {
+        expect(
+          definitelyFalse(condition, {
+            values: {
+              "github.event_name": "workflow_run",
+              "github.repository": "owner/repo",
+              "github.event.workflow_run.conclusion": "failure",
+              "github.event.workflow_run.event": event,
+              "github.event.workflow_run.head_repository.full_name":
+                "owner/repo",
+              "github.event.workflow_run.path": `.github/workflows/${file}`,
+            },
+            status: {
+              always: true,
+              success: true,
+              failure: false,
+              cancelled: false,
+            },
+          }),
+          `${file}: ${event}`,
+        ).toBe(false);
+      }
+    }
+  });
+
+  test("reusable network delivery trusts only the main recorder caller", () => {
+    const workflows = allWorkflows();
+    const delivery = workflows.find(
+      ({ file }) => file === "network-baseline-deliver.yml",
+    )?.workflow;
+    const recording = workflows.find(
+      ({ file }) => file === "network-baseline-record.yml",
+    )?.workflow;
+    if (
+      !isRecord(delivery) ||
+      !isRecord(delivery["jobs"]) ||
+      !isRecord(recording) ||
+      !isRecord(recording["jobs"])
+    ) {
+      expect.unreachable("network baseline workflows require jobs");
+    }
+    expect(triggers(delivery["on"])).toEqual(["workflow_call"]);
+    expect(recording["jobs"]["deliver"]).toMatchObject({
+      uses: "./.github/workflows/network-baseline-deliver.yml",
+      needs: "record",
+    });
+    const job = delivery["jobs"]["deliver"];
+    if (!isRecord(job) || typeof job["if"] !== "string") {
+      expect.unreachable("reusable delivery requires a caller condition");
+    }
+    const condition = new Script(`Boolean(${job["if"]})`);
+    for (const ref of [
+      "refs/heads/main",
+      "refs/heads/feature",
+      "refs/pull/42/merge",
+    ]) {
+      for (const workflow_ref of [
+        "owner/repo/.github/workflows/network-baseline-record.yml@refs/heads/main",
+        "owner/repo/.github/workflows/ci.yml@refs/heads/main",
+        "owner/repo/.github/workflows/network-baseline-record.yml@refs/heads/feature",
+        "fork/repo/.github/workflows/network-baseline-record.yml@refs/heads/main",
+      ]) {
+        for (const event_name of [
+          "schedule",
+          "workflow_dispatch",
+          "pull_request",
+          "pull_request_target",
+          "workflow_run",
+          "push",
+        ]) {
+          const permitted =
+            ref === "refs/heads/main" &&
+            workflow_ref ===
+              "owner/repo/.github/workflows/network-baseline-record.yml@refs/heads/main" &&
+            (event_name === "schedule" || event_name === "workflow_dispatch");
+          expect(
+            condition.runInNewContext({
+              github: {
+                ref,
+                workflow_ref,
+                event_name,
+                repository: "owner/repo",
+              },
+              format: (pattern: string, repository: string) =>
+                pattern.replace("{0}", () => repository),
+              fromJSON: JSON.parse,
+              contains: (values: unknown[], value: unknown) =>
+                values.includes(value),
+            }),
+          ).toBe(permitted);
+        }
+      }
+    }
   });
 
   test("rejects a job that trusts the run's name and conclusion alone", () => {
@@ -317,9 +452,12 @@ describe("workflow_run trust", () => {
     const workflows = allWorkflows().filter(({ workflow }) =>
       usesDefaultCacheScope(workflow),
     );
-    // cla.yml, pr-lint.yml and the workflow_run workflows today.
-    expect(workflows.length).toBeGreaterThanOrEqual(
-      MINIMUM_WORKFLOW_RUN_WORKFLOWS + 1,
+    expect(workflows.map(({ file }) => file).toSorted()).toEqual(
+      [
+        ...WORKFLOW_RUN_WORKFLOWS,
+        "network-baseline-request.yml",
+        "pr-lint.yml",
+      ].toSorted(),
     );
     const problems = workflows.flatMap(({ file, workflow }) =>
       workflowCacheProblems(workflow).map((problem) => `${file}: ${problem}`),

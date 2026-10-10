@@ -5,8 +5,8 @@
 
 Every safe handler the API exposes, grouped by domain: how it is classified
 (read/write, destructive) and how it is reachable — as a curated MCP tool,
-covered by one, or only through the generic `invoke_capability` path (shown
-here as its CLI form). Projected from the same handler enumeration that builds
+covered by one, or through `read_capability` or
+`write_capability` (shown here as its CLI form). Projected from the same handler enumeration that builds
 `packages/cli/capabilities/*.json`; see
 `apps/api/scripts/export-capability-catalog.ts`.
 
@@ -59,6 +59,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `chat.export.create` | write | stella:chat | — | generic invoke → `stella capability chat export-create` |
 | `chat.fork.create` | write | stella:chat | — | generic invoke → `stella capability chat fork-create` |
 | `chat.messages.list` | read | stella:chat | — | generic invoke → `stella capability chat messages-list` |
+| `chat.messages.revisions.list` | read | stella:chat | — | generic invoke → `stella capability chat messages-revisions-list` |
 | `chat.older-messages.list` | read | stella:chat | — | generic invoke → `stella capability chat older-messages-list` |
 | `chat.threads.delete` | write, destructive | stella:chat | — | generic invoke → `stella capability chat threads-delete` |
 | `chat.threads.list` | read | stella:chat | — | generic invoke → `stella capability chat threads-list` |
@@ -672,13 +673,13 @@ mechanics, and similar), not gaps in coverage.
 | --- | --- |
 | account_lifecycle | 4 |
 | assistant_chat | 16 |
-| auth_plumbing | 20 |
+| auth_plumbing | 22 |
 | billing_ui | 1 |
-| chat_thread_ui | 2 |
+| chat_thread_ui | 6 |
 | compound_consent | 1 |
 | deploy_mechanics | 1 |
 | document_processing | 25 |
-| health_infra | 1 |
+| health_infra | 2 |
 | hosted_billing | 7 |
 | mcp_transport | 12 |
 | native_tool_ui | 10 |
@@ -687,6 +688,6 @@ mechanics, and similar), not gaps in coverage.
 | realtime_stream | 4 |
 | search_ui | 15 |
 | session_token_exchange | 20 |
-| ui_navigation_state | 13 |
+| ui_navigation_state | 14 |
 | upload_mechanics | 20 |
 | url_preview | 2 |

@@ -136,6 +136,7 @@ import { isUnauthorizedError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { getExtension } from "@/lib/files/file-extension";
+import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 import { toSafeId } from "@/lib/safe-id";
 import type {
   OcrExportStatus,
@@ -143,6 +144,7 @@ import type {
   WorkspaceCellMetadata,
   WorkspaceEntity,
 } from "@/lib/types";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { downloadFile } from "@/lib/utils";
 import {
   useCreateEntities,
@@ -315,6 +317,28 @@ const OcrExportMenuItems = ({
   );
 };
 
+type ExportableOcrSourcesOptions = {
+  isBulk: boolean;
+  isCellContext: boolean;
+  ocrSource: OcrSource | undefined;
+  ocrSources: readonly OcrSource[];
+};
+
+const getExportableOcrSources = ({
+  isBulk,
+  isCellContext,
+  ocrSource,
+  ocrSources,
+}: ExportableOcrSourcesOptions): readonly OcrSource[] => {
+  if (isBulk) {
+    return [];
+  }
+  if (isCellContext) {
+    return ocrSource && hasOcrExport(ocrSource) ? [ocrSource] : [];
+  }
+  return ocrSources.filter(hasOcrExport);
+};
+
 export const RowActions = ({
   duplicatePresentation = "menu-only",
   entity,
@@ -352,7 +376,11 @@ export const RowActions = ({
   const [isOcrPending, setIsOcrPending] = useState(false);
   const [translationDialogState, setTranslationDialogState] =
     useState<TranslationDialogState>({ type: "closed" });
-  const { data: properties } = useQuery(propertiesOptions(workspaceId));
+  const propertiesQuery = useQuery(propertiesOptions(workspaceId));
+  const propertiesView = useQueryView(propertiesQuery);
+  useQueryViewError(propertiesView);
+  const properties =
+    propertiesView.type === "items" ? propertiesView.items : undefined;
   const duplicateTargetIdsRef = useRef(new Map<string, string>());
   const file = getFirstFile(entity);
   const name = getEntityName(entity);
@@ -480,12 +508,12 @@ export const RowActions = ({
 
   const hasPdfConversion =
     file !== null && file.pdfFileId !== null && file.mimeType !== PDF_MIME_TYPE;
-  let exportableOcrSources: readonly OcrSource[] = [];
-  if (!isBulk && isCellContext && ocrSource && hasOcrExport(ocrSource)) {
-    exportableOcrSources = [ocrSource];
-  } else if (!isBulk && !isCellContext) {
-    exportableOcrSources = ocrSources.filter(hasOcrExport);
-  }
+  const exportableOcrSources = getExportableOcrSources({
+    isBulk,
+    isCellContext,
+    ocrSource,
+    ocrSources,
+  });
   // A bulk selection keeps the originals: it spans files whose versions do not
   // share one answer, so no rendition is offered for all of them.
   const downloadRenditions =
@@ -1232,7 +1260,7 @@ const RowOpenMenuActions = ({
   );
 };
 
-const RowOcrMenuActions = ({
+export const RowOcrMenuActions = ({
   canRunOcr,
   isPending,
   onRun,
@@ -1249,32 +1277,52 @@ const RowOcrMenuActions = ({
   return (
     <>
       {canRunOcr && (
-        <MenuItem
-          disabled={isPending}
-          onClick={() => detached(onRun(selectedSource), "row-actions.run-ocr")}
-        >
-          <ScanTextIcon />
-          {t("workspaces.files.runOcr")}
-        </MenuItem>
+        <CapabilityAction action={{ capability: "ocr" }}>
+          {(capabilityProps) => (
+            <MenuItem
+              disabled={isPending}
+              onClick={() =>
+                detached(onRun(selectedSource), "row-actions.run-ocr")
+              }
+              {...capabilityProps}
+            >
+              <ScanTextIcon />
+              {t("workspaces.files.runOcr")}
+            </MenuItem>
+          )}
+        </CapabilityAction>
       )}
       {rowSources.length > 0 && (
         <MenuSub>
-          <MenuSubTrigger>
-            <ScanTextIcon />
-            {t("workspaces.files.runOcr")}
-          </MenuSubTrigger>
+          <CapabilityAction action={{ capability: "ocr" }}>
+            {(capabilityProps) => (
+              <MenuSubTrigger {...capabilityProps}>
+                <ScanTextIcon />
+                {t("workspaces.files.runOcr")}
+              </MenuSubTrigger>
+            )}
+          </CapabilityAction>
           <MenuSubPopup>
             {rowSources.map((source) => (
-              <MenuItem
-                disabled={isPending}
+              <CapabilityAction
                 key={source.fieldId}
-                onClick={() => detached(onRun(source), "row-actions.run-ocr")}
+                action={{ capability: "ocr" }}
               >
-                <ScanTextIcon />
-                <BidiText as="span" className="max-w-64 truncate">
-                  {source.fileName}
-                </BidiText>
-              </MenuItem>
+                {(capabilityProps) => (
+                  <MenuItem
+                    disabled={isPending}
+                    onClick={() =>
+                      detached(onRun(source), "row-actions.run-ocr")
+                    }
+                    {...capabilityProps}
+                  >
+                    <ScanTextIcon />
+                    <BidiText as="span" className="max-w-64 truncate">
+                      {source.fileName}
+                    </BidiText>
+                  </MenuItem>
+                )}
+              </CapabilityAction>
             ))}
           </MenuSubPopup>
         </MenuSub>
@@ -1371,10 +1419,14 @@ const RowFolderDesktopMenuActions = ({
         />
       )}
       {canOpenInDesktop && (
-        <MenuItem onClick={onOpenInDesktop}>
-          <LaptopIcon />
-          {openInDesktopLabel}
-        </MenuItem>
+        <CapabilityAction action={{ capability: "desktop" }}>
+          {(capabilityProps) => (
+            <MenuItem onClick={onOpenInDesktop} {...capabilityProps}>
+              <LaptopIcon />
+              {openInDesktopLabel}
+            </MenuItem>
+          )}
+        </CapabilityAction>
       )}
       {canReleaseDesktopLock && (
         <MenuItem
@@ -1390,7 +1442,7 @@ const RowFolderDesktopMenuActions = ({
   );
 };
 
-const RowFeatureMenuActions = ({
+export const RowFeatureMenuActions = ({
   canCreateEntity,
   entity,
   file,
@@ -1412,7 +1464,6 @@ const RowFeatureMenuActions = ({
   onChatAbout: () => void;
   onEditPages: (() => void) | undefined;
   onOpenVersionHistory: (() => void) | undefined;
-  /** Always offered for a signable PDF; the label says what it needs. */
   onSign: (() => void) | undefined;
   onTranslate: () => void;
   signLabel: string;
@@ -1441,20 +1492,43 @@ const RowFeatureMenuActions = ({
         </MenuItem>
       )}
       {onSign !== undefined && (
-        <MenuItem onClick={onSign}>
-          <SignatureIcon />
-          {signLabel}
-        </MenuItem>
+        <CapabilityAction action={{ capability: "desktop" }}>
+          {(capabilityProps) => (
+            <MenuItem onClick={onSign} {...capabilityProps}>
+              <SignatureIcon />
+              {signLabel}
+            </MenuItem>
+          )}
+        </CapabilityAction>
       )}
-      <MenuItem onClick={onChatAbout}>
-        <MessageSquareIcon />
-        {t("chat.chatAbout")}
-      </MenuItem>
+      <CapabilityAction action={{ capability: "ai" }}>
+        {(capabilityProps) => (
+          <MenuItem onClick={onChatAbout} {...capabilityProps}>
+            <MessageSquareIcon />
+            {t("chat.chatAbout")}
+          </MenuItem>
+        )}
+      </CapabilityAction>
       {translationTarget !== null && (
-        <MenuItem disabled={!canCreateEntity} onClick={onTranslate}>
-          <LanguagesIcon />
-          {t("common.translate")}
-        </MenuItem>
+        <CapabilityAction
+          action={{
+            capability:
+              translationTarget.mimeType === DOCX_MIME
+                ? "translation"
+                : "deepl",
+          }}
+        >
+          {(capabilityProps) => (
+            <MenuItem
+              disabled={!canCreateEntity}
+              onClick={onTranslate}
+              {...capabilityProps}
+            >
+              <LanguagesIcon />
+              {t("common.translate")}
+            </MenuItem>
+          )}
+        </CapabilityAction>
       )}
     </>
   );

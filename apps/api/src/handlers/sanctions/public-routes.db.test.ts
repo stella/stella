@@ -3,11 +3,12 @@ import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, getTableName, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
-import { createHash } from "node:crypto";
 import { Worker } from "node:worker_threads";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { buildScreeningIndex, SANCTIONS_SOURCES } from "@stll/sanctions";
 import type { SanctionsEntry, SanctionsSource } from "@stll/sanctions";
+import { createSha256, sha256Hex as hashSha256Hex } from "@stll/sha256/node";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -25,11 +26,11 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { runEntityCheckShared } from "@/api/lib/business-registries/entity-checks";
 import type { CounterpartyCheckSubject } from "@/api/lib/business-registries/entity-checks";
 import { createSanctionsMatcherPool } from "@/api/lib/lists/sanctions/matcher-pool";
-import type {
-  SanctionsMatcherMessage,
-  SanctionsMatcherReply,
-} from "@/api/lib/lists/sanctions/matcher-protocol";
-import { createPublicSanctionsScreening } from "@/api/lib/lists/sanctions/public-screening";
+import type { SanctionsMatcherMessage } from "@/api/lib/lists/sanctions/matcher-protocol";
+import {
+  createPublicSanctionsScreening,
+  SANCTIONS_WARMING_RETRY_AFTER_SECONDS,
+} from "@/api/lib/lists/sanctions/public-screening";
 import { createSanctionsPublicReadDb } from "@/api/lib/lists/sanctions/read-db";
 import type { SanctionsPublicReadDb } from "@/api/lib/lists/sanctions/read-db";
 import {
@@ -80,8 +81,7 @@ const editionIds = new Map<
   ReturnType<typeof toSafeId<"sanctionsEdition">>
 >();
 
-const hash = (value: string) =>
-  createHash("sha256").update(value).digest("hex");
+const hash = (value: string) => hashSha256Hex(value);
 
 type EntryOptions = {
   source: SanctionsSource;
@@ -169,8 +169,7 @@ const seedEntries = async (
   source: SanctionsSource,
   entries: SanctionsEntry[],
 ) => {
-  for (let offset = 0; offset < entries.length; offset += INSERT_BATCH_SIZE) {
-    const batch = entries.slice(offset, offset + INSERT_BATCH_SIZE);
+  for (const batch of chunkItems(entries, INSERT_BATCH_SIZE)) {
     await db.insert(sanctionsEntryPayloads).values(
       batch.map((payload) => ({
         contentHash: hash(JSON.stringify(payload)),
@@ -271,6 +270,23 @@ const publicWireSubject = (subject: NameSubject) =>
         nationalityCodes: subject.nationalityCodes,
       };
 
+/** A cold public screening answers "warming"; settle its one background warmup. */
+const warmPublicScreen = async (
+  publicScreen: ReturnType<typeof createPublicSanctionsScreening>,
+  now: Date,
+) => {
+  const cold = (
+    await publicScreen({
+      db: publicDb,
+      now,
+      practiceJurisdictions: [],
+      subject: { type: "organization", name: "Warmup", identifiers: [] },
+    })
+  ).unwrap();
+  expect(cold.lists.some(({ reason }) => reason === "warming")).toBe(true);
+  await publicScreen.warmupSettled();
+};
+
 const assertParity = async ({
   subject,
   now = FRESH_NOW,
@@ -307,13 +323,17 @@ const assertParity = async ({
   const { kind, subject: checkedSubject, ...screening } = inProduct;
   expect(kind).toBe("sanctions");
   expect(checkedSubject.type).toBe(subject.type);
+  const publicScreen = createPublicSanctionsScreening({ pool: publicPool });
+  if (publicResponse === undefined) {
+    await warmPublicScreen(publicScreen, now);
+  }
   const analytics = installRecordingAnalytics();
   const logger = installRecordingLogger();
   const context = new InMemoryRateLimitContext();
   const route = createPublicSanctionsRoute({
     db: publicDb,
     now,
-    screen: createPublicSanctionsScreening({ pool: publicPool }),
+    screen: publicScreen,
     rateLimitOptions: {
       context,
       generator: scopedGenerator("parity-test"),
@@ -353,6 +373,7 @@ const assertParity = async ({
     }
     expect(body).toEqual({
       ...screening,
+      retryAfterSeconds: null,
       lists: inProduct.lists.map((list) => ({
         ...list,
         classification: "informational",
@@ -382,16 +403,8 @@ const clearSubject = {
   companyId: null,
 } as const satisfies NameSubject;
 
-const exerciseColdWarmup = async (size: 1 | 2) => {
-  const firstEntered = Promise.withResolvers<undefined>();
-  const releaseFirst = Promise.withResolvers<undefined>();
-  const warmEntered = Promise.withResolvers<undefined>();
-  const releaseWarm = Promise.withResolvers<undefined>();
-  const warmCacheAccessed = Promise.withResolvers<undefined>();
-  const warmFinished = Promise.withResolvers<undefined>();
+const exerciseColdWarmup = async () => {
   const messages: SanctionsMatcherMessage[] = [];
-  const screenedSources = new Set<SanctionsSource>();
-  let reads = 0;
   class RecordingWorker extends Worker {
     constructor() {
       super(
@@ -400,16 +413,6 @@ const exerciseColdWarmup = async (size: 1 | 2) => {
           import.meta.url,
         ),
       );
-      this.on("message", (reply: SanctionsMatcherReply) => {
-        const message = messages.at(-1);
-        if (reply.status !== "screened" || message?.type !== "screen") {
-          return;
-        }
-        screenedSources.add(message.source);
-        if (message.source === sanctionsSourceIds().at(-1)) {
-          warmFinished.resolve(undefined);
-        }
-      });
     }
     override postMessage(...args: Parameters<Worker["postMessage"]>) {
       messages.push(asTestRaw<SanctionsMatcherMessage>(args[0]));
@@ -417,39 +420,14 @@ const exerciseColdWarmup = async (size: 1 | 2) => {
     }
   }
   const pool = createSanctionsMatcherPool({
-    size,
     deadlineMs: 250,
     createWorker: () => new RecordingWorker(),
   });
+  let reads = 0;
   const publicScreen = createPublicSanctionsScreening({
-    pool: {
-      close: pool.close,
-      run: async (operation, options) =>
-        await pool.run(
-          async (session) =>
-            await operation({
-              signal: session.signal,
-              match: session.match,
-              hasEdition: (source, editionId) => {
-                const cached = session.hasEdition(source, editionId);
-                if (options?.onSettled !== undefined && source === "eu") {
-                  warmCacheAccessed.resolve(undefined);
-                }
-                return cached;
-              },
-            }),
-          options,
-        ),
-    },
+    pool,
     loadEntries: async (options) => {
       reads += 1;
-      if (reads === 1) {
-        firstEntered.resolve(undefined);
-        await releaseFirst.promise;
-        return [];
-      }
-      warmEntered.resolve(undefined);
-      await releaseWarm.promise;
       return await loadEditionEntries(options);
     },
   });
@@ -464,36 +442,27 @@ const exerciseColdWarmup = async (size: 1 | 2) => {
       nationalityCodes: ["RU"],
     },
   } as const;
-  const missingProgress = Promise.withResolvers<never>();
-  const progressTimeout = setTimeout(
-    () =>
-      missingProgress.reject(
-        new TypeError("Background warming did not complete"),
-      ),
-    5000,
-  );
-  const first = publicScreen(props);
   try {
-    await Promise.race([firstEntered.promise, missingProgress.promise]);
-    const unavailable = (await first).unwrap();
-    expect(unavailable.status).toBe("unavailable");
+    const cold = (await publicScreen(props)).unwrap();
+    expect(cold.status).toBe("unavailable");
+    // Each list names the edition it is loading; none was screened.
     expect(
-      unavailable.lists.every(({ status }) => status === "unavailable"),
-    ).toBe(true);
-    if (size === 2) {
-      await Promise.race([warmCacheAccessed.promise, missingProgress.promise]);
-    }
-    releaseFirst.resolve(undefined);
-    await Promise.race([warmEntered.promise, missingProgress.promise]);
-    releaseWarm.resolve(undefined);
-    await Promise.race([warmFinished.promise, missingProgress.promise]);
-    expect([...screenedSources].toSorted()).toEqual(
-      sanctionsSourceIds().toSorted(),
+      cold.lists.map(({ source, status, reason, editionId }) => ({
+        source,
+        status,
+        reason,
+        editionId,
+      })),
+    ).toEqual(
+      cold.lists.map(({ source }) => ({
+        source,
+        status: "unavailable",
+        reason: "warming",
+        editionId: activeEdition(source),
+      })),
     );
-    await new Promise<void>((resolve) => {
-      setImmediate(resolve);
-    });
-    const warmedReads = reads;
+    await publicScreen.warmupSettled();
+    expect(reads).toBe(sanctionsSourceIds().length);
     const backgroundMessages = [...messages];
     const matched = (await publicScreen(props)).unwrap();
     expect(matched.status).toBe("possible-match");
@@ -504,13 +473,9 @@ const exerciseColdWarmup = async (size: 1 | 2) => {
     expect(matched.lists.find(({ source }) => source === "eu")?.editionId).toBe(
       activeEdition("eu"),
     );
-    expect(reads).toBe(warmedReads);
+    expect(reads).toBe(sanctionsSourceIds().length);
     return { messages: backgroundMessages, matched };
   } finally {
-    clearTimeout(progressTimeout);
-    releaseFirst.resolve(undefined);
-    releaseWarm.resolve(undefined);
-    await first;
     await pool.close();
   }
 };
@@ -520,9 +485,13 @@ describe("public sanctions search parity", () => {
     "a public reader grant failure does not poison signed-in screening",
     async () => {
       const context = new InMemoryRateLimitContext();
+      const publicScreen = createPublicSanctionsScreening({
+        pool: benchmarkPool(),
+      });
       const route = createPublicSanctionsRoute({
         db: publicDb,
         now: FRESH_NOW,
+        screen: publicScreen,
         rateLimitOptions: {
           context,
           generator: scopedGenerator("failure-isolation-test"),
@@ -532,8 +501,8 @@ describe("public sanctions search parity", () => {
       });
       await db.execute(sql`REVOKE SELECT (content_hash, payload)
         ON sanctions_entry_payloads FROM stella_public_sanctions_reader`);
-      try {
-        const response = await route.handle(
+      const search = async () =>
+        await route.handle(
           new Request("http://localhost/sanctions/search", {
             method: "POST",
             headers: { "content-type": "application/json" },
@@ -542,6 +511,11 @@ describe("public sanctions search parity", () => {
             }),
           }),
         );
+      try {
+        // The first answer only starts the background reads, which fail.
+        expect((await search()).status).toBe(200);
+        await publicScreen.warmupSettled();
+        const response = await search();
         expect(response.status).toBe(200);
         expect(await response.json()).toMatchObject({
           status: "unavailable",
@@ -887,17 +861,18 @@ describe("public sanctions search parity", () => {
         },
       });
       const pool = benchmarkPool();
+      const publicScreen = createPublicSanctionsScreening({
+        pool,
+        loadEntries: async (props) => {
+          loads += 1;
+          return await loadEditionEntries(props);
+        },
+      });
       const screen =
         engine === "index"
           ? async (props: Parameters<typeof screenSanctionsSubject>[0]) =>
               await screenSanctionsSubject({ ...props, indexCache: cache })
-          : createPublicSanctionsScreening({
-              pool,
-              loadEntries: async (props) => {
-                loads += 1;
-                return await loadEditionEntries(props);
-              },
-            });
+          : publicScreen;
       const context = new InMemoryRateLimitContext();
       const route = createPublicSanctionsRoute({
         db: publicDb,
@@ -944,8 +919,22 @@ describe("public sanctions search parity", () => {
               : {},
         }),
       );
+      // The worker answers "warming" until its background load of a new edition settles.
+      const awaitWarmup = async () => {
+        if (engine === "index") {
+          return;
+        }
+        const warming = await search("Ivan", "Sidorov");
+        expect(warming.status).toBe("unavailable");
+        expect(warming.retryAfterSeconds).toBe(
+          SANCTIONS_WARMING_RETRY_AFTER_SECONDS,
+        );
+        await publicScreen.warmupSettled();
+      };
       try {
+        await awaitWarmup();
         const initial = await search("Ivan", "Sidorov");
+        expect(initial.retryAfterSeconds).toBeNull();
         expect(initial.status).toBe("possible-match");
         expect(
           (
@@ -985,6 +974,7 @@ describe("public sanctions search parity", () => {
           .set({ activeEditionId: id })
           .where(eq(sanctionsSources.id, "eu"));
         // The same mounted route and cache receive no refresh call or notification.
+        await awaitWarmup();
         const oldPerson = await search("Ivan", "Sidorov");
         expect(oldPerson.status).toBe("clear");
         expect(
@@ -1034,33 +1024,28 @@ describe("public sanctions search parity", () => {
     DB_TEST_TIMEOUT_MS,
   );
 
-  test.each([1, 2] as const)(
-    "cold deadline warms real indexes and the next public request matches (size %s)",
-    async (size) => {
-      await exerciseColdWarmup(size);
+  test(
+    "a cold search answers warming and one background warmup readies every list",
+    async () => {
+      await exerciseColdWarmup();
     },
     DB_TEST_TIMEOUT_MS,
   );
 
-  test.each([1, 2] as const)(
-    "deadline warmup never reuses the identity query (size %s)",
-    async (size) => {
-      const { messages, matched } = await exerciseColdWarmup(size);
-      const screens = messages.filter((message) => message.type === "screen");
-      expect(screens.map(({ source }) => source).toSorted()).toEqual(
-        sanctionsSourceIds().toSorted(),
-      );
-      for (const message of screens) {
-        expect(message.query).toEqual({
-          name: "Sanctions Cache Warmup",
-          nameSource: "free-text",
-          entityType: "organisation",
-          identifiers: [],
-        });
-        expect(JSON.stringify(message.query)).not.toContain("Ivan");
-        expect(JSON.stringify(message.query)).not.toContain("1960");
-        expect(JSON.stringify(message.query)).not.toContain("RU");
-      }
+  test(
+    "the background warmup sends the matcher list entries only, never the query",
+    async () => {
+      const { messages, matched } = await exerciseColdWarmup();
+      expect(messages.length).toBeGreaterThan(0);
+      expect(
+        messages.filter(({ type }) => type !== "entries" && type !== "index"),
+      ).toEqual([]);
+      expect(
+        messages
+          .filter((message) => message.type === "index")
+          .map(({ source }) => source)
+          .toSorted(),
+      ).toEqual(sanctionsSourceIds().toSorted());
       expect(
         matched.lists
           .find(({ source }) => source === "eu")
@@ -1140,7 +1125,7 @@ describe("public sanctions search parity", () => {
         .where(eq(sanctionsEditions.id, activeEdition("eu")));
       const inputDigests = new Map<SanctionsSource, string>();
       const digest = (lists: Parameters<typeof buildScreeningIndex>[0]) => {
-        const inputHash = createHash("sha256");
+        const inputHash = createSha256();
         for (const input of lists) {
           inputHash.update(
             JSON.stringify({
@@ -1161,31 +1146,32 @@ describe("public sanctions search parity", () => {
       });
       pools.add(pool);
       const context = new InMemoryRateLimitContext();
+      const publicScreen = createPublicSanctionsScreening({
+        pool,
+        loadEntries: async (props) => {
+          const entries = await loadEditionEntries(props);
+          const source =
+            entries.at(0)?.source ?? panic("Missing benchmark entry");
+          inputDigests.set(
+            source,
+            digest([
+              {
+                version: {
+                  source,
+                  publishedAt: props.edition.publishedAt,
+                  fileId: props.edition.fileId,
+                },
+                entries,
+              },
+            ]),
+          );
+          return entries;
+        },
+      });
       const route = createPublicSanctionsRoute({
         db: publicDb,
         now: FRESH_NOW,
-        screen: createPublicSanctionsScreening({
-          pool,
-          loadEntries: async (props) => {
-            const entries = await loadEditionEntries(props);
-            const source =
-              entries.at(0)?.source ?? panic("Missing benchmark entry");
-            inputDigests.set(
-              source,
-              digest([
-                {
-                  version: {
-                    source,
-                    publishedAt: props.edition.publishedAt,
-                    fileId: props.edition.fileId,
-                  },
-                  entries,
-                },
-              ]),
-            );
-            return entries;
-          },
-        }),
+        screen: publicScreen,
         rateLimitOptions: {
           context,
           generator: scopedGenerator("timing-test"),
@@ -1208,21 +1194,28 @@ describe("public sanctions search parity", () => {
         const cold = await run();
         const coldBody = await cold.json();
         const coldMs = performance.now() - coldStart;
+        await publicScreen.warmupSettled();
+        const warmupMs = performance.now() - coldStart;
         const warmStart = performance.now();
         const warm = await run();
         const warmBody = await warm.json();
         const warmMs = performance.now() - warmStart;
         expect(cold.status).toBe(200);
         expect(warm.status).toBe(200);
-        expect(warmBody).toEqual(coldBody);
         expect(coldBody).toMatchObject({
+          status: "unavailable",
+          retryAfterSeconds: SANCTIONS_WARMING_RETRY_AFTER_SECONDS,
+        });
+        expect(warmBody).toMatchObject({
           status: "clear",
+          retryAfterSeconds: null,
           lists: expect.any(Array),
         });
         console.info(
           JSON.stringify({
             entries: BENCHMARK_ENTRY_COUNT,
             coldMs: Number(coldMs.toFixed(2)),
+            warmupMs: Number(warmupMs.toFixed(2)),
             warmMs: Number(warmMs.toFixed(2)),
           }),
         );

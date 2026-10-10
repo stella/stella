@@ -33,6 +33,7 @@ import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 
 /** `ChatThreadMessages` marks every message it renders with its id. */
 const CHAT_MESSAGE_ATTRIBUTE = "data-chat-message-id";
@@ -332,34 +333,50 @@ export const ChatSelectionToolbar = ({
             switch (action) {
               case CHAT_SELECTION_ACTION.askInNewChat: {
                 return (
-                  <Button
+                  <CapabilityAction
+                    action={{ capability: "ai" }}
                     key={action}
-                    onClick={askInNewChat}
-                    onMouseDown={(event) => event.preventDefault()}
-                    size="sm"
-                    variant="ghost"
+                    surface="control"
                   >
-                    <NewChatIcon className="size-3.5" />
-                    <span className={ACTION_LABEL_CLASS}>
-                      {t("chat.selection.askInNewChat")}
-                    </span>
-                  </Button>
+                    {(capabilityProps) => (
+                      <Button
+                        onClick={askInNewChat}
+                        onMouseDown={(event) => event.preventDefault()}
+                        size="sm"
+                        variant="ghost"
+                        {...capabilityProps}
+                      >
+                        <NewChatIcon className="size-3.5" />
+                        <span className={ACTION_LABEL_CLASS}>
+                          {t("chat.selection.askInNewChat")}
+                        </span>
+                      </Button>
+                    )}
+                  </CapabilityAction>
                 );
               }
               case CHAT_SELECTION_ACTION.quoteInReply: {
                 return (
-                  <Button
+                  <CapabilityAction
+                    action={{ capability: "ai" }}
                     key={action}
-                    onClick={quoteInReply}
-                    onMouseDown={(event) => event.preventDefault()}
-                    size="sm"
-                    variant="ghost"
+                    surface="control"
                   >
-                    <QuoteIcon className="size-3.5" />
-                    <span className={ACTION_LABEL_CLASS}>
-                      {t("chat.selection.quoteInReply")}
-                    </span>
-                  </Button>
+                    {(capabilityProps) => (
+                      <Button
+                        onClick={quoteInReply}
+                        onMouseDown={(event) => event.preventDefault()}
+                        size="sm"
+                        variant="ghost"
+                        {...capabilityProps}
+                      >
+                        <QuoteIcon className="size-3.5" />
+                        <span className={ACTION_LABEL_CLASS}>
+                          {t("chat.selection.quoteInReply")}
+                        </span>
+                      </Button>
+                    )}
+                  </CapabilityAction>
                 );
               }
               case CHAT_SELECTION_ACTION.copy: {

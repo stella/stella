@@ -1,5 +1,41 @@
 # @stll/cli
 
+## 4.1.0
+
+### Minor Changes
+
+- [#5381](https://github.com/stella/stella/pull/5381) [`e094947`](https://github.com/stella/stella/commit/e0949477f0693db17c2f27bfb6248ca93c0a0600) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `case-law open` to open a case-law decision, optionally at a range of paragraphs.
+
+### Patch Changes
+
+- [#5403](https://github.com/stella/stella/pull/5403) [`c6cc87b`](https://github.com/stella/stella/commit/c6cc87bda3860c828bd061eadcfbc9c305ee2a37) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose decision passage headings, publisher labels, positions, and text source.
+
+- [#4972](https://github.com/stella/stella/pull/4972) [`f2af5b5`](https://github.com/stella/stella/commit/f2af5b50b7bfff74bc2046baf5c6589c0ca55b52) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Declare legal list availability in generated capability contracts.
+
+## 4.0.0
+
+### Major Changes
+
+- [#5206](https://github.com/stella/stella/pull/5206) [`5e7b1cb`](https://github.com/stella/stella/commit/5e7b1cb974867db2c371480583b60065c0a7bfb5) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Use separate read and write capability executors and negotiate the updated server protocol.
+
+## 3.9.0
+
+### Minor Changes
+
+- [#5225](https://github.com/stella/stella/pull/5225) [`09856c4`](https://github.com/stella/stella/commit/09856c46c74a7e3e3ab11551d886a7445b6bb32f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Recognize verification run limit error codes; active run limits exit with code 4 and daily run limits with code 9.
+
+### Patch Changes
+
+- [#5171](https://github.com/stella/stella/pull/5171) [`39ab02a`](https://github.com/stella/stella/commit/39ab02af9895166f721cbf178d77bc5e1a5b05d6) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Document that case-law analysis generation refuses decisions in a language without an analysis prompt.
+
+- [#5224](https://github.com/stella/stella/pull/5224) [`6365312`](https://github.com/stella/stella/commit/636531233ad8afc287f9cfe87b077dd81a0ae60b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Show deployment-gated commands only with fresh same-origin availability evidence and the caller's required feature access.
+
+- [#5221](https://github.com/stella/stella/pull/5221) [`6d562a0`](https://github.com/stella/stella/commit/6d562a0ed7834849182830676e9125ed0486e49a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Route CLI SHA-256 hashing through its local Node owner, preserving digest encodings.
+
+- [#5178](https://github.com/stella/stella/pull/5178) [`75dea59`](https://github.com/stella/stella/commit/75dea59c5f41af80acbe5784d67b206e2a9d9f24) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Request approval for tools that can modify existing records.
+
+- [#5054](https://github.com/stella/stella/pull/5054) [`3e70db8`](https://github.com/stella/stella/commit/3e70db8012cc76c2d065791f769ff8d9b7c12bea) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update shared list capability descriptions and caller-specific projections.
+
 ## 3.8.7
 
 ### Patch Changes

@@ -38,6 +38,9 @@ const { IntlProvider } = await import("use-intl");
 const { DesktopRequiredDialog, useDesktopActionGate } =
   await import("@/features/desktop/desktop-action-gate");
 const { desktopPresenceOptions } = await import("./desktop-presence");
+const { DesktopConnectionStatus } = await import("./desktop-connection-status");
+const { detectDesktopPlatform, MACOS_DMG_URL, WINDOWS_EXE_URL } =
+  await import("@/lib/desktop-downloads");
 const desktopBridge = await import("@/lib/desktop-bridge");
 const { getAnalytics } = await import("@/lib/analytics/provider");
 const { AuthenticatedUserProvider } =
@@ -486,5 +489,72 @@ describe("desktop action gate uses observed presence", () => {
     });
     expect(performed).toEqual(["open"]);
     expect(screen.queryByRole("dialog")).toBeNull();
+  });
+});
+
+describe("desktop account update requirement", () => {
+  test("a pre-device-proof desktop challenge is scrubbed and offers the platform update without network or a new deep link", async () => {
+    const originalHref = window.location.href;
+    const requests: unknown[] = [];
+    globalThis.fetch = Object.assign(
+      async (request: RequestInfo | URL) => {
+        requests.push(request);
+        throw new TypeError(
+          "Legacy desktop refusal must precede all network services",
+        );
+      },
+      { preconnect: originalFetch.preconnect },
+    );
+    try {
+      const challenge = new URLSearchParams({
+        correlationId: "90123344-5566-7788-9900-aabbccddeeff",
+        verifierHash: "a".repeat(64),
+        portSecret: "b".repeat(64),
+        protocol: "4",
+      });
+      window.location.hash = `desktop-account?${challenge.toString()}`;
+      const outcome = await desktopBridge.linkDesktopAccount({
+        apiBaseUrl: "https://api.example.test",
+      });
+      expect(outcome.isOk()).toBe(true);
+      if (outcome.isErr()) {
+        panic(
+          "Legacy desktop must produce a successful update-required refusal",
+        );
+      }
+      expect(outcome.value).toEqual({ status: "update-required" });
+      if (outcome.value.status !== "update-required") {
+        panic("Legacy desktop must not connect or start another deep link");
+      }
+      expect(window.location.hash).toBe("");
+      expect(window.location.protocol).toBe("http:");
+      expect(requests).toEqual([]);
+      render(
+        <IntlProvider locale="en" messages={messages} timeZone="UTC">
+          <DesktopConnectionStatus state={outcome.value} />
+        </IntlProvider>,
+      );
+      expect(
+        await screen.findByText(
+          messages.workspaces.files.desktopEdit.updateRequiredTitle,
+        ),
+      ).toBeDefined();
+      const platform = detectDesktopPlatform();
+      const downloadLabel =
+        platform === "mac"
+          ? messages.settings.account.desktopDownloadMac
+          : messages.settings.account.desktopDownloadWindows;
+      const downloadHref = platform === "mac" ? MACOS_DMG_URL : WINDOWS_EXE_URL;
+      expect(
+        screen.getByRole("link", { name: downloadLabel }).getAttribute("href"),
+      ).toBe(downloadHref);
+      expect(
+        screen.queryByText(messages.settings.account.desktopConnectFailed),
+      ).toBeNull();
+      expect(requests).toEqual([]);
+    } finally {
+      globalThis.fetch = originalFetch;
+      window.history.replaceState(null, "", originalHref);
+    }
   });
 });

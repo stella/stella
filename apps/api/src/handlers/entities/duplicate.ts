@@ -45,7 +45,7 @@ const duplicateEntityBodySchema = t.Object({
   name: t.Optional(
     t.String({ minLength: 1, maxLength: LIMITS.entityNameMaxLength }),
   ),
-  targetEntityId: t.Optional(tSafeId("entity")),
+  targetEntityId: t.Optional(tSafeId("entity", { usage: "creation" })),
 });
 
 type DuplicateEntityHandlerProps = {

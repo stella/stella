@@ -23,7 +23,7 @@ import {
 } from "@/api/lib/legal-search/corpus-index-projection-sql";
 import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 
-export const CORPUS_PROJECTION_ERASURE_MAX_BATCH_SIZE = 256;
+const CORPUS_PROJECTION_ERASURE_MAX_BATCH_SIZE = 256;
 export const CORPUS_PROJECTION_ERASURE_MAX_REVISIONS = 1024;
 
 type ProjectionIntentId = SafeId<"corpusIndexProjectionIntent">;

@@ -21,10 +21,10 @@ import {
   DownloadIcon,
   FileDiffIcon,
   HistoryIcon,
-  Loader2Icon,
   PlusIcon,
   Trash2Icon,
 } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 import { Menu, MenuItem, MenuPopup, MenuSeparator } from "@stll/ui/menu";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { useContentDir } from "@stll/ui/use-content-dir";
@@ -166,7 +166,7 @@ export const VersionsSidebar = ({
 
     const observer = new IntersectionObserver(
       (entries) => {
-        const entry = entries.at(0);
+        const entry = entries.at(-1);
         if (!entry?.isIntersecting) {
           return;
         }
@@ -483,8 +483,12 @@ const LoadOlderVersions = ({
   if (isLoadingOlder) {
     return (
       <div className="flex justify-center py-1" ref={ref}>
-        <span className="text-muted-foreground flex items-center gap-2 text-xs">
-          <Loader2Icon aria-hidden="true" className="size-3.5 animate-spin" />
+        <span
+          aria-busy="true"
+          className="text-muted-foreground flex items-center gap-2 text-xs"
+          role="status"
+        >
+          <Loader className="size-3.5" size="sm" variant="decorative" />
           {t("common.loading")}
         </span>
       </div>

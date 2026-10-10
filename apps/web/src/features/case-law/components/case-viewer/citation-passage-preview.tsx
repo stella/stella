@@ -2,13 +2,14 @@ import { useQuery } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { visibleDecisionBlocks } from "@stll/decision-reader/decision-text.logic";
+import type { CitationAnchorSource } from "@stll/decision-reader/reader-types";
 import { findCitationPassage } from "@stll/legal-ast/citation-passage";
 import type { CitationPassageMatch } from "@stll/legal-ast/citation-passage";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Skeleton } from "@stll/ui/skeleton";
 
-import type { CitationAnchorSource } from "@/features/case-law/citation-anchors";
 import { decisionOptions } from "@/features/case-law/queries/decisions";
 
 /** Words shown on either side of the citation. */
@@ -52,19 +53,20 @@ export const useCitationPassage = ({
   }
 
   const ast = parseDocumentAst(decision.documentAst);
-  const passage =
-    ast === null
-      ? null
-      : findCitationPassage({
-          blocks: ast.blocks,
-          citationText: citation.citationText,
-          sectionText:
-            citation.sectionIndex === undefined || decision.sections === null
-              ? undefined
-              : decision.sections.find(
-                  (section) => section.index === citation.sectionIndex,
-                )?.text,
-        });
+  const passage = findCitationPassage({
+    blocks: visibleDecisionBlocks(
+      ast,
+      decision.caseNumberType,
+      decision.fulltext,
+    ),
+    citationText: citation.citationText,
+    sectionText:
+      citation.sectionIndex === undefined || decision.sections === null
+        ? undefined
+        : decision.sections.find(
+            (section) => section.index === citation.sectionIndex,
+          )?.text,
+  });
 
   return passage === null
     ? { passage: null, status: "absent" }

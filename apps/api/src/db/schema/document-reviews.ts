@@ -27,6 +27,11 @@ import type {
 } from "@/api/lib/document-review/run-contract";
 
 import {
+  entityFeatureGateChecks,
+  entityFeatureGateColumns,
+  entityFeatureWorkspaceGateColumns,
+} from "../entity-feature-gate-columns";
+import {
   jsonb,
   organization,
   p,
@@ -223,7 +228,7 @@ export const documentReviewRuns = p.pgTable(
     // Both scopes in every command: the run row carries an organization
     // discriminator, so a valid workspace pin must not authorize a row whose
     // organization_id came from anywhere else.
-    ...wsOrganizationPolicies("document_review_runs"),
+    ...wsOrganizationPolicies("document_review_runs", { columns: table }),
   ],
 );
 
@@ -357,7 +362,7 @@ export const documentReviewFindings = p.pgTable(
         name: "document_review_findings_workspace_organization_fk",
       })
       .onDelete("cascade"),
-    ...wsOrganizationPolicies("document_review_findings"),
+    ...wsOrganizationPolicies("document_review_findings", { columns: table }),
   ],
 );
 
@@ -372,6 +377,8 @@ export const documentReviewFindings = p.pgTable(
 export const documentReviewParties = p.pgTable(
   "document_review_parties",
   {
+    ...entityFeatureGateColumns(),
+    ...entityFeatureWorkspaceGateColumns(),
     id: pUuid<"documentReviewParty">().primaryKey(),
     organizationId: safeOrganizationId("organization_id")
       .notNull()
@@ -390,6 +397,7 @@ export const documentReviewParties = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     p
       .uniqueIndex("document_review_parties_entity_version_uidx")
       .on(table.entityVersionId),
@@ -407,7 +415,19 @@ export const documentReviewParties = p.pgTable(
         name: "document_review_parties_workspace_organization_fk",
       })
       .onDelete("cascade"),
-    ...wsOrganizationPolicies("document_review_parties"),
+    ...wsOrganizationPolicies("document_review_parties", {
+      columns: table,
+      references: new Map([
+        [
+          table.entityVersionId,
+          { target: "entity_versions", kind: "owned-content" },
+        ],
+        [table.entityId, { target: "entities", kind: "owned-content" }],
+      ]),
+    }),
+    p
+      .index("document_review_parties_ef_entity_id_idx")
+      .on(table.workspaceId, table.entityId),
   ],
 );
 
@@ -425,6 +445,7 @@ export const documentReviewParties = p.pgTable(
 export const documentReviewReferencePassages = p.pgTable(
   "document_review_reference_passages",
   {
+    ...entityFeatureGateColumns(),
     id: pUuid<"documentReviewReferencePassage">().primaryKey(),
     // Both scope FKs are named by hand: the generated names run past
     // Postgres's 63-byte identifier limit and would be silently truncated.
@@ -442,6 +463,7 @@ export const documentReviewReferencePassages = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     p
       .uniqueIndex("document_review_reference_passages_version_block_uidx")
       .on(table.entityVersionId, table.blockId),
@@ -473,6 +495,14 @@ export const documentReviewReferencePassages = p.pgTable(
         name: "document_review_reference_passages_workspace_organization_fk",
       })
       .onDelete("cascade"),
-    ...wsOrganizationPolicies("document_review_reference_passages"),
+    ...wsOrganizationPolicies("document_review_reference_passages", {
+      columns: table,
+      references: new Map([
+        [table.entityId, { target: "entities", kind: "owned-content" }],
+      ]),
+    }),
+    p
+      .index("document_review_reference_passages_ef_entity_id_idx")
+      .on(table.workspaceId, table.entityId),
   ],
 );

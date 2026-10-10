@@ -31,7 +31,11 @@ import type { PlaybookPositions } from "@/api/lib/workflow/playbook-positions";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_DB,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
+import { testModelActionAdmitter } from "@/api/tests/helpers/model-dispatch-admission";
 
 import { DOCUMENT_TYPE_NOT_FOUND_MESSAGE } from "./assert-document-type";
 import { createPlaybookDefinitionHandler } from "./create-shared";
@@ -344,6 +348,9 @@ if (!databaseUrl || !runPostgresTests) {
                 server: null,
               });
               const writeContext = {
+                admitModelAction: testModelActionAdmitter(
+                  fixture.organizationId,
+                ),
                 organizationId: fixture.organizationId,
                 accessibleWorkspaceIds: [],
                 orgAIConfig: null,
@@ -408,13 +415,14 @@ if (!databaseUrl || !runPostgresTests) {
               >[0];
               const deletion = deleteDocumentType.handler(
                 createTestHandlerContext<DeleteContext>({
+                  scopedDb: NO_DB,
                   session: { activeOrganizationId: fixture.organizationId },
                   user: { id: fixture.userId },
                   params: { documentTypeId: fixture.documentTypeId },
                   safeDb: createSafeTestDb(deleteDb, (tx) =>
                     holdDeleteReferenceCheck(tx, deleteBarrier),
                   ),
-                  recordAuditEvent,
+                  audit: recordAuditEvent,
                 }),
               );
               tasks.push(deletion);

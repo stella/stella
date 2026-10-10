@@ -1,0 +1,7 @@
+# Persisting a legislation revision's body and version metadata
+
+Generated from `scripts/ownership/legislation-revision-row-write.ts`. See [Module ownership](../module-ownership.md).
+
+| Capability                                                                                       | Owner                                            | Enforcement | Summary                                                                                                                                                                                                                                                                       |
+| ------------------------------------------------------------------------------------------------ | ------------------------------------------------ | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `legislation-revision-row-write` — Persisting a legislation revision's body and version metadata | `apps/api/src/handlers/legislation/ingestion.ts` | none        | The ingestion owner publishes revision values together. `no-direct-legislation-revision-write` rejects separate row mutations; withdrawal, expression-ID backfill and projection-epoch owners may update only their exact unrelated columns through explicit object literals. |

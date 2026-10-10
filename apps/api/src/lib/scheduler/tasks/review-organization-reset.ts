@@ -23,7 +23,7 @@ export const RESET_REVIEW_ORGANIZATION_TASK =
 const REPORTED_FAILURES_MAX = 20;
 
 /** What one reset run did, as the counts its system audit row records. */
-export const reviewResetAuditCounts = (
+const reviewResetAuditCounts = (
   report: ReviewResetReport,
 ): SystemAuditCounts<"system:review-organization-reset"> => {
   const seeded = Result.isOk(report.seed) ? report.seed.value : null;

@@ -2,6 +2,7 @@ import { panic } from "better-result";
 
 import type { DecisionQueryIntent } from "@stll/api-contract/decision-query-intent";
 
+import type { CorpusAggregateCacheOutcome } from "@/api/lib/legal-search/corpus-aggregate-cache";
 import type { CorpusHitDispositionCounts } from "@/api/lib/legal-search/corpus-hit-telemetry";
 import { tokenizeCorpusFreeText } from "@/api/lib/legal-search/corpus-query";
 import type { LoggerAttributes } from "@/api/lib/observability/logger";
@@ -112,7 +113,7 @@ export const CASE_LAW_SEARCH_DB_READ = {
   sourceRegistry: "sourceRegistry",
 } as const;
 
-export type CaseLawSearchDbRead =
+type CaseLawSearchDbRead =
   (typeof CASE_LAW_SEARCH_DB_READ)[keyof typeof CASE_LAW_SEARCH_DB_READ];
 
 /**
@@ -130,7 +131,7 @@ const DB_READ_ATTRIBUTE = {
   sourceRegistry: "dbSourceRegistryMs",
 } as const satisfies Record<CaseLawSearchDbRead, string>;
 
-export type CaseLawSearchDbTiming = {
+type CaseLawSearchDbTiming = {
   /** How many reads the request made, over all the named kinds. */
   reads: number;
   msByRead: Record<CaseLawSearchDbRead, number>;
@@ -194,6 +195,12 @@ type CaseLawSearchCompletedEvent = {
   /** The scan stopped because no unseen candidate could out-blend the page. */
   earlyStopped: boolean;
   /**
+   * Where the facet read's aggregations came from, counted per named
+   * aggregation rather than per engine call. All zero when the request read
+   * no facets.
+   */
+  facetCache: CorpusAggregateCacheOutcome;
+  /**
    * Wall time of the facet read that runs beside the page read: its engine
    * aggregation plus the source-registry read it fails closed on, which
    * `dbSourceRegistryMs` reports as well. Zero when the request asked for no
@@ -241,6 +248,7 @@ export const reportCaseLawSearchCompleted = ({
   country,
   db,
   earlyStopped,
+  facetCache,
   facetMs,
   hitsReturned,
   indexMs,
@@ -276,6 +284,9 @@ export const reportCaseLawSearchCompleted = ({
     hitsReturned,
     indexMs: Math.round(indexMs),
     facetMs: Math.round(facetMs),
+    facetCacheHits: facetCache.hits,
+    facetCacheMisses: facetCache.misses,
+    facetCacheSharedFlights: facetCache.sharedFlights,
     scanAndFacetsMs: Math.round(scanAndFacetsMs),
     dbReads: db.reads,
     dbMs,

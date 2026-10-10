@@ -1361,13 +1361,6 @@
     "reason": "Shared public corpus or index maintenance with no tenant actor."
   },
   {
-    "id": "apps/api/src/lib/legal-search/corpus-index-projection-cleanup-store.ts::retryCorpusProjectionCleanupTx",
-    "writes": {
-      "update:corpusIndexProjectionIntents": 1
-    },
-    "reason": "Shared public corpus or index maintenance with no tenant actor."
-  },
-  {
     "id": "apps/api/src/lib/legal-search/corpus-index-projection-cleanup-store.ts::settleCorpusProjectionCleanupTx",
     "writes": {
       "update:corpusIndexProjectionIntents": 1

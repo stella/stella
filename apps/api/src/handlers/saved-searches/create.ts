@@ -1,10 +1,12 @@
 import { panic, Result } from "better-result";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import { savedSearches } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -60,9 +62,11 @@ const createSavedSearch = createSafeRootHandler(
       safeDb(async (tx) => {
         // Serialize the count-and-insert pair so concurrent browser tabs cannot
         // bypass the per-user cap.
-        await tx.execute(
-          sql`SELECT pg_advisory_xact_lock(hashtext(${session.activeOrganizationId}), hashtext(${user.id}))`,
-        );
+        await withAggregateLock({
+          aggregate: "personalCatalog",
+          id: { organizationId: session.activeOrganizationId, userId: user.id },
+          tx,
+        });
         const count = await tx.$count(
           savedSearches,
           and(
@@ -112,5 +116,10 @@ const createSavedSearch = createSafeRootHandler(
     return Result.ok(toSavedSearchResponse(created));
   },
 );
+
+declareAggregateMutation(createSavedSearch.handler, {
+  type: "aggregate",
+  aggregates: ["personalCatalog"],
+});
 
 export default createSavedSearch;

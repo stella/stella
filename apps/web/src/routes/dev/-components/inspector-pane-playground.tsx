@@ -38,7 +38,7 @@ import { ScrollArea } from "@stll/ui/scroll-area";
 
 import { ViewerOverlayBar } from "@/components/inspector/viewer-overlay-bar";
 import { ZoomControls } from "@/components/inspector/zoom-controls";
-import { DecisionText } from "@/features/case-law/components/case-viewer/decision-text";
+import { WebDecisionReader as DecisionText } from "@/components/legal-reader/web-decision-reader";
 import { CitationYearStrip } from "@/features/case-law/components/citation-year-strip";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -232,6 +232,7 @@ const BenchPane = ({ width }: { width: number }) => (
             />
           </div>
           <DecisionText
+            surface="development"
             decision={BENCH_DECISION}
             decisionId={BENCH_DECISION.id}
           />

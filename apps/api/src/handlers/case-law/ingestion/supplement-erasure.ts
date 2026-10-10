@@ -56,7 +56,7 @@ import { metadataMarkedListingOnly } from "@/api/lib/legal-search/partial-observ
 const HOLDER_LEASE_WAIT_MS = 2 * 60 * 1000;
 
 /** What became of one judgment that held the erased text. */
-export type ErasedSupplementHolderOutcome =
+type ErasedSupplementHolderOutcome =
   /** Rebuilt from its own payload without the erased supplement. */
   | { type: "recomposed"; judgmentId: SafeId<"caseLawDecision"> }
   /**

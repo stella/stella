@@ -436,6 +436,30 @@ export const DOC_SOURCE_EXCLUSIONS = [
       reason: "no-llms-txt",
     },
     {
+      checkedAt: "2026-10-06T00:00:00.000Z",
+      dependency: "mdast-util-from-markdown",
+      explanation:
+        "https://unifiedjs.com/llms.txt and the canonical repository's raw llms.txt endpoint return 404. Use the parser API at https://github.com/syntax-tree/mdast-util-from-markdown directly.",
+      expiresAt: "2026-11-05T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+    {
+      checkedAt: "2026-10-06T00:00:00.000Z",
+      dependency: "mdast-util-gfm",
+      explanation:
+        "https://unifiedjs.com/llms.txt and the canonical repository's raw llms.txt endpoint return 404. Use the GFM tree extension API at https://github.com/syntax-tree/mdast-util-gfm directly.",
+      expiresAt: "2026-11-05T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+    {
+      checkedAt: "2026-10-06T00:00:00.000Z",
+      dependency: "micromark-extension-gfm",
+      explanation:
+        "https://unifiedjs.com/llms.txt and the canonical repository's raw llms.txt endpoint return 404. Use the GFM syntax extension API at https://github.com/micromark/micromark-extension-gfm directly.",
+      expiresAt: "2026-11-05T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+    {
       checkedAt: "2026-09-30T00:00:00.000Z",
       dependency: "@standard-schema/spec",
       explanation:
@@ -508,11 +532,11 @@ export const DOC_SOURCE_EXCLUSIONS = [
       reason: "no-llms-txt",
     },
     {
-      checkedAt: "2026-09-12T00:00:00.000Z",
+      checkedAt: "2026-10-08T00:00:00.000Z",
       dependency: "stylelint",
       explanation:
         "https://stylelint.io/llms.txt returns 404. Use https://stylelint.io/user-guide/rules/ and https://stylelint.io/user-guide/configure/ directly for the CSS correctness configuration.",
-      expiresAt: "2026-10-12T00:00:00.000Z",
+      expiresAt: "2026-11-07T00:00:00.000Z",
       reason: "no-llms-txt",
     },
     {
@@ -524,11 +548,11 @@ export const DOC_SOURCE_EXCLUSIONS = [
       reason: "no-llms-txt",
     },
     {
-      checkedAt: "2026-09-08T00:00:00.000Z",
+      checkedAt: "2026-10-08T00:00:00.000Z",
       dependency: "temporal-polyfill",
       explanation:
         "The package publishes Markdown documentation at https://github.com/fullcalendar/temporal-polyfill and API documentation at https://tc39.es/proposal-temporal/docs/, but neither publishes llms.txt. Use those canonical references directly.",
-      expiresAt: "2026-10-08T00:00:00.000Z",
+      expiresAt: "2026-11-07T00:00:00.000Z",
       reason: "no-llms-txt",
     },
   );

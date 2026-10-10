@@ -1023,7 +1023,7 @@ export const corpusDecisionTypeClause = (requested: string): string => {
  * exact without every scoped query paying for a clause its index already
  * implies.
  */
-export type CaseLawCorpusFilters = {
+type CaseLawCorpusFilters = {
   court?: string | undefined;
   courts?: readonly string[] | undefined;
   /**

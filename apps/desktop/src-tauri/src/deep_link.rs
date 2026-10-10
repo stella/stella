@@ -236,7 +236,9 @@ pub fn handle_url(
           &app_handle,
           &api_base_url,
           &web_origin,
-        ) {
+        )
+        .await
+        {
           tracing::warn!(error = %error, "desktop account connection could not start");
         }
       });
@@ -585,26 +587,38 @@ async fn acknowledge_desktop_edit_handoff_opened(
   handoff_id: &str,
   handoff_token: &str,
   session_id: &str,
-  credential_key: &str,
+  app: &AppHandle,
+  expected_account: &crate::account::LinkedAccount,
 ) -> Result<(), String> {
   if !is_safe_session_id(handoff_id) {
     return Err("Invalid desktop edit handoff payload.".to_string());
   }
 
+  let state = app.state::<crate::account::AccountState>();
+  let account = crate::account::request_account(&state)
+    .await?
+    .ok_or("Desktop account is not connected")?;
+  ensure_handoff_identity(&account.identity, &expected_account.identity)?;
+  if account.api_base_url != api_base_url {
+    return Err("Desktop account server changed".into());
+  }
   let url = format!("{api_base_url}/v1/desktop-edit-handoffs/{handoff_id}/opened");
-  let response = client
+  let builder = client
     .post(url)
-    .bearer_auth(credential_key)
     .json(&AcknowledgeDesktopEditHandoffOpenedRequest {
       handoff_token,
       session_id,
     })
-    .timeout(ACKNOWLEDGE_TIMEOUT)
-    .send()
-    .await
-    .map_err(|e| {
-      format!("stella desktop could not acknowledge the edit handoff: {e}")
-    })?;
+    .timeout(ACKNOWLEDGE_TIMEOUT);
+  let response = crate::http_client::device_proof_request(
+    builder,
+    &account.device_key,
+    Some(&account.credential.key),
+    None,
+  )?
+  .send()
+  .await
+  .map_err(|e| format!("stella desktop could not acknowledge the edit handoff: {e}"))?;
 
   if response.status().is_success() {
     return Ok(());
@@ -645,11 +659,6 @@ pub(crate) async fn recheck_handoff_account(
 ) -> Result<(), String> {
   let current = linked_handoff_account(app_handle, &expected.api_base_url).await?;
   ensure_handoff_identity(&current.identity, &expected.identity)?;
-  if current.credential.key != expected.credential.key {
-    return Err(
-      "The desktop account connection changed while opening the document.".to_string(),
-    );
-  }
   Ok(())
 }
 
@@ -715,7 +724,8 @@ async fn redeem_and_open_desktop_edit(
       &handoff_id,
       &handoff_token,
       &result.session_id,
-      &account.credential.key,
+      &app_handle,
+      &account,
     )
     .await
   {

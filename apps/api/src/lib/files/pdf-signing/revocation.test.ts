@@ -2,6 +2,7 @@ import * as asn1js from "asn1js";
 import { beforeEach, describe, expect, test } from "bun:test";
 import * as pkijs from "pkijs";
 
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { PkiFetcher } from "@/api/lib/files/pdf-signing/pki-fetch";
 import { createTrackedRevocationProvider } from "@/api/lib/files/pdf-signing/revocation";
 import { findRevokedCertificates } from "@/api/lib/files/pdf-signing/validation-data";
@@ -13,6 +14,9 @@ import {
 } from "@/api/tests/helpers/test-pki";
 
 const keyPool = createTestRsaKeyPool();
+const permit = grantThirdPartyOutboundPermit();
+const createTestProvider = (fetcher: PkiFetcher) =>
+  createTrackedRevocationProvider({ fetcher, permit });
 beforeEach(() => keyPool.reset());
 
 const CRL_URL = "http://crl.example/issuing.crl";
@@ -58,7 +62,7 @@ describe("revocation data for long-term validation", () => {
       return null;
     };
 
-    const provider = createTrackedRevocationProvider(fetcher);
+    const provider = createTestProvider(fetcher);
     expect(await provider.getOCSP(leaf.der, root.der)).toBe(null);
 
     expect(requests).toEqual([
@@ -76,7 +80,7 @@ describe("revocation data for long-term validation", () => {
     const fetcher: PkiFetcher = async ({ url }) =>
       url === OCSP_URL ? unsuccessfulOcspResponse() : crl;
 
-    const provider = createTrackedRevocationProvider(fetcher);
+    const provider = createTestProvider(fetcher);
 
     // A responder that answered "try later" is not revocation data.
     expect(await provider.getOCSP(leaf.der, root.der)).toBe(null);
@@ -89,7 +93,7 @@ describe("revocation data for long-term validation", () => {
 
   test("ignores a distribution point that serves something other than a CRL", async () => {
     const { leaf, root } = await buildLeaf();
-    const provider = createTrackedRevocationProvider(async () =>
+    const provider = createTestProvider(async () =>
       new TextEncoder().encode("<html>maintenance</html>"),
     );
 
@@ -104,7 +108,7 @@ describe("revocation data for long-term validation", () => {
       status: "revoked",
       subject: leaf,
     });
-    const provider = createTrackedRevocationProvider(async () => revoked);
+    const provider = createTestProvider(async () => revoked);
 
     expect(await provider.getOCSP(leaf.der, root.der)).toEqual(revoked);
     expect(provider.isRevoked(leaf.der)).toBe(true);
@@ -118,7 +122,7 @@ describe("revocation data for long-term validation", () => {
       status: "good",
       subject: leaf,
     });
-    const provider = createTrackedRevocationProvider(async () => good);
+    const provider = createTestProvider(async () => good);
 
     await provider.getOCSP(leaf.der, root.der);
     expect(provider.covers(leaf.der)).toBe(true);
@@ -137,7 +141,7 @@ describe("revocation data for long-term validation", () => {
       status: "revoked",
       subject: other,
     });
-    const provider = createTrackedRevocationProvider(async () => aboutOther);
+    const provider = createTestProvider(async () => aboutOther);
 
     expect(await provider.getOCSP(leaf.der, root.der)).toBe(null);
     expect(provider.isRevoked(leaf.der)).toBe(false);
@@ -152,7 +156,7 @@ describe("revocation data for long-term validation", () => {
     });
     // Same issuer name, wrong key: it must not revoke, nor count as data.
     const forged = await createTestCrl(impostor, [leaf]);
-    const provider = createTrackedRevocationProvider(async ({ url }) =>
+    const provider = createTestProvider(async ({ url }) =>
       url === CRL_URL ? forged : null,
     );
 
@@ -166,7 +170,7 @@ describe("revocation data for long-term validation", () => {
     const crl = await createTestCrl(root, [leaf]);
 
     const { revoked } = await findRevokedCertificates({
-      provider: createTrackedRevocationProvider(async ({ url }) =>
+      provider: createTestProvider(async ({ url }) =>
         url === CRL_URL ? crl : null,
       ),
       signerChain: [leaf.der, root.der],
@@ -176,8 +180,7 @@ describe("revocation data for long-term validation", () => {
   });
 
   describe("authenticity and currency", () => {
-    const serve = (bytes: Uint8Array) =>
-      createTrackedRevocationProvider(async () => bytes);
+    const serve = (bytes: Uint8Array) => createTestProvider(async () => bytes);
 
     test("ignores a good OCSP answer the issuer did not sign", async () => {
       const { leaf, root } = await buildLeaf();
@@ -289,7 +292,7 @@ describe("revocation data for long-term validation", () => {
         nextUpdate: new Date(Date.now() - 2 * day),
         thisUpdate: new Date(Date.now() - 9 * day),
       });
-      const provider = createTrackedRevocationProvider(async ({ url }) =>
+      const provider = createTestProvider(async ({ url }) =>
         url === CRL_URL ? stale : null,
       );
 

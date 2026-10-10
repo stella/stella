@@ -11,7 +11,6 @@ import type {
 import {
   useInfiniteQuery,
   useMutation,
-  useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
 import { useNavigate, useRouter } from "@tanstack/react-router";
@@ -38,12 +37,8 @@ import {
   CommandList,
 } from "@stll/ui/command";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
-import {
-  ChevronRightIcon,
-  LoaderIcon,
-  PanelRightIcon,
-  AiActionIcon,
-} from "@stll/ui/icons";
+import { ChevronRightIcon, PanelRightIcon, AiActionIcon } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 import { MenuSection } from "@stll/ui/menu-section";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
@@ -158,7 +153,10 @@ import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { FILE_OPEN_TARGET, resolveFileOpenTarget } from "@/lib/file-open.logic";
-import { aiAvailabilityOptions } from "@/lib/organization/ai-config-queries";
+import {
+  CapabilityAction,
+  useActionCapabilities,
+} from "@/lib/organization/feature-access/capability-actions";
 import { toSafeId } from "@/lib/safe-id";
 import {
   hasSearchQueryOrSelectiveFilter,
@@ -215,6 +213,30 @@ const SEARCH_PREVIEW_MAX_WIDTH = 800;
  * separator's reported value until a drag pins an explicit width. */
 const SEARCH_PREVIEW_DEFAULT_WIDTH = 512;
 const SEARCH_RESULTS_MIN_WIDTH = 320;
+
+type SearchColumnsStyle = CSSProperties & {
+  "--search-facets-w"?: string;
+  "--search-preview-w"?: string;
+};
+
+type SearchColumnsStyleOptions = {
+  facetsWidth: number | null;
+  previewWidth: number | null;
+};
+
+const getSearchColumnsStyle = ({
+  facetsWidth,
+  previewWidth,
+}: SearchColumnsStyleOptions): SearchColumnsStyle => {
+  const style: SearchColumnsStyle = {};
+  if (facetsWidth !== null) {
+    style["--search-facets-w"] = `${String(facetsWidth)}px`;
+  }
+  if (previewWidth !== null) {
+    style["--search-preview-w"] = `${String(previewWidth)}px`;
+  }
+  return style;
+};
 
 /** A document chosen in pick mode, resolved to the file field the caller can
  *  pin: the hit's own when it names one, else the entity's current file. */
@@ -885,25 +907,16 @@ export const SearchDialog = ({
   // "Ask about these results" chat (POST /search/summary/chat) both
   // require chat:create; hide the AI summary control for roles that
   // lack it instead of surfacing a 403 on click.
+  const { capabilities } = useActionCapabilities("ai");
   const canSummarizeSearch = usePermissions({ chat: ["create"] });
   const showSearchSummary = canShowSearchSummary({
     canSummarizeSearch,
     query: searchQuery,
   });
 
-  // Tab-to-ask-AI hands the query off to a fresh chat thread, so it needs
-  // the same chat:create permission as the summary chat, plus a usable AI
-  // config (in production AI is BYOK-gated per organization). Availability
-  // is only fetched while the dialog is open to keep route loads untouched.
   const userContext = useChatUserContext();
   const getUserContext = useLatestCallback(() => userContext);
-  const { data: aiAvailability } = useQuery({
-    ...aiAvailabilityOptions({
-      organizationId: searchRecentsScope.organizationId,
-    }),
-    enabled: open,
-  });
-  const canAskAI = canSummarizeSearch && aiAvailability?.available === true;
+  const canAskAI = canSummarizeSearch && capabilities.ai.type === "available";
 
   const { resolvedActions, executeAction, uploadRequest, closeUpload } =
     useCommandActions(open);
@@ -1050,7 +1063,11 @@ export const SearchDialog = ({
 
   const handleSummarizeResults = () => {
     const trimmedQuery = searchQuery.trim();
-    if (!trimmedQuery || summarizeSearchMutation.isPending) {
+    if (
+      capabilities.ai.type !== "available" ||
+      !trimmedQuery ||
+      summarizeSearchMutation.isPending
+    ) {
       return;
     }
 
@@ -1085,6 +1102,7 @@ export const SearchDialog = ({
     const trimmedQuery = searchQuery.trim();
     const summaryData = summarizeSearchMutation.data;
     if (
+      capabilities.ai.type !== "available" ||
       !summarizeSearchMutation.isSuccess ||
       summaryData === undefined ||
       !trimmedQuery ||
@@ -1538,7 +1556,7 @@ export const SearchDialog = ({
 
       const observer = new IntersectionObserver(
         (entries) => {
-          const entry = entries.at(0);
+          const entry = entries.at(-1);
           if (!entry?.isIntersecting || isFetchingNextPage) {
             return;
           }
@@ -1654,16 +1672,7 @@ export const SearchDialog = ({
     );
   };
 
-  const columnsStyle: CSSProperties & {
-    "--search-facets-w"?: string;
-    "--search-preview-w"?: string;
-  } = {};
-  if (facetsWidth !== null) {
-    columnsStyle["--search-facets-w"] = `${String(facetsWidth)}px`;
-  }
-  if (previewWidth !== null) {
-    columnsStyle["--search-preview-w"] = `${String(previewWidth)}px`;
-  }
+  const columnsStyle = getSearchColumnsStyle({ facetsWidth, previewWidth });
 
   const applySavedSearch = (criteria: SavedSearchCriteria) => {
     setSearchScope("all");
@@ -1829,9 +1838,14 @@ export const SearchDialog = ({
                   />
                 </SearchScopeInput>
                 {isFetching && !isFetchingNextPage && (
-                  <LoaderIcon className="text-muted-foreground size-4 shrink-0 animate-spin" />
+                  <Loader
+                    className="size-4 shrink-0"
+                    label={t("common.loading")}
+                    size="sm"
+                  />
                 )}
                 <Button
+                  aria-busy={refineSearchMutation.isPending || undefined}
                   aria-label={t("search.aiRefine")}
                   className="size-8 shrink-0"
                   disabled={!query.trim() || refineSearchMutation.isPending}
@@ -1843,7 +1857,7 @@ export const SearchDialog = ({
                   variant="ghost"
                 >
                   {refineSearchMutation.isPending ? (
-                    <LoaderIcon className="size-4 animate-spin" />
+                    <Loader className="size-4" size="sm" variant="decorative" />
                   ) : (
                     <AiActionIcon className="size-4" />
                   )}
@@ -2099,7 +2113,7 @@ export const SearchDialog = ({
               <SearchDialogFooter
                 scope={searchScope}
                 escapeAction={hasVisibleSearch ? "clear" : "close"}
-                canAskAI={canAskAI}
+                canAskAI={canSummarizeSearch}
                 isAskingAI={askAIMutation.isPending}
                 mode={mode.type}
                 onAskAI={handleAskAI}
@@ -2383,20 +2397,28 @@ const SearchDialogFooter = ({
           <SearchFooterHint translationKey="search.hintOpen" />
         )}
         {canAskAI && mode === "browse" && scope !== "registries" && (
-          <Button
-            aria-keyshortcuts="Tab"
-            className="h-auto gap-1.5"
-            disabled={isAskingAI}
-            onClick={onAskAI}
-            size="xs"
-            variant="muted"
-          >
-            {isAskingAI && <LoaderIcon className="size-3 animate-spin" />}
-            <span className="sm:hidden">{t("common.askAI")}</span>
-            <span className="hidden sm:inline">
-              <SearchFooterHintText translationKey="search.hintAskAI" />
-            </span>
-          </Button>
+          <CapabilityAction action={{ capability: "ai" }} surface="control">
+            {(capabilityProps) => (
+              <Button
+                aria-busy={isAskingAI || undefined}
+                aria-keyshortcuts="Tab"
+                className="h-auto gap-1.5"
+                disabled={isAskingAI}
+                onClick={onAskAI}
+                size="xs"
+                variant="muted"
+                {...capabilityProps}
+              >
+                {isAskingAI && (
+                  <Loader className="size-3" size="sm" variant="decorative" />
+                )}
+                <span className="sm:hidden">{t("common.askAI")}</span>
+                <span className="hidden sm:inline">
+                  <SearchFooterHintText translationKey="search.hintAskAI" />
+                </span>
+              </Button>
+            )}
+          </CapabilityAction>
         )}
         <SearchFooterHint translationKey={ESCAPE_HINT_KEYS[escapeAction]} />
       </div>
@@ -2644,7 +2666,11 @@ const SearchHitResults = ({
           )}
           {!pagination.isFetchNextPageError &&
             pagination.isFetchingNextPage && (
-              <LoaderIcon className="text-muted-foreground size-4 animate-spin" />
+              <Loader
+                className="size-4"
+                label={t("common.loading")}
+                size="sm"
+              />
             )}
           {!pagination.isFetchNextPageError &&
             !pagination.isFetchingNextPage && (

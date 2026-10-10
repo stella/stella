@@ -62,14 +62,14 @@ const linkedAccountSchema = t.Nullable(
   }),
 );
 
-export const createDesktopEditHandoffBodySchema = t.Object({
+const createDesktopEditHandoffBodySchema = t.Object({
   entityId: tSafeId("entity"),
   force: t.Optional(t.Boolean()),
   linkedAccount: linkedAccountSchema,
   propertyId: tSafeId("property"),
 });
 
-export const desktopEditHandoffStatusParamsSchema = workspaceParams({
+const desktopEditHandoffStatusParamsSchema = workspaceParams({
   handoffId: tSafeId("desktopEditHandoff"),
 });
 

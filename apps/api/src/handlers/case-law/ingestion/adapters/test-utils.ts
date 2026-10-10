@@ -26,8 +26,6 @@
  * ```
  */
 
-import { fetchWithTimeout } from "@stll/fetch";
-
 import type {
   SourceAdapter,
   SourceReconciliation,
@@ -147,29 +145,6 @@ export const mockFetchWithFixtures = async (
   return () => {
     globalThis.fetch = originalFetch;
   };
-};
-
-/**
- * Record a live API response as a fixture file.
- * Use this in smoke tests to refresh fixtures.
- */
-export const recordFixture = async (
-  url: string,
-  filename: string,
-  headers?: Record<string, string>,
-): Promise<string> => {
-  const response = await fetchWithTimeout(url, {
-    timeoutMs: 30_000,
-    ...(headers && { headers }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Failed to record fixture: ${response.status} ${url}`);
-  }
-
-  const text = await response.text();
-  await saveFixture(filename, text);
-  return text;
 };
 
 /**

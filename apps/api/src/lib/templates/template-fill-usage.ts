@@ -14,7 +14,7 @@ import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import { assertUsageAvailableForHandler } from "@/api/lib/api-handlers";
+import { authorizeHandlerUsage } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   buildAiConditionDecider,
@@ -22,9 +22,22 @@ import {
   buildAiOccurrenceAdapter,
 } from "@/api/lib/docx/ai-field-generator";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  authorizeOperation,
+  snapshotOperationInput,
+} from "@/api/lib/proofs/checked-transaction";
+import {
+  createModelActionAdmitter,
+  modelActionRefusal,
+  type AdmittedModelAction,
+  type ModelActionAdmitter,
+} from "@/api/lib/rate-limit/model-action-admission";
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
 
-import type { AiFillCollaborators } from "./template-fill-service";
+import type {
+  AiFillAdmission,
+  AiFillCollaborators,
+} from "./template-fill-service";
 
 type TemplateFillUsageArgs = {
   /** Org AI (BYOK) config; null when the org has no usable AI config, in which
@@ -56,13 +69,74 @@ const assertTemplateFillUsage = async ({
   if (!orgAIConfig && !hasTanStackInstanceProvider()) {
     return null;
   }
-  return await assertUsageAvailableForHandler({
+  const authorization = await authorizeHandlerUsage({
     metering: { actionType: "chat", modelRole: "fast" },
     organizationId,
     orgAIConfig,
     workspaceId: null,
     userId,
     safeDb,
+  });
+  if (Result.isError(authorization)) {
+    return authorization.error;
+  }
+  return await authorization.value.execute(() => null);
+};
+
+type RunAdmittedAiFillOptions<TRejection, T> = {
+  admitModelAction: ModelActionAdmitter;
+  /** Runs before admission draws an action; a rejection refuses the fill. */
+  preflight: () => Promise<TRejection | null>;
+  /** Builds the collaborators on the admitted action's proof and signal. */
+  collaborators: (
+    admitted: AdmittedModelAction,
+  ) => AiFillCollaborators | Promise<AiFillCollaborators>;
+  fill: (collaborators: AiFillCollaborators) => Promise<T>;
+};
+
+/**
+ * The {@link AiFillAdmission} every admitting fill caller runs: the usage
+ * preflight, then the whole fill inside one admitted action, so the action is
+ * held until the fill's last model call settles. A failure inside the fill
+ * propagates as the fill's own; only a failure to admit is a refusal.
+ */
+const TEMPLATE_FILL_USAGE_ALLOWED = "TemplateFillUsageAllowed";
+
+export const runAdmittedAiFill = async <TRejection, T>(
+  options: RunAdmittedAiFillOptions<TRejection, T>,
+): Promise<
+  | { type: "refused"; rejection: TRejection | HandlerError<403 | 429 | 503> }
+  | { type: "admitted"; value: T }
+> => {
+  const authorization = await authorizeOperation({
+    kind: TEMPLATE_FILL_USAGE_ALLOWED,
+    input: options,
+    check: async (input) => {
+      const rejection = await input.preflight();
+      return rejection === null ? Result.ok(undefined) : Result.err(rejection);
+    },
+  });
+  if (Result.isError(authorization)) {
+    return { type: "refused", rejection: authorization.error };
+  }
+  return await authorization.value.execute(async ({ proof }) => {
+    const { admitModelAction, collaborators, fill } = proof.input.value;
+    const filling: { promise: Promise<T> | null } = { promise: null };
+    const admitted = await admitModelAction(async (action) => {
+      filling.promise = (async () => await fill(await collaborators(action)))();
+      return await filling.promise;
+    });
+    if (Result.isOk(admitted)) {
+      return { type: "admitted" as const, value: admitted.value };
+    }
+    if (filling.promise !== null) {
+      // A fill failure propagates as its own failure, rather than admission refusal.
+      return { type: "admitted" as const, value: await filling.promise };
+    }
+    return {
+      type: "refused" as const,
+      rejection: modelActionRefusal(admitted.error),
+    };
   });
 };
 
@@ -77,92 +151,111 @@ type TemplateFillAiWiringArgs = {
   /** The template's declared languages, so the aiAdapt rewriter conjugates in
    *  them. Absent for a raw upload, which has no stored template row. */
   documentLanguages?: readonly string[] | undefined;
+  /** Admission seam; ordinary callers draw a `templates.fill` action. */
+  admitModelAction?: ModelActionAdmitter | undefined;
 };
 
 type TemplateFillAiWiring = {
-  assertUsageAvailable: () => Promise<HandlerError<402 | 403 | 500> | null>;
-  aiCollaborators: () => Promise<AiFillCollaborators>;
+  aiFill: AiFillAdmission<HandlerError<402 | 403 | 429 | 500 | 503>>;
 };
 
 /**
- * Build the two AI hooks the fill service takes. Both share a single org AI
- * config read, resolved on first use: the service calls the preflight before
- * any model call and the collaborator builder just after, and calls neither
- * when the template declares no AI field.
+ * Build the AI admission the fill service takes: the usage preflight, then the
+ * fill's model work inside one admitted `templates.fill` action, held until
+ * that work settles. The service calls it only when the template declares an
+ * AI field.
  *
  * The routes are root-scoped (a raw upload, or a template chosen by id with no
  * matter binding), so there is no workspace scope to redact tenant ids
  * against.
  */
-export const buildTemplateFillAiWiring = ({
-  organizationId,
-  userId,
-  safeDb,
-  scopedDb,
-  feature,
-  documentLanguages,
-}: TemplateFillAiWiringArgs): TemplateFillAiWiring => {
+export const buildTemplateFillAiWiring = (
+  options: TemplateFillAiWiringArgs,
+): TemplateFillAiWiring => {
+  const {
+    organizationId,
+    userId,
+    safeDb,
+    scopedDb,
+    feature,
+    documentLanguages,
+    admitModelAction = createModelActionAdmitter({
+      organizationId,
+      userId,
+      organizationStateDb: scopedDb,
+      actionKind: "templates.fill",
+    }),
+  } = snapshotOperationInput(options);
   let configPromise: ReturnType<typeof loadOrgAISettings> | undefined;
   const orgAISettings = async () => {
     configPromise ??= scopedDb(
       async (tx) => await loadOrgAISettings(tx, { organizationId, userId }),
+    ).then((result) =>
+      result.map((settings) => snapshotOperationInput(settings)),
     );
     return await configPromise;
   };
-
+  const settings = async () => {
+    const config = await orgAISettings();
+    // The preflight read the same config and refused on its failure.
+    return Result.isError(config)
+      ? panic("template fill AI collaborators built past a refusal")
+      : config.value;
+  };
   return {
-    assertUsageAvailable: async () => {
-      const config = await orgAISettings();
-      if (Result.isError(config)) {
-        return config.error;
-      }
-      return await assertTemplateFillUsage({
-        orgAIConfig: config.value.orgAIConfig,
-        organizationId,
-        userId,
-        safeDb,
-      });
-    },
-    aiCollaborators: async () => {
-      const configResult = await orgAISettings();
-      if (Result.isError(configResult)) {
-        // The fill service builds collaborators only after this wiring's
-        // preflight passed, and the preflight returns this same refusal.
-        return panic("template fill AI collaborators built past a refusal");
-      }
-      const config = configResult.value;
-      const shared = {
-        orgAIConfig: config.orgAIConfig,
-        managedAIResidency: config.managedAIResidency,
-        organizationId,
-        skillContext: { organizationId, safeDb, userId },
-        aiAnalytics: createTanStackAIAnalyticsCallbacks({
-          dataClass: "customer",
-          usageMetering: {
-            actionType: "chat",
+    aiFill: async (fill) =>
+      await runAdmittedAiFill({
+        admitModelAction,
+        preflight: async () => {
+          const config = await orgAISettings();
+          if (Result.isError(config)) {
+            return config.error;
+          }
+          return await assertTemplateFillUsage({
+            orgAIConfig: config.value.orgAIConfig,
             organizationId,
-            safeDb,
-            serviceTier: "standard",
             userId,
-            workspaceId: null,
-          },
-          feature,
-          modelRole: "fast",
-          orgAIConfig: config.orgAIConfig,
-          properties: { organization_id: organizationId },
-          traceId: Bun.randomUUIDv7(),
-        }),
-        tenantWorkspaceIds: [],
-      };
-      return {
-        generateAiValue: buildAiFieldGenerator(shared),
-        decideAiCondition: buildAiConditionDecider(shared),
-        adaptAiValue: buildAiOccurrenceAdapter(
-          documentLanguages === undefined
-            ? shared
-            : { ...shared, documentLanguages },
-        ),
-      };
-    },
+            safeDb,
+          });
+        },
+        collaborators: async ({ signal, admission }) => {
+          const config = await settings();
+          const shared = {
+            admission,
+            operationSignal: signal,
+            orgAIConfig: config.orgAIConfig,
+            managedAIResidency: config.managedAIResidency,
+            organizationId,
+            skillContext: { organizationId, safeDb, userId },
+            aiAnalytics: createTanStackAIAnalyticsCallbacks({
+              dataClass: "customer",
+              usageMetering: {
+                actionType: "chat",
+                organizationId,
+                safeDb,
+                serviceTier: "standard",
+                userId,
+                workspaceId: null,
+              },
+              feature,
+              modelRole: "fast",
+              orgAIConfig: config.orgAIConfig,
+              properties: { organization_id: organizationId },
+              traceId: Bun.randomUUIDv7(),
+            }),
+            tenantWorkspaceIds: [],
+          };
+          return {
+            generateAiValue: buildAiFieldGenerator(shared),
+            decideAiCondition: buildAiConditionDecider(shared),
+            adaptAiValue: buildAiOccurrenceAdapter(
+              documentLanguages === undefined
+                ? shared
+                : { ...shared, documentLanguages },
+            ),
+          };
+        },
+        fill,
+      }),
   };
 };

@@ -153,6 +153,8 @@ const checkMainConcurrency = ({
             values: {
               "github.event_name": "push",
               "github.ref": "refs/heads/main",
+              "github.event.head_commit.message": "fix: ordinary change",
+              "inputs.sha": "",
             },
           });
     if (
@@ -234,6 +236,26 @@ const checkJobEventPolicy = ({
   if (eventPolicy === "pr-opt-in") {
     const condition =
       typeof job.if === "boolean" ? String(job.if) : (job.if ?? "true");
+    if (key === "ci.yml/service-suites") {
+      if (
+        !condition.includes("vars.CI_POSTGRES_PR_SELECTION == 'on'") ||
+        ["", "off"].some(
+          (value) =>
+            !definitelyFalse(condition, {
+              values: {
+                "github.event_name": "pull_request",
+                "vars.CI_POSTGRES_PR_SELECTION": value,
+                "needs.ci-plan.outputs.corpus_suites_required": "false",
+              },
+            }),
+        )
+      ) {
+        problems.push(
+          `${key}: Postgres PR suites must require the disabled-by-default switch`,
+        );
+      }
+      return problems;
+    }
     if (
       key !== "ci.yml/fix-tests-on-base" ||
       !condition.includes(
@@ -270,6 +292,7 @@ const checkJobEventPolicy = ({
           "github.ref": "refs/heads/main",
           "github.event.head_commit.message": "ordinary main change",
           "inputs.heavy_only": true,
+          "inputs.pr_depth_only": false,
           "needs.ci-plan.outputs.run_required": "true",
           "needs.ci-plan.outputs.queue_depth": "full",
           "needs.ci-plan.outputs.trusted": "true",

@@ -2,6 +2,7 @@ import { lazy, StrictMode, Suspense, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import type { Root as ReactRoot } from "react-dom/client";
 
+import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { panic } from "better-result";
 
@@ -17,6 +18,7 @@ import {
   synchronizeDesktopLanguage,
 } from "../i18n";
 import type { DesktopMessages } from "../i18n";
+import { installAccountActivity } from "../shared/account-activity";
 import { subscribeDesktopEvent } from "../shared/desktop-events";
 import { useSystemTheme } from "../shared/use-system-theme";
 import {
@@ -34,6 +36,7 @@ const REACT_ROOT_KEY = Symbol.for("legal.stella.desktop.react-root");
 const ClipboardEditor = lazy(
   async () => import("../clipboard/ClipboardEditor"),
 );
+const ActivityApp = lazy(async () => import("../activity/ActivityApp"));
 
 const isReactRoot = (value: unknown): value is ReactRoot =>
   typeof value === "object" &&
@@ -119,6 +122,12 @@ const Root = () => {
   let content = <App />;
   if (windowLabel === "clipboard") {
     content = <ClipboardApp />;
+  } else if (windowLabel === "activity") {
+    content = (
+      <Suspense fallback={<main className="bg-background min-h-dvh" />}>
+        <ActivityApp />
+      </Suspense>
+    );
   } else if (windowLabel === "clipboard-editor") {
     content = (
       <Suspense
@@ -151,6 +160,19 @@ const telemetryWindow = desktopTelemetryWindowFromLabel(
 );
 const removeDesktopErrorTelemetry =
   installDesktopErrorTelemetry(telemetryWindow);
+
+const removeAccountActivity = installAccountActivity({
+  document,
+  windowLabel: getCurrentWindow().label,
+  recordUse: async () => await invoke("account_record_use"),
+  onFailure: () => {
+    reportDesktopError({
+      code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+      operation: DESKTOP_TELEMETRY_OPERATIONS.runtime,
+      window: telemetryWindow,
+    });
+  },
+});
 
 const existingRoot: unknown = Reflect.get(rootElement, REACT_ROOT_KEY);
 const reactRoot = isReactRoot(existingRoot)
@@ -185,5 +207,8 @@ Reflect.set(rootElement, REACT_ROOT_KEY, reactRoot);
 reactRoot.render(<Root />);
 
 if (import.meta.hot) {
-  import.meta.hot.dispose(removeDesktopErrorTelemetry);
+  import.meta.hot.dispose(() => {
+    removeAccountActivity();
+    removeDesktopErrorTelemetry();
+  });
 }

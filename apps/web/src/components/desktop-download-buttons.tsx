@@ -1,5 +1,6 @@
 import { useTranslations } from "use-intl";
 
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { buttonVariants } from "@stll/ui/button";
 import { DownloadIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
@@ -10,7 +11,6 @@ import {
   WINDOWS_EXE_URL,
   WINDOWS_MSI_URL,
 } from "@/lib/desktop-downloads";
-import { sanitizeHref } from "@/lib/sanitize-href";
 
 type DesktopDownloadButtonsProps = {
   platform: DesktopPlatform;

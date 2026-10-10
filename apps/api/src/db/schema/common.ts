@@ -1,4 +1,3 @@
-import { panic } from "better-result";
 import { defineRelations, isNotNull, isNull, sql } from "drizzle-orm";
 import * as p from "drizzle-orm/pg-core";
 import { customType } from "drizzle-orm/pg-core";
@@ -30,6 +29,7 @@ import {
   aiMemoryPolicies,
   chatMessageSearchDocumentPolicies,
   chatMessagePolicies,
+  chatMessageRevisionPolicies,
   chatTurnPolicies,
   chatThreadCompactionPolicies,
   chatThreadNamePolicies,
@@ -152,7 +152,7 @@ export type PdfBatesJustificationBlock = {
  *  - `unverified`: the model produced a quote that matched no source
  *    block. There is no navigable block, so only the model's raw text
  *    is kept and the client renders it as a non-navigable hint. */
-export type DocxFolioJustificationCitation =
+type DocxFolioJustificationCitation =
   | { citationStatus: "verified"; blockId: string; text: string }
   | { citationStatus: "unverified"; text: string };
 
@@ -511,7 +511,6 @@ export {
   member,
   organization,
   p,
-  panic,
   sql,
   timestamptz,
   unsafeCents,
@@ -525,6 +524,7 @@ export {
   agentSkillResourcePolicies,
   aiMemoryPolicies,
   chatMessagePolicies,
+  chatMessageRevisionPolicies,
   chatTurnPolicies,
   chatMessageSearchDocumentPolicies,
   chatThreadCompactionPolicies,
