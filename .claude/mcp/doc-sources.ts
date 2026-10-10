@@ -16,6 +16,14 @@ export type NoLlmsTxtExclusion = {
 };
 
 export const DOC_SOURCES = {
+  AGUI: {
+    dependencies: ["@ag-ui/core"],
+    url: "https://docs.ag-ui.com/llms.txt",
+  },
+  Zod: {
+    dependencies: ["zod"],
+    url: "https://zod.dev/llms.txt",
+  },
   Anthropic: {
     dependencies: ["@anthropic-ai/sdk"],
     url: "https://platform.claude.com/llms.txt",
