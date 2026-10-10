@@ -69,7 +69,7 @@ const evaluate = (
       `#!${process.execPath}\nimport { readFileSync } from "node:fs";
 const args = process.argv.slice(2);
 if (args[0] === "rev-parse") { console.log("base"); }
-else { try { console.log(readFileSync(process.env.FIXTURE + "/" + args[1].replace(":", "-"), "utf8")); }
+else { try { console.log(readFileSync(${JSON.stringify(directory)} + "/" + args[1].replace(":", "-"), "utf8")); }
 catch { process.stderr.write("Missing comparison tree"); process.exit(1); } }\n`,
     );
     chmodSync(git, 0o755);
@@ -78,7 +78,6 @@ catch { process.stderr.write("Missing comparison tree"); process.exit(1); } }\n`
       env: {
         ...process.env,
         PATH: `${directory}:${process.env["PATH"] ?? ""}`,
-        FIXTURE: directory,
         EVENT_NAME: event,
         BASE_SHA: baseSha,
       },
