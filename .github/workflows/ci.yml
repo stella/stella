@@ -654,6 +654,7 @@ jobs:
         timeout-minutes: 2
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
+          logout: false
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
@@ -1481,6 +1482,7 @@ jobs:
         if: github.event.pull_request.head.repo.fork != true && github.token != ''
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
+          logout: false
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ github.token }}
@@ -4893,6 +4895,7 @@ jobs:
         if: ${{ !cancelled() && needs.ci-plan.outputs.corpus_suites_required == 'true' && startsWith(needs.ci-plan.outputs.quickwit, 'ghcr.io/') }}
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
+          logout: false
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ github.token }}
@@ -5094,6 +5097,7 @@ jobs:
       - name: Login to GitHub Container Registry
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
+          logout: false
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
@@ -5549,6 +5553,7 @@ jobs:
         if: github.event.pull_request.head.repo.fork != true && github.token != ''
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
+          logout: false
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ github.token }}
@@ -5977,6 +5982,7 @@ jobs:
         continue-on-error: true
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
+          logout: false
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
@@ -6152,6 +6158,7 @@ jobs:
         continue-on-error: true
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
+          logout: false
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
@@ -6364,6 +6371,7 @@ jobs:
         continue-on-error: true
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
+          logout: false
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
@@ -6545,6 +6553,7 @@ jobs:
         continue-on-error: true
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
+          logout: false
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
@@ -6764,6 +6773,7 @@ jobs:
         continue-on-error: true
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
+          logout: false
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
@@ -7099,6 +7109,7 @@ jobs:
         if: github.event.pull_request.head.repo.fork != true && github.token != ''
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
+          logout: false
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ github.token }}
@@ -7291,6 +7302,7 @@ jobs:
         if: github.event.pull_request.head.repo.fork != true && github.token != ''
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
+          logout: false
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ github.token }}

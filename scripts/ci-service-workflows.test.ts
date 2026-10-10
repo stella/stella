@@ -296,3 +296,53 @@ test("staging promotion treats browser mirror authentication as optional", () =>
     );
   expect(login).toHaveProperty("continue-on-error", true);
 });
+
+// A job that logs out of GHCR explicitly must stop the login action from
+// logging out again in its post step: the second logout finds no
+// credentials and fails the job after its work succeeded.
+test("GHCR logins in jobs with an explicit logout disable the post-step logout", () => {
+  const files = [
+    ...new Bun.Glob(".github/**/*.{yml,yaml}").scanSync({ cwd: root }),
+  ];
+  const violations: string[] = [];
+  for (const file of files) {
+    const document = readWorkflow(file);
+    const jobs =
+      "jobs" in document
+        ? Object.entries(record(document["jobs"]))
+        : [["(action)", record(document["runs"] ?? {})] as const];
+    for (const [name, rawJob] of jobs) {
+      const steps = record(rawJob)["steps"];
+      if (!Array.isArray(steps)) {
+        continue;
+      }
+      const stepRecords = steps.map(record);
+      const logsOut = stepRecords.some(
+        (step) =>
+          typeof step["run"] === "string" &&
+          step["run"].includes("docker logout ghcr.io"),
+      );
+      if (!logsOut) {
+        continue;
+      }
+      for (const step of stepRecords) {
+        const uses = step["uses"];
+        if (
+          typeof uses !== "string" ||
+          !uses.startsWith("docker/login-action@")
+        ) {
+          continue;
+        }
+        const options = record(step["with"] ?? {});
+        const registry = String(options["registry"] ?? "");
+        // Release workflows name GHCR through their REGISTRY env value.
+        const ghcr =
+          registry === "ghcr.io" || registry.includes("env.REGISTRY");
+        if (ghcr && options["logout"] !== false) {
+          violations.push(`${file} ${String(name)}`);
+        }
+      }
+    }
+  }
+  expect(violations).toEqual([]);
+});
