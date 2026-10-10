@@ -1091,6 +1091,18 @@
     "anonymizedSpan": {
       "tooltip": "Modeliui išsiųsta kaip {placeholder}."
     },
+    "answerEdit": {
+      "acceptFailed": "Nepavyko išsaugoti pakeitimo. Bandykite dar kartą.",
+      "ask": "Prašyti pakeitimų",
+      "failed": "Nepavyko paruošti pakeitimo. Bandykite dar kartą.",
+      "instruction": "Aprašykite pakeitimą",
+      "instructionRequired": "Aprašykite, kaip pakeisti pasirinktą tekstą.",
+      "invalidSelection": "Šios ištraukos negalima redaguoti. Pasirinkite vientisą tekstą.",
+      "proposal": "Siūlomas pakeitimas",
+      "requesting": "Ruošiami pakeitimai…",
+      "stale": "Šis atsakymas pasikeitė. Pasirinkite tekstą iš naujo.",
+      "submit": "Prašyti pakeitimo"
+    },
     "applyMode": {
       "description": "Word įrašo, kas atliko kiekvieną pakeitimą. Įsiminsime jūsų pasirinkimą.",
       "direct": "Ne, taikyti tiesiogiai",
@@ -2035,6 +2047,7 @@
     "scopeExternalMcps": "Naudoti jūsų prijungtus išorinius įrankius",
     "scopeFeedback": "Siųsti produkto atsiliepimus stella prižiūrėtojams",
     "scopeKnowledgeWrite": "Kurti, redaguoti ir ištrinti jūsų sąlygas ir vykdyti peržiūros vadovus",
+    "scopeLawRead": "Skaityti viešus teisės aktus ir teismų praktiką",
     "scopeMattersWrite": "Kurti ir redaguoti jūsų bylas ir užduotis",
     "scopeOfflineAccess": "Išlaikyti jus prisijungusį be pakartotinio patvirtinimo",
     "scopeOnboarding": "Konfigūruoti jūsų organizacijos praktikos jurisdikcijas",

@@ -1091,6 +1091,18 @@
     "anonymizedSpan": {
       "tooltip": "Sent to the model as {placeholder}."
     },
+    "answerEdit": {
+      "acceptFailed": "The change could not be saved. Try again.",
+      "ask": "Request edits",
+      "failed": "The change could not be prepared. Try again.",
+      "instruction": "Describe the change",
+      "instructionRequired": "Describe how to change the selected text.",
+      "invalidSelection": "This selection cannot be edited. Select continuous text.",
+      "proposal": "Suggested change",
+      "requesting": "Preparing changes…",
+      "stale": "This answer changed. Select the text again.",
+      "submit": "Request change"
+    },
     "applyMode": {
       "description": "Word stores who made each change. We'll remember your choice.",
       "direct": "No, apply directly",
@@ -2035,6 +2047,7 @@
     "scopeExternalMcps": "Use your connected integrations",
     "scopeFeedback": "Send product feedback to the stella maintainers",
     "scopeKnowledgeWrite": "Create, edit, and delete your clauses, and run playbooks",
+    "scopeLawRead": "Read public statutes and case law",
     "scopeMattersWrite": "Create and edit your matters and tasks",
     "scopeOfflineAccess": "Keep you signed in without repeated approval",
     "scopeOnboarding": "Configure your organization's practice jurisdictions",

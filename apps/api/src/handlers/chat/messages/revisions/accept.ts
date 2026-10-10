@@ -39,6 +39,7 @@ const config = {
   params: revisionParams,
   body: t.Object({
     baseRevision: revisionNumber,
+    selectedTextHash: t.String({ pattern: "^[a-f0-9]{64}$", maxLength: 64 }),
     content: t.Object({
       version: t.Literal(3),
       data: t.Array(t.Unknown(), { minItems: 1, maxItems: 1000 }),
@@ -113,6 +114,7 @@ const acceptMessageRevision = createSafeRootHandler(
     body,
     params: { threadId, messageId },
     safeDb,
+    getWorkspaceAccess,
     user,
     session,
     recordAuditEvent,
@@ -122,6 +124,7 @@ const acceptMessageRevision = createSafeRootHandler(
         async (tx) =>
           await writeChatMessageRevisionOnTx({
             tx,
+            getWorkspaceAccess,
             threadId,
             messageId,
             userId: user.id,

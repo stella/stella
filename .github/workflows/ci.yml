@@ -2714,6 +2714,12 @@ jobs:
           bun test scripts/check-standalone-lockfiles.test.ts
           bun scripts/check-standalone-lockfiles.ts
 
+      - name: Standalone negated shell statement guard
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
+        run: |
+          bun test scripts/check-standalone-negated-shell.test.ts
+          bun scripts/check-standalone-negated-shell.ts
+
       - name: Tauri package alignment
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         env:

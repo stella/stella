@@ -1536,6 +1536,7 @@ const FileChatOverlayInner = ({
     clientStatus,
     error,
     messages,
+    refreshAnswers,
     olderCursor,
     isLoadingOlder,
     loadOlder,
@@ -2535,6 +2536,10 @@ const FileChatOverlayInner = ({
             }
           >
             <ChatThreadMessages
+              onAnswerEdited={refreshAnswers}
+              answerRewriteAvailability={
+                data.usedAnonymization ? "anonymized" : "available"
+              }
               activeFileName={activeFile?.fileName}
               assistantTextDensity="compact"
               approvalPendingMessageId={approvalPendingMessageId}

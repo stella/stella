@@ -67,6 +67,7 @@ import { healthRoute } from "@/api/handlers/health/routes";
 import { hostedUsageWebhookRoute } from "@/api/handlers/hosted-usage-webhook/routes";
 import { invoicesRoute } from "@/api/handlers/invoices/routes";
 import { legalReaderRoute } from "@/api/handlers/legal-reader/routes";
+import { legalResolveRoute } from "@/api/handlers/legal-resolve/routes";
 import { legislationCorpusRoute } from "@/api/handlers/legislation/corpus-routes";
 import { publicLegislationRoute } from "@/api/handlers/legislation/public-routes";
 import { legislationRoute } from "@/api/handlers/legislation/routes";
@@ -561,8 +562,12 @@ const api = new Elysia()
       .use(savedSearchesRoute)
       .use(savedTimeNarrativesRoute)
       .use(auditLogsRoute)
-      .use(caseLawRoute)
-      .use(legalReaderRoute)
+      .use(
+        new Elysia()
+          .use(caseLawRoute)
+          .use(legalReaderRoute)
+          .use(legalResolveRoute),
+      )
       .use(chatRoute)
       .use(userFilesRoute)
       .use(skillsRoute)

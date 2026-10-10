@@ -1091,6 +1091,18 @@
     "anonymizedSpan": {
       "tooltip": "Modelu odoslané ako {placeholder}."
     },
+    "answerEdit": {
+      "acceptFailed": "Úpravu sa nepodarilo uložiť. Skúste to znova.",
+      "ask": "Požiadať o úpravy",
+      "failed": "Úpravu sa nepodarilo pripraviť. Skúste to znova.",
+      "instruction": "Opíšte úpravu",
+      "instructionRequired": "Opíšte, ako upraviť vybraný text.",
+      "invalidSelection": "Výber nemožno upraviť, vyberte súvislý text.",
+      "proposal": "Navrhnutá úprava",
+      "requesting": "Príprava úprav…",
+      "stale": "Odpoveď sa zmenila. Vyberte text znova.",
+      "submit": "Požiadať o úpravu"
+    },
     "applyMode": {
       "description": "Word ukladá, kto urobil každú zmenu. Vašu voľbu si zapamätáme.",
       "direct": "Nie, použiť priamo",
@@ -2035,6 +2047,7 @@
     "scopeExternalMcps": "Použitie vašich pripojených externých nástrojov",
     "scopeFeedback": "Odoslať spätnú väzbu k produktu správcom stelly",
     "scopeKnowledgeWrite": "Vytvoriť, upraviť a vymazať vaše vzorové ustanovenia a spúšťať playbooky",
+    "scopeLawRead": "Čítať verejné právne predpisy a judikatúru",
     "scopeMattersWrite": "Vytvoriť a upraviť vaše spisy a úlohy",
     "scopeOfflineAccess": "Udržať vás prihláseného bez opakovaného schválenia",
     "scopeOnboarding": "Nastavte jurisdikcie praxe vašej organizácie",

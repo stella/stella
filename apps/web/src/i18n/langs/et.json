@@ -1091,6 +1091,18 @@
     "anonymizedSpan": {
       "tooltip": "Mudelile saadeti kujul {placeholder}."
     },
+    "answerEdit": {
+      "acceptFailed": "Muudatust ei saanud salvestada. Proovige uuesti.",
+      "ask": "Taotle muudatusi",
+      "failed": "Muudatust ei saanud ette valmistada. Proovige uuesti.",
+      "instruction": "Kirjeldage muudatust",
+      "instructionRequired": "Kirjeldage, kuidas valitud teksti muuta.",
+      "invalidSelection": "Seda valikut ei saa muuta. Valige järjestikune tekstilõik.",
+      "proposal": "Soovitatud muudatus",
+      "requesting": "Muudatuste ettevalmistamine…",
+      "stale": "See vastus on muutunud. Valige tekst uuesti.",
+      "submit": "Taotle muudatust"
+    },
     "applyMode": {
       "description": "Word salvestab, kes iga muudatuse tegi. Jätame sinu valiku meelde.",
       "direct": "Ei, rakenda otse",
@@ -2035,6 +2047,7 @@
     "scopeExternalMcps": "Teie ühendatud väliste tööriistade kasutamine",
     "scopeFeedback": "Tootetagasiside saatmine stella hooldajatele",
     "scopeKnowledgeWrite": "Luua, muuta ja kustutada teie klausleid ja käivitada playbooke",
+    "scopeLawRead": "Lugeda avalikke õigusakte ja kohtupraktikat",
     "scopeMattersWrite": "Luua ja muuta teie toimikuid ja ülesandeid",
     "scopeOfflineAccess": "Hoida teid sisse logituna ilma korduva nõusolekuta",
     "scopeOnboarding": "Seadistada teie organisatsiooni praktikajurisdiktsioonid",
