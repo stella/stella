@@ -24,6 +24,13 @@
       "date": "2026-10-03"
     }
   ],
+  "apps/api/src/handlers/chat/messages/revisions/span-proposal.test.ts::plain-text edits preserve generated prose containing Markdown punctuation": [
+    {
+      "seed": 20260901,
+      "note": "Regression coverage",
+      "date": "2026-10-10"
+    }
+  ],
   "apps/api/src/handlers/chat/tools/subagent-tools.property.test.ts::subagent tool projection retains every eligible own entry and its input": [
     {
       "seed": 20260901,
