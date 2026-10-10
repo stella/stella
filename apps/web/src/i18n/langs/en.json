@@ -1762,6 +1762,7 @@
     "description": "Description",
     "details": "Details",
     "detailsHiddenFeatureUnavailable": "Details hidden: feature not enabled",
+    "detailsUnavailable": "Details unavailable",
     "disconnect": "Disconnect",
     "dismiss": "Dismiss",
     "displayName": "Display name",
