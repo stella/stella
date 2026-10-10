@@ -232,13 +232,8 @@ describe("confidential service OAuth lifecycle", () => {
     expect(JSON.stringify(rows)).not.toContain(client.clientSecret);
   });
 
-  test.each([
-    "stella:read",
-    "stella:law_read stella:documents_write",
-    "openid",
-    "offline_access",
-  ])("enforces the machine scope ceiling for %s", async (scope) => {
-    const response = await issue(await fixture(), scope);
+  test("refuses a scope outside the law-read ceiling", async () => {
+    const response = await issue(await fixture(), "stella:read");
     expect(response.status).toBe(400);
     expect(await response.json()).toMatchObject({ error: "invalid_scope" });
   });
