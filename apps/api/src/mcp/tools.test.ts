@@ -18,6 +18,7 @@ import {
   agentInputNormalizationMetadata,
   COUNTRY_INPUT_MAX_CHARS,
 } from "@stll/agent-input";
+import { courtAbbreviation } from "@stll/api-contract/case-law-court-abbreviations";
 import type { CaseLawCourtYear } from "@stll/api-contract/case-law-court-year";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
@@ -76,7 +77,6 @@ import type {
 } from "@/api/lib/business-registries/sanctions-check";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { CITATION_READ_DIRECTIONS } from "@/api/lib/case-law/citation-vocabulary";
-import { courtAbbreviation } from "@/api/lib/case-law/court-abbreviations";
 import { readDecisionTextMetadata } from "@/api/lib/case-law/decision-text";
 import type { CaseLawSearchGuidanceMode } from "@/api/lib/case-law/search-guidance-mode";
 import { encryptContent } from "@/api/lib/content-encryption";
@@ -101,10 +101,12 @@ import { encodePaginationCursor } from "@/api/lib/pagination";
 import type { SearchHit, SearchResult } from "@/api/lib/search/types";
 import * as actionCostContext from "@/api/lib/usage/action-costs/context";
 import type { withTimeout } from "@/api/lib/with-timeout";
+import { decisionTextVersion } from "@/api/mcp/case-law-decision-read";
 import { COMPAT_SEARCH_CURSOR_MAX_LENGTH } from "@/api/mcp/compat-shared";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { resolveMcpToolOutputContract } from "@/api/mcp/gateway/list-tools";
 import { deriveContactDisplayName } from "@/api/mcp/matter-tools";
+import { getMcpResourceModeConfig } from "@/api/mcp/resource-policy-contract";
 import { DEFAULT_MCP_CLI_ANNOTATIONS } from "@/api/mcp/static-cli-metadata";
 import {
   CASE_LAW_SEARCH_CURSOR_MAX_LENGTH,
@@ -497,6 +499,8 @@ const createRelatedDecision = (
   citationAuthority: 0,
   country: "CZE",
   court: "Nejvyšší soud",
+  courtAbbreviation: "NS",
+  sourceUrl: null,
   decisionDate: "2025-01-15",
   decisionType: "rozsudek",
   ecli: null,
@@ -2929,6 +2933,7 @@ describe("OpenAI-compatible MCP tools", () => {
       ecli?: string | null;
       hint?: string;
       identifier: string;
+      missing?: string[];
       message?: string;
       resourceName?: string;
       status: string;
@@ -3199,7 +3204,7 @@ describe("OpenAI-compatible MCP tools", () => {
     // fifty is worth the forty-nine that resolved, and a failure is not
     // evidence that the corpus lacks the decision.
     expect(payload.items.map(({ status }) => status)).toEqual([
-      "ambiguous",
+      "incomplete_identifier",
       "lookup_failed",
     ]);
     expect(payload.items.at(1)?.message).toContain("Retry this reference");
@@ -3224,12 +3229,12 @@ describe("OpenAI-compatible MCP tools", () => {
     // A Czech file's lone decision is listed, not claimed: a sibling stored
     // under its sheet is keyed apart from the file the read reached.
     expect(payload.items.map(({ status }) => status)).toEqual([
-      "ambiguous",
+      "incomplete_identifier",
       "not_found",
-      "ambiguous",
+      "incomplete_identifier",
       "not_found",
     ]);
-    expect(payload.items.at(0)?.message).toContain("listed rather than chosen");
+    expect(payload.items.at(0)?.message).toContain("Add the sheet");
     expect(payload.items.map(({ identifier }) => identifier)).toEqual([
       CZ_DOCKET,
       "the one about good morals",
@@ -5733,6 +5738,7 @@ describe("OpenAI-compatible MCP tools", () => {
             page: 1,
             pageCount: 1,
             charCount: text.length,
+            textVersion: decisionTextVersion(text),
             outline: [
               {
                 title: "29 Cdo 123/2024",
@@ -7242,14 +7248,14 @@ describe("OpenAI-compatible MCP tools", () => {
       max_chars: maxChars,
     });
 
-    // Each long decision fills its own max_chars page rather than a third of
-    // it; the short one is whole.
+    // The short decision's unused first-pass share moves to the still
+    // truncated decisions in input order.
     expect(windowsOf(payload.items)).toEqual([
       {
         charCount: 5000,
         decisionId: DECISION_ID,
-        pageCount: 2,
-        text: texts.get(DECISION_ID)?.slice(0, maxChars),
+        pageCount: 1,
+        text: texts.get(DECISION_ID),
       },
       {
         charCount: 40,
@@ -7260,12 +7266,12 @@ describe("OpenAI-compatible MCP tools", () => {
       {
         charCount: 6000,
         decisionId: THIRD_DECISION_ID,
-        pageCount: 2,
-        text: texts.get(THIRD_DECISION_ID)?.slice(0, maxChars),
+        pageCount: 1,
+        text: texts.get(THIRD_DECISION_ID),
       },
     ]);
 
-    // Page 2 of the same batch continues each decision where it stopped.
+    // A single decision still treats max_chars as its page size.
     const second = await readDecisions({
       decision_ids: [THIRD_DECISION_ID],
       max_chars: maxChars,
@@ -7332,14 +7338,19 @@ describe("OpenAI-compatible MCP tools", () => {
       [SECOND_DECISION_ID, decisionText("B", 40)],
     ]);
     serveTexts(texts);
-    const share = MCP_CONTENT_MAX_CHARS / 2;
+    // The long decision cannot be completed by the short one's unused share,
+    // so it keeps the even share and pages on that stable window.
+    const evenShare = Math.floor(MCP_CONTENT_MAX_CHARS / 2);
 
     const payload = await readDecisions({
       decision_ids: [DECISION_ID, SECOND_DECISION_ID],
     });
 
     expect(payload.items.map(({ decision }) => decision)).toMatchObject([
-      { text: texts.get(DECISION_ID)?.slice(0, share), pageCount: 2 },
+      {
+        text: texts.get(DECISION_ID)?.slice(0, evenShare),
+        pageCount: Math.ceil(MCP_CONTENT_MAX_CHARS / evenShare),
+      },
       { text: texts.get(SECOND_DECISION_ID), pageCount: 1 },
     ]);
   });
@@ -8500,13 +8511,14 @@ describe("OpenAI-compatible MCP tools", () => {
       version: 1,
     };
     const result = await handleMcpToolCall({
+      mode: "advanced",
       args: { entity_id: "00000000-0000-4000-8000-0000000e0001" },
       context: {
         ...createContext({
           scopedDb: createScopedDb([], textlessProjection, [currentPdf]),
         }),
         grantedScopes: ["stella:read", "stella:matters_write"],
-        request: new Request("https://example.test/mcp"),
+        request: new Request("https://example.test/mcp/advanced"),
       },
       toolName: "read_document",
     });
@@ -8536,6 +8548,7 @@ describe("OpenAI-compatible MCP tools", () => {
   test("read_document derives state and remediation from the persisted non-first source", async () => {
     const sourceSha256Hex = "b".repeat(64);
     const result = await handleMcpToolCall({
+      mode: "advanced",
       args: { entity_id: "00000000-0000-4000-8000-0000000e0001" },
       context: {
         ...createContext({
@@ -8575,7 +8588,7 @@ describe("OpenAI-compatible MCP tools", () => {
           ),
         }),
         grantedScopes: ["stella:read", "stella:matters_write"],
-        request: new Request("https://example.test/mcp"),
+        request: new Request("https://example.test/mcp/advanced"),
       },
       toolName: "read_document",
     });
@@ -8595,18 +8608,26 @@ describe("OpenAI-compatible MCP tools", () => {
 
   test.each([
     {
+      mode: "advanced" as const,
       label: "missing matter-write scope",
       memberRole: "owner" as const,
       grantedScopes: ["stella:read"],
     },
     {
+      mode: "advanced" as const,
       label: "missing entity permission",
       memberRole: "intern" as const,
       grantedScopes: ["stella:read", "stella:matters_write"],
     },
+    {
+      mode: "default" as const,
+      label: "default surface with full permissions",
+      memberRole: "owner" as const,
+      grantedScopes: ["stella:read", "stella:matters_write"],
+    },
   ])(
     "read_document returns an OCR escalation for a caller $label",
-    async ({ grantedScopes, memberRole }) => {
+    async ({ grantedScopes, memberRole, mode }) => {
       const textlessProjection = createExtractedContentRow({ charCount: 0 });
       const currentPdf = {
         encrypted: false,
@@ -8623,12 +8644,15 @@ describe("OpenAI-compatible MCP tools", () => {
         scopedDb: createScopedDb([], textlessProjection, [currentPdf]),
       });
       const result = await handleMcpToolCall({
+        mode,
         args: { entity_id: "00000000-0000-4000-8000-0000000e0001" },
         context: {
           ...context,
           grantedScopes,
           memberRole,
-          request: new Request("https://example.test/mcp"),
+          request: new Request(
+            `https://example.test${getMcpResourceModeConfig(mode).httpPath}`,
+          ),
         },
         toolName: "read_document",
       });
@@ -8907,9 +8931,10 @@ describe("OpenAI-compatible MCP tools", () => {
           ),
         }),
         grantedScopes: ["stella:read", "stella:matters_write"],
-        request: new Request("https://example.test/mcp"),
+        request: new Request("https://example.test/mcp/advanced"),
       },
       toolName: "read_document",
+      mode: "advanced",
     });
 
     expect(parseToolPayload(result)).toMatchObject({

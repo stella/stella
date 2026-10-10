@@ -1577,7 +1577,7 @@ const caseLawDecisionProjection = v.strictObject({
       ),
     ),
   ),
-  // Short token naming this exact text, present when it spans several pages.
+  // Short token naming this exact text, present whenever text is returned.
   textVersion: v.optional(v.string()),
   // The caller's text_version named an older text: its page numbers may now
   // address other passages.

@@ -8,6 +8,8 @@ import { cn } from "@stll/ui/utils";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import Tooltip from "@/components/tooltip";
 import { useCreateBBoxes } from "@/components/workspaces/hooks/use-create-b-boxes";
+import type { Decision } from "@/features/case-law/components/decision-cells";
+import { DecisionPassageCitation } from "@/features/case-law/components/decision-passage-citation";
 import type { Citation } from "@/lib/citations";
 import { detached } from "@/lib/detached";
 import {
@@ -41,6 +43,7 @@ export type JustificationSource =
     }
   | {
       kind: "decision";
+      decision: Decision;
       content: JustificationContent;
       /** Opens the decision at the passage, with the reader's highlight. */
       onOpenPassage: (anchorId: string) => void;
@@ -69,8 +72,9 @@ export const Justification = ({ source }: { source: JustificationSource }) => (
               return <DocxQuote citation={citation} key={key} />;
             case "decision-passage":
               return source.kind === "decision" ? (
-                <DecisionPassageChip
+                <DecisionPassageCitation
                   citation={citation}
+                  decision={source.decision}
                   key={key}
                   onOpen={source.onOpenPassage}
                 />
@@ -169,45 +173,6 @@ const PdfChip = ({ workspaceId, justification, citation }: PdfChipProps) => {
     >
       p.&nbsp;{citation.pageNumber}
     </button>
-  );
-};
-
-type DecisionPassageChipProps = {
-  citation: Extract<Citation, { kind: "decision-passage" }>;
-  onOpen: (anchorId: string) => void;
-};
-
-/**
- * The passage of a decision an answer leaned on. Pressing it opens the
- * decision at that paragraph with the reader's highlight on it, the way a
- * page chip opens a file at its page.
- */
-const DecisionPassageChip = ({
-  citation,
-  onOpen,
-}: DecisionPassageChipProps) => {
-  const trimmed = citation.excerpt.trim();
-  const preview =
-    trimmed.length > DOCX_CHIP_PREVIEW_CHARS
-      ? `${trimmed.slice(0, DOCX_CHIP_PREVIEW_CHARS).trimEnd()}…`
-      : trimmed || "¶";
-
-  return (
-    <Tooltip
-      content={trimmed || undefined}
-      render={
-        <button
-          className={cn(CITATION_CHIP_CLASSES, "max-w-[16rem] truncate")}
-          dir="auto"
-          onClick={() => onOpen(citation.anchorId)}
-          type="button"
-        >
-          {"“"}
-          {preview}
-          {"”"}
-        </button>
-      }
-    />
   );
 };
 

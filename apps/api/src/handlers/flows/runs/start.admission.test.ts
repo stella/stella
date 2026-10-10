@@ -67,7 +67,7 @@ describe("manual flow start admission response", () => {
       };
       const model = {
         provider: "openai",
-        modelId: BYOK_DEFAULT_MODELS.openai.chat,
+        modelId: BYOK_DEFAULT_MODELS.openai.chat.modelId,
       } as const;
       const refusal = new ActionAdmissionError({
         reason: reason === "configuration_unavailable" ? "unavailable" : reason,

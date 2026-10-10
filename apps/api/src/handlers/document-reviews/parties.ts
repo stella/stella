@@ -5,14 +5,15 @@
  *
  * The answer is deterministic for a document version's content, so it is
  * cached per `entityVersionId` (see `document_review_parties`): the first
- * call for a version detects it, every later call for the same version
- * reads the cached row without a model call.
+ * explicit detection request for a version detects it; cached requests only
+ * read the row and never dispatch model work.
  */
 
 import { panic, Result } from "better-result";
 import { and, eq, isNull, ne, sql } from "drizzle-orm";
 import { t } from "elysia";
 
+import type { SafeDb } from "@/api/db/safe-db";
 import {
   documentReviewParties,
   entityVersions,
@@ -24,11 +25,13 @@ import { aiHandlerError } from "@/api/lib/ai-error";
 import {
   ACCOUNT_ACCESS,
   admitFiniteAction,
-  assertUsageAvailableForHandler,
+  authorizeHandlerUsage,
   createSafeHandler,
 } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
+import type { ReviewParty } from "@/api/lib/document-review/contract";
 import {
   detectReviewParties,
   REVIEW_PARTIES_PROMPT_VERSION,
@@ -36,17 +39,37 @@ import {
 } from "@/api/lib/document-review/parties";
 import { fetchAndPrepareReviewFiles } from "@/api/lib/document-review/prepare-review-files";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { cloneOperationInput } from "@/api/lib/proofs/checked-transaction";
 import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
 
 const TIMEOUT_MS = 60_000;
 
+/** What a read answers: cached parties, or (cached mode only) none yet. */
+type ReviewPartiesAnswer =
+  | {
+      type: "cached";
+      entityVersionId: SafeId<"entityVersion">;
+      parties: ReviewParty[];
+    }
+  | { type: "not-detected"; entityVersionId: SafeId<"entityVersion"> };
+
+const cachedPartiesAnswer = (
+  entityVersionId: SafeId<"entityVersion">,
+  parties: ReviewParty[],
+): ReviewPartiesAnswer => ({ type: "cached", entityVersionId, parties });
+
+const notDetectedAnswer = (
+  entityVersionId: SafeId<"entityVersion">,
+): ReviewPartiesAnswer => ({ type: "not-detected", entityVersionId });
+
 const documentReviewPartiesBodySchema = t.Object({
   target: documentReviewTargetSchema,
+  mode: t.Union([t.Literal("cached"), t.Literal("detect")]),
 });
 
 const config = {
   description:
-    "Detect a target document's parties ahead of any position proposal, so the review launcher can show which side the reviewer acts for before choosing references.",
+    "Read cached document parties, or explicitly detect them for the review launcher. Cached mode never runs detection.",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
@@ -96,6 +119,77 @@ const detectAdmittedParties = async ({
       },
     }),
   );
+
+type PersistDetectedPartiesOptions = Pick<
+  typeof documentReviewParties.$inferInsert,
+  "organizationId" | "workspaceId" | "entityId" | "entityVersionId" | "parties"
+> & { safeDb: SafeDb };
+
+const persistDetectedParties = async ({
+  safeDb,
+  organizationId,
+  workspaceId,
+  entityId,
+  entityVersionId,
+  parties,
+}: PersistDetectedPartiesOptions) =>
+  await safeDb(async (tx) => {
+    // Model work runs outside the transaction. Fence its final write
+    // against matter deletion and version tombstoning, in that order.
+    const owners = await tx
+      .select({ id: workspaces.id })
+      .from(workspaces)
+      .where(
+        and(
+          eq(workspaces.id, workspaceId),
+          eq(workspaces.organizationId, organizationId),
+          ne(workspaces.status, "deleting"),
+        ),
+      )
+      .for("share");
+    if (owners.length === 0) {
+      return false;
+    }
+    const versions = await tx
+      .select({ id: entityVersions.id })
+      .from(entityVersions)
+      .where(
+        and(
+          eq(entityVersions.id, entityVersionId),
+          eq(entityVersions.entityId, entityId),
+          eq(entityVersions.workspaceId, workspaceId),
+          isNull(entityVersions.deletedAt),
+        ),
+      )
+      .for("share");
+    if (versions.length === 0) {
+      return false;
+    }
+    // audit: skip — derived AI cache keyed by entity version;
+    // recomputable from the document's current content, never surfaces
+    // as an audited mutation on its own.
+    await tx
+      .insert(documentReviewParties)
+      .values({
+        id: createSafeId<"documentReviewParty">(),
+        organizationId,
+        workspaceId,
+        entityId,
+        entityVersionId,
+        promptVersion: REVIEW_PARTIES_PROMPT_VERSION,
+        parties,
+        createdAt: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: documentReviewParties.entityVersionId,
+        set: {
+          promptVersion: sql`excluded.prompt_version`,
+          parties: sql`excluded.parties`,
+          createdAt: sql`excluded.created_at`,
+        },
+      });
+    return true;
+  });
 
 export const createReviewParties = ({
   detectParties = detectReviewParties,
@@ -168,7 +262,11 @@ export const createReviewParties = ({
     );
     const cachedRow = cached.at(0);
     if (cachedRow !== undefined) {
-      return Result.ok({ entityVersionId, parties: cachedRow.parties });
+      return Result.ok(cachedPartiesAnswer(entityVersionId, cachedRow.parties));
+    }
+
+    if (body.mode === "cached") {
+      return Result.ok(notDetectedAnswer(entityVersionId));
     }
 
     yield* requireTanStackAIAvailableForRole({
@@ -178,131 +276,101 @@ export const createReviewParties = ({
       role: "pdf",
     });
 
-    const preflightError = await assertUsageAvailableForHandler({
-      metering: { actionType: "chat", modelRole: "pdf" },
-      organizationId,
-      orgAIConfig,
-      workspaceId,
-      userId: user.id,
-      safeDb,
-    });
-    if (preflightError) {
-      return Result.err(preflightError);
-    }
-
-    const preparedResult = await Result.tryPromise({
-      try: async () => await prepareReviewFiles([file], organizationId),
-      catch: (cause) =>
-        new HandlerError({
-          status: 500,
-          message: "Internal server error",
-          cause,
-        }),
-    });
-    if (Result.isError(preparedResult)) {
-      return Result.err(preparedResult.error);
-    }
-    const target = preparedResult.value.at(0);
-    if (target?.kind !== "docx") {
-      return panic("DOCX review target was not prepared as DOCX blocks");
-    }
-
-    const serviceTier = "standard" as const;
-    const { parties } = yield* Result.await(
-      detectAdmittedParties({
+    const authorization = yield* Result.await(
+      authorizeHandlerUsage({
+        metering: { actionType: "chat", modelRole: "pdf" },
+        organizationId,
+        orgAIConfig,
+        workspaceId,
+        userId: user.id,
+        safeDb,
         ctx,
         detectParties,
-        request: {
-          target,
-          targetEntityVersionId: entityVersionId,
-          organizationId,
-          workspaceId,
-          orgAIConfig,
-          managedAIResidency,
-          promptCachingEnabled,
-          serviceTier,
-          usageMetering: {
-            actionType: "chat",
-            organizationId,
-            safeDb,
-            serviceTier,
-            userId: user.id,
-            workspaceId,
-          },
-        },
+        prepareReviewFiles,
+        file,
+        entityId,
+        entityVersionId,
+        managedAIResidency,
+        promptCachingEnabled,
       }),
     );
-
-    const persisted = yield* Result.await(
-      safeDb(async (tx) => {
-        // Model work runs outside the transaction. Fence its final write
-        // against matter deletion and version tombstoning, in that order.
-        const owners = await tx
-          .select({ id: workspaces.id })
-          .from(workspaces)
-          .where(
-            and(
-              eq(workspaces.id, workspaceId),
-              eq(workspaces.organizationId, organizationId),
-              ne(workspaces.status, "deleting"),
-            ),
-          )
-          .for("share");
-        if (owners.length === 0) {
-          return false;
-        }
-        const versions = await tx
-          .select({ id: entityVersions.id })
-          .from(entityVersions)
-          .where(
-            and(
-              eq(entityVersions.id, entityVersionId),
-              eq(entityVersions.entityId, entityId),
-              eq(entityVersions.workspaceId, workspaceId),
-              isNull(entityVersions.deletedAt),
-            ),
-          )
-          .for("share");
-        if (versions.length === 0) {
-          return false;
-        }
-        // audit: skip — derived AI cache keyed by entity version;
-        // recomputable from the document's current content, never surfaces
-        // as an audited mutation on its own.
-        await tx
-          .insert(documentReviewParties)
-          .values({
-            id: createSafeId<"documentReviewParty">(),
-            organizationId,
-            workspaceId,
-            entityId,
-            entityVersionId,
-            promptVersion: REVIEW_PARTIES_PROMPT_VERSION,
-            parties,
-            createdAt: new Date(),
-          })
-          .onConflictDoUpdate({
-            target: documentReviewParties.entityVersionId,
-            set: {
-              promptVersion: sql`excluded.prompt_version`,
-              parties: sql`excluded.parties`,
-              createdAt: sql`excluded.created_at`,
-            },
+    return await authorization.execute(
+      async ({ proof }) =>
+        await Result.gen(async function* () {
+          const checked = proof.input.value;
+          const admittedContext = cloneOperationInput(checked.ctx);
+          const preparedResult = await Result.tryPromise({
+            try: async () =>
+              await checked.prepareReviewFiles(
+                [checked.file],
+                checked.organizationId,
+              ),
+            catch: (cause) =>
+              new HandlerError({
+                status: 500,
+                message: "Internal server error",
+                cause,
+              }),
           });
-        return true;
-      }),
-    );
+          if (Result.isError(preparedResult)) {
+            return Result.err(preparedResult.error);
+          }
+          const target = preparedResult.value.at(0);
+          if (target?.kind !== "docx") {
+            return panic("DOCX review target was not prepared as DOCX blocks");
+          }
 
-    if (!persisted) {
-      return Result.err(
-        new HandlerError({
-          status: 404,
-          message: "Document review target is no longer available",
+          const serviceTier = "standard" as const;
+          const { parties } = yield* Result.await(
+            detectAdmittedParties({
+              ctx: admittedContext,
+              detectParties: checked.detectParties,
+              request: {
+                target,
+                targetEntityVersionId: checked.entityVersionId,
+                organizationId: checked.organizationId,
+                workspaceId: checked.workspaceId,
+                orgAIConfig: checked.orgAIConfig,
+                managedAIResidency: checked.managedAIResidency,
+                promptCachingEnabled: checked.promptCachingEnabled,
+                serviceTier,
+                usageMetering: {
+                  actionType: "chat",
+                  organizationId: checked.organizationId,
+                  safeDb: checked.safeDb,
+                  serviceTier,
+                  userId: checked.userId,
+                  workspaceId: checked.workspaceId,
+                },
+              },
+            }),
+          );
+
+          const persisted = yield* Result.await(
+            persistDetectedParties({
+              safeDb: checked.safeDb,
+              organizationId: checked.organizationId,
+              workspaceId: checked.workspaceId,
+              entityId: checked.entityId,
+              entityVersionId: checked.entityVersionId,
+              parties,
+            }),
+          );
+
+          if (!persisted) {
+            return Result.err(
+              new HandlerError({
+                status: 404,
+                message: "Document review target is no longer available",
+              }),
+            );
+          }
+
+          return Result.ok(
+            cachedPartiesAnswer(checked.entityVersionId, parties),
+          );
         }),
-      );
-    }
-
-    return Result.ok({ entityVersionId, parties });
+    );
   });
 
 export default createReviewParties();

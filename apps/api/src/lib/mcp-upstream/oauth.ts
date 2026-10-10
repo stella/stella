@@ -3,6 +3,7 @@ import { getDomain } from "tldts";
 import * as v from "valibot";
 
 import { withTimeout, TimeoutError } from "@stll/concurrency/with-timeout";
+import { sha256Base64Url as hashSha256Base64Url } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import type { McpOAuthRegistrationResponse } from "@/api/db/schema";
@@ -466,9 +467,7 @@ const randomBase64Url = (byteLength: number): string => {
 
 export const createPkce = () => {
   const codeVerifier = randomBase64Url(PKCE_VERIFIER_BYTES);
-  const codeChallenge = new Bun.CryptoHasher("sha256")
-    .update(codeVerifier)
-    .digest("base64url");
+  const codeChallenge = hashSha256Base64Url(codeVerifier);
 
   return { codeChallenge, codeVerifier };
 };

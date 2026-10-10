@@ -1,6 +1,5 @@
 import { Result, TaggedError, panic } from "better-result";
 import { load } from "cheerio";
-import { createHash } from "node:crypto";
 
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import { createEventLoopSlicer } from "@stll/concurrency/event-loop";
@@ -26,6 +25,7 @@ import type {
   SanctionsListParseError,
   SanctionsSource,
 } from "@stll/sanctions";
+import { sha256Hex as hashSha256Hex, createSha256 } from "@stll/sha256/bun";
 
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { INGESTION_USER_AGENT } from "@/api/lib/case-law/ingestion-user-agent";
@@ -653,9 +653,7 @@ const loadEditionOnce = async (
     return parsed.isOk()
       ? Result.ok({
           parsed: parsed.value,
-          contentHash: createHash("sha256")
-            .update(Buffer.from(downloaded.value))
-            .digest("hex"),
+          contentHash: hashSha256Hex(Buffer.from(downloaded.value)),
           lastModified: null,
         })
       : Result.err(refreshError(marker.source, "parse-failed"));
@@ -674,7 +672,7 @@ const loadEditionOnce = async (
     return downloaded;
   }
   const body = trackStreamFailure(downloaded.value.body);
-  const hash = createHash("sha256");
+  const hash = createSha256();
   // The parse runs on the serving event loop. Chunks that have already
   // arrived are read without ever yielding to timers or I/O, so the parser is
   // fed small slices and gives way between them. A cancelled refresh stops

@@ -17,7 +17,7 @@ import {
 } from "@/features/statutes/queries/statutes";
 import type { PublicStatute } from "@/features/statutes/queries/statutes";
 import { resolveStatuteRoute } from "@/features/statutes/statute-route-resolution";
-import { createStatuteLinkTarget } from "@/lib/statute-route";
+import { createStatuteLinkTarget } from "@/lib/statutes/statute-route";
 
 /**
  * Open the statute a chat link names, the way a cited act opens: an inspector
