@@ -73,6 +73,8 @@ describe("CourtListener short text usability", () => {
     ["USCA2 Opinion can't open 24-9876A.pdf\n\nAppeal denied.", "usable"],
     ["Opinion # ZZ-98765 was never issued.", "source-placeholder"],
     ["Opinion # XY-678 was never released.", "source-placeholder"],
+    ["Present — Zqhr, J. The order is vacated.", "usable"],
+    ["???\n\nWe vacate judgment.", "usable"],
     ["(b) (7)(C)\n\n(b) (6)", "no-ruling-text"],
     ["Zqhr, J.\n\n17/08/2088", "no-ruling-text"],
     ["\ufffd\ufffd\ufffd\ufffd", "undecodable"],
@@ -87,6 +89,7 @@ describe("CourtListener short text usability", () => {
     ["Memorandum decisions.\n\nAppeal dismissed.", "usable"],
     ["Office of the Attorney General requested relief [denied].", "usable"],
     ["OFFICE OF\n?t’HE &I!TORNEY GENERAL\n\nAmrmx. ZQULV\n\nDenied.", "usable"],
+    ["OFFICE OF\n?t’HE &I!TORNEY GENERAL\n\nThe order is vacated.", "usable"],
     [
       "The clerk was unable to extract document content, but the appeal is denied.",
       "usable",

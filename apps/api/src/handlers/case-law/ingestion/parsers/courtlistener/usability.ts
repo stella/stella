@@ -16,7 +16,7 @@ const SOURCE_PLACEHOLDERS = [
   /^(?:unable|failed) to extract (?:document )?(?:content|text)[.!]?$/u,
   /^no opinion found\s*\.?\s*(?:click here to view source material[.!]?)?$/u,
   /^(?:usca\d+\s+)?opinion (?:can't|cannot|could not) open\s+\S+$/u,
-  /^(?:this )?opinion\b.{0,100}\b(?:was|has been) (?:never (?:issued|released)|withdrawn)(?: or was withdrawn)?[.!]?(?:\s+opinion\s*#.{0,50})?$/u,
+  /^(?:this )?opinion\b.{0,100}\b(?:was|has been) (?:never (?:issued|released)|withdrawn)(?: or was withdrawn)?[.!]?(?:\s+opinion\s*#\s*[\w-]+(?:\s*['’])?)?$/u,
   /^decision removed at the request of the court[.!]?$/u,
   /^entry removed as entered in error[.!]?$/u,
   /^(?:file\s+)?unavailable[.!]?$/u,
@@ -46,17 +46,74 @@ const COURT_HEADER =
 const FILING_HEADER =
   /^case\s*:?\s*[\w:.-]+\s+(?:document\s+\d+\s+)?(?:date\s+)?filed\s*:?\s*\d+[\d/.-]*\s+page\s*:?\s*\d+\s+of\s+\d+$/u;
 const PARTICIPATION_NOTE =
-  /^(?:judge\s+[\p{L}'’\- ]+\s+took no part|present\s*[—:-]\s+[\p{L}.,'’\- ]+)[.!]?$/u;
+  /^(?:judge\s+[\p{L}'’\- ]+\s+took no part|present\s*[—:-]\s+[\p{L}.,'’\- ]+\b(?:jj|j)\.)[.!]?$/u;
 const OFFICE_HEADER =
   /^[^\p{L}]*office of\s+(?:the\s+)?[\p{L}'’]+(?:\s+general)?(?:\s+of\s+\p{L}+)?(?:\s+[\p{L}]+)?[^\p{L}]*(?:\s+[a-z])?$/u;
 const DAMAGED_OFFICE_HEADER =
   /^(?:office of\b|[\p{L}'’]+\s+[\p{L}'’[\]]+ general\b)[\s\S]{0,100}$/u;
 const COURT_IDENTIFIER =
   /^\d{4}\s+[a-z]{2,4}\s+(?:super|app|sup)\s+\d+[a-z]?(?:\s+[\da-z]+)?$/u;
-// Clear disposition words override metadata and corruption heuristics. This
-// is a preservation rule, not a vocabulary required of every usable body.
+// Preserve very short dispositions; readable sentences do not need these words.
 const RULING_WORDS =
-  /(?<!\p{L})(?:affirm(?:ed)?|den(?:y|ied)|grant(?:ed)?|dismiss(?:ed)?|revers(?:e|ed)|remand(?:ed)?|ordered|per\s+curiam)(?!\p{L})/u;
+  /^[\s[(]*(?:affirm(?:ed)?|den(?:y|ied)|grant(?:ed)?|dismiss(?:ed)?|revers(?:e|ed)|remand(?:ed)?|ordered|per\s+curiam)[\s.!\])]*$/u;
+
+const isMetadata = (text: string): boolean =>
+  AUTHOR_INTRODUCTION.test(text) ||
+  AUTHOR_PUBLICATION_NOTE.test(text) ||
+  COURT_HEADER.test(text) ||
+  FILING_HEADER.test(text) ||
+  PARTICIPATION_NOTE.test(text) ||
+  OFFICE_HEADER.test(text) ||
+  COURT_IDENTIFIER.test(text) ||
+  DATE_ONLY.test(text.replace(/\s+/gu, ""));
+
+const hasReadableSentence = (text: string): boolean => {
+  const compactBody = text.replace(/\s+/gu, " ").trim();
+  if (
+    AUTHOR_INTRODUCTION.test(compactBody) ||
+    AUTHOR_PUBLICATION_NOTE.test(compactBody) ||
+    SOURCE_PLACEHOLDERS.some((pattern) => pattern.test(compactBody))
+  ) {
+    return false;
+  }
+  for (const paragraph of text.split(/\n\s*\n/gu)) {
+    const compact = paragraph.replace(/\s+/gu, " ").trim();
+    if (isMetadata(compact)) {
+      continue;
+    }
+    // Inspect each sentence separately so a damaged header cannot outweigh an
+    // intact sentence, and a publisher message cannot supply its word tokens.
+    for (const sentence of compact.match(/[^.!?。！？]+[.!?。！？]+/gu) ?? []) {
+      const candidate = sentence.trim();
+      if (
+        SOURCE_PLACEHOLDERS.some((pattern) => pattern.test(candidate)) ||
+        isMetadata(candidate) ||
+        /^(?:click here to view source material|not to be published in full)[.!]?$/u.test(
+          candidate,
+        )
+      ) {
+        continue;
+      }
+      const tokens = candidate.match(/\S+/gu) ?? [];
+      const words = tokens.filter((token) =>
+        /^["“”'‘’([{]*\p{L}+(?:['’−-]\p{L}+)*[,;:!?。.！？」\])}"“”'‘’]*$/u.test(
+          token,
+        ),
+      );
+      const letters = candidate.match(/\p{L}/gu)?.length ?? 0;
+      const nonLetters = candidate.match(/[^\p{L}\s]/gu)?.length ?? 0;
+      if (
+        words.length >= 3 &&
+        words.filter((word) => /\p{L}{2}/u.test(word)).length >= 2 &&
+        words.length * 4 >= tokens.length * 3 &&
+        letters > nonLetters * 2
+      ) {
+        return true;
+      }
+    }
+  }
+  return false;
+};
 
 type TextDecodabilityOptions = {
   remaining: string;
@@ -109,22 +166,16 @@ export const classifyCourtListenerText = (
     .replace(ATTRIBUTION, "\n")
     .replace(SIGNATURE, "\n");
   const compact = unattributed.replace(/\s+/gu, " ").trim();
+  if (hasReadableSentence(unattributed)) {
+    return COURTLISTENER_TEXT_USABILITY.USABLE;
+  }
   if (SOURCE_PLACEHOLDERS.some((pattern) => pattern.test(compact))) {
     return COURTLISTENER_TEXT_USABILITY.SOURCE_PLACEHOLDER;
   }
-  if (RULING_WORDS.test(compact)) {
+  if (unattributed.split(/\n/gu).some((line) => RULING_WORDS.test(line))) {
     return COURTLISTENER_TEXT_USABILITY.USABLE;
   }
-  if (
-    AUTHOR_INTRODUCTION.test(compact) ||
-    AUTHOR_PUBLICATION_NOTE.test(compact) ||
-    COURT_HEADER.test(compact) ||
-    FILING_HEADER.test(compact) ||
-    PARTICIPATION_NOTE.test(compact) ||
-    OFFICE_HEADER.test(compact) ||
-    COURT_IDENTIFIER.test(compact) ||
-    DATE_ONLY.test(compact.replace(/\s+/gu, ""))
-  ) {
+  if (isMetadata(compact)) {
     return COURTLISTENER_TEXT_USABILITY.NO_RULING_TEXT;
   }
 

@@ -89,6 +89,49 @@ const usableText = fc.oneof(
     .map(([letter, number]) => `We deny ${letter}${number}.`),
   fc.tuple(ruling, ruling).map(([first, second]) => `${first}\n\n${second}`),
 );
+const readableSentence = fc.oneof(
+  fc
+    .tuple(
+      fc.constantFrom("order", "judgment", "decree", "decision"),
+      fc.constantFrom("vacated", "remanded", "reversed", "modified", "quashed"),
+      fc.constantFrom(".", " with directions.", " after review."),
+    )
+    .map(([subject, verb, ending]) => `The ${subject} is ${verb}${ending}`),
+  fc
+    .tuple(
+      fc.constantFrom("The garden", "A small bird", "The afternoon sky"),
+      fc.constantFrom("appears bright", "looks peaceful", "remains quiet"),
+      fc.constantFrom(" today.", " in the morning.", " during the summer."),
+    )
+    .map(([subject, predicate, ending]) => `${subject} ${predicate}${ending}`),
+);
+
+test(
+  "CourtListener readable sentences make every nonusable short body usable",
+  () => {
+    assertProperty(
+      "CourtListener readable sentences make every nonusable short body usable",
+      fc.property(readableSentence, (sentence) => {
+        expect(classifyCourtListenerText(sentence)).toBe("usable");
+        const suffix = `\n\n${sentence}`;
+        for (const { expected, texts } of shortTexts) {
+          if (expected === "usable") {
+            continue;
+          }
+          for (const text of texts) {
+            const appended = `${text}${suffix}`;
+            expect(classifyCourtListenerText(text)).toBe(expected);
+            expect(classifyCourtListenerText(appended)).toBe("usable");
+            const restored = appended.slice(0, -suffix.length);
+            expect(restored).toBe(text);
+            expect(classifyCourtListenerText(restored)).toBe(expected);
+          }
+        }
+      }),
+    );
+  },
+  propertyTestTimeout(10_000),
+);
 
 test(
   "CourtListener ruling words make non-ruling bodies usable",
