@@ -110,6 +110,11 @@ export const aggregateFences = () => {
       aggregate: "personalCatalog",
       id: { organizationId, userId: mintAuthProviderId<"user">() },
     },
+    chatMessage: {
+      aggregate: "chatMessage",
+      id: { id: createSafeId<"chatMessage">(), threadId },
+      mode: "update",
+    },
   } as const satisfies FenceFixtures;
 };
 

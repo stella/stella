@@ -2803,6 +2803,7 @@ export const createSendMessage = (
           offeredToolNamesForSkills,
           safeDb,
           sendMode: body.sendMode,
+          threadId: thread.data.id,
           toolAvailability: {
             docxEditMode: registeredDocxEditMode,
             templateAuthoring: areTemplateAuthoringToolsRegistered(memberRole),
@@ -3357,6 +3358,7 @@ type PrepareChatContextProps = {
   refRegistry: ReturnType<typeof createChatRefRegistry>;
   safeDb: SafeDb;
   sendMode: ChatSendMode;
+  threadId: SafeId<"chatThread">;
   toolAvailability: ChatToolAvailability;
   userContext: IncomingUserContext | undefined;
   userId: SafeId<"user">;
@@ -3403,6 +3405,7 @@ const prepareChatContext = async ({
   refRegistry,
   safeDb,
   sendMode,
+  threadId,
   toolAvailability,
   userContext,
   userId,
@@ -3438,6 +3441,8 @@ const prepareChatContext = async ({
         practiceJurisdictions,
         refRegistry,
         safeDb,
+        messages: messageWindow,
+        threadId,
         toolAvailability,
         userContext,
         userId,

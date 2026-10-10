@@ -422,7 +422,7 @@ describe("policy coverage", () => {
     // find. Organization is the real boundary and the org policies pin it.
     "document_reference_counters",
   ]);
-  const APPEND_ONLY = new Set(["audit_logs"]);
+  const APPEND_ONLY = new Set(["audit_logs", "chat_message_revisions"]);
   const INSERT_ONLY = new Set([
     "entity_deletion_cleanup_requests",
     "template_deletion_cleanup_requests",

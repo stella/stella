@@ -55,6 +55,7 @@ export const AGGREGATE_LOCKS = {
   processingClaim: { rank: 600, kind: "row" },
   contactCapacity: { rank: 700, kind: "advisory" },
   personalCatalog: { rank: 700, kind: "advisory" },
+  chatMessage: { rank: 810, kind: "row" },
 } as const;
 
 export type AggregateName = keyof typeof AGGREGATE_LOCKS;
@@ -104,6 +105,7 @@ export const AGGREGATE_CHAINS = {
   desktopRenewal: ["desktopMembership", "desktopCredential"],
   contactCapacity: ["contactCapacity"],
   personalCatalog: ["personalCatalog"],
+  chatRevision: ["chatThread", "chatMessage"],
 } as const satisfies Record<string, readonly AggregateName[]>;
 
 export const ROW_LOCK_MODES = [
@@ -195,6 +197,7 @@ type AggregateIdentities = {
     organizationId: SafeId<"organization">;
     userId: SafeId<"user">;
   };
+  chatMessage: { id: SafeId<"chatMessage">; threadId: SafeId<"chatThread"> };
 };
 
 type ExecuteTransaction = { execute: (statement: SQL) => PromiseLike<unknown> };
@@ -523,6 +526,14 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
         values: [options.id.id],
         scopeColumns: ["reference_id"],
         scopeValues: [options.id.userId],
+      };
+    case "chatMessage":
+      return {
+        table: "chat_messages",
+        columns: ["id"],
+        values: [options.id.id],
+        scopeColumns: ["thread_id"],
+        scopeValues: [options.id.threadId],
       };
     case "workspace":
       return {
