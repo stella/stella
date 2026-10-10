@@ -52,14 +52,14 @@ const ComposerHarness = ({ ref }: { ref: Ref<ChatEditorController> }) => {
   const controller = useChatEditor({ threadRef });
   useImperativeHandle(ref, () => controller, [controller]);
   return (
-    <>
+    <div onDrop={controller.handleDrop}>
       <ChatDraftAttachmentChips
         files={controller.attachments}
         onExpand={controller.expandPastedText}
         onRemove={controller.removeFile}
       />
       <PromptEditorContent editor={controller.editor} />
-    </>
+    </div>
   );
 };
 
@@ -147,6 +147,121 @@ test("expanding a pasted chip inserts exact text at the current selection and re
     [],
   );
   client.clear();
+});
+
+for (const editAfterExpand of [false, true]) {
+  test(`pasted chips survive expansion history${editAfterExpand ? " after editing" : " and redo"}`, async () => {
+    const text = ` \t<p>quoted &amp; text</p>\r\n${"x".repeat(1501)}\n\n trailing \r`;
+    const { ui, controller, client } = await mount();
+    paste(ui.getByRole("textbox"), text);
+    await waitFor(() => expect(controller().attachments).toHaveLength(1));
+    const originalAttachments = controller().attachments;
+    const expandButton = { name: messages.chat.pastedText.showInTextField };
+    fireEvent.click(ui.getByRole("button", expandButton));
+    expect(controller().editor?.state.doc.textContent).toBe(text);
+    expect(controller().attachments).toEqual([]);
+    expect(ui.queryByRole("button", expandButton)).toBeNull();
+    if (editAfterExpand) {
+      act(() => {
+        controller().editor?.commands.insertContent({
+          type: "text",
+          text: "edited",
+        });
+      });
+      expect(controller().editor?.state.doc.textContent).toBe(`${text}edited`);
+      act(() => expect(controller().editor?.commands.undo()).toBe(true));
+      expect(controller().editor?.state.doc.textContent).toBe(text);
+      expect(controller().attachments).toEqual([]);
+    }
+    act(() => expect(controller().editor?.commands.undo()).toBe(true));
+    expect(controller().editor?.state.doc.textContent).toBe("");
+    await waitFor(() =>
+      expect(controller().attachments).toEqual(originalAttachments),
+    );
+    expect(ui.getByRole("button", expandButton)).toBeDefined();
+    if (!editAfterExpand) {
+      act(() => expect(controller().editor?.commands.redo()).toBe(true));
+      expect(controller().editor?.state.doc.textContent).toBe(text);
+      expect(controller().attachments).toEqual([]);
+      expect(ui.queryByRole("button", expandButton)).toBeNull();
+      act(() => expect(controller().editor?.commands.undo()).toBe(true));
+      await waitFor(() =>
+        expect(controller().attachments).toEqual(originalAttachments),
+      );
+    }
+    const sent: ChatInputDraft[] = [];
+    await act(async () =>
+      controller().submit((draft) => {
+        sent.push(draft);
+      }),
+    );
+    expect(sent).toHaveLength(1);
+    const draft = sent.at(0);
+    if (!draft) {
+      throw new Error("Expected a restored pasted chip to submit");
+    }
+    expect(draft.html).toBe("");
+    expect(draft.files).toEqual(originalAttachments);
+    expect((await buildChatRequestMessage(draft)).content).toEqual([
+      { type: "text", content: text, metadata: { type: "pasted_text" } },
+    ]);
+    client.clear();
+  });
+}
+
+test("expansion undo restores its chip without changing other pastes or file attachments", async () => {
+  const { ui, controller, client } = await mount();
+  paste(ui.getByRole("textbox"), "a".repeat(1501));
+  paste(ui.getByRole("textbox"), "b".repeat(1501));
+  await waitFor(() => expect(controller().attachments).toHaveLength(2));
+  const originalPastes = controller().attachments;
+  const firstPaste = originalPastes.at(0);
+  if (firstPaste?.type !== "pasted_text") {
+    throw new Error("Expected two pasted attachments");
+  }
+  const dataTransfer = new DataTransfer();
+  dataTransfer.items.add(
+    new File(["document"], "review.txt", { type: "text/plain" }),
+  );
+  fireEvent.drop(ui.getByRole("textbox"), { dataTransfer });
+  await waitFor(() => expect(controller().attachments).toHaveLength(3));
+  const file = controller().attachments.find(
+    (attachment) => attachment.type === "file",
+  );
+  if (!file) {
+    throw new Error("Expected a file attachment");
+  }
+  act(() => controller().expandPastedText(firstPaste.id));
+  expect(controller().editor?.state.doc.textContent).toBe(firstPaste.text);
+  act(() => controller().removeFile(file.id));
+  act(() => expect(controller().editor?.commands.undo()).toBe(true));
+  expect(controller().editor?.state.doc.textContent).toBe("");
+  await waitFor(() => expect(controller().attachments).toEqual(originalPastes));
+  client.clear();
+});
+
+test("restoring a stored draft keeps pasted chip expansion undoable", async () => {
+  const text = "a".repeat(1501);
+  const first = await mount();
+  paste(first.ui.getByRole("textbox"), text);
+  await waitFor(() => expect(first.controller().attachments).toHaveLength(1));
+  const originalAttachments = first.controller().attachments;
+  first.ui.unmount();
+  first.client.clear();
+  const restored = await mount();
+  expect(restored.controller().attachments).toEqual(originalAttachments);
+  fireEvent.click(
+    restored.ui.getByRole("button", {
+      name: messages.chat.pastedText.showInTextField,
+    }),
+  );
+  expect(restored.controller().editor?.state.doc.textContent).toBe(text);
+  act(() => expect(restored.controller().editor?.commands.undo()).toBe(true));
+  expect(restored.controller().editor?.state.doc.textContent).toBe("");
+  await waitFor(() =>
+    expect(restored.controller().attachments).toEqual(originalAttachments),
+  );
+  restored.client.clear();
 });
 
 test("expanded pasted chips preserve arbitrary text byte for byte", async () => {
