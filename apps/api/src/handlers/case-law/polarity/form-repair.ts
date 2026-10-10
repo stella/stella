@@ -311,7 +311,7 @@ export const applyFormRepairs = async ({
           ${current.row.oldPolarity}::text, ${current.row.oldRuleId}::uuid,
           ${current.row.newRuleId}::uuid, ${current.rulePattern}::text,
           ${current.windows.evidenceSpan.start}::integer, ${current.windows.evidenceSpan.end}::integer,
-          ${current.confidence}::real, ${classifyCitedPart(current.windows.contexts, plan.language)}::text
+          ${current.confidence}::real, ${classifyCitedPart({ contexts: current.windows.contexts, citationText: candidate.citationText, language: plan.language })}::text
         )`,
         ),
         sql.raw(","),

@@ -193,7 +193,11 @@ export const planDecisionCitations = async ({
       return {
         reference,
         windows,
-        citedPart: classifyCitedPart(windows?.contexts ?? [], language),
+        citedPart: classifyCitedPart({
+          contexts: windows?.contexts ?? [],
+          citationText: reference.printed,
+          language,
+        }),
         verdict:
           reference.polarityMentions === null
             ? null

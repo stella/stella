@@ -124,7 +124,11 @@ export const classifyCitation = async ({
     classifierVersion: POLARITY_CLASSIFIER_VERSION,
     windowStart: windows.evidenceSpan.start,
     windowEnd: windows.evidenceSpan.end,
-    citedPart: classifyCitedPart(windows.contexts, language),
+    citedPart: classifyCitedPart({
+      contexts: windows.contexts,
+      citationText,
+      language,
+    }),
   };
   // Tier 1: regex rules, over the mentions rather than the merged windows,
   // so two mentions that disagree are two readings and not one.

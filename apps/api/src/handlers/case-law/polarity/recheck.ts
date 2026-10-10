@@ -205,7 +205,11 @@ const recheckPage = async (args: RecheckPageArgs): Promise<RecheckResult> => {
       windowStart: windows.evidenceSpan.start,
       windowEnd: windows.evidenceSpan.end,
       confidence: match.confidence,
-      citedPart: classifyCitedPart(windows.contexts, language),
+      citedPart: classifyCitedPart({
+        contexts: windows.contexts,
+        citationText: citation.citationText,
+        language,
+      }),
     });
   }
   if (!dryRun) {
