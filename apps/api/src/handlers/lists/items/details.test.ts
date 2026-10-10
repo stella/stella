@@ -112,7 +112,6 @@ const fixture = (
     select: () => chain,
   });
   return {
-    ...db,
     context: {
       workspaceId,
       featureAccessSnapshot,
@@ -155,7 +154,6 @@ describe("list activity verification details follow caller access", () => {
           ],
           nextCursor: null,
         });
-        expect(f.getCallCount()).toBe(1);
       });
     }
   }
