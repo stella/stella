@@ -35,6 +35,7 @@ import type { Context } from "elysia";
 import Elysia, { t } from "elysia";
 
 import { BETTER_AUTH_ORGANIZATION_OPTIONS } from "@stll/auth-model";
+import { errorOutputLogger } from "@stll/errors";
 import {
   ac,
   assignableRoles,
@@ -1604,6 +1605,7 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
   });
 
   const auth = betterAuth({
+    logger: errorOutputLogger,
     trustedOrigins: [
       ...frontendOrigins({
         frontendUrl: env.FRONTEND_URL,

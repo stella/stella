@@ -3,7 +3,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import type { ChatDraftAttachment } from "@/components/chat-editor-provider";
 import type { ChatThreadOptionsContext } from "@/features/chat/chat-query-contract";
 import { buildChatRequestMessage } from "@/features/chat/lib/build-chat-request-message";
-import { acquireChatRuntime, chatThreadOptions } from "@/features/chat/queries";
+import { chatThreadOptions } from "@/features/chat/queries";
 import { setThreadActiveSkill } from "@/features/chat/thread-active-skill-store";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 
@@ -38,7 +38,7 @@ export const startNewThreadCommandHandoff = async ({
   if (activeSkill !== undefined) {
     setThreadActiveSkill(threadRef, activeSkill);
   }
-  const [message, data] = await Promise.all([
+  const [message, data, { acquireChatRuntime }] = await Promise.all([
     buildChatRequestMessage({ files, html }),
     queryClient.query({
       ...chatThreadOptions({
@@ -48,6 +48,7 @@ export const startNewThreadCommandHandoff = async ({
       }),
       staleTime: "static",
     }),
+    import("@/features/chat/chat-runtime-registry"),
   ]);
   const chat = acquireChatRuntime({
     activeOrganizationId,
