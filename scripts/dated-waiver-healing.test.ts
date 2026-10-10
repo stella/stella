@@ -947,9 +947,9 @@ const proposalLifecycle = async (owner: DatedWaiver = lifecycleOwner) => {
       }
     }
     if (
-      endpoint === `repos/stella/stella/pulls/${proposal?.number}` &&
+      proposal !== undefined &&
       input !== undefined &&
-      proposal
+      endpoint === `repos/stella/stella/pulls/${String(proposal.number)}`
     ) {
       const close = v.parse(
         v.object({ state: v.literal("closed"), body: v.string() }),
@@ -961,7 +961,9 @@ const proposalLifecycle = async (owner: DatedWaiver = lifecycleOwner) => {
       effects.push("close");
       return proposal;
     }
-    throw new TypeError(`Unexpected proposal fixture endpoint: ${endpoint}`);
+    throw new TypeError(
+      `Unexpected proposal fixture endpoint: ${endpoint ?? "<none>"}`,
+    );
   };
   const retireBranch = async (branch: string) =>
     retireRemoval({

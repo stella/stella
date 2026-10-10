@@ -237,7 +237,7 @@ const hasMergedResolution = async ({
       return false;
     }
   }
-  panic("Fix-task resolution history exceeds pagination budget");
+  return panic("Fix-task resolution history exceeds pagination budget");
 };
 
 // Private visibility is established before sending any failing evidence.
@@ -300,7 +300,7 @@ export const createPrivateTaskSink = async ({
         return matches.at(0);
       }
     }
-    panic("Fix-task inventory exceeds pagination budget");
+    return panic("Fix-task inventory exceeds pagination budget");
   };
   const openFixTask = async (
     entry: DatedWaiver,

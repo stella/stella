@@ -282,7 +282,7 @@ export const readTestQuarantines = (
           scanner.getTokenText(),
         );
         if (match) {
-          markers.set(scanner.getTokenPos(), match.at(1) ?? "");
+          markers.set(scanner.getTokenStart(), match.at(1) ?? "");
         }
       }
       token = scanner.scan();
