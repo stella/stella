@@ -475,8 +475,7 @@ pub(crate) mod tests {
             nonce,
           )
           .unwrap()
-          .build()
-          .unwrap();
+          .build();
           let after = chrono::Utc::now().timestamp();
           let claims = verify_request(&request, &jkt, bearer, nonce);
           assert!(

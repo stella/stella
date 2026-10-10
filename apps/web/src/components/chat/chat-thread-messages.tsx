@@ -7,6 +7,8 @@ import { useTranslations } from "use-intl";
 
 import { isThirdPartyBoundaryRefusalError } from "@stll/anonymize-chat";
 import type { AIErrorKind } from "@stll/api-contract";
+import { isChatPastedTextPart } from "@stll/api-contract/chat";
+import type { ChatPastedTextPart } from "@stll/api-contract/chat";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { Button } from "@stll/ui/button";
 import {
@@ -37,6 +39,7 @@ import {
 } from "@/components/chat/chat-activity.logic";
 import { useChatApproval } from "@/components/chat/chat-approval-context";
 import { ChatAnswerDecisionProvider } from "@/components/chat/chat-decision-citation";
+import { ChatAttachmentChip } from "@/components/chat/chat-draft-attachment-chips";
 import { ChatImageAttachment } from "@/components/chat/chat-image-attachment";
 import { ChatMessageActionsMenu } from "@/components/chat/chat-message-actions-menu";
 import {
@@ -488,9 +491,9 @@ const StickyUserTurn = ({
     messages,
     headerIndex,
   );
-  const fileParts: ChatAttachmentPart[] = [];
+  const fileParts: UserAttachmentPart[] = [];
   for (const part of headerMessage.parts) {
-    if (isChatAttachmentPart(part)) {
+    if (isChatAttachmentPart(part) || isChatPastedTextPart(part)) {
       fileParts.push(part);
     }
   }
@@ -500,7 +503,10 @@ const StickyUserTurn = ({
   // case so the pinned context is never blank; turns that have text keep the
   // current behavior (attachments hidden, text clamped).
   const hasVisibleText = headerMessage.parts.some(
-    (part) => part.type === "text" && part.content.trim().length > 0,
+    (part) =>
+      part.type === "text" &&
+      !isChatPastedTextPart(part) &&
+      part.content.trim().length > 0,
   );
 
   // The compact pinned header must be a visual change only. If collapsing
@@ -662,7 +668,7 @@ const StickyUserTurn = ({
                 )}
               >
                 {headerMessage.parts.map((part, partIndex) =>
-                  part.type === "text" ? (
+                  part.type === "text" && !isChatPastedTextPart(part) ? (
                     <UserMessageText
                       // oxlint-disable-next-line react/no-array-index-key -- message.parts is append-only during streaming (never reordered/removed); index only disambiguates parts within this single message.
                       key={`${headerMessage.id}-user-text-${partIndex}`}
@@ -826,10 +832,12 @@ const downloadDataAttachment = ({
   downloadFile(new Blob([decoded.value], { type: mimeType }), fileName);
 };
 
+type UserAttachmentPart = ChatAttachmentPart | ChatPastedTextPart;
+
 const UserAttachments = ({
   parts,
 }: {
-  parts: readonly ChatAttachmentPart[];
+  parts: readonly UserAttachmentPart[];
 }) => {
   const t = useTranslations();
 
@@ -840,6 +848,20 @@ const UserAttachments = ({
   return (
     <div className="flex flex-wrap gap-1.5">
       {parts.map((part, index) => {
+        if (isChatPastedTextPart(part)) {
+          const pastedTextKey = `pasted-text-${index}`;
+          return (
+            <ChatAttachmentChip
+              behavior={{ type: "sent" }}
+              item={{
+                type: "pasted_text",
+                id: pastedTextKey,
+                text: part.content,
+              }}
+              key={pastedTextKey}
+            />
+          );
+        }
         const url = getAttachmentUrl(part);
         const filename = getAttachmentFilename(part);
         const mimeType = getAttachmentMimeType(part);
@@ -1428,9 +1450,9 @@ const TextMessageParts = ({
 }: TextMessagePartsProps) => (
   <>
     {(() => {
-      const fileParts: ChatAttachmentPart[] = [];
+      const fileParts: UserAttachmentPart[] = [];
       for (const part of message.parts) {
-        if (isChatAttachmentPart(part)) {
+        if (isChatAttachmentPart(part) || isChatPastedTextPart(part)) {
           fileParts.push(part);
         }
       }
@@ -1438,7 +1460,7 @@ const TextMessageParts = ({
       return <UserAttachments parts={fileParts} />;
     })()}
     {message.parts.map((part, partIndex) =>
-      part.type === "text" ? (
+      part.type === "text" && !isChatPastedTextPart(part) ? (
         <UserMessageText
           // oxlint-disable-next-line react/no-array-index-key -- message.parts is append-only during streaming (never reordered/removed); index only disambiguates parts within this single message.
           key={`${message.id}-user-text-${partIndex}`}
