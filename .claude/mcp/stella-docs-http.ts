@@ -140,7 +140,10 @@ const getSessionId = (request: IncomingMessage) => {
   return Array.isArray(value) ? value.at(0) : value;
 };
 
-const httpServer = createServer(async (request, response) => {
+const handleHttpRequest = async (
+  request: IncomingMessage,
+  response: ServerResponse,
+) => {
   if (!request.headers.host || !allowedHosts.has(request.headers.host)) {
     response.writeHead(403).end("Forbidden");
     return;
@@ -224,6 +227,7 @@ const httpServer = createServer(async (request, response) => {
     const session: Session = { server, transport, lastActive: Date.now() };
     // The SDK's HTTP transport declares optional callbacks without `| undefined`,
     // which this package's exactOptionalPropertyTypes rejects; the runtime shape is a Transport.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- SDK typing gap described above
     await server.connect(transport as Transport);
     await transport.handleRequest(request, response, body);
   } catch (error) {
@@ -231,7 +235,9 @@ const httpServer = createServer(async (request, response) => {
       if (error.closeConnection) {
         // Stop reading an unbounded upload: answer, then drop the connection.
         response.setHeader("connection", "close");
-        response.on("finish", () => request.destroy());
+        response.on("finish", () => {
+          request.destroy();
+        });
       }
       if (!response.headersSent) {
         sendError(response, error.status, error.message, error.rpcCode);
@@ -245,6 +251,17 @@ const httpServer = createServer(async (request, response) => {
       sendError(response, 500, "Internal server error");
     }
   }
+};
+
+const httpServer = createServer((request, response) => {
+  handleHttpRequest(request, response).catch((error: unknown) => {
+    process.stderr.write(
+      `[stella-docs] HTTP handler failed: ${String(error)}\n`,
+    );
+    if (!response.headersSent) {
+      sendError(response, 500, "Internal server error");
+    }
+  });
 });
 
 const sweepTimer = setInterval(() => {

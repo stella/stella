@@ -70,6 +70,7 @@ const connectHttpClient = async (baseUrl: string, name: string) => {
   );
   const client = new Client({ name, version: "1.0.0" });
   // Same SDK typing gap as the server transport under exactOptionalPropertyTypes.
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- SDK typing gap described above
   await client.connect(transport as Transport);
   return { client, transport };
 };
@@ -203,9 +204,8 @@ describe("shared documentation MCP HTTP server", () => {
       });
     const malformed = await post("{not json");
     expect(malformed.status).toBe(400);
-    expect(
-      ((await malformed.json()) as { error: { code: number } }).error.code,
-    ).toBe(-32_700);
+    const malformedBody: unknown = await malformed.json();
+    expect(malformedBody).toMatchObject({ error: { code: -32_700 } });
     const oversized = await post(
       JSON.stringify({ padding: "x".repeat(1024 * 1024 + 1) }),
     );
