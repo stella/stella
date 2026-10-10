@@ -3,6 +3,8 @@ import { execFileSync } from "node:child_process";
 import path from "node:path";
 import ts from "typescript";
 
+import { isPathInside, repoRelativePath } from "@stll/portable-path";
+
 import {
   CODE_CHECK_LEGS,
   ownsCodeCheckPath,
@@ -158,12 +160,12 @@ const isProductSourceFile = (
     return false;
   }
 
-  const relative = path.relative(repositoryRoot, sourceFile.fileName);
-  if (relative.startsWith("..") || path.isAbsolute(relative)) {
+  if (!isPathInside(repositoryRoot, sourceFile.fileName)) {
     return false;
   }
 
-  return isProductSourcePath(relative.replaceAll(path.sep, "/"));
+  const relative = repoRelativePath(repositoryRoot, sourceFile.fileName);
+  return isProductSourcePath(relative);
 };
 
 const isCommaExpression = (node: ts.Node): node is ts.BinaryExpression =>
@@ -891,7 +893,7 @@ const createDiagnostic = ({
   const position = sourceFile.getLineAndCharacterOfPosition(node.getStart());
   return {
     column: position.character + 1,
-    file: path.relative(repositoryRoot, sourceFile.fileName),
+    file: repoRelativePath(repositoryRoot, sourceFile.fileName),
     line: position.line + 1,
     message,
     rule,
@@ -966,9 +968,10 @@ const workspaceConfig = (
   repositoryRoot: string,
   sourceFile: string,
 ): string | null => {
-  const [parent, workspace, directory] = path
-    .relative(repositoryRoot, sourceFile)
-    .split(path.sep);
+  const [parent, workspace, directory] = repoRelativePath(
+    repositoryRoot,
+    sourceFile,
+  ).split("/");
   if (parent === "scripts") {
     const config = path.join(repositoryRoot, "scripts", "tsconfig.json");
     return ts.sys.fileExists(config) ? config : null;
@@ -1027,9 +1030,7 @@ export const findResultWorkspaceConfigs = (
     const eligibleSourceFiles = ts.sys
       .readDirectory(directory, [".ts", ".tsx"])
       .filter((sourceFile) => {
-        const relative = path
-          .relative(repositoryRoot, sourceFile)
-          .replaceAll(path.sep, "/");
+        const relative = repoRelativePath(repositoryRoot, sourceFile);
         return isProductSourcePath(relative);
       });
     if (eligibleSourceFiles.length === 0) {
@@ -1082,10 +1083,7 @@ export const partitionResultProjects = ({
 }: PartitionResultProjectsOptions): Map<string, string[] | undefined> =>
   new Map(
     [...projects].filter(([configPath]) =>
-      ownsCodeCheckPath(
-        path.relative(repositoryRoot, configPath).replaceAll(path.sep, "/"),
-        leg,
-      ),
+      ownsCodeCheckPath(repoRelativePath(repositoryRoot, configPath), leg),
     ),
   );
 
@@ -1135,7 +1133,7 @@ const run = (): number => {
       diagnosticsByLocation.set(key, diagnostic);
     }
     console.log(
-      `result-consumption: ${path.relative(repositoryRoot, configPath)} checked in ${((performance.now() - started) / 1000).toFixed(1)}s`,
+      `result-consumption: ${repoRelativePath(repositoryRoot, configPath)} checked in ${((performance.now() - started) / 1000).toFixed(1)}s`,
     );
   }
 

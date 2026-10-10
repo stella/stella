@@ -3,6 +3,8 @@ import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 // These boundaries install the first frame; their descendants already have one.
 export const FIRST_FRAME_OWNERS = [
   {
@@ -606,7 +608,7 @@ export const checkRouteFallbacks = (sourceDirectory: string) => {
     expression: ts.Node,
   ) => {
     boundaries.push({
-      file: path.relative(srcDirectory, file),
+      file: repoRelativePath(srcDirectory, file),
       kind,
       expression,
       line:

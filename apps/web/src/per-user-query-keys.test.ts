@@ -3,6 +3,8 @@ import { describe, expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import { savedTimeNarrativesKeys } from "@/components/billing/saved-time-narratives";
 import { companyFormatKeys } from "@/components/company-format-library";
 import { readerAnnotationKeys } from "@/components/legal-reader/annotations/reader-annotations-query";
@@ -750,7 +752,7 @@ const readHandlers = () => {
     }
   }
   for (const path of listFiles(API_HANDLERS)) {
-    const handler = nodePath.relative(API_HANDLERS, path);
+    const handler = repoRelativePath(API_HANDLERS, path);
     if (READ_HANDLER_NAME.test(`/${handler}`)) {
       reads.add(handler);
     }
@@ -966,7 +968,7 @@ const webCallers = () => {
       if (chains.some((chain) => chain.startsWith(`${call}()`))) {
         callers.set(call, [
           ...(callers.get(call) ?? []),
-          nodePath.relative(WEB_SOURCE, path),
+          repoRelativePath(WEB_SOURCE, path),
         ]);
       }
     }

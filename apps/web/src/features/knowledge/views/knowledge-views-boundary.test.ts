@@ -8,6 +8,8 @@ import { describe, expect, test } from "bun:test";
 import { existsSync, statSync } from "node:fs";
 import nodePath from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 const webSourceRoot = nodePath.resolve(import.meta.dir, "../../..");
 const viewsRoot = nodePath.resolve(webSourceRoot, "features/knowledge/views");
 
@@ -137,7 +139,7 @@ const isForbidden = (module: string) =>
   FORBIDDEN_MODULES.includes(module) ||
   FORBIDDEN_DIRECTORIES.some((directory) => module.startsWith(directory));
 
-const relative = (module: string) => nodePath.relative(webSourceRoot, module);
+const relative = (module: string) => repoRelativePath(webSourceRoot, module);
 
 describe("shared Knowledge views", () => {
   test("exist for the sections moved so far", () => {

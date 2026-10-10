@@ -60,6 +60,8 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 import type { Ranged, Variable } from "@oxlint/plugins";
 import path from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import { isSystemRunActor } from "../apps/api/src/lib/system-audit/actors.ts";
 import { MEMBER_RUN_MODULES } from "../apps/api/src/lib/system-audit/modules.ts";
 import {
@@ -601,12 +603,10 @@ export default eslintCompatPlugin({
           Program(node) {
             const options = context.options.at(0);
             census = censusFromOptions(options);
-            const relative = path
-              .relative(
-                rootFromOptions(options),
-                path.resolve(filenameForContext(context)),
-              )
-              .replaceAll("\\", "/");
+            const relative = repoRelativePath(
+              rootFromOptions(options),
+              path.resolve(filenameForContext(context)),
+            );
             const systemActor = systemModulesFromOptions(options).get(relative);
             if (systemActor !== undefined) {
               if (MEMBER_RUN_MODULE_FILES.has(relative)) {

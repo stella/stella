@@ -14,6 +14,8 @@ import { readdirSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
 import { IntlProvider } from "use-intl";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import { SidebarProvider } from "@/components/sidebar";
 import en from "@/i18n/langs/en.json";
 import { AuthenticatedUserProvider } from "@/lib/authenticated-user-context";
@@ -122,7 +124,7 @@ describe("inspector dock ownership", () => {
   test("only the shells mount the inspector dock", () => {
     const owners = listSourceFiles(WEB_SOURCE)
       .filter((path) => DOCK_IMPORT_PATTERN.test(readFileSync(path, "utf-8")))
-      .map((path) => nodePath.relative(WEB_SOURCE, path))
+      .map((path) => repoRelativePath(WEB_SOURCE, path))
       .toSorted();
 
     expect(owners).toEqual([

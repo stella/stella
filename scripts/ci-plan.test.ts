@@ -18,6 +18,7 @@ import { Script } from "node:vm";
 import * as v from "valibot";
 
 import { compareCodeUnit } from "@stll/collation";
+import { repoRelativePath } from "@stll/portable-path";
 import { drawPropertySamples, propertyConfig } from "@stll/property-testing";
 
 import eventPolicies from "../.github/ci-event-policy.json" with { type: "json" };
@@ -6031,7 +6032,7 @@ test("a planted desktop path plans the PR desktop browser leg while unrelated pa
   const directory = mkdtempSync(
     nodePath.join(root, "apps/desktop/.ci-browser-scope-"),
   );
-  const planted = nodePath.relative(
+  const planted = repoRelativePath(
     root,
     nodePath.join(directory, "planted.unclassified"),
   );

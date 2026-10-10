@@ -4,6 +4,8 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import { withoutTsgoOnlyOptionDiagnostics } from "./tsgo-compiler-options";
 
 const APP_BOUNDARY_LEDGER_PATH = "scripts/app-boundary-exceptions.json";
@@ -73,8 +75,6 @@ type AppBoundaryCollection = {
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
-
-const toPosixPath = (filePath: string) => filePath.replaceAll(path.sep, "/");
 
 const findFiles = (directoryPath: string): string[] => {
   if (!existsSync(directoryPath)) {
@@ -332,7 +332,7 @@ const collectAppBoundaryResult = (rootDir: string): AppBoundaryCollection => {
         filePath.endsWith(".json"),
     )) {
       const config = readTsconfig(tsconfigPath);
-      const source = toPosixPath(path.relative(rootDir, tsconfigPath));
+      const source = repoRelativePath(rootDir, tsconfigPath);
       for (const diagnostic of config.diagnostics) {
         issues.push({
           message: `invalid TypeScript configuration: ${diagnostic}`,
@@ -350,7 +350,7 @@ const collectAppBoundaryResult = (rootDir: string): AppBoundaryCollection => {
           edges.push({
             kind: "tsconfig-path",
             source,
-            specifier: `${pattern} -> ${toPosixPath(path.relative(path.dirname(tsconfigPath), targetPath))}`,
+            specifier: `${pattern} -> ${repoRelativePath(path.dirname(tsconfigPath), targetPath)}`,
             target: target.directory,
           });
         }
@@ -375,7 +375,7 @@ const collectAppBoundaryResult = (rootDir: string): AppBoundaryCollection => {
     for (const sourcePath of workspaceFiles.filter((filePath) =>
       SOURCE_FILE_EXTENSIONS.has(path.extname(filePath)),
     )) {
-      const source = toPosixPath(path.relative(rootDir, sourcePath));
+      const source = repoRelativePath(rootDir, sourcePath);
       const importedFiles = ts.preProcessFile(
         readFileSync(sourcePath, "utf-8"),
         true,

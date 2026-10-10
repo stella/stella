@@ -1,3 +1,4 @@
+import path from "node:path";
 /**
  * Capture a parser fixture from its source, with provenance.
  *
@@ -34,8 +35,7 @@
  * convention.
  */
 
-import path from "node:path";
-
+import { isPathInside } from "@stll/portable-path";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import { INGESTION_USER_AGENT } from "@/api/handlers/case-law/ingestion/adapters/utils";
@@ -77,17 +77,8 @@ const flagValue = (
  * would also accept a sibling directory whose name merely starts with
  * the root's (`__fixtures__-backup`).
  */
-const isInside = (child: string, parent: string): boolean => {
-  const relative = path.relative(
-    path.resolve(API_ROOT, parent),
-    path.resolve(API_ROOT, child),
-  );
-  return (
-    relative.length > 0 &&
-    !relative.startsWith("..") &&
-    !path.isAbsolute(relative)
-  );
-};
+const isInside = (child: string, parent: string): boolean =>
+  isPathInside(path.resolve(API_ROOT, parent), path.resolve(API_ROOT, child));
 
 /** Filename implied by a URL, for when `--name` is not given. */
 const nameFromUrl = (url: URL): string | undefined => {

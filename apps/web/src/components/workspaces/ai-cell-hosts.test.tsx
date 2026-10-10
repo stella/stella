@@ -213,9 +213,7 @@ const sourceCensus = (sources: ReadonlyMap<string, string>) => {
       if (resolved === undefined) {
         continue;
       }
-      const target = path
-        .relative(sourceRoot, resolved)
-        .replaceAll(path.sep, "/");
+      const target = repoRelativePath(sourceRoot, resolved);
       dependencies.add(target);
       const exports = new Set<string>();
       switch (target) {

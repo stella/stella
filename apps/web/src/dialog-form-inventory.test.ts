@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import * as ts from "typescript";
 
+import { repoRelativePath } from "@stll/portable-path";
 import {
   containsJsxTag,
   sourceFileIndex,
@@ -168,7 +169,7 @@ const inventory = () => {
         ts.forEachChild(current, visit);
       };
       visit(node);
-      const key = `${sourceRoot === DESKTOP_SOURCE_ROOT ? "desktop/" : ""}${path.relative(sourceRoot, file)}#${name}`;
+      const key = `${sourceRoot === DESKTOP_SOURCE_ROOT ? "desktop/" : ""}${repoRelativePath(sourceRoot, file)}#${name}`;
       components.set(`${file}#${name}`, {
         key,
         file,

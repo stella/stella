@@ -4,6 +4,8 @@ import { isBuiltin } from "node:module";
 import path from "node:path";
 import ts from "typescript";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import {
   SOURCE_FILE,
   lexShell,
@@ -38,7 +40,7 @@ const offlineCheckEntry = (words: readonly string[], cwd: string) => {
   if (words.at(0) !== "bun") {
     return undefined;
   }
-  const relativeCwd = path.relative(root, cwd);
+  const relativeCwd = repoRelativePath(root, cwd);
   const invocation = parseBunFlags({
     args: words.slice(1),
     context: { root, expanding: new Set(), checkouts: [] },
@@ -306,12 +308,12 @@ export const offlineImportGraphViolations = ({
   const violation = (file: string, detail: string) => {
     violations.push(
       new OfflineCheckPolicyError({
-        message: `Offline check import graph: ${path.relative(sourceRoot, file)}: ${detail}`,
+        message: `Offline check import graph: ${repoRelativePath(sourceRoot, file)}: ${detail}`,
       }),
     );
   };
   const classify = (file: string, capability: string, detail: string) => {
-    const relative = path.relative(sourceRoot, file);
+    const relative = repoRelativePath(sourceRoot, file);
     const key = importCapability(relative, capability);
     if (allowed.has(key)) {
       exercised.add(key);
@@ -357,7 +359,7 @@ export const offlineImportGraphViolations = ({
         violation(file, `Cannot resolve import ${specifier}`);
         return;
       }
-      const relative = path.relative(sourceRoot, resolved.value);
+      const relative = repoRelativePath(sourceRoot, resolved.value);
       if (
         relative.startsWith("..") ||
         path.isAbsolute(relative) ||

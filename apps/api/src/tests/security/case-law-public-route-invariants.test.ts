@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import nodePath from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -798,7 +799,7 @@ describe("public case-law route boundary", () => {
       [...modules].map(async (modulePath) => {
         const source = await Bun.file(modulePath).text();
         if (DECISION_TABLE_MENTION.test(source)) {
-          readers.set(nodePath.relative(repoRoot, modulePath), source);
+          readers.set(repoRelativePath(repoRoot, modulePath), source);
         }
       }),
     );

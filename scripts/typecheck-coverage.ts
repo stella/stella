@@ -27,6 +27,8 @@ import {
 import path from "node:path";
 import ts from "typescript";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import { withoutTsgoOnlyOptionDiagnostics } from "../packages/scripts/src/tsgo-compiler-options.ts";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
@@ -351,9 +353,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const readJsonObject = (file: string): Record<string, unknown> => {
   const parsed = Bun.JSONC.parse(readFileSync(file, "utf-8"));
   if (!isRecord(parsed)) {
-    panic(
-      `${normalizeRepoPath(path.relative(REPO_ROOT, file))} must contain an object`,
-    );
+    panic(`${repoRelativePath(REPO_ROOT, file)} must contain an object`);
   }
   return parsed;
 };
@@ -391,7 +391,7 @@ const duplicateBuildInfoErrors = (projects: ProjectBuildInfo[]): string[] => {
     const owner = owners.get(buildInfoFile);
     if (owner) {
       errors.push(
-        `${project} and ${owner} share ${normalizeRepoPath(path.relative(REPO_ROOT, buildInfoFile))}`,
+        `${project} and ${owner} share ${repoRelativePath(REPO_ROOT, buildInfoFile)}`,
       );
       continue;
     }
@@ -419,7 +419,7 @@ const incrementalProjectErrors = (projects: string[]): string[] => {
       continue;
     }
     const relativeBuildInfo = normalizeRepoPath(
-      path.relative(REPO_ROOT, buildInfoFile),
+      repoRelativePath(REPO_ROOT, buildInfoFile),
     );
     if (!/(?:^|\/)\.cache\/tsbuildinfo[^/]*\.json$/u.test(relativeBuildInfo)) {
       errors.push(
@@ -495,7 +495,7 @@ const assertProxyTargets = (proxies: readonly OxcProjectProxy[]): void => {
     }
 
     const resolvedTarget = normalizeRepoPath(
-      path.relative(
+      repoRelativePath(
         REPO_ROOT,
         path.resolve(path.dirname(proxyPath), extendsPath),
       ),
@@ -553,7 +553,7 @@ const typecheckAutofixFiles = (files: readonly string[]): void => {
   const directoryProjects = new Map<string, string[]>();
   for (const rawFile of files) {
     const file = normalizeRepoPath(
-      path.relative(REPO_ROOT, path.resolve(REPO_ROOT, rawFile)),
+      repoRelativePath(REPO_ROOT, path.resolve(REPO_ROOT, rawFile)),
     );
     if (file === ".." || file.startsWith("../") || path.isAbsolute(file)) {
       panic(`Autofix source is outside the repository: ${rawFile}`);
@@ -700,7 +700,7 @@ const coveredFilesByProject = (
       "--listFilesOnly",
     ]);
     for (const file of lines(output)) {
-      const relative = path.relative(REPO_ROOT, path.resolve(file));
+      const relative = repoRelativePath(REPO_ROOT, path.resolve(file));
       if (relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
         continue;
       }

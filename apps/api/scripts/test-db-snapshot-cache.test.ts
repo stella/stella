@@ -13,6 +13,8 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import {
   acquireCachedSnapshot,
   acquireCurrentSnapshot,
@@ -120,7 +122,7 @@ test("installed dependency version invalidates the key with identical source and
     );
     writeFileSync(path.join(packageDir, "index.js"), "export const value = 1;");
     symlinkSync(
-      path.relative(path.join(root, "node_modules"), packageDir),
+      repoRelativePath(path.join(root, "node_modules"), packageDir),
       path.join(root, "node_modules/example"),
     );
     return root;

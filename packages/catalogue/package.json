@@ -37,6 +37,7 @@
     "refresh-pinned": "bun scripts/check-pinned-content.ts --refresh"
   },
   "dependencies": {
+    "@stll/portable-path": "workspace:*",
     "better-result": "catalog:",
     "valibot": "catalog:"
   },

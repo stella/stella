@@ -13,6 +13,8 @@ import { parseEnv } from "node:util";
 import ts from "typescript";
 import * as v from "valibot";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import { resolveDatabaseUrl } from "../apps/api/src/db-url";
 import {
   envBaseInvariantViolation,
@@ -300,7 +302,7 @@ const generatedEnvironmentArtifacts = () => [
 const generateEnvironmentArtifacts = () => {
   for (const artifact of generatedEnvironmentArtifacts()) {
     writeFileSync(artifact.path, artifact.content);
-    console.log(`Generated ${path.relative(REPO_ROOT, artifact.path)}`);
+    console.log(`Generated ${repoRelativePath(REPO_ROOT, artifact.path)}`);
   }
 };
 
@@ -315,7 +317,7 @@ const checkEnvironmentArtifacts = () => {
     return true;
   }
   for (const { path: artifactPath } of stale) {
-    console.error(`${path.relative(REPO_ROOT, artifactPath)} is stale.`);
+    console.error(`${repoRelativePath(REPO_ROOT, artifactPath)} is stale.`);
   }
   console.error("Run `bun run env:generate` and commit the result.");
   return false;
@@ -1245,7 +1247,7 @@ const runDoctor = (app: EnvApp, mode: EnvMode | undefined) => {
   const validation = validateDoctorEnvironment({ app, input, mode });
   const displayedEnvPaths = (
     existingEnvPaths.length > 0 ? existingEnvPaths : [baseEnvPath]
-  ).map((envPath) => path.relative(REPO_ROOT, envPath));
+  ).map((envPath) => repoRelativePath(REPO_ROOT, envPath));
   console.log(`Environment doctor: ${app} (${displayedEnvPaths.join(", ")})`);
   for (const entry of ENV_CATALOG.filter(
     ({ documented, owner }) => documented && owners.has(owner),

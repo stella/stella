@@ -35,6 +35,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { compareCodeUnit } from "@stll/collation";
+import { isPathInside } from "@stll/portable-path";
 
 import {
   collectLintDirectives,
@@ -281,8 +282,8 @@ const isInsideRepo = (relative: string): boolean => {
   if (path.isAbsolute(relative)) {
     return false;
   }
-  const inside = path.relative(REPO_ROOT, path.resolve(REPO_ROOT, relative));
-  return inside.length > 0 && !inside.startsWith("..");
+  const resolved = path.resolve(REPO_ROOT, relative);
+  return resolved !== REPO_ROOT && isPathInside(REPO_ROOT, resolved);
 };
 
 /**

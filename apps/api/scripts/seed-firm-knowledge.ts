@@ -24,6 +24,7 @@ import path from "node:path";
 
 import { STELLA_API_VERSION_PREFIX } from "@stll/api-contract";
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
+import { repoRelativePath } from "@stll/portable-path";
 
 import { sessionCookieNameForDevPort } from "@/api/lib/auth/auth-cookie-name";
 
@@ -323,7 +324,7 @@ const readMatter = async (matterRoot: string): Promise<MatterManifest> => {
     const entries = await readdir(directory, { withFileTypes: true });
     for (const entry of entries) {
       const absolutePath = path.join(directory, entry.name);
-      const key = path.relative(matterRoot, absolutePath);
+      const key = repoRelativePath(matterRoot, absolutePath);
 
       if (entry.isDirectory()) {
         directories.push({ key, parentKey, name: entry.name });

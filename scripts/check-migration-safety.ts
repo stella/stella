@@ -24,6 +24,7 @@ import {
 } from "node:fs";
 import path from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
 import { createSha256 } from "@stll/sha256/node";
 
 import { CODE_OWNED_TABLES } from "../apps/api/src/db/code-owned-tables";
@@ -785,11 +786,10 @@ const usage = () => {
 };
 
 const toRepoPath = (file: string): string =>
-  path
-    .relative(
-      process.cwd(),
-      existsSync(file) ? realpathSync(file) : path.resolve(file),
-    )
+  repoRelativePath(
+    process.cwd(),
+    existsSync(file) ? realpathSync(file) : path.resolve(file),
+  )
     .split(path.sep)
     .join("/");
 

@@ -1,10 +1,12 @@
-import "../src/tests/setup-env";
 import tailwindcss from "@tailwindcss/postcss";
+
+import "../src/tests/setup-env";
 import { panic } from "better-result";
 import path from "node:path";
 import postcss from "postcss";
 
 import MCP_APP_MESSAGES from "@stll/api-contract/mcp-app-messages";
+import { repoRelativePath } from "@stll/portable-path";
 
 import readerPackage from "../../../packages/decision-reader/package.json";
 import { MCP_APP_OUTPUT_SCHEMAS } from "../src/mcp/app-contracts";
@@ -166,7 +168,7 @@ const buildMcpApp = async ({
     const metafile =
       result.metafile ?? panic("Reader build did not report reachable inputs");
     const inputs = Object.keys(metafile.inputs)
-      .map((file) => path.relative(repoRoot, path.resolve(file)))
+      .map((file) => repoRelativePath(repoRoot, path.resolve(file)))
       .filter((file) => /^(?:apps|packages)\//u.test(file))
       .toSorted();
     const loadModule = async (file: string) => ({

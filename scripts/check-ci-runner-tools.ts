@@ -1,11 +1,13 @@
+import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
+import path from "node:path";
+
 /**
  * Checks optional text-tool invocations reachable from workflow Bash steps,
  * local composite actions and static shell/Python/Node/Bun script calls.
  * Computed executable/script paths and third-party action internals are outside
  * scope; script literal argv checks exclude template/f-string interpolation.
  */
-import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
-import path from "node:path";
+import { repoRelativePath } from "@stll/portable-path";
 
 import {
   conditionOperands,
@@ -423,7 +425,7 @@ const resolveFile = (name: string, context: ScanContext) => {
     .replaceAll("$GITHUB_WORKSPACE", () => root);
   const workspacePath = path.isAbsolute(candidate);
   if (candidate.startsWith(`${root}${path.sep}`)) {
-    candidate = path.relative(root, candidate);
+    candidate = repoRelativePath(root, candidate);
   }
   for (const [prefix, replacement] of aliases) {
     if (cwd === prefix) {
@@ -557,7 +559,7 @@ const inspectSource = (file: string, context: ScanContext) => {
         !toolInstalled(command, context)
       ) {
         context.problems.push(
-          `${context.label}: ${path.relative(context.root, file)} requires ${command}, which this runner/job does not provide`,
+          `${context.label}: ${repoRelativePath(context.root, file)} requires ${command}, which this runner/job does not provide`,
         );
       }
     }
@@ -819,7 +821,7 @@ const inspectShell = (source: string, context: ScanContext) => {
         });
         return directory === undefined
           ? []
-          : [path.relative(context.root, directory)];
+          : [repoRelativePath(context.root, directory)];
       });
       if (changed.length > 0) {
         directories = new Set(
@@ -842,7 +844,7 @@ const inspectShell = (source: string, context: ScanContext) => {
       !toolInstalled(command, context)
     ) {
       context.problems.push(
-        `${context.label}: ${path.relative(context.root, context.file)} requires ${command}, which this runner/job does not provide`,
+        `${context.label}: ${repoRelativePath(context.root, context.file)} requires ${command}, which this runner/job does not provide`,
       );
     }
     if (!conditional) {

@@ -18,6 +18,8 @@ import { panic } from "better-result";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 const API_SOURCE_ROOT = path.join(REPO_ROOT, "apps/api/src");
 const HANDLERS_ROOT = path.join(API_SOURCE_ROOT, "handlers");
@@ -203,9 +205,7 @@ const collectHandlerFiles = (apiFiles: readonly string[]): string[] =>
   apiFiles.filter(
     (absolute) =>
       absolute.startsWith(`${HANDLERS_ROOT}${path.sep}`) &&
-      shouldScanHandlerFile(
-        path.relative(REPO_ROOT, absolute).split(path.sep).join("/"),
-      ),
+      shouldScanHandlerFile(repoRelativePath(REPO_ROOT, absolute)),
   );
 
 type CollectProjectionModulesOptions = {
@@ -219,8 +219,7 @@ const collectProjectionModules = ({
 }: CollectProjectionModulesOptions): ProjectionModule[] => {
   const modules: ProjectionModule[] = [];
   for (const absolute of files) {
-    const relativePath = path
-      .relative(REPO_ROOT, absolute)
+    const relativePath = repoRelativePath(REPO_ROOT, absolute)
       .split(path.sep)
       .join("/");
     const content = readFileSync(absolute, "utf-8");
@@ -257,7 +256,7 @@ const loadAllowlist = (): AllowlistEntry[] => {
   const parsed: unknown = JSON.parse(raw);
   if (!Array.isArray(parsed) || !parsed.every(isAllowlistEntry)) {
     return panic(
-      `${path.relative(REPO_ROOT, ALLOWLIST_PATH)} must be a JSON array of { file, reason } entries`,
+      `${repoRelativePath(REPO_ROOT, ALLOWLIST_PATH)} must be a JSON array of { file, reason } entries`,
     );
   }
   return parsed;
@@ -281,12 +280,12 @@ const main = (): void => {
     if (!module) {
       failed = true;
       console.error(
-        `stale allowlist entry: ${entry.file} no longer exists or no longer classifies as a resource projection module -- remove it from ${path.relative(REPO_ROOT, ALLOWLIST_PATH)}`,
+        `stale allowlist entry: ${entry.file} no longer exists or no longer classifies as a resource projection module -- remove it from ${repoRelativePath(REPO_ROOT, ALLOWLIST_PATH)}`,
       );
     } else if (module.guarded) {
       failed = true;
       console.error(
-        `stale allowlist entry: ${entry.file} now imports ${PROJECTION_TOTALITY_IMPORT} -- remove it from ${path.relative(REPO_ROOT, ALLOWLIST_PATH)}`,
+        `stale allowlist entry: ${entry.file} now imports ${PROJECTION_TOTALITY_IMPORT} -- remove it from ${repoRelativePath(REPO_ROOT, ALLOWLIST_PATH)}`,
       );
     }
   }
@@ -300,7 +299,7 @@ const main = (): void => {
   for (const module of missingGuardOrAllowlist) {
     failed = true;
     console.error(
-      `unguarded resource projection: ${module.relativePath} reads schema rows and returns them to a client, but imports no totality guard from ${PROJECTION_TOTALITY_IMPORT} and carries no ${path.relative(REPO_ROOT, ALLOWLIST_PATH)} entry`,
+      `unguarded resource projection: ${module.relativePath} reads schema rows and returns them to a client, but imports no totality guard from ${PROJECTION_TOTALITY_IMPORT} and carries no ${repoRelativePath(REPO_ROOT, ALLOWLIST_PATH)} entry`,
     );
   }
 

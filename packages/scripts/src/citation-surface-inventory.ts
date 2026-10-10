@@ -1,6 +1,8 @@
 import path from "node:path";
 import ts from "typescript";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import { sourceFileIndex } from "./source-file-index";
 
 type Imported = { module: string; name: string };
@@ -318,7 +320,7 @@ function streamdown({ module, name }: Imported) {
   return module === "streamdown" && name === "Streamdown";
 }
 function location(inventory: Inventory, node: ts.Node) {
-  return `${path.relative(inventory.sourceRoot, node.getSourceFile().fileName)}:${node.getSourceFile().getLineAndCharacterOfPosition(node.getStart()).line + 1}`;
+  return `${repoRelativePath(inventory.sourceRoot, node.getSourceFile().fileName)}:${node.getSourceFile().getLineAndCharacterOfPosition(node.getStart()).line + 1}`;
 }
 function componentChildren(inventory: Inventory, root: ts.Node) {
   const nodes = new Set<ts.Node>();

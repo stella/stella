@@ -11,6 +11,8 @@ import { panic } from "better-result";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import { CATALOGUE_KINDS } from "../src/schema";
 import {
   getInspectedDirectoryEntries,
@@ -302,7 +304,7 @@ function toImportName(kind: string, slug: string): string {
 
 function toImportPath(absolutePath: string): string {
   const srcDir = path.join(packageRoot, "src");
-  const relative = path.relative(srcDir, absolutePath);
+  const relative = repoRelativePath(srcDir, absolutePath);
   return relative.startsWith(".") ? relative : `./${relative}`;
 }
 

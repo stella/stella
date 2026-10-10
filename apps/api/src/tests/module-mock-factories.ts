@@ -2,6 +2,8 @@ import { panic } from "better-result";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import { resolveModuleSpecifier } from "./module-mock-batching";
 
 // Every call site this reader must account for: a `mock.module` naming its
@@ -285,7 +287,7 @@ export const readModuleExports = (
     exports.add(name);
   }
 
-  const apiRelative = path.relative(apiRoot, moduleFile);
+  const apiRelative = repoRelativePath(apiRoot, moduleFile);
   for (const match of source.matchAll(STAR_REEXPORT_PATTERN)) {
     const specifier = match.at(1);
     if (specifier === undefined) {

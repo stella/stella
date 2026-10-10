@@ -10,6 +10,8 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import {
   AUTO_INSTALL_DISABLED,
   checkStandaloneLockfiles,
@@ -482,7 +484,7 @@ describe("Bun under the repository's bunfig.toml files", () => {
     const child = Bun.spawn(
       [
         process.execPath,
-        path.relative(path.join(root, cwd), path.join(root, script)),
+        repoRelativePath(path.join(root, cwd), path.join(root, script)),
       ],
       {
         cwd: path.join(root, cwd),

@@ -18,6 +18,7 @@ import path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 
 import { compareCodeUnit } from "@stll/collation";
+import { isPathInside, repoRelativePath } from "@stll/portable-path";
 import { createSha256 } from "@stll/sha256/bun";
 
 const SNAPSHOT_FORMAT = "1";
@@ -60,7 +61,7 @@ export const snapshotInputPaths = (
     const canonicalFile = realpathSync(candidate);
     if (
       canonicalFile.split(path.sep).includes("node_modules") ||
-      !canonicalFile.startsWith(`${canonicalRoot}${path.sep}`)
+      !isPathInside(canonicalRoot, canonicalFile)
     ) {
       // The installed location distinguishes dependency versions even when
       // bun.lock has changed without a matching install in this checkout.
@@ -70,7 +71,7 @@ export const snapshotInputPaths = (
     }
     const filePath = path.join(
       repositoryRoot,
-      path.relative(canonicalRoot, canonicalFile),
+      repoRelativePath(canonicalRoot, canonicalFile),
     );
     if (visited.has(filePath)) {
       continue;
@@ -142,10 +143,10 @@ export const snapshotKey = (repositoryRoot: string, entryPoint: string) => {
   const inputs = snapshotInputPaths(repositoryRoot, entryPoint)
     .map((filePath) => {
       let identity = filePath;
-      if (filePath.startsWith(`${repositoryRoot}${path.sep}`)) {
-        identity = path.relative(repositoryRoot, filePath);
-      } else if (filePath.startsWith(`${canonicalRoot}${path.sep}`)) {
-        identity = path.relative(canonicalRoot, filePath);
+      if (isPathInside(repositoryRoot, filePath)) {
+        identity = repoRelativePath(repositoryRoot, filePath);
+      } else if (isPathInside(canonicalRoot, filePath)) {
+        identity = repoRelativePath(canonicalRoot, filePath);
       }
       return { filePath, identity };
     })

@@ -2,6 +2,8 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import { selectAppFrame } from "../../src/routes/-app-frame.logic";
 
 type DockedChatSurface = "inspector" | "reader" | "template";
@@ -221,7 +223,7 @@ export const readDockedChatHosts = (): {
     .map((entry) => path.join(entry.parentPath, entry.name));
   const providerSources = sourceFiles
     .filter(mountsDockedChatProvider)
-    .map((file) => path.relative(SOURCE_ROOT, file))
+    .map((file) => repoRelativePath(SOURCE_ROOT, file))
     .toSorted();
   for (const provider of providerSources) {
     if (!PROVIDER_SURFACES.has(provider)) {
@@ -285,12 +287,12 @@ export const readDockedChatHosts = (): {
     const surfaces = new Set<DockedChatSurface>();
     if (
       visiting.has(file) ||
-      inheritedShells.has(path.relative(SOURCE_ROOT, file))
+      inheritedShells.has(repoRelativePath(SOURCE_ROOT, file))
     ) {
       return surfaces;
     }
     visiting.add(file);
-    const provider = PROVIDER_SURFACES.get(path.relative(SOURCE_ROOT, file));
+    const provider = PROVIDER_SURFACES.get(repoRelativePath(SOURCE_ROOT, file));
     if (provider !== undefined) {
       surfaces.add(provider);
     }

@@ -2,6 +2,8 @@ import assert from "node:assert";
 import { readdirSync } from "node:fs";
 import path from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 export const E2E_SHARD_COUNT = 2;
 const SPEC_ROOT = "apps/web/e2e/specs";
 
@@ -34,7 +36,7 @@ const walk = (directory: string): string[] => {
 
 export const listE2eSpecs = (root = process.cwd()): string[] =>
   walk(path.join(root, SPEC_ROOT))
-    .map((file) => path.relative(root, file))
+    .map((file) => repoRelativePath(root, file))
     .toSorted(compareCodeUnit);
 
 export const allE2eShards = (): number[] =>

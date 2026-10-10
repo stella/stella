@@ -6,6 +6,8 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 import path from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import {
   analyzeSqlPerf,
   isBaselinedSqlPerfKind,
@@ -44,9 +46,7 @@ export default eslintCompatPlugin({
         return {
           Program() {
             const filename = filenameForContext(context);
-            const relative = path
-              .relative(ROOT, path.resolve(filename))
-              .replaceAll("\\", "/");
+            const relative = repoRelativePath(ROOT, path.resolve(filename));
             const { hits, commentErrors } = analyzeSqlPerf(
               context.sourceCode.text,
               relative,

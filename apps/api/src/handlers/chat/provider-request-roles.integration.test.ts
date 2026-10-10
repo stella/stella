@@ -9,6 +9,7 @@ import type { ModelRole } from "@stll/ai-catalog";
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { CHAT_TOOL_POLICY_KIND } from "@stll/api-contract";
 import { CHAT_PROMPT_IMPROVEMENT_STRATEGIES } from "@stll/api-contract/chat";
+import { repoRelativePath } from "@stll/portable-path";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads } from "@/api/db/schema";
@@ -600,7 +601,7 @@ const sourceFilesUnder = (directory: string): string[] =>
     if (!entry.isFile() || !entry.name.endsWith(".ts")) {
       return [];
     }
-    const file = path.relative(
+    const file = repoRelativePath(
       SOURCE_ROOT,
       path.join(entry.parentPath, entry.name),
     );

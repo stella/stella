@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import nodePath from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 const repoRoot = nodePath.resolve(import.meta.dir, "../../../../..");
 const webSrc = nodePath.resolve(repoRoot, "apps/web/src");
 
@@ -136,7 +138,7 @@ const walkSsrGraph = (entries: readonly string[]): WalkResult => {
         FORBIDDEN_IMPORT_PATTERNS.some((pattern) => pattern.test(specifier))
       ) {
         violations.push({
-          module: nodePath.relative(repoRoot, file),
+          module: repoRelativePath(repoRoot, file),
           specifier,
         });
         continue;

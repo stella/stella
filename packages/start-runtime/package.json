@@ -44,6 +44,7 @@
     "prepack": "bun run build"
   },
   "dependencies": {
+    "@stll/portable-path": "workspace:*",
     "better-result": "catalog:"
   },
   "devDependencies": {

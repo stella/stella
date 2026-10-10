@@ -2,6 +2,8 @@ import { expect, test } from "bun:test";
 import { realpathSync, readFileSync } from "node:fs";
 import path from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 const sourceRoot = realpathSync(import.meta.dir);
 const repositoryRoot = realpathSync(path.join(sourceRoot, "../../.."));
 const transpiler = new Bun.Transpiler({ loader: "ts" });
@@ -23,7 +25,7 @@ test("the format import graph excludes generated skill content", () => {
     )) {
       if (dependency.path.endsWith(".md")) {
         violations.push(
-          `${path.relative(repositoryRoot, file)} imports ${dependency.path}`,
+          `${repoRelativePath(repositoryRoot, file)} imports ${dependency.path}`,
         );
         continue;
       }
@@ -35,7 +37,7 @@ test("the format import graph excludes generated skill content", () => {
         continue;
       }
       if (/\.gen\.[cm]?[jt]sx?$/u.test(resolved)) {
-        violations.push(path.relative(repositoryRoot, resolved));
+        violations.push(repoRelativePath(repositoryRoot, resolved));
         continue;
       }
       pending.push(resolved);

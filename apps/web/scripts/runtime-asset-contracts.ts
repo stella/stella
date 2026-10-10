@@ -1,5 +1,6 @@
-import path from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { isPathInside, repoRelativePath } from "@stll/portable-path";
 
 const WEB_ROOT_URL = new URL("../", import.meta.url);
 const WEB_ROOT_PATH = fileURLToPath(WEB_ROOT_URL);
@@ -26,7 +27,7 @@ export const SOURCE_WORKER_FILE_GLOB =
   "src/**/*.{cjs,cts,js,jsx,mjs,mts,ts,tsx}";
 
 const toWebRelativePath = (url: URL): string =>
-  path.relative(WEB_ROOT_PATH, fileURLToPath(url));
+  repoRelativePath(WEB_ROOT_PATH, fileURLToPath(url));
 
 export const workerSourceSpecifiers = (source: string): readonly string[] => {
   const specifiers = new Set<string>();
@@ -109,8 +110,7 @@ export const referencedAssetPath = (
     ? new URL(`dist/client${cleanReference}`, WEB_ROOT_URL)
     : new URL(cleanReference, new URL(emittedPath, WEB_ROOT_URL));
   const targetPath = fileURLToPath(targetUrl);
-  const relativeToClient = path.relative(CLIENT_ROOT_PATH, targetPath);
-  if (relativeToClient.startsWith("..") || path.isAbsolute(relativeToClient)) {
+  if (!isPathInside(CLIENT_ROOT_PATH, targetPath)) {
     return undefined;
   }
 

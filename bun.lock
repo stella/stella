@@ -12,6 +12,7 @@
         "@shadcn/lint": "catalog:",
         "@stll/collation": "workspace:*",
         "@stll/oxlint-config": "0.7.0",
+        "@stll/portable-path": "workspace:*",
         "@stll/property-testing": "workspace:*",
         "@stll/sha256": "workspace:^",
         "@stll/typescript-config": "workspace:^0.0.0",
@@ -109,6 +110,7 @@
         "@stll/mojibake": "workspace:*",
         "@stll/money": "workspace:*",
         "@stll/permissions": "workspace:*",
+        "@stll/portable-path": "workspace:*",
         "@stll/redis-config": "workspace:*",
         "@stll/runtime-mode": "workspace:*",
         "@stll/sanctions": "workspace:*",
@@ -287,6 +289,7 @@
         "@stll/clipboard": "workspace:*",
         "@stll/folio-react": "catalog:",
         "@stll/locales": "workspace:*",
+        "@stll/portable-path": "workspace:*",
         "@stll/time": "workspace:*",
         "@stll/ui": "workspace:*",
         "@stll/workspace-ui": "workspace:*",
@@ -435,6 +438,7 @@
         "@stll/locales": "workspace:*",
         "@stll/money": "workspace:*",
         "@stll/permissions": "workspace:*",
+        "@stll/portable-path": "workspace:*",
         "@stll/sha256": "workspace:*",
         "@stll/skills": "workspace:*",
         "@stll/ssr-kit": "workspace:^",
@@ -705,6 +709,7 @@
       "name": "@stll/catalogue",
       "version": "0.0.0",
       "dependencies": {
+        "@stll/portable-path": "workspace:*",
         "better-result": "catalog:",
         "valibot": "catalog:",
       },
@@ -1030,10 +1035,19 @@
         "bun-types": "catalog:",
       },
     },
+    "packages/portable-path": {
+      "name": "@stll/portable-path",
+      "version": "0.0.0",
+      "devDependencies": {
+        "@stll/typescript-config": "workspace:*",
+        "bun-types": "catalog:",
+      },
+    },
     "packages/property-testing": {
       "name": "@stll/property-testing",
       "version": "0.0.0",
       "dependencies": {
+        "@stll/portable-path": "workspace:*",
         "@stll/sha256": "workspace:*",
         "better-result": "catalog:",
         "fast-check": "catalog:",
@@ -1101,6 +1115,7 @@
         "@stll/fetch": "workspace:*",
         "@stll/locales": "workspace:*",
         "@stll/permissions": "workspace:*",
+        "@stll/portable-path": "workspace:*",
         "@stll/sha256": "workspace:*",
         "@stll/skills": "workspace:*",
         "@stll/time": "workspace:*",
@@ -1125,6 +1140,7 @@
       "name": "@stll/skills",
       "version": "0.0.0",
       "dependencies": {
+        "@stll/portable-path": "workspace:*",
         "@stll/sha256": "workspace:*",
         "better-result": "catalog:",
       },
@@ -1171,6 +1187,7 @@
       "name": "@stll/start-runtime",
       "version": "0.2.0",
       "dependencies": {
+        "@stll/portable-path": "workspace:*",
         "better-result": "catalog:",
       },
       "devDependencies": {
@@ -1199,6 +1216,7 @@
       "name": "@stll/template-packs",
       "version": "0.0.0",
       "dependencies": {
+        "@stll/portable-path": "workspace:*",
         "@stll/sha256": "workspace:*",
         "better-result": "catalog:",
         "valibot": "catalog:",
@@ -3049,6 +3067,8 @@
     "@stll/permissions": ["@stll/permissions@workspace:packages/permissions"],
 
     "@stll/playground": ["@stll/playground@workspace:apps/playground"],
+
+    "@stll/portable-path": ["@stll/portable-path@workspace:packages/portable-path"],
 
     "@stll/property-testing": ["@stll/property-testing@workspace:packages/property-testing"],
 

@@ -29,6 +29,7 @@
     "@stll/clipboard": "workspace:*",
     "@stll/folio-react": "catalog:",
     "@stll/locales": "workspace:*",
+    "@stll/portable-path": "workspace:*",
     "@stll/time": "workspace:*",
     "@stll/ui": "workspace:*",
     "@stll/workspace-ui": "workspace:*",

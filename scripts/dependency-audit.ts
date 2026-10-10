@@ -32,6 +32,7 @@ import { appendFileSync } from "node:fs";
 import path from "node:path";
 
 import { compareCodeUnit } from "@stll/collation";
+import { repoRelativePath } from "@stll/portable-path";
 
 import { BASELINE_PATHS } from "./baseline-paths";
 import {
@@ -302,7 +303,7 @@ const writeBaseline = async (advisories: Advisory[]): Promise<void> => {
   };
   await Bun.write(BASELINE_PATH, `${JSON.stringify(baseline, null, 2)}\n`);
   console.info(
-    `Wrote ${advisories.length} advisory(ies) to ${path.relative(REPO_ROOT, BASELINE_PATH)}.`,
+    `Wrote ${advisories.length} advisory(ies) to ${repoRelativePath(REPO_ROOT, BASELINE_PATH)}.`,
   );
 };
 

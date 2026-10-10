@@ -1,6 +1,7 @@
 import fc from "fast-check";
-import path from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { isPathInside, repoRelativePath } from "@stll/portable-path";
 
 import { failureFingerprint } from "./failure-fingerprint";
 import {
@@ -257,11 +258,10 @@ const callerFile = (): string => {
     if (absolute === SELF || !/\.test\.tsx?$/u.test(absolute)) {
       continue;
     }
-    const file = path.relative(REPO_ROOT, absolute).replaceAll("\\", "/");
-    if (file.startsWith("../")) {
+    if (!isPathInside(REPO_ROOT, absolute)) {
       break;
     }
-    return file;
+    return repoRelativePath(REPO_ROOT, absolute);
   }
   throw new PropertyTestConfigError(
     "assertProperty must be called from a repository test file",
@@ -326,7 +326,7 @@ export function runProperty<Ts>({
     const factorEnv =
       factor === 1 ? "" : ` PROPERTY_TEST_NUM_RUNS_FACTOR=${factor}`;
     const workspace = file.split("/").slice(0, 2).join("/");
-    const testFile = `./${path.posix.relative(workspace, file)}`;
+    const testFile = `./${repoRelativePath(workspace, file)}`;
     const replay = `PROPERTY_TEST_SEED=${details.seed} PROPERTY_TEST_PATH=${shellQuote(details.counterexamplePath ?? "")}${factorEnv} bun run --cwd ${shellQuote(workspace)} test --preload @stll/property-testing/preload ${shellQuote(testFile)} -t ${shellQuote(regexEscape(id))}`;
     const error =
       details.errorInstance instanceof Error
