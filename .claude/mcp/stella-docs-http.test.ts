@@ -192,7 +192,7 @@ describe("shared documentation MCP HTTP server", () => {
 
   test("answers malformed and oversized bodies as client errors", async () => {
     const { baseUrl } = await startHttpServer();
-    const post = (body: string) =>
+    const post = async (body: string) =>
       fetch(`${baseUrl}/mcp`, {
         method: "POST",
         headers: {
