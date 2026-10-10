@@ -10,7 +10,7 @@ import {
   formattedArtifactsLikeRepository as formatArtifacts,
   formattedLikeRepository as formatSource,
   type GeneratedArtifact,
-} from "../packages/scripts/src/generated-artifact-format";
+} from "../packages/scripts/src/generated-artifact-format.ts";
 
 // `import.meta.dirname` rather than Bun's `import.meta.dir`: ownership.ts
 // imports this module and is itself loaded by oxlint.config.ts under Node.

@@ -120,6 +120,7 @@ test("independent row additions merge cleanly and pass the production check", ()
       "scripts/ownership-types.ts",
       "scripts/ownership-loader.ts",
       "scripts/generated-artifacts.ts",
+      "packages/scripts/src/generated-artifact-format.ts",
       "scripts/schema-introspection.ts",
       "scripts/ownership/status-transition.ts",
       ".oxlint-plugins/module-id.ts",
