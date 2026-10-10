@@ -573,6 +573,47 @@ export type ImportedBinding = { source: string; imported: string };
 
 export const NAMESPACE_IMPORT = "*";
 
+const isCreateRequireReference = (
+  context: ScopeContext,
+  reference: ESTree.IdentifierReference,
+): boolean => {
+  const variable = resolveVariable(context, reference);
+  const initializer = variable === null ? null : stableInitializer(variable);
+  const definition = variable?.defs.at(0);
+  if (
+    variable === null ||
+    initializer?.type !== "CallExpression" ||
+    !isAstNode(definition?.node) ||
+    !isIdentifier(definition.node.id, reference.name) ||
+    variable.references.some(
+      (use) =>
+        !use.init &&
+        (use.identifier.range[0] !== reference.range[0] ||
+          use.identifier.range[1] !== reference.range[1]),
+    )
+  ) {
+    return false;
+  }
+  const callee = unwrapExpression(initializer.callee);
+  const base =
+    callee?.type === "MemberExpression"
+      ? unwrapExpression(callee.object)
+      : callee;
+  if (
+    !isIdentifierReference(base) ||
+    resolveVariable(context, base)?.defs.at(0)?.type !== "ImportBinding"
+  ) {
+    return false;
+  }
+  // Only an imported factory is eligible; a loader cannot prove itself through
+  // another call to its own binding.
+  const factory = resolveImportedExpression(context, callee);
+  return (
+    factory?.imported === "createRequire" &&
+    (factory.source === "node:module" || factory.source === "module")
+  );
+};
+
 // The module a `require("m")`, `import("m")` or `await import("m")` loads.
 export const dynamicModuleSource = (
   node: unknown,
@@ -591,16 +632,17 @@ export const dynamicModuleSource = (
   if (
     expression.type === "CallExpression" &&
     isIdentifierReference(expression.callee) &&
-    expression.callee.name === "require" &&
     Array.isArray(expression.arguments) &&
     expression.arguments.length === 1 &&
     isStringLiteral(expression.arguments[0])
   ) {
     const binding = resolveVariable(context, expression.callee);
-    if (binding !== null && binding.defs.length !== 0) {
-      return null;
-    }
-    return expression.arguments[0].value;
+    const globalRequire =
+      expression.callee.name === "require" &&
+      (binding === null || binding.defs.length === 0);
+    return globalRequire || isCreateRequireReference(context, expression.callee)
+      ? expression.arguments[0].value
+      : null;
   }
   return null;
 };
