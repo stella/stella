@@ -43,7 +43,10 @@ import {
 } from "@/api/lib/files/file-object-ids";
 import { pdfDerivativeStateForFile } from "@/api/lib/files/gotenberg";
 import { thumbnailDerivativeStateForFile } from "@/api/lib/files/image-derivative";
-import type { OrganizationFileUsageError } from "@/api/lib/files/organization-file-usage";
+import type {
+  CheckedFileCopy,
+  OrganizationFileUsageError,
+} from "@/api/lib/files/organization-file-usage";
 import { createFileKey } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
@@ -405,7 +408,9 @@ const stageAndCopyFiles = async ({
       organizationId,
       objectKey: targetKey,
       sizeBytes: source.value.contentLength,
-      copy: async () => await copyObject(sourceKey, targetKey),
+      source: sourceKey,
+      copy: async (checked: CheckedFileCopy<string>) =>
+        await copyObject(checked.source, checked.objectKey),
     });
   };
   const prepared: Awaited<ReturnType<typeof prepareFile>>[] = [];

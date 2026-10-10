@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import { parseCaseLawDecisionPath } from "@stll/api-contract/case-law-decision-route";
 import { parseStatutePath } from "@stll/api-contract/statute-route";
 import { Temporal } from "@stll/time";
@@ -8,8 +9,9 @@ import { Temporal } from "@stll/time";
 import { readStoredJson } from "@/lib/stored-json";
 
 // Keep the key so existing owner-scoped searches migrate without a second store.
-export const LAW_SEARCH_HISTORY_KEY = "law_search_history";
-const RECENT_LIMIT_PER_KIND = 50;
+export const LAW_HISTORY_STORAGE_KEY = "law_search_history";
+// A display limit only; the server retains entries until their owner deletes them.
+export const LAW_HISTORY_DISPLAY_LIMIT = 20;
 const atSchema = v.pipe(
   v.string(),
   v.check((at) => Result.try(() => Temporal.Instant.from(at)).isOk()),
@@ -34,47 +36,50 @@ const legacyEntrySchema = v.object({
   query: v.pipe(v.string(), v.trim(), v.nonEmpty()),
   at: atSchema,
 });
+const unknownIdentitySchema = v.object({ kind: v.literal("unknown") });
+const decisionIdentitySchema = v.object({
+  kind: v.literal("decision"),
+  courtAbbreviation: v.nullable(v.string()),
+  courtTier: v.optional(v.picklist(COURT_TIER_LABELS)),
+});
+const statuteIdentitySchema = v.object({
+  kind: v.literal("statute"),
+  number: v.nullable(v.string()),
+  year: v.nullable(v.string()),
+});
+
 const recentEntrySchema = v.variant("kind", [
   v.object({ kind: v.literal("search"), ...legacyEntrySchema.entries }),
-  v.object({ kind: v.literal("decision"), ...openedFields }),
-  v.object({ kind: v.literal("statute"), ...openedFields }),
+  v.object({
+    kind: v.literal("decision"),
+    ...openedFields,
+    documentIdentity: v.optional(
+      v.fallback(
+        v.variant("kind", [unknownIdentitySchema, decisionIdentitySchema]),
+        { kind: "unknown" },
+      ),
+    ),
+    courtId: v.optional(v.nullable(v.string()), null),
+    courtAbbreviation: v.optional(v.nullable(v.string()), null),
+    courtTier: v.optional(v.nullable(v.picklist(COURT_TIER_LABELS)), null),
+  }),
+  v.object({
+    kind: v.literal("statute"),
+    ...openedFields,
+    documentIdentity: v.optional(
+      v.fallback(
+        v.variant("kind", [unknownIdentitySchema, statuteIdentitySchema]),
+        { kind: "unknown" },
+      ),
+    ),
+    statuteNumber: v.optional(v.nullable(v.string()), null),
+    statuteYear: v.optional(v.nullable(v.string()), null),
+  }),
 ]);
 
 export type LawRecentEntry = v.InferOutput<typeof recentEntrySchema>;
 export type LawRecentFilter = "all" | LawRecentEntry["kind"];
-export const EMPTY_LAW_RECENT: readonly LawRecentEntry[] = [];
-
-export const lawRecentKey = (entry: LawRecentEntry): string =>
-  entry.kind === "search"
-    ? `${entry.kind}:${entry.query}`
-    : `${entry.kind}:${entry.id}`;
-
-export const filterLawRecent = (
-  entries: readonly LawRecentEntry[],
-  filter: LawRecentFilter,
-): readonly LawRecentEntry[] =>
-  filter === "all" ? entries : entries.filter((entry) => entry.kind === filter);
-
-export const normalizeRecent = (
-  entries: readonly LawRecentEntry[],
-): readonly LawRecentEntry[] => {
-  const seen = new Set<string>();
-  const counts = new Map<LawRecentEntry["kind"], number>();
-  return entries
-    .toSorted((a, b) => Temporal.Instant.compare(b.at, a.at))
-    .filter((entry) => {
-      const key = lawRecentKey(entry);
-      if (
-        seen.has(key) ||
-        (counts.get(entry.kind) ?? 0) >= RECENT_LIMIT_PER_KIND
-      ) {
-        return false;
-      }
-      seen.add(key);
-      counts.set(entry.kind, (counts.get(entry.kind) ?? 0) + 1);
-      return true;
-    });
-};
+const EMPTY: readonly LawRecentEntry[] = [];
 
 /** Bad rows are dropped individually; old searches become recent search rows. */
 export const readLawRecent = (
@@ -82,7 +87,7 @@ export const readLawRecent = (
 ): readonly LawRecentEntry[] => {
   const rows = readStoredJson(raw, v.array(v.unknown()));
   if (rows === null) {
-    return EMPTY_LAW_RECENT;
+    return EMPTY;
   }
   const entries: LawRecentEntry[] = [];
   for (const row of rows) {
@@ -100,14 +105,15 @@ export const readLawRecent = (
       entries.push({ kind: "search", ...legacy.output });
     }
   }
-  return normalizeRecent(entries);
+  return entries;
 };
 
-/**
- * Takes the entries a browser kept before history was keyed by user into the
- * signed-in user's history: both lists merge, newest first, without
- * duplicates and within the usual cap. `null` when the old entry adds nothing.
- */
+export const lawRecentKey = (entry: LawRecentEntry): string =>
+  entry.kind === "search"
+    ? `${entry.kind}:${entry.query}`
+    : `${entry.kind}:${entry.id}`;
+
+/** Preserve every local entry until the server accepts the import. */
 export const mergeLawRecent = (
   legacyRaw: string,
   existingRaw: string | null,
@@ -116,7 +122,16 @@ export const mergeLawRecent = (
   if (legacy.length === 0) {
     return null;
   }
-  return JSON.stringify(
-    normalizeRecent([...readLawRecent(existingRaw), ...legacy]),
-  );
+  const seen = new Set<string>();
+  const merged = [...readLawRecent(existingRaw), ...legacy]
+    .toSorted((a, b) => Temporal.Instant.compare(b.at, a.at))
+    .filter((entry) => {
+      const key = lawRecentKey(entry);
+      if (seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    });
+  return JSON.stringify(merged);
 };

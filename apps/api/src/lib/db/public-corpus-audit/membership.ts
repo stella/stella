@@ -1,4 +1,4 @@
-export type PublicCorpusColumn = {
+type PublicCorpusColumn = {
   kind:
     | "public-corpus-id"
     | "counter"

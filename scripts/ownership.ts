@@ -47,6 +47,11 @@ export const SCHEMA_INTROSPECTION = [
       "Exports the static schema catalog for corpus admission verification without database operations.",
   },
   {
+    path: "apps/api/scripts/generate-entity-feature-gate-propagation.ts",
+    reason:
+      "Renders static gate propagation SQL from full-schema metadata without database operations.",
+  },
+  {
     path: "apps/api/scripts/generate-status-tables.ts",
     reason: "Enumerates full-schema metadata without database operations.",
   },
@@ -169,6 +174,12 @@ const enforcementCell = (enforcement: OwnershipEnforcement): string => {
     }
     case "function-call": {
       return `call \`${enforcement.name}()\` in \`${enforcement.within.join("`, `")}\``;
+    }
+    case "table-column-read": {
+      const columns = enforcement.columns.map(
+        (column) => `${enforcement.table}.${column}`,
+      );
+      return `read \`${columns.join("`, `")}\`, including implicit full-row selections`;
     }
     case "status-set": {
       return "lifecycle updates, conflict sets and visible SQL assignments; lint errors plus measured per-file backlog and shrink-only ratchet";

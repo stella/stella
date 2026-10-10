@@ -7,8 +7,8 @@ name: Model Catalog Upstream Check
 # deprecated or gone upstream, or the committed Text Arena quality ratings
 # (Hugging Face lmarena-ai/leaderboard-dataset) drift or lose a mapped row.
 # Rates and request capabilities refresh together in one maintained pull request.
-# Benchmark availability is inconclusive twice, then alerts on the third
-# consecutive scheduled run. A successful fetch resets the persisted streak.
+# Benchmark availability remains inconclusive for 7 days, then alerts once the
+# outage lasts longer. A successful fetch clears the persisted outage start.
 
 on:
   schedule:
@@ -79,7 +79,7 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           mkdir -p .benchmark-state
-          bash "$GH_RETRY_SCRIPT" api "repos/$GH_REPO/actions/artifacts?name=model-catalog-benchmark-state-v1&per_page=1" > .benchmark-state/artifacts.json
+          bash "$GH_RETRY_SCRIPT" api "repos/$GH_REPO/actions/artifacts?name=model-catalog-benchmark-state-v2&per_page=1" > .benchmark-state/artifacts.json
           jq -e '(.artifacts | type) == "array"' .benchmark-state/artifacts.json > /dev/null
           if [ "$(jq '.artifacts | length' .benchmark-state/artifacts.json)" = 0 ]; then
             echo 'Starting scheduled benchmark state.'
@@ -115,6 +115,18 @@ jobs:
             echo "changed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          # The refresh owns this path and replaces only the two changesets it
+          # writes itself; a hand-written note must move to its own file first.
+          refresh_summary='Refresh upstream model rates and request capabilities.'
+          empty_changeset_text=$'---\n---'
+          patch_changeset_text=$'---\n"@stll/ai-catalog": patch\n---\n\n'"$refresh_summary"
+          if [[ -e "$REFRESH_CHANGESET" ]]; then
+            existing="$(tr -d '\r' < "$REFRESH_CHANGESET")"
+            if [[ "$existing" != "$empty_changeset_text" && "$existing" != "$patch_changeset_text" ]]; then
+              echo "::error file=$REFRESH_CHANGESET::$REFRESH_CHANGESET holds a changeset the refresh did not write; move it to its own changeset file."
+              exit 1
+            fi
+          fi
           runtime_changed="$(git status --porcelain --untracked-files=all -- packages/ai-catalog/src/model-rates.gen.ts packages/ai-catalog/src/capabilities.gen.ts)"
           if [[ -z "$runtime_changed" ]]; then
             bun run changeset --empty
@@ -122,12 +134,12 @@ jobs:
             test -f "$empty_changeset"
             mv "$empty_changeset" "$REFRESH_CHANGESET"
           else
-            cat > "$REFRESH_CHANGESET" <<'CHANGESET'
+            cat > "$REFRESH_CHANGESET" <<CHANGESET
           ---
           "@stll/ai-catalog": patch
           ---
 
-          Refresh upstream model rates and request capabilities.
+          $refresh_summary
           CHANGESET
           fi
           echo "changed=true" >> "$GITHUB_OUTPUT"
@@ -153,7 +165,7 @@ jobs:
         if: ${{ !cancelled() && github.event_name == 'schedule' && steps.benchmarks.outcome != 'skipped' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: model-catalog-benchmark-state-v1
+          name: model-catalog-benchmark-state-v2
           path: .benchmark-state/state.json
           if-no-files-found: error
           retention-days: 90

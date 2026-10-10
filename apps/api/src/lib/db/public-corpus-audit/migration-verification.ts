@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { sha256Hex } from "@stll/sha256/node";
 
 import { isOwnerOnlyExpression } from "./schema-verification.ts";
 
@@ -24,7 +24,7 @@ export type VerifiedCorpusMembership = Pick<
 > & { verification: "matched" };
 
 export const corpusDigest = (value: unknown): string =>
-  createHash("sha256").update(JSON.stringify(value)).digest("hex");
+  sha256Hex(JSON.stringify(value));
 
 // Preserve quoted bodies as one token and remove comments. Unsupported or
 // unterminated quoting cannot hide a statement from the admission check.

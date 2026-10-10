@@ -147,7 +147,10 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
 
 // Request transactions append names alongside chat messages and read them on
 // later requests. The role needs SELECT and INSERT, never UPDATE or DELETE.
-const POST_BOOTSTRAP_APPEND_ONLY_TABLES = new Set(["chat_thread_names"]);
+const POST_BOOTSTRAP_APPEND_ONLY_TABLES = new Set([
+  "chat_thread_names",
+  "chat_message_revisions",
+]);
 
 // Audit trails the request role may only append to: INSERT, nothing else.
 // The table owner reads them and purges rows past retention.
@@ -201,6 +204,7 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   "agent_trusted_issuer",
   "agent_delegation",
   "agent_assertion_replay",
+  "desktop_device_proof_replays",
   // Better Auth OAuth control-plane state. Request-role access would expose
   // resource policy or let tenant traffic change token authorization rules.
   "oauth_resource",

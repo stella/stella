@@ -1,6 +1,7 @@
 import { Panic, panic, Result } from "better-result";
 import { asc, eq, sql } from "drizzle-orm";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
@@ -13,6 +14,11 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import type { MaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  authorizeOperation,
+  snapshotOperationInput,
+} from "@/api/lib/proofs/checked-transaction";
+import type { CheckedOperationContext } from "@/api/lib/proofs/checked-transaction";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   lockAssignmentCapacities,
@@ -128,6 +134,31 @@ export type FileUsageInput = {
   sizeBytes: number;
   contentSha256Hex?: string | undefined;
 };
+
+export type CheckedFileWrite<Content> = Pick<
+  FileUsageInput,
+  "objectKey" | "sizeBytes"
+> & {
+  content: Content;
+};
+
+export type CheckedFileCopy<Source> = Pick<
+  FileUsageInput,
+  "objectKey" | "sizeBytes"
+> & {
+  source: Source;
+};
+
+type CheckedStorageOperation<T, Checked> = {
+  checked: Checked;
+  execute: (checked: Checked) => Promise<T>;
+};
+
+/** Storage callbacks only receive values from the snapshot that passed reservation. */
+export const runCheckedStorageOperation = async <T, Checked>({
+  checked,
+  execute,
+}: CheckedStorageOperation<T, Checked>) => await execute(checked);
 
 export type FileUsageReservation =
   | { status: "disabled" }
@@ -358,16 +389,66 @@ export const removeOrganizationFileBytes = async (
   db?: FileUsageDb,
 ) => await removeOrganizationFilesBytes([objectKey], db);
 
-/** Reserve before external I/O and settle only after the provider confirms it. */
-export const writeOrganizationFile = async <T>(
-  input: FileUsageInput & { write: () => Promise<T>; db?: FileUsageDb },
-): Promise<Result<T, OrganizationFileUsageError>> => {
-  const reservation = await reserveOrganizationFileBytes(input, input.db);
+const FILE_WRITE_RESERVED = "FileWriteReserved";
+const FILE_BATCH_RESERVED = "FileBatchReserved";
+
+export const authorizeOrganizationFileWrite = async <
+  Input extends FileUsageInput,
+>(
+  input: Input,
+  db?: FileUsageDb,
+) => {
+  const operation = snapshotOperationInput(input);
+  const reservation = await reserveOrganizationFileBytes(operation, db);
   if (Result.isError(reservation)) {
     return Result.err(reservation.error);
   }
+  return await authorizeOperation({
+    kind: FILE_WRITE_RESERVED,
+    input: { operation, reservation: reservation.value, db },
+    check: async () => await Promise.resolve(reservation.map(() => undefined)),
+  });
+};
+
+export const authorizeOrganizationFileBatch = async <
+  Input extends readonly FileUsageInput[],
+>(
+  input: Input,
+  db?: FileUsageDb,
+) => {
+  const operation = snapshotOperationInput(input);
+  const reservations = await reserveOrganizationFilesBytes(operation, db);
+  if (Result.isError(reservations)) {
+    return Result.err(reservations.error);
+  }
+  return await authorizeOperation({
+    kind: FILE_BATCH_RESERVED,
+    input: { operation, reservations: reservations.value, db },
+    check: async () => await Promise.resolve(reservations.map(() => undefined)),
+  });
+};
+
+export const runCheckedOrganizationFileWrite = async <T, N, Content = unknown>({
+  proof,
+}: CheckedOperationContext<
+  typeof FILE_WRITE_RESERVED,
+  {
+    operation: Parameters<typeof writeOrganizationFile<T, Content>>[0];
+    reservation: FileUsageReservation;
+    db: FileUsageDb | undefined;
+  },
+  N
+>): Promise<Result<T, OrganizationFileUsageError>> => {
   const written = await Result.tryPromise({
-    try: input.write,
+    try: async () =>
+      await runCheckedStorageOperation({
+        checked: {
+          objectKey: proof.input.value.operation.objectKey,
+          sizeBytes: proof.input.value.operation.sizeBytes,
+          content: proof.input.value.operation.content,
+        },
+        execute: proof.input.value.operation.write,
+      }),
     catch: storageUnavailable,
   });
   if (Result.isError(written)) {
@@ -376,27 +457,40 @@ export const writeOrganizationFile = async <T>(
     return Result.err(written.error);
   }
   const committed = await commitOrganizationFileBytes(
-    reservation.value,
-    input.db,
+    proof.input.value.reservation,
+    proof.input.value.db,
   );
   return Result.isError(committed)
     ? Result.err(committed.error)
     : Result.ok(written.value);
 };
 
-export const copyOrganizationFile = async <T, E>(
-  input: FileUsageInput & {
-    copy: () => Promise<Result<T, E>>;
-    confirmedDestinationAbsentOnCopyError?: (error: E) => boolean;
-    db?: FileUsageDb;
+export const runCheckedOrganizationFileCopy = async <
+  T,
+  E,
+  N,
+  Source = unknown,
+>({
+  proof,
+}: CheckedOperationContext<
+  typeof FILE_WRITE_RESERVED,
+  {
+    operation: Parameters<typeof copyOrganizationFile<T, E, Source>>[0];
+    reservation: FileUsageReservation;
+    db: FileUsageDb | undefined;
   },
-): Promise<Result<T, E | OrganizationFileUsageError>> => {
-  const reservation = await reserveOrganizationFileBytes(input, input.db);
-  if (Result.isError(reservation)) {
-    return Result.err(reservation.error);
-  }
+  N
+>): Promise<Result<T, E | OrganizationFileUsageError>> => {
   const copied = await Result.tryPromise({
-    try: input.copy,
+    try: async () =>
+      await runCheckedStorageOperation({
+        checked: {
+          objectKey: proof.input.value.operation.objectKey,
+          sizeBytes: proof.input.value.operation.sizeBytes,
+          source: proof.input.value.operation.source,
+        },
+        execute: proof.input.value.operation.copy,
+      }),
     catch: storageUnavailable,
   });
   if (Result.isError(copied)) {
@@ -405,10 +499,14 @@ export const copyOrganizationFile = async <T, E>(
   if (Result.isError(copied.value)) {
     // Only a copy error that proves the destination was never written may
     // release the reservation; timeouts still need object-state recovery.
-    if (input.confirmedDestinationAbsentOnCopyError?.(copied.value.error)) {
+    if (
+      proof.input.value.operation.confirmedDestinationAbsentOnCopyError?.(
+        copied.value.error,
+      )
+    ) {
       const released = await releaseOrganizationFileBytes(
-        reservation.value,
-        input.db,
+        proof.input.value.reservation,
+        proof.input.value.db,
       );
       if (Result.isError(released)) {
         return Result.err(released.error);
@@ -417,12 +515,46 @@ export const copyOrganizationFile = async <T, E>(
     return Result.err(copied.value.error);
   }
   const committed = await commitOrganizationFileBytes(
-    reservation.value,
-    input.db,
+    proof.input.value.reservation,
+    proof.input.value.db,
   );
   return Result.isError(committed)
     ? Result.err(committed.error)
     : Result.ok(copied.value.value);
+};
+
+/** Reserve before external I/O and settle only after the provider confirms it. */
+export const writeOrganizationFile = async <T, Content>(
+  input: FileUsageInput & {
+    content: Content;
+    write: (checked: CheckedFileWrite<Content>) => Promise<T>;
+    db?: FileUsageDb;
+  },
+): Promise<Result<T, OrganizationFileUsageError>> => {
+  const authorization = await authorizeOrganizationFileWrite(input, input.db);
+  if (Result.isError(authorization)) {
+    return Result.err(authorization.error);
+  }
+  return await authorization.value.execute(
+    async (operation) => await runCheckedOrganizationFileWrite(operation),
+  );
+};
+
+export const copyOrganizationFile = async <T, E, Source>(
+  input: FileUsageInput & {
+    source: Source;
+    copy: (checked: CheckedFileCopy<Source>) => Promise<Result<T, E>>;
+    confirmedDestinationAbsentOnCopyError?: (error: E) => boolean;
+    db?: FileUsageDb;
+  },
+): Promise<Result<T, E | OrganizationFileUsageError>> => {
+  const authorization = await authorizeOrganizationFileWrite(input, input.db);
+  if (Result.isError(authorization)) {
+    return Result.err(authorization.error);
+  }
+  return await authorization.value.execute(
+    async (operation) => await runCheckedOrganizationFileCopy(operation),
+  );
 };
 
 /** Import a confirmed object or repair a byte count. Repeating the same scan is a fixed point. */
@@ -946,8 +1078,7 @@ const recoverOrganizationFileReservations = async (
         return Result.err(read.error);
       }
       if (
-        new Bun.CryptoHasher("sha256").update(read.value).digest("hex") !==
-        object.expectedSha256Hex
+        hashSha256Hex(new Uint8Array(read.value)) !== object.expectedSha256Hex
       ) {
         if (ageMs >= FILE_RESERVATION_ABANDON_DELAY_MS) {
           toRelease.push(reservation);
@@ -980,15 +1111,19 @@ export const reserveOrganizationFilesBytes = async (
   inputs: readonly FileUsageInput[],
   db?: FileUsageDb,
 ): Promise<Result<FileUsageReservation[], OrganizationFileUsageError>> => {
-  const reserved = await reserveOrganizationFilesBytesOnce(inputs, db);
+  const checkedInputs = snapshotOperationInput(inputs);
+  const reserved = await reserveOrganizationFilesBytesOnce(checkedInputs, db);
   if (Result.isOk(reserved) || reserved.error.reason !== "reservation_busy") {
     return reserved;
   }
-  const recovered = await recoverOrganizationFileReservations(inputs, db);
+  const recovered = await recoverOrganizationFileReservations(
+    checkedInputs,
+    db,
+  );
   if (Result.isError(recovered)) {
     return Result.err(recovered.error);
   }
-  return await reserveOrganizationFilesBytesOnce(inputs, db);
+  return await reserveOrganizationFilesBytesOnce(checkedInputs, db);
 };
 
 export const ORGANIZATION_FILE_ACCOUNTING_BATCH_LIMIT = 128;
@@ -1198,19 +1333,35 @@ export const removeOrganizationFilesBytes = async (
       ).map(() => undefined)
     : Promise.resolve(Result.ok(undefined));
 
-export const writeOrganizationFiles = async <T>(
-  inputs: readonly (FileUsageInput & { write: () => Promise<T> })[],
+export const writeOrganizationFiles = async <T, Content>(
+  inputs: readonly (FileUsageInput & {
+    content: Content;
+    write: (checked: CheckedFileWrite<Content>) => Promise<T>;
+  })[],
   db?: FileUsageDb,
 ): Promise<
   Result<Result<T, OrganizationFileUsageError>[], OrganizationFileUsageError>
 > => {
+  const checkedInputs = snapshotOperationInput(inputs);
   const { copyOrganizationFiles } =
     await import("@/api/lib/files/copy-organization-files");
   return await copyOrganizationFiles({
-    inputs: inputs.map(({ write, ...input }) => ({
+    inputs: checkedInputs.map(({ write, content, ...input }) => ({
       ...input,
-      copy: async () =>
-        await Result.tryPromise({ try: write, catch: storageUnavailable }),
+      source: content,
+      copy: async (checked: CheckedFileCopy<Content>) =>
+        await Result.tryPromise({
+          try: async () =>
+            await runCheckedStorageOperation({
+              checked: {
+                objectKey: checked.objectKey,
+                sizeBytes: checked.sizeBytes,
+                content: checked.source,
+              },
+              execute: write,
+            }),
+          catch: storageUnavailable,
+        }),
     })),
     concurrency: 1,
     db,

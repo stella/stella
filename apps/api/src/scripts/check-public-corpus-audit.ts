@@ -4,6 +4,8 @@ import { PgTable, getTableConfig } from "drizzle-orm/pg-core";
 import { writeFileSync } from "node:fs";
 import path from "node:path";
 
+import { loadLocalModule } from "@stll/start-runtime/local-module-loader";
+
 import {
   CORPUS_ATTESTATION_PATH,
   CORPUS_REPOSITORY_ROOT,
@@ -49,9 +51,14 @@ for (const entry of PUBLIC_CORPUS_BOOKKEEPING_TABLES) {
       }
     }
   }
-  const module: unknown = await import(
-    new URL(`../../../../${entry.moduleId}.ts`, import.meta.url).href
-  );
+  const loaded = await loadLocalModule({
+    root: path.join(CORPUS_REPOSITORY_ROOT, "apps/api/src/db/schema"),
+    modulePath: `${entry.moduleId.slice("apps/api/src/db/schema/".length)}.ts`,
+  });
+  if (loaded.isErr()) {
+    panic("Cannot load the declared corpus schema module", loaded.error);
+  }
+  const module = loaded.value;
   if (
     typeof module !== "object" ||
     module === null ||
