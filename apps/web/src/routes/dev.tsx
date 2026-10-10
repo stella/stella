@@ -1,6 +1,6 @@
 import type { ComponentType, ReactElement } from "react";
 
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 
 import { visualRegistry } from "@/routes/dev/-visual-metadata";
 import type { VisualLayout } from "@/routes/dev/-visual-metadata";
@@ -33,11 +33,6 @@ const visualLayouts = {
 
 export const Route = createFileRoute("/dev")({
   validateSearch: visualSearchSchema,
-  beforeLoad: () => {
-    if (!import.meta.env.DEV) {
-      return redirect({ to: "/" });
-    }
-  },
   component: DevRouteComponent,
 });
 
