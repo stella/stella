@@ -54,5 +54,9 @@
   {
     "name": "Test autofix decision boundaries",
     "reason": "Replaced by Test autofix protected paths; API duration weights are no longer repository files managed by autofix."
+  },
+  {
+    "name": "MCP App bundle and shared assets guard",
+    "reason": "Replaced by MCP app package bundles and shared assets guard: builds the frontend package, regenerates its API-derived contracts, checks all committed bundle assets, and enforces per-app bundle budgets."
   }
 ]
