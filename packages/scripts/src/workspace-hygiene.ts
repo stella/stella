@@ -2,6 +2,8 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import { validateWorkspaceAppBoundaries } from "./workspace-app-boundaries";
 import type { AppBoundaryOptions } from "./workspace-app-boundaries";
 
@@ -638,7 +640,7 @@ const validateBunTypeOwnership = (
     )
     .map((filePath) => ({
       message: `${BUN_TYPES_DEPENDENCY} is named by this TypeScript project but is not declared in the workspace package.json`,
-      path: `${relativeWorkspacePath}/${path.relative(workspacePath, filePath)}`,
+      path: `${relativeWorkspacePath}/${repoRelativePath(workspacePath, filePath)}`,
     }));
 };
 
@@ -672,7 +674,7 @@ const validateTurboInstallPins = (rootDir: string): WorkspaceIssue[] => {
       const installVersion = match[0].slice(match[0].lastIndexOf("@") + 1);
       issues.push({
         message: `turbo install version must derive from root package.json; found mirrored pin ${installVersion}`,
-        path: `${path.relative(rootDir, filePath)}:${lineNumberForIndex(content, match.index)}`,
+        path: `${repoRelativePath(rootDir, filePath)}:${lineNumberForIndex(content, match.index)}`,
       });
     }
   }
@@ -710,7 +712,7 @@ const validateBunCwdRunForm = (rootDir: string): WorkspaceIssue[] =>
       return [...content.matchAll(BUN_SPACED_CWD_RUN_PATTERN)].map((match) => ({
         message:
           "`bun --cwd <dir> run <script>` exits 0 without running the script; use `bun run --cwd <dir> <script>`",
-        path: `${path.relative(rootDir, filePath)}:${lineNumberForIndex(content, match.index)}`,
+        path: `${repoRelativePath(rootDir, filePath)}:${lineNumberForIndex(content, match.index)}`,
       }));
     });
 

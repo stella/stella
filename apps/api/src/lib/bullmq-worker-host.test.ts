@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import { rootDb } from "@/api/db/root";
 import { documentProcessingEnvInvariantViolation } from "@/api/env-document-processing-worker-schema";
 import { createBullMqWorkerHost } from "@/api/lib/bullmq-queue";
@@ -71,7 +73,7 @@ describe("background queue workers", () => {
     );
     const unhosted = sourceFiles(SRC_DIR)
       .filter((file) => /new BullMqWorker\b/u.test(readFileSync(file, "utf-8")))
-      .map((file) => path.relative(SRC_DIR, file))
+      .map((file) => repoRelativePath(SRC_DIR, file))
       .filter((file) => !hosted.has(file));
 
     expect(unhosted).toEqual([]);

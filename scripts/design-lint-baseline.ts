@@ -34,6 +34,7 @@ import path from "node:path";
 import * as v from "valibot";
 
 import { compareCodeUnit } from "@stll/collation";
+import { repoRelativePath } from "@stll/portable-path";
 
 import { BASELINE_PATHS } from "./baseline-paths";
 import {
@@ -118,8 +119,7 @@ export const emptyBacklog = (): DesignLintBacklog => ({
 
 /** A repository-relative POSIX path, whichever form oxlint printed. */
 const repositoryPath = (filename: string): string =>
-  path
-    .relative(REPOSITORY_ROOT, path.resolve(REPOSITORY_ROOT, filename))
+  repoRelativePath(REPOSITORY_ROOT, path.resolve(REPOSITORY_ROOT, filename))
     .split(path.sep)
     .join("/");
 

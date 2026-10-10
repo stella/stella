@@ -20,11 +20,11 @@ test("rejects named platform imports stable aliases and zero index checks", asyn
   ).toEqual([4, 5]);
 });
 
-test("accepts separator suffixed and relative path containment", async () => {
+test("accepts separator suffixed and owned path containment", async () => {
   expect(
     await lintSingleRule(
       "no-path-prefix-containment",
-      `import * as path from "node:path";\nconst candidate = path.resolve(root, input);\ncandidate.startsWith(\`\${root}\${path.sep}\`);\ncandidate.startsWith(root + "/");\nconst relative = path.relative(root, candidate);\n!relative.startsWith(\`..\${path.sep}\`) && !path.isAbsolute(relative);`,
+      `import { isPathInside } from "@stll/portable-path";\nimport * as path from "node:path";\nconst candidate = path.resolve(root, input);\ncandidate.startsWith(\`\${root}\${path.sep}\`);\ncandidate.startsWith(root + "/");\nisPathInside(root, candidate);`,
     ),
   ).toEqual([]);
 });

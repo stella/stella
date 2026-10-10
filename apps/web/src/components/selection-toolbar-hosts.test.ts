@@ -3,6 +3,8 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 const sourceRoot = path.resolve(import.meta.dirname, "..");
 const primitive = path.join(sourceRoot, "components/selection-toolbar.tsx");
 const modules = [...new Bun.Glob("**/*.tsx").scanSync({ cwd: sourceRoot })]
@@ -184,7 +186,7 @@ test("every discovered selection toolbar mount supplies its own clipping boundar
 });
 
 for (const host of hosts) {
-  test(`${path.relative(sourceRoot, host.file)}: ${host.component} inherits the shared bounded selection toolbar`, () => {
+  test(`${repoRelativePath(sourceRoot, host.file)}: ${host.component} inherits the shared bounded selection toolbar`, () => {
     expect(host.component).not.toBe("");
     expect(
       wrappers.some((wrapper) =>

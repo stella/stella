@@ -2,6 +2,8 @@ import { expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 /**
  * `resolveDecisionReference` restates the SQL resolver's doctrine so the two
  * can be compared; it decides no stored outcome. A production module calling
@@ -32,7 +34,7 @@ const IMPORTS_TWIN =
 test("no production module imports the resolution twin", () => {
   const importers = sourceFiles(API_SRC)
     .filter((file) => IMPORTS_TWIN.test(readFileSync(file, "utf-8")))
-    .map((file) => nodePath.relative(API_SRC, file));
+    .map((file) => repoRelativePath(API_SRC, file));
   expect(importers).toEqual([]);
 });
 

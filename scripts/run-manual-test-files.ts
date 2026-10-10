@@ -1,6 +1,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 type TestFileGroup = { directory: string; files: string[] };
 
 const hasTestScript = (directory: string) => {
@@ -43,7 +45,7 @@ export const groupTestFiles = (
   for (const file of files) {
     const directory = owningDirectory(root, file);
     // bun reads a bare argument as a path filter; ./ selects exactly this file.
-    const relative = `./${directory === "." ? file : path.relative(directory, file)}`;
+    const relative = `./${directory === "." ? file : repoRelativePath(directory, file)}`;
     const grouped = groups.get(directory) ?? [];
     grouped.push(relative);
     groups.set(directory, grouped);

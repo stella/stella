@@ -3,6 +3,8 @@ import { realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
+import { isPathInside } from "@stll/portable-path";
+
 export class LocalModuleLoadError extends TaggedError("LocalModuleLoadError")<{
   code: "invalid-path" | "resolution-failed" | "module-failed";
   message: string;
@@ -13,14 +15,8 @@ type LoadLocalModuleOptions = { root: string; modulePath: string };
 
 type PathContainmentOptions = { root: string; target: string };
 
-const isWithinRoot = ({ root, target }: PathContainmentOptions) => {
-  const relative = path.relative(root, target);
-  return (
-    relative !== ".." &&
-    !relative.startsWith(`..${path.sep}`) &&
-    !path.isAbsolute(relative)
-  );
-};
+const isWithinRoot = ({ root, target }: PathContainmentOptions) =>
+  isPathInside(root, target);
 
 /** Roots contain trusted code; entry-path containment does not sandbox its execution. */
 export const loadLocalModule = async ({

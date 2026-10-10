@@ -3,6 +3,8 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import {
   isDatabaseHandleName,
   isDatabaseOperationMethod,
@@ -375,7 +377,7 @@ export const validateSchemaIntrospection = ({
             );
             return;
           }
-          walk(path.relative(repoRoot, resolved.resolvedFileName));
+          walk(repoRelativePath(repoRoot, resolved.resolvedFileName));
         }
       };
       const inspectMember = (node: ts.Node): void => {

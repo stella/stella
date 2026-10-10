@@ -25,6 +25,8 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 const ICON_MODULE = "packages/ui/src/icons.ts";
 const ICON_SPECIFIER = "@stll/ui/icons";
@@ -102,7 +104,7 @@ const iconSpecifierFor = (file: string): string => {
   if (!file.startsWith(UI_SOURCE_ROOT)) {
     return ICON_SPECIFIER;
   }
-  const relative = path.relative(
+  const relative = repoRelativePath(
     path.dirname(file),
     ICON_MODULE.replace(/\.ts$/u, ""),
   );

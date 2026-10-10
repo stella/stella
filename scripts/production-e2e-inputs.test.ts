@@ -10,6 +10,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import { productionE2eInputs } from "./production-e2e-inputs.mjs";
 
 const productionConfig = path.resolve(
@@ -31,7 +33,7 @@ test("production input scope follows the config's testDir and imported modules",
     path.resolve(path.dirname(productionConfig), testDir),
   );
   const relativeFiles = [...files].map((file) =>
-    path.relative(path.dirname(productionConfig), file),
+    repoRelativePath(path.dirname(productionConfig), file),
   );
   expect(relativeFiles).toContain("helpers/test.ts");
   expect(relativeFiles).toContain("execution-profile.ts");
@@ -70,7 +72,7 @@ test("input derivation follows a different testDir, transitive imports and setup
   );
   expect(testDirectory).toBe(path.join(directory, "suite"));
   expect(
-    [...files].map((file) => path.relative(directory, file)).toSorted(),
+    [...files].map((file) => repoRelativePath(directory, file)).toSorted(),
   ).toEqual(
     Object.keys(fixtureFiles)
       .filter(

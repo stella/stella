@@ -1,6 +1,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import formatterConfig from "../.oxfmtrc.json" with { type: "json" };
 import rootPackage from "../package.json" with { type: "json" };
 
@@ -46,8 +48,10 @@ const workspaceFormatCommandErrors = () => {
     })) {
       const manifestPath = path.join(REPO_ROOT, relativeManifestPath);
       const formatCommand = readFormatCommand(manifestPath);
-      const relativeRunnerPath = path
-        .relative(path.dirname(manifestPath), FORMAT_RUNNER_PATH)
+      const relativeRunnerPath = repoRelativePath(
+        path.dirname(manifestPath),
+        FORMAT_RUNNER_PATH,
+      )
         .split(path.sep)
         .join("/");
       const expectedFormatRunner = `bun ${relativeRunnerPath}`;

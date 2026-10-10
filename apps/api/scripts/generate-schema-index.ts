@@ -1,3 +1,4 @@
+import { mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs";
 /**
  * The schema index: every table and column as one grep-able line.
  *
@@ -15,13 +16,12 @@
  * schema module, so two pull requests changing different modules never
  * conflict in the index.
  */
-
-import { mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
 
 import { compareCodeUnit } from "@stll/collation";
+import { repoRelativePath } from "@stll/portable-path";
 
 import {
   formattedArtifactsLikeRepository,
@@ -435,7 +435,7 @@ export const renderSchemaIndex = (
 
 export const schemaIndexArtifacts = () =>
   schemaSourceFiles().flatMap((file) => {
-    const relativeSource = path.relative(API_SRC_DIR, file);
+    const relativeSource = repoRelativePath(API_SRC_DIR, file);
     const contents = renderSchemaIndex(
       relativeSource,
       indexSchemaSource({
@@ -470,7 +470,7 @@ if (import.meta.main) {
     }
   } else {
     for (const file of stale) {
-      console.error(`stale: ${path.relative(API_SRC_DIR, file)}`);
+      console.error(`stale: ${repoRelativePath(API_SRC_DIR, file)}`);
     }
   }
   const exitCode = await writeOrCheckArtifacts(artifacts, {

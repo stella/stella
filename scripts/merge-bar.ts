@@ -63,6 +63,7 @@ import { homedir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { repoRelativePath } from "@stll/portable-path";
 import { readRuntimeMode } from "@stll/runtime-mode";
 
 import { findMigrationIdentityViolation } from "./check-migration-order";
@@ -3833,7 +3834,7 @@ if (import.meta.main) {
       : decideBarFreshness(
           readBarFreshness({
             repositoryRoot,
-            entry: path.relative(repositoryRoot, import.meta.filename),
+            entry: repoRelativePath(repositoryRoot, import.meta.filename),
           }),
         );
   if (barFreshness.type === "refuse") {

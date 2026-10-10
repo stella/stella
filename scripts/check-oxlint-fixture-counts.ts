@@ -34,6 +34,8 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import { repositoryRules } from "./check-oxlint-rule-coverage.ts";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
@@ -160,7 +162,7 @@ const copyFixtures = (
       copyFixtures(sourcePath, targetPath, expectations);
       continue;
     }
-    const relativePath = path.relative(REPO_ROOT, sourcePath);
+    const relativePath = repoRelativePath(REPO_ROOT, sourcePath);
     const result = rewriteFixture(
       relativePath,
       readFileSync(sourcePath, "utf-8"),
@@ -319,7 +321,7 @@ const main = async (targets: readonly string[]): Promise<number> => {
       if (ruleId === null || !isCountedRule(ruleId) || line === undefined) {
         continue;
       }
-      const file = path.relative(
+      const file = repoRelativePath(
         mirror,
         path.resolve(mirror, diagnostic.filename ?? ""),
       );

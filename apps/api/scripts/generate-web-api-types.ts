@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 // Prints the API types apps/web consumes (`WebApiContract` in
 // src/eden-contract.ts) into apps/web/src/generated/api-routes.gen.ts. apps/web
 // type-checks against that snapshot instead of re-inferring the whole API
@@ -29,11 +30,11 @@
 //   as its ISO string and the client never revives it, so every `Date` reached
 //   from a response prints as `string` (a package type carrying one is
 //   expanded). The identity check runs on the same printout with `Date` kept.
-
-import { panic } from "better-result";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
+
+import { repoRelativePath } from "@stll/portable-path";
 
 import { hasPreparedGeneratedSources } from "../../../packages/scripts/src/prepared-generated-sources";
 import { withoutTsgoOnlyOptionDiagnostics } from "../../../packages/scripts/src/tsgo-compiler-options";
@@ -142,10 +143,7 @@ const createApiProgram = ({
 // A relative import specifier: forward slashes on every platform, so a
 // Windows run neither escapes `\n` into the path nor differs from the snapshot.
 const moduleSpecifier = (fromDirectory: string, target: string): string => {
-  const relative = path
-    .relative(fromDirectory, target)
-    .split(path.sep)
-    .join("/");
+  const relative = repoRelativePath(fromDirectory, target);
   return relative.startsWith(".") ? relative : `./${relative}`;
 };
 
@@ -377,7 +375,7 @@ export const printContract = ({
     if (packageMarker === undefined || inPackage === -1 || webRoot === -1) {
       return panic(
         `generate-web-api-types: unique symbol ${symbol.getName()} is declared in ` +
-          `${path.relative(REPO_ROOT, fileName)}, which apps/web cannot import. ` +
+          `${repoRelativePath(REPO_ROOT, fileName)}, which apps/web cannot import. ` +
           "Declare it in a package apps/web depends on.",
       );
     }
@@ -1321,7 +1319,7 @@ const main = () => {
   mkdirSync(path.dirname(OUTPUT_PATH), { recursive: true });
   writeFileSync(OUTPUT_PATH, output);
   console.log(
-    `generate-web-api-types: ${check ? "verified deterministic" : "wrote"} ${path.relative(REPO_ROOT, OUTPUT_PATH)} ` +
+    `generate-web-api-types: ${check ? "verified deterministic" : "wrote"} ${repoRelativePath(REPO_ROOT, OUTPUT_PATH)} ` +
       `(${Buffer.byteLength(output)} bytes) in ${Math.round(performance.now() - started)} ms`,
   );
 };

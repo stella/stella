@@ -3,6 +3,8 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import { canonicalModuleId } from "../../../.oxlint-plugins/module-id";
 
 const packageRoot = path.resolve(import.meta.dirname, "../../decision-reader");
@@ -352,7 +354,7 @@ const removedReaderMutationFile =
   "apps/web/src/features/statutes/components/statute-compare-view.tsx";
 for (const oldPath of removedReaderPaths) {
   const alias = oldPath.replace("apps/web/src/", "@/");
-  const relative = path.relative(
+  const relative = repoRelativePath(
     path.dirname(removedReaderMutationFile),
     oldPath,
   );

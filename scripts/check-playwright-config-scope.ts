@@ -23,6 +23,8 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import * as v from "valibot";
 
+import { isPathInside, repoRelativePath } from "@stll/portable-path";
+
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const PLAYWRIGHT_BIN = path.join(REPO_ROOT, "node_modules/.bin/playwright");
 const CONFIG_NAME = /^playwright(\.[\w-]+)?\.config\.(ts|mts|js|mjs|cjs)$/u;
@@ -98,16 +100,6 @@ export const parseListingReport = (stdout: string | null | undefined) => {
   return Result.ok(validated.output);
 };
 
-const isInside = (root: string, target: string) => {
-  const relative = path.relative(root, target);
-  return (
-    relative === "" ||
-    (relative !== ".." &&
-      !relative.startsWith(`..${path.sep}`) &&
-      !path.isAbsolute(relative))
-  );
-};
-
 const listedFiles = (rootDir: string, suites: ListedSuite[]): string[] =>
   suites.flatMap((suite) => [
     ...(suite.file === undefined ? [] : [path.resolve(rootDir, suite.file)]),
@@ -125,9 +117,9 @@ export const checkListing = (
       `${config}: failed to load: ${(error.message ?? "unknown error").split("\n", 1).join("")}`,
   );
   for (const project of listing.config.projects) {
-    if (!isInside(packageRoot, project.testDir)) {
+    if (!isPathInside(packageRoot, project.testDir)) {
       problems.push(
-        `${config}: project "${project.name}" testDir ${path.relative(REPO_ROOT, project.testDir)} is outside ${path.relative(REPO_ROOT, packageRoot)}`,
+        `${config}: project "${project.name}" testDir ${repoRelativePath(REPO_ROOT, project.testDir)} is outside ${repoRelativePath(REPO_ROOT, packageRoot)}`,
       );
     }
   }
@@ -135,9 +127,9 @@ export const checkListing = (
     ...new Set(listedFiles(listing.config.rootDir, listing.suites)),
   ];
   for (const file of files) {
-    if (!isInside(packageRoot, file)) {
+    if (!isPathInside(packageRoot, file)) {
       problems.push(
-        `${config}: collects ${path.relative(REPO_ROOT, file)}, outside ${path.relative(REPO_ROOT, packageRoot)}`,
+        `${config}: collects ${repoRelativePath(REPO_ROOT, file)}, outside ${repoRelativePath(REPO_ROOT, packageRoot)}`,
       );
     }
   }
@@ -161,7 +153,7 @@ export const owningPackage = ({
 }: OwningPackageOptions) => {
   const root = path.resolve(repositoryRoot);
   let directory = path.dirname(path.resolve(file));
-  if (!isInside(root, directory)) {
+  if (!isPathInside(root, directory)) {
     return Result.err(
       new PlaywrightPackageError({
         message: `${file} is outside the repository`,

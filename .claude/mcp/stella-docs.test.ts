@@ -6,6 +6,8 @@ import { chmodSync, cpSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 const repo = path.resolve(import.meta.dir, "../..");
 const inheritedPath = process.env["PATH"];
 assert.ok(typeof inheritedPath === "string");
@@ -65,7 +67,7 @@ describe("documentation MCP startup", () => {
   }
 
   for (const cwd of [repo, path.join(repo, "apps/web")]) {
-    test(`completes discovery and a local tool call from ${path.relative(repo, cwd) || "the repository root"}`, async () => {
+    test(`completes discovery and a local tool call from ${repoRelativePath(repo, cwd) || "the repository root"}`, async () => {
       const config = Bun.TOML.parse(
         await Bun.file(path.join(repo, ".codex/config.toml")).text(),
       );

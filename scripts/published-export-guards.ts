@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import path from "node:path";
 
+import { isPathInside } from "@stll/portable-path";
+
 const testArtifactPattern =
   /(?:^|\/)(?:fixtures\/|[^/]+\.(?:test|spec)\.(?:[cm]?[jt]sx?|d\.ts)$|[^/]+\.playwright\.[cm]?[jt]sx?$|playwright\.config\.[cm]?[jt]sx?$)/u;
 
@@ -12,12 +14,10 @@ export const isPublishedTestArtifact = (file: string) =>
  * `dist` but is a different directory.
  */
 const isInsideDirectory = (candidate: string, directory: string): boolean => {
-  const relative = path.relative(directory, path.resolve(candidate));
+  const resolvedCandidate = path.resolve(candidate);
   return (
-    relative !== "" &&
-    relative !== ".." &&
-    !relative.startsWith(`..${path.sep}`) &&
-    !path.isAbsolute(relative)
+    resolvedCandidate !== path.resolve(directory) &&
+    isPathInside(directory, resolvedCandidate)
   );
 };
 

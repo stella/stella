@@ -176,6 +176,9 @@
     "packages/permissions": {
       "entry": ["src/index.ts"]
     },
+    "packages/portable-path": {
+      "entry": ["src/index.ts", "src/**/*.test.ts"]
+    },
     "packages/redis-config": {
       "entry": ["src/connection.ts", "src/**/*.test.ts"]
     },

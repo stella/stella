@@ -18,6 +18,8 @@ import { panic } from "better-result";
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import path from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 const MAIN_REF = "refs/remotes/origin/main";
 const FETCH_TIMEOUT_MS = 20_000;
 const SHELL_SCRIPT_SUFFIX = ".sh";
@@ -160,7 +162,7 @@ const barSourcePaths = (root: string, entry: string) => {
         continue;
       }
       pending.push(
-        path.relative(
+        repoRelativePath(
           repositoryRoot,
           Bun.resolveSync(specifier, path.dirname(absolute)),
         ),

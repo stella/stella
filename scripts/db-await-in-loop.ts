@@ -87,6 +87,7 @@ import path from "node:path";
 import ts from "typescript";
 
 import { compareCodeUnit } from "@stll/collation";
+import { repoRelativePath } from "@stll/portable-path";
 
 import { createProgram } from "../packages/scripts/src/typescript-program.ts";
 
@@ -1651,7 +1652,7 @@ export const scanDbAwaitInLoop = ({
   let filesScanned = 0;
 
   for (const sourceFile of program.getSourceFiles()) {
-    const file = toPosix(path.relative(repositoryRoot, sourceFile.fileName));
+    const file = repoRelativePath(repositoryRoot, sourceFile.fileName);
     if (!isProgramSource(sourceFile) || !isInScope(file)) {
       continue;
     }

@@ -1,5 +1,7 @@
 import path from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 /**
  * Positional arguments select which discovered test files to run.
  *
@@ -112,7 +114,7 @@ export const normalizeAbsoluteTestPatterns = (
     if (!path.isAbsolute(pattern)) {
       return pattern;
     }
-    const relative = path.relative(root, pattern);
+    const relative = repoRelativePath(root, pattern);
     // path.relative drops a trailing separator; keep it, so a directory
     // selector (`/…/src/lib/`) doesn't also match `src/library/`.
     return pattern.endsWith(path.sep) && relative !== ""

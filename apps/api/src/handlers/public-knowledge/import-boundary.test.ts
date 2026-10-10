@@ -10,6 +10,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import ts from "typescript";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 const repoRoot = path.resolve(import.meta.dir, "../../../../..");
 const apiRoot = path.join(repoRoot, "apps/api/src");
 const routeFile = path.join(apiRoot, "handlers/public-knowledge/routes.ts");
@@ -211,7 +213,7 @@ test("public Knowledge runtime graph is limited to static readers and parsers", 
   const reached = new Set<string>();
   const unexpectedExternal = new Set<string>();
   const visit = (file: string) => {
-    const relative = path.relative(apiRoot, file);
+    const relative = repoRelativePath(apiRoot, file);
     if (reached.has(relative)) {
       return;
     }
