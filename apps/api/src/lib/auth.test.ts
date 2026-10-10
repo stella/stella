@@ -20,6 +20,7 @@ import {
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
+import { createScopedDb } from "@/api/db/scoped";
 import { getServerAnalytics } from "@/api/lib/analytics/client";
 import {
   AUTHORITATIVE_SESSION_PATHS,
@@ -34,6 +35,7 @@ import {
   NEW_ACCOUNT_OTP_RATE_LIMIT_MODE,
   runEmailOtpRequestOnResponseSchedule,
   resolveMemberAuthorization,
+  resolveWorkspaceMemberAccess,
   resolveAuthoritativeSessionForSensitiveAuthPath,
   resolveWorkspaceRealtimeAudience,
   SESSION_COOKIE_CACHE_MAX_AGE_SECONDS,
@@ -303,6 +305,39 @@ describe("resolveMemberAuthorization", () => {
     expect(memberPersonal?.workspace?.id).toBe(memberPersonalWorkspaceId);
     expect(memberClient?.workspace).toBeNull();
   });
+
+  test.each([
+    {
+      actor: ownerInFull,
+      target: clientWorkspaceId,
+      expected: clientWorkspaceId,
+    },
+    { actor: ownerInFull, target: memberPersonalWorkspaceId, expected: null },
+    {
+      actor: memberInFull,
+      target: memberPersonalWorkspaceId,
+      expected: memberPersonalWorkspaceId,
+    },
+    { actor: memberInFull, target: clientWorkspaceId, expected: null },
+  ])(
+    "worker membership uses the session access rule under RLS: %p",
+    async ({ actor, target, expected }) => {
+      const lookup = {
+        organizationId: orgFull,
+        userId: actor,
+        workspaceId: target,
+      };
+      const session = await resolveMemberAuthorization(lookup, testDb);
+      const workspace = await createScopedDb(
+        testDb,
+        [target],
+        orgFull,
+        actor,
+      )(async (tx) => await resolveWorkspaceMemberAccess(lookup, tx));
+      expect(workspace?.id ?? null).toBe(expected);
+      expect(workspace).toEqual(session?.workspace ?? null);
+    },
+  );
 
   test("organization members with zero workspaces keep their roles", async () => {
     const ownerAuthorization = await resolveMemberAuthorization(

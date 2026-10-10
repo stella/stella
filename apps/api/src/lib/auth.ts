@@ -1813,7 +1813,7 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
           after: async (user, ctx) => {
             await recordUserProfessionalUseAtCreation(rootDb, {
               userId: brandPersistedUserId(user.id),
-              acceptance: await readCreationAcceptance(ctx),
+              acceptance: await readCreationAcceptance(ctx, getOAuthState),
             });
           },
         },
@@ -2521,6 +2521,58 @@ const featureAccessColumns = {
 
 const ACTIVE_WORKSPACE_STATUS = "active";
 
+const memberWorkspaceAccess = (db: MemberAuthorizationDb) => {
+  const membershipExists = exists(
+    db
+      .select({ id: workspaceMembers.id })
+      .from(workspaceMembers)
+      .where(
+        and(
+          eq(workspaceMembers.workspaceId, workspaces.id),
+          eq(workspaceMembers.userId, member.userId),
+        ),
+      ),
+  );
+  // sql-perf-allow: bounded by one target workspace and organization membership keys
+  return or(
+    membershipExists,
+    and(
+      inArray(member.role, CLIENT_MATTER_ADMIN_ROLES),
+      isNotNull(workspaces.clientId),
+    ),
+  );
+};
+
+type WorkspaceMemberLookup = {
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+  workspaceId: SafeId<"workspace">;
+};
+
+/** Recheck a worker's matter membership inside its RLS transaction. */
+export const resolveWorkspaceMemberAccess = async (
+  { organizationId, userId, workspaceId }: WorkspaceMemberLookup,
+  db: MemberAuthorizationDb,
+): Promise<AccessibleWorkspace | null> => {
+  const row = await db
+    .select({ id: workspaces.id, status: workspaces.status })
+    .from(member)
+    .innerJoin(
+      workspaces,
+      and(
+        eq(workspaces.id, workspaceId),
+        eq(workspaces.organizationId, member.organizationId),
+        memberWorkspaceAccess(db),
+      ),
+    )
+    .where(
+      and(eq(member.userId, userId), eq(member.organizationId, organizationId)),
+    )
+    .limit(1)
+    .then((rows) => rows.at(0));
+  return row ?? null;
+};
+
 export const resolveMemberAuthorization = async (
   { organizationId, userId, workspaceId }: MemberAuthorizationLookup,
   db: MemberAuthorizationDb,
@@ -2563,17 +2615,6 @@ export const resolveMemberAuthorization = async (
       : null;
   }
 
-  const membershipExists = exists(
-    db
-      .select({ id: workspaceMembers.id })
-      .from(workspaceMembers)
-      .where(
-        and(
-          eq(workspaceMembers.workspaceId, workspaces.id),
-          eq(workspaceMembers.userId, member.userId),
-        ),
-      ),
-  );
   const row = await db
     .select({
       memberId: member.id,
@@ -2595,14 +2636,7 @@ export const resolveMemberAuthorization = async (
       and(
         eq(workspaces.id, workspaceId),
         eq(workspaces.organizationId, member.organizationId),
-        // sql-perf-allow: bounded by one workspaceId and one member per user and organization
-        or(
-          membershipExists,
-          and(
-            inArray(member.role, CLIENT_MATTER_ADMIN_ROLES),
-            isNotNull(workspaces.clientId),
-          ),
-        ),
+        memberWorkspaceAccess(db),
       ),
     )
     .where(
@@ -2743,17 +2777,6 @@ export const resolveWorkspaceRealtimeAudience = async (
     return new Set<SafeId<"user">>();
   }
 
-  const membershipExists = exists(
-    db
-      .select({ id: workspaceMembers.id })
-      .from(workspaceMembers)
-      .where(
-        and(
-          eq(workspaceMembers.workspaceId, workspaces.id),
-          eq(workspaceMembers.userId, member.userId),
-        ),
-      ),
-  );
   const rows = await db
     .select({ userId: member.userId })
     .from(member)
@@ -2763,14 +2786,7 @@ export const resolveWorkspaceRealtimeAudience = async (
         eq(workspaces.id, workspaceId),
         eq(workspaces.organizationId, member.organizationId),
         eq(workspaces.status, ACTIVE_WORKSPACE_STATUS),
-        // sql-perf-allow: bounded by one workspaceId and LIMITS.organizationMembersCount members
-        or(
-          membershipExists,
-          and(
-            inArray(member.role, CLIENT_MATTER_ADMIN_ROLES),
-            isNotNull(workspaces.clientId),
-          ),
-        ),
+        memberWorkspaceAccess(db),
       ),
     )
     .where(inArray(member.userId, uniqueUserIds))

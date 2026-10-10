@@ -1,4 +1,3 @@
-import { getOAuthState } from "better-auth/api";
 import { panic } from "better-result";
 import { and, eq, isNull } from "drizzle-orm";
 
@@ -157,17 +156,24 @@ export type CreationAcceptance =
 /** The parts of the user hook's endpoint context the decision reads. */
 type CreationContext = { path: string; body: unknown } | null | undefined;
 
-const readDisplayedVersion = async (
-  carrier: DisplayedVersionCarrier,
-  context: CreationContext,
-): Promise<unknown> => {
+type ReadDisplayedVersionOptions = {
+  carrier: DisplayedVersionCarrier;
+  context: CreationContext;
+  readOAuthState: () => Promise<unknown>;
+};
+
+const readDisplayedVersion = async ({
+  carrier,
+  context,
+  readOAuthState,
+}: ReadDisplayedVersionOptions): Promise<unknown> => {
   switch (carrier) {
     case "request_body":
       return isRecord(context?.body)
         ? context.body[PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD]
         : undefined;
     case "oauth_state": {
-      const state: unknown = await getOAuthState();
+      const state = await readOAuthState();
       return isRecord(state)
         ? state[PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD]
         : undefined;
@@ -184,6 +190,7 @@ const readDisplayedVersion = async (
  */
 export const readCreationAcceptance = async (
   context: CreationContext,
+  readOAuthState: () => Promise<unknown>,
 ): Promise<CreationAcceptance> => {
   const statement =
     STATEMENT_AT_CREATION[requireUserCreationOrigin(context?.path)];
@@ -191,10 +198,11 @@ export const readCreationAcceptance = async (
     case "not_shown":
       return { type: "required", reason: "statement_not_shown" };
     case "shown": {
-      const displayed = await readDisplayedVersion(
-        statement.displayedVersionIn,
+      const displayed = await readDisplayedVersion({
+        carrier: statement.displayedVersionIn,
         context,
-      );
+        readOAuthState,
+      });
       if (typeof displayed !== "string") {
         return { type: "required", reason: "displayed_version_absent" };
       }

@@ -1,6 +1,7 @@
 import type { GoogleProfile } from "@better-auth/core/social-providers";
 import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
+import { getOAuthState } from "better-auth/api";
 import { describe, expect, spyOn, test } from "bun:test";
 import * as v from "valibot";
 
@@ -87,7 +88,10 @@ describe("acceptance at creation", () => {
       `a registration through ${path} naming %s`,
       async (_name, body, expected) => {
         expect(
-          await readCreationAcceptance({ path, body: { ...body } }),
+          await readCreationAcceptance(
+            { path, body: { ...body } },
+            getOAuthState,
+          ),
         ).toEqual(expected);
       },
     );
@@ -101,13 +105,16 @@ describe("acceptance at creation", () => {
     "an account created through %s is never accepted, whatever it names",
     async (path) => {
       expect(
-        await readCreationAcceptance({
-          path,
-          body: {
-            [PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD]:
-              PROFESSIONAL_USE_STATEMENT_VERSION,
+        await readCreationAcceptance(
+          {
+            path,
+            body: {
+              [PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD]:
+                PROFESSIONAL_USE_STATEMENT_VERSION,
+            },
           },
-        }),
+          getOAuthState,
+        ),
       ).toEqual({ type: "required", reason: "statement_not_shown" });
     },
   );
@@ -162,7 +169,9 @@ describe("acceptance at creation", () => {
         user: {
           create: {
             after: async (_user, context) => {
-              decisions.push(await readCreationAcceptance(context));
+              decisions.push(
+                await readCreationAcceptance(context, getOAuthState),
+              );
             },
           },
         },

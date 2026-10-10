@@ -42,12 +42,11 @@ export const useClientAuthStatus = ({
     ? sessionData.session.userId
     : undefined;
   // Read only for a member: a visitor's cache holds nothing of it.
-  const [professionalUse] = useQueries({
-    queries:
-      memberUserId === undefined
-        ? []
-        : [{ ...professionalUseOptions(memberUserId), enabled }],
-  });
+  const queries =
+    memberUserId === undefined
+      ? []
+      : [{ ...professionalUseOptions(memberUserId), enabled }];
+  const professionalUse = useQueries({ queries }).at(0);
 
   if (isPending) {
     return {
