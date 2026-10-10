@@ -4557,6 +4557,12 @@
       "auditLogsTo": "Data iki",
       "auditLogsUserId": "Naudotojo ID",
       "auditLogsUserIdPlaceholder": "Filtruoti pagal naudotojo ID",
+      "billingDrafts": {
+        "description": "Kurkite darbo aprašymus iš pasirinktų veiklų ir kontoros arba kliento žinių failų. Kiekvienas naudotojas taip pat duoda savo sutikimą. Prieš įjungdami juodraščius pridėkite kontoros gaires.",
+        "firm": "Kontoros gairės",
+        "ledes": "Elektroninis sąskaitų išrašymas (LEDES)",
+        "title": "DI atsiskaitymo juodraščiai"
+      },
       "documentProcessing": {
         "description": "Automatiškai atpažinkite tekstą nuskenuotuose PDF, kad jų turinį būtų galima ieškoti.",
         "title": "Dokumentų teksto atpažinimas",

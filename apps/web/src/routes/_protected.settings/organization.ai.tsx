@@ -3,6 +3,7 @@ import { useTranslations } from "use-intl";
 
 import { env } from "@/env";
 import { AIConfigCard } from "@/routes/_protected.settings/-components/organization/ai-config-card";
+import { BillingDraftsCard } from "@/routes/_protected.settings/-components/organization/billing-drafts-card";
 import { DeepLKeyCard } from "@/routes/_protected.settings/-components/organization/deepl-key-card";
 import { DocumentProcessingCard } from "@/routes/_protected.settings/-components/organization/document-processing-card";
 import { MemoryExtractionCard } from "@/routes/_protected.settings/-components/organization/memory-extraction-card";
@@ -25,6 +26,7 @@ function AIConfigPage() {
       />
       <AIConfigCard />
       <PromptCachingCard />
+      <BillingDraftsCard />
       <DocumentProcessingCard />
       {env.VITE_FEATURE_AI_MEMORY && <MemoryExtractionCard />}
       <div className="my-8 border-t" />

@@ -4557,6 +4557,12 @@
       "auditLogsTo": "Záró dátum",
       "auditLogsUserId": "Felhasználói azonosító",
       "auditLogsUserIdPlaceholder": "Szűrés felhasználói azonosító alapján",
+      "billingDrafts": {
+        "description": "Készítsen munkaleírásokat a kiválasztott tevékenységekből és az iroda vagy az ügyfél tudásfájljaiból. Minden felhasználó külön hozzájárulást ad. A vázlatok engedélyezése előtt csatolja az iroda irányelveit.",
+        "firm": "Irodai irányelvek",
+        "ledes": "Elektronikus számlázás (LEDES)",
+        "title": "AI számlázási vázlatok"
+      },
       "documentProcessing": {
         "description": "Automatikusan felismeri a szkennelt PDF-ek szövegét, hogy a tartalmuk kereshető legyen.",
         "title": "Dokumentumszöveg-felismerés",

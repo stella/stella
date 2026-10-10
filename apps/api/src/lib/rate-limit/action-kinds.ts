@@ -6,6 +6,7 @@ export type ActionKindDefinition = {
 };
 
 export const ACTION_KINDS = {
+  "billing.activity-drafts": { consumesServices: true, admission: "period" },
   "chat.send": { consumesServices: true, admission: "period" },
   "chat.generate-thread-title": { consumesServices: true, admission: "period" },
   "chat.improve-prompt": { consumesServices: true, admission: "period" },

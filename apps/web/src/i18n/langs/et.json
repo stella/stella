@@ -4557,6 +4557,12 @@
       "auditLogsTo": "Kuni",
       "auditLogsUserId": "Kasutaja ID",
       "auditLogsUserIdPlaceholder": "Filtreeri kasutaja ID järgi",
+      "billingDrafts": {
+        "description": "Koostage töö kirjeldused valitud tegevustest ning büroo või kliendi teadmiste failidest. Iga kasutaja annab ka oma nõusoleku. Enne mustandite lubamist lisage büroo juhised.",
+        "firm": "Büroo juhised",
+        "ledes": "Elektrooniline arveldamine (LEDES)",
+        "title": "Tehisintellekti arveldusmustandid"
+      },
       "documentProcessing": {
         "description": "Tuvastage skannitud PDF-ides tekst automaatselt, et nende sisu oleks otsitav.",
         "title": "Dokumenditeksti tuvastamine",

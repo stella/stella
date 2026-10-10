@@ -4557,6 +4557,12 @@
       "auditLogsTo": "To date",
       "auditLogsUserId": "User ID",
       "auditLogsUserIdPlaceholder": "Filter by user ID",
+      "billingDrafts": {
+        "description": "Draft billing narratives from selected activity and firm or client knowledge files. Each user also gives consent. Attach firm guidelines before enabling drafts.",
+        "firm": "Firm guidelines",
+        "ledes": "Electronic billing (LEDES)",
+        "title": "AI billing drafts"
+      },
       "documentProcessing": {
         "description": "Automatically recognize text in scanned PDFs so their contents can be searched.",
         "title": "Document text recognition",

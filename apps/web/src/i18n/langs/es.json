@@ -4557,6 +4557,12 @@
       "auditLogsTo": "Hasta",
       "auditLogsUserId": "ID de usuario",
       "auditLogsUserIdPlaceholder": "Filtrar por ID de usuario",
+      "billingDrafts": {
+        "description": "Redacte descripciones a partir de las actividades seleccionadas y los archivos de conocimiento del despacho o del cliente. Cada usuario también da su consentimiento. Adjunte las directrices del despacho antes de activar los borradores.",
+        "firm": "Directrices del despacho",
+        "ledes": "Facturación electrónica (LEDES)",
+        "title": "Borradores de facturación con IA"
+      },
       "documentProcessing": {
         "description": "Reconoce automáticamente texto en PDF escaneados para que se pueda buscar en su contenido.",
         "title": "Reconocimiento de texto de documentos",

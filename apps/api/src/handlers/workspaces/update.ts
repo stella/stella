@@ -21,6 +21,7 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
+import { narrativeLanguageSchema } from "@/api/lib/billing/narrative-language";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -35,6 +36,7 @@ const updateWorkspaceBodySchema = t.Object({
   name: t.Optional(tDefaultVarchar),
   clientId: t.Optional(tSafeId("contact")),
   reference: t.Optional(t.String({ maxLength: 64, minLength: 1 })),
+  billingNarrativeLanguage: t.Optional(narrativeLanguageSchema),
   billingReference: t.Optional(t.Nullable(t.String({ maxLength: 128 }))),
   color: t.Optional(t.Nullable(t.String({ maxLength: 32 }))),
   // Pinned-first avatar on the matters list. Must be an existing
@@ -195,6 +197,7 @@ export const updateWorkspaceHandler = async function* ({
         clientId: workspaces.clientId,
         reference: workspaces.reference,
         billingReference: workspaces.billingReference,
+        billingNarrativeLanguage: workspaces.billingNarrativeLanguage,
         color: workspaces.color,
         leadUserId: workspaces.leadUserId,
       })
@@ -325,6 +328,7 @@ export const updateWorkspaceHandler = async function* ({
           "clientId",
           "reference",
           "billingReference",
+          "billingNarrativeLanguage",
           "color",
           "leadUserId",
         ]),
@@ -366,6 +370,15 @@ export const updateWorkspaceHandler = async function* ({
       changes["reference"] = {
         old: workspace.reference,
         new: body.reference,
+      };
+    }
+    if (
+      body.billingNarrativeLanguage !== undefined &&
+      body.billingNarrativeLanguage !== workspace.billingNarrativeLanguage
+    ) {
+      changes["billingNarrativeLanguage"] = {
+        old: workspace.billingNarrativeLanguage,
+        new: body.billingNarrativeLanguage,
       };
     }
     if (

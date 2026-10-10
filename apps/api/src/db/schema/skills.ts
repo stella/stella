@@ -124,6 +124,9 @@ export const agentSkillResources = p.pgTable(
     p
       .uniqueIndex("agent_skill_resources_skill_path_uidx")
       .on(table.skillId, table.path),
+    p
+      .index("agent_skill_resources_path_billing_trgm_idx")
+      .using("gin", sql`${table.path} gin_trgm_ops`),
     p.index("agent_skill_resources_skill_idx").on(table.skillId),
     p
       .index("agent_skill_resources_org_skill_idx")

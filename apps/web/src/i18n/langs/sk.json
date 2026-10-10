@@ -4557,6 +4557,12 @@
       "auditLogsTo": "Dátum do",
       "auditLogsUserId": "ID používateľa",
       "auditLogsUserIdPlaceholder": "Filtrovať podľa ID používateľa",
+      "billingDrafts": {
+        "description": "Navrhujte opisy práce z vybranej aktivity a znalostných súborov kancelárie alebo klienta. Každý používateľ tiež udeľuje súhlas. Pred zapnutím návrhov pripojte pravidlá kancelárie.",
+        "firm": "Pravidlá kancelárie",
+        "ledes": "Elektronická fakturácia (LEDES)",
+        "title": "AI návrhy výkazov práce"
+      },
       "documentProcessing": {
         "description": "Automaticky rozpoznávajte text v naskenovaných PDF, aby sa v ich obsahu dalo vyhľadávať.",
         "title": "Rozpoznávanie textu dokumentov",

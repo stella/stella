@@ -4557,6 +4557,12 @@
       "auditLogsTo": "Data final",
       "auditLogsUserId": "ID do usuário",
       "auditLogsUserIdPlaceholder": "Filtrar por ID do usuário",
+      "billingDrafts": {
+        "description": "Redija descrições com base nas atividades selecionadas e nos arquivos de conhecimento do escritório ou do cliente. Cada usuário também dá seu consentimento. Anexe as diretrizes do escritório antes de ativar os rascunhos.",
+        "firm": "Diretrizes do escritório",
+        "ledes": "Faturamento eletrônico (LEDES)",
+        "title": "Rascunhos de faturamento com IA"
+      },
       "documentProcessing": {
         "description": "Reconheça automaticamente texto em PDFs digitalizados para que seu conteúdo possa ser pesquisado.",
         "title": "Reconhecimento de texto de documentos",

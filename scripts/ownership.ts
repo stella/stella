@@ -996,6 +996,11 @@ const OWNERSHIP_DECLARATIONS = [
       names: MODEL_REQUEST_NAMES,
       allowed: [
         {
+          path: "apps/api/src/handlers/desktop-time-entries/billing-drafts.ts",
+          reason:
+            "Sends selected activity evidence, own bounded time history and authorized guideline files; carries no chat transcript. Both consent gates are checked live.",
+        },
+        {
           path: "apps/api/src/handlers/chat/stream-chat.ts",
           reason:
             "The chat turn: messages, system text, tools and resumed payloads pass through the turn's third-party boundary right before the request.",

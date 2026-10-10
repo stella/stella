@@ -1196,6 +1196,30 @@ const organizationManagerCheck = sql`EXISTS (
     AND m.role IN (${organizationManagementRoleValues})
 )`;
 
+export const billingGuidelinePolicies = () => [
+  p.pgPolicy("organization_select", {
+    for: "select",
+    to: stella,
+    using: organizationCheck,
+  }),
+  p.pgPolicy("admin_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: sql`${organizationCheck} AND ${organizationManagerCheck}`,
+  }),
+  p.pgPolicy("admin_update", {
+    for: "update",
+    to: stella,
+    using: sql`${organizationCheck} AND ${organizationManagerCheck}`,
+    withCheck: sql`${organizationCheck} AND ${organizationManagerCheck}`,
+  }),
+  p.pgPolicy("admin_delete", {
+    for: "delete",
+    to: stella,
+    using: sql`${organizationCheck} AND ${organizationManagerCheck}`,
+  }),
+];
+
 // Internal work is visible to its owner and approvers, never every org member.
 const internalTimeEntryAccessCheck = sql`(
   activity_group = '${sql.raw(TIME_ENTRY_ACTIVITY_GROUP.INTERNAL)}'

@@ -32,6 +32,12 @@ export const brandPersistedWorkspaceId = (
   workspaceId: string,
 ): SafeId<"workspace"> => toSafeId<"workspace">(workspaceId);
 
+/** Multi-matter desktop requests validate UUIDs before scoped authorization. */
+export const brandValidatedWorkspaceId = (
+  value: string,
+): SafeId<"workspace"> | null =>
+  isUuid(value) ? toSafeId<"workspace">(value) : null;
+
 export const brandPersistedSavedTimeNarrativeId = (
   id: string,
 ): SafeId<"savedTimeNarrative"> => toSafeId<"savedTimeNarrative">(id);
