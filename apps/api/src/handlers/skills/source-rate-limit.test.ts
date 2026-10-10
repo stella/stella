@@ -183,7 +183,7 @@ test.each(["user", "address"] as const)(
       name: keyKind === "user" ? "skills.source.user" : "skills.source.address",
       keyKind,
       windowMs: API_RATE_LIMITS.skillSource.duration,
-    };
+    } as const;
     expect(observations).toEqual([expected]);
     const generator = createSkillSourceRateLimitGenerator(async () =>
       keyKind === "user" ? toSafeId<"user">("source-user") : null,
