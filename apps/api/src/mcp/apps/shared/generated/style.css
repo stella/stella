@@ -2599,6 +2599,9 @@
   .break-all {
     word-break: break-all;
   }
+  .text-ellipsis {
+    text-overflow: ellipsis;
+  }
   .whitespace-normal {
     white-space: normal;
   }
@@ -5454,6 +5457,9 @@
   }
   .\[\&_\[data-slot\=review-status-dot\]\]\:bg-current [data-slot=review-status-dot] {
     background-color: currentcolor;
+  }
+  .\[\&_\[data-slot\=scroll-area-viewport\]\]\:max-h-\[60dvh\] [data-slot=scroll-area-viewport] {
+    max-height: 60dvh;
   }
   .\[\&_mark\]\:bg-\(--text-mark\)\/30 mark {
     background-color: var(--text-mark);

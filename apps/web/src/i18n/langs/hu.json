@@ -1694,6 +1694,7 @@
     "actions": "Műveletek",
     "active": "Aktív",
     "add": "Hozzáadás",
+    "advanced": "Speciális",
     "all": "Összes",
     "and": "És",
     "anonymizationLabels": {
@@ -1760,6 +1761,7 @@
     "createdAt": "Létrehozva: {date}",
     "currency": "Pénznem",
     "currentPage": "Aktuális oldal",
+    "custom": "Egyéni",
     "date": "Dátum",
     "datePicker": {
       "label": "Dátumválasztó",
@@ -1947,6 +1949,7 @@
     "rename": "Átnevezés",
     "required": "Kötelező",
     "reset": "Visszaállítás",
+    "resetToDefault": "Visszaállítás alapértelmezettre",
     "resetZoom": "Nagyítás visszaállítása",
     "restore": "Visszaállítás",
     "retry": "Újrapróbál",
@@ -2000,6 +2003,7 @@
     "unexpectedError": "Váratlan hiba történt. Kérjük, lépjen kapcsolatba az ügyfélszolgálattal.",
     "unknownUser": "Ismeretlen felhasználó",
     "unpin": "Rögzítés feloldása",
+    "unsavedChanges": "Nem mentett módosítások",
     "unsavedChangesEscape": "Nem mentett módosítások. Az elvetéshez nyomja meg újra az Esc billentyűt",
     "unsavedLeaveConfirm": "Mentetlen módosításai vannak. Kilép mentés nélkül?",
     "unverified": "Nem ellenőrzött",
@@ -3816,7 +3820,6 @@
         "fallback": "Alternatíva",
         "notAcceptable": "Nem elfogadható"
       },
-      "unsavedChanges": "Mentetlen módosítások",
       "untitledPosition": "Névtelen álláspont",
       "updated": "Playbook frissítve",
       "updatedAt": "Frissítve: {date}",
@@ -4025,7 +4028,6 @@
       "invalidBinding": "Adjon hozzá egy nem módosító billentyűt",
       "notRebindable": "Ez a billentyűparancs nem módosítható",
       "pressKeys": "Nyomja le az új billentyűket…",
-      "resetToDefault": "Visszaállítás alapértelmezettre",
       "title": "Billentyűparancsok"
     },
     "showShortcuts": "Billentyűparancsok megjelenítése",
@@ -4115,6 +4117,9 @@
     "aiConfig": {
       "addProvider": "Szolgáltató hozzáadása",
       "addProviderFirst": "Először adjon hozzá szolgáltatót",
+      "anthropicWorkspaceId": "Munkaterület-azonosító",
+      "anthropicWorkspaceRequired": "Ehhez az Anthropic-kulcshoz munkaterület szükséges. Adja meg az azonosítóját az Anthropic konzoljából, majd mentse újra.",
+      "anthropicWorkspaces": "Anthropic-munkaterületek megnyitása",
       "apiKey": "API-kulcs",
       "apiKeyConfiguredPlaceholder": "Beállítva: {key}. Új kulccsal lecserélheti.",
       "apiKeyPlaceholder": "Adja meg az API-kulcsát",
@@ -4127,25 +4132,27 @@
       "customModelBadge": "Egyedi · {provider}",
       "customModelDescription": "Ez a modellazonosító nincs a stella katalógusában. A kiválasztott szolgáltatónak pontosan így lesz továbbítva.",
       "customModelHint": "Nincs katalógustalálat. Írjon be bármilyen modellazonosítót; az egyedi azonosítók változatlanul mentésre kerülnek.",
-      "dataRegion": "Adatrégió",
-      "dataRegionDescription": "Az adatszuverenitás érdekében a kiválasztott régión keresztül irányítja az AI-hívásokat.",
-      "dataRegionUnsupported": "A regionális útválasztás csak a Google AI (Vertex AI) esetén érhető el.",
       "decision": {
-        "add": "Döntési modell hozzáadása",
-        "description": "A rögzített válaszú kérdések, például a dokumentumkategóriák vagy a hivatkozások polaritása, ehhez a modellhez kerülnek; enélkül a generatív modell válaszol rájuk.",
+        "description": "Rögzített válaszú kérdések (dokumentumkategóriák, hivatkozások polaritása)",
+        "generativeFallback": "Az adott feladathoz a generatív modellt használja.",
         "incomplete": "Adjon meg API-kulcsot és modellt a döntési modellhez, vagy távolítsa el.",
         "instanceProvided": "stella már biztosít döntési modellt; sajátot csak akkor adjon hozzá, ha másikat szeretne használni.",
-        "label": "Döntési modell",
-        "modelId": "Modellazonosító"
+        "label": "Döntéshozatal"
       },
       "defaultModel": "Alapértelmezett: {model}",
       "defaultModelOption": "Alapértelmezett",
+      "defaultRationale": {
+        "chat": "Beszélgetésekhez és mindennapi kérdésekhez.",
+        "fast": "Rövid, rutinszerű feladatokhoz.",
+        "pdf": "PDF-dokumentumok olvasásához és elemzéséhez.",
+        "reasoning": "Alapos érvelést igénylő összetett feladatokhoz."
+      },
       "deploymentNamePlaceholder": "Üzembe helyezés neve",
-      "description": "Használja saját API-kulcsát, vagy állítsa be az adatszuverenitási régiót.",
       "editProviders": "Szolgáltatók szerkesztése",
       "endpoint": "Végpont",
       "endpointDescription": "Használja az Azure OpenAI vagy Azure Foundry /openai/v1 végpontot. A stella a normalizált végpontot menti.",
       "keepSavedKey": "Mentett kulcs megtartása",
+      "keyFormatHint": "Ez a kulcs a(z) {provider} esetében szokatlan formátumú. Mentse a szolgáltatónál történő ellenőrzéshez.",
       "modelForRole": "{role} modellje",
       "modelIdPlaceholder": "Modellek keresése",
       "modelsDescription": "Válasszon szolgáltatót és egy felkínált multimodális modellt minden AI-kategóriához.",
@@ -4174,13 +4181,11 @@
       "providerKeyInvalidShort": "Érvénytelen",
       "providersDescription": "Adja meg azoknak a szolgáltatóknak a hitelesítő adatait, amelyeket stella használ.",
       "providersPanel": "Szolgáltatók",
-      "regions": {
-        "ch": "Svájc (europe-west6)",
-        "eu": "EU (europe-west4)",
-        "global": "Globális"
-      },
+      "removeLastProviderConfirm": "Eltávolítja a(z) {provider} szolgáltatót? Ezzel az egyéni AI-modellválasztás is visszaáll az alapértelmezésre.",
       "removeProvider": "Szolgáltató eltávolítása",
+      "removeProviderConfirm": "Eltávolítja a(z) {provider} szolgáltatót és a mentett hitelesítő adatait?",
       "replaceKey": "Kulcs cseréje",
+      "roleUnavailable": "A(z) {provider} nem támogatja ezt a szerepkört.",
       "roles": {
         "chat": "Csevegés",
         "fast": "Gyors",
@@ -4190,7 +4195,8 @@
       "selectAtLeastOneRole": "Válasszon legalább egy szerepkört ehhez a kulcshoz.",
       "selectModelForEachRole": "Adjon hozzá szolgáltatót, és válasszon modellt minden kategóriához.",
       "selectedProvider": "{provider}",
-      "title": "AI-konfiguráció"
+      "title": "AI-konfiguráció",
+      "usingDefaults": "Alapértelmezett beállítások használatban"
     },
     "invitations": {
       "cancelInvitation": "Meghívó visszavonása",
@@ -4220,7 +4226,6 @@
       "patternMustContainSeq": "A mintának tartalmaznia kell a '{'SEQ'}' tokent",
       "patternRequired": "A minta megadása kötelező",
       "presets": {
-        "custom": "Egyéni",
         "sequential": "Sorszámos (001)",
         "yearMonthSequential": "Év-Hónap / Sorszámos (2026-02/001)",
         "yearSequential": "Év / Sorszámos (2026/001)"
@@ -4252,7 +4257,6 @@
       "member": "Tag",
       "owner": "Tulajdonos"
     },
-    "settings": "Szervezet beállításai",
     "settingsDescription": "Szervezet nevének és slugjának szerkesztése",
     "switchOrganization": "Szervezet váltása"
   },
@@ -4627,7 +4631,7 @@
     "organization": {
       "activeMembers": "Aktív tagok",
       "ai": "AI-konfiguráció",
-      "aiDescription": "Használja saját API-kulcsát, vagy állítsa be az adatszuverenitási régiót",
+      "aiDescription": "Csatlakoztassa saját AI-szolgáltatói kulcsait.",
       "anonymization": {
         "addPlaceholder": "Mindig maszkolandó kifejezés (pl. csapat neve)",
         "deleteAction": "Kifejezés törlése",
@@ -5471,11 +5475,7 @@
       "apiKeyPlaceholder": "00000000-0000-0000-0000-000000000000:fx",
       "currentKey": "Tárolt kulcs",
       "description": "Állítson be egy DeepL API-kulcsot a dokumentumfordítás engedélyezéséhez. A Free és a Pro kulcsok egyaránt támogatottak.",
-      "removed": "DeepL-kulcs eltávolítva",
-      "removedDescription": "A fordítás le van tiltva, amíg új kulcsot nem ad hozzá.",
       "removing": "Eltávolítás…",
-      "saved": "DeepL-kulcs mentve",
-      "savedDescription": "A fordítások mostantól elérhetők.",
       "tierFree": "Free",
       "tierPro": "Pro",
       "title": "DeepL-fordítás"
@@ -6259,7 +6259,6 @@
     "views": {
       "addAdvancedFilter": "Speciális szűrő hozzáadása",
       "addFields": "Mezők hozzáadása",
-      "advancedFilter": "Speciális",
       "advancedFilterCount": "{count, plural, =0 {bármelyik} one {# szabály} other {# szabály}}",
       "aiGenerated": "AI által generált",
       "calendar": {
