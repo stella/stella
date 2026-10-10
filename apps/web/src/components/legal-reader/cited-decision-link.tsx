@@ -156,6 +156,13 @@ export const CitedDecisionLink = ({
     slug: decision.slug,
   });
 
+  const searchQuery = passage?.type === "text" ? passage.text : undefined;
+  const readerPath = createCaseLawDecisionPath(params);
+  const readerUrl =
+    searchQuery === undefined
+      ? readerPath
+      : `${readerPath}?${new URLSearchParams({ q: searchQuery })}`;
+
   const openDecision = () => {
     const tab = createCaseDecisionViewTab({
       caseNumber: decision.caseNumber,
@@ -165,6 +172,7 @@ export const CitedDecisionLink = ({
       language: decision.language,
       languageAlternates: decision.languageAlternates,
       slug: decision.slug,
+      searchQuery,
     });
     if (isMobile) {
       // No inspector to dock beside: the decision takes the main view.
@@ -187,7 +195,7 @@ export const CitedDecisionLink = ({
           courtShortCode: decisionCitationCourtLabel(decision),
           caseNumber: decision.caseNumber,
           decisionDate: decision.decisionDate,
-          readerUrl: createCaseLawDecisionPath(params),
+          readerUrl,
           originalUrl: decision.sourceUrl ?? null,
         }}
         onOpen={openDecision}

@@ -18,6 +18,8 @@ import {
 import {
   CASE_LAW_RESULT_DEPTH_MAX,
   SEARCH_QUERY_MAX_LENGTH,
+  SEARCH_HISTORY_TITLE_MAX_LENGTH,
+  SEARCH_HISTORY_IMPORT_MAX,
   READER_PAGE_MAX_CHARS,
   READER_PROVISION_ANCHOR_MIN_CHARS,
   READER_PROVISION_ANCHOR_MAX_CHARS,
@@ -29,6 +31,7 @@ import {
   CHAT_CONTEXT_FILE_MAX_MEGABYTES,
 } from "@stll/chat-limits";
 import { SKILL_PACKAGE_LIMITS } from "@stll/skills/format";
+import { DAY_IN_MS } from "@stll/time";
 
 import type { env } from "@/api/env";
 
@@ -398,6 +401,21 @@ export const LIMITS = {
   savedSearchesPageSizeDefault: 50,
   savedSearchesPageSizeMax: 100,
   savedTimeNarrativesPerUser: 100,
+  /**
+   * Search history entries a list returns unless asked for more: the law
+   * page shows the latest 20. A display bound only; storage keeps every
+   * entry its user has not deleted, one row per distinct entry.
+   */
+  searchHistoryPageSizeDefault: 20,
+  searchHistoryPageSizeMax: 100,
+  /** Browser-kept entries one import call takes (three kinds of 50, twice). */
+  searchHistoryImportMax: SEARCH_HISTORY_IMPORT_MAX,
+  // Import clocks may differ by at most one day in either direction.
+  searchHistoryClockSkewMaxMs: DAY_IN_MS,
+  // Older deletion identities compact into an owner import cutoff.
+  searchHistoryTombstonesMax: 128,
+  searchHistoryTitleMaxLength: SEARCH_HISTORY_TITLE_MAX_LENGTH,
+  searchHistoryPathMaxLength: 1024,
   /** Cap on the rolled-up message text indexed per chat thread for
    *  global search. Bounds the stored tsv so a long conversation
    *  cannot blow up the index; the headline only reads the first

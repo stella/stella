@@ -15,6 +15,7 @@ export {
   auditEventChanges,
   recordAuditGroups,
   createBackgroundAuditRecorder,
+  searchHistoryAuditEvent,
 } from "./db/audit-recording";
 export type {
   AuditAction,
