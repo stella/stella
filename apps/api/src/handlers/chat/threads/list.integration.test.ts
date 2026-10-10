@@ -596,10 +596,8 @@ describe("chat thread list decision badges", () => {
     const plainThreadId = await seedThread({ title: "Plain chat" });
     const failingBadges = createGetThreads({
       readDecisionBadges: async () =>
-        Promise.resolve(
-          Result.err(
-            new HandlerError({ status: 500, message: "corpus unavailable" }),
-          ),
+        Result.err(
+          new HandlerError({ status: 500, message: "corpus unavailable" }),
         ),
     });
 
