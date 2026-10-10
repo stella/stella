@@ -46,8 +46,8 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import {
-  ADAPTER_MANIFESTS,
   type DeferredDocumentAdapterKey,
+  isDeferredDocumentAdapterKey,
 } from "@/api/lib/legal-search/adapter-manifest";
 import type {
   BackfilledDocument,
@@ -128,10 +128,7 @@ export const isDeferredDocumentFetchable = ({
   documentPending &&
   !documentReadFailed &&
   documentUrl !== null &&
-  Object.values(ADAPTER_MANIFESTS).some(
-    (source) =>
-      source.key === adapterKey && source.documentStage === "deferred",
-  );
+  isDeferredDocumentAdapterKey(adapterKey);
 
 /**
  * The pacing and durable effects this path needs are supplied by the
@@ -306,10 +303,7 @@ export const readThroughDeferredDocument = async ({
   // (first request wins), so if the budget expires mid-write and the
   // write lands afterwards anyway, the queue still learns of the demand.
   const attempt = async (): Promise<BackfilledDocument | null> => {
-    const source = Object.values(ADAPTER_MANIFESTS).find(
-      (entry) => entry.key === adapterKey,
-    );
-    if (source?.documentStage !== "deferred") {
+    if (!isDeferredDocumentAdapterKey(adapterKey)) {
       return null;
     }
     // Recorded before anything can turn the fetch down, so a reader who
@@ -329,8 +323,7 @@ export const readThroughDeferredDocument = async ({
       return null;
     }
 
-    return await (existing ??
-      startFetch({ decision, deps, adapterKey: source.key }));
+    return await (existing ?? startFetch({ decision, deps, adapterKey }));
   };
 
   // The single boundary the module's guarantee rests on. Every await
