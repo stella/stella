@@ -5,6 +5,7 @@ import { useTranslations } from "use-intl";
 
 import { toStatuteCountrySegment } from "@stll/api-contract/statute-route";
 import { DecisionIdentity } from "@stll/decision-reader/decision-identity";
+import { DECISION_TITLE_SEPARATOR } from "@stll/decision-reader/decision-title";
 import { BidiText } from "@stll/ui/bidi-text";
 import {
   Breadcrumb,
@@ -21,7 +22,6 @@ import { DecisionLanguageSelect } from "@/features/case-law/components/decision-
 import { TopBarCitations } from "@/features/case-law/components/top-bar-citations";
 import { TopBarCountry } from "@/features/case-law/components/top-bar-country";
 import { isCourtTier } from "@/features/case-law/decision-filter-facets.logic";
-import { DECISION_TITLE_SEPARATOR } from "@/features/case-law/decision-title";
 import { StatuteStatusDot } from "@/features/statutes/components/statute-validity-indicator";
 import { readExpressionEligibility } from "@/features/statutes/statute-expression";
 import {

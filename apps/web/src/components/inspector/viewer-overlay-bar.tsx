@@ -1,5 +1,7 @@
 import type { PropsWithChildren } from "react";
 
+import { cn } from "@stll/ui/utils";
+
 /**
  * The glass bar a viewer's controls float in, pinned to the top inline-end
  * corner of the document: the PDF and DOCX preview, the search preview, and
@@ -11,8 +13,16 @@ import type { PropsWithChildren } from "react";
  * the annotation toolbar and the chat composer, which anchor to the opposite
  * edge and win any overlap.
  */
-export const ViewerOverlayBar = ({ children }: PropsWithChildren) => (
-  <div className="bg-background/80 supports-[backdrop-filter]:bg-background/65 absolute end-2 top-2 z-10 flex items-center gap-1 rounded-md border p-0.5 shadow-sm backdrop-blur">
+export const ViewerOverlayBar = ({
+  children,
+  className,
+}: PropsWithChildren<{ className?: string }>) => (
+  <div
+    className={cn(
+      "bg-background/80 supports-[backdrop-filter]:bg-background/65 absolute end-2 top-2 z-10 flex items-center gap-1 rounded-md border p-0.5 shadow-sm backdrop-blur",
+      className,
+    )}
+  >
     {children}
   </div>
 );

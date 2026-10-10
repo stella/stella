@@ -24,6 +24,13 @@ import { AnnotationToolbar } from "@/components/legal-reader/annotations/annotat
 import { GuestAnnotationPrompt } from "@/components/legal-reader/annotations/guest-annotation-prompt";
 import type { ReaderAnnotationTarget } from "@/components/legal-reader/annotations/reader-annotation-target";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
+import {
+  LEGAL_READER_CONTENT_CLEARANCE_CLASS_NAME,
+  LEGAL_READER_LAYOUT_CLASS_NAME,
+  LegalReaderControls,
+} from "@/components/legal-reader/legal-reader-controls";
+import { useReaderElement } from "@/components/legal-reader/use-reader-element";
+import { useWebReaderTextScale as useReaderTextScale } from "@/components/legal-reader/use-web-reader-text-scale";
 import { WebDecisionReader as DecisionText } from "@/components/legal-reader/web-decision-reader";
 import { MatterIcon } from "@/components/matter-icon";
 import Tooltip from "@/components/tooltip";
@@ -163,7 +170,14 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
     id: decisionId,
     name: caseName,
   } as const satisfies ReaderAnnotationTarget;
-  const mainRef = useRef<HTMLDivElement>(null);
+  const { element: contentElement, attach: attachContent } =
+    useReaderElement<HTMLElement>();
+  const {
+    readerRef: mainRef,
+    element: viewportElement,
+    attach: attachViewport,
+  } = useReaderElement<HTMLDivElement>();
+  const textScale = useReaderTextScale();
   const [notesFilter, setNotesFilter] = useState<NotesFilter>("all");
   const showAiNotes = NOTES_FILTER_SHOWS_AI[notesFilter];
   const annotations = useDecisionAnnotationSurface({
@@ -424,7 +438,19 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
       <h1 className="sr-only" data-slot="decision-title">
         <BidiText as="span">{decision.caseNumber}</BidiText>
       </h1>
-      <div className="relative min-h-0 flex-1">
+      <div
+        className={cn(
+          LEGAL_READER_LAYOUT_CLASS_NAME,
+          "relative min-h-0 flex-1",
+        )}
+      >
+        <LegalReaderControls
+          blocks={ast === null ? [] : ast.blocks}
+          content={contentElement}
+          viewport={viewportElement}
+          textScale={textScale}
+          key={decisionId}
+        />
         <div className="bg-background/80 supports-[backdrop-filter]:bg-background/55 shadow-floating absolute start-3 bottom-3 z-30 flex items-center overflow-hidden rounded-lg border backdrop-blur-xl max-lg:hidden">
           {notesFilterOptions.map((option) => {
             const Icon = option.icon;
@@ -520,7 +546,11 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
             aiMode={props.aiMode}
             className="h-full"
           >
-            <div className="reader-scroll h-full overflow-y-auto" ref={mainRef}>
+            <div
+              className="reader-scroll h-full overflow-y-auto"
+              ref={attachViewport}
+              {...textScale.rootProps}
+            >
               {(paragraphLanding.type === "range" ||
                 paragraphLanding.type === "not-found") && (
                 <p
@@ -673,7 +703,11 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
                 </aside>
 
                 <main
-                  className="reader-paper min-w-0 py-8"
+                  className={cn(
+                    "reader-paper min-w-0 pb-8",
+                    LEGAL_READER_CONTENT_CLEARANCE_CLASS_NAME,
+                  )}
+                  ref={attachContent}
                   data-slot="reader-document-column"
                 >
                   <DecisionText

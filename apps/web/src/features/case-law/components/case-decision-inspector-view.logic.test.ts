@@ -1,10 +1,14 @@
 import { describe, expect, test } from "bun:test";
 
+import type { AnalysisHeading } from "@stll/legal-ast/analysis";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import { createCaseDecisionViewTab } from "@/components/inspector/case-decision-view";
 import { readerTargetCitation } from "@/components/legal-reader/annotations/reader-annotation-target";
-import { decisionInspectorAnnotationTarget } from "@/features/case-law/components/case-decision-inspector-view.logic";
+import {
+  analysisReaderBreadcrumbPaths,
+  decisionInspectorAnnotationTarget,
+} from "@/features/case-law/components/case-decision-inspector-view.logic";
 
 describe("the inspector decision citation", () => {
   test("uses one loaded decision for its court, style, date, and type", () => {
@@ -69,5 +73,46 @@ describe("the inspector decision citation", () => {
       ecli: null,
       name: null,
     });
+  });
+});
+
+const analysisHeading = (
+  id: string,
+  startAnchorId: string,
+  children: AnalysisHeading[] = [],
+): AnalysisHeading => ({
+  id,
+  label: id,
+  category: "reasoning",
+  startAnchorId,
+  endAnchorId: startAnchorId,
+  annotations: [],
+  children,
+});
+
+describe("the analysis reader breadcrumb fallback", () => {
+  test("merges a heading into the outer heading that owns its anchor", () => {
+    const model = analysisReaderBreadcrumbPaths([
+      analysisHeading("Reasoning", "paragraph-1", [
+        analysisHeading("First ground", "paragraph-1", [
+          analysisHeading("Evidence", "paragraph-2"),
+        ]),
+      ]),
+      analysisHeading("Outcome", "paragraph-3"),
+    ]);
+
+    expect(model.headings).toEqual([
+      { anchorId: "paragraph-1", title: "Reasoning" },
+      { anchorId: "paragraph-2", title: "Evidence" },
+      { anchorId: "paragraph-3", title: "Outcome" },
+    ]);
+    expect(model.paths.get("paragraph-2")).toEqual([
+      { anchorId: "paragraph-1", title: "Reasoning" },
+      { anchorId: "paragraph-2", title: "Evidence" },
+    ]);
+    for (const path of model.paths.values()) {
+      const anchors = path.map(({ anchorId }) => anchorId);
+      expect(new Set(anchors).size).toBe(anchors.length);
+    }
   });
 });
