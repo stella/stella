@@ -100,3 +100,35 @@ jobs:
           MCP_CANARY_MODE: ${{ github.event.schedule == '17 3 * * *' && 'full' || inputs.mode || 'frequent' }}
           MCP_CANARY_TOKEN: ${{ steps.target.outputs.authenticated == 'true' && secrets.MCP_CANARY_TOKEN || '' }}
         run: bun run canary:mcp
+
+  desktop-transport-canary:
+    name: Desktop transport against hosted API
+    runs-on: macos-14
+    timeout-minutes: 35
+    permissions:
+      contents: read
+    steps:
+      - name: Resolve the probe target
+        id: target
+        env:
+          CONFIGURED_BASE_URL: ${{ vars.MCP_CANARY_BASE_URL }}
+          INPUT_BASE_URL: ${{ inputs.base_url }}
+        run: |
+          target="${INPUT_BASE_URL:-${CONFIGURED_BASE_URL:-https://api.stll.app}}"
+          echo "base_url=$target" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with:
+          toolchain: stable
+          targets: aarch64-apple-darwin
+
+      - name: Smoke native desktop transport against hosted API
+        env:
+          STELLA_DESKTOP_SMOKE_API_URL: ${{ steps.target.outputs.base_url }}
+        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --lib --target aarch64-apple-darwin --locked registry::tests::native_desktop_transport_reaches_api_authentication -- --ignored --exact

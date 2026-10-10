@@ -707,6 +707,15 @@
     },
     "writeOff": "Abschreiben"
   },
+  "capabilityActions": {
+    "aiMissing": "KI ist nicht eingerichtet.",
+    "availabilityUnknown": "Die Verfügbarkeit konnte nicht bestätigt werden.",
+    "deeplMissing": "DeepL ist nicht eingerichtet.",
+    "desktopUnavailable": "stella desktop verbinden oder aktualisieren.",
+    "featureUnavailable": "Diese Funktion ist nicht verfügbar.",
+    "ocrUnavailable": "OCR ist nicht verfügbar.",
+    "translationMissing": "Kein Übersetzungsdienst ist eingerichtet."
+  },
   "caseLaw": {
     "analysis": {
       "abstract": "Kurzfassung",
@@ -748,6 +757,7 @@
     "citation": {
       "citedAtLeast": "Mindestens {count}-mal zitiert",
       "citedSummary": "{count, plural, =0 {Nicht zitiert} one {Einmal zitiert} other {#-mal zitiert}}",
+      "dateUnavailable": "Datum nicht verfügbar",
       "decisionCount": "{count, plural, =0 {Keine Entscheidungen} one {# Entscheidung} other {# Entscheidungen}}",
       "lastNegative": "zuletzt ablehnend zitiert {year}",
       "negativeCount": "{count, plural, one {# ablehnend} other {# ablehnend}}",
@@ -757,6 +767,7 @@
       "partialSummary": "Zitationszahlen und Zeitachse sind unvollständig.",
       "passageNotFound": "Die zitierende Stelle wurde im Text nicht gefunden",
       "positiveCount": "{count, plural, one {# zustimmend} other {# zustimmend}}",
+      "referenceLabel": "{court}, {caseNumber}, {date}",
       "showAll": "{count, plural, one {Alle # Entscheidung anzeigen} other {Alle # Entscheidungen anzeigen}}",
       "stripLabel": "Zitate nach Jahr",
       "treatment": {
@@ -877,9 +888,13 @@
     "pagination": {
       "goToPage": "Zu Seite {page} wechseln",
       "label": "Ergebnisseiten",
+      "pageOfCount": "Seite {page} von {pageCount}",
+      "pageOfEstimatedCount": "Seite {page} von ~{pageCount}",
+      "pageOfEstimatedCountLabel": "Seite {page} von etwa {pageCount}",
       "pageWithEstimatedResultCount": "Seite {page} · etwa {count, plural, one {# Ergebnis} other {# Ergebnisse}}",
       "pageWithResultCount": "Seite {page} · {count, plural, one {# Ergebnis} other {# Ergebnisse}}",
-      "perPage": "Pro Seite"
+      "perPage": "Pro Seite",
+      "refineForMore": "Grenzen Sie die Suche ein, um weitere Ergebnisse zu sehen"
     },
     "paragraphRangeNotFound": "{count, plural, one {Der Absatz {range} wurde in diesem Text nicht gefunden.} other {Die Absätze {range} wurden in diesem Text nicht gefunden.}}",
     "paragraphRangeSelected": "{count, plural, one {Der Absatz {range} ist hervorgehoben.} other {Die Absätze {range} sind hervorgehoben.}}",
@@ -1181,6 +1196,13 @@
       "previewWaiting": "Warten auf Inhalt…",
       "savePendingReview": "Prüfen Sie die ausstehenden KI-Vorschläge, bevor Sie das Dokument speichern."
     },
+    "credentialPasteAction": "Private Karte verwenden",
+    "credentialPasteDescription": "Dieser Text sieht wie eine Zugangsinformation aus. Verwenden Sie eine private Karte, damit er nicht im Chat landet. Fügen Sie den Wert erneut in die Karte ein, sobald sie erscheint.",
+    "credentialPasteRequest": "Bitte fordere diese Zugangsdaten über eine private Karte an.",
+    "credentialPasteTitle": "Einfügen von Zugangsdaten angehalten",
+    "credentialSendAction": "Trotzdem senden",
+    "credentialSendDescription": "Senden Sie sie nur, wenn Sie diesen Wert in der Unterhaltung teilen möchten.",
+    "credentialSendTitle": "Diese Nachricht könnte Zugangsdaten enthalten",
     "deleteThread": "Konversation löschen",
     "editMode": {
       "autoDirect": "Automatisch · direkt überschreiben",
@@ -1319,6 +1341,31 @@
     "removeSuggestion": "(entfernen)",
     "renameThread": "Konversation umbenennen",
     "renameUnavailableEmptyThread": "Zuerst eine Nachricht senden, dann kann die Konversation umbenannt werden.",
+    "requestSecret": {
+      "checkingTarget": "Connector-Details werden überprüft …",
+      "connectionDisposition": "Verbindung: {disposition}",
+      "continuationError": "Ihre Antwort wurde gespeichert, aber der Chat konnte nicht fortgesetzt werden.",
+      "declined": "Abgelehnt",
+      "description": "Der Assistent benötigt diese Angabe, um fortzufahren",
+      "error": "Die Zugangsdaten konnten nicht übermittelt werden. Versuchen Sie es erneut.",
+      "kind": {
+        "token": "Zugriffstoken"
+      },
+      "normalConnection": "Normale Verbindung",
+      "private": "Der Assistent sieht diesen Wert nicht.",
+      "provideAction": "Bereitstellen",
+      "provided": "Bereitgestellt",
+      "purposeByAi": "Von der KI angegebener Zweck: {purpose}",
+      "receiptOnlyConnection": "Nur private Verbindung",
+      "replaceOrdinaryConnection": "Normale Verbindung durch private Nutzung ersetzen",
+      "retryContinuationAction": "Chat fortsetzen",
+      "saveForFuture": "Für zukünftige Chats speichern",
+      "savedAvailabilityError": "Gespeicherte Zugangsdaten konnten nicht überprüft werden.",
+      "target": "Ziel: {target}",
+      "title": "Private Zugangsdaten anfordern",
+      "useSavedAction": "Gespeicherte Zugangsdaten verwenden",
+      "valueLabel": "Zugangsdaten"
+    },
     "resend": "Erneut senden",
     "resizeThread": "Konversation vergrößern oder verkleinern",
     "richContentLoading": "Interaktiver Inhalt wird geladen…",
@@ -1442,6 +1489,7 @@
       "read_story": "Dokumentteil lesen",
       "remember": "Erinnerung speichern",
       "reply_comment": "Auf Kommentar antworten",
+      "request_secret": "Private Zugangsdaten anfordern",
       "resolve_comment": "Kommentar erledigen",
       "review_folder_consistency": "Ordnerkonsistenz prüfen",
       "run-stella-query": "Akten-Daten lesen",
@@ -1475,6 +1523,7 @@
       "update-entity-fields": "Metadaten aktualisieren",
       "update_reader_annotation": "Hervorhebung oder Kommentar bearbeiten",
       "use-browser": "Ihren Browser verwenden",
+      "use_connector_secret": "Zugangsdaten des Connectors verwenden",
       "web_search": "Web wird durchsucht"
     },
     "toolCall": {
@@ -4544,6 +4593,7 @@
       "noMatches": "Keine Verbindung passt zu „{query}“",
       "notConnected": "Nicht verbunden",
       "permissionCount": "{count, plural, one {# Berechtigung} other {# Berechtigungen}}",
+      "privateCredentialOnly": "Nur private Zugangsdaten",
       "searchPlaceholder": "Verbindungen durchsuchen",
       "title": "Verbindungen",
       "turnedOff": "Ausgeschaltet"

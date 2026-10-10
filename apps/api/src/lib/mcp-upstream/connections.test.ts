@@ -240,6 +240,7 @@ const makeSafeDb = () => {
         {
           ...row,
           authType: row.type,
+          responseDisposition: "normal",
           oauthConnectorIssuer: "https://auth.example.com",
           oauthConnectorConfirmedEndpointOrigins: null,
           oauthReviewApprovedIssuer: null,
@@ -277,6 +278,7 @@ const makeSafeDb = () => {
 const oauthRow = (
   overrides: Partial<Extract<LoadedMcpConnection, { type: "oauth2" }>> = {},
 ): LoadedMcpConnection => ({
+  responseDisposition: "normal",
   accessTokenEncrypted: Buffer.from("access"),
   accessTokenIv: Buffer.from("iv"),
   allowedTools: null,
@@ -1050,6 +1052,7 @@ describe("MCP upstream connection lifecycle", () => {
 
   test("bearer connections send the decrypted static token, no OAuth path", async () => {
     const bearerRow: LoadedMcpConnection = {
+      responseDisposition: "normal",
       allowedTools: null,
       connectorId: toSafeId<"mcpConnector">("connector_1"),
       description: "Static-token connector",
@@ -1077,6 +1080,7 @@ describe("MCP upstream connection lifecycle", () => {
 
 describe("loading a user's active MCP connections", () => {
   const storedRow = (overrides: Record<string, unknown>) => ({
+    responseDisposition: "normal",
     accessTokenEncrypted: Buffer.from("access"),
     accessTokenIv: Buffer.from("iv"),
     allowedTools: null,
@@ -1162,6 +1166,30 @@ describe("loading a user's active MCP connections", () => {
     ]);
     expect(listing.updates()).toBe(1);
     expect(hasStatusSet("needs_reauth")).toBe(true);
+  });
+
+  test("omits receipt-only connections from ordinary discovery", async () => {
+    const listing = makeListingSafeDb([
+      storedRow({ userConnectionId: "conn_1" }),
+      storedRow({
+        responseDisposition: "receipt-only",
+        userConnectionId: "conn_2",
+        description: "Private connector",
+        slug: "private",
+      }),
+    ]);
+    const loaded = await loadActiveMcpConnectionsForUser({
+      organizationId,
+      safeDb: listing.safeDb,
+      userId,
+    });
+    expect(loaded.map(({ userConnectionId }) => userConnectionId)).toEqual([
+      toSafeId<"mcpUserConnection">("conn_1"),
+    ]);
+    expect(loaded.map(({ description }) => description)).toEqual([
+      "Registry connector",
+    ]);
+    expect(listing.updates()).toBe(0);
   });
 
   test("writes nothing when every row is usable", async () => {

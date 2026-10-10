@@ -707,6 +707,15 @@
     },
     "writeOff": "Nurašyti"
   },
+  "capabilityActions": {
+    "aiMissing": "DI nesukonfigūruotas.",
+    "availabilityUnknown": "Nepavyko patvirtinti prieinamumo.",
+    "deeplMissing": "DeepL nesukonfigūruotas.",
+    "desktopUnavailable": "Prijunkite arba atnaujinkite stella desktop.",
+    "featureUnavailable": "Ši funkcija nepasiekiama.",
+    "ocrUnavailable": "OCR nepasiekiamas.",
+    "translationMissing": "Nesukonfigūruota jokia vertimo paslauga."
+  },
   "caseLaw": {
     "analysis": {
       "abstract": "Santrauka",
@@ -748,6 +757,7 @@
     "citation": {
       "citedAtLeast": "Cituota bent {count} kartų",
       "citedSummary": "{count, plural, =0 {Necituota} one {Cituota kartą} few {Cituota # kartus} many {Cituota # karto} other {Cituota # kartų}}",
+      "dateUnavailable": "Data nenurodyta",
       "decisionCount": "{count, plural, =0 {Sprendimų nėra} one {# sprendimas} few {# sprendimai} many {# sprendimo} other {# sprendimų}}",
       "lastNegative": "paskutinė neigiama citata {year} m.",
       "negativeCount": "{count, plural, one {# neigiama} few {# neigiamos} many {# neigiamos} other {# neigiamų}}",
@@ -757,6 +767,7 @@
       "partialSummary": "Citavimų sumos ir laiko juosta yra nepilnos.",
       "passageNotFound": "Cituojanti ištrauka tekste nerasta",
       "positiveCount": "{count, plural, one {# teigiama} few {# teigiamos} many {# teigiamos} other {# teigiamų}}",
+      "referenceLabel": "{court}, {caseNumber}, {date}",
       "showAll": "{count, plural, one {Rodyti # sprendimą} few {Rodyti visus # sprendimus} many {Rodyti visus # sprendimo} other {Rodyti visus # sprendimų}}",
       "stripLabel": "Citatos pagal metus",
       "treatment": {
@@ -877,9 +888,13 @@
     "pagination": {
       "goToPage": "Eiti į {page} psl.",
       "label": "Rezultatų puslapiai",
+      "pageOfCount": "{page} psl. iš {pageCount}",
+      "pageOfEstimatedCount": "{page} psl. iš ~{pageCount}",
+      "pageOfEstimatedCountLabel": "{page} psl. iš apytiksliai {pageCount}",
       "pageWithEstimatedResultCount": "{page} psl. · apytiksliai {count, plural, one {# rezultatas} few {# rezultatai} many {# rezultato} other {# rezultatų}}",
       "pageWithResultCount": "{page} psl. · {count, plural, one {# rezultatas} few {# rezultatai} many {# rezultato} other {# rezultatų}}",
-      "perPage": "Viename puslapyje"
+      "perPage": "Viename puslapyje",
+      "refineForMore": "Patikslinkite paiešką, kad pamatytumėte daugiau rezultatų"
     },
     "paragraphRangeNotFound": "{count, plural, one {Pastraipa {range} šiame tekste nerasta.} few {Pastraipos {range} šiame tekste nerastos.} many {Pastraipos {range} šiame tekste nerastos.} other {Pastraipos {range} šiame tekste nerastos.}}",
     "paragraphRangeSelected": "{count, plural, one {Pastraipa {range} paryškinta.} few {Pastraipos {range} paryškintos.} many {Pastraipos {range} paryškintos.} other {Pastraipos {range} paryškintos.}}",
@@ -1181,6 +1196,13 @@
       "previewWaiting": "Laukiama turinio…",
       "savePendingReview": "Prieš išsaugodami dokumentą išspręskite peržiūros laukiančius DI pasiūlymus."
     },
+    "credentialPasteAction": "Naudoti privačią kortelę",
+    "credentialPasteDescription": "Šis tekstas panašus į prisijungimo duomenis. Naudokite privačią kortelę, kad jie nepatektų į pokalbį. Kai kortelė pasirodys, įklijuokite reikšmę į ją dar kartą.",
+    "credentialPasteRequest": "Paprašykite šių prisijungimo duomenų naudojant privačią kortelę.",
+    "credentialPasteTitle": "Prisijungimo duomenų įklijavimas sulaikytas",
+    "credentialSendAction": "Vis tiek siųsti",
+    "credentialSendDescription": "Siųskite tik jei norite bendrinti šią reikšmę pokalbyje.",
+    "credentialSendTitle": "Šiame pranešime gali būti prisijungimo duomenų",
     "deleteThread": "Ištrinti pokalbį",
     "editMode": {
       "autoDirect": "Automatiškai · perrašyti",
@@ -1319,6 +1341,31 @@
     "removeSuggestion": "(pašalinti)",
     "renameThread": "Pervadinti pokalbį",
     "renameUnavailableEmptyThread": "Pirmiausia išsiųskite žinutę, tada pokalbį bus galima pervadinti.",
+    "requestSecret": {
+      "checkingTarget": "Tikrinama jungties informacija…",
+      "connectionDisposition": "Ryšys: {disposition}",
+      "continuationError": "Jūsų atsakymas išsaugotas, bet pokalbio nepavyko tęsti.",
+      "declined": "Atsisakyta",
+      "description": "Asistentui jų reikia, kad galėtų tęsti",
+      "error": "Nepavyko pateikti prisijungimo duomenų. Bandykite dar kartą.",
+      "kind": {
+        "token": "Prieigos raktas"
+      },
+      "normalConnection": "Įprastas ryšys",
+      "private": "Asistentas šios reikšmės nematys.",
+      "provideAction": "Pateikti",
+      "provided": "Pateikta",
+      "purposeByAi": "DI parašytas tikslas: {purpose}",
+      "receiptOnlyConnection": "Tik privatus ryšys",
+      "replaceOrdinaryConnection": "Pakeisti įprastą ryšį į tik privatų naudojimą",
+      "retryContinuationAction": "Tęsti pokalbį",
+      "saveForFuture": "Išsaugoti būsimiems pokalbiams",
+      "savedAvailabilityError": "Nepavyko patikrinti, ar yra išsaugotų prisijungimo duomenų.",
+      "target": "Paskirtis: {target}",
+      "title": "Prašyti privačių prisijungimo duomenų",
+      "useSavedAction": "Naudoti išsaugotus prisijungimo duomenis",
+      "valueLabel": "Prisijungimo duomenys"
+    },
     "resend": "Siųsti dar kartą",
     "resizeThread": "Keisti pokalbio dydį",
     "richContentLoading": "Įkeliamas interaktyvus turinys…",
@@ -1442,6 +1489,7 @@
       "read_story": "Skaitoma dokumento dalis",
       "remember": "Įsimenama",
       "reply_comment": "Atsakoma į komentarą",
+      "request_secret": "Prašoma privačių prisijungimo duomenų",
       "resolve_comment": "Išsprendžiamas komentaras",
       "review_folder_consistency": "Tikrinamas aplanko nuoseklumas",
       "run-stella-query": "Skaitomi bylos duomenys",
@@ -1475,6 +1523,7 @@
       "update-entity-fields": "Atnaujinami metaduomenys",
       "update_reader_annotation": "Redaguoti paryškinimą ar komentarą",
       "use-browser": "Jūsų naršyklės naudojimas",
+      "use_connector_secret": "Naudojami jungties prisijungimo duomenys",
       "web_search": "Ieškoma internete"
     },
     "toolCall": {
@@ -4544,6 +4593,7 @@
       "noMatches": "Užklausą „{query}“ atitinkančių ryšių nėra",
       "notConnected": "Neprijungta",
       "permissionCount": "{count, plural, one {# leidimas} few {# leidimai} many {# leidimo} other {# leidimų}}",
+      "privateCredentialOnly": "Tik privatūs prisijungimo duomenys",
       "searchPlaceholder": "Ieškoti ryšių",
       "title": "Ryšiai",
       "turnedOff": "Išjungta"

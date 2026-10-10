@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { sha256Hex } from "@stll/sha256/node";
 
 import type { SanctionsEntry } from "../entry";
 
@@ -6,9 +6,7 @@ export const MONITORING_CONTACT_COUNT = 10_000;
 export const MONITORING_ENTRY_COUNT = 20_000;
 
 export const syntheticMonitoringName = (index: number) =>
-  createHash("sha256")
-    .update(`synthetic-person-${index}`)
-    .digest("hex")
+  sha256Hex(`synthetic-person-${index}`)
     .slice(0, 32)
     .replaceAll(/[0-9a-f]/gu, (hex) =>
       String.fromCodePoint(97 + Number.parseInt(hex, 16)),

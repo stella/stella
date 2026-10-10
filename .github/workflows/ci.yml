@@ -27,6 +27,10 @@ on:
         required: false
         type: boolean
         default: false
+      pr_depth_only:
+        required: false
+        type: boolean
+        default: false
       sha:
         type: string
         default: ""
@@ -79,6 +83,7 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
+      packages: read
       # The merge-group trust check reads the queued pull request's head
       # and the pull_request runs recorded for it.
       pull-requests: read
@@ -94,7 +99,11 @@ jobs:
       postgres_selection_reason: ${{ steps.postgres-test-plan.outputs.postgres_selection_reason || 'Planner unavailable; full suite retained.' }}
       # Absent repository switch is OFF; enabling it requires the service job.
       postgres_pr_required: ${{ github.event_name == 'pull_request' && vars.CI_POSTGRES_PR_SELECTION == 'on' && steps.completed-depth.outputs.run_required != 'false' && steps.check.outputs.trusted == 'true' && steps.changed-files.outputs.service_suites_pr_required == 'true' }}
-      playwright_image: ${{ steps.browser-image.outputs.image }}
+      playwright_image: ${{ steps.images.outputs.playwright }}
+      postgres: ${{ steps.images.outputs.postgres }}
+      redis: ${{ steps.images.outputs.redis }}
+      valkey: ${{ steps.images.outputs.valkey }}
+      quickwit: ${{ steps.images.outputs.quickwit }}
       # Pull requests run lightweight guards, lint and type checks.
       # Test shards retain PR coverage and follow heavy merge-queue depth.
       # Builds, images, browsers and services certify the merge group.
@@ -112,6 +121,11 @@ jobs:
       queue_depth: ${{ steps.depth.outputs.queue_depth || 'full' }}
       thin_jobs: ${{ steps.heavy-plan.outputs.thin_jobs }}
       heavy_jobs: ${{ steps.heavy-plan.outputs.heavy_jobs }}
+      pr_depth_jobs: ${{ steps.pr-depth-plan.outputs.pr_depth_jobs }}
+      pr_depth_reused: ${{ steps.completed-depth.outputs.pr_depth_reused }}
+      pr_depth_source_run_id: ${{ steps.completed-depth.outputs.pr_depth_source_run_id }}
+      patch_id: ${{ steps.patch-id.outputs.patch_id }}
+      pr_depth_workflow_version: ${{ steps.patch-id.outputs.workflow_version }}
       heavy_web_build_required: ${{ inputs.heavy_only == true && 'true' || 'false' }}
       agent_sandbox_docker_required: ${{ steps.changed-files.outputs.agent_sandbox_docker_required }}
       api_image_deps_required: ${{ steps.changed-files.outputs.api_image_deps_required }}
@@ -175,67 +189,70 @@ jobs:
         with:
           retries: 0
           script: |
-            core.setOutput("coverage_profile", "normal-v1");
-            if (process.env.CI_PR_DEPTH_PILOT !== "on" || context.eventName !== "pull_request") return;
-            // Uncertified pilot evidence keeps complete PR coverage.
-            core.setOutput("coverage_profile", "normal-v1");
-            if (!["opened", "synchronize"].includes(context.payload.action)) return;
-            const name = "ci-pr-depth-pilot-v1";
-            try {
-              const { data } = await github.rest.actions.listArtifactsForRepo({
-                ...context.repo, name, per_page: 100, request: { timeout: 10000 },
-              });
-              if (!Array.isArray(data.artifacts)) return;
-              const artifact = data.artifacts.filter((item) => item?.name === name
-                && item.expired === false && Date.parse(item.expires_at) > Date.now()
-                && Number.isSafeInteger(item.workflow_run?.id))
-                .sort((a, b) => b.id - a.id)[0];
-              if (!artifact) return;
-              await new Promise(resolve => setTimeout(resolve, 1100));
-              const { data: run } = await github.rest.actions.getWorkflowRun({
-                ...context.repo, run_id: artifact.workflow_run.id, request: { timeout: 10000 },
-              });
-              if (run.path !== ".github/workflows/ci-pr-pilot-metrics.yml"
-                  || !["schedule", "workflow_dispatch"].includes(run.event)
-                  || run.head_branch !== context.payload.repository.default_branch
-                  || run.head_sha !== artifact.workflow_run.head_sha
-                  || run.status !== "completed" || run.conclusion !== "success") return;
-              await new Promise(resolve => setTimeout(resolve, 1100));
-              const { data: zip } = await github.rest.actions.downloadArtifact({
-                ...context.repo, artifact_id: artifact.id, archive_format: "zip",
-                request: { timeout: 10000 },
-              });
-              const fs = require("node:fs");
-              const path = require("node:path");
-              const directory = fs.mkdtempSync(path.join(process.env.RUNNER_TEMP, "ci-pilot-"));
-              let report;
+            const resolveCoverageProfile = async () => {
+              if (process.env.CI_PR_DEPTH_PILOT !== "on" || context.eventName !== "pull_request") return "normal-v1";
+              if (!["opened", "synchronize"].includes(context.payload.action)) return "normal-v1";
+              const name = "ci-pr-depth-pilot-v1";
               try {
-                const filename = path.join(directory, "report.zip");
-                fs.writeFileSync(filename, Buffer.from(zip));
-                const text = require("node:child_process").execFileSync("unzip",
-                  ["-p", filename, "ci-pr-pilot.json"], { maxBuffer: 65536, timeout: 5000 });
-                report = JSON.parse(text.toString());
-              } finally {
-                fs.rmSync(directory, { recursive: true, force: true });
+                const { data } = await github.rest.actions.listArtifactsForRepo({
+                  ...context.repo, name, per_page: 100, request: { timeout: 10000 },
+                });
+                if (!Array.isArray(data.artifacts)) return "normal-v1";
+                const artifact = data.artifacts.filter((item) => item?.name === name
+                  && item.expired === false && Date.parse(item.expires_at) > Date.now()
+                  && Number.isSafeInteger(item.workflow_run?.id))
+                  .sort((a, b) => b.id - a.id)[0];
+                if (!artifact) return "normal-v1";
+                await new Promise(resolve => setTimeout(resolve, 1100));
+                const { data: run } = await github.rest.actions.getWorkflowRun({
+                  ...context.repo, run_id: artifact.workflow_run.id, request: { timeout: 10000 },
+                });
+                if (run.path !== ".github/workflows/ci-pr-pilot-metrics.yml"
+                    || !["schedule", "workflow_dispatch"].includes(run.event)
+                    || run.head_branch !== context.payload.repository.default_branch
+                    || run.head_sha !== artifact.workflow_run.head_sha
+                    || run.status !== "completed" || run.conclusion !== "success") return "normal-v1";
+                await new Promise(resolve => setTimeout(resolve, 1100));
+                const { data: zip } = await github.rest.actions.downloadArtifact({
+                  ...context.repo, artifact_id: artifact.id, archive_format: "zip",
+                  request: { timeout: 10000 },
+                });
+                const fs = require("node:fs");
+                const path = require("node:path");
+                const directory = fs.mkdtempSync(path.join(process.env.RUNNER_TEMP, "ci-pilot-"));
+                let report;
+                try {
+                  const filename = path.join(directory, "report.zip");
+                  fs.writeFileSync(filename, Buffer.from(zip));
+                  const text = require("node:child_process").execFileSync("unzip",
+                    ["-p", filename, "ci-pr-pilot.json"], { maxBuffer: 65536, timeout: 5000 });
+                  report = JSON.parse(text.toString());
+                } finally {
+                  fs.rmSync(directory, { recursive: true, force: true });
+                }
+                const start = Date.parse(report.startedAt);
+                const generated = Date.parse(report.generatedAt);
+                const now = Date.now();
+                if (report.profile !== "pilot-v1" || report.complete !== true
+                    || report.stopped !== false || !Number.isFinite(start)
+                    || !Number.isFinite(generated) || start > generated || generated > now
+                    || now - generated > 36 * 60 * 60 * 1000
+                    || now - start >= 7 * 24 * 60 * 60 * 1000
+                    || !Number.isFinite(report.baselineArmToMergeP50Minutes)
+                    || report.baselineArmToMergeP50Minutes < 0
+                    || (report.armToMergeP50Minutes !== null
+                      && (!Number.isFinite(report.armToMergeP50Minutes)
+                        || report.armToMergeP50Minutes < 0
+                        || report.armToMergeP50Minutes > report.baselineArmToMergeP50Minutes + 20))) return "normal-v1";
+                return "pilot-fast-v1";
+              } catch {
+                core.info("Pilot metrics unavailable; retaining complete PR coverage.");
+                return "normal-v1";
               }
-              const start = Date.parse(report.startedAt);
-              const generated = Date.parse(report.generatedAt);
-              const now = Date.now();
-              if (report.profile !== "pilot-v1" || report.complete !== true
-                  || report.stopped !== false || !Number.isFinite(start)
-                  || !Number.isFinite(generated) || start > generated || generated > now
-                  || now - generated > 36 * 60 * 60 * 1000
-                  || now - start >= 7 * 24 * 60 * 60 * 1000
-                  || !Number.isFinite(report.baselineArmToMergeP50Minutes)
-                  || report.baselineArmToMergeP50Minutes < 0
-                  || (report.armToMergeP50Minutes !== null
-                    && (!Number.isFinite(report.armToMergeP50Minutes)
-                      || report.armToMergeP50Minutes < 0
-                      || report.armToMergeP50Minutes > report.baselineArmToMergeP50Minutes + 20))) return;
-              core.setOutput("coverage_profile", "pilot-fast-v1");
-            } catch {
-              core.info("Pilot metrics unavailable; retaining complete PR coverage.");
-            }
+            };
+            const coverageProfile = await resolveCoverageProfile();
+            core.setOutput("coverage_profile", coverageProfile);
+            core.notice(`coverage_profile=${coverageProfile}`);
 
       - name: Fetch GitHub API tooling
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -245,6 +262,7 @@ jobs:
           path: .workflow-tooling
           persist-credentials: false
           sparse-checkout: |
+            .github/workflows/ci.yml
             scripts/gh-retry.sh
             scripts/retry.sh
           sparse-checkout-cone-mode: false
@@ -254,12 +272,16 @@ jobs:
           cp "$GITHUB_WORKSPACE/.workflow-tooling/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
           echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
 
+      - name: Preserve this run's CI workflow for planning
+        run: cp "$GITHUB_WORKSPACE/.workflow-tooling/.github/workflows/ci.yml" "$RUNNER_TEMP/ci-workflow.yml"
+
       - name: Resolve suite depth
         id: depth
         env:
           MERGE_QUEUE_DEPTH: ${{ vars.MERGE_QUEUE_DEPTH }}
           DISPATCH_DEPTH: ${{ inputs.depth }}
           HEAVY_ONLY: ${{ inputs.heavy_only }}
+          PR_DEPTH_ONLY: ${{ inputs.pr_depth_only }}
           EVENT_NAME: ${{ github.event_name }}
           DISPATCH_REF: ${{ github.ref }}
           ALLOW_FULL: ${{ inputs.allow_full }}
@@ -281,6 +303,10 @@ jobs:
               exit 1
             fi
             echo "suite_depth=full" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [[ "${PR_DEPTH_ONLY:-false}" == true ]]; then
+            echo "suite_depth=fast" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           # Merge groups keep full scope planning; queue_depth controls which
@@ -312,6 +338,67 @@ jobs:
               ;;
           esac
 
+      - name: Checkout patch-id inputs
+        if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+
+      - name: Compute stable patch id
+        id: patch-id
+        if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          GROUP_BASE_SHA: ${{ github.event.merge_group.base_sha }}
+          GROUP_HEAD_SHA: ${{ github.event.merge_group.head_sha }}
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
+        run: |
+          if [[ "$EVENT_NAME" == merge_group ]]; then
+            base="$GROUP_BASE_SHA"
+            head="$GROUP_HEAD_SHA"
+          else
+            base=$(git merge-base "$PR_BASE_SHA" "$PR_HEAD_SHA")
+            head="$PR_HEAD_SHA"
+          fi
+          # An empty net change (a pull request that reverts itself) has no
+          # patch id; it leaves reuse unavailable instead of failing the plan.
+          patch_id=""
+          if ! git diff --quiet "$base..$head"; then
+            patch_id=$(git diff --binary "$base..$head" | git patch-id --stable | awk 'NR == 1 { print $1 }')
+            [[ "$patch_id" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::Unable to compute stable patch id."; exit 1; }
+          fi
+          workflow_version=$(git show "$WORKFLOW_SHA:.github/workflows/ci.yml" | git hash-object --stdin)
+          [[ "$workflow_version" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::Unable to identify CI workflow version."; exit 1; }
+          echo "patch_id=$patch_id" >> "$GITHUB_OUTPUT"
+          echo "workflow_version=$workflow_version" >> "$GITHUB_OUTPUT"
+
+      - name: Derive PR-depth jobs
+        id: pr-depth-plan
+        shell: ruby {0}
+        run: |
+          require "json"
+          require "yaml"
+          # Every caller reaches this step before any source checkout, so read
+          # this run's own workflow from the tooling fetched at workflow_sha.
+          workflow = YAML.load_file(File.join(ENV.fetch("RUNNER_TEMP"), "ci-workflow.yml"))
+          outcome = workflow.fetch("jobs").fetch("ci-result").fetch("steps")
+            .find { |candidate| candidate["name"] == "Evaluate CI outcome" }
+          required = JSON.parse(outcome.fetch("env").fetch("FAST_REQUIRED"))
+          # Mirrors prDepthJobs in scripts/main-heavy-plan.ts; a test runs this
+          # step and compares the two.
+          jobs = required.select do |job|
+            job != "ci-checks-docs" &&
+              (job == "ci-generated-sources" || job.start_with?("ci-checks-", "code-quality-"))
+          end
+          File.open(ENV.fetch("GITHUB_OUTPUT"), "a") do |output|
+            output.puts("pr_depth_jobs=#{JSON.generate(jobs)}")
+          end
+
       - name: Check completed suite depth
         id: completed-depth
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
@@ -319,6 +406,9 @@ jobs:
           SUITE_DEPTH: ${{ steps.depth.outputs.suite_depth }}
           COVERAGE_PROFILE: ${{ steps.pilot.outputs.coverage_profile }}
           QUEUE_DEPTH: ${{ steps.depth.outputs.queue_depth }}
+          PATCH_ID: ${{ steps.patch-id.outputs.patch_id }}
+          WORKFLOW_VERSION: ${{ steps.patch-id.outputs.workflow_version }}
+          PR_DEPTH_JOBS: ${{ steps.pr-depth-plan.outputs.pr_depth_jobs }}
         with:
           retries: 0
           script: |
@@ -328,11 +418,12 @@ jobs:
               core.setOutput("queue_validation", "true");
               return;
             }
-            const queue = context.eventName === "merge_group" && process.env.QUEUE_DEPTH === "thin";
+            const mergeGroup = context.eventName === "merge_group";
+            const queue = mergeGroup && process.env.QUEUE_DEPTH === "thin";
             if (queue) core.setOutput("normal_completion", "required");
             let pr = context.payload.pull_request;
-            const depth = queue ? "fast" : process.env.SUITE_DEPTH;
-            if (queue) {
+            const depth = mergeGroup ? "fast" : process.env.SUITE_DEPTH;
+            if (mergeGroup) {
               const match = /^refs\/heads\/gh-readonly-queue\/[^/]+\/pr-([0-9]+)-[a-f0-9]{40}$/.exec(context.payload.merge_group?.head_ref || "");
               if (!match || !/^[a-f0-9]{40}$/.test(context.payload.merge_group?.head_sha || "")) return;
               try {
@@ -346,7 +437,7 @@ jobs:
                 return;
               }
             }
-            if ((!queue && context.eventName !== "pull_request") || !pr
+            if ((!mergeGroup && context.eventName !== "pull_request") || !pr
                 || !["fast", "full"].includes(depth)
                 || typeof pr.title !== "string"
                 || (pr.body != null && typeof pr.body !== "string")
@@ -359,12 +450,12 @@ jobs:
               && pr.labels.some((label) => label.name === "prove-fix");
             const scope = require("node:crypto").createHash("sha256")
               .update(JSON.stringify([pr.title, pr.body || "", proof])).digest("hex");
-            const profile = queue ? "normal-v1" : process.env.COVERAGE_PROFILE || "normal-v1";
-            const marker = `ci-completed-v5-${profile}-${pr.number}-${pr.head.repo.id}-${pr.head.sha}-${pr.base.sha}-${depth}-${scope}`;
-            if (!queue) core.setOutput("marker", marker);
-            if (!queue && !["labeled", "unlabeled", "ready_for_review", "reopened", "auto_merge_enabled", "enqueued"].includes(context.payload.action)) return;
+            const profile = mergeGroup ? "normal-v1" : process.env.COVERAGE_PROFILE || "normal-v1";
+            const marker = `ci-completed-v6-${profile}-${pr.number}-${pr.head.repo.id}-${pr.head.sha}-${depth}-${scope}`;
+            if (!mergeGroup) core.setOutput("marker", marker);
+            if (!mergeGroup && !["labeled", "unlabeled", "ready_for_review", "reopened", "auto_merge_enabled", "enqueued"].includes(context.payload.action)) return;
             try {
-              if (queue) {
+              if (mergeGroup) {
                 const { data: comparison } = await github.rest.repos.compareCommits({
                   ...context.repo, base: pr.head.sha, head: context.payload.merge_group.head_sha,
                   request: { timeout: 10000 },
@@ -432,16 +523,18 @@ jobs:
                 : body).toString("utf8"));
               const results = evidence?.jobs;
               const planned = evidence?.planned;
-              if (evidence?.version !== 5
+              if (evidence?.version !== 6
                   || evidence.marker !== marker
                   || evidence.event !== "pull_request"
                   || evidence.run_id !== sourceId
+                  || !/^[0-9a-f]{40}$/.test(process.env.PATCH_ID || "")
+                  || evidence.patch_id !== process.env.PATCH_ID
+                  || evidence.workflow_version !== process.env.WORKFLOW_VERSION
                   || !Number.isSafeInteger(evidence.run_attempt)
                   || evidence.run_attempt < 1
                   || evidence.pr_number !== pr.number
                   || evidence.head_repo_id !== pr.head.repo.id
                   || evidence.head_sha !== pr.head.sha
-                  || evidence.base_sha !== pr.base.sha
                   || evidence.suite_depth !== depth
                   || evidence.coverage_profile !== profile
                   || results === null || typeof results !== "object" || Array.isArray(results)
@@ -452,8 +545,19 @@ jobs:
                   || new Set(planned).size !== planned.length
                   || !planned.every((job) => typeof job === "string"
                     && Object.hasOwn(results, job) && results[job] === "success")) return;
-              if (queue) {
-                core.setOutput("normal_completion", "complete");
+              // A whole pull request run is reused only on its own base. A merge
+              // group reuses just the PR-depth jobs of an identical change, so
+              // a moved base is allowed there and every PR-depth job must pass.
+              if (!mergeGroup && evidence.base_sha !== pr.base.sha) return;
+              if (mergeGroup && (!Array.isArray(evidence.pr_depth_jobs)
+                  || JSON.stringify(evidence.pr_depth_jobs) !== process.env.PR_DEPTH_JOBS
+                  || evidence.pr_depth_jobs.length === 0
+                  || !evidence.pr_depth_jobs.every((job) => typeof job === "string"
+                    && results[job] === "success"))) return;
+              if (mergeGroup) {
+                core.setOutput("pr_depth_reused", "true");
+                core.setOutput("pr_depth_source_run_id", String(sourceId));
+                if (queue) core.setOutput("normal_completion", "complete");
                 return;
               }
               core.setOutput("completed_run_id", String(sourceId));
@@ -534,20 +638,37 @@ jobs:
           fetch-depth: 0
           filter: blob:none
           persist-credentials: false
-          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
+          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
-      - name: Resolve browser image
-        id: browser-image
-        if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
-        run: echo "image=$(cat .github/actions/setup-playwright/image.txt)" >> "$GITHUB_OUTPUT"
-
-      - name: Setup Bun for heavy job planning
-        id: planner-bun
-        if: steps.completed-depth.outputs.run_required != 'false' && (inputs.heavy_only == true || (github.event_name == 'merge_group' && steps.depth.outputs.queue_depth == 'thin'))
+      - name: Setup Bun for dependency scope
+        if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch' || inputs.heavy_only == true || (github.event_name == 'merge_group' && steps.depth.outputs.queue_depth == 'thin'))
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
-          bun-version-file: "package.json"
+          bun-version-file: package.json
+
+      - name: Login to GitHub Container Registry for image resolution
+        id: registry
+        if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch') && github.event.pull_request.head.repo.fork != true && github.token != ''
+        continue-on-error: true
+        timeout-minutes: 2
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve available CI images
+        id: images
+        if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
+        timeout-minutes: 3
+        env:
+          CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && steps.registry.outcome == 'success' }}
+        run: bun scripts/ci-service-images.ts --resolve >> "$GITHUB_OUTPUT"
+
+      - name: Log out of GitHub Container Registry
+        if: always() && steps.completed-depth.outputs.run_required != 'false'
+        run: docker logout ghcr.io
 
       - name: Install heavy planner dependencies
         timeout-minutes: 3
@@ -616,13 +737,6 @@ jobs:
             fi
           fi
           echo "required=$required" >> "$GITHUB_OUTPUT"
-
-      - name: Setup Bun for dependency scope
-        if: steps.planner-bun.outcome == 'skipped' && steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
-        with:
-          save: ${{ github.ref == 'refs/heads/main' }}
-          bun-version-file: "package.json"
 
       - name: Check changed file scope
         if: >-
@@ -806,11 +920,6 @@ jobs:
             exit 1
           fi
           read -r postgres_suites_required corpus_suites_required valkey_suites_required collaboration_suite_required <<< "$service_suite_scopes"
-          # Corpus engine suites have no file-level selection; pull requests
-          # leave them to full-depth runs.
-          if [[ "$EVENT_NAME" == pull_request ]]; then
-            corpus_suites_required=false
-          fi
           service_suites_pr_required=false
           if [[ "$postgres_suites_required" == true || "$corpus_suites_required" == true || "$valkey_suites_required" == true || "$collaboration_suite_required" == true ]]; then
             service_suites_pr_required=true
@@ -877,7 +986,7 @@ jobs:
             # inputs, the files the Dockerfile and the smoke read from the
             # context, and how CI and the release build it.
             case "$file" in
-              VERSION|apps/api/*|apps/collab/*|apps/legal-atlas-runner/*|packages/*|patches/*|apps/*/package.json|apps/landing/public/fonts/CabinetGrotesk-Regular.otf|docker/postgres/init.sql|.gitmodules|bun.lock|bunfig.toml|package.json|.npmrc|turbo.json|scripts/smoke-api-image.sh|scripts/pull-base-images.sh|scripts/retry.sh|.dockerignore|.github/workflows/ci.yml|.github/workflows/release.yml)
+              VERSION|apps/api/*|apps/collab/*|apps/legal-atlas-runner/*|packages/*|patches/*|apps/*/package.json|apps/landing/public/fonts/CabinetGrotesk-Regular.otf|docker/postgres/init.sql|.gitmodules|bun.lock|bunfig.toml|package.json|.npmrc|turbo.json|scripts/smoke-api-image.sh|scripts/pull-base-images.sh|scripts/ci-service-images.ts|scripts/ci-service-images.json|scripts/retry.sh|.dockerignore|.github/workflows/ci.yml|.github/workflows/release.yml)
                 api_image_smoke_required=true
                 ;;
             esac
@@ -888,12 +997,12 @@ jobs:
             # lib/db modules, and the script modules the online repairs
             # reuse) or how the rehearsal seeds and measures.
             case "$file" in
-              VERSION|apps/api/drizzle/*|apps/api/src/db/*|apps/api/src/lib/db/*|apps/api/src/lib/decision-date-bounds-sql.ts|apps/api/src/handlers/case-law/citation-resolution.ts|apps/api/src/scripts/*|scripts/rehearse-migration-upgrade.sh|scripts/migration-rehearsal-db.ts|.github/workflows/ci.yml)
+              VERSION|apps/api/drizzle/*|apps/api/src/db/*|apps/api/src/lib/db/*|apps/api/src/lib/decision-date-bounds-sql.ts|apps/api/src/handlers/case-law/citation-resolution.ts|apps/api/src/scripts/*|scripts/rehearse-migration-upgrade.sh|scripts/resolve-promoted-release.ts|scripts/migration-rehearsal-db.ts|.github/workflows/ci.yml)
                 migration_rehearsal_required=true
                 ;;
             esac
             case "$file" in
-              .github/workflows/agent-sandbox-canary.yml|.github/workflows/ci.yml|packages/agent-engine/*|package.json|bun.lock|scripts/pull-base-images.sh|scripts/retry.sh)
+              .github/workflows/agent-sandbox-canary.yml|.github/workflows/ci.yml|packages/agent-engine/*|package.json|bun.lock|scripts/pull-base-images.sh|scripts/ci-service-images.ts|scripts/ci-service-images.json|scripts/retry.sh)
                 agent_sandbox_docker_required=true
                 ;;
             esac
@@ -941,12 +1050,12 @@ jobs:
             # change: Dockerfiles, manifests, the runner and its packages.
             # The merge queue keeps the broad selection above.
             case "$file" in
-              */Dockerfile|*.Dockerfile|*/package.json|package.json|bun.lock|bunfig.toml|.npmrc|patches/*|turbo.json|scripts/pull-base-images.sh|apps/legal-atlas-runner/*|packages/legal-atlas/*|packages/agent-engine/docker/*|.dockerignore)
+              */Dockerfile|*.Dockerfile|*/package.json|package.json|bun.lock|bunfig.toml|.npmrc|patches/*|turbo.json|scripts/pull-base-images.sh|scripts/ci-service-images.ts|scripts/ci-service-images.json|apps/legal-atlas-runner/*|packages/legal-atlas/*|packages/agent-engine/docker/*|.dockerignore)
                 image_inputs_changed=true
                 ;;
             esac
             case "$file" in
-              apps/legal-atlas-runner/*|apps/api/*|packages/legal-atlas/*|packages/typescript-config/*|bun.lock|bunfig.toml|package.json|.npmrc|turbo.json|scripts/pull-base-images.sh|scripts/retry.sh|.dockerignore|.github/workflows/ci.yml)
+              apps/legal-atlas-runner/*|apps/api/*|packages/legal-atlas/*|packages/typescript-config/*|bun.lock|bunfig.toml|package.json|.npmrc|turbo.json|scripts/pull-base-images.sh|scripts/ci-service-images.ts|scripts/ci-service-images.json|scripts/retry.sh|.dockerignore|.github/workflows/ci.yml)
                 legal_atlas_image_required=true
                 ;;
             esac
@@ -979,7 +1088,7 @@ jobs:
             # ordinary app-source changes are covered by web-build's cheaper
             # in-checkout boot smoke instead of a full image build.
             case "$file" in
-              VERSION|apps/web/Dockerfile|apps/web/src/runtime.ts|apps/web/vite.config.ts|packages/start-runtime/**|packages/*/package.json|scripts/stage-web-runtime.ts|scripts/publish-manifest.ts|scripts/web-runtime-closure.ts|scripts/pull-base-images.sh|scripts/retry.sh|bun.lock|.dockerignore|.github/workflows/ci.yml)
+              VERSION|apps/web/Dockerfile|apps/web/src/runtime.ts|apps/web/vite.config.ts|packages/start-runtime/**|packages/*/package.json|scripts/stage-web-runtime.ts|scripts/publish-manifest.ts|scripts/web-runtime-closure.ts|scripts/pull-base-images.sh|scripts/ci-service-images.ts|scripts/ci-service-images.json|scripts/retry.sh|bun.lock|.dockerignore|.github/workflows/ci.yml)
                 web_image_smoke_required=true
                 ;;
             esac
@@ -1238,8 +1347,7 @@ jobs:
             echo 'api_test_shards=0' >> "$GITHUB_OUTPUT"
             echo 'api_test_files=' >> "$GITHUB_OUTPUT"
           else
-            echo 'ci_tests_matrix={"shard":["api-1","api-2","api-3","api-4","rest-web"]}' >> "$GITHUB_OUTPUT"
-            echo 'api_test_shards=4' >> "$GITHUB_OUTPUT"
+            bun scripts/api-test-shard-plan.ts >> "$GITHUB_OUTPUT"
             echo 'api_test_files=' >> "$GITHUB_OUTPUT"
           fi
 
@@ -1299,6 +1407,8 @@ jobs:
     name: Sandbox Docker and image dependency checks
     needs: ci-plan
     if: >-
+      inputs.pr_depth_only != true
+      &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
       github.event_name != 'pull_request' && (
@@ -1316,6 +1426,7 @@ jobs:
     timeout-minutes: 35
     permissions:
       contents: read
+      packages: read
       actions: write
     env:
       AGENT_ENGINE_DOCKER_IMAGE: stella/agent-sandbox:ci
@@ -1330,7 +1441,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
+          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
@@ -1359,25 +1470,43 @@ jobs:
           path: .workflow-tooling
           persist-credentials: false
           sparse-checkout: |
-            scripts/pull-base-images.sh
+            scripts/ci-service-images.ts
+            scripts/ci-service-images.json
+            packages/scripts/src/child-exit-status.ts
             scripts/retry.sh
           sparse-checkout-cone-mode: false
+
+      - name: Log in to the CI image mirror
+        continue-on-error: true
+        if: github.event.pull_request.head.repo.fork != true && github.token != ''
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
 
       - name: Pull sandbox base images
         if: needs.ci-plan.outputs.agent_sandbox_docker_required == 'true'
         id: pull
+        env:
+          CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
         run: |
-          bash .workflow-tooling/scripts/pull-base-images.sh packages/agent-engine/docker/sandbox.Dockerfile
-          rm -rf .workflow-tooling
+          bun .workflow-tooling/scripts/ci-service-images.ts --pull packages/agent-engine/docker/sandbox.Dockerfile
 
       - name: Build pinned sandbox image
         if: needs.ci-plan.outputs.agent_sandbox_docker_required == 'true'
         id: image
+        env:
+          CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
         run: >-
-          docker build
+          bun .workflow-tooling/scripts/ci-service-images.ts --build packages/agent-engine/docker/sandbox.Dockerfile --
           --file packages/agent-engine/docker/sandbox.Dockerfile
           --tag "$AGENT_ENGINE_DOCKER_IMAGE"
           packages/agent-engine/docker
+
+      - name: Log out of GitHub Container Registry
+        if: always()
+        run: docker logout ghcr.io
 
       - name: Create internal sandbox network
         if: needs.ci-plan.outputs.agent_sandbox_docker_required == 'true'
@@ -1564,6 +1693,8 @@ jobs:
   parser-version-guard:
     needs: ci-plan
     if: >-
+      inputs.pr_depth_only != true
+      &&
       (needs.ci-plan.outputs.coverage_profile != 'pilot-fast-v1' || contains(fromJSON(needs.ci-plan.outputs.pilot_fast_jobs || '[]'), 'parser-version-guard')) && (
       needs.ci-plan.outputs.run_required != 'false'
       && (
@@ -1658,6 +1789,8 @@ jobs:
   ci-generated-sources:
     needs: ci-plan
     if: >-
+      needs.ci-plan.outputs.pr_depth_reused != 'true'
+      &&
       (needs.ci-plan.outputs.coverage_profile != 'pilot-fast-v1' || contains(fromJSON(needs.ci-plan.outputs.pilot_fast_jobs || '[]'), 'ci-generated-sources')) && (
       needs.ci-plan.outputs.run_required != 'false'
       && (
@@ -1763,6 +1896,8 @@ jobs:
   ci-checks-docs:
     needs: ci-plan
     if: >-
+      inputs.pr_depth_only != true
+      &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
       inputs.heavy_only != true
@@ -1847,6 +1982,8 @@ jobs:
   ci-checks-generated:
     needs: [ci-plan, ci-generated-sources]
     if: >-
+      needs.ci-plan.outputs.pr_depth_reused != 'true'
+      &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
       inputs.heavy_only != true
@@ -2155,6 +2292,8 @@ jobs:
   ci-checks-policy:
     needs: [ci-plan, ci-generated-sources]
     if: >-
+      needs.ci-plan.outputs.pr_depth_reused != 'true'
+      &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
       inputs.heavy_only != true
@@ -2292,6 +2431,12 @@ jobs:
       - name: Ratchet scanner invariants
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun test scripts/ratchet-scan.test.ts
+
+      - name: Test subject reachability census
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: |
+          bun scripts/test-subject-reachability.ts --self-test
+          bun scripts/test-subject-reachability.ts --base "$RATCHET_BASE_REF"
 
       - name: Deployment feature guard
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
@@ -2448,6 +2593,8 @@ jobs:
   ci-checks-rest:
     needs: [ci-plan, ci-generated-sources]
     if: >-
+      needs.ci-plan.outputs.pr_depth_reused != 'true'
+      &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
       inputs.heavy_only != true
@@ -2775,6 +2922,12 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun run marketing:check
 
+      - name: Docker host mount guard
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: |
+          bun test scripts/check-docker-host-mounts.test.ts
+          bun run check:docker-host-mounts
+
       - name: Railway template shape
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun run check:railway-template
@@ -2788,6 +2941,19 @@ jobs:
         env:
           BASE_REF: ${{ github.base_ref || 'main' }}
         run: bash scripts/check-release-changelog.sh --base "origin/$BASE_REF"
+
+      - name: Release queue history guard
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (github.event_name == 'pull_request' || github.event_name == 'merge_group') }}
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git diff --quiet "$BASE_SHA"...HEAD -- VERSION; then
+            echo "VERSION unchanged; release queue history not required."
+            exit 0
+          fi
+          previous_tag="v$(git show "$BASE_SHA:VERSION" | tr -d '[:space:]')"
+          bun scripts/check-release-queue-history.ts --from "$previous_tag" --base "$BASE_SHA"
 
       # Same verdict the tag workflow gives after merge, delivered while the
       # release pull request can still wait for the Version Packages one.
@@ -3416,6 +3582,13 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun test scripts/prepare-maintenance-release.property.test.ts
 
+      - name: Test release queue history guard
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun test scripts/check-release-queue-history.test.ts
+      - name: Test promoted release resolution
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun test scripts/resolve-promoted-release.test.ts
+
       - name: Test API and CLI contract invariants
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: |
@@ -3441,6 +3614,10 @@ jobs:
           set -euo pipefail
           bun test scripts/ci-service-images.test.ts
           bun scripts/ci-service-images.ts
+
+      - name: Test CI service image workflow contracts
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
+        run: bun test scripts/ci-service-workflows.test.ts
 
       - name: Test CI workflow invariants
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
@@ -3674,6 +3851,8 @@ jobs:
   ci-tests:
     needs: ci-plan
     if: >-
+      inputs.pr_depth_only != true
+      &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
       (github.event_name != 'merge_group'
@@ -3709,7 +3888,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
           submodules: true
-          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
+          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Download planned API test durations
         if: startsWith(matrix.shard, 'api-') && needs.ci-plan.outputs.api_test_durations_hash != 'missing'
@@ -3934,6 +4113,8 @@ jobs:
   api-test-durations:
     needs: [ci-plan, ci-tests]
     if: >-
+      inputs.pr_depth_only != true
+      &&
       needs.ci-plan.outputs.run_required != 'false'
       && github.ref == 'refs/heads/main'
       && github.event_name != 'pull_request'
@@ -4003,6 +4184,8 @@ jobs:
   ci-browser:
     needs: ci-plan
     if: >-
+      inputs.pr_depth_only != true
+      &&
       (needs.ci-plan.outputs.coverage_profile != 'pilot-fast-v1' || contains(fromJSON(needs.ci-plan.outputs.pilot_fast_jobs || '[]'), 'ci-browser'))
       && needs.ci-plan.outputs.ci_browser_required == 'true'
     runs-on: ubuntu-latest
@@ -4013,12 +4196,14 @@ jobs:
         suite: ${{ github.event_name == 'pull_request' && fromJSON('["desktop"]') || fromJSON('["desktop","ui"]') }}
     container:
       image: ${{ needs.ci-plan.outputs.playwright_image }}
+      credentials: ${{ startsWith(needs.ci-plan.outputs.playwright_image, 'ghcr.io/') && fromJSON(format('{{"username":"{0}","password":"{1}"}}', github.actor, secrets.GITHUB_TOKEN)) || fromJSON('{}') }}
       options: --init --ipc=host
     defaults:
       run:
         shell: bash
     permissions:
       contents: read
+      packages: read
       actions: write
     steps:
       - name: Checkout
@@ -4027,7 +4212,7 @@ jobs:
           fetch-depth: 0
           filter: blob:none
           persist-credentials: false
-          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
+          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
           submodules: true
 
       - name: Check desktop browser test scope
@@ -4250,6 +4435,8 @@ jobs:
   code-quality-api:
     needs: [ci-plan, ci-generated-sources]
     if: >-
+      needs.ci-plan.outputs.pr_depth_reused != 'true'
+      &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
       inputs.heavy_only != true
@@ -4384,6 +4571,8 @@ jobs:
   code-quality-web-rest:
     needs: [ci-plan, ci-generated-sources]
     if: >-
+      needs.ci-plan.outputs.pr_depth_reused != 'true'
+      &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
       inputs.heavy_only != true
@@ -4599,27 +4788,30 @@ jobs:
   service-suites:
     needs: ci-plan
     if: >-
+      inputs.pr_depth_only != true
+      &&
       needs.ci-plan.outputs.run_required != 'false'
-      && (
-      (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && (
-      needs.ci-plan.outputs.queue_depth != 'thin'
-      && (needs.ci-plan.outputs.service_suites_required == 'true'
+      && needs.ci-plan.outputs.service_suites_required == 'true'
       && (needs.ci-plan.outputs.trusted == 'true'
           || github.event_name == 'workflow_dispatch')
-      && (needs.ci-plan.outputs.suite_depth == 'full'
-          || (needs.ci-plan.outputs.suite_depth == 'fast'
-              && needs.ci-plan.outputs.service_suites_pr_required == 'true'))
-      )
-      )
+      && (needs.ci-plan.outputs.corpus_suites_required == 'true'
+          || ((github.event_name != 'pull_request'
+                  || vars.CI_POSTGRES_PR_SELECTION == 'on')
+              && needs.ci-plan.outputs.queue_depth != 'thin'
+              && (needs.ci-plan.outputs.suite_depth == 'full'
+                  || (needs.ci-plan.outputs.suite_depth == 'fast'
+                      && needs.ci-plan.outputs.service_suites_pr_required == 'true')))
       )
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
       contents: read
+      packages: read
       actions: write
     services:
       redis:
-        image: redis:8@sha256:298e5b3bc566bade82f46ad5511777a4a07a294097ce16ada2f6a42be5239df5
+        image: ${{ needs.ci-plan.outputs.redis }}
+        credentials: ${{ startsWith(needs.ci-plan.outputs.redis, 'ghcr.io/') && fromJSON(format('{{"username":"{0}","password":"{1}"}}', github.actor, secrets.GITHUB_TOKEN)) || fromJSON('{}') }}
         ports:
           - 6380:6379
         options: >-
@@ -4629,7 +4821,8 @@ jobs:
           --health-retries 10
 
       postgres:
-        image: postgres:18.6@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280
+        image: ${{ needs.ci-plan.outputs.postgres }}
+        credentials: ${{ startsWith(needs.ci-plan.outputs.postgres, 'ghcr.io/') && fromJSON(format('{{"username":"{0}","password":"{1}"}}', github.actor, secrets.GITHUB_TOKEN)) || fromJSON('{}') }}
         env:
           POSTGRES_USER: stella_owner
           POSTGRES_PASSWORD: stella
@@ -4642,7 +4835,8 @@ jobs:
           --health-timeout 5s
           --health-retries 10
       valkey:
-        image: valkey/valkey:9.1.1-alpine@sha256:ee91f7a174ac4d6a6b0685b3a60e321f0a9dbbb691f9b0e285be2ba1d1be8328
+        image: ${{ needs.ci-plan.outputs.valkey }}
+        credentials: ${{ startsWith(needs.ci-plan.outputs.valkey, 'ghcr.io/') && fromJSON(format('{{"username":"{0}","password":"{1}"}}', github.actor, secrets.GITHUB_TOKEN)) || fromJSON('{}') }}
         ports:
           - 6379:6379
         options: >-
@@ -4656,7 +4850,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
+          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
@@ -4677,7 +4871,7 @@ jobs:
 
       - name: Run Postgres-gated API suites
         id: postgres-tests
-        if: needs.ci-plan.outputs.postgres_suites_required == 'true'
+        if: needs.ci-plan.outputs.postgres_suites_required == 'true' && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && needs.ci-plan.outputs.queue_depth != 'thin' && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true'))
         working-directory: apps/api
         env:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
@@ -4701,18 +4895,30 @@ jobs:
           fi
           bun scripts/ci-postgres-selector-miss.ts
 
+      - name: Login to GHCR for corpus engine
+        if: ${{ !cancelled() && needs.ci-plan.outputs.corpus_suites_required == 'true' && startsWith(needs.ci-plan.outputs.quickwit, 'ghcr.io/') }}
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
       - name: Start corpus engine
         if: ${{ !cancelled() && needs.ci-plan.outputs.corpus_suites_required == 'true' }}
         run: |
           docker run -d --name corpus-engine \
             -p 127.0.0.1:7290:7280 -p 127.0.0.1:7291:7280 \
-            quickwit/quickwit:0.9.0@sha256:1e6169bf4e98a489fca397105f1698c1d80a0f9779f3cf652973bac8a0c3b2bd run
+            ${{ needs.ci-plan.outputs.quickwit }} run
           curl --fail --silent --show-error --retry 30 --retry-connrefused \
             --retry-all-errors --retry-delay 1 --retry-max-time 60 --max-time 2 \
             http://127.0.0.1:7290/health/readyz
 
       # The statute recall floor is raise-only against the target branch; the
       # shallow checkout holds only HEAD, so fetch exactly the base commit.
+      - name: Log out of GitHub Container Registry
+        if: always()
+        run: docker logout ghcr.io
+
       - name: Select statute recall base from the target branch
         if: ${{ !cancelled() && needs.ci-plan.outputs.corpus_suites_required == 'true' }}
         env:
@@ -4747,14 +4953,14 @@ jobs:
       # Independent of the Postgres verdict: a failure there should not hide
       # this runner's result.
       - name: Run Valkey-gated API suites
-        if: ${{ !cancelled() && needs.ci-plan.outputs.valkey_suites_required == 'true' }}
+        if: ${{ !cancelled() && needs.ci-plan.outputs.valkey_suites_required == 'true' && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && needs.ci-plan.outputs.queue_depth != 'thin' && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true')) }}
         working-directory: apps/api
         env:
           REDIS_URL: redis://127.0.0.1:6379
         run: bun run test:valkey
 
       - name: Run cross-replica collaboration suite
-        if: ${{ !cancelled() && needs.ci-plan.outputs.collaboration_suite_required == 'true' }}
+        if: ${{ !cancelled() && needs.ci-plan.outputs.collaboration_suite_required == 'true' && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && needs.ci-plan.outputs.queue_depth != 'thin' && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true')) }}
         env:
           STELLA_COLLAB_TEST_REDIS_CONTAINER_ID: ${{ job.services.redis.id }}
           STELLA_COLLAB_TEST_REDIS_URL: redis://127.0.0.1:6380
@@ -4818,6 +5024,8 @@ jobs:
     # parity. See scripts/rehearse-migration-upgrade.sh.
     needs: ci-plan
     if: >-
+      inputs.pr_depth_only != true
+      &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
       github.event_name != 'pull_request' && (
@@ -4837,7 +5045,8 @@ jobs:
       actions: write
     services:
       postgres:
-        image: postgres:18.6@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280
+        image: ${{ needs.ci-plan.outputs.postgres }}
+        credentials: ${{ startsWith(needs.ci-plan.outputs.postgres, 'ghcr.io/') && fromJSON(format('{{"username":"{0}","password":"{1}"}}', github.actor, secrets.GITHUB_TOKEN)) || fromJSON('{}') }}
         env:
           POSTGRES_USER: stella_owner
           POSTGRES_PASSWORD: stella
@@ -4855,7 +5064,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
+          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
@@ -4876,12 +5085,8 @@ jobs:
         id: base
         run: |
           set -euo pipefail
-          version="$(curl -fsS --max-time 15 https://api.stll.app/ready | jq -r '.version // empty')"
-          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "::error::Production did not report a stable version (got '${version}')."
-            exit 1
-          fi
-          echo "ref=v${version}" >> "$GITHUB_OUTPUT"
+          ref="$(bun --preload ./scripts/offline-network-preload.ts scripts/resolve-promoted-release.ts --check)"
+          echo "ref=${ref}" >> "$GITHUB_OUTPUT"
 
       - name: Checkout workflow tooling
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -4907,6 +5112,7 @@ jobs:
           rm -rf .workflow-tooling
 
       - name: Drop the registry credential
+        if: always()
         run: docker logout ghcr.io
 
       - name: Rehearse the upgrade from the promoted release at scale
@@ -4966,6 +5172,8 @@ jobs:
   release-typecheck:
     needs: ci-plan
     if: >-
+      inputs.pr_depth_only != true
+      &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
       github.event_name != 'pull_request' && (
@@ -4988,7 +5196,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
+          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
@@ -5058,6 +5266,8 @@ jobs:
   fix-tests-on-base:
     needs: ci-plan
     if: >-
+      inputs.pr_depth_only != true
+      &&
       (needs.ci-plan.outputs.coverage_profile != 'pilot-fast-v1' || contains(fromJSON(needs.ci-plan.outputs.pilot_fast_jobs || '[]'), 'fix-tests-on-base')) && (
       needs.ci-plan.outputs.run_required != 'false'
       && (
@@ -5099,7 +5309,7 @@ jobs:
           fetch-depth: 0
           filter: blob:none
           persist-credentials: false
-          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
+          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
           submodules: true
 
       - name: Setup Bun
@@ -5144,6 +5354,8 @@ jobs:
   web-build:
     needs: ci-plan
     if: >-
+      inputs.pr_depth_only != true
+      &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
       github.event_name != 'pull_request' && (
@@ -5164,7 +5376,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
+          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
           persist-credentials: false
 
       - name: Setup Bun
@@ -5313,6 +5525,8 @@ jobs:
   web-image-smoke:
     needs: ci-plan
     if: >-
+      inputs.pr_depth_only != true
+      &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
       github.event_name != 'pull_request' && (
@@ -5327,13 +5541,28 @@ jobs:
     timeout-minutes: 8
     permissions:
       contents: read
+      packages: read
       actions: write
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
+          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
+
+      - name: Log in to the CI image mirror
+        continue-on-error: true
+        if: github.event.pull_request.head.repo.fork != true && github.token != ''
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        with:
+          bun-version-file: package.json
+          save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Checkout workflow tooling
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -5342,23 +5571,32 @@ jobs:
           path: .workflow-tooling
           persist-credentials: false
           sparse-checkout: |
-            scripts/pull-base-images.sh
+            scripts/ci-service-images.ts
+            scripts/ci-service-images.json
+            packages/scripts/src/child-exit-status.ts
             scripts/retry.sh
           sparse-checkout-cone-mode: false
 
       - name: Pull web base images
+        env:
+          CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
         run: |
-          bash .workflow-tooling/scripts/pull-base-images.sh apps/web/Dockerfile
-          rm -rf .workflow-tooling
+          bun .workflow-tooling/scripts/ci-service-images.ts --pull apps/web/Dockerfile
 
       - name: Build runner image
+        env:
+          CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
         run: >-
-          docker build
+          bun .workflow-tooling/scripts/ci-service-images.ts --build apps/web/Dockerfile --
           --file apps/web/Dockerfile
           --build-arg PUBLIC_API_URL=https://api.smoke.invalid
           --build-arg PUBLIC_APP_URL=https://app.smoke.invalid
           --tag stella-web-runner:ci
           .
+
+      - name: Log out of GitHub Container Registry
+        if: always()
+        run: docker logout ghcr.io
 
       - name: Boot runner container
         run: |
@@ -5436,6 +5674,8 @@ jobs:
   mobile-build:
     needs: ci-plan
     if: >-
+      inputs.pr_depth_only != true
+      &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
       github.event_name != 'pull_request' && (
@@ -5457,7 +5697,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
+          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
@@ -5531,6 +5771,8 @@ jobs:
   landing-build:
     needs: ci-plan
     if: >-
+      inputs.pr_depth_only != true
+      &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
       github.event_name != 'pull_request' && (
@@ -5551,7 +5793,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
+          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
@@ -5624,6 +5866,8 @@ jobs:
   heavy-web-build:
     needs: ci-plan
     if: >-
+      inputs.pr_depth_only != true
+      &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
       github.event_name != 'pull_request' && (
@@ -5642,7 +5886,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
+          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
@@ -5668,6 +5912,8 @@ jobs:
     # A thin merge group still runs the browser suites when the change needs
     # them; QUEUE_BROWSER_SUITES=off turns that off without a commit.
     if: >-
+      inputs.pr_depth_only != true
+      &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
       github.event_name != 'pull_request' && (
@@ -5685,13 +5931,16 @@ jobs:
     timeout-minutes: 12
     permissions:
       contents: read
+      packages: read
       actions: write
+    env:
+      CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
+          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
           fetch-depth: 0
 
       - name: Setup Bun
@@ -5727,6 +5976,16 @@ jobs:
         with:
           base-sha: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
           token: ${{ github.token }}
+
+      - name: Login to GitHub Container Registry for browser images
+        timeout-minutes: 2
+        if: github.event.pull_request.head.repo.fork != true && github.token != ''
+        continue-on-error: true
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Check route network baseline
         id: network-baseline
@@ -5820,6 +6079,8 @@ jobs:
     needs: [ci-plan, web-build, heavy-web-build]
     # Admitted to thin merge groups like route-smoke (see there).
     if: >-
+      inputs.pr_depth_only != true
+      &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
       github.event_name != 'pull_request' && (
@@ -5834,10 +6095,11 @@ jobs:
       )
       )
     runs-on: ubuntu-latest
-    # Longest leg: 13m setup + 9m tests + 4m uploads + 2m cancellation/post hooks.
-    timeout-minutes: 28
+    # Longest leg: 15m setup + 9m tests + 4m uploads + 2m cancellation/post hooks.
+    timeout-minutes: 30
     permissions:
       contents: read
+      packages: read
       actions: write
     strategy:
       fail-fast: false
@@ -5845,13 +6107,15 @@ jobs:
         # The route network baseline runs alone against its stack, so it
         # gets a leg of its own instead of lengthening a Playwright shard.
         shard: [1, 2, network-baseline]
+    env:
+      CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
     steps:
       - name: Checkout
         timeout-minutes: 7
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
+          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
           fetch-depth: 0
 
       - name: Setup Bun
@@ -5887,6 +6151,16 @@ jobs:
         with:
           base-sha: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
           token: ${{ github.token }}
+
+      - name: Login to GitHub Container Registry for browser images
+        timeout-minutes: 2
+        if: github.event.pull_request.head.repo.fork != true && github.token != ''
+        continue-on-error: true
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Check route network baseline
         timeout-minutes: 4
@@ -6052,6 +6326,8 @@ jobs:
   stack-redaction-browsers:
     needs: ci-plan
     if: >-
+      inputs.pr_depth_only != true
+      &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
       github.event_name != 'pull_request' && (
@@ -6067,13 +6343,16 @@ jobs:
     timeout-minutes: 35
     permissions:
       contents: read
+      packages: read
       actions: write
+    env:
+      CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
+          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
@@ -6084,6 +6363,16 @@ jobs:
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
+
+      - name: Login to GitHub Container Registry for browser images
+        timeout-minutes: 2
+        if: github.event.pull_request.head.repo.fork != true && github.token != ''
+        continue-on-error: true
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Verify Firefox and WebKit in the pinned image
         uses: ./.github/actions/setup-playwright
@@ -6154,6 +6443,8 @@ jobs:
   e2e-vite-canary:
     needs: ci-plan
     if: >-
+      inputs.pr_depth_only != true
+      &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
       github.event_name != 'pull_request' && (
@@ -6169,13 +6460,16 @@ jobs:
     timeout-minutes: 35
     permissions:
       contents: read
+      packages: read
       actions: write
+    env:
+      CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
+          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
@@ -6250,6 +6544,16 @@ jobs:
           echo "::error::Collaboration server never came up"
           tail -200 /tmp/collab.log || true
           exit 1
+
+      - name: Login to GitHub Container Registry for browser images
+        timeout-minutes: 2
+        if: github.event.pull_request.head.repo.fork != true && github.token != ''
+        continue-on-error: true
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install Playwright browsers
         if: steps.e2e-stack.outputs.status == 'ready'
@@ -6398,6 +6702,8 @@ jobs:
   e2e-landing:
     needs: ci-plan
     if: >-
+      inputs.pr_depth_only != true
+      &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
       github.event_name != 'pull_request' && (
@@ -6413,13 +6719,16 @@ jobs:
     timeout-minutes: 35
     permissions:
       contents: read
+      packages: read
       actions: write
+    env:
+      CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
+          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
@@ -6454,6 +6763,16 @@ jobs:
           echo "::error::Landing preview never came up"
           tail -200 /tmp/landing.log || true
           exit 1
+
+      - name: Login to GitHub Container Registry for browser images
+        timeout-minutes: 2
+        if: github.event.pull_request.head.repo.fork != true && github.token != ''
+        continue-on-error: true
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install Playwright browsers
         uses: ./.github/actions/setup-playwright
@@ -6552,6 +6871,8 @@ jobs:
     # declare the producer so artifact consumers start only after it succeeds.
     needs: [ci-plan, web-build, heavy-web-build]
     if: >-
+      inputs.pr_depth_only != true
+      &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
       github.event_name != 'pull_request' && (
@@ -6572,7 +6893,7 @@ jobs:
       contents: read
     with:
       mode: check
-      ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
+      ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
       # Serve the same production build the e2e shards use whenever web-build
       # runs in this workflow; the capture job builds it otherwise.
       web-build-artifact: ${{ needs.ci-plan.outputs.web_build_required == 'true' && 'e2e-web-build' || '' }}
@@ -6643,6 +6964,8 @@ jobs:
   e2e-report:
     needs: [ci-plan, e2e-production-shard, e2e-vite-canary]
     if: >-
+      inputs.pr_depth_only != true
+      &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
       github.event_name != 'pull_request' && (
@@ -6662,7 +6985,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
+          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
@@ -6747,6 +7070,8 @@ jobs:
     name: API release image (${{ matrix.platform }})
     needs: ci-plan
     if: >-
+      inputs.pr_depth_only != true
+      &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
       github.event_name != 'pull_request' && (
@@ -6765,14 +7090,29 @@ jobs:
     timeout-minutes: 8
     permissions:
       contents: read
+      packages: read
       actions: write
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
+          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
           submodules: true
+
+      - name: Log in to the CI image mirror
+        continue-on-error: true
+        if: github.event.pull_request.head.repo.fork != true && github.token != ''
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        with:
+          bun-version-file: package.json
+          save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Checkout workflow tooling
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -6781,24 +7121,44 @@ jobs:
           path: .workflow-tooling
           persist-credentials: false
           sparse-checkout: |
-            scripts/pull-base-images.sh
+            scripts/ci-service-images.ts
+            scripts/ci-service-images.json
+            packages/scripts/src/child-exit-status.ts
             scripts/retry.sh
           sparse-checkout-cone-mode: false
 
       - name: Pull API base images
+        env:
+          CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
         run: |
-          bash .workflow-tooling/scripts/pull-base-images.sh apps/api/Dockerfile
-          rm -rf .workflow-tooling
+          bun .workflow-tooling/scripts/ci-service-images.ts --pull apps/api/Dockerfile
 
       - name: Build final API release image
+        env:
+          CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
         run: |
           set -euo pipefail
-          docker build --progress=plain --file apps/api/Dockerfile \
+          bun .workflow-tooling/scripts/ci-service-images.ts --build apps/api/Dockerfile -- --progress=plain --file apps/api/Dockerfile \
             --build-arg "STELLA_VERSION=$(tr -d '[:space:]' < VERSION)" \
             --build-arg "STELLA_COMMIT_SHA=$(git rev-parse HEAD)" \
             --tag stella-api-release:ci . 2>&1 | tee "$RUNNER_TEMP/api-image-build.log"
 
+      - name: Pull API smoke service images
+        env:
+          POSTGRES_IMAGE: ${{ needs.ci-plan.outputs.postgres }}
+          REDIS_IMAGE: ${{ needs.ci-plan.outputs.redis }}
+        run: |
+          bash .workflow-tooling/scripts/retry.sh docker pull "$POSTGRES_IMAGE"
+          bash .workflow-tooling/scripts/retry.sh docker pull "$REDIS_IMAGE"
+
+      - name: Log out of GitHub Container Registry
+        if: always()
+        run: docker logout ghcr.io
+
       - name: Rehearse migrations and boot packaged entrypoints
+        env:
+          POSTGRES_IMAGE: ${{ needs.ci-plan.outputs.postgres }}
+          REDIS_IMAGE: ${{ needs.ci-plan.outputs.redis }}
         run: |
           set -euo pipefail
           bash scripts/smoke-api-image.sh stella-api-release:ci 2>&1 | tee "$RUNNER_TEMP/api-image-smoke.log"
@@ -6904,6 +7264,8 @@ jobs:
   legal-atlas-image:
     needs: ci-plan
     if: >-
+      inputs.pr_depth_only != true
+      &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
       github.event_name != 'pull_request' && (
@@ -6921,16 +7283,31 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
+      packages: read
       actions: write
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
+          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
+      - name: Log in to the CI image mirror
+        continue-on-error: true
+        if: github.event.pull_request.head.repo.fork != true && github.token != ''
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        with:
+          bun-version-file: package.json
+          save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Checkout workflow tooling
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -6939,13 +7316,21 @@ jobs:
           path: .workflow-tooling
           persist-credentials: false
           sparse-checkout: |
-            scripts/pull-base-images.sh
+            scripts/ci-service-images.ts
+            scripts/ci-service-images.json
+            packages/scripts/src/child-exit-status.ts
             scripts/retry.sh
           sparse-checkout-cone-mode: false
 
-      - name: Pull legal-atlas-runner base images
+      - name: Resolve legal-atlas-runner base images
+        id: base-contexts
+        env:
+          CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
         run: |
-          bash .workflow-tooling/scripts/pull-base-images.sh --buildx linux/amd64 apps/legal-atlas-runner/Dockerfile
+          echo 'contexts<<CI_IMAGE_CONTEXTS' >> "$GITHUB_OUTPUT"
+          bun .workflow-tooling/scripts/ci-service-images.ts --pull apps/legal-atlas-runner/Dockerfile
+          bun .workflow-tooling/scripts/ci-service-images.ts --build-contexts apps/legal-atlas-runner/Dockerfile >> "$GITHUB_OUTPUT"
+          echo 'CI_IMAGE_CONTEXTS' >> "$GITHUB_OUTPUT"
           rm -rf .workflow-tooling
 
       - name: Build legal-atlas-runner image
@@ -6953,10 +7338,15 @@ jobs:
         with:
           context: .
           file: apps/legal-atlas-runner/Dockerfile
+          build-contexts: ${{ steps.base-contexts.outputs.contexts }}
           platforms: linux/amd64
           push: false
           cache-from: type=gha,scope=legal-atlas-runner
           cache-to: type=gha,mode=max,scope=legal-atlas-runner
+
+      - name: Log out of GitHub Container Registry
+        if: always()
+        run: docker logout ghcr.io
 
       - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
@@ -7011,6 +7401,8 @@ jobs:
   windows-scripts:
     needs: ci-plan
     if: >-
+      inputs.pr_depth_only != true
+      &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
       github.event_name != 'pull_request' && (
@@ -7031,7 +7423,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
+          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
@@ -7128,6 +7520,8 @@ jobs:
     name: Desktop Rust (${{ matrix.os }})
     needs: ci-plan
     if: >-
+      inputs.pr_depth_only != true
+      &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
       github.event_name != 'pull_request' && (
@@ -7163,7 +7557,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
+          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
@@ -7243,12 +7637,36 @@ jobs:
               if ($_.HasPrivateKey) { Remove-Item -Path $_.PSPath -DeleteKey } else { Remove-Item -Path $_.PSPath }
             }
 
-      - name: Smoke native desktop transport against hosted API
+      - name: Setup Bun for the desktop transport smoke
+        if: matrix.os == 'macos'
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: "package.json"
+
+      - name: Install desktop transport smoke dependencies
         if: matrix.os == 'macos'
         shell: bash
+        run: bash scripts/retry.sh bun ci --ignore-scripts --filter @stll/api
         env:
-          STELLA_DESKTOP_SMOKE_API_URL: https://api.stll.app
-        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --lib --target ${{ matrix.target }} --locked registry::tests::hosted_api_accepts_native_desktop_requests -- --ignored --exact
+          NPM_TOKEN: ""
+
+      - name: Smoke native desktop transport against the local API contract
+        if: matrix.os == 'macos'
+        shell: bash
+        run: |
+          url_file="$RUNNER_TEMP/desktop-smoke-url"
+          bun apps/api/scripts/desktop-registry-transport-smoke-server.ts "$url_file" &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for _ in {1..100}; do
+            test -s "$url_file" && break
+            kill -0 "$server_pid" 2>/dev/null || { wait "$server_pid"; exit 1; }
+            sleep 0.1
+          done
+          test -s "$url_file"
+          STELLA_DESKTOP_SMOKE_API_URL="$(cat "$url_file")" cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --lib --target ${{ matrix.target }} --locked registry::tests::native_desktop_transport_reaches_api_authentication -- --ignored --exact
+          wait "$server_pid"
 
       - name: Install cargo-deny
         if: matrix.os == 'macos'
@@ -7315,6 +7733,8 @@ jobs:
   dependency-malware:
     needs: ci-plan
     if: >-
+      inputs.pr_depth_only != true
+      &&
       (needs.ci-plan.outputs.coverage_profile != 'pilot-fast-v1' || contains(fromJSON(needs.ci-plan.outputs.pilot_fast_jobs || '[]'), 'dependency-malware')) && (
       needs.ci-plan.outputs.run_required != 'false'
       && (
@@ -7332,7 +7752,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
+          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
       # No dependency cache: Safe Chain must inspect every registry download.
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
@@ -7484,6 +7904,12 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_REPO_ID: ${{ github.event.pull_request.head.repo.id }}
+          PATCH_ID: ${{ needs.ci-plan.outputs.patch_id }}
+          WORKFLOW_VERSION: ${{ needs.ci-plan.outputs.pr_depth_workflow_version }}
+          PR_DEPTH_JOBS: ${{ needs.ci-plan.outputs.pr_depth_jobs || '[]' }}
+          PR_DEPTH_REUSED: ${{ needs.ci-plan.outputs.pr_depth_reused }}
+          PR_DEPTH_ONLY: ${{ inputs.pr_depth_only }}
+          PR_DEPTH_SOURCE_RUN_ID: ${{ needs.ci-plan.outputs.pr_depth_source_run_id }}
           QUEUE_VALIDATION: ${{ needs.ci-plan.outputs.queue_validation }}
           PR_ACTION: ${{ github.event.action }}
           PLAN_RESULT: ${{ needs.ci-plan.result }}
@@ -7676,6 +8102,16 @@ jobs:
             exit 1
           fi
 
+          if [[ "${PR_DEPTH_ONLY:-false}" == true ]]; then
+            violations=$(jq -r --argjson required "$PR_DEPTH_JOBS" '[to_entries[] | select(.key as $job | $required | index($job)) | select(.value.result != "success") | "\(.key) (\(.value.result))"] | join(", ")' <<< "$NEEDS")
+            if [[ -n "$violations" || $(jq 'length' <<< "$PR_DEPTH_JOBS") -eq 0 ]]; then
+              echo "::error::Main PR-depth checks did not succeed: $violations"
+              exit 1
+            fi
+            echo "All derived PR-depth checks succeeded."
+            exit 0
+          fi
+
           if [[ "$QUEUE_DEPTH" == thin && "$EVENT" != merge_group ]]; then
             echo "::error::Thin queue depth is valid only for merge_group."
             exit 1
@@ -7692,15 +8128,25 @@ jobs:
             echo "CI validation already completed for this head, base and depth."
             exit 0
           fi
+          if [[ "$EVENT" == merge_group && "${PR_DEPTH_REUSED:-false}" == true ]]; then
+            reused_violations=$(jq -r --argjson reused "$PR_DEPTH_JOBS" '[to_entries[] | select(.key as $job | $reused | index($job)) | select(.value.result != "skipped") | "\(.key) (\(.value.result))"] | join(", ")' <<< "$NEEDS")
+            if [[ -n "$reused_violations" || ! "${PR_DEPTH_SOURCE_RUN_ID:-}" =~ ^[1-9][0-9]*$ ]]; then
+              echo "::error::Invalid PR-depth reuse: $reused_violations"
+              exit 1
+            fi
+            echo "Reused PR-depth checks from run ${PR_DEPTH_SOURCE_RUN_ID}." >> "$GITHUB_STEP_SUMMARY"
+          fi
           case "$SUITE_DEPTH" in
             full)
               # Planned checks must succeed. A thin queue allows only the
               # heavy skips selected by the same plan, and rejects failures.
-              violations=$(jq -r --argjson plan "$PLAN" --argjson scopes "$JOB_SCOPES" --arg queue "${QUEUE_DEPTH:-full}" --argjson thin "${THIN_JOBS:-[]}" '
+              violations=$(jq -r --argjson plan "$PLAN" --argjson scopes "$JOB_SCOPES" --arg queue "${QUEUE_DEPTH:-full}" --argjson thin "${THIN_JOBS:-[]}" --arg pr_reused "${PR_DEPTH_REUSED:-false}" --argjson pr_jobs "${PR_DEPTH_JOBS:-[]}" '
                 [to_entries[] | select(.key != "ci-plan") | .key as $job | .value.result as $result
                   | if $queue == "thin" and ($thin | index($job) | not) then
                       (if $result == "success" or $result == "skipped" then empty else "\($job) (\($result))" end)
                     elif ($scopes | has($job) | not) then "\($job) (no entry in JOB_SCOPES)"
+                    elif $pr_reused == "true" and ($pr_jobs | index($job)) then
+                      (if $result == "skipped" then empty else "\($job) (reused, \($result))" end)
                     elif ($scopes[$job] == null or $plan[$scopes[$job]] == "true") then
                       (if $result == "success" then empty else "\($job) (planned, \($result))" end)
                     elif $result == "success" or $result == "skipped" then empty
@@ -7774,7 +8220,7 @@ jobs:
             evidence=$(jq -ce --argjson plan "$PLAN" --argjson scopes "$evidence_scopes" --argjson required "$evidence_required" \
               --arg marker "$COMPLETION_MARKER" --arg run "$GITHUB_RUN_ID" --arg attempt "$GITHUB_RUN_ATTEMPT" \
               --arg pr "$PR_NUMBER" --arg repo "$HEAD_REPO_ID" --arg head "$HEAD_SHA" --arg base "$BASE_SHA" \
-              --arg depth "$SUITE_DEPTH" --arg profile "${COVERAGE_PROFILE:-normal-v1}" '
+              --arg depth "$SUITE_DEPTH" --arg profile "${COVERAGE_PROFILE:-normal-v1}" --arg patch "$PATCH_ID" --arg workflow "$WORKFLOW_VERSION" --argjson pr_depth "$PR_DEPTH_JOBS" '
               (with_entries(.value = .value.result)) as $jobs
               | ([$required[] | select($scopes[.] == null or $plan[$scopes[.]] == "true")] | unique) as $planned
               | select(($jobs | length) > 1 and $jobs["ci-plan"] == "success"
@@ -7782,10 +8228,10 @@ jobs:
                 and ($planned | length) > 0
                 and all($planned[]; . as $job | $jobs[$job] == "success")
                 and ($head | test("^[0-9a-f]{40}$")) and ($base | test("^[0-9a-f]{40}$")))
-              | {version: 5, marker: $marker, event: "pull_request",
+              | {version: 6, marker: $marker, event: "pull_request",
                 run_id: ($run | tonumber), run_attempt: ($attempt | tonumber),
                 pr_number: ($pr | tonumber), head_repo_id: ($repo | tonumber),
-                head_sha: $head, base_sha: $base, suite_depth: $depth,
+                head_sha: $head, base_sha: $base, patch_id: $patch, workflow_version: $workflow, pr_depth_jobs: $pr_depth, suite_depth: $depth,
                 coverage_profile: (if $profile == "" then "normal-v1" else $profile end),
                 planned: $planned, jobs: $jobs}' <<< "$NEEDS") || evidence=""
             if [[ -n "$evidence" ]]; then
@@ -7801,7 +8247,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
+          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
           sparse-checkout: |
             scripts/check-main-merge-hold.sh
             scripts/release-pull-requests.sh

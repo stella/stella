@@ -43,6 +43,23 @@ const FIXTURE_DIR = path.join(import.meta.dir, "../fixtures/rpc");
 const readFixture = (name: string): unknown =>
   JSON.parse(readFileSync(path.join(FIXTURE_DIR, name), "utf-8"));
 
+test("snapshot fixture advertises the native bridge contract revision", () => {
+  const native = readFileSync(
+    new URL("../src-tauri/src/types.rs", import.meta.url),
+    "utf-8",
+  );
+  const revision = /^pub const BRIDGE_VERSION: u32 = (\d+);$/mu
+    .exec(native)
+    ?.at(1);
+  if (!revision) {
+    throw new TypeError("Missing native bridge contract revision");
+  }
+  expect(readFixture("app-snapshot.json")).toHaveProperty(
+    "bridgeVersion",
+    Number(revision),
+  );
+});
+
 // Fixtures are hand-authored JSON objects (never arrays or primitives); this
 // guard narrows the parsed `unknown` before mutating tests spread/drop keys,
 // rather than asserting the shape blind.
@@ -80,7 +97,7 @@ const CAMEL_CASE = /^[a-z][a-zA-Z0-9]*$/u;
 // runtime `toEqual` is the on-disk half.
 const appSnapshot = {
   bridgePort: 45_901,
-  bridgeVersion: 17,
+  bridgeVersion: 18,
   capabilities: ["office-edit.v1", "self-host.connect", "account-link.v4"],
   notificationPreferences: {
     documentReady: true,

@@ -11,6 +11,8 @@ import { panic, Result } from "better-result";
  */
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { sha256Hex as legacySha256Hex } from "@stll/sha256/node";
+
 import {
   decodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
@@ -31,6 +33,7 @@ import {
   plUodoDocketOfCourtUrn,
   plUodoListingIdentity,
   plUodoRawPartsOf,
+  plUodoQuarantineId,
   tallyPlUodoSkips,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-uodo";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
@@ -1376,4 +1379,52 @@ describe("the stored listing", () => {
       ),
     ).toEqual(served);
   });
+});
+
+test("body checksums accept exactly the legacy SHA-256 bytes", async () => {
+  const listed = normalizePlUodoRow(await recordOf(DECISION_URN));
+  expect(listed.resources.length).toBeGreaterThan(0);
+  for (const text of ["", "ordinary", "Žluťoučký koń Łódź", "e\u0301"]) {
+    const bytes = new TextEncoder().encode(text);
+    const row = {
+      ...listed,
+      resources: listed.resources.map((resource) => ({
+        ...resource,
+        checksum: `{SHA256}${legacySha256Hex(bytes)}`,
+      })),
+    };
+    expect(plUodoBodyFrom(row, bytes)?.checksumMatches).toBe(true);
+    expect(
+      plUodoBodyFrom(row, new Uint8Array([...bytes, 0]))?.checksumMatches,
+    ).toBe(false);
+  }
+});
+
+test("quarantine identities and raw hashes retain the legacy SHA-256 recipe", async () => {
+  for (const text of ["", "ordinary", "Žluťoučký koń Łódź", "e\u0301"]) {
+    const listing = {
+      ...(await recordOf(DECISION_URN)),
+      refid: "",
+      refname: text,
+      name: { pl: text || "decision" },
+      title: { pl: text },
+    };
+    const row = normalizePlUodoRow(listing);
+    expect(plUodoQuarantineId(row)).toBe(
+      `pl-uodo-quarantine:${legacySha256Hex(
+        JSON.stringify({
+          refname: row.refname ?? null,
+          time: row.time ?? null,
+          kind: row.kind ?? null,
+          name: row.name ?? null,
+          title: row.title ?? null,
+          type: row.publicator.type ?? null,
+          subtype: row.publicator.subtype ?? null,
+          country: row.publicator.country ?? null,
+        }),
+      )}`,
+    );
+    const decision = builtDecision(buildFrom(listing, undefined));
+    expect(decision.rawHash).toBe(legacySha256Hex(decision.sourceRaw ?? ""));
+  }
 });

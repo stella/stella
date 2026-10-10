@@ -81,6 +81,8 @@ const related = (
   citationAuthority: 0,
   country: "CZE",
   court: "Nejvyšší soud",
+  courtAbbreviation: "NS",
+  sourceUrl: null,
   decisionDate: "2020-01-01",
   decisionType: "rozsudek",
   ecli: null,
@@ -312,6 +314,7 @@ describe("citation summary", () => {
         `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`,
       ),
       citationText,
+      textWithheldReason: null,
       sectionIndex: n,
       treatment: "unclassified" as const,
       decision,
@@ -330,8 +333,8 @@ describe("citation summary", () => {
       appUrlOf,
     );
     expect(summary.cites.decisions).toEqual([
-      { citation: "sp. zn. 29 Odo 1/2001" },
-      { citation: "29 Odo 1/2001" },
+      { citation: "sp. zn. 29 Odo 1/2001", textWithheldReason: null },
+      { citation: "29 Odo 1/2001", textWithheldReason: null },
       {
         caseNumber: "5 Cdo 5/2020",
         decisionId: decisionId(5),
@@ -339,6 +342,29 @@ describe("citation summary", () => {
       },
     ]);
     expect(summary.cites.more).toBe(true);
+  });
+
+  test("restricted unresolved citation text is represented only by its marker", () => {
+    const summary = citationSummaryOutput(
+      digestOf({
+        cites: [
+          {
+            id: brandPersistedCaseLawCitationId(
+              "00000000-0000-4000-8000-000000000099",
+            ),
+            citationText: null,
+            textWithheldReason: "source_licence",
+            sectionIndex: null,
+            treatment: "unclassified",
+            decision: null,
+          },
+        ],
+      }),
+      appUrlOf,
+    );
+    expect(summary.cites.decisions).toEqual([
+      { citation: null, textWithheldReason: "source_licence" },
+    ]);
   });
 });
 
