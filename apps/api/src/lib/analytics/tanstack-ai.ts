@@ -342,7 +342,7 @@ const recordTanStackConsumption = async ({
       unitsConsumed: lane === "pool" ? unitsConsumed : 0,
       isByok: modelInfo.keySource === "byok",
       lane,
-      modelRole: config.modelTask ?? "chat",
+      modelTask: config.modelTask ?? "chat",
       organizationId: metering.organizationId,
       rawUsageMicroUnits,
       serviceTier: effectiveServiceTier,

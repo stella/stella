@@ -41,6 +41,25 @@ const REMOVED_MODEL_EXPORTS = new Set([
   "getTemperatureForRole",
   "tanStackModelOptionsForRole",
 ]);
+export const LEGACY_FIELD_BY_MODEL_CALL = {
+  generateTanStackTextForTask: "role",
+  generateTanStackObjectForTask: "role",
+  streamTanStackTextForTask: "role",
+  streamTanStackObjectForTask: "role",
+  getTanStackTextModelById: "role",
+  getTanStackTextModelForTask: "role",
+  getTanStackTextModelInfoForTask: "role",
+  requireTanStackAIAvailableForTask: "role",
+  isAllowedBYOKModelForTask: "role",
+  isDeferredServiceTierAvailableForTask: "role",
+  resolveWorkingBYOKModelForTask: "role",
+  resolveOrgAIModelForTask: "role",
+  resolveTanStackTextModel: "role",
+  tanStackModelOptionsForTask: "role",
+  resolveCaching: "role",
+  createTanStackAIAnalyticsCallbacks: "modelRole",
+  recordUsageEvent: "modelRole",
+} as const satisfies Record<string, "role" | "modelRole">;
 const MEASURED_DEFAULT_ELIGIBILITY = {
   "local-eval": "eligible",
   "same-weights": "eligible",
@@ -146,12 +165,24 @@ export const checkModelDefaultsSource = ({
       );
     }
   };
+  const modelCalls = new Map(Object.entries(LEGACY_FIELD_BY_MODEL_CALL));
+  const registerImport = (binding: ts.ImportSpecifier) => {
+    const name = (binding.propertyName ?? binding.name).text;
+    reportRemoved(name);
+    if (binding.propertyName !== undefined) {
+      reportRemoved(binding.name.text);
+    }
+    const legacyField = modelCalls.get(name);
+    if (legacyField !== undefined) {
+      modelCalls.set(binding.name.text, legacyField);
+    }
+  };
   for (const statement of file.statements) {
     if (ts.isImportDeclaration(statement)) {
       const bindings = statement.importClause?.namedBindings;
       if (bindings !== undefined && ts.isNamedImports(bindings)) {
         for (const binding of bindings.elements) {
-          reportRemoved((binding.propertyName ?? binding.name).text);
+          registerImport(binding);
         }
       }
       continue;
@@ -220,6 +251,44 @@ export const checkModelDefaultsSource = ({
       reportRemoved(statement.name.text);
     }
   }
+  const inspectModelCalls = (node: ts.Node) => {
+    if (ts.isCallExpression(node)) {
+      const name = ts.isPropertyAccessExpression(node.expression)
+        ? node.expression.name
+        : node.expression;
+      const legacyField = ts.isIdentifier(name)
+        ? modelCalls.get(name.text)
+        : undefined;
+      if (legacyField !== undefined) {
+        for (const argument of node.arguments) {
+          if (!ts.isObjectLiteralExpression(argument)) {
+            continue;
+          }
+          for (const property of argument.properties) {
+            if (
+              !ts.isPropertyAssignment(property) &&
+              !ts.isShorthandPropertyAssignment(property)
+            ) {
+              continue;
+            }
+            const key = ts.isComputedPropertyName(property.name)
+              ? property.name.expression
+              : property.name;
+            if (
+              (ts.isIdentifier(key) || ts.isStringLiteral(key)) &&
+              key.text === legacyField
+            ) {
+              errors.push(
+                `${relativePath}: ${name.getText(file)} requires the task contract; remove ${legacyField}`,
+              );
+            }
+          }
+        }
+      }
+    }
+    ts.forEachChild(node, inspectModelCalls);
+  };
+  inspectModelCalls(file);
   return errors;
 };
 
@@ -241,7 +310,10 @@ const checkRepositoryModelDefaultsSources = (): string[] => {
       !source.includes("ForRole") &&
       !source.includes("ModelRole") &&
       !source.includes("MODEL_ROLES") &&
-      !source.includes("DEFAULT_MODELS")
+      !source.includes("DEFAULT_MODELS") &&
+      !Object.keys(LEGACY_FIELD_BY_MODEL_CALL).some((name) =>
+        source.includes(name),
+      )
     ) {
       continue;
     }

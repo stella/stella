@@ -36,9 +36,9 @@ const DERIVE_ASK_TIMEOUT_MS = 20_000;
 // positions) cannot burst an unbounded number of external calls at once.
 const DERIVE_ASK_CONCURRENCY = 4;
 
-// The derive-ask task shares the verdict grading role so both playbook AI paths
+// The derive-ask task shares the verdict grading task so both playbook AI paths
 // resolve to the same model.
-const DERIVE_ASK_ROLE = "pdf" as const;
+const DERIVE_ASK_TASK = "pdf" as const;
 
 const DERIVE_ASK_SYSTEM_PROMPT =
   "You turn a contract-review issue and its tiered rules into ONE extraction " +
@@ -125,7 +125,7 @@ const defaultDeriveAskGenerate: DeriveAskGenerate = async (input) => {
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
     dataClass: "customer",
     feature: "playbook.derive-ask",
-    modelTask: DERIVE_ASK_ROLE,
+    modelTask: DERIVE_ASK_TASK,
     organizationId,
     orgAIConfig,
     properties: { organization_id: organizationId },
@@ -135,7 +135,7 @@ const defaultDeriveAskGenerate: DeriveAskGenerate = async (input) => {
   try {
     return await generateTanStackObjectForTask({
       dataClass: "customer",
-      role: DERIVE_ASK_ROLE,
+      task: DERIVE_ASK_TASK,
       orgAIConfig,
       managedAIResidency,
       organizationId,
@@ -146,7 +146,7 @@ const defaultDeriveAskGenerate: DeriveAskGenerate = async (input) => {
       analytics: aiAnalytics,
       caching: resolveCaching({
         promptCachingEnabled,
-        role: DERIVE_ASK_ROLE,
+        task: DERIVE_ASK_TASK,
         scopeKey: null,
       }),
       serviceTier: "standard",

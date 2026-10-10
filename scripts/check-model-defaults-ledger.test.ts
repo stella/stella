@@ -9,6 +9,7 @@ import {
 import {
   checkModelDefaultsLedger,
   checkModelDefaultsSource,
+  LEGACY_FIELD_BY_MODEL_CALL,
 } from "./check-model-defaults-ledger";
 import { addedEntries, parseReasonedLedger } from "./ledger-membership";
 
@@ -26,9 +27,53 @@ const withGoogleChat = (entry: ModelDefaultEntry) => ({
 });
 
 describe("task model source ownership", () => {
+  test("rejects legacy argument fields across task calls and imported aliases", () => {
+    for (const [name, field] of Object.entries(LEGACY_FIELD_BY_MODEL_CALL)) {
+      for (const key of [field, `"${field}"`, `["${field}"]`]) {
+        for (const call of [name, "aliased", `models.${name}`]) {
+          expect(
+            checkModelDefaultsSource({
+              relativePath: "apps/api/src/lib/example.ts",
+              source: `import { ${name} as aliased } from "./models"; ${call}({ ${key}: "pdf" });`,
+            }).length,
+          ).toBeGreaterThan(0);
+        }
+      }
+      expect(
+        checkModelDefaultsSource({
+          relativePath: "apps/api/src/lib/example.ts",
+          source: `${name}({ ${field} });`,
+        }).length,
+      ).toBeGreaterThan(0);
+    }
+  });
+
+  test("keeps message roles, override groups, and the storage column distinct from task inputs", () => {
+    expect(
+      checkModelDefaultsSource({
+        relativePath: "apps/api/src/lib/example.ts",
+        source: `generateTanStackObjectForTask({ task: "pdf", messages: [{ role: "user", content: "Question" }] });
+        resolveCaching({ task: "pdf" });
+        createTanStackAIAnalyticsCallbacks({ modelTask: "short-text" });
+        recordUsageEvent({ modelTask: "short-text" });
+        tx.insert(usageEvents).values({ modelRole: modelTask });
+        isBYOKProviderRoleSupported({ provider: "google", role: "pdf" });`,
+      }),
+    ).toEqual([]);
+    expect(
+      checkModelDefaultsSource({
+        relativePath: "apps/api/src/lib/example.ts",
+        source:
+          "generateTanStackObjectForTask({ role: DERIVE_ASK_ROLE }); resolveCaching({ role: DERIVE_ASK_ROLE });",
+      }),
+    ).toHaveLength(2);
+  });
+
   test("rejects removed imports, aliases, and exported declarations", () => {
     for (const source of [
       'import type { ModelRole as Role } from "@stll/ai-catalog";',
+      'import type { ModelTask as ModelRole } from "@stll/ai-catalog";',
+      'import { MODEL_TASKS as MODEL_ROLES } from "@stll/ai-catalog";',
       'import { MODEL_ROLES, DEFAULT_MODELS as defaults } from "@stll/ai-catalog";',
       'import { generateTanStackTextForRole as generate } from "@/api/lib/tanstack-ai-generate";',
       "export { task as ModelRole };",
