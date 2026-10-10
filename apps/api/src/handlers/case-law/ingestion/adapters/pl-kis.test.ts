@@ -492,15 +492,17 @@ describe("every ingested category, as the service served it", () => {
       rawParts,
       pdfBytes: corrected,
     });
-    expect(first.decision.sourceRaw).toBe(second.decision.sourceRaw);
+    const firstRaw =
+      first.decision.sourceRaw ?? panic("first source envelope missing");
+    const secondRaw =
+      second.decision.sourceRaw ?? panic("second source envelope missing");
+    expect(firstRaw).toBe(secondRaw);
     expect(first.decision.rawHash).toBe(again.decision.rawHash);
     expect(first.decision.rawHash).toBe(
-      legacySha256Hex(`${first.decision.sourceRaw}\n${legacySha256Hex(pdf)}`),
+      legacySha256Hex(`${firstRaw}\n${legacySha256Hex(pdf)}`),
     );
     expect(second.decision.rawHash).toBe(
-      legacySha256Hex(
-        `${second.decision.sourceRaw}\n${legacySha256Hex(corrected)}`,
-      ),
+      legacySha256Hex(`${secondRaw}\n${legacySha256Hex(corrected)}`),
     );
     expect(first.decision.rawHash).not.toBe(second.decision.rawHash);
   });

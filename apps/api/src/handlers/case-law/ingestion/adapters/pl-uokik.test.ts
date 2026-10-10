@@ -360,10 +360,10 @@ describe("a decision", () => {
         { name, status: PL_UOKIK_FILE_STATUS.READ, bytes: await pdfBytes() },
       ]),
     );
+    const sourceRaw =
+      decision.sourceRaw ?? panic("decision source envelope missing");
     expect(decision.rawHash).toBe(
-      legacySha256Hex(
-        `${decision.sourceRaw}\n${legacySha256Hex(await pdfBytes())}`,
-      ),
+      legacySha256Hex(`${sourceRaw}\n${legacySha256Hex(await pdfBytes())}`),
     );
     expect(decision.sourceDocumentId).toBe(WITH_RULINGS);
     expect(decision.caseNumber === "DOK-9/2011").toBe(true);
@@ -951,11 +951,13 @@ describe("the court rulings a decision page attaches", () => {
     const kept =
       appeal.sourceRawObjects?.["ruling-file"]?.bytes ??
       panic("ruling bytes missing");
-    expect(String(appeal.metadata["attachmentSha256"])).toBe(
-      legacySha256Hex(kept),
+    expect(appeal.metadata["attachmentSha256"] === legacySha256Hex(kept)).toBe(
+      true,
     );
+    const sourceRaw =
+      appeal.sourceRaw ?? panic("appeal source envelope missing");
     expect(appeal.rawHash).toBe(
-      legacySha256Hex(`${appeal.sourceRaw}\n${legacySha256Hex(kept)}`),
+      legacySha256Hex(`${sourceRaw}\n${legacySha256Hex(kept)}`),
     );
     expect(appeal.court === "Sąd Apelacyjny w Warszawie").toBe(true);
     expect(appeal.caseNumber === "VI ACa 527/08").toBe(true);
