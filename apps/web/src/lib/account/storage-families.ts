@@ -170,6 +170,13 @@ export const USER_STORAGE_FAMILIES: readonly UserStorageFamily[] = [
     // The chosen default only; the per-chat modes name one user's chats.
     legacy: { keys: "bare", adopt: keepPersistedFields(["defaultSendMode"]) },
   },
+  // The skill each main-area chat runs with: the user's choice per chat.
+  {
+    area: "local",
+    prefix: "stella.chat.threadActiveSkill",
+    owner: "scoped",
+    retention: "kept-for-owner",
+  },
   // Report exports still running: work in flight on organization data.
   {
     area: "local",

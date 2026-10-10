@@ -1,6 +1,7 @@
 import type { StreamChunk } from "@tanstack/ai";
 
 import { REASONING_EFFORTS } from "@stll/ai-catalog";
+import type { ChatSendRequest } from "@stll/api-contract/chat";
 import type { ChatMessageRevisionEdit } from "@stll/api-contract/chat-message-revisions";
 
 import { entityFeaturePolicies } from "@/api/db/entity-feature-policies";
@@ -114,6 +115,11 @@ export const chatThreads = p.pgTable(
     organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
+    /** Skill selected when the thread starts; null means an ordinary chat. */
+    activeSkill:
+      jsonb("active_skill").$type<
+        NonNullable<ChatSendRequest["activeSkill"]>
+      >(),
     title: p.varchar({ length: CHAT_THREAD_TITLE_MAX_LENGTH }).notNull(),
     // Provenance of `title`; gates whether background AI titling may replace it.
     // See ChatTitleSource in ./common. New threads start "default"; a rename

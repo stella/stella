@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 
 import type { ReasoningEffort } from "@stll/ai-catalog";
+import type { ChatSendRequest } from "@stll/api-contract/chat";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { chatThreads } from "@/api/db/schema";
@@ -27,6 +28,7 @@ import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { PG_ERROR, pgErrorFields } from "@/api/lib/pg-error";
 
 type ReadThreadValidationStateProps = {
+  initialActiveSkill?: ChatSendRequest["activeSkill"];
   messageId: SafeId<"chatMessage">;
   organizationId: SafeId<"organization">;
   safeDb: SafeDb;
@@ -36,6 +38,8 @@ type ReadThreadValidationStateProps = {
 };
 
 type ThreadValidationState = {
+  /** Existing threads use their stored skill, including an ordinary-chat null. */
+  activeSkill: ChatSendRequest["activeSkill"];
   persistedMessage: {
     content: PersistedChatMessageContent;
     role: ChatMessage["role"];
@@ -46,6 +50,7 @@ type ThreadValidationState = {
 };
 
 export const readThreadValidationState = async ({
+  initialActiveSkill,
   messageId,
   organizationId,
   safeDb,
@@ -65,6 +70,7 @@ export const readThreadValidationState = async ({
             userId: { eq: userId },
           },
           columns: {
+            activeSkill: true,
             workspaceId: true,
             webSearchEnabled: true,
           },
@@ -86,6 +92,7 @@ export const readThreadValidationState = async ({
 
     if (read === null) {
       return Result.ok({
+        activeSkill: initialActiveSkill,
         persistedMessage: null,
         threadNames: EMPTY_CHAT_THREAD_NAMES_READ,
         webSearchEnabled: false,
@@ -105,6 +112,7 @@ export const readThreadValidationState = async ({
 
     const persistedMessage = thread.messages.at(0);
     return Result.ok({
+      activeSkill: thread.activeSkill ?? undefined,
       persistedMessage:
         persistedMessage === undefined
           ? null
@@ -135,6 +143,7 @@ type ChatThreadRecord = {
 };
 
 type LoadThreadProps = {
+  initialActiveSkill?: ChatSendRequest["activeSkill"];
   /**
    * Server-derived workspace scope inherited by a newly created draft chat.
    * This is deliberately not populated from the request: a draft can place
@@ -185,6 +194,7 @@ type LoadThreadAttemptProps = LoadThreadProps & {
 
 const loadThreadAttempt = async ({
   claimAttempt,
+  initialActiveSkill,
   initialDataWorkspaceIds,
   initialContextMatterIds,
   organizationId,
@@ -321,6 +331,7 @@ const loadThreadAttempt = async ({
       }
       return await loadThreadAttempt({
         claimAttempt: claimAttempt + 1,
+        initialActiveSkill,
         initialDataWorkspaceIds,
         initialContextMatterIds,
         organizationId,
@@ -404,6 +415,7 @@ const loadThreadAttempt = async ({
         userId,
         workspaceId,
         contextMatterIds: initialContextMatterIds,
+        activeSkill: initialActiveSkill ?? null,
         rollbackToken,
         subjectDecisionId,
         // Workspace-scoped chats embed at minimum their own

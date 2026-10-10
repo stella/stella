@@ -1984,6 +1984,7 @@
     "sort": "Sortuj",
     "source": "Źródło",
     "stale": "Nieaktualne",
+    "start": "Rozpocznij",
     "status": "Status",
     "stepCount": "{count, plural, one {# krok} few {# kroki} many {# kroków} other {# kroku}}",
     "stepProgress": "{current} z {total}",
@@ -2771,7 +2772,6 @@
       },
       "selectFlow": "Wybierz przepływ pracy",
       "sizeConfirmTitle": "Obszerne uruchomienie przepływu",
-      "start": "Rozpocznij",
       "startFailed": "Nie udało się uruchomić przepływu pracy.",
       "started": "Uruchomiono przepływ pracy",
       "stepProgress": "Krok {current} z {total}",
@@ -2988,8 +2988,7 @@
   "guides": {
     "action": {
       "replay": "Uruchom ponownie",
-      "skip": "Pomiń",
-      "start": "Rozpocznij"
+      "skip": "Pomiń"
     },
     "checklist": {
       "progress": "Ukończono {completed} z {total}"
@@ -3668,6 +3667,10 @@
         "failed": "Nie udało się zapisać",
         "nameMissing": "Nie zapisano: podaj nazwę",
         "positionsNeedAttention": "Nie zapisano: {count, plural, one {# stanowisko wymaga} few {# stanowiska wymagają} many {# stanowisk wymaga} other {# stanowiska wymaga}} uwagi"
+      },
+      "buildWithAi": {
+        "description": "Odpowiedz na kilka pytań na czacie, a playbook będzie zapisywany na bieżąco.",
+        "title": "Utwórz z AI"
       },
       "check": "Użyj dokładnej reguły zamiast AI",
       "checkHint": "Do mierzalnych warunków, na przykład: termin płatności ≤ 30 dni.",

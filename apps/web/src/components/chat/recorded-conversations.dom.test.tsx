@@ -215,6 +215,7 @@ const createRecordedServer = (recording: RecordedConversation) => {
       reasoningEffort: null,
       // Every settled request writes the thread, which moves its revision.
       threadRevision: `revision-${String(revision)}`,
+      activeSkill: null,
       threadExists: page.messages.length > 0,
       usedAnonymization: false,
       webSearchAvailable: false,

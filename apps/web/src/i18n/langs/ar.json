@@ -1984,6 +1984,7 @@
     "sort": "فرز",
     "source": "المصدر",
     "stale": "قديم",
+    "start": "ابدأ",
     "status": "الحالة",
     "stepCount": "{count, plural, zero {# خطوة} one {# خطوة} two {# خطوتان} few {# خطوات} many {# خطوة} other {# خطوة}}",
     "stepProgress": "{current} من {total}",
@@ -2771,7 +2772,6 @@
       },
       "selectFlow": "اختر مسار عمل",
       "sizeConfirmTitle": "تشغيل سير عمل كبير",
-      "start": "بدء",
       "startFailed": "تعذّر بدء مسار العمل.",
       "started": "تم بدء مسار العمل",
       "stepProgress": "الخطوة {current} من {total}",
@@ -2988,8 +2988,7 @@
   "guides": {
     "action": {
       "replay": "البدء من جديد",
-      "skip": "تخطي",
-      "start": "ابدأ"
+      "skip": "تخطي"
     },
     "checklist": {
       "progress": "اكتمل {completed} من {total}"
@@ -3668,6 +3667,10 @@
         "failed": "تعذّر الحفظ",
         "nameMissing": "لم يُحفظ: أضِف اسمًا",
         "positionsNeedAttention": "لم يُحفظ: {count, plural, zero {لا مواقف تحتاج} one {موقف واحد يحتاج} two {موقفان يحتاجان} few {# مواقف تحتاج} many {# موقفًا يحتاج} other {# موقف يحتاج}} إلى مراجعة"
+      },
+      "buildWithAi": {
+        "description": "أجب عن بضعة أسئلة في دردشة، ويُحفظ دليل المراجعة أولًا بأول.",
+        "title": "الإنشاء بالذكاء الاصطناعي"
       },
       "check": "استخدام قاعدة دقيقة بدلًا من الذكاء الاصطناعي",
       "checkHint": "للشروط القابلة للقياس، مثل: مهلة السداد ≤ 30 يومًا.",

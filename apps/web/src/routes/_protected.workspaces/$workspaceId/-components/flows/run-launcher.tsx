@@ -227,7 +227,7 @@ export const RunLauncher = ({
       </div>
 
       <RunSizeConfirmDialog
-        confirmLabel={t("flows.runs.start")}
+        confirmLabel={t("common.start")}
         detail={sizeConfirmation}
         title={t("flows.runs.sizeConfirmTitle")}
         onConfirm={() => {
@@ -251,7 +251,7 @@ export const RunLauncher = ({
           type="button"
         >
           <PlayIcon />
-          {t("flows.runs.start")}
+          {t("common.start")}
         </Button>
       </div>
     </div>

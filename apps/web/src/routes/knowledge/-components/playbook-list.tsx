@@ -1,4 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
@@ -14,6 +15,10 @@ import {
 import { PlusIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 
+import {
+  PLAYBOOK_BUILDER_SKILL_NAME,
+  setThreadActiveSkill,
+} from "@/features/chat/thread-active-skill-store";
 import { guideAnchor } from "@/features/guides/guide-anchor";
 import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
 import {
@@ -25,6 +30,8 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
 import { roleOptions } from "@/lib/auth-queries";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { createChatThreadId } from "@/lib/chat-thread-ref";
+import { detached } from "@/lib/detached";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import type { PlaybookListItem } from "@/lib/knowledge/playbook-types";
@@ -78,6 +85,21 @@ export const PlaybookList = ({
   );
   const playbookActions =
     memberKnowledgeActions.usePlaybookActions(organizationId);
+  const navigate = useNavigate();
+
+  // Nothing is created here: the chat's first save creates the playbook.
+  // The chat resolves the skill's title when it renders.
+  const buildWithAi = () => {
+    const threadId = createChatThreadId();
+    setThreadActiveSkill(
+      { scope: "global", threadId },
+      { skillName: PLAYBOOK_BUILDER_SKILL_NAME },
+    );
+    detached(
+      navigate({ to: "/chat/$threadId", params: { threadId } }),
+      "playbook-list.build-with-ai",
+    );
+  };
 
   const create = useMutation({
     mutationFn: playbookActions.createFromStarter,
@@ -178,6 +200,7 @@ export const PlaybookList = ({
           startFrom: canCreate
             ? (starter) => startFrom(starter.starterId)
             : undefined,
+          buildWithAi: canCreate ? buildWithAi : undefined,
           open: onSelect,
           loadMore: onLoadMore,
           refresh: onRefresh,

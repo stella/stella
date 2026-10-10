@@ -245,6 +245,7 @@ describe("chat thread fetch failures", () => {
 
     expect(data).toMatchObject({
       messages: [],
+      activeSkill: null,
       threadExists: false,
     });
   });
@@ -3150,6 +3151,7 @@ describe("acquireChatRuntime reconcile", () => {
     contextMatterIds: [],
     lastActivityAt: null,
     threadRevision: null,
+    activeSkill: null,
     threadExists: true,
     usedAnonymization: false,
     webSearchAvailable: false,

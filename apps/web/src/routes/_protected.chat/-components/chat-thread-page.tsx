@@ -49,6 +49,7 @@ import { UsageFallbackNotice } from "@/components/usage/usage-fallback-notice";
 import { UsageLimitModal } from "@/components/usage/usage-limit-modal";
 import { useUsageLimit } from "@/components/usage/use-usage-limit";
 import { env } from "@/env";
+import { ChatActiveSkillLabel } from "@/features/chat/components/chat-active-skill-label";
 import { SuggestedFollowupChips } from "@/features/chat/components/suggested-followup-chips";
 import { useChatSession } from "@/features/chat/hooks/use-chat-session";
 import { useChatThreadRuntime } from "@/features/chat/hooks/use-chat-thread-runtime";
@@ -62,6 +63,10 @@ import {
   chatThreadOptions,
   invalidateChatThreadAcrossScopes,
 } from "@/features/chat/queries";
+import {
+  resolveThreadActiveSkill,
+  useThreadActiveSkill,
+} from "@/features/chat/thread-active-skill-store";
 import { GuideNudge } from "@/features/guides/guide-nudge";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -169,6 +174,8 @@ export const ChatThreadPage = ({
     ),
   );
   const getSendMode = useLatestCallback(() => getChatSendMode(threadRef));
+  const cachedSkill = useThreadActiveSkill(threadRef);
+  const getCachedSkill = useLatestCallback(() => cachedSkill);
 
   // A thread can be opened (e.g. via "Move to main" from the inspector)
   // before its first message has reached the server, so the row may not
@@ -179,6 +186,7 @@ export const ChatThreadPage = ({
     getUserContext,
     getContextMatterIds,
     getSendMode,
+    ...(cachedSkill ? { getActiveSkill: getCachedSkill } : {}),
   };
   const threadQueryOptions = chatThreadOptions({
     activeOrganizationId,
@@ -186,9 +194,18 @@ export const ChatThreadPage = ({
     context: chatThreadContext,
   });
   const { data } = useSuspenseQuery(threadQueryOptions);
+  const activeSkill = resolveThreadActiveSkill(data, cachedSkill);
+  const getActiveSkill = useLatestCallback(() => activeSkill);
+  const runtimeContext = {
+    allowMissingThread: true,
+    getUserContext,
+    getContextMatterIds,
+    getSendMode,
+    ...(activeSkill ? { getActiveSkill } : {}),
+  };
   const chat = useChatThreadRuntime({
     activeOrganizationId,
-    context: chatThreadContext,
+    context: runtimeContext,
     data,
     key: threadRef,
   });
@@ -532,7 +549,7 @@ export const ChatThreadPage = ({
       await startNewThreadCommandHandoff({
         activeOrganizationId,
         context: {
-          ...chatThreadContext,
+          ...runtimeContext,
           getContextMatterIds: () => selectedContextMatterIds,
           getSendMode: () => getChatSendMode(newThreadRef),
         },
@@ -807,17 +824,22 @@ export const ChatThreadPage = ({
                           selectModel: modelSelection.selectModel,
                         }}
                         leadingContext={
-                          <ChatMatterPicker
-                            matterIds={selectedContextMatterIds}
-                            onChange={(matterIds) =>
-                              setContextMatterIds(
-                                resolveChatContextMatterIds(
-                                  threadRef,
-                                  matterIds,
-                                ),
-                              )
-                            }
-                          />
+                          <>
+                            {activeSkill && (
+                              <ChatActiveSkillLabel skill={activeSkill} />
+                            )}
+                            <ChatMatterPicker
+                              matterIds={selectedContextMatterIds}
+                              onChange={(matterIds) =>
+                                setContextMatterIds(
+                                  resolveChatContextMatterIds(
+                                    threadRef,
+                                    matterIds,
+                                  ),
+                                )
+                              }
+                            />
+                          </>
                         }
                         onNewThread={
                           messages.length > 0 ? startNewThread : null
