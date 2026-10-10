@@ -18,7 +18,19 @@ export const applyDraftDocToEditor = (
   editor: Editor,
   doc: JSONContent,
 ): void => {
-  editor.chain().setMeta(CHAT_DRAFT_ECHO_META, true).setContent(doc).run();
+  editor
+    .chain()
+    .setMeta(CHAT_DRAFT_ECHO_META, true)
+    .setContent(doc)
+    .command(({ tr }) => {
+      // setContent replaces child content only; document attributes need their
+      // own steps to restore the complete draft (including pasted chips).
+      for (const [name, value] of Object.entries(doc.attrs ?? {})) {
+        tr.setDocAttribute(name, value);
+      }
+      return true;
+    })
+    .run();
 };
 
 type MetaCarrier = Pick<Transaction, "getMeta">;
