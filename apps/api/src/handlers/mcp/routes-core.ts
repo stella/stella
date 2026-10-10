@@ -142,21 +142,14 @@ export const createMcpRoute = ({
       });
     }
 
-    const refused = await limitAuthenticationFailure?.admit({
+    if (!limitAuthenticationFailure) {
+      return await handleMcpHttpRequest(request, options);
+    }
+    return await limitAuthenticationFailure({
       request,
       clientIp: options?.clientIp,
+      run: async () => await handleMcpHttpRequest(request, options),
     });
-    if (refused) {
-      return refused;
-    }
-    const response = await handleMcpHttpRequest(request, options);
-    return limitAuthenticationFailure
-      ? await limitAuthenticationFailure({
-          request,
-          response,
-          clientIp: options?.clientIp,
-        })
-      : response;
   };
 
   return new Elysia()

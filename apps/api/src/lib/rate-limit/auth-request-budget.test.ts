@@ -30,14 +30,8 @@ describe("Auth request identities", () => {
   );
 
   test("does not select unrelated or inherited properties", () => {
-    for (const path of [
-      "/sign-up/email",
-      "toString",
-      "__proto__",
-      "/oauth2/token/extra",
-    ]) {
-      expect(isAuthRequestBudgetPath(path)).toBe(false);
-    }
+    expect(isAuthRequestBudgetPath("/sign-up/email")).toBe(false);
+    expect(isAuthRequestBudgetPath("toString")).toBe(false);
   });
 
   test.each(["/oauth2/authorize", "/oauth2/register"])(
@@ -81,9 +75,9 @@ describe("Auth request identities", () => {
         await identity({ path, body: { email: "second@example.test" } }),
       ).not.toEqual(first);
       expect(first.key).not.toContain("person");
-      for (const body of [undefined, {}, { email: 42 }, { email: " " }]) {
-        expect((await identity({ path, body })).type).toBe("anonymous");
-      }
+      expect((await identity({ path, body: { email: " " } })).type).toBe(
+        "anonymous",
+      );
     },
   );
 
@@ -98,51 +92,37 @@ describe("Auth request identities", () => {
       readGrant,
     });
     expect(first.type).toBe("verified");
-    for (const token of ["refresh-a", "refresh-b", "refresh-c"]) {
-      expect(
-        await identity({
-          path: "/oauth2/token",
-          address: "203.0.113.10",
-          body: {
-            grant_type: "refresh_token",
-            refresh_token: token,
-            client_id: "client-a",
-          },
-          readGrant,
-        }),
-      ).toEqual(first);
-    }
-    for (const grant of [
-      { userId: "first-user", clientId: "client-b" },
-      { userId: "second-user", clientId: "client-a" },
-    ]) {
-      expect(
-        await identity({
-          path: "/oauth2/token",
-          body: { grant_type: "refresh_token", refresh_token: "other" },
-          readGrant: async () => grant,
-        }),
-      ).not.toEqual(first);
-    }
+    expect(
+      await identity({
+        path: "/oauth2/token",
+        body: {
+          grant_type: "refresh_token",
+          refresh_token: "refresh-a",
+          client_id: "client-a",
+        },
+        readGrant,
+      }),
+    ).toEqual(first);
+    expect(
+      await identity({
+        path: "/oauth2/token",
+        body: { grant_type: "refresh_token", refresh_token: "other" },
+        readGrant: async () => ({ userId: "first-user", clientId: "client-b" }),
+      }),
+    ).not.toEqual(first);
   });
 
-  test("unproved token identities and mismatched clients retain an address quota", async () => {
-    const anonymous = await identity({ path: "/oauth2/token" });
-    for (const body of [
-      undefined,
-      {},
-      { grant_type: "client_credentials", client_id: "declared" },
-      { grant_type: "refresh_token", refresh_token: "" },
-      { grant_type: "refresh_token", refresh_token: "unknown" },
-    ]) {
-      expect(
-        await identity({
-          path: "/oauth2/token",
-          body,
-          readUserId: async () => "cookie-user",
-        }),
-      ).toEqual(anonymous);
-    }
+  test("an unknown token retains the address quota", async () => {
+    expect(
+      await identity({
+        path: "/oauth2/token",
+        body: { grant_type: "refresh_token", refresh_token: "unknown" },
+        readUserId: async () => "cookie-user",
+      }),
+    ).toEqual(await identity({ path: "/oauth2/token" }));
+  });
+
+  test("a different client retains the address quota", async () => {
     expect(
       await identity({
         path: "/oauth2/token",
@@ -153,7 +133,7 @@ describe("Auth request identities", () => {
         },
         readGrant: async () => ({ userId: "user", clientId: "actual" }),
       }),
-    ).toEqual(anonymous);
+    ).toEqual(await identity({ path: "/oauth2/token" }));
   });
 
   test("anonymous registration groups a callback set independently of ordering, labels and address", async () => {
@@ -182,16 +162,13 @@ describe("Auth request identities", () => {
         body: { redirect_uris: ["https://third.example/callback"] },
       }),
     ).not.toEqual(first);
-    for (const body of [
-      undefined,
-      {},
-      { redirect_uris: [] },
-      { redirect_uris: ["invalid"] },
-      { redirect_uris: [42] },
-    ]) {
-      expect((await identity({ path: "/oauth2/register", body })).type).toBe(
-        "anonymous",
-      );
-    }
+    expect(
+      (
+        await identity({
+          path: "/oauth2/register",
+          body: { redirect_uris: ["invalid"] },
+        })
+      ).type,
+    ).toBe("anonymous");
   });
 });

@@ -8,7 +8,6 @@ import { recordBudgetRejection } from "@/api/lib/rate-limit/budget-observability
 import type {
   RateLimitGenerator,
   RateLimitOptions,
-  ReadableRateLimitContext,
 } from "@/api/lib/rate-limit/rate-limit";
 import { createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
 import {
@@ -139,20 +138,14 @@ const createMcpTransportAddressRateLimitOptions = () =>
     }),
   }) as const satisfies RateLimitOptions;
 
-type McpAuthenticationAdmissionOptions = {
+type McpAuthenticationRunOptions = {
   request: Request;
   clientIp?: string | null | undefined;
-};
-
-type McpAuthenticationFailureLimitOptions = Omit<
-  RateLimitOptions,
-  "context"
-> & {
-  context: ReadableRateLimitContext;
+  run: () => Promise<Response>;
 };
 
 export const createMcpAuthenticationFailureLimiter = (
-  options: McpAuthenticationFailureLimitOptions = createMcpTransportAddressRateLimitOptions(),
+  options: RateLimitOptions = createMcpTransportAddressRateLimitOptions(),
   recordRejection: typeof recordBudgetRejection = recordBudgetRejection,
 ) => {
   options.context.init({ duration: options.duration });
@@ -161,12 +154,12 @@ export const createMcpAuthenticationFailureLimiter = (
   const getKey = async ({
     request,
     clientIp,
-  }: McpAuthenticationAdmissionOptions) =>
+  }: Pick<McpAuthenticationRunOptions, "request" | "clientIp">) =>
     await options.generator(
       request,
       clientIp ? { requestIP: () => ({ address: clientIp }) } : null,
     );
-  const reject = (nextReset: Date, originalHeaders?: Headers) => {
+  const reject = (nextReset: Date) => {
     recordRejection({
       name: "mcp.authentication.address",
       keyKind: "address",
@@ -178,8 +171,7 @@ export const createMcpAuthenticationFailureLimiter = (
         (nextReset.getTime() - Temporal.Now.instant().epochMilliseconds) / 1000,
       ),
     );
-    const headers = new Headers(originalHeaders);
-    headers.delete("content-length");
+    const headers = new Headers();
     headers.set("content-type", "application/json");
     headers.set("Retry-After", String(resetSeconds));
     headers.set("RateLimit-Limit", String(options.max));
@@ -190,35 +182,32 @@ export const createMcpAuthenticationFailureLimiter = (
       headers,
     });
   };
-  const limitFailure = async ({
+  return async ({
     request,
-    response,
     clientIp,
-  }: McpAuthenticationAdmissionOptions & {
-    response: Response;
-  }): Promise<Response> => {
-    // Authentication owns the 401 decision. Charging accepted credentials here
-    // would turn a shared assistant egress address into a shared user quota.
-    if (response.status !== 401 || (await skip(request))) {
-      return response;
+    run,
+  }: McpAuthenticationRunOptions): Promise<Response> => {
+    if (await skip(request)) {
+      return await run();
     }
     const key = await getKey({ request, clientIp });
-    const counter = await options.context.increment(key, options.duration);
-    await options.context.complete(key);
-    if (counter.count <= options.max) {
-      return response;
-    }
-    return reject(counter.nextReset, response.headers);
-  };
-  return Object.assign(limitFailure, {
-    admit: async (admission: McpAuthenticationAdmissionOptions) => {
-      if (await skip(admission.request)) {
-        return null;
+    try {
+      // Reserve before verification: concurrent unverified requests must share
+      // the same address ceiling even while their credential checks are pending.
+      const counter = await options.context.increment(key, options.duration);
+      if (counter.count > options.max) {
+        await options.context.decrement(key, counter.start);
+        return reject(counter.nextReset);
       }
-      const counter = await options.context.read(await getKey(admission));
-      return counter && counter.count >= options.max
-        ? reject(counter.nextReset)
-        : null;
-    },
-  });
+      const response = await run();
+      // Authentication owns the 401 decision. Accepted credentials refund the
+      // reservation so shared egress does not become a persistent user quota.
+      if (response.status !== 401) {
+        await options.context.decrement(key, counter.start);
+      }
+      return response;
+    } finally {
+      await options.context.complete(key);
+    }
+  };
 };

@@ -468,6 +468,13 @@ export const createStellaOAuthProvider = (
     ...provider,
     hooks: {
       ...provider.hooks,
+      after: [
+        ...provider.hooks.after,
+        {
+          matcher: (ctx: HookEndpointContext) => ctx.path === "/oauth2/token",
+          handler: createAuthMiddleware(enforceRequestBudget.complete),
+        },
+      ],
       before: [
         {
           matcher: (ctx: HookEndpointContext) =>

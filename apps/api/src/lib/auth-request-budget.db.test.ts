@@ -13,6 +13,7 @@ import {
   AUTH_ACCOUNT_REQUEST_BUDGET_RULES,
   AUTH_REQUEST_BUDGET_RULES,
 } from "@/api/lib/rate-limit/auth-request-budget";
+import { createAuthRateLimitStorage } from "@/api/lib/rate-limit/auth-storage";
 import { createHumanSession } from "@/api/tests/helpers/human-session";
 import {
   initAgentAuthTestDb,
@@ -31,10 +32,34 @@ afterAll(async () => {
   await releaseAgentAuthTestDb();
 });
 
+const withTokenAdmission = (
+  consume: ReturnType<typeof createAuthRateLimitStorage>["consume"],
+) => ({
+  consume,
+  reserve: async (key: string, rule: { max: number; window: number }) => {
+    const decision = await consume(key, rule);
+    if (!decision.allowed) {
+      return {
+        type: "limited",
+        retryAfter: decision.retryAfter ?? rule.window,
+      } as const;
+    }
+    return {
+      type: "reserved",
+      reservation: {
+        key,
+        requestId: Bun.randomUUIDv7(),
+        localWindow: "test-window",
+      },
+    } as const;
+  },
+  settle: async () => undefined,
+});
+
 const createLimitedAuth = () => {
   const charges = new Map<string, number>();
-  const storage = {
-    consume: async (key: string, rule: { max: number; window: number }) => {
+  const storage = withTokenAdmission(
+    async (key: string, rule: { max: number; window: number }) => {
       if (
         rule === AUTH_RATE_LIMITS.authSharedAddress &&
         key.startsWith("/oauth2/token:address:")
@@ -45,7 +70,7 @@ const createLimitedAuth = () => {
       charges.set(key, count);
       return { allowed: count <= 2, retryAfter: count <= 2 ? null : 60 };
     },
-  };
+  );
   return {
     auth: createAuth(undefined, {
       rateLimitStorage: storage,
@@ -106,9 +131,10 @@ describe("OAuth handler quotas", () => {
     try {
       const auth = createAuth(undefined, {
         rateLimitEnabled: true,
-        rateLimitStorage: {
-          consume: async () => ({ allowed: false, retryAfter: 60 }),
-        },
+        rateLimitStorage: withTokenAdmission(async () => ({
+          allowed: false,
+          retryAfter: 60,
+        })),
       });
       for (const [path, name, keyKind, windowMs] of [
         [
@@ -167,13 +193,11 @@ describe("OAuth handler quotas", () => {
     let admissions = 0;
     const auth = createAuth(undefined, {
       rateLimitEnabled: true,
-      rateLimitStorage: {
-        consume: async (_key, rule) => {
-          expect(rule).toBe(AUTH_RATE_LIMITS.authSharedAddress);
-          admissions += 1;
-          return { allowed: admissions <= 2, retryAfter: 60 };
-        },
-      },
+      rateLimitStorage: withTokenAdmission(async (_key, rule) => {
+        expect(rule).toBe(AUTH_RATE_LIMITS.authSharedAddress);
+        admissions += 1;
+        return { allowed: admissions <= 2, retryAfter: 60 };
+      }),
     });
     const context = await auth.$context;
     const refreshLookup = spyOn(context.adapter, "findOne");
@@ -258,8 +282,8 @@ describe("OAuth handler quotas", () => {
     const charges = new Map<string, number>();
     // This test store leaves the broad address ceiling open while enforcing client budgets.
     const addressKeys = new Set<string>();
-    const storage = {
-      consume: async (key: string, rule: { max: number; window: number }) => {
+    const storage = withTokenAdmission(
+      async (key: string, rule: { max: number; window: number }) => {
         if (rule.max === 3000) {
           addressKeys.add(key);
           return { allowed: true, retryAfter: null };
@@ -268,7 +292,7 @@ describe("OAuth handler quotas", () => {
         charges.set(key, count);
         return { allowed: count <= 2, retryAfter: count <= 2 ? null : 60 };
       },
-    };
+    );
     const registrationAuth = createAuth(undefined, {
       rateLimitStorage: storage,
       rateLimitEnabled: true,
@@ -293,21 +317,19 @@ describe("OAuth handler quotas", () => {
       const addresses = new Set<string>();
       const auth = createAuth(undefined, {
         rateLimitEnabled: true,
-        rateLimitStorage: {
-          consume: async (key, rule) => {
-            if (rule.max === AUTH_RATE_LIMITS.authSharedAddress.max) {
-              addresses.add(key);
-              return { allowed: true, retryAfter: null };
-            }
-            expect(rule).toEqual(AUTH_RATE_LIMITS.signIn);
-            const count = (accounts.get(key) ?? 0) + 1;
-            accounts.set(key, count);
-            return {
-              allowed: count <= rule.max,
-              retryAfter: count <= rule.max ? null : 60,
-            };
-          },
-        },
+        rateLimitStorage: withTokenAdmission(async (key, rule) => {
+          if (rule.max === AUTH_RATE_LIMITS.authSharedAddress.max) {
+            addresses.add(key);
+            return { allowed: true, retryAfter: null };
+          }
+          expect(rule).toEqual(AUTH_RATE_LIMITS.signIn);
+          const count = (accounts.get(key) ?? 0) + 1;
+          accounts.set(key, count);
+          return {
+            allowed: count <= rule.max,
+            retryAfter: count <= rule.max ? null : 60,
+          };
+        }),
       });
       for (const email of ["first@example.test", "second@example.test"]) {
         for (
@@ -337,13 +359,11 @@ describe("OAuth handler quotas", () => {
     const keys = new Set<string>();
     const auth = createAuth(undefined, {
       rateLimitEnabled: true,
-      rateLimitStorage: {
-        consume: async (key, rule) => {
-          expect(rule).toEqual(AUTH_RATE_LIMITS.authSharedAddress);
-          keys.add(key);
-          return { allowed: true, retryAfter: null };
-        },
-      },
+      rateLimitStorage: withTokenAdmission(async (key, rule) => {
+        expect(rule).toEqual(AUTH_RATE_LIMITS.authSharedAddress);
+        keys.add(key);
+        return { allowed: true, retryAfter: null };
+      }),
     });
     for (
       let attempt = 0;
@@ -362,13 +382,11 @@ describe("OAuth handler quotas", () => {
     const calls: string[] = [];
     const auth = createAuth(undefined, {
       rateLimitEnabled: true,
-      rateLimitStorage: {
-        consume: async (key, rule) => {
-          calls.push(key);
-          expect(rule).toEqual(AUTH_RATE_LIMITS.oauthAnonymousAddress);
-          return { allowed: false, retryAfter: 42 };
-        },
-      },
+      rateLimitStorage: withTokenAdmission(async (key, rule) => {
+        calls.push(key);
+        expect(rule).toEqual(AUTH_RATE_LIMITS.oauthAnonymousAddress);
+        return { allowed: false, retryAfter: 42 };
+      }),
     });
     const response = await auth.handler(
       registration("https://limited.example/callback"),
@@ -452,5 +470,122 @@ describe("OAuth handler quotas", () => {
     }
     expect(charges.size).toBe(2);
     expect(Array.from(charges.values())).toEqual([3, 3]);
+  });
+  test("holds at most the token admission ceiling during concurrent grant resolution", async () => {
+    const maximum = 3;
+    const storage = createAuthRateLimitStorage({
+      redis: {
+        send: async () => {
+          throw new TypeError("store unavailable");
+        },
+      },
+    });
+    const auth = createAuth(undefined, {
+      rateLimitEnabled: true,
+      rateLimitStorage: {
+        ...storage,
+        reserve: async (key, rule) =>
+          await storage.reserve(key, { ...rule, max: maximum }),
+      },
+    });
+    const context = await auth.$context;
+    const originalFind = context.adapter.findOne.bind(context.adapter);
+    const held = Promise.withResolvers<undefined>();
+    const filled = Promise.withResolvers<undefined>();
+    let entered = 0;
+    const lookup = spyOn(context.adapter, "findOne").mockImplementation(
+      async (input) => {
+        if (input.model === "oauthRefreshToken") {
+          entered += 1;
+          if (entered === maximum) {
+            filled.resolve(undefined);
+          }
+          await held.promise;
+        }
+        return await originalFind(input);
+      },
+    );
+    const pending = Array.from({ length: maximum * 3 }, (_, index) =>
+      auth.handler(
+        request("/oauth2/token", {
+          grant_type: "refresh_token",
+          refresh_token: `held-grant-${String(index)}`,
+          client_id: "unknown-client",
+        }),
+      ),
+    );
+    try {
+      await filled.promise;
+      expect(entered).toBe(maximum);
+      held.resolve(undefined);
+      const responses = await Promise.all(pending);
+      expect(
+        responses.filter((response) => response.status === 429),
+      ).toHaveLength(maximum * 2);
+      expect(
+        responses.filter((response) => response.status !== 429),
+      ).toHaveLength(maximum);
+    } finally {
+      held.resolve(undefined);
+      await Promise.all(pending);
+      lookup.mockRestore();
+    }
+  });
+
+  test("refunds successful token responses while retaining mismatched client charges", async () => {
+    const { browser } = await createHumanSession({
+      email: `admission-${Bun.randomUUIDv7()}@example.test`,
+      orgName: "Admission",
+      orgSlugPrefix: "admission",
+    });
+    const client = await registerOAuthClient(undefined, "none");
+    const grant = await grantOAuthClient(browser, client);
+    const storage = createAuthRateLimitStorage({
+      redis: {
+        send: async () => {
+          throw new TypeError("store unavailable");
+        },
+      },
+    });
+    const auth = createAuth(undefined, {
+      rateLimitEnabled: true,
+      rateLimitStorage: {
+        ...storage,
+        reserve: async (key, rule) =>
+          await storage.reserve(key, { ...rule, max: 1 }),
+      },
+    });
+    let refreshToken = grant.refreshToken;
+    for (let index = 0; index < 2; index += 1) {
+      const response = await auth.handler(
+        request("/oauth2/token", {
+          grant_type: "refresh_token",
+          refresh_token: refreshToken,
+          client_id: client.clientId,
+        }),
+      );
+      expect(response.status).toBe(200);
+      const tokens = v.parse(
+        v.object({ refresh_token: v.pipe(v.string(), v.nonEmpty()) }),
+        await response.json(),
+      );
+      refreshToken = tokens.refresh_token;
+    }
+    const mismatch = await auth.handler(
+      request("/oauth2/token", {
+        grant_type: "refresh_token",
+        refresh_token: refreshToken,
+        client_id: "different-client",
+      }),
+    );
+    expect(mismatch.status).toBe(400);
+    const refused = await auth.handler(
+      request("/oauth2/token", {
+        grant_type: "refresh_token",
+        refresh_token: refreshToken,
+        client_id: client.clientId,
+      }),
+    );
+    expect(refused.status).toBe(429);
   });
 });

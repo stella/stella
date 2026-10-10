@@ -286,7 +286,7 @@ describe("application throttle keying census", () => {
     expect(key).toBe(`/oauth2/token:address:${sha256Hex("198.51.100.10")}`);
     expect(key).not.toBe(AUTH_TOKEN_ADDRESS_BUDGET.key("203.0.113.10"));
     const source = readSource("lib/rate-limit/auth-request-budget.ts");
-    const admission = source.indexOf("...AUTH_TOKEN_ADDRESS_BUDGET");
+    const admission = source.indexOf("await storage.reserve(");
     const resolution = source.indexOf(
       "const identity = await resolveAuthRequestBudgetIdentity",
     );
@@ -395,6 +395,12 @@ describe("application throttle keying census", () => {
     expect(policy).toMatch(
       /createAuthRequestBudgetHook\(\{\s*\.\.\.requestBudget,\s*type: "oauth",\s*providerOptions: policyOptions,/u,
     );
+    expect(policy).toMatch(
+      /matcher: \(ctx: HookEndpointContext\) => ctx.path === "\/oauth2\/token",\s*handler: createAuthMiddleware\(enforceRequestBudget.complete\)/u,
+    );
+    expect(readSource("lib/auth/request-budget-hooks.ts")).toContain(
+      "complete: checkBudget.complete",
+    );
     expect(readSource("lib/auth/request-budget-hooks.ts")).toMatch(
       /const budget = await checkBudget\(ctx\);\s*if \(budget\.isErr\(\)\) \{\s*throw budget\.error;/u,
     );
@@ -424,16 +430,16 @@ describe("application throttle keying census", () => {
     );
     const transport = readSource("handlers/mcp/routes-core.ts");
     expect(transport).toMatch(
-      /const response = await handleMcpHttpRequest\(request, options\);\s*return limitAuthenticationFailure/u,
+      /run: (?:async )?\(\) => (?:await )?handleMcpHttpRequest\(request, options\)/u,
     );
-    const admission = transport.indexOf("limitAuthenticationFailure?.admit");
-    expect(admission).toBeGreaterThan(0);
-    expect(
-      transport.indexOf("const response = await handleMcpHttpRequest"),
-    ).toBeGreaterThan(admission);
-    expect(transport.slice(admission)).toMatch(
-      /if \(refused\) \{\s*return refused;/u,
+    const limiterSource = readSource("handlers/mcp/transport-rate-limit.ts");
+    const reservation = limiterSource.indexOf(
+      "await options.context.increment(",
     );
+    const verification = limiterSource.indexOf("const response = await run()");
+    expect(reservation).toBeGreaterThan(0);
+    expect(verification).toBeGreaterThan(reservation);
+    expect(limiterSource).toContain("await options.context.decrement(key,");
     expect(readSource("mcp/capability-tools.ts")).toMatch(
       /organizationId: context\.organizationId,\s*userId: context\.userId,/u,
     );
@@ -605,7 +611,11 @@ describe("application throttle keying census", () => {
         for (const status of [200, 204, 400, 403, 500]) {
           const response = new Response(null, { status });
           expect(
-            await limiter({ request, response, clientIp: "192.0.2.10" }),
+            await limiter({
+              request,
+              run: async () => response,
+              clientIp: "192.0.2.10",
+            }),
           ).toBe(response);
         }
       }
@@ -621,35 +631,35 @@ describe("application throttle keying census", () => {
           requestIP: () => ({ address: "192.0.2.11" }),
         }),
       ).not.toBe(await mcpTransportAddressRateLimitKey(request, sharedPeer));
-      expect(
-        await limiter.admit({ request, clientIp: "192.0.2.10" }),
-      ).toBeNull();
       const failure = new Response(null, { status: 401 });
       expect(
-        await limiter({ request, response: failure, clientIp: "192.0.2.10" }),
+        await limiter({
+          request,
+          run: async () => failure,
+          clientIp: "192.0.2.10",
+        }),
       ).toBe(failure);
-      for (const credential of ["invented-a", "invented-b", "invented-c"]) {
-        expect(
-          (
-            await limiter.admit({
-              request: transportRequest(credential),
-              clientIp: "192.0.2.10",
-            })
-          )?.status,
-        ).toBe(429);
-      }
-      expect(
-        await limiter.admit({ request, clientIp: "192.0.2.11" }),
-      ).toBeNull();
+      let verified = false;
       expect(
         (
           await limiter({
-            request,
-            response: new Response(null, { status: 401 }),
+            request: transportRequest("invalid-credential"),
             clientIp: "192.0.2.10",
+            run: async () => {
+              verified = true;
+              return failure;
+            },
           })
         ).status,
       ).toBe(429);
+      expect(verified).toBe(false);
+      expect(
+        await limiter({
+          request,
+          run: async () => failure,
+          clientIp: "192.0.2.11",
+        }),
+      ).toBe(failure);
     } finally {
       context.kill();
     }

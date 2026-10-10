@@ -128,21 +128,27 @@ type RateLimitCounter = {
 };
 
 type RefundProvenance = {
-  /**
-   * The attempt id sent with the increment EVAL. Kept even when the
-   * increment's own reply never arrived (client-side timeout): Redis may
-   * have already applied that EVAL before the timeout fired, and
-   * DECREMENT_SCRIPT's attempt-id match makes refunding against an
-   * unconfirmed attempt safe either way -- it decrements only if Redis
-   * actually recorded this attempt, and no-ops otherwise. Discarding
-   * provenance on timeout (the previous behavior) traded that bounded
-   * ambiguity for a guaranteed permanent over-count whenever the EVAL had
-   * in fact landed.
-   */
-  attemptId: string;
   counterKey: string;
   expiresAt: number;
-};
+  fallbackStart: number;
+} & (
+  | { type: "local" }
+  | {
+      type: "redis";
+      /**
+       * The attempt id sent with the increment EVAL. Kept even when the
+       * increment's own reply never arrived (client-side timeout): Redis may
+       * have already applied that EVAL before the timeout fired, and
+       * DECREMENT_SCRIPT's attempt-id match makes refunding against an
+       * unconfirmed attempt safe either way -- it decrements only if Redis
+       * actually recorded this attempt, and no-ops otherwise. Discarding
+       * provenance on timeout (the previous behavior) traded that bounded
+       * ambiguity for a guaranteed permanent over-count whenever the EVAL had
+       * in fact landed.
+       */
+      attemptId: string;
+    }
+);
 
 class RedisRateLimitReplyError extends TaggedError("RedisRateLimitReplyError")<{
   message: string;
@@ -318,12 +324,19 @@ export class RedisRateLimitContext implements ReadableRateLimitContext {
           // decrement() can still attempt a refund; DECREMENT_SCRIPT
           // resolves the ambiguity server-side.
           this.refundProvenanceByRequest.set(requestId, {
+            type: "redis",
             attemptId,
             counterKey,
             expiresAt: now + effectiveDuration,
+            fallbackStart: fallbackCounter.start,
           });
         } else {
-          this.refundProvenanceByRequest.delete(requestId);
+          this.refundProvenanceByRequest.set(requestId, {
+            type: "local",
+            counterKey,
+            expiresAt: fallbackCounter.nextReset.getTime(),
+            fallbackStart: fallbackCounter.start,
+          });
         }
       }
       if (this.failurePolicy === "fail_open_local") {
@@ -344,9 +357,11 @@ export class RedisRateLimitContext implements ReadableRateLimitContext {
     }
     if (requestId !== null) {
       this.refundProvenanceByRequest.set(requestId, {
+        type: "redis",
         attemptId,
         counterKey,
         expiresAt: redisResult.value.nextReset.getTime(),
+        fallbackStart: fallbackCounter.start,
       });
     }
     return redisResult.value;
@@ -359,7 +374,7 @@ export class RedisRateLimitContext implements ReadableRateLimitContext {
     }
     const provenance = this.refundProvenanceByRequest.get(requestId);
     this.refundProvenanceByRequest.delete(requestId);
-    if (provenance === undefined) {
+    if (provenance === undefined || provenance.type === "local") {
       return;
     }
     // No handler refund can occur after the response is sent. The counter and
@@ -376,15 +391,19 @@ export class RedisRateLimitContext implements ReadableRateLimitContext {
     }
   }
 
-  async decrement(key: string): Promise<void> {
+  async decrement(key: string, windowStart?: number): Promise<void> {
     const { counterKey, requestId } = parseRequestScopedKey(key);
-    this.fallback.decrement(counterKey);
     if (requestId === null) {
+      this.fallback.decrement(counterKey, windowStart);
       return;
     }
     const provenance = this.refundProvenanceByRequest.get(requestId);
     this.refundProvenanceByRequest.delete(requestId);
     if (provenance === undefined) {
+      return;
+    }
+    this.fallback.decrement(counterKey, provenance.fallbackStart);
+    if (provenance.type === "local") {
       return;
     }
     const result = await Result.tryPromise(

@@ -1,5 +1,7 @@
 import { Temporal } from "@stll/time";
 
+import { errorTag } from "@/api/lib/errors/utils";
+import { logger } from "@/api/lib/observability/logger";
 /**
  * Redis-backed storage for better-auth's rate limiter.
  *
@@ -12,8 +14,11 @@ import { Temporal } from "@stll/time";
  * per-process Map (the previous behaviour) instead of blocking auth. A
  * Redis outage must never hard-lock sign-in.
  */
-import { errorTag } from "@/api/lib/errors/utils";
-import { logger } from "@/api/lib/observability/logger";
+import { createAuthAdmissionStorage } from "@/api/lib/rate-limit/auth-admission-reservations";
+import type {
+  AuthRateLimitReservation,
+  AuthReservationDecision,
+} from "@/api/lib/rate-limit/auth-admission-reservations";
 import {
   type ScheduleTimeout,
   withCommandTimeout,
@@ -22,6 +27,14 @@ import { createRedisClient } from "@/api/lib/redis-client";
 import { coordinationKey, type CoordinationKey } from "@/api/lib/redis-keys";
 
 type AuthRateLimitStorage = {
+  reserve: (
+    key: string,
+    rule: { max: number; window: number },
+  ) => Promise<AuthReservationDecision>;
+  settle: (
+    reservation: AuthRateLimitReservation,
+    outcome: "accepted" | "rejected",
+  ) => Promise<void>;
   consume: (
     key: string,
     rule: { max: number; window: number },
@@ -32,7 +45,7 @@ type AuthRateLimitStorage = {
 // `require-coordination-key` lint rule inspects, so the key position is held by
 // the type instead: a hand-written string does not satisfy `CoordinationKey`.
 // `expiryMode` is likewise non-optional, which is this path's TTL discipline.
-type AuthRateLimitRedisClient = {
+export type AuthRateLimitRedisClient = {
   send: (
     command: "EVAL",
     args: [string, "1", CoordinationKey, string, string],
@@ -47,6 +60,7 @@ type CommandTimer = {
 type AuthRateLimitStorageOptions = {
   redis?: AuthRateLimitRedisClient;
   commandTimer?: CommandTimer;
+  now?: () => number;
 };
 
 const FALLBACK_CLEANUP_INTERVAL_MS = 60_000;
@@ -169,6 +183,12 @@ export const createAuthRateLimitStorage = (
   };
 
   return {
+    ...createAuthAdmissionStorage({
+      redis,
+      scheduleTimeout,
+      commandTimeoutMs: COMMAND_TIMEOUT_MS,
+      now: options.now ?? (() => Temporal.Now.instant().epochMilliseconds),
+    }),
     consume: async (key, rule) => {
       const fallbackDecision = consumeFallback(key, rule);
       try {
