@@ -4,9 +4,8 @@ import type { AIProvider, TanStackAIProvider } from "@stll/ai-catalog";
 import { Temporal } from "@stll/time";
 
 import type { VerificationRunErrorCode } from "@/api/lib/lists/verification/contract";
+import type { BudgetName } from "@/api/lib/rate-limit/budget-observability";
 import type { PublicCorpusClass } from "@/api/public-corpus-policy";
-import { isLocalDevOpen } from "@/api/runtime-mode";
-
 /**
  * Per-request latency, split by request class, emitted as a CloudWatch
  * Embedded Metric Format (EMF) line on stdout.
@@ -27,10 +26,29 @@ import { isLocalDevOpen } from "@/api/runtime-mode";
  * class regardless of route cardinality; `http.route` and
  * `http.status_code` ride along as queryable properties, not dimensions.
  */
+import { isLocalDevOpen } from "@/api/runtime-mode";
 
 const METRIC_NAMESPACE = "Stella/Api";
 const METRIC_NAME = "RequestDuration";
 const FAILURE_METRIC_NAME = "RequestTransientFailures";
+
+/** One rejection per budget name; caller identifiers are never dimensions. */
+export const emitRateLimitRejectedMetric = (budgetName: BudgetName): void => {
+  writeMetricLine({
+    budgetName,
+    RateLimitRejected: 1,
+    _aws: {
+      Timestamp: Temporal.Now.instant().epochMilliseconds,
+      CloudWatchMetrics: [
+        {
+          Namespace: METRIC_NAMESPACE,
+          Dimensions: [["budgetName"]],
+          Metrics: [{ Name: "RateLimitRejected", Unit: "Count" }],
+        },
+      ],
+    },
+  });
+};
 
 /** Reasoning items dropped per turn; the adapter ledger excludes SDK rereads. */
 export const emitReasoningReplayDroppedMetric = ({
