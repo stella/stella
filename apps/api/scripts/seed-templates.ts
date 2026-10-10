@@ -2604,8 +2604,9 @@ if (import.meta.main) {
   requireLocalDevOpen("Seeding");
 
   console.log("Seeding templates & clauses...\n");
-  await ensureTestUsers(DEFAULT_ORG_ID);
-  seedTemplates()
+  const { colleagueUserIds, testUserId } =
+    await ensureTestUsers(DEFAULT_ORG_ID);
+  seedTemplates(DEFAULT_ORG_ID, [testUserId, ...colleagueUserIds])
     .then(() => {
       console.log("\nDone.");
       process.exit(0);
