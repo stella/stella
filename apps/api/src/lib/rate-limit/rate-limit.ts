@@ -30,7 +30,7 @@ export type RateLimitContextConfig = {
 export type RateLimitContext = {
   /** Drop refund identity after response completion, preserving the quota count. */
   complete: (key: string) => MaybePromise<void>;
-  decrement: (key: string) => MaybePromise<void>;
+  decrement: (key: string, windowStart?: number) => MaybePromise<void>;
   increment: (
     key: string,
     duration?: number,
@@ -164,10 +164,15 @@ export class InMemoryRateLimitContext implements ReadableRateLimitContext {
     // In-memory counters retain no refund identities.
   }
 
-  decrement(key: string) {
+  decrement(key: string, windowStart?: number) {
     const now = Temporal.Now.instant().epochMilliseconds;
     const entry = this.store.get(key);
-    if (entry && entry.expiresAt > now && entry.count > 0) {
+    if (
+      entry &&
+      entry.expiresAt > now &&
+      entry.count > 0 &&
+      (windowStart === undefined || entry.start === windowStart)
+    ) {
       entry.count -= 1;
     }
   }
@@ -198,8 +203,8 @@ export class InMemoryRateLimitContext implements ReadableRateLimitContext {
 type RateLimitResponseSet = Context["set"];
 
 type RateLimitRequestState =
-  | { type: "counted"; key: string }
-  | { type: "counted_early_failure"; key: string }
+  | { type: "counted"; key: string; windowStart: number }
+  | { type: "counted_early_failure"; key: string; windowStart: number }
   | { type: "limited"; key: string }
   | { type: "refunded" }
   | { type: "skipped" };
@@ -309,7 +314,7 @@ export const rateLimit = ({
     }
 
     const key = await generator(request, server);
-    const { count, nextReset } = await context.increment(
+    const { count, nextReset, start } = await context.increment(
       key,
       duration,
       Temporal.Now.instant().epochMilliseconds,
@@ -347,8 +352,8 @@ export const rateLimit = ({
     requestState.set(
       request,
       phase === "before_handler"
-        ? { type: "counted", key }
-        : { type: "counted_early_failure", key },
+        ? { type: "counted", key, windowStart: start }
+        : { type: "counted_early_failure", key, windowStart: start },
     );
     return undefined;
   };
@@ -379,7 +384,7 @@ export const rateLimit = ({
         switch (state.type) {
           case "counted":
             requestState.set(request, { type: "refunded" });
-            await context.decrement(state.key);
+            await context.decrement(state.key, state.windowStart);
             return undefined;
           case "counted_early_failure":
           case "limited":
@@ -455,7 +460,7 @@ export const rateLimit = ({
       case "counted":
         if (handledError) {
           requestState.set(request, { type: "refunded" });
-          await context.decrement(state.key);
+          await context.decrement(state.key, state.windowStart);
         }
         return undefined;
       case "counted_early_failure":

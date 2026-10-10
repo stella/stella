@@ -28,6 +28,64 @@ test("counter reads preserve quota and ignore expired local windows", () => {
   }
 });
 
+test("a late local refund cannot decrement a successor window", () => {
+  const context = new InMemoryRateLimitContext();
+  context.init({ duration: 60_000 });
+  try {
+    const now = Temporal.Now.instant().epochMilliseconds;
+    const oldReservation = context.increment("address", 1, now - 100);
+    const successor = context.increment("address", 60_000, now);
+    context.decrement("address", oldReservation.start);
+    expect(context.read("address")?.count).toBe(1);
+    context.decrement("address", successor.start);
+    expect(context.read("address")?.count).toBe(0);
+  } finally {
+    context.kill();
+  }
+});
+
+test.each(["local", "redis"] as const)(
+  "a late %s reservation refund preserves the successor fallback window",
+  async (initialStore) => {
+    let commands = 0;
+    const context = new RedisRateLimitContext({
+      failurePolicy: "fail_open_local",
+      createRedis: () => ({
+        send: async () => {
+          commands += 1;
+          if (initialStore === "redis" && commands === 1) {
+            return [1, 1];
+          }
+          throw new TypeError("unavailable");
+        },
+      }),
+      onRedisError: () => undefined,
+    });
+    context.init({ duration: 60_000 });
+    const oldKey = createRedisRateLimitRequestKey({
+      counterKey: "address",
+      requestId: "old",
+    });
+    const successorKey = createRedisRateLimitRequestKey({
+      counterKey: "address",
+      requestId: "successor",
+    });
+    try {
+      const now = Temporal.Now.instant().epochMilliseconds;
+      await context.increment(oldKey, 1, now - 100);
+      await context.increment(successorKey, 60_000, now);
+      await context.decrement(oldKey);
+      expect((await context.read(successorKey))?.count).toBe(1);
+      await context.decrement(oldKey);
+      expect((await context.read(successorKey))?.count).toBe(1);
+      await context.decrement(successorKey);
+      expect((await context.read(successorKey))?.count).toBe(0);
+    } finally {
+      await context.kill();
+    }
+  },
+);
+
 test.each([
   [0, -1],
   [0, 30_000],

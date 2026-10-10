@@ -242,15 +242,18 @@ Account-attempt limits count failures and attempts in flight; successful attempt
 return their reserved slot. OTP delivery limits count requests for delivery.
 
 The shared-address default of 1,200/minute admits concurrent sign-ins and token
-exchanges from many users behind one assistant egress. Token requests consume it
-before grant lookup; recognized grants also use the 20/minute user-and-client
+exchanges from many users behind one assistant egress. Token requests reserve a slot atomically
+before grant lookup and return it after successful exchanges; failed exchanges
+retain their charge. Recognized grants also use the 20/minute user-and-client
 budget. Anonymous registration allows 300/minute per callback set and 3,000/minute
 per address, so a hosted callback can register clients for many users.
 
 MCP allows 600/minute per bearer. Its 3,000/minute address budget counts only
-failed authentication; successful requests do not consume it. Once exhausted,
-admission rejects every request at that address before credential verification
-until the window resets. Source-fetch work has its own 10/minute user budget.
+failed authentication and attempts in flight. Each request reserves a slot
+before verification; successful requests return it. Once exhausted,
+admission rejects requests at that address before credential verification until
+a slot is returned or the window resets. Source-fetch work has its own 10/minute
+user budget.
 
 Every quota rejection emits a `rate_limit.rejected` structured log with `budget`,
 `budget.keyKind`, and `budget.windowMs`, plus a `RateLimitRejected` counter labelled

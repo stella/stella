@@ -347,7 +347,7 @@ test("authentication address refusals emit one bounded budget observation", asyn
       (
         await limiter({
           request,
-          response: new Response(null, { status: 200 }),
+          run: async () => new Response(null, { status: 200 }),
           clientIp: "192.0.2.10",
         })
       ).status,
@@ -356,7 +356,7 @@ test("authentication address refusals emit one bounded budget observation", asyn
       (
         await limiter({
           request,
-          response: new Response(null, { status: 401 }),
+          run: async () => new Response(null, { status: 401 }),
           clientIp: "192.0.2.10",
         })
       ).status,
@@ -366,7 +366,7 @@ test("authentication address refusals emit one bounded budget observation", asyn
       (
         await limiter({
           request,
-          response: new Response(null, { status: 401 }),
+          run: async () => new Response(null, { status: 401 }),
           clientIp: "192.0.2.10",
         })
       ).status,
@@ -438,7 +438,7 @@ test("an exhausted address rejects rotating credentials before verification", as
   }
 });
 
-test("accepted credentials never allocate an address failure counter", async () => {
+test("accepted credentials refund their address reservation", async () => {
   const context = new InMemoryRateLimitContext();
   const limiter = createMcpAuthenticationFailureLimiter({
     ...MCP_TRANSPORT_ADDRESS_RATE_LIMIT_POLICY,
@@ -457,8 +457,69 @@ test("accepted credentials never allocate an address failure counter", async () 
           .status,
       ).toBe(200);
     }
-    expect(context.read("mcp-transport-address")).toBeNull();
+    expect(context.read("mcp-transport-address")?.count).toBe(0);
   } finally {
+    context.kill();
+  }
+});
+
+test("concurrent pending verification admits exactly the address maximum", async () => {
+  const maximum = 3;
+  const total = 12;
+  const context = new InMemoryRateLimitContext();
+  const verification = Promise.withResolvers<undefined>();
+  const arrived = Promise.withResolvers<undefined>();
+  let arrivals = 0;
+  const recordArrival = () => {
+    arrivals += 1;
+    if (arrivals === total) {
+      arrived.resolve(undefined);
+    }
+  };
+  const verify = mock(async () => {
+    recordArrival();
+    await verification.promise;
+    return new Response(null, { status: 401 });
+  });
+  const limiter = createMcpAuthenticationFailureLimiter({
+    ...MCP_TRANSPORT_ADDRESS_RATE_LIMIT_POLICY,
+    context,
+    generator: mcpTransportAddressRateLimitKey,
+    max: maximum,
+  });
+  const app = createMcpRoute({
+    handleMcpHttpRequest: verify,
+    limitAuthenticationFailure: limiter,
+  });
+  const pending = Array.from({ length: total }, async (_, index) => {
+    const response = await app.handle(
+      transportRequest({ token: `invalid_${index}` }),
+    );
+    if (response.status === 429) {
+      recordArrival();
+    }
+    return response;
+  });
+  try {
+    // Every request has reached either verification or rejection. Verification
+    // remains held, so this assertion measures admission rather than completion.
+    await arrived.promise;
+    expect(verify).toHaveBeenCalledTimes(maximum);
+    expect(context.read("mcp-transport-address")?.count).toBe(maximum);
+    verification.resolve(undefined);
+    const responses = await Promise.all(pending);
+    expect(
+      responses.filter((response) => response.status === 401),
+    ).toHaveLength(maximum);
+    expect(
+      responses.filter((response) => response.status === 429),
+    ).toHaveLength(total - maximum);
+    // Refused attempts have refunded their reservations; retained quota is
+    // exactly the admitted authentication failures.
+    expect(context.read("mcp-transport-address")?.count).toBe(maximum);
+  } finally {
+    verification.resolve(undefined);
+    await Promise.allSettled(pending);
     context.kill();
   }
 });
@@ -482,12 +543,11 @@ test.each(["e2e", "skip"] as const)(
       const request = transportRequest({ token: "invalid" });
       await context.increment("mcp-transport-address");
       testState.setConfig("E2E_DISABLE_AUTH_RATE_LIMIT", mode === "e2e");
-      expect(await limiter.admit({ request })).toBeNull();
       expect(
         (
           await limiter({
             request,
-            response: new Response(null, { status: 401 }),
+            run: async () => new Response(null, { status: 401 }),
           })
         ).status,
       ).toBe(401);

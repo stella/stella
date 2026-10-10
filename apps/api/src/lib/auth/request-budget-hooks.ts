@@ -5,10 +5,11 @@ export const createAuthRequestBudgetHook = (
   options: Parameters<typeof createAuthRequestBudget>[0],
 ) => {
   const checkBudget = createAuthRequestBudget(options);
-  return async (ctx: Parameters<typeof checkBudget>[0]) => {
+  const before = async (ctx: Parameters<typeof checkBudget>[0]) => {
     const budget = await checkBudget(ctx);
     if (budget.isErr()) {
       throw budget.error;
     }
   };
+  return Object.assign(before, { complete: checkBudget.complete });
 };

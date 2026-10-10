@@ -5,6 +5,7 @@ import {
 } from "@better-auth/oauth-provider";
 import {
   APIError,
+  isAPIError,
   type createAuthMiddleware,
   getAuthoritativeSessionFromCtx,
 } from "better-auth/api";
@@ -15,6 +16,7 @@ import { sha256Hex } from "@stll/sha256/bun";
 
 import { AUTH_CLIENT_ADDRESS_HEADER } from "@/api/lib/client-ip";
 import { AUTH_RATE_LIMITS } from "@/api/lib/limits";
+import type { AuthRateLimitReservation } from "@/api/lib/rate-limit/auth-admission-reservations";
 import type { createAuthRateLimitStorage } from "@/api/lib/rate-limit/auth-storage";
 import {
   recordBudgetRejection,
@@ -282,9 +284,13 @@ type CreateAuthRequestBudgetOptions = {
   | { type: "oauth"; providerOptions: OAuthOptions<Scope[]> }
 );
 
-export const createAuthRequestBudget =
-  ({ storage, enabled, ...policy }: CreateAuthRequestBudgetOptions) =>
-  async (ctx: AuthRequestBudgetContext) => {
+export const createAuthRequestBudget = ({
+  storage,
+  enabled,
+  ...policy
+}: CreateAuthRequestBudgetOptions) => {
+  const reservations = new WeakMap<object, AuthRateLimitReservation>();
+  const enforce = async (ctx: AuthRequestBudgetContext) => {
     if (!enabled || !ctx.path || !isAuthRequestBudgetPath(ctx.path)) {
       return Result.ok(undefined);
     }
@@ -296,14 +302,25 @@ export const createAuthRequestBudget =
     const address = ctx.headers?.get(AUTH_CLIENT_ADDRESS_HEADER) ?? "unknown";
     // Bound grant-resolution work before untrusted credentials reach the database.
     if (ctx.path === "/oauth2/token") {
-      const admission = await consumeAuthRequestBudget({
-        storage,
-        ...AUTH_TOKEN_ADDRESS_BUDGET,
-        key: AUTH_TOKEN_ADDRESS_BUDGET.key(address),
-      });
-      if (admission.isErr()) {
-        return admission;
+      const admission = await storage.reserve(
+        AUTH_TOKEN_ADDRESS_BUDGET.key(address),
+        AUTH_TOKEN_ADDRESS_BUDGET.rule,
+      );
+      if (admission.type === "limited") {
+        recordBudgetRejection({
+          name: AUTH_TOKEN_ADDRESS_BUDGET.name,
+          keyKind: "address",
+          windowMs: AUTH_TOKEN_ADDRESS_BUDGET.rule.window * 1000,
+        });
+        return Result.err(
+          new APIError(
+            "TOO_MANY_REQUESTS",
+            { message: "Try again later.", code: "TOO_MANY_REQUESTS" },
+            { "Retry-After": String(admission.retryAfter) },
+          ),
+        );
       }
+      reservations.set(ctx.request ?? ctx.context, admission.reservation);
     }
     const identity = await resolveAuthRequestBudgetIdentity({
       path: ctx.path,
@@ -395,3 +412,24 @@ export const createAuthRequestBudget =
     }
     return Result.ok(undefined);
   };
+  const complete = async (ctx: AuthRequestBudgetContext) => {
+    const owner = ctx.request ?? ctx.context;
+    const reservation = reservations.get(owner);
+    if (!reservation) {
+      return;
+    }
+    reservations.delete(owner);
+    const returned: unknown = ctx.context.returned;
+    const accepted =
+      !isAPIError(returned) &&
+      v.is(
+        v.object({
+          access_token: v.pipe(v.string(), v.nonEmpty()),
+          token_type: v.union([v.literal("Bearer"), v.literal("DPoP")]),
+        }),
+        returned,
+      );
+    await storage.settle(reservation, accepted ? "accepted" : "rejected");
+  };
+  return Object.assign(enforce, { complete });
+};
