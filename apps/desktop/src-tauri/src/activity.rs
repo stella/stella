@@ -2431,12 +2431,23 @@ mod tests {
   #[test]
   fn consented_browsers_remain_disclosed_on_days_without_observations() {
     let mut manager = recording_manager();
-    manager.set_browser_title_capture("com.google.chrome", "Google Chrome", true, at(0)).unwrap();
+    manager
+      .set_browser_title_capture("com.google.chrome", "Google Chrome", true, at(0))
+      .unwrap();
     let caller = ActivityCaller::for_account_test(1, "fixture");
-    let snapshot = manager.day_snapshot(local_date(at(0)), at(5), &caller, 0, ActivityDetailsAccess::Ready);
+    let snapshot = manager.day_snapshot(
+      local_date(at(0)),
+      at(5),
+      &caller,
+      0,
+      ActivityDetailsAccess::Ready,
+    );
     assert!(snapshot.segments.is_empty());
     assert_eq!(snapshot.browser_apps.len(), 1);
-    assert_eq!(snapshot.browser_apps[0].identifier, snapshot.browser_title_apps[0].identifier);
+    assert_eq!(
+      snapshot.browser_apps[0].identifier,
+      snapshot.browser_title_apps[0].identifier
+    );
   }
 
   #[test]

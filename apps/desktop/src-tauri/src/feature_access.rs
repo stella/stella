@@ -14,7 +14,7 @@ use std::{
 };
 use tauri::{AppHandle, Manager};
 
-use crate::account::{self, AccountState, AccountRequest};
+use crate::account::{self, AccountRequest, AccountState};
 use crate::feature_gate::{DesktopFeature, FeatureGates};
 use crate::http_client::{DesktopHttpClient, HttpClientOptions};
 
@@ -286,10 +286,16 @@ mod tests {
     };
 
     assert_eq!(
-      fetch(&AccountRequest::fixture(account("stella_dr_good")).await).await.unwrap(),
+      fetch(&AccountRequest::fixture(account("stella_dr_good")).await)
+        .await
+        .unwrap(),
       HashSet::from([DesktopFeature::ActivityTimeline])
     );
-    assert!(fetch(&AccountRequest::fixture(account("stella_dr_bad")).await).await.is_err());
+    assert!(
+      fetch(&AccountRequest::fixture(account("stella_dr_bad")).await)
+        .await
+        .is_err()
+    );
     server.abort();
   }
 }
