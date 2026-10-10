@@ -80,6 +80,44 @@ const cases = [
     lines: [2, 3],
   },
   {
+    title: "reports an awaited oracle as the direct expectation",
+    source:
+      "test('async', async () => { expect(await detect(fx.input)).toBe(await derive(fx.input)); });",
+    lines: [1],
+  },
+  {
+    title: "allows an awaited state read compared before and after an action",
+    source: [
+      "test('kept', async () => {",
+      "  const before = await readKey(db, fixture.keyId);",
+      "  await rotate(fixture.keyId);",
+      "  expect(await readKey(db, fixture.keyId)).toEqual(before);",
+      "});",
+    ].join("\n"),
+    lines: [],
+  },
+  {
+    title: "reports an awaited derivation behind an alias",
+    source: [
+      "test('async', async () => {",
+      "  const expected = await derive(fx.input);",
+      "  expect(await detect(fx.input)).toEqual(expected);",
+      "});",
+    ].join("\n"),
+    lines: [3],
+  },
+  {
+    title: "follows a standalone chained expected alias",
+    source:
+      "const derived = derive(fx.input);\nconst expected = derived;\nexpect(detect(fx.input)).toBe(expected);",
+    lines: [3],
+  },
+  {
+    title: "terminates on a cyclic expected alias",
+    source: "const a = b;\nconst b = a;\nexpect(detect(fx.input)).toBe(a);",
+    lines: [],
+  },
+  {
     title: "reports a detector compared with an oracle over the same member",
     source: "expect(detect(fx.text)).toBe(derive(fx.text));",
     lines: [1],

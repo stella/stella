@@ -23,6 +23,10 @@ const MATCHERS = new Set([
 ]);
 const TEST_FUNCTIONS = new Set(["describe", "it", "test"]);
 const TEST_MODIFIERS = new Set(["each", "if", "only", "skip", "skipIf"]);
+// Computing verbs; any read repeated synchronously is also an oracle, but an
+// awaited read observes state an awaited action may have changed.
+const COMPUTED_NAME =
+  /(?:classif|detect|derive|project|extract|parse|build|expected)/iu;
 const ORACLE_NAME =
   /(?:classif|detect|derive|project|extract|parse|read|build|expected)/iu;
 const FIXTURE_NOUN = /^(?:fixture|fx|case|sample|input|record|row)s?$/u;
@@ -96,7 +100,10 @@ const isAwaitedObservation = (node: AstNode): boolean => {
     return false;
   }
   const argument = unwrapExpression(node.argument);
-  return argument?.type === "CallExpression" && !containsOracleCall(argument);
+  return (
+    argument?.type === "CallExpression" &&
+    !containsCallNamed(argument, COMPUTED_NAME)
+  );
 };
 
 const pathsIn = (
@@ -199,34 +206,44 @@ const isConstructedOracle = (
   values: ValueMap,
   resolveBinding: ResolveBinding,
 ): boolean => {
-  const expression = unwrapExpression(node);
-  if (expression === null) {
-    return false;
-  }
-  if (
-    expression.type === "ObjectExpression" ||
-    expression.type === "ArrayExpression"
-  ) {
-    return true;
-  }
-  if (isIdentifier(expression)) {
-    const binding = resolveBinding(expression);
-    const value = binding === null ? undefined : values.get(binding);
-    return (
-      value !== undefined &&
-      isConstructedOracle(value, new Map(), resolveBinding)
-    );
-  }
-  const name = calledName(expression);
-  return name !== null && ORACLE_NAME.test(name);
+  // Chained aliases resolve through the same initializer map; `seen` stops a
+  // cycle such as `const a = b; const b = a;`.
+  const seen = new Set<Variable>();
+  const constructed = (current: unknown): boolean => {
+    const expression = unwrapExpression(current);
+    if (expression === null) {
+      return false;
+    }
+    if (expression.type === "AwaitExpression") {
+      return containsCallNamed(expression.argument, COMPUTED_NAME);
+    }
+    if (
+      expression.type === "ObjectExpression" ||
+      expression.type === "ArrayExpression"
+    ) {
+      return true;
+    }
+    if (isIdentifier(expression)) {
+      const binding = resolveBinding(expression);
+      if (binding === null || seen.has(binding)) {
+        return false;
+      }
+      seen.add(binding);
+      const value = values.get(binding);
+      return value !== undefined && constructed(value);
+    }
+    const name = calledName(expression);
+    return name !== null && ORACLE_NAME.test(name);
+  };
+  return constructed(node);
 };
 
-const containsOracleCall = (node: unknown): boolean => {
+const containsCallNamed = (node: unknown, names: RegExp): boolean => {
   if (!isAstNode(node)) {
     return false;
   }
   const name = calledName(node);
-  if (name !== null && ORACLE_NAME.test(name)) {
+  if (name !== null && names.test(name)) {
     return true;
   }
   return Object.entries(node).some(([key, value]) => {
@@ -234,10 +251,13 @@ const containsOracleCall = (node: unknown): boolean => {
       return false;
     }
     return Array.isArray(value)
-      ? value.some(containsOracleCall)
-      : containsOracleCall(value);
+      ? value.some((child) => containsCallNamed(child, names))
+      : containsCallNamed(value, names);
   });
 };
+
+const containsOracleCall = (node: unknown): boolean =>
+  containsCallNamed(node, ORACLE_NAME);
 
 type IndependentAnchorOptions = {
   aliases: AliasMap;
