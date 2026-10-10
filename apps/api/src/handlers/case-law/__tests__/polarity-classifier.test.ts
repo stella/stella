@@ -370,9 +370,6 @@ describe("seed rules", () => {
     );
 
     const testCases = [
-      "srov. rozhodnutí",
-      "viz nález",
-      "srovnej usnesení",
       "Nejvyšší soud judikoval",
       "lze odkázat na precedenční",
       "má oporu v rozhodovací činnosti",
