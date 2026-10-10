@@ -35,12 +35,12 @@ import {
   retireRemoval,
   validateRemovalModules,
 } from "./dated-waiver-publish";
+import { trackedPolicyFiles } from "./dated-waiver-tracked-files";
 import {
   DAY_MS,
   dueWaivers,
   expiryInstant,
   loadWaivers,
-  trackedPolicyFiles,
   type DatedWaiver,
 } from "./dated-waivers";
 
@@ -852,7 +852,7 @@ const main = async (): Promise<void> => {
   if (process.argv.includes("--probe")) {
     const sha = checkedGit(["rev-parse", "HEAD"]);
     const now = new Date();
-    const inventory = await loadWaivers();
+    const inventory = loadWaivers(trackedPolicyFiles());
     const due = dueWaivers(inventory, now);
     const budget = createProbeBudget({
       attempts: due
@@ -921,7 +921,7 @@ const main = async (): Promise<void> => {
     panic("Publishing requires the scheduled repository workflow");
   }
   const report = await readReport(file);
-  const inventory = await loadWaivers();
+  const inventory = loadWaivers(trackedPolicyFiles());
   // Re-read proposals on the write path: runner evidence never supplies branch
   // names or authority to retire a proposal.
   const discovered = await Result.tryPromise(async () =>

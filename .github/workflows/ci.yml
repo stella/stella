@@ -7856,9 +7856,13 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
+      - name: List tracked files for dated waiver guard
+        if: ${{ !cancelled() }}
+        run: git ls-files -z > "$RUNNER_TEMP/dated-waiver-tracked-files"
+
       - name: Check dated waiver expiry on the current tree
         if: ${{ !cancelled() }}
-        run: bun --preload ./scripts/offline-network-preload.ts scripts/dated-waivers.ts --check
+        run: bun --preload ./scripts/offline-network-preload.ts scripts/dated-waivers.ts --check --tracked-files "$RUNNER_TEMP/dated-waiver-tracked-files"
 
       - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'

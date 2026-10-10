@@ -1,5 +1,8 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 
 import { assertProperty } from "@stll/property-testing";
 
@@ -299,4 +302,72 @@ test("exception identity survives sibling removal and rejects ambiguous covered 
   expect(() => exceptionInventory(marker)).toThrow(
     "Release-age exception has no covered zero-age command",
   );
+});
+
+test("check consumes validated tracked files without spawning under the offline preload", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "dated-waiver-tracked-"));
+  const trackedFiles = path.join(directory, "tracked-files");
+  try {
+    const git = Bun.spawnSync(["git", "ls-files", "-z"], {
+      cwd: path.resolve(import.meta.dir, ".."),
+    });
+    expect(git.exitCode).toBe(0);
+    writeFileSync(trackedFiles, git.stdout);
+
+    const checked = Bun.spawnSync(
+      [
+        "bun",
+        "--preload",
+        "./scripts/offline-network-preload.ts",
+        "scripts/dated-waivers.ts",
+        "--check",
+        "--tracked-files",
+        trackedFiles,
+      ],
+      { cwd: path.resolve(import.meta.dir, "..") },
+    );
+    expect(checked.stderr.toString()).toBe("");
+    expect(checked.exitCode).toBe(0);
+  } finally {
+    rmSync(directory, { force: true, recursive: true });
+  }
+});
+
+test("check requires an explicit tracked-files input", () => {
+  const checked = Bun.spawnSync(
+    ["bun", "scripts/dated-waivers.ts", "--check"],
+    {
+      cwd: path.resolve(import.meta.dir, ".."),
+    },
+  );
+  expect(checked.exitCode).not.toBe(0);
+  expect(checked.stderr.toString()).toContain(
+    "--check requires --tracked-files <NUL-separated-file>",
+  );
+});
+
+test("tracked-files input rejects absolute and parent paths", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "dated-waiver-invalid-"));
+  try {
+    for (const invalid of ["/absolute.ts", "scripts/../outside.ts"]) {
+      const trackedFiles = path.join(directory, "tracked-files");
+      writeFileSync(trackedFiles, `${invalid}\0`);
+      const checked = Bun.spawnSync(
+        [
+          "bun",
+          "scripts/dated-waivers.ts",
+          "--check",
+          "--tracked-files",
+          trackedFiles,
+        ],
+        { cwd: path.resolve(import.meta.dir, "..") },
+      );
+      expect(checked.exitCode).not.toBe(0);
+      expect(checked.stderr.toString()).toContain(
+        `Invalid tracked-file path: ${invalid}`,
+      );
+    }
+  } finally {
+    rmSync(directory, { force: true, recursive: true });
+  }
 });

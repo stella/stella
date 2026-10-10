@@ -17,7 +17,6 @@ import {
   readTemporaryExcludes,
   RELEASE_AGE_EXCEPTION_SOURCES,
 } from "./check-stll-quarantine-excludes";
-import { readBaseline } from "./dependency-audit";
 import type { AcceptanceTerms } from "./dependency-audit-acceptance";
 import { parseLedger } from "./suppression-waivers";
 
@@ -385,21 +384,29 @@ export const uncoveredExpirySources = (
     )
     .map(([file]) => file);
 
-export const trackedPolicyFiles = (): string[] => {
-  const proc = Bun.spawnSync(["git", "ls-files", "-z"], {
-    cwd: path.resolve(import.meta.dir, ".."),
-  });
-  if (proc.exitCode !== 0) {
-    panic("Cannot enumerate tracked policy files");
+export const readTrackedPolicyFiles = (file: string): string[] => {
+  const contents = readFileSync(file, "utf-8");
+  if (contents.length === 0 || !contents.endsWith("\0")) {
+    panic("Tracked-files input must be a non-empty NUL-separated path list");
   }
-  return proc.stdout.toString().split("\0").filter(Boolean);
+  const files = contents.slice(0, -1).split("\0");
+  for (const trackedFile of files) {
+    if (
+      trackedFile.length === 0 ||
+      path.posix.isAbsolute(trackedFile) ||
+      path.win32.isAbsolute(trackedFile) ||
+      trackedFile.split("/").includes("..")
+    ) {
+      panic(`Invalid tracked-file path: ${trackedFile || "<empty>"}`);
+    }
+  }
+  return files;
 };
 
-export const loadWaivers = async (): Promise<DatedWaiver[]> => {
+export const loadWaivers = (tracked: readonly string[]): DatedWaiver[] => {
   const root = path.resolve(import.meta.dir, "..");
   const read = (file: string): string =>
     readFileSync(path.join(root, file), "utf-8");
-  const tracked = trackedPolicyFiles();
   const files = tracked.filter(
     (file) => file === "bunfig.toml" || file.endsWith("/bunfig.toml"),
   );
@@ -428,10 +435,28 @@ export const loadWaivers = async (): Promise<DatedWaiver[]> => {
   const configSources = Object.fromEntries(
     RELEASE_AGE_EXCEPTION_SOURCES.map((file) => [file, read(file)]),
   );
+  const auditBaseline: unknown = JSON.parse(
+    read("scripts/dependency-audit-baseline.json"),
+  );
+  const audit =
+    typeof auditBaseline === "object" &&
+    auditBaseline !== null &&
+    "accepted" in auditBaseline &&
+    Array.isArray(auditBaseline.accepted)
+      ? auditBaseline.accepted.filter(
+          (entry): entry is AcceptanceTerms =>
+            typeof entry === "object" &&
+            entry !== null &&
+            "id" in entry &&
+            typeof entry.id === "string" &&
+            "package" in entry &&
+            typeof entry.package === "string",
+        )
+      : [];
   return collectWaivers({
     read,
     docs: DOC_SOURCE_EXCLUSIONS,
-    audit: (await readBaseline()).accepted,
+    audit,
     bunfigs: files,
     releaseAgeSources: configSources,
     quarantineSources: Object.fromEntries(
@@ -444,8 +469,21 @@ export const loadWaivers = async (): Promise<DatedWaiver[]> => {
 };
 
 if (import.meta.main) {
-  const entries = await loadWaivers();
-  if (process.argv.includes("--check")) {
+  const check = process.argv.includes("--check");
+  const trackedFilesFlag = process.argv.indexOf("--tracked-files");
+  if (check && trackedFilesFlag === -1) {
+    panic("--check requires --tracked-files <NUL-separated-file>");
+  }
+  const trackedFilesPath =
+    trackedFilesFlag === -1 ? undefined : process.argv.at(trackedFilesFlag + 1);
+  if (trackedFilesFlag !== -1 && !trackedFilesPath) {
+    panic("--tracked-files requires a path");
+  }
+  if (trackedFilesPath === undefined) {
+    panic("Inventory modes require --tracked-files <NUL-separated-file>");
+  }
+  const entries = loadWaivers(readTrackedPolicyFiles(trackedFilesPath));
+  if (check) {
     const expired = entries.filter(
       (entry) => Date.parse(expiryInstant(entry.expiresAt)) <= Date.now(),
     );

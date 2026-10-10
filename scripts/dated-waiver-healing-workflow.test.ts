@@ -246,9 +246,15 @@ test("required CI expiry checks cannot be skipped by paths, reuse, or queue dept
   const check = expiry.steps.find(
     ({ name }) => name === "Check dated waiver expiry on the current tree",
   );
+  const trackedFiles = expiry.steps.find(
+    ({ name }) => name === "List tracked files for dated waiver guard",
+  );
   expect(install?.run).toContain("bun scripts/ci-install.ts");
+  expect(trackedFiles?.run).toBe(
+    'git ls-files -z > "$RUNNER_TEMP/dated-waiver-tracked-files"',
+  );
   expect(check?.run).toBe(
-    "bun --preload ./scripts/offline-network-preload.ts scripts/dated-waivers.ts --check",
+    'bun --preload ./scripts/offline-network-preload.ts scripts/dated-waivers.ts --check --tracked-files "$RUNNER_TEMP/dated-waiver-tracked-files"',
   );
   for (const step of expiry.steps) {
     expect(step.env?.["GH_TOKEN"]).toBeUndefined();
