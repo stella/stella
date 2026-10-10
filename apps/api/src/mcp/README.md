@@ -18,13 +18,14 @@ One server, one registry, several audiences. Each audience is its own HTTP
 path with its own tool list, server name, resource scopes and connect-time
 instructions, because an orchestrator picks tools from the names it was handed:
 
-- `/mcp`: the default stella MCP. It includes first-party stella tools,
-  OpenAI-compatible `search` / `fetch` tools, user-managed skills, and enabled
-  external MCP connectors.
+- `/mcp`: the default stella MCP. It includes purpose-built stella tools and
+  user-managed skills.
+- `/mcp/advanced`: the opt-in advanced MCP. It adds generic capability access
+  and enabled external MCP connectors to the default tool set.
 - `/mcp-anonymized`: the anonymized MCP mode. It exposes the full first-party
   read/search surface (matters, matter overviews, cross-matter search and
-  content, contacts, templates, case law, plus the OpenAI-compatible
-  `search`/`fetch` tools) for clients that should receive anonymized results.
+  content, contacts, templates, case law, plus the compatible `search`/`fetch`
+  tools) for clients that should receive anonymized results.
   Tenant and personal text is redacted on egress; mutating tools and the dynamic
   gateway are not exposed.
 - `/mcp-documents`: the least-privilege document surface. Document tools plus
@@ -56,10 +57,15 @@ the order those two are used in (author, create, read the discovered paths
 back, configure, preview, persist), and
 `stella://reference/legislation-workflow` for the corpus-reading order.
 
-The default audience serves all of them. The documents audience serves the
-product identity and the three template references, and not the legislation
-workflow. The law audience serves the product identity and the legislation
-workflow, and none of the template references.
+The default and advanced audiences serve all of them. The documents audience
+serves the product identity and the three template references, and not the
+legislation workflow. The law audience serves the product identity and the
+legislation workflow, and none of the template references.
+
+Machine API keys may be bound to the advanced audience for `/mcp/advanced`.
+Default-bound keys remain limited to `/mcp`; an unbound key can authenticate to
+either connection. An audience mismatch returns the key's configured audience
+and the path where it can be used.
 
 Each audience is also an OAuth resource, and adding one needs no operator step.
 It widens the resource set the startup census requires, and startup never seeds
@@ -75,6 +81,7 @@ OAuth protected-resource discovery is served from:
 
 - `/.well-known/oauth-protected-resource`
 - `/.well-known/oauth-protected-resource/mcp`
+- `/.well-known/oauth-protected-resource/mcp/advanced`
 - `/.well-known/oauth-protected-resource/mcp-anonymized`
 - `/.well-known/oauth-protected-resource/mcp-documents`
 - `/.well-known/oauth-protected-resource/mcp-law`
