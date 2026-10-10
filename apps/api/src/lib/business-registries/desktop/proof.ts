@@ -4,6 +4,7 @@ import { calculateJwkThumbprint, importJWK, jwtVerify } from "jose";
 import { timingSafeEqual } from "node:crypto";
 import * as v from "valibot";
 
+import { DESKTOP_ACCOUNT_POLICY } from "@stll/api-contract/desktop-registry";
 import { sha256Base64Url } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
@@ -11,7 +12,8 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 export const DESKTOP_PROOF_HEADER = "DPoP";
 const DESKTOP_PROOF_MAX_AGE_SECONDS = 60;
-const DESKTOP_PROOF_FUTURE_SKEW_SECONDS = 5;
+const DESKTOP_PROOF_FUTURE_SKEW_SECONDS =
+  DESKTOP_ACCOUNT_POLICY.clockSkewSeconds;
 const MAX_PROOF_BYTES = 4096;
 const publicDeviceKey = v.strictObject({
   kty: v.literal("EC"),

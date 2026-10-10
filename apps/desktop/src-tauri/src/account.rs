@@ -67,6 +67,7 @@ struct AccountPolicy {
   key_prefix: String,
   credential_lifetime_seconds: i64,
   rotation_interval_seconds: u64,
+  clock_skew_seconds: i64,
   link_protocol: u32,
 }
 
@@ -81,8 +82,6 @@ fn policy() -> AccountPolicy {
 /// API sees a fresh credential as longer-lived than the policy allows, so the
 /// upper bound tolerates this much skew. The lower bound stays strict: a
 /// credential past its own timestamp is not live, whatever the local clock.
-const CLOCK_SKEW_SECONDS: i64 = 5 * 60;
-
 pub fn is_live_expiry(value: &str) -> bool {
   is_live_expiry_at(value, chrono::Utc::now())
 }
@@ -91,7 +90,7 @@ fn is_live_expiry_at(value: &str, now: chrono::DateTime<chrono::Utc>) -> bool {
   chrono::DateTime::parse_from_rfc3339(value).is_ok_and(|expires| {
     let remaining = expires.signed_duration_since(now).num_seconds();
     remaining > 0
-      && remaining <= policy().credential_lifetime_seconds + CLOCK_SKEW_SECONDS
+      && remaining <= policy().credential_lifetime_seconds + policy().clock_skew_seconds
   })
 }
 
@@ -1658,7 +1657,8 @@ mod tests {
 
   #[tokio::test]
   async fn a_profile_is_connected_only_while_its_shared_credential_is_live() {
-    let max_lifetime = policy().credential_lifetime_seconds + CLOCK_SKEW_SECONDS;
+    let max_lifetime =
+      policy().credential_lifetime_seconds + policy().clock_skew_seconds;
     for lifetime in [-60, 0, 60, max_lifetime, max_lifetime + 60] {
       let state = Arc::new(Mutex::new(AccountStore::Memory(Some(fixture(
         "stella_dr_fixture",
@@ -1685,12 +1685,18 @@ mod tests {
 
     assert!(is_live_expiry_at(&expires_at, local(0)));
     assert!(is_live_expiry_at(&expires_at, local(-1)));
-    assert!(is_live_expiry_at(&expires_at, local(-CLOCK_SKEW_SECONDS)));
+    assert!(is_live_expiry_at(
+      &expires_at,
+      local(-policy().clock_skew_seconds)
+    ));
     assert!(!is_live_expiry_at(
       &expires_at,
-      local(-CLOCK_SKEW_SECONDS - 1)
+      local(-policy().clock_skew_seconds - 1)
     ));
-    assert!(is_live_expiry_at(&expires_at, local(CLOCK_SKEW_SECONDS)));
+    assert!(is_live_expiry_at(
+      &expires_at,
+      local(policy().clock_skew_seconds)
+    ));
     assert!(is_live_expiry_at(
       &expires_at,
       local(policy().credential_lifetime_seconds - 1)
@@ -1943,6 +1949,102 @@ mod tests {
       "stella_dr_successor"
     );
     assert!(!store.expired().await.unwrap());
+  }
+
+  #[tokio::test]
+  async fn proof_refusals_preserve_saved_credentials_during_rotation_and_recovery() {
+    use axum::{Json, Router, http::StatusCode, routing::post};
+    for code in [
+      "desktop_proof_expired",
+      "desktop_proof_invalid",
+      "desktop_proof_replayed",
+      "desktop_device_mismatch",
+    ] {
+      let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+      let mut original = fixture("stella_dr_original", 60);
+      original.api_base_url = format!("http://{}", listener.local_addr().unwrap());
+      let router = Router::new().route(
+        "/v1/desktop-registry/renew",
+        post(move || async move {
+          (
+            StatusCode::UNAUTHORIZED,
+            Json(serde_json::json!({"code": code})),
+          )
+        }),
+      );
+      let server = tokio::spawn(async move {
+        axum::serve(listener, router).await.unwrap();
+      });
+      let mut store = rotation_fixture(original.clone());
+      assert!(
+        rotate_account(
+          &mut store,
+          original.clone(),
+          "stella_dr_successor".into(),
+          &HttpRenewal
+        )
+        .await
+        .is_err()
+      );
+      assert_rotation_pending(&store, &original).await;
+      for mode in [
+        RecoveryMode::ProbeOnly,
+        RecoveryMode::Foreground,
+        RecoveryMode::Disconnect,
+      ] {
+        assert!(
+          recover_rotation(&mut store, original.clone(), &HttpRenewal, mode)
+            .await
+            .is_err()
+        );
+        assert_rotation_pending(&store, &original).await;
+      }
+      server.abort();
+    }
+  }
+
+  #[tokio::test]
+  async fn credential_refusals_clear_saved_credentials_during_rotation_and_recovery() {
+    use axum::{Json, Router, http::StatusCode, routing::post};
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let mut original = fixture("stella_dr_original", 60);
+    original.api_base_url = format!("http://{}", listener.local_addr().unwrap());
+    let router = Router::new().route(
+      "/v1/desktop-registry/renew",
+      post(|| async {
+        (
+          StatusCode::UNAUTHORIZED,
+          Json(serde_json::json!({"message":"Reconnect desktop to your account"})),
+        )
+      }),
+    );
+    let server = tokio::spawn(async move {
+      axum::serve(listener, router).await.unwrap();
+    });
+    let mut store = rotation_fixture(original.clone());
+    assert!(
+      rotate_account(
+        &mut store,
+        original.clone(),
+        "stella_dr_successor".into(),
+        &HttpRenewal
+      )
+      .await
+      .is_err()
+    );
+    assert!(store.load().await.unwrap().is_none());
+    assert!(store.pending().await.unwrap().is_none());
+    for mode in [RecoveryMode::Foreground, RecoveryMode::Disconnect] {
+      let mut store = rotation_fixture(original.clone());
+      assert!(
+        recover_rotation(&mut store, original.clone(), &HttpRenewal, mode)
+          .await
+          .is_err()
+      );
+      assert!(store.load().await.unwrap().is_none());
+      assert!(store.pending().await.unwrap().is_none());
+    }
+    server.abort();
   }
 
   #[tokio::test]
@@ -2383,7 +2485,7 @@ mod tests {
         "unbounded-expiry" => {
           reply.expires_at = (chrono::Utc::now()
             + chrono::Duration::seconds(
-              policy().credential_lifetime_seconds + CLOCK_SKEW_SECONDS + 60,
+              policy().credential_lifetime_seconds + policy().clock_skew_seconds + 60,
             ))
           .to_rfc3339()
         }

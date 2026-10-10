@@ -115,13 +115,11 @@ async fn request_path(
   .send()
   .await
   .map_err(|_| "Registry search is unavailable")?;
-  if response.status() == reqwest::StatusCode::UNAUTHORIZED {
-    return Err(not_connected());
-  }
+  let unauthorized = response.status() == reqwest::StatusCode::UNAUTHORIZED;
   if response.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
     return Err(rate_limited());
   }
-  if !response.status().is_success() {
+  if !unauthorized && !response.status().is_success() {
     return Err("Registry request failed".into());
   }
   let mut bytes = Vec::new();
@@ -135,7 +133,27 @@ async fn request_path(
     }
     bytes.extend_from_slice(&chunk);
   }
-  serde_json::from_slice(&bytes).map_err(|_| "Registry response is invalid".into())
+  let value: serde_json::Value =
+    serde_json::from_slice(&bytes).map_err(|_| "Registry response is invalid")?;
+  if unauthorized {
+    return match value.get("code").and_then(serde_json::Value::as_str) {
+      Some(
+        "desktop_proof_expired"
+        | "desktop_proof_invalid"
+        | "desktop_proof_replayed"
+        | "desktop_device_mismatch",
+      ) => Err("Desktop account proof was refused".into()),
+      // Only the account endpoints' credential refusal ends the saved link.
+      None
+        if value.get("message").and_then(serde_json::Value::as_str)
+          == Some("Reconnect desktop to your account") =>
+      {
+        Err(not_connected())
+      }
+      _ => Err("Registry authorization failed".into()),
+    };
+  }
+  Ok(value)
 }
 
 #[tauri::command]

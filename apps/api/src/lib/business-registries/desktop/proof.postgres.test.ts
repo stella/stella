@@ -9,6 +9,7 @@ import {
   SignJWT,
 } from "jose";
 
+import { DESKTOP_ACCOUNT_POLICY } from "@stll/api-contract/desktop-registry";
 import { sha256Base64Url } from "@stll/sha256/bun";
 
 import { verification } from "@/api/db/auth-schema";
@@ -151,6 +152,43 @@ const expectRefusal = (result: ClaimResult, code: string) => {
 };
 
 describe.skipIf(!enabled)("desktop proof receipts (postgres)", () => {
+  test("future-skew receipts prevent replay through the final acceptance second", async () => {
+    await withProofDatabase(async ({ db }) => {
+      const verified = await (
+        await deviceFixture()
+      ).proof(
+        Bun.randomUUIDv7(),
+        NOW.getTime() / 1000 + DESKTOP_ACCOUNT_POLICY.clockSkewSeconds,
+      );
+      expect(
+        (
+          await ConsumedDesktopDeviceProof.claim({
+            proof: verified,
+            db,
+            now: NOW,
+          })
+        ).isOk(),
+      ).toBe(true);
+      const finalSecond = new Date(verified.expiresAt.getTime() - 1000);
+      expectRefusal(
+        await ConsumedDesktopDeviceProof.claim({
+          proof: verified,
+          db,
+          now: finalSecond,
+        }),
+        "desktop_proof_replayed",
+      );
+      expectRefusal(
+        await ConsumedDesktopDeviceProof.claim({
+          proof: verified,
+          db,
+          now: verified.expiresAt,
+        }),
+        "desktop_proof_expired",
+      );
+    });
+  });
+
   test("independent database sessions claim one receipt", async () => {
     await withProofDatabase(async ({ db, secondDb }) => {
       const { proof } = await deviceFixture();
