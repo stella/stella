@@ -78,7 +78,7 @@ const fakeGithub = ({ failure }: FakeOptions = {}) => {
   let mainSha = "base-sha";
   let failuresRemaining = failure ? 1 : 0;
   const fail = (point: FakeOptions["failure"]) => {
-    if (point !== failure || failuresRemaining === 0) {
+    if (point === undefined || point !== failure || failuresRemaining === 0) {
       return;
     }
     failuresRemaining--;
@@ -782,7 +782,9 @@ describe("independent proposal file failures", () => {
       );
       files["nonmodule.txt"] = "export const value = (;";
       if (invalid.length === 0) {
-        expect(validateRemovalModules(files)).toBeUndefined();
+        expect(() => {
+          validateRemovalModules(files);
+        }).not.toThrow();
         continue;
       }
       let githubCalls = 0;

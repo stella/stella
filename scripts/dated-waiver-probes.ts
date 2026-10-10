@@ -14,6 +14,12 @@ import { parseLedger } from "./suppression-waivers";
 
 export type RemovalChange = { source: string; before: string; after: string };
 
+/**
+ * The documented zero-age override, as one separate argument. Detection and
+ * removal share it, so any spelling detection accepts is one removal removes.
+ */
+const ZERO_AGE_OVERRIDE = /[ \t]--minimum-release-age[= ]0\b/u;
+
 // Offsets must come from a parseable owner, never from regex over source text.
 const parseOwner = (source: string, file: string): ts.SourceFile => {
   const diagnostics =
@@ -155,7 +161,7 @@ const removeReleaseAgeException = (
   }
   // Only the documented zero-age override is removable automatically.
   const previous = lines.at(entry.line - 2);
-  if (!previous || !/--minimum-release-age(?:=|\s+)0\b/u.test(previous)) {
+  if (!previous || !ZERO_AGE_OVERRIDE.test(previous)) {
     panic(
       `Release-age exception has no removable zero-age override: ${entry.id}`,
     );
@@ -163,10 +169,13 @@ const removeReleaseAgeException = (
   if (previous.trim() !== entry.id) {
     panic(`Release-age exception anchor missing: ${entry.id}`);
   }
-  lines[entry.line - 2] = previous.replace(
-    /\s*--minimum-release-age(?:=|\s+)0\b/u,
-    "",
-  );
+  const withoutOverride = previous.replace(ZERO_AGE_OVERRIDE, "");
+  if (ZERO_AGE_OVERRIDE.test(withoutOverride)) {
+    panic(
+      `Release-age exception has more than one zero-age override: ${entry.id}`,
+    );
+  }
+  lines[entry.line - 2] = withoutOverride;
   lines.splice(entry.line - 1, 1);
   return lines.join("\n");
 };
@@ -439,7 +448,7 @@ export const runWaiverProbe = async (
       executedTest =
         selected.length === 1 &&
         selected.at(0) === "pass" &&
-        /^\s*[1-9]\d* pass\s*$/mu.test(output);
+        /^ *[1-9]\d* pass *$/mu.test(output);
     }
     results.push({
       passed: receipt.passed && executedTest,

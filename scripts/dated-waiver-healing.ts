@@ -133,10 +133,10 @@ const healEntry = async ({
 }: HealEntryOptions): Promise<void> => {
   const attempt = async <T>(
     stage: HealingFailure["stage"],
-    action: () => Promise<T>,
+    action: () => T | Promise<T>,
   ) => {
     const result = await Result.tryPromise({
-      try: action,
+      try: async () => await action(),
       catch: (cause) => cause,
     });
     if (Result.isError(result)) {
@@ -144,7 +144,7 @@ const healEntry = async ({
     }
     return result;
   };
-  const checked = await attempt("evidence", async () => {
+  const checked = await attempt("evidence", () => {
     const at = Date.parse(expiryInstant(entry.expiresAt));
     if (now.getTime() < at && outcome.status === "expired") {
       panic("Expired waiver evidence precedes its owner deadline");
@@ -947,12 +947,10 @@ const main = async (): Promise<void> => {
     report,
     now: new Date(),
     reconciliation: {
-      discover: async () => {
-        if (Result.isError(discovered)) {
-          throw discovered.error;
-        }
-        return discovered.value;
-      },
+      discover: async () =>
+        await (Result.isError(discovered)
+          ? Promise.reject(discovered.error)
+          : Promise.resolve(discovered.value)),
       retire: async ({ branch }) =>
         retireRemoval({
           branch,

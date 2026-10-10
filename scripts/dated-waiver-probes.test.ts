@@ -323,7 +323,14 @@ test("real Bun filtered receipts accept only the selected passing declaration", 
             cwd: directory,
             stdout: "pipe",
             stderr: "pipe",
-            env: { ...process.env, FORCE_COLOR: "0" },
+            // Mirror the production allowlist: an inherited agent environment
+            // makes Bun hide the per-test receipts this probe reads.
+            env: {
+              PATH: process.env["PATH"],
+              HOME: process.env["HOME"],
+              TMPDIR: process.env["TMPDIR"],
+              FORCE_COLOR: "0",
+            },
             timeout: 30_000,
           });
           captured = result.stdout.toString() + result.stderr.toString();
