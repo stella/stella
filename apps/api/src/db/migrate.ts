@@ -5,14 +5,17 @@ import nodePath from "node:path";
 import { printError } from "@stll/errors";
 import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
+import { loadTestEnv } from "../../scripts/load-test-env";
 // Relative imports: this entrypoint also ships as a loose file without tsconfig.
 import { resolveDatabaseUrl } from "../db-url";
-import { envDbLoadGate } from "../env-db-load-gate";
 import {
   requireEbsConfiguration,
   resolveEbsConfiguration,
 } from "../lib/db/ebs-signal-reader";
 import { runMigrationsUntilSettled } from "./migration-runner";
+
+loadTestEnv(nodePath.resolve(import.meta.dir, "../../.env.test"));
+const { envDbLoadGate } = await import("../env-db-load-gate");
 
 // An index build would hold forever on a load gate nobody configured, and the
 // deploy waits on this process: reject that before any connection opens.

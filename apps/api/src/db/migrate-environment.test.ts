@@ -1,4 +1,5 @@
 import { expect, setDefaultTimeout, test } from "bun:test";
+import { copyFile, mkdir, mkdtemp, rm, symlink } from "node:fs/promises";
 import nodeOs from "node:os";
 import nodePath from "node:path";
 
@@ -33,7 +34,7 @@ import nodePath from "node:path";
  * `Invalid environment variables`.
  */
 
-const MIGRATE_ENTRYPOINT = nodePath.join(import.meta.dir, "migrate.ts");
+const API_ROOT = nodePath.resolve(import.meta.dir, "../..");
 
 /**
  * Empties Bun's default `.env` loading for the spawned process. Written to the
@@ -56,25 +57,56 @@ setDefaultTimeout(60_000);
 
 const runMigrateEntrypoint = async (environment: Record<string, string>) => {
   await Bun.write(EMPTY_ENV_FILE, "");
-  const migrate = Bun.spawn({
-    cmd: ["bun", "run", `--env-file=${EMPTY_ENV_FILE}`, MIGRATE_ENTRYPOINT],
-    env: {
-      DATABASE_URL: UNREACHABLE_DATABASE_URL,
-      HOME: "/tmp",
-      NODE_ENV: "test",
-      // `bun` itself has to be findable; nothing else is inherited.
-      PATH: process.env["PATH"] ?? "",
-      ...environment,
-    },
-    stderr: "pipe",
-    stdout: "pipe",
-  });
-  const [stderr, stdout, exitCode] = await Promise.all([
-    new Response(migrate.stderr).text(),
-    new Response(migrate.stdout).text(),
-    migrate.exited,
-  ]);
-  return { exitCode, output: `${stdout}\n${stderr}` };
+  // Keep the generated .env.test in a developer checkout out of this scrubbed
+  // environment, including its database URL.
+  const directory = await mkdtemp(
+    nodePath.join(nodeOs.tmpdir(), "migrate-env-"),
+  );
+  await mkdir(nodePath.join(directory, "src/db"), { recursive: true });
+  await mkdir(nodePath.join(directory, "scripts"));
+  const entrypoint = nodePath.join(directory, "src/db/migrate.ts");
+  await copyFile(nodePath.join(API_ROOT, "src/db/migrate.ts"), entrypoint);
+  await copyFile(
+    nodePath.join(API_ROOT, "scripts/load-test-env.ts"),
+    nodePath.join(directory, "scripts/load-test-env.ts"),
+  );
+  for (const dependency of ["db-url.ts", "env-db-load-gate.ts", "lib"]) {
+    await symlink(
+      nodePath.join(API_ROOT, "src", dependency),
+      nodePath.join(directory, "src", dependency),
+    );
+  }
+  await symlink(
+    nodePath.join(API_ROOT, "src/db/migration-runner.ts"),
+    nodePath.join(directory, "src/db/migration-runner.ts"),
+  );
+  await symlink(
+    nodePath.join(API_ROOT, "../../node_modules"),
+    nodePath.join(directory, "node_modules"),
+  );
+  try {
+    const migrate = Bun.spawn({
+      cmd: ["bun", "run", `--env-file=${EMPTY_ENV_FILE}`, entrypoint],
+      env: {
+        DATABASE_URL: UNREACHABLE_DATABASE_URL,
+        HOME: "/tmp",
+        NODE_ENV: "test",
+        // `bun` itself has to be findable; nothing else is inherited.
+        PATH: process.env["PATH"] ?? "",
+        ...environment,
+      },
+      stderr: "pipe",
+      stdout: "pipe",
+    });
+    const [stderr, stdout, exitCode] = await Promise.all([
+      new Response(migrate.stderr).text(),
+      new Response(migrate.stdout).text(),
+      migrate.exited,
+    ]);
+    return { exitCode, output: `${stdout}\n${stderr}` };
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 };
 
 test("the migrate entrypoint needs only the database and its load-gate setting", async () => {
