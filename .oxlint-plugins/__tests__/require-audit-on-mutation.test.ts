@@ -385,16 +385,23 @@ test("the recorder owns audit insertion while other writes still require an even
   expect(
     await lintSingleRule(RULE, accountInsert, {
       sourcePath: "apps/api/src/lib/audit-log.ts",
+      ruleOptionsForRoot: (root) => ({ root }),
     }),
   ).toEqual([]);
   expect(
-    await lintSingleRule(RULE, accountInsert, { sourcePath: SOURCE_PATH }),
+    await lintSingleRule(RULE, accountInsert, {
+      sourcePath: SOURCE_PATH,
+      ruleOptionsForRoot: (root) => ({ root }),
+    }),
   ).toEqual([1]);
   expect(
     await lintSingleRule(
       RULE,
       "export const record = (tx) => tx.insert(otherRows);",
-      { sourcePath: "apps/api/src/lib/audit-log.ts" },
+      {
+        sourcePath: "apps/api/src/lib/audit-log.ts",
+        ruleOptionsForRoot: (root) => ({ root }),
+      },
     ),
   ).toEqual([1]);
 });

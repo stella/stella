@@ -392,10 +392,7 @@ const nullableHeader = (headers: Headers, name: string): string | null => {
   return value && value.length > 0 ? value : null;
 };
 
-const baseRequestMetadata = (
-  request: Request,
-  server: ServerLike | null,
-): AuditMetadata => ({
+const baseRequestMetadata = (request: Request, server: ServerLike | null) => ({
   ipAddress: resolveClientIp(request, server),
   // The raw forwarded-for chain stays in metadata for forensic
   // inspection, even though `ipAddress` only trusts it when the
@@ -537,7 +534,7 @@ const createOrganizationAuditRecorder = (
   };
 };
 
-export type AccountAuditEvent = {
+type AccountAuditEvent = {
   type: AccountAuditEventType;
   resourceId: string;
 };
@@ -601,11 +598,10 @@ export function createAuditRecorder(
   bindings: OrganizationAuditRecorderBindings | AccountRequestAuditBindings,
 ): AuditRecorder | AccountAuditRecorder {
   if (bindings.account !== undefined) {
-    return createAccountRecorder(bindings, {
-      ipAddress: resolveClientIp(bindings.request, bindings.server),
-      forwardedFor: nullableHeader(bindings.request.headers, "x-forwarded-for"),
-      userAgent: nullableHeader(bindings.request.headers, "user-agent"),
-    });
+    return createAccountRecorder(
+      bindings,
+      baseRequestMetadata(bindings.request, bindings.server),
+    );
   }
   return createOrganizationAuditRecorder(bindings);
 }
