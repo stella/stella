@@ -150,6 +150,7 @@ export const DOMAIN_ACTION_VERBS = [
   "archive",
   "cancel",
   "check",
+  "clear",
   "clip",
   "clone",
   "compare",

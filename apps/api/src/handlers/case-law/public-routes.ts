@@ -81,6 +81,8 @@ import {
 } from "@/api/lib/api-handlers";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import { readCourtRegistry } from "@/api/lib/case-law/court-presentation";
+import { loadPublicCourtWeights } from "@/api/lib/case-law/public-case-law-config";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
@@ -357,7 +359,10 @@ const listCitingDecisions = createSafeBoundedPublicHandler(
     const response = yield* Result.await(
       Result.tryPromise(
         async () =>
-          await listCitingDecisionsHandler(query, caseLawPublicReadDb),
+          await listCitingDecisionsHandler(query, {
+            caseLawDb: caseLawPublicReadDb,
+            courtRegistry: await readCourtRegistry(loadPublicCourtWeights),
+          }),
       ),
     );
 

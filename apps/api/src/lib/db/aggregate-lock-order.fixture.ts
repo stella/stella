@@ -119,6 +119,11 @@ export const aggregateFences = () => {
       aggregate: "personalCatalog",
       id: { organizationId, userId: mintAuthProviderId<"user">() },
     },
+    searchHistory: {
+      aggregate: "searchHistory",
+      id: { organizationId, userId: mintAuthProviderId<"user">() },
+      mode: "update",
+    },
     chatMessage: {
       aggregate: "chatMessage",
       id: { id: createSafeId<"chatMessage">(), threadId },
