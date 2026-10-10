@@ -1,8 +1,13 @@
+import path from "node:path";
+
+import { loadTestEnv } from "./load-test-env";
 import {
   assertSharedTableDdlIsolated,
   EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS,
 } from "./postgres-test-plan";
 import { runGatedTests } from "./run-gated-tests";
+
+loadTestEnv(path.resolve(import.meta.dir, "../.env.test"));
 
 process.exitCode = await runGatedTests({
   requiredEnv: ["DATABASE_URL"],
