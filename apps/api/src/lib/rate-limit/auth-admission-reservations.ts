@@ -93,8 +93,8 @@ export const createAuthAdmissionStorage = ({
     key,
     script,
     parameters,
-  }: AdmissionCommandOptions) => {
-    const outcome = await Result.tryPromise({
+  }: AdmissionCommandOptions) =>
+    await Result.tryPromise({
       try: async () =>
         await withCommandTimeout({
           command: redis.send("EVAL", [
@@ -113,13 +113,6 @@ export const createAuthAdmissionStorage = ({
         }),
       catch: (error: unknown) => error,
     });
-    if (outcome.isErr()) {
-      observeFailure(outcome.error, {
-        sink: REDIS_ADMISSION_FAILURE_SINK,
-      });
-    }
-    return outcome;
-  };
   return {
     reserve: async (
       key: string,
@@ -170,6 +163,10 @@ export const createAuthAdmissionStorage = ({
             : { type: "limited", retryAfter: Math.max(1, Number(reply.at(1))) };
         }
         logger.warn("auth.rate_limit.redis_admission_invalid_response");
+      } else {
+        observeFailure(outcome.error, {
+          sink: REDIS_ADMISSION_FAILURE_SINK,
+        });
       }
       return localAllowed
         ? { type: "reserved", reservation }
@@ -195,11 +192,16 @@ export const createAuthAdmissionStorage = ({
       ) {
         local.count -= 1;
       }
-      await command({
+      const settlement = await command({
         key: reservation.key,
         script: SETTLE_SCRIPT,
         parameters: [reservation.requestId, outcome],
       });
+      if (settlement.isErr()) {
+        observeFailure(settlement.error, {
+          sink: REDIS_ADMISSION_FAILURE_SINK,
+        });
+      }
     },
   };
 };
