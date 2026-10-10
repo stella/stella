@@ -156,6 +156,7 @@
         "$TURBO_ROOT$/scripts/check-test-state-baseline.ts",
         "$TURBO_ROOT$/scripts/baseline-paths.ts",
         "$TURBO_ROOT$/scripts/ledger-membership.ts",
+        "$TURBO_ROOT$/scripts/product-frontend-files.ts",
         "$TURBO_ROOT$/packages/typescript-config/**",
         "$TURBO_ROOT$/patches/**",
         "$TURBO_ROOT$/tsconfig.tooling.json",
@@ -198,6 +199,7 @@
         "$TURBO_ROOT$/scripts/check-test-state-baseline.ts",
         "$TURBO_ROOT$/scripts/baseline-paths.ts",
         "$TURBO_ROOT$/scripts/ledger-membership.ts",
+        "$TURBO_ROOT$/scripts/product-frontend-files.ts",
         "$TURBO_ROOT$/tsconfig.tooling.json"
       ],
       "cache": false
@@ -381,6 +383,7 @@
         "$TURBO_ROOT$/scripts/check-test-state-baseline.ts",
         "$TURBO_ROOT$/scripts/baseline-paths.ts",
         "$TURBO_ROOT$/scripts/ledger-membership.ts",
+        "$TURBO_ROOT$/scripts/product-frontend-files.ts",
         "$TURBO_ROOT$/packages/typescript-config/**",
         "$TURBO_ROOT$/patches/**",
         "$TURBO_ROOT$/tsconfig.tooling.json",
@@ -437,6 +440,7 @@
         "$TURBO_ROOT$/scripts/check-test-state-baseline.ts",
         "$TURBO_ROOT$/scripts/baseline-paths.ts",
         "$TURBO_ROOT$/scripts/ledger-membership.ts",
+        "$TURBO_ROOT$/scripts/product-frontend-files.ts",
         "$TURBO_ROOT$/packages/typescript-config/**",
         "$TURBO_ROOT$/patches/**",
         "$TURBO_ROOT$/tsconfig.tooling.json",
@@ -484,6 +488,7 @@
         "$TURBO_ROOT$/scripts/check-test-state-baseline.ts",
         "$TURBO_ROOT$/scripts/baseline-paths.ts",
         "$TURBO_ROOT$/scripts/ledger-membership.ts",
+        "$TURBO_ROOT$/scripts/product-frontend-files.ts",
         "$TURBO_ROOT$/packages/typescript-config/**",
         "$TURBO_ROOT$/patches/**",
         "$TURBO_ROOT$/tsconfig.tooling.json",
@@ -523,6 +528,7 @@
         "$TURBO_ROOT$/scripts/check-test-state-baseline.ts",
         "$TURBO_ROOT$/scripts/baseline-paths.ts",
         "$TURBO_ROOT$/scripts/ledger-membership.ts",
+        "$TURBO_ROOT$/scripts/product-frontend-files.ts",
         "$TURBO_ROOT$/scripts/derived-attributes.ts",
         "$TURBO_ROOT$/scripts/source-fingerprint-baseline.json",
         "$TURBO_ROOT$/scripts/audit-mutation-ledger-scope.ts"
@@ -644,6 +650,7 @@
         "$TURBO_ROOT$/scripts/check-test-state-baseline.ts",
         "$TURBO_ROOT$/scripts/baseline-paths.ts",
         "$TURBO_ROOT$/scripts/ledger-membership.ts",
+        "$TURBO_ROOT$/scripts/product-frontend-files.ts",
         "$TURBO_ROOT$/packages/typescript-config/**",
         "$TURBO_ROOT$/patches/**",
         "$TURBO_ROOT$/tsconfig.tooling.json",
@@ -772,6 +779,7 @@
         "$TURBO_ROOT$/scripts/check-test-state-baseline.ts",
         "$TURBO_ROOT$/scripts/baseline-paths.ts",
         "$TURBO_ROOT$/scripts/ledger-membership.ts",
+        "$TURBO_ROOT$/scripts/product-frontend-files.ts",
         "$TURBO_ROOT$/packages/typescript-config/**",
         "$TURBO_ROOT$/patches/**",
         "$TURBO_ROOT$/tsconfig.tooling.json",
@@ -809,12 +817,7 @@
         "$TURBO_ROOT$/apps/web/src/features/chat/chat-runtime.ts",
         "$TURBO_ROOT$/apps/web/src/fonts.css",
         "$TURBO_ROOT$/apps/web/public/fonts/**",
-        "$TURBO_ROOT$/apps/web/src/i18n/langs/**",
         "$TURBO_ROOT$/packages/mcp-apps/src/**",
-        "$TURBO_ROOT$/packages/decision-reader/package.json",
-        "$TURBO_ROOT$/packages/decision-reader/src/**",
-        "$TURBO_ROOT$/packages/legal-ast/src/document-ast.ts",
-        "$TURBO_ROOT$/packages/legal-ast/src/inline.ts",
         "$TURBO_ROOT$/oxlint.config.ts",
         "$TURBO_ROOT$/scripts/check-aggregate-mutations.ts",
         "$TURBO_ROOT$/scripts/ownership/**",
@@ -826,9 +829,8 @@
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/apps/**",
         "$TURBO_ROOT$/packages/**",
-        "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/oxlint.config.ts",
-        "$TURBO_ROOT$/scripts/**"
+        "$TURBO_ROOT$/scripts/product-frontend-files.ts"
       ]
     },
     "@stll/web#test": {

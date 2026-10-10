@@ -1,10 +1,11 @@
 import { expect, test } from "bun:test";
 import { existsSync, readdirSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
 
-import oxlintConfig from "../../../oxlint.config";
-import { PRODUCT_FRONTEND_FILES } from "../../../scripts/product-frontend-files";
+import { ts } from "@stll/scripts/src/typescript-program";
+
+import oxlintConfig from "../../../oxlint.config.ts";
+import { PRODUCT_FRONTEND_FILES } from "../../../scripts/product-frontend-files.ts";
 import { MCP_APPS } from "../src/manifest";
 
 const root = path.resolve(import.meta.dirname, "../../..");

@@ -1,4 +1,4 @@
-import ts from "typescript";
+import { ts } from "@stll/scripts/src/typescript-program";
 
 export const MCP_READER_UI_APP_DIRECTORIES = [
   "case-law-results",

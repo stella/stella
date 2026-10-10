@@ -31,7 +31,7 @@ import { withCanonicalDisableRuleIds } from "./scripts/oxlint-disable-rule-ids.t
 import core from "./scripts/oxlint-presets/core.mjs";
 import react from "./scripts/oxlint-presets/react.mjs";
 import shadcn from "./scripts/oxlint-presets/shadcn.mjs";
-import { PRODUCT_FRONTEND_FILES } from "./scripts/product-frontend-files";
+import { PRODUCT_FRONTEND_FILES } from "./scripts/product-frontend-files.ts";
 import {
   DECLARATION_FILE_GLOB,
   RESULT_CONVENTION_ENABLED_GLOBS,

@@ -9,7 +9,7 @@ browser contracts; this package never imports API source or environment setup.
 
 Run `bun run build` to regenerate bundles and frontend assets, and `bun run test`
 to exercise the React views, bridge contracts and package ownership guards.
-Regenerate API contracts first with `bun --cwd apps/api run generate:mcp-app-contracts`
+Regenerate API contracts first with `bun run --cwd apps/api generate:mcp-app-contracts`
 from the repository root (the canonical generated-files runner orders both).
 
 Bundle budgets live in `scripts/bundle-baseline.json`; check them with

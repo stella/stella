@@ -1114,7 +1114,7 @@
         "fast-check": "catalog:",
         "oxc-transform-react": "catalog:",
         "postcss": "catalog:",
-        "typescript": "catalog:",
+        "tailwindcss": "catalog:",
       },
     },
     "packages/scripts": {
