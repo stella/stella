@@ -25,6 +25,7 @@ import {
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
 import { iterateCursorPages } from "@/api/lib/pagination";
+import { brandPersistedFlowDefinitionId } from "@/api/lib/safe-id-boundaries";
 import {
   FLOW_RUN_TASK,
   flowScheduleJobId,
@@ -256,7 +257,9 @@ export const repairFlowScheduleTriggers = async ({
         .where(
           and(
             drift,
-            cursor === null ? undefined : gt(flowDefinitions.id, cursor),
+            cursor === null
+              ? undefined
+              : gt(flowDefinitions.id, brandPersistedFlowDefinitionId(cursor)),
             principal === undefined
               ? undefined
               : and(

@@ -569,14 +569,16 @@ const exportedVoidFunction = (ast: ts.SourceFile, name: string) => {
   return false;
 };
 
+type TableOwnership = readonly {
+  matcher: RegExp;
+  owners: ReadonlyMap<string, Requirement>;
+}[];
+
 type OperationalValidationOptions = {
   boundary: OperationalBoundary;
   graph: DeclarationSourceGraph;
   registry: FeatureRegistry;
-  tables: readonly {
-    matcher: RegExp;
-    owners: ReadonlyMap<string, Requirement>;
-  }[];
+  tables: TableOwnership;
 };
 
 const operationalOwners = (
@@ -1278,7 +1280,7 @@ const isAggregateTableSelection = (
 
 type AggregateSelectorUsesOptions = {
   node: ts.Node;
-  tables: Readonly<ReturnType<typeof validateOwnership>["tables"]>;
+  tables: TableOwnership;
   aggregateTables: ReadonlyMap<string, ReadonlySet<string>>;
 };
 const aggregateSelectorUses = ({
@@ -1308,7 +1310,7 @@ const aggregateSelectorUses = ({
 const collectModuleUses = (
   ast: ts.SourceFile,
   registry: FeatureRegistry,
-  tables: Readonly<ReturnType<typeof validateOwnership>["tables"]>,
+  tables: TableOwnership,
   aggregateTables: ReadonlyMap<string, ReadonlySet<string>>,
 ): ModuleUse[] => {
   const uses: ModuleUse[] = [];
