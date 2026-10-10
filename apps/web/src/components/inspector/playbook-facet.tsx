@@ -1585,8 +1585,8 @@ const Launcher = ({
   // question "whose side are we on" is about the contract on screen, and
   // asking it after the proposal has been paid for is asking it too late.
   const partiesQuery = useQuery({
-    ...documentReviewPartiesOptions({ workspaceId, ...target }),
-    select: (answer) => answer.parties,
+    ...documentReviewPartiesOptions({ workspaceId, ...target }, "detect"),
+    select: (answer) => (answer.type === "cached" ? answer.parties : []),
   });
   const parties = useQueryView(partiesQuery);
   const setup: ReviewSetup = {

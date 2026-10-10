@@ -5,8 +5,8 @@
  *
  * The answer is deterministic for a document version's content, so it is
  * cached per `entityVersionId` (see `document_review_parties`): the first
- * call for a version detects it, every later call for the same version
- * reads the cached row without a model call.
+ * explicit detection request for a version detects it; cached requests only
+ * read the row and never dispatch model work.
  */
 
 import { panic, Result } from "better-result";
@@ -42,11 +42,12 @@ const TIMEOUT_MS = 60_000;
 
 const documentReviewPartiesBodySchema = t.Object({
   target: documentReviewTargetSchema,
+  mode: t.Union([t.Literal("cached"), t.Literal("detect")]),
 });
 
 const config = {
   description:
-    "Detect a target document's parties ahead of any position proposal, so the review launcher can show which side the reviewer acts for before choosing references.",
+    "Read cached document parties, or explicitly detect them for the review launcher. Cached mode never runs detection.",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
@@ -168,7 +169,15 @@ export const createReviewParties = ({
     );
     const cachedRow = cached.at(0);
     if (cachedRow !== undefined) {
-      return Result.ok({ entityVersionId, parties: cachedRow.parties });
+      return Result.ok({
+        type: "cached" as const,
+        entityVersionId,
+        parties: cachedRow.parties,
+      });
+    }
+
+    if (body.mode === "cached") {
+      return Result.ok({ type: "not-detected" as const, entityVersionId });
     }
 
     yield* requireTanStackAIAvailableForRole({
@@ -302,7 +311,7 @@ export const createReviewParties = ({
       );
     }
 
-    return Result.ok({ entityVersionId, parties });
+    return Result.ok({ type: "cached" as const, entityVersionId, parties });
   });
 
 export default createReviewParties();

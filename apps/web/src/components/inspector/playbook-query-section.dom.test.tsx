@@ -36,7 +36,7 @@ const target = {
   fileFieldId: "file",
 };
 for (const queryKey of [
-  documentReviewPartiesKeys.target(target),
+  documentReviewPartiesKeys.target(target, "detect"),
   entityVersionsKeys.all(target),
 ]) {
   describe(`${JSON.stringify(queryKey)} query region`, () => {
