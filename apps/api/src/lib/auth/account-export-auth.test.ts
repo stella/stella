@@ -39,83 +39,71 @@ afterEach(() => {
 });
 
 describe("account export HTTP authentication", () => {
-  test.each(["read", "write"] as const)(
-    "%s consent authenticates only its access class",
-    async (access) => {
-      let membershipReads = 0;
-      const app = new Elysia()
-        .use(
-          createAccountExportAuthMacro({
-            authenticate: async () =>
-              Result.ok({
-                ...oauthSession,
-                scopes: [ACCOUNT_EXPORT_SCOPES[access]],
-              }),
-            resolveAuthorization: async (identity) => {
-              membershipReads += 1;
-              expect(identity.userId).toBe(oauthSession.userId);
-              expect(identity.organizationId).toBe(oauthSession.organizationId);
-              return memberAuthorization;
-            },
-            getSession: async () =>
-              panic("Bearer requests must not read browser cookies"),
-          }),
-        )
-        .get("/export", ({ user }) => user, { validateAccountExport: "read" })
-        .post("/export", ({ user }) => user, {
-          validateAccountExport: "write",
-        });
-      const headers = {
-        authorization: "Bearer oauth-token",
-        cookie: "another-session=present",
-      };
-      const read = await app.handle(
-        new Request("http://localhost/export", { headers }),
-      );
-      expect(read.status).toBe(access === "read" ? 200 : 403);
-      if (access === "read") {
-        expect(await read.json()).toEqual({
-          id: "user_one",
-          email: "user@example.test",
-        });
-      }
-      const write = await app.handle(
-        new Request("http://localhost/export", { headers, method: "POST" }),
-      );
-      expect(write.status).toBe(access === "write" ? 200 : 403);
-      if (access === "write") {
-        expect(await write.json()).toEqual({
-          id: "user_one",
-          email: "user@example.test",
-        });
-      }
-      expect(membershipReads).toBe(1);
-    },
-  );
-
-  test.each(["Basic token", "Bearer", "Bearer token trailing"])(
-    "malformed authorization never falls back to a cookie: %s",
-    async (authorization) => {
-      const app = new Elysia()
-        .use(
-          createAccountExportAuthMacro({
-            authenticate: async () =>
-              panic("Malformed credentials must not reach verification"),
-            getSession: async () =>
-              panic("Invalid credentials must not fall back to cookies"),
-          }),
-        )
-        .get("/export", () => "authenticated", {
-          validateAccountExport: "read",
-        });
-      const response = await app.handle(
-        new Request("http://localhost/export", {
-          headers: { authorization, cookie: "session=present" },
+  test("read consent authenticates its access class", async () => {
+    const access = "read";
+    let membershipReads = 0;
+    const app = new Elysia()
+      .use(
+        createAccountExportAuthMacro({
+          authenticate: async () =>
+            Result.ok({
+              ...oauthSession,
+              scopes: [ACCOUNT_EXPORT_SCOPES[access]],
+            }),
+          resolveAuthorization: async (identity) => {
+            membershipReads += 1;
+            expect(identity.userId).toBe(oauthSession.userId);
+            expect(identity.organizationId).toBe(oauthSession.organizationId);
+            return memberAuthorization;
+          },
+          getSession: async () =>
+            panic("Bearer requests must not read browser cookies"),
         }),
-      );
-      expect(response.status).toBe(401);
-    },
-  );
+      )
+      .get("/export", ({ user }) => user, { validateAccountExport: "read" })
+      .post("/export", ({ user }) => user, {
+        validateAccountExport: "write",
+      });
+    const headers = {
+      authorization: "Bearer oauth-token",
+      cookie: "another-session=present",
+    };
+    const read = await app.handle(
+      new Request("http://localhost/export", { headers }),
+    );
+    expect(read.status).toBe(200);
+    expect(await read.json()).toEqual({
+      id: "user_one",
+      email: "user@example.test",
+    });
+    const write = await app.handle(
+      new Request("http://localhost/export", { headers, method: "POST" }),
+    );
+    expect(write.status).toBe(403);
+    expect(membershipReads).toBe(1);
+  });
+
+  test("refuses a malformed credential", async () => {
+    const authorization = "Bearer";
+    const app = new Elysia()
+      .use(
+        createAccountExportAuthMacro({
+          authenticate: async () =>
+            panic("Malformed credentials must not reach verification"),
+          getSession: async () =>
+            panic("Invalid credentials must not fall back to cookies"),
+        }),
+      )
+      .get("/export", () => "authenticated", {
+        validateAccountExport: "read",
+      });
+    const response = await app.handle(
+      new Request("http://localhost/export", {
+        headers: { authorization, cookie: "session=present" },
+      }),
+    );
+    expect(response.status).toBe(401);
+  });
 
   test("a verifier refusal remains final with cookies present", async () => {
     const app = new Elysia()

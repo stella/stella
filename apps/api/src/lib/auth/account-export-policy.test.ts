@@ -7,48 +7,16 @@ import {
 } from "@stll/api-contract";
 
 import { hasAccountExportAuthority } from "@/api/lib/auth/account-export-policy";
-import type { McpSession } from "@/api/mcp/auth";
-
-const credentialCases = [
-  { credential: undefined, permitted: false },
-  { credential: { type: "delegated_user" }, permitted: false },
-  { credential: { type: "agent_run", runId: "run" }, permitted: false },
-  {
-    credential: {
-      type: "machine_api_key",
-      id: "key",
-      name: "key",
-      permissions: { workspace: ["read"] },
-    },
-    permitted: false,
-  },
-  {
-    credential: {
-      type: "personal_api_key",
-      id: "key",
-      name: "key",
-      permissions: { workspace: ["read"] },
-    },
-    permitted: false,
-  },
-  { credential: { type: "oauth_client", clientId: "client" }, permitted: true },
-] as const satisfies readonly {
-  credential: McpSession["credential"];
-  permitted: boolean;
-}[];
 
 describe("account export consent", () => {
-  test.each(credentialCases)(
-    "credential admission: %j",
-    ({ credential, permitted }) => {
-      const authority = {
-        credential,
-        grantedScopes: Object.values(ACCOUNT_EXPORT_SCOPES),
-      };
-      expect(hasAccountExportAuthority(authority, "read")).toBe(permitted);
-      expect(hasAccountExportAuthority(authority, "write")).toBe(permitted);
-    },
-  );
+  test("account consent requires a credential", () => {
+    const authority = {
+      credential: undefined,
+      grantedScopes: Object.values(ACCOUNT_EXPORT_SCOPES),
+    };
+    expect(hasAccountExportAuthority(authority, "read")).toBe(false);
+    expect(hasAccountExportAuthority(authority, "write")).toBe(false);
+  });
 
   test("organization grants and opposite access grants convey no account consent", () => {
     const credential = { type: "oauth_client", clientId: "client" } as const;

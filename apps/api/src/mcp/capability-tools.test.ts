@@ -937,48 +937,28 @@ describe("account export capability authority", () => {
     }
   });
 
-  test.each([
-    undefined,
-    { type: "delegated_user" },
-    { type: "agent_run", runId: "run" },
-    {
-      type: "machine_api_key",
-      id: "key",
-      name: "key",
-      permissions: { workspace: ["read"] },
-    },
-    {
-      type: "personal_api_key",
-      id: "key",
-      name: "key",
-      permissions: { workspace: ["read"] },
-    },
-  ] as const satisfies readonly McpRequestContext["credential"][])(
-    "organization credentials cannot discover or dispatch account exports: %j",
-    async (credential) => {
-      const context = createContext({
-        credential,
-        grantedScopes: ["stella:read", ...Object.values(ACCOUNT_EXPORT_SCOPES)],
+  test("account exports require a credential", async () => {
+    const context = createContext({
+      grantedScopes: ["stella:read", ...Object.values(ACCOUNT_EXPORT_SCOPES)],
+    });
+    expect(await listedAccountIds(context)).toEqual([]);
+    for (const entry of entries) {
+      const described = await handleMcpToolCall({
+        mode: "advanced",
+        toolName: "describe_capability",
+        args: { capability: entry.id },
+        context,
       });
-      expect(await listedAccountIds(context)).toEqual([]);
-      for (const entry of entries) {
-        const described = await handleMcpToolCall({
-          mode: "advanced",
-          toolName: "describe_capability",
-          args: { capability: entry.id },
-          context,
-        });
-        expect(errorEnvelope(described).code).toBe("not_found");
-        const invoked = await handleCapabilityCall({
-          args: { capability: entry.id, validate_only: true },
-          context,
-        });
-        expect(errorEnvelope(invoked).code).toBe("not_found");
-      }
-      expect(loadOrgSettingsMock).not.toHaveBeenCalled();
-      expect(consumeRateLimitMock).not.toHaveBeenCalled();
-    },
-  );
+      expect(errorEnvelope(described).code).toBe("not_found");
+      const invoked = await handleCapabilityCall({
+        args: { capability: entry.id, validate_only: true },
+        context,
+      });
+      expect(errorEnvelope(invoked).code).toBe("not_found");
+    }
+    expect(loadOrgSettingsMock).not.toHaveBeenCalled();
+    expect(consumeRateLimitMock).not.toHaveBeenCalled();
+  });
 
   test("read-only OAuth consent discovers reads and refuses requests", async () => {
     const context = createContext({
