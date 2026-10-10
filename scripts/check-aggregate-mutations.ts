@@ -802,14 +802,14 @@ type HandlerImplementationOptions = {
 type HandlerImplementation =
   | { body: ts.Node; source: ts.SourceFile; file: string }
   | undefined;
-/** The call a local arrow factory returns, directly or as its only statement. */
+/** The handler constructor call a local factory returns, as its arrow body or only statement. */
 const factoryReturn = (
-  initializer: ts.Expression,
+  node: ts.FunctionDeclaration | ts.ArrowFunction | ts.FunctionExpression,
 ): ts.CallExpression | undefined => {
-  if (!ts.isArrowFunction(initializer)) {
+  const { body } = node;
+  if (body === undefined) {
     return undefined;
   }
-  const { body } = initializer;
   if (ts.isCallExpression(body)) {
     return body;
   }
@@ -864,9 +864,7 @@ const handlerImplementation = ({
     // A local endpoint factory (dependencies injectable for tests) is
     // followed to the handler constructor call it returns.
     const returned =
-      factory?.kind === "const"
-        ? factoryReturn(factory.initializer)
-        : undefined;
+      factory?.kind === "function" ? factoryReturn(factory.node) : undefined;
     if (returned !== undefined) {
       const key = `${file}#${handler.expression.text}()`;
       if (visited.has(key)) {
