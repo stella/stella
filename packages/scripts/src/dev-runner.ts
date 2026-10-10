@@ -2761,7 +2761,7 @@ export const runMainAndExit = async ({ exit, report, run }: RunMainOptions) => {
 
 if (import.meta.main) {
   await runMainAndExit({
-    exit: process.exit,
+    exit: (code) => process.exit(code),
     report: console.error,
     run: main,
   });

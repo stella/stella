@@ -7,12 +7,12 @@ const UNREADABLE_CAUSE = "<unreadable cause>";
 // Error properties can be getters that throw; a failed read becomes a
 // placeholder so formatting never replaces the failure it reports.
 const readOr = <T>(read: () => T, placeholder: T) =>
-  Result.try({ try: read, catch: () => placeholder }).unwrapOr(placeholder);
+  Result.try(read).unwrapOr(placeholder);
 
 const describeLink = (value: unknown) => {
   if (value instanceof Error) {
-    const name = readOr(() => String(value.name), UNREADABLE);
-    const message = readOr(() => String(value.message), UNREADABLE);
+    const name = readOr(() => value.name, UNREADABLE);
+    const message = readOr(() => value.message, UNREADABLE);
     return `${name}: ${message}`;
   }
   return typeof value === "string"
@@ -22,7 +22,7 @@ const describeLink = (value: unknown) => {
 
 const readCause = (value: unknown) =>
   value instanceof Error
-    ? readOr<unknown>(() => value.cause, UNREADABLE_CAUSE)
+    ? readOr(() => value.cause, UNREADABLE_CAUSE)
     : undefined;
 
 export const formatErrorChain = (error: unknown) => {

@@ -14,6 +14,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { DevProcessRegistrationError } from "./dev-process-groups";
 import {
   AUTO_INFRA_OFFSET_GRID,
   buildPersistentSteps,
@@ -1762,7 +1763,10 @@ describe("startup failure reporting", () => {
   test("a failed group stop during cleanup is reported without throwing", () => {
     const reports: string[] = [];
     const groupStop = Result.err(
-      new Error("Could not signal process group", { cause: "ESRCH" }),
+      new DevProcessRegistrationError({
+        message: "Could not signal process group",
+        cause: "ESRCH",
+      }),
     );
 
     expect(
