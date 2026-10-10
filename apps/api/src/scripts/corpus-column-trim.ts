@@ -445,7 +445,7 @@ const runCorpusColumnTrim = async (): Promise<void> => {
   );
 
   const trimRows = async (rows: TrimRow[]): Promise<void> => {
-    // trimRow settles every row into the counters itself and never rejects.
+    // trimColumnRow settles every row into the counters itself and never rejects.
     await mapWithConcurrency({
       items: rows,
       limit: CONCURRENCY,
