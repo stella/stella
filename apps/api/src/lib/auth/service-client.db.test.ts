@@ -6,7 +6,11 @@ import * as v from "valibot";
 
 import { sha256Base64Url } from "@stll/sha256/bun";
 
-import { oauthClient, organization } from "@/api/db/auth-schema";
+import {
+  oauthClient,
+  oauthClientResource,
+  organization,
+} from "@/api/db/auth-schema";
 import {
   createServiceOAuthClient,
   changeServiceOAuthClient,
@@ -19,6 +23,7 @@ import { meRoute } from "@/api/handlers/me/routes";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log.constants";
 import { getAuth } from "@/api/lib/auth";
 import { getAuthEndpointUrl } from "@/api/lib/auth/auth-paths";
+import { completeOrganizationDeletion } from "@/api/lib/organization-storage-teardown";
 import { extractMcpSession } from "@/api/mcp/auth";
 import { getMcpResourceUrl } from "@/api/mcp/constants";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
@@ -136,6 +141,25 @@ describe("confidential service OAuth lifecycle", () => {
         .where(eq(oauthClient.name, name))
         .limit(1),
     ).toHaveLength(0);
+  });
+
+  test("organization deletion removes the whole service credential", async () => {
+    const { clientId, organizationId } = await fixture();
+    await rootDb.transaction(
+      async (tx) => await completeOrganizationDeletion({ organizationId, tx }),
+    );
+    for (const table of [
+      oauthClient,
+      oauthClientResource,
+      serviceOAuthClients,
+    ]) {
+      expect(
+        await rootDb
+          .select({ clientId: table.clientId })
+          .from(table)
+          .where(eq(table.clientId, clientId)),
+      ).toEqual([]);
+    }
   });
 
   test.each([
