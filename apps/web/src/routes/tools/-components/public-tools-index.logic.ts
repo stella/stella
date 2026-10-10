@@ -19,13 +19,8 @@ export type PublicToolTask = (typeof PUBLIC_TOOL_TASKS)[number];
 const TASK_SLUGS = {
   "prepare-documents": ["create-docx"],
   "protect-client-data": ["anonymize"],
-  "research-precedents": [
-    "jurisrank-csjn-analysis",
-    "infosoud",
-    "boe",
-    "web-search",
-  ],
-  "review-agreements": ["contract-review"],
+  "research-precedents": ["jurisrank", "infosoud", "boe", "web-search"],
+  "review-agreements": ["contract-review-anthropic"],
   "verify-organizations": [
     "ares",
     "brreg",

@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
 import { BLUEPRINTS } from "./blueprints";
-import { isAllowedResourcePath, parseSkillFile } from "./loader";
-import { SKILL_NAME_PATTERN } from "./package-limits";
+import { SKILL_NAME_PATTERN } from "./format";
+import { parseSkillFile } from "./frontmatter";
+import { isAllowedResourcePath } from "./loader";
 
 // The file-tree editor (apps/web) only renders paths whose every segment
 // starts alphanumeric. A `_guide.md`-style segment stores fine via the loader

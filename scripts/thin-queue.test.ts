@@ -133,6 +133,7 @@ const plan = {
   service_suites_pr_required: "false",
   corpus_suites_required: "false",
   fix_tests_on_base_required: "false",
+  browser_spec_selection_required: "true",
   api_test_shards: "4",
   pr_depth_reused: "false",
 };
@@ -292,6 +293,11 @@ type ExpectedPrSelectionOptions = {
   baseline: boolean;
   value: ReturnType<typeof context>;
 };
+const DECLARED_PR_PLAN_CHANGES = new Set([
+  "ci-browser",
+  "e2e-production-shard",
+  "web-build",
+]);
 const expectedPrSelection = ({
   job,
   baseline,
@@ -302,9 +308,29 @@ const expectedPrSelection = ({
     panic(`Missing CI event disposition: ${job}`);
   }
   if (job === "ci-browser") {
+    expect(DECLARED_PR_PLAN_CHANGES.has(job)).toBe(true);
     return (
       value.needs["ci-plan"]?.outputs["trusted"] === "true" &&
       value.needs["ci-plan"].outputs["desktop_browser_required"] === "true"
+    );
+  }
+  if (job === "web-build") {
+    expect(DECLARED_PR_PLAN_CHANGES.has(job)).toBe(true);
+    return (
+      !value.inputs.heavy_only &&
+      value.needs["ci-plan"]?.outputs["trusted"] === "true" &&
+      value.needs["ci-plan"].outputs["browser_spec_selection_required"] ===
+        "true"
+    );
+  }
+  if (job === "e2e-production-shard") {
+    expect(DECLARED_PR_PLAN_CHANGES.has(job)).toBe(true);
+    return (
+      value.needs["ci-plan"]?.outputs["coverage_profile"] === "normal-v1" &&
+      value.needs["ci-plan"].outputs["trusted"] === "true" &&
+      value.needs["ci-plan"].outputs["e2e_production_required"] === "true" &&
+      (value.needs["web-build"]?.result === "success" ||
+        value.needs["heavy-web-build"]?.result === "success")
     );
   }
   switch (disposition) {
@@ -763,6 +789,11 @@ test("unset and full preserve historical predicates except declared PR, Postgres
       ]),
     ].toSorted(),
   );
+  expect([...DECLARED_PR_PLAN_CHANGES].toSorted()).toEqual([
+    "ci-browser",
+    "e2e-production-shard",
+    "web-build",
+  ]);
   for (const event of events) {
     for (const { variable, proveFix } of ["", "full"].flatMap((queueVariable) =>
       [false, true].map((labelRequested) => ({
@@ -1296,7 +1327,11 @@ test("the queue switch admits browser suites only in merge groups", () => {
       expect(
         selected(ci.jobs[job]?.if, value),
         `${job}/${event.event}/${event.message}`,
-      ).toBe(false);
+      ).toBe(
+        DECLARED_PR_PLAN_CHANGES.has(job) &&
+          job === "e2e-production-shard" &&
+          event.event === "pull_request",
+      );
     }
   }
 });

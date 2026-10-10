@@ -12,7 +12,8 @@ import {
 import { panic, Result } from "better-result";
 
 import { BUILT_IN_CHAT_TOOL_POLICY_KINDS } from "@stll/api-contract";
-import { listSkillMetadata, readDocumentedChatReads } from "@stll/skills";
+import { listSkillMetadata } from "@stll/skills";
+import { readDocumentedChatReads } from "@stll/skills/frontmatter";
 
 import { isChatScriptRead } from "@/api/handlers/chat/tools/execute/chat-read-script-policy";
 import { runChatScriptRead } from "@/api/handlers/chat/tools/execute/chat-script-read-boundary";

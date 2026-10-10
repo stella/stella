@@ -7,6 +7,7 @@
   "sideEffects": false,
   "exports": {
     ".": "./src/index.ts",
+    "./provider-setup": "./src/provider-setup.ts",
     "./currency-code": "./src/currency-code.ts",
     "./visual-preview": "./src/visual-preview.ts",
     "./limits": "./src/limits.ts",
@@ -67,6 +68,7 @@
     "./folio-collab": "./src/folio-collab.ts",
     "./legal-reader-annotations": "./src/legal-reader-annotations.ts",
     "./legal-citation-links": "./src/legal-citation-links.ts",
+    "./legal-resolve": "./src/legal-resolve.ts",
     "./legislation-expression": "./src/legislation-expression.ts",
     "./hosted-checkout": "./src/hosted-checkout.ts",
     "./legislation-status": "./src/legislation-status.ts",

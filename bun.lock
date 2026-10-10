@@ -156,6 +156,9 @@
         "jose": "^6.2.12",
         "jszip": "catalog:",
         "mailauth": "7.1.0",
+        "mdast-util-from-markdown": "2.0.3",
+        "mdast-util-gfm": "3.1.0",
+        "micromark-extension-gfm": "3.0.0",
         "nodemailer": "^10.0.13",
         "onnxruntime-node": "1.30.0",
         "pkijs": "3.4.1",
@@ -1122,6 +1125,7 @@
       "name": "@stll/skills",
       "version": "0.0.0",
       "dependencies": {
+        "@stll/sha256": "workspace:*",
         "better-result": "catalog:",
       },
       "devDependencies": {
@@ -1157,8 +1161,10 @@
       "name": "@stll/stable-stringify",
       "version": "0.2.1",
       "devDependencies": {
+        "@stll/property-testing": "workspace:*",
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
+        "fast-check": "catalog:",
       },
     },
     "packages/start-runtime": {

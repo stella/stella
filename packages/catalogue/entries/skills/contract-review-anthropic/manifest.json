@@ -2,7 +2,7 @@
   "$schema": "../../../schema.json",
   "kind": "skill",
   "source": "github",
-  "slug": "contract-review",
+  "slug": "contract-review-anthropic",
   "displayName": "Contract Review",
   "description": "Reviews commercial agreements clause by clause against an organization's negotiation playbook, classifying deviations by severity and generating redline suggestions. Falls back to general commercial standards when no playbook is configured.",
   "author": "Anthropic",

@@ -137,7 +137,11 @@ jobs:
       collab_redis_required: ${{ steps.changed-files.outputs.collab_redis_required }}
       desktop_rust_checks_required: ${{ steps.changed-files.outputs.desktop_rust_checks_required }}
       e2e_core_required: ${{ steps.changed-files.outputs.e2e_core_required }}
-      e2e_production_required: ${{ steps.changed-files.outputs.e2e_production_required }}
+      e2e_production_required: ${{ steps.e2e-pr-plan.outputs.required }}
+      e2e_production_matrix: ${{ steps.e2e-pr-plan.outputs.matrix }}
+      e2e_production_mode: ${{ steps.e2e-pr-plan.outputs.mode }}
+      e2e_production_specs: ${{ steps.e2e-pr-plan.outputs.specs }}
+      browser_spec_selection_required: ${{ steps.e2e-pr-plan.outputs.selection_required }}
       e2e_landing_required: ${{ steps.changed-files.outputs.e2e_landing_required }}
       fix_tests_on_base_required: ${{ steps.changed-files.outputs.fix_tests_on_base_required }}
       landing_build_required: ${{ steps.changed-files.outputs.landing_build_required }}
@@ -1322,6 +1326,63 @@ jobs:
           overwrite: true
           retention-days: 1
           if-no-files-found: ignore
+
+      - name: Select changed PR e2e shards
+        id: e2e-pr-selection
+        continue-on-error: true
+        if: >-
+          steps.completed-depth.outputs.run_required != 'false'
+          && github.event_name == 'pull_request'
+          && steps.api-test-deps.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed_files=()
+          if [[ -s "$RUNNER_TEMP/api-test-changed-paths" ]]; then
+            while IFS= read -r -d '' file; do
+              changed_files+=("$file")
+            done < "$RUNNER_TEMP/api-test-changed-paths"
+          fi
+          plan=$(bun scripts/e2e-spec-shards.ts select "${changed_files[@]}")
+          matrix=$(jq -c .matrix <<< "$plan")
+          mode=$(jq -r .status <<< "$plan")
+          specs=$(jq -c .specs <<< "$plan")
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+          echo "specs=$specs" >> "$GITHUB_OUTPUT"
+
+      - name: Plan changed PR e2e shards
+        id: e2e-pr-plan
+        if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          E2E_PRODUCTION_REQUIRED: ${{ steps.changed-files.outputs.e2e_production_required }}
+          SELECTED_MATRIX: ${{ steps.e2e-pr-selection.outputs.matrix }}
+          SELECTED_MODE: ${{ steps.e2e-pr-selection.outputs.mode }}
+          SELECTED_SPECS: ${{ steps.e2e-pr-selection.outputs.specs }}
+          SELECTOR_OUTCOME: ${{ steps.e2e-pr-selection.outcome }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" != pull_request || "$SELECTOR_OUTCOME" != success || -z "$SELECTED_MATRIX" ]]; then
+            matrix=$(bun scripts/e2e-spec-shards-core.ts all)
+            mode=full
+            specs='[]'
+          else
+            matrix=$SELECTED_MATRIX
+            mode=$SELECTED_MODE
+            specs=$SELECTED_SPECS
+          fi
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+          echo "specs=$specs" >> "$GITHUB_OUTPUT"
+          if [[ "$matrix" == '{"shard":[]}' ]]; then
+            echo "selection_required=false" >> "$GITHUB_OUTPUT"
+            echo "required=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "selection_required=true" >> "$GITHUB_OUTPUT"
+            echo "required=$E2E_PRODUCTION_REQUIRED" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Plan API test files and shards
         if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
@@ -2714,6 +2775,12 @@ jobs:
           bun test scripts/check-standalone-lockfiles.test.ts
           bun scripts/check-standalone-lockfiles.ts
 
+      - name: Standalone negated shell statement guard
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
+        run: |
+          bun test scripts/check-standalone-negated-shell.test.ts
+          bun scripts/check-standalone-negated-shell.ts
+
       - name: Tauri package alignment
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         env:
@@ -3054,6 +3121,10 @@ jobs:
         run: |
           bun test scripts/design-lint-baseline.test.ts scripts/oxlint-config-inputs.test.ts
           bun scripts/design-lint-baseline.ts --check
+
+      - name: Full error toast text census
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun run check:toast-errors
 
       - name: Query data state baseline
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
@@ -3613,6 +3684,10 @@ jobs:
       - name: Test route smoke change detector
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
         run: bun test scripts/detect-route-smoke-changes.test.ts
+
+      - name: Test changed e2e shard selection
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun test scripts/e2e-spec-shards.test.ts
 
       - name: Validate CI service image mirror inventory
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
@@ -5363,16 +5438,14 @@ jobs:
       inputs.pr_depth_only != true
       &&
       needs.ci-plan.outputs.run_required != 'false'
-      && (
-      github.event_name != 'pull_request' && (
-      inputs.heavy_only != true
-      && (
-        (needs.ci-plan.outputs.trusted == 'true'
-        || github.event_name == 'workflow_dispatch')
-        && needs.ci-plan.outputs.web_build_required == 'true'
-      )
-      )
-      )
+      && inputs.heavy_only != true
+      && (needs.ci-plan.outputs.trusted == 'true'
+      || github.event_name == 'workflow_dispatch')
+      && ((github.event_name != 'pull_request'
+      && needs.ci-plan.outputs.web_build_required == 'true')
+      || (github.event_name == 'pull_request'
+      && needs.ci-plan.outputs.coverage_profile == 'normal-v1'
+      && needs.ci-plan.outputs.browser_spec_selection_required == 'true'))
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -5411,6 +5484,7 @@ jobs:
         # The e2e shards and the marketing capture both serve this build.
         if: >-
           needs.ci-plan.outputs.e2e_core_required == 'true'
+          || needs.ci-plan.outputs.e2e_production_required == 'true'
           || needs.ci-plan.outputs.marketing_screenshots_required == 'true'
           || needs.ci-plan.outputs.route_smoke_required == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -6089,15 +6163,17 @@ jobs:
       &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
-      github.event_name != 'pull_request' && (
-      (needs.ci-plan.outputs.queue_depth != 'thin' || (github.event_name == 'merge_group' && vars.QUEUE_BROWSER_SUITES != 'off'))
+      ((github.event_name == 'pull_request'
+      && needs.ci-plan.outputs.coverage_profile == 'normal-v1')
+      || (github.event_name != 'pull_request'
+      && (needs.ci-plan.outputs.queue_depth != 'thin'
+      || (github.event_name == 'merge_group' && vars.QUEUE_BROWSER_SUITES != 'off'))))
       && (always()
       && (github.event_name != 'merge_group' || !cancelled())
       && (needs.ci-plan.outputs.trusted == 'true'
           || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.e2e_production_required == 'true'
       && (needs.web-build.result == 'success' || needs.heavy-web-build.result == 'success')
-      )
       )
       )
     runs-on: ubuntu-latest
@@ -6112,7 +6188,7 @@ jobs:
       matrix:
         # The route network baseline runs alone against its stack, so it
         # gets a leg of its own instead of lengthening a Playwright shard.
-        shard: [1, 2, network-baseline]
+        shard: ${{ fromJSON(needs.ci-plan.outputs.e2e_production_matrix).shard }}
     env:
       CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
     steps:
@@ -6202,10 +6278,32 @@ jobs:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/run-playwright-shard.json
           E2E_EXECUTION_PROFILE: ci-production-parallel
           E2E_EXPECT_DEV_ROUTES: "false"
-        run: >-
-          bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e --
-          --grep-invert='route-smoke'
-          --shard=${{ matrix.shard }}/2
+          E2E_MODE: ${{ needs.ci-plan.outputs.e2e_production_mode }}
+          E2E_SPECS: ${{ needs.ci-plan.outputs.e2e_production_specs }}
+        run: |
+          set -euo pipefail
+          case "$E2E_MODE" in
+            full)
+              args=(--shard=${{ matrix.shard }}/2)
+              ;;
+            selected)
+              specs_output=$(jq -r '.[]' <<< "$E2E_SPECS")
+              [[ -n "$specs_output" ]] || {
+                echo "Selected E2E leg has no specs" >&2
+                exit 1
+              }
+              args=()
+              while IFS= read -r spec; do
+                args+=("$spec")
+              done <<< "$specs_output"
+              ;;
+            *)
+              echo "Unknown E2E selection mode: $E2E_MODE" >&2
+              exit 1
+              ;;
+          esac
+          bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" \
+            bun --filter @stll/web test:e2e -- --grep-invert='route-smoke' "${args[@]}"
 
       # API-owned browser checks (visual sandbox) need the API from this stack
       # but no web app; one shard runs them.
@@ -7970,9 +8068,9 @@ jobs:
           # Jobs a fast-depth run must also see succeed once their scope is
           # planned; any other job may skip there.
           FAST_JOB_SCOPES: >-
-            {"service-suites": "service_suites_pr_required", "docker-checks": "docker_checks_pr_required", "legal-atlas-image": "legal_atlas_image_pr_required"}
+            {"service-suites": "service_suites_pr_required", "docker-checks": "docker_checks_pr_required", "legal-atlas-image": "legal_atlas_image_pr_required", "web-build": "browser_spec_selection_required"}
           FAST_REQUIRED: >-
-            ["ci-browser", "ci-generated-sources", "ci-checks-docs", "ci-checks-generated", "ci-checks-policy", "ci-checks-rest", "code-quality-api", "code-quality-web-rest", "dependency-malware", "parser-version-guard", "ci-tests"]
+            ["ci-browser", "ci-generated-sources", "ci-checks-docs", "ci-checks-generated", "ci-checks-policy", "ci-checks-rest", "code-quality-api", "code-quality-web-rest", "dependency-malware", "parser-version-guard", "ci-tests", "e2e-production-shard", "web-build"]
         run: |
           if [[ "$QUEUE_DEPTH" == thin ]]; then
             THIN_JOBS=$(jq -cn --argjson thin "$THIN_JOBS" --argjson required "$QUEUE_REQUIRED_JOBS" '$thin + $required | unique') || exit 1

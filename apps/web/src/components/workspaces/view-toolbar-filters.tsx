@@ -463,9 +463,7 @@ const AdvancedFilterChip = ({
     <Popover onOpenChange={onOpenChange} open={open}>
       <PopoverTrigger render={<ViewFilterChip />}>
         <SlidersHorizontalIcon className="size-3.5" />
-        <span className="text-foreground">
-          {t("workspaces.views.advancedFilter")}
-        </span>
+        <span className="text-foreground">{t("common.advanced")}</span>
         <span className="text-muted-foreground">
           {t("workspaces.views.advancedFilterCount", {
             count: node.children.length,

@@ -130,6 +130,8 @@ export const ChatThreadMessages = ({
   loadOlderError = false,
   messages: rawMessages,
   onLoadOlder,
+  onAnswerEdited,
+  answerRewriteAvailability = "unknown",
   scrollContainerRef,
   onResend,
   onSendWithoutAnonymization,
@@ -357,16 +359,9 @@ export const ChatThreadMessages = ({
           </ChatAnswerDecisionProvider>
         ) : (
           <>
-            {(() => {
-              const fileParts: ChatAttachmentPart[] = [];
-              for (const part of message.parts) {
-                if (isChatAttachmentPart(part)) {
-                  fileParts.push(part);
-                }
-              }
-
-              return <UserAttachments parts={fileParts} />;
-            })()}
+            <UserAttachments
+              parts={message.parts.filter(isChatAttachmentPart)}
+            />
             {message.parts.map((part, partIndex) =>
               part.type === "text" ? (
                 <UserMessageText
@@ -392,7 +387,15 @@ export const ChatThreadMessages = ({
     <ReferenceRenderScope workspaceId={workspaceId}>
       {scrollRef !== null && <ChatTranscriptCopy rootRef={scrollRef} />}
       {branchSource !== undefined && scrollRef !== null && (
-        <ChatSelectionToolbar rootRef={scrollRef} source={branchSource} />
+        <ChatSelectionToolbar
+          key={branchSource.threadRef.threadId}
+          rootRef={scrollRef}
+          source={branchSource}
+          messages={messages}
+          isGenerating={generationActive}
+          onAnswerEdited={onAnswerEdited}
+          answerRewriteAvailability={answerRewriteAvailability}
+        />
       )}
       {canLoadOlder && (
         <LoadOlderSentinel
@@ -1225,6 +1228,12 @@ type ChatThreadMessagesProps = {
    *  sentinel cannot loop the request (the manual button still retries). */
   loadOlderError?: boolean | undefined;
   messages: ChatUIMessage[];
+  onAnswerEdited?: ((messageId: string) => Promise<void>) | undefined;
+  answerRewriteAvailability?:
+    | "available"
+    | "anonymized"
+    | "unknown"
+    | undefined;
   /** Explicit scroll container for surfaces that render outside a
    *  `Conversation`/StickToBottom provider (e.g. the file-chat overlay);
    *  falls back to the StickToBottom context when omitted. */
@@ -1668,6 +1677,8 @@ const AssistantMessageParts = ({
           components={streamdownComponents}
           key={`${message.id}-text-${index}`}
           restorationPairs={restorationPairs}
+          partIndex={index}
+          sourceOffsets={!isTurnActive}
           text={part.content}
         />
       );
@@ -2059,11 +2070,15 @@ const AssistantTextPart = ({
   className,
   components,
   restorationPairs,
+  partIndex,
+  sourceOffsets = false,
   text,
 }: {
   className?: string | undefined;
   components: ChatThreadMessagesProps["streamdownComponents"];
   restorationPairs: readonly ChatAnonRestoration[];
+  partIndex?: number;
+  sourceOffsets?: boolean;
   text: string;
 }) => {
   // Stable identity so MessageResponse memo can short-circuit when
@@ -2082,6 +2097,8 @@ const AssistantTextPart = ({
     return (
       <MessageResponse
         components={components}
+        data-text-part-index={partIndex}
+        sourceOffsets={sourceOffsets}
         fallbackChildren={assistantMessageFallbackText(text)}
         {...classNamePatch}
       >
@@ -2092,6 +2109,8 @@ const AssistantTextPart = ({
   return (
     <MessageResponse
       components={components}
+      data-text-part-index={partIndex}
+      sourceOffsets={sourceOffsets}
       fallbackChildren={assistantMessageFallbackText(text)}
       rehypePlugins={rehypePlugins}
       {...classNamePatch}

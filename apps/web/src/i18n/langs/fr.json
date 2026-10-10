@@ -1091,6 +1091,18 @@
     "anonymizedSpan": {
       "tooltip": "Envoyé au modèle sous la forme {placeholder}."
     },
+    "answerEdit": {
+      "acceptFailed": "La modification n’a pas pu être enregistrée. Réessayez.",
+      "ask": "Demander des modifications",
+      "failed": "La modification n’a pas pu être préparée. Réessayez.",
+      "instruction": "Décrivez la modification",
+      "instructionRequired": "Décrivez comment modifier le texte sélectionné.",
+      "invalidSelection": "Cette sélection ne peut pas être modifiée. Sélectionnez un passage continu.",
+      "proposal": "Modification proposée",
+      "requesting": "Préparation des modifications…",
+      "stale": "Cette réponse a été modifiée. Sélectionnez à nouveau le texte.",
+      "submit": "Demander une modification"
+    },
     "applyMode": {
       "description": "Word enregistre l’auteur de chaque modification. Nous mémoriserons votre choix.",
       "direct": "Non, appliquer directement",
@@ -1683,6 +1695,7 @@
     "actions": "Actions",
     "active": "Actif",
     "add": "Ajouter",
+    "advanced": "Avancé",
     "all": "Tous",
     "and": "Et",
     "anonymizationLabels": {
@@ -1749,6 +1762,7 @@
     "createdAt": "Créé le {date}",
     "currency": "Devise",
     "currentPage": "Page actuelle",
+    "custom": "Personnalisé",
     "date": "Date",
     "datePicker": {
       "label": "Sélecteur de date",
@@ -1936,6 +1950,7 @@
     "rename": "Renommer",
     "required": "Obligatoire",
     "reset": "Réinitialiser",
+    "resetToDefault": "Réinitialiser par défaut",
     "resetZoom": "Réinitialiser le zoom",
     "restore": "Restaurer",
     "retry": "Réessayer",
@@ -1989,6 +2004,7 @@
     "unexpectedError": "Une erreur inattendue est survenue. Veuillez contacter le support.",
     "unknownUser": "Utilisateur inconnu",
     "unpin": "Désépingler",
+    "unsavedChanges": "Modifications non enregistrées",
     "unsavedChangesEscape": "Modifications non enregistrées. Appuyez à nouveau sur Échap pour les abandonner",
     "unsavedLeaveConfirm": "Vous avez des modifications non enregistrées. Quitter sans enregistrer ?",
     "unverified": "Non vérifié",
@@ -2036,6 +2052,7 @@
     "scopeExternalMcps": "Utiliser vos outils externes connectés",
     "scopeFeedback": "Envoyer des retours produit aux mainteneurs de stella",
     "scopeKnowledgeWrite": "Créer, modifier et supprimer vos clauses, et exécuter des playbooks",
+    "scopeLawRead": "Lire les textes législatifs publics et la jurisprudence",
     "scopeMattersWrite": "Créer et modifier vos dossiers et tâches",
     "scopeOfflineAccess": "Vous garder connecté sans approbation répétée",
     "scopeOnboarding": "Configurer les juridictions d’exercice de votre organisation",
@@ -3804,7 +3821,6 @@
         "fallback": "Alternative",
         "notAcceptable": "Inacceptable"
       },
-      "unsavedChanges": "Modifications non enregistrées",
       "untitledPosition": "Critère sans titre",
       "updated": "Playbook mis à jour",
       "updatedAt": "Mis à jour : {date}",
@@ -4013,7 +4029,6 @@
       "invalidBinding": "Ajoutez une touche non modificatrice",
       "notRebindable": "Ce raccourci ne peut pas être modifié",
       "pressKeys": "Appuyez sur les nouvelles touches…",
-      "resetToDefault": "Réinitialiser par défaut",
       "title": "Raccourcis clavier"
     },
     "showShortcuts": "Afficher les raccourcis clavier",
@@ -4103,6 +4118,9 @@
     "aiConfig": {
       "addProvider": "Ajouter un fournisseur",
       "addProviderFirst": "Ajoutez d’abord un fournisseur",
+      "anthropicWorkspaceId": "ID de l’espace de travail",
+      "anthropicWorkspaceRequired": "Cette clé Anthropic nécessite un espace de travail. Saisissez son ID depuis la console Anthropic, puis enregistrez à nouveau.",
+      "anthropicWorkspaces": "Ouvrir les espaces de travail Anthropic",
       "apiKey": "Clé API",
       "apiKeyConfiguredPlaceholder": "Configurée : {key}. Saisissez une nouvelle clé pour la remplacer.",
       "apiKeyPlaceholder": "Saisissez votre clé API",
@@ -4115,25 +4133,27 @@
       "customModelBadge": "Personnalisé · {provider}",
       "customModelDescription": "Cet ID de modèle n’est pas dans le catalogue stella. Il sera transmis tel quel au fournisseur sélectionné.",
       "customModelHint": "Aucune correspondance dans le catalogue. Saisissez n’importe quel ID de modèle; les IDs personnalisés sont enregistrés tels quels.",
-      "dataRegion": "Région des données",
-      "dataRegionDescription": "Achemine les appels IA via la région sélectionnée pour la souveraineté des données.",
-      "dataRegionUnsupported": "Le routage régional n’est disponible que pour Google AI (Vertex AI).",
       "decision": {
-        "add": "Ajouter un modèle de décision",
-        "description": "Les questions à réponse fixe, comme les catégories de documents ou la polarité des citations, sont adressées à ce modèle ; sans lui, c’est le modèle génératif qui y répond.",
+        "description": "Questions à réponse fixe (catégories de documents, polarité des citations)",
+        "generativeFallback": "Utilise le modèle génératif pour la tâche.",
         "incomplete": "Renseignez une clé API et un modèle pour le modèle de décision, ou supprimez-le.",
         "instanceProvided": "stella fournit déjà un modèle de décision ; ajoutez le vôtre uniquement pour en utiliser un autre.",
-        "label": "Modèle de décision",
-        "modelId": "ID du modèle"
+        "label": "Prise de décision"
       },
       "defaultModel": "Par défaut : {model}",
       "defaultModelOption": "Par défaut",
+      "defaultRationale": {
+        "chat": "Pour les conversations et les questions du quotidien.",
+        "fast": "Pour les tâches courtes et courantes.",
+        "pdf": "Pour lire et analyser des documents PDF.",
+        "reasoning": "Pour les tâches complexes nécessitant un raisonnement approfondi."
+      },
       "deploymentNamePlaceholder": "Nom du déploiement",
-      "description": "Utilisez votre propre clé API ou configurez la région de souveraineté des données.",
       "editProviders": "Modifier les fournisseurs",
       "endpoint": "Point de terminaison",
       "endpointDescription": "Utilisez le point de terminaison Azure OpenAI ou Azure Foundry /openai/v1. stella enregistre le point de terminaison normalisé.",
       "keepSavedKey": "Conserver la clé enregistrée",
+      "keyFormatHint": "Le format de cette clé est inhabituel pour {provider}. Enregistrez-la pour la vérifier auprès du fournisseur.",
       "modelForRole": "Modèle pour {role}",
       "modelIdPlaceholder": "Rechercher des modèles",
       "modelsDescription": "Choisissez un fournisseur et un modèle multimodal proposé pour chaque catégorie IA.",
@@ -4162,13 +4182,11 @@
       "providerKeyInvalidShort": "Invalide",
       "providersDescription": "Ajoutez les identifiants des fournisseurs que stella doit utiliser.",
       "providersPanel": "Fournisseurs",
-      "regions": {
-        "ch": "Suisse (europe-west6)",
-        "eu": "UE (europe-west4)",
-        "global": "Global"
-      },
+      "removeLastProviderConfirm": "Supprimer {provider} ? Cela réinitialise également la sélection personnalisée des modèles d’IA.",
       "removeProvider": "Supprimer le fournisseur",
+      "removeProviderConfirm": "Supprimer {provider} et ses identifiants enregistrés ?",
       "replaceKey": "Remplacer la clé",
+      "roleUnavailable": "{provider} ne prend pas en charge ce rôle.",
       "roles": {
         "chat": "Conversation",
         "fast": "Rapide",
@@ -4178,7 +4196,8 @@
       "selectAtLeastOneRole": "Sélectionnez au moins un rôle pour cette clé.",
       "selectModelForEachRole": "Ajoutez un fournisseur et choisissez un modèle pour chaque catégorie.",
       "selectedProvider": "{provider}",
-      "title": "Configuration de l’IA"
+      "title": "Configuration de l’IA",
+      "usingDefaults": "Valeurs par défaut utilisées"
     },
     "invitations": {
       "cancelInvitation": "Annuler l'invitation",
@@ -4208,7 +4227,6 @@
       "patternMustContainSeq": "Le modèle doit contenir '{'SEQ'}'",
       "patternRequired": "Le modèle est requis",
       "presets": {
-        "custom": "Personnalisé",
         "sequential": "Séquentiel (001)",
         "yearMonthSequential": "Année-Mois / Séquentiel (2026-02/001)",
         "yearSequential": "Année / Séquentiel (2026/001)"
@@ -4240,7 +4258,6 @@
       "member": "Membre",
       "owner": "Propriétaire"
     },
-    "settings": "Paramètres de l'organisation",
     "settingsDescription": "Modifier le nom et le slug de votre organisation",
     "switchOrganization": "Changer d'organisation"
   },
@@ -4615,7 +4632,7 @@
     "organization": {
       "activeMembers": "Membres actifs",
       "ai": "Configuration de l’IA",
-      "aiDescription": "Utilisez votre propre clé API ou configurez la région de souveraineté des données",
+      "aiDescription": "Connectez vos propres clés de fournisseurs d’IA.",
       "anonymization": {
         "addPlaceholder": "Terme à toujours masquer (ex. nom de l’équipe)",
         "deleteAction": "Supprimer le terme",
@@ -5459,11 +5476,7 @@
       "apiKeyPlaceholder": "00000000-0000-0000-0000-000000000000:fx",
       "currentKey": "Clé enregistrée",
       "description": "Configurez une clé API DeepL pour activer la traduction de documents. Les clés Free et Pro sont toutes deux prises en charge.",
-      "removed": "Clé DeepL supprimée",
-      "removedDescription": "La traduction est désactivée jusqu'à l'ajout d'une nouvelle clé.",
       "removing": "Suppression…",
-      "saved": "Clé DeepL enregistrée",
-      "savedDescription": "Les traductions sont désormais disponibles.",
       "tierFree": "Free",
       "tierPro": "Pro",
       "title": "Traduction DeepL"
@@ -6247,7 +6260,6 @@
     "views": {
       "addAdvancedFilter": "Ajouter un filtre avancé",
       "addFields": "Ajouter des champs",
-      "advancedFilter": "Avancé",
       "advancedFilterCount": "{count, plural, =0 {Tous} one {# règle} other {# règles}}",
       "aiGenerated": "Généré par IA",
       "calendar": {

@@ -157,10 +157,10 @@ pub enum ActivityHistoryDisposition {
 }
 
 macro_rules! define_activity_details_access {
-  ($($variant:ident),+ $(,)?) => {
+  ($($(#[$meta:meta])* $variant:ident),+ $(,)?) => {
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
     #[serde(rename_all = "camelCase")]
-    pub enum ActivityDetailsAccess { $($variant),+ }
+    pub enum ActivityDetailsAccess { $($(#[$meta])* $variant),+ }
 
     impl ActivityDetailsAccess {
       #[cfg(test)]
@@ -169,7 +169,22 @@ macro_rules! define_activity_details_access {
   };
 }
 
-define_activity_details_access! { Disabled, Ready, AccessibilityRequired, Unavailable }
+// The contract carries every state; each target constructs only the states
+// its platform can reach.
+define_activity_details_access! {
+  Disabled,
+  Ready,
+  #[cfg_attr(
+    not(target_os = "macos"),
+    allow(dead_code, reason = "only the macOS accessibility permission gates details")
+  )]
+  AccessibilityRequired,
+  #[cfg_attr(
+    any(target_os = "macos", target_os = "windows"),
+    allow(dead_code, reason = "only platforms without window details report it")
+  )]
+  Unavailable,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

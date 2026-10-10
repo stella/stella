@@ -35,6 +35,7 @@ const revertMessageRevision = createSafeRootHandler(
     body: { baseRevision },
     params: { threadId, messageId, revision },
     safeDb,
+    getWorkspaceAccess,
     user,
     session,
     recordAuditEvent,
@@ -44,6 +45,7 @@ const revertMessageRevision = createSafeRootHandler(
         async (tx) =>
           await writeChatMessageRevisionOnTx({
             tx,
+            getWorkspaceAccess,
             threadId,
             messageId,
             userId: user.id,

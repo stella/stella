@@ -97,16 +97,17 @@ export const LEGAL_ATLAS_RUNNER_ENV = {
     fallback: 0,
     min: 0,
   }),
-  // The deferred Slovak document walk. Off unless a deployment turns it
-  // on: it is the only loop here that fetches from a publisher outside
-  // the adapter crawl, so starting it is a decision about outbound load,
+  // The deferred-document walks, one per adapter whose manifest declares
+  // a `deferred` document stage. Off unless a deployment turns them on:
+  // they are the loops here that fetch from a publisher outside the
+  // adapter crawl, so starting them is a decision about outbound load,
   // made where it can be reverted without a build.
   skDocumentBackfillEnabled: readBooleanEnv({
     name: "SK_DOCUMENT_BACKFILL_ENABLED",
     fallback: false,
   }),
   // Gap between two document fetches, and therefore the entire
-  // throughput of that walk. 500ms is what the crawl has always paced
+  // throughput of each walk. 500ms is what the crawl has always paced
   // itself at; it is a manners default, not a rate the publisher has
   // confirmed, so it is configurable and should be moved in steps while
   // the walk's failure tallies are watched. The floor keeps a typo from

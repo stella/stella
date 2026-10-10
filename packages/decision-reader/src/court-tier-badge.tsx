@@ -1,5 +1,9 @@
 import type { CourtTierLabel as CourtTier } from "@stll/api-contract/case-law-court-tiers";
-import { CourtBadge, type CourtBadgeWeight } from "@stll/ui/court-badge";
+import {
+  CourtBadge,
+  type CourtBadgeSize,
+  type CourtBadgeWeight,
+} from "@stll/ui/court-badge";
 import { cn } from "@stll/ui/utils";
 
 /**
@@ -17,6 +21,7 @@ const TIER_BADGE_WEIGHT = {
 type CourtTierBadgeProps = {
   abbreviation: string;
   tier: CourtTier;
+  size?: CourtBadgeSize | undefined;
   className?: string;
 };
 
@@ -27,11 +32,13 @@ type CourtTierBadgeProps = {
 export const CourtTierBadge = ({
   abbreviation,
   className,
+  size,
   tier,
 }: CourtTierBadgeProps) => (
   <CourtBadge
     abbreviation={abbreviation}
     className={cn(className)}
+    size={size}
     weight={TIER_BADGE_WEIGHT[tier]}
   />
 );
