@@ -853,6 +853,46 @@ test("a listing-only related decision is absent from every citation read even wi
   expect(summary.outgoing.positive).toBe(RANKED_LEADERS.length);
 });
 
+test("listing-only decisions citing or cited do not affect exact public totals", async () => {
+  const pending = await withSubject(
+    rankedSubjectId,
+    async (subject) => await summaryOf({ currentYear: 2026, subject }),
+  );
+  expect(pending.precision.status).toBe("bounded");
+  expect(pending.incoming.positive).toBe(RANKED_LEADERS.length);
+  expect(pending.outgoing.positive).toBe(RANKED_LEADERS.length);
+  await db.execute(
+    sql`SELECT refresh_decision_citation_stats(${rankedSubjectId}::uuid)`,
+  );
+  const exact = await withSubject(
+    rankedSubjectId,
+    async (subject) => await summaryOf({ currentYear: 2026, subject }),
+  );
+  expect(exact).toEqual({ ...pending, precision: { status: "exact" } });
+
+  await db
+    .update(caseLawDecisions)
+    .set({ metadata: null })
+    .where(eq(caseLawDecisions.id, listingOnlyRelatedId));
+  const published = await withSubject(
+    rankedSubjectId,
+    async (subject) => await summaryOf({ currentYear: 2026, subject }),
+  );
+  expect(published.precision.status).toBe("exact");
+  expect(published.incoming.positive).toBe(RANKED_LEADERS.length + 1);
+  expect(published.outgoing.positive).toBe(RANKED_LEADERS.length + 1);
+
+  await db
+    .update(caseLawDecisions)
+    .set({ metadata: LISTING_ONLY_METADATA })
+    .where(eq(caseLawDecisions.id, listingOnlyRelatedId));
+  const hiddenAgain = await withSubject(
+    rankedSubjectId,
+    async (subject) => await summaryOf({ currentYear: 2026, subject }),
+  );
+  expect(hiddenAgain).toEqual(exact);
+});
+
 test("exact citation totals and timeline preserve the public graph filters", async () => {
   const pending = await withSubject(
     subjectId,
