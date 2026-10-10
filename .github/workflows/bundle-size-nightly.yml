@@ -1,0 +1,49 @@
+name: Bundle size nightly
+
+# Bundle growth never blocks a pull request: CI annotates groups that grew past
+# the headroom. This nightly run lists every group over budget on main in the
+# job summary, so growth that slipped through stays visible until it is
+# trimmed or re-measured.
+
+on:
+  schedule:
+    - cron: "41 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bundle-size-nightly
+  cancel-in-progress: false
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Install dependencies
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      - name: Prepare environment
+        run: |
+          cd ./apps/web
+          cp .env.example .env
+
+      - name: Build web
+        uses: ./.github/actions/build-e2e-web
+
+      - name: Bundle size report
+        run: bun scripts/bundle-baseline.ts --check

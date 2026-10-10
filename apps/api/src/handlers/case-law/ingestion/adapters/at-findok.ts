@@ -3,6 +3,8 @@
 import { panic, Result, TaggedError } from "better-result";
 
 import { classifyFailure } from "@stll/errors";
+// parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
+import { sha256Hex as hashContent } from "@stll/sha256/bun";
 import { Temporal, parsePlainDate } from "@stll/time";
 import { isUuid } from "@stll/uuid-codec";
 
@@ -43,10 +45,7 @@ import {
   validatePublisherPage,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-page";
 import type { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
-import {
-  adapterCatch,
-  hashContent,
-} from "@/api/handlers/case-law/ingestion/adapters/utils";
+import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import {
   listFindokDocumentFields,
   parseFindokDecisionXml,

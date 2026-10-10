@@ -150,7 +150,15 @@ pub async fn run_check(handle: &AppHandle, active_edit_sessions: bool) -> CheckO
   // Startup, handoffs and tray actions cannot run installers concurrently.
   let _check = CHECK_LOCK.lock().await;
   record_check(unix_seconds(SystemTime::now()));
-  let updater = match handle.updater() {
+  let exit_handle = handle.clone();
+  let updater = match handle
+    .updater_builder()
+    .on_before_exit(move || {
+      crate::desktop_crash::clean_exit(&exit_handle);
+      exit_handle.cleanup_before_exit();
+    })
+    .build()
+  {
     Ok(u) => u,
     Err(err) => return CheckOutcome::Failed(err.to_string()),
   };
@@ -181,6 +189,8 @@ pub async fn run_check(handle: &AppHandle, active_edit_sessions: bool) -> CheckO
     .download_and_install(|_chunk, _total| {}, || {})
     .await
   {
+    #[cfg(windows)]
+    crate::desktop_crash::resume_after_failed_update(handle);
     let msg = err.to_string();
     notify(handle, "Stella update failed", &msg);
     return CheckOutcome::Failed(msg);

@@ -57,11 +57,16 @@ import { Result, panic } from "better-result";
 import * as cheerio from "cheerio";
 
 import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-grammar";
-import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import {
+  DECISION_IDENTIFIER_TYPES,
+  isDecisionIdentifier,
+} from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
+// parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
+import { sha256Hex as hashContent, createSha256 } from "@stll/sha256/bun";
 import { readCappedBytes } from "@stll/skills/streaming";
 import { parsePlainDate, Temporal } from "@stll/time";
 
@@ -108,10 +113,7 @@ import { plCommonCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapt
 import { plSupremeCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-sn-ruling-keys";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
-import {
-  adapterCatch,
-  hashContent,
-} from "@/api/handlers/case-law/ingestion/adapters/utils";
+import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import {
   parsePlUokikDocument,
   plUokikDocumentLines,
@@ -124,6 +126,7 @@ import type {
   PlUokikRulingUnread,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-uokik";
 import { visibleHtmlText } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
+import { fitsCitationStorageField } from "@/api/lib/case-law/citation-storage-bounds";
 import {
   absentDecisionTextFields,
   checkedDecisionMetadata,
@@ -1152,7 +1155,7 @@ const keptFilesOf = (files: readonly PlUokikFetchedFile[]): KeptFile[] =>
   });
 
 const sha256 = (bytes: Uint8Array): string =>
-  new Bun.CryptoHasher("sha256").update(bytes).digest("hex");
+  createSha256().update(bytes).digest("hex");
 
 type DocumentRead =
   | { type: "read"; output: ParsePlUokikDocumentOutput }
@@ -1424,8 +1427,27 @@ export const assemblePlUokikDecision = async ({
 
   const number =
     fieldText(detail, PL_UOKIK_LABEL.NUMBER) ?? row.decisionNumber ?? "";
-  const placeholder = isPlaceholderNumber(number);
-  const caseNumber = placeholder ? id : number.replace(/\s+/gu, " ");
+  const normalizedNumber = number.replace(/\s+/gu, " ");
+  const numberTooLong = !fitsCitationStorageField(
+    "caseNumber",
+    normalizedNumber,
+  );
+  const placeholder = isPlaceholderNumber(number) || numberTooLong;
+  const caseNumber = placeholder ? id : normalizedNumber;
+  const statedIdentifiers = placeholder
+    ? []
+    : plUokikDecisionIdentifiers(caseNumber);
+  const [firstIdentifier, ...restIdentifiers] =
+    statedIdentifiers.filter(isDecisionIdentifier);
+  const identifiers =
+    firstIdentifier === undefined
+      ? undefined
+      : ([
+          firstIdentifier,
+          ...restIdentifiers,
+        ] as const satisfies DecisionIdentifiers);
+  const omittedIdentifier =
+    (identifiers?.length ?? 0) < statedIdentifiers.length;
   const decisionDate =
     plUokikDayOfDetailDate(fieldText(detail, PL_UOKIK_LABEL.DATE)) ??
     row.decisionDate;
@@ -1478,9 +1500,8 @@ export const assemblePlUokikDecision = async ({
   const decision: IngestionResult = plainTextIngestionResult(
     {
       caseNumber,
-      ...(placeholder
-        ? { caseNumberIsPlaceholder: true }
-        : { identifiers: plUokikDecisionIdentifiers(caseNumber) }),
+      ...(placeholder ? { caseNumberIsPlaceholder: true } : {}),
+      ...(identifiers === undefined ? {} : { identifiers }),
       sourceDocumentId: id,
       ...(quarantined ? {} : repairAliasesOf(row)),
       court: authority,
@@ -1504,6 +1525,12 @@ export const assemblePlUokikDecision = async ({
           register,
           decisionNumber: number.length === 0 ? undefined : number,
           decisionNumberAsListed: row.decisionNumber,
+          ...(numberTooLong
+            ? { caseNumberFallbackReason: "overlong-number" }
+            : {}),
+          ...(omittedIdentifier
+            ? { identifierStorageReason: "unrepresentable-identifier" }
+            : {}),
           decisionDateAsListed: row.datePrinted,
           ...pageMetadataOf({
             detail,
@@ -1558,7 +1585,7 @@ export const plUokikRulingId = (unid: string, name: string): string => {
   const readable = `${unid}/${name}`;
   return isPersistableSourceDocumentId(readable)
     ? readable
-    : `${unid}/sha256:${new Bun.CryptoHasher("sha256").update(name).digest("hex")}`;
+    : `${unid}/sha256:${createSha256().update(name).digest("hex")}`;
 };
 
 /** The envelope part naming which of the decision page's files a row is. */

@@ -4,88 +4,91 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## document_review_runs · `documentReviewRuns` · document-reviews.ts:81
+## document_review_runs · `documentReviewRuns` · document-reviews.ts:86
 
 One immutable execution of a document review: a confirmed position list, with the reference documents those positions came from and the side it was judged for,…
 
 ```text
-document_review_runs.id                      pUuid               pk,not null       document-reviews.ts:84
-document_review_runs.organization_id         safeOrganizationId  fk,not null       document-reviews.ts:85
-document_review_runs.workspace_id            safeWorkspaceId     fk,not null       document-reviews.ts:88
-document_review_runs.entity_id               safeUuid            not null          document-reviews.ts:93   Target pin.
-document_review_runs.file_field_id           safeUuid            not null          document-reviews.ts:94
-document_review_runs.entity_version_id       safeUuid            not null          document-reviews.ts:95
-document_review_runs.content_sha256          varchar             not null          document-reviews.ts:96
-document_review_runs.playbook_definition_id  safeUuid            null              document-reviews.ts:99   Query projection for per-user recent playbooks.
-document_review_runs.basis                   jsonb               not null          document-reviews.ts:102
-document_review_runs.skipped                 jsonb               default,not null  document-reviews.ts:108  What the proposal pass read and deliberately did not turn into a position.
-document_review_runs.status                  text                default,not null  document-reviews.ts:109
-document_review_runs.error_code              varchar             null              document-reviews.ts:113
-document_review_runs.executor                text                default,not null  document-reviews.ts:119  Who carries this run to a terminal state.
-document_review_runs.total                   integer             default,not null  document-reviews.ts:124  Coarse progress over the expected finding set (see `expectedFindings`).
-document_review_runs.completed               integer             default,not null  document-reviews.ts:125
-document_review_runs.requested_by            text                fk,null           document-reviews.ts:126
-document_review_runs.pipeline_version        integer             default,not null  document-reviews.ts:131  Bumped when the executed pipeline changes shape, so an old run is never silently read as if it had been produced by today's engine.
-document_review_runs.model_ref               varchar             null              document-reviews.ts:133  The model identity the run resolved to, recorded for reproducibility.
-document_review_runs.created_at              timestamptz         default,not null  document-reviews.ts:134
-document_review_runs.started_at              timestamptz         null              document-reviews.ts:135
-document_review_runs.finished_at             timestamptz         null              document-reviews.ts:136
+document_review_runs.id                      pUuid               pk,not null       document-reviews.ts:89
+document_review_runs.organization_id         safeOrganizationId  fk,not null       document-reviews.ts:90
+document_review_runs.workspace_id            safeWorkspaceId     fk,not null       document-reviews.ts:93
+document_review_runs.entity_id               safeUuid            not null          document-reviews.ts:98   Target pin.
+document_review_runs.file_field_id           safeUuid            not null          document-reviews.ts:99
+document_review_runs.entity_version_id       safeUuid            not null          document-reviews.ts:100
+document_review_runs.content_sha256          varchar             not null          document-reviews.ts:101
+document_review_runs.playbook_definition_id  safeUuid            null              document-reviews.ts:104  Query projection for per-user recent playbooks.
+document_review_runs.basis                   jsonb               not null          document-reviews.ts:107
+document_review_runs.skipped                 jsonb               default,not null  document-reviews.ts:113  What the proposal pass read and deliberately did not turn into a position.
+document_review_runs.status                  text                default,not null  document-reviews.ts:114
+document_review_runs.error_code              varchar             null              document-reviews.ts:118
+document_review_runs.executor                text                default,not null  document-reviews.ts:124  Who carries this run to a terminal state.
+document_review_runs.total                   integer             default,not null  document-reviews.ts:129  Coarse progress over the expected finding set (see `expectedFindings`).
+document_review_runs.completed               integer             default,not null  document-reviews.ts:130
+document_review_runs.requested_by            text                fk,null           document-reviews.ts:131
+document_review_runs.pipeline_version        integer             default,not null  document-reviews.ts:136  Bumped when the executed pipeline changes shape, so an old run is never silently read as if it had been produced by today's engine.
+document_review_runs.model_ref               varchar             null              document-reviews.ts:138  The model identity the run resolved to, recorded for reproducibility.
+document_review_runs.created_at              timestamptz         default,not null  document-reviews.ts:139
+document_review_runs.started_at              timestamptz         null              document-reviews.ts:140
+document_review_runs.finished_at             timestamptz         null              document-reviews.ts:141
 ```
 
-## document_review_findings · `documentReviewFindings` · document-reviews.ts:238
+## document_review_findings · `documentReviewFindings` · document-reviews.ts:243
 
 One judgment per confirmed position.
 
 ```text
-document_review_findings.id                  pUuid               pk,not null             document-reviews.ts:241
-document_review_findings.organization_id     safeOrganizationId  fk,not null             document-reviews.ts:242
-document_review_findings.workspace_id        safeWorkspaceId     fk,not null             document-reviews.ts:245
-document_review_findings.run_id              safeUuid            fk,not null             document-reviews.ts:248
-document_review_findings.entity_id           safeUuid            not null                document-reviews.ts:252  Denormalized read keys so the document-keyed read never joins the run.
-document_review_findings.file_field_id       safeUuid            not null                document-reviews.ts:253
-document_review_findings.entity_version_id   safeUuid            not null                document-reviews.ts:254
-document_review_findings.position_id         uuid                not null                document-reviews.ts:259  The position this judges, by its playbook-stable `sourceId`.
-document_review_findings.position_title      varchar             not null                document-reviews.ts:261  Denormalized so a report renders without the run's position snapshot.
-document_review_findings.outcome             varchar             null                    document-reviews.ts:264  One verdict vocabulary, whatever the standard was.
-document_review_findings.payload             jsonb               not null                document-reviews.ts:265
-document_review_findings.decision            text                default,not null        document-reviews.ts:269  Reviewer disposition.
-document_review_findings.decided_by          text                fk,null                 document-reviews.ts:276  Nulled when the decider's account is removed; the decision itself and its timestamp stay, so an audited disposition never disappears with a person.
-document_review_findings.decided_at          timestamptz         null                    document-reviews.ts:279
-document_review_findings.flags               text                array,default,not null  document-reviews.ts:284  Reviewer flags, the same vocabulary the files table's cell flags use.
-document_review_findings.application_status  text                default,not null        document-reviews.ts:292  Applying a proposed fix is a separate durable action from accepting the finding.
-document_review_findings.applied_by          text                fk,null                 document-reviews.ts:298
-document_review_findings.applied_at          timestamptz         null                    document-reviews.ts:301
-document_review_findings.created_at          timestamptz         default,not null        document-reviews.ts:302
-document_review_findings.updated_at          timestamptz         default,not null        document-reviews.ts:303
+document_review_findings.id                  pUuid               pk,not null             document-reviews.ts:246
+document_review_findings.organization_id     safeOrganizationId  fk,not null             document-reviews.ts:247
+document_review_findings.workspace_id        safeWorkspaceId     fk,not null             document-reviews.ts:250
+document_review_findings.run_id              safeUuid            fk,not null             document-reviews.ts:253
+document_review_findings.entity_id           safeUuid            not null                document-reviews.ts:257  Denormalized read keys so the document-keyed read never joins the run.
+document_review_findings.file_field_id       safeUuid            not null                document-reviews.ts:258
+document_review_findings.entity_version_id   safeUuid            not null                document-reviews.ts:259
+document_review_findings.position_id         uuid                not null                document-reviews.ts:264  The position this judges, by its playbook-stable `sourceId`.
+document_review_findings.position_title      varchar             not null                document-reviews.ts:266  Denormalized so a report renders without the run's position snapshot.
+document_review_findings.outcome             varchar             null                    document-reviews.ts:269  One verdict vocabulary, whatever the standard was.
+document_review_findings.payload             jsonb               not null                document-reviews.ts:270
+document_review_findings.decision            text                default,not null        document-reviews.ts:274  Reviewer disposition.
+document_review_findings.decided_by          text                fk,null                 document-reviews.ts:281  Nulled when the decider's account is removed; the decision itself and its timestamp stay, so an audited disposition never disappears with a person.
+document_review_findings.decided_at          timestamptz         null                    document-reviews.ts:284
+document_review_findings.flags               text                array,default,not null  document-reviews.ts:289  Reviewer flags, the same vocabulary the files table's cell flags use.
+document_review_findings.application_status  text                default,not null        document-reviews.ts:297  Applying a proposed fix is a separate durable action from accepting the finding.
+document_review_findings.applied_by          text                fk,null                 document-reviews.ts:303
+document_review_findings.applied_at          timestamptz         null                    document-reviews.ts:306
+document_review_findings.created_at          timestamptz         default,not null        document-reviews.ts:307
+document_review_findings.updated_at          timestamptz         default,not null        document-reviews.ts:308
 ```
 
-## document_review_parties · `documentReviewParties` · document-reviews.ts:372
+## document_review_parties · `documentReviewParties` · document-reviews.ts:377
 
 The target document's parties, detected once per document version so the review launcher can show "We act for" before any proposal pass runs.
 
 ```text
-document_review_parties.id                 pUuid               pk,not null       document-reviews.ts:375
-document_review_parties.organization_id    safeOrganizationId  fk,not null       document-reviews.ts:376
-document_review_parties.workspace_id       safeWorkspaceId     fk,not null       document-reviews.ts:379
-document_review_parties.entity_id          safeUuid            not null          document-reviews.ts:382
-document_review_parties.entity_version_id  safeUuid            fk,not null       document-reviews.ts:383
-document_review_parties.prompt_version     smallint            not null          document-reviews.ts:388  Bumped when the detection prompt changes shape, so a stale row is recomputed instead of read as today's answer.
-document_review_parties.parties            jsonb               not null          document-reviews.ts:389
-document_review_parties.created_at         timestamptz         default,not null  document-reviews.ts:390
+document_review_parties.{...entityFeatureGateColumns()}           spread                                document-reviews.ts:380
+document_review_parties.{...entityFeatureWorkspaceGateColumns()}  spread                                document-reviews.ts:381
+document_review_parties.id                                        pUuid               pk,not null       document-reviews.ts:382
+document_review_parties.organization_id                           safeOrganizationId  fk,not null       document-reviews.ts:383
+document_review_parties.workspace_id                              safeWorkspaceId     fk,not null       document-reviews.ts:386
+document_review_parties.entity_id                                 safeUuid            not null          document-reviews.ts:389
+document_review_parties.entity_version_id                         safeUuid            fk,not null       document-reviews.ts:390
+document_review_parties.prompt_version                            smallint            not null          document-reviews.ts:395  Bumped when the detection prompt changes shape, so a stale row is recomputed instead of read as today's answer.
+document_review_parties.parties                                   jsonb               not null          document-reviews.ts:396
+document_review_parties.created_at                                timestamptz         default,not null  document-reviews.ts:397
 ```
 
-## document_review_reference_passages · `documentReviewReferencePassages` · document-reviews.ts:434
+## document_review_reference_passages · `documentReviewReferencePassages` · document-reviews.ts:445
 
 The words a reference-derived position quotes: one row per block of a reference document version, owned by the matter that document belongs to.
 
 ```text
-document_review_reference_passages.id                 pUuid               pk,not null       document-reviews.ts:437
-document_review_reference_passages.organization_id    safeOrganizationId  not null          document-reviews.ts:440  Both scope FKs are named by hand: the generated names run past Postgres's 63-byte identifier limit and would be silently truncated.
-document_review_reference_passages.workspace_id       safeWorkspaceId     not null          document-reviews.ts:443  The matter the reference document lives in, not the matter of any run that quotes it: that is what row security scopes by.
-document_review_reference_passages.entity_id          safeUuid            not null          document-reviews.ts:444
-document_review_reference_passages.file_field_id      safeUuid            not null          document-reviews.ts:445
-document_review_reference_passages.entity_version_id  safeUuid            not null          document-reviews.ts:448  Provenance, not a foreign key: a passage outlives the pruning of the version it was read from as long as the document itself exists.
-document_review_reference_passages.block_id           varchar             not null          document-reviews.ts:449
-document_review_reference_passages.text               text                not null          document-reviews.ts:450
-document_review_reference_passages.created_at         timestamptz         default,not null  document-reviews.ts:451
+document_review_reference_passages.{...entityFeatureGateColumns()}  spread                                document-reviews.ts:448
+document_review_reference_passages.id                               pUuid               pk,not null       document-reviews.ts:449
+document_review_reference_passages.organization_id                  safeOrganizationId  not null          document-reviews.ts:452  Both scope FKs are named by hand: the generated names run past Postgres's 63-byte identifier limit and would be silently truncated.
+document_review_reference_passages.workspace_id                     safeWorkspaceId     not null          document-reviews.ts:455  The matter the reference document lives in, not the matter of any run that quotes it: that is what row security scopes by.
+document_review_reference_passages.entity_id                        safeUuid            not null          document-reviews.ts:456
+document_review_reference_passages.file_field_id                    safeUuid            not null          document-reviews.ts:457
+document_review_reference_passages.entity_version_id                safeUuid            not null          document-reviews.ts:460  Provenance, not a foreign key: a passage outlives the pruning of the version it was read from as long as the document itself exists.
+document_review_reference_passages.block_id                         varchar             not null          document-reviews.ts:461
+document_review_reference_passages.text                             text                not null          document-reviews.ts:462
+document_review_reference_passages.created_at                       timestamptz         default,not null  document-reviews.ts:463
 ```

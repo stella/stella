@@ -1,39 +1,4 @@
 import { Result, panic } from "better-result";
-/**
- * Polish public-procurement rulings from the UZP decision database.
- *
- * orzeczenia.uzp.gov.pl publishes the rulings of the Krajowa Izba Odwoławcza
- * and the court rulings on complaints against them (district courts, and a
- * handful from the administrative courts and the Supreme Court). Three
- * surfaces per ruling, all HTML:
- *
- *   POST /Home/GetResults       the listing: ten rows a page, filtered by an
- *                               issue-date range (`Dt`), sorted by `Srt`
- *   GET  /Home/Details/{id}     the record: labelled fields, the appeals the
- *                               ruling decided and how, provisions, index
- *   GET  /Home/ContentHtml/{id} the document, converted from the original
- *
- * The listing states its own count (`resultCounts`), so a walk knows where a
- * window ends; asked for a page past the end, it serves the last page again
- * rather than an empty one, which is why every walk below stops on the count
- * and never on an empty page.
- *
- * Rows sort by issue date, then by id. The database also holds rulings with
- * no issue date, and a few dated past the present: no month the walk reaches
- * lists them, and the unfiltered ascending listing serves them last, the
- * undated ones in id order, so a later arrival appends. That tail is walked
- * once the months are caught up, and re-read on every parked cycle; the
- * day-sliced reconciliation cannot reach it.
- *
- * Cursor format: `YYYY-MM:offset+tail` — the month being walked and the row
- * offset reached inside it, oldest first, and the rows of the tail read so
- * far. At the present month the month part parks on its count.
- *
- * Overlap with `pl-courts`: SAOS mirrors KIO rulings until 2018 and holds
- * more of them for those years than this database does. The two sources have
- * separate id spaces; {@link plProcurementRulingKeys} is the relationship
- * between their rows, and nothing here merges or deletes either side.
- */
 import * as cheerio from "cheerio";
 import type { AnyNode } from "domhandler";
 
@@ -44,6 +9,8 @@ import {
 // parser-output-unchanged: imports the document AST from its package owner
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
+// parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
+import { sha256Hex as hashContent } from "@stll/sha256/bun";
 import { readCappedBytes } from "@stll/skills/streaming";
 import { Temporal } from "@stll/time";
 
@@ -86,10 +53,7 @@ import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/ad
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
-import {
-  adapterCatch,
-  hashContent,
-} from "@/api/handlers/case-law/ingestion/adapters/utils";
+import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
 import {
   legacyQuarantineHtmlText,
@@ -103,6 +67,45 @@ import {
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+/**
+ * Polish public-procurement rulings from the UZP decision database.
+ *
+ * orzeczenia.uzp.gov.pl publishes the rulings of the Krajowa Izba Odwoławcza
+ * and the court rulings on complaints against them (district courts, and a
+ * handful from the administrative courts and the Supreme Court). Three
+ * surfaces per ruling, all HTML:
+ *
+ *   POST /Home/GetResults       the listing: ten rows a page, filtered by an
+ *                               issue-date range (`Dt`), sorted by `Srt`
+ *   GET  /Home/Details/{id}     the record: labelled fields, the appeals the
+ *                               ruling decided and how, provisions, index
+ *   GET  /Home/ContentHtml/{id} the document, converted from the original
+ *
+ * The listing states its own count (`resultCounts`), so a walk knows where a
+ * window ends; asked for a page past the end, it serves the last page again
+ * rather than an empty one, which is why every walk below stops on the count
+ * and never on an empty page.
+ *
+ * Rows sort by issue date, then by id. The database also holds rulings with
+ * no issue date, and a few dated past the present: no month the walk reaches
+ * lists them, and the unfiltered ascending listing serves them last, the
+ * undated ones in id order, so a later arrival appends. That tail is walked
+ * once the months are caught up, and re-read on every parked cycle; the
+ * day-sliced reconciliation cannot reach it.
+ *
+ * Cursor format: `YYYY-MM:offset+tail` — the month being walked and the row
+ * offset reached inside it, oldest first, and the rows of the tail read so
+ * far. At the present month the month part parks on its count.
+ *
+ * Overlap with `pl-courts`: SAOS mirrors KIO rulings until 2018 and holds
+ * more of them for those years than this database does. The two sources have
+ * separate id spaces; {@link plProcurementRulingKeys} is the relationship
+ * between their rows, and nothing here merges or deletes either side.
+ */
+import {
+  decisionCourtExceedsStorage,
+  storedCaseNumberOf,
+} from "@/api/lib/legal-search/ingestion-normalization";
 import type { RawIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { logger } from "@/api/lib/observability/logger";
@@ -834,6 +837,58 @@ const listOf = (
   return items.length === 0 ? undefined : items;
 };
 
+type PlKioCourtStorageOptions = {
+  statedCourt: string | undefined;
+  hasRecordId: boolean;
+  caseNumber: string;
+  decisionType: string | undefined;
+  sourceDocumentId: string;
+};
+
+const plKioCourtStorage = ({
+  statedCourt,
+  hasRecordId,
+  caseNumber,
+  decisionType,
+  sourceDocumentId,
+}: PlKioCourtStorageOptions) => {
+  if (statedCourt === undefined) {
+    logger.warn("case_law.ingestion.court_not_stated", {
+      adapterKey: ADAPTER_KEYS.PL_KIO,
+      sourceDocumentId,
+    });
+  }
+  const candidate = {
+    caseNumber: storedCaseNumberOf({
+      caseNumber,
+      country: ADAPTER_MANIFESTS[ADAPTER_KEYS.PL_KIO].country,
+      sourceDocumentId,
+    }),
+    country: ADAPTER_MANIFESTS[ADAPTER_KEYS.PL_KIO].country,
+    court: statedCourt ?? "",
+    decisionType,
+    ecli: undefined,
+    sourceDocumentId,
+  };
+  const courtTooLong =
+    statedCourt !== undefined && decisionCourtExceedsStorage(candidate);
+  const court = courtTooLong ? "" : (statedCourt ?? "");
+  const unavailableCourt = statedCourt === undefined || courtTooLong;
+  let quarantineReason:
+    | "no-record-id"
+    | "court-not-stated"
+    | "court-too-long"
+    | undefined;
+  if (!hasRecordId) {
+    quarantineReason = "no-record-id";
+  } else if (statedCourt === undefined) {
+    quarantineReason = "court-not-stated";
+  } else if (courtTooLong) {
+    quarantineReason = "court-too-long";
+  }
+  return { court, courtTooLong, quarantineReason, unavailableCourt };
+};
+
 /**
  * Build one ruling from the responses in hand. No I/O: the crawl, the
  * reconciliation and a replay of the stored envelope all reach this with the
@@ -890,23 +945,18 @@ export const assemblePlKioDecision = ({
   // and a later observation that states the body replaces it.
   const statedCourt =
     fieldOf(detail, "Organ wydający") ?? presentText(item.court);
-  if (statedCourt === undefined) {
-    logger.warn("case_law.ingestion.court_not_stated", {
-      adapterKey: ADAPTER_KEYS.PL_KIO,
-      sourceDocumentId,
-    });
-  }
-  const court = statedCourt ?? "";
-  let quarantineReason: "no-record-id" | "court-not-stated" | undefined;
-  if (id === undefined) {
-    quarantineReason = "no-record-id";
-  } else if (statedCourt === undefined) {
-    quarantineReason = "court-not-stated";
-  }
-  const listingOnly = detail === null || statedCourt === undefined;
   const decisionForm =
     fieldOf(detail, "Rodzaj dokumentu") ?? presentText(item.documentType);
   const decisionType = plKioDecisionType(decisionForm);
+  const { court, courtTooLong, quarantineReason, unavailableCourt } =
+    plKioCourtStorage({
+      statedCourt,
+      hasRecordId: id !== undefined,
+      caseNumber,
+      decisionType,
+      sourceDocumentId,
+    });
+  const listingOnly = detail === null || unavailableCourt;
   const publishedDate =
     plKioIsoDate(fieldOf(detail, "Data wydania rozstrzygnięcia")) ??
     plKioIsoDate(item.issueDate);
@@ -1033,6 +1083,7 @@ export const assemblePlKioDecision = ({
       decisionForm,
       documentId: id,
       quarantineReason,
+      ...(courtTooLong ? { courtAsStated: statedCourt } : {}),
       kind,
       decisionDateSource,
       presiding,

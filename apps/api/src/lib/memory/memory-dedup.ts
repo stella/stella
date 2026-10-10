@@ -1,3 +1,5 @@
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
+
 import type { SafeId } from "@/api/lib/branded-types";
 
 export type MemoryDedupScope =
@@ -50,9 +52,7 @@ export const createMemoryDedupIdentity = ({
   });
 
   return {
-    dedupKey: new Bun.CryptoHasher("sha256")
-      .update(canonicalIdentity)
-      .digest("hex"),
+    dedupKey: hashSha256Hex(canonicalIdentity),
     sourceDataWorkspaceIds: canonicalSourceWorkspaceIds,
   };
 };

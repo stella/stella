@@ -22,10 +22,12 @@ import {
 } from "@stll/api-contract/decision-query-intent";
 import { publicCountryUnavailable } from "@stll/api-contract/public-country-capability";
 import {
+  SEARCH_PAGE_END,
   SEARCH_PAGINATION_COMPLETE,
   SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET,
   DEFAULT_SEARCH_SORT,
   SEARCH_SORTS,
+  searchPageEnd,
   SEARCH_TOTAL_NOT_COUNTED,
 } from "@stll/api-contract/search";
 import { decisionReporterGrammarForJurisdiction } from "@stll/api-contract/us-reporter-citation";
@@ -149,6 +151,7 @@ import {
   citationSummaryOutput,
   compactDecisionMetadata,
   decisionParagraphs,
+  decisionTextAllowances,
   decisionTextVersion,
   pageOfOffset,
   paragraphsMatching,
@@ -840,7 +843,7 @@ const lookupCaseLawArgsSchema = nullAsAbsent(
       v.minLength(1),
       v.maxLength(LIMITS.caseLawLookupIdentifiersMax),
       v.description(
-        `The references to resolve, at most ${LIMITS.caseLawLookupIdentifiersMax} per call: a docket number as the court writes it (the sheet number after it is ignored) or an ECLI. Each is answered on its own.`,
+        `The references to resolve, at most ${LIMITS.caseLawLookupIdentifiersMax} per call: a docket number as the court writes it, with the sheet number when the court publishes one (it picks a single decision when the file holds several), or an ECLI. Each is answered on its own.`,
       ),
     ),
     country: countryInputSchema(
@@ -894,7 +897,7 @@ const readCaseLawDecisionArgsSchema = nullAsAbsent(
         v.minValue(1),
         v.maxValue(MCP_CONTENT_MAX_CHARS),
         v.description(
-          `Page size per decision, 1–${MCP_CONTENT_MAX_CHARS} characters. In a batch each decision gets its own page of this size, trimmed evenly so the call returns at most ${READ_DECISION_BATCH_MAX_TEXT_CHARS} characters; omitted, the batch shares ${MCP_CONTENT_MAX_CHARS} characters.`,
+          `Requested page size per decision, 1–${MCP_CONTENT_MAX_CHARS} characters. A batch stays within ${READ_DECISION_BATCH_MAX_TEXT_CHARS} characters: each decision gets an even share, and unused characters finish other decisions in input order when one fits whole; a decision still cut keeps the even share. Omitted, the batch shares ${MCP_CONTENT_MAX_CHARS} characters the same way.`,
         ),
       ),
     ),
@@ -912,7 +915,7 @@ const readCaseLawDecisionArgsSchema = nullAsAbsent(
       v.pipe(
         v.boolean(),
         v.description(
-          `true returns the whole text in one page, up to ${READ_DECISION_FULL_MAX_TEXT_CHARS} characters (shared evenly by a batch); a longer text continues on page 2. Takes no max_chars.`,
+          `true returns the whole text in one page, up to ${READ_DECISION_FULL_MAX_TEXT_CHARS} characters (shared by a batch; unused shares finish other decisions in input order when one fits whole); a longer text continues on page 2. Takes no max_chars.`,
         ),
       ),
     ),
@@ -1144,10 +1147,11 @@ export const STELLA_TOOL_DEFINITIONS = [
       "write them and ECLIs. Matches identity columns, not ranked text or citations. Each " +
       "`identifiers[]` entry is answered on its own, in input order, under " +
       "`status`: `found` carries that decision's id, resourceName, appUrl, " +
-      "caseNumber (citable reference, not always a docket), court, date and " +
-      "ECLI; `ambiguous` carries the candidates: a docket is unique per " +
-      "court, not per corpus, so none is picked; `not_found` says what to " +
-      "call instead; `lookup_failed`: the read did not complete; retry that " +
+      "caseNumber (citable, not always a docket), court, date and " +
+      "ECLI; `incomplete_identifier` names the missing docket components; " +
+      "`ambiguous` carries several real candidates: a docket is unique per " +
+      "court, so none is picked; `not_found` says what to " +
+      "call instead; `lookup_failed`: retry that " +
       "entry. Use this when the user names a case; use search_case_law when " +
       "they describe one. Pass a `found` decisionId to " +
       "read_case_law_decision for the text and typed identifiers. " +
@@ -2231,11 +2235,16 @@ type ManyRequiredTermsOptions = {
   guidance: CaseLawSearchGuidanceMode;
   /** The phrasing's cursor this call: `undefined` is its first page. */
   subCursor: string | null | undefined;
-  /** The cursor the page returned: non-null while results remain unread. */
-  nextCursor: string | null;
-  /** What the phrasing required, a fixed point of the tokenizer. */
-  queryUsed: string;
-  hitCount: number;
+  /**
+   * The page the phrasing returned. What follows it is read from everything
+   * the search answered (`searchPageEnd`): only `complete` proves the
+   * phrasing was exhausted. Its `queryUsed` is a fixed point of the
+   * tokenizer.
+   */
+  page: Pick<
+    SearchCaseLawSuccess,
+    "hits" | "nextCursor" | "pageReach" | "paginationOutcome" | "queryUsed"
+  >;
   /** The result slots the phrasing was given. */
   slots: number;
 };
@@ -2245,25 +2254,29 @@ type ManyRequiredTermsOptions = {
  * read from the page already returned. A continuation is not asked about: it
  * is short at the end of every result set. A short first page that still
  * carries a cursor (a ranked row gone before hydration) has unread results,
- * so it is not exhausted either. A quoted phrase requires each of its words.
+ * and one whose scan stopped on a budget may have them too, so neither is
+ * exhausted. A quoted phrase requires each of its words.
  */
 const manyRequiredTermsWarnings = ({
   guidance,
   subCursor,
-  nextCursor,
-  queryUsed,
-  hitCount,
+  page,
   slots,
 }: ManyRequiredTermsOptions): AgentCaseLawSearchWarning[] => {
+  const end = searchPageEnd({
+    nextCursor: page.nextCursor,
+    paginationOutcome: page.paginationOutcome,
+    reach: page.pageReach,
+  });
   if (
     !CASE_LAW_SEARCH_GUIDANCE_RAISES_MANY_REQUIRED_TERMS[guidance] ||
     subCursor !== undefined ||
-    nextCursor !== null ||
-    hitCount >= slots
+    end !== SEARCH_PAGE_END.COMPLETE ||
+    page.hits.length >= slots
   ) {
     return [];
   }
-  const tokens = tokenizeCorpusFreeText(queryUsed);
+  const tokens = tokenizeCorpusFreeText(page.queryUsed);
   const wordCount = tokens.reduce(
     (count, { value }) => count + value.split(" ").length,
     0,
@@ -2315,10 +2328,23 @@ const caseLawSearchResult = ({
     ecli: hit.ecli,
     language: hit.language,
     matchingPassages: hit.matchingPassages,
-    snippet: toPlainTextSnippet(hit.headline),
-    keywords: hit.keywords,
-    headnote:
-      hit.headnote.type === TEXT_FIELD_TYPE.PRESENT ? hit.headnote : null,
+    ...(hit.textWithheldReason === null
+      ? {
+          snippet: toPlainTextSnippet(hit.headline),
+          keywords: hit.keywords,
+          headnote:
+            hit.headnote.type === TEXT_FIELD_TYPE.PRESENT ? hit.headnote : null,
+        }
+      : {
+          excerpt: {
+            type: "withheld" as const,
+            reason: hit.textWithheldReason,
+          },
+          // Headnote and classifications are the source's own text: the
+          // licence that withholds the excerpt withholds them too.
+          keywords: null,
+          headnote: null,
+        }),
     sourceUrl: hit.sourceUrl,
   };
 };
@@ -2526,9 +2552,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
           ...manyRequiredTermsWarnings({
             guidance,
             subCursor,
-            nextCursor: outcome.page.nextCursor,
-            queryUsed: outcome.page.queryUsed,
-            hitCount: outcome.page.hits.length,
+            page: outcome.page,
             slots: perQueryLimit,
           }),
         ],
@@ -2722,9 +2746,7 @@ const decisionTextPart = ({
 }: DecisionTextPartOptions): Partial<FoundDecision> => {
   const version = decisionTextVersion(text);
   const versioning = {
-    ...(starts.length > 1 || seenTextVersion !== undefined
-      ? { textVersion: version }
-      : {}),
+    textVersion: version,
     ...(seenTextVersion !== undefined && seenTextVersion !== version
       ? { versionChanged: true as const }
       : {}),
@@ -2843,10 +2865,14 @@ const decisionStaticFields = ({
           ...(read.ecli === null ? {} : { ecli: read.ecli }),
         }
       : {}),
-    ...(includedFields.has("metadata") && Object.keys(metadata).length > 0
+    ...(read.source.allowsDerivedAi &&
+    includedFields.has("metadata") &&
+    Object.keys(metadata).length > 0
       ? { metadata }
       : {}),
-    ...(includedFields.has("textFields") && Object.keys(textFields).length > 0
+    ...(read.source.allowsDerivedAi &&
+    includedFields.has("textFields") &&
+    Object.keys(textFields).length > 0
       ? { textFields }
       : {}),
     ...(includedFields.has("source") && sourceName !== null
@@ -3003,13 +3029,12 @@ const decisionItemResult = ({
 };
 
 /**
- * Every entry's page size. An explicit max_chars sizes each entry's page on
- * its own; without one the default text budget is shared across the entries,
- * so a batch nobody sized cannot answer with twenty full pages. `full` reads
- * each decision whole up to its share of the full ceiling. Either way the
- * whole call stays within its ceiling, trimmed evenly.
+ * The fixed text budget for a call. An explicit max_chars contributes that
+ * much per entry until the batch ceiling; without one the entries share the
+ * default content budget. The allocator gives each entry an even first pass,
+ * then gives unused shares to entries they complete, without growing this cap.
  */
-const decisionWindowChars = ({
+const decisionTextCap = ({
   count,
   full,
   maxChars,
@@ -3019,15 +3044,31 @@ const decisionWindowChars = ({
   maxChars: number | undefined;
 }): number => {
   if (full) {
-    return Math.max(1, Math.floor(READ_DECISION_FULL_MAX_TEXT_CHARS / count));
+    return READ_DECISION_FULL_MAX_TEXT_CHARS;
   }
-  return Math.max(
-    1,
-    Math.min(
-      maxChars ?? Math.floor(MCP_CONTENT_MAX_CHARS / count),
-      Math.floor(READ_DECISION_BATCH_MAX_TEXT_CHARS / count),
-    ),
+  return Math.min(
+    maxChars === undefined ? MCP_CONTENT_MAX_CHARS : maxChars * count,
+    READ_DECISION_BATCH_MAX_TEXT_CHARS,
   );
+};
+
+const readableDecisionTextLength = (
+  read: GatedDecisionRead,
+  readsSharedCorpus: boolean,
+): number => {
+  if (
+    read === null ||
+    !isReadCaseLawDecisionSuccess(read) ||
+    isDecisionDocumentPending(read, readsSharedCorpus) ||
+    !read.source.allowsDerivedAi
+  ) {
+    return 0;
+  }
+  const blocks = parseCaseLawDecisionAst(read.documentAst)?.blocks ?? null;
+  const astText =
+    blocks === null ? null : toPlainCorpusText({ blocks, fulltext: null });
+  const text = astText !== null && astText.length > 0 ? astText : read.fulltext;
+  return text?.length ?? 0;
 };
 
 /** A typed refusal of one input combination, naming the field to change. */
@@ -3247,18 +3288,24 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
     }),
   );
 
-  const windowChars = decisionWindowChars({
+  const textCap = decisionTextCap({
     count: decisionIds.length,
     full,
     maxChars,
   });
+  const windowChars = decisionTextAllowances(
+    decisionIds.map((decisionId) =>
+      readableDecisionTextLength(readOf(decisionId), readsSharedCorpus),
+    ),
+    textCap,
+  );
 
   return toolDataResult(
     projectionPayload(READ_CASE_LAW_DECISION_PROJECTION, {
-      items: decisionIds.map((decisionId) =>
+      items: decisionIds.map((decisionId, index) =>
         decisionItemResult({
           decisionId,
-          windowChars,
+          windowChars: Math.max(1, windowChars[index] ?? 0),
           outline: decisionIds.length === 1 ? "include" : "omit",
           read: readOf(decisionId),
           digest: digests.get(decisionId),
@@ -3339,8 +3386,6 @@ const ambiguityReasonText = (
       return `${count} carry this identifier: decisions of one file, or the same number at different courts or in different languages.`;
     case "selector_unmatched":
       return `No decision here is known to carry the sheet or part this reference names; ${count} of its file ${single ? "is" : "are"} listed instead.`;
-    case "file_incomplete":
-      return `${count} of this file ${single ? "is" : "are"} listed rather than chosen: the corpus may hold other decisions of the same file under their sheet number.`;
     default: {
       reason satisfies never;
       return panic(`Unhandled ambiguity: ${String(reason)}`);
@@ -3386,6 +3431,13 @@ const lookupItemResult = ({
         identifier,
         ...decisionIdentityOf(resolution.decision),
         status: DECISION_LOOKUP_STATUS.found,
+      };
+    case "incomplete_identifier":
+      return {
+        identifier,
+        missing: [...resolution.missing],
+        message: `Add the ${resolution.missing.join(", ")} to identify one decision in this case file.`,
+        status: DECISION_LOOKUP_STATUS.incompleteIdentifier,
       };
     case "ambiguous": {
       // The cap lands here, on what survived the exact-identity filter: the
@@ -3563,6 +3615,7 @@ const handleReadCaseLawCitationsTool: TypedMcpToolHandler<
       citations: read.page.items.map((item) => ({
         citationId: item.id,
         citationText: item.citationText,
+        textWithheldReason: item.textWithheldReason,
         polarity: item.treatment,
         decision:
           item.decision === null

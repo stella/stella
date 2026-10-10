@@ -91,9 +91,28 @@ export const legalListOptions = (workspaceId: string, listId: string) =>
     enabled: listId.length > 0,
   });
 
-export const legalListItemsOptions = (workspaceId: string, listId: string) =>
+type LegalListViewer = {
+  userId: string;
+  organizationId: string;
+};
+
+type LegalListItemsOptionsInput = {
+  workspaceId: string;
+  listId: string;
+  viewer: LegalListViewer;
+};
+
+export const legalListItemsOptions = ({
+  workspaceId,
+  listId,
+  viewer,
+}: LegalListItemsOptionsInput) =>
   infiniteQueryOptions({
-    queryKey: legalListKeys.items(workspaceId, listId),
+    queryKey: [
+      ...legalListKeys.items(workspaceId, listId),
+      viewer.userId,
+      viewer.organizationId,
+    ],
     queryFn: async ({ signal, pageParam }) => {
       const response = await api
         .lists({ workspaceId: toSafeId<"workspace">(workspaceId) })({
@@ -160,13 +179,22 @@ export const legalListCandidatesOptions = (
     enabled: listId.length > 0 && runId.length > 0,
   });
 
-export const legalListSourcesOptions = (
-  workspaceId: string,
-  listId: string,
-  itemEntityId: string,
-) =>
+type LegalListItemOptionsInput = LegalListItemsOptionsInput & {
+  itemEntityId: string;
+};
+
+export const legalListSourcesOptions = ({
+  workspaceId,
+  listId,
+  itemEntityId,
+  viewer,
+}: LegalListItemOptionsInput) =>
   queryOptions({
-    queryKey: legalListKeys.sources(workspaceId, listId, itemEntityId),
+    queryKey: [
+      ...legalListKeys.sources(workspaceId, listId, itemEntityId),
+      viewer.userId,
+      viewer.organizationId,
+    ],
     queryFn: async ({ signal }) => {
       const response = await api
         .lists({ workspaceId: toSafeId<"workspace">(workspaceId) })({
@@ -182,13 +210,18 @@ export const legalListSourcesOptions = (
     enabled: itemEntityId.length > 0,
   });
 
-export const legalListActivityOptions = (
-  workspaceId: string,
-  listId: string,
-  itemEntityId: string,
-) =>
+export const legalListActivityOptions = ({
+  workspaceId,
+  listId,
+  itemEntityId,
+  viewer,
+}: LegalListItemOptionsInput) =>
   queryOptions({
-    queryKey: legalListKeys.activity(workspaceId, listId, itemEntityId),
+    queryKey: [
+      ...legalListKeys.activity(workspaceId, listId, itemEntityId),
+      viewer.userId,
+      viewer.organizationId,
+    ],
     queryFn: async ({ signal }) => {
       const response = await api
         .lists({ workspaceId: toSafeId<"workspace">(workspaceId) })({

@@ -91,6 +91,8 @@ const searchChatHistoryOutputSchema = v.strictObject({
     v.strictObject({
       messageId: v.string(),
       role: v.string(),
+      revision: v.pipe(v.number(), v.integer(), v.minValue(0)),
+      edited: v.boolean(),
       excerpt: v.string(),
       createdAt: v.string(),
     }),
@@ -103,6 +105,8 @@ const expandChatHistoryOutputSchema = v.strictObject({
     v.strictObject({
       messageId: v.string(),
       role: v.string(),
+      revision: v.pipe(v.number(), v.integer(), v.minValue(0)),
+      edited: v.boolean(),
       createdAt: v.string(),
       content: v.string(),
     }),
@@ -125,6 +129,7 @@ type ChatHistorySearchRow = {
   excerpt: string;
   messageId: SafeId<"chatMessage">;
   role: ChatMessageRole;
+  revision: number;
 };
 
 type ChatHistoryExpansionRow = {
@@ -133,6 +138,7 @@ type ChatHistoryExpansionRow = {
   dataWorkspaceIds: SafeId<"workspace">[];
   id: SafeId<"chatMessage">;
   role: ChatMessageRole;
+  revision: number;
   threadId: SafeId<"chatThread">;
   threadWorkspaceId: SafeId<"workspace"> | null;
 };
@@ -225,20 +231,22 @@ export const createChatHistoryTools = ({
       const result = await safeDb((tx) =>
         tx.execute<ChatHistorySearchRow>(sql`
         SELECT
-          message_id AS "messageId",
-          role,
+          d.message_id AS "messageId",
+          d.role,
+          m.revision,
           ts_headline(
             'simple',
-            left(searchable_text, 2000),
+            left(d.searchable_text, 2000),
             ${tsQuery},
             ${CHAT_HISTORY_HEADLINE_CONFIG}
           ) AS excerpt,
-          created_at AS "createdAt"
-        FROM chat_message_search_documents
-        WHERE thread_id = ${threadId}
-          AND tsv @@ ${tsQuery}
-          ${excludeMessageSql(sql`message_id`)}
-        ORDER BY ts_rank(tsv, ${tsQuery}) DESC, created_at DESC, message_id DESC
+          d.created_at AS "createdAt"
+        FROM chat_message_search_documents d
+        JOIN chat_messages m ON m.id = d.message_id
+        WHERE d.thread_id = ${threadId}
+          AND d.tsv @@ ${tsQuery}
+          ${excludeMessageSql(sql`d.message_id`)}
+        ORDER BY ts_rank(d.tsv, ${tsQuery}) DESC, d.created_at DESC, d.message_id DESC
         LIMIT ${limit}
       `),
       );
@@ -258,6 +266,8 @@ export const createChatHistoryTools = ({
         results: result.value.map((row) => ({
           messageId: row.messageId,
           role: row.role,
+          revision: row.revision,
+          edited: row.revision > 0,
           // Persisted text carries stable mention hrefs with raw tenant
           // UUIDs; hand-written history tools bypass the registry adapter's
           // hydration, so rewrite them into chat refs here before the text
@@ -301,7 +311,7 @@ export const createChatHistoryTools = ({
         ),
         window_rows AS (
           (
-            SELECT m.id, m.role, m.content, m.created_at
+            SELECT m.id, m.role, m.content, m.created_at, m.revision
             FROM chat_messages m, target t
             WHERE m.thread_id = t.thread_id
               ${excludeMessageSql(sql`m.id`)}
@@ -310,13 +320,13 @@ export const createChatHistoryTools = ({
             LIMIT ${before}
           )
           UNION ALL
-          SELECT m.id, m.role, m.content, m.created_at
+          SELECT m.id, m.role, m.content, m.created_at, m.revision
           FROM chat_messages m, target t
           WHERE m.id = t.id
             ${excludeMessageSql(sql`m.id`)}
           UNION ALL
           (
-            SELECT m.id, m.role, m.content, m.created_at
+            SELECT m.id, m.role, m.content, m.created_at, m.revision
             FROM chat_messages m, target t
             WHERE m.thread_id = t.thread_id
               ${excludeMessageSql(sql`m.id`)}
@@ -329,6 +339,7 @@ export const createChatHistoryTools = ({
           w.id,
           w.role,
           w.content,
+          w.revision,
           w.created_at AS "createdAt",
           t.thread_id AS "threadId",
           t.thread_workspace_id AS "threadWorkspaceId",
@@ -384,6 +395,8 @@ export const createChatHistoryTools = ({
           return {
             messageId: row.id,
             role: row.role,
+            revision: row.revision,
+            edited: row.revision > 0,
             createdAt: row.createdAt.toISOString(),
             // Same rationale as the search excerpt: persisted mention hrefs
             // must re-enter the model as chat refs, not raw tenant UUIDs.

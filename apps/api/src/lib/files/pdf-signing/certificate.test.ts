@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
+
 import { inspectSigningCertificate } from "@/api/lib/files/pdf-signing/certificate";
 import {
   createSelfSignedCertificate,
@@ -47,7 +49,7 @@ describe("signing certificate inspection", () => {
     });
 
     expect(inspectSigningCertificate(der, NOW)).toMatchObject({
-      sha256Hex: new Bun.CryptoHasher("sha256").update(der).digest("hex"),
+      sha256Hex: hashSha256Hex(der),
     });
   });
 

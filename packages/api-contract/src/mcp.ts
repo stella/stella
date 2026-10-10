@@ -1,5 +1,6 @@
 /** Browser-safe path for the default MCP transport. */
 export const MCP_HTTP_PATH = "/mcp" as const;
+export const MCP_ADVANCED_HTTP_PATH = "/mcp/advanced" as const;
 export const MCP_DOCUMENTS_HTTP_PATH = "/mcp-documents" as const;
 export const MCP_ANONYMIZED_HTTP_PATH = "/mcp-anonymized" as const;
 export const MCP_LAW_HTTP_PATH = "/mcp-law" as const;
@@ -7,6 +8,7 @@ export const MCP_LAW_HTTP_PATH = "/mcp-law" as const;
 export const MCP_DEFAULT_RESOURCE_SCOPES = [
   "stella:search",
   "stella:read",
+  "stella:law_read",
   "stella:templates",
   "stella:documents_write",
   "stella:matters_write",
@@ -18,16 +20,21 @@ export const MCP_DEFAULT_RESOURCE_SCOPES = [
   "stella:admin_write",
   "stella:onboarding",
   "stella:skills",
-  "stella:external_mcps",
   "stella:feedback",
 ] as const;
 
+export const MCP_ADVANCED_RESOURCE_SCOPES = [
+  ...MCP_DEFAULT_RESOURCE_SCOPES,
+  "stella:external_mcps",
+] as const;
+
 export type McpDefaultResourceScope =
-  (typeof MCP_DEFAULT_RESOURCE_SCOPES)[number];
+  (typeof MCP_ADVANCED_RESOURCE_SCOPES)[number];
 
 export const MCP_ANONYMIZED_SCOPE_BY_DEFAULT_SCOPE = {
   "stella:search": "stella:search_anonymized",
   "stella:read": "stella:read_anonymized",
+  "stella:law_read": null,
   "stella:templates": "stella:templates_anonymized",
   "stella:documents_write": null,
   "stella:matters_write": null,
@@ -62,6 +69,7 @@ export const MCP_ANONYMIZED_RESOURCE_SCOPES = Object.values(
 const MCP_RESOURCE_SCOPE_ACCESS = {
   "stella:search": "read-capable",
   "stella:read": "read-capable",
+  "stella:law_read": "read-capable",
   "stella:templates": "read-capable",
   "stella:documents_write": "write-only",
   "stella:matters_write": "write-only",
