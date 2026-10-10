@@ -90,8 +90,13 @@ export const CLI_DEFAULT_RESOURCE_SCOPES: readonly CliResourceScope[] = [
   "stella:feedback",
 ];
 
-/** Resource scopes a default login leaves out: organization administration and one-off setup. */
+/**
+ * Resource scopes a default login leaves out: organization administration,
+ * one-off setup, and narrower grants already implied by a default grant.
+ */
 export const CLI_NON_DEFAULT_RESOURCE_SCOPES: readonly CliResourceScope[] = [
+  // `stella:read` already admits public-law reads for the logged-in user.
+  "stella:law_read",
   "stella:admin_write",
   "stella:onboarding",
   "stella:external_mcps",

@@ -18,6 +18,7 @@ use keyring_core::{Entry, Error};
 const ACCOUNT_CONNECTION_KEY: &str = "account:connection:v1";
 const LEGACY_REGISTRY_ACCOUNT_KEY: &str = "registry:account:v1";
 const ACCOUNT_EXPIRED_KEY: &str = "account:expired:v1";
+const ACCOUNT_DEVICE_KEY: &str = "account:device-key:pkcs8:v1";
 const ACCOUNT_ROTATION_KEY: &str = "account:rotation:v1";
 const ACCOUNT_KEYS_TO_DELETE: [&str; 4] = [
   ACCOUNT_CONNECTION_KEY,
@@ -240,16 +241,18 @@ pub fn delete_token(session_id: &str) {
 /// The keychain account of each local-only data store's encryption key. Each
 /// store has its own key, so losing or resetting one never touches another.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum LocalDataKey {
+pub enum LocalDataKey<'a> {
   ClipboardHistory,
-  ActivityTimeline,
+  ActivityTimeline(&'a str),
 }
 
-impl LocalDataKey {
-  pub const fn account(self) -> &'static str {
+impl<'a> LocalDataKey<'a> {
+  pub fn account(self) -> std::borrow::Cow<'a, str> {
     match self {
-      Self::ClipboardHistory => "clipboard:history:v1",
-      Self::ActivityTimeline => "activity:timeline:v1",
+      Self::ClipboardHistory => "clipboard:history:v1".into(),
+      Self::ActivityTimeline(namespace) => {
+        format!("activity:timeline:v2:{namespace}").into()
+      }
     }
   }
 }
@@ -262,8 +265,8 @@ pub enum LocalDataKeyLookup {
 /// Look up a local data store's encryption key. The caller decides whether a
 /// missing key may be created: it must not be while encrypted data still
 /// depends on the old one.
-pub fn get_local_data_key(key: LocalDataKey) -> Result<LocalDataKeyLookup, String> {
-  let key_entry = named_entry(key.account())?;
+pub fn get_local_data_key(key: LocalDataKey<'_>) -> Result<LocalDataKeyLookup, String> {
+  let key_entry = named_entry(&key.account())?;
   match key_entry.get_secret() {
     Ok(secret) => secret
       .try_into()
@@ -275,11 +278,11 @@ pub fn get_local_data_key(key: LocalDataKey) -> Result<LocalDataKeyLookup, Strin
 }
 
 /// Mint and store a fresh local data store key.
-pub fn create_local_data_key(key: LocalDataKey) -> Result<[u8; 32], String> {
+pub fn create_local_data_key(key: LocalDataKey<'_>) -> Result<[u8; 32], String> {
   use aes_gcm::{Aes256Gcm, Key, aead::Generate};
 
   let secret = Key::<Aes256Gcm>::generate();
-  named_entry(key.account())?
+  named_entry(&key.account())?
     .set_secret(&secret)
     .map_err(|e| format!("keychain store error: {e}"))?;
   Ok(secret.into())
@@ -375,8 +378,8 @@ mod tests {
       "clipboard:history:v1"
     );
     assert_eq!(
-      LocalDataKey::ActivityTimeline.account(),
-      "activity:timeline:v1"
+      LocalDataKey::ActivityTimeline("fixture").account(),
+      "activity:timeline:v2:fixture"
     );
   }
 
@@ -436,4 +439,36 @@ mod tests {
       .is_err()
     );
   }
+}
+
+pub(crate) async fn get_account_device_key() -> Result<Option<String>, String> {
+  let read = tokio::task::spawn_blocking(|| {
+    match named_entry(ACCOUNT_DEVICE_KEY)?.get_password() {
+      Ok(value) => Ok(Some(value)),
+      Err(Error::NoEntry) => Ok(None),
+      Err(_) => Err("Desktop device Keychain read failed".into()),
+    }
+  });
+  tokio::time::timeout(std::time::Duration::from_secs(5), read)
+    .await
+    .map_err(|_| "Desktop device Keychain read timed out")?
+    .map_err(|_| "Desktop device Keychain task failed")?
+}
+
+pub(crate) async fn store_account_device_key(
+  value: zeroize::Zeroizing<String>,
+) -> Result<(), String> {
+  tokio::task::spawn_blocking(move || {
+    named_entry(ACCOUNT_DEVICE_KEY)?
+      .set_password(&value)
+      .map_err(|_| "Could not save desktop device key in Keychain".into())
+  })
+  .await
+  .map_err(|_| "Desktop device Keychain task failed")?
+}
+
+pub(crate) async fn delete_account_device_key() -> Result<(), String> {
+  tokio::task::spawn_blocking(|| delete_named_credential(ACCOUNT_DEVICE_KEY))
+    .await
+    .map_err(|_| "Desktop device Keychain task failed")?
 }

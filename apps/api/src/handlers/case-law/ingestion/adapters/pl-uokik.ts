@@ -57,7 +57,10 @@ import { Result, panic } from "better-result";
 import * as cheerio from "cheerio";
 
 import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-grammar";
-import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import {
+  DECISION_IDENTIFIER_TYPES,
+  isDecisionIdentifier,
+} from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
@@ -123,6 +126,7 @@ import type {
   PlUokikRulingUnread,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-uokik";
 import { visibleHtmlText } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
+import { fitsCitationStorageField } from "@/api/lib/case-law/citation-storage-bounds";
 import {
   absentDecisionTextFields,
   checkedDecisionMetadata,
@@ -1423,8 +1427,27 @@ export const assemblePlUokikDecision = async ({
 
   const number =
     fieldText(detail, PL_UOKIK_LABEL.NUMBER) ?? row.decisionNumber ?? "";
-  const placeholder = isPlaceholderNumber(number);
-  const caseNumber = placeholder ? id : number.replace(/\s+/gu, " ");
+  const normalizedNumber = number.replace(/\s+/gu, " ");
+  const numberTooLong = !fitsCitationStorageField(
+    "caseNumber",
+    normalizedNumber,
+  );
+  const placeholder = isPlaceholderNumber(number) || numberTooLong;
+  const caseNumber = placeholder ? id : normalizedNumber;
+  const statedIdentifiers = placeholder
+    ? []
+    : plUokikDecisionIdentifiers(caseNumber);
+  const [firstIdentifier, ...restIdentifiers] =
+    statedIdentifiers.filter(isDecisionIdentifier);
+  const identifiers =
+    firstIdentifier === undefined
+      ? undefined
+      : ([
+          firstIdentifier,
+          ...restIdentifiers,
+        ] as const satisfies DecisionIdentifiers);
+  const omittedIdentifier =
+    (identifiers?.length ?? 0) < statedIdentifiers.length;
   const decisionDate =
     plUokikDayOfDetailDate(fieldText(detail, PL_UOKIK_LABEL.DATE)) ??
     row.decisionDate;
@@ -1477,9 +1500,8 @@ export const assemblePlUokikDecision = async ({
   const decision: IngestionResult = plainTextIngestionResult(
     {
       caseNumber,
-      ...(placeholder
-        ? { caseNumberIsPlaceholder: true }
-        : { identifiers: plUokikDecisionIdentifiers(caseNumber) }),
+      ...(placeholder ? { caseNumberIsPlaceholder: true } : {}),
+      ...(identifiers === undefined ? {} : { identifiers }),
       sourceDocumentId: id,
       ...(quarantined ? {} : repairAliasesOf(row)),
       court: authority,
@@ -1503,6 +1525,12 @@ export const assemblePlUokikDecision = async ({
           register,
           decisionNumber: number.length === 0 ? undefined : number,
           decisionNumberAsListed: row.decisionNumber,
+          ...(numberTooLong
+            ? { caseNumberFallbackReason: "overlong-number" }
+            : {}),
+          ...(omittedIdentifier
+            ? { identifierStorageReason: "unrepresentable-identifier" }
+            : {}),
           decisionDateAsListed: row.datePrinted,
           ...pageMetadataOf({
             detail,

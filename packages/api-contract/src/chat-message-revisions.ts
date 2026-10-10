@@ -94,3 +94,11 @@ export const chatMessageRevisionEditSchema = v.union([
 export type ChatMessageRevisionEdit = v.InferOutput<
   typeof chatMessageRevisionEditSchema
 >;
+
+export const CHAT_ANSWER_EDIT_STATES = [
+  "instruction",
+  "requesting",
+  "proposal",
+  "accepting",
+  "stale",
+] as const;

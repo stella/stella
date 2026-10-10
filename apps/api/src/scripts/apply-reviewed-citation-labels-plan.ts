@@ -28,6 +28,10 @@ import type {
 } from "@/api/handlers/case-law/polarity/consts";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  assertCitationStorageField,
+  fitsCitationStorageField,
+} from "@/api/lib/case-law/citation-storage-bounds";
 import type { ConstantMap } from "@/api/lib/constant-map";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
@@ -55,7 +59,12 @@ const sha256Schema = v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/u));
 
 const byCitationKeyEntries = {
   citingDecisionId: uuidSchema,
-  citationKey: storedTextSchema(128),
+  citationKey: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.check((value) => !value.includes("\u0000"), "text must not contain NUL"),
+    v.check((value) => fitsCitationStorageField("key", value)),
+  ),
 };
 
 const byCitationIdEntries = { citationId: uuidSchema };
@@ -759,8 +768,12 @@ const upsertReviewsStatement = (
      model, prompt_version, prompt_sha256, evidence_sha256, run_id, produced_at)
   VALUES ${sql.join(
     labels.map((label) => {
+      const checked = assertCitationStorageField("key", label.citationKey);
+      if (checked.isErr()) {
+        throw checked.error;
+      }
       const columns = provenanceColumns(label.provenance);
-      return sql`(${createSafeId<"caseLawCitationReview">()}::uuid, ${label.citingDecisionId}::uuid, ${label.citationKey}, ${label.polarity}, ${label.reviewRef}, ${columns.origin}, ${columns.model}::text, ${columns.promptVersion}::text, ${columns.promptSha256}::text, ${columns.evidenceSha256}::text, ${columns.runId}::text, ${columns.producedAt}::timestamptz)`;
+      return sql`(${createSafeId<"caseLawCitationReview">()}::uuid, ${label.citingDecisionId}::uuid, ${checked.value}, ${label.polarity}, ${label.reviewRef}, ${columns.origin}, ${columns.model}::text, ${columns.promptVersion}::text, ${columns.promptSha256}::text, ${columns.evidenceSha256}::text, ${columns.runId}::text, ${columns.producedAt}::timestamptz)`;
     }),
     sql`, `,
   )}

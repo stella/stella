@@ -204,6 +204,8 @@ export type ChatMessageMetadata = {
 export type ChatMessage = Omit<UIMessage, "parts"> & {
   parts: ChatPart[];
   metadata?: ChatMessageMetadata;
+  revision?: number;
+  edited?: boolean;
 };
 
 export type PersistableChatMessageCandidate = {
