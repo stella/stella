@@ -72,7 +72,19 @@ const savedThread = {
   activeSkill: builder,
   activeTurnId: null,
   attachedFiles: { fileCount: 0, files: [] },
-  context: null,
+  context: {
+    estimatedTokens: 0,
+    triggerTokens: 0,
+    cacheStableTokens: 0,
+    summarizedMessageCount: 0,
+    breakdown: {
+      promptTokens: 0,
+      toolTokens: 0,
+      summaryTokens: 0,
+      attachmentTokens: 0,
+      conversationTokens: 0,
+    },
+  },
   contextMatterIds: [],
   forkProvenance: { type: "none" },
   lastActivityAt: null,
@@ -166,8 +178,10 @@ test("reopening an evicted builder on the thread page restores its skill for the
       }
       if (pathname.endsWith("/skills")) {
         return Response.json({
-          installed: [],
           builtIn: [],
+          installed: [],
+          canManageTeam: false,
+          limit: 100,
           nextCursor: null,
         } satisfies WebApiRoutes["skills"]["get"]["response"][200]);
       }
@@ -262,7 +276,8 @@ test("reopening an evicted builder on the thread page restores its skill for the
     key: threadRef,
     context: { allowMissingThread: true },
   });
-  expect(client.getQueryData(plainQuery.queryKey)).toMatchObject({
+  const plainThread: unknown = client.getQueryData(plainQuery.queryKey);
+  expect(plainThread).toMatchObject({
     activeSkill: builder,
     threadExists: true,
   });

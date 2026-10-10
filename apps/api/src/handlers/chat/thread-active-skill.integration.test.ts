@@ -61,6 +61,7 @@ const createThread = async (
     organizationId: ids.orgA,
     recordAuditEvent: async () => undefined,
     safeDb,
+    subjectDecisionId: null,
     threadId,
     title: "Durable skill test",
     userId: ids.userA1,

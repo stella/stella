@@ -118,17 +118,7 @@ test("tells the user when an approved save failed", async () => {
           <ChatMattersContext
             value={{ createDocumentMattersView: { type: "empty" } }}
           >
-            <ChatApprovalContext
-              value={{
-                activeOrganizationId: "test-active-organization",
-                alwaysApprovedTools: new Set(),
-                conversationApprovedTools: new Set(),
-                handleAllowInConversation: () => {},
-                handleAlwaysAllow: () => {},
-                handleApprove: () => {},
-                handleDeny: () => {},
-              }}
-            >
+            <ChatApprovalContext value={testChatApprovalContextValue}>
               <ChatEditorProvider>
                 <ChatThreadMessages
                   approvalPendingMessageId={null}
