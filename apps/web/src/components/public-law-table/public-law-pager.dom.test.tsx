@@ -13,6 +13,7 @@ import {
 } from "@/components/public-law-table/public-law-pagination.logic";
 import czechMessages from "@/i18n/langs/cs.json";
 import messages from "@/i18n/langs/en.json";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law/cases" });
 const { useRef, useState } = await import("react");
@@ -28,7 +29,7 @@ const { WORKSPACE_TABLE_SCROLL_SLOT } =
   await import("@/components/workspaces/table/workspace-grid");
 
 afterEach(cleanup);
-afterAll(async () => await GlobalRegistrator.unregister());
+afterAll(async () => await unregisterDomEnvironment());
 
 const PAGE_SIZE = 25;
 const DEEPEST_PAGE = 20;

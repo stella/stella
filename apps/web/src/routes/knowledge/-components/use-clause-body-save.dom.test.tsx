@@ -14,6 +14,7 @@ import { assertProperty } from "@stll/property-testing";
 
 import type { ClauseParagraph } from "@/components/templates/clause-editor-types";
 import { APIError } from "@/lib/errors/api";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import type { ClauseBodyWrite } from "./use-clause-body-save";
 
@@ -35,7 +36,7 @@ afterEach(() => {
   cleanup();
   jest.useRealTimers();
 });
-afterAll(async () => GlobalRegistrator.unregister());
+afterAll(async () => unregisterDomEnvironment());
 
 type MountOptions = {
   readHead?: (() => Promise<ClauseParagraph[]>) | undefined;

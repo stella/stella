@@ -1,8 +1,10 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, describe, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 GlobalRegistrator.register();
-afterAll(async () => await GlobalRegistrator.unregister());
+afterAll(async () => await unregisterDomEnvironment());
 const { attachElementDropTarget, readSourceSubgroupValue } =
   await import("./use-kanban-drop-targets");
 

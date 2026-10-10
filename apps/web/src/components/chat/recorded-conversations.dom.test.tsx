@@ -15,6 +15,7 @@ import { sleep } from "@stll/concurrency/sleep";
 
 import { browserStorage } from "@/lib/account/browser-storage";
 import { userStorageKey } from "@/lib/account/user-scoped-storage";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 const localArea = () =>
   browserStorage("local") ?? panic("Test requires local browser storage");
@@ -73,7 +74,7 @@ afterAll(async () => {
   await sleep(50);
   Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", actEnvironment);
   globalThis.fetch = originalFetch;
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 // Conversations the real send pipeline served, replayed through the chat a

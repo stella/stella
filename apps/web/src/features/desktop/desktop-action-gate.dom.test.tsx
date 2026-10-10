@@ -17,6 +17,7 @@ import type { DesktopPresence } from "@stll/api-contract/desktop-presence";
 
 import messages from "@/i18n/langs/en.json";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import type { DesktopAction } from "./desktop-action-gate.logic";
 
@@ -62,7 +63,7 @@ afterEach(async () => {
 });
 afterAll(async () => {
   globalThis.fetch = originalFetch;
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const gate = messages.workspaces.files.desktopGate;

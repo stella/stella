@@ -20,6 +20,7 @@ import {
 } from "@/features/chat/stream-chunk-commit-budget";
 import type { StreamChunkKind } from "@/features/chat/stream-chunk-commit-budget";
 import { browserStorage } from "@/lib/account/browser-storage";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 const localArea = () =>
   browserStorage("local") ?? panic("Test requires local browser storage");
@@ -74,7 +75,7 @@ afterAll(async () => {
   await sleep(50);
   Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", actEnvironment);
   globalThis.fetch = originalFetch;
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 afterEach(() => {

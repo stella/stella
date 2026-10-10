@@ -2,6 +2,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { testChatApprovalContextValue } from "@/components/chat/chat-approval-context.test-fixtures";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "https://app.example.test/chat/thread" });
 
@@ -40,7 +41,7 @@ afterAll(async () => {
   } else {
     process.env["VITE_API_URL"] = previousApiUrl;
   }
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 test("opens the playbook an approved save wrote", async () => {

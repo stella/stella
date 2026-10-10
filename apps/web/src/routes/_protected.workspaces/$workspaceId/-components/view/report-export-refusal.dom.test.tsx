@@ -9,6 +9,7 @@ import { sleep } from "@stll/concurrency/sleep";
 
 import messages from "@/i18n/langs/en.json";
 import { toSafeId } from "@/lib/safe-id";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import type { ReportExportRequest } from "./export-report-dialog.logic";
 
@@ -25,7 +26,7 @@ afterAll(async () => {
   await act(async () => {
     await sleep(50);
   });
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 test("only a refused AI export offers an explicit fallback preserving request fields", () => {

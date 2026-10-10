@@ -18,6 +18,7 @@ import type {
 } from "@/components/workspaces/table/types";
 import { TABLE_CONTENT_MODES } from "@/lib/workspaces/table-store.logic";
 import type { TableContentMode } from "@/lib/workspaces/table-store.logic";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 
@@ -65,7 +66,7 @@ afterEach(() => {
 afterAll(async () => {
   globalThis.fetch = originalFetch;
   onlineManager.setOnline(wasOnline);
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 // Derive the host census from imports, so a new host automatically exercises

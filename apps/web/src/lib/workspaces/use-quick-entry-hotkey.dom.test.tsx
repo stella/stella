@@ -1,6 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 GlobalRegistrator.register({ url: "http://localhost:3000/time" });
 
 const { act, cleanup, renderHook } = await import("@testing-library/react");
@@ -17,7 +19,7 @@ afterEach(() => {
 });
 
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 // Happy DOM aliases AltGraph to Alt; this fixture represents plain Alt.

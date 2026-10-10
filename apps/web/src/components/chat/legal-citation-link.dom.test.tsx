@@ -4,6 +4,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({
   url: "http://localhost:3000/chat",
@@ -76,7 +77,7 @@ afterAll(async () => {
   } else {
     process.env["VITE_PUBLIC_LAW_ENABLED"] = originalPublicLawFlag;
   }
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const renderChat = async (

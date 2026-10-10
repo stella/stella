@@ -4,6 +4,7 @@ import { afterAll, afterEach, describe, expect, spyOn, test } from "bun:test";
 import type { TableTreeNode } from "@/components/workspaces/table/types";
 import englishMessages from "@/i18n/langs/en.json";
 import type { WorkspaceView } from "@/lib/types";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 
@@ -355,7 +356,7 @@ afterAll(async () => {
   await new Promise<void>((resolve) => {
     setImmediate(resolve);
   });
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 describe("OS file drops in the Files view", () => {

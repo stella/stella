@@ -9,6 +9,7 @@ import type { ChatInputMentionSource } from "@/components/chat-editor-provider";
 import type { ChatMentionOption } from "@/components/chat-mention-extension";
 import messages from "@/i18n/langs/en.json";
 import type { McpConnectorsResponse } from "@/lib/knowledge/queries";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "https://app.example.test" });
 const previousApiUrl = process.env["VITE_API_URL"];
@@ -43,7 +44,7 @@ const { ComposerSkillsMenu, ComposerContextMenu, ComposerMcpSubmenu } =
 afterEach(cleanup);
 afterAll(async () => {
   await act(async () => {});
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
   if (previousApiUrl === undefined) {
     delete process.env["VITE_API_URL"];
   } else {

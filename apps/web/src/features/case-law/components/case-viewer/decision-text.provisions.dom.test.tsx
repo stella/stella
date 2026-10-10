@@ -12,6 +12,8 @@ import type { DecisionProvisionAnchor } from "@stll/decision-reader/reader-types
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
 
 const { act, cleanup, fireEvent, render, waitFor, within } =
@@ -43,7 +45,7 @@ afterEach(async () => {
 
 afterAll(async () => {
   await sleep(0);
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const FIRST_CITATION = "§ 31 odst. 4";

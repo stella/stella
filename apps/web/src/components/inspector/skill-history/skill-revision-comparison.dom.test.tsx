@@ -2,6 +2,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, expect, test } from "bun:test";
 
 import type { MarkdownHybridEditorHandle } from "@/components/markdown/markdown-hybrid-editor";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 // Happy DOM omits the legacy editing API that the EditContext polyfill wraps.
@@ -32,7 +33,7 @@ const messages = (await import("@/i18n/langs/en.json")).default;
 
 afterAll(async () => {
   cleanup();
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 test("clicking retry recovers a selected read and replaces the error with content", async () => {

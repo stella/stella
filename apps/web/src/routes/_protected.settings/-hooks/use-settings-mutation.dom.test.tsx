@@ -7,6 +7,8 @@ import fc from "fast-check";
 import { sleep } from "@stll/concurrency/sleep";
 import { assertProperty } from "@stll/property-testing";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 GlobalRegistrator.register({ url: "http://localhost:3000/settings" });
 
 const ORGANIZATION = "settings-org-a";
@@ -46,7 +48,7 @@ afterEach(() => {
 });
 afterAll(async () => {
   globalThis.fetch = originalFetch;
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const SETTINGS_KEY = ["settings-mutation-order-test"] as const;
