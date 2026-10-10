@@ -1,7 +1,7 @@
 import type { Result } from "better-result";
 import { TaggedError } from "better-result";
 
-export type PageRotation = 0 | 90 | 180 | 270;
+export type ScanPageRotation = 0 | 90 | 180 | 270;
 
 export type PhysicalPageSize = {
   widthPoints: number;
@@ -14,7 +14,7 @@ export type RasterizedScanPage = {
   height: number;
   pageSize: PhysicalPageSize;
   dpi: number;
-  rotation: PageRotation;
+  rotation: ScanPageRotation;
 };
 
 export type ScanOptions = {
@@ -39,7 +39,7 @@ export type CleanedScanImage = {
   format: ScanOptions["output"];
 };
 
-export type ScanResult =
+export type CleanScanResult =
   | {
       type: "cleaned";
       image: CleanedScanImage;
@@ -65,5 +65,5 @@ export type ScanEngine = {
   clean: (
     page: RasterizedScanPage,
     options: ScanOptions,
-  ) => Promise<Result<ScanResult, ScanEngineError>>;
+  ) => Promise<Result<CleanScanResult, ScanEngineError>>;
 };

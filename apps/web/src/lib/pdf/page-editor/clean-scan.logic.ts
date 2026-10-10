@@ -1,16 +1,16 @@
 import { panic, Result } from "better-result";
 
 import type {
-  PageRotation,
+  ScanPageRotation,
   PhysicalPageSize,
   RasterizedScanPage,
   ScanEngine,
   ScanEngineError,
   ScanOptions,
-  ScanResult,
+  CleanScanResult,
 } from "./scan-engine";
 
-type CleanedScan = Extract<ScanResult, { type: "cleaned" }>;
+type CleanedScan = Extract<CleanScanResult, { type: "cleaned" }>;
 
 export type CleanScanPageReview =
   | { type: "pending"; pageId: string }
@@ -151,12 +151,12 @@ export const undoCleanScanReview = (
 export type TargetPageBox = PhysicalPageSize & {
   xPoints: 0;
   yPoints: 0;
-  rotation: PageRotation;
+  rotation: ScanPageRotation;
 };
 
 export const targetPageBox = (
   pageSize: PhysicalPageSize,
-  rotation: PageRotation,
+  rotation: ScanPageRotation,
 ): TargetPageBox => ({
   xPoints: 0,
   yPoints: 0,

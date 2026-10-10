@@ -15,14 +15,14 @@ import type {
   RasterizedScanPage,
   ScanEngine,
   ScanOptions,
-  ScanResult,
+  CleanScanResult,
 } from "./scan-engine";
 
 class FakeScanEngine implements ScanEngine {
   receivedOptions: ScanOptions[] = [];
-  private readonly result: ScanResult;
+  private readonly result: CleanScanResult;
 
-  constructor(result: ScanResult) {
+  constructor(result: CleanScanResult) {
     this.result = result;
   }
 
@@ -41,7 +41,7 @@ const page = (dpi: number, rotation: RasterizedScanPage["rotation"]) => ({
   rotation,
 });
 
-const cleanedResult = (format: ScanOptions["output"]): ScanResult => ({
+const cleanedResult = (format: ScanOptions["output"]): CleanScanResult => ({
   type: "cleaned",
   image: {
     pixels: new Uint8Array(200 * 300),

@@ -6,7 +6,7 @@ import type {
   RasterizedScanPage,
   ScanEngine,
   ScanOptions,
-  ScanResult,
+  CleanScanResult,
 } from "./types";
 import { ScanEngineError } from "./types";
 import type { WorkerRequest, WorkerResponse } from "./worker-protocol";
@@ -40,7 +40,7 @@ type WasmBindings = {
 type WasmLoader = () => Promise<WasmBindings>;
 
 type AppliedQuad = NonNullable<
-  Extract<ScanResult, { type: "cleaned" }>["appliedQuad"]
+  Extract<CleanScanResult, { type: "cleaned" }>["appliedQuad"]
 >;
 
 const WASM_LOAD_TIMEOUT_MS = 10_000;
@@ -105,7 +105,7 @@ const createWorkerEngine = ({
         pixels,
         options,
       };
-      return await new Promise<ScanResult>((resolve, reject) => {
+      return await new Promise<CleanScanResult>((resolve, reject) => {
         let settled = false;
         const settle = (complete: () => void) => {
           if (settled) {
@@ -271,7 +271,7 @@ const readQuad = (values: Float32Array): AppliedQuad | null => {
 const convertResult = (
   result: WasmScanResult,
   output: ScanOptions["output"],
-): ScanResult => {
+): CleanScanResult => {
   if (result.status === "unrecognized") {
     if (result.reason.length === 0) {
       throw new ScanEngineError({

@@ -1,9 +1,9 @@
 export type {
-  PageRotation,
+  ScanPageRotation,
   PhysicalPageSize,
   RasterizedScanPage,
   ScanEngine,
   ScanOptions,
-  ScanResult,
+  CleanScanResult,
 } from "@stll/scan-engine/types";
 export { ScanEngineError } from "@stll/scan-engine/types";
