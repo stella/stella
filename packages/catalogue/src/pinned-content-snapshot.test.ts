@@ -9,6 +9,8 @@ import {
   collectGithubTargets,
   PINNED_SNAPSHOT_PATH,
   PinnedContentError,
+  pinnedParserFingerprint,
+  pinnedParserInputs,
   projectFrontmatter,
   readPinnedSnapshot,
   recordingPinnedSource,
@@ -210,6 +212,40 @@ describe("pinned validation facts", () => {
 });
 
 describe("pinned facts trust boundary", () => {
+  test("binds the snapshot to every reached parser source", async () => {
+    const inputs = pinnedParserInputs();
+    expect(inputs).toContain("packages/skills/src/frontmatter.ts");
+    expect(inputs).not.toContain("packages/skills/src/loader.ts");
+
+    const frontmatter = path.resolve(
+      import.meta.dir,
+      "../../skills/src/frontmatter.ts",
+    );
+    const changedReader = async (file: string) => {
+      const source = await Bun.file(file).text();
+      return file === frontmatter ? `${source}\n// parser mutation\n` : source;
+    };
+    const current = await pinnedParserFingerprint();
+    expect(await pinnedParserFingerprint(changedReader)).not.toBe(current);
+
+    await withSnapshotFile(async (file) => {
+      const snapshot = await buildPinnedSnapshot([fixtureEntry()]);
+      await Bun.write(file, serializePinnedSnapshot(snapshot));
+      const failure: unknown = await readPinnedSnapshot(
+        [target],
+        file,
+        changedReader,
+      ).then(
+        () => null,
+        (error: unknown) => error,
+      );
+      expect(failure).toBeInstanceOf(PinnedContentError);
+      expect(
+        failure instanceof PinnedContentError ? failure.message : null,
+      ).toContain("parser fingerprint is stale");
+    });
+  });
+
   test("rejects an edited fact without its matching digest", async () => {
     await withSnapshotFile(async (file) => {
       const entry = fixtureEntry();

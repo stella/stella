@@ -5,6 +5,7 @@ import * as v from "valibot";
 
 import { sha256Hex } from "@stll/sha256/bun";
 import type { SkillMetadata } from "@stll/skills/frontmatter";
+import { walkStaticImportGraph } from "@stll/skills/static-import-graph";
 import { stableStringify } from "@stll/stable-stringify";
 
 import { isGithubSkillEntry, loadCatalogue } from "../src/loader";
@@ -100,14 +101,27 @@ export const PINNED_SNAPSHOT_PATH = nodePath.resolve(
   "../upstream/pinned-content.gen.json",
 );
 const root = nodePath.resolve(import.meta.dir, "../../..");
-const PARSER_INPUTS = [
-  "packages/skills/src/loader.ts",
-  "packages/skills/src/format.ts",
-  "packages/skills/package.json",
+const PARSER_ENTRYPOINTS = [
   "packages/catalogue/scripts/pinned-content-facts.ts",
   "packages/catalogue/scripts/pinned-content-upstream.ts",
   "packages/catalogue/scripts/check-pinned-content.ts",
 ] as const;
+const skillsSourceRoot = nodePath.join(root, "packages/skills/src");
+const isNonTestSource = (file: string): boolean =>
+  file.startsWith(`${skillsSourceRoot}${nodePath.sep}`) &&
+  !/\.(?:test|spec)\.[cm]?[jt]sx?$/u.test(file);
+
+export const pinnedParserInputs = (): string[] =>
+  [
+    ...walkStaticImportGraph({
+      entries: PARSER_ENTRYPOINTS.map((file) => nodePath.join(root, file)),
+      shouldTraverse: (file) =>
+        PARSER_ENTRYPOINTS.some(
+          (entry) => file === nodePath.join(root, entry),
+        ) || isNonTestSource(file),
+    }).map((file) => nodePath.relative(root, file)),
+    "packages/skills/package.json",
+  ].toSorted();
 
 const compareKeys = (left: string, right: string): number => {
   if (left < right) {
@@ -155,13 +169,17 @@ export const assertCompleteGithubContentsListing = ({
     message: `GitHub contents listing may be truncated at ${GITHUB_CONTENTS_LISTING_LIMIT} entries for ${repoRelativePath || "<root>"}`,
   });
 };
-const fingerprint = async () =>
+type ParserFileReader = (file: string) => Promise<string>;
+
+export const pinnedParserFingerprint = async (
+  readFile: ParserFileReader = async (file) => Bun.file(file).text(),
+) =>
   sha256Hex(
     (
       await Promise.all(
-        PARSER_INPUTS.map(
+        pinnedParserInputs().map(
           async (file) =>
-            `${file}\n${await Bun.file(nodePath.join(root, file)).text()}`,
+            `${file}\n${await readFile(nodePath.join(root, file))}`,
         ),
       )
     ).join("\n"),
@@ -180,7 +198,7 @@ export const buildPinnedSnapshot = async (entries: EntryFacts[]) => {
   const detachedEntries = parsed.output;
   return {
     version: 2 as const,
-    parserFingerprint: await fingerprint(),
+    parserFingerprint: await pinnedParserFingerprint(),
     factsSha256: sha256Hex(stableStringify(detachedEntries)),
     entries: detachedEntries,
   };
@@ -262,6 +280,7 @@ export const recordingPinnedSource = (upstream: PinnedSource) => {
 export const readPinnedSnapshot = async (
   targets: GithubTarget[],
   file = PINNED_SNAPSHOT_PATH,
+  readParserFile?: ParserFileReader,
 ): Promise<PinnedSnapshotSource> => {
   const read = await Result.tryPromise(async () => Bun.file(file).text());
   if (read.isErr()) {
@@ -279,7 +298,10 @@ export const readPinnedSnapshot = async (
     });
   }
   const snapshot = parsed.output;
-  if (snapshot.parserFingerprint !== (await fingerprint())) {
+  if (
+    snapshot.parserFingerprint !==
+    (await pinnedParserFingerprint(readParserFile))
+  ) {
     throw new PinnedContentError({
       message: "Pinned facts parser fingerprint is stale; run refresh-pinned",
     });
