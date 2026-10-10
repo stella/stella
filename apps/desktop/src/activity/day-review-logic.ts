@@ -226,9 +226,9 @@ export const matchDay = ({
   manualAssignments,
   draftedEntries,
 }: MatchDayOptions) => {
-  const orderedCandidates = candidates
-    .slice()
-    .sort((left, right) => left.id.localeCompare(right.id));
+  const orderedCandidates = [...candidates].sort((left, right) =>
+    left.id.localeCompare(right.id),
+  );
   const distinctiveTokens = distinctiveTokenIndex(orderedCandidates);
   const assignments = manualAssignments.map((range) => ({
     ...range,

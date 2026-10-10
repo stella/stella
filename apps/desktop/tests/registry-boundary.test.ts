@@ -96,7 +96,6 @@ const accountBearerOwners = {
   "deep_link.rs": "crate::account::request_account(&state).await?",
   "sse.rs": ".bearer_auth(&session_token)",
   "http_client.rs": "key: &crate::device_proof::DeviceKey",
-  "time_entry_submit.rs": "account: &AccountRequest",
 } as const;
 
 const assertBearerOwner = (file: string, source: string) => {
