@@ -297,6 +297,9 @@ describe.skipIf(!runPostgresTests)(
             const after =
               await tx`SELECT entity_feature_gate AS gate FROM flow_run_steps WHERE id = ${stepId}`;
             expect(after).toEqual([{ gate: "legal-lists" }]);
+            // The orphan has a parent again; restore the schema's validated FK
+            // so later suites on this database see the canonical constraint.
+            await tx`ALTER TABLE flow_run_steps VALIDATE CONSTRAINT flow_run_steps_review_task_entity_id_entities_id_fk`;
           });
         } finally {
           await client`DELETE FROM organization WHERE id = ${fixture.organizationId}`;
