@@ -1,0 +1,5 @@
+{
+  "metric": "web-lib-top-level-entries",
+  "delta": 1,
+  "reason": "apps/web/src/lib/uuid.ts is the single owner of identifier and nonce generation for the web app; it is a cross-cutting primitive with no fitting lib subfolder, and the lint rule points every caller at it."
+}
