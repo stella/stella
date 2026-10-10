@@ -8,6 +8,8 @@ import {
 } from "bun:test";
 import { inArray, TransactionRollbackError } from "drizzle-orm";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
+
 import type { Transaction } from "@/api/db/root";
 import { aiMemories } from "@/api/db/schema";
 import { deletePersonalAiMemories } from "@/api/lib/account-deletion-steps";
@@ -35,8 +37,7 @@ afterAll(async () => {
   await releaseRlsFixture();
 });
 
-const dedupKey = () =>
-  new Bun.CryptoHasher("sha256").update(Bun.randomUUIDv7()).digest("hex");
+const dedupKey = () => hashSha256Hex(Bun.randomUUIDv7());
 
 describe("account deletion assistant memory", () => {
   test("removes the user's own memories and pending suggestions and keeps shared memory unattributed", async () => {

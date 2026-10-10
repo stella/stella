@@ -27,7 +27,6 @@ describe("corpus source reuse terms", () => {
     expect(
       allowsDerivedAi({
         ...RESTRICTED,
-        license: "public-domain",
         allowsDerivedAi: true,
       }),
     ).toBe(true);

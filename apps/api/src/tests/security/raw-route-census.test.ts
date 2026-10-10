@@ -4,6 +4,10 @@ import {
   ACCOUNT_ACCESS,
   getSafeHandlerAccountAccess,
 } from "@/api/lib/api-handlers";
+import {
+  MCP_MODES,
+  MCP_RESOURCE_MODE_CONFIG,
+} from "@/api/mcp/resource-policy-contract";
 import api from "@/api/server";
 
 /**
@@ -36,26 +40,16 @@ const RAW_ROUTES = {
     reason:
       "Better Auth handler; its before hooks refuse the demo account's account, key, OAuth and organization writes.",
   },
-  "ALL /mcp": {
-    access: RAW_ROUTE_ACCESS.sessionless,
-    reason:
-      "MCP token transport; the demo account is refused once the token resolves (mcp/context.ts).",
-  },
-  "ALL /mcp-anonymized": {
-    access: RAW_ROUTE_ACCESS.sessionless,
-    reason:
-      "MCP token transport; the demo account is refused once the token resolves.",
-  },
-  "ALL /mcp-documents": {
-    access: RAW_ROUTE_ACCESS.sessionless,
-    reason:
-      "MCP token transport; the demo account is refused once the token resolves.",
-  },
-  "ALL /mcp-law": {
-    access: RAW_ROUTE_ACCESS.sessionless,
-    reason:
-      "MCP token transport; the demo account is refused once the token resolves.",
-  },
+  ...Object.fromEntries(
+    MCP_MODES.map((mode) => [
+      `ALL ${MCP_RESOURCE_MODE_CONFIG[mode].httpPath}`,
+      {
+        access: RAW_ROUTE_ACCESS.sessionless,
+        reason:
+          "MCP token transport; the demo account is refused once the token resolves.",
+      },
+    ]),
+  ),
   "GET /.well-known/openai-apps-challenge": {
     access: RAW_ROUTE_ACCESS.sessionless,
     reason: "Public static domain-verification token.",
@@ -150,22 +144,15 @@ const RAW_ROUTES = {
     access: RAW_ROUTE_ACCESS.sessionless,
     reason: "Public discovery preflight.",
   },
-  "OPTIONS /.well-known/oauth-protected-resource/mcp": {
-    access: RAW_ROUTE_ACCESS.sessionless,
-    reason: "Public discovery preflight.",
-  },
-  "OPTIONS /.well-known/oauth-protected-resource/mcp-anonymized": {
-    access: RAW_ROUTE_ACCESS.sessionless,
-    reason: "Public discovery preflight.",
-  },
-  "OPTIONS /.well-known/oauth-protected-resource/mcp-documents": {
-    access: RAW_ROUTE_ACCESS.sessionless,
-    reason: "Public discovery preflight.",
-  },
-  "OPTIONS /.well-known/oauth-protected-resource/mcp-law": {
-    access: RAW_ROUTE_ACCESS.sessionless,
-    reason: "Public discovery preflight.",
-  },
+  ...Object.fromEntries(
+    MCP_MODES.map((mode) => [
+      `OPTIONS ${MCP_RESOURCE_MODE_CONFIG[mode].discoveryPath}`,
+      {
+        access: RAW_ROUTE_ACCESS.sessionless,
+        reason: "Public discovery preflight.",
+      },
+    ]),
+  ),
   "OPTIONS /.well-known/openid-configuration": {
     access: RAW_ROUTE_ACCESS.sessionless,
     reason: "Public discovery preflight.",

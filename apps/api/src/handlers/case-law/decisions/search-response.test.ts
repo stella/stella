@@ -6,6 +6,7 @@ import fc from "fast-check";
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import { DECISION_TYPE_KIND_OTHER } from "@stll/api-contract/case-law-decision-types";
 import {
+  SEARCH_PAGE_REACH,
   SEARCH_PAGINATION_COMPLETE,
   SEARCH_TOTAL_NOT_COUNTED,
 } from "@stll/api-contract/search";
@@ -57,6 +58,7 @@ const responseWithText = (text: string): SearchResponse => {
       ),
       omitted: 0,
     },
+    textWithheldReason: null,
     headline: `<mark>${escapeSearchHtml(text)}</mark>`,
     anchorId: text,
     citationCount: Number.MAX_VALUE,
@@ -86,6 +88,7 @@ const responseWithText = (text: string): SearchResponse => {
     total: SEARCH_TOTAL_NOT_COUNTED,
     nextCursor: text,
     paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+    pageReach: SEARCH_PAGE_REACH.REACHED,
     queryUsed: text,
     warnings: [{ code: "function_words_optional", message: text, hint: text }],
   };

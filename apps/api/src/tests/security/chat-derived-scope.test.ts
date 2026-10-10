@@ -57,21 +57,45 @@ describe("chat-derived rows carry the thread's data scope", () => {
   });
 
   test("each is scoped by a thread join or its own source scope", () => {
-    const unscoped = tablesReferencingChatThreads()
-      .filter((table) => {
-        const config = getTableConfig(table);
-        const policies = renderPolicies(table);
-        const joinsThread = /\bchat_threads\b/u.test(policies);
-        const ownSourceScope =
-          config.columns.some(
-            (column) => column.name === SOURCE_SCOPE_COLUMN,
-          ) && policies.includes(SOURCE_SCOPE_COLUMN);
+    const carriesThreadScope = (
+      table: PgTable,
+      visited: Set<PgTable>,
+    ): boolean => {
+      if (visited.has(table)) {
+        return false;
+      }
+      visited.add(table);
+      const config = getTableConfig(table);
+      const policies = renderPolicies(table);
+      if (/\bchat_threads\b/u.test(policies)) {
+        return true;
+      }
+      if (
+        config.columns.some((column) => column.name === SOURCE_SCOPE_COLUMN) &&
+        policies.includes(SOURCE_SCOPE_COLUMN)
+      ) {
+        return true;
+      }
+      // A policy may inherit scope through an RLS-protected parent row;
+      // derive that parent from the schema rather than exempting its child.
+      return config.foreignKeys.some((foreignKey) => {
+        const parent = foreignKey.reference().foreignTable;
+        const parentConfig = getTableConfig(parent);
         return (
-          !joinsThread &&
-          !ownSourceScope &&
-          !POINTER_ONLY_TABLES.has(config.name)
+          parentConfig.enableRLS &&
+          new RegExp(String.raw`\b${parentConfig.name}\b`, "u").test(
+            policies,
+          ) &&
+          carriesThreadScope(parent, new Set(visited))
         );
-      })
+      });
+    };
+    const unscoped = tablesReferencingChatThreads()
+      .filter(
+        (table) =>
+          !POINTER_ONLY_TABLES.has(getTableConfig(table).name) &&
+          !carriesThreadScope(table, new Set()),
+      )
       .map((table) => getTableConfig(table).name);
 
     expect(unscoped).toEqual([]);

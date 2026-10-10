@@ -1,4 +1,6 @@
-// parser-output-unchanged: scheduling, identity-resolution and app-reader text policy declarations do not change parsed decision output.
+// parser-output-unchanged: manifest policy and derived deferred-document keys do not change parsed decision output.
+import { panic } from "better-result";
+
 import {
   type CaseLawJurisdiction,
   isCaseLawJurisdiction,
@@ -7,6 +9,7 @@ import {
   DECISION_DOCKET_GRAMMARS,
   type DecisionDocketGrammar,
 } from "@stll/api-contract/decision-docket-grammar";
+import type { DocumentStage } from "@stll/legal-atlas/document-fetch-diagnostics";
 
 import {
   CZ_ECLI_COURTS,
@@ -71,7 +74,7 @@ export type StatedEcliIdentity =
 
 type AdapterManifest<TKey extends string> = {
   readonly key: TKey;
-  readonly documentStage: "inline" | "deferred";
+  readonly documentStage: DocumentStage;
   /** The feed's English label, for operators and logs. */
   readonly name: string;
   /**
@@ -704,6 +707,22 @@ export const APP_READER_TEXT = {
 export type AppReaderText =
   (typeof APP_READER_TEXT)[keyof typeof APP_READER_TEXT];
 
+// parser-output-unchanged: [eu-ecj] Seed-only reader keys; parsed decision output is unchanged.
+// parser-output-unchanged: [us-courtlistener] Seed-only reader keys; parsed decision output is unchanged.
+/** Seed-only source keys: these are reader fixtures, never crawlable adapters. */
+export const FIXTURE_SOURCE_KEYS = {
+  SYNTHETIC_CZ: "synthetic-cz",
+  SYNTHETIC_SK: "synthetic-sk",
+} as const;
+
+export type FixtureSourceKey =
+  (typeof FIXTURE_SOURCE_KEYS)[keyof typeof FIXTURE_SOURCE_KEYS];
+
+const FIXTURE_SOURCE_APP_READER_TEXT = {
+  [FIXTURE_SOURCE_KEYS.SYNTHETIC_CZ]: APP_READER_TEXT.FULL,
+  [FIXTURE_SOURCE_KEYS.SYNTHETIC_SK]: APP_READER_TEXT.FULL,
+} as const satisfies Record<FixtureSourceKey, AppReaderText>;
+
 /**
  * Per source, so one source can move to `metadata-only` when its terms require
  * it. Total over every adapter and import key: a new source cannot land
@@ -740,7 +759,11 @@ export const SOURCE_APP_READER_TEXT = {
   [ADAPTER_KEYS.PL_UODO]: APP_READER_TEXT.FULL,
   [ADAPTER_KEYS.PL_UOKIK]: APP_READER_TEXT.FULL,
   [IMPORT_SOURCE_KEYS.COURTLISTENER]: APP_READER_TEXT.FULL,
-} as const satisfies Record<AdapterKey | ImportSourceKey, AppReaderText>;
+  ...FIXTURE_SOURCE_APP_READER_TEXT,
+} as const satisfies Record<
+  AdapterKey | ImportSourceKey | FixtureSourceKey,
+  AppReaderText
+>;
 
 export type DeferredDocumentAdapterKey = {
   [
@@ -749,3 +772,34 @@ export type DeferredDocumentAdapterKey = {
     ? TKey
     : never;
 }[keyof typeof ADAPTER_MANIFESTS];
+
+type AdapterManifestEntry =
+  (typeof ADAPTER_MANIFESTS)[keyof typeof ADAPTER_MANIFESTS];
+
+const deferredDocumentKeys = (
+  manifest: AdapterManifestEntry,
+): DeferredDocumentAdapterKey[] => {
+  switch (manifest.documentStage) {
+    case "deferred":
+      return [manifest.key];
+    case "inline":
+      return [];
+    default: {
+      manifest satisfies never;
+      return panic("Unexpected adapter document stage");
+    }
+  }
+};
+
+/**
+ * Adapters whose crawl stores metadata only and leaves the document to the
+ * deferred-document queue, derived from the manifests so a source declared
+ * `deferred` is read through and drained without being listed anywhere else.
+ */
+export const DEFERRED_DOCUMENT_ADAPTER_KEYS =
+  Object.values(ADAPTER_MANIFESTS).flatMap(deferredDocumentKeys);
+
+export const isDeferredDocumentAdapterKey = (
+  key: string,
+): key is DeferredDocumentAdapterKey =>
+  DEFERRED_DOCUMENT_ADAPTER_KEYS.some((deferred) => deferred === key);

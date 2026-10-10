@@ -8,6 +8,11 @@ import {
   selectApiTestImpact,
   type ApiTestImpact,
 } from "./api-test-impact";
+import {
+  API_TEST_SHARD_IDS,
+  fullTestPlan,
+  isApiTestShardId,
+} from "./api-test-shard-plan";
 
 const ImpactSchema = v.strictObject({
   mode: v.picklist(["all", "selected", "none"]),
@@ -17,7 +22,12 @@ const ImpactSchema = v.strictObject({
       v.regex(/^(?:src|scripts|evals)\/[^\r\n]*\.test\.tsx?$/u),
     ),
   ),
-  shards: v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(4)),
+  shards: v.pipe(
+    v.number(),
+    v.integer(),
+    v.minValue(0),
+    v.maxValue(API_TEST_SHARD_IDS.length),
+  ),
 });
 
 // This also guards the workflow boundary if a selector exits successfully
@@ -27,7 +37,8 @@ export const parseApiTestImpact = (output: string): ApiTestImpact => {
     const impact = v.parse(ImpactSchema, JSON.parse(output));
     if (
       (impact.mode === "all" &&
-        (impact.shards !== 4 || impact.files.length !== 0)) ||
+        (impact.shards !== API_TEST_SHARD_IDS.length ||
+          impact.files.length !== 0)) ||
       (impact.mode === "none" &&
         (impact.shards !== 0 || impact.files.length !== 0)) ||
       (impact.mode === "selected" &&
@@ -66,16 +77,14 @@ export const planCiApiTests = ({
       impact = allApiTests();
     }
   }
+  const fullPlan = fullTestPlan();
+  const enabledApiShards = new Set(API_TEST_SHARD_IDS.slice(0, impact.shards));
   return {
     impact,
     matrix: {
-      shard: [
-        ...Array.from(
-          { length: impact.shards },
-          (_, index) => `api-${index + 1}`,
-        ),
-        "rest-web",
-      ],
+      shard: fullPlan.matrix.shard.filter(
+        (shard) => !isApiTestShardId(shard) || enabledApiShards.has(shard),
+      ),
     },
   };
 };

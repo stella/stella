@@ -2,6 +2,8 @@ import { Result } from "better-result";
 
 import type { TextField } from "@stll/api-contract/case-law-text-field";
 import { DECISION_DOCUMENT_ROLE_METADATA_KEY } from "@stll/api-contract/decision-document-role";
+// parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
+import { createSha256 } from "@stll/sha256/bun";
 
 import type { caseLawDecisions } from "@/api/db/schema";
 import { EU_ECJ_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj.metadata-urls";
@@ -440,7 +442,7 @@ export const ecjCompletionFingerprint = ({
     contentHash: existing.contentHash,
     redactedAt: existing.redactedAt?.toISOString() ?? null,
   };
-  return new Bun.CryptoHasher("sha256")
+  return createSha256()
     .update(JSON.stringify(sortDeep(state)))
     .digest("hex");
 };

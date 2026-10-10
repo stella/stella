@@ -131,10 +131,9 @@ for (const kind of ["batch", "snapshot"] as const) {
       expect(diagnostic).toContain("stderr before hang");
       expect(readLogs(fixture.directory)).toContain("progress before hang");
       expect(readLogs(fixture.directory)).toContain("stderr before hang");
-      const failure = readFileSync(
-        path.join(fixture.directory, "failure.json"),
-        "utf-8",
-      );
+      const readFailure = () =>
+        readFileSync(path.join(fixture.directory, "failure.json"), "utf-8");
+      const failure = readFailure();
       expect(failure).toContain(label);
       expect(failure).toContain(String(pid));
       for (const file of files) {
@@ -146,9 +145,7 @@ for (const kind of ["batch", "snapshot"] as const) {
       expect(() => process.kill(pid, 0)).toThrow(/ESRCH/u);
       fixture.supervisor.stop("second stop must not overwrite diagnostics");
       expect(fixture.diagnostics).toHaveLength(1);
-      expect(
-        readFileSync(path.join(fixture.directory, "failure.json"), "utf-8"),
-      ).toBe(failure);
+      expect(readFailure()).toBe(failure);
     } finally {
       fixture.cleanup();
     }

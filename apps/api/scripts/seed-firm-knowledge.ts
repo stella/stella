@@ -19,7 +19,6 @@ import { TaggedError } from "better-result";
  * Usage: bun run db:seed-firm-knowledge --matters 15 [--api <origin>]
  *   [--replace-incomplete]
  */
-import { createHash } from "node:crypto";
 import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
 
@@ -29,6 +28,7 @@ import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import { sessionCookieNameForDevPort } from "@/api/lib/auth/auth-cookie-name";
 
 import { selectMatterNames } from "./seed-firm-knowledge.logic";
+import { seedFileIdentity } from "./seed-utils";
 
 const CORPUS_REPOSITORY = "https://github.com/harveyai/harvey-labs.git";
 // Pinned so every machine seeds identical documents and an upstream change
@@ -338,14 +338,15 @@ const readMatter = async (matterRoot: string): Promise<MatterManifest> => {
       }
 
       const bytes = await Bun.file(absolutePath).bytes();
+      const { sha256Hex, sizeBytes } = seedFileIdentity(bytes);
       files.push({
         absolutePath,
         key,
         mimeType,
         name: entry.name,
         parentKey,
-        sha256Hex: createHash("sha256").update(bytes).digest("hex"),
-        size: bytes.byteLength,
+        sha256Hex,
+        size: sizeBytes,
       });
     }
   };

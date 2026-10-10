@@ -342,7 +342,9 @@ describe("pull request workflow concurrency", () => {
               `staging-web-build-\${{ needs.resolve.outputs.sha }}`,
             ].includes(String(group))) ||
           (file === "deploy-landing.yml" &&
-            group === `deploy-landing-\${{ github.ref }}`);
+            group === `deploy-landing-\${{ github.ref }}`) ||
+          (file === "manual-checks.yml" &&
+            group === `manual-check-\${{ github.ref }}-\${{ inputs.check }}`);
         if (deliberate) {
           return [];
         }

@@ -1,8 +1,16 @@
 import { describe, expect, test } from "bun:test";
 
-import { BYOK_DEFAULT_MODELS } from "@stll/ai-catalog";
+import {
+  BYOK_DEFAULT_MODELS,
+  MODEL_ROLES,
+  TANSTACK_AI_PROVIDERS,
+  isBYOKProviderRoleSupported,
+} from "@stll/ai-catalog";
 
-import { normalizeOrgAIConfig } from "@/api/lib/ai-config";
+import {
+  normalizeOrgAIConfig,
+  resolveOrgAIModelForRole,
+} from "@/api/lib/ai-config";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 
 const googleProvider = {
@@ -32,21 +40,21 @@ describe("normalizeOrgAIConfig auto-heal", () => {
 
     const healed = normalizeOrgAIConfig(config).overrideModels;
 
-    expect(healed.fast).toEqual({
+    expect(healed?.fast).toEqual({
       provider: "google",
-      modelId: BYOK_DEFAULT_MODELS.google.fast,
+      modelId: BYOK_DEFAULT_MODELS.google.fast.modelId,
     });
-    expect(healed.chat).toEqual({
+    expect(healed?.chat).toEqual({
       provider: "google",
-      modelId: BYOK_DEFAULT_MODELS.google.chat,
+      modelId: BYOK_DEFAULT_MODELS.google.chat.modelId,
     });
-    expect(healed.reasoning).toEqual({
+    expect(healed?.reasoning).toEqual({
       provider: "google",
-      modelId: BYOK_DEFAULT_MODELS.google.reasoning,
+      modelId: BYOK_DEFAULT_MODELS.google.reasoning.modelId,
     });
-    expect(healed.pdf).toEqual({
+    expect(healed?.pdf).toEqual({
       provider: "google",
-      modelId: BYOK_DEFAULT_MODELS.google.pdf,
+      modelId: BYOK_DEFAULT_MODELS.google.pdf.modelId,
     });
   });
 
@@ -54,13 +62,22 @@ describe("normalizeOrgAIConfig auto-heal", () => {
     const config: OrgAIConfig = {
       providers: [googleProvider],
       overrideModels: {
-        fast: { provider: "google", modelId: BYOK_DEFAULT_MODELS.google.fast },
-        chat: { provider: "google", modelId: BYOK_DEFAULT_MODELS.google.chat },
+        fast: {
+          provider: "google",
+          modelId: BYOK_DEFAULT_MODELS.google.fast.modelId,
+        },
+        chat: {
+          provider: "google",
+          modelId: BYOK_DEFAULT_MODELS.google.chat.modelId,
+        },
         reasoning: {
           provider: "google",
-          modelId: BYOK_DEFAULT_MODELS.google.reasoning,
+          modelId: BYOK_DEFAULT_MODELS.google.reasoning.modelId,
         },
-        pdf: { provider: "google", modelId: BYOK_DEFAULT_MODELS.google.pdf },
+        pdf: {
+          provider: "google",
+          modelId: BYOK_DEFAULT_MODELS.google.pdf.modelId,
+        },
       },
       decision: null,
     };
@@ -89,13 +106,17 @@ describe("normalizeOrgAIConfig auto-heal", () => {
     const healed = normalizeOrgAIConfig(config).overrideModels;
 
     // fast/chat/reasoning heal on the same provider...
-    expect(healed.fast.modelId).toBe(BYOK_DEFAULT_MODELS.mistral.fast);
-    expect(healed.chat.modelId).toBe(BYOK_DEFAULT_MODELS.mistral.chat);
-    expect(healed.reasoning.modelId).toBe(
-      BYOK_DEFAULT_MODELS.mistral.reasoning,
+    expect(healed?.fast?.modelId).toBe(
+      BYOK_DEFAULT_MODELS.mistral.fast.modelId,
+    );
+    expect(healed?.chat?.modelId).toBe(
+      BYOK_DEFAULT_MODELS.mistral.chat.modelId,
+    );
+    expect(healed?.reasoning?.modelId).toBe(
+      BYOK_DEFAULT_MODELS.mistral.reasoning.modelId,
     );
     // ...but pdf cannot be healed to the same provider, so it is untouched.
-    expect(healed.pdf).toEqual(staleMistralPdf);
+    expect(healed?.pdf).toEqual(staleMistralPdf);
   });
 
   test("leaves a non-BYOK provider selection untouched", () => {
@@ -110,18 +131,79 @@ describe("normalizeOrgAIConfig auto-heal", () => {
       providers: [googleProvider],
       overrideModels: {
         fast: staleHuggingFace,
-        chat: { provider: "google", modelId: BYOK_DEFAULT_MODELS.google.chat },
+        chat: {
+          provider: "google",
+          modelId: BYOK_DEFAULT_MODELS.google.chat.modelId,
+        },
         reasoning: {
           provider: "google",
-          modelId: BYOK_DEFAULT_MODELS.google.reasoning,
+          modelId: BYOK_DEFAULT_MODELS.google.reasoning.modelId,
         },
-        pdf: { provider: "google", modelId: BYOK_DEFAULT_MODELS.google.pdf },
+        pdf: {
+          provider: "google",
+          modelId: BYOK_DEFAULT_MODELS.google.pdf.modelId,
+        },
       },
       decision: null,
     };
 
-    expect(normalizeOrgAIConfig(config).overrideModels.fast).toEqual(
+    expect(normalizeOrgAIConfig(config).overrideModels?.fast).toEqual(
       staleHuggingFace,
     );
+  });
+});
+
+describe("organization catalog defaults", () => {
+  test("every provider and role resolves its canonical default without storing overrides", () => {
+    for (const provider of TANSTACK_AI_PROVIDERS) {
+      const config = {
+        providers: [{ provider, apiKey: "fixture-key" }],
+        overrideModels: null,
+        decision: null,
+      } satisfies OrgAIConfig;
+      for (const role of MODEL_ROLES) {
+        const entry = BYOK_DEFAULT_MODELS[provider][role];
+        if (entry.kind === "unsupported") {
+          expect(resolveOrgAIModelForRole(config, role)).toBeNull();
+        } else {
+          expect(resolveOrgAIModelForRole(config, role)).toEqual({
+            provider,
+            modelId: entry.modelId,
+          });
+        }
+      }
+      expect(normalizeOrgAIConfig(config).overrideModels).toBeNull();
+    }
+  });
+  test("a sparse custom selection stays custom and other roles use defaults", () => {
+    const config = {
+      providers: [googleProvider],
+      overrideModels: {
+        chat: { provider: "google", modelId: "gemini-3.8-flash" },
+      },
+      decision: null,
+    } satisfies OrgAIConfig;
+    expect(normalizeOrgAIConfig(config).overrideModels).toEqual(
+      config.overrideModels,
+    );
+    expect(resolveOrgAIModelForRole(config, "fast")).toEqual({
+      provider: "google",
+      modelId: BYOK_DEFAULT_MODELS.google.fast.modelId,
+    });
+  });
+  test("defaults use the first configured provider that supports the role", () => {
+    const config = {
+      providers: [mistralProvider, googleProvider],
+      overrideModels: null,
+      decision: null,
+    } satisfies OrgAIConfig;
+    expect(
+      isBYOKProviderRoleSupported({ provider: "mistral", role: "pdf" }),
+    ).toBe(false);
+    expect(resolveOrgAIModelForRole(config, "pdf")).toEqual({
+      provider: "google",
+      modelId: BYOK_DEFAULT_MODELS.google.pdf.modelId,
+    });
+    expect(resolveOrgAIModelForRole(config, "chat")?.provider).toBe("mistral");
   });
 });

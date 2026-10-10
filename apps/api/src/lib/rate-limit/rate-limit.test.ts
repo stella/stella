@@ -1,8 +1,14 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import Elysia, { status, t } from "elysia";
 
+import { toSafeId } from "@/api/lib/branded-types";
 import { parseTrustedProxies } from "@/api/lib/client-ip";
+import { withDemoActionBudget } from "@/api/lib/rate-limit/demo-action-budget";
+import {
+  createOtpAccountBudget,
+  OTP_ACCOUNT_BUDGET,
+} from "@/api/lib/rate-limit/otp-account-budget";
 import {
   InMemoryRateLimitContext,
   scopedGenerator,
@@ -17,6 +23,7 @@ import {
   createRedisRateLimitRequestKey,
   RedisRateLimitContext,
 } from "@/api/lib/rate-limit/redis-context";
+import { consumeSignupOtpRateLimit } from "@/api/lib/signup-abuse";
 
 const WINDOW_MS = 1000;
 const RATE_LIMIT_OPTIONS = {
@@ -27,11 +34,16 @@ const RATE_LIMIT_OPTIONS = {
 } as const satisfies Omit<RateLimitOptions, "context">;
 
 class TrackingRateLimitContext implements RateLimitContext {
+  readonly completedKeys: string[] = [];
   readonly decrementedKeys: string[] = [];
   readonly incrementedKeys: string[] = [];
   killCount = 0;
   private readonly counts = new Map<string, number>();
   private duration = WINDOW_MS;
+
+  complete(key: string): void {
+    this.completedKeys.push(key);
+  }
 
   decrement(key: string): void {
     this.decrementedKeys.push(key);
@@ -68,6 +80,14 @@ class FakeRedisClient {
   }
 
   async send(command: string, args: string[]): Promise<unknown> {
+    if (command === "HDEL") {
+      const current = this.state.entries.get(requiredArg(args, 0));
+      return current?.attempts.delete(
+        requiredArg(args, 1).slice("attempt:".length),
+      )
+        ? 1
+        : 0;
+    }
     if (command === "DEL") {
       return this.state.entries.delete(requiredArg(args, 0)) ? 1 : 0;
     }
@@ -82,6 +102,7 @@ class FakeRedisClient {
         key,
         Number(requiredArg(args, 3)),
         requiredArg(args, 4),
+        script.includes('if ARGV[2] ~= "" then'),
       );
     }
     if (script.includes('redis.call("HDEL"')) {
@@ -94,18 +115,23 @@ class FakeRedisClient {
     key: string,
     durationMs: number,
     attemptId: string,
+    conditionalMarker: boolean,
   ): [number, number] {
     const current = this.state.entries.get(key);
     if (current === undefined || current.expiresAt <= this.state.now) {
       this.state.entries.set(key, {
-        attempts: new Set([attemptId]),
+        attempts: new Set(
+          conditionalMarker && attemptId === "" ? [] : [attemptId],
+        ),
         count: 1,
         expiresAt: this.state.now + durationMs,
       });
       return [1, durationMs];
     }
     current.count += 1;
-    current.attempts.add(attemptId);
+    if (!conditionalMarker || attemptId !== "") {
+      current.attempts.add(attemptId);
+    }
     return [current.count, current.expiresAt - this.state.now];
   }
 
@@ -186,6 +212,148 @@ describe("RedisRateLimitContext", () => {
 
     first.kill();
     second.kill();
+  });
+
+  test("direct signup counters never allocate refund markers", async () => {
+    const state = createFakeRedisState();
+    const context = createContext(state);
+    try {
+      for (const kind of ["email", "ip"] as const) {
+        for (let count = 1; count <= 40; count += 1) {
+          const result = await consumeSignupOtpRateLimit({
+            context,
+            identity: kind === "email" ? "fixture@example.test" : "192.0.2.1",
+            kind,
+          });
+          expect(result.count).toBe(count);
+        }
+      }
+      expect(
+        [...state.entries.values()].map(({ attempts }) => attempts.size),
+      ).toEqual([0, 0]);
+      expect([...state.entries.values()].map(({ count }) => count)).toEqual([
+        40, 40,
+      ]);
+    } finally {
+      context.kill();
+    }
+  });
+
+  test("direct OTP completions and refusals retain counts without refund markers", async () => {
+    const state = createFakeRedisState();
+    const context = createContext(state);
+    const budget = createOtpAccountBudget(context, undefined);
+    try {
+      for (let attempt = 0; attempt < OTP_ACCOUNT_BUDGET.max; attempt += 1) {
+        const reservation = await budget.reserve("fixture@example.test");
+        expect(Result.isOk(reservation)).toBe(true);
+        await budget.complete(reservation.unwrap(), false);
+      }
+      expect(Result.isError(await budget.reserve("fixture@example.test"))).toBe(
+        true,
+      );
+      expect([...state.entries.values()].at(0)?.attempts.size).toBe(0);
+      expect([...state.entries.values()].at(0)?.count).toBe(
+        OTP_ACCOUNT_BUDGET.max + 1,
+      );
+      const successful = await budget.reserve("success@example.test");
+      await budget.complete(successful.unwrap(), true);
+      expect(
+        [...state.entries.values()].map(({ attempts }) => attempts.size),
+      ).toEqual([0, 0]);
+      expect([...state.entries.values()].map(({ count }) => count)).toEqual([
+        OTP_ACCOUNT_BUDGET.max + 1,
+        0,
+      ]);
+    } finally {
+      context.kill();
+    }
+  });
+
+  test("direct demo actions settle their successful daily attempts", async () => {
+    const state = createFakeRedisState();
+    const context = createContext(state);
+    const userId = toSafeId<"user">("synthetic-user");
+    try {
+      for (let attempt = 0; attempt < 40; attempt += 1) {
+        const result = await withDemoActionBudget({
+          organizationId: toSafeId<"organization">("synthetic-organization"),
+          userId,
+          scope: "independent",
+          budget: {
+            counter: () => context,
+            now: () => state.now,
+            resolveDemoUserId: async () => userId,
+          },
+          run: async (markStarted) => {
+            markStarted();
+            return Result.ok("complete");
+          },
+        });
+        expect(Result.isOk(result)).toBe(true);
+      }
+      expect([...state.entries.values()].at(0)?.attempts.size).toBe(0);
+      expect([...state.entries.values()].at(0)?.count).toBe(40);
+    } finally {
+      context.kill();
+    }
+  });
+
+  test("completed long-window requests retain quota counts without refund markers", async () => {
+    const state = createFakeRedisState();
+    const context = createContext(state);
+    const completed: string[] = [];
+    const complete = context.complete.bind(context);
+    context.complete = async (key) => {
+      await complete(key);
+      completed.push(key);
+    };
+    const app = new Elysia()
+      .use(
+        rateLimit({
+          context,
+          duration: 86_400_000,
+          max: 1,
+          generator: () => requestKey("daily"),
+        }),
+      )
+      .get("/resolve", () => "resolved");
+    for (let attempt = 0; attempt < 40; attempt += 1) {
+      const response = await app.handle(
+        new Request("http://localhost/resolve"),
+      );
+      expect(response.status).toBe(attempt === 0 ? 200 : 429);
+    }
+    // After-response hooks finish asynchronously; wait for this observable work.
+    await Bun.sleep(0);
+    expect(completed).toHaveLength(40);
+    expect(
+      [...state.entries.values()].map(({ attempts }) => attempts.size),
+    ).toEqual([0]);
+    expect([...state.entries.values()].map(({ count }) => count)).toEqual([40]);
+    const next = requestKey("daily");
+    expect((await context.increment(next, 86_400_000)).count).toBe(41);
+    await context.decrement(next);
+    expect([...state.entries.values()].at(0)?.count).toBe(40);
+    context.kill();
+  });
+
+  test("completing one request preserves an in-flight request's refund", async () => {
+    const state = createFakeRedisState();
+    const context = createContext(state);
+    const completed = requestKey("daily");
+    const pending = requestKey("daily");
+    await context.increment(completed, 86_400_000);
+    await context.increment(pending, 86_400_000);
+    await context.complete(completed);
+    expect([...state.entries.values()].at(0)?.attempts.size).toBe(1);
+    expect([...state.entries.values()].at(0)?.count).toBe(2);
+    await context.decrement(pending);
+    expect([...state.entries.values()].at(0)?.count).toBe(1);
+    expect([...state.entries.values()].at(0)?.attempts.size).toBe(0);
+    await context.decrement(completed);
+    expect([...state.entries.values()].at(0)?.count).toBe(1);
+    context.kill();
   });
 
   test("falls back locally on malformed Redis replies", async () => {
@@ -1030,6 +1198,7 @@ describe("composed rate-limit response policies", () => {
               duration: 60_000,
               generator: () => "fixture",
               context: {
+                complete: () => undefined,
                 init: () => undefined,
                 decrement: () => undefined,
                 kill: () => undefined,
