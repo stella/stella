@@ -6,7 +6,12 @@ import {
   findNewerGenerationModels,
   type GenerationExclusion,
 } from "./model-catalog-discovery";
-import { checkSnapshotGenerations } from "./model-catalog-generation-check";
+import {
+  checkSnapshotGenerations,
+  formatFailure,
+  PLANTED_FAILURE,
+  SELF_TEST_OFFERED,
+} from "./model-catalog-generation-check";
 
 const emptyProviderMap = (): Record<FirstPartyModelProvider, string[]> => ({
   anthropic: [],
@@ -190,5 +195,47 @@ describe("snapshot generation check", () => {
         modelId: "claude-haiku-5-6",
       },
     ]);
+  });
+});
+
+describe("generation self-test", () => {
+  const planted = {
+    anthropic: {
+      models: { "claude-haiku-5-6": { release_date: "2026-10-10" } },
+    },
+    google: { models: {} },
+    mistral: { models: {} },
+    openai: { models: {} },
+  };
+
+  test("the fixed baseline reports exactly the planted generation", () => {
+    expect(
+      checkSnapshotGenerations({
+        snapshot: planted,
+        today: "2026-10-10",
+        offered: SELF_TEST_OFFERED,
+      }).map(formatFailure),
+    ).toEqual([PLANTED_FAILURE]);
+  });
+
+  test("offering the planted generation in the catalog does not affect the self-test", () => {
+    const upgraded = {
+      ...SELF_TEST_OFFERED,
+      anthropic: ["claude-haiku-5-6"],
+    };
+    expect(
+      checkSnapshotGenerations({
+        snapshot: planted,
+        today: "2026-10-10",
+        offered: upgraded,
+      }),
+    ).toEqual([]);
+    expect(
+      checkSnapshotGenerations({
+        snapshot: planted,
+        today: "2026-10-10",
+        offered: SELF_TEST_OFFERED,
+      }).map(formatFailure),
+    ).toEqual([PLANTED_FAILURE]);
   });
 });

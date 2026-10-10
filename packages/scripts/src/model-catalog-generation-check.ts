@@ -49,24 +49,37 @@ type CheckSnapshotGenerationsOptions = {
   // Exclusions expire on the calendar, not on the snapshot's newest release.
   today: string;
   exclusions?: FindNewerGenerationModelsOptions["exclusions"];
+  offered?: FindNewerGenerationModelsOptions["offered"];
 };
 
 export const checkSnapshotGenerations = ({
   snapshot,
   today,
   exclusions,
+  offered,
 }: CheckSnapshotGenerationsOptions) =>
   findNewerGenerationModels({
     upstreamIds: readUpstreamIds(snapshot),
     asOf: today,
     ...(exclusions === undefined ? {} : { exclusions }),
+    ...(offered === undefined ? {} : { offered }),
   });
 
-// The planted snapshot holds exactly one newer generation of an offered family.
-const PLANTED_FAILURE = "newer-generation: anthropic:claude-haiku-5-6";
+// The planted snapshot holds exactly one newer generation of this fixed
+// baseline, so upgrading the live catalog cannot change the self-test.
+export const SELF_TEST_OFFERED = {
+  anthropic: ["claude-haiku-5-5"],
+  google: [],
+  mistral: [],
+  openai: [],
+} as const satisfies FindNewerGenerationModelsOptions["offered"];
+export const PLANTED_FAILURE = "newer-generation: anthropic:claude-haiku-5-6";
 
-const formatFailure = ({ type, provider, modelId }: GenerationGuardFailure) =>
-  `${type}: ${provider}:${modelId}`;
+export const formatFailure = ({
+  type,
+  provider,
+  modelId,
+}: GenerationGuardFailure) => `${type}: ${provider}:${modelId}`;
 
 const main = async () => {
   const selfTest = process.argv.includes("--self-test");
@@ -76,6 +89,7 @@ const main = async () => {
   const failures = checkSnapshotGenerations({
     snapshot,
     today: Temporal.Now.plainDateISO("UTC").toString(),
+    ...(selfTest ? { offered: SELF_TEST_OFFERED } : {}),
   });
   if (selfTest) {
     const reported = failures.map(formatFailure);
