@@ -514,7 +514,12 @@ const negationConsumed = ({
     index > 0 &&
     tail === tokens.length &&
     !WORKFLOW_FILE.test(file);
-  const inAndOrList = isOperator(tokens[index - 1], AND_OR);
+  // An and-or operator may end the previous line, before comments.
+  let before = index - 1;
+  while (isOperator(tokens[before], LINE_BREAKS)) {
+    before -= 1;
+  }
+  const inAndOrList = isOperator(tokens[before], AND_OR);
   // In a condition only the final and-or list before `then`/`do` decides, so
   // follow the list containing the negation to its end.
   let listEnd = end;

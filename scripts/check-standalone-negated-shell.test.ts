@@ -403,3 +403,15 @@ test("for and select loops keep the enclosing condition frame", () => {
     ),
   ).toEqual([{ file: "scripts/loops.sh", line: 7, source: "! false" }]);
 });
+
+test("a terminal negation continued from an and-or line is still in the list", () => {
+  expect(check("scripts/terminal-list.sh", "true &&\n  ! true")).toHaveLength(
+    1,
+  );
+  expect(
+    check(
+      "scripts/terminal-list-function.sh",
+      "f() {\n  true && # why\n  ! true\n}",
+    ),
+  ).toHaveLength(1);
+});
