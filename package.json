@@ -144,6 +144,7 @@
     "@stll/collation": "workspace:*",
     "@stll/oxlint-config": "0.7.0",
     "@stll/property-testing": "workspace:*",
+    "@stll/sha256": "workspace:^",
     "@stll/typescript-config": "workspace:^0.0.0",
     "@tanstack/eslint-plugin-query": "catalog:",
     "@tanstack/eslint-plugin-router": "catalog:",

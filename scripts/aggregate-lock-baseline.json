@@ -709,9 +709,9 @@
   },
   {
     "file": "apps/api/src/db/scoped.ts",
-    "fingerprint": "9ada6645ab3c8bba9bd50482dcfbbe02728228f0ba63d9701a028d0b95ec2122",
+    "fingerprint": "622d70b7ebeee86194653c07da75cae319097fbb3dd38c49e31fcb964764ca60",
     "count": 1,
-    "reason": "Same root transaction runner; it now also sets the caller's enabled features before running the scoped callback."
+    "reason": "Same root scoped transaction; its role and tenant settings move to the shared production helper, without changing the transaction boundary or lock acquisitions."
   },
   {
     "file": "apps/api/src/db/scoped.ts",
@@ -2608,18 +2608,6 @@
     "fingerprint": "8b21c3b751772b762c0733fc210fd24030a5821b5abbebb619ccc9b6fdea19d1",
     "count": 1,
     "reason": "pg_advisory_xact_lock( in apps/api/src/lib/db/feedback-report-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/db/lock-for-write.ts",
-    "fingerprint": "218c70cffac7a929d18a3189e2ad514119c3ab23887a438b39d301ff6feb902e",
-    "count": 1,
-    "reason": "for key share in apps/api/src/lib/db/lock-for-write.ts: Existing acquisition sequence; migrate together with its aggregate order."
-  },
-  {
-    "file": "apps/api/src/lib/db/lock-for-write.ts",
-    "fingerprint": "4242c2f358f9cac04c6cc1eb8c83930bb2a835f1700dda3db20e17c198f14392",
-    "count": 1,
-    "reason": "for key share in apps/api/src/lib/db/lock-for-write.ts: Existing acquisition sequence; migrate together with its aggregate order."
   },
   {
     "file": "apps/api/src/lib/db/maintenance-db.ts",

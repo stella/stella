@@ -8,6 +8,8 @@ import type { DecisionDocumentRole } from "@stll/api-contract/decision-document-
 import { classifyFailure } from "@stll/errors";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifier } from "@stll/legal-ast/decision-identifier";
+// parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
+import { sha256Hex as hashContent } from "@stll/sha256/bun";
 import { parsePlainDate, Temporal } from "@stll/time";
 
 import {
@@ -57,7 +59,6 @@ import { plSupremeCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adap
 import { plConstitutionalTribunalRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-tk-ruling-keys";
 import { fetchPublisher } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
-  hashContent,
   INGESTION_USER_AGENT,
   isArrayOf,
   isNullishArrayOf,

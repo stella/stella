@@ -4,6 +4,11 @@ import { entityFeaturePolicies } from "@/api/db/entity-feature-policies";
 import { DOCUMENT_NATIVE_EXTRACTION_PROCESSOR_VERSION } from "@/api/lib/document-processing-contract";
 
 import {
+  entityFeatureGateChecks,
+  entityFeatureGateColumns,
+  entityFeatureWorkspaceGateColumns,
+} from "../entity-feature-gate-columns";
+import {
   organization,
   p,
   pUuid,
@@ -193,6 +198,8 @@ const scopedEnqueueShapeCheck = sql`(
 export const documentProcessingRuns = p.pgTable(
   "document_processing_runs",
   {
+    ...entityFeatureGateColumns(),
+    ...entityFeatureWorkspaceGateColumns(),
     id: pUuid<"documentProcessingRun">().primaryKey(),
     organizationId: safeOrganizationId("organization_id")
       .notNull()
@@ -265,6 +272,7 @@ export const documentProcessingRuns = p.pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     ...entityFeaturePolicies(
       table,
       new Map([

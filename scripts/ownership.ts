@@ -42,6 +42,11 @@ export const CI_MARKDOWN_READER_INPUTS = [
 
 export const SCHEMA_INTROSPECTION = [
   {
+    path: "apps/api/scripts/generate-entity-feature-gate-propagation.ts",
+    reason:
+      "Renders static gate propagation SQL from full-schema metadata without database operations.",
+  },
+  {
     path: "apps/api/scripts/generate-status-tables.ts",
     reason: "Enumerates full-schema metadata without database operations.",
   },

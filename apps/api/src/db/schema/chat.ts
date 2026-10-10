@@ -17,6 +17,11 @@ import {
 } from "@/api/lib/chat/thread-name-kinds";
 
 import {
+  entityFeatureGateChecks,
+  entityFeatureGateColumns,
+  entityFeatureWorkspaceGateColumns,
+} from "../entity-feature-gate-columns";
+import {
   aiMemoryPolicies,
   CHAT_COMPACTION_MEMORY_ELIGIBILITIES,
   chatMessageSearchDocumentPolicies,
@@ -660,6 +665,8 @@ export const chatRunLogEntries = p.pgTable(
 export const fileChatThreads = p.pgTable(
   "file_chat_threads",
   {
+    ...entityFeatureGateColumns(),
+    ...entityFeatureWorkspaceGateColumns(),
     id: pUuid<"fileChatThread">().primaryKey(),
     organizationId: safeOrganizationId("organization_id")
       .notNull()
@@ -681,6 +688,7 @@ export const fileChatThreads = p.pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     ...entityFeaturePolicies(
       table,
       new Map([
@@ -731,6 +739,9 @@ export const fileChatThreads = p.pgTable(
       })
       .onDelete("cascade"),
     ...fileChatThreadPolicies(),
+    p
+      .index("file_chat_threads_ef_field_id_idx")
+      .on(table.workspaceId, table.fieldId),
   ],
 );
 
