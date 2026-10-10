@@ -988,10 +988,14 @@
     "viewer": {
       "abstract": "Resumen",
       "appliedVersionNotStated": "Versión aplicada no indicada",
+      "appliedVersionNotStatedCompact": "Versión no indicada",
       "appliedVersionStatedAmendment": "Redacción modificada por <reference>{amendment}</reference>",
+      "appliedVersionStatedAmendmentCompact": "Indicado: <reference>{amendment}</reference>",
       "appliedVersionStatedDate": "{relation, select, on {Redacción vigente el {date}} until {Redacción vigente hasta el {date}} from {Redacción vigente desde el {date}} other {Redacción vigente el {date}}}",
+      "appliedVersionStatedDateCompact": "{relation, select, on {Indicado: {date}} until {Indicado: hasta {date}} from {Indicado: desde {date}} other {Indicado: {date}}}",
       "caseFileMayHoldOthers": "Este expediente también puede contener otras resoluciones.",
       "citedBy": "Citado por",
+      "citedDecisionPassage": "Pasaje de la resolución",
       "cites": "Cita",
       "dissentByline": "Voto particular: <bdi>{names}</bdi>",
       "judgeRole": {
@@ -1018,7 +1022,9 @@
       "textPending": "El texto de la resolución aún se está obteniendo",
       "textReadFailed": "No se ha podido cargar el texto de la resolución",
       "textUnavailable": "No hay texto disponible para esta resolución",
-      "versionAtDecisionDateInferred": "Versión a la fecha de la resolución (inferida)"
+      "versionAtDecisionDateInferred": "Versión a la fecha de la resolución (inferida)",
+      "versionBasisInferredCompact": "Fecha de la resolución · inferida",
+      "versionBasisInferredExplanation": "La versión se infiere de la fecha de la resolución. La resolución no indica qué redacción se aplica."
     }
   },
   "catalogue": {
@@ -1763,6 +1769,7 @@
     "description": "Descripción",
     "details": "Detalles",
     "detailsHiddenFeatureUnavailable": "Detalles ocultos: función no activada",
+    "detailsUnavailable": "Detalles no disponibles",
     "disconnect": "Desconectar",
     "dismiss": "Descartar",
     "displayName": "Nombre para mostrar",

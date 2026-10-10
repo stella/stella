@@ -45,7 +45,7 @@ import {
 } from "@/features/statutes/queries/statutes";
 import { resolveStatuteDisplayStatus } from "@/features/statutes/statute-status";
 import { optionalArray } from "@/lib/arrays";
-import { createStatuteLinkTarget } from "@/lib/statute-route";
+import { createStatuteLinkTarget } from "@/lib/statutes/statute-route";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 // The ask actions pull the prompt builders the chat needs; the pane is read

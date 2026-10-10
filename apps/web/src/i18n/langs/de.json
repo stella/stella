@@ -988,10 +988,14 @@
     "viewer": {
       "abstract": "Zusammenfassung",
       "appliedVersionNotStated": "Angewandte Fassung nicht angegeben",
+      "appliedVersionNotStatedCompact": "Fassung nicht angegeben",
       "appliedVersionStatedAmendment": "Fassung gemäß Änderungsgesetz <reference>{amendment}</reference>",
+      "appliedVersionStatedAmendmentCompact": "Angegeben: <reference>{amendment}</reference>",
       "appliedVersionStatedDate": "{relation, select, on {Am {date} geltende Fassung} until {Bis einschließlich {date} geltende Fassung} from {Ab {date} geltende Fassung} other {Am {date} geltende Fassung}}",
+      "appliedVersionStatedDateCompact": "{relation, select, on {Angegeben: {date}} until {Angegeben: bis {date}} from {Angegeben: ab {date}} other {Angegeben: {date}}}",
       "caseFileMayHoldOthers": "Diese Verfahrensakte kann auch weitere Entscheidungen enthalten.",
       "citedBy": "Zitiert von",
+      "citedDecisionPassage": "Textstelle in der Entscheidung",
       "cites": "Zitiert",
       "dissentByline": "Sondervotum: <bdi>{names}</bdi>",
       "judgeRole": {
@@ -1018,7 +1022,9 @@
       "textPending": "Der Entscheidungstext wird noch abgerufen",
       "textReadFailed": "Der Entscheidungstext konnte nicht geladen werden",
       "textUnavailable": "Für diese Entscheidung liegt kein Text vor",
-      "versionAtDecisionDateInferred": "Fassung zum Entscheidungsdatum (abgeleitet)"
+      "versionAtDecisionDateInferred": "Fassung zum Entscheidungsdatum (abgeleitet)",
+      "versionBasisInferredCompact": "Entscheidungsdatum · abgeleitet",
+      "versionBasisInferredExplanation": "Die Fassung wird aus dem Entscheidungsdatum abgeleitet. Die Entscheidung gibt nicht an, welche Fassung gilt."
     }
   },
   "catalogue": {
@@ -1763,6 +1769,7 @@
     "description": "Beschreibung",
     "details": "Details",
     "detailsHiddenFeatureUnavailable": "Details ausgeblendet: Funktion nicht aktiviert",
+    "detailsUnavailable": "Details nicht verfügbar",
     "disconnect": "Trennen",
     "dismiss": "Verwerfen",
     "displayName": "Anzeigename",

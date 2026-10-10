@@ -988,10 +988,14 @@
     "viewer": {
       "abstract": "Kokkuvõte",
       "appliedVersionNotStated": "Kohaldatud redaktsiooni pole märgitud",
+      "appliedVersionNotStatedCompact": "Redaktsioon märkimata",
       "appliedVersionStatedAmendment": "Redaktsioon muudatuse <reference>{amendment}</reference> järgi",
+      "appliedVersionStatedAmendmentCompact": "Märgitud: <reference>{amendment}</reference>",
       "appliedVersionStatedDate": "{relation, select, on {Kuupäeval {date} kehtinud redaktsioon} until {Kuni {date} kehtinud redaktsioon} from {Alates {date} kehtinud redaktsioon} other {Kuupäeval {date} kehtinud redaktsioon}}",
+      "appliedVersionStatedDateCompact": "{relation, select, on {Märgitud: {date}} until {Märgitud: kuni {date}} from {Märgitud: alates {date}} other {Märgitud: {date}}}",
       "caseFileMayHoldOthers": "Selles toimikus võib olla ka teisi lahendeid.",
       "citedBy": "Viidatud",
+      "citedDecisionPassage": "Lõik lahendis",
       "cites": "Viitab",
       "dissentByline": "Eriarvamus: <bdi>{names}</bdi>",
       "judgeRole": {
@@ -1018,7 +1022,9 @@
       "textPending": "Lahendi teksti alles hangitakse",
       "textReadFailed": "Lahendi teksti ei õnnestunud laadida",
       "textUnavailable": "Selle lahendi teksti ei ole saadaval",
-      "versionAtDecisionDateInferred": "Otsuse kuupäeval kehtinud redaktsioon (tuletatud)"
+      "versionAtDecisionDateInferred": "Otsuse kuupäeval kehtinud redaktsioon (tuletatud)",
+      "versionBasisInferredCompact": "Lahendi kuupäev · tuletatud",
+      "versionBasisInferredExplanation": "Redaktsioon on tuletatud lahendi kuupäevast. Lahendis ei ole märgitud, milline redaktsioon kohaldub."
     }
   },
   "catalogue": {
@@ -1763,6 +1769,7 @@
     "description": "Kirjeldus",
     "details": "Üksikasjad",
     "detailsHiddenFeatureUnavailable": "Üksikasjad on peidetud: funktsioon pole lubatud",
+    "detailsUnavailable": "Üksikasjad pole saadaval",
     "disconnect": "Katkesta ühendus",
     "dismiss": "Jäta kõrvale",
     "displayName": "Kuvatav nimi",

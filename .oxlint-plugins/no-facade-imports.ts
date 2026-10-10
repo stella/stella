@@ -33,6 +33,7 @@ const ALLOWED_LEAF_IMPORTS = new Set([
   "@/api/db/retention",
   "@/api/db/safe-db",
   "@/api/db/schema",
+  "@/api/db/schema/desktop-device-proof-replay",
   "@/api/db/schema-validators",
   "@/api/db/scoped",
   "@/api/db/scoped-feature-access",

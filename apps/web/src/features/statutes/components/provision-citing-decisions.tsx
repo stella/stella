@@ -13,12 +13,12 @@ import { ProvisionVersionBasisLabel } from "@/components/provision-version-basis
 import type { DecisionCitationPresentation } from "@/components/references/decision-citation-presentation.logic";
 import { presentedCitingDecisions } from "@/features/statutes/provision-inspector.logic";
 import { citingDecisionsInfiniteOptions } from "@/features/statutes/queries/citing-decisions";
-import { formatValidityDate } from "@/features/statutes/statute-format";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
 import type { PublicLawData } from "@/lib/public-law-api";
+import { formatValidityDate } from "@/lib/statutes/statute-format";
 
 /** One decision citing the provision, as the citing-decisions read answers it. */
 export type CitingDecisionRow = PublicLawData<

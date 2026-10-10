@@ -6,7 +6,7 @@ import {
   createStatuteLinkTarget,
   isPublicStatuteCountry,
   STATUTE_COUNTRIES,
-} from "@/lib/statute-route";
+} from "@/lib/statutes/statute-route";
 
 const DOCUMENT_ID = "019dd47d-f507-7c84-b827-980af11b8980";
 const ELI = "/eli/cz/sb/2012/89";

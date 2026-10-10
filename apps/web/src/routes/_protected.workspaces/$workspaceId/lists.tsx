@@ -11,6 +11,7 @@ import { Result } from "better-result";
 import { useFormatter, useTranslations } from "use-intl";
 import * as v from "valibot";
 
+import { AUDIT_CHANGES_STATUS } from "@stll/api-contract/audit-log";
 import { Button } from "@stll/ui/button";
 import {
   CheckIcon,
@@ -46,6 +47,7 @@ import {
 import type { ListItemType } from "@/components/workspaces/tasks/task-detail-constants";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
@@ -239,13 +241,20 @@ type LegalListDetailProps = {
 };
 
 const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
+  const user = useAuthenticatedUser();
   const t = useTranslations();
   const formatter = useFormatter();
   const queryClient = useQueryClient();
   const list = useQuery(legalListOptions(workspaceId, listId));
   const listView = useQueryView(list);
   const listData = listView.type === "items" ? listView.items : undefined;
-  const items = useInfiniteQuery(legalListItemsOptions(workspaceId, listId));
+  const items = useInfiniteQuery(
+    legalListItemsOptions({
+      workspaceId,
+      listId,
+      viewer: { userId: user.id, organizationId: user.activeOrganizationId },
+    }),
+  );
   const itemsView = useQueryView(items);
   const itemsData = itemsView.type === "items" ? itemsView.items : undefined;
   const properties = useQuery(propertiesOptions(workspaceId));
@@ -843,14 +852,25 @@ const ItemSourcesPanel = ({
   itemEntityId,
   onClose,
 }: ItemSourcesPanelProps) => {
+  const user = useAuthenticatedUser();
   const t = useTranslations();
   const formatter = useFormatter();
   const dataQuery = useQuery(
-    legalListSourcesOptions(workspaceId, listId, itemEntityId),
+    legalListSourcesOptions({
+      workspaceId,
+      listId,
+      itemEntityId,
+      viewer: { userId: user.id, organizationId: user.activeOrganizationId },
+    }),
   );
   const { isPending } = dataQuery;
   const activity = useQuery(
-    legalListActivityOptions(workspaceId, listId, itemEntityId),
+    legalListActivityOptions({
+      workspaceId,
+      listId,
+      itemEntityId,
+      viewer: { userId: user.id, organizationId: user.activeOrganizationId },
+    }),
   );
   const activityView = useQueryView(activity);
   const activityData =
@@ -903,6 +923,12 @@ const ItemSourcesPanel = ({
                     {" · "}
                     {formatter.dateTime(new Date(event.createdAt))}
                   </p>
+                  {event.changesStatus ===
+                    AUDIT_CHANGES_STATUS.featureUnavailable && (
+                    <p className="text-muted-foreground mt-1">
+                      {t("common.detailsUnavailable")}
+                    </p>
+                  )}
                 </li>
               ))}
               {activityData?.items.length === 0 && (
