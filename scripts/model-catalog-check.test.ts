@@ -294,8 +294,16 @@ describe("scheduled catalog refresh", () => {
       '---\r\n"@stll/ai-catalog": patch\r\n---\r\n\r\nAdd a new model route.\r\n',
     ],
     ["no frontmatter", "Add a new model route.\n"],
+    [
+      "extra package",
+      '---\n"@stll/ai-catalog": patch\n"@stll/web": patch\n---\n\nRefresh upstream model rates and request capabilities.\n',
+    ],
+    [
+      "major bump",
+      '---\n"@stll/ai-catalog": major\n---\n\nRefresh upstream model rates and request capabilities.\n',
+    ],
   ])(
-    "a hand-written %s note at the refresh changeset path stops the refresh",
+    "a hand-written changeset (%s) at the refresh path stops the refresh",
     async (_, note) => {
       const result = await runRefresh("rates", note);
       expect(result.exitCode).toBe(1);

@@ -115,15 +115,15 @@ jobs:
             echo "changed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          # The refresh owns this path; a release note written there by hand
-          # would be overwritten, so it must move to its own changeset first.
+          # The refresh owns this path and replaces only the two changesets it
+          # writes itself; a hand-written note must move to its own file first.
           refresh_summary='Refresh upstream model rates and request capabilities.'
+          empty_changeset_text=$'---\n---'
+          patch_changeset_text=$'---\n"@stll/ai-catalog": patch\n---\n\n'"$refresh_summary"
           if [[ -e "$REFRESH_CHANGESET" ]]; then
             existing="$(tr -d '\r' < "$REFRESH_CHANGESET")"
-            delimiters="$(grep -c '^---$' <<< "$existing" || true)"
-            existing_summary="$(awk 'seen >= 2 && NF { print } /^---$/ { seen++ }' <<< "$existing")"
-            if [[ "$delimiters" -lt 2 || ( -n "$existing_summary" && "$existing_summary" != "$refresh_summary" ) ]]; then
-              echo "::error file=$REFRESH_CHANGESET::$REFRESH_CHANGESET holds a release note the refresh did not write; move it to its own changeset file."
+            if [[ "$existing" != "$empty_changeset_text" && "$existing" != "$patch_changeset_text" ]]; then
+              echo "::error file=$REFRESH_CHANGESET::$REFRESH_CHANGESET holds a changeset the refresh did not write; move it to its own changeset file."
               exit 1
             fi
           fi
