@@ -36,6 +36,8 @@ import {
   requireTanStackAIAvailableForRole,
 } from "@/api/lib/tanstack-ai-models";
 
+import { hashSummarySource } from "./summary-source-hash";
+
 const MAX_ORGANIZE_FILES = 100;
 const MAX_EXISTING_FOLDERS = 500;
 const MAX_USER_INSTRUCTIONS_CHARS = 1500;
@@ -1064,30 +1066,6 @@ const persistGeneratedSummaries = async ({
         },
       });
   });
-};
-
-type HashSummarySourceOptions = {
-  entityVersionId: SafeId<"entityVersion">;
-  originalName: string;
-  indexedTitle: string;
-  searchDocumentUpdatedAt: Date | null;
-};
-
-const hashSummarySource = ({
-  entityVersionId,
-  originalName,
-  indexedTitle,
-  searchDocumentUpdatedAt,
-}: HashSummarySourceOptions): string => {
-  const hasher = new Bun.CryptoHasher("sha256");
-  hasher.update(entityVersionId);
-  hasher.update("\n");
-  hasher.update(originalName);
-  hasher.update("\n");
-  hasher.update(indexedTitle);
-  hasher.update("\n");
-  hasher.update(searchDocumentUpdatedAt?.toISOString() ?? "");
-  return hasher.digest("hex");
 };
 
 const config = {

@@ -1536,6 +1536,7 @@ const FileChatOverlayInner = ({
     clientStatus,
     error,
     messages,
+    refreshAnswers,
     olderCursor,
     isLoadingOlder,
     loadOlder,
@@ -1554,6 +1555,10 @@ const FileChatOverlayInner = ({
     handleApprove,
     handleAllowInConversation,
     handleDeny,
+    handleRequestSecret,
+    continueRequestSecret,
+    resolveSecretTarget,
+    secretAvailabilityKey,
     handleAskUserSubmit,
     handleAskUserEditAndRerun,
     handleAlwaysAllow,
@@ -2509,6 +2514,10 @@ const FileChatOverlayInner = ({
           handleAlwaysAllow: handleAlwaysAllowWithFolioAgentCommentExecution,
           handleApprove: handleApproveWithDocxUnlock,
           handleDeny,
+          handleRequestSecret,
+          continueRequestSecret,
+          resolveSecretTarget,
+          secretAvailabilityKey,
           handleRetryAfterAuthorNameSet: resendLatestMessage,
           blockedApprovalTools,
         }}
@@ -2527,6 +2536,10 @@ const FileChatOverlayInner = ({
             }
           >
             <ChatThreadMessages
+              onAnswerEdited={refreshAnswers}
+              answerRewriteAvailability={
+                data.usedAnonymization ? "anonymized" : "available"
+              }
               activeFileName={activeFile?.fileName}
               assistantTextDensity="compact"
               approvalPendingMessageId={approvalPendingMessageId}

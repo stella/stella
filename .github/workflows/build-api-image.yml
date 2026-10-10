@@ -90,6 +90,12 @@ jobs:
           persist-credentials: false
           submodules: true
 
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: package.json
+          no-cache: true
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
@@ -110,13 +116,21 @@ jobs:
           path: .workflow-tooling
           persist-credentials: false
           sparse-checkout: |
-            scripts/pull-base-images.sh
+            scripts/ci-service-images.ts
+            scripts/ci-service-images.json
+            packages/scripts/src/child-exit-status.ts
             scripts/retry.sh
           sparse-checkout-cone-mode: false
 
-      - name: Pull API base images
+      - name: Resolve API base images
+        id: base-contexts
+        env:
+          CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
         run: |
-          bash .workflow-tooling/scripts/pull-base-images.sh --buildx linux/arm64 apps/api/Dockerfile
+          echo 'contexts<<CI_IMAGE_CONTEXTS' >> "$GITHUB_OUTPUT"
+          bun .workflow-tooling/scripts/ci-service-images.ts --pull apps/api/Dockerfile
+          bun .workflow-tooling/scripts/ci-service-images.ts --build-contexts apps/api/Dockerfile >> "$GITHUB_OUTPUT"
+          echo 'CI_IMAGE_CONTEXTS' >> "$GITHUB_OUTPUT"
           rm -rf .workflow-tooling
 
       - name: Build and push image
@@ -125,6 +139,7 @@ jobs:
         with:
           context: .
           file: apps/api/Dockerfile
+          build-contexts: ${{ steps.base-contexts.outputs.contexts }}
           platforms: linux/arm64
           push: true
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:commit-${{ needs.resolve.outputs.source_sha }}
@@ -139,6 +154,10 @@ jobs:
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           subject-digest: ${{ steps.build.outputs.digest }}
+
+      - name: Log out of GitHub Container Registry
+        if: always()
+        run: docker logout ghcr.io
 
       - name: Record immutable image
         env:

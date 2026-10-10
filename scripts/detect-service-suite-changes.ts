@@ -16,7 +16,6 @@ const infrastructurePaths = new Set([
   "package.json",
   "bun.lock",
   "bunfig.toml",
-  "docker/postgres/init.sql",
 ]);
 
 const SUITES = {
@@ -94,7 +93,11 @@ const loadSuites = (root: string) => {
 };
 
 const directlyRequired = (file: string, suite: ServiceSuite) => {
-  if (infrastructurePaths.has(file) || file.startsWith("patches/")) {
+  if (
+    infrastructurePaths.has(file) ||
+    file.startsWith("patches/") ||
+    file.startsWith("docker/postgres/")
+  ) {
     return true;
   }
   const { app } = SUITES[suite];

@@ -31,6 +31,7 @@ const UTILITY_SOURCES: ReadonlyMap<string, readonly string[]> = new Map([
   ["changelog", [`${SRC}/pages/changelog.astro`, ...CHANGELOG_SOURCES]],
   ["press", [`${SRC}/pages/press.astro`]],
   ["privacy", [`${SRC}/pages/privacy.astro`]],
+  ["support", [`${SRC}/pages/support.astro`]],
   ["terms", [`${SRC}/pages/terms.astro`]],
   ["imprint", [`${SRC}/pages/imprint.astro`]],
   ["docx-editor", [`${SRC}/pages/docx-editor.astro`]],

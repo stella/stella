@@ -6,6 +6,7 @@ import path from "node:path";
 import * as v from "valibot";
 
 import eventPolicies from "../.github/ci-event-policy.json" with { type: "json" };
+import serviceImages from "./ci-service-images.json" with { type: "json" };
 import {
   contextFromNested,
   contextWithPlanOutputs,
@@ -141,6 +142,7 @@ const heavyPlan = {
   queue_required_jobs: "[]",
   suite_depth: "full",
   queue_depth: "full",
+  browser_spec_selection_required: "true",
   fix_tests_on_base_required: "false",
 };
 
@@ -180,9 +182,21 @@ test("dedicated query recording dispatch schedules one measurement job", () => {
   });
   const services = v.parse(serviceSchema, Bun.YAML.parse(source));
   const queryServices = v.parse(serviceSchema, Bun.YAML.parse(querySource));
-  expect(queryServices.jobs["query-perf"]?.services?.["postgres"]?.image).toBe(
-    services.jobs["service-suites"]?.services?.["postgres"]?.image,
-  );
+  const postgres =
+    serviceImages.find(({ name }) => name === "postgres") ??
+    panic("Missing canonical PostgreSQL image");
+  expect(
+    `docker.io/library/${queryServices.jobs["query-perf"]?.services?.["postgres"]?.image}`,
+  ).toBe(postgres.source);
+  expect(
+    evaluateExpression(
+      services.jobs["service-suites"]?.services?.["postgres"]?.image ??
+        panic("Missing service-suite PostgreSQL image"),
+      contextFromNested({
+        needs: { "ci-plan": { outputs: { postgres: postgres.source } } },
+      }),
+    ),
+  ).toBe(postgres.source);
   const steps = queryWorkflow.jobs["query-perf"]?.steps ?? [];
   const recording =
     steps.find(({ name }) => name === "Run query performance suite")?.env?.[
@@ -527,6 +541,8 @@ test("heavy event policies exclude pull requests and preserve existing full cert
         plan["suite_depth"] = depth;
         plan["queue_depth"] = "full";
         plan["heavy_web_build_required"] = "false";
+        plan["browser_spec_selection_required"] = required;
+        plan["docker_checks_pr_required"] = required;
         // Queue policies intentionally remove PR execution. Existing non-PR
         // certification stays unchanged except for the added queue route smoke.
         for (const [job, body] of Object.entries(original.jobs)) {
@@ -554,7 +570,23 @@ test("heavy event policies exclude pull requests and preserve existing full cert
           ) {
             expected = expected && required === "true";
           }
+          if (job === "docker-checks" && event === "merge_group") {
+            expected = required === "true";
+          }
           if (job === "route-smoke" && event === "merge_group") {
+            expected = required === "true";
+          }
+          // Selected browser specs build the web app on pull requests.
+          if (
+            event === "pull_request" &&
+            current.includes(
+              "needs.ci-plan.outputs.browser_spec_selection_required == 'true'",
+            )
+          ) {
+            expected = required === "true";
+          }
+          // Selected production e2e specs run on pull requests when planned.
+          if (event === "pull_request" && job === "e2e-production-shard") {
             expected = required === "true";
           }
           expect(

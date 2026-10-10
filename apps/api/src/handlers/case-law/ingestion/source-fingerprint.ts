@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * The fingerprint change detection compares for a case-law decision.
  *
@@ -14,7 +15,8 @@
  * hashed and what is stored cannot drift apart.
  */
 
-import { panic } from "better-result";
+// parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
+import { createSha256 } from "@stll/sha256/bun";
 
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 
@@ -33,7 +35,7 @@ export type StoredSourceRaw = {
 };
 
 const sha256Hex = (input: string | Uint8Array): string =>
-  new Bun.CryptoHasher("sha256").update(input).digest("hex");
+  createSha256().update(input).digest("hex");
 
 const SHA256_HEX = /^[0-9a-f]{64}$/u;
 

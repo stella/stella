@@ -1030,6 +1030,87 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
     }
   });
 
+  test.each([
+    {
+      name: "the run error's raw event",
+      chunk: {
+        message: "Provider returned error",
+        rawEvent: { error: { code: 503, message: "Upstream unavailable" } },
+      },
+    },
+    {
+      name: "a provider body in the run error's message",
+      chunk: {
+        message: JSON.stringify({
+          error: { code: 503, message: "Upstream unavailable" },
+        }),
+      },
+    },
+  ])("classifies a run error from $name", async ({ chunk }) => {
+    const { createTanStackAIAnalyticsCallbacks } =
+      await loadTanStackAIAnalytics();
+    const { logger } = await import("@/api/lib/observability/logger");
+    const errorSpy = spyOn(logger, "error");
+    const warnSpy = spyOn(logger, "warn");
+    const callbacks = createTanStackAIAnalyticsCallbacks({
+      dataClass: "public_corpus",
+      analytics: {
+        capture: () => undefined,
+        flush: async () => undefined,
+        identifyOrganizationGroup: () => undefined,
+      },
+      feature: "subagent",
+      orgAIConfig: createOpenAIOrgAIConfig(),
+      traceId: "trace_run_error_detail",
+    });
+    const adapter = {
+      kind: "text",
+      name: "run-error",
+      model: "run-error",
+      "~types": {
+        providerOptions: {},
+        inputModalities: ["text"],
+        messageMetadataByModality: {},
+        toolCapabilities: [],
+        toolCallMetadata: {},
+        systemPromptMetadata: undefined,
+      },
+      async *chatStream({ runId, threadId }) {
+        yield {
+          type: EventType.RUN_STARTED,
+          runId: runId ?? "run-error-run",
+          threadId: threadId ?? "run-error-thread",
+        } satisfies StreamChunk;
+        yield { type: EventType.RUN_ERROR, ...chunk } satisfies StreamChunk;
+      },
+      structuredOutput: () => {
+        throw new Error("This run streams");
+      },
+    } satisfies AnyTextAdapter;
+
+    try {
+      for await (const _ of streamChatChunks({
+        adapter,
+        messages: [{ role: "user", content: "Reply." }],
+        middleware: [callbacks.middleware],
+      })) {
+        // Drain the stream so the terminal hook runs.
+      }
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        "tanstack_ai.generation.failed",
+        expect.objectContaining({ "ai.error_kind": "provider_unavailable" }),
+      );
+      expect(errorSpy).not.toHaveBeenCalledWith(
+        "tanstack_ai.generation.failed",
+        expect.anything(),
+      );
+    } finally {
+      errorSpy.mockRestore();
+      warnSpy.mockRestore();
+    }
+  });
+
   test("a model call that fails after reporting usage is metered once, and its run error keeps the usage", async () => {
     const { createTanStackAIAnalyticsCallbacks } =
       await loadTanStackAIAnalytics();

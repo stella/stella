@@ -9,10 +9,9 @@ import { compareCodeUnit } from "@stll/collation";
 
 import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 
-import {
-  APPLICATION_RLS_ROLE_NAME,
-  ENTITY_FEATURE_GATE_ROLE_NAME,
-} from "./role-names";
+import { APPLICATION_RLS_ROLE_NAME } from "./role-names";
+
+const ENTITY_FEATURE_GATE_ROLE_NAME = "stella_entity_gate";
 
 export type EntityReferenceClassification =
   | {

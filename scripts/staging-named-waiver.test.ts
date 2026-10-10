@@ -19,6 +19,8 @@ const stepSchema = v.looseObject({
   name: v.string(),
   id: v.optional(v.string()),
   run: v.optional(v.string()),
+  uses: v.optional(v.string()),
+  with: v.optional(v.record(v.string(), v.unknown())),
   if: v.optional(v.string()),
   env: v.optional(v.record(v.string(), v.string())),
   "continue-on-error": v.optional(v.union([v.boolean(), v.string()])),
@@ -134,6 +136,20 @@ const assertScope = (candidate = workflow) => {
   ]);
   for (const [jobName, job] of Object.entries(candidate.jobs)) {
     for (const step of job.steps ?? []) {
+      if (
+        step.name === "Login to GitHub Container Registry for browser images"
+      ) {
+        expect(jobName).toBe("promote-staging");
+        expect(step.uses).toStartWith("docker/login-action@");
+        expect(step.with?.["registry"]).toBe("ghcr.io");
+        expect(step.if).toContain(
+          "github.event.pull_request.head.repo.fork != true",
+        );
+        expect(step.if).toContain("github.token != ''");
+        expect(step.if).not.toContain("corpus_search_waived");
+        expect(step["continue-on-error"]).toBe(true);
+        continue;
+      }
       if (step.id === "corpus-preflight") {
         expect(jobName).toBe("promote-staging");
         expect(

@@ -16,7 +16,7 @@ import { cn } from "@stll/ui/utils";
 import { opensCitationInInspector } from "@/components/inspector/case-decision-view";
 import { useInspectorView } from "@/components/inspector/use-inspector-view";
 import { createStatuteViewTab } from "@/features/statutes/statute-inspector.logic";
-import { createStatuteLinkTarget } from "@/lib/statute-route";
+import { createStatuteLinkTarget } from "@/lib/statutes/statute-route";
 
 /**
  * A work-level statute citation: no provision locator is required.

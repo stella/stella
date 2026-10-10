@@ -116,6 +116,7 @@ const runContentText = (item: FolioRunContent): string => {
     case "symbol":
     case "footnoteRef":
     case "endnoteRef":
+    case "noteMarker":
     case "fieldChar":
     case "instrText":
     case "softHyphen":
