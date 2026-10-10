@@ -863,7 +863,7 @@
           },
           "ended": "complete",
           "response": {
-            "body": "data: {\"type\":\"RUN_STARTED\",\"runId\":\"run-recorded-2\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225614000,\"metadata\":{\"tanstack\":{\"model\":\"scripted\"}}}\n\ndata: {\"type\":\"TEXT_MESSAGE_START\",\"messageId\":\"00000000-0000-7000-8000-000000000005\",\"role\":\"assistant\",\"timestamp\":1767225615000,\"metadata\":{\"tanstack\":{\"model\":\"scripted\"}}}\n\ndata: {\"type\":\"TEXT_MESSAGE_CONTENT\",\"messageId\":\"00000000-0000-7000-8000-000000000005\",\"delta\":\"Anything else?\",\"timestamp\":1767225616000}\n\ndata: {\"type\":\"TEXT_MESSAGE_END\",\"messageId\":\"00000000-0000-7000-8000-000000000005\",\"timestamp\":1767225617000,\"metadata\":{\"tanstack\":{\"model\":\"scripted\"}}}\n\ndata: {\"type\":\"RUN_FINISHED\",\"runId\":\"run-recorded-2\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225618000,\"usage\":[{\"inputTokens\":1,\"outputTokens\":1,\"totalTokens\":2}],\"metadata\":{\"tanstack\":{\"model\":\"scripted\",\"finishReason\":\"stop\"}}}\n\n",
+            "body": "data: {\"type\":\"RUN_STARTED\",\"runId\":\"run-recorded-2\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225614000,\"metadata\":{\"tanstack\":{\"model\":\"gpt-5.4-mini\"}}}\n\ndata: {\"type\":\"TEXT_MESSAGE_START\",\"messageId\":\"00000000-0000-7000-8000-000000000005\",\"role\":\"assistant\",\"timestamp\":1767225615000,\"metadata\":{\"tanstack\":{\"model\":\"gpt-5.4-mini\"}}}\n\ndata: {\"type\":\"TEXT_MESSAGE_CONTENT\",\"messageId\":\"00000000-0000-7000-8000-000000000005\",\"delta\":\"Anything else?\",\"timestamp\":1767225616000}\n\ndata: {\"type\":\"TEXT_MESSAGE_END\",\"messageId\":\"00000000-0000-7000-8000-000000000005\",\"timestamp\":1767225617000,\"metadata\":{\"tanstack\":{\"model\":\"gpt-5.4-mini\"}}}\n\ndata: {\"type\":\"RUN_FINISHED\",\"runId\":\"run-recorded-2\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225618000,\"usage\":[{\"inputTokens\":1,\"outputTokens\":1,\"totalTokens\":2}],\"metadata\":{\"tanstack\":{\"model\":\"gpt-5.4-mini\",\"finishReason\":\"stop\"}}}\n\n",
             "status": 200
           },
           "page": {
@@ -904,6 +904,10 @@
                     "totalTokens": 2,
                     "promptTokens": 1,
                     "completionTokens": 1
+                  },
+                  "turnModel": {
+                    "model": "gpt-5.4-mini",
+                    "provider": "openai"
                   },
                   "refContext": {
                     "refs": [],

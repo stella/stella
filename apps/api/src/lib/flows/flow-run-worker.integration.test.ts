@@ -29,6 +29,7 @@ import { and, asc, eq } from "drizzle-orm";
 
 import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
 import { inspectDocxPackage } from "@stll/folio-core/server";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
 import { parseTimeZoneId } from "@stll/time";
 
 import { member, organization, user } from "@/api/db/auth-schema";
@@ -1362,9 +1363,7 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
       throw new Error(`no object was stored at ${documentKey}`);
     }
     expect(stored.contentType).toBe(DOCX_MIME_TYPE);
-    expect(
-      new Bun.CryptoHasher("sha256").update(stored.bytes).digest("hex"),
-    ).toBe(fileContent.sha256Hex);
+    expect(hashSha256Hex(stored.bytes)).toBe(fileContent.sha256Hex);
 
     // The step renders the AI step's Markdown on stella's house preset:
     // "BodyText" is absent from folio's default style catalog, so its

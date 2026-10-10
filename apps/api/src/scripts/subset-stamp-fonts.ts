@@ -31,6 +31,8 @@ import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbou
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 
+import { hashArtifactBytes as sha256Hex } from "./artifact-content-hash";
+
 /** A google/fonts commit, so the bytes behind each URL cannot move. */
 const SOURCE_COMMIT = "23e54b51ddffbc7713c583748e3bd86f62b1fa4a";
 const SOURCE_BASE = `https://raw.githubusercontent.com/google/fonts/${SOURCE_COMMIT}/ofl`;
@@ -85,9 +87,6 @@ const DOWNLOAD_MAX_BYTES = 32 * 1024 * 1024;
 const CJK_DROPPED_TABLES = "GSUB,GPOS,GDEF,vhea,vmtx,VORG,BASE,DSIG,STAT";
 
 const PRINTABLE_ASCII = "20-7e";
-
-const sha256Hex = (bytes: ArrayBuffer) =>
-  new Bun.CryptoHasher("sha256").update(bytes).digest("hex");
 
 const download = async ({
   permit,

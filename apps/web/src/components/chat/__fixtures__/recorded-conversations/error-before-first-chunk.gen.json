@@ -441,6 +441,10 @@
                 "edited": false,
                 "id": "00000000-0000-7000-8000-000000000003",
                 "metadata": {
+                  "turnModel": {
+                    "model": "gpt-5.4-mini",
+                    "provider": "openai"
+                  },
                   "refContext": {
                     "refs": [],
                     "version": 2,

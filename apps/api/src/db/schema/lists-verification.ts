@@ -20,6 +20,11 @@ import type {
 } from "@/api/lib/lists/verification/contract";
 import { DEFAULT_VERIFICATION_RUN_CAPS } from "@/api/lib/lists/verification/run-cap-config";
 
+import {
+  entityFeatureGateChecks,
+  entityFeatureGateColumns,
+  entityFeatureOrganizationGateColumns,
+} from "../entity-feature-gate-columns";
 import { entityFeaturePolicies } from "../entity-feature-policies";
 import {
   jsonb,
@@ -124,6 +129,7 @@ export const legalListVerificationBudgets = p.pgTable.withRLS(
 export const legalListVerificationRuns = p.pgTable(
   "legal_list_verification_runs",
   {
+    ...entityFeatureGateColumns(),
     id: pUuid<"legalListVerificationRun">().primaryKey(),
     // The worker rebuilds its tenant scope from the row, so the organization
     // is recorded rather than looked up.
@@ -156,6 +162,7 @@ export const legalListVerificationRuns = p.pgTable(
     finishedAt: timestamptz("finished_at"),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     ...entityFeaturePolicies(
       table,
       new Map([
@@ -241,6 +248,7 @@ export const legalListVerificationRuns = p.pgTable(
 export const legalListVerificationReadReceipts = p.pgTable(
   "legal_list_verification_read_receipts",
   {
+    ...entityFeatureGateColumns(),
     organizationId: safeOrganizationId("organization_id").notNull(),
     workspaceId: safeWorkspaceId("workspace_id").notNull(),
     runId: safeUuid<"legalListVerificationRun">("run_id").notNull(),
@@ -251,6 +259,7 @@ export const legalListVerificationReadReceipts = p.pgTable(
     auditedDay: p.date("audited_day", { mode: "string" }).notNull(),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     p.primaryKey({
       name: "verification_read_receipts_pk",
       columns: [
@@ -298,6 +307,8 @@ export const legalListVerificationReadReceipts = p.pgTable(
 export const legalListVerificationBlocks = p.pgTable(
   "legal_list_verification_blocks",
   {
+    ...entityFeatureGateColumns(),
+    ...entityFeatureOrganizationGateColumns(),
     runId: safeUuid<"legalListVerificationRun">("run_id").notNull(),
     workspaceId: safeWorkspaceId("workspace_id").notNull(),
     ordinal: p.smallint().notNull(),
@@ -307,6 +318,7 @@ export const legalListVerificationBlocks = p.pgTable(
     text: p.text().notNull(),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     p.primaryKey({ columns: [table.runId, table.ordinal] }),
     p
       .foreignKey({
@@ -354,6 +366,8 @@ export const legalListVerificationBlocks = p.pgTable(
 export const legalListClaims = p.pgTable(
   "legal_list_claims",
   {
+    ...entityFeatureGateColumns(),
+    ...entityFeatureOrganizationGateColumns(),
     id: pUuid<"legalListClaim">().primaryKey(),
     workspaceId: safeWorkspaceId("workspace_id").notNull(),
     runId: safeUuid<"legalListVerificationRun">("run_id").notNull(),
@@ -374,6 +388,7 @@ export const legalListClaims = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     p
       .foreignKey({
         name: "legal_list_claims_run_fk",
@@ -456,6 +471,8 @@ export const legalListClaims = p.pgTable(
 export const legalListClaimReviewEvents = p.pgTable(
   "legal_list_claim_review_events",
   {
+    ...entityFeatureGateColumns(),
+    ...entityFeatureOrganizationGateColumns(),
     id: pUuid<"legalListClaimReviewEvent">().primaryKey(),
     workspaceId: safeWorkspaceId("workspace_id").notNull(),
     runId: safeUuid<"legalListVerificationRun">("run_id").notNull(),
@@ -473,6 +490,7 @@ export const legalListClaimReviewEvents = p.pgTable(
       .default(sql`clock_timestamp()`),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     p
       .foreignKey({
         name: "legal_list_claim_review_events_claim_fk",
@@ -525,5 +543,8 @@ export const legalListClaimReviewEvents = p.pgTable(
       to: stella,
       using: sql`false`,
     }),
+    p
+      .index("legal_list_claim_review_events_ef_claim_id_idx")
+      .on(table.workspaceId, table.claimId),
   ],
 );

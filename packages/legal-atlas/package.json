@@ -102,6 +102,7 @@
   },
   "devDependencies": {
     "@stll/property-testing": "workspace:*",
+    "@stll/sha256": "workspace:^",
     "@stll/typescript-config": "workspace:*",
     "bun-types": "catalog:",
     "fast-check": "catalog:"
