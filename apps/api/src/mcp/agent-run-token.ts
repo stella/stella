@@ -40,6 +40,7 @@ const AGENT_RUN_SCOPE_DISPOSITION = {
   offline_access: "excluded",
   "stella:search": "default",
   "stella:read": "default",
+  "stella:law_read": "default",
   "stella:templates": "default",
   "stella:documents_write": "default",
   "stella:matters_write": "default",

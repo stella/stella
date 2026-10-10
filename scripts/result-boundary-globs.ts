@@ -27,6 +27,8 @@ export const RESULT_CONVENTION_SOURCE_GLOBS = [
 // oxlint.config.ts spreads this list rather than restating it, so the lint
 // scope and the enrolment guard cannot drift apart.
 export const RESULT_CONVENTION_ENABLED_GLOBS = [
+  "apps/desktop/src/activity/**/*.ts",
+  "apps/desktop/src/activity/**/*.tsx",
   "apps/visual-preview/src/**/*.ts",
   "apps/api/src/handlers/realtime-resource-sets.ts",
   "apps/api/src/lib/auth/**/*.ts",
@@ -38,6 +40,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/handlers/billing-codes/**/*.ts",
   "apps/api/src/handlers/clauses/**/*.ts",
   "apps/api/src/handlers/contacts/**/*.ts",
+  "apps/api/src/handlers/desktop-feature-access/**/*.ts",
   "apps/api/src/handlers/desktop-presence/**/*.ts",
   "apps/api/src/handlers/desktop-registry/**/*.ts",
   "apps/api/src/handlers/dev/**/*.ts",
@@ -51,6 +54,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/handlers/files/**/*.ts",
   "apps/api/src/handlers/flows/**/*.ts",
   "apps/api/src/handlers/folio-collab/**/*.ts",
+  "apps/api/src/handlers/legal-resolve/**/*.ts",
   "apps/api/src/handlers/legal-reader/**/*.ts",
   "apps/api/src/handlers/mcp/**/*.ts",
   "apps/api/src/handlers/me/**/*.ts",
@@ -144,6 +148,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/web/src/lib/inbox/**/*.{ts,tsx}",
   "apps/web/src/lib/law-search-history/**/*.{ts,tsx}",
   "apps/web/src/lib/prompts/**/*.{ts,tsx}",
+  "apps/web/src/lib/statutes/**/*.ts",
   "apps/web/src/lib/web-search/**/*.{ts,tsx}",
   "apps/web/src/queries/**/*.{ts,tsx}",
   "apps/web/src/routes/-protected-app/**/*.{ts,tsx}",

@@ -707,6 +707,15 @@
     },
     "writeOff": "Norakstīt"
   },
+  "capabilityActions": {
+    "aiMissing": "AI nav konfigurēts.",
+    "availabilityUnknown": "Neizdevās apstiprināt pieejamību.",
+    "deeplMissing": "DeepL nav konfigurēts.",
+    "desktopUnavailable": "Savienojiet vai atjauniniet stella desktop.",
+    "featureUnavailable": "Šī funkcija nav pieejama.",
+    "ocrUnavailable": "OCR nav pieejams.",
+    "translationMissing": "Nav konfigurēts neviens tulkošanas pakalpojums."
+  },
   "caseLaw": {
     "analysis": {
       "abstract": "Kopsavilkums",
@@ -748,6 +757,7 @@
     "citation": {
       "citedAtLeast": "Citēts vismaz {count} reizes",
       "citedSummary": "{count, plural, =0 {Nav citēts} zero {Citēts # reižu} one {Citēts vienu reizi} other {Citēts # reizes}}",
+      "dateUnavailable": "Datums nav norādīts",
       "decisionCount": "{count, plural, =0 {Nav nolēmumu} zero {# nolēmumu} one {# nolēmums} other {# nolēmumi}}",
       "lastNegative": "pēdējā negatīvā atsauce {year}. gadā",
       "negativeCount": "{count, plural, zero {# negatīvu} one {# negatīva} other {# negatīvas}}",
@@ -757,6 +767,7 @@
       "partialSummary": "Citējumu kopsummas un laika skala ir nepilnīgas.",
       "passageNotFound": "Citējošais fragments tekstā netika atrasts",
       "positiveCount": "{count, plural, zero {# pozitīvu} one {# pozitīvs} other {# pozitīvi}}",
+      "referenceLabel": "{court}, {caseNumber}, {date}",
       "showAll": "{count, plural, zero {Rādīt visus # nolēmumus} one {Rādīt # nolēmumu} other {Rādīt visus # nolēmumus}}",
       "stripLabel": "Atsauces pa gadiem",
       "treatment": {
@@ -977,10 +988,14 @@
     "viewer": {
       "abstract": "Kopsavilkums",
       "appliedVersionNotStated": "Piemērotā redakcija nav norādīta",
+      "appliedVersionNotStatedCompact": "Redakcija nav norādīta",
       "appliedVersionStatedAmendment": "Redakcija ar <reference>{amendment}</reference> grozījumiem",
+      "appliedVersionStatedAmendmentCompact": "Norādīts: <reference>{amendment}</reference>",
       "appliedVersionStatedDate": "{relation, select, on {{date} spēkā esošā redakcija} until {Līdz {date} spēkā esošā redakcija} from {No {date} spēkā esošā redakcija} other {{date} spēkā esošā redakcija}}",
+      "appliedVersionStatedDateCompact": "{relation, select, on {Norādīts: {date}} until {Norādīts: līdz {date}} from {Norādīts: no {date}} other {Norādīts: {date}}}",
       "caseFileMayHoldOthers": "Šajā lietā var būt arī citi nolēmumi.",
       "citedBy": "Atsaucas uz",
+      "citedDecisionPassage": "Fragments nolēmumā",
       "cites": "Citē",
       "dissentByline": "Atsevišķās domas: <bdi>{names}</bdi>",
       "judgeRole": {
@@ -1007,7 +1022,9 @@
       "textPending": "Nolēmuma teksts vēl tiek saņemts",
       "textReadFailed": "Nolēmuma tekstu neizdevās ielādēt",
       "textUnavailable": "Šim nolēmumam teksts nav pieejams",
-      "versionAtDecisionDateInferred": "Redakcija lēmuma datumā (izsecināta)"
+      "versionAtDecisionDateInferred": "Redakcija lēmuma datumā (izsecināta)",
+      "versionBasisInferredCompact": "Nolēmuma datums · izsecināts",
+      "versionBasisInferredExplanation": "Redakcija ir izsecināta no nolēmuma datuma. Nolēmumā nav norādīts, kura redakcija ir piemērojama."
     }
   },
   "catalogue": {
@@ -1073,6 +1090,18 @@
     "anonymizedModeEnabled": "Anonimizēts AI režīms ir ieslēgts",
     "anonymizedSpan": {
       "tooltip": "Modelim nosūtīts kā {placeholder}."
+    },
+    "answerEdit": {
+      "acceptFailed": "Neizdevās saglabāt izmaiņu. Mēģiniet vēlreiz.",
+      "ask": "Pieprasīt izmaiņas",
+      "failed": "Neizdevās sagatavot izmaiņu. Mēģiniet vēlreiz.",
+      "instruction": "Aprakstiet izmaiņu",
+      "instructionRequired": "Aprakstiet, kā mainīt atlasīto tekstu.",
+      "invalidSelection": "Šo atlasi nevar rediģēt. Atlasiet nepārtrauktu teksta fragmentu.",
+      "proposal": "Ieteiktā izmaiņa",
+      "requesting": "Izmaiņu sagatavošana…",
+      "stale": "Šī atbilde ir mainījusies. Atlasiet tekstu vēlreiz.",
+      "submit": "Pieprasīt izmaiņu"
     },
     "applyMode": {
       "description": "Word saglabā, kurš veica katru izmaiņu. Mēs atcerēsimies jūsu izvēli.",
@@ -1185,6 +1214,13 @@
       "previewWaiting": "Gaida saturu…",
       "savePendingReview": "Pirms dokumenta saglabāšanas izskatiet pārskatīšanu gaidošos AI ieteikumus."
     },
+    "credentialPasteAction": "Izmantot privātu kartīti",
+    "credentialPasteDescription": "Šis teksts izskatās pēc piekļuves informācijas. Izmantojiet privātu kartīti, lai tā nenonāktu tērzēšanā. Kad kartīte parādās, ielīmējiet vērtību tajā vēlreiz.",
+    "credentialPasteRequest": "Pieprasiet šo piekļuves informāciju, izmantojot privātu kartīti.",
+    "credentialPasteTitle": "Piekļuves informācijas ielīmēšana apturēta",
+    "credentialSendAction": "Sūtīt tik un tā",
+    "credentialSendDescription": "Sūtiet tikai tad, ja vēlaties šo vērtību kopīgot sarunā.",
+    "credentialSendTitle": "Šajā ziņojumā var būt piekļuves informācija",
     "deleteThread": "Dzēst sarunu",
     "editMode": {
       "autoDirect": "Automātiski · pārrakstīt",
@@ -1323,6 +1359,31 @@
     "removeSuggestion": "(noņemt)",
     "renameThread": "Pārdēvēt sarunu",
     "renameUnavailableEmptyThread": "Vispirms nosūtiet ziņu, pēc tam sarunu varēs pārdēvēt.",
+    "requestSecret": {
+      "checkingTarget": "Tiek pārbaudīta savienotāja informācija…",
+      "connectionDisposition": "Savienojums: {disposition}",
+      "continuationError": "Jūsu atbilde ir saglabāta, bet tērzēšanu neizdevās turpināt.",
+      "declined": "Atteikts",
+      "description": "Asistentam tā ir vajadzīga, lai turpinātu",
+      "error": "Neizdevās iesniegt piekļuves informāciju. Mēģiniet vēlreiz.",
+      "kind": {
+        "token": "Piekļuves tokens"
+      },
+      "normalConnection": "Parastais savienojums",
+      "private": "Asistents šo vērtību neredzēs.",
+      "provideAction": "Iesniegt",
+      "provided": "Iesniegts",
+      "purposeByAi": "AI norādītais mērķis: {purpose}",
+      "receiptOnlyConnection": "Tikai privāts savienojums",
+      "replaceOrdinaryConnection": "Aizstāt parasto savienojumu ar tikai privātu izmantošanu",
+      "retryContinuationAction": "Turpināt tērzēšanu",
+      "saveForFuture": "Saglabāt turpmākām tērzēšanas sarunām",
+      "savedAvailabilityError": "Neizdevās pārbaudīt, vai ir saglabāti piekļuves dati.",
+      "target": "Mērķis: {target}",
+      "title": "Pieprasīt privātu piekļuves informāciju",
+      "useSavedAction": "Izmantot saglabātos piekļuves datus",
+      "valueLabel": "Piekļuves informācija"
+    },
     "resend": "Nosūtīt vēlreiz",
     "resizeThread": "Mainīt sarunas izmēru",
     "richContentLoading": "Notiek interaktīvā satura ielāde…",
@@ -1446,6 +1507,7 @@
       "read_story": "Dokumenta daļas lasīšana",
       "remember": "Saglabāšana atmiņā",
       "reply_comment": "Atbildēšana uz komentāru",
+      "request_secret": "Pieprasa privātu piekļuves informāciju",
       "resolve_comment": "Komentāra atrisināšana",
       "review_folder_consistency": "Mapes konsekvences pārbaude",
       "run-stella-query": "Lietas datu lasīšana",
@@ -1479,6 +1541,7 @@
       "update-entity-fields": "Metadatu atjaunināšana",
       "update_reader_annotation": "Rediģēt izcēlumu vai komentāru",
       "use-browser": "Jūsu pārlūkprogrammas izmantošana",
+      "use_connector_secret": "Izmanto savienotāja piekļuves informāciju",
       "web_search": "Meklēšana tīmeklī"
     },
     "toolCall": {
@@ -1631,6 +1694,7 @@
     "actions": "Darbības",
     "active": "Aktīvs",
     "add": "Pievienot",
+    "advanced": "Papildu iestatījumi",
     "all": "Visi",
     "and": "Un",
     "anonymizationLabels": {
@@ -1697,6 +1761,7 @@
     "createdAt": "Izveidots {date}",
     "currency": "Valūta",
     "currentPage": "Pašreizējā lapa",
+    "custom": "Pielāgots",
     "date": "Datums",
     "datePicker": {
       "label": "Datuma atlasītājs",
@@ -1717,6 +1782,7 @@
     "description": "Apraksts",
     "details": "Detaļas",
     "detailsHiddenFeatureUnavailable": "Detalizēta informācija ir paslēpta: funkcija nav iespējota",
+    "detailsUnavailable": "Informācija nav pieejama",
     "disconnect": "Atvienot",
     "dismiss": "Noraidīt",
     "displayName": "Attēlojamais vārds",
@@ -1883,6 +1949,7 @@
     "rename": "Pārdēvēt",
     "required": "Obligāts",
     "reset": "Atiestatīt",
+    "resetToDefault": "Atiestatīt uz noklusējumu",
     "resetZoom": "Atiestatīt tālummaiņu",
     "restore": "Atjaunot",
     "retry": "Mēģināt vēlreiz",
@@ -1936,6 +2003,7 @@
     "unexpectedError": "Radās neparedzēta kļūda. Lūdzu, sazinieties ar atbalsta dienestu.",
     "unknownUser": "Nezināms lietotājs",
     "unpin": "Atspraust",
+    "unsavedChanges": "Nesaglabātas izmaiņas",
     "unsavedChangesEscape": "Nesaglabātas izmaiņas. Vēlreiz nospiediet Esc, lai tās atmestu",
     "unsavedLeaveConfirm": "Jums ir nesaglabātas izmaiņas. Vai iziet bez saglabāšanas?",
     "unverified": "Nav pārbaudīts",
@@ -1983,6 +2051,7 @@
     "scopeExternalMcps": "Izmantot jūsu pievienotos ārējos rīkus",
     "scopeFeedback": "Nosūtīt produkta atsauksmes stella uzturētājiem",
     "scopeKnowledgeWrite": "Izveidot, rediģēt un dzēst jūsu klauzulas un palaist pārbaudes ceļvežus",
+    "scopeLawRead": "Lasīt publiski pieejamos tiesību aktus un judikatūru",
     "scopeMattersWrite": "Izveidot un rediģēt jūsu lietas un uzdevumus",
     "scopeOfflineAccess": "Paturēt jūs pieslēgtu bez atkārtotas apstiprināšanas",
     "scopeOnboarding": "Konfigurēt jūsu organizācijas prakses jurisdikcijas",
@@ -2817,6 +2886,12 @@
     "editSessionReleased": "Šis dokuments tika atvērts rediģēšanai citur, tāpēc šī cilne ir tikai lasāma.",
     "editSessionReleasedUnsaved": "Jūsu nesaglabātās izmaiņas paliek šeit.",
     "editSessionReopen": "Atkārtoti atvērt rediģēšanai",
+    "editor": {
+      "outlineDepthAll": "Visi līmeņi",
+      "outlineDepthLabel": "Virsrakstu dziļums",
+      "outlineDepthThree": "1–3",
+      "outlineDepthTwo": "1–2"
+    },
     "evidenceReferences": "Pierādījumu atsauces",
     "evidenceUnavailable": "Šo pierādījuma atsauci šajā lietā nevar atvērt.",
     "findReplace": {
@@ -3745,7 +3820,6 @@
         "fallback": "Alternatīva",
         "notAcceptable": "Nav pieņemams"
       },
-      "unsavedChanges": "Nesaglabātas izmaiņas",
       "untitledPosition": "Nenosaukta pozīcija",
       "updated": "Pārbaudes ceļvedis atjaunināts",
       "updatedAt": "Atjaunināts {date}",
@@ -3954,7 +4028,6 @@
       "invalidBinding": "Pievienojiet taustiņu, kas nav modifikators",
       "notRebindable": "Šo saīsni nevar mainīt",
       "pressKeys": "Nospiediet jaunos taustiņus…",
-      "resetToDefault": "Atiestatīt uz noklusējumu",
       "title": "Tastatūras saīsnes"
     },
     "showShortcuts": "Rādīt tastatūras saīsnes",
@@ -4044,6 +4117,9 @@
     "aiConfig": {
       "addProvider": "Pievienot pakalpojumu sniedzēju",
       "addProviderFirst": "Vispirms pievienojiet pakalpojumu sniedzēju",
+      "anthropicWorkspaceId": "Darbvietas ID",
+      "anthropicWorkspaceRequired": "Šai Anthropic atslēgai nepieciešama darbvieta. Ievadiet tās ID no Anthropic konsoles un saglabājiet vēlreiz.",
+      "anthropicWorkspaces": "Atvērt Anthropic darbvietas",
       "apiKey": "API atslēga",
       "apiKeyConfiguredPlaceholder": "Konfigurēts: {key}. Ievadiet jaunu atslēgu, lai to aizstātu.",
       "apiKeyPlaceholder": "Ievadiet savu API atslēgu",
@@ -4056,25 +4132,27 @@
       "customModelBadge": "Pielāgots · {provider}",
       "customModelDescription": "Šis modeļa ID nav stella katalogā. Tas tiks nosūtīts izvēlētajam pakalpojumu sniedzējam tieši tā, kā ievadīts.",
       "customModelHint": "Katalogā nav atbilstības. Ievadiet jebkuru modeļa ID; pielāgotie ID tiek saglabāti tieši tā, kā ievadīti.",
-      "dataRegion": "Datu reģions",
-      "dataRegionDescription": "Novirza AI pieprasījumus caur izvēlēto reģionu datu suverenitātes nodrošināšanai.",
-      "dataRegionUnsupported": "Reģionālā maršrutēšana pieejama tikai Google AI (Vertex AI).",
       "decision": {
-        "add": "Pievienot lēmumu modeli",
-        "description": "Jautājumi ar noteiktu atbildi, piemēram, dokumentu kategorijas vai citātu polaritāte, nonāk pie šī modeļa; bez tā uz tiem atbild ģeneratīvais modelis.",
+        "description": "Jautājumi ar noteiktām atbildēm (dokumentu kategorijas, citātu polaritāte)",
+        "generativeFallback": "Uzdevumam izmanto ģeneratīvo modeli.",
         "incomplete": "Ievadiet lēmumu modeļa API atslēgu un modeli vai noņemiet to.",
         "instanceProvided": "stella jau nodrošina lēmumu modeli; pievienojiet savu tikai tad, ja vēlaties izmantot citu.",
-        "label": "Lēmumu modelis",
-        "modelId": "Modeļa ID"
+        "label": "Lēmumu pieņemšana"
       },
       "defaultModel": "Noklusējums: {model}",
       "defaultModelOption": "Noklusējums",
+      "defaultRationale": {
+        "chat": "Sarunām un ikdienas jautājumiem.",
+        "fast": "Īsiem, ikdienišķiem uzdevumiem.",
+        "pdf": "PDF dokumentu lasīšanai un analīzei.",
+        "reasoning": "Sarežģītiem uzdevumiem, kam nepieciešama rūpīga spriešana."
+      },
       "deploymentNamePlaceholder": "Izvietojuma nosaukums",
-      "description": "Izmantojiet savu API atslēgu vai konfigurējiet datu suverenitātes reģionu.",
       "editProviders": "Rediģēt pakalpojumu sniedzējus",
       "endpoint": "Galamērķis",
       "endpointDescription": "Izmantojiet Azure OpenAI vai Azure Foundry /openai/v1 galamērķi. stella saglabā normalizēto galamērķi.",
       "keepSavedKey": "Paturēt saglabāto atslēgu",
+      "keyFormatHint": "Šai atslēgai ir neparasts formāts pakalpojuma sniedzējam {provider}. Saglabājiet to, lai sniedzējs to pārbaudītu.",
       "modelForRole": "{role} modelis",
       "modelIdPlaceholder": "Meklēt modeļus",
       "modelsDescription": "Katrai AI kategorijai izvēlieties pakalpojumu sniedzēju un vienu piedāvāto multimodālo modeli.",
@@ -4103,13 +4181,11 @@
       "providerKeyInvalidShort": "Nederīgs",
       "providersDescription": "Pievienojiet to pakalpojumu sniedzēju akreditācijas datus, kurus stella izmantos.",
       "providersPanel": "Pakalpojumu sniedzēji",
-      "regions": {
-        "ch": "Šveice (europe-west6)",
-        "eu": "ES (europe-west4)",
-        "global": "Globāls"
-      },
+      "removeLastProviderConfirm": "Noņemt {provider}? Tiks atiestatīta arī pielāgotā AI modeļu izvēle.",
       "removeProvider": "Noņemt pakalpojumu sniedzēju",
+      "removeProviderConfirm": "Noņemt {provider} un saglabātos autentifikācijas datus?",
       "replaceKey": "Aizstāt atslēgu",
+      "roleUnavailable": "{provider} neatbalsta šo lomu.",
       "roles": {
         "chat": "Tērzēšana",
         "fast": "Ātrs",
@@ -4119,7 +4195,8 @@
       "selectAtLeastOneRole": "Atlasiet vismaz vienu lomu šai atslēgai.",
       "selectModelForEachRole": "Pievienojiet pakalpojumu sniedzēju un izvēlieties modeli katrai kategorijai.",
       "selectedProvider": "{provider}",
-      "title": "AI konfigurācija"
+      "title": "AI konfigurācija",
+      "usingDefaults": "Tiek izmantoti noklusējuma iestatījumi"
     },
     "invitations": {
       "cancelInvitation": "Atcelt uzaicinājumu",
@@ -4149,7 +4226,6 @@
       "patternMustContainSeq": "Šablonam jāsatur '{'SEQ'}'",
       "patternRequired": "Šablons ir obligāts",
       "presets": {
-        "custom": "Pielāgots",
         "sequential": "Secīgs (001)",
         "yearMonthSequential": "Gads-mēnesis / Secīgs (2026-02/001)",
         "yearSequential": "Gads / Secīgs (2026/001)"
@@ -4181,7 +4257,6 @@
       "member": "Dalībnieks",
       "owner": "Īpašnieks"
     },
-    "settings": "Organizācijas iestatījumi",
     "settingsDescription": "Rediģēt organizācijas nosaukumu un slug",
     "switchOrganization": "Mainīt organizāciju"
   },
@@ -4548,6 +4623,7 @@
       "noMatches": "Vaicājumam “{query}” neatbilst neviens savienojums",
       "notConnected": "Nav pievienots",
       "permissionCount": "{count, plural, zero {# atļauju} one {# atļauja} other {# atļaujas}}",
+      "privateCredentialOnly": "Tikai privāta piekļuves informācija",
       "searchPlaceholder": "Meklēt savienojumus",
       "title": "Savienojumi",
       "turnedOff": "Izslēgts"
@@ -4555,7 +4631,7 @@
     "organization": {
       "activeMembers": "Aktīvie dalībnieki",
       "ai": "AI konfigurācija",
-      "aiDescription": "Izmantojiet savu API atslēgu vai konfigurējiet datu suverenitātes reģionu",
+      "aiDescription": "Pievienojiet savas AI pakalpojumu sniedzēju atslēgas.",
       "anonymization": {
         "addPlaceholder": "Termins, kas vienmēr jāmaskē (piem., komandas nosaukums)",
         "deleteAction": "Dzēst terminu",
@@ -5399,11 +5475,7 @@
       "apiKeyPlaceholder": "00000000-0000-0000-0000-000000000000:fx",
       "currentKey": "Saglabātā atslēga",
       "description": "Konfigurējiet DeepL API atslēgu, lai iespējotu dokumentu tulkošanu. Tiek atbalstītas gan Free, gan Pro atslēgas.",
-      "removed": "DeepL atslēga noņemta",
-      "removedDescription": "Tulkošana ir atspējota, līdz tiks pievienota jauna atslēga.",
       "removing": "Notiek noņemšana…",
-      "saved": "DeepL atslēga saglabāta",
-      "savedDescription": "Tulkojumi tagad ir pieejami.",
       "tierFree": "Free",
       "tierPro": "Pro",
       "title": "DeepL tulkošana"
@@ -6187,7 +6259,6 @@
     "views": {
       "addAdvancedFilter": "Pievienot paplašināto filtru",
       "addFields": "Pievienot laukus",
-      "advancedFilter": "Paplašināts",
       "advancedFilterCount": "{count, plural, =0 {jebkurš} zero {nav kārtulu} one {# kārtula} other {# kārtulas}}",
       "aiGenerated": "AI ģenerēts",
       "calendar": {

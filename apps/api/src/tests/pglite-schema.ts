@@ -401,6 +401,27 @@ const CHAT_RUN_LOG_MIGRATION_PATH = nodePath.join(
   "migration.sql",
 );
 
+/** Apply the revision migration's forced boundary, which schema push omits. */
+export const installPgliteChatMessageRevisionsRls = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statement = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261009190430_chat_message_revisions",
+      "migration.sql",
+    ),
+  ).find((candidate) =>
+    executableSql(candidate).startsWith(
+      'ALTER TABLE "chat_message_revisions" FORCE ROW LEVEL SECURITY',
+    ),
+  );
+  if (statement === undefined) {
+    panic("Chat message revision FORCE RLS migration statement is missing");
+  }
+  await db.execute(sql.raw(statement));
+};
+
 /** Schema push omits FORCE RLS, so mirror the migration's forced policies. */
 export const installPgliteChatRunLogRls = async (
   db: PgliteSchemaDb,
@@ -427,6 +448,26 @@ export const installPgliteChatRunLogRls = async (
     panic("Chat run log entries FORCE RLS migration statement is missing");
   }
   await db.execute(sql.raw(entriesStatement));
+};
+
+/** Apply the committed setting omitted by schema push. */
+export const installPgliteChatSecretRls = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    nodePath.join(DRIZZLE_DIR, "20261008090000_chat_secrets", "migration.sql"),
+  );
+  for (const table of ["chat_secrets"]) {
+    const statement = statements.find((candidate) =>
+      executableSql(candidate).startsWith(
+        `ALTER TABLE "${table}" FORCE ROW LEVEL SECURITY`,
+      ),
+    );
+    if (statement === undefined) {
+      panic("Chat secret FORCE RLS migration statement is missing");
+    }
+    await db.execute(sql.raw(statement));
+  }
 };
 
 const PDF_SIGNING_TOKEN_SCOPE_STATEMENT_PREFIXES = [

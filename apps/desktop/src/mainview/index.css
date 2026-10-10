@@ -15,6 +15,7 @@
  * source. Without this, uncommon sizing and glass classes are omitted. */
 @source "../clipboard/**/*.{ts,tsx}";
 @source "../registry/**/*.{ts,tsx}";
+@source "../activity/**/*.{ts,tsx}";
 
 html,
 body,

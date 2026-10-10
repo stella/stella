@@ -1,10 +1,13 @@
 import { panic, Result } from "better-result";
 /**
- * The continuous walk over the Slovak decisions waiting on their PDF.
+ * The continuous walk over one deferred-stage source's decisions waiting
+ * on their document.
  *
- * `sk-courts` stores metadata during the crawl and leaves the document
- * behind, so the backlog grows with every page ingested and a decision
- * still in it has no text to search, cite or read. The walk is therefore
+ * An adapter whose manifest declares a `deferred` document stage stores
+ * metadata during the crawl and leaves the document behind, so the
+ * backlog grows with every page ingested and a decision still in it has
+ * no text to search, cite or read. The runner starts one walk per such
+ * adapter. The walk is therefore
  * a loop rather than a periodic sweep, and its throughput is one number:
  * the gap this sleeps between fetches. Nothing batches the work into an
  * interval, so nothing can throttle it below that gap by accident.
@@ -22,14 +25,12 @@ import { panic, Result } from "better-result";
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import {
   DOCUMENT_FETCH_EVENT,
+  type DocumentFetchErrorDiagnostic,
+  documentErrorDiagnostics,
   documentFetchErrorOutcome,
   type DocumentStageObserver,
 } from "@stll/legal-atlas/document-fetch-diagnostics";
 import { createSafeDocumentStageObserver } from "@stll/legal-atlas/document-stage-observer";
-import {
-  type SkDocumentFetchErrorDiagnostic,
-  skDocumentErrorDiagnostics,
-} from "@stll/legal-atlas/sk-document-fetch-diagnostics";
 
 import type {
   DecisionDocumentOutcome,
@@ -46,7 +47,7 @@ type DocumentOutcomeStatus = DecisionDocumentOutcome["status"];
  */
 type OutcomeCounts = Record<DocumentOutcomeStatus, number>;
 
-export type SkDocumentDrainSummary = OutcomeCounts & {
+export type DeferredDocumentDrainSummary = OutcomeCounts & {
   /** Documents taken from the queue during the window. */
   attempted: number;
   /**
@@ -73,10 +74,10 @@ export type SkDocumentDrainSummary = OutcomeCounts & {
    */
   lastError: unknown;
   /** Bounded classes only; never a URL, response body or error message. */
-  lastErrorDiagnostic: SkDocumentFetchErrorDiagnostic | undefined;
+  lastErrorDiagnostic: DocumentFetchErrorDiagnostic | undefined;
 };
 
-const emptySummary = (): SkDocumentDrainSummary => ({
+const emptySummary = (): DeferredDocumentDrainSummary => ({
   attempted: 0,
   claimed: 0,
   busy: 0,
@@ -101,9 +102,9 @@ const emptySummary = (): SkDocumentDrainSummary => ({
 const summaryIsEmpty = ({
   attempted,
   failed,
-}: SkDocumentDrainSummary): boolean => attempted === 0 && failed === 0;
+}: DeferredDocumentDrainSummary): boolean => attempted === 0 && failed === 0;
 
-export type SkDocumentDrainTiming = {
+export type DeferredDocumentDrainTiming = {
   /**
    * Gap between two fetches. This is the politeness contract with the
    * publisher and the only thing that sets throughput.
@@ -124,12 +125,12 @@ export type SkDocumentDrainTiming = {
  * configuration: the gap decides how hard an external publisher is
  * asked, and these decide how cheaply the loop waits.
  */
-export const SK_DOCUMENT_DRAIN_TIMING = {
+export const DEFERRED_DOCUMENT_DRAIN_TIMING = {
   idleSleepMs: 30_000,
   idleSleepMaxMs: 15 * 60_000,
   summaryIntervalMs: 5 * 60_000,
   failureBackoffMaxMs: 60_000,
-} as const satisfies Omit<SkDocumentDrainTiming, "fetchDelayMs">;
+} as const satisfies Omit<DeferredDocumentDrainTiming, "fetchDelayMs">;
 
 /**
  * The longest slice a pacing wait sleeps before re-checking the drain flag.
@@ -137,7 +138,7 @@ export const SK_DOCUMENT_DRAIN_TIMING = {
  */
 export const DRAIN_CHECK_SLICE_MS = 1000;
 
-export type SkDocumentDrainOptions = {
+export type DeferredDocumentDrainOptions = {
   documentObservations?: {
     source: string;
     observe: DocumentStageObserver;
@@ -152,9 +153,9 @@ export type SkDocumentDrainOptions = {
   isDraining: () => boolean;
   now: () => number;
   /** Receives the periodic tallies; nothing is logged per document. */
-  report: (summary: SkDocumentDrainSummary) => void;
+  report: (summary: DeferredDocumentDrainSummary) => void;
   sleep: (ms: number) => Promise<void>;
-  timing: SkDocumentDrainTiming;
+  timing: DeferredDocumentDrainTiming;
 };
 
 /**
@@ -182,7 +183,7 @@ export type SkDocumentDrainOptions = {
  *   walk off for it would let a few such documents at the head of the
  *   queue hold everything behind them. Errors never break the loop.
  */
-export const runSkDocumentDrain = async ({
+export const runDeferredDocumentDrain = async ({
   fetchDocument,
   documentObservations,
   isDraining,
@@ -191,7 +192,7 @@ export const runSkDocumentDrain = async ({
   report,
   sleep,
   timing,
-}: SkDocumentDrainOptions): Promise<void> => {
+}: DeferredDocumentDrainOptions): Promise<void> => {
   const observations =
     documentObservations === undefined
       ? undefined
@@ -286,7 +287,7 @@ export const runSkDocumentDrain = async ({
       consecutiveFailures += 1;
       summary.failed += 1;
       summary.lastError = error;
-      summary.lastErrorDiagnostic = skDocumentErrorDiagnostics(error);
+      summary.lastErrorDiagnostic = documentErrorDiagnostics(error);
       delayMs = backoffDelay(consecutiveFailures, {
         baseMs: timing.fetchDelayMs,
         maxMs: timing.failureBackoffMaxMs,

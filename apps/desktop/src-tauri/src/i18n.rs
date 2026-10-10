@@ -85,6 +85,11 @@ pub(crate) fn locales_missing(key: &str) -> Vec<&'static str> {
     .collect()
 }
 
+#[cfg(test)]
+pub(crate) fn shipped_locales() -> impl Iterator<Item = &'static str> {
+  LOCALES.iter().map(|(locale, _)| *locale)
+}
+
 fn locale_source(locale: &str) -> Option<(&'static str, &'static str)> {
   LOCALES
     .iter()

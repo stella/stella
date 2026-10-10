@@ -73,6 +73,7 @@ const DESKTOP_ACCOUNT_CHALLENGE_TTL_MS = 60_000;
 type DesktopAccountChallenge = {
   correlationId: string;
   verifierHash: string;
+  deviceJkt: string;
   portSecret: string;
   protocol: string;
 };
@@ -95,9 +96,10 @@ export const parseDesktopAccountChallenge = (hash: string) => {
   const correlationId = params.get("correlationId");
   const verifierHash = params.get("verifierHash");
   const portSecret = params.get("portSecret");
+  const deviceJkt = params.get("deviceJkt");
   const protocol = params.get("protocol");
   if (
-    [...params].length !== 4 ||
+    [...params].length !== 5 ||
     protocol !== String(DESKTOP_ACCOUNT_POLICY.linkProtocol) ||
     !correlationId ||
     !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u.test(
@@ -105,12 +107,14 @@ export const parseDesktopAccountChallenge = (hash: string) => {
     ) ||
     !verifierHash ||
     !/^[0-9a-f]{64}$/u.test(verifierHash) ||
+    !deviceJkt ||
+    !/^[A-Za-z0-9_-]{43}$/u.test(deviceJkt) ||
     !portSecret ||
     !/^[0-9a-f]{64}$/u.test(portSecret)
   ) {
     return null;
   }
-  return { correlationId, verifierHash, portSecret, protocol };
+  return { correlationId, verifierHash, deviceJkt, portSecret, protocol };
 };
 
 export const captureDesktopAccountLink = () => {
@@ -464,6 +468,7 @@ export const linkDesktopAccount = async ({
         await api["desktop-registry"].grant.post({
           correlationId: challenge.correlationId,
           verifierHash: challenge.verifierHash,
+          deviceJkt: challenge.deviceJkt,
         }),
       );
       const matched = resolveDesktopAccountLink({

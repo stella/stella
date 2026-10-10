@@ -1602,12 +1602,6 @@
     "reason": "builder-for in apps/api/src/handlers/lists/items/fact-details/update.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
-    "file": "apps/api/src/handlers/mcp-connectors/oauth-callback.ts",
-    "fingerprint": "8e1197c7c80ccf5b32760181cc89d1a737e695fa4547747f7fc48d144fee0528",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/handlers/mcp-connectors/oauth-callback.ts: Legacy savepoint on tx; migrate through the aggregate savepoint owner so the parent lock history is retained."
-  },
-  {
     "file": "apps/api/src/handlers/memories/update.ts",
     "fingerprint": "57d76d747519bcd8783087297221d3bc1f79297d2e24cc71a984fa7cc5eaad27",
     "count": 1,
@@ -3156,18 +3150,6 @@
     "reason": "builder-for in apps/api/src/lib/files/pdf-signing/sessions.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
-    "file": "apps/api/src/lib/flows/automated-run-cap.ts",
-    "fingerprint": "3022c5720db6b5a6a55bb3a2863922ef45fb3c22c6584ee789279969c49b6488",
-    "count": 1,
-    "reason": "pg_advisory_xact_lock( in apps/api/src/lib/flows/automated-run-cap.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/flows/automated-run-cap.ts",
-    "fingerprint": "786ecc9573c847f206b2e7a6db5abd7abc66383c3675aea0d96d94eb935cb9fc",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/flows/automated-run-cap.ts: Existing root transaction runner on database; opens the owning database transaction for this module."
-  },
-  {
     "file": "apps/api/src/lib/flows/flow-executor.ts",
     "fingerprint": "4205677a801602cbae5cd9abf5540fb2e84f83756efca8be7487f2a1fb9e99b9",
     "count": 1,
@@ -4276,18 +4258,6 @@
     "fingerprint": "8f251f5c50d8856c2cda79c689c28c5fc197e9bbdb2b59690e8125eb57ac9f36",
     "count": 1,
     "reason": "transaction-boundary in apps/api/src/lib/sharepoint-disable-purge.ts: Existing root transaction runner on rootDb; opens the owning database transaction for this module."
-  },
-  {
-    "file": "apps/api/src/lib/signals/proofs/may-create-signal-request.ts",
-    "fingerprint": "cd2f3b46c8704c24a6da17f5c8ac24a89c12ca2c7d5954e5bdc65b48a82d29a2",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/signals/proofs/may-create-signal-request.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/signals/proofs/signal-visible-to.ts",
-    "fingerprint": "1a1d62d3067e5324f8fbb238c89d1e0812210ceb14a9ea3813344ae5272ede65",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/signals/proofs/signal-visible-to.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
     "file": "apps/api/src/lib/skills/install.ts",

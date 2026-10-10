@@ -1211,7 +1211,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
           if [[ "$package_checks_required" != "true" ]]; then
-            echo "::notice::Only documentation or provenance changed; skipping package CI checks."
+            echo "::notice::Only documentation changed; skipping package CI checks."
           fi
 
       - name: Install API test planner dependencies
@@ -2432,6 +2432,12 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun test scripts/ratchet-scan.test.ts
 
+      - name: Test subject reachability census
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: |
+          bun scripts/test-subject-reachability.ts --self-test
+          bun scripts/test-subject-reachability.ts --base "$RATCHET_BASE_REF"
+
       - name: Deployment feature guard
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # Every declared deployment flag has a reader and every flag read is
@@ -2707,6 +2713,12 @@ jobs:
         run: |
           bun test scripts/check-standalone-lockfiles.test.ts
           bun scripts/check-standalone-lockfiles.ts
+
+      - name: Standalone negated shell statement guard
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
+        run: |
+          bun test scripts/check-standalone-negated-shell.test.ts
+          bun scripts/check-standalone-negated-shell.ts
 
       - name: Tauri package alignment
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
@@ -3049,6 +3061,10 @@ jobs:
           bun test scripts/design-lint-baseline.test.ts scripts/oxlint-config-inputs.test.ts
           bun scripts/design-lint-baseline.ts --check
 
+      - name: Full error toast text census
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun run check:toast-errors
+
       - name: Query data state baseline
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         env:
@@ -3333,6 +3349,12 @@ jobs:
           bun scripts/offline-check-policy.ts
           bun --filter @stll/ai-catalog gen:rates --check
           bun --filter @stll/ai-catalog gen:capabilities --check
+
+      - name: Model catalog generation guard
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: |
+          bun --filter @stll/ai-catalog check:generations --self-test --check
+          bun --filter @stll/ai-catalog check:generations --check
 
       - name: Model catalog snapshot drift check
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && needs.ci-plan.outputs.model_catalog_drift_required == 'true') }}

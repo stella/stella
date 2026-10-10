@@ -107,6 +107,7 @@
     --container-xs: 20rem;
     --container-md: 28rem;
     --container-lg: 32rem;
+    --container-xl: 36rem;
     --container-2xl: 42rem;
     --container-5xl: 64rem;
     --container-6xl: 72rem;
@@ -151,12 +152,10 @@
     --color-foreground: var(--foreground);
     --color-border: var(--border);
     --color-info: var(--info);
-    --color-accent: var(--accent);
     --color-muted-foreground: var(--muted-foreground);
     --color-foreground-disabled: var(--foreground-disabled);
     --color-muted: var(--muted);
     --color-primary: var(--primary);
-    --color-popover: var(--popover);
     --color-card: var(--card);
     --ease-spring: linear(
     0,
@@ -1262,6 +1261,9 @@
   .max-w-none {
     max-width: none;
   }
+  .max-w-xl {
+    max-width: var(--container-xl);
+  }
   .max-w-xs {
     max-width: var(--container-xs);
   }
@@ -1332,10 +1334,6 @@
   }
   .-translate-x-1\/2 {
     --tw-translate-x: calc(calc(1 / 2 * 100%) * -1);
-    translate: var(--tw-translate-x) var(--tw-translate-y);
-  }
-  .-translate-x-6 {
-    --tw-translate-x: calc(var(--spacing) * -6);
     translate: var(--tw-translate-x) var(--tw-translate-y);
   }
   .-translate-x-px {
@@ -2376,6 +2374,9 @@
   .pb-2 {
     padding-bottom: calc(var(--spacing) * 2);
   }
+  .pb-3 {
+    padding-bottom: calc(var(--spacing) * 3);
+  }
   .pb-4 {
     padding-bottom: calc(var(--spacing) * 4);
   }
@@ -2601,6 +2602,9 @@
   }
   .break-all {
     word-break: break-all;
+  }
+  .text-ellipsis {
+    text-overflow: ellipsis;
   }
   .whitespace-normal {
     white-space: normal;
@@ -3683,6 +3687,9 @@
   .empty\:m-0:empty {
     margin: 0px;
   }
+  .empty\:hidden:empty {
+    display: none;
+  }
   .empty\:p-0:empty {
     padding: 0px;
   }
@@ -3871,35 +3878,6 @@
       content: var(--tw-content);
       background-color: var(--sidebar-border);
     }
-  }
-  .focus\:not-sr-only:focus {
-    position: static;
-    width: auto;
-    height: auto;
-    padding: 0;
-    margin: 0;
-    overflow: visible;
-    clip-path: none;
-    white-space: normal;
-  }
-  .focus\:absolute:focus {
-    position: absolute;
-  }
-  .focus\:w-max:focus {
-    width: max-content;
-  }
-  .focus\:rounded-md:focus {
-    border-radius: var(--radius-md);
-  }
-  .focus\:border:focus {
-    border-style: var(--tw-border-style);
-    border-width: 1px;
-  }
-  .focus\:px-2:focus {
-    padding-inline: calc(var(--spacing) * 2);
-  }
-  .focus\:py-1:focus {
-    padding-block: var(--spacing);
   }
   .focus\:outline-none:focus {
     --tw-outline-style: none;
@@ -4835,23 +4813,7 @@
       padding-top: 0px;
     }
   }
-  @media (width < 64rem) {
-    .max-lg\:hidden {
-      display: none;
-    }
-  }
   @media (width < 40rem) {
-    .max-sm\:sr-only {
-      position: absolute;
-      width: 1px;
-      height: 1px;
-      padding: 0;
-      margin: -1px;
-      overflow: hidden;
-      clip-path: inset(50%);
-      white-space: nowrap;
-      border-width: 0;
-    }
     .max-sm\:col-span-2 {
       grid-column: span 2 / span 2;
     }
@@ -5002,6 +4964,9 @@
     }
     .sm\:h-10 {
       height: calc(var(--spacing) * 10);
+    }
+    .sm\:h-auto {
+      height: auto;
     }
     .sm\:min-h-0 {
       min-height: 0px;
@@ -5425,6 +5390,9 @@
     }
   }
   @media (pointer: coarse) {
+    .pointer-coarse\:my-1\.5 {
+      margin-block: calc(var(--spacing) * 1.5);
+    }
     .pointer-coarse\:size-11 {
       width: calc(var(--spacing) * 11);
       height: calc(var(--spacing) * 11);
@@ -5493,6 +5461,9 @@
   }
   .\[\&_\[data-slot\=review-status-dot\]\]\:bg-current [data-slot=review-status-dot] {
     background-color: currentcolor;
+  }
+  .\[\&_\[data-slot\=scroll-area-viewport\]\]\:max-h-\[60dvh\] [data-slot=scroll-area-viewport] {
+    max-height: 60dvh;
   }
   .\[\&_mark\]\:bg-\(--text-mark\)\/30 mark {
     background-color: var(--text-mark);
@@ -7471,6 +7442,12 @@ body {
   margin: 0;
   background: var(--color-background-primary, var(--background));
   color: var(--color-text-primary, var(--foreground));
+}
+.status-error {
+  color: var(--color-text-danger, var(--destructive));
+}
+.status-success {
+  color: var(--color-text-success, var(--foreground));
 }
 @property --tw-translate-x {
   syntax: "*";

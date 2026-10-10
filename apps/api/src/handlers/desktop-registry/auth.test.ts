@@ -204,6 +204,11 @@ const assertIssuanceCall = (
   ) {
     throw new TypeError(`${filename}: inactivity metadata must be explicit`);
   }
+  if (!issuanceProperty(metadata.initializer, "deviceJkt")) {
+    throw new TypeError(
+      `${filename}: issuance must persist its device key binding`,
+    );
+  }
   return true;
 };
 const censusIssuanceSource = ({
@@ -277,6 +282,7 @@ describe("desktop registry API-key configuration", () => {
         metadata: {
           purpose: DESKTOP_REGISTRY_KEY_CONFIG,
           organizationId: "00000000-0000-4000-8000-000000000001",
+          deviceJkt: "A".repeat(43),
           inactivityExpiresAt: new Date(
             Date.now() + DESKTOP_REGISTRY_KEY_SECONDS * 1000,
           ).toISOString(),
@@ -370,6 +376,7 @@ describe("desktop registry API-key configuration", () => {
       panic("Desktop credential issuer must exist");
     }
     expect(issuer.source).toContain("expiresIn: null");
+    expect(issuer.source).toContain("deviceJkt: identity.deviceJkt,");
     expect(() =>
       assertDesktopIssuance(
         sources.map((entry) =>
@@ -400,6 +407,21 @@ describe("desktop registry API-key configuration", () => {
         ),
       ),
     ).toThrow("issuance must persist its inactivity deadline");
+    expect(() =>
+      assertDesktopIssuance(
+        sources.map((entry) =>
+          entry === issuer
+            ? {
+                ...entry,
+                source: entry.source.replace(
+                  "deviceJkt: identity.deviceJkt,",
+                  "",
+                ),
+              }
+            : entry,
+        ),
+      ),
+    ).toThrow("issuance must persist its device key binding");
     expect(() =>
       assertDesktopIssuance([
         ...sources,
@@ -446,6 +468,7 @@ describe("desktop registry API-key configuration", () => {
     const metadata = {
       purpose: DESKTOP_REGISTRY_KEY_CONFIG,
       organizationId: "00000000-0000-4000-8000-000000000001",
+      deviceJkt: "A".repeat(43),
       inactivityExpiresAt: "2026-11-05T12:00:00.000Z",
     };
     expect(parseDesktopRegistryMetadata(metadata).success).toBe(true);
@@ -466,8 +489,17 @@ describe("desktop registry API-key configuration", () => {
       { purpose: metadata.purpose, organizationId: metadata.organizationId },
       { ...metadata, inactivityExpiresAt: "not-a-date" },
       { ...metadata, inactivityExpiresAt: 123 },
-      { ...metadata, inactivityExpiresAt: new Date(Number.NaN) },
       { ...metadata, purpose: "machine" },
+      ...[
+        undefined,
+        "",
+        "A".repeat(42),
+        "A".repeat(44),
+        `${"A".repeat(42)}=`,
+        `${"A".repeat(42)}+`,
+        `${"A".repeat(42)}/`,
+      ].map((deviceJkt) => ({ ...metadata, deviceJkt })),
+      { ...metadata, inactivityExpiresAt: new Date(Number.NaN) },
       { ...metadata, providerExpiresAt: metadata.inactivityExpiresAt },
     ]) {
       expect(parseDesktopRegistryMetadata(invalid).success).toBe(false);
@@ -492,6 +524,7 @@ describe("desktop registry API-key configuration", () => {
         metadata: {
           purpose: DESKTOP_REGISTRY_KEY_CONFIG,
           organizationId: "00000000-0000-4000-8000-000000000001",
+          deviceJkt: "A".repeat(43),
           inactivityExpiresAt: new Date(
             Date.now() + DESKTOP_REGISTRY_KEY_SECONDS * 1000,
           ).toISOString(),

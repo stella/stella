@@ -7,11 +7,7 @@ import * as nodeHttp from "node:http";
 import * as nodeHttp2 from "node:http2";
 import * as nodeHttps from "node:https";
 
-import {
-  BYOK_MODEL_OPTIONS,
-  DEFAULT_MODELS,
-  isBYOKModelRoleSupported,
-} from "@stll/ai-catalog";
+import { BYOK_MODEL_OPTIONS, isBYOKModelRoleSupported } from "@stll/ai-catalog";
 import { BUILT_IN_CHAT_TOOL_POLICY_KINDS } from "@stll/api-contract";
 import { VISUAL_PREVIEW_TOOL_NAME } from "@stll/api-contract/visual-preview";
 
@@ -171,12 +167,7 @@ const chatModelSelections = (
 
 const canaryConfig = (provider: CanaryProvider): OrgAIConfig => ({
   providers: [{ apiKey: "test-key", provider }],
-  overrideModels: {
-    fast: { modelId: DEFAULT_MODELS[provider].fast, provider },
-    chat: { modelId: DEFAULT_MODELS[provider].chat, provider },
-    reasoning: { modelId: DEFAULT_MODELS[provider].reasoning, provider },
-    pdf: { modelId: DEFAULT_MODELS[provider].pdf, provider },
-  },
+  overrideModels: null,
   decision: null,
 });
 
