@@ -40,15 +40,13 @@ const listDecisionCitations = createSafePublicSubjectFollowUpHandler({
       direction: query.direction === "incoming" ? "cited_by" : "cites",
       limit: LIMITS.caseLawDecisionCitationPageSize,
     }),
-  followUp: async (prepared, { params: { decisionId }, query }) => {
+  followUp: async (prepared) => {
     if (prepared.type === "invalid_cursor") {
       return status(400, { message: "Invalid cursor" });
     }
     const read = await completeDecisionCitations({
       caseLawDb: caseLawPublicReadDb,
       prepared,
-      decisionId,
-      direction: query.direction === "incoming" ? "cited_by" : "cites",
     });
     if (read.type === "invalid_cursor") {
       return status(400, { message: "Invalid cursor" });

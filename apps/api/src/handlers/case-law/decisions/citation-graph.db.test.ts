@@ -7,6 +7,7 @@ import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import {
   caseLawCitations,
+  caseLawDecisionAliases,
   caseLawDecisions,
   caseLawSources,
 } from "@/api/db/schema";
@@ -22,7 +23,11 @@ import {
   treatmentOf,
 } from "@/api/handlers/case-law/decisions/citation-graph";
 import type { DecisionCitationRow } from "@/api/handlers/case-law/decisions/citation-graph";
-import { readGatedDecisionCitations } from "@/api/handlers/case-law/decisions/citation-passages";
+import {
+  completeDecisionCitations,
+  prepareDecisionCitations,
+  readGatedDecisionCitations,
+} from "@/api/handlers/case-law/decisions/citation-passages";
 import { POLARITIES, POLARITY } from "@/api/handlers/case-law/polarity/consts";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -959,6 +964,142 @@ test("citation evidence reads the persisted classifier window only after AST eli
       ],
     },
   });
+});
+
+test("outgoing citations through a retired UUID retain canonical passages and evidence", async () => {
+  const retiredId = createSafeId<"caseLawDecision">();
+  const canonicalId = createSafeId<"caseLawDecision">();
+  const referenceId = createSafeId<"caseLawCitation">();
+  const citationText = "21 Cdo 500/2019";
+  const paragraph = `Canonical reasoning follows ${citationText}.`;
+  const documentAst = {
+    version: 1,
+    source: {
+      system: "test",
+      documentId: "canonical-citing-decision",
+      webUrl: "",
+      printUrl: "",
+    },
+    metadata: {
+      caseNumber: "canonical-citing-decision",
+      court: "Court",
+      ecli: "",
+      decisionDate: "2024-02-01",
+      decisionType: "judgment",
+      keywords: [],
+      statutes: [],
+    },
+    blocks: [
+      {
+        id: "canonical-reasoning",
+        anchorId: "p1",
+        type: "paragraph",
+        inlines: [{ type: "text", text: paragraph }],
+        plainText: paragraph,
+      },
+    ],
+  } satisfies DocumentAst;
+  await db.insert(caseLawDecisions).values([
+    {
+      id: retiredId,
+      caseNumber: "retired-citing-decision",
+      country: "CZE",
+      court: "Court",
+      language: "cs",
+      sourceId: openSourceId,
+    },
+    {
+      id: canonicalId,
+      caseNumber: "canonical-citing-decision",
+      country: "CZE",
+      court: "Court",
+      language: "cs",
+      sourceId: openSourceId,
+      documentAst,
+      sections: [
+        { index: 0, type: "argumentation", title: null, text: paragraph },
+      ],
+    },
+  ]);
+  await db.insert(caseLawDecisionAliases).values({
+    retiredDecisionId: retiredId,
+    canonicalDecisionId: canonicalId,
+  });
+  await db.delete(caseLawDecisions).where(eq(caseLawDecisions.id, retiredId));
+  await db.insert(caseLawCitations).values({
+    id: referenceId,
+    citingDecisionId: canonicalId,
+    citedDecisionId: subjectId,
+    citationText,
+    kind: CITATION_KIND.PRECEDENT,
+    polarity: POLARITY.POSITIVE,
+    polaritySource: "review",
+    polarityClassifierVersion: "canonical-v1",
+    polarityWindowStart: 0,
+    polarityWindowEnd: paragraph.length,
+    citedPart: "majority",
+  });
+  expect(retiredId).not.toBe(canonicalId);
+  expect(
+    await db
+      .select({ id: caseLawDecisions.id })
+      .from(caseLawDecisions)
+      .where(eq(caseLawDecisions.id, retiredId)),
+  ).toEqual([]);
+
+  const canonical = await readGatedDecisionCitations({
+    caseLawDb,
+    cursor: undefined,
+    decisionId: canonicalId,
+    direction: "cites",
+    limit: 10,
+  });
+  expect(canonical).toMatchObject({
+    type: "page",
+    page: {
+      items: [
+        {
+          id: referenceId,
+          citationText,
+          passage: { anchorId: "p1", text: paragraph },
+          textWithheldReason: null,
+          textIncompleteReason: null,
+          evidenceIncompleteReason: null,
+          polarityEvidence: { source: "review", excerpt: paragraph },
+        },
+      ],
+    },
+  });
+  // REST prepares inside the public gate and completes after it closes.
+  const prepared = await withRedistributableSubject(
+    caseLawDb,
+    { kind: "id", id: retiredId },
+    async (subject) => {
+      expect(subject.id).toBe(canonicalId);
+      return await prepareDecisionCitations({
+        subject,
+        cursor: undefined,
+        direction: "cites",
+        limit: 10,
+      });
+    },
+  );
+  if (prepared === null) {
+    panic("Expected retired UUID to resolve to the public canonical decision");
+  }
+  expect(await completeDecisionCitations({ caseLawDb, prepared })).toEqual(
+    canonical,
+  );
+  // MCP and chat use this shared gated owner.
+  expect(
+    await readGatedDecisionCitations({
+      caseLawDb,
+      cursor: undefined,
+      decisionId: retiredId,
+      direction: "cites",
+      limit: 10,
+    }),
+  ).toEqual(canonical);
 });
 
 test("missing evidence privileges withhold only the evidence fields", async () => {

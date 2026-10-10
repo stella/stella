@@ -470,6 +470,8 @@ export const prepareDecisionCitations = async ({
     return {
       page,
       sources,
+      resolvedDecisionId: decisionId,
+      direction,
       evidence: { type: "not-granted" as const },
       type: "page" as const,
     };
@@ -497,7 +499,14 @@ export const prepareDecisionCitations = async ({
               ),
             ),
   };
-  return { page, sources, evidence, type: "page" as const };
+  return {
+    page,
+    sources,
+    evidence,
+    resolvedDecisionId: decisionId,
+    direction,
+    type: "page" as const,
+  };
 };
 
 type PreparedDecisionCitations = Awaited<
@@ -507,16 +516,12 @@ type PreparedDecisionCitations = Awaited<
 type CompleteDecisionCitationsOptions = {
   caseLawDb: CaseLawPublicReadDb;
   prepared: PreparedDecisionCitations;
-  decisionId: SafeId<"caseLawDecision">;
-  direction: CitationReadDirection;
 };
 
 /** Resolve both display passages and exact classifier windows through one text owner. */
 export const completeDecisionCitations = async ({
   caseLawDb,
   prepared: gated,
-  decisionId,
-  direction,
 }: CompleteDecisionCitationsOptions): Promise<DecisionCitationsRead> => {
   if (gated.type === "invalid_cursor") {
     return gated;
@@ -539,7 +544,9 @@ export const completeDecisionCitations = async ({
   );
   const items = gated.page.items.map((item): CitationWithPassage => {
     const citingId =
-      direction === "cites" ? String(decisionId) : String(item.decision?.id);
+      gated.direction === "cites"
+        ? String(gated.resolvedDecisionId)
+        : String(item.decision?.id);
     const text = textByDecision.get(citingId);
     const textWithheldReason = withholdingByDecision.get(citingId);
     if (textWithheldReason === undefined) {
@@ -646,8 +653,6 @@ export const readGatedDecisionCitations = async ({
   return await completeDecisionCitations({
     caseLawDb,
     prepared,
-    decisionId,
-    direction,
   });
 };
 
