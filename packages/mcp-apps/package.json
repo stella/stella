@@ -41,6 +41,7 @@
   "devDependencies": {
     "@happy-dom/global-registrator": "20.14.5",
     "@stll/property-testing": "workspace:*",
+    "@stll/scripts": "workspace:*",
     "@stll/typescript-config": "workspace:*",
     "@tailwindcss/postcss": "catalog:",
     "@testing-library/dom": "10.4.2",

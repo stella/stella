@@ -2,11 +2,11 @@ import { expect, test } from "bun:test";
 import path from "node:path";
 import * as v from "valibot";
 
-import readerPackage from "../../../../packages/decision-reader/package.json";
+import readerPackage from "../../../decision-reader/package.json";
 import {
   READER_MESSAGE_KEYS,
   READER_TEMPLATE_KEYS,
-} from "../../src/mcp/apps/decision-reader/message-keys";
+} from "../../src/decision-reader/message-keys";
 import {
   inspectMcpReaderUi,
   MCP_READER_UI_APP_DIRECTORIES,
@@ -21,7 +21,7 @@ const astModule = {
   text: 'const schema = { type: v.literal("paragraph") };',
 };
 const consumer = {
-  file: "apps/api/src/mcp/apps/decision-reader/app.tsx",
+  file: "packages/mcp-apps/src/decision-reader/app.tsx",
   text: 'import { BlockRenderer as SharedBlock } from "@stll/decision-reader/document-ast-text"; const App = () => <SharedBlock block={block} />;',
 };
 const inspectFixture = (
@@ -32,10 +32,10 @@ const inspectFixture = (
     sharedModules: [sharedModule],
     astModules: [astModule],
     bundleModules: [
-      { ...consumer, file: `apps/api/src/mcp/apps/${directory}/app.tsx` },
+      { ...consumer, file: `packages/mcp-apps/src/${directory}/app.tsx` },
       ...(includesShared ? [sharedModule] : []),
       {
-        file: `apps/api/src/mcp/apps/${directory}/dependency.tsx`,
+        file: `packages/mcp-apps/src/${directory}/dependency.tsx`,
         text: additionalText,
       },
     ],
@@ -118,7 +118,7 @@ test("renaming local legal AST rendering does not bypass ownership", () => {
 });
 
 const root = path.resolve(import.meta.dirname, "../../../..");
-const generatedRoot = path.join(root, "apps/api/src/mcp/apps/shared/generated");
+const generatedRoot = path.join(root, "packages/mcp-apps/src/shared/generated");
 
 test("the built reader graph uses the shared package without duplicate UI", async () => {
   const graphs = v.parse(

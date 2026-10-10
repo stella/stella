@@ -10,6 +10,9 @@
     "i18n-typegen": "src/i18n-typegen.ts"
   },
   "type": "module",
+  "exports": {
+    "./react-compiler-options": "./src/react-compiler-options.ts"
+  },
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",
     "test": "bun test",
@@ -36,6 +39,7 @@
     "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",
     "bun-types": "catalog:",
-    "fast-check": "catalog:"
+    "fast-check": "catalog:",
+    "oxc-transform-react": "catalog:"
   }
 }

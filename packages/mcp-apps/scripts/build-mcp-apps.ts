@@ -1,18 +1,19 @@
-import "../src/tests/setup-env";
 import tailwindcss from "@tailwindcss/postcss";
 import { panic } from "better-result";
 import path from "node:path";
+import { transform } from "oxc-transform-react";
 import postcss from "postcss";
 
 import MCP_APP_MESSAGES from "@stll/api-contract/mcp-app-messages";
+import { REACT_COMPILER_OPTIONS } from "@stll/scripts/react-compiler-options";
 
-import readerPackage from "../../../packages/decision-reader/package.json";
-import { MCP_APP_OUTPUT_SCHEMAS } from "../src/mcp/app-contracts";
+import readerPackage from "../../decision-reader/package.json";
 import {
   READER_MESSAGE_KEYS,
   READER_TEMPLATE_KEYS,
-} from "../src/mcp/apps/decision-reader/message-keys";
-import { MCP_APPS } from "../src/mcp/apps/manifest";
+} from "../src/decision-reader/message-keys";
+import { MCP_APPS } from "../src/manifest";
+import { MCP_APP_OUTPUT_SCHEMAS } from "../src/mcp/app-contracts";
 import { defineChatProjectionMcpToolOutput } from "../src/mcp/valibot-tool-definition";
 import { inspectMcpAppHtml } from "./lib/mcp-app-html-guard";
 import {
@@ -22,7 +23,7 @@ import {
 
 const generatedRoot = path.resolve(
   import.meta.dirname,
-  "../src/mcp/apps/shared/generated",
+  "../src/shared/generated",
 );
 await Bun.write(
   path.join(generatedRoot, "messages.json"),
@@ -43,7 +44,7 @@ const styles = await postcss([tailwindcss()]).process(
   await Bun.file(styleInput).text(),
   { from: styleInput },
 );
-const webRoot = path.resolve(import.meta.dirname, "../../web");
+const webRoot = path.resolve(import.meta.dirname, "../../../apps/web");
 const repoRoot = path.resolve(import.meta.dirname, "../../..");
 const readerMessages = new Map<string, Map<string, string>>();
 const localeRoot = path.join(webRoot, "src/i18n/langs");
@@ -75,6 +76,31 @@ await Bun.write(
   path.join(generatedRoot, "reader-messages.json"),
   `${JSON.stringify(Object.fromEntries([...readerMessages].map(([locale, messages]) => [locale, Object.fromEntries(messages)])), null, 2)}\n`,
 );
+
+// Vite's adapter is specific to Vite hooks; Bun uses the same Oxc transform.
+const reactCompiler = {
+  name: "react-compiler",
+  setup(builder: Bun.PluginBuilder) {
+    builder.onLoad({ filter: /\.[jt]sx$/u }, async ({ path: filename }) => {
+      if (filename.includes(`${path.sep}node_modules${path.sep}`)) {
+        return undefined;
+      }
+      const result = await transform(
+        filename,
+        await Bun.file(filename).text(),
+        {
+          reactCompiler: REACT_COMPILER_OPTIONS,
+        },
+      );
+      if (result.fatal) {
+        panic(
+          `React Compiler failed for ${filename}: ${result.errors.map(({ message }) => message).join("\n")}`,
+        );
+      }
+      return { contents: result.code, loader: "js" };
+    });
+  },
+} satisfies Bun.BunPlugin;
 
 const inlineReaderFonts = {
   name: "inline-reader-fonts",
@@ -139,17 +165,13 @@ const buildMcpApp = async ({
   directory: string;
   input: string;
 }): Promise<void> => {
-  const appRoot = path.resolve(
-    import.meta.dirname,
-    "../src/mcp/apps",
-    directory,
-  );
+  const appRoot = path.resolve(import.meta.dirname, "../src", directory);
   const app = `${directory}/${input}`;
   const result = await Bun.build({
     root: repoRoot,
     compile: true,
     metafile: true,
-    plugins: [inlineReaderFonts],
+    plugins: [reactCompiler, inlineReaderFonts],
     entrypoints: [path.join(appRoot, input)],
     minify: true,
     target: "browser",

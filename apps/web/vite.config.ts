@@ -16,9 +16,9 @@ import {
 } from "vite";
 
 import stllAnonymizeWasm from "@stll/anonymize-wasm/vite";
+import { REACT_COMPILER_OPTIONS } from "@stll/scripts/react-compiler-options";
 
 import { devRouteBuildGuard } from "./dev-route-build-guard.ts";
-import { REACT_COMPILER_OPTIONS } from "./react-compiler-options.ts";
 import { routeTreeOptions } from "./route-tree.config.ts";
 
 const APP_ROOT = import.meta.dirname;

@@ -2,8 +2,8 @@
 @import "@stll/ui/theme.css";
 @source "../case-law-results/*.tsx";
 @source "../decision-reader/*.tsx";
-@source "../../../../../../packages/decision-reader/src";
-@source "../../../../../../packages/ui/src";
+@source "../../../decision-reader/src";
+@source "../../../ui/src";
 
 :root {
   font-family: var(--font-sans);
