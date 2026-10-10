@@ -294,10 +294,7 @@ const verificationWritesWithoutPolicy = (source: string) =>
       )?.[1] ?? entry.default;
     return (
       policy.type !== "caller-feature" ||
-      policy.featureId !==
-        (resourceType === AUDIT_RESOURCE_TYPE.LEGAL_LIST_VERIFICATION
-          ? LEGAL_LISTS_FEATURE_ID
-          : LIST_VERIFICATION_FEATURE_ID)
+      policy.featureId !== LIST_VERIFICATION_FEATURE_ID
     );
   });
 

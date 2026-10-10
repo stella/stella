@@ -285,7 +285,7 @@ export const AUDIT_DETAIL_POLICY = {
     },
   },
   [AUDIT_RESOURCE_TYPE.LEGAL_LIST_VERIFICATION]: {
-    default: { type: "caller-feature", featureId: LEGAL_LISTS_FEATURE_ID },
+    default: VERIFICATION_AUDIT_DETAILS,
     operations: {},
   },
   [AUDIT_RESOURCE_TYPE.MCP_GATEWAY_TOOL]: UNGATED_AUDIT_DETAILS,
