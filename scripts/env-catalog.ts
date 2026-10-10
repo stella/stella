@@ -1554,6 +1554,15 @@ export const TOOLING_ENV_KEYS = new Set([
   "TURN_OUTCOME_SHARD",
   "UPDATE_CHAT_PROMPT_BASELINE",
   "UPDATE_PROVIDER_REQUEST_PATHS",
+  // Release dependency-audit gate: a reasoned waiver and the remediation branch.
+  "WAIVE_DEPENDENCY_AUDIT",
+  "WAIVER_REASON",
+  "FIX_BRANCH",
+  // Shell fixtures for the dependency-audit gate and remediation scripts.
+  "TEST_AUDIT_STATUS",
+  "TEST_CONCURRENT_SHA",
+  "TEST_FIX_AVAILABLE",
+  "TEST_OPEN_PRS",
   "WXT_STELLA_ORIGINS",
 ]);
 
