@@ -22,11 +22,10 @@ SET LOCAL statement_timeout = '30s';
 `;
 
 const runCheckerOn = (...args: string[]): CheckerResult => {
-  const result = Bun.spawnSync([
-    "bun",
-    "scripts/check-migration-safety.ts",
-    ...args,
-  ]);
+  const result = Bun.spawnSync(
+    ["bun", path.join(import.meta.dir, "check-migration-safety.ts"), ...args],
+    { cwd: path.resolve(import.meta.dir, "..") },
+  );
 
   return {
     exitCode: result.exitCode,
