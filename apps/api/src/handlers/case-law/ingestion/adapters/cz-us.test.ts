@@ -12,6 +12,8 @@ import {
   test,
 } from "bun:test";
 
+import { sha256Hex as hashContent } from "@stll/sha256/node";
+
 import {
   decodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
@@ -25,7 +27,6 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
 import { NalusRateLimitedError } from "@/api/handlers/case-law/ingestion/adapters/cz-us-throttle";
 import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
-import { hashContent } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import {
   TEXT_ABSENCE_REASON,
   TEXT_FIELD_TYPE,

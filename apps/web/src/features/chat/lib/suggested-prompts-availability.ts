@@ -29,7 +29,11 @@ type ResolveSuggestedPromptsAvailabilityOptions = {
   turnOwner: SuggestedPromptsTurnOwner;
 };
 
-export type SuggestedPromptsTurnOwner = "approval" | "ask-user" | "composer";
+export type SuggestedPromptsTurnOwner =
+  | "approval"
+  | "ask-user"
+  | "secret"
+  | "composer";
 
 type ToolCallState = Extract<ChatPart, { type: "tool-call" }>["state"];
 const ASK_USER_STATE_OWNS_TURN = {
@@ -64,11 +68,18 @@ export const resolveSuggestedPromptsTurnOwner = ({
     lastMessage.parts.some(
       (part) =>
         part.type === "tool-call" &&
-        part.name === "ask-user" &&
+        (part.name === "ask-user" || part.name === "request_secret") &&
         ASK_USER_STATE_OWNS_TURN[part.state],
     )
   ) {
-    return "ask-user";
+    return lastMessage.parts.some(
+      (part) =>
+        part.type === "tool-call" &&
+        part.name === "request_secret" &&
+        ASK_USER_STATE_OWNS_TURN[part.state],
+    )
+      ? "secret"
+      : "ask-user";
   }
   return "composer";
 };

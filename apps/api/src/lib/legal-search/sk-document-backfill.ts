@@ -75,6 +75,7 @@ import type {
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorSystemFields } from "@/api/lib/errors/utils";
 import { declaredMimeMatchesMagic } from "@/api/lib/file-scan/magic";
+import type { DeferredDocumentAdapterKey } from "@/api/lib/legal-search/adapter-manifest";
 import { settleReservedCaseLawCorpusUpload } from "@/api/lib/legal-search/case-law-corpus-upload-intents";
 import { indexDecision } from "@/api/lib/legal-search/case-law-search-index";
 import {
@@ -664,17 +665,18 @@ type LoadTierOptions<TCursor> = {
 };
 
 /**
- * The source whose adapter stores metadata during the crawl and leaves
- * the document to this queue. Resolved once per sweep so the queue
+ * The source row of an adapter that stores metadata during the crawl and
+ * leaves the document to this queue. Resolved once per sweep so the queue
  * filters decisions by an indexed `source_id` instead of joining the
  * whole backlog against the source table.
  */
 export const loadDeferredDocumentSourceId = async (
   scopedDb: ScopedDb,
+  adapterKey: DeferredDocumentAdapterKey,
 ): Promise<SafeId<"caseLawSource"> | undefined> => {
   const source = await scopedDb((tx) =>
     tx.query.caseLawSources.findFirst({
-      where: { adapterKey: { eq: ADAPTER_KEYS.SK_COURTS } },
+      where: { adapterKey: { eq: adapterKey } },
       columns: { id: true },
     }),
   );
@@ -865,11 +867,12 @@ export const hasPendingDeferredDocumentsForSource = async ({
       (await pendingDocumentPresenceQuery({ sourceId, tx })).length > 0,
   );
 
-/** Bounded existence probe for the registered deferred-document source. */
+/** Bounded existence probe for one deferred-document adapter's source. */
 export const hasPendingDeferredDocuments = async (
   scopedDb: ScopedDb,
+  adapterKey: DeferredDocumentAdapterKey,
 ): Promise<boolean> => {
-  const sourceId = await loadDeferredDocumentSourceId(scopedDb);
+  const sourceId = await loadDeferredDocumentSourceId(scopedDb, adapterKey);
   return sourceId === undefined
     ? false
     : await hasPendingDeferredDocumentsForSource({ scopedDb, sourceId });
@@ -887,6 +890,7 @@ export const hasPendingDeferredDocuments = async (
  */
 export const scopedPendingDocumentTierLoaders = (
   scopedDb: ScopedDb,
+  adapterKey: DeferredDocumentAdapterKey,
 ): PendingDocumentTierLoaders => {
   let sourceId: SafeId<"caseLawSource"> | undefined;
   let sourceReprobeAt = Number.NEGATIVE_INFINITY;
@@ -900,7 +904,7 @@ export const scopedPendingDocumentTierLoaders = (
     ) {
       return sourceId;
     }
-    sourceId = await loadDeferredDocumentSourceId(scopedDb);
+    sourceId = await loadDeferredDocumentSourceId(scopedDb, adapterKey);
     sourceReprobeAt =
       Temporal.Now.instant().epochMilliseconds + DOCUMENT_SCAN_REPROBE_MS;
     return sourceId;
@@ -938,11 +942,18 @@ export const scopedPendingDocumentTierLoaders = (
  * of the rest. The worker's continuous stream additionally limits rows
  * examined before checking readiness; see `sk-document-queue.ts`.
  */
-export const loadPendingDocuments = async (
-  scopedDb: ScopedDb,
-  limit: number,
-): Promise<PendingDocument[]> => {
-  const sourceId = await loadDeferredDocumentSourceId(scopedDb);
+type LoadPendingDocumentsOptions = {
+  scopedDb: ScopedDb;
+  adapterKey: DeferredDocumentAdapterKey;
+  limit: number;
+};
+
+export const loadPendingDocuments = async ({
+  scopedDb,
+  adapterKey,
+  limit,
+}: LoadPendingDocumentsOptions): Promise<PendingDocument[]> => {
+  const sourceId = await loadDeferredDocumentSourceId(scopedDb, adapterKey);
   if (sourceId === undefined) {
     return [];
   }

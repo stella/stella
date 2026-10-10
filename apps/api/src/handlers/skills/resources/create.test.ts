@@ -1,7 +1,7 @@
 import { Value } from "@sinclair/typebox/value";
 import { describe, expect, test } from "bun:test";
 
-import { SKILL_RESOURCE_KINDS } from "@stll/skills/resource-kinds";
+import { SKILL_RESOURCE_KINDS } from "@stll/skills/format";
 
 import createSkillResource from "./create";
 

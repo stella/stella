@@ -382,6 +382,7 @@ describe("pinning a decision into a matter", () => {
     expect(JSON.stringify(model)).not.toContain("decision-summary-fixture");
 
     const capabilityCall = await handleMcpToolCall({
+      mode: "advanced",
       args: {
         capability: "case-law.matter-links.list",
         input: { params: { matterId: ids.wsA1 } },

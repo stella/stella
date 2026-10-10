@@ -10,14 +10,15 @@ import {
 import type { PgColumn } from "drizzle-orm/pg-core";
 
 import * as authSchema from "@/api/db/auth-schema";
+import { entityFeatureGateMetadata } from "@/api/db/entity-feature-gate-metadata";
 import * as schema from "@/api/db/schema";
 import { workspaces } from "@/api/db/schema";
 import {
-  WORKSPACE_DERIVED_REFERENCE_DISPOSITION,
   WORKSPACE_DELETION_MANUAL_TABLES,
   WORKSPACE_STORAGE_CLASS,
   WORKSPACE_STORAGE_DISPOSITION,
   WORKSPACE_STORAGE_REFERENCE_DISPOSITION,
+  workspaceDerivedReferenceDisposition,
 } from "@/api/lib/organization-storage-teardown";
 
 const isPgTable = (value: unknown): value is PgTable => is(value, PgTable);
@@ -154,8 +155,19 @@ describe("workspace deletion coverage", () => {
         .map((column) => `${tableName}.${column.name}`);
     });
     expect(derivedWorkspaceColumns.toSorted()).toEqual(
-      Object.keys(WORKSPACE_DERIVED_REFERENCE_DISPOSITION).toSorted(),
+      Object.keys(workspaceDerivedReferenceDisposition(allTables)).toSorted(),
     );
+  });
+
+  test("workspace feature-gate scopes belong to rows removed by the cascade", () => {
+    const cascadeClosure = new Set(
+      [...deletionClosure()].map((table) => getTableConfig(table).name),
+    );
+    const outsideCascade = entityFeatureGateMetadata(allTables)
+      .filter(({ needsWorkspace }) => needsWorkspace)
+      .map(({ tableName }) => tableName)
+      .filter((tableName) => !cascadeClosure.has(tableName));
+    expect(outsideCascade).toEqual([]);
   });
 
   test("every known workspace storage class has an explicit disposition", () => {

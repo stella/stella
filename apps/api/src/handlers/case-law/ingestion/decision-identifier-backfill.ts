@@ -11,6 +11,7 @@ import type {
 } from "@stll/legal-ast/decision-identifier";
 
 import type { Transaction } from "@/api/db/root";
+import { abortTransaction } from "@/api/db/safe-db";
 import {
   CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE,
   CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASES,
@@ -30,6 +31,7 @@ import {
   normalizeDecisionIdentifierValue,
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import type { SafeId } from "@/api/lib/branded-types";
+import { assertCitationStorageField } from "@/api/lib/case-law/citation-storage-bounds";
 import type { CaseLawRootHandle } from "@/api/lib/case-law/maintenance-lane";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import {
@@ -543,7 +545,14 @@ const projectCitationPage = async (
   const projected = sql.join(
     rows.map((row) => {
       const { type, normalizedValue } = citationProjection(row);
-      return sql`(${row.id}::uuid, ${type}::varchar, ${normalizedValue}::varchar)`;
+      const checked = assertCitationStorageField(
+        "normalizedIdentifier",
+        normalizedValue,
+      );
+      if (checked.isErr()) {
+        abortTransaction(checked.error);
+      }
+      return sql`(${row.id}::uuid, ${type}::varchar, ${checked.value}::varchar)`;
     }),
     sql`, `,
   );
