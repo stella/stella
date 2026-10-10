@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import JSZip from "jszip";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
+import { sha256Hex as legacySha256Hex } from "@stll/sha256/node";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -555,6 +556,38 @@ describe("chat attachment hydration", () => {
       safeDb,
     });
   });
+
+  test.each(["", "ordinary", "Žluťoučký kůň Łódź", "e\u0301", "\u0000\u00ff"])(
+    "stores the legacy SHA-256 of the exact attachment bytes: %j",
+    async (text) => {
+      const bytes = new TextEncoder().encode(text);
+      const values = mock(
+        async (_row: { sha256Hex: string; sizeBytes: number }) => undefined,
+      );
+      const testTx = asTestRaw<Transaction>({ insert: () => ({ values }) });
+      const safeDb: SafeDb = async (callback) =>
+        await Result.tryPromise(async () => await callback(testTx));
+      const result = await uploadUserFile({
+        dependencies: uploadDependencies,
+        file: { bytes, fileName: "notes.txt", mimeType: TEXT_PLAIN_MIME_TYPE },
+        recordAuditEvent: mock(async () => undefined),
+        safeDb,
+        threadId: toSafeId<"chatThread">(
+          "11111111-1111-4111-8111-111111111112",
+        ),
+        userId: toSafeId<"user">("11111111-1111-4111-8111-111111111113"),
+        workspaceId,
+      });
+      expect(Result.isOk(result)).toBe(true);
+      expect(values.mock.calls.at(0)?.at(0)).toMatchObject({
+        sha256Hex: legacySha256Hex(bytes),
+        sizeBytes: bytes.byteLength,
+      });
+      const putKey =
+        requestKeys("PUT").at(0) ?? panic("attachment was not stored");
+      expect(fake.objects.get(`${bucket}/${putKey}`)?.bytes).toEqual(bytes);
+    },
+  );
 
   test("stores a sanitized filename, whatever the caller supplied", async () => {
     // SW-0009 waives `no-raw-filename-write` at `hydrateMessages` on two

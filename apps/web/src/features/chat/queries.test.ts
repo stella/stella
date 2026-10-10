@@ -98,6 +98,37 @@ const chatRequestRunId = (body: unknown): string => {
 const parseChatRequestRunId = (init: RequestInit | undefined): string =>
   chatRequestRunId(parseJsonRequestBody(init));
 
+test("retains answer revisions when hydrating and refreshing the live runtime", () => {
+  const originalAnswer = {
+    id: assistantMessageId,
+    role: "assistant",
+    parts: [{ type: "text", content: "The deadline is Monday." }],
+    revision: 0,
+    edited: false,
+  } as const satisfies PersistedChatMessage;
+  const runtime = createChatRuntime({
+    activeTurnId: null,
+    context: undefined,
+    initialMessages: [originalAnswer],
+    key: { scope: "global", threadId: toChatThreadId("thread-A") },
+    onError: (error) => {
+      throw error;
+    },
+    onFinish: () => undefined,
+    reloadThread: () => undefined,
+  });
+  expect(runtime.getSnapshot().messages).toEqual([originalAnswer]);
+  const editedAnswer = {
+    ...originalAnswer,
+    parts: [{ type: "text", content: "The deadline is Friday." }],
+    revision: 1,
+    edited: true,
+  } as const satisfies PersistedChatMessage;
+  runtime.setMessages([editedAnswer]);
+  expect(runtime.getSnapshot().messages).toEqual([editedAnswer]);
+  runtime.leave();
+});
+
 describe("chatKeys", () => {
   test("isolates normalized history searches from the unfiltered list", () => {
     const activeOrganizationId = "org_test";
@@ -440,6 +471,7 @@ describe("mergeGroupedChatThreadPages", () => {
             updatedAt: "2026-05-16T08:00:00.000Z",
             usedAnonymization: false,
             context: EMPTY_THREAD_CONTEXT,
+            decision: null,
           },
         ],
         nextCursor: "page-2",
@@ -456,6 +488,7 @@ describe("mergeGroupedChatThreadPages", () => {
                 updatedAt: "2026-05-16T07:00:00.000Z",
                 usedAnonymization: false,
                 context: EMPTY_THREAD_CONTEXT,
+                decision: null,
               },
             ],
           },
@@ -471,6 +504,7 @@ describe("mergeGroupedChatThreadPages", () => {
             updatedAt: "2026-05-16T08:00:00.000Z",
             usedAnonymization: false,
             context: EMPTY_THREAD_CONTEXT,
+            decision: null,
           },
           {
             createdAt: "2026-05-16T06:00:00.000Z",
@@ -480,6 +514,7 @@ describe("mergeGroupedChatThreadPages", () => {
             updatedAt: "2026-05-16T06:00:00.000Z",
             usedAnonymization: false,
             context: EMPTY_THREAD_CONTEXT,
+            decision: null,
           },
         ],
         nextCursor: null,
@@ -496,6 +531,7 @@ describe("mergeGroupedChatThreadPages", () => {
                 updatedAt: "2026-05-16T07:00:00.000Z",
                 usedAnonymization: false,
                 context: EMPTY_THREAD_CONTEXT,
+                decision: null,
               },
               {
                 createdAt: "2026-05-16T05:00:00.000Z",
@@ -505,6 +541,7 @@ describe("mergeGroupedChatThreadPages", () => {
                 updatedAt: "2026-05-16T05:00:00.000Z",
                 usedAnonymization: false,
                 context: EMPTY_THREAD_CONTEXT,
+                decision: null,
               },
             ],
           },
@@ -520,6 +557,7 @@ describe("mergeGroupedChatThreadPages", () => {
                 updatedAt: "2026-05-16T06:00:00.000Z",
                 usedAnonymization: false,
                 context: EMPTY_THREAD_CONTEXT,
+                decision: null,
               },
               {
                 createdAt: "2026-05-16T04:00:00.000Z",
@@ -529,6 +567,7 @@ describe("mergeGroupedChatThreadPages", () => {
                 updatedAt: "2026-05-16T04:00:00.000Z",
                 usedAnonymization: false,
                 context: EMPTY_THREAD_CONTEXT,
+                decision: null,
               },
             ],
           },

@@ -1796,6 +1796,10 @@ test("only a pull request or a manual run skips heavy suites or passes a superse
   const skippedHeavy = Object.fromEntries(
     heavyJobs.map((job) => [job, "skipped"]),
   );
+  const unplannedHeavyScopes = heavyJobs.flatMap((job) => {
+    const scope = fastJobScopes[job] ?? jobScopes[job];
+    return typeof scope === "string" ? [scope] : [];
+  });
   const fast = SUITE_DEPTH.fast;
   for (const event of FAST_DEPTH_EVENTS) {
     expect(
@@ -1803,7 +1807,7 @@ test("only a pull request or a manual run skips heavy suites or passes a superse
         event,
         results: skippedHeavy,
         suiteDepth: fast,
-        unplannedScopes: Object.values(fastJobScopes),
+        unplannedScopes: unplannedHeavyScopes,
       }),
       event,
     ).toBe(0);
@@ -1970,9 +1974,6 @@ test("a fast-depth run requires every selected fast-required job to run", () => 
     expect(jobScopes).toHaveProperty(job);
     const scope = fastJobScopes[job] ?? jobScopes[job];
     // A scope-less job always runs; a scoped job must be selected by the plan.
-    if (fastJobScopes[job] === undefined) {
-      expect(heavyJobs, job).not.toContain(job);
-    }
     const event = EVENT.pullRequest;
     gates.push(
       {
@@ -2160,6 +2161,204 @@ const resolveDepth = (
     rmSync(directory, { force: true, recursive: true });
   }
 };
+
+const shellLocals = (script: string): Set<string> => {
+  const withoutExpressions = script.replace(/\$\{\{[\s\S]*?\}\}/gu, "");
+  const defined = new Set<string>();
+  const declarations = /\b(?:local|declare|typeset|readonly)\s+([^\n;]+)/gu;
+  for (const [, names] of withoutExpressions.matchAll(declarations)) {
+    for (const [, name] of (names ?? "").matchAll(
+      /(?:^|\s)([A-Za-z_][A-Za-z0-9_]*)(?==|\s|$)/gu,
+    )) {
+      if (name !== undefined) {
+        defined.add(name);
+      }
+    }
+  }
+  for (const [, assignment, loop] of withoutExpressions.matchAll(
+    /(?:^|[\s;]|\()([A-Za-z_][A-Za-z0-9_]*)\s*=(?!=)|\bfor\s+([A-Za-z_][A-Za-z0-9_]*)\s+in\b/gu,
+  )) {
+    const name = assignment ?? loop;
+    if (name !== undefined) {
+      defined.add(name);
+    }
+  }
+  for (const [, name] of withoutExpressions.matchAll(
+    /\bread\b[^\n;]*?\s([A-Za-z_][A-Za-z0-9_]*)\s*(?:$|;)/gmu,
+  )) {
+    if (name !== undefined) {
+      defined.add(name);
+    }
+  }
+  return defined;
+};
+
+const shellVariableReads = (script: string): Set<string> => {
+  const reads = new Set<string>();
+  let quote: "single" | "double" | undefined;
+  for (let index = 0; index < script.length; index += 1) {
+    const character = script[index];
+    if (character === "\\" && quote !== "single") {
+      index += 1;
+      continue;
+    }
+    if (quote === "single") {
+      if (character === "'") {
+        quote = undefined;
+      }
+      continue;
+    }
+    if (character === "'" && quote === undefined) {
+      quote = "single";
+      continue;
+    }
+    if (character === '"') {
+      quote = quote === "double" ? undefined : "double";
+      continue;
+    }
+    if (
+      character === "#" &&
+      quote === undefined &&
+      (index === 0 || /[\s;|&()]/u.test(script[index - 1] ?? ""))
+    ) {
+      const newline = script.indexOf("\n", index);
+      index = newline === -1 ? script.length : newline;
+      continue;
+    }
+    if (character !== "$" || script[index + 1] === "{") {
+      if (character === "$" && script[index + 1] === "{") {
+        const end = script.indexOf("}", index + 2);
+        if (end !== -1) {
+          const expansion = script.slice(index + 2, end);
+          const match = /^([A-Za-z_][A-Za-z0-9_]*)(.*)$/u.exec(expansion);
+          if (match?.[1] !== undefined && !/^:?[-+]/u.test(match[2] ?? "")) {
+            reads.add(match[1]);
+          }
+          index = end;
+        }
+      }
+      continue;
+    }
+    const match = /^[A-Za-z_][A-Za-z0-9_]*/u.exec(script.slice(index + 1));
+    if (match?.[0] !== undefined) {
+      reads.add(match[0]);
+      index += match[0].length;
+    }
+  }
+  return reads;
+};
+
+test("CI shell steps using nounset define every variable they read", () => {
+  const parsedWorkflow = v.parse(
+    v.looseObject({
+      env: v.optional(v.record(v.string(), v.unknown())),
+      jobs: v.record(v.string(), v.unknown()),
+    }),
+    Bun.YAML.parse(workflow),
+  );
+  const runnerEnvironment = new Set([
+    "CI",
+    "GITHUB_ACTION",
+    "GITHUB_ACTION_PATH",
+    "GITHUB_ACTION_REPOSITORY",
+    "GITHUB_ACTIONS",
+    "GITHUB_ACTOR",
+    "GITHUB_ACTOR_ID",
+    "GITHUB_API_URL",
+    "GITHUB_BASE_REF",
+    "GITHUB_ENV",
+    "GITHUB_EVENT_NAME",
+    "GITHUB_EVENT_PATH",
+    "GITHUB_GRAPHQL_URL",
+    "GITHUB_HEAD_REF",
+    "GITHUB_JOB",
+    "GITHUB_OUTPUT",
+    "GITHUB_PATH",
+    "GITHUB_REF",
+    "GITHUB_REF_NAME",
+    "GITHUB_REF_PROTECTED",
+    "GITHUB_REF_TYPE",
+    "GITHUB_REPOSITORY",
+    "GITHUB_REPOSITORY_ID",
+    "GITHUB_REPOSITORY_OWNER",
+    "GITHUB_RETENTION_DAYS",
+    "GITHUB_RUN_ATTEMPT",
+    "GITHUB_RUN_ID",
+    "GITHUB_RUN_NUMBER",
+    "GITHUB_SERVER_URL",
+    "GITHUB_SHA",
+    "GITHUB_STEP_SUMMARY",
+    "GITHUB_WORKFLOW",
+    "GITHUB_WORKSPACE",
+    "HOME",
+    "ImageOS",
+    "ImageVersion",
+    "RUNNER_ARCH",
+    "RUNNER_NAME",
+    "RUNNER_OS",
+    "RUNNER_TEMP",
+    "RUNNER_TOOL_CACHE",
+    "BASH_REMATCH",
+    "BASH_SOURCE",
+    "BASH_VERSION",
+    "BASHOPTS",
+    "BASHPID",
+    "EUID",
+    "FUNCNAME",
+    "IFS",
+    "OLDPWD",
+    "PIPESTATUS",
+    "PPID",
+    "PWD",
+    "SHELLOPTS",
+    "UID",
+  ]);
+  const rawJob = parsedWorkflow.jobs["ci-plan"];
+  if (rawJob === undefined) {
+    throw new TypeError("Missing ci-plan job");
+  }
+  const job = v.parse(
+    v.looseObject({
+      env: v.optional(v.record(v.string(), v.unknown())),
+      steps: v.optional(v.unknown()),
+    }),
+    rawJob,
+  );
+  const jobEnvironment = new Set([
+    ...Object.keys(parsedWorkflow.env ?? {}),
+    ...Object.keys(job.env ?? {}),
+  ]);
+  const failures = flattenWorkflowSteps(job.steps ?? []).flatMap((step) => {
+    if (
+      typeof step["run"] !== "string" ||
+      !/\bset\s+-[^\n]*u/u.test(step["run"])
+    ) {
+      return [];
+    }
+    const stepDetails = v.parse(
+      v.looseObject({
+        name: v.optional(v.string()),
+        env: v.optional(v.record(v.string(), v.unknown())),
+        run: v.string(),
+      }),
+      step,
+    );
+    const defined = new Set([
+      ...runnerEnvironment,
+      ...jobEnvironment,
+      ...Object.keys(stepDetails.env ?? {}),
+      ...shellLocals(stepDetails.run),
+    ]);
+    const shell = stepDetails.run.replace(/\$\{\{[\s\S]*?\}\}/gu, "");
+    const missing = [...shellVariableReads(shell)]
+      .filter((name) => !defined.has(name))
+      .toSorted(compareCodeUnit);
+    return missing.length > 0
+      ? [`ci-plan/${stepDetails.name ?? "unnamed step"}: ${missing.join(", ")}`]
+      : [];
+  });
+  expect(failures).toEqual([]);
+});
 
 test("a manual run supersedes only an older manual run on the same branch", () => {
   const concurrency = v.parse(
@@ -2425,9 +2624,9 @@ test("CLI packaging parity runs whenever CLI sources, codegen or generated outpu
   ].map((glob) =>
     glob.replaceAll("**", "example/generated.ts").replaceAll("*", "example"),
   );
-  // The scope is not trivially on: provenance-only changes skip it.
-  expect(packageChecksPlan(["provenance/attestation.json"])).toBe("false");
-  // Every CLI path, alone and on either side of skipped provenance files.
+  // Ordinary documentation still skips package checks.
+  expect(packageChecksPlan(["README.md"])).toBe("false");
+  // Every CLI path, alone and on either side of provenance files.
   const provenance = [".provenance.yml", "provenance/attestation.json"];
   for (const cliPath of cliPaths) {
     for (const files of [
@@ -2783,16 +2982,21 @@ test("spec-tree PRs plan production shards and their web build at fast depth", (
     );
     expect(planned, file).toEqual(["true", "true"]);
     expect(jobScopes["e2e-production-shard"]).toBe("e2e_production_required");
+    expect(fastJobScopes["web-build"]).toBe("browser_spec_selection_required");
+    expect(jobIf(ciJobs["web-build"])).toContain(
+      "needs.ci-plan.outputs.browser_spec_selection_required == 'true'",
+    );
     expect(jobIf(ciJobs["e2e-production-shard"])).toContain(
       "needs.ci-plan.outputs.e2e_production_required == 'true'",
     );
-    expect(fastRequired).not.toContain("e2e-production-shard");
+    expect(fastRequired).toContain("e2e-production-shard");
+    expect(fastRequired).toContain("web-build");
     expect(
       evaluateResult({
         event: EVENT.pullRequest,
         results: { "e2e-production-shard": "skipped" },
       }),
-    ).toBe(0);
+    ).toBe(1);
     expect(
       evaluateResult({
         event: EVENT.pullRequest,
@@ -2800,6 +3004,131 @@ test("spec-tree PRs plan production shards and their web build at fast depth", (
       }),
     ).toBe(1);
   }
+});
+
+test("PR e2e selection schedules its build and shard together", () => {
+  const selected = {
+    event: EVENT.pullRequest,
+    depth: SUITE_DEPTH.fast,
+  } as const;
+  expect(runsAtDepth(jobIf(ciJobs["web-build"]), selected)).toBe(true);
+  expect(runsAtDepth(jobIf(ciJobs["e2e-production-shard"]), selected)).toBe(
+    true,
+  );
+
+  const values = {
+    "github.event_name": EVENT.pullRequest,
+    "inputs.heavy_only": false,
+    "needs.ci-plan.outputs.run_required": "true",
+    "needs.ci-plan.outputs.trusted": "true",
+    "needs.ci-plan.outputs.coverage_profile": "normal-v1",
+    "needs.ci-plan.outputs.queue_depth": "full",
+    "needs.ci-plan.outputs.web_build_required": "false",
+    "needs.ci-plan.outputs.browser_spec_selection_required": "false",
+    "needs.ci-plan.outputs.e2e_production_required": "false",
+    "needs.web-build.result": "skipped",
+    "needs.heavy-web-build.result": "skipped",
+    "vars.QUEUE_BROWSER_SUITES": "",
+  };
+  expect(
+    evaluate(jobIf(ciJobs["web-build"]), {
+      values,
+      status: { always: true, success: true, failure: false, cancelled: false },
+    }),
+  ).toBe(false);
+  expect(
+    evaluate(jobIf(ciJobs["e2e-production-shard"]), {
+      values,
+      status: { always: true, success: true, failure: false, cancelled: false },
+    }),
+  ).toBe(false);
+  expect(runSelector(["README.md"], ["e2e_production_required"])).toEqual([
+    "false",
+  ]);
+});
+
+type PlaywrightSelectionOptions = {
+  mode: "full" | "selected";
+  specs: string;
+  shard?: number;
+};
+
+const runPlaywrightSelection = ({
+  mode,
+  specs,
+  shard = 1,
+}: PlaywrightSelectionOptions) => {
+  const step = jobSteps(ciJobs["e2e-production-shard"]).find(
+    ({ name }) => name === "Run Playwright shard",
+  );
+  const run = step?.run ?? panic("Missing Playwright shard step");
+  expect(step?.env?.["E2E_MODE"]).toBe(
+    `\${{ needs.ci-plan.outputs.e2e_production_mode }}`,
+  );
+  expect(step?.env?.["E2E_SPECS"]).toBe(
+    `\${{ needs.ci-plan.outputs.e2e_production_specs }}`,
+  );
+  return Bun.spawnSync(
+    [
+      "bash",
+      "-c",
+      `bash() { printf '%s\\n' "$@"; }\n${run.replaceAll(/\$\{\{ matrix\.shard \}\}/gu, () => String(shard))}`,
+    ],
+    {
+      env: {
+        PATH: Bun.env["PATH"] ?? "",
+        GITHUB_WORKSPACE: nodePath.resolve(import.meta.dir, ".."),
+        E2E_MODE: mode,
+        E2E_SPECS: specs,
+      },
+      stdout: "pipe",
+      stderr: "pipe",
+    },
+  );
+};
+
+test.each([1, 2])(
+  "full Playwright depth shards tests without a spec list: %s",
+  (shard) => {
+    const result = runPlaywrightSelection({ mode: "full", specs: "[]", shard });
+    expect(result.exitCode, result.stderr.toString()).toBe(0);
+    expect(result.stdout.toString().trim().split("\n")).toEqual([
+      `${nodePath.resolve(import.meta.dir, "..")}/.github/actions/setup-playwright/run-in-image.sh`,
+      "bun",
+      "--filter",
+      "@stll/web",
+      "test:e2e",
+      "--",
+      "--grep-invert=route-smoke",
+      `--shard=${shard}/2`,
+    ]);
+  },
+);
+
+test("a selected PR leg passes only its selected specs without sharding", () => {
+  const spec = "apps/web/e2e/specs/guides.spec.ts";
+  const result = runPlaywrightSelection({
+    mode: "selected",
+    specs: JSON.stringify([spec]),
+  });
+  expect(result.exitCode, result.stderr.toString()).toBe(0);
+  expect(result.stdout.toString().trim().split("\n")).toEqual([
+    `${nodePath.resolve(import.meta.dir, "..")}/.github/actions/setup-playwright/run-in-image.sh`,
+    "bun",
+    "--filter",
+    "@stll/web",
+    "test:e2e",
+    "--",
+    "--grep-invert=route-smoke",
+    spec,
+  ]);
+});
+
+test("a selected Playwright leg fails before loading an empty spec list", () => {
+  const result = runPlaywrightSelection({ mode: "selected", specs: "[]" });
+  expect(result.exitCode).toBe(1);
+  expect(result.stderr.toString()).toContain("Selected E2E leg has no specs");
+  expect(result.stdout.toString()).toBe("");
 });
 
 test("production shards keep full-depth core coverage and exclude unrelated fast PRs", () => {
@@ -4771,7 +5100,7 @@ test("property suites and their budgets select required PR checks", () => {
   ]) {
     expect(packageChecksPlan([file]), file).toBe("true");
   }
-  expect(packageChecksPlan(["provenance/manifest.json"])).toBe("false");
+  expect(packageChecksPlan(["provenance/manifest.json"])).toBe("true");
   for (const job of ["ci-tests", "ci-checks-policy", "ci-checks-rest"]) {
     expect(
       runsAtDepth(jobIf(ciJobs[job]), {
@@ -5151,6 +5480,94 @@ test("a crashed API planner widens the real workflow outputs", () => {
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test.each([
+  {
+    event: "pull_request",
+    outcome: "failure",
+    matrix: '{"shard":[]}',
+    full: true,
+  },
+  { event: "pull_request", outcome: "success", matrix: "", full: true },
+  {
+    event: "merge_group",
+    outcome: "success",
+    matrix: '{"shard":[1]}',
+    full: true,
+  },
+  { event: "push", outcome: "success", matrix: '{"shard":[1]}', full: true },
+  {
+    event: "workflow_dispatch",
+    outcome: "success",
+    matrix: '{"shard":[1]}',
+    full: true,
+  },
+  {
+    event: "pull_request",
+    outcome: "success",
+    matrix: '{"shard":[1]}',
+    full: false,
+  },
+  {
+    event: "pull_request",
+    outcome: "success",
+    matrix: '{"shard":[]}',
+    full: false,
+  },
+])(
+  "the e2e planner preserves full depth or selected PR legs: %j",
+  ({ event, outcome, matrix, full }) => {
+    const planner = jobSteps(ciJobs["ci-plan"]).find(
+      (step) => step.name === "Plan changed PR e2e shards",
+    );
+    const directory = mkdtempSync(nodePath.join(tmpdir(), "e2e-plan-"));
+    const output = nodePath.join(directory, "output");
+    const selected = matrix === '{"shard":[1]}';
+    const specs = selected ? '["apps/web/e2e/specs/guides.spec.ts"]' : "[]";
+    try {
+      const result = Bun.spawnSync(
+        [
+          "bash",
+          "-e",
+          "-c",
+          `bun() {
+          [[ "$*" == 'scripts/e2e-spec-shards-core.ts all' ]] || return 1
+          printf '%s' '{"shard":[1,2,"network-baseline"]}'
+        }
+        ${planner?.run ?? panic("Missing e2e shard planner")}`,
+        ],
+        {
+          env: {
+            PATH: Bun.env["PATH"] ?? "",
+            E2E_PRODUCTION_REQUIRED: "true",
+            EVENT_NAME: event,
+            GITHUB_OUTPUT: output,
+            SELECTED_MATRIX: matrix,
+            SELECTED_MODE: "selected",
+            SELECTED_SPECS: specs,
+            SELECTOR_OUTCOME: outcome,
+          },
+          stdout: "pipe",
+          stderr: "pipe",
+        },
+      );
+      expect(result.exitCode, result.stderr.toString()).toBe(0);
+      const required = full || selected;
+      expect(readFileSync(output, "utf-8")).toBe(
+        [
+          `matrix=${full ? '{"shard":[1,2,"network-baseline"]}' : matrix}`,
+          `mode=${full ? "full" : "selected"}`,
+          `specs=${full ? "[]" : specs}`,
+          `selection_required=${required}`,
+          `required=${required}`,
+          "",
+        ].join("\n"),
+      );
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  },
+);
 
 test("nightly full tests use the shared full-depth shard plan and selection enters its cache key", () => {
   const nightly = readFileSync(

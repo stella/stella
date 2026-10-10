@@ -1,3 +1,4 @@
+// parser-output-unchanged: This change only classifies failed listing fetches as source unreachable and does not change parser output.
 // parser-output-unchanged: completion batches use the shared owner with identical items and cursor boundaries; parsed content is unchanged.
 import { panic, Result } from "better-result";
 // parser-output-unchanged: Retry exhaustion holds the cursor; successful pages produce unchanged parsed decisions.
@@ -12,6 +13,7 @@ import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
+import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
 
 import { ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
 import type {
@@ -918,12 +920,20 @@ export const createPagePaginatedFetch = <TResponse>(
             } catch (retryParseError) {
               const retryContentType =
                 retryResponse.headers.get("content-type") ?? "unknown";
+              // Two answers in a row that are not data at all are the
+              // publisher's error or maintenance page, not a page this
+              // adapter misread.
               return Result.err(
-                retryFailed(
-                  retryParseError instanceof SyntaxError
-                    ? `unparseable (content-type: ${retryContentType})`
-                    : `validation failed: ${retryParseError instanceof Error ? retryParseError.message : String(retryParseError)}`,
-                ),
+                retryParseError instanceof SyntaxError
+                  ? new AdapterFetchError({
+                      message: `${opts.adapterKey}: page ${page} retry unparseable (content-type: ${retryContentType})`,
+                      adapterKey: opts.adapterKey,
+                      cursor,
+                      stopKind: INGESTION_STOP_KIND.SOURCE_UNREACHABLE,
+                    })
+                  : retryFailed(
+                      `validation failed: ${retryParseError instanceof Error ? retryParseError.message : String(retryParseError)}`,
+                    ),
               );
             }
           }

@@ -11,6 +11,7 @@ import {
   parseBrowserControlCommand,
 } from "@stll/api-contract/browser-control";
 import type { BrowserControlCommand } from "@stll/api-contract/browser-control";
+import { requiresPerCallChatApproval } from "@stll/api-contract/chat-secret";
 import { Button } from "@stll/ui/button";
 import { CheckIcon, GlobeIcon, PencilIcon, XIcon } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
@@ -548,6 +549,7 @@ export const ToolApprovalCard = ({
     useBrowserCommandAutoApproved(browserCommand);
   const shouldAutoApprove =
     !isBlocked &&
+    !requiresPerCallChatApproval(name) &&
     (hasAutomaticApproval({
       alwaysApprovedTools,
       canAlwaysAllow,
@@ -935,7 +937,9 @@ const getToolApprovalState = ({
   // grant can auto-approve a later call.
   const isApprovalOnce = isApprovalOnceChatToolName(name);
   const canAllowInConversation =
-    !isApprovalOnce && !isNonPersistentGrantChatToolName(name);
+    !requiresPerCallChatApproval(name) &&
+    !isApprovalOnce &&
+    !isNonPersistentGrantChatToolName(name);
   const externalMcpProviderName = getExternalMcpProviderName(name);
 
   return {

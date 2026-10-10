@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import * as v from "valibot";
 
+import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
 import { propertyConfig } from "@stll/property-testing";
 
 import type { IngestionItem } from "@/api/handlers/case-law/ingestion/adapter";
@@ -31,6 +32,7 @@ import {
 import { mockFetchWithFixtures, saveFixture } from "./test-utils";
 
 const FIXTURE_NAME = "pagination-test.json";
+const HTML_FIXTURE_NAME = "pagination-test-html.json";
 
 type TestItem = { id: number };
 type TestResponse = { results: TestItem[]; total: number };
@@ -260,6 +262,25 @@ describe("createPagePaginatedFetch", () => {
       return;
     }
     expect(result.error.message).toBe("test: the body states no results array");
+  });
+
+  test("a page that stays unparseable after its retry is the publisher unavailable", async () => {
+    await saveFixture(
+      HTML_FIXTURE_NAME,
+      "<html><body>maintenance</body></html>",
+    );
+    restore = await mockFetchWithFixtures([
+      { pattern: "/test-api", fixture: HTML_FIXTURE_NAME },
+    ]);
+
+    const result = await createTestFetch()(null, {});
+
+    expect(result.isErr()).toBe(true);
+    if (!Result.isError(result)) {
+      return;
+    }
+    expect(result.error.message).toContain("retry unparseable");
+    expect(result.error.stopKind).toBe(INGESTION_STOP_KIND.SOURCE_UNREACHABLE);
   });
 
   test("returns error for invalid cursor", async () => {

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { parseSkillFile } from "./loader";
+import { parseSkillFile } from "./frontmatter";
 import {
   readSkillRequiredTools,
   SKILL_REQUIRED_TOOLS_METADATA_KEY,

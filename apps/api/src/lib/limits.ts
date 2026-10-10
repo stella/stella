@@ -28,7 +28,7 @@ import {
   CHAT_CONTEXT_FILE_MAX_BYTES,
   CHAT_CONTEXT_FILE_MAX_MEGABYTES,
 } from "@stll/chat-limits";
-import { SKILL_PACKAGE_LIMITS } from "@stll/skills/package-limits";
+import { SKILL_PACKAGE_LIMITS } from "@stll/skills/format";
 
 import type { env } from "@/api/env";
 
@@ -876,6 +876,9 @@ export const API_RATE_LIMITS = {
   /** REST API: 1000 req/min per IP. Covers normal navigation
    *  (5-10 requests per page load × frequent workspace switching). */
   api: { duration: 60_000, max: 1000 },
+  /** Legal identity resolution: 120 requests/minute for each credential and
+   * organization, with separate counters for decisions and legislation. */
+  legalResolve: { duration: 60_000, max: 120 },
   /** Anonymous sanctions searches: 20 req/min per IP. Each search matches
    *  across the shared sanctions indexes, so it has a separate CPU budget. */
   publicSanctionsSearch: { duration: 60_000, max: 20, maxConcurrent: 2 },

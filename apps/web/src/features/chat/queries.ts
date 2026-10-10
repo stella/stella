@@ -146,6 +146,26 @@ type ThreadFetch = {
   context: ChatContextUsage | null;
 };
 
+type FetchChatMessageOptions = {
+  threadId: string;
+  messageId: string;
+};
+
+export const fetchChatMessage = async ({
+  threadId,
+  messageId,
+}: FetchChatMessageOptions) => {
+  const message = unwrapEden(
+    await api.chat.threads({ threadId }).messages({ messageId }).get(),
+  );
+  const { createdAt, parts, ...rest } = message;
+  return {
+    ...rest,
+    createdAt: readChatTimestamp(createdAt),
+    parts: parts.map(deserializeChatPart),
+  };
+};
+
 const fetchThreadMessages = async (
   key: ChatThreadKey,
   {

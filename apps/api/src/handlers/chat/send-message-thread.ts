@@ -155,6 +155,12 @@ type LoadThreadProps = {
   organizationId: SafeId<"organization">;
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
+  /**
+   * The decision a new thread is about, from the send's active decision.
+   * Written only when this send creates the thread; an existing thread keeps
+   * the decision it was created with.
+   */
+  subjectDecisionId: SafeId<"caseLawDecision"> | null;
   threadId: SafeId<"chatThread">;
   title: string;
   userId: SafeId<"user">;
@@ -194,6 +200,7 @@ const loadThreadAttempt = async ({
   organizationId,
   recordAuditEvent,
   safeDb,
+  subjectDecisionId,
   threadId,
   title,
   userId,
@@ -330,6 +337,7 @@ const loadThreadAttempt = async ({
         organizationId,
         recordAuditEvent,
         safeDb,
+        subjectDecisionId,
         threadId,
         title,
         userId,
@@ -409,6 +417,7 @@ const loadThreadAttempt = async ({
         contextMatterIds: initialContextMatterIds,
         activeSkill: initialActiveSkill ?? null,
         rollbackToken,
+        subjectDecisionId,
         // Workspace-scoped chats embed at minimum their own
         // workspace's content. Global chats start with no
         // embedded workspace data; subsequent messages widen

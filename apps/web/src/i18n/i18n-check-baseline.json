@@ -704,17 +704,6 @@
     "organization.aiConfig.provider": [
       "de"
     ],
-    "organization.aiConfig.regions.eu": [
-      "cs",
-      "de",
-      "hu"
-    ],
-    "organization.aiConfig.regions.global": [
-      "de",
-      "es",
-      "fr",
-      "pt-BR"
-    ],
     "organization.aiConfig.roles.chat": [
       "cs",
       "de",
@@ -1076,13 +1065,9 @@
     "organization.aiConfig.customModelBadge",
     "organization.aiConfig.customModelDescription",
     "organization.aiConfig.customModelHint",
-    "organization.aiConfig.dataRegion",
-    "organization.aiConfig.dataRegionDescription",
-    "organization.aiConfig.dataRegionUnsupported",
     "organization.aiConfig.defaultModel",
     "organization.aiConfig.defaultModelOption",
     "organization.aiConfig.deploymentNamePlaceholder",
-    "organization.aiConfig.description",
     "organization.aiConfig.editProviders",
     "organization.aiConfig.endpoint",
     "organization.aiConfig.endpointDescription",
@@ -1099,9 +1084,6 @@
     "organization.aiConfig.prices.source",
     "organization.aiConfig.prices.title",
     "organization.aiConfig.prices.typicalCallHint",
-    "organization.aiConfig.regions.ch",
-    "organization.aiConfig.regions.eu",
-    "organization.aiConfig.regions.global",
     "organization.aiConfig.selectAtLeastOneRole",
     "organization.aiConfig.selectedProvider",
     "organization.matterNumber.description",
@@ -1111,7 +1093,6 @@
     "organization.matterNumber.title",
     "organization.members.changeRoleDescription",
     "organization.members.updateRole",
-    "organization.settings",
     "organization.settingsDescription",
     "tasks.addSubtask",
     "tasks.assigneeRoles.assignee",
