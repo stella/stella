@@ -1,6 +1,7 @@
 import { fromMarkdown } from "mdast-util-from-markdown";
 import { gfmFromMarkdown } from "mdast-util-gfm";
 import { gfm } from "micromark-extension-gfm";
+import * as v from "valibot";
 
 export const normalizeMarkdownSelectionText = (text: string) =>
   text.replace(/\s+/gu, " ").trim();
@@ -152,6 +153,20 @@ const stampedLeaf = (node: Node, root: HTMLElement): HTMLElement | null => {
   return leaf instanceof HTMLElement && root.contains(leaf) ? leaf : null;
 };
 
+const sourceOffsetAttributes = v.object({
+  srcOffsets: v.pipe(
+    v.string(),
+    v.regex(/^\d+(?:,\d+)*$/u),
+    v.transform((raw) => raw.split(",").map(Number)),
+    v.array(v.pipe(v.number(), v.safeInteger())),
+  ),
+});
+
+const readSourceOffsets = (element: HTMLElement) => {
+  const parsed = v.safeParse(sourceOffsetAttributes, element.dataset);
+  return parsed.success ? { offsets: parsed.output.srcOffsets } : undefined;
+};
+
 const endpointSourceOffset = (
   node: Node,
   localOffset: number,
@@ -165,11 +180,7 @@ const endpointSourceOffset = (
   prefix.selectNodeContents(leaf);
   prefix.setEnd(node, localOffset);
   const renderedOffset = prefix.toString().length;
-  const offsets = leaf.dataset.srcOffsets?.split(",").map(Number);
-  const offset = offsets?.at(renderedOffset);
-  return offset !== undefined && Number.isSafeInteger(offset)
-    ? offset
-    : undefined;
+  return readSourceOffsets(leaf)?.offsets.at(renderedOffset);
 };
 
 type MapMarkdownSelectionOptions = {

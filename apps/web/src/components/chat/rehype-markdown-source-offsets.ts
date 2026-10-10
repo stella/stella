@@ -1,9 +1,9 @@
-import type { Element, Root } from "hast";
+import type { Element, Root, Text } from "hast";
 
 import { markdownTextLeaves } from "@/components/chat/markdown-selection.logic";
 
-/** Stamp existing leaf elements and wrap only mixed text siblings. Keeping link
- * and code children as strings preserves their custom renderer contracts. */
+/** Anchor text spans independently of renderers that may drop element props.
+ * Link and code children stay strings to preserve citation renderer contracts. */
 export const rehypeMarkdownSourceOffsets =
   () => (tree: Root, file: { value: unknown }) => {
     if (typeof file.value !== "string") {
@@ -12,11 +12,8 @@ export const rehypeMarkdownSourceOffsets =
     const leaves = new Map(
       markdownTextLeaves(file.value).map((leaf) => [leaf.sourceStart, leaf]),
     );
-    const textLeaf = (
-      child: Root["children"][number],
-      parent: Root | Element,
-    ) => {
-      if (child.type !== "text" || !child.value) {
+    const textLeaf = (child: Text, parent: Root | Element) => {
+      if (!child.value) {
         return undefined;
       }
       const position = child.position ?? parent.position;
@@ -35,7 +32,7 @@ export const rehypeMarkdownSourceOffsets =
       "data-src-end": leaf.offsets.at(-1),
       "data-src-offsets": leaf.offsets.join(","),
     });
-    const visit = (parent: Root | Element) => {
+    const visit = (parent: Root | Element): Element | undefined => {
       if (parent.type === "element") {
         // Source markup cannot supply selection anchors; only this pass owns
         // them, after parsing and sanitization have completed.
@@ -46,28 +43,51 @@ export const rehypeMarkdownSourceOffsets =
         );
         const onlyChild =
           parent.children.length === 1 ? parent.children.at(0) : undefined;
-        const leaf = onlyChild ? textLeaf(onlyChild, parent) : undefined;
+        const leaf =
+          onlyChild?.type === "text" ? textLeaf(onlyChild, parent) : undefined;
         if (leaf) {
-          parent.properties = { ...parent.properties, ...propertiesFor(leaf) };
-          return;
+          if (parent.tagName === "a") {
+            return {
+              type: "element",
+              tagName: "span",
+              properties: propertiesFor(leaf),
+              children: [parent],
+            };
+          }
+          if (parent.tagName === "code") {
+            parent.properties = {
+              ...parent.properties,
+              ...propertiesFor(leaf),
+            };
+            return;
+          }
         }
       }
-      parent.children = parent.children.map((child) => {
+      for (const [index, child] of parent.children.entries()) {
+        if (child.type === "doctype" || child.type === "raw") {
+          continue;
+        }
         if (child.type === "element") {
-          visit(child);
-          return child;
+          const anchored = visit(child);
+          if (anchored) {
+            parent.children[index] = anchored;
+          }
+          continue;
+        }
+        if (child.type !== "text") {
+          continue;
         }
         const leaf = textLeaf(child, parent);
         if (!leaf) {
-          return child;
+          continue;
         }
-        return {
+        parent.children[index] = {
           type: "element",
           tagName: "span",
           properties: propertiesFor(leaf),
           children: [child],
         } satisfies Element;
-      });
+      }
     };
     visit(tree);
   };

@@ -1,3 +1,5 @@
+import * as v from "valibot";
+
 import type { ChatUIMessage } from "@/components/chat/chat-ui-tools";
 import { mapMarkdownSelection } from "@/components/chat/markdown-selection.logic";
 
@@ -13,6 +15,20 @@ type AnswerSelectionOptions = {
 type AnswerSelectionEdit =
   | { status: "available"; anchor: AnswerEditAnchor }
   | { status: "unsupported" };
+
+const textPartAttributes = v.object({
+  textPartIndex: v.pipe(
+    v.string(),
+    v.regex(/^\d+$/u),
+    v.transform(Number),
+    v.safeInteger(),
+  ),
+});
+
+const readTextPartIndex = (element: HTMLElement) => {
+  const parsed = v.safeParse(textPartAttributes, element.dataset);
+  return parsed.success ? parsed.output.textPartIndex : undefined;
+};
 
 export const mapAnswerSelection = ({
   message,
@@ -31,7 +47,10 @@ export const mapAnswerSelection = ({
   if (!(partRoot instanceof HTMLElement)) {
     return { status: "unsupported" };
   }
-  const partIndex = Number(partRoot.dataset.textPartIndex);
+  const partIndex = readTextPartIndex(partRoot);
+  if (partIndex === undefined) {
+    return { status: "unsupported" };
+  }
   const part = message.parts.at(partIndex);
   if (part?.type !== "text") {
     return { status: "unsupported" };

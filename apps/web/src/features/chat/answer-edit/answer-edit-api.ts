@@ -21,13 +21,13 @@ type RequestAnswerEditOptions = {
   signal: AbortSignal;
 };
 
-export const requestAnswerEdit = ({
+export const requestAnswerEdit = async ({
   threadId,
   anchor,
   instruction,
   signal,
 }: RequestAnswerEditOptions) =>
-  Result.tryPromise({
+  await Result.tryPromise({
     try: async () => {
       const selectedTextHash = await sha256Hex(anchor.selectedSource);
       const messageResource = api.chat
@@ -60,12 +60,12 @@ type AcceptAnswerEditOptions = {
   proposal: AnswerEditProposal;
 };
 
-export const acceptAnswerEdit = ({
+export const acceptAnswerEdit = async ({
   threadId,
   anchor,
   proposal,
 }: AcceptAnswerEditOptions) =>
-  Result.tryPromise({
+  await Result.tryPromise({
     try: async () =>
       unwrapEden(
         await api.chat

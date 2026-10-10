@@ -13,7 +13,7 @@ import { createAppQueryClient } from "@/lib/react-query";
 
 import { answerEditStates } from "../-visual-metadata";
 
-const acknowledgeAnswerEdit = async () => undefined;
+const acknowledgeAnswerEdit = async () => await Promise.resolve();
 
 export const AnswerEditPlayground = () => {
   const [queryClient] = useState(createAppQueryClient);
@@ -55,9 +55,13 @@ export const AnswerEditPlayground = () => {
                       disabled={false}
                       onCancel={() => undefined}
                       onAnswerEdited={acknowledgeAnswerEdit}
-                      request={async () => Result.ok(proposal)}
+                      request={async () =>
+                        await Promise.resolve(Result.ok(proposal))
+                      }
                       accept={async () =>
-                        Result.ok({ revision: 1, edited: true })
+                        await Promise.resolve(
+                          Result.ok({ revision: 1, edited: true }),
+                        )
                       }
                     />
                   );

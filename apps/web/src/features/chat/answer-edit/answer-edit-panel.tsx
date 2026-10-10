@@ -108,7 +108,7 @@ export const AnswerEditPanel = ({
       }),
       defaultValues: { instruction: "" },
       submitValues: "schema-output",
-      onSubmit: ({ value }) => submitInstruction(value.instruction),
+      onSubmit: async ({ value }) => await submitInstruction(value.instruction),
     }),
   );
   const save = async (proposal: AnswerEditProposal) => {

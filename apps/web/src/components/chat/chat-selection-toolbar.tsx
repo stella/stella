@@ -279,7 +279,7 @@ export const ChatSelectionToolbar = ({
     insertPastedTextIntoThread(source.threadRef, chip);
   };
 
-  const copy = () =>
+  const copy = async () =>
     copySelectedText({
       quote: selected.quote,
       setCopied,
@@ -323,8 +323,8 @@ export const ChatSelectionToolbar = ({
                     }}
                     size="sm"
                     variant="ghost"
+                    disabled={editsDisabled}
                     {...capabilityProps}
-                    disabled={editsDisabled || capabilityProps.disabled}
                   >
                     <AiActionIcon className="size-3.5" />
                     <span className={ACTION_LABEL_CLASS}>

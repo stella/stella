@@ -209,8 +209,8 @@ test("Escape cancels a pending request after focus leaves the removed instructio
           cancelled++;
         }}
         onAnswerEdited={async () => undefined}
-        request={({ signal }) =>
-          new Promise((resolve) => {
+        request={async ({ signal }) =>
+          await new Promise((resolve) => {
             signals.push(signal);
             signal.addEventListener(
               "abort",
@@ -256,8 +256,8 @@ test("acceptance keeps focus and ignores Escape while the revision write is pend
         }}
         onAnswerEdited={async () => undefined}
         request={async () => Result.ok(proposal)}
-        accept={() =>
-          new Promise(() => {
+        accept={async () =>
+          await new Promise(() => {
             /* Keep the revision write pending while testing keyboard ownership. */
           })
         }
@@ -330,8 +330,8 @@ test("Cancel aborts the pending proposal request and ignores its cancellation re
           cancelled++;
         }}
         onAnswerEdited={async () => undefined}
-        request={({ signal }) =>
-          new Promise((resolve) => {
+        request={async ({ signal }) =>
+          await new Promise((resolve) => {
             signals.push(signal);
             signal.addEventListener(
               "abort",
@@ -367,8 +367,8 @@ test("unmounting the proposal owner aborts the request signal", async () => {
         disabled={false}
         onCancel={() => undefined}
         onAnswerEdited={async () => undefined}
-        request={({ signal }) =>
-          new Promise((resolve) => {
+        request={async ({ signal }) =>
+          await new Promise((resolve) => {
             signals.push(signal);
             signal.addEventListener(
               "abort",
@@ -410,7 +410,7 @@ test("a committed revision refreshes its original answer after the panel unmount
           refreshed++;
         }}
         request={async () => Result.ok(proposal)}
-        accept={() => accepted.promise}
+        accept={async () => await accepted.promise}
       />
     </IntlProvider>,
   );

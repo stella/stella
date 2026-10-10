@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, expect, test } from "bun:test";
 import fc from "fast-check";
+import type { Root } from "hast";
 import { fromMarkdown } from "mdast-util-from-markdown";
 import { defaultRehypePlugins, Streamdown } from "streamdown";
 
@@ -13,9 +14,10 @@ import {
   normalizeMarkdownSelectionText,
 } from "@/components/chat/markdown-selection.logic";
 import { rehypeMarkdownSourceOffsets } from "@/components/chat/rehype-markdown-source-offsets";
+import { mapAnswerSelection } from "@/features/chat/answer-edit/answer-edit-selection";
 
 GlobalRegistrator.register();
-afterAll(() => GlobalRegistrator.unregister());
+afterAll(async () => await GlobalRegistrator.unregister());
 
 const renderMarkdown = (source: string) => {
   const root = document.createElement("div");
@@ -25,6 +27,7 @@ const renderMarkdown = (source: string) => {
       mode="static"
       controls={false}
       parseIncompleteMarkdown={false}
+      normalizeHtmlIndentation={false}
       rehypePlugins={[
         ...Object.values(defaultRehypePlugins),
         rehypeMarkdownSourceOffsets,
@@ -142,7 +145,9 @@ test("every generated rendered markdown leaf maps to the same stripped source te
         }
       }
       for (const leaf of leaves) {
-        const text = leaf.firstChild;
+        const text = document
+          .createTreeWalker(leaf, NodeFilter.SHOW_TEXT)
+          .nextNode();
         expect(text).not.toBeNull();
         if (!text) {
           continue;
@@ -266,5 +271,86 @@ test("maps across nested emphasis without reinterpreting partial markdown delimi
     start: 9,
     end: 26,
     selectedText: "bold nested text",
+  });
+});
+
+test.each(["", "0,,1", "0,NaN", "0,-1", "0,1.5", "0,9007199254740992"])(
+  "refuses malformed source offsets %s at the DOM boundary",
+  (offsets) => {
+    const source = "hello";
+    const root = renderMarkdown(source);
+    const leaf = root.querySelector("[data-src-start]");
+    expect(leaf).not.toBeNull();
+    if (!leaf) {
+      return;
+    }
+    Object.assign(leaf.dataset, { srcOffsets: offsets });
+    const range = document.createRange();
+    range.selectNodeContents(leaf);
+    expect(mapMarkdownSelection({ root, source, range }).status).toBe(
+      "unsupported",
+    );
+  },
+);
+
+test.each([null, "", " ", "-1", "0.5", "NaN", "9007199254740992", "0"])(
+  "validates the answer part index %s before selecting a message part",
+  (index) => {
+    const source = "hello";
+    const root = renderMarkdown(source);
+    const messageRoot = document.createElement("div");
+    messageRoot.append(root);
+    // The attribute is found on the surrounding part even when absent on a
+    // nested element; the reader must still reject an invalid part index.
+    Object.assign(messageRoot.dataset, { textPartIndex: "" });
+    if (index !== null) {
+      Object.assign(root.dataset, { textPartIndex: index });
+    }
+    const leaf = root.querySelector("[data-src-start]");
+    expect(leaf).not.toBeNull();
+    if (!leaf) {
+      return;
+    }
+    const range = document.createRange();
+    range.selectNodeContents(leaf);
+    const selected = mapAnswerSelection({
+      message: {
+        id: "answer",
+        role: "assistant",
+        parts: [{ type: "text", content: source }],
+      },
+      baseRevision: 0,
+      messageRoot,
+      range,
+    });
+    expect(selected.status).toBe(index === "0" ? "available" : "unsupported");
+  },
+);
+
+test("stamps text and element nodes while preserving root doctype and raw nodes", () => {
+  const doctype = { type: "doctype" } as const;
+  const raw = { type: "raw", value: "<div>raw</div>" } as const;
+  const tree = {
+    type: "root",
+    children: [
+      doctype,
+      raw,
+      {
+        type: "text",
+        value: "hello",
+        position: {
+          start: { line: 1, column: 1, offset: 0 },
+          end: { line: 1, column: 6, offset: 5 },
+        },
+      },
+    ],
+  } satisfies Root;
+  rehypeMarkdownSourceOffsets()(tree, { value: "hello" });
+  expect(tree.children.slice(0, 2)).toEqual([doctype, raw]);
+  expect(tree.children.at(2)).toMatchObject({
+    type: "element",
+    tagName: "span",
+    properties: { "data-src-offsets": "0,1,2,3,4,5" },
+    children: [{ type: "text", value: "hello" }],
   });
 });
