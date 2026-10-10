@@ -1,7 +1,7 @@
 // The path-scope selector of ci.yml's `ci-plan` job, runnable outside CI.
 // The workflow is the only copy of the selection rules: this module slices
 // them out of a given ci.yml and runs them over a list of changed files, so
-// the plan tests and the merge bar evaluate exactly what CI would.
+// the plan tests evaluate exactly what CI would.
 
 import { panic, Result, TaggedError } from "better-result";
 

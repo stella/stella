@@ -43,7 +43,7 @@ import { SUBAGENT_TITLE_MAX_CHARS } from "@stll/api-contract/spawn-subagents";
 import { describeSuggestChangesCapabilities } from "@stll/folio-agents";
 import { isFolioAIContentBlock } from "@stll/folio-core/server";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
-import type { SkillMetadata } from "@stll/skills";
+import type { SkillMetadata } from "@stll/skills/frontmatter";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
@@ -665,6 +665,7 @@ export const buildChatPromptCacheKey = (
 };
 
 type BuildChatSystemPromptProps = {
+  caseLawDb?: CaseLawPublicReadDb;
   featureAccessContext?: McpFeatureAccessContext | undefined;
   activeDecision: IncomingActiveDecision | undefined;
   activeDraft?: IncomingActiveDraft | undefined;
@@ -853,6 +854,7 @@ const resolveActiveFilePromptContext = async ({
 };
 
 export const buildChatSystemPromptParts = async ({
+  caseLawDb = caseLawPublicReadDb,
   featureAccessContext,
   activeDecision,
   activeDraft,
@@ -931,7 +933,7 @@ export const buildChatSystemPromptParts = async ({
     const decisionSection = yield* Result.await(
       buildActiveDecisionSection({
         activeDecision,
-        caseLawDb: caseLawPublicReadDb,
+        caseLawDb,
         organizationId,
         safeDb,
         userId,

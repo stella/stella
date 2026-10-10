@@ -19,6 +19,13 @@ const visualLoaders = {
       return { default: ChatLongPastePlayground };
     },
   },
+  "chat-history-decision": {
+    load: async () => {
+      const { ChatHistoryDecisionPlayground } =
+        await import("./-components/chat-history-decision-playground");
+      return { default: ChatHistoryDecisionPlayground };
+    },
+  },
   "answer-edit": {
     load: async () => {
       const { AnswerEditPlayground } =
