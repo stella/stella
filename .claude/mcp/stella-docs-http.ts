@@ -104,10 +104,8 @@ const httpServer = createServer(async (request, response) => {
 
     if (existingSession) {
       existingSession.lastActive = Date.now();
+      // A successful DELETE ends the session through onsessionclosed; a rejected one must keep it.
       await existingSession.transport.handleRequest(request, response);
-      if (request.method === "DELETE" && sessionId) {
-        sessions.delete(sessionId);
-      }
       return;
     }
 

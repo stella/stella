@@ -142,6 +142,27 @@ describe("shared documentation MCP HTTP server", () => {
     }
   });
 
+  test("keeps a session when its DELETE request is rejected", async () => {
+    const { baseUrl } = await startHttpServer();
+    const { client, transport } = await connectHttpClient(baseUrl, "http-keep");
+    try {
+      const sessionId = transport.sessionId;
+      expect(sessionId).toBeDefined();
+      const rejected = await fetch(`${baseUrl}/mcp`, {
+        method: "DELETE",
+        headers: {
+          "mcp-session-id": sessionId ?? "",
+          "mcp-protocol-version": "1999-01-01",
+        },
+      });
+      expect(rejected.status).toBeGreaterThanOrEqual(400);
+      expect(await getSessionCount(baseUrl)).toBe(1);
+      expect((await client.listTools()).tools).not.toHaveLength(0);
+    } finally {
+      await client.close();
+    }
+  });
+
   test("rejects requests with an unexpected Host header", async () => {
     const { baseUrl } = await startHttpServer();
     const response = await fetch(`${baseUrl}/healthz`, {
