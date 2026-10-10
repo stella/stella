@@ -449,8 +449,26 @@ pub(crate) struct ParkedHandoff {
 
 static PARKED: std::sync::Mutex<Option<ParkedHandoff>> = std::sync::Mutex::new(None);
 
-pub(crate) fn park(target: Target, api_base_url: &str, token: &str) {
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum AccountWait {
+  Parked,
+  AccountAvailable,
+}
+
+pub(crate) async fn park_if_unlinked(
+  state: &crate::account::AccountState,
+  target: Target,
+  api_base_url: &str,
+  token: &str,
+) -> Result<AccountWait, String> {
+  // Linking shares this lease: it either publishes before this check, or
+  // publishes after the handoff is parked and its completion can resume it.
+  let _lease = crate::account::lock_requests().await;
+  if crate::account::current(state).await?.is_some() {
+    return Ok(AccountWait::AccountAvailable);
+  }
   park_at(target, api_base_url, token, std::time::Instant::now());
+  Ok(AccountWait::Parked)
 }
 
 fn park_at(target: Target, api_base_url: &str, token: &str, now: std::time::Instant) {
@@ -1113,7 +1131,12 @@ mod tests {
       .await;
       assert!(matches!(arrived, Err(Stop::AccountRequired)));
       assert_eq!(redeems.load(std::sync::atomic::Ordering::SeqCst), 0);
-      park(target, &origin, &token);
+      assert_eq!(
+        park_if_unlinked(&state, target, &origin, &token)
+          .await
+          .unwrap(),
+        AccountWait::Parked
+      );
 
       // The account link completes; the parked handoff resumes with it.
       *state.lock().await = crate::account::AccountStore::fixture(linked_fixture(
@@ -1131,6 +1154,47 @@ mod tests {
           target: parked.target,
           api_base_url: &parked.api_base_url,
           token: &parked.token,
+        },
+        &no_recovery(),
+      )
+      .await
+      .unwrap();
+      assert_eq!(redeemed, serde_json::json!({"id":"redeemed"}));
+      assert_eq!(account.credential.key, "stella_dr_live");
+      assert_eq!(redeems.swap(0, std::sync::atomic::Ordering::SeqCst), 1);
+      assert_eq!(take_parked(), Resumable::Nothing);
+      *state.lock().await = crate::account::AccountStore::Memory(None);
+    }
+
+    // Complete exactly after admission fails and before parking. The
+    // completion callback sees no parked token; parking must notice the account.
+    for target in [Target::PdfSigning, Target::DesktopEdit] {
+      assert!(matches!(
+        admitted_account(&state, &origin).await,
+        Err(Stop::AccountRequired)
+      ));
+      {
+        let _lease = crate::account::lock_requests().await;
+        *state.lock().await = crate::account::AccountStore::fixture(linked_fixture(
+          &origin,
+          "stella_dr_live",
+        ));
+      }
+      assert_eq!(take_parked(), Resumable::Nothing);
+      assert_eq!(
+        park_if_unlinked(&state, target, &origin, &token)
+          .await
+          .unwrap(),
+        AccountWait::AccountAvailable,
+        "a completed link must resume immediately without another connection offer"
+      );
+      let (redeemed, account) = redeem_with::<serde_json::Value>(
+        RedeemCore {
+          state: &state,
+          client: &client,
+          target,
+          api_base_url: &origin,
+          token: &token,
         },
         &no_recovery(),
       )

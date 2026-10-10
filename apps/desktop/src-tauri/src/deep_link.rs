@@ -431,14 +431,31 @@ async fn present_handoff_failure(app: &AppHandle, failure: &crate::handoff::Fail
   }
 }
 
-/// Parks the handoff and offers to link the account; a link completed by any
-/// route resumes it through `resume_parked_handoff`.
+/// Retries a link completed since admission, or parks and offers to link;
+/// a later completion resumes it through `resume_parked_handoff`.
 async fn offer_account_link(
   run: HandoffRun,
   manager: Arc<Mutex<SessionManager>>,
   app: AppHandle,
 ) {
-  crate::handoff::park(run.target, &run.api_base_url, &run.token);
+  match crate::handoff::park_if_unlinked(
+    &app.state::<crate::account::AccountState>(),
+    run.target,
+    &run.api_base_url,
+    &run.token,
+  )
+  .await
+  {
+    Ok(crate::handoff::AccountWait::AccountAvailable) => {
+      start_handoff(run, manager, app);
+      return;
+    }
+    Ok(crate::handoff::AccountWait::Parked) => {}
+    Err(error) => {
+      present_handoff_failure(&app, &crate::handoff::Failure::Terminal(error)).await;
+      return;
+    }
+  }
   tracing::info!(target: crate::logging::TRAIL_TARGET, event = "handoff.parked", target_kind = ?run.target);
   let approved = match show_connection_confirmation(
     &app,
