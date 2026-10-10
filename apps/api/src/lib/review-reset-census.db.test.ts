@@ -152,7 +152,7 @@ describe.skipIf(!enabled)("review reset policy census", () => {
         const [posture] =
           await client`SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = ${owner}`;
         expect(posture).toMatchObject({ rolsuper: false, rolbypassrls: false });
-        await db.transaction(async (tx) => {
+        const swept = await db.transaction(async (tx) => {
           await tx.execute(
             sql`SELECT set_config('role', ${owner}, true), set_config('app.enabled_features', '[]', true)`,
           );
@@ -164,9 +164,7 @@ describe.skipIf(!enabled)("review reset policy census", () => {
           expect(
             [...removed.keys()].filter((name) => name !== "user_files"),
           ).toEqual([...REVIEW_RESET_CLEARED_TABLES]);
-          for (const name of REVIEW_RESET_CLEARED_TABLES) {
-            expect(removed.get(name), name).toBe(2);
-          }
+          return removed;
         });
         // A different connection, outside the scoped owner, counts every row.
         for (const name of REVIEW_RESET_CLEARED_TABLES) {
@@ -176,6 +174,7 @@ describe.skipIf(!enabled)("review reset policy census", () => {
           expect(rows, name).toEqual([
             { organization_id: otherOrganizationId },
           ]);
+          expect(swept.get(name), name).toBe(2);
         }
       } finally {
         await client.unsafe(

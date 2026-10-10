@@ -90,3 +90,9 @@ CREATE POLICY "review_reset_owner_delete" ON "correspondence_attachments" FOR DE
   current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.correspondence_attachments'::regclass)
   AND organization_id = nullif(current_setting('app.correspondence_review_reset_organization_id', true), '')
 );
+--> statement-breakpoint
+-- stella-migration-safety: reviewed alter-policy - Restrictive deletion stays denied to the application; only the table owner can clear the explicitly selected reset organization. Rollback restores USING (false).
+ALTER POLICY "events_no_delete" ON "sanctions_screening_events" USING (
+  current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.sanctions_screening_events'::regclass)
+  AND organization_id = nullif(current_setting('app.correspondence_review_reset_organization_id', true), '')
+);
