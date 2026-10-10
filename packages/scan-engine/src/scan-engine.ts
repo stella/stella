@@ -125,14 +125,27 @@ const createWorkerEngine = ({
           }
           const { data } = event;
           if (data.type === "result") {
-            settle(() =>
-              resolve(
-                convertResult(
-                  { ...data.result, free: () => undefined },
-                  options.output,
-                ),
-              ),
-            );
+            settle(() => {
+              // A malformed result must still settle the request, or the
+              // serialized queue would wait on it forever.
+              try {
+                resolve(
+                  convertResult(
+                    { ...data.result, free: () => undefined },
+                    options.output,
+                  ),
+                );
+              } catch (error) {
+                reject(
+                  error instanceof ScanEngineError
+                    ? error
+                    : new ScanEngineError({
+                        type: "engine-failure",
+                        message: "The scan engine returned an invalid result",
+                      }),
+                );
+              }
+            });
             return;
           }
           reset();

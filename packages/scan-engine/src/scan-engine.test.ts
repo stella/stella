@@ -178,6 +178,32 @@ describe("worker lifecycle", () => {
     expect(healthyWorker.terminated).toBe(false);
   });
 
+  test("fails an invalid worker result and keeps serving later requests", async () => {
+    const invalidWorker = new FakeWorker({
+      type: "result",
+      result: {
+        ...successfulWorkerResponse.result,
+        width: successfulWorkerResponse.result.width + 1,
+      },
+    });
+    const engine = createScanEngine(undefined, {
+      createWorker: () => invalidWorker,
+    });
+
+    const failed = await engine.clean(onePixelPage, options);
+    expect(failed.isErr()).toBe(true);
+    if (failed.isOk()) {
+      throw new Error("Expected the invalid result to fail");
+    }
+    expect(failed.error).toMatchObject({
+      type: "engine-failure",
+      message: "The scan engine returned an invalid pixel buffer",
+    });
+
+    invalidWorker.response = successfulWorkerResponse;
+    expect((await engine.clean(onePixelPage, options)).isOk()).toBe(true);
+  });
+
   test("removes paired listeners after every worker request", async () => {
     const worker = new FakeWorker(successfulWorkerResponse);
     const engine = createScanEngine(undefined, {
