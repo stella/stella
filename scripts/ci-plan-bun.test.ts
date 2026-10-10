@@ -156,7 +156,12 @@ const contexts = combinations
     (values) =>
       ({
         values,
-        status: { success: true, failure: false, cancelled: false },
+        status: {
+          always: true,
+          success: true,
+          failure: false,
+          cancelled: false,
+        },
       }) satisfies Context,
   );
 
