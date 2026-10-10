@@ -4144,7 +4144,7 @@
         "instanceProvided": "stella ya proporciona un modelo de decisión; añade el tuyo solo para usar otro distinto.",
         "label": "Toma de decisiones",
         "regionEu": "Unión Europea",
-        "regionGlobal": "Global",
+        "regionGlobal": "Mundial",
         "reuseOpenAIKey": "Usar mi clave de OpenAI",
         "separateKey": "Usar una clave independiente"
       },
