@@ -442,7 +442,8 @@ const decodeBytes = (bytes: readonly number[], label: CodePageLabel): string =>
  * A run of bytes read as the ASCII it is: control words and the RTF signature
  * are ASCII by definition, so each byte is its own code point.
  */
-const asciiOf = (bytes: Uint8Array): string => String.fromCodePoint(...bytes);
+const asciiOf = (bytes: Uint8Array | Uint16Array): string =>
+  String.fromCodePoint(...bytes);
 
 const HEX_DIGITS = "0123456789abcdefABCDEF";
 
@@ -486,7 +487,10 @@ type ControlToken = {
  * remainder is returned as text — which recovers the name rather than losing
  * it, and is reported by the caller either way.
  */
-const readControlWord = (source: Uint8Array, start: number): ControlToken => {
+const readControlWord = (
+  source: Uint8Array | Uint16Array,
+  start: number,
+): ControlToken => {
   let cursor = start;
   while (cursor < source.length && isAsciiLetter(source[cursor] ?? 0)) {
     cursor += 1;
@@ -548,7 +552,7 @@ const readControlWord = (source: Uint8Array, start: number): ControlToken => {
  * a group) ends the replacement early and is left to the scanner.
  */
 const afterFallbackCharacters = (
-  source: Uint8Array,
+  source: Uint8Array | Uint16Array,
   start: number,
   count: number,
 ): number => {
@@ -1273,10 +1277,7 @@ export const readRtf = (
  * The transport has already decoded literal non-ASCII characters, so encode
  * them as RTF Unicode controls while leaving the source's byte escapes intact.
  */
-export const readRtfString = (
-  source: string,
-  options: ReadRtfOptions = {},
-): Document => {
+const rtfBytesFromUnicodeTransport = (source: string): Uint8Array => {
   const ascii: number[] = [];
   const appendUnicodeUnit = (unit: number): void => {
     const signed = unit > 0x7f_ff ? unit - 0x1_00_00 : unit;
@@ -1286,22 +1287,78 @@ export const readRtfString = (
       ascii.push(escaped.codePointAt(0) ?? 0);
     }
   };
-  for (const character of source) {
-    const point = character.codePointAt(0) ?? 0;
-    if (point <= 0x7f) {
-      ascii.push(point);
-      continue;
+  // Split by UTF-16 unit: Unicode escapes and opaque counts include separate
+  // surrogate halves, even when the decoded transport contains astral text.
+  const units = Uint16Array.from(
+    source.split(""),
+    (unit) => unit.codePointAt(0) ?? 0,
+  );
+  const fallbackStack: number[] = [];
+  let fallbackCount = 1;
+  const copyOpaque = (start: number, end: number): void => {
+    for (let index = start; index < end; index += 1) {
+      const unit = units[index] ?? 0;
+      // These units are skipped by the reader. A decoded non-byte unit occupies
+      // one opaque byte slot; emitting Unicode syntax here would change the count.
+      ascii.push(unit <= 0xff ? unit : 0);
     }
-    if (point <= 0xff_ff) {
-      appendUnicodeUnit(point);
-      continue;
+  };
+  let cursor = 0;
+  while (cursor < units.length) {
+    const unit = units[cursor] ?? 0;
+    if (unit === 0x5c) {
+      const token = readControlWord(units, cursor + 1);
+      if (token.word !== null) {
+        copyOpaque(cursor, token.next);
+        cursor = token.next;
+        if (
+          token.word === "bin" &&
+          token.parameter !== undefined &&
+          token.parameter >= 0
+        ) {
+          const end = Math.min(units.length, cursor + token.parameter);
+          copyOpaque(cursor, end);
+          cursor = end;
+        } else if (token.word === "uc") {
+          fallbackCount = Math.max(token.parameter ?? 1, 0);
+        } else if (
+          token.word === "u" &&
+          token.parameter !== undefined &&
+          token.parameter >= -0x1_00_00 &&
+          token.parameter <= 0x10_ff_ff
+        ) {
+          const end = afterFallbackCharacters(units, cursor, fallbackCount);
+          copyOpaque(cursor, end);
+          cursor = end;
+        }
+        continue;
+      }
+      // Escaped backslashes and braces are symbols, not token/group boundaries.
+      if ([0x5c, 0x7b, 0x7d].includes(units[cursor + 1] ?? 0)) {
+        copyOpaque(cursor, cursor + 2);
+        cursor += 2;
+        continue;
+      }
     }
-    const offset = point - 0x1_00_00;
-    appendUnicodeUnit(0xd8_00 + Math.floor(offset / 0x4_00));
-    appendUnicodeUnit(0xdc_00 + (offset % 0x4_00));
+    if (unit === 0x7b) {
+      fallbackStack.push(fallbackCount);
+    } else if (unit === 0x7d) {
+      fallbackCount = fallbackStack.pop() ?? fallbackCount;
+    }
+    if (unit <= 0x7f) {
+      ascii.push(unit);
+    } else {
+      appendUnicodeUnit(unit);
+    }
+    cursor += 1;
   }
-  return readRtf(Uint8Array.from(ascii), options);
+  return Uint8Array.from(ascii);
 };
+
+export const readRtfString = (
+  source: string,
+  options: ReadRtfOptions = {},
+): Document => readRtf(rtfBytesFromUnicodeTransport(source), options);
 
 /** Every RTF file opens with this; nothing else the publisher serves does. */
 const RTF_SIGNATURE = "{\\rtf";

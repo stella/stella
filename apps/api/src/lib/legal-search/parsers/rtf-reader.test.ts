@@ -24,7 +24,11 @@ import {
   embeddedTextFixtures,
   embeddedTextRtf,
 } from "@/api/lib/legal-search/parsers/rtf-destinations.fixtures";
-import { isRtf, readRtf } from "@/api/lib/legal-search/parsers/rtf-reader";
+import {
+  isRtf,
+  readRtf,
+  readRtfString,
+} from "@/api/lib/legal-search/parsers/rtf-reader";
 
 /**
  * The bytes a document holds, one per character: RTF is a byte format and the
@@ -94,7 +98,7 @@ const HEADER = String.raw`{\rtf1\ansi\ansicpg1250\deff0{\fonttbl{\f0\froman Time
 
 test("generated RTF retains plain text without markup residue", () => {
   const plainText = fc
-    .array(fc.constantFrom("alpha", "beta", "gamma", "delta"), {
+    .array(fc.constantFrom("alpha", "beta", "gamma", "delta", "šťáva😀"), {
       minLength: 1,
       maxLength: 8,
     })
@@ -108,6 +112,9 @@ test("generated RTF retains plain text without markup residue", () => {
     String.raw`{\object{\*\objdata\bin4 abcd}}`,
     String.raw`{\*\unknown \rtf1\ansi hidden`, // unbalanced group
   );
+  const binaryPayload = fc
+    .array(fc.integer({ min: 0, max: 255 }), { maxLength: 48 })
+    .map((bytes) => String.fromCodePoint(...bytes));
   const encoded = fc.constantFrom(
     String.raw`\'e1`,
     String.raw`\u225?`,
@@ -122,18 +129,22 @@ test("generated RTF retains plain text without markup residue", () => {
       fc.array(destination, { maxLength: 8 }),
       fc.nat({ max: 6 }),
       fc.nat({ max: 4 }),
-      (text, escapes, destinations, nesting, unmatchedClosings) => {
+      fc.array(binaryPayload, { minLength: 1, maxLength: 4 }),
+      (text, escapes, destinations, nesting, unmatchedClosings, payloads) => {
         const visible = `${text}${escapes.join("")}`;
         const nested = `${"{".repeat(nesting)}${visible}${"}".repeat(nesting)}`;
-        const rtf = `${HEADER}${nested}${destinations.join("")}\\par }${"}".repeat(unmatchedClosings)}`;
-        const document = readRtf(bytesOf(rtf));
+        const binary = payloads
+          .map((payload) => `\\bin${String(payload.length)} ${payload}`)
+          .join("");
+        const rtf = `${HEADER}${nested}${binary}tail${destinations.join("")}\\par }${"}".repeat(unmatchedClosings)}`;
+        const document = readRtfString(rtf);
         const output = [
           ...document.package.document.content.map(textOf),
           ...(document.package.footnotes ?? []).flatMap(({ content }) =>
             content.map(textOf),
           ),
         ].join(" ");
-        expect(output).toBe(`${text}${"á".repeat(escapes.length)}`);
+        expect(output).toBe(`${text}${"á".repeat(escapes.length)}tail`);
         expect(markupResidueIn(output)).toBeUndefined();
       },
     ),
@@ -575,4 +586,47 @@ describe("embedded RTF text destinations", () => {
       "Box",
     ]);
   });
+});
+
+describe("Unicode transport respects counted opaque spans", () => {
+  for (const payload of [
+    "é}{\\bin99 ",
+    "ÿ{\\rtf1\\ansi}",
+    "Ā}",
+    "é{\\\\bin8 }",
+  ]) {
+    test(`binary payload ${JSON.stringify(payload)} cannot alter following text`, () => {
+      const rtf = `{\\rtf1 Before \\bin${String(payload.length)} ${payload}After\\par}`;
+      const document = readRtfString(rtf);
+      expect(document.package.document.content.map(textOf)).toEqual([
+        "Before After",
+      ]);
+      expect(document.package.footnotes ?? []).toEqual([]);
+    });
+  }
+  test("Unicode fallbacks retain their scoped character counts", () => {
+    const rtf = String.raw`{\rtf1\uc2\u225${"éĀ"}{\uc1\u269${"š"}}\u225${"éĀ"} After\par}`;
+    expect(readRtfString(rtf).package.document.content.map(textOf)).toEqual([
+      "áčá After",
+    ]);
+  });
+  test("an escaped binary control stays literal", () => {
+    expect(
+      readRtfString(
+        String.raw`{\rtf1 \\bin2 ${"é"}}text}`,
+      ).package.document.content.map(textOf),
+    ).toEqual([String.raw`\bin2 ${"é"}text`]);
+  });
+});
+
+test("Unicode transport emits literal characters as complete Unicode controls", () => {
+  const source = "šťáva";
+  expect(readRtfString(source).package.document.content.map(textOf)).toEqual([
+    source,
+  ]);
+  expect(
+    readRtfString(
+      String.raw`{\rtf1\ansi Literal ${"šťáva"} \'e1\uc2\u225??}`,
+    ).package.document.content.map(textOf),
+  ).toEqual(["Literal šťáva áá"]);
 });

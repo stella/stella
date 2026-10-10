@@ -978,7 +978,7 @@ for (const tag of ["script", "style"]) {
 }
 
 test("RTF source decoding preserves bytes, Unicode transport, table text and notes", () => {
-  const rtf = String.raw`{\rtf1\ansi Literal šťáva \'e1\uc2\u225??\par \trowd\cellx3000\pard\intbl cell text\cell\row \pard body{\footnote note text}\par}`;
+  const rtf = String.raw`{\rtf1\ansi Literal ${"šťáva"} \'e1\uc2\u225??\par \trowd\cellx3000\pard\intbl cell text\cell\row \pard body{\footnote note text}\par}`;
   const { fulltext } = parseUsDecisionHtml(
     baseInput(`<input id="docContentHidden" value="${rtf}">`),
   );
