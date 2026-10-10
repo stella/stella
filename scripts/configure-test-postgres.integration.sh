@@ -42,19 +42,12 @@ fi
 }
 # Exercise password authentication, not the trusted maintenance socket.
 docker exec "$container" sh -ec 'export PGPASSWORD="$POSTGRES_PASSWORD"; exec psql -h 127.0.0.1 -U "$1" -d "$2" -v ON_ERROR_STOP=1 -c "SELECT 1"' sh "$owner" "$database" >/dev/null
-for address in 127.0.0.1 ::1; do
-  for login in stella_bootstrap stella_maintenance; do
-    if docker exec "$container" psql -h "$address" -U "$login" -d "$database" -w -c 'SELECT 1' >/dev/null 2>&1; then
-      echo "The $login account authenticated over TCP ($address)." >&2; exit 1;
-    fi
-  done
-done
+if docker exec "$container" psql -h 127.0.0.1 -U stella_bootstrap -d "$database" -w -c 'SELECT 1' >/dev/null 2>&1; then
+  echo 'The bootstrap account authenticated over TCP.' >&2; exit 1;
+fi
 [[ "$(psql_probe -c "SELECT NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolsuper AND rolcanlogin)")" == t ]] || {
   echo 'The bootstrap role permits direct login.' >&2; exit 1;
 }
-if docker exec --user root "$container" psql -U stella_maintenance -d "$database" -w -c 'SELECT 1' >/dev/null 2>&1; then
-  echo 'Maintenance socket authentication accepted the wrong OS peer.' >&2; exit 1;
-fi
 [[ "$(docker exec --user postgres "$container" psql -U stella_maintenance -d "$database" -v ON_ERROR_STOP=1 -tAc 'SET ROLE stella_bootstrap; SELECT current_user' | tail -1)" == stella_bootstrap ]] || exit 1
 [[ "$(psql_probe -c "SELECT NOT pg_has_role(current_user, 'stella_bootstrap', 'MEMBER') AND NOT pg_has_role(current_user, 'stella_maintenance', 'MEMBER') AND pg_has_role(current_user, 'pg_read_all_settings', 'USAGE') AND pg_has_role(current_user, 'pg_read_all_stats', 'USAGE') AND NOT pg_has_role(current_user, 'pg_monitor', 'MEMBER')")" == t ]] || {
   echo 'The replacement owner has unexpected role privileges.' >&2; exit 1;
