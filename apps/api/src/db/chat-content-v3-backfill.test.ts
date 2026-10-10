@@ -4,6 +4,10 @@ import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
 
+import {
+  isChatPart,
+  normalizePersistedChatMessageContent,
+} from "@/api/handlers/chat/chat-message-parts";
 import type { ChatPart } from "@/api/handlers/chat/types";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 
@@ -45,6 +49,90 @@ test("the migration rejects corrupt envelopes and unsupported versions", () => {
   expect(() =>
     convertLegacyChatContent({ version: 2, data: [], metadata: "invalid" }),
   ).toThrow("Stored v2 chat content has invalid metadata");
+});
+
+const canonicalToolStates = {
+  "approval-requested": true,
+  "approval-responded": true,
+  "awaiting-input": true,
+  complete: true,
+  error: true,
+  "input-complete": true,
+  "input-streaming": true,
+} as const satisfies Record<
+  Extract<ChatPart, { type: "tool-call" }>["state"],
+  true
+>;
+const canonicalArguments = fc.oneof(
+  fc.string(),
+  fc.string().map((query) => ` \n {"query": ${JSON.stringify(query)} }\t`),
+  fc.string().map((query) => `{"query":${JSON.stringify(query)}`),
+  fc.constant(String.raw`{ "query": "žaloba\n\"citace\" \u00e9" }`),
+);
+const canonicalToolPart = fc.record({
+  type: fc.constant("tool-call"),
+  id: fc.string({ minLength: 1 }),
+  name: fc.string({ minLength: 1 }),
+  state: fc.constantFrom(...Object.keys(canonicalToolStates)),
+  arguments: canonicalArguments,
+});
+
+test("v1 canonical tool-call golden retains its name and exact raw arguments", () => {
+  const argumentsText = '{"query":"contract"}';
+  const converted = convertLegacyChatContent({
+    version: 1,
+    data: [
+      {
+        type: "tool-call",
+        id: "call_1",
+        name: "search",
+        state: "input-complete",
+        arguments: argumentsText,
+      },
+    ],
+  });
+  expect(converted).toEqual({
+    version: 3,
+    data: [
+      {
+        type: "tool-call",
+        id: "call_1",
+        name: "search",
+        state: "input-complete",
+        input: { status: "raw", rawArguments: argumentsText },
+      },
+    ],
+  });
+  expect(normalizePersistedChatMessageContent(converted).parts).toEqual([
+    {
+      type: "tool-call",
+      id: "call_1",
+      name: "search",
+      state: "input-complete",
+      arguments: argumentsText,
+    },
+  ]);
+});
+
+test("v1 canonical tool calls preserve name state and raw argument bytes across reload", () => {
+  assertProperty(
+    "v1 canonical tool calls preserve name state and raw argument bytes across reload",
+    fc.property(canonicalToolPart, (part) => {
+      const converted = convertLegacyChatContent({ version: 1, data: [part] });
+      expect(converted.data).toEqual([
+        {
+          type: "tool-call",
+          id: part.id,
+          name: part.name,
+          state: part.state,
+          input: { status: "raw", rawArguments: part.arguments },
+        },
+      ]);
+      expect(normalizePersistedChatMessageContent(converted).parts).toEqual([
+        part,
+      ]);
+    }),
+  );
 });
 
 const malformedCanonicalParts = {
@@ -196,6 +284,7 @@ test("supported content and promoted metadata are accounted for or reject the wh
       fc.array(
         fc.oneof(
           fc.constantFrom(...capturedParts),
+          canonicalToolPart,
           restoration,
           mentions,
           sourceDocument,
@@ -215,6 +304,9 @@ test("supported content and promoted metadata are accounted for or reject the wh
           return;
         }
         let contentParts = 0;
+        const reloaded = normalizePersistedChatMessageContent(
+          converted.value,
+        ).parts;
         const sourceDocuments: unknown[] = [];
         for (const part of parts) {
           if (!isRecord(part)) {
@@ -245,6 +337,62 @@ test("supported content and promoted metadata are accounted for or reject the wh
               sourceDocuments.push(part["data"]);
               break;
             default:
+              if (part["type"] === "tool-call") {
+                expect(reloaded.at(contentParts)).toMatchObject({
+                  type: "tool-call",
+                  id: part["id"],
+                  name: part["name"],
+                  state: part["state"],
+                });
+                if (part["input"] === undefined) {
+                  expect(reloaded.at(contentParts)).toMatchObject({
+                    arguments: part["arguments"],
+                  });
+                }
+              } else if (part["type"] === "tool-result") {
+                expect(reloaded.at(contentParts)).toMatchObject({
+                  type: "tool-result",
+                  toolCallId: part["toolCallId"],
+                  state: part["state"],
+                });
+              } else if (isChatPart(part)) {
+                expect(reloaded.at(contentParts)).toMatchObject(part);
+              } else if (
+                typeof part["type"] === "string" &&
+                (part["type"] === "dynamic-tool" ||
+                  part["type"].startsWith("tool-"))
+              ) {
+                const name =
+                  part["type"] === "dynamic-tool"
+                    ? part["toolName"]
+                    : part["type"].slice("tool-".length);
+                expect(reloaded.at(contentParts)).toMatchObject({
+                  type: "tool-call",
+                  id: part["toolCallId"] ?? part["id"],
+                  name,
+                });
+                if (name !== "create-document") {
+                  if (
+                    part["input"] !== undefined &&
+                    part["state"] !== "input-streaming"
+                  ) {
+                    expect(reloaded.at(contentParts)).toMatchObject({
+                      input: part["input"],
+                    });
+                  }
+                  if (part["output"] !== undefined) {
+                    expect(reloaded.at(contentParts)).toMatchObject({
+                      output: part["output"],
+                    });
+                  }
+                }
+              }
+              if (part["type"] === "text") {
+                expect(reloaded.at(contentParts)).toMatchObject({
+                  type: "text",
+                  content: part["text"] ?? part["content"],
+                });
+              }
               contentParts += 1;
           }
         }

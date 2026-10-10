@@ -102,6 +102,10 @@ const normalizeLegacyMessagePartsToTanStack = (
     ) {
       invalidLegacyPart();
     }
+    if (isChatPart(part)) {
+      normalized.push(validateV2Part(part));
+      continue;
+    }
     if (isLegacyAiSdkTextPart(part)) {
       normalized.push(legacyAiSdkTextPartToTanStack(part));
       continue;
@@ -148,10 +152,6 @@ const normalizeLegacyMessagePartsToTanStack = (
         invalidLegacyPart();
       }
       normalized.push(converted);
-      continue;
-    }
-    if (isChatPart(part)) {
-      normalized.push(validateV2Part(part));
       continue;
     }
     invalidLegacyPart();
@@ -252,7 +252,11 @@ const isLegacyToolPart = (
   if (part["type"] === "dynamic-tool") {
     return typeof part["toolName"] === "string";
   }
-  return part["type"].startsWith("tool-") && part["type"] !== "tool-result";
+  return (
+    part["type"].startsWith("tool-") &&
+    part["type"] !== "tool-call" &&
+    part["type"] !== "tool-result"
+  );
 };
 
 const legacyToolPartToTanStack = (
@@ -532,7 +536,10 @@ export const convertLegacyChatContent = (
   const proved = Result.try({
     try: () =>
       toPersistedChatMessageContentV3({
-        data: normalizeLegacyPersistedToolInputs(normalized.parts),
+        data:
+          version === 1
+            ? normalized.parts
+            : normalizeLegacyPersistedToolInputs(normalized.parts),
         ...(Object.keys(normalized.metadata).length > 0 ||
         (version === 2 && content["metadata"] !== undefined)
           ? { metadata: normalized.metadata }
