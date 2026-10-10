@@ -1,8 +1,13 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { t } from "elysia";
 
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { VERSION_CONFLICT_ERROR_CODE } from "@/api/lib/optimistic-concurrency";
+
 import {
   assertWriteContract,
+  enforceWritePrecondition,
   getWriteContract,
   recordWriteContract,
 } from "./write-contract";
@@ -11,6 +16,104 @@ const timestampContract = {
   contract: "replace",
   precondition: { type: "updatedAt", field: "expectedUpdatedAt" },
 } as const;
+
+describe("replacement writes require the state the caller read", () => {
+  test("stale and malformed timestamp tokens stop the replacement before any write", () => {
+    for (const expectedUpdatedAt of [
+      "2026-01-01T00:00:00.000Z",
+      "invalid-timestamp",
+    ]) {
+      const row = {
+        updatedAt: new Date("2026-01-02T00:00:00.000Z"),
+        values: ["original"],
+      };
+      const result = Result.try({
+        try: () => {
+          enforceWritePrecondition({
+            type: "updatedAt",
+            field: "expectedUpdatedAt",
+            storedUpdatedAt: row.updatedAt,
+            expectedUpdatedAt,
+            resource: "Record",
+          });
+          row.values = ["replacement"];
+        },
+        catch: (error) => error,
+      });
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error).toBeInstanceOf(HandlerError);
+        expect(result.error).toMatchObject({
+          status: 409,
+          code: VERSION_CONFLICT_ERROR_CODE,
+        });
+      }
+      expect(row.values).toEqual(["original"]);
+    }
+  });
+
+  test("timestamps describing the same instant allow the replacement", () => {
+    const row = {
+      updatedAt: new Date("2026-01-02T00:00:00.000Z"),
+      values: ["original"],
+    };
+    enforceWritePrecondition({
+      type: "updatedAt",
+      field: "expectedUpdatedAt",
+      storedUpdatedAt: row.updatedAt,
+      expectedUpdatedAt: "2026-01-02T01:00:00.000+01:00",
+      resource: "Record",
+    });
+    row.values = ["replacement"];
+    expect(row.values).toEqual(["replacement"]);
+  });
+
+  test("a differing revision token stops the replacement with the standard conflict", () => {
+    for (const tokens of [
+      { storedRevision: 2, expectedRevision: 1 },
+      { storedRevision: "current", expectedRevision: "previous" },
+      { storedRevision: 1, expectedRevision: "1" },
+    ]) {
+      const row = { values: ["original"] };
+      const result = Result.try({
+        try: () => {
+          enforceWritePrecondition({
+            type: "revision",
+            field: "revision",
+            ...tokens,
+            resource: "Record",
+          });
+          row.values = ["replacement"];
+        },
+        catch: (error) => error,
+      });
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error).toBeInstanceOf(HandlerError);
+        expect(result.error).toMatchObject({
+          status: 409,
+          code: VERSION_CONFLICT_ERROR_CODE,
+        });
+      }
+      expect(row.values).toEqual(["original"]);
+    }
+  });
+
+  test("matching numeric and string revisions allow the replacement", () => {
+    for (const revision of [2, "current"]) {
+      const row = { values: ["original"] };
+      enforceWritePrecondition({
+        type: "revision",
+        field: "revision",
+        storedRevision: revision,
+        expectedRevision: revision,
+        resource: "Record",
+      });
+      row.values = ["replacement"];
+      expect(row.values).toEqual(["replacement"]);
+    }
+  });
+});
 
 describe("replacement precondition schemas", () => {
   test("a planted replacement without a required precondition fails at the factory boundary", () => {

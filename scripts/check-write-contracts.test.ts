@@ -242,6 +242,96 @@ describe("write contracts cover the mutation route graph", () => {
     );
     expect(check(sources)).toEqual([]);
   });
+  test("a required token schema cannot authorize an unconditional replacement", () => {
+    const config = `{contract: 'replace', precondition: {type: 'updatedAt', field: 'expectedUpdatedAt'}, body: t.Object({expectedUpdatedAt: t.String({format: 'date-time'})})}`;
+    const sources = fixture(config);
+    const guarded = `import { t } from 'elysia';
+      import { createSafeHandler } from '@/api/lib/api-handlers';
+      import { enforceWritePrecondition as enforce } from '@/api/lib/write-contract';
+      export default createSafeHandler(${config}, async ({body, scopedDb}) =>
+        scopedDb.transaction(async (tx) => {
+          const stored = await tx.readForUpdate();
+          enforce({type: 'updatedAt', field: 'expectedUpdatedAt', expectedUpdatedAt: body.expectedUpdatedAt, storedUpdatedAt: stored.updatedAt, resource: 'Example'});
+          return tx.replace(body);
+        }));`;
+    const diagnostic = expect.stringContaining(
+      "Replacement must reach owner enforcement for expectedUpdatedAt",
+    );
+    expect(enumerate(sources)).toHaveLength(1);
+    expect(check(sources)).toContainEqual(diagnostic);
+    sources.set(handler, guarded);
+    expect(check(sources)).toEqual([]);
+    // Mutation: removing only the comparison leaves the required body schema intact.
+    sources.set(handler, guarded.replace(/enforce\(\{type:[^;]+;/u, ""));
+    expect(sources.get(handler)).toContain("body: t.Object");
+    expect(check(sources)).toContainEqual(diagnostic);
+  });
+  test("owner identity, field and invoked helper reachability are required", () => {
+    const config = `{contract: 'replace', precondition: {type: 'updatedAt', field: 'expectedUpdatedAt'}}`;
+    const sources = fixture(config);
+    const helper = "apps/api/src/handlers/example/write.ts";
+    sources.set(
+      helper,
+      `import { enforceWritePrecondition } from '@/api/lib/write-contract';
+      export const write = (body) => { enforceWritePrecondition({type: 'updatedAt', field: 'expectedUpdatedAt', expectedUpdatedAt: body.expectedUpdatedAt}); };`,
+    );
+    const invoked = `import { createSafeHandler } from '@/api/lib/api-handlers'; import {write} from './write';
+      export default createSafeHandler(${config}, async ({body}) => write(body));`;
+    sources.set(handler, invoked);
+    expect(check(sources)).toEqual([]);
+    for (const changed of [
+      invoked.replace("write(body)", "({})"),
+      invoked.replace("async ({body})", "async ({body, write})"),
+    ]) {
+      sources.set(handler, changed);
+      expect(check(sources)).toContainEqual(
+        expect.stringContaining("Replacement must reach owner enforcement"),
+      );
+    }
+    sources.set(handler, invoked);
+    const original = sources.get(helper);
+    if (original === undefined) {
+      panic("Fixture helper must exist");
+    }
+    for (const changed of [
+      original.replace("@/api/lib/write-contract", "./lookalike"),
+      original.replace("field: 'expectedUpdatedAt'", "field: 'revision'"),
+    ]) {
+      sources.set(helper, changed);
+      expect(check(sources)).toContainEqual(
+        expect.stringContaining("Replacement must reach owner enforcement"),
+      );
+    }
+  });
+  test("compound revision declarations require every owner comparison", () => {
+    const config = `{contract: 'replace', precondition: {type: 'revision', fields: ['baseRevision', 'selectedTextHash']}}`;
+    const sources = fixture(config);
+    sources.set(
+      "apps/api/src/lib/write-contract.ts",
+      `const REVISION_PRECONDITIONS = {message: ['baseRevision', 'selectedTextHash']};`,
+    );
+    const guarded = `import { createSafeHandler } from '@/api/lib/api-handlers';
+      import { enforceWritePrecondition } from '@/api/lib/write-contract';
+      export default createSafeHandler(${config}, async ({body}) => {
+        enforceWritePrecondition({type: 'revision', field: 'baseRevision', expectedRevision: body.baseRevision});
+        enforceWritePrecondition({type: 'revision', field: 'selectedTextHash', expectedRevision: body.selectedTextHash});
+        return {};
+      });`;
+    sources.set(handler, guarded);
+    expect(check(sources)).toEqual([]);
+    sources.set(
+      handler,
+      guarded.replace(
+        /enforceWritePrecondition\(\{type: 'revision', field: 'selectedTextHash'[^;]+;/u,
+        "",
+      ),
+    );
+    expect(check(sources)).toContainEqual(
+      expect.stringContaining(
+        "Replacement must reach owner enforcement for selectedTextHash",
+      ),
+    );
+  });
   test("replacement precondition metadata must match its declared protocol", () => {
     expect(check(fixture('{contract: "replace"}'))).toContainEqual(
       expect.stringContaining("Replace route requires precondition:"),

@@ -1,6 +1,12 @@
 import { Kind } from "@sinclair/typebox";
 import { panic } from "better-result";
 
+import { HandlerError } from "./errors/tagged-errors";
+import {
+  assertUnchangedSince,
+  VERSION_CONFLICT_ERROR_CODE,
+} from "./optimistic-concurrency";
+
 /** Exact migration identities; the route census binds these to the reasoned baseline. */
 export const REPLACE_CONTRACT_DEBT_IDS = [
   "apps/api/src/handlers/case-law/research/columns-reorder.ts",
@@ -57,6 +63,46 @@ export type WriteContract =
         | { type: "revision"; fields: RevisionFields }
         | { type: "deferred"; baselineId: ReplaceContractDebtId };
     };
+
+type WritePreconditionArgs =
+  | {
+      type: "updatedAt";
+      field: "expectedUpdatedAt";
+      storedUpdatedAt: Date;
+      expectedUpdatedAt: string;
+      resource: string;
+    }
+  | {
+      type: "revision";
+      field: RevisionFields[number];
+      storedRevision: string | number;
+      expectedRevision: string | number;
+      resource: string;
+    };
+
+/** Check every declared field after locking the decisive row, holding that lock through the write. */
+export const enforceWritePrecondition = (args: WritePreconditionArgs): void => {
+  switch (args.type) {
+    case "updatedAt": {
+      const conflict = assertUnchangedSince(args);
+      if (conflict) {
+        throw conflict;
+      }
+      return;
+    }
+    case "revision":
+      if (args.storedRevision === args.expectedRevision) {
+        return;
+      }
+      throw new HandlerError({
+        code: VERSION_CONFLICT_ERROR_CODE,
+        status: 409,
+        message: `${args.resource} changed while it was being edited; reload and try again`,
+      });
+    default:
+      return panic(args satisfies never);
+  }
+};
 
 /** Custom transport boundaries declare the same contract without changing handler identities. */
 export const RAW_WRITE_CONTRACTS = {

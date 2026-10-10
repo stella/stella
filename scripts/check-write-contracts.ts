@@ -87,6 +87,14 @@ type SafeCallOptions = {
   seen?: Set<string>;
   handler: string;
 };
+type EnforcementOptions = {
+  value: LocatedExpression;
+  type: string;
+  seen: Set<string>;
+};
+type EnforcementCallOptions = Omit<EnforcementOptions, "value"> & {
+  value: LocatedExpression & { node: ts.CallExpression };
+};
 type SafeCall = LocatedExpression & {
   node: ts.CallExpression;
   configArgument: (typeof SAFE_HANDLER_FACTORIES)[keyof typeof SAFE_HANDLER_FACTORIES]["configArgument"];
@@ -670,6 +678,108 @@ class WriteSourceResolver {
     });
   };
   private readonly safeBoundaries = new Set<string>();
+  private readonly handlers = new Map<string, SafeCall[]>();
+
+  /** Follow only invoked functions and callbacks, never unrelated module declarations. */
+  enforcementFields = (handler: string, type: string): Set<string> => {
+    const calls = this.handlers.get(handler) ?? [];
+    const perHandler = calls.map((safe) => {
+      const callback = safe.node.arguments.at(1);
+      if (callback === undefined) {
+        return new Set<string>();
+      }
+      return this.functionEnforcement({
+        value: { file: safe.file, node: callback, scope: safe.scope },
+        type,
+        seen: new Set(),
+      });
+    });
+    const first = perHandler.at(0) ?? new Set<string>();
+    return new Set(
+      [...first].filter((field) =>
+        perHandler.every((fields) => fields.has(field)),
+      ),
+    );
+  };
+  functionEnforcement = ({
+    value,
+    type,
+    seen,
+  }: EnforcementOptions): Set<string> => {
+    const resolved = this.resolve(value);
+    const result = new Set<string>();
+    if (
+      resolved === undefined ||
+      (!ts.isArrowFunction(resolved.node) &&
+        !ts.isFunctionExpression(resolved.node))
+    ) {
+      return result;
+    }
+    const key = `${resolved.file}:${resolved.node.pos}`;
+    if (seen.has(key)) {
+      return result;
+    }
+    seen.add(key);
+    const scope = wrapperScope(resolved);
+    const visit = (node: ts.Node) => {
+      if (ts.isFunctionLike(node)) {
+        return;
+      }
+      if (ts.isCallExpression(node)) {
+        for (const field of this.callEnforcement({
+          value: { file: resolved.file, node, scope },
+          type,
+          seen,
+        })) {
+          result.add(field);
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(resolved.node.body);
+    return result;
+  };
+  callEnforcement = ({
+    value,
+    type,
+    seen,
+  }: EnforcementCallOptions): Set<string> => {
+    const result = new Set<string>();
+    const imported = this.factoryBinding({
+      file: value.file,
+      expression: value.node.expression,
+      scope: value.scope,
+    });
+    if (
+      imported?.module === OWNER &&
+      imported.imported === "enforceWritePrecondition"
+    ) {
+      const argument = value.node.arguments.at(0);
+      const options =
+        argument === undefined
+          ? new Map<string, LocatedExpression>()
+          : this.fields({
+              file: value.file,
+              node: argument,
+              scope: value.scope,
+            });
+      const field = this.text(options.get("field"));
+      if (this.text(options.get("type")) === type && field !== undefined) {
+        result.add(field);
+      }
+      return result;
+    }
+    for (const expression of [value.node.expression, ...value.node.arguments]) {
+      for (const field of this.functionEnforcement({
+        value: { file: value.file, node: expression, scope: value.scope },
+        type,
+        seen: new Set(seen),
+      })) {
+        result.add(field);
+      }
+    }
+    return result;
+  };
   config = (handler: string): Map<string, LocatedExpression> => {
     const match = /^(.*\.ts)(?:#(.*))?\.handler$/u.exec(handler);
     const file = match?.[1];
@@ -686,6 +796,7 @@ class WriteSourceResolver {
       return new Map();
     }
     this.safeBoundaries.add(handler);
+    this.handlers.set(handler, calls);
     const configs = calls.map(this.callConfig);
     const first = configs.at(0);
     if (first === undefined) {
@@ -842,6 +953,23 @@ export const enumerateWriteContracts = (
         )
       ) {
         violations.push("Revision precondition requires registered fields");
+      }
+    }
+    if (
+      resolver.text(config.get("contract")) === "replace" &&
+      (type === "updatedAt" || type === "revision")
+    ) {
+      const required =
+        type === "updatedAt"
+          ? [resolver.text(precondition.get("field"))]
+          : (resolver.strings(precondition.get("fields")) ?? []);
+      const enforced = resolver.enforcementFields(route.handler, type);
+      for (const field of required) {
+        if (field !== undefined && !enforced.has(field)) {
+          violations.push(
+            `Replacement must reach owner enforcement for ${field}`,
+          );
+        }
       }
     }
     if (
