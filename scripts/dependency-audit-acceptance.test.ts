@@ -33,6 +33,7 @@ const runCheck = async (
   advisories: Advisory[],
   accepted: Baseline,
   today: string,
+  warningFormat: "github" | "plain" = "plain",
 ) => {
   const output = { info: [] as string[], warn: [] as string[] };
   const info = spyOn(console, "info").mockImplementation((message) =>
@@ -46,6 +47,7 @@ const runCheck = async (
     const status = await check(advisories, {
       baseline: accepted,
       now: () => new Date(`${today}T00:00:00Z`),
+      warningFormat,
     });
     return { ...output, status };
   } finally {
@@ -88,6 +90,19 @@ describe("audit acceptance expiry", () => {
     expect(result.status).toBe(0);
     expect(result.warn).toEqual([
       "WARNING: GHSA-aaaa-bbbb-cccc for pkg is accepted until 2026-10-05; review or remediate it before expiry.",
+    ]);
+  });
+
+  test("an expiring acceptance warns as a GitHub annotation in Actions output", async () => {
+    const result = await runCheck(
+      [currentAdvisory],
+      auditBaseline("2026-10-05"),
+      "2026-10-02",
+      "github",
+    );
+    expect(result.status).toBe(0);
+    expect(result.warn).toEqual([
+      "::warning title=Dependency audit acceptance expiring::GHSA-aaaa-bbbb-cccc for pkg is accepted until 2026-10-05; review or remediate it before expiry.",
     ]);
   });
 

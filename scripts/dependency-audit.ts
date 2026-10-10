@@ -27,7 +27,7 @@
 // acceptance lapse (and --check fail) after a date or once a patched release
 // is published; see scripts/dependency-audit-acceptance.ts.
 
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { appendFileSync } from "node:fs";
 import path from "node:path";
 
@@ -382,24 +382,40 @@ const checkLapsedAcceptances = async (
 const githubCommandValue = (value: string): string =>
   value.replaceAll("%", "%25").replaceAll("\r", "%0D").replaceAll("\n", "%0A");
 
-const warnBeforeExpiry = (
-  advisories: Advisory[],
-  baseline: Baseline,
-  today: string,
-): void => {
+type WarningFormat = "github" | "plain";
+
+type WarnBeforeExpiryOptions = {
+  advisories: Advisory[];
+  baseline: Baseline;
+  today: string;
+  format: WarningFormat;
+};
+
+const warnBeforeExpiry = ({
+  advisories,
+  baseline,
+  today,
+  format,
+}: WarnBeforeExpiryOptions): void => {
   for (const entry of expiringAcceptances({
     accepted: baseline.accepted,
     current: advisories,
     today,
   })) {
     const message = `${entry.id} for ${entry.package} is accepted until ${entry.expiresOn}; review or remediate it before expiry.`;
-    if (process.env["GITHUB_ACTIONS"] === "true") {
-      console.warn(
-        `::warning title=Dependency audit acceptance expiring::${githubCommandValue(message)}`,
-      );
-      continue;
+    switch (format) {
+      case "github":
+        console.warn(
+          `::warning title=Dependency audit acceptance expiring::${githubCommandValue(message)}`,
+        );
+        break;
+      case "plain":
+        console.warn(`WARNING: ${message}`);
+        break;
+      default:
+        format satisfies never;
+        panic("unhandled warning format");
     }
-    console.warn(`WARNING: ${message}`);
   }
 };
 
@@ -408,6 +424,8 @@ type CheckOptions = {
   latestVersion?: (pkg: string) => Promise<string | undefined>;
   now?: () => Date;
   packages?: ReadonlySet<string>;
+  /** Defaults to GitHub annotations inside GitHub Actions. */
+  warningFormat?: WarningFormat;
 };
 
 export const check = async (
@@ -431,7 +449,14 @@ export const check = async (
   );
   // UTC calendar date; an acceptance holds through its expiresOn day.
   const today = (options.now?.() ?? new Date()).toISOString().slice(0, 10);
-  warnBeforeExpiry(advisories, baseline, today);
+  warnBeforeExpiry({
+    advisories,
+    baseline,
+    today,
+    format:
+      options.warningFormat ??
+      (process.env["GITHUB_ACTIONS"] === "true" ? "github" : "plain"),
+  });
   const lapsed = await checkLapsedAcceptances(
     advisories,
     baseline,
