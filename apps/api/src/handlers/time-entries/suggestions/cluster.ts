@@ -1,4 +1,5 @@
 import type { TimeEntrySuggestionEvidence } from "@stll/api-contract/time-entry-types";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 /**
  * One observed action by the timekeeper inside a matter. `key` is unique per
@@ -44,7 +45,7 @@ const MS_PER_MINUTE = 60_000;
  * earlier one's identity; the later one's fingerprint stops being produced.
  */
 export const suggestionFingerprint = (date: string, firstKey: string) =>
-  new Bun.CryptoHasher("sha256").update(`${date}\n${firstKey}`).digest("hex");
+  hashSha256Hex(`${date}\n${firstKey}`);
 
 const compareSignals = (a: ActivitySignal, b: ActivitySignal) => {
   const byTime = a.at.getTime() - b.at.getTime();

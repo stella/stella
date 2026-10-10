@@ -192,7 +192,6 @@ const PUBLIC_DECISION_READ_GATES = {
     gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
     reason: "Relation definitions.",
   },
-  [COVERAGE_ARRIVALS_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
   [CITATION_GRAPH_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
   "apps/api/src/handlers/case-law/decisions/citations.ts": {
     gate: PUBLIC_DECISION_READ_GATE.PREDICATE,
@@ -290,6 +289,10 @@ const PUBLIC_DECISION_READ_GATES = {
   [PG_FTS_FACETS_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
   "apps/api/src/lib/legal-search/pg-fts-legal-provider.ts": {
     gate: PUBLIC_DECISION_READ_GATE.PREDICATE,
+  },
+  "apps/api/src/lib/legal-search/deferred-document-source-ownership.ts": {
+    gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
+    reason: "Source ownership lookup for document writes; not a public read.",
   },
   "apps/api/src/lib/legal-search/sk-document-backfill.ts": {
     gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
@@ -848,11 +851,11 @@ describe("public case-law route boundary", () => {
     // source's whole index range on a two-connection pool.
     expect(coverageSource).not.toContain("source-totals");
     expect(coverageSource).toContain("caseLawSources.storedTotal");
-    // The one read left against the decision table is a week of one source's
-    // arrivals: bounded by the window, and gated like every other public read.
-    expect(arrivalsSource).toContain("d.created_at >=");
-    expect(arrivalsSource).toContain("publishedCaseLawDecisionSqlFor");
-    expect(arrivalsSource).not.toContain("LIMIT");
+    // The week's arrivals are counted by the scheduler and read back as one
+    // stored integer per source: the request path reads no decision row.
+    expect(arrivalsSource).not.toMatch(DECISION_TABLE_MENTION);
+    expect(arrivalsSource).toContain(".from(caseLawSourceArrivals)");
+    expect(arrivalsSource).not.toContain('source-arrivals-refresh"');
   });
 
   test("the coverage route publishes no crawl or lease state", async () => {

@@ -184,6 +184,7 @@ const readCitingDecisionRows = async ({
       court: caseLawDecisions.court,
       courtId: caseLawDecisions.courtId,
       ecli: caseLawDecisions.ecli,
+      sourceUrl: caseLawDecisions.sourceUrl,
       country: caseLawDecisions.country,
       language: caseLawDecisions.language,
       languageGroupKey: caseLawDecisions.languageGroupKey,
@@ -242,6 +243,7 @@ const readCitingDecisionRows = async ({
       court: mentions.court,
       courtId: mentions.courtId,
       ecli: mentions.ecli,
+      sourceUrl: mentions.sourceUrl,
       country: mentions.country,
       language: mentions.language,
       languageGroupKey: mentions.languageGroupKey,
@@ -403,11 +405,10 @@ export const listCitingDecisionsHandler = async (
     ...page,
     nextCursor: byAuthority || byCitations ? null : page.nextCursor,
     snapshot: byCitations
-      ? {
-          type:
-            rows.length > limit ? ("capped" as const) : ("complete" as const),
+      ? ({
+          type: rows.length > limit ? "capped" : "complete",
           limit: PROVISION_CITING_SNAPSHOT_LIMIT,
-        }
+        } as const)
       : null,
     items: page.items.map(
       ({ anchor: _anchor, decisionDateCursor: _decisionDateCursor, ...item }) =>

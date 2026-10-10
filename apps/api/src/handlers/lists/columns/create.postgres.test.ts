@@ -11,21 +11,31 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
+import { env } from "@/api/env";
 import { createSafeId } from "@/api/lib/branded-types";
+import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { LIMITS } from "@/api/lib/limits";
 import {
   LIST_COLUMN_LIMIT_ERROR_CODE,
   LIST_COLUMN_OVERFLOW_ERROR_CODE,
 } from "@/api/lib/lists/column-error-codes";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
+import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
 import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import { organizationFeatureGrants } from "@/api/tests/helpers/feature-grants";
+import {
+  NO_DB,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
+import { createTestState } from "@/api/tests/helpers/test-state";
 
 import readList from "../get";
 import createColumn from "./create";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgres = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -63,6 +73,10 @@ if (!databaseUrl || !runPostgres) {
         email: `${userId}@example.test`,
         emailVerified: true,
       });
+      testState.setConfig(
+        "API_FEATURE_ACCESS_GRANTS",
+        organizationFeatureGrants(organizationId, [LEGAL_LISTS_FEATURE_ID]),
+      );
       try {
         await db.insert(member).values({
           id: mintAuthProviderIdValue(),
@@ -107,6 +121,7 @@ if (!databaseUrl || !runPostgres) {
           })),
         );
         const baseContext = {
+          audit: auditRecorderDouble(),
           workspaceId,
           session: { activeOrganizationId: organizationId },
           user: { id: userId },
@@ -114,6 +129,7 @@ if (!databaseUrl || !runPostgres) {
         const read = async () =>
           await readList.handler(
             createTestHandlerContext<Parameters<typeof readList.handler>[0]>({
+              scopedDb: NO_DB,
               ...baseContext,
               safeDb: createSafeDb(db, [workspaceId], organizationId, userId),
               params: { listId, workspaceId },
@@ -144,6 +160,7 @@ if (!databaseUrl || !runPostgres) {
                   createTestHandlerContext<
                     Parameters<typeof createColumn.handler>[0]
                   >({
+                    scopedDb: NO_DB,
                     ...baseContext,
                     safeDb: createSafeDb(
                       workerDb,

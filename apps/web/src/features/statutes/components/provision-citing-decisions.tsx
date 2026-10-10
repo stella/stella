@@ -1,4 +1,5 @@
 import { useInfiniteQuery } from "@tanstack/react-query";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { PROVISION_CITING_FILTER_LIMITS } from "@stll/api-contract/provision-citing-decisions";
@@ -13,6 +14,8 @@ import {
 } from "@stll/ui/select";
 import { Skeleton } from "@stll/ui/skeleton";
 
+import { decisionCitationCourtLabel } from "@/components/references/decision-citation-chip.logic";
+import { decisionCitationPresentationsById } from "@/components/references/decision-citation-presentation.logic";
 import { CitingDecisionItem } from "@/features/statutes/components/citing-decision-item";
 import { citingDecisionsInfiniteOptions } from "@/features/statutes/queries/citing-decisions";
 import { readProvisionCitingSearch } from "@/features/statutes/statute-page-search";
@@ -68,6 +71,12 @@ export const ProvisionCitingDecisions = ({
     }
   }
   const decisions = [...byDecision.values()];
+  const presentations = decisionCitationPresentationsById(
+    decisions.map((decision) => ({
+      decisionId: decision.decisionId,
+      courtShortCode: decisionCitationCourtLabel(decision),
+    })),
+  );
   const snapshot = data?.pages.at(0)?.snapshot;
   return (
     <div className="flex flex-col gap-2">
@@ -95,8 +104,9 @@ export const ProvisionCitingDecisions = ({
         }}
       >
         <Input
-          aria-label={t("caseLaw.court")}
-          className="min-w-24 flex-1 text-xs"
+          aria-label={t("caseLaw.filters.court")}
+          className="min-w-24 flex-1"
+          size="sm"
           defaultValue={filters.citingCourt ?? ""}
           maxLength={PROVISION_CITING_FILTER_LIMITS.courtChars}
           name="court"
@@ -105,7 +115,8 @@ export const ProvisionCitingDecisions = ({
         />
         <Input
           aria-label={t("statutes.citingDecisionsYear")}
-          className="w-24 text-xs"
+          className="w-24"
+          size="sm"
           defaultValue={filters.citingYear ?? ""}
           max={PROVISION_CITING_FILTER_LIMITS.yearMax}
           min={PROVISION_CITING_FILTER_LIMITS.yearMin}
@@ -173,6 +184,10 @@ export const ProvisionCitingDecisions = ({
               <CitingDecisionItem
                 currentVersionValidFrom={currentVersionValidFrom}
                 decision={decision}
+                presentation={
+                  presentations.get(decision.decisionId) ??
+                  panic("Citing decision missing collected identity")
+                }
               />
             </li>
           ))}

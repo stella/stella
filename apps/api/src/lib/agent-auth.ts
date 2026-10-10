@@ -1,6 +1,10 @@
 import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
+import {
+  sha256Base64Url as hashSha256Base64Url,
+  sha256Hex as hashSha256Hex,
+} from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import {
@@ -53,25 +57,15 @@ const AGENT_REDIRECT_URI =
 /** How long an unconsumed claim token / registration row stays valid. */
 const REGISTRATION_TTL_MS = AGENT_AUTH_CEREMONY_TTL_SECONDS * 1000;
 
-const sha256Hex = (value: string): string =>
-  new Bun.CryptoHasher("sha256").update(value).digest("hex");
-
-/**
- * better-auth's default `storeClientSecret: "hashed"` form: SHA-256 of
- * the secret, base64url without padding. Reproduced here so we can mint
- * a confidential agent client by inserting the row directly (the admin
- * create-client endpoint requires an interactive session we do not have
- * at registration time). Kept in lockstep with `defaultHasher` in
- * `@better-auth/oauth-provider`.
- */
+/** better-auth stores confidential client secrets as unpadded SHA-256 base64url. */
 const hashClientSecret = (secret: string): string =>
-  new Bun.CryptoHasher("sha256").update(secret).digest("base64url");
+  hashSha256Base64Url(secret);
 
 export const generateOpaqueToken = (): string =>
   Bun.randomUUIDv7().replaceAll("-", "") +
   Bun.randomUUIDv7().replaceAll("-", "");
 
-export const hashClaimToken = (token: string): string => sha256Hex(token);
+export const hashClaimToken = (token: string): string => hashSha256Hex(token);
 
 const getResourceModeForType = (
   registrationType: AgentRegistrationType,
@@ -194,9 +188,7 @@ export type TokenResponseShape = {
   scope: string;
 };
 
-export const isTokenResponse = (
-  value: unknown,
-): value is TokenResponseShape => {
+const isTokenResponse = (value: unknown): value is TokenResponseShape => {
   if (typeof value !== "object" || value === null) {
     return false;
   }
@@ -210,7 +202,7 @@ export const isTokenResponse = (
   );
 };
 
-export const reshapeTokenResponse = (
+const reshapeTokenResponse = (
   value: TokenResponseShape,
 ): TokenResponseShape => ({
   access_token: value.access_token,
@@ -218,9 +210,6 @@ export const reshapeTokenResponse = (
   expires_in: value.expires_in,
   scope: value.scope,
 });
-
-/** The redirect URI every agent client is bound to (never navigated to). */
-export const getAgentRedirectUri = (): string => AGENT_REDIRECT_URI;
 
 export type AgentTokenErrorCode =
   | "authorization_pending"

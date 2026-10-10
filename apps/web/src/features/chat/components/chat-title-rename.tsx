@@ -4,7 +4,8 @@ import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
-import { Loader2Icon, AiActionIcon } from "@stll/ui/icons";
+import { AiActionIcon } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 import { cn } from "@stll/ui/utils";
 
 import { InlineEdit } from "@/components/inline-edit";
@@ -74,7 +75,7 @@ export const ChatTitleSuggestButton = ({
       variant="muted"
     >
       {isPending ? (
-        <Loader2Icon aria-hidden="true" className="size-3.5 animate-spin" />
+        <Loader className="size-3.5" label={t("common.loading")} size="sm" />
       ) : (
         <AiActionIcon aria-hidden="true" className="size-3.5" />
       )}

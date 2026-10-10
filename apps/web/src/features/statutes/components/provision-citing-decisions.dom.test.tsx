@@ -3,6 +3,7 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { PROVISION_CITING_SNAPSHOT_LIMIT } from "@stll/api-contract/provision-citing-decisions";
 import { DECISION_DATE_VERSION_BASIS } from "@stll/api-contract/provision-version-basis";
+import { sleep } from "@stll/concurrency/sleep";
 
 import { readProvisionCitingSearch } from "@/features/statutes/statute-page-search";
 import type { ProvisionCitingSearch } from "@/features/statutes/statute-page-search";
@@ -40,9 +41,7 @@ afterEach(() => {
 });
 afterAll(async () => {
   await act(async () => {
-    await new Promise((resolve) => {
-      setTimeout(resolve, 0);
-    });
+    await sleep(0);
   });
   await GlobalRegistrator.unregister();
 });
@@ -66,6 +65,7 @@ const makeDecision = (id: string, caseNumber: string) =>
     slug: caseNumber.replaceAll("/", "-"),
     court: "Supreme Court",
     courtAbbreviation: "SC",
+    sourceUrl: null,
     courtTier: "supreme",
     mentionCount: 1,
     snippetCitation: null,
@@ -235,7 +235,7 @@ for (const [locale, messages] of [
 
     expect(ui.getAllByRole("link", { name: /1 C 11\/2020/u })).toHaveLength(1);
     fireEvent.change(
-      ui.getByRole("searchbox", { name: messages.caseLaw.court }),
+      ui.getByRole("searchbox", { name: messages.caseLaw.filters.court }),
       {
         target: { value: " Supreme Court " },
       },

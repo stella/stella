@@ -1,6 +1,7 @@
 import { BUSINESS_REGISTRY_CREDENTIAL_SLUGS } from "@stll/api-contract";
 import type { TimeZoneId } from "@stll/time";
 
+import { entityFeaturePolicies } from "@/api/db/entity-feature-policies";
 import {
   DEFAULT_MANAGED_AI_RESIDENCY,
   MANAGED_AI_RESIDENCIES,
@@ -8,6 +9,11 @@ import {
 import { SANCTIONS_MONITORING_MODES } from "@/api/lib/lists/sanctions/monitoring-vocabulary";
 import { PERSONAL_API_KEY_POLICIES } from "@/api/lib/machine-api-key-config";
 
+import {
+  entityFeatureGateChecks,
+  entityFeatureGateColumns,
+  entityFeatureWorkspaceGateColumns,
+} from "../entity-feature-gate-columns";
 import {
   bytea,
   jsonb,
@@ -109,7 +115,7 @@ export const documentCounters = p.pgTable(
   },
   (table) => [
     p.uniqueIndex("document_counters_ws_uidx").on(table.workspaceId),
-    ...wsPolicies(),
+    ...wsPolicies({ columns: table }),
   ],
 );
 
@@ -390,6 +396,8 @@ export const organizationSettings = p.pgTable(
 export const anonymizationAllowlistEntries = p.pgTable(
   "anonymization_allowlist_entries",
   {
+    ...entityFeatureGateColumns(),
+    ...entityFeatureWorkspaceGateColumns(),
     id: pUuid<"anonymizationAllowlistEntry">().primaryKey(),
     organizationId: safeOrganizationId("organization_id").notNull(),
     workspaceId: safeWorkspaceId("workspace_id").references(
@@ -407,6 +415,13 @@ export const anonymizationAllowlistEntries = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
+    ...entityFeaturePolicies(
+      table,
+      new Map([
+        [table.entityId, { target: "entities", kind: "owned-content" }],
+      ]),
+    ),
     // Named explicitly: drizzle's generated name exceeds PostgreSQL's 63-byte
     // identifier limit and was silently truncated in the catalog until
     // 20260813110000 renamed it.

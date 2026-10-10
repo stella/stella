@@ -350,7 +350,7 @@ export const backfillLegislationSearchIndex = async (
   return { found: rows.length, indexed };
 };
 
-export const removeLegislationFromIndex = async (
+const removeLegislationFromIndex = async (
   documentId: SafeId<"legislationDocument">,
   scopedDb: ScopedDb,
 ): Promise<void> => {

@@ -4,15 +4,16 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { provisionVersionAsOf } from "@stll/api-contract/provision-version-basis";
+import { CourtName } from "@stll/decision-reader/court-name";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { TextMark } from "@stll/ui/text-mark";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 import { cn } from "@stll/ui/utils";
 
-import { CourtName } from "@/components/court-name";
 import { CitedDecisionLink } from "@/components/legal-reader/cited-decision-link";
 import { ProvisionVersionBasisLabel } from "@/components/provision-version-basis";
+import type { DecisionCitationPresentation } from "@/components/references/decision-citation-presentation.logic";
 import { useFormatter } from "@/i18n/formatting-context";
 import { formatValidityDate } from "@/lib/statutes/statute-format";
 
@@ -22,8 +23,10 @@ import type { CitingDecisionRow } from "./provision-citing-decisions";
 export const CitingDecisionItem = ({
   currentVersionValidFrom,
   decision,
+  presentation,
 }: {
   decision: CitingDecisionRow;
+  presentation?: DecisionCitationPresentation | undefined;
   currentVersionValidFrom: string | null;
 }) => {
   const t = useTranslations();
@@ -83,10 +86,13 @@ export const CitingDecisionItem = ({
     <div className="flex flex-col items-start">
       <CitedDecisionLink
         className="hover:bg-accent -mx-2 flex w-full flex-col gap-0.5 rounded-md px-2 py-1.5 no-underline"
+        presentation={presentation}
         decision={{
           caseNumber: decision.caseNumber,
           country: decision.country,
           court: decision.court,
+          courtAbbreviation: decision.courtAbbreviation,
+          sourceUrl: decision.sourceUrl,
           decisionDate: decision.decisionDate,
           id: decision.decisionId,
           language: decision.language,

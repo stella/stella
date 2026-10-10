@@ -1,4 +1,10 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
+
+import { stripDiacritics } from "@stll/text-normalize";
+
+import { decisionCitationCourtLabel } from "@/components/references/decision-citation-chip.logic";
+import { decisionCitationPresentationsById } from "@/components/references/decision-citation-presentation.logic";
+import type { DecisionCitationPresentation } from "@/components/references/decision-citation-presentation.logic";
 
 /** Inspector view kind for one provision of a consolidated statute. */
 export const PROVISION_VIEW = "statute-provision";
@@ -138,6 +144,68 @@ export const submitsOnEnter = ({
   key,
   shiftKey,
 }: EnterSubmitKey): boolean => key === "Enter" && !shiftKey && !isComposing;
+
+type CitingDecisionRow = {
+  caseNumber: string;
+  court: string;
+  sentenceText: string | null;
+};
+
+const foldForFilter = (value: string): string =>
+  stripDiacritics(value).toLowerCase();
+
+/**
+ * Narrows the loaded pages to the rows whose case number, court, or cited
+ * sentence contains the query. Diacritics are folded on both sides, so a
+ * query typed without them still finds the decision.
+ */
+export const filterCitingDecisions = <T extends CitingDecisionRow>(
+  decisions: readonly T[],
+  query: string,
+): T[] => {
+  const needle = foldForFilter(query.trim());
+  if (needle === "") {
+    return [...decisions];
+  }
+
+  return decisions.filter((decision) =>
+    foldForFilter(
+      `${decision.caseNumber} ${decision.court} ${decision.sentenceText ?? ""}`,
+    ).includes(needle),
+  );
+};
+
+type PresentedCitingDecisionRow = CitingDecisionRow & {
+  country: string;
+  courtAbbreviation?: string | null | undefined;
+  decisionId: string;
+  ecli?: string | null | undefined;
+};
+
+/**
+ * The rows the filter leaves, each with the chip size it is shown at. Chips
+ * are sized against the rows on screen, not everything loaded: a shared court
+ * code only needs the expanded chip while both decisions are visible.
+ */
+export const presentedCitingDecisions = <T extends PresentedCitingDecisionRow>(
+  decisions: readonly T[],
+  query: string,
+): { decision: T; presentation: DecisionCitationPresentation }[] => {
+  const visible = filterCitingDecisions(decisions, query);
+  const presentations = decisionCitationPresentationsById(
+    visible.map((decision) => ({
+      decisionId: decision.decisionId,
+      courtShortCode: decisionCitationCourtLabel(decision),
+    })),
+  );
+
+  return visible.map((decision) => ({
+    decision,
+    presentation:
+      presentations.get(decision.decisionId) ??
+      panic("Citing decision missing collected identity"),
+  }));
+};
 
 /**
  * Where a half-written question about a provision is kept while the reader is

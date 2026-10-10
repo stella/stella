@@ -375,10 +375,23 @@ export const hostedCheckoutClaims = p.pgTable(
     /** Identifies one start, so a stale request releases only its own claim. */
     claimId: safeUuid<"hostedCheckoutClaim">("claim_id").notNull(),
     hostedSessionId: p.text("hosted_session_id"),
+    /**
+     * The provider page for the created session. Anyone holding it can
+     * complete the checkout, so it is returned only to the organization and
+     * never logged or audited.
+     */
+    hostedCheckoutUrl: p.text("hosted_checkout_url"),
+    /** The requested policy and seat count; a matching start reuses the session. */
+    usagePolicyId: safeUuid<"usagePolicy">("usage_policy_id"),
+    seats: p.integer("seats"),
     expiresAt: timestamptz("expires_at").notNull(),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
-  () => [
+  (table) => [
+    p.check(
+      "hosted_checkout_claims_url_has_session_check",
+      sql`${table.hostedCheckoutUrl} IS NULL OR ${table.hostedSessionId} IS NOT NULL`,
+    ),
     // Members with organization settings access start checkouts through the
     // scoped connection; the webhook dispatcher clears claims on the owner
     // connection.

@@ -1,6 +1,9 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
+
 import type { PropertyContent } from "@/api/db/schema-validators";
 import { resolveCaching } from "@/api/lib/ai-config";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
@@ -10,6 +13,8 @@ import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { logger } from "@/api/lib/observability/logger";
+import type { ModelActionAdmitter } from "@/api/lib/rate-limit/model-action-admission";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 import type {
   PlaybookPositions,
@@ -67,9 +72,7 @@ const canonicalRulesInput = (position: TierStandardPosition) => {
 };
 
 export const computeRulesHash = (position: TierStandardPosition): string =>
-  new Bun.CryptoHasher("sha256")
-    .update(JSON.stringify(canonicalRulesInput(position)))
-    .digest("hex");
+  hashSha256Hex(JSON.stringify(canonicalRulesInput(position)));
 
 const buildDeriveAskUserMessage = (position: TierStandardPosition): string => {
   const { tiers } = position.standard;
@@ -98,6 +101,7 @@ const buildDeriveAskUserMessage = (position: TierStandardPosition): string => {
 // The structured-output call that derives one ask. Injectable so callers (tests)
 // can substitute it without a live model; the default runs the real LLM task.
 export type DeriveAskGenerate = (input: {
+  admission: ModelDispatchAdmission;
   system: string;
   prompt: string;
   organizationId: SafeId<"organization">;
@@ -110,6 +114,7 @@ export type DeriveAskGenerate = (input: {
 // branded type visible on the binding, which the aliased object type hides.
 const defaultDeriveAskGenerate: DeriveAskGenerate = async (input) => {
   const {
+    admission,
     system,
     prompt,
     organizationId,
@@ -134,6 +139,7 @@ const defaultDeriveAskGenerate: DeriveAskGenerate = async (input) => {
       orgAIConfig,
       managedAIResidency,
       organizationId,
+      admission,
       // DeriveAskGenerate carries no workspace id; playbook grading runs at
       // organization scope.
       tenantWorkspaceIds: [],
@@ -158,6 +164,8 @@ const defaultDeriveAskGenerate: DeriveAskGenerate = async (input) => {
 };
 
 export type DeriveAutoAsksDeps = {
+  /** Admits the derivations of one save as one action, only when any runs. */
+  admitModelAction: ModelActionAdmitter;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
@@ -179,15 +187,25 @@ const needsDerivation = (
   return position.ask.derived?.rulesHash !== rulesHash;
 };
 
-const deriveOne = async (
-  position: TierStandardPosition,
-  rulesHash: string,
-  deps: DeriveAutoAsksDeps,
-  generate: DeriveAskGenerate,
-): Promise<Position> => {
+type DeriveOneOptions = {
+  admission: ModelDispatchAdmission;
+  deps: DeriveAutoAsksDeps;
+  generate: DeriveAskGenerate;
+  position: TierStandardPosition;
+  rulesHash: string;
+};
+
+const deriveOne = async ({
+  admission,
+  deps,
+  generate,
+  position,
+  rulesHash,
+}: DeriveOneOptions): Promise<Position> => {
   const derived = await Result.tryPromise({
     try: async () =>
       await generate({
+        admission,
         system: DERIVE_ASK_SYSTEM_PROMPT,
         prompt: buildDeriveAskUserMessage(position),
         organizationId: deps.organizationId,
@@ -271,20 +289,34 @@ export const deriveAutoAsks = async (
     return { version: 3, items };
   }
 
-  for (
-    let cursor = 0;
-    cursor < pending.length;
-    cursor += DERIVE_ASK_CONCURRENCY
-  ) {
-    const chunk = pending.slice(cursor, cursor + DERIVE_ASK_CONCURRENCY);
-    const derived = await Promise.all(
-      chunk.map(async ({ index, position, hash }) => ({
-        index,
-        position: await deriveOne(position, hash, deps, generate),
-      })),
-    );
-    for (const { index, position } of derived) {
-      items[index] = position;
+  const admitted = await deps.admitModelAction(async ({ admission }) => {
+    for (const chunk of chunkItems(pending, DERIVE_ASK_CONCURRENCY)) {
+      const derived = await Promise.all(
+        chunk.map(async ({ index, position, hash }) => ({
+          index,
+          position: await deriveOne({
+            admission,
+            deps,
+            generate,
+            position,
+            rulesHash: hash,
+          }),
+        })),
+      );
+      for (const { index, position } of derived) {
+        items[index] = position;
+      }
+    }
+  });
+  if (Result.isError(admitted)) {
+    // A refused action is a skipped derivation: the save keeps its positions
+    // with `derived` absent, like a failed call.
+    logger.warn("Playbook auto-ASK derivation not admitted", {
+      organization_id: deps.organizationId,
+      feature: "playbook.derive-ask",
+    });
+    for (const { index, position } of pending) {
+      items[index] = { ...position, ask: { mode: "auto" } };
     }
   }
 

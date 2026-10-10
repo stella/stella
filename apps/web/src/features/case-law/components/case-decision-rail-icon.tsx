@@ -1,13 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
 
+import { CourtTierBadge } from "@stll/decision-reader/court-tier-badge";
 import { FileTextIcon, InfoIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
-import { CourtTierBadge } from "@/components/court-name";
 import type { CaseDecisionViewPayload } from "@/components/inspector/case-decision-view";
 import type { InspectorRailIconProps } from "@/components/inspector/view-registry";
 import { railCourtAbbreviation } from "@/features/case-law/components/case-decision-rail-icon.logic";
 import { decisionOptions } from "@/features/case-law/queries/decisions";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 /**
  * The court's chip stands for the tab, the way it stands beside the court in
@@ -20,7 +21,11 @@ export const CaseDecisionRailIcon = ({
   active,
   tab,
 }: InspectorRailIconProps<CaseDecisionViewPayload>) => {
-  const { data: decision } = useQuery(decisionOptions(tab.payload.decisionId));
+  const decisionQuery = useQuery(decisionOptions(tab.payload.decisionId));
+  const decisionView = useQueryView(decisionQuery);
+  useQueryViewError(decisionView);
+  const decision =
+    decisionView.type === "items" ? decisionView.items : undefined;
   const abbreviation = railCourtAbbreviation(decision?.courtAbbreviation);
   if (decision === undefined || abbreviation === null) {
     return <FileTextIcon className={cn("size-3.5", !active && "opacity-70")} />;

@@ -91,7 +91,7 @@ import {
 } from "@/components/ai-suggestions/document-review-passage-texts";
 import {
   decideReviewFinding,
-  documentReviewPartiesOptions,
+  documentReviewPartiesDetectOptions,
   documentReviewRunOptions,
   documentReviewRunsOptions,
   documentReviewSourcesOptions,
@@ -214,6 +214,7 @@ import type {
 } from "@/components/inspector/playbook-review-results.logic";
 import { ReviewExportMenu } from "@/components/inspector/review-export-menu";
 import { PlaybookStatusBadge } from "@/components/playbook-status-badge";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import {
   REVIEW_FLAG_PRESENTATION,
   ReviewFlagGlyphs,
@@ -246,7 +247,8 @@ import {
   playbookDetailOptions,
   playbooksOptions,
 } from "@/lib/knowledge/queries";
-import { useQueryView } from "@/lib/use-query-view";
+import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import type { EntityVersion } from "@/lib/workspaces/queries/entity-versions";
 import { entityVersionsOptions } from "@/lib/workspaces/queries/entity-versions";
 
@@ -418,7 +420,9 @@ export const PlaybookFacet = ({
   );
   const versions = useQueryView(versionsQuery);
 
-  const playbooks = usePlaybookPickerItems(user.activeOrganizationId);
+  const { playbooks, view: playbooksView } = usePlaybookPickerItems(
+    user.activeOrganizationId,
+  );
 
   const {
     history,
@@ -879,6 +883,7 @@ export const PlaybookFacet = ({
     <>
       {sizeConfirmDialog}
       {historyFeedback}
+      <QueryViewFeedback view={playbooksView} />
       <Launcher
         chatSection={chatSectionWith(queueControls)}
         history={
@@ -1069,10 +1074,16 @@ const useDocumentPaneRouting = ({
 
 /** The organization's playbooks, as the launcher's picker lists them. */
 const usePlaybookPickerItems = (organizationId: string) => {
-  const { data } = useQuery(
+  const dataQuery = useQuery(
     playbooksOptions(organizationId, PLAYBOOK_PICKER_LIMIT),
   );
-  return data && "items" in data ? data.items : [];
+  const dataView = useQueryView(dataQuery);
+  useQueryViewError(dataView);
+  const data = dataView.type === "items" ? dataView.items : undefined;
+  return {
+    playbooks: data && "items" in data ? data.items : [],
+    view: dataView,
+  };
 };
 
 /** The playbook a starting run was launched with, named from the picker's
@@ -1163,7 +1174,7 @@ const useShownReviewRun = ({
  * endpoint returned, which of them is on screen, and whether it is on screen
  * as the tracked run or as a record opened from the history.
  */
-export type ReviewRunHistoryView = {
+type ReviewRunHistoryView = {
   runs: readonly DocumentReviewRunSummary[];
   /** The run on screen, or `null` when the facet is showing no run at all
    *  (the launcher, after a reviewer chose to start again). */
@@ -1273,10 +1284,14 @@ const ReviewRunPanel = ({
   // finding: look each finding's guidance up by `sourceId`
   // (== `finding.positionId`) so a deviation/fallback card can surface what to
   // say without threading new fields through grading.
-  const { data: playbookDetail } = useQuery({
+  const playbookDetailQuery = useQuery({
     ...playbookDetailOptions(organizationId, restoredPlaybookId ?? ""),
     enabled: restoredPlaybookId !== null,
   });
+  const playbookDetailView = useQueryView(playbookDetailQuery);
+  useQueryViewError(playbookDetailView);
+  const playbookDetail =
+    playbookDetailView.type === "items" ? playbookDetailView.items : undefined;
 
   const navigate = useNavigate();
   const saveAsPlaybook = useMutation({
@@ -1570,9 +1585,13 @@ const Launcher = ({
   // The document's own sides, read before a reference is even chosen: the
   // question "whose side are we on" is about the contract on screen, and
   // asking it after the proposal has been paid for is asking it too late.
+  const queryClient = useQueryClient();
   const partiesQuery = useQuery({
-    ...documentReviewPartiesOptions({ workspaceId, ...target }),
-    select: (answer) => answer.parties,
+    ...documentReviewPartiesDetectOptions(
+      { workspaceId, ...target },
+      queryClient,
+    ),
+    select: (answer) => (answer.type === "cached" ? answer.parties : []),
   });
   const parties = useQueryView(partiesQuery);
   const setup: ReviewSetup = {
@@ -1582,13 +1601,19 @@ const Launcher = ({
     references,
   };
   const user = useAuthenticatedUser();
-  const { data: selectedPlaybook } = useQuery({
+  const selectedPlaybookQuery = useQuery({
     ...playbookDetailOptions(
       user.activeOrganizationId,
       selectedPlaybookId ?? "",
     ),
     enabled: selectedPlaybookId !== null,
   });
+  const selectedPlaybookView = useQueryView(selectedPlaybookQuery);
+  useQueryViewError(selectedPlaybookView);
+  const selectedPlaybook =
+    selectedPlaybookView.type === "items"
+      ? selectedPlaybookView.items
+      : undefined;
   // No playbook selected, or its detail is still loading: seed nothing. The
   // `playbookReady` flag below is what holds the review back meanwhile.
   const seededPositions: Position[] =
@@ -1611,6 +1636,9 @@ const Launcher = ({
   return (
     <div className="bg-background flex h-full flex-col">
       <div className="flex-1 space-y-4 overflow-y-auto p-4">
+        {selectedPlaybookId !== null && (
+          <QueryViewFeedback view={selectedPlaybookView} />
+        )}
         <PlaybookQuerySection
           view={parties}
           pending={<PerspectivePickerSkeleton />}
@@ -2135,9 +2163,13 @@ const ReferenceFilePicker = ({
   // The matter's own DOCX documents, offered as one-click references so the
   // common case (compare with the signed version sitting next to the draft)
   // needs no search at all. Anything else goes through the full search.
-  const { data: sourcePages } = useInfiniteQuery(
+  const sourcePagesQuery = useInfiniteQuery(
     documentReviewSourcesOptions({ workspaceId, q: "" }),
   );
+  const sourcePagesView = useQueryView(sourcePagesQuery);
+  useQueryViewError(sourcePagesView);
+  const sourcePages =
+    sourcePagesView.type === "items" ? sourcePagesView.items : undefined;
   const sources =
     sourcePages === undefined
       ? []
@@ -2169,6 +2201,7 @@ const ReferenceFilePicker = ({
 
   return (
     <section className="space-y-2">
+      <QueryViewFeedback view={sourcePagesView} />
       <div className="flex items-center justify-between gap-2">
         <h3 className={SECTION_LABEL_CLASS}>
           {t("inspector.review.referencesSection")}
@@ -4204,15 +4237,20 @@ const ReviewCardActions = ({
         {!readOnly && (
           <FindingFlagMenu flags={item.flags} onSetFlags={onSetFlags} />
         )}
-        <Button
-          className="text-muted-foreground hover:text-foreground ms-auto h-7 px-2"
-          onClick={onAskInChat}
-          size="sm"
-          variant="ghost"
-        >
-          <MessageSquareIcon className="me-1 size-3.5" />
-          {t("common.askInChat")}
-        </Button>
+        <CapabilityAction action={{ capability: "ai" }} surface="control">
+          {(capabilityProps) => (
+            <Button
+              className="text-muted-foreground hover:text-foreground ms-auto h-7 px-2"
+              onClick={onAskInChat}
+              size="sm"
+              variant="ghost"
+              {...capabilityProps}
+            >
+              <MessageSquareIcon className="me-1 size-3.5" />
+              {t("common.askInChat")}
+            </Button>
+          )}
+        </CapabilityAction>
       </div>
     </section>
   );

@@ -2,6 +2,8 @@ import { panic, Result, TaggedError } from "better-result";
 import { deepEquals } from "bun";
 import { and, asc, count, eq, inArray, isNull, sql } from "drizzle-orm";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
+
 import type { Transaction } from "@/api/db/root";
 import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
 import type { EntityKind, FieldContent } from "@/api/db/schema-validators";
@@ -41,7 +43,10 @@ import {
 } from "@/api/lib/files/file-object-ids";
 import { pdfDerivativeStateForFile } from "@/api/lib/files/gotenberg";
 import { thumbnailDerivativeStateForFile } from "@/api/lib/files/image-derivative";
-import type { OrganizationFileUsageError } from "@/api/lib/files/organization-file-usage";
+import type {
+  CheckedFileCopy,
+  OrganizationFileUsageError,
+} from "@/api/lib/files/organization-file-usage";
 import { createFileKey } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
@@ -403,16 +408,14 @@ const stageAndCopyFiles = async ({
       organizationId,
       objectKey: targetKey,
       sizeBytes: source.value.contentLength,
-      copy: async () => await copyObject(sourceKey, targetKey),
+      source: sourceKey,
+      copy: async (checked: CheckedFileCopy<string>) =>
+        await copyObject(checked.source, checked.objectKey),
     });
   };
   const prepared: Awaited<ReturnType<typeof prepareFile>>[] = [];
-  for (let start = 0; start < mappings.length; start += FILE_COPY_CONCURRENCY) {
-    prepared.push(
-      ...(await Promise.all(
-        mappings.slice(start, start + FILE_COPY_CONCURRENCY).map(prepareFile),
-      )),
-    );
+  for (const itemBatch of chunkItems(mappings, FILE_COPY_CONCURRENCY)) {
+    prepared.push(...(await Promise.all(itemBatch.map(prepareFile))));
   }
   const inputs = Result.all(prepared);
   if (Result.isError(inputs)) {

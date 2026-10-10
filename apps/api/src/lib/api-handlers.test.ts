@@ -5,6 +5,7 @@ import { API_FILE_SECURITY_REJECTED_ERROR_CODE } from "@stll/api-contract";
 import type { ApiFileSecurityIssue } from "@stll/api-contract";
 import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
 
+import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { env } from "@/api/env";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
@@ -13,7 +14,7 @@ import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import { AI_MEMBER_ASSIGNMENT_REQUIRED_ERROR_CODE } from "@/api/lib/ai-config-response";
 import {
   ACCOUNT_ACCESS,
-  assertRunSizeConfirmedForHandler,
+  authorizeHandlerRunSize,
   createSafeHandler,
   createSafeRootHandler,
   errorCauseChainAttributes,
@@ -30,6 +31,7 @@ import {
   UsageLimitExceededError,
 } from "@/api/lib/errors/tagged-errors";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
 import {
   instanceWireErrorModel,
@@ -41,7 +43,10 @@ import {
   installRecordingAnalytics,
   installRecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
+import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const noopAuditRecorder: AuditRecorder = async () => undefined;
 
@@ -111,6 +116,74 @@ describe("createSafeHandler workspace audit binding", () => {
 });
 
 describe("createSafeRootHandler usage preflight", () => {
+  test("retains the complete static refusal response for exhausted managed usage", async () => {
+    const previousEnforcement = env.USAGE_ENFORCEMENT_ENABLED;
+    const previousProvider = env.AI_PROVIDER;
+    const previousKey = env.OPENROUTER_API_KEY;
+    const previousConfiguredAccess = env.FEATURE_CONFIGURED_ACCESS;
+    env.USAGE_ENFORCEMENT_ENABLED = true;
+    env.FEATURE_CONFIGURED_ACCESS = false;
+    env.AI_PROVIDER = "openrouter";
+    env.OPENROUTER_API_KEY = "sk-test";
+    try {
+      let bodyRan = false;
+      const endpoint = createSafeRootHandler(
+        {
+          permissions: { workspace: ["read"] },
+          accountAccess: ACCOUNT_ACCESS.sandbox,
+          mcp: { type: "internal", reason: "health_infra" },
+          requiresUsage: { actionType: "chat" },
+        },
+        async function* () {
+          bodyRan = true;
+          return Result.ok({ ok: true });
+        },
+      );
+      const safeDb = safeDbFromScoped(
+        async (run) =>
+          await run(
+            asTestRaw({
+              select: () => ({
+                from: () => ({
+                  where: () =>
+                    Object.assign([{ total: 0 }], {
+                      limit: async () =>
+                        await Promise.resolve([
+                          {
+                            status: "active",
+                            currentPeriodStart: new Date("2020-01-01"),
+                            currentPeriodEnd: new Date("2099-01-01"),
+                          },
+                        ]),
+                    }),
+                }),
+              }),
+            }),
+          ),
+      );
+      const result = await endpoint.handler(createContext(endpoint, safeDb));
+      expect(bodyRan).toBe(false);
+      if (!("code" in result)) {
+        throw new TypeError("Expected static admission refusal");
+      }
+      expect({ status: result.code, body: result.response }).toEqual({
+        status: 402,
+        body: {
+          code: "usage_limit_exceeded",
+          message: "Usage limit exceeded: need 2, have 0",
+          reason: "usage_limit_exceeded",
+          required: 2,
+          available: 0,
+        },
+      });
+    } finally {
+      env.USAGE_ENFORCEMENT_ENABLED = previousEnforcement;
+      env.FEATURE_CONFIGURED_ACCESS = previousConfiguredAccess;
+      env.AI_PROVIDER = previousProvider;
+      env.OPENROUTER_API_KEY = previousKey;
+    }
+  });
+
   test("uses effective provider tier for preflight cost", () => {
     const previousProvider = env.AI_PROVIDER;
     const previousAnthropicKey = env.ANTHROPIC_API_KEY;
@@ -142,7 +215,11 @@ describe("createSafeRootHandler usage preflight", () => {
 
   test("fails closed when enforced usage preflight cannot read the ledger", async () => {
     const previousEnforcement = env.USAGE_ENFORCEMENT_ENABLED;
+    const previousProvider = env.AI_PROVIDER;
+    const previousKey = env.OPENROUTER_API_KEY;
     env.USAGE_ENFORCEMENT_ENABLED = true;
+    env.AI_PROVIDER = "openrouter";
+    env.OPENROUTER_API_KEY = "sk-test";
     try {
       let meteredHandlerCalled = false;
       const endpoint = createSafeRootHandler(
@@ -175,6 +252,8 @@ describe("createSafeRootHandler usage preflight", () => {
       });
     } finally {
       env.USAGE_ENFORCEMENT_ENABLED = previousEnforcement;
+      env.AI_PROVIDER = previousProvider;
+      env.OPENROUTER_API_KEY = previousKey;
     }
   });
 
@@ -339,9 +418,14 @@ describe("createSafeRootHandler member AI access", () => {
       if (!("code" in result)) {
         throw new Error("expected a status response");
       }
-      expect(result.code).toBe(403);
-      expect(result.response).toMatchObject({
-        code: AI_MEMBER_ASSIGNMENT_REQUIRED_ERROR_CODE,
+      expect({ status: result.code, body: result.response }).toEqual({
+        status: 403,
+        body: {
+          code: AI_MEMBER_ASSIGNMENT_REQUIRED_ERROR_CODE,
+          message:
+            "AI is available only to members with an assigned seat in this " +
+            "organization. Ask an organization admin to assign you one.",
+        },
       });
     } finally {
       env.USAGE_ENFORCEMENT_ENABLED = previousEnforcement;
@@ -542,52 +626,50 @@ describe("a mapped status survives the transport wrapper", () => {
   };
 
   test("raw and wrapped admission outcomes survive returned and thrown safe handlers", async () => {
-    const previousContact = env.ACTION_LIMIT_CONTACT_URL;
-    env.ACTION_LIMIT_CONTACT_URL = "https://example.test/contact";
-    try {
-      for (const reason of [
-        "busy",
-        "period_exhausted",
-        "not_enabled",
-        "unavailable",
-      ] as const) {
-        const refusal = new ActionAdmissionError({
-          reason,
-          message: "Private coordination detail",
-        });
-        const metadata = ACTION_ADMISSION_REFUSALS[refusal.code];
-        for (const wrapped of [
-          refusal,
-          new UnhandledException({ cause: refusal }),
-          new HandlerError({
-            status: 500,
-            message: "Request failed",
-            cause: refusal,
-          }),
-        ]) {
-          for (const mode of ["return", "throw"] as const) {
-            const response = await runEndpoint(async function* () {
-              if (mode === "throw") {
-                throw wrapped;
-              }
-              return Result.err(wrapped);
-            });
-            expect(response).toMatchObject({
-              code: metadata.status,
-              response: {
-                code: refusal.code,
-                message: metadata.message,
-                retryable: metadata.retryable,
-                ...(metadata.status === 403
-                  ? { contactUrl: env.ACTION_LIMIT_CONTACT_URL }
-                  : {}),
-              },
-            });
-          }
+    testState.setConfig(
+      "ACTION_LIMIT_CONTACT_URL",
+      "https://example.test/contact",
+    );
+    for (const reason of [
+      "busy",
+      "period_exhausted",
+      "not_enabled",
+      "unavailable",
+    ] as const) {
+      const refusal = new ActionAdmissionError({
+        reason,
+        message: "Private coordination detail",
+      });
+      const metadata = ACTION_ADMISSION_REFUSALS[refusal.code];
+      for (const wrapped of [
+        refusal,
+        new UnhandledException({ cause: refusal }),
+        new HandlerError({
+          status: 500,
+          message: "Request failed",
+          cause: refusal,
+        }),
+      ]) {
+        for (const mode of ["return", "throw"] as const) {
+          const response = await runEndpoint(async function* () {
+            if (mode === "throw") {
+              throw wrapped;
+            }
+            return Result.err(wrapped);
+          });
+          expect(response).toMatchObject({
+            code: metadata.status,
+            response: {
+              code: refusal.code,
+              message: metadata.message,
+              retryable: metadata.retryable,
+              ...(metadata.status === 403
+                ? { contactUrl: env.ACTION_LIMIT_CONTACT_URL }
+                : {}),
+            },
+          });
         }
       }
-    } finally {
-      env.ACTION_LIMIT_CONTACT_URL = previousContact;
     }
   });
 
@@ -773,7 +855,7 @@ describe("errorCauseChainAttributes", () => {
   });
 });
 
-describe("assertRunSizeConfirmedForHandler", () => {
+describe("authorizeHandlerRunSize", () => {
   const organizationId = toSafeId<"organization">(
     "019e7000-0000-7000-8000-000000000002",
   );
@@ -810,48 +892,34 @@ describe("assertRunSizeConfirmedForHandler", () => {
   const withInstanceEnforcement = async (
     fn: () => Promise<void>,
   ): Promise<void> => {
-    const previous = {
-      enforcement: env.USAGE_ENFORCEMENT_ENABLED,
-      provider: env.AI_PROVIDER,
-      openaiKey: env.OPENAI_API_KEY,
-    };
-    env.USAGE_ENFORCEMENT_ENABLED = true;
-    env.AI_PROVIDER = "openai";
-    env.OPENAI_API_KEY = "test-openai-instance-key";
-    try {
-      await fn();
-    } finally {
-      env.USAGE_ENFORCEMENT_ENABLED = previous.enforcement;
-      env.AI_PROVIDER = previous.provider;
-      env.OPENAI_API_KEY = previous.openaiKey;
-    }
+    testState.patchConfig({
+      USAGE_ENFORCEMENT_ENABLED: true,
+      AI_PROVIDER: "openai",
+      OPENAI_API_KEY: "test-openai-instance-key",
+    });
+    await fn();
   };
 
   test("no-op while enforcement is off", async () => {
-    const previous = env.USAGE_ENFORCEMENT_ENABLED;
-    env.USAGE_ENFORCEMENT_ENABLED = false;
-    try {
-      const outcome = await assertRunSizeConfirmedForHandler({
-        ...baseInput,
-        estimatedUnits: 10_000,
-        confirmedUnits: undefined,
-        safeDb: untouchableDb,
-      });
-      expect(outcome).toBeNull();
-    } finally {
-      env.USAGE_ENFORCEMENT_ENABLED = previous;
-    }
+    testState.setConfig("USAGE_ENFORCEMENT_ENABLED", false);
+    const outcome = await authorizeHandlerRunSize({
+      ...baseInput,
+      estimatedUnits: 10_000,
+      confirmedUnits: undefined,
+      safeDb: untouchableDb,
+    });
+    expect(Result.isOk(outcome)).toBe(true);
   });
 
   test("a zero estimate never touches the ledger", async () => {
     await withInstanceEnforcement(async () => {
-      const outcome = await assertRunSizeConfirmedForHandler({
+      const outcome = await authorizeHandlerRunSize({
         ...baseInput,
         estimatedUnits: 0,
         confirmedUnits: undefined,
         safeDb: untouchableDb,
       });
-      expect(outcome).toBeNull();
+      expect(Result.isOk(outcome)).toBe(true);
     });
   });
 
@@ -867,38 +935,38 @@ describe("assertRunSizeConfirmedForHandler", () => {
         },
         decision: null,
       };
-      const outcome = await assertRunSizeConfirmedForHandler({
+      const outcome = await authorizeHandlerRunSize({
         ...baseInput,
         orgAIConfig: byokConfig,
         estimatedUnits: 10_000,
         confirmedUnits: undefined,
         safeDb: untouchableDb,
       });
-      expect(outcome).toBeNull();
+      expect(Result.isOk(outcome)).toBe(true);
     });
   });
 
   test("small runs pass once the whole estimate is affordable", async () => {
     await withInstanceEnforcement(async () => {
-      const outcome = await assertRunSizeConfirmedForHandler({
+      const outcome = await authorizeHandlerRunSize({
         ...baseInput,
         estimatedUnits: 10,
         confirmedUnits: undefined,
         safeDb: availableDb(500),
       });
-      expect(outcome).toBeNull();
+      expect(Result.isOk(outcome)).toBe(true);
     });
   });
 
   test("an unaffordable estimate answers the over-limit shape, not a confirmation", async () => {
     await withInstanceEnforcement(async () => {
-      const outcome = await assertRunSizeConfirmedForHandler({
+      const outcome = await authorizeHandlerRunSize({
         ...baseInput,
         estimatedUnits: 800,
         confirmedUnits: undefined,
         safeDb: overLimitDb(800, 30),
       });
-      expect(outcome).toMatchObject({
+      expect(Result.isError(outcome) ? outcome.error : outcome).toMatchObject({
         status: 402,
         code: "usage_limit_exceeded",
         usage: { required: 800, available: 30 },
@@ -908,13 +976,13 @@ describe("assertRunSizeConfirmedForHandler", () => {
 
   test("a large unconfirmed run answers 428 carrying the estimate", async () => {
     await withInstanceEnforcement(async () => {
-      const outcome = await assertRunSizeConfirmedForHandler({
+      const outcome = await authorizeHandlerRunSize({
         ...baseInput,
         estimatedUnits: 120,
         confirmedUnits: undefined,
         safeDb: availableDb(500),
       });
-      expect(outcome).toMatchObject({
+      expect(Result.isError(outcome) ? outcome.error : outcome).toMatchObject({
         status: 428,
         code: "usage_confirmation_required",
         confirmation: { estimatedUnits: 120, availableUnits: 500 },
@@ -924,25 +992,27 @@ describe("assertRunSizeConfirmedForHandler", () => {
 
   test("a stale lower confirmation does not cover a grown estimate", async () => {
     await withInstanceEnforcement(async () => {
-      const outcome = await assertRunSizeConfirmedForHandler({
+      const outcome = await authorizeHandlerRunSize({
         ...baseInput,
         estimatedUnits: 120,
         confirmedUnits: 60,
         safeDb: availableDb(500),
       });
-      expect(outcome).toMatchObject({ status: 428 });
+      expect(Result.isError(outcome) ? outcome.error : outcome).toMatchObject({
+        status: 428,
+      });
     });
   });
 
   test("restating the estimate lets the run proceed", async () => {
     await withInstanceEnforcement(async () => {
-      const outcome = await assertRunSizeConfirmedForHandler({
+      const outcome = await authorizeHandlerRunSize({
         ...baseInput,
         estimatedUnits: 120,
         confirmedUnits: 120,
         safeDb: availableDb(500),
       });
-      expect(outcome).toBeNull();
+      expect(Result.isOk(outcome)).toBe(true);
     });
   });
 });
@@ -953,8 +1023,7 @@ describe("provider failure HTTP response", () => {
       const replay = installProviderWireReplay({ retryAfterMs: 1 });
       const analytics = installRecordingAnalytics();
       const logs = installRecordingLogger();
-      const previousMockAI = env.USE_MOCK_AI;
-      env.USE_MOCK_AI = false;
+      testState.setConfig("USE_MOCK_AI", false);
       try {
         replay.serve(cassette);
         const model = instanceWireErrorModel(cassette.model);
@@ -974,6 +1043,7 @@ describe("provider failure HTTP response", () => {
                 dataClass: "public_corpus",
                 role: "chat",
                 organizationId: null,
+                admission: NO_ORGANIZATION_MODEL_DISPATCH,
                 prompt: "Draft a memo",
                 finishPolicy: "require-complete",
                 resolveTextModel: async () => model,
@@ -1010,7 +1080,6 @@ describe("provider failure HTTP response", () => {
           }),
         ).not.toContain(providerCallErrorSentinel(cassette));
       } finally {
-        env.USE_MOCK_AI = previousMockAI;
         logs.restore();
         analytics.restore();
         replay.restore();

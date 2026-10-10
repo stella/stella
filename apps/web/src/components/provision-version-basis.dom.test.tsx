@@ -3,9 +3,14 @@ import type { ComponentProps } from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import {
+  createCaseLawDecisionPath,
+  createCaseLawDecisionRouteParams,
+} from "@stll/api-contract/case-law-decision-route";
 import { STATED_DATE_RELATIONS } from "@stll/api-contract/provision-applied-version";
 import { DECISION_DATE_VERSION_BASIS } from "@stll/api-contract/provision-version-basis";
 import type { ProvisionVersionBasis } from "@stll/api-contract/provision-version-basis";
+import { sleep } from "@stll/concurrency/sleep";
 
 import { toSafeId } from "@/lib/safe-id";
 
@@ -15,11 +20,14 @@ const { act, cleanup, render, fireEvent, within, waitFor } =
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const router = await import("@tanstack/react-router");
-const { IntlProvider } = await import("use-intl");
+const { IntlProvider, createTranslator } = await import("use-intl");
+const { env } = await import("@/env");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { buildFormattingLocale } = await import("@/i18n/i18n-store");
 const { ProvisionsCited } =
   await import("@/features/case-law/components/case-viewer/provisions-cited");
+const { ProvisionVersionBasisLabel } =
+  await import("./provision-version-basis");
 const { CitingDecisionItem } =
   await import("@/features/statutes/components/provision-citing-decisions");
 const { decisionProvisionsInfiniteOptions } =
@@ -27,20 +35,20 @@ const { decisionProvisionsInfiniteOptions } =
 const en = (await import("@/i18n/langs/en.json")).default;
 const ar = (await import("@/i18n/langs/ar.json")).default;
 const clients: InstanceType<typeof QueryClient>[] = [];
-afterEach(() => {
-  cleanup();
-  for (const client of clients) {
-    client.clear();
-  }
-  clients.length = 0;
+afterEach(async () => {
+  await act(async () => {
+    cleanup();
+    for (const client of clients) {
+      client.clear();
+    }
+    clients.length = 0;
+  });
 });
 afterAll(async () => {
   cleanup();
   // Let React's scheduled work drain before the DOM goes away.
   await act(async () => {
-    await new Promise((resolve) => {
-      setTimeout(resolve, 50);
-    });
+    await sleep(50);
   });
   await GlobalRegistrator.unregister();
 });
@@ -53,11 +61,16 @@ const decision = {
   caseNumber: "1 C 1/2020",
   country: "CZE",
   court: "Supreme Court",
+  courtAbbreviation: null,
+  sourceUrl: null,
   language: "cs",
   languageAlternates: [],
   slug: "decision",
   decisionDate: "2020-01-01",
   citationAuthority: 1,
+  courtTier: "supreme",
+  mentionCount: 1,
+  snippetCitation: null,
   sentenceText: "§ 13",
   spanStart: 0,
   spanEnd: 4,
@@ -70,9 +83,9 @@ const decision = {
   },
 } satisfies ComponentProps<typeof CitingDecisionItem>["decision"];
 
-for (const [locale, messages, year] of [
-  ["en", en, "2014"],
-  ["ar", ar, "٢٠١٤"],
+for (const [locale, messages] of [
+  ["en", en],
+  ["ar", ar],
 ] as const) {
   const formattingLocale = buildFormattingLocale({
     lang: locale,
@@ -82,6 +95,50 @@ for (const [locale, messages, year] of [
     numberingSystem: "auto",
     weekStart: "auto",
   });
+  const translate = createTranslator({
+    locale,
+    messages: {
+      caseLaw: {
+        citation: {
+          referenceLabel: messages.caseLaw.citation.referenceLabel,
+        },
+        viewer: {
+          appliedVersionStatedAmendment:
+            messages.caseLaw.viewer.appliedVersionStatedAmendment,
+          appliedVersionStatedAmendmentCompact:
+            messages.caseLaw.viewer.appliedVersionStatedAmendmentCompact,
+          appliedVersionStatedDateCompact:
+            messages.caseLaw.viewer.appliedVersionStatedDateCompact,
+          appliedVersionStatedDate:
+            messages.caseLaw.viewer.appliedVersionStatedDate,
+        },
+      },
+    },
+  });
+  const formatDate = (date: string) =>
+    new Intl.DateTimeFormat(formattingLocale, {
+      dateStyle: "medium",
+      timeZone: "UTC",
+    }).format(new Date(`${date}T00:00:00Z`));
+  const reference = translate("caseLaw.citation.referenceLabel", {
+    court: decision.court,
+    caseNumber: decision.caseNumber,
+    date: formatDate(decision.decisionDate),
+  });
+  const readerUrl = new URL(
+    createCaseLawDecisionPath(
+      createCaseLawDecisionRouteParams({
+        caseNumber: decision.caseNumber,
+        country: decision.country,
+        court: decision.court,
+        decisionId: decision.decisionId,
+        language: decision.language,
+        languageAlternates: decision.languageAlternates,
+        slug: decision.slug,
+      }),
+    ),
+    env.VITE_PUBLIC_APP_URL,
+  ).href;
   const cases = [
     {
       basis: DECISION_DATE_VERSION_BASIS,
@@ -100,8 +157,17 @@ for (const [locale, messages, year] of [
         expression: null,
         evidence: { kind: "stated_version", start: 0, end: 10 },
       },
-      label: "303/2013 Sb.",
-      compactLabel: "303/2013 Sb.",
+      label: translate.markup("caseLaw.viewer.appliedVersionStatedAmendment", {
+        amendment: "303/2013 Sb.",
+        reference: (chunks) => chunks,
+      }),
+      compactLabel: translate.markup(
+        "caseLaw.viewer.appliedVersionStatedAmendmentCompact",
+        {
+          amendment: "303/2013 Sb.",
+          reference: (chunks) => chunks,
+        },
+      ),
     },
     ...STATED_DATE_RELATIONS.map(
       (relation) =>
@@ -113,8 +179,17 @@ for (const [locale, messages, year] of [
             expression: null,
             evidence: { kind: "stated_date", start: 0, end: 10 },
           },
-          label: year,
-          compactLabel: year,
+          label: translate("caseLaw.viewer.appliedVersionStatedDate", {
+            date: formatDate("2014-01-01"),
+            relation,
+          }),
+          compactLabel: translate(
+            "caseLaw.viewer.appliedVersionStatedDateCompact",
+            {
+              date: formatDate("2014-01-01"),
+              relation,
+            },
+          ),
         }) as const,
     ),
   ] as const satisfies readonly {
@@ -196,8 +271,10 @@ for (const [locale, messages, year] of [
               isHydrated
             />
             <CitingDecisionItem
+              currentVersionValidFrom={null}
               decision={{ ...decision, versionBasis: basis }}
             />
+            <ProvisionVersionBasisLabel basis={basis} />
           </>
         ),
       });
@@ -223,9 +300,17 @@ for (const [locale, messages, year] of [
           </IntlProvider>
         </QueryClientProvider>,
       );
-      expect(
-        ui.getByRole("link", { name: /1 C 1\/2020/u }).textContent,
-      ).toContain(label);
+      const chip = ui.getByRole("button", { name: reference });
+      expect(chip.getAttribute("href")).toBe(readerUrl);
+      expect(chip.textContent).not.toContain(label);
+      const citingBasis = ui.getByText(
+        (_, element) =>
+          element !== null &&
+          element.classList.contains("text-2xs") &&
+          element.textContent === label,
+      );
+      expect(citingBasis.textContent).toBe(label);
+      expect(chip.contains(citingBasis)).toBe(false);
       fireEvent.click(
         ui.getByRole("button", {
           name: messages.caseLaw.viewer.provisionsCited,
@@ -239,7 +324,7 @@ for (const [locale, messages, year] of [
           .closest("section") ?? ui.container;
       expect(
         panel.querySelector('[data-version-basis="group"]')?.textContent,
-      ).toContain(compactLabel);
+      ).toBe(compactLabel);
       if (basis.type === "stated_version") {
         // A mixed-direction act identifier keeps its own order inside RTL copy.
         expect(
@@ -249,9 +334,9 @@ for (const [locale, messages, year] of [
       expect(
         panel.querySelectorAll('[data-version-basis="exception"]'),
       ).toHaveLength(0);
-      const chip = within(panel).getByRole("button", { name: "§ 13" });
-      expect(chip.textContent).toBe("§ 13");
-      chip.focus();
+      const provisionChip = within(panel).getByRole("button", { name: "§ 13" });
+      expect(provisionChip.textContent).toBe("§ 13");
+      provisionChip.focus();
       await waitFor(() => {
         expect(
           ui.baseElement.querySelector('[data-slot="preview-card-content"]')
@@ -259,11 +344,9 @@ for (const [locale, messages, year] of [
         ).toContain(label);
       });
       // A pointer click lands after the focus that opened the preview.
-      fireEvent.click(chip);
+      fireEvent.click(provisionChip);
       await act(async () => {
-        await new Promise((resolve) => {
-          setTimeout(resolve, 0);
-        });
+        await sleep(0);
       });
       expect(
         ui.baseElement.querySelector('[data-slot="preview-card-content"]')

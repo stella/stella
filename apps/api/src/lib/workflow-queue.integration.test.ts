@@ -45,6 +45,7 @@ import type { ExecutionLevel } from "@/api/lib/workflow/get-execution-plan";
 import { WORKFLOW_QUEUE_CLASSES } from "@/api/lib/workflow/queue-topology";
 import * as rootRunStateStore from "@/api/lib/workflow/root-run-state-store";
 import * as stragglerCatchUp from "@/api/lib/workflow/straggler-catchup";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -224,6 +225,7 @@ const queueRun = async (
   const run = async () =>
     await processWorkflowEntityRun({
       actor,
+      admission: testModelAdmission(actor.organizationId),
       data: {
         organizationId: ids.orgA,
         workspaceId: ids.wsA1,

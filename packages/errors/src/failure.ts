@@ -54,6 +54,11 @@ export const FAILURE_REASON_GRADE = {
   optional_file_absent: "anticipated",
   // parser-output-unchanged: research retrieval reasons grade observed failures only; no parser reads them.
   research_index_not_ready: "anticipated",
+  // parser-output-unchanged: sanctions reasons classify telemetry only; no parser reads them.
+  sanctions_matcher_deadline: "anticipated",
+  sanctions_matcher_saturated: "anticipated",
+  sanctions_matcher_closed: "anticipated",
+  sanctions_screening_work_limit: "anticipated",
   request_invalid: "client",
   access_denied: "client",
   usage_limited: "client",
@@ -65,7 +70,13 @@ export const FAILURE_REASON_GRADE = {
   route_not_found: "client",
   request_malformed: "client",
   unclassified: "defect",
+  // parser-output-unchanged: provider request rejections grade observed failures only; no parser reads them.
+  // A provider answered 400 to a request this service built and nothing more
+  // specific named it: the request broke the provider's contract, which is
+  // this service's bug, never the user's.
+  provider_request_rejected: "defect",
   research_passage_target_failed: "defect",
+  sanctions_screening_failed: "defect",
   research_passage_search_failed: "defect",
   unobserved_5xx: "defect",
   rls_denied: "defect",

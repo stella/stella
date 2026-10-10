@@ -16,14 +16,15 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { loadFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
-import {
-  isFeatureAccessSnapshotForPrincipal,
-  isFeatureEnabled,
-} from "@/api/lib/auth/feature-access/policy";
-import type { FeatureAccessSnapshot } from "@/api/lib/auth/feature-access/policy";
 import { DEFAULT_MANAGED_AI_RESIDENCY } from "@/api/lib/chat/ai-data-policy";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import {
+  isFeatureAccessSnapshotForPrincipal,
+  isFeatureEnabled,
+} from "@/api/lib/feature-access/policy";
+import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
+import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import {
   DEFAULT_MATTER_NUMBER_PADDING,
   DEFAULT_MATTER_NUMBER_PATTERN,
@@ -73,50 +74,57 @@ type OrganizationSettingsRow = {
 export const projectOrganizationSettingsRow = (
   row: OrganizationSettingsRow | null | undefined,
   snapshot: FeatureAccessSnapshot,
-) => ({
-  declaredFeatureIds: Array.from(snapshot.decisions.keys()),
-  deploymentFeatures: {
-    legalLists: isDeploymentFeatureEnabled("FEATURE_LEGAL_LISTS"),
-  },
-  capabilities: Object.fromEntries(
-    Array.from(
-      snapshot.decisions,
-      ([featureId]) =>
-        [
-          featureId,
-          {
-            status: isFeatureEnabled(snapshot, featureId, snapshot)
-              ? ("enabled" as const)
-              : ("hidden" as const),
-          },
-        ] as const,
+) => {
+  const visibleDecisions = Array.from(snapshot.decisions).filter(
+    ([featureId]) =>
+      featureId !== LIST_VERIFICATION_FEATURE_ID ||
+      isFeatureEnabled(snapshot, featureId, snapshot),
+  );
+  return {
+    declaredFeatureIds: visibleDecisions.map(([featureId]) => featureId),
+    deploymentFeatures: {
+      legalLists: isDeploymentFeatureEnabled("FEATURE_LEGAL_LISTS"),
+    },
+    capabilities: Object.fromEntries(
+      visibleDecisions.map(
+        ([featureId]) =>
+          [
+            featureId,
+            {
+              status: isFeatureEnabled(snapshot, featureId, snapshot)
+                ? ("enabled" as const)
+                : ("hidden" as const),
+            },
+          ] as const,
+      ),
     ),
-  ),
-  documentProcessingMode:
-    row?.documentProcessingMode ?? DEFAULT_DOCUMENT_PROCESSING_MODE,
-  matterNumberPattern:
-    row?.matterNumberPattern ?? DEFAULT_MATTER_NUMBER_PATTERN,
-  matterNumberPadding:
-    row?.matterNumberPadding ?? DEFAULT_MATTER_NUMBER_PADDING,
-  practiceJurisdictions: arrayOrEmpty(row?.practiceJurisdictions),
-  promptCachingEnabled: row?.promptCachingEnabled ?? true,
-  managedAIResidency: row?.managedAIResidency ?? DEFAULT_MANAGED_AI_RESIDENCY,
-  memoryExtractionEnabled: row?.memoryExtractionEnabled ?? false,
-  timeMinimumUnitMinutes:
-    row?.timeMinimumUnitMinutes ?? DEFAULT_TIME_MINIMUM_UNIT_MINUTES,
-  timeEditWindowDays: row?.timeEditWindowDays ?? DEFAULT_TIME_EDIT_WINDOW_DAYS,
-  timeLockedThroughMonth: row?.timeLockedThroughMonth ?? null,
-  timeNarrativeRequired:
-    row?.timeNarrativeRequired ?? DEFAULT_TIME_NARRATIVE_REQUIRED,
-  timeZone: effectiveOrganizationTimeZone({
-    timeZone: row?.timeZone ?? null,
+    documentProcessingMode:
+      row?.documentProcessingMode ?? DEFAULT_DOCUMENT_PROCESSING_MODE,
+    matterNumberPattern:
+      row?.matterNumberPattern ?? DEFAULT_MATTER_NUMBER_PATTERN,
+    matterNumberPadding:
+      row?.matterNumberPadding ?? DEFAULT_MATTER_NUMBER_PADDING,
     practiceJurisdictions: arrayOrEmpty(row?.practiceJurisdictions),
-  }),
-  timeZoneSource:
-    (row?.timeZone ?? null) === null
-      ? ORGANIZATION_TIME_ZONE_SOURCE.PRACTICE_JURISDICTION
-      : ORGANIZATION_TIME_ZONE_SOURCE.ORGANIZATION,
-});
+    promptCachingEnabled: row?.promptCachingEnabled ?? true,
+    managedAIResidency: row?.managedAIResidency ?? DEFAULT_MANAGED_AI_RESIDENCY,
+    memoryExtractionEnabled: row?.memoryExtractionEnabled ?? false,
+    timeMinimumUnitMinutes:
+      row?.timeMinimumUnitMinutes ?? DEFAULT_TIME_MINIMUM_UNIT_MINUTES,
+    timeEditWindowDays:
+      row?.timeEditWindowDays ?? DEFAULT_TIME_EDIT_WINDOW_DAYS,
+    timeLockedThroughMonth: row?.timeLockedThroughMonth ?? null,
+    timeNarrativeRequired:
+      row?.timeNarrativeRequired ?? DEFAULT_TIME_NARRATIVE_REQUIRED,
+    timeZone: effectiveOrganizationTimeZone({
+      timeZone: row?.timeZone ?? null,
+      practiceJurisdictions: arrayOrEmpty(row?.practiceJurisdictions),
+    }),
+    timeZoneSource:
+      (row?.timeZone ?? null) === null
+        ? ORGANIZATION_TIME_ZONE_SOURCE.PRACTICE_JURISDICTION
+        : ORGANIZATION_TIME_ZONE_SOURCE.ORGANIZATION,
+  };
+};
 
 const readOrganizationSettings = createSafeRootHandler(
   config,

@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
+import { visibleDecisionBlocks } from "@stll/decision-reader/decision-text.logic";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import { BidiText } from "@stll/ui/bidi-text";
@@ -27,7 +28,8 @@ import { AnnotationToolbar } from "@/components/legal-reader/annotations/annotat
 import { GuestAnnotationPrompt } from "@/components/legal-reader/annotations/guest-annotation-prompt";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
 import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
-import { useReaderTextScale } from "@/components/legal-reader/use-reader-text-scale";
+import { useWebReaderTextScale as useReaderTextScale } from "@/components/legal-reader/use-web-reader-text-scale";
+import { WebDecisionReader as DecisionText } from "@/components/legal-reader/web-decision-reader";
 import { decisionInspectorAnnotationTarget } from "@/features/case-law/components/case-decision-inspector-view.logic";
 import {
   DecisionInspectorOutline,
@@ -46,8 +48,6 @@ import type {
   DecisionFactKind,
   DecisionFactsInput,
 } from "@/features/case-law/components/case-viewer/decision-facts.logic";
-import { DecisionText } from "@/features/case-law/components/case-viewer/decision-text";
-import { visibleDecisionBlocks } from "@/features/case-law/components/case-viewer/decision-text.logic";
 import { useDecisionAnnotationSurface } from "@/features/case-law/components/case-viewer/use-decision-annotation-surface";
 import { useDecisionCitationAnchors } from "@/features/case-law/components/case-viewer/use-decision-citation-anchors";
 import { useDecisionProvisionAnchors } from "@/features/case-law/components/case-viewer/use-decision-provision-anchors";
@@ -273,6 +273,8 @@ export const CaseDecisionInspectorView = ({
                     caseNumberType: decision.caseNumberType,
                     country: decision.country,
                     court: decision.court,
+                    courtAbbreviation: decision.courtAbbreviation,
+                    sourceUrl: decision.sourceUrl,
                     decisionDate: decision.decisionDate,
                     decisionType: decision.decisionType,
                     ecli: decision.ecli,

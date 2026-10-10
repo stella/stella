@@ -5,7 +5,7 @@ import { memberAIAccessError } from "@/api/lib/ai-config-response";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
   ACCOUNT_ACCESS,
-  assertUsageAvailableForHandler,
+  authorizeHandlerUsage,
   createSafeHandler,
 } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
@@ -24,6 +24,11 @@ import {
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
+import { snapshotOperationInput } from "@/api/lib/proofs/checked-transaction";
+import {
+  createModelActionAdmitter,
+  type AdmittedModelAction,
+} from "@/api/lib/rate-limit/model-action-admission";
 import {
   DOCX_EXT_RE,
   sanitizeFilename,
@@ -39,7 +44,9 @@ import {
 import {
   fillTemplateDocx,
   loadStoredTemplateSource,
+  type AiFillAdmission,
 } from "@/api/lib/templates/template-fill-service";
+import { runAdmittedAiFill } from "@/api/lib/templates/template-fill-usage";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const fillToWorkspaceParamsSchema = workspaceParams({
@@ -102,19 +109,20 @@ const config = {
  */
 const fillTemplateToWorkspace = createSafeHandler(
   config,
-  async function* ({
-    safeDb,
-    scopedDb,
-    session,
-    user,
-    workspaceId,
-    params,
-    body,
-    orgAIConfig,
-    managedAIResidency,
-    orgAIConfigStatus,
-    recordAuditEvent,
-  }) {
+  async function* (context) {
+    const {
+      safeDb,
+      scopedDb,
+      session,
+      user,
+      workspaceId,
+      params,
+      body,
+      orgAIConfig,
+      managedAIResidency,
+      orgAIConfigStatus,
+      recordAuditEvent,
+    } = snapshotOperationInput(context);
     const organizationId = session.activeOrganizationId;
     const { templateId } = params;
 
@@ -152,9 +160,18 @@ const fillTemplateToWorkspace = createSafeHandler(
       }
     }
 
+    // The fill draws one action after its preflight and holds it until the
+    // fill's last model call settles.
+    const admitModelAction = createModelActionAdmitter({
+      organizationId,
+      userId: user.id,
+      organizationStateDb: scopedDb,
+      actionKind: "templates.fill",
+    });
+
     // Built only when the manifest declares an AI field: the fill service
     // defers this, so a deterministic fill opens no metered trace.
-    const aiCollaborators = () => {
+    const aiCollaborators = ({ signal, admission }: AdmittedModelAction) => {
       const aiAnalytics = createTanStackAIAnalyticsCallbacks({
         dataClass: "customer",
         usageMetering: {
@@ -172,6 +189,8 @@ const fillTemplateToWorkspace = createSafeHandler(
         traceId: Bun.randomUUIDv7(),
       });
       const shared = {
+        admission,
+        operationSignal: signal,
         orgAIConfig,
         managedAIResidency,
         organizationId,
@@ -197,23 +216,34 @@ const fillTemplateToWorkspace = createSafeHandler(
     // layer (instance-provider rate).
     const checkUsage =
       orgAIConfig || hasTanStackInstanceProvider()
-        ? async () =>
-            await assertUsageAvailableForHandler({
+        ? async () => {
+            const authorization = await authorizeHandlerUsage({
               metering: { actionType: "chat", modelRole: "fast" },
               organizationId,
               orgAIConfig,
               workspaceId,
               userId: user.id,
               safeDb,
-            })
+            });
+            if (Result.isError(authorization)) {
+              return authorization.error;
+            }
+            return await authorization.value.execute(() => null);
+          }
         : undefined;
     const accessError = memberAIAccessError(orgAIConfigStatus);
-    const assertUsageAvailable:
-      | (() => Promise<HandlerError<402 | 403 | 500> | null>)
-      | undefined =
-      accessError === null
-        ? checkUsage
-        : async () => await Promise.resolve(accessError);
+    const aiFill: AiFillAdmission<HandlerError> = async (fill) =>
+      await runAdmittedAiFill({
+        admitModelAction,
+        preflight: async () => {
+          if (accessError !== null) {
+            return accessError;
+          }
+          return checkUsage === undefined ? null : await checkUsage();
+        },
+        collaborators: aiCollaborators,
+        fill,
+      });
 
     // A missing template is a 404, and a stored file the scan refuses (or a
     // scanner outage) answers as it would for an upload: 422 or 503.
@@ -233,8 +263,7 @@ const fillTemplateToWorkspace = createSafeHandler(
             workspaceId,
             requiredFields: "enforce",
             clauseOverrides: body.clauseOverrides,
-            assertUsageAvailable,
-            aiCollaborators,
+            aiFill,
           }),
         catch: (cause) =>
           new HandlerError({

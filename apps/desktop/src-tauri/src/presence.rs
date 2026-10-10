@@ -168,18 +168,23 @@ struct Report<'a> {
 
 fn request(
   client: &DesktopHttpClient,
-  account: &crate::account::LinkedAccount,
+  account: &crate::account::AccountRequest,
   report: &Report<'_>,
-) -> reqwest::RequestBuilder {
-  client
+) -> Result<crate::http_client::DeviceProofRequest, String> {
+  let builder = client
     .post(format!("{}/v1/desktop/presence", account.api_base_url))
-    .bearer_auth(&account.credential.key)
-    .json(report)
+    .json(report);
+  crate::http_client::device_proof_request(
+    builder,
+    &account.device_key,
+    Some(&account.credential.key),
+    None,
+  )
 }
 
 async fn report(handle: &AppHandle) {
   let state = handle.state::<crate::account::AccountState>();
-  let account = match crate::account::current(&state).await {
+  let account = match crate::account::request_account(&state).await {
     Ok(Some(account)) => account,
     Ok(None) => return,
     Err(_) => {
@@ -207,7 +212,7 @@ async fn report(handle: &AppHandle) {
     return;
   };
   let version = handle.package_info().version.to_string();
-  let result = request(
+  let request = match request(
     &client,
     &account,
     &Report {
@@ -215,9 +220,14 @@ async fn report(handle: &AppHandle) {
       version: &version,
       protocol: crate::handoff::PROTOCOL_VERSION,
     },
-  )
-  .send()
-  .await;
+  ) {
+    Ok(request) => request,
+    Err(_) => {
+      tracing::warn!("desktop presence device proof unavailable");
+      return;
+    }
+  };
+  let result = request.send().await;
   match result {
     Ok(response) if response.status().is_success() => {}
     Ok(response) => {
@@ -260,8 +270,8 @@ mod tests {
     assert!(!schedule.take_due(1_151, tick));
   }
 
-  #[test]
-  fn report_uses_account_bearer_and_only_the_presence_contract_fields() {
+  #[tokio::test]
+  async fn report_uses_account_bearer_and_only_the_presence_contract_fields() {
     let account = serde_json::from_value(serde_json::json!({
       "apiBaseUrl": "https://api.example.test",
       "webOrigin": "https://web.example.test",
@@ -269,6 +279,7 @@ mod tests {
       "account": {"email": "desktop@example.test", "name": null, "verifiedAt": "2026-10-05T00:00:00Z"},
       "credential": {"key": "account-key", "expiresAt": "2026-10-06T00:00:00Z"}
     })).unwrap();
+    let account = crate::account::AccountRequest::fixture(account).await;
     let client = DesktopHttpClient::new(HttpClientOptions::default()).unwrap();
     let fixture: serde_json::Value = serde_json::from_str(include_str!(
       "../../../../packages/api-contract/src/desktop-presence-request.fixture.json"
@@ -286,6 +297,7 @@ mod tests {
         protocol: crate::handoff::PROTOCOL_VERSION,
       },
     )
+    .unwrap()
     .build()
     .unwrap();
     assert_eq!(req.method(), reqwest::Method::POST);
@@ -294,6 +306,12 @@ mod tests {
       "https://api.example.test/v1/desktop/presence"
     );
     assert_eq!(req.headers()["authorization"], "Bearer account-key");
+    crate::device_proof::tests::verify_request(
+      &req,
+      &account.device_key.thumbprint().unwrap(),
+      Some("account-key"),
+      None,
+    );
     let body: serde_json::Value =
       serde_json::from_slice(req.body().unwrap().as_bytes().unwrap()).unwrap();
     assert_eq!(body, fixture);

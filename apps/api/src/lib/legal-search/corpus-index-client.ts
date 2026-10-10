@@ -116,7 +116,7 @@ const ADMIN_TIMEOUT_MS = 30_000;
  * slow engine must give up well inside the page's own budget rather than
  * hold the request open for the full search timeout.
  */
-const AGGREGATION_TIMEOUT_MS = 10_000;
+export const CORPUS_INDEX_AGGREGATION_TIMEOUT_MS = 10_000;
 const SPLIT_PAGE_SIZE = 1000;
 const MAX_SETTLEMENT_SPLITS = 10_000;
 const MAX_SETTLEMENT_SCAN_PASSES = 3;
@@ -1455,7 +1455,7 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
               format: SEARCH_RESPONSE_FORMAT,
             }),
           },
-          timeoutMs: AGGREGATION_TIMEOUT_MS,
+          timeoutMs: CORPUS_INDEX_AGGREGATION_TIMEOUT_MS,
         });
         if (!isRecord(response) || !isRecord(response["aggregations"])) {
           throw new CorpusIndexError({

@@ -3,16 +3,24 @@ import { createOpenaiChat } from "@tanstack/ai-openai";
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import { withReasoningBoundToProvider } from "@/api/lib/chat/provider-bound-reasoning";
+import { buildClosedTranscript } from "@/api/lib/chat/closed-transcript";
 
-type InputItem = { id?: string; type: string };
+type InputItem = { id?: string; role?: string; type: string };
 
-const responsesSignature = (id: string) => JSON.stringify({ id });
+// What the adapter packs when the request asks for encrypted reasoning: the
+// item id and its encrypted content, so the item can be replayed whole.
+const responsesSignature = (id: string) =>
+  JSON.stringify({ id, encrypted_content: `enc_${id}` });
 
 const thinkingFor = (ids: readonly string[]) =>
   ids.map((id) => ({
     content: `summary ${id}`,
     signature: responsesSignature(id),
+    provenance: {
+      provider: "openai",
+      model: "gpt-5.2",
+      format: "openai-encrypted-content",
+    },
   }));
 
 // A call the model made while reasoning carries the item id that pairs it
@@ -70,9 +78,11 @@ const responsesInput = (messages: readonly ModelMessage[]): InputItem[] => {
     }
     const type: unknown = Reflect.get(item, "type");
     const id: unknown = Reflect.get(item, "id");
+    const role: unknown = Reflect.get(item, "role");
     return {
       type: typeof type === "string" ? type : "message",
       ...(typeof id === "string" ? { id } : {}),
+      ...(typeof role === "string" ? { role } : {}),
     };
   });
 };
@@ -101,7 +111,13 @@ const unpairedReasoning = (input: readonly InputItem[]): string[] =>
   });
 
 const sentToOpenAI = (messages: readonly ModelMessage[]) =>
-  responsesInput(withReasoningBoundToProvider(messages, "openai"));
+  responsesInput(
+    buildClosedTranscript({
+      messages,
+      target: { provider: "openai", modelId: "gpt-5.2" },
+      onReasoningDropped: () => undefined,
+    }),
+  );
 
 describe("OpenAI reasoning replay after a declined call", () => {
   test("one reasoning item stays paired with its call", () => {
@@ -153,7 +169,13 @@ describe("OpenAI reasoning replay after a declined call", () => {
       USER,
       assistant({ reasoning: ["rs_1", "rs_2"], text: "Done." }),
     ];
-    expect(withReasoningBoundToProvider(messages, "openai")).toEqual(messages);
+    expect([
+      ...buildClosedTranscript({
+        messages,
+        target: { provider: "openai", modelId: "gpt-5.2" },
+        onReasoningDropped: () => undefined,
+      }),
+    ]).toEqual(messages);
   });
 
   test("other providers' messages are not reshaped", () => {
@@ -162,7 +184,11 @@ describe("OpenAI reasoning replay after a declined call", () => {
       assistant({ calls: 1, reasoning: ["rs_1", "rs_2"] }),
       declined(0),
     ];
-    const anthropic = withReasoningBoundToProvider(messages, "anthropic");
+    const anthropic = buildClosedTranscript({
+      messages,
+      target: { provider: "anthropic", modelId: "claude-sonnet-4-6" },
+      onReasoningDropped: () => undefined,
+    });
     expect(anthropic.some((message) => message.thinking !== undefined)).toBe(
       false,
     );
@@ -201,5 +227,54 @@ describe("OpenAI reasoning replay after a declined call", () => {
         }
       }
     }
+  });
+
+  test("a reasoning item replayed by id alone is not sent", () => {
+    const byIdOnly: ModelMessage = {
+      content: null,
+      role: "assistant",
+      thinking: [
+        { content: "summary rs_1", signature: JSON.stringify({ id: "rs_1" }) },
+      ],
+      toolCalls: [callFor(0, true)],
+    };
+    const messages = [USER, byIdOnly, declined(0)];
+    // The adapter alone sends the item by id, with nothing to resolve it by.
+    expect(
+      responsesInput(messages).filter(({ type }) => type === "reasoning"),
+    ).toEqual([{ id: "rs_1", type: "reasoning" }]);
+
+    const input = sentToOpenAI(messages);
+    expect(input.map(({ type }) => type)).toEqual([
+      "message",
+      "function_call",
+      "function_call_output",
+    ]);
+    expect(input.at(1)?.id).toBeUndefined();
+    expect(unpairedReasoning(input)).toEqual([]);
+  });
+
+  test("reasoning stored after a declined call, with nothing after it, is not sent", () => {
+    const messages = [
+      USER,
+      assistant({ calls: 1, reasoning: ["rs_1"] }),
+      declined(0),
+      assistant({ reasoning: ["rs_2"] }),
+    ];
+    // The adapter alone ends the request on a reasoning item.
+    expect(responsesInput(messages).at(-1)).toEqual({
+      id: "rs_2",
+      type: "reasoning",
+    });
+
+    const input = sentToOpenAI(messages);
+    expect(input.map(({ type }) => type)).toEqual([
+      "message",
+      "reasoning",
+      "function_call",
+      "function_call_output",
+    ]);
+    expect(input.at(1)?.id).toBe("rs_1");
+    expect(input.at(2)?.id).toBe("fc_0");
   });
 });

@@ -13,10 +13,11 @@ use crate::{
     ClipboardSnapshot, ClipboardSourceAppVisual,
   },
   clipboard_screen_capture::ClipboardScreenCapture,
-  clipboard_window::{self, ClipboardCaller, ClipboardStartupTrace},
+  clipboard_window::{self, ClipboardStartupTrace},
   desktop_telemetry::{
     DesktopTelemetry, DesktopTelemetrySpan, DesktopTelemetryWindow, DesktopTimingReport,
   },
+  local_window::ClipboardCaller,
 };
 
 const HISTORY_EVENT: &str = "clipboard-history-changed";
@@ -277,6 +278,25 @@ pub fn clipboard_update_group(
   let snapshot = {
     let mut manager = state.lock().map_err(|_| lock_error())?;
     if !manager.update_group(&id, &name, color)? {
+      return Err(GROUP_NOT_FOUND_ERROR.to_string());
+    }
+    manager.snapshot(&caller)
+  };
+  let _ = window.emit(HISTORY_EVENT, ());
+  Ok(snapshot)
+}
+
+#[tauri::command]
+pub fn clipboard_move_group(
+  caller: ClipboardCaller,
+  id: String,
+  index: usize,
+  state: State<'_, ClipboardAppState>,
+  window: WebviewWindow,
+) -> Result<ClipboardSnapshot, String> {
+  let snapshot = {
+    let mut manager = state.lock().map_err(|_| lock_error())?;
+    if !manager.move_group(&id, index)? {
       return Err(GROUP_NOT_FOUND_ERROR.to_string());
     }
     manager.snapshot(&caller)

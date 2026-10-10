@@ -18,6 +18,7 @@ import {
   type DecisionHeadnotePreview,
   type TextField,
 } from "@stll/api-contract/case-law-text-field";
+import { CourtName } from "@stll/decision-reader/court-name";
 import type { DecisionPrimaryReferenceType } from "@stll/legal-ast/decision-identifier";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
@@ -29,7 +30,6 @@ import {
 } from "@stll/ui/text-mark";
 import { cn } from "@stll/ui/utils";
 
-import { CourtName } from "@/components/court-name";
 import { HighlightedText } from "@/components/workspaces/table/find-highlight";
 import { parseDecisionDate } from "@/features/case-law/citation-format";
 import { languageLabel } from "@/features/case-law/components/decision-language-select";

@@ -10,7 +10,6 @@ import { panic, Result } from "better-result";
  * an agent leaves is the same record the reader would have written and shows
  * up in the reader's margin like any other.
  */
-import { CryptoHasher } from "bun";
 import * as v from "valibot";
 
 import {
@@ -24,6 +23,7 @@ import {
 } from "@stll/api-contract/legal-reader-annotations";
 import type { ReaderAnnotationTargetType } from "@stll/api-contract/legal-reader-annotations";
 import type { Block } from "@stll/legal-ast/document-ast";
+import { createSha256 } from "@stll/sha256/bun";
 
 import { createReaderAnnotationHandler } from "@/api/handlers/legal-reader/annotations/create";
 import { deleteReaderAnnotationHandler } from "@/api/handlers/legal-reader/annotations/delete";
@@ -392,7 +392,7 @@ const HEX_DIGITS = "0123456789abcdef";
  * mark is, shaped as a UUID; the create handler compares the stored rows
  * with the request before it treats a present id as a replay.
  */
-const createRequestIdFor = ({
+export const createRequestIdFor = ({
   organizationId,
   request,
   userId,
@@ -401,7 +401,7 @@ const createRequestIdFor = ({
   request: unknown;
   userId: string;
 }) => {
-  const hex = new CryptoHasher("sha256")
+  const hex = createSha256()
     .update(JSON.stringify([organizationId, userId, request]))
     .digest("hex")
     .slice(0, UUID_HEX_LENGTH);
@@ -704,7 +704,7 @@ const READER_ANNOTATION_TOOL_DEFINITIONS = [
     consumesServices: false,
     annotations: {
       title: "Update reader annotation",
-      destructiveHint: false,
+      destructiveHint: true,
       idempotentHint: true,
       openWorldHint: false,
       readOnlyHint: false,

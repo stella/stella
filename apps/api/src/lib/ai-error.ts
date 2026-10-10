@@ -8,7 +8,7 @@ import { panic, Result } from "better-result";
  * The wire values live in @stll/api-contract so producers and consumers are
  * checked against one source.
  */
-import { AI_ERROR_KINDS, type AIErrorKind } from "@stll/api-contract";
+import type { AIErrorKind } from "@stll/api-contract";
 import { classifyFailure } from "@stll/errors";
 import type { FailureReason } from "@stll/errors";
 import { isNonNullObject } from "@stll/template-conditions/path";
@@ -36,7 +36,6 @@ import {
   readProviderStatus,
 } from "@/api/lib/observability/failure-evidence";
 
-export { AI_ERROR_KINDS };
 export type { AIErrorKind };
 
 const HTTP_SERVER_ERROR_MIN = 500;
@@ -408,11 +407,31 @@ export const AI_ERROR_KIND_FAILURE_REASON = {
  * unbounded walk, is the one a sink records, so a bare provider error and the
  * same error wrapped by `aiHandlerError` grade alike.
  */
+/**
+ * Grade a provider 400 that no kind names as a request this service built
+ * and the provider refused (`provider_request_rejected`, a defect), rather
+ * than leaving it unclassified. A kind already decided keeps its own grade.
+ */
+export const classifyRejectedProviderRequest = (
+  error: unknown,
+  kind: AIErrorKind,
+): void => {
+  if (
+    kind === "unknown" &&
+    typeof error === "object" &&
+    error !== null &&
+    providerStatusCode(error) === 400
+  ) {
+    classifyFailure(error, "provider_request_rejected");
+  }
+};
+
 export const classifyAIBoundaryFailure = (error: unknown): AIErrorKind => {
   const kind = classifyAIError(error);
   if (kind !== "unknown" && typeof error === "object" && error !== null) {
     classifyFailure(error, AI_ERROR_KIND_FAILURE_REASON[kind]);
   }
+  classifyRejectedProviderRequest(error, kind);
   return kind;
 };
 

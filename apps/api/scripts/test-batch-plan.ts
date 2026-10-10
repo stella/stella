@@ -1,6 +1,8 @@
 import { panic, Result } from "better-result";
 import ts from "typescript";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
+
 import { RECORDED_CONVERSATION_SUITES } from "../src/tests/helpers/recorded-conversation-suites";
 import rssData from "./test-peak-rss.json";
 
@@ -440,11 +442,9 @@ export const composeTestBatches = (
     panic("test batch size must be a positive integer");
   }
 
-  const batches: string[][] = [];
-  for (let index = 0; index < testFiles.length; index += batchSize) {
-    batches.push(testFiles.slice(index, index + batchSize));
-  }
-  return batches;
+  // Oversized integer widths still produce one batch, as before; array lengths
+  // fit within the owner's safe-integer cursor contract.
+  return chunkItems(testFiles, Math.min(batchSize, Number.MAX_SAFE_INTEGER));
 };
 
 const DB_TEST_MARKERS = [

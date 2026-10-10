@@ -11,6 +11,7 @@ import type { GenerateBatchProps } from "@/api/lib/workflow/generate-batch-share
 import type { AIBatchProperty } from "@/api/lib/workflow/get-execution-plan";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const fileFieldId = toSafeId<"field">("field_file");
@@ -51,6 +52,7 @@ const props = {
   batch: { id: "batch_0", inputs: [propertyId], properties: [aiProperty] },
   entityVersionId: toSafeId<"entityVersion">("entity_version_test"),
   organizationId: toSafeId<"organization">("org_test"),
+  admission: testModelAdmission(toSafeId<"organization">("org_test")),
   workspaceId: toSafeId<"workspace">("workspace_test"),
   scopedDb: asTestRaw<ScopedDb>(async () => {
     throw new Error("unexpected database access");

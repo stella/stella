@@ -25,6 +25,7 @@ import {
   CYCLE_HALT_REASON,
   INGESTION_STOP_KIND,
 } from "@stll/legal-atlas/ingestion-cycle";
+import { createSha256 } from "@stll/sha256/node";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -127,6 +128,7 @@ const testSourceLease = (
   beforeDatabaseMark: async () => undefined,
   beforeRemoteEffect: async (effect) => await effect(),
   leaseToken: createSafeId<"caseLawSourceIngestionLease">(),
+  purpose: "ingestion",
   release: async () => undefined,
   source,
 });
@@ -1974,7 +1976,7 @@ describe("processDecision — source raw upload failure", () => {
   /** The payload's own digest, under the decision's own raw prefix. */
   const rawKey = (sourceId: string, payload: string): RegExp =>
     new RegExp(
-      `^case-law/raw/${sourceId}/documents/[0-9a-f-]{36}/payloads/${new Bun.CryptoHasher("sha256").update(payload).digest("hex")}$`,
+      `^case-law/raw/${sourceId}/documents/[0-9a-f-]{36}/payloads/${createSha256().update(payload).digest("hex")}$`,
       "u",
     );
 

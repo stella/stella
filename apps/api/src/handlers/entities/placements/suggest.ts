@@ -18,18 +18,25 @@ import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import { aiHandlerError } from "@/api/lib/ai-error";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  configuredModelAdmission,
+  createSafeHandler,
+} from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 import {
   getTanStackTextModelInfoForRole,
   requireTanStackAIAvailableForRole,
 } from "@/api/lib/tanstack-ai-models";
+
+import { hashSummarySource } from "./summary-source-hash";
 
 const MAX_ORGANIZE_FILES = 100;
 const MAX_EXISTING_FOLDERS = 500;
@@ -106,6 +113,7 @@ type OrganizeSuggestionsHandlerProps = {
   safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
   organizationId: SafeId<"organization">;
+  admission: ModelDispatchAdmission;
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
   orgAIConfigStatus: OrgAIConfigStatus;
@@ -175,6 +183,7 @@ const organizeSuggestionsHandler = async function* ({
   safeDb,
   workspaceId,
   organizationId,
+  admission,
   orgAIConfig,
   managedAIResidency,
   orgAIConfigStatus,
@@ -213,6 +222,7 @@ const organizeSuggestionsHandler = async function* ({
     const summariesResult = await generateMissingSummaries({
       contexts: missingContexts,
       organizationId,
+      admission,
       workspaceId,
       orgAIConfig,
       managedAIResidency,
@@ -287,6 +297,7 @@ const organizeSuggestionsHandler = async function* ({
         orgAIConfig,
         managedAIResidency,
         organizationId,
+        admission,
         tenantWorkspaceIds: [workspaceId],
         analytics: aiAnalytics,
         caching: resolveCaching({
@@ -709,6 +720,7 @@ const loadSummaryContexts = async ({
 type GenerateMissingSummariesOptions = {
   contexts: EntitySummaryContext[];
   organizationId: SafeId<"organization">;
+  admission: ModelDispatchAdmission;
   workspaceId: SafeId<"workspace">;
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
@@ -720,6 +732,7 @@ type GenerateMissingSummariesOptions = {
 const generateMissingSummaries = async ({
   contexts,
   organizationId,
+  admission,
   workspaceId,
   orgAIConfig,
   managedAIResidency,
@@ -759,6 +772,7 @@ const generateMissingSummaries = async ({
         orgAIConfig,
         managedAIResidency,
         organizationId,
+        admission,
         tenantWorkspaceIds: [workspaceId],
         analytics: aiAnalytics,
         caching: resolveCaching({
@@ -1054,31 +1068,11 @@ const persistGeneratedSummaries = async ({
   });
 };
 
-type HashSummarySourceOptions = {
-  entityVersionId: SafeId<"entityVersion">;
-  originalName: string;
-  indexedTitle: string;
-  searchDocumentUpdatedAt: Date | null;
-};
-
-const hashSummarySource = ({
-  entityVersionId,
-  originalName,
-  indexedTitle,
-  searchDocumentUpdatedAt,
-}: HashSummarySourceOptions): string => {
-  const hasher = new Bun.CryptoHasher("sha256");
-  hasher.update(entityVersionId);
-  hasher.update("\n");
-  hasher.update(originalName);
-  hasher.update("\n");
-  hasher.update(indexedTitle);
-  hasher.update("\n");
-  hasher.update(searchDocumentUpdatedAt?.toISOString() ?? "");
-  return hasher.digest("hex");
-};
-
 const config = {
+  actionAdmission: {
+    type: "handler",
+    actionKind: "entities.suggest-placements",
+  },
   description:
     "Propose a folder placement and a tidied file name for up to 100 " +
     "documents of a matter, given the folders that already exist plus an " +
@@ -1109,6 +1103,7 @@ const config = {
 const organizeSuggestions = createSafeHandler(
   config,
   async function* ({
+    modelAdmission,
     safeDb,
     workspaceId,
     session,
@@ -1120,6 +1115,7 @@ const organizeSuggestions = createSafeHandler(
     user,
   }) {
     return yield* organizeSuggestionsHandler({
+      admission: configuredModelAdmission({ modelAdmission }),
       safeDb,
       workspaceId,
       organizationId: session.activeOrganizationId,

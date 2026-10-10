@@ -1,21 +1,20 @@
-import { panic } from "better-result";
+import { Result, panic } from "better-result";
+import { readFileSync } from "node:fs";
 import * as v from "valibot";
 
-// Runner timings are noisy: drift is advisory, with relative and absolute floors.
-const TEST_DURATION_DRIFT_FACTOR = 4;
-const MIN_COMPARISON_SECONDS = 1;
-const MIN_DRIFT_SECONDS = 10;
+import { sha256Hex } from "@stll/sha256/bun";
+
+export const API_TEST_DURATIONS_FILE_ENV = "API_TEST_DURATIONS_FILE";
 
 export const TEST_DURATION_SOURCE = {
   measured: "measured",
-  estimated: "estimated",
 } as const;
 
 const durationSchema = v.record(
   v.string(),
   v.strictObject({
     seconds: v.pipe(v.number(), v.finite(), v.minValue(0)),
-    source: v.picklist(Object.values(TEST_DURATION_SOURCE)),
+    source: v.literal(TEST_DURATION_SOURCE.measured),
   }),
 );
 
@@ -29,6 +28,115 @@ export const durationSeconds = (value: unknown) =>
       seconds,
     ]),
   );
+
+/** Resolve missing live files with the same median for shard and lane planning. */
+export const testFileDurationWeights = (
+  files: readonly string[],
+  durations: Readonly<Record<string, number>>,
+) => {
+  const measured = files
+    .flatMap((file) => {
+      const duration = durations[file];
+      if (duration === undefined) {
+        return [];
+      }
+      if (!Number.isFinite(duration) || duration < 0) {
+        panic(`Invalid duration for ${file}`);
+      }
+      return [duration];
+    })
+    .toSorted((a, b) => a - b);
+  const fallback = measured.at(Math.floor(measured.length / 2)) ?? 1;
+  return Object.fromEntries(
+    files.map((file) => [file, durations[file] ?? fallback]),
+  );
+};
+
+export const API_TEST_DURATIONS_HASH_ENV = "API_TEST_DURATIONS_HASH";
+export const MISSING_TEST_DURATIONS_HASH = "missing";
+
+type AssertTestDurationsIdentityOptions = {
+  path: string | undefined;
+  hash: string | undefined;
+};
+
+/**
+ * Weights decide which files a shard runs, and Turbo keys shard results by the
+ * declared hash: a sharded run must read exactly the weights its key names, or
+ * a cached pass could stand in for files it never ran.
+ */
+export const assertTestDurationsIdentity = ({
+  path,
+  hash,
+}: AssertTestDurationsIdentityOptions) => {
+  const contents =
+    path === undefined || path === ""
+      ? undefined
+      : Result.try(() => readFileSync(path)).unwrapOr(undefined);
+  const actual =
+    contents === undefined ? MISSING_TEST_DURATIONS_HASH : sha256Hex(contents);
+  const declared =
+    hash === undefined || hash === "" ? MISSING_TEST_DURATIONS_HASH : hash;
+  if (declared !== actual) {
+    panic(
+      `${API_TEST_DURATIONS_HASH_ENV} must be the sha256 of ${API_TEST_DURATIONS_FILE_ENV} (expected ${actual}, got ${declared})`,
+    );
+  }
+};
+
+type LoadTestDurationWeightsOptions = {
+  files: readonly string[];
+  path: string | undefined;
+  notice?: (message: string) => void;
+};
+
+/** Cached main measurements are an optional external input, never a test gate. */
+export const loadTestDurationWeights = ({
+  files,
+  path,
+  notice = console.log,
+}: LoadTestDurationWeightsOptions) => {
+  let durations: Readonly<Record<string, number>> = {};
+  let fallbackNoticed = false;
+  if (path === undefined || path === "") {
+    notice(
+      "::notice::API test duration cache unavailable; using uniform weights",
+    );
+    fallbackNoticed = true;
+  } else {
+    const parsed = Result.try((): unknown =>
+      JSON.parse(readFileSync(path, "utf-8")),
+    );
+    if (parsed.isErr()) {
+      notice(
+        `::notice::API test duration cache unreadable; using uniform weights (${path})`,
+      );
+      fallbackNoticed = true;
+    } else {
+      const validated = v.safeParse(durationSchema, parsed.value);
+      if (!validated.success) {
+        notice(
+          `::notice::API test duration cache has an invalid schema; using uniform weights (${path})`,
+        );
+        fallbackNoticed = true;
+      } else {
+        durations = durationSeconds(validated.output);
+      }
+    }
+  }
+  const unknown = files.filter((file) => durations[file] === undefined);
+  const usable = files.length - unknown.length;
+  if (unknown.length > 0 && usable > 0) {
+    notice(
+      `::notice::${unknown.length} API test file(s) use the median duration weight`,
+    );
+  } else if (unknown.length > 0 && !fallbackNoticed) {
+    notice(
+      "::notice::API test duration cache has no live entries; using uniform weights",
+    );
+  }
+  return testFileDurationWeights(files, durations);
+};
 
 const timingSchema = v.strictObject({
   version: v.literal(1),
@@ -45,71 +153,4 @@ export const readTimingArtifact = (contents: string) => {
       milliseconds / 1000,
     ]),
   );
-};
-
-/**
- * A missing weight fails the pull request that adds the test file. Shards run
- * after merge, where a file that landed next to a concurrent change is weighted
- * by the median instead: a warning, never a red main.
- */
-export const MISSING_TEST_DURATION = {
-  fail: "fail",
-  warn: "warn",
-} as const;
-
-type AssertTestDurationsOptions = {
-  files: readonly string[];
-  durations: ReturnType<typeof readDurationWeights>;
-  missing: (typeof MISSING_TEST_DURATION)[keyof typeof MISSING_TEST_DURATION];
-  measurements?: Readonly<Record<string, number>>;
-};
-
-const MISSING_TEST_DURATION_FIX =
-  "run bun apps/api/scripts/refresh-test-durations.ts --write";
-
-export const assertTestDurations = ({
-  files,
-  durations,
-  missing,
-  measurements = {},
-}: AssertTestDurationsOptions): void => {
-  for (const file of files) {
-    const entry = durations[file];
-    if (entry === undefined) {
-      if (missing === MISSING_TEST_DURATION.fail) {
-        panic(
-          `Missing API test duration: ${file}; ${MISSING_TEST_DURATION_FIX}`,
-        );
-      }
-      console.warn(
-        `::warning::Missing API test duration: ${file} (sharded by the median weight); ${MISSING_TEST_DURATION_FIX}`,
-      );
-      continue;
-    }
-    const recorded = entry.seconds;
-    if (!Number.isFinite(recorded) || recorded < 0) {
-      panic(`Invalid duration for ${file}`);
-    }
-    const measured = measurements[file];
-    if (measured === undefined) {
-      continue;
-    }
-    if (!Number.isFinite(measured) || measured < 0) {
-      panic(`Invalid measurement for ${file}`);
-    }
-    if (entry.source === TEST_DURATION_SOURCE.estimated) {
-      continue;
-    }
-    const previous = Math.max(MIN_COMPARISON_SECONDS, recorded);
-    const latest = Math.max(MIN_COMPARISON_SECONDS, measured);
-    if (
-      Math.max(previous, latest) / Math.min(previous, latest) >
-        TEST_DURATION_DRIFT_FACTOR &&
-      Math.abs(recorded - measured) >= MIN_DRIFT_SECONDS
-    ) {
-      console.warn(
-        `::warning::Stale API test duration: ${file} (${recorded}s recorded, ${measured}s measured); run bun apps/api/scripts/refresh-test-durations.ts --write <timing-artifact-directory>`,
-      );
-    }
-  }
 };

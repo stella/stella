@@ -1,13 +1,14 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { sleep } from "@stll/concurrency/sleep";
+
 import {
   readProvisionCitingSearch,
   publicStatuteSearchSchema,
   updateProvisionCitingSearch,
 } from "@/features/statutes/statute-page-search";
 import type { api } from "@/lib/api";
-import { detached } from "@/lib/detached";
 import type { PublicLawData } from "@/lib/public-law-api";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
@@ -35,9 +36,7 @@ afterEach(() => {
 });
 afterAll(async () => {
   await act(async () => {
-    await new Promise((resolve) => {
-      setTimeout(resolve, 0);
-    });
+    await sleep(0);
   });
   await GlobalRegistrator.unregister();
 });
@@ -74,10 +73,15 @@ test("citing filters update route search and the next API request, then clear bo
     validateSearch: publicStatuteSearchSchema,
   });
   const StatutePage = () => {
-    const filters = StatuteRoute.useSearch({
-      select: readProvisionCitingSearch,
+    const search = StatuteRoute.useSearch({
+      select: ({ q, citingCourt, citingYear, citingSort }) => ({
+        q,
+        citingCourt,
+        citingYear,
+        citingSort,
+      }),
     });
-    const navigate = StatuteRoute.useNavigate();
+    const filters = readProvisionCitingSearch(search);
     return (
       <ProvisionCitingDecisions
         anchorId="s13"
@@ -86,12 +90,9 @@ test("citing filters update route search and the next API request, then clear bo
         currentVersionValidFrom="2022-01-01"
         filters={filters}
         onFiltersChange={(nextFilters) => {
-          detached(
-            navigate({
-              search: (previous) =>
-                updateProvisionCitingSearch(previous, nextFilters),
-            }),
-            "statutes.test-citing-filter-change",
+          const nextSearch = updateProvisionCitingSearch(search, nextFilters);
+          appRouter.history.push(
+            `${StatuteRoute.fullPath}${router.defaultStringifySearch(nextSearch)}`,
           );
         }}
       />
@@ -130,7 +131,7 @@ test("citing filters update route search and the next API request, then clear bo
 
   await waitFor(() => expect(requests).toHaveLength(1));
   fireEvent.change(
-    ui.getByRole("searchbox", { name: messages.caseLaw.court }),
+    ui.getByRole("searchbox", { name: messages.caseLaw.filters.court }),
     {
       target: { value: " Supreme Court " },
     },
@@ -158,7 +159,7 @@ test("citing filters update route search and the next API request, then clear bo
   expect(requests.at(1)?.searchParams.get("year")).toBe("2020");
 
   fireEvent.change(
-    ui.getByRole("searchbox", { name: messages.caseLaw.court }),
+    ui.getByRole("searchbox", { name: messages.caseLaw.filters.court }),
     {
       target: { value: "" },
     },

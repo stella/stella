@@ -240,6 +240,7 @@ export const MODEL_RATES = {
     cachedInputPerMTok: 17_500,
   },
   // models.dev: anthropic:claude-sonnet-5-5
+  // reviewed rate correction: cost.cache_read 0.1 -> 0.2 (2026-10-07: models.dev lists half the provider cache-read price; https://platform.claude.com/docs/en/models/sonnet-5-5/overview)
   "claude-sonnet-5-5": {
     kind: "flat",
     inputPerMTok: 200_000,
@@ -319,6 +320,23 @@ export const MODEL_RATES = {
     cachedInputPerMTok: 50_000,
     cachedWriteInputPerMTok: 625_000,
   },
+  // models.dev: anthropic:claude-haiku-5-5
+  "claude-haiku-5-5": {
+    kind: "input-token-tiered",
+    inputTokenThreshold: 100_000,
+    standard: {
+      inputPerMTok: 10_000,
+      outputPerMTok: 50_000,
+      cachedInputPerMTok: 1000,
+      cachedWriteInputPerMTok: 12_500,
+    },
+    aboveThreshold: {
+      inputPerMTok: 50_000,
+      outputPerMTok: 250_000,
+      cachedInputPerMTok: 5000,
+      cachedWriteInputPerMTok: 62_500,
+    },
+  },
   // models.dev: anthropic:claude-haiku-4-5-20251001
   "claude-haiku-4-5-20251001": {
     kind: "flat",
@@ -334,6 +352,23 @@ export const MODEL_RATES = {
     outputPerMTok: 1_650_000,
     cachedInputPerMTok: 33_000,
     cachedWriteInputPerMTok: 412_500,
+  },
+  // models.dev: amazon-bedrock:us.anthropic.claude-haiku-5-5
+  "us.anthropic.claude-haiku-5-5": {
+    kind: "input-token-tiered",
+    inputTokenThreshold: 100_000,
+    standard: {
+      inputPerMTok: 11_000,
+      outputPerMTok: 55_000,
+      cachedInputPerMTok: 1100,
+      cachedWriteInputPerMTok: 13_750,
+    },
+    aboveThreshold: {
+      inputPerMTok: 55_000,
+      outputPerMTok: 275_000,
+      cachedInputPerMTok: 5500,
+      cachedWriteInputPerMTok: 68_750,
+    },
   },
   // models.dev: amazon-bedrock:us.anthropic.claude-haiku-4-5-20251001-v1:0
   "us.anthropic.claude-haiku-4-5-20251001-v1:0": {

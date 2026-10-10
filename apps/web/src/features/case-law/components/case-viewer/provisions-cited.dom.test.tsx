@@ -1,6 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { sleep } from "@stll/concurrency/sleep";
+
 import { toSafeId } from "@/lib/safe-id";
 import type { ProvisionPreviewData } from "@/lib/statutes/provision-preview";
 
@@ -21,8 +23,8 @@ const messages = (await import("@/i18n/langs/en.json")).default;
 const decisionId = toSafeId<"caseLawDecision">(
   "00000000-0000-4000-8000-000000000002",
 );
-const clients: InstanceType<typeof QueryClient>[] = [];
 const originalFetch = globalThis.fetch;
+const clients: InstanceType<typeof QueryClient>[] = [];
 
 afterEach(() => {
   cleanup();
@@ -34,9 +36,7 @@ afterEach(() => {
 });
 afterAll(async () => {
   await act(async () => {
-    await new Promise((resolve) => {
-      setTimeout(resolve, 0);
-    });
+    await sleep(0);
   });
   await GlobalRegistrator.unregister();
 });

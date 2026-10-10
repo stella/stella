@@ -20,6 +20,7 @@
  * presigned URLs can then be issued through an STS session policy
  * scoped to one organization/workspace key prefix.
  */
+
 import {
   CopyObjectCommand,
   GetObjectCommand,
@@ -32,6 +33,7 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { Result, TaggedError } from "better-result";
 
 import { fetchWithTimeout } from "@stll/fetch";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import { envBase } from "@/api/env-base";
@@ -104,7 +106,7 @@ type ScopedClientCacheEntry = {
   cached?: CachedScopedClient;
   promise: Promise<CachedScopedClient>;
 };
-export const S3_SIGNING_KEYSPACES = ["tenant", "exports"] as const;
+const S3_SIGNING_KEYSPACES = ["tenant", "exports"] as const;
 export type S3SigningKeyspace = (typeof S3_SIGNING_KEYSPACES)[number];
 
 export type S3SigningScope = {
@@ -250,10 +252,7 @@ const assertKeyInSigningScope = (key: string, scope: S3SigningScope): void => {
 };
 
 const roleSessionName = (scope: S3SigningScope): string => {
-  const scopeHash = new Bun.CryptoHasher("sha256")
-    .update(s3SigningScopePrefix(scope))
-    .digest("hex")
-    .slice(0, 24);
+  const scopeHash = hashSha256Hex(s3SigningScopePrefix(scope)).slice(0, 24);
   return `s3-scope-${scopeHash}`;
 };
 

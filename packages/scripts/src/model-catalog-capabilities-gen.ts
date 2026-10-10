@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, TaggedError } from "better-result";
 /**
  * Generates `packages/ai-catalog/src/capabilities.gen.ts` — the
  * per-model document-input, image-input, reasoning-effort, temperature policy and
@@ -26,7 +26,7 @@ import { panic } from "better-result";
  * new model's capabilities from the source.
  *
  * Usage:
- *   bun packages/scripts/src/model-catalog-capabilities-gen.ts
+ *   bun packages/scripts/src/model-catalog-capabilities-gen.ts --from-snapshot
  *   bun packages/scripts/src/model-catalog-capabilities-gen.ts --check
  */
 import path from "node:path";
@@ -60,24 +60,15 @@ import type {
   UpstreamCapabilities,
 } from "./model-catalog-capabilities";
 import { formatInteger } from "./model-catalog-rates-gen";
+import {
+  MODELS_DEV_KEY_BY_PROVIDER,
+  loadModelCatalogSnapshot,
+} from "./model-catalog-snapshot";
 
 const OUTPUT_PATH = path.resolve(
   import.meta.dir,
   "../../ai-catalog/src/capabilities.gen.ts",
 );
-
-/** Catalog provider → models.dev provider key. */
-export const MODELS_DEV_KEY_BY_PROVIDER: Record<
-  keyof typeof BYOK_MODEL_OPTIONS,
-  string
-> = {
-  google: "google",
-  anthropic: "anthropic",
-  openai: "openai",
-  openrouter: "openrouter",
-  bedrock: "amazon-bedrock",
-  mistral: "mistral",
-};
 
 const REASONING_EFFORT_LADDER: readonly string[] = REASONING_EFFORTS;
 
@@ -447,24 +438,16 @@ ${outputTokenLines.join("\n")}
 `;
 };
 
-const loadUpstream = async (): Promise<
-  ReadonlyMap<string, UpstreamCapabilities>
-> => {
-  const response = await fetch("https://models.dev/api.json", {
-    signal: AbortSignal.timeout(30_000),
-    headers: { accept: "application/json" },
-  });
-  if (!response.ok) {
-    panic(`models.dev responded ${response.status}`);
-  }
-  const body: unknown = await response.json();
+export const parseModelsDevCapabilities = (
+  body: unknown,
+): ReadonlyMap<string, UpstreamCapabilities> => {
   const upstream = new Map<string, UpstreamCapabilities>();
   if (typeof body !== "object" || body === null) {
     return upstream;
   }
-  const wanted = new Set(Object.values(MODELS_DEV_KEY_BY_PROVIDER));
+  const wanted = Object.values(MODELS_DEV_KEY_BY_PROVIDER);
   for (const [providerKey, providerVal] of Object.entries(body)) {
-    if (!wanted.has(providerKey)) {
+    if (!wanted.some((provider) => provider === providerKey)) {
       continue;
     }
     if (
@@ -486,24 +469,27 @@ const loadUpstream = async (): Promise<
   return upstream;
 };
 
-const loadOpenRouterDefaults =
-  async (): Promise<OpenRouterReasoningDefaults> => {
-    const response = await fetch("https://openrouter.ai/api/v1/models", {
-      signal: AbortSignal.timeout(30_000),
-      headers: { accept: "application/json" },
-    });
-    if (!response.ok) {
-      panic(`OpenRouter responded ${response.status}`);
-    }
-    return parseOpenRouterReasoningDefaults(await response.json());
-  };
+class UnsupportedCapabilityRefreshError extends TaggedError(
+  "UnsupportedCapabilityRefreshError",
+)<{
+  message: string;
+}> {}
 
 const main = async (): Promise<void> => {
+  if (Bun.argv.includes("--refresh")) {
+    console.error(
+      new UnsupportedCapabilityRefreshError({
+        message:
+          "Capability refresh requires `bun --filter @stll/ai-catalog gen:rates --refresh` followed by `bun --filter @stll/ai-catalog gen:capabilities --from-snapshot`.",
+      }),
+    );
+    process.exitCode = 1;
+    return;
+  }
   const checkOnly = Bun.argv.includes("--check");
-  const [upstream, openRouterDefaults] = await Promise.all([
-    loadUpstream(),
-    loadOpenRouterDefaults(),
-  ]);
+  const { modelsDev, openRouter } = await loadModelCatalogSnapshot();
+  const upstream = parseModelsDevCapabilities(modelsDev);
+  const openRouterDefaults = parseOpenRouterReasoningDefaults(openRouter);
   const rows = buildCapabilityRows({ openRouterDefaults, upstream });
   const rendered = renderCapabilitiesModule(rows);
   // A missing generated file is the "stale" answer this check is asking for,
@@ -519,7 +505,7 @@ const main = async (): Promise<void> => {
     }
     console.error(
       "capabilities.gen.ts is stale; regenerate with " +
-        "`bun --filter @stll/ai-catalog gen:capabilities`.",
+        "`bun --filter @stll/ai-catalog gen:capabilities --from-snapshot`.",
     );
     process.exit(1);
   }

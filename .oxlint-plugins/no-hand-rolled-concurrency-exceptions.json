@@ -1,0 +1,17 @@
+[
+  {
+    "path": "packages/infosoud/src/client.ts",
+    "source": "delay",
+    "reason": "Published package has no concurrency dependency; importing the private owner would change its publishing boundary."
+  },
+  {
+    "path": "packages/infosoud/src/client.test.ts",
+    "source": "setTimeout(resolve, 1)",
+    "reason": "Published package has no concurrency dependency; its tests retain the same package boundary."
+  },
+  {
+    "path": "apps/desktop/tests/browser/clipboard-keyboard.playwright.spec.ts",
+    "source": "setTimeout(resolve, 25)",
+    "reason": "Playwright serializes this callback into the browser; it cannot capture a workspace import."
+  }
+]

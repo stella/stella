@@ -1,4 +1,4 @@
-import { sanitizeHref } from "./sanitize-href";
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 
 const ISOLATED_WINDOW_FEATURES = "noopener,noreferrer";
 

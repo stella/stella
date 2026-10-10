@@ -2,8 +2,10 @@ import { panic } from "better-result";
 import path from "node:path";
 import ts from "typescript";
 
+import { DESKTOP_FEATURE_IDS } from "@stll/api-contract/desktop-feature-access";
 import { compareCodeUnit } from "@stll/collation";
 
+import { featurePrerequisiteClosure } from "../../src/lib/feature-access/prerequisites";
 import type { FeatureRegistry } from "../../src/lib/feature-access/registry";
 
 type DeclarationOptions = {
@@ -576,6 +578,16 @@ const validateOwnership = (
   const tableOwners = new Map<string, Map<string, Requirement>>();
   const dispatchModules = new Set<string>();
   for (const [featureId, { ownership }] of Object.entries(registry)) {
+    // A desktop feature is gated by the client from its served decision, so
+    // it may own no API source at all.
+    if (
+      ownership === undefined &&
+      DESKTOP_FEATURE_IDS.some(
+        (desktopFeatureId) => desktopFeatureId === featureId,
+      )
+    ) {
+      continue;
+    }
     if (
       ownership === undefined ||
       [
@@ -923,12 +935,19 @@ const inspectEndpoint = ({
         message: `featureAccess ${id} conditional tables require the shared policy module`,
       });
     }
-    if (declaration.id !== id) {
+    if (
+      declaration.id === undefined ||
+      !Object.hasOwn(registry, declaration.id) ||
+      !featurePrerequisiteClosure(registry, declaration.id).has(id)
+    ) {
       violations.push({
         file,
         message: `source ownership requires featureAccess ${id}`,
       });
-    } else if (!types.has(declaration.type) || types.size > 1) {
+    } else if (
+      declaration.id === id &&
+      (!types.has(declaration.type) || types.size > 1)
+    ) {
       violations.push({
         file,
         message: `featureAccess ${id} must match source ownership (${[...types].toSorted().join(", ")})`,

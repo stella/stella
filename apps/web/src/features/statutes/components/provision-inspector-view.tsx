@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
@@ -25,7 +26,9 @@ import { ViewerOverlayBar } from "@/components/inspector/viewer-overlay-bar";
 import { ZoomControls } from "@/components/inspector/zoom-controls";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
 import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
-import { useReaderTextScale } from "@/components/legal-reader/use-reader-text-scale";
+import { useWebReaderTextScale as useReaderTextScale } from "@/components/legal-reader/use-web-reader-text-scale";
+import { decisionCitationCourtLabel } from "@/components/references/decision-citation-chip.logic";
+import { decisionCitationPresentationsById } from "@/components/references/decision-citation-presentation.logic";
 import { pickVersionAt } from "@/features/case-law/statute-version";
 import {
   CitingDecisionItem,
@@ -55,7 +58,7 @@ import { useFormatter } from "@/i18n/formatting-context";
 import { optionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
 import { createStatuteLinkTarget } from "@/lib/statutes/statute-route";
-import { useQueryView } from "@/lib/use-query-view";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 // The ask actions pull the prompt builders the chat needs; the pane is read
 // far more often than it is asked a question, so they arrive on demand.
@@ -96,9 +99,11 @@ export const ProvisionInspectorView = ({
       : null;
   const textScale = useReaderTextScale();
   const updateView = useInspectorTabsStore((state) => state.updateView);
-  const { data: versions } = useQuery(
-    statuteVersionsOptions(payload.documentId),
-  );
+  const versionsQuery = useQuery(statuteVersionsOptions(payload.documentId));
+  const versionsView = useQueryView(versionsQuery);
+  useQueryViewError(versionsView);
+  const versions =
+    versionsView.type === "items" ? versionsView.items : undefined;
   const availableVersions = optionalArray(versions);
   // The opener's seed stands only until the list arrives: an opener with no
   // reason to read the work's versions carries one.
@@ -146,7 +151,13 @@ export const ProvisionInspectorView = ({
     ),
   );
   const leadingDecisions =
-    leadingView.type === "items" ? leadingView.items : [];
+    leadingView.type === "items" ? uniqueByDecision(leadingView.items) : [];
+  const leadingPresentations = decisionCitationPresentationsById(
+    leadingDecisions.map((decision) => ({
+      decisionId: decision.decisionId,
+      courtShortCode: decisionCitationCourtLabel(decision),
+    })),
+  );
   const leadingCount =
     leadingView.type === "pending" || leadingView.type === "error"
       ? null
@@ -265,6 +276,10 @@ export const ProvisionInspectorView = ({
                             payload.versionValidFrom
                           }
                           decision={decision}
+                          presentation={
+                            leadingPresentations.get(decision.decisionId) ??
+                            panic("Leading decision missing collected identity")
+                          }
                         />
                       </li>
                     ))}
@@ -352,6 +367,22 @@ export const ProvisionInspectorView = ({
       </LegalReaderAIChat>
     </div>
   );
+};
+
+/** One entry per decision: a decision applying the provision twice leads once. */
+const uniqueByDecision = (
+  rows: readonly CitingDecisionRow[],
+): CitingDecisionRow[] => {
+  const seen = new Set<string>();
+  const unique: CitingDecisionRow[] = [];
+  for (const row of rows) {
+    if (seen.has(row.decisionId)) {
+      continue;
+    }
+    seen.add(row.decisionId);
+    unique.push(row);
+  }
+  return unique;
 };
 
 const ProvisionSection = ({

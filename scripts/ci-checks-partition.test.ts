@@ -292,10 +292,9 @@ const withoutActionRef = (step: Step): Step => {
     : { ...step, uses: uses.replace(PINNED_REF, "@<pinned>") };
 };
 const CONTINUATION_PREFIXES = {
-  checkout: "${{ !cancelled() && steps.checkout.outcome == 'success'",
-  install:
-    "${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure'",
-  installPackages: "${{ !cancelled() && steps.install.outcome == 'success'",
+  checkout: `\${{ !cancelled() && steps.checkout.outcome == 'success'`,
+  install: `\${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure'`,
+  installPackages: `\${{ !cancelled() && steps.install.outcome == 'success'`,
 } as const;
 const outcomeDependencies: Record<string, string> = {
   Format: "affected",
@@ -456,9 +455,48 @@ const withoutTestTimeout = (step: Step): Step => {
   };
 };
 
+const LOCAL_CHECK_BASE_REF = `\${{ format('origin/{0}', github.base_ref || 'main') }}`;
+const LOCAL_BASE_REF = `\${{ github.base_ref || 'main' }}`;
+const CLI_CONTRACT_COMMAND = "bun scripts/check-cli-contract-changeset.ts";
+const withoutLocalVerification = (step: Step): Step => {
+  const { env, run } = v.parse(
+    v.looseObject({
+      env: v.optional(v.record(v.string(), v.unknown())),
+      run: v.optional(v.string()),
+    }),
+    step,
+  );
+  if (
+    env?.["STELLA_VERIFY"] !== "prepare" &&
+    env?.["STELLA_VERIFY"] !== "check"
+  ) {
+    return step;
+  }
+  const environment = { ...env };
+  delete environment["STELLA_VERIFY"];
+  const original = { ...step };
+  // Normalize the complete base-ref handoff; every other command and env survives.
+  if (
+    step.name === "CLI contract changeset guard" &&
+    env["CHECK_BASE_REF"] === LOCAL_CHECK_BASE_REF &&
+    env["BASE_REF"] === LOCAL_BASE_REF &&
+    run === `${CLI_CONTRACT_COMMAND} --base "$CHECK_BASE_REF"`
+  ) {
+    delete environment["CHECK_BASE_REF"];
+    original["run"] = `${CLI_CONTRACT_COMMAND} --base "origin/$BASE_REF"`;
+  }
+  if (Object.keys(environment).length === 0) {
+    delete original["env"];
+  } else {
+    original["env"] = environment;
+  }
+  return original;
+};
+
 const ownedSteps = (steps: readonly Step[]) =>
   steps
     .filter(({ name }) => !prerequisites.has(name))
+    .map(withoutLocalVerification)
     .map(documentationScope)
     .map(withoutContinuation)
     .map(withoutPreparedGeneration)
@@ -519,8 +557,13 @@ const expectScope = ({ current, base }: ScopeOptions) => {
   // Ordinary scope comparisons supply fresh-run evidence. Completion reuse
   // is exercised separately by the depth contract's true/false census. A
   // merge base may already carry the completion guard, so strip it from both.
+  // The PR-depth reuse skip is bound to its job set in
+  // ci-pr-depth-workflow.test.ts, so strip it here too.
   const freshScope = (value: unknown) => {
-    const tokens = conditionTokens(v.parse(v.string(), value));
+    const tokens = conditionTokens(v.parse(v.string(), value)).replace(
+      /^needs\.ci-plan\.outputs\.pr_depth_reused != 'true' && /u,
+      "",
+    );
     return (
       /^needs\.ci-plan\.outputs\.run_required != 'false' && \(\s*(.*?)\s*\)$/u
         .exec(tokens)
@@ -750,8 +793,18 @@ test("each CI check leg preserves merge-base setup, supply-chain protection and 
     }
     expect(originalSetup).toHaveLength(setupPrerequisites.size);
     expectScope({ current: scope, base: originalScope });
+    // While the merge base still runs typecheck-baseline as its own job, the
+    // generated leg that absorbs it carries both budgets.
+    const absorbedBaseline = baseJobs["typecheck-baseline"];
+    const absorbedTimeout =
+      partitionIds.at(index) === "ci-checks-generated" && absorbedBaseline
+        ? v.parse(
+            v.looseObject({ "timeout-minutes": v.number() }),
+            absorbedBaseline,
+          )["timeout-minutes"]
+        : 0;
     expect(timeout).toBe(
-      partitionIds.at(index) === "ci-checks-generated" ? 60 : originalTimeout,
+      v.parse(v.number(), originalTimeout) + absorbedTimeout,
     );
     expect(setupSteps(steps)).toEqual(originalSetup);
     const installIndex = steps.findIndex(
@@ -1202,7 +1255,7 @@ test("repository backgrounds are bounded and joined before failure cancellation"
       }
       continue;
     }
-    if (step["name"] === "Cancel failed merge-group run") {
+    if (step["name"] === CANONICAL_CANCEL_STEP.name) {
       expect(pending.size).toBe(0);
     }
   }
@@ -1365,6 +1418,76 @@ test("every independent CI guard continues only after successful prerequisites",
   }
 });
 
+test("CI coverage accepts the real local-verification projection", () => {
+  const current = actualSteps.find(
+    ({ name }) => name === "CLI contract changeset guard",
+  );
+  const base = baseSteps.find(
+    ({ name }) => name === "CLI contract changeset guard",
+  );
+  if (current === undefined || base === undefined) {
+    panic("CLI contract check is missing from CI coverage");
+  }
+  const step = v.parse(v.record(v.string(), v.unknown()), current);
+  const env = v.parse(v.record(v.string(), v.unknown()), step["env"]);
+  expect(env["STELLA_VERIFY"]).toBe("check");
+  expect(env["CHECK_BASE_REF"]).toBe(LOCAL_CHECK_BASE_REF);
+  expect(env["BASE_REF"]).toBe(LOCAL_BASE_REF);
+  expect(step["run"]).toBe(`${CLI_CONTRACT_COMMAND} --base "$CHECK_BASE_REF"`);
+  expectCoverage({ current: [current], base: [base], removed: [] });
+});
+
+test("CI coverage strips only valid local metadata and the exact base-ref handoff", () => {
+  const original = {
+    name: "CLI contract changeset guard",
+    if: "github.event_name == 'pull_request'",
+    run: `${CLI_CONTRACT_COMMAND} --base "origin/$BASE_REF"`,
+    env: { BASE_REF: LOCAL_BASE_REF, RETAINED: "strict" },
+  };
+  for (const phase of ["prepare", "check"]) {
+    const marked = {
+      ...original,
+      run: `${CLI_CONTRACT_COMMAND} --base "$CHECK_BASE_REF"`,
+      env: {
+        ...original.env,
+        STELLA_VERIFY: phase,
+        CHECK_BASE_REF: LOCAL_CHECK_BASE_REF,
+      },
+    };
+    expectCoverage({ current: [marked], base: [original], removed: [] });
+    for (const changed of [
+      { ...marked, env: { ...marked.env, STELLA_VERIFY: "later" } },
+      { ...marked, env: { ...marked.env, CHECK_BASE_REF: "origin/main" } },
+      { ...marked, env: { ...marked.env, BASE_REF: "main" } },
+      { ...marked, env: { ...marked.env, RETAINED: "changed" } },
+      { ...marked, env: { ...marked.env, UNRELATED: "added" } },
+      { ...marked, run: `${marked.run} --skip-check` },
+      { ...marked, run: "exit 0" },
+      { ...marked, if: "always()" },
+      { ...marked, name: "Some other guard" },
+    ]) {
+      expect(() =>
+        expectCoverage({ current: [changed], base: [original], removed: [] }),
+      ).toThrow("toEqual");
+    }
+  }
+  for (const phase of ["prepare", "check"]) {
+    const step = { name: "Guard", run: "bun check" };
+    expectCoverage({
+      current: [{ ...step, env: { STELLA_VERIFY: phase } }],
+      base: [step],
+      removed: [],
+    });
+    expect(() =>
+      expectCoverage({
+        current: [{ ...step, env: { STELLA_VERIFY: phase, EXTRA: "value" } }],
+        base: [step],
+        removed: [],
+      }),
+    ).toThrow("toEqual");
+  }
+});
+
 test("CI coverage strips only canonical continuation wrappers and preserves condition, run and inputs", () => {
   for (const CONTINUATION_PREFIX of Object.values(CONTINUATION_PREFIXES)) {
     for (const original of [
@@ -1495,7 +1618,7 @@ const conditionEvaluator = ({
     needs: { "ci-plan": { outputs: scopes } },
   });
   return (condition: string) => {
-    const expression = condition.startsWith("${{")
+    const expression = condition.startsWith(`\${{`)
       ? condition.slice(4, -3)
       : condition;
     return v.parse(

@@ -33,6 +33,7 @@ import {
 import { createStreamMessageCapture } from "@/api/lib/chat/stream-message-capture";
 import { finishReasonOf } from "@/api/lib/chat/tanstack-chat-runtime";
 import type { TanStackTextFinishReason } from "@/api/lib/chat/tanstack-chat-runtime";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import {
   abortControllerFromSignal,
   resolveTanStackTextModel,
@@ -54,6 +55,8 @@ type RunSubagentMetering = {
 };
 
 export type RunSubagentOptions = {
+  /** The parent turn's admission; a subagent is never admitted again. */
+  admission: ModelDispatchAdmission;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
@@ -209,11 +212,14 @@ export const runSubagent = async (
     managedAIResidency: options.managedAIResidency,
     modelId: options.modelId,
     organizationId: options.organizationId,
+    admission: options.admission,
     orgAIConfig: options.orgAIConfig,
     role: options.role,
   });
 
-  const abortController = abortControllerFromSignal(options.abortSignal);
+  const abortController = abortControllerFromSignal(
+    AbortSignal.any([options.abortSignal, options.admission.signal]),
+  );
 
   const analytics = createTanStackAIAnalyticsCallbacks({
     dataClass: "customer",
@@ -302,6 +308,7 @@ export const runSubagent = async (
   });
 
   const stream = streamTanStackChatRun({
+    admission: options.admission,
     model,
     adapter: model.adapter,
     messages: guardedMessages,

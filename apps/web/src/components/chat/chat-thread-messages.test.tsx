@@ -12,12 +12,14 @@ import {
 } from "@stll/api-contract/action-admission";
 
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
+import { testChatApprovalContextValue } from "@/components/chat/chat-approval-context.test-fixtures";
 import { ChatMattersContext } from "@/components/chat/chat-matters-context";
 import { getChatAssistantTurnError } from "@/components/chat/chat-ui-tools";
 import type {
   ChatUIMessage,
   PersistedChatMessage,
 } from "@/components/chat/chat-ui-tools";
+import { FormattingProvider } from "@/i18n/formatting-context";
 import messages from "@/i18n/langs/en.json";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { ChatThreadTestRouter } from "@/lib/chat-thread-test-router";
@@ -40,36 +42,44 @@ afterAll(() => {
   process.env["VITE_API_URL"] = previousApiUrl;
 });
 
-const withProviders = (children: ReactNode) => (
-  <ChatThreadTestRouter>
-    <QueryClientProvider client={new QueryClient()}>
-      <IntlProvider locale="en" messages={messages} timeZone="UTC">
-        <ChatMattersContext
-          value={{
-            createDocumentMattersView: { type: "empty" },
-          }}
-        >
-          <ChatApprovalContext
+const withProviders = (children: ReactNode, savedSecretAvailable = false) => {
+  const queryClient = new QueryClient();
+  if (savedSecretAvailable) {
+    queryClient.setQueryData(["chat-saved-secret", "test-thread", "sample"], {
+      available: true,
+      connector: {
+        connectionId: "sample-connection",
+        displayName: "Sample connector",
+        host: "sample.test",
+        responseDisposition: "receipt-only",
+      },
+    });
+  }
+  return (
+    <ChatThreadTestRouter>
+      <QueryClientProvider client={queryClient}>
+        <IntlProvider locale="en" messages={messages} timeZone="UTC">
+          <ChatMattersContext
             value={{
-              activeOrganizationId: "test-active-organization",
-              alwaysApprovedTools: new Set(),
-              conversationApprovedTools: new Set(),
-              handleAllowInConversation: () => {},
-              handleAlwaysAllow: () => {},
-              handleApprove: () => {},
-              handleDeny: () => {},
+              createDocumentMattersView: { type: "empty" },
             }}
           >
-            <ChatEditorProvider>{children}</ChatEditorProvider>
-          </ChatApprovalContext>
-        </ChatMattersContext>
-      </IntlProvider>
-    </QueryClientProvider>
-  </ChatThreadTestRouter>
-);
+            <ChatApprovalContext value={testChatApprovalContextValue}>
+              <FormattingProvider locale="en" timeZone="UTC">
+                <ChatEditorProvider>{children}</ChatEditorProvider>
+              </FormattingProvider>
+            </ChatApprovalContext>
+          </ChatMattersContext>
+        </IntlProvider>
+      </QueryClientProvider>
+    </ChatThreadTestRouter>
+  );
+};
 
-const renderWithProviders = (children: ReactNode) =>
-  renderToStaticMarkup(withProviders(children));
+const renderWithProviders = (
+  children: ReactNode,
+  savedSecretAvailable = false,
+) => renderToStaticMarkup(withProviders(children, savedSecretAvailable));
 
 const renderWithLoadedMarkdown = async (children: ReactNode) => {
   const stream = await renderToReadableStream(withProviders(children));
@@ -549,6 +559,54 @@ describe("chat thread messages", () => {
     expect(html).toContain("Which matter?");
   });
 
+  test("renders a private credential form in the user-owned turn", () => {
+    const secretInput = {
+      purpose: "Authenticate the sample connector",
+      kind: "token" as const,
+      target: { type: "mcp-connector" as const, connectorSlug: "sample" },
+    };
+    const html = renderWithProviders(
+      <ChatThreadMessages
+        approvalPendingMessageId={null}
+        messages={[
+          {
+            id: "message-user",
+            parts: [{ type: "text", content: "Continue the lookup" }],
+            role: "user",
+          },
+          {
+            id: "message-secret",
+            parts: [
+              {
+                arguments: JSON.stringify(secretInput),
+                id: "tool-call-secret",
+                input: secretInput,
+                name: "request_secret",
+                state: "input-complete",
+                type: "tool-call",
+              },
+            ],
+            role: "assistant",
+          },
+        ]}
+        onAskUserSubmit={() => {}}
+        onCreateDocumentResolve={() => {}}
+        onOpenCreatedDocument={() => {}}
+        streamdownComponents={{
+          a: ({ children, ...props }) => <a {...props}>{children}</a>,
+        }}
+      />,
+      true,
+    );
+
+    expect(html).toContain("Authenticate the sample connector");
+    expect(html).toContain('type="password"');
+    expect(html).toContain("The assistant will not see this value.");
+    expect(html).toContain("Provide");
+    expect(html).toContain("Decline");
+    expect(html).toContain("Use saved credential");
+  });
+
   // The same supersession withdraws a user-input card: the runtime has no
   // interrupt left to answer it, and the server rejects a late answer.
   test("withdraws the user-input form once a later message supersedes the turn", () => {
@@ -687,7 +745,7 @@ describe("chat thread messages", () => {
         "Reading cited documents with create-document.",
       );
       expect(output).not.toContain("**");
-      expect(output).not.toContain("animate-pulse");
+      expect(output).not.toContain('data-slot="loader"');
       expect(output).not.toContain("Working with context");
     }
   });

@@ -175,14 +175,15 @@ export const citingDecisionsSuccessResponseSchema = t.Object({
       court: boundedString(2048),
       courtAbbreviation: nullableBoundedString(2048),
       courtTier: t.UnionEnum(COURT_TIER_LABELS),
-      mentionCount: t.Integer({ minimum: 1 }),
+      mentionCount: Type.Integer({ minimum: 1 }),
       snippetCitation: t.Union([
         t.Object({
-          start: t.Integer({ minimum: 0 }),
-          end: t.Integer({ minimum: 1 }),
+          start: Type.Integer({ minimum: 0 }),
+          end: Type.Integer({ minimum: 1 }),
         }),
         t.Null(),
       ]),
+      sourceUrl: nullableBoundedString(8192),
       country: boundedString(12),
       language: boundedString(32),
       decisionDate: date,

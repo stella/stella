@@ -1,10 +1,13 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
 
 import { AI_PROVIDERS } from "@stll/ai-catalog";
+import { compareCodeUnit } from "@stll/collation";
 
 import { CHAT_TURN_FAILURE_CODES } from "@/api/handlers/chat/chat-turn-state";
 import type { ChatTurnOutcome } from "@/api/handlers/chat/types";
+import { VERIFICATION_RUN_ERROR_CODES } from "@/api/lib/lists/verification/contract";
 import {
   ANONYMIZATION_REFUSAL_REASONS,
   ANONYMIZATION_REFUSAL_SITES,
@@ -14,11 +17,93 @@ import {
   emitActionCostDropMetric,
   emitChatRunLogMetric,
   emitPromptCacheMetric,
+  emitReasoningReplayDroppedMetric,
+  emitVerificationRunFailureMetric,
   REQUEST_CLASSES,
   resetMetricLineSinkForTesting,
   setMetricLineSinkForTesting,
 } from "@/api/lib/observability/request-metrics";
 import type { RequestClass } from "@/api/lib/observability/request-metrics";
+
+test("reasoning replay drops emit only bounded provider and reason dimensions", () => {
+  const lines: string[] = [];
+  setMetricLineSinkForTesting((line) => {
+    lines.push(line);
+  });
+  try {
+    emitReasoningReplayDroppedMetric({
+      fromProvider: "anthropic",
+      toProvider: "openai",
+      reason: "incompatible-provenance",
+      count: 3,
+    });
+    expect(lines).toHaveLength(1);
+    expect(JSON.parse(lines.at(0) ?? "{}")).toEqual({
+      fromProvider: "anthropic",
+      toProvider: "openai",
+      reason: "incompatible-provenance",
+      "chat.reasoning_replay_dropped": 3,
+      _aws: {
+        Timestamp: expect.any(Number),
+        CloudWatchMetrics: [
+          {
+            Namespace: "Stella/Api",
+            Dimensions: [["fromProvider", "toProvider", "reason"]],
+            Metrics: [{ Name: "chat.reasoning_replay_dropped", Unit: "Count" }],
+          },
+        ],
+      },
+    });
+  } finally {
+    resetMetricLineSinkForTesting();
+  }
+});
+
+test("verification failures emit bounded class metrics and structured events", () => {
+  const lines: string[] = [];
+  setMetricLineSinkForTesting((line) => {
+    lines.push(line);
+  });
+  try {
+    for (const errorCode of VERIFICATION_RUN_ERROR_CODES) {
+      emitVerificationRunFailureMetric(errorCode);
+    }
+    const records = lines.map((line) =>
+      v.parse(
+        v.looseObject({ errorCode: v.picklist(VERIFICATION_RUN_ERROR_CODES) }),
+        JSON.parse(line),
+      ),
+    );
+    expect(records).toHaveLength(4);
+    expect(
+      records.map((record) => record.errorCode).toSorted(compareCodeUnit),
+    ).toEqual([
+      "access_revoked",
+      "extraction_failed",
+      "grading_failed",
+      "no_text",
+    ]);
+    for (const record of records) {
+      expect(record).toEqual({
+        event: `list_verification_run.${record.errorCode}`,
+        errorCode: record.errorCode,
+        VerificationRunFailures: 1,
+        _aws: {
+          Timestamp: expect.any(Number),
+          CloudWatchMetrics: [
+            {
+              Namespace: "Stella/Api",
+              Dimensions: [["errorCode"]],
+              Metrics: [{ Name: "VerificationRunFailures", Unit: "Count" }],
+            },
+          ],
+        },
+      });
+    }
+  } finally {
+    resetMetricLineSinkForTesting();
+  }
+});
 
 describe("buildRequestDurationRecord", () => {
   const base = {

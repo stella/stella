@@ -20,6 +20,8 @@ import {
 } from "@/api/lib/errors/action-admission-error";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { withAdmittedOperation } from "@/api/lib/proofs/checked-transaction";
+import type { AdmittedOperationContext } from "@/api/lib/proofs/checked-transaction";
 import { ACTION_KINDS } from "@/api/lib/rate-limit/action-kinds";
 import type {
   AdmittedActionIdentity,
@@ -56,6 +58,7 @@ import {
 import { resolveOrganizationAccess } from "@/api/lib/usage/organization-access";
 import {
   actionDrawsServiceBudget,
+  actionPlanAvailability,
   readOrganizationActionState,
   resolveOrganizationActionBudget,
   type OrganizationActionBudgetConfig,
@@ -377,7 +380,7 @@ const createAdmissionExecutor = ({
             ? staleActionPeriodTime(reply)
             : null;
         if (budget === null || storeNow === null) {
-          return Result.ok(reply);
+          return Result.ok({ reply, window: budget });
         }
 
         // A stale window has not reserved anything. Retry once using store time,
@@ -401,22 +404,25 @@ const createAdmissionExecutor = ({
             }),
           );
         }
-        if (refreshed.value === null) {
-          return Result.ok(-2);
+        const window = refreshed.value;
+        if (window === null) {
+          return Result.ok({ reply: -2, window });
         }
-        const retried = await send(refreshed.value, [
+        const retried = await send(window, [
           ...args.slice(0, 4),
-          ...actionPeriodArguments(refreshed.value),
+          ...actionPeriodArguments(window),
         ]);
-        return retried.mapError((cause) =>
-          ActionAdmissionError.is(cause)
-            ? cause
-            : new ActionAdmissionError({
-                message: "Action admission is unavailable",
-                reason: "unavailable",
-                cause,
-              }),
-        );
+        return retried
+          .map((retriedReply) => ({ reply: retriedReply, window }))
+          .mapError((cause) =>
+            ActionAdmissionError.is(cause)
+              ? cause
+              : new ActionAdmissionError({
+                  message: "Action admission is unavailable",
+                  reason: "unavailable",
+                  cause,
+                }),
+          );
       },
       catch: (error: unknown) =>
         ActionAdmissionError.is(error)
@@ -599,6 +605,20 @@ const resolveAdmissionBudget = async ({
         now: new Date(nowMs),
         freeTier: state.value.freeTier,
       });
+      if (
+        actionPlanAvailability({
+          access,
+          actionKind: periodIdentity.actionKind,
+          modelCredentials: state.value.modelCredentials,
+        }) === "not_on_plan"
+      ) {
+        return Result.err(
+          new ActionAdmissionError({
+            message: "This action is not offered on the organization's plan",
+            reason: "not_on_plan",
+          }),
+        );
+      }
       consumesServices = actionDrawsServiceBudget({
         access,
         serviceCredentials:
@@ -710,20 +730,35 @@ const configuredServiceBudgets = () => ({
   selfManagedActions: env.SERVICE_ACTIONS_SELF_MANAGED_ACTIONS,
 });
 
-const acquisitionRefusal = (reply: unknown): ActionAdmissionError | null => {
+type AdmissionReply = {
+  reply: unknown;
+  /** The period window the reply answered for, after any stale-window retry. */
+  window: ActionPeriodBudget | null;
+};
+
+const acquisitionRefusal = ({
+  reply,
+  window,
+}: AdmissionReply): ActionAdmissionError | null => {
   if (reply === ACTION_SERVICE_DEADLINE_EXPIRED) {
     return new ActionAdmissionError({
       message: "Organization service actions are not enabled",
       reason: "not_enabled",
     });
   }
-  if (reply === 0 || reply === -1) {
+  if (reply === 0) {
     return new ActionAdmissionError({
-      message:
-        reply === -1
-          ? "Action period limit reached"
-          : "Concurrent action limit reached",
-      reason: reply === -1 ? "period_exhausted" : "busy",
+      message: "Concurrent action limit reached",
+      reason: "busy",
+    });
+  }
+  // Only a counted window refuses for its period; the refusal names the
+  // window's own reset, whichever budget (generic or service) it belongs to.
+  if (reply === -1 && window !== null) {
+    return new ActionAdmissionError({
+      message: "Action period limit reached",
+      reason: "period_exhausted",
+      retryAtMs: window.endMs,
     });
   }
   if (reply !== 1) {
@@ -1194,7 +1229,7 @@ const withEnabledActionAdmission = async <T>({
       String(limits.leaseMs),
     ]);
     if (Result.isOk(result)) {
-      if (result.value !== 1) {
+      if (result.value.reply !== 1) {
         loseLease();
         return;
       }
@@ -1259,9 +1294,23 @@ const withEnabledActionAdmission = async <T>({
   return settledAdmissionOutcome(outcome, controller.signal);
 };
 
-export const withActionAdmission = async <T>(
-  options: ActionAdmissionOptions<T>,
-): Promise<Result<T, unknown>> => {
+const ACTION_ADMITTED = "ActionAdmitted";
+
+type ActionExecution = {
+  signal: AbortSignal;
+  control: ActionAdmissionControl;
+};
+
+export const runCheckedAction = async <T, N, A>({
+  proof,
+}: AdmittedOperationContext<
+  typeof ACTION_ADMITTED,
+  ActionAdmissionOptions<T>,
+  ActionExecution,
+  N,
+  A
+>): Promise<T> => {
+  const options = proof.input.value;
   const observedRun = createObservedAdmissionRun({
     organizationId: options.organizationId,
     userId: options.userId,
@@ -1269,56 +1318,73 @@ export const withActionAdmission = async <T>(
     costRecorder: options.costRecorder,
     run: options.run,
   });
-  // The demo account's daily budget holds whether or not admission is
-  // enabled, so it wraps both branches.
-  return await withDemoActionBudget({
-    budget: options.demoActionBudget ?? configuredDemoActionBudget,
-    organizationId: options.organizationId,
-    userId: options.userId,
-    scope:
-      options.execution === "background-job"
-        ? "independent"
-        : (options.scope ?? "inherit"),
-    run: async (markStarted) => {
-      const startedRun = async (
-        signal: AbortSignal,
-        control: ActionAdmissionControl,
-      ) => {
-        markStarted();
-        return await observedRun(signal, control);
-      };
-      if (
-        !(
-          options.enabled ??
-          isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION")
-        )
-      ) {
-        return await Result.tryPromise({
-          try: async () =>
-            await startedRun(new AbortController().signal, disabledControl),
-          catch: (error: unknown) => error,
-        });
-      }
-      return await withEnabledActionAdmission({
-        ...options,
-        run: startedRun,
-        organizationBudgetOptions: {
-          organizationId: options.organizationId,
-          userId: options.userId,
-          periodIdentity: options.periodIdentity,
-          periodPolicy: options.periodPolicy,
-          serviceBudgetsEnabled:
-            options.serviceBudgetsEnabled ??
-            isDeploymentFeatureEnabled("FEATURE_ORG_SERVICE_BUDGETS"),
-          serviceBudgetConfig:
-            options.serviceBudgetConfig ?? configuredServiceBudgets(),
-          organizationStateDb: options.organizationStateDb,
-          readOrganizationState: options.readOrganizationState,
-          budgetNow:
-            options.budgetNow ??
-            (() => Temporal.Now.instant().epochMilliseconds),
-        },
-      });
-    },
-  });
+  return await observedRun(
+    proof.admission.value.signal,
+    proof.admission.value.control,
+  );
 };
+
+export const withActionAdmission = async <T>(
+  options: ActionAdmissionOptions<T>,
+): Promise<Result<T, unknown>> =>
+  await withAdmittedOperation({
+    kind: ACTION_ADMITTED,
+    input: options,
+    run: runCheckedAction,
+    // The demo account's daily admission limit also applies when admission is disabled.
+    admit: async (
+      checkedOptions,
+      execute: (admission: ActionExecution) => Promise<T>,
+    ) =>
+      await withDemoActionBudget({
+        budget: checkedOptions.demoActionBudget ?? configuredDemoActionBudget,
+        organizationId: checkedOptions.organizationId,
+        userId: checkedOptions.userId,
+        scope:
+          checkedOptions.execution === "background-job"
+            ? "independent"
+            : (checkedOptions.scope ?? "inherit"),
+        run: async (markStarted) => {
+          const startedRun = async (
+            signal: AbortSignal,
+            control: ActionAdmissionControl,
+          ) => {
+            markStarted();
+            return await execute({ signal, control });
+          };
+          if (
+            !(
+              checkedOptions.enabled ??
+              isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION")
+            )
+          ) {
+            return await Result.tryPromise({
+              try: async () =>
+                await startedRun(new AbortController().signal, disabledControl),
+              catch: (error: unknown) => error,
+            });
+          }
+          return await withEnabledActionAdmission({
+            ...checkedOptions,
+            run: startedRun,
+            organizationBudgetOptions: {
+              organizationId: checkedOptions.organizationId,
+              userId: checkedOptions.userId,
+              periodIdentity: checkedOptions.periodIdentity,
+              periodPolicy: checkedOptions.periodPolicy,
+              serviceBudgetsEnabled:
+                checkedOptions.serviceBudgetsEnabled ??
+                isDeploymentFeatureEnabled("FEATURE_ORG_SERVICE_BUDGETS"),
+              serviceBudgetConfig:
+                checkedOptions.serviceBudgetConfig ??
+                configuredServiceBudgets(),
+              organizationStateDb: checkedOptions.organizationStateDb,
+              readOrganizationState: checkedOptions.readOrganizationState,
+              budgetNow:
+                checkedOptions.budgetNow ??
+                (() => Temporal.Now.instant().epochMilliseconds),
+            },
+          });
+        },
+      }),
+  });

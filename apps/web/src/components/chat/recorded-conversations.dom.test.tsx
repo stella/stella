@@ -11,6 +11,8 @@ import {
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
+import { sleep } from "@stll/concurrency/sleep";
+
 import { browserStorage } from "@/lib/account/browser-storage";
 import { userStorageKey } from "@/lib/account/user-scoped-storage";
 
@@ -68,9 +70,7 @@ beforeAll(() => {
 
 afterAll(async () => {
   // Let React's scheduled work drain before the DOM goes away.
-  await new Promise((resolve) => {
-    setTimeout(resolve, 50);
-  });
+  await sleep(50);
   Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", actEnvironment);
   globalThis.fetch = originalFetch;
   await GlobalRegistrator.unregister();
@@ -293,9 +293,7 @@ const createRecordedServer = (recording: RecordedConversation) => {
       },
       pull: async (controller) => {
         // One event per read, a task apart, as a network delivers them.
-        await new Promise((resolve) => {
-          setTimeout(resolve, 0);
-        });
+        await sleep(0);
         if (!open) {
           return;
         }
@@ -396,11 +394,6 @@ afterEach(() => {
 
 const { act, fireEvent, waitFor, within } = testing;
 
-const sleep = async (ms: number) =>
-  await new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
-
 /** Lets the page finish what the last event started: renders, effects and
  *  the page load a finished turn triggers. */
 const flush = async () => {
@@ -463,8 +456,8 @@ const readScreen = (container: HTMLElement): ScreenState => {
     actionable: [],
     approved: [],
     busy:
-      container.querySelector(".animate-spin, .animate-skeleton") !== null ||
-      BUSY_TEXTS.some((text) => container.textContent.includes(text)),
+      container.querySelector('[aria-busy="true"], [data-slot="skeleton"]') !==
+        null || BUSY_TEXTS.some((text) => container.textContent.includes(text)),
     denied: [],
     stepLists: [...container.querySelectorAll("summary")].filter((summary) =>
       STEP_COUNT_PATTERN.test(summary.textContent.trim()),
@@ -1006,6 +999,10 @@ const RECORDED_ACTIONS: Record<string, RecordedCoverage> = {
   "attach-files": notRecorded(
     "The recorder posts text messages only; attachments need stored files.",
   ),
+  "check-saved-private-input": OUTSIDE_THE_CONVERSATION,
+  "continue-private-input": notRecorded(
+    "The recorder posts text messages only; private input cards submit through their own endpoint.",
+  ),
   copy: OUTSIDE_THE_CONVERSATION,
   "delete-thread": OUTSIDE_THE_CONVERSATION,
   deny: recordedAs(approvedAs("deny")),
@@ -1022,6 +1019,7 @@ const RECORDED_ACTIONS: Record<string, RecordedCoverage> = {
   "new-chat": OUTSIDE_THE_CONVERSATION,
   "open-created-document": OUTSIDE_THE_CONVERSATION,
   "open-draft": OUTSIDE_THE_CONVERSATION,
+  "open-playbook": OUTSIDE_THE_CONVERSATION,
   "remove-queued-message": notRecorded(
     "The recorder has no send queue; it lives in the session hook this replay renders.",
   ),
@@ -1037,6 +1035,9 @@ const RECORDED_ACTIONS: Record<string, RecordedCoverage> = {
     "The recorder scripts one model; a model switch needs a second one.",
   ),
   send: recordedAs(({ type }) => type === "send"),
+  "submit-private-input": notRecorded(
+    "The recorder posts text messages only; private input cards submit through their own endpoint.",
+  ),
   "send-queued-message-now": notRecorded(
     "The recorder has no send queue; it lives in the session hook this replay renders.",
   ),

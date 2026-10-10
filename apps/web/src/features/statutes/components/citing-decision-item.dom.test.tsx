@@ -2,6 +2,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { DECISION_DATE_VERSION_BASIS } from "@stll/api-contract/provision-version-basis";
+import { sleep } from "@stll/concurrency/sleep";
 
 import { toSafeId } from "@/lib/safe-id";
 
@@ -32,9 +33,7 @@ afterEach(() => {
 afterAll(async () => {
   cleanup();
   await act(async () => {
-    await new Promise((resolve) => {
-      setTimeout(resolve, 0);
-    });
+    await sleep(0);
   });
   await GlobalRegistrator.unregister();
 });
@@ -54,6 +53,7 @@ const decision = {
   country: "CZE",
   court: "Supreme Court",
   courtAbbreviation: "SC",
+  sourceUrl: null,
   courtTier: "supreme",
   citationAuthority: 1,
   language: "cs",

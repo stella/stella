@@ -19,7 +19,11 @@ import { cn } from "@stll/ui/utils";
 
 import type { PublicLawRowData } from "@/components/public-law-table/public-law-table";
 import type { TableRowRenderInput } from "@/components/workspaces/table/row-host";
-import { SelectRowContent } from "@/components/workspaces/table/select-row-content";
+import {
+  ROW_FIRST_LINE,
+  RowNumberLabel,
+  SelectRowContent,
+} from "@/components/workspaces/table/select-row-content";
 import type { TableCell } from "@/components/workspaces/table/types";
 import {
   WorkspaceGridCell,
@@ -39,6 +43,10 @@ import {
 } from "@/components/workspaces/table/workspace-table/internals-helpers";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { TOOLBAR_ROW_MIN_HEIGHT } from "@/lib/consts";
+
+// Result cells are plain text lines; the number cell and every other cell
+// read this one key.
+const FIRST_LINE = "text";
 
 /**
  * A gesture that already means something else: a link in a cell, a menu, a
@@ -147,6 +155,7 @@ export const PublicLawRow = <TRow extends PublicLawRowData>({
         selectCell={
           row_getCanSelect(row) ? (
             <SelectRowContent
+              firstLine={FIRST_LINE}
               index={index}
               label={rowLabel}
               lastSelectedIndex={lastSelectedIndex}
@@ -154,9 +163,7 @@ export const PublicLawRow = <TRow extends PublicLawRowData>({
               table={table}
             />
           ) : (
-            <span className="absolute inset-0 flex min-w-12 shrink-0 items-center justify-center text-xs tabular-nums">
-              {rowLabel}
-            </span>
+            <RowNumberLabel firstLine={FIRST_LINE} label={rowLabel} />
           )
         }
         visibleCells={visibleCells}
@@ -236,7 +243,12 @@ const PublicLawRowCellContent = <TRow extends PublicLawRowData>({
     return null;
   }
   return (
-    <span className="flex w-full min-w-0 items-center gap-1.5">
+    <span
+      className={cn(
+        "flex w-full min-w-0 items-center gap-1.5",
+        ROW_FIRST_LINE[FIRST_LINE].content,
+      )}
+    >
       {flexRender(cell.column.columnDef.cell, cell.getContext())}
     </span>
   );

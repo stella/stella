@@ -4,6 +4,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { toStatuteCountrySegment } from "@stll/api-contract/statute-route";
+import { DecisionIdentity } from "@stll/decision-reader/decision-identity";
 import { BidiText } from "@stll/ui/bidi-text";
 import {
   Breadcrumb,
@@ -14,7 +15,6 @@ import {
 } from "@stll/ui/breadcrumb";
 import { Separator } from "@stll/ui/separator";
 
-import { CourtName } from "@/components/court-name";
 import { PublicWorkspaceShell } from "@/components/public-workspace-shell";
 import { SidebarTrigger, useSidebar } from "@/components/sidebar";
 import { DecisionLanguageSelect } from "@/features/case-law/components/decision-language-select";
@@ -255,20 +255,17 @@ function PublicLawTopBar() {
                     />
                   </span>
                 )}
-                <BreadcrumbPage className="min-w-0 flex-1 truncate font-medium">
-                  <BidiText>{documentLabel}</BidiText>
-                </BreadcrumbPage>
-                {court !== null && (
-                  // Dropped on a narrow screen: the case number identifies the
-                  // decision on its own, the court only qualifies it.
-                  <span className="text-muted-foreground flex min-w-0 items-center gap-1.5 truncate max-sm:hidden">
-                    {DECISION_TITLE_SEPARATOR}
-                    <CourtName
-                      abbreviation={courtAbbreviation}
-                      court={court}
-                      tier={courtTier}
-                    />
-                  </span>
+                {court === null ? (
+                  <BreadcrumbPage className="min-w-0 flex-1 truncate font-medium">
+                    <BidiText>{documentLabel}</BidiText>
+                  </BreadcrumbPage>
+                ) : (
+                  <DecisionIdentity
+                    caseNumber={documentLabel}
+                    court={court}
+                    courtAbbreviation={courtAbbreviation}
+                    courtTier={courtTier}
+                  />
                 )}
                 {legalArea !== null && (
                   <span className="text-muted-foreground min-w-0 truncate">

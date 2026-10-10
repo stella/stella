@@ -2,10 +2,15 @@ import { Result } from "better-result";
 import { and, eq, isNull, or } from "drizzle-orm";
 import { t } from "elysia";
 
-import { mcpConnectors, mcpUserConnections } from "@/api/db/schema";
+import {
+  mcpConnectors,
+  mcpUserConnections,
+  MCP_RESPONSE_DISPOSITION,
+} from "@/api/db/schema";
 import { mcpConnectorRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { refreshCachedMcpToolsForConnection } from "@/api/lib/mcp-upstream/connections";
 import { encryptMcpSecret } from "@/api/lib/mcp-upstream/crypto";
@@ -87,6 +92,8 @@ const createMcpConnection = createSafeRootHandler(
               staticTokenEncrypted: encrypted.ciphertext,
               staticTokenIv: encrypted.iv,
               status: "connected",
+              responseDisposition: MCP_RESPONSE_DISPOSITION.normal,
+              responseTargetUrl: null,
               enabled: true,
               tokenType: "Bearer",
             })
@@ -110,6 +117,8 @@ const createMcpConnection = createSafeRootHandler(
                 cachedTools: null,
                 cachedToolsRefreshedAt: null,
                 status: "connected",
+                responseDisposition: MCP_RESPONSE_DISPOSITION.normal,
+                responseTargetUrl: null,
                 enabled: true,
                 tokenType: "Bearer",
                 updatedAt: new Date(),
@@ -135,6 +144,7 @@ const createMcpConnection = createSafeRootHandler(
     await refreshCachedMcpToolsForConnection({
       connectionId: connection.id,
       organizationId: session.activeOrganizationId,
+      permit: grantThirdPartyOutboundPermit(),
       safeDb,
       userId: user.id,
     });
@@ -173,7 +183,10 @@ const assertStaticTokenAccepted = async ({
     return staticTokenRejected();
   }
 
-  const metadata = await discoverOAuthMetadata(url);
+  const metadata = await discoverOAuthMetadata({
+    rawMcpUrl: url,
+    permit: grantThirdPartyOutboundPermit(),
+  });
   if (Result.isError(metadata)) {
     return staticTokenRejected();
   }

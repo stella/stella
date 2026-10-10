@@ -1,9 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
+import { stripDiacritics } from "@stll/text-normalize";
+
+import { DECISION_CITATION_PRESENTATION } from "@/components/references/decision-citation-presentation.logic";
 import {
   clearProvisionQuestionDraft,
   createProvisionViewTab,
   isProvisionViewPayload,
+  presentedCitingDecisions,
   provisionQuestionDraftKey,
   provisionTabId,
   readProvisionQuestionDraft,
@@ -169,6 +173,111 @@ describe("submitsOnEnter", () => {
         false,
       );
     }
+  });
+});
+
+const supremeCourtDecision = {
+  caseNumber: "22 Cdo 3819/2019",
+  court: "Nejvyšší soud",
+  sentenceText: "Zastoupení členem domácnosti podle § 47 se řídí…",
+};
+
+const constitutionalCourtDecision = {
+  caseNumber: "II. ÚS 1234/20",
+  court: "Ústavní soud",
+  sentenceText: "Svéprávnost lze omezit jen v zájmu člověka.",
+};
+
+const decisions = [supremeCourtDecision, constitutionalCourtDecision];
+
+describe("filterCitingDecisions", () => {
+  test("an unfiltered list is the loaded list", () => {
+    expect(filterCitingDecisions(decisions, "   ")).toEqual(decisions);
+  });
+
+  test("a query typed without diacritics still finds the decision", () => {
+    // Without this assertion the case would pass on plain substring matching
+    // and prove nothing about folding.
+    expect(stripDiacritics("Nejvyssi")).not.toBe("Nejvyšší");
+    expect(filterCitingDecisions(decisions, "nejvyssi")).toEqual([
+      supremeCourtDecision,
+    ]);
+  });
+
+  test("a query typed with diacritics finds a row stored without them", () => {
+    const rows = [
+      { caseNumber: "Pl. US 1/21", court: "Ustavni soud", sentenceText: "" },
+    ];
+
+    expect(filterCitingDecisions(rows, "Ústavní")).toEqual(rows);
+  });
+
+  test("the cited sentence and the case number are searched too", () => {
+    expect(filterCitingDecisions(decisions, "3819")).toEqual([
+      supremeCourtDecision,
+    ]);
+    expect(filterCitingDecisions(decisions, "svéprávnost")).toEqual([
+      constitutionalCourtDecision,
+    ]);
+    expect(filterCitingDecisions(decisions, "no such court")).toEqual([]);
+  });
+
+  test("a citation without an excerpt remains searchable by its metadata", () => {
+    const rows = [
+      {
+        caseNumber: "4 As 3/2008",
+        court: "Nejvyšší správní soud",
+        sentenceText: null,
+      },
+    ];
+
+    expect(filterCitingDecisions(rows, "správní")).toEqual(rows);
+    expect(filterCitingDecisions(rows, "null")).toEqual([]);
+  });
+});
+
+// Two synthetic decisions of one court share its registered code.
+const firstSameCourtDecision = {
+  caseNumber: "SYN 1/2026",
+  country: "CZE",
+  court: "Synthetic Supreme Court",
+  courtAbbreviation: "SYN",
+  decisionId: "00000000-0000-4000-8000-000000000001",
+  sentenceText: "The first synthetic holding.",
+};
+
+const secondSameCourtDecision = {
+  caseNumber: "SYN 2/2026",
+  country: "CZE",
+  court: "Synthetic Supreme Court",
+  courtAbbreviation: "SYN",
+  decisionId: "00000000-0000-4000-8000-000000000002",
+  sentenceText: "The second synthetic holding.",
+};
+
+describe("presentedCitingDecisions", () => {
+  const rows = [firstSameCourtDecision, secondSameCourtDecision];
+
+  test("visible decisions sharing a court code expand to stay distinguishable", () => {
+    expect(presentedCitingDecisions(rows, "")).toEqual([
+      {
+        decision: firstSameCourtDecision,
+        presentation: DECISION_CITATION_PRESENTATION.expanded,
+      },
+      {
+        decision: secondSameCourtDecision,
+        presentation: DECISION_CITATION_PRESENTATION.expanded,
+      },
+    ]);
+  });
+
+  test("a decision the filter leaves alone with its court code renders compact", () => {
+    expect(presentedCitingDecisions(rows, "SYN 2/2026")).toEqual([
+      {
+        decision: secondSameCourtDecision,
+        presentation: DECISION_CITATION_PRESENTATION.compact,
+      },
+    ]);
   });
 });
 
