@@ -23,6 +23,7 @@ import {
 } from "@/api/lib/signals/read";
 
 const config = {
+  contract: "patch",
   description:
     "Snooze an inbox signal until a later time; it returns to the open feed " +
     "once that time passes.",

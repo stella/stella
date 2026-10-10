@@ -655,6 +655,7 @@ export const generateAnalysis = async ({
 };
 
 const config = {
+  contract: "patch",
   description:
     "Read the structural analysis of one court decision, starting generation " +
     "when there is none yet. Returns status done with the stored analysis, " +

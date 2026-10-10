@@ -21,6 +21,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
+  contract: "patch",
   permissions: { legalReaderAnnotation: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   description:

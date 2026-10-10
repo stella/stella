@@ -67,6 +67,7 @@ export const readJustificationsHandler = async ({
 };
 
 const config = {
+  contract: "patch",
   description:
     "Read the stored justifications for the current versions of up to one " +
     "page of documents in a matter: per extracted cell, the explanation the " +

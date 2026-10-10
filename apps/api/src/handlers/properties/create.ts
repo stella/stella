@@ -18,6 +18,7 @@ import { propertyKindsForTool } from "@/api/lib/properties/property-kinds";
 import { lockWorkspacePropertyWrites } from "@/api/lib/properties/property-lock";
 
 const config = {
+  contract: "patch",
   description:
     "Add one property (a column) to a matter: its name, value type, and " +
     "either an AI prompt tool, optionally depending on other columns, or a " +

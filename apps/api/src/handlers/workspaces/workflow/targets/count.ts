@@ -9,6 +9,7 @@ import { LIMITS } from "@/api/lib/limits";
 import { countWorkflowTargetEntities } from "@/api/lib/workflow-target-queries";
 
 const config = {
+  contract: "patch",
   description:
     "Count the documents an extraction workflow would process in a matter, " +
     "optionally narrowed to a set of entity ids. Use it before " +

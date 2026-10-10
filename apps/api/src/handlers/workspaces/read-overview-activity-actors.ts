@@ -16,6 +16,7 @@ import {
 import { readOverviewActivityActorRows } from "./read-overview-activity-actors.query";
 
 const config = {
+  contract: "patch",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "ui_navigation_state" },

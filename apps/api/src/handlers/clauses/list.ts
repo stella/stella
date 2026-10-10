@@ -4,6 +4,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { listClausesHandler, listClausesQuerySchema } from "./read";
 
 const config = {
+  contract: "patch",
   description:
     "List the organization's clause library. Without q, clauses come back " +
     "newest first with cursor pagination; with q they are matched on the " +

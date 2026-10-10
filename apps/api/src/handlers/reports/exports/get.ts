@@ -38,6 +38,7 @@ const downloadFileName = (resultS3Key: string): string =>
 // at export-view.ts, so a caller with nothing to poll could never have
 // reached one.
 const config = {
+  contract: "patch",
   accountAccess: ACCOUNT_ACCESS.standard,
   contentDelivery: {
     type: "none",

@@ -373,6 +373,7 @@ export const updateTimeEntryHandler = async function* ({
 
 const updateTimeEntryById = createSafeHandler(
   {
+    contract: "patch",
     description:
       "Change one time entry's date worked, duration, narratives, billable " +
       "and no-charge flags, work item, or task and activity codes. Editing " +

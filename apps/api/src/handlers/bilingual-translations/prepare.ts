@@ -30,6 +30,7 @@ import { readScannedBilingualDocx } from "@/api/lib/file-scan/document-parsers";
 const PREPARE_TIMEOUT_MS = 150_000;
 
 const config = {
+  contract: "patch",
   actionAdmission: { type: "handler", actionKind: "bilingual.prepare" },
   contentDelivery: {
     type: "none",

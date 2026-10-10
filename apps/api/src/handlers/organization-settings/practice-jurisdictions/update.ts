@@ -24,6 +24,12 @@ const practiceJurisdictionSchema = t.Object({
 });
 
 const config = {
+  contract: "replace",
+  precondition: {
+    type: "deferred",
+    baselineId:
+      "apps/api/src/handlers/organization-settings/practice-jurisdictions/update.ts",
+  },
   description:
     "Set the practice jurisdictions for the user's stella organization. " +
     "Call this when the org's practice jurisdictions are empty (e.g., the " +

@@ -85,6 +85,7 @@ const bodySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   featureAccess: { featureId: LIST_VERIFICATION_FEATURE_ID, type: "required" },
   description:
     "Record one reviewer action on a claim of a list verification and return " +

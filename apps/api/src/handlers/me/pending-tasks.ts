@@ -8,6 +8,7 @@ import type { SessionHandlerConfig } from "@/api/lib/api-handlers";
 import { getPendingTasksAndMembers } from "@/api/lib/delete-account";
 
 const config = {
+  contract: "patch",
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "account_lifecycle" },
 } satisfies SessionHandlerConfig;

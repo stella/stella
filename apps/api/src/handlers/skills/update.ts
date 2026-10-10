@@ -53,6 +53,11 @@ const updateSkillBodySchema = t.Object({
 });
 
 const config = {
+  contract: "replace",
+  precondition: {
+    type: "deferred",
+    baselineId: "apps/api/src/handlers/skills/update.ts",
+  },
   description:
     "Change an agent skill: enable or disable it, or edit its name, " +
     "description, instruction body, version, or slash command. Pass command " +

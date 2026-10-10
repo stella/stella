@@ -27,6 +27,11 @@ const updateSkillResourceBodySchema = t.Object({
 });
 
 const config = {
+  contract: "replace",
+  precondition: {
+    type: "deferred",
+    baselineId: "apps/api/src/handlers/skills/resources/update.ts",
+  },
   description:
     "Replace the content of one file of an agent skill, addressed by its " +
     "path. The path and kind stay as they are; use skills.resources.rename " +

@@ -14,6 +14,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { buildLineDiffSegments, diffSegmentsToText } from "@/api/lib/text-diff";
 
 const config = {
+  contract: "patch",
   actionAdmission: { type: "handler", actionKind: "versions.summarize" },
   contentDelivery: {
     type: "none",

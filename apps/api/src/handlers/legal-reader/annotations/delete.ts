@@ -15,6 +15,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
+  contract: "patch",
   permissions: { legalReaderAnnotation: ["delete"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   description: "Permanently delete one of the caller's highlights or comments.",

@@ -10,6 +10,7 @@ import { readUsagePolicyCatalog } from "@/api/lib/usage/policy-catalog";
  */
 
 const config = {
+  contract: "patch",
   description:
     "List the plans and add-on packs available to this deployment: " +
     "display name, description, included monthly usage units, price " +

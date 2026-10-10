@@ -54,6 +54,7 @@ const buildBatchDeleteEvents = (params: {
 
 const batchDelete = createSafeHandler(
   {
+    contract: "patch",
     description:
       "Delete or write off many time entries in one matter at once: draft " +
       "entries are permanently deleted and every other unbilled entry is " +

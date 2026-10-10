@@ -13,6 +13,7 @@ import { LEGAL_LIST_TASK_FEATURE_ACCESS } from "@/api/lib/tasks/legal-list-acces
 export const createTaskForFeatures = (features: TaskDeploymentFeatures) =>
   createSafeHandler(
     {
+      contract: "patch",
       description:
         "Create a task in the current matter: name plus optional parent, " +
         "status, priority, due date, assignees, calendar fields for an " +

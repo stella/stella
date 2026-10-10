@@ -241,6 +241,7 @@ const claimAttempt = async (
 };
 
 const config = {
+  contract: "patch",
   accountAccess: ACCOUNT_ACCESS.sandbox,
   contentDelivery: {
     type: "none",

@@ -114,6 +114,7 @@ const requestContext = ({
 });
 
 const baseConfig = {
+  contract: "patch",
   permissions: { workspace: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "health_infra" },

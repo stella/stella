@@ -45,6 +45,7 @@ true satisfies MissingSavedTimeNarrativeColumn extends never ? true : never;
 true satisfies UnexpectedSavedTimeNarrativeColumn extends never ? true : never;
 
 const config = {
+  contract: "patch",
   description:
     "List the signed-in user's saved time narratives in the active organization, ordered by name with cursor pagination.",
   permissions: { timeEntry: ["read"] },

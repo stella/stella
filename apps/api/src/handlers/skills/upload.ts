@@ -25,6 +25,7 @@ const uploadSkillBodySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   contentDelivery: {
     type: "none",
     reason: "Stores a skill upload without delivering stored-file bytes.",

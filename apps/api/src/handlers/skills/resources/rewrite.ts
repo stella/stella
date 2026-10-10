@@ -33,6 +33,7 @@ const rewriteSkillResourceBodySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   actionAdmission: { type: "handler", actionKind: "skills.rewrite-resource" },
   description:
     "Rewrite one file of an agent skill with the model, from a free-text " +

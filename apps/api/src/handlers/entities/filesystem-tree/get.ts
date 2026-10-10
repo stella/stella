@@ -30,6 +30,7 @@ const readFilesystemTreeBodySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "Read a matter's folders and documents as one unpaginated tree, using " +
     "the same filters, sorts, and search as the table listings; tasks are " +

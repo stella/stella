@@ -148,6 +148,7 @@ export const writeFolioCollabCheckpointObject = async ({
 
 const checkpointFolioCollabRoom = createSafeHandler(
   {
+    contract: "patch",
     contentDelivery: {
       type: "none",
       reason: "Processes collaboration content without returning stored files.",

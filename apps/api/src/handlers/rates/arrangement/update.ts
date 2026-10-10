@@ -17,6 +17,11 @@ import { cents } from "@/api/lib/money";
 
 const updateBillingArrangement = createSafeHandler(
   {
+    contract: "replace",
+    precondition: {
+      type: "deferred",
+      baselineId: "apps/api/src/handlers/rates/arrangement/update.ts",
+    },
     description:
       "Set the matter's current billing arrangement in integer minor currency units. Hourly supports an optional positive cap and alert threshold in basis points; flat fee supplies one amount. Refused for mixed-currency existing charged work or a cap below reserved invoice time. Changes do not change invoice snapshots.",
     permissions: { rate: ["update"] },

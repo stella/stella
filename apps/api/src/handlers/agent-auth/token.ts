@@ -33,6 +33,7 @@ import { PRAGMA_NO_CACHE } from "@/api/lib/security-headers";
  * closed union so an unsupported grant fails schema validation.
  */
 const config = {
+  contract: "patch",
   body: t.Union([
     t.Object({
       grant_type: t.Literal(AGENT_AUTH_CLAIM_GRANT_TYPE),

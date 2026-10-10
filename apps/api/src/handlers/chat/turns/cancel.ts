@@ -19,6 +19,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 const LOCAL_STOP_SETTLE_WAIT_MS = 10_000;
 
 const config = {
+  contract: "patch",
   description:
     "Stop a turn of one of your chat threads. Idempotent: the answer is the " +
     "turn as it now stands. 200 when the turn is settled, by this request or " +

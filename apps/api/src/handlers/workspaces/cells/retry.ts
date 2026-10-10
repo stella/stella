@@ -11,6 +11,7 @@ import { requestExtractionRunStore } from "@/api/lib/extraction-runs/request-run
 import { isWorkflowRunning, startWorkflow } from "@/api/lib/workflow-queue";
 
 const config = {
+  contract: "patch",
   description:
     "Re-run the AI extraction for one cell, meaning one document's value for " +
     "one AI column, in a matter. Refused when the property is not " +

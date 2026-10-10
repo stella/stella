@@ -22,6 +22,7 @@ import {
 } from "./scope-precondition";
 
 const config = {
+  contract: "patch",
   realtime: noResourceSetUpdates(
     "Personal history refreshes through the caller-owned query cache",
   ),

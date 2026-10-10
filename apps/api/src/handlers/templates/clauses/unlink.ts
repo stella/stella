@@ -13,6 +13,7 @@ const unlinkTemplateClauseParamsSchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "Remove one clause link from a template, with its pinned version, " +
     "variant, and slot assignment. Reversible: nothing leaves the clause " +

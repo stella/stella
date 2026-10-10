@@ -24,6 +24,7 @@ import type {
 } from "@/api/lib/projection-totality";
 
 const config = {
+  contract: "patch",
   featureAccess: { featureId: LIST_VERIFICATION_FEATURE_ID, type: "required" },
   description:
     "Read the latest list verification of each named document file (entity " +

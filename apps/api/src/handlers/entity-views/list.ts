@@ -9,6 +9,7 @@ import { LIMITS } from "@/api/lib/limits";
 import { response, viewOwner } from "./shared";
 
 const config = {
+  contract: "patch",
   description:
     "List the current user's saved cross-matter views in tab order. The complete list is bounded by the per-user creation limit.",
   permissions: { workspace: ["read"] },

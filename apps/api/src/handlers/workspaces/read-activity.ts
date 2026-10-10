@@ -27,6 +27,7 @@ import { LIMITS } from "@/api/lib/limits";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 
 const config = {
+  contract: "patch",
   permissions: WORKSPACE_ACTIVITY_PERMISSIONS,
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "ui_navigation_state" },

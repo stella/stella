@@ -14,6 +14,7 @@ import { LIST_COLUMN_OVERFLOW_ERROR_CODE } from "@/api/lib/lists/column-error-co
 const paramsSchema = workspaceParams({ listId: tSafeId("legalList") });
 
 const config = {
+  contract: "patch",
   featureAccess: { type: "required", featureId: LEGAL_LISTS_FEATURE_ID },
   description:
     "Read one list with its sections in order, its columns (each bound " +

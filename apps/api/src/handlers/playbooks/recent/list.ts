@@ -97,6 +97,7 @@ export const listRecentPlaybooksHandler = async function* ({
 };
 
 const config = {
+  contract: "patch",
   description:
     "List the current user's recently used playbooks in the active organization.",
   permissions: { workspace: ["read"] },

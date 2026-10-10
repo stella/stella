@@ -25,6 +25,7 @@ const deleteSkillResourceBodySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "Delete one resource file from an agent skill, addressed by its path; the " +
     "skill and its other resources are untouched. Bundled skills are read-only " +

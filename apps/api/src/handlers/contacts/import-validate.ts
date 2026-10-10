@@ -18,6 +18,7 @@ const importValidateBodySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "Check a reviewed batch of contacts against the import rules without " +
     "persisting anything: the same per-row issues a file preview reports, " +

@@ -82,6 +82,7 @@ const skipReasonForIssues = (
     : "invalid_row";
 
 const config = {
+  contract: "patch",
   description:
     "Import a reviewed batch of up to 500 contacts into the organization " +
     "address book. Supply a caller-generated importRequestId: replaying it " +

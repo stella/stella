@@ -8,6 +8,7 @@ import { LIMITS } from "@/api/lib/limits";
 
 const approveTimeEntries = createSafeRootHandler(
   {
+    contract: "patch",
     description:
       "Approve up to 200 time entries in accessible matters. Only the assigned approver or an organization owner/admin may approve. Each id returns approved or a refusal reason; running timers and locked periods are refused. Approval records the actor and time, and clears the last return comment. Already approved entries can be retried safely.",
     permissions: { timeEntry: ["read"] },

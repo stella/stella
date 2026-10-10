@@ -43,6 +43,7 @@ import {
 } from "@/api/lib/views/utils";
 
 const config = {
+  contract: "patch",
   description:
     "Add a view (a tab) to a matter with a name and a layout. Duplicate " +
     "sorts and multiple kind filters are refused, the columns the layout " +

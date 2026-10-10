@@ -95,6 +95,7 @@ true satisfies MissingProjectedPropertyColumn extends never ? true : never;
 true satisfies UnexpectedProjectedPropertyColumn extends never ? true : never;
 
 const config = {
+  contract: "patch",
   description:
     "List the property (column) definitions of a matter. Returns each " +
     "property's id, name, value type (text, single-select, multi-select, " +

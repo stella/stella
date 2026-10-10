@@ -127,6 +127,7 @@ export const createRateTableHandler = async function* ({
 
 const createRateTable = createSafeHandler(
   {
+    contract: "patch",
     description:
       "Create a rate table, a named set of hourly rates in a single " +
       "currency, in a matter. Pass isDefault to make it the matter's " +

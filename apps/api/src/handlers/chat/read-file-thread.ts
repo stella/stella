@@ -40,6 +40,7 @@ const readFileThreadQuerySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   contentDelivery: {
     type: "none",
     reason:

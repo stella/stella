@@ -9,6 +9,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 
 const config = {
+  contract: "patch",
   description:
     "Remove one anonymization allowlist entry from a matter, so the term it " +
     "exempted is masked again from the next detection run on. Only entries " +

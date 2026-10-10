@@ -365,6 +365,11 @@ export const updateContactHandler = async function* ({
 
 const updateContactById = createSafeRootHandler(
   {
+    contract: "replace",
+    precondition: {
+      type: "deferred",
+      baselineId: "apps/api/src/handlers/contacts/update.ts",
+    },
     description:
       "Change a contact in the organization address book, writing only the " +
       "fields you pass and clearing a nullable one when you pass null. " +

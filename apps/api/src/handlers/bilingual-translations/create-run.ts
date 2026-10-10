@@ -31,6 +31,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { readScannedBilingualDocx } from "@/api/lib/file-scan/document-parsers";
 
 const config = {
+  contract: "patch",
   // The run is queued here; its worker takes a background slot.
   actionAdmission: { type: "handler", actionKind: "bilingual.start" },
   contentDelivery: {

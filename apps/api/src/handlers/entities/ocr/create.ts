@@ -30,6 +30,7 @@ const createOcrBody = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "Queue an unencrypted PDF field for the next searchable-text " +
     "recognition batch. Returns the durable run and reports when that source " +

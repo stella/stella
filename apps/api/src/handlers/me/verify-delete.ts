@@ -30,6 +30,7 @@ const deleteAccountVerifyBody = t.Object({
 });
 
 const config = {
+  contract: "patch",
   accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: { type: "internal", reason: "account_lifecycle" },
   body: deleteAccountVerifyBody,

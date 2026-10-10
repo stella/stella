@@ -14,6 +14,7 @@ import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
+  contract: "patch",
   featureAccess: AVT_LAYOUT_FEATURE_ACCESS,
   description:
     "Delete one of your own saved view templates, the personal blueprint used " +

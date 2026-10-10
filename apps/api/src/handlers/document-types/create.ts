@@ -14,6 +14,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
 const config = {
+  contract: "patch",
   description:
     "Add one document type to the organization's classification list. Its " +
     "key is slugified from the label and de-duplicated automatically, and " +

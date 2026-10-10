@@ -33,6 +33,7 @@ export const validateProviderBody = t.Object({
 });
 
 const config = {
+  contract: "patch",
   accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: { type: "internal", reason: "provider_secret" },
   body: validateProviderBody,

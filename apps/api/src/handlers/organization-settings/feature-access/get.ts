@@ -5,6 +5,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { loadFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 
 const config = {
+  contract: "patch",
   description: "Report the features available to the signed-in member.",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,

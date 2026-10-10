@@ -17,6 +17,7 @@ import { LIMITS } from "@/api/lib/limits";
 const FACET_VALUE_LIMIT = 50;
 
 const config = {
+  contract: "patch",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "document_processing" },

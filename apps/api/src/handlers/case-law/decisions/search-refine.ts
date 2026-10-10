@@ -40,6 +40,7 @@ const CASE_LAW_REFINE_TIMEOUT_MS = 20_000;
 const REFINE_FAILED_MESSAGE = "Failed to improve search query";
 
 const config = {
+  contract: "patch",
   actionAdmission: { type: "handler", actionKind: "case-law.search-refine" },
   description:
     "Rewrite a case-law search into the words court decisions of the " +

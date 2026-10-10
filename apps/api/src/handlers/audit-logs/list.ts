@@ -11,6 +11,7 @@ import {
 } from "./query";
 
 const config = {
+  contract: "patch",
   description:
     "Read the organization's audit trail (compliance view). Returns audit " +
     "entries newest first, each with its action, resource type and id, actor " +

@@ -15,6 +15,7 @@ const updateTemplateCategoryParamsSchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "Rename or re-describe one template category, move it under a different " +
     "parent (or to the root by passing null), or change its sort order. Only " +

@@ -35,6 +35,7 @@ import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { broadcastSessionEvent, revokeWorkspaceSseAccess } from "@/api/lib/sse";
 
 const config = {
+  contract: "patch",
   description:
     "Remove one member from a matter, revoking their live access and " +
     "cancelling their open desktop editing sessions. Their active work " +

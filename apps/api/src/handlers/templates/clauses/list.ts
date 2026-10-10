@@ -12,6 +12,7 @@ const listTemplateClausesParamsSchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "List the clauses linked to one template: each link's id, clause, pinned " +
     "variant and version, slot name, sort order, and whether the pinned " +

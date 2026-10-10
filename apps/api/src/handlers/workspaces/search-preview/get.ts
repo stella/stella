@@ -5,6 +5,7 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 
 const config = {
+  contract: "patch",
   description:
     "Return bounded task and document highlights for a matter search-result preview.",
   permissions: { workspace: ["read"] },

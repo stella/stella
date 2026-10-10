@@ -16,6 +16,7 @@ export const createCurrentMachineApiKeyHandler = (
 ) =>
   createSafeTokenHandler(
     {
+      contract: "patch",
       accountAccess: ACCOUNT_ACCESS.sandbox,
       mcp: { type: "internal", reason: "auth_plumbing" },
     },

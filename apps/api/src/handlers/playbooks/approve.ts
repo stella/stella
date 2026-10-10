@@ -18,6 +18,7 @@ import { assertUnchangedSince } from "@/api/lib/optimistic-concurrency";
 import { PLAYBOOK_VERSION_SOURCE } from "@/api/lib/workflow/playbook-positions";
 
 const config = {
+  contract: "patch",
   description:
     "Approve a playbook definition: snapshot its current name, description, " +
     "scope, and positions as a new immutable version, then mark the " +

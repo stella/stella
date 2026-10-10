@@ -121,6 +121,7 @@ const listFilesHandler = async function* ({
 };
 
 const config = {
+  contract: "patch",
   description:
     "List every document in a matter that has an uploaded file, oldest first " +
     "with cursor pagination, each with its entity id, name, parent folder, " +

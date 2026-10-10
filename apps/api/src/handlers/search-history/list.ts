@@ -23,6 +23,7 @@ import {
 } from "./entries";
 
 const config = {
+  contract: "patch",
   description:
     "List your own search history in the active organization, most recently used first: law searches you ran and the decisions and statutes you opened. Each entry is private to you; nobody else in the organization can read it. Pass `kind` to list one kind, and `cursor` from `nextCursor` for older entries. Delete an entry with `search-history.delete`, or all of it with `search-history.clear`; pass the returned `scope.organizationId` as `expectedOrganizationId` and `scope.userId` as `expectedUserId` on either mutation.",
   permissions: { searchHistory: ["read"] },

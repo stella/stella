@@ -10,6 +10,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { entityViewParams, viewOwner } from "./shared";
 
 const config = {
+  contract: "patch",
   description:
     "Delete one personal cross-matter view. This does not delete its records or proposals.",
   permissions: { view: ["delete"] },

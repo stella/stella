@@ -105,6 +105,7 @@ const readEntitySummariesHandler = async function* ({
 };
 
 const config = {
+  contract: "patch",
   description:
     "List a matter's documents, folders, and tasks as bare id and name " +
     "pairs, newest first with cursor pagination. The cheapest listing " +

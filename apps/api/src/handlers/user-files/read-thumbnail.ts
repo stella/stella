@@ -13,6 +13,7 @@ import { createUserFileKey } from "@/api/lib/files/utils";
 
 const readUserFileThumbnail = createSafeRootHandler(
   {
+    contract: "patch",
     contentDelivery: { type: "audited" },
     permissions: { chat: ["create"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,

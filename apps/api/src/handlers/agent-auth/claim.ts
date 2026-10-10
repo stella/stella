@@ -11,6 +11,7 @@ import {
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
+  contract: "patch",
   body: t.Object({
     claim_token: t.String({ minLength: 1, maxLength: 256 }),
     email: t.String({ format: "email", maxLength: 320 }),

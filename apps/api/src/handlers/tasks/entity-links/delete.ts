@@ -107,6 +107,7 @@ export const deleteEntityLinkHandler = async function* ({
 
 const deleteEntityLink = createSafeHandler(
   {
+    contract: "patch",
     description:
       "Remove one link between a task and another document, folder, or task, " +
       "addressed by the link id. Both linked items survive; a link with a task " +

@@ -44,6 +44,7 @@ const querySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   featureAccess: { type: "required", featureId: LEGAL_LISTS_FEATURE_ID },
   description:
     "List one list's items in list order with cursor pagination. Each item " +

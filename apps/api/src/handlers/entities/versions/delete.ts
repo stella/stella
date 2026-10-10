@@ -38,6 +38,7 @@ const paramsSchema = workspaceParams({
 });
 
 const config = {
+  contract: "patch",
   description:
     "Tombstone one version of a document: it disappears from listings, " +
     "downloads, and restores, but the row and its stored file are retained for " +

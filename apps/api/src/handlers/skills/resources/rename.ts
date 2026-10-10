@@ -31,6 +31,7 @@ const renameSkillResourceBodySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "Move one file of an agent skill to a new path, re-deriving its kind " +
     "from that path and leaving the content untouched. A path identical to " +

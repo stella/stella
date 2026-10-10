@@ -925,6 +925,7 @@ const publicationRejection = (
 
 const publishFolioCollabVersion = createSafeHandler(
   {
+    contract: "patch",
     contentDelivery: {
       type: "none",
       reason: "Processes collaboration content without returning stored files.",

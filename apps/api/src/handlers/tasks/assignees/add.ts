@@ -116,6 +116,7 @@ export const addAssigneeHandler = async function* ({
 
 const addAssignee = createSafeHandler(
   {
+    contract: "patch",
     description:
       "Assign one member of the matter to a task, in a role that defaults to " +
       "assignee. Repeating an assignment updates that user's role instead of " +

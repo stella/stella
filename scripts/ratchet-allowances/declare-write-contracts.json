@@ -1,0 +1,5 @@
+{
+  "metric": "api-lib-top-level-entries",
+  "delta": 1,
+  "reason": "One shared owner keeps write contract declarations, required precondition schema checks, and safe factory registration together."
+}

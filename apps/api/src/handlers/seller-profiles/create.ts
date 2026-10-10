@@ -11,6 +11,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
+  contract: "patch",
   description:
     "Create an issuer profile for the active organization. The first active " +
     "profile becomes the default; later profiles can be made default explicitly.",

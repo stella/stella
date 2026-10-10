@@ -13,6 +13,7 @@ import { organizationResourceSetUpdates } from "@/api/lib/resource-set-realtime"
 
 export default createSafeRootHandler(
   {
+    contract: "patch",
     realtime: organizationResourceSetUpdates(RESOURCE_TYPE.CONTACT),
     accountAccess: ACCOUNT_ACCESS.sandbox,
     description:

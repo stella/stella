@@ -8,6 +8,7 @@ import { LOOKUP_REGISTRIES } from "@/api/lib/docx/types";
 import { setLookupFormatUserDefault } from "@/api/lib/templates/lookup-formats/set-user-default";
 
 const config = {
+  contract: "patch",
   description:
     "Choose or clear your own default company specification format for a business registry, overriding the organization's default for you alone.",
   // permissions-exempt: the write reaches nothing but the caller's own

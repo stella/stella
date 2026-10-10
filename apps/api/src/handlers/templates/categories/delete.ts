@@ -12,6 +12,7 @@ const deleteTemplateCategoryParamsSchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "Delete one category from the organization's template category tree. No " +
     "template is deleted: templates filed under the category become " +

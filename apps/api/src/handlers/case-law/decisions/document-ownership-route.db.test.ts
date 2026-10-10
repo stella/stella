@@ -94,6 +94,7 @@ if (!databaseUrl || !enabled) {
         };
         const definition = createSafePublicSubjectFollowUpHandler({
           config: {
+            contract: "patch",
             accountAccess: ACCOUNT_ACCESS.sandbox,
             mcp: { type: "internal", reason: "public_indexing" },
             cache: { kind: "none" },

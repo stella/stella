@@ -73,6 +73,7 @@ const createTemplateHandler = async function* ({
 };
 
 const config = {
+  contract: "patch",
   contentDelivery: {
     type: "none",
     reason:

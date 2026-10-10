@@ -36,6 +36,11 @@ import {
 } from "@/api/lib/views/utils";
 
 const config = {
+  contract: "replace",
+  precondition: {
+    type: "deferred",
+    baselineId: "apps/api/src/handlers/views/update.ts",
+  },
   description:
     "Rename one view of a matter or replace its layout. The layout type " +
     "cannot change here, use views.convert for that; duplicate sorts and " +

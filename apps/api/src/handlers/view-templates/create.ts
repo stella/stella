@@ -38,6 +38,7 @@ const createViewTemplateBodySchema = t.Object(
 );
 
 const config = {
+  contract: "patch",
   description:
     "Save a view layout as a personal view template, the blueprint used to " +
     "create views in other matters. Duplicate sorts and multiple kind " +

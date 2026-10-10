@@ -20,6 +20,7 @@ const stripTrailingSlashes = (value: string) => {
 };
 
 const config = {
+  contract: "patch",
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "session_token_exchange" },
   body: permissiveBodySchema({ keys: ["handoffToken"] }),

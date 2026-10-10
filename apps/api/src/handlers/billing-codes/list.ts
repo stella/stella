@@ -28,6 +28,7 @@ const readBillingCodesQuerySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "List a matter's task and activity billing codes, ordered by sort order " +
     "then code, with cursor pagination. Filter by type (task or activity) " +

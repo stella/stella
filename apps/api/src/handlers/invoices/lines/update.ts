@@ -60,6 +60,7 @@ const UPDATED_FIELDS = [
 
 const updateInvoiceLine = createSafeHandler(
   {
+    contract: "patch",
     description:
       "Change one line of a draft invoice and recompute its totals. Any line " +
       "takes a new description, VAT rate, or VAT treatment; quantity, unit, " +

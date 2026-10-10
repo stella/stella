@@ -7,6 +7,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { LIMITS } from "@/api/lib/limits";
 
 const config = {
+  contract: "patch",
   description:
     "List the organization's document types in display order, each with its " +
     "id, immutable key, label, and sort order. The starter taxonomy is " +

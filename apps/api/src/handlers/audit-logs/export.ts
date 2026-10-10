@@ -26,6 +26,7 @@ import {
 } from "./query";
 
 const config = {
+  contract: "patch",
   accountAccess: ACCOUNT_ACCESS.standard,
   contentDelivery: { type: "audited" },
   permissions: { auditLog: ["read"] },

@@ -77,6 +77,7 @@ const listSkillCommentsParamsSchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "List the comments anchored to an agent skill, oldest first, across its " +
     "revisions and proposals. Each carries the character range and the quoted " +

@@ -15,6 +15,7 @@ const deleteRateTableBodySchema = t.Object({
 
 const deleteRateTable = createSafeHandler(
   {
+    contract: "patch",
     description:
       "Permanently delete one rate table from a matter and, with it, every " +
       "per-user rate line it holds. The matter's default rate table is refused " +

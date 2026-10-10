@@ -482,6 +482,7 @@ describe("anonymous response text bounds", () => {
   test("top-level unconstrained schemas are not mistaken for empty status maps", () => {
     const { handler } = createSafePublicHandler(
       {
+        contract: "patch",
         accountAccess: ACCOUNT_ACCESS.sandbox,
         mcp: { type: "internal", reason: "health_infra" },
         cache: { kind: "none" },

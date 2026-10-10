@@ -31,6 +31,7 @@ const CONTACT_EXPORT_CSV_MEDIA_TYPE = "text/csv; charset=utf-8";
 const CONTACT_EXPORT_JSON_MEDIA_TYPE = "application/json";
 
 const config = {
+  contract: "patch",
   accountAccess: ACCOUNT_ACCESS.standard,
   contentDelivery: { type: "audited" },
   description:

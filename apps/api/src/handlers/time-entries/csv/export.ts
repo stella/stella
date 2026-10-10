@@ -106,6 +106,7 @@ export const exportCsvHandler = async ({
 };
 
 const config = {
+  contract: "patch",
   accountAccess: ACCOUNT_ACCESS.standard,
   featureAccess: { featureId: "time-billing", type: "required" },
   description:

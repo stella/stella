@@ -237,6 +237,11 @@ const updatePropertyBodySchema = t.Object({
 });
 
 const config = {
+  contract: "replace",
+  precondition: {
+    type: "deferred",
+    baselineId: "apps/api/src/handlers/properties/update.ts",
+  },
   description:
     "Replace one property's name, value type, and tool (an AI prompt with " +
     "its dependencies, or manual input) in a matter. A change that affects " +

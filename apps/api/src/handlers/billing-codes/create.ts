@@ -20,6 +20,7 @@ const createBillingCodeBodySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "Add one task or activity billing code to a matter's code list. The code " +
     "string must be unique within the matter for its type, so the same " +

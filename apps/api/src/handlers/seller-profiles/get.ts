@@ -53,6 +53,7 @@ true satisfies MissingSellerProfileGetColumn extends never ? true : never;
 true satisfies UnexpectedSellerProfileGetColumn extends never ? true : never;
 
 const config = {
+  contract: "patch",
   description: "Read one active issuer profile in the active organization.",
   permissions: { organizationSettings: ["update"] },
   accountAccess: ACCOUNT_ACCESS.standard,

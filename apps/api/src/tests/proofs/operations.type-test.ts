@@ -20,6 +20,7 @@ import { fillTemplateDocx } from "@/api/lib/templates/template-fill-service";
 import type { AiFillCollaborators } from "@/api/lib/templates/template-fill-service";
 
 const config = {
+  contract: "patch",
   permissions: { chat: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "assistant_chat" },

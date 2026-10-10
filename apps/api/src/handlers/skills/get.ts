@@ -14,6 +14,7 @@ const getSkillParamsSchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "Read one agent skill in full: its instruction body, scope, origin, " +
     "version, license, compatibility, source URL, slash command, and every " +

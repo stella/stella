@@ -39,6 +39,7 @@ const querySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   description:

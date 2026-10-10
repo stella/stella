@@ -29,6 +29,7 @@ const STORED_VISUAL_BYTES = 4 * 1024 * 1024;
 export const createReadUserFileVisual = (readObject = readStoredFile) =>
   createSafeRootHandler(
     {
+      contract: "patch",
       contentDelivery: { type: "audited" },
       permissions: { chat: ["create"] },
       accountAccess: ACCOUNT_ACCESS.sandbox,

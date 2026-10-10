@@ -12,6 +12,7 @@ const syncAllTemplateClausesParamsSchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "Re-pin every outdated clause link of one template to its clause's " +
     "current version in a single transaction, auditing each link as if it " +

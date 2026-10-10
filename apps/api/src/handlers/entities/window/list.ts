@@ -14,6 +14,7 @@ import { createCursorPage } from "@/api/lib/pagination";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 
 const config = {
+  contract: "patch",
   description:
     "Read a window of a matter's documents, folders, and tasks with the same " +
     "filters, sorts, search, and field selection as entities.list, plus the " +

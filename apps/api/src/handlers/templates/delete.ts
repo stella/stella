@@ -106,6 +106,7 @@ export const deleteTemplateHandler = async function* ({
 };
 
 const config = {
+  contract: "patch",
   description:
     "Permanently delete an organization template with its version history, its " +
     "clause slots, and the stored file of every version. Recorded fills of the " +

@@ -24,6 +24,7 @@ import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import createMcpConnector from "./create-connector";
 
 const config = {
+  contract: "patch",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "mcp_transport" },

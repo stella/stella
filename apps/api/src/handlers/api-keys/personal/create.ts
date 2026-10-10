@@ -8,6 +8,7 @@ import { personalApiKeyBodySchema } from "./schema";
 
 // permissions-exempt: Members mint only their own keys, bounded by their live role.
 const config = {
+  contract: "patch",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: { type: "internal", reason: "provider_secret" },

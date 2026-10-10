@@ -10,6 +10,7 @@ import { readStyleSetPackage } from "@/api/lib/style-sets";
 
 const paramsSchema = t.Object({ styleSetId: tSafeId("styleSet") });
 const config = {
+  contract: "patch",
   contentDelivery: {
     type: "none",
     reason:

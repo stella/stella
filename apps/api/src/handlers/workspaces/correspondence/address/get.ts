@@ -40,6 +40,7 @@ true satisfies MissingInboundAddressRowColumn extends never ? true : never;
 true satisfies UnexpectedInboundAddressRowColumn extends never ? true : never;
 
 const config = {
+  contract: "patch",
   description: "Read the active inbound address for a matter.",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,

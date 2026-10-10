@@ -9,6 +9,7 @@ import { recordVerificationRead } from "@/api/lib/lists/verification/read-audit"
 import { readVerificationRun } from "@/api/lib/lists/verification/read-run";
 
 const config = {
+  contract: "patch",
   featureAccess: { featureId: LIST_VERIFICATION_FEATURE_ID, type: "required" },
   description:
     "Read one list verification: the document version it checked, the list " +

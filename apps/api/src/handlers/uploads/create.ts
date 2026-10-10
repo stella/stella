@@ -128,6 +128,7 @@ const toPurposeData = (purposeBody: PresignBody): PresignPurposeData => {
 };
 
 const config = {
+  contract: "patch",
   description:
     "Step 1 of 3 of the file-upload flow: reserve an upload and mint a " +
     "short-lived presigned S3 PUT URL. This is the ONLY way to get a file " +

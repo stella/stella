@@ -21,6 +21,7 @@ const readContactsQuerySchema = t.Object({
 
 const readContacts = createSafeRootHandler(
   {
+    contract: "patch",
     description:
       "List the organization address book alphabetically by display name, " +
       "with cursor pagination. Filter by type (person or organization) and " +

@@ -45,6 +45,7 @@ true satisfies MissingNumberSeriesGetColumn extends never ? true : never;
 true satisfies UnexpectedNumberSeriesGetColumn extends never ? true : never;
 
 const config = {
+  contract: "patch",
   description: "Read one active document number series.",
   permissions: { organizationSettings: ["update"] },
   accountAccess: ACCOUNT_ACCESS.standard,

@@ -10,6 +10,7 @@ import {
 } from "@/api/lib/signals/read";
 
 const config = {
+  contract: "patch",
   description:
     "Read one inbox signal with its evidence and suggestions; 404 when it is " +
     "not visible to the caller.",

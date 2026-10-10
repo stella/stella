@@ -19,6 +19,7 @@ import { tRejectPendingDocxSuggestionsBody } from "./schemas";
  */
 const rejectPendingDocxSuggestions = createSafeHandler(
   {
+    contract: "patch",
     permissions: { entity: ["update"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "document_processing" },

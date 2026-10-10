@@ -109,6 +109,7 @@ describe("handler contexts require explicit collaborators", () => {
     });
     const endpoint = createSafeHandler(
       {
+        contract: "patch",
         permissions: { workspace: ["read"] },
         accountAccess: ACCOUNT_ACCESS.sandbox,
         mcp: { type: "internal", reason: "health_infra" },
@@ -136,6 +137,7 @@ describe("handler contexts require explicit collaborators", () => {
     const workspaceIds: (SafeId<"workspace"> | null | undefined)[] = [];
     const endpoint = createSafeHandler(
       {
+        contract: "patch",
         permissions: { workspace: ["read"] },
         accountAccess: ACCOUNT_ACCESS.sandbox,
         mcp: { type: "internal", reason: "health_infra" },
