@@ -349,7 +349,7 @@ export const ChatThreadMessages = ({
                 activeOrganizationId={activeOrganizationId}
                 workspaceId={workspaceId}
                 threadId={threadRef?.threadId}
-                disabled={generationActive}
+                disabled={generationActive || !!awaitedAssistantMessageId}
                 onAnswerEdited={onAnswerEdited}
               />
             </div>
