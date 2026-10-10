@@ -125,104 +125,129 @@ export type ModelDefaultsLedger = {
   [TTask in ModelTask]: TaskProviderDefaults<TTask>;
 };
 
+const PROVIDER_DEFAULT_OMIT_MODE = {
+  type: "provider-default",
+  temperaturePolicy: "omit",
+} as const satisfies ModelMode;
+const PROVIDER_DEFAULT_EMIT_MODE = {
+  type: "provider-default",
+  temperaturePolicy: "emit",
+} as const satisfies ModelMode;
+const GOOGLE_FLASH_NONE_MODE = {
+  type: "google-thinking",
+  requestedEffort: "none",
+  thinkingLevel: "LOW",
+  temperaturePolicy: "omit",
+} as const satisfies ModelMode;
+const GOOGLE_FLASH_HIGH_MODE = {
+  type: "google-thinking",
+  requestedEffort: "high",
+  thinkingLevel: "HIGH",
+  temperaturePolicy: "omit",
+} as const satisfies ModelMode;
+const UNMEASURED_SEED_QUALITY = {
+  source: "seed",
+  measurement: { status: "unmeasured" },
+} as const satisfies ModelDefaultQuality;
+const GOOGLE_FLASH_DIFFERENT_MODE_QUALITY = {
+  source: "seed",
+  measurement: {
+    status: "different-mode",
+    source: "external-benchmark",
+    measuredMode: GOOGLE_FLASH_HIGH_MODE,
+  },
+} as const satisfies ModelDefaultQuality;
+
+const DEFAULT_RATIONALE_BY_GROUP = {
+  fast: { rationaleKey: "organization.aiConfig.defaultRationale.fast" },
+  chat: { rationaleKey: "organization.aiConfig.defaultRationale.chat" },
+  reasoning: {
+    rationaleKey: "organization.aiConfig.defaultRationale.reasoning",
+  },
+  pdf: { rationaleKey: "organization.aiConfig.defaultRationale.pdf" },
+} as const satisfies Record<ModelOverrideGroup, ModelDefaultRationale>;
+
 const CHAT_DEFAULTS = {
   google: {
     kind: "candidate",
     candidate: {
       modelId: "gemini-3.8-flash",
-      mode: {
-        type: "google-thinking",
-        requestedEffort: "none",
-        thinkingLevel: "LOW",
-        temperaturePolicy: "omit",
-      },
+      mode: GOOGLE_FLASH_NONE_MODE,
     },
-    quality: {
-      source: "seed",
-      measurement: {
-        status: "different-mode",
-        source: "external-benchmark",
-        measuredMode: {
-          type: "google-thinking",
-          requestedEffort: "high",
-          thinkingLevel: "HIGH",
-          temperaturePolicy: "omit",
-        },
-      },
-    },
-    rationale: { rationaleKey: "organization.aiConfig.defaultRationale.chat" },
+    quality: GOOGLE_FLASH_DIFFERENT_MODE_QUALITY,
+    rationale: DEFAULT_RATIONALE_BY_GROUP.chat,
   },
   openrouter: {
     kind: "candidate",
     candidate: {
       modelId: "openai/gpt-6-sol",
-      mode: { type: "provider-default", temperaturePolicy: "omit" },
+      mode: PROVIDER_DEFAULT_OMIT_MODE,
     },
-    quality: { source: "seed", measurement: { status: "unmeasured" } },
-    rationale: { rationaleKey: "organization.aiConfig.defaultRationale.chat" },
+    quality: UNMEASURED_SEED_QUALITY,
+    rationale: DEFAULT_RATIONALE_BY_GROUP.chat,
   },
   openai: {
     kind: "candidate",
     candidate: {
       modelId: "gpt-6-sol",
-      mode: { type: "provider-default", temperaturePolicy: "omit" },
+      mode: PROVIDER_DEFAULT_OMIT_MODE,
     },
-    quality: { source: "seed", measurement: { status: "unmeasured" } },
-    rationale: { rationaleKey: "organization.aiConfig.defaultRationale.chat" },
+    quality: UNMEASURED_SEED_QUALITY,
+    rationale: DEFAULT_RATIONALE_BY_GROUP.chat,
   },
   azure_foundry: {
     kind: "candidate",
     candidate: {
       modelId: "gpt-5.6-terra",
-      mode: { type: "provider-default", temperaturePolicy: "omit" },
+      mode: PROVIDER_DEFAULT_OMIT_MODE,
     },
-    quality: { source: "seed", measurement: { status: "unmeasured" } },
-    rationale: { rationaleKey: "organization.aiConfig.defaultRationale.chat" },
+    quality: UNMEASURED_SEED_QUALITY,
+    rationale: DEFAULT_RATIONALE_BY_GROUP.chat,
   },
   anthropic: {
     kind: "candidate",
     candidate: {
       modelId: "claude-opus-5-5",
-      mode: { type: "provider-default", temperaturePolicy: "omit" },
+      mode: PROVIDER_DEFAULT_OMIT_MODE,
     },
-    quality: { source: "seed", measurement: { status: "unmeasured" } },
-    rationale: { rationaleKey: "organization.aiConfig.defaultRationale.chat" },
+    quality: UNMEASURED_SEED_QUALITY,
+    rationale: DEFAULT_RATIONALE_BY_GROUP.chat,
   },
   bedrock: {
     kind: "candidate",
     candidate: {
       modelId: "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
-      mode: { type: "provider-default", temperaturePolicy: "emit" },
+      mode: PROVIDER_DEFAULT_EMIT_MODE,
     },
-    quality: { source: "seed", measurement: { status: "unmeasured" } },
-    rationale: { rationaleKey: "organization.aiConfig.defaultRationale.chat" },
+    quality: UNMEASURED_SEED_QUALITY,
+    rationale: DEFAULT_RATIONALE_BY_GROUP.chat,
   },
   mistral: {
     kind: "candidate",
     candidate: {
       modelId: "mistral-medium-latest",
-      mode: { type: "provider-default", temperaturePolicy: "emit" },
+      mode: PROVIDER_DEFAULT_EMIT_MODE,
     },
-    quality: { source: "seed", measurement: { status: "unmeasured" } },
-    rationale: { rationaleKey: "organization.aiConfig.defaultRationale.chat" },
+    quality: UNMEASURED_SEED_QUALITY,
+    rationale: DEFAULT_RATIONALE_BY_GROUP.chat,
   },
   openai_compatible: {
     kind: "candidate",
     candidate: {
       modelId: "default",
-      mode: { type: "provider-default", temperaturePolicy: "omit" },
+      mode: PROVIDER_DEFAULT_OMIT_MODE,
     },
-    quality: { source: "seed", measurement: { status: "unmeasured" } },
-    rationale: { rationaleKey: "organization.aiConfig.defaultRationale.chat" },
+    quality: UNMEASURED_SEED_QUALITY,
+    rationale: DEFAULT_RATIONALE_BY_GROUP.chat,
   },
   huggingface: {
     kind: "candidate",
     candidate: {
       modelId: "speakleash/Bielik-11B-v2.3-Instruct",
-      mode: { type: "provider-default", temperaturePolicy: "omit" },
+      mode: PROVIDER_DEFAULT_OMIT_MODE,
     },
-    quality: { source: "seed", measurement: { status: "unmeasured" } },
-    rationale: { rationaleKey: "organization.aiConfig.defaultRationale.chat" },
+    quality: UNMEASURED_SEED_QUALITY,
+    rationale: DEFAULT_RATIONALE_BY_GROUP.chat,
   },
 } as const satisfies TaskProviderDefaults<"chat">;
 
@@ -231,17 +256,10 @@ const REASONING_DEFAULTS = {
     kind: "candidate",
     candidate: {
       modelId: "gemini-3.8-flash",
-      mode: {
-        type: "google-thinking",
-        requestedEffort: "high",
-        thinkingLevel: "HIGH",
-        temperaturePolicy: "omit",
-      },
+      mode: GOOGLE_FLASH_HIGH_MODE,
     },
-    quality: { source: "seed", measurement: { status: "unmeasured" } },
-    rationale: {
-      rationaleKey: "organization.aiConfig.defaultRationale.reasoning",
-    },
+    quality: UNMEASURED_SEED_QUALITY,
+    rationale: DEFAULT_RATIONALE_BY_GROUP.reasoning,
   },
   openrouter: {
     kind: "candidate",
@@ -253,10 +271,8 @@ const REASONING_DEFAULTS = {
         temperaturePolicy: "omit",
       },
     },
-    quality: { source: "seed", measurement: { status: "unmeasured" } },
-    rationale: {
-      rationaleKey: "organization.aiConfig.defaultRationale.reasoning",
-    },
+    quality: UNMEASURED_SEED_QUALITY,
+    rationale: DEFAULT_RATIONALE_BY_GROUP.reasoning,
   },
   openai: {
     kind: "candidate",
@@ -268,21 +284,17 @@ const REASONING_DEFAULTS = {
         temperaturePolicy: "omit",
       },
     },
-    quality: { source: "seed", measurement: { status: "unmeasured" } },
-    rationale: {
-      rationaleKey: "organization.aiConfig.defaultRationale.reasoning",
-    },
+    quality: UNMEASURED_SEED_QUALITY,
+    rationale: DEFAULT_RATIONALE_BY_GROUP.reasoning,
   },
   azure_foundry: {
     kind: "candidate",
     candidate: {
       modelId: "gpt-5.6-terra",
-      mode: { type: "provider-default", temperaturePolicy: "omit" },
+      mode: PROVIDER_DEFAULT_OMIT_MODE,
     },
-    quality: { source: "seed", measurement: { status: "unmeasured" } },
-    rationale: {
-      rationaleKey: "organization.aiConfig.defaultRationale.reasoning",
-    },
+    quality: UNMEASURED_SEED_QUALITY,
+    rationale: DEFAULT_RATIONALE_BY_GROUP.reasoning,
   },
   anthropic: {
     kind: "candidate",
@@ -294,54 +306,44 @@ const REASONING_DEFAULTS = {
         temperaturePolicy: "omit",
       },
     },
-    quality: { source: "seed", measurement: { status: "unmeasured" } },
-    rationale: {
-      rationaleKey: "organization.aiConfig.defaultRationale.reasoning",
-    },
+    quality: UNMEASURED_SEED_QUALITY,
+    rationale: DEFAULT_RATIONALE_BY_GROUP.reasoning,
   },
   bedrock: {
     kind: "candidate",
     candidate: {
       modelId: "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
-      mode: { type: "provider-default", temperaturePolicy: "emit" },
+      mode: PROVIDER_DEFAULT_EMIT_MODE,
     },
-    quality: { source: "seed", measurement: { status: "unmeasured" } },
-    rationale: {
-      rationaleKey: "organization.aiConfig.defaultRationale.reasoning",
-    },
+    quality: UNMEASURED_SEED_QUALITY,
+    rationale: DEFAULT_RATIONALE_BY_GROUP.reasoning,
   },
   mistral: {
     kind: "candidate",
     candidate: {
       modelId: "mistral-medium-latest",
-      mode: { type: "provider-default", temperaturePolicy: "emit" },
+      mode: PROVIDER_DEFAULT_EMIT_MODE,
     },
-    quality: { source: "seed", measurement: { status: "unmeasured" } },
-    rationale: {
-      rationaleKey: "organization.aiConfig.defaultRationale.reasoning",
-    },
+    quality: UNMEASURED_SEED_QUALITY,
+    rationale: DEFAULT_RATIONALE_BY_GROUP.reasoning,
   },
   openai_compatible: {
     kind: "candidate",
     candidate: {
       modelId: "default",
-      mode: { type: "provider-default", temperaturePolicy: "omit" },
+      mode: PROVIDER_DEFAULT_OMIT_MODE,
     },
-    quality: { source: "seed", measurement: { status: "unmeasured" } },
-    rationale: {
-      rationaleKey: "organization.aiConfig.defaultRationale.reasoning",
-    },
+    quality: UNMEASURED_SEED_QUALITY,
+    rationale: DEFAULT_RATIONALE_BY_GROUP.reasoning,
   },
   huggingface: {
     kind: "candidate",
     candidate: {
       modelId: "speakleash/Bielik-11B-v2.3-Instruct",
-      mode: { type: "provider-default", temperaturePolicy: "omit" },
+      mode: PROVIDER_DEFAULT_OMIT_MODE,
     },
-    quality: { source: "seed", measurement: { status: "unmeasured" } },
-    rationale: {
-      rationaleKey: "organization.aiConfig.defaultRationale.reasoning",
-    },
+    quality: UNMEASURED_SEED_QUALITY,
+    rationale: DEFAULT_RATIONALE_BY_GROUP.reasoning,
   },
 } as const satisfies TaskProviderDefaults<"reasoning">;
 
@@ -350,91 +352,74 @@ const PDF_DEFAULTS = {
     kind: "candidate",
     candidate: {
       modelId: "gemini-3.8-flash",
-      mode: {
-        type: "google-thinking",
-        requestedEffort: "none",
-        thinkingLevel: "LOW",
-        temperaturePolicy: "omit",
-      },
+      mode: GOOGLE_FLASH_NONE_MODE,
     },
-    quality: {
-      source: "seed",
-      measurement: {
-        status: "different-mode",
-        source: "external-benchmark",
-        measuredMode: {
-          type: "google-thinking",
-          requestedEffort: "high",
-          thinkingLevel: "HIGH",
-          temperaturePolicy: "omit",
-        },
-      },
-    },
-    rationale: { rationaleKey: "organization.aiConfig.defaultRationale.pdf" },
+    quality: GOOGLE_FLASH_DIFFERENT_MODE_QUALITY,
+    rationale: DEFAULT_RATIONALE_BY_GROUP.pdf,
   },
   openrouter: {
     kind: "candidate",
     candidate: {
       modelId: "openai/gpt-6-sol",
-      mode: { type: "provider-default", temperaturePolicy: "omit" },
+      mode: PROVIDER_DEFAULT_OMIT_MODE,
     },
-    quality: { source: "seed", measurement: { status: "unmeasured" } },
-    rationale: { rationaleKey: "organization.aiConfig.defaultRationale.pdf" },
+    quality: UNMEASURED_SEED_QUALITY,
+    rationale: DEFAULT_RATIONALE_BY_GROUP.pdf,
   },
   openai: {
     kind: "candidate",
     candidate: {
       modelId: "gpt-6-sol",
-      mode: { type: "provider-default", temperaturePolicy: "omit" },
+      mode: PROVIDER_DEFAULT_OMIT_MODE,
     },
-    quality: { source: "seed", measurement: { status: "unmeasured" } },
-    rationale: { rationaleKey: "organization.aiConfig.defaultRationale.pdf" },
+    quality: UNMEASURED_SEED_QUALITY,
+    rationale: DEFAULT_RATIONALE_BY_GROUP.pdf,
   },
   azure_foundry: {
     kind: "candidate",
     candidate: {
       modelId: "gpt-5.6-terra",
-      mode: { type: "provider-default", temperaturePolicy: "omit" },
+      mode: PROVIDER_DEFAULT_OMIT_MODE,
     },
-    quality: { source: "seed", measurement: { status: "unmeasured" } },
-    rationale: { rationaleKey: "organization.aiConfig.defaultRationale.pdf" },
+    quality: UNMEASURED_SEED_QUALITY,
+    rationale: DEFAULT_RATIONALE_BY_GROUP.pdf,
   },
   anthropic: {
     kind: "candidate",
     candidate: {
       modelId: "claude-opus-5-5",
-      mode: { type: "provider-default", temperaturePolicy: "omit" },
+      mode: PROVIDER_DEFAULT_OMIT_MODE,
     },
-    quality: { source: "seed", measurement: { status: "unmeasured" } },
-    rationale: { rationaleKey: "organization.aiConfig.defaultRationale.pdf" },
+    quality: UNMEASURED_SEED_QUALITY,
+    rationale: DEFAULT_RATIONALE_BY_GROUP.pdf,
   },
   bedrock: {
     kind: "candidate",
     candidate: {
       modelId: "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
-      mode: { type: "provider-default", temperaturePolicy: "emit" },
+      mode: PROVIDER_DEFAULT_EMIT_MODE,
     },
-    quality: { source: "seed", measurement: { status: "unmeasured" } },
-    rationale: { rationaleKey: "organization.aiConfig.defaultRationale.pdf" },
+    quality: UNMEASURED_SEED_QUALITY,
+    rationale: DEFAULT_RATIONALE_BY_GROUP.pdf,
   },
   mistral: { kind: "unsupported", reason: "document-input-unsupported" },
   openai_compatible: {
     kind: "candidate",
     candidate: {
       modelId: "default",
-      mode: { type: "provider-default", temperaturePolicy: "omit" },
+      mode: PROVIDER_DEFAULT_OMIT_MODE,
     },
-    quality: { source: "seed", measurement: { status: "unmeasured" } },
-    rationale: { rationaleKey: "organization.aiConfig.defaultRationale.pdf" },
+    quality: UNMEASURED_SEED_QUALITY,
+    rationale: DEFAULT_RATIONALE_BY_GROUP.pdf,
   },
   huggingface: {
     kind: "candidate",
     candidate: {
       modelId: "speakleash/Bielik-11B-v2.3-Instruct",
-      mode: { type: "provider-default", temperaturePolicy: "omit" },
+      mode: PROVIDER_DEFAULT_OMIT_MODE,
     },
-    quality: { source: "seed", measurement: { status: "unmeasured" } },
-    rationale: { rationaleKey: "organization.aiConfig.defaultRationale.pdf" },
+    quality: UNMEASURED_SEED_QUALITY,
+    rationale: DEFAULT_RATIONALE_BY_GROUP.pdf,
   },
 } as const satisfies TaskProviderDefaults<"pdf">;
 
@@ -443,27 +428,10 @@ const FAST_DEFAULTS = {
     kind: "candidate",
     candidate: {
       modelId: "gemini-3.8-flash",
-      mode: {
-        type: "google-thinking",
-        requestedEffort: "none",
-        thinkingLevel: "LOW",
-        temperaturePolicy: "omit",
-      },
+      mode: GOOGLE_FLASH_NONE_MODE,
     },
-    quality: {
-      source: "seed",
-      measurement: {
-        status: "different-mode",
-        source: "external-benchmark",
-        measuredMode: {
-          type: "google-thinking",
-          requestedEffort: "high",
-          thinkingLevel: "HIGH",
-          temperaturePolicy: "omit",
-        },
-      },
-    },
-    rationale: { rationaleKey: "organization.aiConfig.defaultRationale.fast" },
+    quality: GOOGLE_FLASH_DIFFERENT_MODE_QUALITY,
+    rationale: DEFAULT_RATIONALE_BY_GROUP.fast,
   },
   openrouter: {
     kind: "candidate",
@@ -475,71 +443,71 @@ const FAST_DEFAULTS = {
         temperaturePolicy: "omit",
       },
     },
-    quality: { source: "seed", measurement: { status: "unmeasured" } },
-    rationale: { rationaleKey: "organization.aiConfig.defaultRationale.fast" },
+    quality: UNMEASURED_SEED_QUALITY,
+    rationale: DEFAULT_RATIONALE_BY_GROUP.fast,
   },
   openai: {
     kind: "candidate",
     candidate: {
       modelId: "gpt-6-luna",
-      mode: { type: "provider-default", temperaturePolicy: "omit" },
+      mode: PROVIDER_DEFAULT_OMIT_MODE,
     },
-    quality: { source: "seed", measurement: { status: "unmeasured" } },
-    rationale: { rationaleKey: "organization.aiConfig.defaultRationale.fast" },
+    quality: UNMEASURED_SEED_QUALITY,
+    rationale: DEFAULT_RATIONALE_BY_GROUP.fast,
   },
   azure_foundry: {
     kind: "candidate",
     candidate: {
       modelId: "gpt-5.6-luna",
-      mode: { type: "provider-default", temperaturePolicy: "omit" },
+      mode: PROVIDER_DEFAULT_OMIT_MODE,
     },
-    quality: { source: "seed", measurement: { status: "unmeasured" } },
-    rationale: { rationaleKey: "organization.aiConfig.defaultRationale.fast" },
+    quality: UNMEASURED_SEED_QUALITY,
+    rationale: DEFAULT_RATIONALE_BY_GROUP.fast,
   },
   anthropic: {
     kind: "candidate",
     candidate: {
       modelId: "claude-haiku-5-5",
-      mode: { type: "provider-default", temperaturePolicy: "omit" },
+      mode: PROVIDER_DEFAULT_OMIT_MODE,
     },
-    quality: { source: "seed", measurement: { status: "unmeasured" } },
-    rationale: { rationaleKey: "organization.aiConfig.defaultRationale.fast" },
+    quality: UNMEASURED_SEED_QUALITY,
+    rationale: DEFAULT_RATIONALE_BY_GROUP.fast,
   },
   bedrock: {
     kind: "candidate",
     candidate: {
       modelId: "us.anthropic.claude-haiku-5-5",
-      mode: { type: "provider-default", temperaturePolicy: "omit" },
+      mode: PROVIDER_DEFAULT_OMIT_MODE,
     },
-    quality: { source: "seed", measurement: { status: "unmeasured" } },
-    rationale: { rationaleKey: "organization.aiConfig.defaultRationale.fast" },
+    quality: UNMEASURED_SEED_QUALITY,
+    rationale: DEFAULT_RATIONALE_BY_GROUP.fast,
   },
   mistral: {
     kind: "candidate",
     candidate: {
       modelId: "mistral-small-latest",
-      mode: { type: "provider-default", temperaturePolicy: "emit" },
+      mode: PROVIDER_DEFAULT_EMIT_MODE,
     },
-    quality: { source: "seed", measurement: { status: "unmeasured" } },
-    rationale: { rationaleKey: "organization.aiConfig.defaultRationale.fast" },
+    quality: UNMEASURED_SEED_QUALITY,
+    rationale: DEFAULT_RATIONALE_BY_GROUP.fast,
   },
   openai_compatible: {
     kind: "candidate",
     candidate: {
       modelId: "default",
-      mode: { type: "provider-default", temperaturePolicy: "omit" },
+      mode: PROVIDER_DEFAULT_OMIT_MODE,
     },
-    quality: { source: "seed", measurement: { status: "unmeasured" } },
-    rationale: { rationaleKey: "organization.aiConfig.defaultRationale.fast" },
+    quality: UNMEASURED_SEED_QUALITY,
+    rationale: DEFAULT_RATIONALE_BY_GROUP.fast,
   },
   huggingface: {
     kind: "candidate",
     candidate: {
       modelId: "speakleash/Bielik-1.5B-v3.0-Instruct",
-      mode: { type: "provider-default", temperaturePolicy: "omit" },
+      mode: PROVIDER_DEFAULT_OMIT_MODE,
     },
-    quality: { source: "seed", measurement: { status: "unmeasured" } },
-    rationale: { rationaleKey: "organization.aiConfig.defaultRationale.fast" },
+    quality: UNMEASURED_SEED_QUALITY,
+    rationale: DEFAULT_RATIONALE_BY_GROUP.fast,
   },
 } as const satisfies TaskProviderDefaults<"short-text">;
 
