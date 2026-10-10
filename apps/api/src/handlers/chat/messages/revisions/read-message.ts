@@ -2,6 +2,8 @@ import { and, eq, inArray } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import { chatMessages, chatThreads, chatTurns } from "@/api/db/schema";
+import { hasChatWorkspaceAccess } from "@/api/handlers/chat/chat-scope";
+import type { ChatWorkspaceAccess } from "@/api/handlers/chat/chat-scope";
 import { ACTIVE_CHAT_TURN_STATUSES } from "@/api/handlers/chat/chat-turn-state";
 import type { SafeId } from "@/api/lib/branded-types";
 import { readThreadStoredContentSendModeOnTx } from "@/api/lib/chat/thread-stored-content-send-mode";
@@ -12,6 +14,7 @@ type ReadEditableMessageOptions = {
   messageId: SafeId<"chatMessage">;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
+  getWorkspaceAccess: ChatWorkspaceAccess;
 };
 
 export const readEditableMessageOnTx = async ({
@@ -20,6 +23,7 @@ export const readEditableMessageOnTx = async ({
   messageId,
   organizationId,
   userId,
+  getWorkspaceAccess,
 }: ReadEditableMessageOptions) => {
   const row = (
     await tx
@@ -36,7 +40,13 @@ export const readEditableMessageOnTx = async ({
       )
       .limit(1)
   ).at(0);
-  if (!row) {
+  if (
+    !row ||
+    !(await hasChatWorkspaceAccess({
+      workspaceId: row.thread.workspaceId,
+      getWorkspaceAccess,
+    }))
+  ) {
     return null;
   }
   const active = (

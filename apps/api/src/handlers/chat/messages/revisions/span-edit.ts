@@ -14,6 +14,7 @@ import {
 } from "@/api/handlers/chat/messages/revisions/accept";
 import { prepareSpanRewrite } from "@/api/handlers/chat/messages/revisions/prepare-span-rewrite";
 import { readEditableMessageOnTx } from "@/api/handlers/chat/messages/revisions/read-message";
+import { serializeRevisionSnapshot } from "@/api/handlers/chat/messages/revisions/serialize-revision-snapshot";
 import {
   isSpanReplacementBalanced,
   spliceSpanProposal,
@@ -81,6 +82,7 @@ export const createProposeMessageSpanEdit = ({
       body,
       params: { threadId, messageId },
       safeDb,
+      getWorkspaceAccess,
       session,
       user,
       orgAIConfig,
@@ -95,6 +97,7 @@ export const createProposeMessageSpanEdit = ({
         safeDb((tx) =>
           readEditableMessageOnTx({
             tx,
+            getWorkspaceAccess,
             threadId,
             messageId,
             organizationId,
@@ -216,11 +219,13 @@ export const createProposeMessageSpanEdit = ({
         );
       }
       return Result.ok({
-        content: spliceSpanProposal({
-          content,
-          anchor,
-          replacement: output.replacement,
-        }),
+        content: serializeRevisionSnapshot(
+          spliceSpanProposal({
+            content,
+            anchor,
+            replacement: output.replacement,
+          }),
+        ),
         replacement: output.replacement,
         edit: {
           type: CHAT_MESSAGE_EDIT_TYPE.aiSpan,

@@ -20,11 +20,18 @@ const config = {
 
 export default createSafeRootHandler(
   config,
-  async function* ({ params: { threadId, messageId }, safeDb, user, session }) {
+  async function* ({
+    params: { threadId, messageId },
+    safeDb,
+    getWorkspaceAccess,
+    user,
+    session,
+  }) {
     const message = yield* Result.await(
       safeDb(async (tx) => {
         const loaded = await readEditableMessageOnTx({
           tx,
+          getWorkspaceAccess,
           threadId,
           messageId,
           userId: user.id,

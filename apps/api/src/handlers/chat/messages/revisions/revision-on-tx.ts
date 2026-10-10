@@ -15,6 +15,8 @@ import {
   getAwaitingUserInteractions,
   isChatPart,
 } from "@/api/handlers/chat/chat-message-parts";
+import { hasChatWorkspaceAccess } from "@/api/handlers/chat/chat-scope";
+import type { ChatWorkspaceAccess } from "@/api/handlers/chat/chat-scope";
 import { ACTIVE_CHAT_TURN_STATUSES } from "@/api/handlers/chat/chat-turn-state";
 import { normalizeRevisionContent } from "@/api/handlers/chat/messages/revisions/normalize-revision-content";
 import { isRevisionToolCallSettled } from "@/api/handlers/chat/messages/revisions/revision-settlement";
@@ -46,6 +48,50 @@ type WriteChatMessageRevisionOptions = {
   organizationId: SafeId<"organization">;
   change: ChatMessageRevisionChange;
   recordAuditEvent: AuditRecorder;
+  getWorkspaceAccess: ChatWorkspaceAccess;
+};
+
+type LockAccessibleRevisionThreadOptions = Pick<
+  WriteChatMessageRevisionOptions,
+  "tx" | "threadId" | "organizationId" | "userId" | "getWorkspaceAccess"
+>;
+
+const lockAccessibleRevisionThreadOnTx = async ({
+  tx,
+  threadId,
+  organizationId,
+  userId,
+  getWorkspaceAccess,
+}: LockAccessibleRevisionThreadOptions) => {
+  const threadLock = await withAggregateRowQuery({
+    tx,
+    aggregate: "chatThread",
+    id: { id: threadId, organizationId, userId },
+    mode: "update",
+    select: (handle) =>
+      handle
+        .select({
+          id: chatThreads.id,
+          organizationId: chatThreads.organizationId,
+          userId: chatThreads.userId,
+          workspaceId: chatThreads.workspaceId,
+        })
+        .from(chatThreads),
+  });
+  if (threadLock.status === "busy") {
+    return panic("Blocking thread lock returned busy");
+  }
+  const thread = threadLock.rows.at(0);
+  if (
+    !thread ||
+    !(await hasChatWorkspaceAccess({
+      workspaceId: thread.workspaceId,
+      getWorkspaceAccess,
+    }))
+  ) {
+    return false;
+  }
+  return true;
 };
 
 // Turn acceptance and settlement lock the thread before touching messages.
@@ -58,25 +104,17 @@ export const writeChatMessageRevisionOnTx = async ({
   organizationId,
   change,
   recordAuditEvent,
+  getWorkspaceAccess,
 }: WriteChatMessageRevisionOptions) => {
-  const threadLock = await withAggregateRowQuery({
-    tx,
-    aggregate: "chatThread",
-    id: { id: threadId, organizationId, userId },
-    mode: "update",
-    select: (handle) =>
-      handle
-        .select({
-          id: chatThreads.id,
-          organizationId: chatThreads.organizationId,
-          userId: chatThreads.userId,
-        })
-        .from(chatThreads),
-  });
-  if (threadLock.status === "busy") {
-    return panic("Blocking thread lock returned busy");
-  }
-  if (threadLock.rows.length === 0) {
+  if (
+    !(await lockAccessibleRevisionThreadOnTx({
+      tx,
+      threadId,
+      organizationId,
+      userId,
+      getWorkspaceAccess,
+    }))
+  ) {
     return { type: "not-found" } as const;
   }
   const messageLock = await withAggregateRowQuery({

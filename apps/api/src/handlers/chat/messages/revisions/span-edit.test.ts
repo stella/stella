@@ -39,6 +39,7 @@ const runProposal = async ({
   anonymized = false,
   active = false,
   replacement = "new",
+  workspaceAccess = "unscoped",
 } = {}) => {
   state.patchConfig({
     FEATURE_ACTION_ADMISSION: false,
@@ -60,7 +61,10 @@ const runProposal = async ({
               }),
             },
             thread: {
-              workspaceId: null,
+              workspaceId:
+                workspaceAccess === "unscoped"
+                  ? null
+                  : toSafeId<"workspace">("workspace_span"),
               dataWorkspaceIds: [],
               chatModel: "openai::gpt-5.4-mini",
               chatReasoningEffort: null,
@@ -95,6 +99,13 @@ const runProposal = async ({
       params: { threadId, messageId },
       safeDb: db.safeDb,
       scopedDb: db.scopedDb,
+      getWorkspaceAccess: async (id: string) =>
+        workspaceAccess === "missing"
+          ? null
+          : {
+              id,
+              status: workspaceAccess === "deleting" ? "deleting" : "active",
+            },
       session: { activeOrganizationId: organizationId },
       user: { id: userId },
       orgAIConfig,
@@ -129,22 +140,60 @@ describe("answer rewrite endpoint", () => {
     });
   });
   test.each([
-    { options: { revision: 1 }, status: 409 },
-    { options: { hash: sha256Hex("wrong") }, status: 409 },
-    { options: { active: true }, status: 409 },
-    { options: { anonymized: true }, status: 403 },
-    { options: { instruction: "   " }, status: 400 },
+    {
+      options: { workspaceAccess: "missing" },
+      status: 404,
+      message: "Chat message not found",
+    },
+    {
+      options: { workspaceAccess: "deleting" },
+      status: 404,
+      message: "Chat message not found",
+    },
+    {
+      options: { revision: 1 },
+      status: 409,
+      message: "Message selection changed; reload and select the text again",
+    },
+    {
+      options: { hash: sha256Hex("wrong") },
+      status: 409,
+      message: "Message selection changed; reload and select the text again",
+    },
+    {
+      options: { active: true },
+      status: 409,
+      message: "Wait for the assistant turn to settle before editing",
+    },
+    {
+      options: { anonymized: true },
+      status: 403,
+      message: "Answer rewriting is unavailable for anonymized conversations",
+    },
+    {
+      options: { instruction: "   " },
+      status: 400,
+      message: "Edit instruction is required",
+    },
   ])(
     "refuses invalid anchor or policy with status $status before dispatch",
-    async ({ options, status }) => {
+    async ({ options, status, message }) => {
       const { result, modelCalls } = await runProposal(options);
       expect(modelCalls).toBe(0);
-      expect(result).toMatchObject({ status });
+      expect(result).toMatchObject({ code: status, response: { message } });
     },
   );
   test("surfaces malformed model Markdown as a retryable proposal failure", async () => {
-    const { result, modelCalls } = await runProposal({ replacement: "**open" });
+    const { result, modelCalls } = await runProposal({
+      replacement: "new\nblock",
+    });
     expect(modelCalls).toBe(1);
-    expect(result).toMatchObject({ status: 502 });
+    expect(result).toMatchObject({
+      code: 502,
+      response: {
+        message:
+          "Answer rewrite returned unbalanced Markdown; try another instruction",
+      },
+    });
   });
 });

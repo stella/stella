@@ -151,6 +151,7 @@ const seedFixture = async (db: GatedTestDb) => {
           messageId,
           userId,
           organizationId,
+          getWorkspaceAccess: async (id) => ({ id, status: "active" }),
           change,
           recordAuditEvent,
         }),
@@ -451,6 +452,7 @@ if (!databaseUrl || !runPostgres) {
                 messageId: fixture.messageId,
                 userId: fixture.userId,
                 organizationId: fixture.organizationId,
+                getWorkspaceAccess: async (id) => ({ id, status: "active" }),
                 limit: 1,
               }),
           );
@@ -471,6 +473,7 @@ if (!databaseUrl || !runPostgres) {
                 messageId: fixture.messageId,
                 userId: fixture.userId,
                 organizationId: fixture.organizationId,
+                getWorkspaceAccess: async (id) => ({ id, status: "active" }),
                 limit: 1,
                 before: beforeRevision,
               }),
@@ -873,6 +876,56 @@ if (!databaseUrl || !runPostgres) {
       });
     });
 
+    test("denied matter access prevents revision reads and writes without mutation", async () => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const db = openClient().db;
+        const fixture = await seedFixture(db);
+        try {
+          const before = await fixture.observe();
+          for (const getWorkspaceAccess of [
+            async () => null,
+            async () => ({
+              id: fixture.workspaceId,
+              status: "deleting" as const,
+            }),
+          ]) {
+            const write = await fixture.scoped(db)(
+              async (tx) =>
+                await writeChatMessageRevisionOnTx({
+                  tx,
+                  threadId: fixture.threadId,
+                  messageId: fixture.messageId,
+                  userId: fixture.userId,
+                  organizationId: fixture.organizationId,
+                  getWorkspaceAccess,
+                  change: acceptedChange,
+                  recordAuditEvent: async () => {
+                    throw new TypeError("Denied write reached audit");
+                  },
+                }),
+            );
+            expect(write).toEqual({ type: "not-found" });
+            const page = await fixture.scoped(db)(
+              async (tx) =>
+                await readChatMessageRevisionsOnTx({
+                  tx,
+                  threadId: fixture.threadId,
+                  messageId: fixture.messageId,
+                  userId: fixture.userId,
+                  organizationId: fixture.organizationId,
+                  getWorkspaceAccess,
+                  limit: 1,
+                }),
+            );
+            expect(page).toBeNull();
+            expect(await fixture.observe()).toEqual(before);
+          }
+        } finally {
+          await fixture.cleanUp();
+        }
+      });
+    });
+
     test("an audit failure rolls back content, revision snapshots and compaction epoch", async () => {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const db = openClient().db;
@@ -899,6 +952,10 @@ if (!databaseUrl || !runPostgres) {
                     messageId: fixture.messageId,
                     userId: fixture.userId,
                     organizationId: fixture.organizationId,
+                    getWorkspaceAccess: async (id) => ({
+                      id,
+                      status: "active",
+                    }),
                     change: acceptedChange,
                     recordAuditEvent: async () => {
                       throw failure;
