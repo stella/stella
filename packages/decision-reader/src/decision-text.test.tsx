@@ -1,6 +1,8 @@
 import type { ComponentProps, ReactNode } from "react";
+import { useState } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
+import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
 
 import {
@@ -10,6 +12,7 @@ import {
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { CitedProvisionExpansion } from "./cited-provision";
+import type { FullProvisionRead } from "./cited-provision";
 import { DecisionText, prepareDecisionTextPlacements } from "./decision-text";
 import { BlockRenderer } from "./document-ast-text";
 import {
@@ -17,7 +20,11 @@ import {
   ReaderPresentationProvider,
 } from "./reader-adapters";
 import type { DecisionReaderAdapters } from "./reader-adapters";
-import type { CitedProvisionTarget, ReaderDecision } from "./reader-types";
+import type {
+  CitedProvisionTarget,
+  ProvisionPreviewData,
+  ReaderDecision,
+} from "./reader-types";
 
 export const fakeReaderAdapters = {
   messages: {
@@ -484,3 +491,178 @@ test("a provision card identifies unavailable parts until its full wording recov
     'data-slot="provision-card-unavailable-part"',
   );
 });
+
+for (const response of ["error", "null", "empty"] as const) {
+  test(`an unavailable full provision (${response}) can fold back and retry`, async () => {
+    const { GlobalRegistrator } = await import("@happy-dom/global-registrator");
+    GlobalRegistrator.register();
+    const previousActEnvironment = Reflect.get(
+      globalThis,
+      "IS_REACT_ACT_ENVIRONMENT",
+    );
+    Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
+    const { createRoot } = await import("react-dom/client");
+    const { act } = await import("react");
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    const citation = {
+      document: {
+        country: "cz",
+        eli: "/eli/cz/sb/2012/89",
+        id: "act",
+        slug: null,
+        versionValidFrom: null,
+      },
+      payload: {
+        anchorId: "par_5",
+        documentId: "act",
+        eli: "/eli/cz/sb/2012/89",
+        highlightAnchorId: "par_5-odst_1",
+        jurisdiction: "CZE",
+        provisionLabel: "§ 5 odst. 1",
+        statuteTitle: "Občanský zákoník",
+        versionCount: 1,
+        versionValidFrom: null,
+      },
+      preview: null,
+    } satisfies CitedProvisionTarget;
+    const wording = {
+      anchorId: "par_5",
+      blocks: [
+        { anchorId: "par_5-odst_1", id: "part-1", text: "Cited wording." },
+      ],
+      citedAnchorId: "par_5-odst_1",
+      documentId: "act",
+      heading: null,
+      headings: [],
+      language: "cs",
+    } satisfies ProvisionPreviewData;
+    const requests: ReturnType<
+      typeof Promise.withResolvers<ProvisionPreviewData | null>
+    >[] = [];
+    const readFull = () => {
+      const request = Promise.withResolvers<ProvisionPreviewData | null>();
+      requests.push(request);
+      return request.promise;
+    };
+    const Card = () => {
+      const [shown, setShown] = useState<"cited" | "full">("cited");
+      const [full, setFull] = useState<FullProvisionRead>({
+        isPending: false,
+        whole: null,
+      });
+      const onToggleFull = async () => {
+        if (shown === "full") {
+          setShown("cited");
+          return;
+        }
+        setShown("full");
+        setFull({ isPending: true, whole: null });
+        const result = await Result.tryPromise(readFull);
+        setFull({
+          isPending: false,
+          whole: result.isOk() ? result.value : null,
+        });
+      };
+      return (
+        <DecisionReaderProvider adapters={fakeReaderAdapters}>
+          <CitedProvisionExpansion
+            citations={[citation]}
+            full={full}
+            onToggleFull={onToggleFull}
+            showsFull={shown === "full"}
+            wordings={[{ target: citation, wording }]}
+          />
+        </DecisionReaderProvider>
+      );
+    };
+    try {
+      await act(async () => {
+        root.render(<Card />);
+      });
+      const toggle =
+        container.querySelector<HTMLButtonElement>("button[aria-expanded]") ??
+        panic("Missing provision toggle");
+      await act(async () => {
+        toggle.click();
+      });
+      expect(requests).toHaveLength(1);
+      expect(toggle.disabled).toBe(true);
+      expect(toggle.getAttribute("aria-expanded")).toBe("false");
+      expect(container.textContent).toContain("Cited wording.");
+      await act(async () => {
+        const request = requests.at(0) ?? panic("Missing full provision read");
+        switch (response) {
+          case "error":
+            request.reject(new DOMException("Read failed", "NetworkError"));
+            break;
+          case "null":
+            request.resolve(null);
+            break;
+          case "empty":
+            request.resolve({ ...wording, blocks: [] });
+            break;
+          default:
+            response satisfies never;
+        }
+      });
+      expect(toggle.disabled).toBe(false);
+      expect(toggle.textContent).toBe("Show full provision");
+      expect(toggle.getAttribute("aria-expanded")).toBe("false");
+      expect(
+        container.querySelector('[data-slot="provision-card-full-unavailable"]')
+          ?.textContent,
+      ).toBe("Text not available");
+      await act(async () => {
+        toggle.click();
+      });
+      expect(
+        container.querySelector(
+          '[data-slot="provision-card-full-unavailable"]',
+        ),
+      ).toBeNull();
+      expect(container.textContent).toContain("Cited wording.");
+      expect(toggle.disabled).toBe(false);
+      expect(requests).toHaveLength(1);
+      await act(async () => {
+        toggle.click();
+      });
+      expect(requests).toHaveLength(2);
+      expect(toggle.disabled).toBe(true);
+      await act(async () => {
+        const retry = requests.at(1) ?? panic("Missing retry read");
+        retry.resolve({
+          ...wording,
+          blocks: [
+            ...wording.blocks,
+            {
+              anchorId: "par_5-odst_2",
+              id: "part-2",
+              text: "Rest of provision.",
+            },
+          ],
+        });
+      });
+      expect(toggle.disabled).toBe(false);
+      expect(toggle.textContent).toBe("Show cited part only");
+      expect(toggle.getAttribute("aria-expanded")).toBe("true");
+      expect(container.textContent).toContain("Rest of provision.");
+    } finally {
+      await act(async () => {
+        root.unmount();
+      });
+      container.remove();
+      if (previousActEnvironment === undefined) {
+        Reflect.deleteProperty(globalThis, "IS_REACT_ACT_ENVIRONMENT");
+      } else {
+        Reflect.set(
+          globalThis,
+          "IS_REACT_ACT_ENVIRONMENT",
+          previousActEnvironment,
+        );
+      }
+      await GlobalRegistrator.unregister();
+    }
+  });
+}

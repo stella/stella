@@ -378,7 +378,7 @@ export const CitedProvisionExpansion = ({
         <span className="reader-chrome self-start">
           <Button
             aria-expanded={displaysFullText}
-            disabled={showsFull && outcome.type !== "text"}
+            disabled={showsFull && outcome.type === "pending"}
             onClick={onToggleFull}
             size="xs"
             variant="link"
