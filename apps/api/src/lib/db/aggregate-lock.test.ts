@@ -175,7 +175,7 @@ test("every advisory aggregate declares a distinct first-key namespace", async (
       execute: async (statement: SQL) => {
         const query = dialect.sqlToQuery(statement);
         const expression =
-          query.sql.match(/^SELECT (.*?) AS key1/u)?.at(1) ??
+          /^SELECT (.*?) AS key1/u.exec(query.sql)?.at(1) ??
           panic("Missing advisory first key");
         const parameters = [...expression.matchAll(/\$(\d+)/gu)].map((match) =>
           query.params.at(Number(match.at(1)) - 1),

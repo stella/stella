@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
 use crate::{
-  account::LinkedAccount,
+  account::AccountRequest,
   http_client::{DesktopHttpClient, HttpClientOptions},
 };
 
@@ -83,7 +83,9 @@ fn client() -> Result<DesktopHttpClient, String> {
   .map_err(|_| FAILURE.to_string())
 }
 
-async fn response_body(request: reqwest::RequestBuilder) -> Result<Vec<u8>, String> {
+async fn response_body(
+  request: crate::http_client::DeviceProofRequest,
+) -> Result<Vec<u8>, String> {
   let mut response = request.send().await.map_err(|_| FAILURE.to_string())?;
   if !response.status().is_success() {
     return Err(FAILURE.to_string());
@@ -99,18 +101,20 @@ async fn response_body(request: reqwest::RequestBuilder) -> Result<Vec<u8>, Stri
 }
 
 pub async fn search_matters(
-  account: &LinkedAccount,
+  account: &AccountRequest,
   query: &str,
 ) -> Result<Vec<Matter>, String> {
   if query.len() > 200 {
     return Err(FAILURE.to_string());
   }
-  let body = response_body(
+  let body = response_body(crate::http_client::device_proof_request(
     client()?
       .get(format!("{}/v1/desktop/matters", account.api_base_url))
-      .bearer_auth(&account.credential.key)
       .query(&[("query", query)]),
-  )
+    &account.device_key,
+    Some(&account.credential.key),
+    None,
+  )?)
   .await?;
   let response: MattersResponse =
     serde_json::from_slice(&body).map_err(|_| FAILURE.to_string())?;
@@ -131,16 +135,17 @@ pub async fn search_matters(
 }
 
 pub async fn candidates(
-  account: &LinkedAccount,
+  account: &AccountRequest,
 ) -> Result<Vec<MatterCandidate>, String> {
-  let body = response_body(
-    client()?
-      .get(format!(
-        "{}/v1/desktop/matter-candidates",
-        account.api_base_url
-      ))
-      .bearer_auth(&account.credential.key),
-  )
+  let body = response_body(crate::http_client::device_proof_request(
+    client()?.get(format!(
+      "{}/v1/desktop/matter-candidates",
+      account.api_base_url
+    )),
+    &account.device_key,
+    Some(&account.credential.key),
+    None,
+  )?)
   .await?;
   let result: CandidatesResponse =
     serde_json::from_slice(&body).map_err(|_| FAILURE.to_string())?;
@@ -190,21 +195,27 @@ enum AttemptFailure {
 }
 
 async fn submit_batch(
-  account: &LinkedAccount,
+  account: &AccountRequest,
   batch: &ConfirmedBatch,
 ) -> Result<CreatedBatch, AttemptFailure> {
   batch.validate().map_err(|_| AttemptFailure::Rejected)?;
-  let mut response = client()
+  let request = client()
     .map_err(|_| AttemptFailure::Rejected)?
     .put(format!(
       "{}/v1/desktop/time-entries/batch",
       account.api_base_url
     ))
-    .bearer_auth(&account.credential.key)
-    .json(batch)
-    .send()
-    .await
-    .map_err(|_| AttemptFailure::Uncertain)?;
+    .json(batch);
+  let mut response = crate::http_client::device_proof_request(
+    request,
+    &account.device_key,
+    Some(&account.credential.key),
+    None,
+  )
+  .map_err(|_| AttemptFailure::Rejected)?
+  .send()
+  .await
+  .map_err(|_| AttemptFailure::Uncertain)?;
   if !response.status().is_success() {
     // Client rejection still needs ledger recovery: an earlier attempt may
     // have committed even when this retry cannot be accepted.
@@ -266,20 +277,25 @@ pub enum SubmitFailure {
 }
 
 pub async fn submit_batch_with_recovery(
-  account: &LinkedAccount,
+  account: &AccountRequest,
   batch: &ConfirmedBatch,
 ) -> Result<CreatedBatch, SubmitFailure> {
   match submit_batch(account, batch).await {
     Err(AttemptFailure::Rejected) => {
       let body = response_body(
-        client()
-          .map_err(|_| SubmitFailure::Uncertain)?
-          .put(format!(
-            "{}/v1/desktop/time-entries/batch/status",
-            account.api_base_url
-          ))
-          .bearer_auth(&account.credential.key)
-          .json(&serde_json::json!({ "idempotencyKey": batch.idempotency_key })),
+        crate::http_client::device_proof_request(
+          client()
+            .map_err(|_| SubmitFailure::Uncertain)?
+            .put(format!(
+              "{}/v1/desktop/time-entries/batch/status",
+              account.api_base_url
+            ))
+            .json(&serde_json::json!({ "idempotencyKey": batch.idempotency_key })),
+          &account.device_key,
+          Some(&account.credential.key),
+          None,
+        )
+        .map_err(|_| SubmitFailure::Uncertain)?,
       )
       .await
       .map_err(|_| SubmitFailure::Uncertain)?;
@@ -303,24 +319,38 @@ mod tests {
   use super::*;
   use axum::{Json, Router, http::HeaderMap, routing::put};
 
-  fn fixture(api_base_url: String) -> LinkedAccount {
-    serde_json::from_value(serde_json::json!({
+  async fn fixture(api_base_url: String) -> AccountRequest {
+    let account = serde_json::from_value(serde_json::json!({
       "apiBaseUrl": api_base_url,
       "webOrigin": "https://example.test",
       "account": {"email": "fixture@example.test", "name": null, "verifiedAt": "2026-01-01T00:00:00Z"},
       "identity": {"userId": "user_fixture", "organizationId": "org_fixture"},
       "credential": {"key": "fixture_key", "expiresAt": "2099-01-01T00:00:00Z"}
-    })).unwrap()
+    })).unwrap();
+    AccountRequest::fixture(account).await
   }
 
   #[tokio::test]
   async fn outbound_request_contains_only_confirmed_fields_and_credential() {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let account = fixture(format!("http://{}", listener.local_addr().unwrap()));
+    let account = fixture(format!("http://{}", listener.local_addr().unwrap())).await;
+    let thumbprint = account.device_key.thumbprint().unwrap();
+    let url = format!("{}/v1/desktop/time-entries/batch", account.api_base_url);
     let router = Router::new().route(
       "/v1/desktop/time-entries/batch",
       put(
-        |headers: HeaderMap, Json(body): Json<serde_json::Value>| async move {
+        move |headers: HeaderMap, Json(body): Json<serde_json::Value>| {
+          let thumbprint = thumbprint.clone();
+          let url = url.clone();
+          async move {
+          let mut request = reqwest::Request::new(reqwest::Method::PUT, url.parse().unwrap());
+          *request.headers_mut() = headers.clone();
+          crate::device_proof::tests::verify_request(
+            &request,
+            &thumbprint,
+            Some("fixture_key"),
+            None,
+          );
           assert_eq!(headers.get("authorization").unwrap(), "Bearer fixture_key");
           assert_eq!(headers.get("user-agent").unwrap(), "stella-desktop");
           assert_eq!(
@@ -331,6 +361,7 @@ mod tests {
             })
           );
           Json(serde_json::json!({"entries": [{"id": "entry_fixture", "matterId": "workspace_fixture"}]}))
+          }
         },
       ),
     );
@@ -355,23 +386,49 @@ mod tests {
   #[tokio::test]
   async fn uncertain_attempt_then_rejection_recovers_only_an_authoritative_outcome() {
     use axum::http::StatusCode;
-    use std::sync::{
-      Arc,
-      atomic::{AtomicUsize, Ordering},
+    use std::{
+      collections::HashSet,
+      sync::{
+        Arc, Mutex,
+        atomic::{AtomicUsize, Ordering},
+      },
     };
     for status in ["cancelled", "committed", "unavailable"] {
       let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-      let account = fixture(format!("http://{}", listener.local_addr().unwrap()));
+      let account = fixture(format!("http://{}", listener.local_addr().unwrap())).await;
       let attempts = Arc::new(AtomicUsize::new(0));
       let submissions = Arc::clone(&attempts);
       let recoveries = Arc::new(AtomicUsize::new(0));
       let status_requests = Arc::clone(&recoveries);
+      let proofs = Arc::new(Mutex::new(HashSet::new()));
+      let submission_proofs = Arc::clone(&proofs);
+      let recovery_proofs = Arc::clone(&proofs);
+      let submission_thumbprint = account.device_key.thumbprint().unwrap();
+      let recovery_thumbprint = submission_thumbprint.clone();
+      let submission_url =
+        format!("{}/v1/desktop/time-entries/batch", account.api_base_url);
+      let recovery_url = format!(
+        "{}/v1/desktop/time-entries/batch/status",
+        account.api_base_url
+      );
       let router = Router::new()
-        .route("/v1/desktop/time-entries/batch", put(move || {
+        .route("/v1/desktop/time-entries/batch", put(move |headers: HeaderMap| {
+          let mut request = reqwest::Request::new(reqwest::Method::PUT, submission_url.parse().unwrap());
+          *request.headers_mut() = headers;
+          let claims = crate::device_proof::tests::verify_request(
+            &request, &submission_thumbprint, Some("fixture_key"), None,
+          );
+          assert!(submission_proofs.lock().unwrap().insert(claims["jti"].as_str().unwrap().to_string()));
           let attempt = submissions.fetch_add(1, Ordering::SeqCst);
           async move { if attempt == 0 { StatusCode::SERVICE_UNAVAILABLE } else { StatusCode::UNPROCESSABLE_ENTITY } }
         }))
         .route("/v1/desktop/time-entries/batch/status", put(move |headers: HeaderMap, Json(body): Json<serde_json::Value>| {
+          let mut request = reqwest::Request::new(reqwest::Method::PUT, recovery_url.parse().unwrap());
+          *request.headers_mut() = headers.clone();
+          let claims = crate::device_proof::tests::verify_request(
+            &request, &recovery_thumbprint, Some("fixture_key"), None,
+          );
+          assert!(recovery_proofs.lock().unwrap().insert(claims["jti"].as_str().unwrap().to_string()));
           status_requests.fetch_add(1, Ordering::SeqCst);
           async move {
             assert_eq!(headers.get("authorization").unwrap(), "Bearer fixture_key");
@@ -402,6 +459,7 @@ mod tests {
       }
       assert_eq!(attempts.load(Ordering::SeqCst), 2);
       assert_eq!(recoveries.load(Ordering::SeqCst), 1);
+      assert_eq!(proofs.lock().unwrap().len(), 3);
       server.abort();
     }
   }

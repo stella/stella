@@ -168,10 +168,9 @@ export const createDesktopTimeEntryBatchEndpoint = (
                 }),
               );
             }
-            if (!receipt.result) {
-              panic("Committed batch receipt has no result");
-            }
-            return receipt.result;
+            return (
+              receipt.result ?? panic("Committed batch receipt has no result")
+            );
           }
           const safeDb = safeDbFromScoped(async (run) => await run(tx));
           const rates = await resolveWorkspaceRatesInTransaction({
@@ -236,8 +235,9 @@ export const createDesktopTimeEntryBatchEndpoint = (
           }
           const entries = [];
           const auditEvents: AuditEvent[] = [];
-          const bufferAuditEvent: AuditRecorder = async (_tx, events) => {
+          const bufferAuditEvent: AuditRecorder = (_tx, events) => {
             auditEvents.push(...(Array.isArray(events) ? events : [events]));
+            return Promise.resolve();
           };
           for (const { workspaceId, prepared } of preparedBatch.value) {
             const entry = await insertPreparedTimeEntry({

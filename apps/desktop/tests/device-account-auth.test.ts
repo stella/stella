@@ -54,6 +54,7 @@ const assertAccountRequestOwners = (sources: readonly NativeSource[]) => {
     "handoff.rs",
     "presence.rs",
     "registry.rs",
+    "time_entry_submit.rs",
   ];
   if (JSON.stringify(proofCallers.toSorted()) !== JSON.stringify(expected)) {
     throw new TypeError("Desktop device proof caller census changed");
@@ -80,6 +81,7 @@ describe("native desktop account request ownership", () => {
       "handoff.rs",
       "presence.rs",
       "registry.rs",
+      "time_entry_submit.rs",
     ]) {
       const caller = sources.find((source) => source.filename === filename);
       expect(caller?.source).toContain(

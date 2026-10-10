@@ -11,7 +11,7 @@ import {
 } from "./activity-logic";
 import type { ActivityManualAssignment } from "./activity-types";
 
-export type ActivityRange = { start: string; end: string };
+type ActivityRange = { start: string; end: string };
 export type MatchConfidence = "strong" | "likely" | "manual" | "unmatched";
 export type MatchedSegment = TimedSegment & {
   matter: DesktopTimeEntryMatterCandidate | null;
@@ -59,6 +59,7 @@ const containsRange = (
 const distinctiveTokenIndex = (
   candidates: readonly DesktopTimeEntryMatterCandidate[],
 ) => {
+  const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
   const index = {
     name: new Map<string, Set<string>>(),
     clientName: new Map<string, Set<string>>(),
@@ -66,7 +67,7 @@ const distinctiveTokenIndex = (
   for (const field of ["name", "clientName"] as const) {
     for (const candidate of candidates) {
       for (const token of new Set(tokens(candidate[field] ?? ""))) {
-        if ([...token].length < 3) {
+        if (Array.from(graphemes.segment(token)).length < 3) {
           continue;
         }
         const owners = index[field].get(token);
@@ -94,7 +95,8 @@ const likelyMatter = ({
   const details = evidence.map(tokens);
   const references = candidates.filter(
     ({ reference }) =>
-      reference &&
+      reference !== null &&
+      reference.length > 0 &&
       details.some((detail) => hasPhrase(detail, tokens(reference))),
   );
   if (references.length > 0) {
@@ -224,9 +226,9 @@ export const matchDay = ({
   manualAssignments,
   draftedEntries,
 }: MatchDayOptions) => {
-  const orderedCandidates = candidates.toSorted((left, right) =>
-    left.id.localeCompare(right.id),
-  );
+  const orderedCandidates = candidates
+    .slice()
+    .sort((left, right) => left.id.localeCompare(right.id));
   const distinctiveTokens = distinctiveTokenIndex(orderedCandidates);
   const assignments = manualAssignments.map((range) => ({
     ...range,
@@ -245,7 +247,7 @@ export const matchDay = ({
         endMs,
       ]),
     ),
-  ].toSorted((left, right) => left - right);
+  ].sort((left, right) => left - right);
   let edgeIndex = 0;
   const matchedSegments: MatchedSegment[] = [];
   for (const original of segments) {
@@ -327,11 +329,13 @@ export const matchDay = ({
   }
   return {
     segments: matchedSegments,
-    groups: groups.toSorted(
-      (left, right) =>
-        Number(left.matter === null) - Number(right.matter === null) ||
-        right.durationMs - left.durationMs ||
-        left.id.localeCompare(right.id),
-    ),
+    groups: groups
+      .slice()
+      .sort(
+        (left, right) =>
+          Number(left.matter === null) - Number(right.matter === null) ||
+          right.durationMs - left.durationMs ||
+          left.id.localeCompare(right.id),
+      ),
   };
 };

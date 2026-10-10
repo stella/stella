@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 
 import type { DesktopTimeEntryMatterCandidate } from "@stll/api-contract/desktop-time-entries";
 
-import { timedSegments, totalDurationMs } from "./activity-logic";
-import { matchDay } from "./day-review-logic";
+import { timedSegments, totalDurationMs } from "../src/activity/activity-logic";
+import { matchDay } from "../src/activity/day-review-logic";
 
 const candidates = [
   {

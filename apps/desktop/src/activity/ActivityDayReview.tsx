@@ -164,7 +164,12 @@ export const ActivityDayReview = ({
     });
     setCopied(false);
   };
-  const eligible = day.groups.filter((group) => group.matter);
+  const eligible = day.groups.filter(
+    (
+      group,
+    ): group is DayReviewGroup & { matter: DesktopTimeEntryMatterCandidate } =>
+      group.matter !== null,
+  );
   const selected = eligible.filter((group) => editFor(group).selected);
   const selectedTenths = selected.reduce(
     (sum, group) => sum + group.roundedTenths,
@@ -366,7 +371,7 @@ export const ActivityDayReview = ({
             selected
               .map(
                 (group) =>
-                  `${group.matter?.name} · ${format.dateTime(calendarDate(snapshot.date), { dateStyle: "medium" })} · ${t("hours", { hours: hours(group.roundedTenths / 10) })}: ${editFor(group).narrative}`,
+                  `${group.matter.name} · ${format.dateTime(calendarDate(snapshot.date), { dateStyle: "medium" })} · ${t("hours", { hours: hours(group.roundedTenths / 10) })}: ${editFor(group).narrative}`,
               )
               .join("\n"),
             () => setCopied(true),

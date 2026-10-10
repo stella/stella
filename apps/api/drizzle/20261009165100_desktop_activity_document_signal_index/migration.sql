@@ -6,7 +6,7 @@ COMMIT;
 --> statement-breakpoint
 SET statement_timeout = 0;--> statement-breakpoint
 SET lock_timeout = 0;--> statement-breakpoint
--- stella-migration-safety: reviewed drop-object - removes only this migration's own interrupted index build before replay
+-- Rebuild only this migration's interrupted index before replay.
 DROP INDEX CONCURRENTLY IF EXISTS "entities_ws_editor_updated_idx";
 --> statement-breakpoint
 CREATE INDEX CONCURRENTLY "entities_ws_editor_updated_idx" ON "entities" ("workspace_id", "last_edited_by", "updated_at") WHERE "kind" = 'document';

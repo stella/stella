@@ -63,7 +63,7 @@ export const ActivityTimeline = ({
       snapshot.recordingStatus !== "recording" ||
       snapshot.date !== snapshot.today
     ) {
-      return;
+      return undefined;
     }
     const timer = setInterval(
       () => setNow(Temporal.Now.instant().epochMilliseconds),

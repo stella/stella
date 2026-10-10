@@ -4,7 +4,7 @@ import type { ActivitySegment } from "./activity-types";
 
 const MINUTE_MS = 60_000;
 /** Durations round up to a tenth of an hour. */
-export const ENTRY_INCREMENT_MS = 6 * MINUTE_MS;
+const ENTRY_INCREMENT_MS = 6 * MINUTE_MS;
 
 export type TimedSegment = {
   appIdentifier: string;

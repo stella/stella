@@ -34,7 +34,7 @@ export const MatterPicker = ({
   >({ type: "idle" });
   useEffect(() => {
     if (disabled || !open || !query.trim()) {
-      return;
+      return undefined;
     }
     let disposed = false;
     const timer = setTimeout(() => {

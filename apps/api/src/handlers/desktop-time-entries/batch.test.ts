@@ -17,6 +17,10 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { aggregateExecutionRows } from "@/api/lib/db/aggregate-lock-order.fixture";
 import { LIMITS } from "@/api/lib/limits";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import {
+  claimFixtureDeviceProof,
+  createDesktopDeviceSigner,
+} from "@/api/tests/helpers/desktop-device-proof";
 import { createTestState } from "@/api/tests/helpers/test-state";
 import {
   createScopedDbMock,
@@ -137,14 +141,26 @@ const createBatchHarness = (existingEntries = 0) => {
       },
     },
   );
-  const authorizeAccount = async () =>
-    Result.ok({
+  const deviceSigner = createDesktopDeviceSigner();
+  const authorizeAccount = async (request: Request) => {
+    const device = await deviceSigner;
+    return Result.ok({
+      consumedProof: await claimFixtureDeviceProof({
+        request: await device.signRequest({
+          request,
+          credential: "fixture-credential",
+        }),
+        deviceJkt: device.deviceJkt,
+        keyId: "desktop-key",
+        credential: "fixture-credential",
+      }),
       scopedDb,
       organizationId: toSafeId<"organization">("org_test"),
       userId: toSafeId<"user">("user_test"),
       keyId: "desktop-key",
       memberRole: sessionMemberRole("member"),
     });
+  };
   const endpoint = createDesktopTimeEntryBatchEndpoint(authorizeAccount);
   const statusEndpoint =
     createDesktopTimeEntryBatchStatusEndpoint(authorizeAccount);

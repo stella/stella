@@ -10,6 +10,10 @@ import {
   authorizedMemberRole,
   sessionMemberRole,
 } from "@/api/lib/permission-authorization";
+import {
+  claimFixtureDeviceProof,
+  createDesktopDeviceSigner,
+} from "@/api/tests/helpers/desktop-device-proof";
 import { createTestState } from "@/api/tests/helpers/test-state";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -154,8 +158,18 @@ const exercise = async ({
       },
     },
   );
-  const authorizeAccount = async () =>
+  const device = await createDesktopDeviceSigner();
+  const authorizeAccount = async (request: Request) =>
     Result.ok({
+      consumedProof: await claimFixtureDeviceProof({
+        request: await device.signRequest({
+          request,
+          credential: "fixture-credential",
+        }),
+        deviceJkt: device.deviceJkt,
+        keyId: "desktop-key",
+        credential: "fixture-credential",
+      }),
       scopedDb,
       organizationId: toSafeId<"organization">(ORGANIZATION_ID),
       userId: toSafeId<"user">(USER_ID),

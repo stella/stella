@@ -17,6 +17,10 @@ import { createMembershipScopedDb } from "@/api/db/scoped";
 import { env } from "@/api/env";
 import type { SafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import {
+  claimFixtureDeviceProof,
+  createDesktopDeviceSigner,
+} from "@/api/tests/helpers/desktop-device-proof";
 import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -101,14 +105,26 @@ const appForKey = (organizationId: SafeId<"organization">) => {
       serverValidatedWorkspaceIds: [],
     }),
   );
-  const authorizeAccount = async () =>
-    Result.ok({
+  const deviceSigner = createDesktopDeviceSigner();
+  const authorizeAccount = async (request: Request) => {
+    const device = await deviceSigner;
+    return Result.ok({
+      consumedProof: await claimFixtureDeviceProof({
+        request: await device.signRequest({
+          request,
+          credential: "fixture-credential",
+        }),
+        deviceJkt: device.deviceJkt,
+        keyId: `desktop-key-${organizationId}`,
+        credential: "fixture-credential",
+      }),
       organizationId,
       userId: ids.userA1,
       keyId: `desktop-key-${organizationId}`,
       memberRole: sessionMemberRole("member"),
       scopedDb,
     });
+  };
   const candidates = createDesktopMatterCandidatesEndpoint(authorizeAccount);
   const batch = createDesktopTimeEntryBatchEndpoint(authorizeAccount);
   const status = createDesktopTimeEntryBatchStatusEndpoint(authorizeAccount);

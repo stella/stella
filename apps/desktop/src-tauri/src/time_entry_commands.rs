@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, State};
 
 use crate::{
-  account::{self, AccountState, LinkedAccount},
+  account::{self, AccountRequest, AccountState, LinkedAccount},
   activity::{
     self, ActivityAppState, ActivityDraftedEntry, ActivityPendingBatch, ActivityRange,
   },
@@ -66,8 +66,8 @@ async fn linked_account(
   caller: &ActivityCaller,
   gates: &FeatureGates,
   state: &AccountState,
-) -> Result<LinkedAccount, String> {
-  let linked = account::current(state)
+) -> Result<AccountRequest, String> {
+  let linked = account::request_account(state)
     .await
     .map_err(|_| REFUSAL.to_string())?
     .ok_or_else(|| REFUSAL.to_string())?;
