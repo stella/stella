@@ -18,10 +18,17 @@ const UNSUPPORTED_BUILT_INS = [
   { name: "Promise.withResolvers", pattern: /\bPromise\.withResolvers\b/u },
   { name: "String#isWellFormed", pattern: /\.isWellFormed\(/u },
   { name: "String#toWellFormed", pattern: /\.toWellFormed\(/u },
+  // These names exist only on Set, so any receiver is flagged.
+  {
+    name: "Set relation methods",
+    pattern:
+      /\.(?:symmetricDifference|isSubsetOf|isSupersetOf|isDisjointFrom)\(/u,
+  },
+  // Schema and date libraries share these names (`v.union(...)`), so only a
+  // call with a Set argument is flagged.
   {
     name: "Set composition methods",
-    pattern:
-      /\.(?:union|intersection|difference|symmetricDifference|isSubsetOf|isSupersetOf|isDisjointFrom)\(\s*new Set\b/u,
+    pattern: /\.(?:union|intersection|difference)\(\s*new Set\b/u,
   },
 ] as const;
 
@@ -65,6 +72,7 @@ describe("desktop WebView baseline", () => {
       "Promise.withResolvers()",
       "text.isWellFormed()",
       "text.toWellFormed()",
+      "left.isSubsetOf(right)",
       "left.union(new Set(right))",
     ];
     expect(
@@ -73,5 +81,15 @@ describe("desktop WebView baseline", () => {
     expect(
       unsupportedCalls("sample.ts", "[...items].sort((a, b) => a - b)"),
     ).toEqual([]);
+    for (const call of [
+      "left.symmetricDifference(right)",
+      "left.isSupersetOf(right)",
+      "left.isDisjointFrom(right)",
+    ]) {
+      expect(unsupportedCalls("sample.ts", call)).toEqual([
+        "sample.ts: Set relation methods",
+      ]);
+    }
+    expect(unsupportedCalls("sample.ts", "v.union([a, b])")).toEqual([]);
   });
 });
