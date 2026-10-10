@@ -1,4 +1,5 @@
-import { createHash } from "node:crypto";
+import { compareCodeUnit } from "@stll/collation";
+import { createSha256 } from "@stll/sha256/bun";
 
 type SelectMatterNamesOptions = {
   matterCount: number;
@@ -18,9 +19,7 @@ export const selectMatterNames = ({
   matterNames,
   selectionSeed,
 }: SelectMatterNamesOptions): string[] => {
-  const uniqueNames = [...new Set(matterNames)].toSorted((a, b) =>
-    a.localeCompare(b),
-  );
+  const uniqueNames = [...new Set(matterNames)].toSorted(compareCodeUnit);
   if (selectionSeed === undefined) {
     return uniqueNames.slice(0, matterCount);
   }
@@ -28,14 +27,15 @@ export const selectMatterNames = ({
   return uniqueNames
     .map((name) => ({
       name,
-      rank: createHash("sha256")
+      rank: createSha256()
         .update(selectionSeed)
         .update("\0")
         .update(name)
         .digest("hex"),
     }))
     .toSorted(
-      (a, b) => a.rank.localeCompare(b.rank) || a.name.localeCompare(b.name),
+      (a, b) =>
+        compareCodeUnit(a.rank, b.rank) || compareCodeUnit(a.name, b.name),
     )
     .slice(0, matterCount)
     .map(({ name }) => name);

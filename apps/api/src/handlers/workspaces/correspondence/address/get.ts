@@ -3,7 +3,7 @@ import { and, eq, isNull } from "drizzle-orm";
 
 import { matterInboundAddresses } from "@/api/db/schema";
 import { env } from "@/api/env";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type {
   UnbackedProjectionKeys,
@@ -42,6 +42,7 @@ true satisfies UnexpectedInboundAddressRowColumn extends never ? true : never;
 const config = {
   description: "Read the active inbound address for a matter.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "provider_secret" },
   access: "read",
 } satisfies WorkspaceHandlerConfig;

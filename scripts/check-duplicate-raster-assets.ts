@@ -3,6 +3,9 @@
 import { panic } from "better-result";
 import nodePath from "node:path";
 
+import { compareCodeUnit } from "@stll/collation";
+import { createSha256 } from "@stll/sha256/bun";
+
 const RASTER_EXTENSIONS = new Set([
   ".avif",
   ".bmp",
@@ -53,7 +56,7 @@ export const groupDuplicateRasterAssets = (
     duplicates.push({ ...first, path: paths[0] ?? first.path, paths });
   }
   return duplicates.toSorted((left, right) =>
-    left.path.localeCompare(right.path),
+    compareCodeUnit(left.path, right.path),
   );
 };
 
@@ -67,7 +70,7 @@ const hashRaster = async (
   }
   const bytes = await file.arrayBuffer();
   return {
-    digest: new Bun.CryptoHasher("sha256").update(bytes).digest("hex"),
+    digest: createSha256().update(new Uint8Array(bytes)).digest("hex"),
     path: filePath,
     size: bytes.byteLength,
   };

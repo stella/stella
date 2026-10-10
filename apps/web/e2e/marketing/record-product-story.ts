@@ -660,7 +660,6 @@ const scenes = [
 
 // Join the shared capture matrix (viewports, watched paths) with this file's
 // per-scene routes and choreography.
-// oxlint-disable-next-line no-map-spread -- merges each capture definition with its scene into a new record; neither source object may be mutated, and the array is tiny
 const captures: readonly StoryCapture[] = captureDefinitions.map(
   (definition) => {
     const scene = scenes.find(({ id }) => id === definition.sceneId);

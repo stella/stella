@@ -1,4 +1,4 @@
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import {
   dailyTargetBody,
   setDailyTarget,
@@ -9,6 +9,8 @@ const updateDailyTarget = createSafeRootHandler(
     description:
       "Set the signed-in user's daily time target in the active organization. Pass minutes from 1 to 1440, or null to clear the target. Read time-entries.me.list for the target and remaining minutes for a work date.",
     permissions: { timeEntry: ["create"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: { featureId: "time-billing", type: "required" },
     access: "write",
     mcp: {
       type: "capability",

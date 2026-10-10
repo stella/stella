@@ -7,6 +7,7 @@ import {
   cloneFieldsForRevision,
   nextEntityVersionNumber,
 } from "@/api/lib/entity-versions/version-utils";
+import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import {
   allocateFileObject,
   fileContentWithMintedObject,
@@ -83,7 +84,7 @@ describe("cloneFieldsForRevision", () => {
     const textPropertyId = toSafeId<"property">("prop_text");
     const nextVersionId = toSafeId<"entityVersion">("version_next");
     const replacementFile = fileContentWithMintedObject({
-      encrypted: false,
+      encryption: serverBuiltFileEncryption(),
       fileName: "agreement.docx",
       id: allocateFileObject(),
       mimeType:
@@ -154,7 +155,7 @@ describe("cloneFieldsForRevision", () => {
     const nextVersionId = toSafeId<"entityVersion">("version_next");
     const replacementFieldId = toSafeId<"field">("field_replacement");
     const replacementFile = fileContentWithMintedObject({
-      encrypted: false,
+      encryption: serverBuiltFileEncryption(),
       fileName: "agreement.docx",
       id: allocateFileObject(),
       mimeType:

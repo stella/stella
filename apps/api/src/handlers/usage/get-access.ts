@@ -1,11 +1,12 @@
 import { Result } from "better-result";
 
-import { env } from "@/api/env";
 import {
+  ACCOUNT_ACCESS,
   createSafeRootHandler,
   type HandlerConfig,
   type SafeHandlerGenerator,
 } from "@/api/lib/api-handlers";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import {
   CONFIGURED_ACCESS_STATE,
   configuredPaymentRetry,
@@ -16,6 +17,7 @@ const config = {
   description:
     "Read the organization's current access notification and its deadline.",
   permissions: { chat: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
   mcp: { type: "internal", reason: "hosted_billing" },
 } satisfies HandlerConfig;
@@ -30,7 +32,7 @@ const getAccess = createSafeRootHandler(
     session,
     safeDb,
   }): SafeHandlerGenerator<UsageAccessResult> {
-    if (!env.FEATURE_CONFIGURED_ACCESS) {
+    if (!isDeploymentFeatureEnabled("FEATURE_CONFIGURED_ACCESS")) {
       return Result.ok({ paymentRetry: { status: "none" as const } });
     }
     const state = yield* Result.await(

@@ -23,6 +23,7 @@ import {
   SchedulerTaskFailure,
   type SchedulerTask,
 } from "@/api/lib/scheduler/types";
+import { recordSystemAudit } from "@/api/lib/system-audit/record";
 
 export const BACKFILL_LEGISLATION_EXPRESSION_IDS_TASK =
   "legislation.backfillExpressionIds" as const;
@@ -309,7 +310,7 @@ export const createLegislationExpressionIdBackfill =
     clock = () => Temporal.Now.instant().epochMilliseconds,
     observeStatus = logSchedulerBackfillStatus,
   }: BackfillBounds = DEFAULT_BOUNDS): SchedulerTask =>
-  async ({ db, job, logger, scheduleContinuation, signal }) => {
+  async ({ db, job, logger, runId, scheduleContinuation, signal }) => {
     signal.throwIfAborted();
     const runtime = createRuntime({
       db,
@@ -387,8 +388,10 @@ export const createLegislationExpressionIdBackfill =
       }
     }
 
-    // audit: skip — bounded identity repair derived from stored publisher IRIs;
-    // scheduler_job_runs provides the durable operator trail.
+    await recordSystemAudit(db, "system:legislation-expression-id-backfill", {
+      subject: runId,
+      counts: { claimedDocuments: page.type === "page" ? page.claimed : 0 },
+    });
     logger.info("scheduler.legislation_expression_ids_backfilled", {
       "legislationExpressionIds.claimed":
         page.type === "page" ? page.claimed : 0,

@@ -37,6 +37,8 @@ import {
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
+import { validateFetchedToolsList } from "../../../../../packages/cli/src/registry-trust";
+
 /**
  * End-to-end contract of the `skill__*` family through the served surface:
  * `tools/list` (`listMcpTools`) and `tools/call` (`handleMcpToolCall`) over
@@ -132,7 +134,7 @@ const SUMMARIZE_SLUG = `summarize-${RUN}`;
 const DOTTED_SLUG = `data.report-${RUN}`;
 const UNDERSCORED_SLUG = `data_report-${RUN}`;
 const MALFORMED_SLUG = `malformed-${RUN}`;
-const COLLIDING_NAME = `skill__data_report-${RUN}`;
+const COLLIDING_NAME = `skill__data_report_${RUN}`;
 
 const listSkillTools = async () =>
   (await listMcpTools(createContext(), "default", ["stella:skills"])).filter(
@@ -173,6 +175,17 @@ describe("skill tool output contract", () => {
         SKILL_TOOL_OUTPUT.outputSchema,
       );
     }
+  });
+
+  test("the served listing, colliding skills included, passes the CLI's listing check", async () => {
+    // One name outside the contract makes the CLI drop the whole listing.
+    const tools = await listMcpTools(createContext(), "default", undefined);
+    const names = tools.map((tool) => tool.name);
+    expect(names).toContain(COLLIDING_NAME);
+    expect(new Set(names).size).toBe(names.length);
+    expect(validateFetchedToolsList(JSON.stringify({ tools }))).toMatchObject({
+      ok: true,
+    });
   });
 
   test("every skill tool is read-only, non-destructive and closed-world", async () => {
@@ -225,7 +238,7 @@ describe("skill tool output contract", () => {
     const result = await handleMcpToolCall({
       args: {},
       context: createContext(),
-      toolName: `skill__${MALFORMED_SLUG}`,
+      toolName: `skill__malformed_${RUN}`,
     });
 
     expect(result.isError).toBe(true);

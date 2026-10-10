@@ -1,0 +1,6 @@
+{
+  "metric": "direct-failure-sinks",
+  "file": "apps/api/src/lib/files/detect-file-encryption.ts",
+  "delta": 2,
+  "reason": "uploadFileEncryption is now the one place the upload paths report an encryption inspection that failed (unreadable) or did not finish (unsure); the captureError calls the three upload handlers made by hand moved into it, so the total falls."
+}

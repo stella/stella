@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import { completeEntityVersionUpload } from "./upload-entity-version.logic";
 
 describe("entity version upload completion", () => {
@@ -36,7 +38,10 @@ describe("entity version upload completion", () => {
       },
     });
 
-    expect(operation).rejects.toThrow("S3 rejected upload (503)");
+    expect(await rejectionOf(operation)).toHaveProperty(
+      "message",
+      expect.stringContaining("S3 rejected upload (503)"),
+    );
     // swallow-ok: drains the upload after the named storage-rejection assertion above
     await operation.catch(() => undefined);
     expect(events).toEqual(["put", "abort"]);
@@ -57,7 +62,10 @@ describe("entity version upload completion", () => {
       },
     });
 
-    expect(operation).rejects.toThrow("network unavailable");
+    expect(await rejectionOf(operation)).toHaveProperty(
+      "message",
+      expect.stringContaining("network unavailable"),
+    );
     // swallow-ok: drains the upload after the named network-error assertion above
     await operation.catch(() => undefined);
     expect(events).toEqual(["put", "abort"]);

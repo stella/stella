@@ -26,7 +26,9 @@ import {
   maxRssBytesToMb,
 } from "./resource-usage";
 import {
+  measuredTestRssTable,
   parseRssMeasurementArguments,
+  staleTestRssTableAnnotation,
   testRssArtifact,
   TEST_BATCH_KIND,
   type TestBatchKind,
@@ -39,8 +41,11 @@ import {
   snapshotKey,
   SnapshotBuildError,
 } from "./test-db-snapshot-cache";
-import durations from "./test-durations.json";
-import { API_TEST_SHARD_ENV, selectApiTestFiles } from "./test-file-shards";
+import {
+  API_TEST_SHARD_ENV,
+  restrictApiTestFiles,
+  selectApiTestFiles,
+} from "./test-file-shards";
 import {
   deriveTestLaneCount,
   laneRunExitCode,
@@ -48,6 +53,17 @@ import {
   runInLanes,
 } from "./test-lanes";
 import { partitionRunnerArguments, selectTestPaths } from "./test-path-filters";
+import {
+  TestProcessSupervisor,
+  testProcessBudgets,
+} from "./test-process-supervisor";
+import {
+  API_TEST_DURATIONS_FILE_ENV,
+  API_TEST_DURATIONS_HASH_ENV,
+  assertTestDurationsIdentity,
+  loadTestDurationWeights,
+  testFileDurationWeights,
+} from "./test-timings";
 
 const PROPERTY_FLAG = "--property";
 const TEST_ROOT_SET = new Set<string>(TEST_ROOTS);
@@ -64,16 +80,37 @@ const forwardedArguments = runnerArguments.filter(
   (argument) => argument !== PROPERTY_FLAG,
 );
 
-const allTestPaths = listApiTestPaths(apiRoot);
+const allTestPaths = restrictApiTestFiles(
+  listApiTestPaths(apiRoot),
+  process.env["API_TEST_FILES"],
+);
+const durationWeights = loadTestDurationWeights({
+  files: allTestPaths,
+  path: process.env[API_TEST_DURATIONS_FILE_ENV],
+});
 const { testPaths, shard } = selectApiTestFiles({
   files: allTestPaths,
-  durations,
+  durations: durationWeights,
   shardValue: process.env[API_TEST_SHARD_ENV],
 });
 if (shard !== null) {
+  assertTestDurationsIdentity({
+    path: process.env[API_TEST_DURATIONS_FILE_ENV],
+    hash: process.env[API_TEST_DURATIONS_HASH_ENV],
+  });
   console.log(
     `API test shard ${shard.index}/${shard.count}: ${testPaths.length}/${allTestPaths.length} files`,
   );
+}
+// One annotation per run: the first shard speaks for all of them.
+if (rssMode.mode === "batched" && (shard === null || shard.index === 1)) {
+  const staleTable = staleTestRssTableAnnotation(
+    measuredTestRssTable().measuredAt,
+    new Date(),
+  );
+  if (staleTable !== undefined) {
+    console.log(staleTable);
+  }
 }
 
 // Hidden directories are tool caches; `node_modules` is third-party code. A
@@ -139,82 +176,65 @@ const printError = (text: string) => {
   process.stderr.write(`${text}\n`);
 };
 
-// Every child process the runner started and has not reaped yet. An interrupt
-// stops them and waits for them before the run ends and releases its cache
-// lease or deletes its private snapshot.
-const liveChildren = new Set<Bun.Subprocess>();
-const runnerShutdown = new AbortController();
-const CHILD_STOP_GRACE_MS = 10_000;
+const processSupervisor = new TestProcessSupervisor({
+  // The dedicated memory workflow allows two hours for a serial per-file
+  // sweep; nightly jobs declare budgets explicitly, while PR defaults stay bounded.
+  ...testProcessBudgets(
+    process.env,
+    rssMode.mode === "measure-rss" ? 110 * 60_000 : undefined,
+  ),
+  directory:
+    process.env["API_TEST_ARTIFACT_DIR"] ??
+    mkdtempSync(path.join(tmpdir(), "stella-api-test-diagnostics-")),
+  onProgress: print,
+  onDiagnostic: printError,
+  onStdout: (text) => {
+    process.stdout.write(text);
+  },
+  onStderr: (text) => {
+    process.stderr.write(text);
+  },
+});
+process.on("exit", () => {
+  processSupervisor.dispose();
+});
 
-const awaitChild = async (child: Bun.Subprocess): Promise<number> => {
-  liveChildren.add(child);
-  try {
-    return await child.exited;
-  } finally {
-    liveChildren.delete(child);
-  }
-};
-
-const stopLiveChildren = async (signal: NodeJS.Signals): Promise<void> => {
-  const children = [...liveChildren];
-  for (const child of children) {
-    child.kill(signal);
-  }
-  const escalation = setTimeout(() => {
-    for (const child of children) {
-      child.kill("SIGKILL");
-    }
-  }, CHILD_STOP_GRACE_MS);
-  try {
-    await Promise.all(children.map(async (child) => await child.exited));
-  } finally {
-    clearTimeout(escalation);
-  }
-};
-
-// The handler never exits by itself: aborting stops new batches, the running
-// ones end once signalled, and the run then finishes through its normal path,
-// which prints the summary and runs snapshot cleanup in the `exit` hook. A
-// second signal skips the grace period.
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.on(signal, () => {
-    if (runnerShutdown.signal.aborted) {
-      for (const child of liveChildren) {
-        child.kill("SIGKILL");
-      }
+    if (processSupervisor.signal.aborted) {
+      processSupervisor.kill();
       return;
     }
-    printError(
-      `${signal} received; stopping ${liveChildren.size} running test ` +
-        "process(es) before cleanup ...",
+    processSupervisor.stop(
+      `${signal} received; stopping API test processes before cleanup`,
     );
-    runnerShutdown.abort();
-    stopLiveChildren(signal).catch((error: unknown) => {
-      printError(`Stopping the test processes failed: ${String(error)}`);
-    });
   });
 }
 
 const runSnapshotBuilder = async (snapshotPath: string): Promise<void> => {
   console.log("Building the PGlite test-database snapshot ...");
-  if (runnerShutdown.signal.aborted) {
+  if (processSupervisor.signal.aborted) {
     throw new SnapshotBuildError({
       message: "PGlite snapshot build interrupted.",
       exitCode: 1,
     });
   }
-  const builder = Bun.spawn({
-    cmd: [
+  const { exitCode: builderExitCode } = await processSupervisor.run({
+    command: () => [
       process.execPath,
       path.join(apiRoot, "scripts/build-pglite-snapshot.ts"),
       snapshotPath,
     ],
     cwd: apiRoot,
-    stdin: "inherit",
-    stdout: "inherit",
-    stderr: "inherit",
+    env: process.env,
+    identity: {
+      kind: "snapshot",
+      label: "PGlite snapshot build",
+      files: ["scripts/build-pglite-snapshot.ts"],
+      lane: 0,
+    },
+    mode: "stream",
   });
-  const builderExitCode = await awaitChild(builder);
   if (builderExitCode !== 0) {
     throw new SnapshotBuildError({
       message: "PGlite snapshot build failed; aborting the test run.",
@@ -242,12 +262,19 @@ const validateSnapshot = async (snapshotPath: string): Promise<boolean> => {
   ) {
     return false;
   }
-  const check = Bun.spawn({
-    cmd: ["tar", "-tf", snapshotPath],
-    stdout: "ignore",
-    stderr: "ignore",
+  const { exitCode } = await processSupervisor.run({
+    command: () => ["tar", "-tf", snapshotPath],
+    cwd: apiRoot,
+    env: process.env,
+    identity: {
+      kind: "snapshot-validation",
+      label: "PGlite snapshot archive validation",
+      files: [snapshotPath],
+      lane: 0,
+    },
+    mode: "discard",
   });
-  return (await check.exited) === 0;
+  return exitCode === 0;
 };
 
 const buildTestDbSnapshot = async (): Promise<string> => {
@@ -265,7 +292,7 @@ const buildTestDbSnapshot = async (): Promise<string> => {
       key: () => snapshotKey(repositoryRoot, entryPoint),
       build: runSnapshotBuilder,
       validate: validateSnapshot,
-      signal: runnerShutdown.signal,
+      signal: processSupervisor.signal,
     });
     if (result.status === "hit") {
       process.on("exit", result.snapshot.release);
@@ -318,6 +345,7 @@ const composedBatches = await planApiTestBatches({
 });
 const plannedBatches = orderBatchesForLanes(
   composedBatches.flatMap((group) => planBatches(group)),
+  testFileDurationWeights(allTestPaths, durationWeights),
 );
 
 const testProcessEnv: Record<string, string | undefined> = {
@@ -337,7 +365,8 @@ if (
   } catch (error) {
     if (error instanceof SnapshotBuildError) {
       printError(error.message);
-      process.exit(error.exitCode);
+      process.exitCode = error.exitCode;
+      throw error;
     }
     throw error;
   }
@@ -374,59 +403,6 @@ const streamingLog: BatchLog = {
   },
 };
 
-const collectStream = async (
-  stream: ReadableStream<Uint8Array>,
-  parts: string[],
-): Promise<void> => {
-  const decoder = new TextDecoder();
-  for await (const chunk of stream) {
-    parts.push(decoder.decode(chunk, { stream: true }));
-  }
-  parts.push(decoder.decode());
-};
-
-type ChildResult = {
-  exitCode: number;
-  usage: ReturnType<Bun.Subprocess["resourceUsage"]>;
-};
-
-const spawnStreaming = async (command: string[]): Promise<ChildResult> => {
-  const child = Bun.spawn({
-    cmd: command,
-    cwd: apiRoot,
-    env: testProcessEnv,
-    stdin: "inherit",
-    stdout: "inherit",
-    stderr: "inherit",
-  });
-  const exitCode = await awaitChild(child);
-  return { exitCode, usage: child.resourceUsage() };
-};
-
-const spawnCollected = async (
-  command: string[],
-  log: BatchLog,
-): Promise<ChildResult> => {
-  const child = Bun.spawn({
-    cmd: command,
-    cwd: apiRoot,
-    env: testProcessEnv,
-    stdin: "ignore",
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  // Both streams feed one list in arrival order, so a test's own stdout lines
-  // stay next to the reporter's stderr lines around them.
-  const parts: string[] = [];
-  const [exitCode] = await Promise.all([
-    awaitChild(child),
-    collectStream(child.stdout, parts),
-    collectStream(child.stderr, parts),
-  ]);
-  log.out(parts.join("").trimEnd());
-  return { exitCode, usage: child.resourceUsage() };
-};
-
 class TestRssMeasurementError extends TaggedError("TestRssMeasurementError")<{
   message: string;
 }> {}
@@ -440,14 +416,29 @@ const measurePreloadBaseline = async () => {
     'import { test } from "bun:test"; test("preload memory baseline", () => {});\n',
   );
   try {
-    const child = await spawnStreaming(
-      buildApiTestCommand({
-        bunExecutable: process.execPath,
-        bunRuntimeArguments: ["--smol"],
-        testArguments: ["--preload", preloadPath],
-        testFiles: [file],
-      }),
-    );
+    const child = await processSupervisor.run({
+      command: (junitPath) =>
+        buildApiTestCommand({
+          bunExecutable: process.execPath,
+          bunRuntimeArguments: ["--smol"],
+          testArguments: [
+            "--preload",
+            preloadPath,
+            "--reporter=junit",
+            `--reporter-outfile=${junitPath}`,
+          ],
+          testFiles: [file],
+        }),
+      cwd: apiRoot,
+      env: testProcessEnv,
+      identity: {
+        kind: "baseline",
+        label: "preload memory baseline",
+        files: [file],
+        lane: 0,
+      },
+      mode: "stream",
+    });
     const peakMb =
       child.usage === undefined ? 0 : maxRssBytesToMb(child.usage.maxRSS);
     if (child.exitCode !== 0 || !Number.isFinite(peakMb) || peakMb <= 0) {
@@ -464,10 +455,17 @@ const measurePreloadBaseline = async () => {
 const baselineMb =
   rssMode.mode === "measure-rss" ? await measurePreloadBaseline() : 0;
 
-const runTests = async (
-  { isolate, label, maxPeakRssMb, testFiles }: PlannedTestBatch,
-  log: BatchLog,
-): Promise<number> => {
+type RunTestsOptions = {
+  batch: PlannedTestBatch;
+  log: BatchLog;
+  lane: number;
+};
+
+const runTests = async ({
+  batch: { isolate, label, maxPeakRssMb, testFiles },
+  log,
+  lane,
+}: RunTestsOptions): Promise<number> => {
   const executionMode = isolate ? "isolated" : "shared-process";
   log.out(
     `Running ${testFiles.length} ${executionMode} API test files (${label})`,
@@ -480,17 +478,27 @@ const runTests = async (
     testArguments.push("--isolate");
   }
   testArguments.push(...bunArguments);
-  const command = buildApiTestCommand({
-    bunExecutable: process.execPath,
-    bunRuntimeArguments: ["--smol"],
-    testArguments,
-    testFiles,
-  });
-
   const startedAt = performance.now();
-  const { exitCode, usage } = bufferBatchOutput
-    ? await spawnCollected(command, log)
-    : await spawnStreaming(command);
+  const { exitCode, usage, output } = await processSupervisor.run({
+    command: (junitPath) =>
+      buildApiTestCommand({
+        bunExecutable: process.execPath,
+        bunRuntimeArguments: ["--smol"],
+        testArguments: [
+          ...testArguments,
+          "--reporter=junit",
+          `--reporter-outfile=${junitPath}`,
+        ],
+        testFiles,
+      }),
+    cwd: apiRoot,
+    env: testProcessEnv,
+    identity: { kind: "batch", label, files: testFiles, lane },
+    mode: bufferBatchOutput ? "buffered" : "stream",
+  });
+  if (bufferBatchOutput) {
+    log.out(output);
+  }
   const elapsedSeconds = ((performance.now() - startedAt) / 1000).toFixed(1);
   log.out(`${label} finished in ${elapsedSeconds}s with exit code ${exitCode}`);
 
@@ -526,6 +534,7 @@ const runTests = async (
       switch (verdict.type) {
         case BATCH_MEMORY.within:
           break;
+        case BATCH_MEMORY.planDrift:
         case BATCH_MEMORY.nearCap:
           log.out(verdict.annotation);
           break;
@@ -550,7 +559,10 @@ const runTests = async (
  * Buffered output goes to stdout as one write: separate stdout and stderr
  * writes can reach a shared log out of order, splitting a batch's block.
  */
-const runBufferedTests = async (batch: PlannedTestBatch): Promise<number> => {
+const runBufferedTests = async (
+  batch: PlannedTestBatch,
+  lane: number,
+): Promise<number> => {
   const lines: string[] = [];
   const bufferedLog: BatchLog = {
     err: (line) => {
@@ -561,7 +573,7 @@ const runBufferedTests = async (batch: PlannedTestBatch): Promise<number> => {
     },
   };
   try {
-    return await runTests(batch, bufferedLog);
+    return await runTests({ batch, log: bufferedLog, lane });
   } catch (error) {
     bufferedLog.err(`${batch.label} could not run: ${String(error)}`);
     return 1;
@@ -578,11 +590,11 @@ const runStartedAt = performance.now();
 const outcomes = await runInLanes({
   batches: plannedBatches,
   lanes: testLanes,
-  runBatch: async (batch) =>
+  runBatch: async (batch, lane) =>
     bufferBatchOutput
-      ? await runBufferedTests(batch)
-      : await runTests(batch, streamingLog),
-  signal: runnerShutdown.signal,
+      ? await runBufferedTests(batch, lane)
+      : await runTests({ batch, log: streamingLog, lane }),
+  signal: processSupervisor.signal,
   failurePolicy: rssMode.mode === "measure-rss" ? "complete" : "serial-fast",
 });
 const runSeconds = ((performance.now() - runStartedAt) / 1000).toFixed(1);
@@ -614,13 +626,17 @@ if (rssMode.mode === "measure-rss") {
     rssMode.outputPath,
     testRssArtifact({
       measurements,
+      measuredAt: new Date().toISOString(),
       baselineMb,
       environment: rssMode.environment,
       source: rssMode.source,
+      shard: shard ?? { index: 1, count: 1 },
+      plannedFiles: testPaths.length,
     }),
   );
   print(
     `Wrote ${measurements.length} per-file peak RSS measurements to ${rssMode.outputPath}`,
   );
 }
+processSupervisor.dispose();
 process.exitCode = laneRunExitCode(outcomes);

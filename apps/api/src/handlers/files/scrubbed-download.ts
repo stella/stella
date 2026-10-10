@@ -9,10 +9,10 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import { scrubDocumentProperties } from "@/api/lib/files/document-properties";
 import { fileFieldQuery } from "@/api/lib/files/read-file";
 import { createFileKey } from "@/api/lib/files/utils";
-import { readS3ArrayBuffer } from "@/api/lib/s3";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { secureDocumentResponse } from "@/api/lib/secure-document-response";
 import { withTimeout } from "@/api/lib/with-timeout";
@@ -64,15 +64,18 @@ export const readScrubbedDownload = async ({
 
   const bytes = await withTimeout(
     async (signal) =>
-      await readS3ArrayBuffer(
-        createFileKey({
-          organizationId,
-          workspaceId,
-          fileId: content.id,
+      (
+        await readStoredFile({
+          key: createFileKey({
+            organizationId,
+            workspaceId,
+            fileId: content.id,
+            mimeType: content.mimeType,
+          }),
           mimeType: content.mimeType,
-        }),
-        signal,
-      ),
+          signal,
+        })
+      ).bytes,
     {
       label: "Scrubbed download storage read",
       timeoutMs: SCRUBBED_DOWNLOAD_READ_TIMEOUT_MS,

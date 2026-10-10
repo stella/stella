@@ -4,9 +4,11 @@ import { expect, test } from "bun:test";
 import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
 import { DocxArchiveError } from "@stll/docx-utils";
 
+import { actionAdmissionErrorFor } from "@/api/tests/helpers/action-admission-error";
+
 import {
-  ActionAdmissionError,
   actionAdmissionRefusal,
+  type ActionAdmissionError,
 } from "./action-admission-error";
 import {
   MAX_TRANSPORT_WRAPPER_DEPTH,
@@ -51,7 +53,9 @@ test("archive errors keep their client status through handler wrappers", () => {
 const admissionReasons = {
   busy: true,
   period_exhausted: true,
+  daily_exhausted: true,
   not_enabled: true,
+  not_on_plan: true,
   unavailable: true,
 } as const satisfies Record<ActionAdmissionError["reason"], true>;
 
@@ -62,16 +66,18 @@ test("all admission refusals preserve the canonical contract through bounded wra
       !(
         reason === "busy" ||
         reason === "period_exhausted" ||
+        reason === "daily_exhausted" ||
         reason === "not_enabled" ||
+        reason === "not_on_plan" ||
         reason === "unavailable"
       )
     ) {
       throw new Error("Unknown admission reason");
     }
-    const refusal = new ActionAdmissionError({
+    const refusal = actionAdmissionErrorFor(
       reason,
-      message: "Private coordination detail",
-    });
+      "Private coordination detail",
+    );
     codes.add(refusal.code);
     const expected = actionAdmissionRefusal(
       refusal,

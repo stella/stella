@@ -5,6 +5,8 @@
 
 import path from "node:path";
 
+import { childExitStatus } from "../packages/scripts/src/child-exit-status";
+
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 
 const packageJson: unknown = await Bun.file(
@@ -40,7 +42,7 @@ const result = Bun.spawnSync(
 );
 if (result.exitCode !== 0) {
   console.error(result.stderr.toString().trim());
-  process.exit(result.exitCode);
+  process.exit(childExitStatus(result));
 }
 
 const actual = result.stdout

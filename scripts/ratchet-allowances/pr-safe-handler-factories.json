@@ -1,0 +1,5 @@
+{
+  "metric": "api-lib-top-level-entries",
+  "delta": 1,
+  "reason": "apps/api/src/lib/safe-handler-factories.ts is the one list of safe-handler factories, beside api-handlers.ts whose exports it binds; it imports nothing so the oxlint plugins, API scripts and tests can all derive their factory lists from it."
+}

@@ -10,7 +10,6 @@ import type { TaskStatus } from "@stll/api-contract";
 import { Temporal } from "@stll/time";
 
 import { getFirstWeekday } from "@/i18n/week";
-import type { WorkspaceFieldContent } from "@/lib/types";
 import { includesValue } from "@/lib/utils";
 
 export type CalendarDay = {
@@ -34,19 +33,25 @@ const toUTCDateTime = (date: Temporal.PlainDate): number =>
     timeZone: "UTC",
   }).epochMilliseconds;
 
-const todayISO = (): string => Temporal.Now.plainDateISO("UTC").toString();
-
 /**
  * Returns all days to display in a month grid (6 weeks max).
- * Weeks start on the locale's first weekday.
+ * Weeks start on the locale's first weekday. `today` is the viewer's calendar
+ * day (`appToday()`), never the UTC day.
  */
-export const getMonthDays = (
-  year: number,
-  month: number,
-  firstWeekday: number,
-  weekend: ReadonlySet<number>,
-): CalendarDay[] => {
-  const today = todayISO();
+export const getMonthDays = ({
+  year,
+  month,
+  firstWeekday,
+  weekend,
+  today,
+}: {
+  year: number;
+  /** Zero-based month. */
+  month: number;
+  firstWeekday: number;
+  weekend: ReadonlySet<number>;
+  today: Temporal.PlainDate;
+}): CalendarDay[] => {
   const days: CalendarDay[] = [];
 
   // First day of the month
@@ -65,7 +70,7 @@ export const getMonthDays = (
     days.push({
       date: iso,
       isCurrentMonth: d.month === month + 1,
-      isToday: iso === today,
+      isToday: d.equals(today),
       isWeekend: weekend.has(dayOfWeek),
     });
   }
@@ -76,14 +81,14 @@ export const getMonthDays = (
 /**
  * Returns all days to display in a week view.
  * The week containing `referenceDate`, starting on the locale's
- * first weekday.
+ * first weekday; `today` is the viewer's calendar day.
  */
 export const getWeekDays = (
   referenceDate: Temporal.PlainDate,
   firstWeekday: number,
   weekend: ReadonlySet<number>,
+  today: Temporal.PlainDate,
 ): CalendarDay[] => {
-  const today = todayISO();
   const dow = ((referenceDate.dayOfWeek % 7) - firstWeekday + 7) % 7;
   const weekStart = referenceDate.subtract({ days: dow });
 
@@ -95,7 +100,7 @@ export const getWeekDays = (
     days.push({
       date: iso,
       isCurrentMonth: true,
-      isToday: iso === today,
+      isToday: d.equals(today),
       isWeekend: weekend.has(dayOfWeek),
     });
   }
@@ -163,52 +168,10 @@ export const appendToMapArray = <K, V>(map: Map<K, V[]>, key: K, value: V) => {
 };
 
 /**
- * Extract a date string from an entity for a given property ID.
- * Handles both custom date properties and internal properties.
- */
-/** The YYYY-MM-DD part of an ISO date or instant. */
-const toDateString = (value: string): string => value.slice(0, 10);
-
-export const getEntityDate = (
-  entity: {
-    fields: Record<string, { content: WorkspaceFieldContent }>;
-    createdAt: string;
-    updatedAt: string | null;
-    dueDate?: string | null;
-    startAt?: string | null;
-    occurredAt?: string | null;
-  },
-  propertyId: string,
-): string | null => {
-  if (propertyId === INTERNAL_DATE_IDS[0]) {
-    return toDateString(entity.createdAt);
-  }
-  if (propertyId === INTERNAL_DATE_IDS[1]) {
-    return entity.updatedAt !== null ? toDateString(entity.updatedAt) : null;
-  }
-  if (propertyId === TASK_DATE_IDS[0]) {
-    return entity.dueDate !== null && entity.dueDate !== undefined
-      ? toDateString(entity.dueDate)
-      : null;
-  }
-  if (propertyId === TASK_DATE_IDS[1]) {
-    const value = entity.startAt ?? entity.occurredAt ?? entity.dueDate;
-    return value !== null && value !== undefined ? toDateString(value) : null;
-  }
-
-  const field = entity.fields[propertyId];
-  if (field?.content.type === "date" && field.content.value) {
-    return toDateString(field.content.value);
-  }
-
-  return null;
-};
-
-/**
  * Internal date pseudo-properties (`_created-at`, `_updated-at`)
  * are read-only metadata; drag/resize/create should be disabled.
  */
-export const INTERNAL_DATE_IDS = ["_created-at", "_updated-at"] as const;
+const INTERNAL_DATE_IDS = ["_created-at", "_updated-at"] as const;
 
 export const isInternalDateProperty = (id: string) =>
   includesValue(INTERNAL_DATE_IDS, id);

@@ -151,7 +151,12 @@ describe("skill-declared chat tool exclusions", () => {
       SPAWN_SUBAGENTS_TOOL_NAME,
     );
     expect(
-      registeredToolNames(getChatValidationTools(validationInputs)),
+      registeredToolNames(
+        getChatValidationTools({
+          ...validationInputs,
+          featureAccessSnapshot: validationInputs.featureAccessSnapshot,
+        }),
+      ),
     ).toContain(SPAWN_SUBAGENTS_TOOL_NAME);
     expect(
       registeredToolNames(

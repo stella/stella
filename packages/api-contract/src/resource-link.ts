@@ -171,6 +171,17 @@ const CHAT_RESOURCE_HREF_CANDIDATE_REGEX = new RegExp(
   "gu",
 );
 
+const UUID_SHAPED_ID = "[0-9a-fA-F-]{36}";
+
+/**
+ * A mention link with UUID ids, as regex source that JavaScript and
+ * PostgreSQL both accept: `#stella-entity=<matter>:<entity>` or
+ * `#stella-workspace=<matter>`. Group 1 is the entity id of an entity link,
+ * group 2 the matter id of a matter link; the other is unset. Fixed-width ids
+ * keep matching linear.
+ */
+export const CHAT_MENTION_UUID_HREF_PATTERN = `${CHAT_RESOURCE_HREF_PREFIX.entity}${UUID_SHAPED_ID}:(${UUID_SHAPED_ID})|${CHAT_RESOURCE_HREF_PREFIX.workspace}(${UUID_SHAPED_ID})`;
+
 /**
  * A literal dot is legal in an RFC 3986 component, but it is ambiguous at
  * the end of a bare link in prose. Encoding it keeps opaque IDs distinct from

@@ -6,7 +6,7 @@ import {
   memberAssignmentRequiredError,
   storedAIConfigUnreadableError,
 } from "@/api/lib/ai-config-response";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tJsonObject, tSafeId } from "@/api/lib/custom-schema";
 import { templateDecideConditionsLogic } from "@/api/lib/templates/template-decide-conditions";
@@ -20,6 +20,11 @@ const decideConditionsParamsSchema = t.Object({
 });
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Processes template content and returns parsed data or saved-document metadata rather than stored-file bytes.",
+  },
   description:
     "Ask the organization's decision model about every AI-decided boolean " +
     "condition of a stored template, given the values entered so far, and " +
@@ -32,6 +37,7 @@ const config = {
   // Same grant as the fill routes: the answers are what a fill of this
   // template would decide, and reaching them spends the org's decision model.
   permissions: { template: ["use"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
   mcp: { type: "tool", name: "preview_template_conditions" },
   params: decideConditionsParamsSchema,

@@ -20,8 +20,11 @@ import { decisionCitationSummaryOptions } from "@/features/case-law/queries/cita
 import { useHydrated } from "@/hooks/use-hydrated";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { SafeId } from "@/lib/safe-id";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 type CitationHeaderProps = {
+  /** The compact inspector shows counts beside the chart in its own row. */
+  compact?: boolean;
   decisionDate: string | null;
   decisionId: SafeId<"caseLawDecision">;
   /** The decision, as the citing-decisions tab the panel opens needs it. */
@@ -60,6 +63,7 @@ export const citationStripFromYear = ({
  * flat strip would only say "nothing", which the missing panel already says.
  */
 export const CitationHeader = ({
+  compact = false,
   decisionDate,
   decisionId,
   target,
@@ -67,9 +71,10 @@ export const CitationHeader = ({
   const t = useTranslations();
   const format = useFormatter();
   const now = useNow();
-  const { data: summary } = useQuery(
-    decisionCitationSummaryOptions(decisionId),
-  );
+  const summaryQuery = useQuery(decisionCitationSummaryOptions(decisionId));
+  const summaryView = useQueryView(summaryQuery);
+  useQueryViewError(summaryView);
+  const summary = summaryView.type === "items" ? summaryView.items : undefined;
   // Prefetched without blocking the route: known on one side of hydration
   // and not the other, so the strip waits for hydration to stay identical.
   const hydrated = useHydrated();
@@ -112,11 +117,12 @@ export const CitationHeader = ({
   return (
     <div
       className={cn(
-        "reader-chrome mb-3 flex text-xs print:hidden",
+        "reader-chrome flex text-xs print:hidden",
+        compact ? "justify-center" : "mb-3",
         // The zoom bar floats over this first row at the opposite corner; the
         // row keeps that corner free at every reader width and on every scroll
         // position, since the bar does not move with the text.
-        VIEWER_OVERLAY_BAR_CLEARANCE,
+        !compact && VIEWER_OVERLAY_BAR_CLEARANCE,
       )}
     >
       <Popover>
@@ -140,7 +146,7 @@ export const CitationHeader = ({
             fromYear={fromYear}
             toYear={currentYear}
           />
-          <span aria-hidden="true">{summaryText}</span>
+          {!compact && <span aria-hidden="true">{summaryText}</span>}
         </PopoverTrigger>
         <PopoverPanel
           align="start"

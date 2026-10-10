@@ -17,7 +17,7 @@ jobs:
   full-typecheck:
     if: ${{ !inputs.fresh-web }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 40
     permissions:
       contents: read
 
@@ -28,8 +28,9 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
+          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       - name: Install dependencies
@@ -40,7 +41,9 @@ jobs:
           NPM_TOKEN: ""
 
       - name: Full typecheck (no --affected, no turbo cache)
-        run: bun run typecheck && bun run typecheck:repo
+        # The API compiler and web contract generator each build the API graph.
+        # Keep their peak memory separate, as in the full release check.
+        run: bun run typecheck --concurrency=1 && bun run typecheck:repo
         env:
           TURBO_FORCE: "true"
 
@@ -61,8 +64,9 @@ jobs:
           submodules: true
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
+          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       - name: Install dependencies
@@ -74,6 +78,7 @@ jobs:
         # This job calls the compiler directly rather than the Turbo
         # typecheck graph, so materialize its ignored API contract first.
         run: |
+          bun --filter @stll/api generate:capability-runtime
           bun run generate
           bun run typegen
 
@@ -92,8 +97,9 @@ jobs:
         with:
           persist-credentials: false
       - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
+          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: package.json
       - name: Prove fresh web consumers and generator guards
         run: bash scripts/check-fresh-web-sources.sh

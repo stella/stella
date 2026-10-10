@@ -14,7 +14,7 @@ import {
 } from "@/api/handlers/legal-reader/annotations/schema";
 import type { AnnotationAuthorScope } from "@/api/handlers/legal-reader/annotations/target";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import {
   tPaginationCursor,
   tPaginationLimit,
@@ -40,6 +40,7 @@ const querySchema = t.Object({
 
 const config = {
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   description:
     "List the highlights and comments on one decision or statute version: the caller's own and those colleagues shared.",
   mcp: { type: "tool", name: "list_reader_annotations" },

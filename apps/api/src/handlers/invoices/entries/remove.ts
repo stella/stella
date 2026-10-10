@@ -15,7 +15,8 @@ import {
   requireDraftInvoiceForEntryChanges,
   recalculateInvoiceTotals,
 } from "@/api/handlers/invoices/invoice-lines";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { invoiceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
@@ -100,6 +101,9 @@ const removeEntries = createSafeHandler(
       "be changed, and ids that are not on this invoice are skipped without " +
       "an error.",
     permissions: { invoice: ["update"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: { featureId: "time-billing", type: "required" },
+    realtime: invoiceRealtimeUpdates,
     mcp: {
       type: "capability",
       reason: "billing_admin",

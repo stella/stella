@@ -10,6 +10,9 @@ import * as authSchema from "@/api/db/auth-schema";
 import * as schema from "@/api/db/schema";
 import { SCOPED_NATIVE_EXTRACTION_ENQUEUE } from "@/api/db/schema";
 import {
+  AI_CITATION_REVIEW_ORIGINS,
+  CITATION_REVIEW_ORIGIN,
+  CITATION_REVIEW_ORIGINS,
   POLARITY,
   REVIEWABLE_POLARITIES,
 } from "@/api/handlers/case-law/polarity/consts";
@@ -24,7 +27,8 @@ const {
 } = schema;
 
 const MIGRATIONS_DIR = path.join(import.meta.dir, "../../../drizzle");
-const NAMED_CHECK = /CONSTRAINT\s+"(?<name>[a-z_0-9]+)"\s+CHECK\s*\(/giu;
+const NAMED_CHECK =
+  /\bCONSTRAINT\s+(?:"(?<quotedName>[a-z_0-9]+)"|(?<unquotedName>[a-z_][a-z_0-9$]*))\s+CHECK\s*\(/giu;
 
 /**
  * The text inside the parenthesis opening at `open`, matched by depth.
@@ -76,6 +80,26 @@ const inListGroups = (sql: string): string[][] => {
   }
 
   return groups;
+};
+
+const namedCheckValues = (sql: string): Map<string, string[][]> => {
+  const constraints = new Map<string, string[][]>();
+  for (const match of sql.matchAll(NAMED_CHECK)) {
+    // PostgreSQL folds unquoted identifiers; quoted names retain their case.
+    const name =
+      match.groups?.["quotedName"] ??
+      match.groups?.["unquotedName"]?.toLowerCase();
+    if (name === undefined) {
+      continue;
+    }
+    const groups = inListGroups(
+      balancedGroup(sql, match.index + match[0].length - 1),
+    );
+    if (groups.length > 0) {
+      constraints.set(name, groups);
+    }
+  }
+  return constraints;
 };
 
 /**
@@ -159,18 +183,8 @@ const migrationCheckValues = (): Map<
       continue;
     }
 
-    for (const match of sql.matchAll(NAMED_CHECK)) {
-      const name = match.groups?.["name"];
-      if (name === undefined) {
-        continue;
-      }
-
-      const groups = inListGroups(
-        balancedGroup(sql, match.index + match[0].length - 1),
-      );
-      if (groups.length > 0) {
-        constraints.set(name, { migration, groups });
-      }
+    for (const [name, groups] of namedCheckValues(sql)) {
+      constraints.set(name, { migration, groups });
     }
   }
 
@@ -317,6 +331,48 @@ const LEGACY_DERIVED_NAMES_OVER_LIMIT = [
   "workspace_search_document_preview_passages_workspace_id_workspace_search_documents_workspace_id_fk",
 ];
 
+describe("migration CHECK parsing", () => {
+  const declarations = [
+    (name: string) =>
+      `CREATE TABLE items (status text CONSTRAINT ${name} CHECK (status IN ('applied','rejected') AND tag IN ('invalid_document','retry_exhausted')));`,
+    (name: string) =>
+      `CREATE TABLE items (status text, tag text, CONSTRAINT ${name} CHECK (status IN ('applied','rejected') AND tag IN ('invalid_document','retry_exhausted')));`,
+    (name: string) =>
+      `ALTER TABLE items ADD CONSTRAINT ${name} CHECK (status IN ('applied','rejected') AND tag IN ('invalid_document','retry_exhausted'));`,
+  ];
+
+  test("quoted and unquoted CHECK names retain every branch across declaration forms", () => {
+    for (const name of [
+      '"items_status_check"',
+      "items_status_check",
+      "ITEMS_STATUS_CHECK",
+    ]) {
+      for (const declaration of declarations) {
+        expect([...namedCheckValues(declaration(name))]).toEqual([
+          [
+            "items_status_check",
+            [
+              ["applied", "rejected"],
+              ["invalid_document", "retry_exhausted"],
+            ],
+          ],
+        ]);
+      }
+    }
+  });
+
+  test("quoted names retain case and the final replacement supplies the enforced values", () => {
+    const sql = `
+      CREATE TABLE items (status text CONSTRAINT "Items_Status_Check" CHECK (status IN ('old')));
+      ALTER TABLE items DROP CONSTRAINT "Items_Status_Check";
+      ALTER TABLE items ADD CONSTRAINT "Items_Status_Check" CHECK (status IN ('new','current'));
+    `;
+    expect([...namedCheckValues(sql)]).toEqual([
+      ["Items_Status_Check", [["new", "current"]]],
+    ]);
+  });
+});
+
 describe("identifier length", () => {
   const names = declaredNames();
 
@@ -392,6 +448,28 @@ describe("schema invariants", () => {
       "citation_reviews_polarity_values",
     ).toSorted();
     expect(dbValues).toEqual(REVIEWABLE_POLARITIES.toSorted());
+  });
+
+  test("citation_reviews origin CHECK constraints match CITATION_REVIEW_ORIGINS", () => {
+    expect(
+      extractCheckValues(
+        caseLawCitationReviews,
+        "citation_reviews_origin_values",
+      ).toSorted(),
+    ).toEqual(CITATION_REVIEW_ORIGINS.toSorted());
+    const check = getTableConfig(caseLawCitationReviews).checks.find(
+      (candidate) => candidate.name === "citation_reviews_origin_provenance",
+    );
+    if (check === undefined) {
+      throw new Error("citation_reviews_origin_provenance not found");
+    }
+    // Human branch first, then every model origin: together, every origin.
+    expect(
+      inListGroups(renderCheck(check)).map((group) => group.toSorted()),
+    ).toEqual([
+      [CITATION_REVIEW_ORIGIN.HUMAN_REVIEW],
+      AI_CITATION_REVIEW_ORIGINS.toSorted(),
+    ]);
   });
 
   test("corpus mirror CHECK constraint matches its domain type", () => {

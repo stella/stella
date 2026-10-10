@@ -14,7 +14,7 @@ import {
 } from "@/api/db/schema";
 import { createBilingualRunBodySchema } from "@/api/handlers/bilingual-translations/schemas";
 import { captureError } from "@/api/lib/analytics/capture";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import {
@@ -31,9 +31,16 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { readScannedBilingualDocx } from "@/api/lib/file-scan/document-parsers";
 
 const config = {
+  // The run is queued here; its worker takes a background slot.
+  actionAdmission: { type: "handler", actionKind: "bilingual.start" },
+  contentDelivery: {
+    type: "none",
+    reason: "Prepares translation inputs without returning stored-file bytes.",
+  },
   description:
     "Start an asynchronous translation of a bilingual document using the reviewed row dispositions and glossary. Returns a run ID to poll.",
   permissions: { entity: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "write",
   mcp: { type: "internal", reason: "document_processing" },
   params: workspaceParams({}),

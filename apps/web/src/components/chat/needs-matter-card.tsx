@@ -12,9 +12,9 @@ import {
   DownloadIcon,
   ExternalLinkIcon,
   FilePlusIcon,
-  LoaderIcon,
   SearchIcon,
 } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 import { contentDir } from "@stll/ui/use-content-dir";
 import { cn } from "@stll/ui/utils";
 
@@ -33,6 +33,7 @@ import { MarkdownPreview } from "@/components/markdown-preview";
 import { MatterIcon } from "@/components/matter-icon";
 import { DOCX_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
+import type { QueryView } from "@/lib/query-view.logic";
 
 type CreateDocumentPart = Extract<
   RegisteredChatUIToolCallPart,
@@ -93,10 +94,7 @@ export const NeedsMatterCard = ({
   onOpenCreated,
   onOpenDraft,
 }: NeedsMatterCardProps) => {
-  const {
-    createDocumentMatters: matters,
-    isLoadingCreateDocumentMatters: isLoadingMatters,
-  } = useChatMatters();
+  const { createDocumentMattersView } = useChatMatters();
   const t = useTranslations();
 
   if (isCreateDocumentToolFailureState(part)) {
@@ -187,7 +185,11 @@ export const NeedsMatterCard = ({
           </Button>
         )}
         {isStreaming && (
-          <LoaderIcon className="text-muted-foreground ms-auto size-3.5 shrink-0 animate-spin" />
+          <Loader
+            className="ms-auto size-3.5 shrink-0"
+            label={t("common.loading")}
+            size="sm"
+          />
         )}
       </div>
 
@@ -195,8 +197,7 @@ export const NeedsMatterCard = ({
 
       {isAwaitingMatter && (
         <MatterPickerSection
-          isLoadingMatters={isLoadingMatters}
-          matters={matters}
+          view={createDocumentMattersView}
           onDownload={handleDownload}
           onContinue={handleMatterContinue}
         />
@@ -290,16 +291,37 @@ const extractPreviewSnippet = (source: string): string => {
   return out.join("\n").slice(0, 480);
 };
 
+type MatterReadErrorProps = {
+  retry: Extract<
+    QueryView<readonly NeedsMatterMatter[], unknown>,
+    { type: "error" }
+  >["retry"];
+};
+
+const MatterReadError = ({ retry }: MatterReadErrorProps) => {
+  const t = useTranslations();
+  return (
+    <div className="flex items-center gap-2 text-xs" role="alert">
+      <span className="text-destructive">{t("common.somethingWentWrong")}</span>
+      <Button
+        onClick={() => detached(retry(), "needs-matter-card.retry")}
+        size="xs"
+        variant="ghost"
+      >
+        {t("common.retry")}
+      </Button>
+    </div>
+  );
+};
+
 type MatterPickerSectionProps = {
-  matters: readonly NeedsMatterMatter[];
-  isLoadingMatters: boolean;
+  view: QueryView<readonly NeedsMatterMatter[], unknown>;
   onContinue: (matterId: string) => Promise<void> | void;
   onDownload: () => Promise<void> | void;
 };
 
 const MatterPickerSection = ({
-  matters,
-  isLoadingMatters,
+  view,
   onContinue,
   onDownload,
 }: MatterPickerSectionProps) => {
@@ -310,25 +332,28 @@ const MatterPickerSection = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
 
-  const filtered = useMemo(() => {
-    const q = deferredSearch.trim().toLowerCase();
-    if (q.length === 0) {
-      return matters;
-    }
-    return matters.filter(
-      (m) =>
-        m.name.toLowerCase().includes(q) ||
-        (m.client?.displayName ?? "").toLowerCase().includes(q),
-    );
-  }, [matters, deferredSearch]);
+  const matters = view.type === "items" ? view.items : [];
+  const selectedMatter = matters.find(
+    (matter) => matter.id === selectedMatterId,
+  );
+
+  const query = deferredSearch.trim().toLowerCase();
+  const filtered =
+    query.length === 0
+      ? matters
+      : matters.filter(
+          (matter) =>
+            matter.name.toLowerCase().includes(query) ||
+            (matter.client?.displayName ?? "").toLowerCase().includes(query),
+        );
 
   const handleContinue = async () => {
-    if (!selectedMatterId || isSubmitting || isDownloading) {
+    if (!selectedMatter || isSubmitting || isDownloading) {
       return;
     }
     setIsSubmitting(true);
     try {
-      await onContinue(selectedMatterId);
+      await onContinue(selectedMatter.id);
     } finally {
       setIsSubmitting(false);
     }
@@ -367,20 +392,31 @@ const MatterPickerSection = ({
           />
         </div>
 
+        {view.type === "items" && view.refetchError !== undefined && (
+          <MatterReadError retry={view.retry} />
+        )}
+
         {(() => {
-          if (isLoadingMatters) {
-            return (
-              <p className="text-muted-foreground py-2 text-center text-xs">
-                {t("common.loading")}
-              </p>
-            );
-          }
-          if (matters.length === 0) {
-            return (
-              <p className="text-muted-foreground py-2 text-center text-xs">
-                {t("inspector.matterPicker.empty")}
-              </p>
-            );
+          switch (view.type) {
+            case "pending":
+              return (
+                <p className="text-muted-foreground py-2 text-center text-xs">
+                  {t("common.loading")}
+                </p>
+              );
+            case "error":
+              return <MatterReadError retry={view.retry} />;
+            case "empty":
+              return (
+                <p className="text-muted-foreground py-2 text-center text-xs">
+                  {t("inspector.matterPicker.empty")}
+                </p>
+              );
+            case "items":
+              break;
+            default:
+              view satisfies never;
+              return panic("Unhandled matter query state");
           }
           if (filtered.length === 0) {
             return (
@@ -448,7 +484,9 @@ const MatterPickerSection = ({
           {isDownloading ? t("common.loading") : t("common.download")}
         </Button>
         <Button
-          disabled={selectedMatterId === null || isSubmitting || isDownloading}
+          disabled={
+            selectedMatter === undefined || isSubmitting || isDownloading
+          }
           onClick={() => {
             detached(handleContinue(), "needs-matter-card.continue");
           }}

@@ -1,3 +1,5 @@
+import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
+
 import { DOCUMENT_COMPARE_REQUEST_TIMEOUT_MS } from "@/api/handlers/documents/compare";
 import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 import { defineMcpCliToolAnnotations } from "@/api/mcp/tool-types";
@@ -13,6 +15,21 @@ import { defineMcpCliToolAnnotations } from "@/api/mcp/tool-types";
 export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
   DEFAULT_MCP_TOOL_DEFINITIONS,
   {
+    open_case_law_decision: {
+      command: ["case-law", "open"],
+      scope: "read",
+      paginationless: true,
+    },
+    read_case_law_decision_blocks: {
+      command: ["case-law", "reader-blocks"],
+      excluded: true,
+      scope: "read",
+    },
+    preview_cited_provision: {
+      command: ["case-law", "reader-provision"],
+      excluded: true,
+      scope: "read",
+    },
     search: { command: ["search"], excluded: true, scope: "search" },
     fetch: { command: ["fetch"], excluded: true, scope: "read" },
 
@@ -233,23 +250,23 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
       scope: "search",
       itemsKey: "results",
     },
+    case_law_coverage: {
+      command: ["case-law", "coverage"],
+      scope: "read",
+      itemsKey: "countries",
+      paginationless: true,
+    },
     lookup_case_law: {
       command: ["case-law", "lookup"],
       scope: "read",
       itemsKey: "items",
     },
-    // A batch read answers per entry, so the leaf renders `items`. It cannot
-    // be a `windowedText` leaf: that annotation names one text and one
-    // top-level `nextCursor`, and here both are per entry. `perEntryCursor`
-    // takes `--all` off the leaf for the same reason: the follow loop advances
-    // a top-level cursor, and with none to advance it would return the first
-    // window as though it were the whole decision. A caller continuing one
-    // decision's text passes that decision id with its own entry cursor.
+    // A batch read answers per entry, so the leaf renders `items`. It pages
+    // by number (`--page`), not by cursor, so there is nothing to follow.
     read_case_law_decision: {
       command: ["case-law", "read"],
       scope: "read",
       itemsKey: "items",
-      perEntryCursor: true,
     },
     read_case_law_citations: {
       command: ["case-law", "citations"],
@@ -401,8 +418,12 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
       command: ["capability", "describe"],
       scope: "read",
     },
-    invoke_capability: {
-      command: ["capability", "invoke"],
+    [MCP_CAPABILITY_EXECUTORS.read]: {
+      command: ["capability", "read"],
+      scope: "read",
+    },
+    [MCP_CAPABILITY_EXECUTORS.write]: {
+      command: ["capability", "write"],
       scope: "read",
     },
 
@@ -419,7 +440,7 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
           },
           remove_member: {
             command: "remove-member",
-            include: ["matter_id", "user_id"],
+            include: ["matter_id", "user_id", "reassign_to"],
             required: ["matter_id", "user_id"],
           },
           update_org_settings: {
@@ -429,6 +450,11 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
               "matter_number_padding",
               "prompt_caching_enabled",
               "document_processing_mode",
+              "time_minimum_unit_minutes",
+              "time_edit_window_days",
+              "time_locked_through_month",
+              "time_narrative_required",
+              "time_zone",
             ],
           },
         },

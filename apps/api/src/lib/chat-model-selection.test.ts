@@ -22,6 +22,7 @@ env.OPENAI_API_KEY = "test-openai-instance-key";
 const {
   decodeChatModelSelection,
   encodeChatModelSelection,
+  getChatModelBenchmarkOptions,
   getChatModelReasoningEfforts,
   getConfiguredChatModelOptions,
   getDefaultChatModelValue,
@@ -235,6 +236,76 @@ describe("getConfiguredChatModelOptions", () => {
         expect(option.reasoningEfforts).toBeNull();
       }
     }
+  });
+});
+
+describe("getChatModelBenchmarkOptions", () => {
+  test("lists every offered route, marking unconfigured providers", () => {
+    const options = getChatModelBenchmarkOptions(
+      orgConfigForProviders(["anthropic"]),
+    );
+
+    expect(options.map(({ value }) => value)).toEqual(
+      TANSTACK_AI_PROVIDERS.flatMap((provider) =>
+        BYOK_MODEL_OPTIONS[provider].map((modelId) =>
+          encodeChatModelSelection({ provider, modelId }),
+        ),
+      ),
+    );
+    for (const option of options) {
+      expect(option.availability).toBe(
+        option.provider === "anthropic" ? "available" : "provider_unconfigured",
+      );
+    }
+  });
+
+  test("explains every route the catalog has no exact Arena row for", () => {
+    const options = getChatModelBenchmarkOptions(null);
+
+    expect(
+      options.find(({ value }) => value === "openai::gpt-6.1-sol")
+        ?.unratedReason,
+    ).toBe("too_new");
+    for (const option of options) {
+      if (option.unratedReason !== null) {
+        expect(option.tradeoff.type).toBe("unmeasured");
+      }
+    }
+  });
+
+  test("measures only efforts the route can be sent with", () => {
+    for (const option of getChatModelBenchmarkOptions(null)) {
+      for (const { reasoningEffort } of option.measurements) {
+        if (reasoningEffort !== null) {
+          expect(option.reasoningEfforts ?? []).toContain(reasoningEffort);
+        }
+      }
+    }
+  });
+
+  test("reports dominated and premium efforts from the classified measurements", () => {
+    const options = getChatModelBenchmarkOptions(null);
+
+    for (const { measurements, tradeoff } of options) {
+      expect(tradeoff.dominatedReasoningEfforts).toEqual(
+        measurements
+          .filter(({ classification }) => classification === "dominated")
+          .map(({ reasoningEffort }) => reasoningEffort),
+      );
+      expect(tradeoff.premiumReasoningEfforts).toEqual(
+        measurements
+          .filter(({ premium }) => premium)
+          .map(({ reasoningEffort }) => reasoningEffort),
+      );
+      expect(tradeoff.type === "unmeasured").toBe(measurements.length === 0);
+    }
+    // The committed snapshot contains clearly dominated variants; an empty
+    // result would mean classification stopped reaching the API.
+    expect(
+      options.some(
+        ({ tradeoff }) => tradeoff.dominatedReasoningEfforts.length > 0,
+      ),
+    ).toBe(true);
   });
 });
 

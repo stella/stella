@@ -23,6 +23,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { writeFileVersion } from "@/api/lib/entity-versions/write-file-version";
 import { createFileKey } from "@/api/lib/file-key";
+import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import { allocateFileObject } from "@/api/lib/files/file-object-ids";
 import { LIMITS } from "@/api/lib/limits";
 import { cents } from "@/api/lib/money";
@@ -585,6 +586,7 @@ test.each(cases)(
                 fileId,
                 fileName: "New.txt",
                 mimeType: "text/plain",
+                encryption: serverBuiltFileEncryption(),
                 sizeBytes: 8,
                 sha256Hex: "b".repeat(64),
                 source: null,

@@ -7,14 +7,19 @@ import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { entities, workspaces } from "@/api/db/schema";
 import type { EntityKind } from "@/api/db/schema-validators";
+import { entityRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { captureError } from "@/api/lib/analytics/capture";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
-import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
+import {
+  isTreeParentGuardError,
+  lockTree,
+  treeParentCycleError,
+} from "@/api/lib/db/tree-parent-guard";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { syncWorkspaceSearchActivity } from "@/api/lib/search/index-global";
@@ -25,6 +30,9 @@ const moveEntityBodySchema = t.Object({
 });
 
 type MoveEntityBodySchema = Static<typeof moveEntityBodySchema>;
+
+const DESCENDANT_MOVE_MESSAGE =
+  "Cannot move a folder into one of its descendants";
 
 export type MoveEntityHandlerProps = {
   safeDb: SafeDb;
@@ -92,10 +100,7 @@ const lockMove = async ({
   // Prevent moving to itself.
   if (body.entityId === body.parentId) {
     return Result.err(
-      new HandlerError({
-        status: 400,
-        message: "Cannot move an entity into itself",
-      }),
+      treeParentCycleError("Cannot move an entity into itself"),
     );
   }
 
@@ -142,12 +147,7 @@ const lockMove = async ({
     });
 
     if (relation === "descendant") {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "Cannot move a folder into one of its descendants",
-        }),
-      );
+      return Result.err(treeParentCycleError(DESCENDANT_MOVE_MESSAGE));
     }
     if (relation === "depth-exceeded") {
       return Result.err(
@@ -170,43 +170,47 @@ export const moveEntityHandler = async function* ({
   body,
   syncSearchActivity = syncWorkspaceSearchActivity,
 }: MoveEntityHandlerProps) {
-  const moved = yield* Result.await(
-    safeDb(async (tx) => {
-      // Serialize ancestry decisions before taking any entity locks. Disjoint
-      // source/target row pairs can still join into a cycle across two moves.
-      await lockWorkspacesForEntityCap(tx, [workspaceId]);
-      const locked = await lockMove({ tx, workspaceId, body });
-      if (Result.isError(locked)) {
-        return locked;
-      }
-      const { kind, oldParentId } = locked.value;
+  const attempt = await safeDb(async (tx) => {
+    // Serialize ancestry decisions before taking any entity locks. Disjoint
+    // source/target row pairs can still join into a cycle across two moves;
+    // the `entities_parent_acyclic` trigger holds the rule for any writer
+    // that skips this lock.
+    await lockTree(tx, { tree: "entities", scopeId: workspaceId });
+    const locked = await lockMove({ tx, workspaceId, body });
+    if (Result.isError(locked)) {
+      return locked;
+    }
+    const { kind, oldParentId } = locked.value;
 
-      await tx
-        .update(entities)
-        .set({ parentId: body.parentId, updatedAt: new Date() })
-        .where(eq(entities.id, body.entityId));
+    await tx
+      .update(entities)
+      .set({ parentId: body.parentId, updatedAt: new Date() })
+      .where(eq(entities.id, body.entityId));
 
-      await tx
-        .update(workspaces)
-        .set({ lastActivityAt: new Date() })
-        .where(eq(workspaces.id, workspaceId));
+    await tx
+      .update(workspaces)
+      .set({ lastActivityAt: new Date() })
+      .where(eq(workspaces.id, workspaceId));
 
-      await recordAuditEvent(tx, {
-        action: AUDIT_ACTION.UPDATE,
-        resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
-        resourceId: body.entityId,
-        metadata: { kind },
-        changes: {
-          parentId: {
-            old: oldParentId,
-            new: body.parentId,
-          },
+    await recordAuditEvent(tx, {
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+      resourceId: body.entityId,
+      metadata: { kind },
+      changes: {
+        parentId: {
+          old: oldParentId,
+          new: body.parentId,
         },
-      });
+      },
+    });
 
-      return Result.ok();
-    }),
-  );
+    return Result.ok();
+  });
+  if (attempt.isErr() && isTreeParentGuardError(attempt.error, "entities")) {
+    return Result.err(treeParentCycleError(DESCENDANT_MOVE_MESSAGE));
+  }
+  const moved = yield* attempt;
   yield* moved;
 
   syncSearchActivity(workspaceId).catch(captureError);
@@ -286,6 +290,8 @@ const config = {
     "must be a folder in this matter, a folder may not be moved into itself " +
     "or into one of its own descendants, and a read-only entity is refused.",
   permissions: { entity: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: entityRealtimeUpdates,
   mcp: { type: "covered", by: "save_document" },
   body: moveEntityBodySchema,
 } satisfies WorkspaceHandlerConfig;

@@ -9,6 +9,8 @@ import {
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+import { createSha256 } from "@stll/sha256/node";
 import { DAY_IN_MS } from "@stll/time";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
@@ -26,7 +28,7 @@ import {
 import { PL_COURTS_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/pl-courts.metadata-urls";
 import { plUodoHeldWithoutDetail } from "@/api/handlers/case-law/ingestion/adapters/pl-uodo";
 import { metadataUrlSchemaForAdapter } from "@/api/handlers/case-law/ingestion/metadata-url-schemas";
-import { resolveSourceMetadataUrlSchema } from "@/api/handlers/case-law/ingestion/pipeline/source-metadata-schema";
+import { readSourceContract } from "@/api/handlers/case-law/ingestion/pipeline/source-contract";
 import type { SliceRetrySchedule } from "@/api/handlers/case-law/ingestion/reconciliation-engine";
 import {
   MAX_SLICE_INGEST_BUDGET,
@@ -2170,32 +2172,32 @@ test("pipeline metadata classification follows the persisted source adapter", as
   const sourceId = await seedSource();
   try {
     expect(
-      await resolveSourceMetadataUrlSchema(sourceId, scopedDb),
+      (await readSourceContract(sourceId, scopedDb)).metadataUrlSchema,
     ).toBeUndefined();
     await db
       .update(caseLawSources)
       .set({ adapterKey: ADAPTER_KEYS.CZ_NS })
       .where(eq(caseLawSources.id, sourceId));
     expect(
-      await resolveSourceMetadataUrlSchema(sourceId, scopedDb),
+      (await readSourceContract(sourceId, scopedDb)).metadataUrlSchema,
     ).toBeUndefined();
     await db
       .update(caseLawSources)
       .set({ adapterKey: ADAPTER_KEYS.PL_COURTS })
       .where(eq(caseLawSources.id, sourceId));
-    expect(await resolveSourceMetadataUrlSchema(sourceId, scopedDb)).toEqual(
-      metadataUrlSchemaForAdapter(ADAPTER_KEYS.PL_COURTS),
-    );
+    expect(
+      (await readSourceContract(sourceId, scopedDb)).metadataUrlSchema,
+    ).toEqual(metadataUrlSchemaForAdapter(ADAPTER_KEYS.PL_COURTS));
   } finally {
     await db.delete(caseLawSources).where(eq(caseLawSources.id, sourceId));
   }
 });
 
-test("metadata classification rejects a missing persisted source", () => {
+test("metadata classification rejects a missing persisted source", async () => {
   const absentSourceId = createSafeId<"caseLawSource">();
   expect(
-    resolveSourceMetadataUrlSchema(absentSourceId, scopedDb),
-  ).rejects.toThrow("is absent");
+    await rejectionOf(readSourceContract(absentSourceId, scopedDb)),
+  ).toHaveProperty("message", expect.stringContaining("is absent"));
 });
 
 test("reconciliation persists registered root and nested URLs without caller schema overrides", async () => {
@@ -2235,7 +2237,7 @@ test("reconciliation persists registered root and nested URLs without caller sch
           PL_COURTS_METADATA_URL_SCHEMA,
         ),
         textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-        rawHash: new Bun.CryptoHasher("sha256").update(sourceRaw).digest("hex"),
+        rawHash: createSha256().update(sourceRaw).digest("hex"),
         sourceRaw,
         sourceRawContentType: "application/json",
         documentAst: EMPTY_AST,

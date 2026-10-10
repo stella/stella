@@ -1,10 +1,16 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { InferSelectModel } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
-import { parsePlainDate, Temporal } from "@stll/time";
+import {
+  parsePlainDate,
+  parseTimeZoneId,
+  Temporal,
+  todayFor,
+} from "@stll/time";
+import type { TimeZoneId } from "@stll/time";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import {
@@ -16,18 +22,22 @@ import {
   documentProcessingRuns,
   organizationSettings,
 } from "@/api/db/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { arrayOrEmpty } from "@/api/lib/array";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import {
-  DEFAULT_MANAGED_AI_RESIDENCY,
-  MANAGED_AI_RESIDENCIES,
-} from "@/api/lib/chat/ai-data-policy";
+import { DEFAULT_MANAGED_AI_RESIDENCY } from "@/api/lib/chat/ai-data-policy";
+import type { MANAGED_AI_RESIDENCIES } from "@/api/lib/chat/ai-data-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { validatePattern } from "@/api/lib/matter-reference";
+import {
+  effectiveOrganizationTimeZone,
+  organizationTimeZoneColumns,
+  TIME_ZONE_ID_MAX_LENGTH,
+} from "@/api/lib/organization-time-zone";
 
 import { resolveMemoryExtractionEnabledAt } from "./memory-extraction-consent";
 
@@ -36,31 +46,63 @@ const documentProcessingModeSchema = t.Union([
   t.Literal(DOCUMENT_PROCESSING_MODE.SEARCHABLE_TEXT),
 ]);
 
+// The literal list mirrors MANAGED_AI_RESIDENCIES: a member on one side only
+// fails to compile here.
+const managedAIResidencySchema = t.Union([t.Literal("eu"), t.Literal("us")]);
+type ManagedAIResidencyValue = (typeof MANAGED_AI_RESIDENCIES)[number];
+type ManagedAIResidencySchemaValue = Static<typeof managedAIResidencySchema>;
+type MissingManagedAIResidencySchemaValue = Exclude<
+  ManagedAIResidencyValue,
+  ManagedAIResidencySchemaValue
+>;
+type UnexpectedManagedAIResidencySchemaValue = Exclude<
+  ManagedAIResidencySchemaValue,
+  ManagedAIResidencyValue
+>;
+
+true satisfies MissingManagedAIResidencySchemaValue extends never
+  ? true
+  : never;
+true satisfies UnexpectedManagedAIResidencySchemaValue extends never
+  ? true
+  : never;
+
 const updateOrganizationSettingsBodySchema = t.Object({
   documentProcessingMode: t.Optional(documentProcessingModeSchema),
   matterNumberPattern: t.Optional(t.String({ minLength: 1, maxLength: 128 })),
   matterNumberPadding: t.Optional(t.Integer({ minimum: 1, maximum: 6 })),
   promptCachingEnabled: t.Optional(t.Boolean()),
-  managedAIResidency: t.Optional(
-    t.Union(MANAGED_AI_RESIDENCIES.map((region) => t.Literal(region))),
-  ),
+  managedAIResidency: t.Optional(managedAIResidencySchema),
   memoryExtractionEnabled: t.Optional(t.Boolean()),
   timeMinimumUnitMinutes: t.Optional(t.Integer({ minimum: 1, maximum: 60 })),
   timeEditWindowDays: t.Optional(t.Integer({ minimum: 0 })),
   timeLockedThroughMonth: t.Optional(t.Nullable(t.String({ format: "date" }))),
   timeNarrativeRequired: t.Optional(t.Boolean()),
+  timeZone: t.Optional(
+    t.Nullable(
+      t.String({
+        minLength: 1,
+        maxLength: TIME_ZONE_ID_MAX_LENGTH,
+        description:
+          "IANA time zone whose calendar decides the organization's day " +
+          "(e.g. Europe/Prague), or null to derive it from the primary " +
+          "practice jurisdiction again",
+      }),
+    ),
+  ),
 });
 
 const config = {
   description:
     "Change the organization's general settings: document processing mode, " +
     "matter-number pattern and padding, prompt caching, memory " +
-    "extraction, and time policy. Only the fields you pass are written and the matter-number " +
+    "extraction, time policy, and time zone. Only the fields you pass are written and the matter-number " +
     "pattern is validated against its padding first. Turning document " +
     "processing off is refused while an automatic run is still going. " +
     "Practice jurisdictions are set through " +
     "organization-settings.practice-jurisdictions.update.",
   permissions: { organizationSettings: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: { type: "covered", by: "manage_organization" },
   body: updateOrganizationSettingsBodySchema,
 } satisfies HandlerConfig;
@@ -70,9 +112,14 @@ export type UpdateOrganizationSettingsProps = {
   organizationId: SafeId<"organization">;
   recordAuditEvent: AuditRecorder;
   body: Static<typeof updateOrganizationSettingsBodySchema>;
+  /** The instant the lock-month check reads the organization's day at. */
+  now?: Temporal.Instant;
 };
 
 type UpdateBody = UpdateOrganizationSettingsProps["body"];
+type NormalizedUpdateBody = Omit<UpdateBody, "timeZone"> & {
+  timeZone?: TimeZoneId | null;
+};
 type ExistingTimePolicy = Pick<
   InferSelectModel<typeof organizationSettings>,
   | "timeMinimumUnitMinutes"
@@ -151,10 +198,20 @@ type ExistingGeneralSettings = ExistingTimePolicy &
     | "promptCachingEnabled"
     | "documentProcessingMode"
     | "memoryExtractionEnabled"
+    | "timeZone"
+    | "practiceJurisdictions"
   >;
 
+const timeZoneAuditChanges = (
+  body: NormalizedUpdateBody,
+  existing: Pick<ExistingGeneralSettings, "timeZone"> | undefined,
+) =>
+  body.timeZone !== undefined && body.timeZone !== (existing?.timeZone ?? null)
+    ? { timeZone: { old: existing?.timeZone ?? null, new: body.timeZone } }
+    : {};
+
 const organizationSettingsAuditChanges = (
-  body: UpdateBody,
+  body: NormalizedUpdateBody,
   existing: ExistingGeneralSettings | undefined,
 ) => ({
   ...(body.matterNumberPattern !== undefined ||
@@ -211,7 +268,68 @@ const organizationSettingsAuditChanges = (
       }
     : {}),
   ...timePolicyAuditChanges(body, existing),
+  ...timeZoneAuditChanges(body, existing),
 });
+
+/**
+ * The body with its zone in the tz database's spelling, which is what gets
+ * stored, audited and echoed; `null` when the zone is not one the runtime
+ * knows.
+ */
+const normalizeTimeZone = ({
+  timeZone,
+  ...otherSettings
+}: UpdateBody): NormalizedUpdateBody | null => {
+  if (timeZone === undefined || timeZone === null) {
+    return timeZone === null
+      ? { ...otherSettings, timeZone: null }
+      : otherSettings;
+  }
+  const parsed = parseTimeZoneId(timeZone);
+  return parsed === null ? null : { ...otherSettings, timeZone: parsed };
+};
+
+const invalidLockedMonth = () =>
+  Result.err(
+    new HandlerError({
+      status: 400,
+      code: "invalid_time_locked_month",
+      message:
+        "timeLockedThroughMonth must be the last day of a month that has " +
+        "ended in the organization's time zone",
+    }),
+  );
+
+/**
+ * The zone a lock month is judged in: the zone this request sets, else the
+ * stored one, else the jurisdiction default. A request that changes both is
+ * judged in its new zone, the one the lock will be read in afterwards.
+ */
+const lockMonthZone = (
+  requested: TimeZoneId | null | undefined,
+  existing:
+    | Pick<ExistingGeneralSettings, "timeZone" | "practiceJurisdictions">
+    | undefined,
+): TimeZoneId =>
+  effectiveOrganizationTimeZone({
+    timeZone:
+      requested === undefined ? (existing?.timeZone ?? null) : requested,
+    practiceJurisdictions: arrayOrEmpty(existing?.practiceJurisdictions),
+  });
+
+type IsClosedMonthOptions = {
+  lockedThrough: Temporal.PlainDate;
+  zone: TimeZoneId;
+  now: Temporal.Instant;
+};
+
+/** A month is closed once its last day is before the organization's today. */
+const isClosedMonth = ({
+  lockedThrough,
+  zone,
+  now,
+}: IsClosedMonthOptions): boolean =>
+  Temporal.PlainDate.compare(lockedThrough, todayFor(zone, now)) < 0;
 
 // Shared org-settings update logic reused by the HTTP handler and the
 // `manage_organization` MCP tool, so both emit the identical audit event and
@@ -222,8 +340,21 @@ export const updateOrganizationSettingsHandler = async function* ({
   safeDb,
   organizationId,
   recordAuditEvent,
-  body,
+  body: requestBody,
+  now = Temporal.Now.instant(),
 }: UpdateOrganizationSettingsProps) {
+  const body = normalizeTimeZone(requestBody);
+  if (body === null) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        code: "invalid_time_zone",
+        message:
+          "timeZone must be an IANA time zone such as Europe/Prague or " +
+          "America/New_York; fixed offsets like +01:00 are not accepted",
+      }),
+    );
+  }
   const matterPattern = body.matterNumberPattern;
   const matterPadding = body.matterNumberPadding;
   const wantsMatterUpdate =
@@ -265,25 +396,14 @@ export const updateOrganizationSettingsHandler = async function* ({
     );
   }
 
-  if (body.timeLockedThroughMonth) {
-    const lockedThrough = parsePlainDate(body.timeLockedThroughMonth);
-    if (
-      lockedThrough === null ||
-      lockedThrough.day !== lockedThrough.daysInMonth ||
-      Temporal.PlainDate.compare(
-        lockedThrough,
-        Temporal.Now.plainDateISO("UTC"),
-      ) >= 0
-    ) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          code: "invalid_time_locked_month",
-          message:
-            "timeLockedThroughMonth must be the last day of a closed month",
-        }),
-      );
-    }
+  const lockedThrough = body.timeLockedThroughMonth
+    ? parsePlainDate(body.timeLockedThroughMonth)
+    : null;
+  if (
+    body.timeLockedThroughMonth &&
+    (lockedThrough === null || lockedThrough.day !== lockedThrough.daysInMonth)
+  ) {
+    return invalidLockedMonth();
   }
 
   const timePolicyUpdate = timePolicyValues(body);
@@ -300,12 +420,14 @@ export const updateOrganizationSettingsHandler = async function* ({
       const wantsMemoryExtractionUpdate =
         body.memoryExtractionEnabled !== undefined;
       const wantsTimePolicyUpdate = Object.keys(timePolicyUpdate).length > 0;
+      const wantsTimeZoneUpdate = body.timeZone !== undefined;
       const needsSerializedSettingsRead =
         wantsManagedAIResidencyUpdate ||
         wantsPromptCachingUpdate ||
         wantsDocumentProcessingUpdate ||
         wantsMemoryExtractionUpdate ||
-        wantsTimePolicyUpdate;
+        wantsTimePolicyUpdate ||
+        wantsTimeZoneUpdate;
 
       // Coordinate extraction consent changes with the background worker's
       // persistence transaction as well as concurrent settings requests.
@@ -345,6 +467,7 @@ export const updateOrganizationSettingsHandler = async function* ({
               timeLockedThroughMonth:
                 organizationSettings.timeLockedThroughMonth,
               timeNarrativeRequired: organizationSettings.timeNarrativeRequired,
+              ...organizationTimeZoneColumns,
             })
             .from(organizationSettings)
             .where(eq(organizationSettings.organizationId, organizationId))
@@ -352,6 +475,16 @@ export const updateOrganizationSettingsHandler = async function* ({
             .for("update")
         : [];
       const existing = existingRows.at(0);
+      if (
+        lockedThrough !== null &&
+        !isClosedMonth({
+          lockedThrough,
+          zone: lockMonthZone(body.timeZone, existing),
+          now,
+        })
+      ) {
+        return { type: "invalid_locked_month" } as const;
+      }
       const memoryExtractionEnabledAt =
         body.memoryExtractionEnabled === undefined
           ? undefined
@@ -414,6 +547,7 @@ export const updateOrganizationSettingsHandler = async function* ({
               }
             : {}),
           ...timePolicyUpdate,
+          ...(wantsTimeZoneUpdate ? { timeZone: body.timeZone } : {}),
         })
         .onConflictDoUpdate({
           target: organizationSettings.organizationId,
@@ -441,7 +575,11 @@ export const updateOrganizationSettingsHandler = async function* ({
                     : {}),
                 }
               : {}),
-            ...timePolicyUpdate,
+            timeMinimumUnitMinutes: timePolicyUpdate.timeMinimumUnitMinutes,
+            timeEditWindowDays: timePolicyUpdate.timeEditWindowDays,
+            timeLockedThroughMonth: timePolicyUpdate.timeLockedThroughMonth,
+            timeNarrativeRequired: timePolicyUpdate.timeNarrativeRequired,
+            ...(wantsTimeZoneUpdate ? { timeZone: body.timeZone } : {}),
             updatedAt: new Date(),
           },
         });
@@ -456,13 +594,22 @@ export const updateOrganizationSettingsHandler = async function* ({
     }),
   );
 
-  if (updateOutcome.type === "automatic_ocr_running") {
-    return Result.err(
-      new HandlerError({
-        status: 409,
-        message: "Wait for document processing to finish before disabling OCR",
-      }),
-    );
+  switch (updateOutcome.type) {
+    case "automatic_ocr_running":
+      return Result.err(
+        new HandlerError({
+          status: 409,
+          message:
+            "Wait for document processing to finish before disabling OCR",
+        }),
+      );
+    case "invalid_locked_month":
+      return invalidLockedMonth();
+    case "updated":
+      break;
+    default:
+      updateOutcome satisfies never;
+      return panic("Unhandled organization settings update outcome");
   }
 
   return Result.ok({
@@ -485,6 +632,7 @@ export const updateOrganizationSettingsHandler = async function* ({
       ? { memoryExtractionEnabled: body.memoryExtractionEnabled }
       : {}),
     ...timePolicyUpdate,
+    ...(body.timeZone !== undefined ? { timeZone: body.timeZone } : {}),
   });
 };
 

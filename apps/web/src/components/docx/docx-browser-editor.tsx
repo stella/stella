@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 /**
  * DocxBrowserEditor — wrapper that manages the edit session lifecycle
  * and renders the Folio DocxEditor.
@@ -20,9 +20,9 @@ import {
   EyeIcon,
   GitCommitHorizontalIcon,
   PenLineIcon,
-  RefreshCwIcon,
   XIcon,
 } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 import { ReviewOutOfDateNotice } from "@stll/ui/review-out-of-date-notice";
 import type { ReviewOutOfDateReason } from "@stll/ui/review-out-of-date-notice";
 import {
@@ -39,12 +39,12 @@ import { DocxEditor } from "@/components/docx/app-docx-editor";
 import { DocxEditorAiOverlay } from "@/components/docx/docx-editor-ai-overlay";
 import { DocxFindBar } from "@/components/docx/docx-find-bar";
 import { DocxLoadingShell } from "@/components/docx/docx-loading-shell";
+import { DocxSuggestionsStatus } from "@/components/docx/docx-suggestions-status";
 import {
   EvidenceReferencesButton,
   EvidenceReferencesDialog,
 } from "@/components/docx/evidence-references";
 import { useDocxBlockScroll } from "@/components/docx/use-docx-block-scroll";
-import { useSyncDocxSuggestions } from "@/components/docx/use-sync-docx-suggestions";
 import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
 import { RenderStormRegion } from "@/components/render-storm-canary";
 import { StatusMessage } from "@/components/route-components";
@@ -206,12 +206,13 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
   const preservedLoadedBufferRef = useRef<PreservedLoadedBuffer | null>(null);
   const editTargetKey = `${workspaceId}:${entityId}:${propertyId}:${fieldId}`;
   const [, setAutosaveStatus] = useState<AutosaveStatus>("synced");
-  const { composedContainerRef, find, targetZoom } = useDocxEditorViewport({
-    containerRef,
-    editorRef,
-    scaleOffset,
-    surface,
-  });
+  const { composedContainerRef, find, targetZoom, zoomMode } =
+    useDocxEditorViewport({
+      containerRef,
+      editorRef,
+      scaleOffset,
+      surface,
+    });
   const { isPlaceholderData: isPreviewPlaceholderData, previewFile } =
     useDocxPreviewFile({ fieldId, optimisticPreviewRef, workspaceId });
   const { compatibility, handleCompatibilityChange, resetCompatibility } =
@@ -283,16 +284,8 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
   const { isUnlocked, requestEditMode } = opening;
   const { editorMode, handleEditorModeChange } = useDocxEditorMode(isUnlocked);
 
-  useLayoutEffect(() => {
-    editorRef.current?.setZoom(targetZoom);
-  }, [targetZoom]);
   useDocxWheelZoom(containerRef, editorRef);
   useDocxBlockScroll({ editorRef, fieldId });
-  // Hydrate persisted AI suggestions into the review store on reload.
-  // Lives here (not on the route) because rebuilding each suggestion's
-  // preview needs this editor's live snapshot; the review panel/bar
-  // then render exactly as they did before the reload.
-  useSyncDocxSuggestions({ workspaceId, entityId, editorRef });
 
   const evidence = useEvidenceReferenceInsertion({
     canUnlock,
@@ -439,6 +432,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
           onReopen={opening.reopenReleasedSession}
         />
       )}
+      <DocxSuggestionsStatus document={props} editorRef={editorRef} />
       {find.isOpen && <DocxFindBar find={find} />}
       {/* Folio editor with AI overlay */}
       <div
@@ -477,7 +471,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
             comments={comments.docxComments}
             onCommentsChange={comments.handleEditorDocxCommentsChange}
             documentBuffer={editorBuffer}
-            initialZoom={targetZoom}
+            initialZoom={zoomMode === "fit-width" ? "fit-width" : targetZoom}
             mode={isUnlocked ? editorMode : "viewing"}
             onModeChange={handleEditorModeChange}
             onCompatibilityChange={handleCompatibilityChange}
@@ -719,7 +713,7 @@ const CollaborationStatusIndicator = ({
         return <EyeIcon className="size-3.5" />;
       case "connecting":
       case "reconnecting":
-        return <RefreshCwIcon className="size-3.5 motion-safe:animate-spin" />;
+        return <Loader className="size-3.5" size="sm" variant="decorative" />;
       default: {
         status satisfies never;
         return panic(`Unhandled status: ${String(status)}`);

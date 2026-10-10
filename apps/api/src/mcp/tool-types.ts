@@ -6,14 +6,18 @@ import type * as v from "valibot";
 
 import type { SearchPaginationOutcome } from "@stll/api-contract/search";
 
-import type { env } from "@/api/env";
+import type { AccountAccess } from "@/api/lib/api-handlers";
+import type { DeploymentFeatureFlag } from "@/api/lib/deployment-feature";
+import type { FeatureId } from "@/api/lib/feature-access/registry";
 import type {
   MCP_ALL_RESOURCE_SCOPES,
   MCP_DEFAULT_RESOURCE_SCOPES,
 } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import type { McpErrorCode, McpValidationIssue } from "@/api/mcp/error-codes";
+import type { MCP_INTERNAL_TOOL_FAILURE } from "@/api/mcp/tool-call-outcome";
 import type { TextWindowResult } from "@/api/mcp/tool-utils";
+import type { McpWriteToolPermissions } from "@/api/mcp/write-tool-authority";
 
 /**
  * v2 types `Tool["inputSchema"]` as an arbitrary JSON value, which loses the
@@ -62,16 +66,6 @@ export type RuntimeMcpToolOutputContract = Omit<
 >;
 
 export type ToolScope = (typeof MCP_ALL_RESOURCE_SCOPES)[number];
-
-/**
- * Deployment feature flag that gates a tool's backing surface. Derived
- * structurally from the `FEATURE_*` keys of the API env schema, so a tool can
- * only name a flag that actually exists: a typo or a removed flag fails
- * typecheck. A tool tagged with a flag is advertised and dispatchable only when
- * that flag is on (or the deployment is running in dev); see
- * `isMcpToolFeatureEnabled` in `gateway/list-tools.ts`.
- */
-export type McpToolFeatureFlag = Extract<keyof typeof env, `FEATURE_${string}`>;
 
 /**
  * Closed set of reasons a tool is kept off the anonymized surface. No
@@ -185,9 +179,19 @@ export type McpToolAccessBranch =
     }
   | {
       access: "write";
-      /** Generic dispatch may invoke a read target despite its own write access. */
-      readClass?: McpReadClassResolver;
+      readClass?: never;
       annotations: McpToolAnnotations & { readOnlyHint: false };
+      /**
+       * The member authority every call needs; discovery and dispatch enforce
+       * it centrally through `write-tool-authority.ts`.
+       */
+      permissions: McpWriteToolPermissions;
+      /**
+       * Whether the configured demo account may use the tool, declared as its
+       * REST counterpart declares it (`standard` refuses it, `sandbox`
+       * admits it); discovery and dispatch read it through the same owner.
+       */
+      accountAccess: AccountAccess;
     };
 
 export type McpToolDestructiveBehavior =
@@ -220,9 +224,12 @@ type McpToolDestructiveBranch =
   | {
       annotations: McpToolAnnotations & { destructiveHint: false };
       destructiveBehavior?: undefined;
+      /** Why a broader update grant does not imply this handler modifies data. */
+      nonDestructiveReason?: string;
     }
   | {
       annotations: McpToolAnnotations & { destructiveHint: false };
+      nonDestructiveReason?: never;
       destructiveBehavior: Extract<
         McpToolConfirmationBehavior,
         { type: "outbound" }
@@ -230,7 +237,10 @@ type McpToolDestructiveBranch =
     }
   | {
       annotations: McpToolAnnotations & { destructiveHint: true };
-      destructiveBehavior: McpToolDestructiveBehavior;
+      // Updating existing data needs the client hint even when the server
+      // requires no irreversible-action confirmation.
+      destructiveBehavior?: McpToolDestructiveBehavior;
+      nonDestructiveReason?: never;
     };
 
 export type McpToolDefinition = McpToolAccessBranch &
@@ -252,10 +262,18 @@ export type McpToolDefinition = McpToolAccessBranch &
     description: string;
     /**
      * Deployment feature flag gating this tool. When set, the tool is dropped
-     * from the advertised list and its dispatch is rejected unless the flag is on
-     * (or the deployment runs in dev). Omitted for always-available tools.
+     * from the advertised list and its dispatch is rejected unless
+     * `isDeploymentFeatureEnabled` holds for it. Omitted for always-available
+     * tools.
      */
-    feature?: McpToolFeatureFlag;
+    feature?: DeploymentFeatureFlag;
+    featureId?: FeatureId;
+    featureInput?: {
+      featureId: FeatureId;
+      usesFeature: (args: unknown) => boolean;
+      projectInputSchema: (schema: McpToolInputSchema) => McpToolInputSchema;
+      unavailableDescription: string;
+    };
     inputSchema: McpToolInputSchema;
     /**
      * Optional session-member visibility predicate, enforced centrally for both
@@ -311,6 +329,8 @@ export type McpCliDiscriminatorSubcommand = {
 };
 
 export type McpCliToolAnnotation = {
+  feature?: DeploymentFeatureFlag;
+  featureId?: FeatureId;
   command: readonly string[];
   additionalScopes?: readonly McpCliToolScope[];
   /** API-owned finite transport deadline projected into generated CLI leaves. */
@@ -353,9 +373,8 @@ export type McpCliToolAnnotation = {
    */
   localFileBase64Prop?: string;
   /**
-   * The tool is not destructive itself but gates SOME calls behind its `confirm`
-   * arg (per-target destructiveness, e.g. `invoke_capability` where the invoked
-   * capability's catalog flag decides). The CLI leaf then accepts `--yes`
+   * Some calls require the `confirm` arg in addition to host approval
+   * (e.g. write_capability checks the invoked capability's catalog flag). The CLI leaf then accepts `--yes`
    * (injecting `confirm: true` upfront) and, on a `confirmation_required`
    * envelope at a TTY, prompts and retries once with `confirm: true`.
    */
@@ -422,7 +441,13 @@ export type McpCompatSearchResult =
       url: string;
       workspaceId: string;
     }
-  | { kind: "corpus"; id: string; title: string; url: string };
+  | {
+      kind: "corpus";
+      id: string;
+      title: string;
+      url: string;
+      source_url?: string;
+    };
 
 /**
  * What one compat fetch is reading, and therefore whether its text is
@@ -480,14 +505,16 @@ export type InternalToolSuccess<TData = unknown> = {
 
 export type InternalToolStructuredError = {
   type: "structured";
-  code: McpErrorCode;
   message: string;
   hint?: string;
   issues?: readonly McpValidationIssue[];
   retryable?: boolean;
   contactUrl?: string;
   requestId?: string;
-};
+} & (
+  | { code: "internal_error"; readonly [MCP_INTERNAL_TOOL_FAILURE]: true }
+  | { code: Exclude<McpErrorCode, "internal_error"> }
+);
 
 export type InternalToolTextError = {
   type: "text";
@@ -536,6 +563,7 @@ export type McpEgressPlan<TPayload = unknown> =
     }
   | {
       egress: "compatFetch";
+      source_url?: string;
       cursor: string | undefined;
       id: string;
       maxChars: number;

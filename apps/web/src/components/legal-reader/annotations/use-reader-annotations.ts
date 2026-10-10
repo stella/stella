@@ -43,6 +43,7 @@ import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 /** A mark not yet acknowledged by the server, keyed so it can be told apart. */
 const PENDING_ID_PREFIX = "pending:";
@@ -171,7 +172,10 @@ export const useReaderAnnotations = (
     ...targetKey,
   });
   const queryKey = annotationsQuery.queryKey;
-  const { data } = useQuery({ ...annotationsQuery, enabled: user !== null });
+  const dataQuery = useQuery({ ...annotationsQuery, enabled: user !== null });
+  const dataView = useQueryView(dataQuery);
+  useQueryViewError(dataView);
+  const data = dataView.type === "items" ? dataView.items : undefined;
 
   const patchCache = async (
     patch: (rows: readonly ReaderAnnotation[]) => ReaderAnnotation[],
@@ -389,7 +393,7 @@ export const useReaderAnnotations = (
           createGuestAnnotation({
             input,
             newId: uuidv7,
-            now: new Date(),
+            now: new Date(Temporal.Now.instant().epochMilliseconds),
             store: guestStore,
             target: targetKey,
           }),

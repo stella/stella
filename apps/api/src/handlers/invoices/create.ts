@@ -22,7 +22,8 @@ import {
   recalculateInvoiceTotals,
   timeEntryLineDraft,
 } from "@/api/handlers/invoices/invoice-lines";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { invoiceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { lockBillingArrangement } from "@/api/lib/billing/arrangements";
@@ -301,6 +302,7 @@ const createDraftInvoice = async (
       rateAtEntry: timeEntries.rateAtEntry,
       narrative: timeEntries.narrative,
       invoiceNarrative: timeEntries.invoiceNarrative,
+      noCharge: timeEntries.noCharge,
     });
 
   const linkedCount = updated.length;
@@ -386,6 +388,9 @@ const createInvoice = createSafeHandler(
       "Pass empty timeEntryIds for a draft with manual lines. Expenses are added " +
       "afterwards with invoices.entries.add.",
     permissions: { invoice: ["create"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: { featureId: "time-billing", type: "required" },
+    realtime: invoiceRealtimeUpdates,
     mcp: {
       type: "capability",
       reason: "billing_admin",

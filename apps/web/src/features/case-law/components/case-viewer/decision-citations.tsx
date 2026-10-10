@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
@@ -9,6 +10,9 @@ import { ChevronRightIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import { CitedDecisionLink } from "@/components/legal-reader/cited-decision-link";
+import { decisionCitationCourtLabel } from "@/components/references/decision-citation-chip.logic";
+import { decisionCitationPresentationsById } from "@/components/references/decision-citation-presentation.logic";
+import type { DecisionCitationPresentation } from "@/components/references/decision-citation-presentation.logic";
 import {
   CITATION_TREATMENT_DOT,
   CITATION_TREATMENT_LABEL,
@@ -22,6 +26,7 @@ import type {
   DecisionCitation,
 } from "@/features/case-law/citation-treatment";
 import {
+  CITATION_DIRECTIONS,
   decisionCitationsInfiniteOptions,
   decisionCitationSummaryOptions,
 } from "@/features/case-law/queries/citations";
@@ -44,93 +49,8 @@ type DecisionCitationsProps = {
   /** The decision being read, as a citation names it. */
   decision: CitedDecisionAddress;
   decisionId: SafeId<"caseLawDecision">;
-};
-
-/**
- * The decisions that cite this one and the decisions it cites, each side
- * headed by how many and how they treat it.
- *
- * Incoming first, because "is this still good law" is the question a reader
- * brings; negative treatment leads every list for the same reason.
- */
-export const DecisionCitations = ({
-  decision,
-  decisionId,
-}: DecisionCitationsProps) => {
-  const t = useTranslations();
-  const {
-    data: summary,
-    isError,
-    refetch,
-  } = useQuery(decisionCitationSummaryOptions(decisionId));
-  // The summary is prefetched without blocking the route, so whether it is
-  // known differs between the server pass and the client's hydration pass.
-  // Rendering nothing until hydrated keeps the two passes identical.
-  const hydrated = useHydrated();
-
-  // Absent is the answer for a decision nobody cites. A failed read is not
-  // that answer, so it says so and offers a retry instead of disappearing.
-  if (!hydrated || summary === undefined) {
-    if (!hydrated || !isError) {
-      return null;
-    }
-    return (
-      <section className="reader-chrome border-border/60 mb-6 rounded-lg border px-3 py-2 print:hidden">
-        <div className="flex items-center gap-2">
-          <p className="text-muted-foreground text-xs">
-            {t("errors.actionFailed")}
-          </p>
-          <Button
-            onClick={() => {
-              detached(refetch(), "case-law.citations-retry");
-            }}
-            size="sm"
-            variant="ghost"
-          >
-            {t("common.retry")}
-          </Button>
-        </div>
-      </section>
-    );
-  }
-
-  const incomingTotal = totalCitations(summary.incoming);
-  const outgoingTotal = totalCitations(summary.outgoing);
-  if (
-    incomingTotal === 0 &&
-    outgoingTotal === 0 &&
-    !summary.capped.incoming &&
-    !summary.capped.outgoing &&
-    !isError
-  ) {
-    return null;
-  }
-
-  return (
-    <>
-      {(incomingTotal > 0 || summary.capped.incoming) && (
-        <CitationDirectionSection
-          capped={summary.capped.incoming}
-          counts={summary.incoming}
-          decision={decision}
-          decisionId={decisionId}
-          direction="incoming"
-          // A decision tab reuses this component; a new decision starts collapsed.
-          key={`${decisionId}-incoming`}
-        />
-      )}
-      {(outgoingTotal > 0 || summary.capped.outgoing) && (
-        <CitationDirectionSection
-          capped={summary.capped.outgoing}
-          counts={summary.outgoing}
-          decision={decision}
-          decisionId={decisionId}
-          direction="outgoing"
-          key={`${decisionId}-outgoing`}
-        />
-      )}
-    </>
-  );
+  /** The compact inspector owns the one disclosure around both directions. */
+  expanded?: boolean;
 };
 
 const CitationDirectionSection = ({
@@ -261,9 +181,20 @@ export const CitationList = ({
     refetch,
   } = useInfiniteQuery(decisionCitationsInfiniteOptions(decisionId, direction));
 
-  const groups = groupByTreatment(
-    optionalArray(data?.pages).flatMap((page) => page.items),
+  const items = optionalArray(data?.pages).flatMap((page) => page.items);
+  const presentations = decisionCitationPresentationsById(
+    items.flatMap(({ decision: cited }) =>
+      cited === null
+        ? []
+        : [
+            {
+              decisionId: cited.id,
+              courtShortCode: decisionCitationCourtLabel(cited),
+            },
+          ],
+    ),
   );
+  const groups = groupByTreatment(items);
 
   return (
     <div className="flex flex-col gap-3 px-3 pb-3">
@@ -301,6 +232,7 @@ export const CitationList = ({
                 decision={decision}
                 direction={direction}
                 item={item}
+                presentations={presentations}
                 key={item.id}
               />
             ))}
@@ -324,11 +256,127 @@ export const CitationList = ({
   );
 };
 
+/**
+ * The decisions that cite this one and the decisions it cites, each side
+ * headed by how many and how they treat it.
+ *
+ * Incoming first, because "is this still good law" is the question a reader
+ * brings; negative treatment leads every list for the same reason.
+ */
+export const DecisionCitations = ({
+  decision,
+  decisionId,
+  expanded,
+}: DecisionCitationsProps) => {
+  const t = useTranslations();
+  const {
+    data: summary,
+    isError,
+    refetch,
+  } = useQuery(decisionCitationSummaryOptions(decisionId));
+  // The summary is prefetched without blocking the route, so whether it is
+  // known differs between the server pass and the client's hydration pass.
+  // Rendering nothing until hydrated keeps the two passes identical.
+  const hydrated = useHydrated();
+  const compactExpanded = expanded === true;
+
+  // Absent is the answer for a decision nobody cites. A failed read is not
+  // that answer, so it says so and offers a retry instead of disappearing.
+  if (!hydrated || summary === undefined) {
+    if (!hydrated || !isError) {
+      return null;
+    }
+    return (
+      <section className="reader-chrome border-border/60 mb-6 rounded-lg border px-3 py-2 print:hidden">
+        <div className="flex items-center gap-2">
+          <p className="text-muted-foreground text-xs">
+            {t("errors.actionFailed")}
+          </p>
+          <Button
+            onClick={() => {
+              detached(refetch(), "case-law.citations-retry");
+            }}
+            size="sm"
+            variant="ghost"
+          >
+            {t("common.retry")}
+          </Button>
+        </div>
+      </section>
+    );
+  }
+
+  const incomingTotal = totalCitations(summary.incoming);
+  const outgoingTotal = totalCitations(summary.outgoing);
+  if (expanded !== undefined) {
+    if (!compactExpanded) {
+      return null;
+    }
+    return (
+      <div className="flex flex-col gap-3">
+        {CITATION_DIRECTIONS.map((direction) =>
+          totalCitations(summary[direction]) > 0 ||
+          summary.capped[direction] ? (
+            <section className="flex flex-col gap-2" key={direction}>
+              <h3 className="text-foreground-strong-muted text-xs font-medium">
+                {t(DIRECTION_TITLE[direction])}
+              </h3>
+              <CitationList
+                decision={decision}
+                decisionId={decisionId}
+                direction={direction}
+              />
+            </section>
+          ) : null,
+        )}
+      </div>
+    );
+  }
+
+  if (
+    incomingTotal === 0 &&
+    outgoingTotal === 0 &&
+    !summary.capped.incoming &&
+    !summary.capped.outgoing &&
+    !isError
+  ) {
+    return null;
+  }
+
+  return (
+    <>
+      {(incomingTotal > 0 || summary.capped.incoming) && (
+        <CitationDirectionSection
+          capped={summary.capped.incoming}
+          counts={summary.incoming}
+          decision={decision}
+          decisionId={decisionId}
+          direction="incoming"
+          // A decision tab reuses this component; a new decision starts collapsed.
+          key={`${decisionId}-incoming`}
+        />
+      )}
+      {(outgoingTotal > 0 || summary.capped.outgoing) && (
+        <CitationDirectionSection
+          capped={summary.capped.outgoing}
+          counts={summary.outgoing}
+          decision={decision}
+          decisionId={decisionId}
+          direction="outgoing"
+          key={`${decisionId}-outgoing`}
+        />
+      )}
+    </>
+  );
+};
+
 const CitationRow = ({
   decision,
   direction,
   item,
+  presentations,
 }: {
+  presentations: ReadonlyMap<string, DecisionCitationPresentation>;
   decision: CitedDecisionAddress;
   direction: CitationDirection;
   item: DecisionCitation;
@@ -359,7 +407,12 @@ const CitationRow = ({
     <li className="flex flex-wrap items-baseline gap-x-2 text-xs">
       <CitedDecisionLink
         decision={item.decision}
+        presentation={
+          presentations.get(item.decision.id) ??
+          panic("Citation list target missing collected identity")
+        }
         passage={{
+          type: "citation",
           citation: {
             citationText: item.citationText,
             decision: cited,

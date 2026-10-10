@@ -6,7 +6,6 @@ import * as v from "valibot";
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
 
-import { encodeDecisionCitationCursor } from "@/api/handlers/case-law/decisions/get";
 import { CONTACT_DISPLAY_NAME_MAX_LENGTH } from "@/api/handlers/contacts/list-query";
 import { encodeVersionCursor } from "@/api/handlers/entities/version-cursor";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
@@ -31,6 +30,10 @@ import {
 import { isRecord } from "@/api/lib/type-guards";
 import { LAW_COMPAT_TOOL_SET } from "@/api/mcp/compat-law-tools";
 import { encodeCompatSearchCursor } from "@/api/mcp/compat-shared";
+import {
+  encodeReaderCursor,
+  readerVersion,
+} from "@/api/mcp/decision-reader.logic";
 import capabilityCatalog from "@/api/mcp/generated/capability-catalog";
 import {
   ALL_MCP_TOOL_DEFINITIONS,
@@ -93,9 +96,19 @@ const timestampCursor = createTimestampIdCursorCodec({
 }).encode(TIMESTAMP, UUID);
 const idCursor = encodePaginationCursor([UUID]);
 const offsetCursor = encodePaginationCursor([Number.MAX_SAFE_INTEGER]);
-const citationsCursor = encodeDecisionCitationCursor({
-  from: { status: "continue", after: idCursor },
-  to: { status: "continue", after: idCursor },
+
+const readerCursor = encodeReaderCursor({
+  decisionId: UUID,
+  version: readerVersion([]),
+  phase: "provisions",
+  offset: Number.MAX_SAFE_INTEGER,
+  blockOffset: Number.MAX_SAFE_INTEGER,
+  referenceCursor: encodePaginationCursor([
+    "9223372036854775807",
+    2_147_483_647,
+    "a".repeat(LIMITS.decisionReaderProvisionAnchorMaxChars),
+  ]),
+  batchDigest: readerVersion([]),
 });
 
 // These use the same encoders as the handlers: tuple shapes come from the
@@ -122,11 +135,8 @@ const cursorFixtures: Readonly<Record<string, string>> = {
     ),
   ),
   "default.read_content_across_matters.nextCursor": offsetCursor,
-  "default.read_case_law_decision.items[].nextCursor": encodePaginationCursor([
-    Number.MAX_SAFE_INTEGER,
-    citationsCursor,
-  ]),
   "default.read_case_law_citations.nextCursor": idCursor,
+  "default.read_case_law_decision_blocks.content.nextCursor": readerCursor,
   "default.search_legislation.nextCursor": statuteCursor,
   "default.read_statute.nextCursor": offsetCursor,
   "default.read_provision_history.nextCursor": encodePaginationCursor([
@@ -256,7 +266,6 @@ describe("every registered pagination envelope fits its own next-call input", ()
   test("the longest optional corpus segments survive the real encoder", () => {
     expect(decodeCorpusSearchCursor(decisionCursor)).toEqual(corpusPosition);
     expect(decodeCorpusSearchCursor(statuteCursor)).toEqual(statutePosition);
-    expect(citationsCursor).not.toBeNull();
   });
 
   test("an undersized fixture input fails the same acceptance guard", () => {

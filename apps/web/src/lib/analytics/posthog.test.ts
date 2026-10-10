@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+import {
+  API_FILE_SECURITY_REJECTED_ERROR_CODE,
+  CHAT_CONTINUATION_REJECTED_ERROR_CODE,
+} from "@stll/api-contract";
+
 import { env } from "@/env";
 import { INGESTION_REQUIRED_KEYS } from "@/lib/analytics/posthog-ingestion";
 import { WEB_ANALYTICS_EVENTS } from "@/lib/analytics/types";
@@ -55,9 +60,14 @@ const initMock = mock((_key: string, options: PostHogInitOptions) => {
 const registerMock = mock((_properties: Record<string, unknown>) => undefined);
 const getDistinctIdMock = mock(() => distinctId);
 const isIdentifiedMock = mock(() => identified);
-const resetMock = mock(() => {
-  distinctId = "anonymous_after_reset";
-  identified = false;
+type ResetOptions = {
+  bootstrap?: { distinctID?: string; isIdentifiedID?: boolean };
+};
+// Mirrors posthog-js: a bootstrapped id becomes the distinct id, identified
+// when the bootstrap says so; a bare reset mints a new anonymous id.
+const resetMock = mock((options?: ResetOptions) => {
+  distinctId = options?.bootstrap?.distinctID ?? "anonymous_after_reset";
+  identified = options?.bootstrap?.isIdentifiedID === true;
 });
 const groupMock = mock((_type: string, _key: string) => undefined);
 
@@ -86,7 +96,12 @@ void mock.module("posthog-js", () => ({
   posthog: posthogMock,
 }));
 
-const { createPostHogAnalytics } = await import("./posthog");
+const {
+  createPostHogAnalytics,
+  isNoiseException,
+  sanitizeFrame,
+  UNKNOWN_FRAME_FUNCTION,
+} = await import("./posthog");
 const { redactTelemetryStack } = await import("./stack-redaction");
 const { sanitizeRouteErrorLifecycleEvent } =
   await import("./posthog-route-error");
@@ -273,6 +288,116 @@ describe("PostHog browser analytics adapter", () => {
     }
   });
 
+  const exceptionEvent = (
+    entry: Record<string, unknown>,
+    properties: Record<string, unknown> = {},
+  ) => ({
+    event: WEB_ANALYTICS_EVENTS.exception,
+    properties: { ...properties, $exception_list: [entry] },
+  });
+
+  test.each([
+    ["no desktop app", { type: "DesktopBridgeUnavailableError", value: "x" }],
+    [
+      "public law source down",
+      { type: "PublicLawUnavailableError", value: "x" },
+    ],
+    ["signed-out session", { type: "AuthClientError", value: "x" }],
+    [
+      "a React removeChild race",
+      {
+        type: "NotFoundError",
+        value:
+          "Failed to execute 'removeChild' on 'Node': The node to be removed is not a child of this node.",
+      },
+    ],
+    [
+      "a React insertBefore race",
+      {
+        type: "Error",
+        value: "Failed to execute 'insertBefore' on 'Node': x",
+      },
+    ],
+    [
+      "a dropped fetch (Chromium)",
+      { type: "TypeError", value: "Failed to fetch" },
+    ],
+    ["a dropped fetch (Safari)", { type: "TypeError", value: "Load failed" }],
+    [
+      "a dropped fetch (Firefox)",
+      {
+        type: "TypeError",
+        value: "NetworkError when attempting to fetch resource.",
+      },
+    ],
+    [
+      "an extension frame",
+      {
+        type: "TypeError",
+        value: "x is undefined",
+        stacktrace: {
+          frames: [
+            { filename: "https://my.stll.app/assets/app.js" },
+            { filename: "chrome-extension://abcdef/content.js" },
+          ],
+        },
+      },
+    ],
+  ])("drops %s as noise", (_label, entry) => {
+    expect(isNoiseException(exceptionEvent(entry))).toBe(true);
+  });
+
+  test.each([401, 403, 404])("drops an expected %i API answer", (status) => {
+    expect(
+      isNoiseException(
+        exceptionEvent(
+          { type: "ApiError", value: "x" },
+          { error_status: status },
+        ),
+      ),
+    ).toBe(true);
+  });
+
+  test.each([
+    "ai_config_provider_validation_failed",
+    CHAT_CONTINUATION_REJECTED_ERROR_CODE,
+    API_FILE_SECURITY_REJECTED_ERROR_CODE,
+  ])("drops the expected API outcome %s", (code) => {
+    expect(
+      isNoiseException(
+        exceptionEvent(
+          { type: "ApiError", value: "x" },
+          { error_status: 422, error_code: code },
+        ),
+      ),
+    ).toBe(true);
+  });
+
+  test.each([
+    ["a server error", { type: "ApiError", value: "x" }, { error_status: 500 }],
+    ["another 4xx", { type: "ApiError", value: "x" }, { error_status: 409 }],
+    [
+      "a 404 a viewer boundary caught",
+      { type: "ClientTelemetryError", value: "x" },
+      { error_status: 404 },
+    ],
+    [
+      "a TypeError of ours",
+      { type: "TypeError", value: "x is not a function" },
+      {},
+    ],
+    [
+      "a fetch failure with more context",
+      {
+        type: "TypeError",
+        value: "Failed to fetch dynamically imported module: /a.js",
+      },
+      {},
+    ],
+  ])("keeps %s", (_label, entry, properties) => {
+    expect(isNoiseException(exceptionEvent(entry, properties))).toBe(false);
+  });
+
   test("identifies a DOM exception by its error name", () => {
     createPostHogAnalytics({ host: "https://posthog.test", key: "phc_test" });
 
@@ -422,7 +547,15 @@ describe("PostHog browser analytics adapter", () => {
             value: "",
             stacktrace: {
               type: "raw",
-              frames: [{ filename: "app.js", lineno: 42 }],
+              frames: [
+                {
+                  platform: "web:javascript",
+                  function: UNKNOWN_FRAME_FUNCTION,
+                  in_app: true,
+                  filename: "app.js",
+                  lineno: 42,
+                },
+              ],
             },
           },
         ],
@@ -471,6 +604,7 @@ describe("PostHog browser analytics adapter", () => {
           frames: [
             {
               platform: "web:javascript",
+              function: UNKNOWN_FRAME_FUNCTION,
               filename: "https://my.stll.app/assets/app.js",
               in_app: true,
               lineno: 42,
@@ -480,6 +614,36 @@ describe("PostHog browser analytics adapter", () => {
         },
       },
     ]);
+  });
+
+  // PostHog drops an exception whose raw frame lacks `platform`, `function`
+  // or `in_app` ("missing field function"), so no input frame may lose them.
+  test.each([
+    ["an empty frame", {}],
+    ["a non-object frame", "at renderMatter (app.js:1:2)"],
+    ["a null frame", null],
+    ["a frame without a function", { filename: "app.js", lineno: 3 }],
+    [
+      "a frame with a named function",
+      { function: "renderMatter", filename: "app.js", in_app: false },
+    ],
+    ["a frame from another platform", { platform: "node:javascript" }],
+  ])("a sanitized frame keeps every required field: %s", (_label, frame) => {
+    const sanitized = sanitizeFrame(frame);
+    expect(sanitized.function).toBe(UNKNOWN_FRAME_FUNCTION);
+    expect(typeof sanitized.platform).toBe("string");
+    expect(typeof sanitized.in_app).toBe("boolean");
+  });
+
+  test("a sanitized frame never carries the function name", () => {
+    expect(
+      sanitizeFrame({ function: "Smith v Example", filename: "app.js" }),
+    ).toEqual({
+      platform: "web:javascript",
+      function: UNKNOWN_FRAME_FUNCTION,
+      in_app: true,
+      filename: "app.js",
+    });
   });
 
   test("captureError ignores null and undefined", () => {
@@ -832,8 +996,20 @@ describe("PostHog browser analytics adapter", () => {
         stacktrace: {
           type: "raw",
           frames: [
-            { filename: "app.js", lineno: 1 },
-            { filename: "app.js", lineno: 2 },
+            {
+              platform: "web:javascript",
+              function: UNKNOWN_FRAME_FUNCTION,
+              in_app: true,
+              filename: "app.js",
+              lineno: 1,
+            },
+            {
+              platform: "web:javascript",
+              function: UNKNOWN_FRAME_FUNCTION,
+              in_app: true,
+              filename: "app.js",
+              lineno: 2,
+            },
           ],
         },
       },
@@ -1168,7 +1344,14 @@ describe("PostHog browser analytics adapter", () => {
             value: "",
             stacktrace: {
               type: "raw",
-              frames: [{ filename: "https://my.stll.app/assets/app.js" }],
+              frames: [
+                {
+                  platform: "web:javascript",
+                  function: UNKNOWN_FRAME_FUNCTION,
+                  in_app: true,
+                  filename: "https://my.stll.app/assets/app.js",
+                },
+              ],
             },
           },
         ],
@@ -1437,7 +1620,11 @@ describe("PostHog browser analytics adapter", () => {
     });
   });
 
-  test("identifies users by stable id and attaches the organization group", () => {
+  const bootstrapped = (userId: string) => ({
+    bootstrap: { distinctID: userId, isIdentifiedID: true },
+  });
+
+  test("binds the signed-in user by stable id without an identify merge", () => {
     const { analytics } = createPostHogAnalytics({
       host: "https://posthog.test",
       key: "phc_test",
@@ -1445,11 +1632,31 @@ describe("PostHog browser analytics adapter", () => {
 
     analytics.identifyUser({ id: "user_123", activeOrganizationId: "org_1" });
 
-    expect(identifyMock).toHaveBeenCalledWith("user_123");
+    expect(resetMock).toHaveBeenCalledWith(bootstrapped("user_123"));
+    expect(identifyMock).not.toHaveBeenCalled();
     expect(groupMock).toHaveBeenCalledWith("organization", "org_1");
   });
 
-  test("identifies the same user only once per browser app session", () => {
+  test("two page loads of the same user produce one distinct id", () => {
+    const distinctIds: string[] = [];
+    for (const pageLoad of [1, 2]) {
+      // Persistence is off: every load starts with a new anonymous id.
+      distinctId = `anonymous_load_${String(pageLoad)}`;
+      identified = false;
+      const { analytics } = createPostHogAnalytics({
+        host: "https://posthog.test",
+        key: "phc_test",
+      });
+      analytics.identifyUser({ id: "user_123", activeOrganizationId: "org_1" });
+      distinctIds.push(getDistinctIdMock());
+    }
+
+    expect(new Set(distinctIds)).toEqual(new Set(["user_123"]));
+    // No load links its anonymous id to the person.
+    expect(identifyMock).not.toHaveBeenCalled();
+  });
+
+  test("binds the same user only once per browser app session", () => {
     const { analytics } = createPostHogAnalytics({
       host: "https://posthog.test",
       key: "phc_test",
@@ -1458,8 +1665,7 @@ describe("PostHog browser analytics adapter", () => {
     analytics.identifyUser({ id: "user_123", activeOrganizationId: "org_1" });
     analytics.identifyUser({ id: "user_123", activeOrganizationId: "org_1" });
 
-    expect(identifyMock).toHaveBeenCalledTimes(1);
-    expect(resetMock).not.toHaveBeenCalled();
+    expect(resetMock).toHaveBeenCalledTimes(1);
   });
 
   test("rebinds the organization group on a same-user organization switch", () => {
@@ -1471,14 +1677,14 @@ describe("PostHog browser analytics adapter", () => {
     analytics.identifyUser({ id: "user_123", activeOrganizationId: "org_1" });
     analytics.identifyUser({ id: "user_123", activeOrganizationId: "org_2" });
 
-    // The identity guard still suppresses the duplicate identify, but the
-    // group must follow the active organization or later events attribute
-    // to the previous organization across an ownership boundary.
-    expect(identifyMock).toHaveBeenCalledTimes(1);
+    // The identity guard still suppresses a second bind, but the group must
+    // follow the active organization or later events attribute to the
+    // previous organization across an ownership boundary.
+    expect(resetMock).toHaveBeenCalledTimes(1);
     expect(groupMock).toHaveBeenNthCalledWith(2, "organization", "org_2");
   });
 
-  test("resets before identifying a different user", () => {
+  test("binds a different user in place of the previous one", () => {
     const { analytics } = createPostHogAnalytics({
       host: "https://posthog.test",
       key: "phc_test",
@@ -1487,9 +1693,28 @@ describe("PostHog browser analytics adapter", () => {
     analytics.identifyUser({ id: "user_123", activeOrganizationId: "org_1" });
     analytics.identifyUser({ id: "user_456", activeOrganizationId: "org_2" });
 
-    expect(resetMock).toHaveBeenCalledTimes(1);
-    expect(identifyMock).toHaveBeenNthCalledWith(2, "user_456");
+    expect(resetMock).toHaveBeenNthCalledWith(2, bootstrapped("user_456"));
+    expect(getDistinctIdMock()).toBe("user_456");
     expect(groupMock).toHaveBeenNthCalledWith(2, "organization", "org_2");
+  });
+
+  test("every identity change keeps the build metadata on later events", () => {
+    const { analytics } = createPostHogAnalytics({
+      host: "https://posthog.test",
+      key: "phc_test",
+    });
+
+    analytics.identifyUser({ id: "user_123", activeOrganizationId: "org_1" });
+    analytics.reset();
+
+    // `reset` clears super-properties; each one is followed by a register.
+    expect(registerMock).toHaveBeenCalledTimes(3);
+    for (const [properties] of registerMock.mock.calls) {
+      expect(Object.keys(properties).toSorted()).toEqual([
+        "app_commit",
+        "app_version",
+      ]);
+    }
   });
 
   test("reset can be limited to identified sessions", () => {
@@ -1505,7 +1730,8 @@ describe("PostHog browser analytics adapter", () => {
     analytics.identifyUser({ id: "user_123", activeOrganizationId: "org_1" });
     analytics.reset({ onlyIfIdentified: true });
 
-    expect(resetMock).toHaveBeenCalledTimes(1);
+    expect(resetMock).toHaveBeenNthCalledWith(2, undefined);
+    expect(isIdentifiedMock()).toBe(false);
   });
 
   test("reset clears anonymous sessions by default", () => {
@@ -1529,8 +1755,8 @@ describe("PostHog browser analytics adapter", () => {
     analytics.reset();
     analytics.identifyUser({ id: "user_123", activeOrganizationId: "org_1" });
 
-    expect(resetMock).toHaveBeenCalledTimes(1);
-    expect(identifyMock).toHaveBeenCalledTimes(2);
+    expect(resetMock).toHaveBeenNthCalledWith(3, bootstrapped("user_123"));
+    expect(identifyMock).not.toHaveBeenCalled();
   });
 
   test("sanitizer keeps a validated API response identity and groups by it", () => {
@@ -1539,16 +1765,16 @@ describe("PostHog browser analytics adapter", () => {
     const sanitized = initOptions?.before_send({
       event: WEB_ANALYTICS_EVENTS.exception,
       properties: {
-        $exception_list: [{ type: "ApiError", value: "Not Found" }],
-        error_status: 404,
-        error_code: "not_found",
+        $exception_list: [{ type: "ApiError", value: "Conflict" }],
+        error_status: 409,
+        error_code: "conflict",
       },
     });
     expect(sanitized?.properties?.["$exception_fingerprint"]).toBe(
-      "ApiError||||404:not_found",
+      "ApiError||||409:conflict",
     );
-    expect(sanitized?.properties?.["error_status"]).toBe(404);
-    expect(sanitized?.properties?.["error_code"]).toBe("not_found");
+    expect(sanitized?.properties?.["error_status"]).toBe(409);
+    expect(sanitized?.properties?.["error_code"]).toBe("conflict");
 
     // A free-text code or an out-of-range status never passes through.
     const rejected = initOptions?.before_send({

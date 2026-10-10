@@ -10,7 +10,7 @@ import {
   workObligations,
   workspaces,
 } from "@/api/db/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -61,6 +61,7 @@ const config = {
   description:
     "List the signed-in user's governed work with cursor pagination. The queues partition the work: at-risk holds every open obligation already due, to-acknowledge the rest awaiting acknowledgement, upcoming the rest already acknowledged, and completed the finished work.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     readClass: "tenant",
@@ -97,11 +98,17 @@ const getAttention = (
 
 const myWork = createSafeRootHandler(
   config,
-  async function* ({ scopedDb, user, query }) {
+  async function* ({ safeDb, scopedDb, session, user, query }) {
     // No queue is a superset of the others any more, so the default is the one
     // that needs an answer from the owner rather than the widest slice.
     const queue = query.queue ?? MY_WORK_QUEUE.TO_ACKNOWLEDGE;
-    const asOf = resolveWorkAsOf(query.asOf);
+    const asOf = yield* Result.await(
+      resolveWorkAsOf({
+        asOf: query.asOf,
+        safeDb,
+        organizationId: session.activeOrganizationId,
+      }),
+    );
     const limit = normalizeTenantPageLimit(
       query.limit ?? WORK_QUEUE_PAGE_SIZE_DEFAULT,
     );

@@ -2,7 +2,11 @@ import { panic, Result } from "better-result";
 import { t } from "elysia";
 
 import type { SafeDbError } from "@/api/db/safe-db";
-import { estimateChatContextPromptTokens } from "@/api/handlers/chat/chat-prompt";
+import {
+  estimateChatContextPromptTokens,
+  estimateChatRevisionNoteTokens,
+} from "@/api/handlers/chat/chat-prompt";
+import { readChatRevisionContextChanges } from "@/api/handlers/chat/chat-revision-context";
 import {
   assertChatThreadScopeMatches,
   resolveChatScope,
@@ -13,11 +17,15 @@ import { loadWindowedThreadMessages } from "@/api/handlers/chat/history-window";
 import { loadChatMessagePage } from "@/api/handlers/chat/message-page";
 import { readLatestChatCompactionOnTx } from "@/api/handlers/chat/persistent-compaction";
 import {
+  EMPTY_CHAT_THREAD_ATTACHED_FILES,
+  readChatThreadAttachedFiles,
+} from "@/api/handlers/chat/threads/list-context";
+import {
   areSubagentToolsRegistered,
   isWebSearchAvailable,
 } from "@/api/handlers/chat/tools/chat-tools";
 import type { ChatMessage } from "@/api/handlers/chat/types";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resolveEffectiveChatModelId } from "@/api/lib/chat-model-selection";
@@ -90,6 +98,11 @@ const resolveForkProvenance = ({
 };
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Returns chat messages and computed context metadata, not stored-file grants.",
+  },
   description:
     "Read the most recent page of one of your own chat threads, together " +
     "with the thread's context matters, model and reasoning-effort settings, " +
@@ -100,6 +113,7 @@ const config = {
     "allowMissingThread, a thread that does not exist yet returns an empty " +
     "draft instead of a 404. Page further back with chat.older-messages.list.",
   permissions: { chat: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
   mcp: {
     type: "capability",
@@ -140,11 +154,13 @@ const getMessages = createSafeRootHandler(
     // next send would use.
     const buildNextSendContext = ({
       messages,
+      revisionNoteTokens = 0,
       summary,
       threadChatModel,
       webResearch,
     }: {
       messages: readonly ChatMessage[];
+      revisionNoteTokens?: number;
       summary: {
         summarizedMessageCount: number;
         summaryMarkdown: string;
@@ -173,6 +189,7 @@ const getMessages = createSafeRootHandler(
       });
       return computeThreadContextUsage({
         messages,
+        conversationContextTokens: revisionNoteTokens,
         promptTokens,
         toolTokens,
         triggerTokens,
@@ -267,6 +284,10 @@ const getMessages = createSafeRootHandler(
         const page = unwrapTxRead(
           await loadChatMessagePage({ tx, threadId, userId: user.id }),
         );
+        const attachedFiles = await readChatThreadAttachedFiles({
+          threadId,
+          tx,
+        });
 
         // Estimate the model context the next send would carry, mirroring the
         // send path: the active compaction summary plus the same windowed
@@ -299,15 +320,24 @@ const getMessages = createSafeRootHandler(
             checkpoint,
           }),
         );
+        const revisionChanges = unwrapTxRead(
+          await readChatRevisionContextChanges({
+            messages: windowedMessages,
+            threadId,
+            tx,
+          }),
+        );
 
         return {
           kind: "ok" as const,
+          attachedFiles,
           webSearchAvailable,
           thread,
           page,
           parent,
           checkpoint,
           windowedMessages,
+          revisionNoteTokens: estimateChatRevisionNoteTokens(revisionChanges),
         };
       }),
     );
@@ -316,6 +346,7 @@ const getMessages = createSafeRootHandler(
       if (allowMissingThread) {
         return Result.ok({
           activeTurnId: null,
+          attachedFiles: EMPTY_CHAT_THREAD_ATTACHED_FILES,
           forkProvenance: { type: "none" } as const,
           messages: [],
           olderCursor: null,
@@ -359,12 +390,14 @@ const getMessages = createSafeRootHandler(
     }
 
     const {
+      attachedFiles,
       thread,
       webSearchAvailable,
       page,
       parent,
       checkpoint,
       windowedMessages,
+      revisionNoteTokens,
     } = reads;
 
     // Estimated for every thread, empty ones included: with no messages and no
@@ -375,6 +408,7 @@ const getMessages = createSafeRootHandler(
     // template studio) the standalone read path never carries template-authoring
     // tools. The trigger denominator resolves the same model the next send uses.
     const context = buildNextSendContext({
+      revisionNoteTokens,
       messages: windowedMessages.map((message) => ({
         id: message.id,
         role: message.role,
@@ -392,6 +426,7 @@ const getMessages = createSafeRootHandler(
 
     return Result.ok({
       activeTurnId: page.activeTurnId,
+      attachedFiles,
       forkProvenance: resolveForkProvenance({
         forkedFromMessageId: thread.forkedFromMessageId,
         parent,

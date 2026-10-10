@@ -1,8 +1,9 @@
 import { panic, Result } from "better-result";
 import { Buffer } from "node:buffer";
 
+import { hasUsableAst } from "@stll/legal-ast/document-ast";
+
 import type { SafeId } from "@/api/lib/branded-types";
-import { hasUsableAst } from "@/api/lib/case-law/document-ast";
 import {
   publisherHeadnoteOf,
   publisherKeywordsOf,

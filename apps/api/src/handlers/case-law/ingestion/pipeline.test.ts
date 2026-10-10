@@ -2,13 +2,21 @@ import { Result } from "better-result";
 import { SQL } from "bun";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
-import { TEXT_ABSENCE_REASONS } from "@stll/api-contract/case-law-text-field";
+import {
+  DECISION_TEXT_ABSENCE_METADATA_KEY,
+  DECISION_TEXT_ABSENCE_VERSION_METADATA_KEY,
+  DECISION_TEXT_ABSENCE_SCHEMA_VERSION,
+  DECISION_TEXT_FIELD,
+  TEXT_ABSENCE_REASONS,
+} from "@stll/api-contract/case-law-text-field";
 import {
   DECISION_DOCUMENT_ROLE,
   DECISION_DOCUMENT_ROLE_METADATA_KEY,
 } from "@stll/api-contract/decision-document-role";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import { plainTextOf } from "@stll/legal-ast/document-ast";
 import {
   DOCUMENT_FETCH_EVENT,
   type DocumentStageObserver,
@@ -17,6 +25,7 @@ import {
   CYCLE_HALT_REASON,
   INGESTION_STOP_KIND,
 } from "@stll/legal-atlas/ingestion-cycle";
+import { createSha256 } from "@stll/sha256/node";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -27,8 +36,6 @@ import {
   caseLawSources,
 } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
-import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
-import { plainTextOf } from "@/api/handlers/case-law/document-ast";
 import {
   EMPTY_AST,
   SOURCE_DOCUMENT_ID_MAX_LENGTH,
@@ -50,6 +57,7 @@ import {
   absentTextField,
   presentTextField,
   readDecisionTextMetadata,
+  splitStoredDecisionTextMetadata,
 } from "@/api/lib/case-law/decision-text";
 import { canonicalDecisionDate } from "@/api/lib/dates";
 import { errorTag } from "@/api/lib/errors/error-tag";
@@ -82,7 +90,7 @@ import type { RecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 
 // An insert whose values can be awaited directly or chained into an upsert,
 // as the refresh path does for identifier rows.
-// oxlint-disable-next-line typescript-eslint/promise-function-async -- the double returns a promise that also carries onConflictDoUpdate; `async` would drop the extra method
+// oxlint-disable-next-line typescript/promise-function-async -- the double returns a promise that also carries onConflictDoUpdate; `async` would drop the extra method
 const insertedValues = () =>
   Object.assign(Promise.resolve(undefined), {
     onConflictDoUpdate: async () => await Promise.resolve(undefined),
@@ -120,6 +128,7 @@ const testSourceLease = (
   beforeDatabaseMark: async () => undefined,
   beforeRemoteEffect: async (effect) => await effect(),
   leaseToken: createSafeId<"caseLawSourceIngestionLease">(),
+  purpose: "ingestion",
   release: async () => undefined,
   source,
 });
@@ -199,7 +208,12 @@ describe("publisher document role persistence", () => {
       expect(input.metadata[DECISION_DOCUMENT_ROLE_METADATA_KEY]).toBe(
         "untrusted",
       );
-      expect(sanitizeResult(stored)).toEqual(stored);
+      expect(
+        sanitizeResult({
+          ...stored,
+          ...splitStoredDecisionTextMetadata(stored.metadata),
+        }),
+      ).toEqual(stored);
     },
   );
 
@@ -217,7 +231,12 @@ describe("publisher document role persistence", () => {
       Object.hasOwn(stored.metadata, DECISION_DOCUMENT_ROLE_METADATA_KEY),
     ).toBe(false);
     expect(stored.decisionType === input.decisionType).toBe(true);
-    expect(sanitizeResult(stored)).toEqual(stored);
+    expect(
+      sanitizeResult({
+        ...stored,
+        ...splitStoredDecisionTextMetadata(stored.metadata),
+      }),
+    ).toEqual(stored);
   });
 });
 
@@ -488,6 +507,7 @@ describe("sanitizeResult — shared partial-observation quality", () => {
 
     const recovered = sanitizeResult({
       ...partial,
+      ...splitStoredDecisionTextMetadata(partial.metadata),
       caseNumberIsPlaceholder: undefined,
       isListingOnly: undefined,
       observationDetail: "complete",
@@ -1916,7 +1936,25 @@ describe("processDecision — fields on an existing row", () => {
       },
     });
 
-    expect(updated?.["metadata"]).toEqual({ abstract: "Stored abstract" });
+    expect(updated?.["metadata"]).toEqual({
+      abstract: "Stored abstract",
+      [DECISION_TEXT_ABSENCE_VERSION_METADATA_KEY]:
+        DECISION_TEXT_ABSENCE_SCHEMA_VERSION,
+      [DECISION_TEXT_ABSENCE_METADATA_KEY]: [
+        {
+          field: DECISION_TEXT_FIELD.HEADNOTE,
+          reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+        },
+        {
+          field: DECISION_TEXT_FIELD.LEGAL_SENTENCE,
+          reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+        },
+        {
+          field: DECISION_TEXT_FIELD.SUMMARY,
+          reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+        },
+      ],
+    });
   });
 });
 
@@ -1938,7 +1976,7 @@ describe("processDecision — source raw upload failure", () => {
   /** The payload's own digest, under the decision's own raw prefix. */
   const rawKey = (sourceId: string, payload: string): RegExp =>
     new RegExp(
-      `^case-law/raw/${sourceId}/documents/[0-9a-f-]{36}/payloads/${new Bun.CryptoHasher("sha256").update(payload).digest("hex")}$`,
+      `^case-law/raw/${sourceId}/documents/[0-9a-f-]{36}/payloads/${createSha256().update(payload).digest("hex")}$`,
       "u",
     );
 

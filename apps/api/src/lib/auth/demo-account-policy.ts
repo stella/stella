@@ -2,8 +2,6 @@ import type { BetterAuthPlugin } from "better-auth";
 import { createAuthMiddleware } from "better-auth/api";
 import { Result } from "better-result";
 
-import type { statements } from "@stll/permissions";
-
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 export type DemoAccountConfig = {
@@ -33,7 +31,7 @@ const isDemoAccount = ({
   config: DemoAccountConfig;
 }) =>
   config.email !== undefined &&
-  email.trim().toLowerCase() === config.email.toLowerCase();
+  email.trim().toLowerCase() === config.email.trim().toLowerCase();
 
 type DemoAccountAccessOptions = {
   email: string;
@@ -101,48 +99,3 @@ export const createDemoSessionFilter = (config: DemoAccountConfig) =>
       ],
     },
   }) satisfies BetterAuthPlugin;
-
-const ACCOUNT_PERMISSION_POLICY = {
-  organization: "restricted",
-  member: "restricted",
-  invitation: "restricted",
-  team: "restricted",
-  ac: "restricted",
-  workspace: "sandbox",
-  organizationSettings: "restricted",
-  integration: "restricted",
-  contact: "sandbox",
-  invoice: "sandbox",
-  template: "sandbox",
-  styleSet: "sandbox",
-  clause: "sandbox",
-  entity: "sandbox",
-  timeEntry: "sandbox",
-  expense: "sandbox",
-  view: "sandbox",
-  property: "sandbox",
-  playbook: "sandbox",
-  flow: "sandbox",
-  signal: "sandbox",
-  billingCode: "sandbox",
-  rate: "sandbox",
-  chat: "sandbox",
-  auditLog: "sandbox",
-  agentSkill: "sandbox",
-  firmMemory: "sandbox",
-  caseLawResearch: "sandbox",
-  legalReaderAnnotation: "sandbox",
-  savedSearch: "sandbox",
-} as const satisfies Record<keyof typeof statements, "restricted" | "sandbox">;
-
-export const requiresStandardAccount = (
-  permissions: Partial<Record<keyof typeof statements, readonly string[]>>,
-) =>
-  Object.entries(ACCOUNT_PERMISSION_POLICY).some(
-    ([resource, policy]) =>
-      policy === "restricted" &&
-      Object.entries(permissions).some(
-        ([name, actions]) =>
-          name === resource && actions.some((action) => action !== "read"),
-      ),
-  );

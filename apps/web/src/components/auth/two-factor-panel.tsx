@@ -5,6 +5,7 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
+import { DialogFormState } from "@stll/ui/dialog";
 import { Field, FieldLabel } from "@stll/ui/field";
 import {
   Frame,
@@ -91,6 +92,15 @@ export const TwoFactorPanel = ({ className }: TwoFactorPanelProps) => {
 
   return (
     <Frame className={cn("w-full max-w-md", className)}>
+      <DialogFormState
+        dirty={totp !== "" || backupCode !== "" || trustDevice}
+        onDiscard={() => {
+          setTotp("");
+          setBackupCode("");
+          setTrustDevice(false);
+          setMode("totp");
+        }}
+      />
       <FrameHeader>
         <FrameTitle>{t("auth.twoFactor.title")}</FrameTitle>
         <FrameDescription>

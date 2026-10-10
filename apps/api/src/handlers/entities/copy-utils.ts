@@ -1,21 +1,27 @@
 import { panic, Result, TaggedError } from "better-result";
 import { deepEquals } from "bun";
-import { and, asc, count, eq, inArray, isNull, like, sql } from "drizzle-orm";
+import { and, asc, count, eq, inArray, isNull, sql } from "drizzle-orm";
 
-import { ENTITY_NAME_MAX_LENGTH, truncateEntityName } from "@stll/api-contract";
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
 import type { Transaction } from "@/api/db/root";
 import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
 import type { EntityKind, FieldContent } from "@/api/db/schema-validators";
-import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { allocateEntityStamps } from "@/api/lib/document-counter";
 import type { EntityStamp } from "@/api/lib/document-counter";
 import { validateEntityRemovalState } from "@/api/lib/entities/entity-removal-state";
+import {
+  createSiblingNamePlan,
+  resolveSiblingNameForInsert,
+  type NamedEntityInsert,
+  type ResolvedSiblingNames,
+} from "@/api/lib/entities/sibling-name-insert";
 import {
   lockWorkspacesForEntityCap,
   lockWorkspacesForEntityTransfer,
@@ -26,9 +32,9 @@ import {
 } from "@/api/lib/entity-versions/insert-entity-batch";
 import { carryVerificationCodes } from "@/api/lib/entity-versions/insert-entity-version";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { escapeLike } from "@/api/lib/escape-like";
 import { copyOrganizationFiles } from "@/api/lib/files/copy-organization-files";
 import { deleteOrganizationFilesWithSignal } from "@/api/lib/files/delete-organization-file";
+import { storedFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import {
   allocateFileObject,
   fileContentWithMintedObject,
@@ -37,13 +43,15 @@ import {
 } from "@/api/lib/files/file-object-ids";
 import { pdfDerivativeStateForFile } from "@/api/lib/files/gotenberg";
 import { thumbnailDerivativeStateForFile } from "@/api/lib/files/image-derivative";
-import type { OrganizationFileUsageError } from "@/api/lib/files/organization-file-usage";
+import type {
+  CheckedFileCopy,
+  OrganizationFileUsageError,
+} from "@/api/lib/files/organization-file-usage";
 import { createFileKey } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import { copyObject, headObject } from "@/api/lib/s3-presign";
 import type { S3PresignError } from "@/api/lib/s3-presign";
-import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import {
   nativeExtractionRunRequestForFields,
   requestNativeExtractionRuns,
@@ -54,6 +62,7 @@ import type {
   SearchIndexOwner,
 } from "@/api/lib/search/process-extraction";
 import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
+import { findExtractionFileFieldRow } from "@/api/lib/search/types";
 
 export type EntityFieldSnapshot = {
   id: SafeId<"field">;
@@ -389,7 +398,7 @@ const stageAndCopyFiles = async ({
     return { ...source, targetKey, newFileId };
   });
   const prepareFile = async ({ sourceKey, targetKey }: FileMapping) => {
-    const source = env.FEATURE_FILE_USAGE_LIMITS
+    const source = isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")
       ? await headObject(sourceKey)
       : Result.ok({ contentLength: 0 });
     if (Result.isError(source)) {
@@ -399,16 +408,14 @@ const stageAndCopyFiles = async ({
       organizationId,
       objectKey: targetKey,
       sizeBytes: source.value.contentLength,
-      copy: async () => await copyObject(sourceKey, targetKey),
+      source: sourceKey,
+      copy: async (checked: CheckedFileCopy<string>) =>
+        await copyObject(checked.source, checked.objectKey),
     });
   };
   const prepared: Awaited<ReturnType<typeof prepareFile>>[] = [];
-  for (let start = 0; start < mappings.length; start += FILE_COPY_CONCURRENCY) {
-    prepared.push(
-      ...(await Promise.all(
-        mappings.slice(start, start + FILE_COPY_CONCURRENCY).map(prepareFile),
-      )),
-    );
+  for (const itemBatch of chunkItems(mappings, FILE_COPY_CONCURRENCY)) {
+    prepared.push(...(await Promise.all(itemBatch.map(prepareFile))));
   }
   const inputs = Result.all(prepared);
   if (Result.isError(inputs)) {
@@ -495,6 +502,7 @@ const remapFieldFileId = ({
   }
 
   const {
+    encrypted: _encrypted,
     pdfDerivative: _pdfDerivative,
     placeholder: _placeholder,
     thumbnailDerivative: _thumbnailDerivative,
@@ -505,6 +513,8 @@ const remapFieldFileId = ({
     ...field,
     content: fileContentWithMintedObject({
       ...restContent,
+      // A copy holds the same bytes, so the stored attribute carries over.
+      encryption: storedFileEncryption(field.content),
       id: newFileId,
       pdfFileId: null,
       pdfDerivative: pdfDerivativeStateForFile({
@@ -540,93 +550,7 @@ export const rollbackS3Copies = async (keys: string[]): Promise<void> => {
   }
 };
 
-const trailingSuffixRe = /_\d+$/u;
-
-type ResolveEntityNameProps = {
-  tx: Transaction;
-  workspaceId: SafeId<"workspace">;
-  parentId: SafeId<"entity"> | null;
-  name: string;
-};
-
-/**
- * Generate a unique entity name by appending `_N` suffix.
- * Splits on the last dot to preserve file extensions:
- *   "Report.pdf" → "Report_1.pdf", "Report_2.pdf", …
- *   "My Folder"  → "My Folder_1", "My Folder_2", …
- * Strips any existing `_N` suffix before computing the
- * next number so re-duplicating "Report_1" still increments
- * from the highest sibling, not from the stripped base.
- */
-export const resolveEntityName = async ({
-  tx,
-  workspaceId,
-  parentId,
-  name,
-}: ResolveEntityNameProps): Promise<string> => {
-  const lastDot = name.lastIndexOf(".");
-  const hasExt = lastDot > 0;
-  const rawBase = hasExt ? name.slice(0, lastDot) : name;
-  const ext = hasExt ? name.slice(lastDot) : "";
-
-  // Strip trailing _N to get the root name
-  const base = rawBase.replace(trailingSuffixRe, "");
-
-  const longestSuffix = `_${LIMITS.entitiesCount}`;
-  const searchPrefix = truncateEntityName(
-    base,
-    Math.max(ENTITY_NAME_MAX_LENGTH - ext.length - longestSuffix.length, 0),
-  );
-  const pattern = `${escapeLike(searchPrefix)}%`;
-  const parentCondition = parentId
-    ? eq(entities.parentId, parentId)
-    : isNull(entities.parentId);
-
-  const siblings = await tx
-    .select({ name: entities.name })
-    .from(entities)
-    .where(
-      and(
-        eq(entities.workspaceId, workspaceId),
-        parentCondition,
-        like(entities.name, pattern),
-      ),
-    );
-
-  // If no conflict with the original name, keep it unchanged
-  const siblingNames = new Set(siblings.map((s) => s.name));
-  if (!siblingNames.has(name)) {
-    return name;
-  }
-
-  const collisionName = (suffixNumber: number) => {
-    const suffix = `_${suffixNumber}`;
-    const boundedExtension = truncateEntityName(
-      ext,
-      ENTITY_NAME_MAX_LENGTH - suffix.length,
-    );
-    const boundedBase = truncateEntityName(
-      base,
-      ENTITY_NAME_MAX_LENGTH - suffix.length - boundedExtension.length,
-    );
-    return `${boundedBase}${suffix}${boundedExtension}`;
-  };
-
-  let maxSuffixNumber = 0;
-  for (const siblingName of siblingNames) {
-    for (const match of siblingName.matchAll(/_(\d+)/gu)) {
-      const suffixNumber = Number.parseInt(match[1] ?? "", 10);
-      if (
-        suffixNumber > maxSuffixNumber &&
-        siblingName === collisionName(suffixNumber)
-      ) {
-        maxSuffixNumber = suffixNumber;
-      }
-    }
-  }
-
-  return collisionName(maxSuffixNumber + 1);
-};
+export const resolveEntityName = resolveSiblingNameForInsert;
 
 export const getFolderSubtree = <
   TEntity extends Pick<EntitySnapshot, "id" | "parentId">,
@@ -716,7 +640,7 @@ type CopyEntitiesProps = {
   sourceEntities: WritableEntitySnapshot[];
   /** Stable root identity supplied by a replay-safe same-matter duplicate. */
   targetRootEntityId?: SafeId<"entity"> | undefined;
-  /** Caller-selected name for the root copy; descendants retain their names. */
+  /** Caller-selected root label; descendants resolve against their copied siblings. */
   targetRootName?: string | undefined;
   /** Source workspace ID for audit log (cross-workspace only). */
   sourceWorkspaceId?: SafeId<"workspace">;
@@ -831,7 +755,7 @@ const resolveRootCopyName = async ({
   targetParentId,
   targetRootName,
   targetWorkspaceId,
-}: ResolveRootCopyNameOptions): Promise<string | undefined> =>
+}: ResolveRootCopyNameOptions): Promise<ResolvedSiblingNames | undefined> =>
   rootSource === undefined
     ? undefined
     : await resolveEntityName({
@@ -839,6 +763,7 @@ const resolveRootCopyName = async ({
         workspaceId: targetWorkspaceId,
         parentId: targetParentId,
         name: targetRootName ?? rootSource.name,
+        kind: rootSource.kind,
       });
 
 type ValidateCopySourcesOptions = {
@@ -1253,7 +1178,7 @@ type CopyScope = Pick<
 
 /** Every row and result a copy produces, built before the first insert. */
 type CopyRows = {
-  entityRows: (typeof entities.$inferInsert)[];
+  entityRows: NamedEntityInsert[];
   versionRows: ReturnType<typeof targetVersionValues>[];
   versionTransfers: VersionTransfer[];
   currentVersions: CurrentVersionAssignment[];
@@ -1271,32 +1196,35 @@ type CopyPlan = CopyRows & { rootEntityId: SafeId<"entity"> };
 type CopyTarget = {
   entityId: SafeId<"entity">;
   parentId: SafeId<"entity"> | null;
-  name: string;
+  name: ResolvedSiblingNames["name"];
+  fileName: ResolvedSiblingNames["fileName"];
 };
 
 type ResolveCopyTargetOptions = {
   scope: CopyScope;
   source: WritableEntitySnapshot;
-  rootCopyName: string | undefined;
+  rootCopyName: ResolvedSiblingNames | undefined;
   targetIdBySourceId: ReadonlyMap<SafeId<"entity">, SafeId<"entity">>;
+  resolvePlannedName: Awaited<ReturnType<typeof createSiblingNamePlan>>;
 };
 
 /**
  * The root takes the caller's parent and resolved name, and the caller's id
- * when a replay-safe duplicate supplies one. Every descendant keeps its name
- * under the copy of its parent.
+ * when a replay-safe duplicate supplies one. Descendants reserve their names
+ * among the siblings planned under each copied parent.
  */
 const resolveCopyTarget = ({
   scope: { sourceEntityId, targetParentId, targetRootEntityId },
   source,
   rootCopyName,
   targetIdBySourceId,
+  resolvePlannedName,
 }: ResolveCopyTargetOptions): CopyTarget => {
   if (source.id === sourceEntityId) {
     return {
       entityId: targetRootEntityId ?? createSafeId<"entity">(),
       parentId: targetParentId,
-      name: rootCopyName ?? panic("Copy root name was not resolved"),
+      ...(rootCopyName ?? panic("Copy root name was not resolved")),
     };
   }
 
@@ -1306,7 +1234,15 @@ const resolveCopyTarget = ({
   if (parentId === undefined) {
     panic("Copy source parent order was not validated");
   }
-  return { entityId: createSafeId<"entity">(), parentId, name: source.name };
+  return {
+    entityId: createSafeId<"entity">(),
+    parentId,
+    ...resolvePlannedName({
+      name: source.name,
+      kind: source.kind,
+      parentId,
+    }),
+  };
 };
 
 type AppendVersionRowsOptions = {
@@ -1373,16 +1309,13 @@ type AppendFieldRowsOptions = {
  */
 const appendFieldRows = ({
   rows,
-  scope: { sourceEntityId, targetRootName, targetWorkspaceId, fieldMapping },
+  scope: { targetWorkspaceId, fieldMapping },
   source,
   target,
   currentVersion,
   targetVersionIds,
 }: AppendFieldRowsOptions): CopiedFieldInsert[] => {
-  const renamedRootFileFieldId =
-    source.id === sourceEntityId && targetRootName !== undefined
-      ? currentVersion.fields.find(({ content }) => content.type === "file")?.id
-      : undefined;
+  const primaryFile = findExtractionFileFieldRow(currentVersion.fields);
 
   const currentFieldRows: CopiedFieldInsert[] = [];
   for (const version of source.versions) {
@@ -1418,10 +1351,10 @@ const appendFieldRows = ({
       }
 
       const content =
-        field.id === renamedRootFileFieldId && field.content.type === "file"
+        isCurrentVersion && primaryFile !== null && field.id === primaryFile.id
           ? {
-              ...field.content,
-              fileName: sanitizeFilename(target.name),
+              ...primaryFile.content,
+              fileName: target.fileName,
             }
           : field.content;
       const fieldRow = {
@@ -1528,10 +1461,11 @@ const appendCopiedEntity = ({
 };
 
 type PlanEntityCopiesOptions = {
+  tx: Transaction;
   scope: CopyScope;
   sourceEntities: WritableEntitySnapshot[];
   documentStamps: EntityStamp[];
-  rootCopyName: string | undefined;
+  rootCopyName: ResolvedSiblingNames | undefined;
 };
 
 /**
@@ -1539,12 +1473,17 @@ type PlanEntityCopiesOptions = {
  * writes them in one batch. Sources arrive parents first, so every parent
  * resolves from the ids already minted.
  */
-const planEntityCopies = ({
+const planEntityCopies = async ({
+  tx,
   scope,
   sourceEntities,
   documentStamps,
   rootCopyName,
-}: PlanEntityCopiesOptions): CopyPlan => {
+}: PlanEntityCopiesOptions): Promise<CopyPlan> => {
+  const resolvePlannedName = await createSiblingNamePlan({
+    tx,
+    workspaceId: scope.targetWorkspaceId,
+  });
   const rows: CopyRows = {
     entityRows: [],
     versionRows: [],
@@ -1569,6 +1508,7 @@ const planEntityCopies = ({
 
   for (const source of sourceEntities) {
     const target = resolveCopyTarget({
+      resolvePlannedName,
       scope,
       source,
       rootCopyName,
@@ -1734,7 +1674,8 @@ export const copyEntities = async ({
     targetWorkspaceId,
   });
 
-  const plan = planEntityCopies({
+  const plan = await planEntityCopies({
+    tx,
     scope: {
       organizationId,
       targetWorkspaceId,

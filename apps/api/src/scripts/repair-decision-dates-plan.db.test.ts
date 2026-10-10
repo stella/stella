@@ -3,6 +3,7 @@ import { inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import { runCitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { canonicalDecisionDate } from "@/api/lib/dates";
@@ -271,8 +272,8 @@ test("the selection is exactly what the write-path guard rejects", async () => {
   const rejected = new Set(rejectedByGuard.map(({ id }) => id));
 
   expect([...selected].toSorted()).toEqual([...rejected].toSorted());
-  // The repairing variant claims its rows before the citation-graph lock, in
-  // the ingestion pipeline's lock order. `FOR UPDATE OF d` over a join is only
+  // The repairing variant claims its rows under the owned graph transaction.
+  // `FOR UPDATE OF d` over a join is only
   // valid SQL against the right alias, and it must not change what is selected.
   expect(
     (await corruptRows(100, DECISION_DATE_ROW_LOCKS.FOR_UPDATE))
@@ -449,12 +450,16 @@ test("the batch hands every written id to its projection reconciler", async () =
   });
 
   const reconciled: string[] = [];
-  const batch = await repairDecisionDateBatch(db, 10, {
-    reconcileProjection: async (entityId) => {
-      reconciled.push(entityId);
-      await Promise.resolve();
-    },
-  });
+  const batch = await runCitationGraphTransaction(
+    async (run) => await run(db),
+    async (graphTx) =>
+      await repairDecisionDateBatch(graphTx, 10, {
+        reconcileProjection: async (entityId) => {
+          reconciled.push(entityId);
+          await Promise.resolve();
+        },
+      }),
+  );
 
   // The date really was repaired, so the reconcile below is about a row that
   // changed rather than one the statement skipped.
@@ -478,9 +483,13 @@ test("a batch given no reconciler reports the rows it left behind", async () => 
     languageGroupKey: "unreconciled-fixture",
   });
 
-  const batch = await repairDecisionDateBatch(db, 10, {
-    reconcileProjection: null,
-  });
+  const batch = await runCitationGraphTransaction(
+    async (run) => await run(db),
+    async (graphTx) =>
+      await repairDecisionDateBatch(graphTx, 10, {
+        reconcileProjection: null,
+      }),
+  );
 
   expect(batch.cleared + batch.rederived).toBe(1);
   expect(batch.unreconciled).toBe(1);

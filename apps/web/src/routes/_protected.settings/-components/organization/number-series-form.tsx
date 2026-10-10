@@ -35,6 +35,7 @@ import {
   NUMBER_SERIES_PADDING_OPTIONS,
   numberSeriesFormSchema,
 } from "./number-series-form.logic";
+import { NumberSeriesSellerPicker } from "./number-series-seller-picker";
 
 const DOCUMENT_TYPE_LABELS = {
   invoice: "billing.numberSeries.invoice",
@@ -70,6 +71,7 @@ export const NumberSeriesForm = ({
         documentType: series?.documentType ?? "invoice",
         pattern: series?.pattern ?? DEFAULT_NUMBER_SERIES_PATTERN,
         padding: series?.padding ?? 4,
+        sellerProfileId: series?.sellerProfileId ?? null,
       },
       onSubmit: async ({ value }) => {
         if (!pending) {
@@ -78,14 +80,17 @@ export const NumberSeriesForm = ({
       },
     }),
   );
-  const errors = useSelector(form.store, (state) =>
-    toFormErrors(state.fieldMeta),
-  );
+  const { errors, dirty } = useSelector(form.store, (state) => ({
+    errors: toFormErrors(state.fieldMeta),
+    dirty: !state.isDefaultValue,
+  }));
   const isSubmitting = useSelector(form.store, (state) => state.isSubmitting);
   const disabled = pending || isSubmitting;
 
   return (
     <Form
+      dirty={dirty}
+      onDiscard={() => form.reset()}
       errors={errors}
       onSubmit={(event) => {
         event.preventDefault();
@@ -208,6 +213,22 @@ export const NumberSeriesForm = ({
                     ))}
                   </SelectPopup>
                 </Select>
+                <FieldError />
+              </Field>
+            )}
+          </form.Field>
+          <form.Field name="sellerProfileId">
+            {(field) => (
+              <Field name={field.name}>
+                <FieldLabel htmlFor={`${id}-seller`}>
+                  {t("billing.numberSeries.sellerProfile")}
+                </FieldLabel>
+                <NumberSeriesSellerPicker
+                  id={`${id}-seller`}
+                  disabled={disabled}
+                  value={field.state.value}
+                  onChange={field.handleChange}
+                />
                 <FieldError />
               </Field>
             )}

@@ -3,7 +3,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import { correspondence } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
@@ -29,6 +29,8 @@ const CORRESPONDENCE_LIST_COLUMNS = {
   sentAt: correspondence.sentAt,
   handlingState: correspondence.handlingState,
   assigneeId: correspondence.assigneeId,
+  source: correspondence.source,
+  sourceEntityId: correspondence.sourceEntityId,
   intake: correspondence.intake,
   originalSignature: correspondence.originalSignature,
   authenticatedSenderAddress: correspondence.authenticatedSenderAddress,
@@ -39,6 +41,7 @@ const CORRESPONDENCE_LIST_COLUMNS = {
 };
 
 const UNPROJECTED_LIST_COLUMNS = [
+  "entityFeatureGate", // RLS state is internal to the gate.
   "organizationId", // Tenant scope comes from the authorized session.
   "workspaceId", // Matter scope comes from the authorized route.
   "contentHash", // Internal content fingerprint for ingestion.
@@ -76,8 +79,9 @@ const cursorCodec = createTimestampIdCursorCodec({
 
 const config = {
   description:
-    "List correspondence filed in a matter, newest received first. When intake is not direct, from, to, and the message date (sentAt) are asserted by the forwarder and are not verified; authentication verdicts in authenticatedSender describe the delivery, not the extracted original.",
+    "List correspondence filed in a matter, newest received first. When intake is not direct, from, to, and the message date (sentAt) are asserted by the forwarder and are not verified; authentication verdicts in authenticatedSender describe the delivery, not the extracted original. A record whose source is upload was read from the email file sourceEntityId in the matter; its headers are as stated in that file and are not verified.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     readClass: "tenant",
@@ -139,6 +143,8 @@ const listCorrespondence = createSafeHandler(
       items: page.items.map(
         ({
           cursorTimestamp: _cursorTimestamp,
+          source,
+          sourceEntityId,
           intake,
           originalSignature,
           authenticatedSenderAddress,
@@ -150,6 +156,8 @@ const listCorrespondence = createSafeHandler(
         }) => ({
           ...record,
           ...readCorrespondenceProvenance({
+            source,
+            sourceEntityId,
             intake,
             originalSignature,
             authenticatedSenderAddress,

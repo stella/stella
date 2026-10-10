@@ -14,12 +14,16 @@ import {
   supportsStreamingToolUse,
 } from "@stll/ai-catalog";
 import type { ModelRole } from "@stll/ai-catalog";
+import type { AIErrorKind } from "@stll/api-contract";
+import { backoffDelay } from "@stll/concurrency/backoff-delay";
 
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import type { CachingDecision, OrgAIConfig } from "@/api/lib/ai-config";
 import { streamChatChunks } from "@/api/lib/chat/tanstack-chat-runtime";
+import { ProviderCallError } from "@/api/lib/errors/provider-call-error";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { providerSafeJsonSchemaOptionsForTanStackProvider } from "@/api/lib/provider-safe-json-schema";
+import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { buildBudgetEdgeSchema } from "@/api/lib/structured-output-budget-probe";
 import {
   abortControllerFromSignal,
@@ -50,6 +54,32 @@ import type {
   WeeklyCanaryRotation,
 } from "./ai-provider-canary-config";
 import { createWeeklyToolShapeDefinition } from "./ai-provider-canary-weekly";
+
+export class CanaryProviderRunError extends TypeError {
+  readonly code: string | null;
+  readonly failure: CanaryFailure;
+  readonly incompleteReason: string | null;
+  readonly rejectionReason: ProviderRejectionReason | null;
+  readonly retryCode: string | null;
+  readonly retryable: boolean | null;
+  readonly stage: CanaryRunStage;
+  readonly status: number | null;
+  readonly terminalCode: string | null;
+
+  constructor(event: unknown, stage: CanaryRunStage) {
+    super("Provider stream failed.");
+    this.name = "CanaryProviderRunError";
+    this.retryCode = rawProviderCode(event);
+    this.retryable = explicitRetryability(event);
+    this.code = safeProviderCode(this.retryCode);
+    this.failure = canaryEventFailure(event);
+    this.incompleteReason = safeIncompleteReason(event);
+    this.rejectionReason = providerRejectionReason(event);
+    this.stage = stage;
+    this.status = providerStatus(event);
+    this.terminalCode = terminalProviderCode(event);
+  }
+}
 
 const CAPABILITY_ROLE = "fast" satisfies ModelRole;
 const TOOL_CALL_ROLE = "chat" satisfies ModelRole;
@@ -223,6 +253,18 @@ const RETRYABLE_TRANSPORT_CODES = new Set([
   "UND_ERR_HEADERS_TIMEOUT",
   "UND_ERR_SOCKET",
 ]);
+
+const PROVIDER_CALL_ERROR_RETRYABILITY = {
+  quota_exhausted: true,
+  provider_billing: false,
+  provider_credentials_rejected: false,
+  model_unavailable: false,
+  provider_unavailable: true,
+  provider_stream_incomplete: true,
+  loop_detected: false,
+  empty_completion: false,
+  unknown: false,
+} as const satisfies Record<AIErrorKind, boolean>;
 
 type CanaryRunStage =
   | "before-tool-call"
@@ -619,32 +661,6 @@ const canaryEventFailure = (event: unknown): CanaryFailure => {
     : { kind: "credential-rejected", reason: signature };
 };
 
-export class CanaryProviderRunError extends TypeError {
-  readonly code: string | null;
-  readonly failure: CanaryFailure;
-  readonly incompleteReason: string | null;
-  readonly rejectionReason: ProviderRejectionReason | null;
-  readonly retryCode: string | null;
-  readonly retryable: boolean | null;
-  readonly stage: CanaryRunStage;
-  readonly status: number | null;
-  readonly terminalCode: string | null;
-
-  constructor(event: unknown, stage: CanaryRunStage) {
-    super("Provider stream failed.");
-    this.name = "CanaryProviderRunError";
-    this.retryCode = rawProviderCode(event);
-    this.retryable = explicitRetryability(event);
-    this.code = safeProviderCode(this.retryCode);
-    this.failure = canaryEventFailure(event);
-    this.incompleteReason = safeIncompleteReason(event);
-    this.rejectionReason = providerRejectionReason(event);
-    this.stage = stage;
-    this.status = providerStatus(event);
-    this.terminalCode = terminalProviderCode(event);
-  }
-}
-
 // A failure the canary itself detected. Its message is canary-authored and
 // bounded, so the top-level handler prints it. Provider errors are never
 // printed.
@@ -693,6 +709,20 @@ export const isRetryableCanaryError = (
 ): boolean => {
   if (signal.aborted) {
     return true;
+  }
+
+  if (error instanceof ProviderCallError) {
+    if (credentialRejectionStatus(error.providerStatus ?? null) !== null) {
+      return false;
+    }
+    const explicitRetryabilityFromFacts = explicitRetryability(error);
+    if (explicitRetryabilityFromFacts !== null) {
+      return explicitRetryabilityFromFacts;
+    }
+    if (error.providerStatus !== undefined) {
+      return isRetryableProviderStatus(error.providerStatus);
+    }
+    return PROVIDER_CALL_ERROR_RETRYABILITY[error.kind];
   }
 
   // A rejected credential fails every remaining attempt identically.
@@ -768,7 +798,12 @@ export const runCanaryProbe = async ({
       ) {
         return { attempts: attempt, error, signal, status: "failed" };
       }
-      await wait(retryDelayMs * CANARY_PROBE_RETRY_BACKOFF ** (attempt - 1));
+      await wait(
+        backoffDelay(attempt - 1, {
+          baseMs: retryDelayMs,
+          factor: CANARY_PROBE_RETRY_BACKOFF,
+        }),
+      );
     }
   }
 
@@ -975,6 +1010,7 @@ const capabilityProbes = [
           role: CAPABILITY_ROLE,
         }),
         organizationId: null,
+        admission: NO_ORGANIZATION_MODEL_DISPATCH,
         orgAIConfig: config,
         outputMode: "generative",
         outputSchema: structuredOutputSchema,
@@ -1014,6 +1050,7 @@ const capabilityProbes = [
           propertyCount: edge.propertyCount,
         }),
         organizationId: null,
+        admission: NO_ORGANIZATION_MODEL_DISPATCH,
         orgAIConfig: config,
         outputSchema: edge.outputSchema,
         prompt:
@@ -1079,6 +1116,7 @@ const capabilityProbes = [
           role: CAPABILITY_ROLE,
         }),
         organizationId: null,
+        admission: NO_ORGANIZATION_MODEL_DISPATCH,
         orgAIConfig: config,
         prompt: SYNTHETIC_PROMPT,
         role: CAPABILITY_ROLE,
@@ -1139,6 +1177,7 @@ const runModelRoleProbe = async ({
   const model = await resolveTanStackTextModel({
     dataClass: "public_corpus",
     organizationId: null,
+    admission: NO_ORGANIZATION_MODEL_DISPATCH,
     orgAIConfig: probeConfig,
     role: selection.role,
   });
@@ -1161,6 +1200,7 @@ const runModelRoleProbe = async ({
       ? { messages: createPdfCanaryMessages() }
       : { prompt: SYNTHETIC_PROMPT }),
     organizationId: null,
+    admission: NO_ORGANIZATION_MODEL_DISPATCH,
     orgAIConfig: probeConfig,
     role: selection.role,
     serviceTier: "standard",
@@ -1183,6 +1223,7 @@ const runStructuredOutputModelRoleProbe = async ({
       role,
     }),
     organizationId: null,
+    admission: NO_ORGANIZATION_MODEL_DISPATCH,
     orgAIConfig: config,
     outputSchema: nestedStructuredOutputSchema,
     prompt: "Return an object with an empty entries array.",
@@ -1206,6 +1247,7 @@ const runWeeklyModelRoleProbe = async ({
   const model = await resolveTanStackTextModel({
     dataClass: "public_corpus",
     organizationId: null,
+    admission: NO_ORGANIZATION_MODEL_DISPATCH,
     orgAIConfig: rotatedConfig,
     role,
   });
@@ -1228,6 +1270,7 @@ const runWeeklyModelRoleProbe = async ({
       ? { messages: createPdfCanaryMessages() }
       : { prompt: SYNTHETIC_PROMPT }),
     organizationId: null,
+    admission: NO_ORGANIZATION_MODEL_DISPATCH,
     orgAIConfig: rotatedConfig,
     role,
     serviceTier: "standard",
@@ -1250,6 +1293,7 @@ const runWeeklyStructuredOutputModelRoleProbe = async ({
       role,
     }),
     organizationId: null,
+    admission: NO_ORGANIZATION_MODEL_DISPATCH,
     orgAIConfig: rotatedConfig,
     outputSchema: nestedStructuredOutputSchema,
     prompt: "Return an object with an empty entries array.",
@@ -1406,6 +1450,7 @@ const runToolProbe = async ({
   const model = await resolveTextModel({
     dataClass: "public_corpus",
     organizationId: null,
+    admission: NO_ORGANIZATION_MODEL_DISPATCH,
     orgAIConfig: config,
     role,
   });
@@ -1830,6 +1875,7 @@ const runCatalogModelProbe = async ({
   const model = await resolveTanStackTextModel({
     dataClass: "public_corpus",
     organizationId: null,
+    admission: NO_ORGANIZATION_MODEL_DISPATCH,
     orgAIConfig: config,
     role: CATALOG_PROBE_ROLE,
   });
@@ -1850,6 +1896,7 @@ const runCatalogModelProbe = async ({
     }),
     prompt: SYNTHETIC_PROMPT,
     organizationId: null,
+    admission: NO_ORGANIZATION_MODEL_DISPATCH,
     orgAIConfig: config,
     role: CATALOG_PROBE_ROLE,
     serviceTier: "standard",

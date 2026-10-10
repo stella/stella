@@ -1,8 +1,15 @@
 import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { FILE_PROPERTY_TYPE_IMMUTABLE_CODE } from "@stll/api-contract/property-policy";
+
 import { toSafeId } from "@/api/lib/branded-types";
 import type { OpenPlaybookRunResult } from "@/api/lib/document-review/open-playbook-run";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import { PLAYBOOK_RUN_FAILURE_CODE } from "@/api/lib/document-review/playbook-run-refusal";
+import { mapHandlerResult } from "@/api/mcp/capability-tools";
+import {
+  NO_AUDIT,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 const loadLatestApprovedVersionsMock = mock();
@@ -53,7 +60,11 @@ const runAutoRun = async () => {
     query: { playbookDefinitions: { findMany: async () => [] } },
   });
   return await autoRunPlaybooks.handler(
-    createTestHandlerContext<AutoRunCtx>({ safeDb, scopedDb }),
+    createTestHandlerContext<AutoRunCtx>({
+      audit: NO_AUDIT,
+      safeDb,
+      scopedDb,
+    }),
   );
 };
 
@@ -109,6 +120,143 @@ describe("auto-run playbooks handler", () => {
       playbooksRun: 1,
       runPropertyCount: 1,
       documentRunCount: 1,
+      refusals: [],
     });
+  });
+
+  test("policy refusals retain per-playbook details through REST and MCP", async () => {
+    const refusal = {
+      ok: false,
+      status: 422,
+      code: FILE_PROPERTY_TYPE_IMMUTABLE_CODE,
+      retryable: false,
+      message: "File property types cannot be changed.",
+      hint: "Keep the existing ASK content.type, or add a new playbook position.",
+    } as const satisfies OpenPlaybookRunResult;
+    openPlaybookRunMock.mockResolvedValue(refusal);
+    const result = await runAutoRun();
+    const expected = {
+      playbooksRun: 0,
+      runPropertyCount: 0,
+      documentRunCount: 0,
+      refusals: [
+        {
+          ...refusal,
+          playbookId,
+          playbookName: "Vendor agreement review",
+        },
+      ],
+    };
+    expect(result).toEqual(expected);
+    expect(
+      mapHandlerResult({
+        id: "playbooks.applicable.run",
+        result,
+        access: "write",
+      }),
+    ).toMatchObject({
+      egress: "structured",
+      payload: expected,
+    });
+    expect(startWorkflowMock).not.toHaveBeenCalled();
+  });
+
+  test("property limits skip only that playbook while successful runs continue", async () => {
+    const limit = {
+      ok: false,
+      status: 400,
+      code: PLAYBOOK_RUN_FAILURE_CODE.PROPERTIES_LIMIT,
+      message: "Properties limit reached",
+    } as const satisfies OpenPlaybookRunResult;
+    const secondId = toSafeId<"playbookDefinition">("pb_second");
+    resolveApplicablePlaybooksMock.mockResolvedValue([
+      {
+        id: playbookId,
+        name: "Limited",
+        positions: { version: 3, items: [] },
+        scope: null,
+      },
+      {
+        id: secondId,
+        name: "Available",
+        positions: { version: 3, items: [] },
+        scope: null,
+      },
+    ]);
+    openPlaybookRunMock
+      .mockResolvedValueOnce(limit)
+      .mockResolvedValueOnce(opened);
+    startWorkflowMock.mockResolvedValue({ status: "skipped" });
+    expect(await runAutoRun()).toEqual({
+      playbooksRun: 1,
+      runPropertyCount: 1,
+      documentRunCount: 1,
+      refusals: [],
+    });
+    expect(openPlaybookRunMock).toHaveBeenCalledTimes(2);
+    expect(startWorkflowMock.mock.calls.at(0)?.[0]).toMatchObject({
+      propertyIds: [propertyId],
+    });
+  });
+
+  test("all-limited batches remain skipped without policy refusals", async () => {
+    openPlaybookRunMock.mockResolvedValue({
+      ok: false,
+      status: 400,
+      code: PLAYBOOK_RUN_FAILURE_CODE.PROPERTIES_LIMIT,
+      message: "Properties limit reached",
+    } as const satisfies OpenPlaybookRunResult);
+    expect(await runAutoRun()).toEqual({
+      playbooksRun: 0,
+      runPropertyCount: 0,
+      documentRunCount: 0,
+      refusals: [],
+    });
+    expect(startWorkflowMock).not.toHaveBeenCalled();
+  });
+
+  test("configuration refusals survive alongside successfully started playbooks", async () => {
+    const refusal = {
+      ok: false,
+      status: 400,
+      code: PLAYBOOK_RUN_FAILURE_CODE.SCOPE_UNRESOLVED,
+      message: "Document Type classifier unavailable",
+      hint: "Configure the matching Document Type classifier.",
+      retryable: false,
+    } as const satisfies OpenPlaybookRunResult;
+    resolveApplicablePlaybooksMock.mockResolvedValue([
+      {
+        id: playbookId,
+        name: "Refused",
+        positions: { version: 3, items: [] },
+        scope: null,
+      },
+      {
+        id: toSafeId<"playbookDefinition">("pb_second"),
+        name: "Available",
+        positions: { version: 3, items: [] },
+        scope: null,
+      },
+    ]);
+    openPlaybookRunMock
+      .mockResolvedValueOnce(refusal)
+      .mockResolvedValueOnce(opened);
+    startWorkflowMock.mockResolvedValue({ status: "started" });
+    const expected = {
+      playbooksRun: 1,
+      runPropertyCount: 1,
+      documentRunCount: 1,
+      refusals: [{ playbookId, playbookName: "Refused", ...refusal }],
+    };
+    const result = await runAutoRun();
+    expect(result).toEqual(expected);
+    expect(
+      mapHandlerResult({
+        id: "playbooks.applicable.run",
+        result,
+        access: "write",
+      }),
+    ).toMatchObject({ egress: "structured", payload: expected });
+    expect(startWorkflowMock).toHaveBeenCalledTimes(1);
   });
 });

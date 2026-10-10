@@ -1,10 +1,14 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { CLAUSE_DIRECTIVES_INVALID_CODE } from "@stll/api-contract";
+import { FILE_PROPERTY_TYPE_IMMUTABLE_CODE } from "@stll/api-contract/property-policy";
+
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { type ClauseBody, isClauseBody } from "@/api/lib/clauses/types";
 import { isRecord } from "@/api/lib/type-guards";
+import type { MaterializePlaybookRunResult } from "@/api/lib/workflow/materialize-playbook-run";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { isMcpEgressPlan } from "@/api/mcp/tool-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -90,6 +94,7 @@ const createPlaybookScopedDb = (playbook: unknown) =>
         await run({
           query: {
             playbookDefinitions: { findFirst: async () => playbook },
+            documentTypes: { findFirst: async () => null },
           },
         }),
     ),
@@ -135,6 +140,12 @@ const STORED_EXTRACT_POSITION = {
   },
   enabled: true,
 } as const;
+const READABLE_SOURCE_ROW = {
+  entityId: "00000000-0000-4000-8000-0000000000d1",
+  workspaceId: "00000000-0000-4000-8000-0000000000d2",
+  name: "Keller supply agreement.docx",
+  workspaceName: "Keller supply",
+} as const;
 const STORED_PLAYBOOK = {
   id: PLAYBOOK_ID,
   name: "NDA playbook",
@@ -154,8 +165,23 @@ const STORED_PLAYBOOK = {
  */
 const createPlaybookWriteScopedDb = ({
   lockedUpdatedAt = STORED_UPDATED_AT,
-}: { lockedUpdatedAt?: Date } = {}) => {
+  rereadFailure,
+  readableSources = [],
+  storedPositions = STORED_PLAYBOOK.positions.items,
+}: {
+  lockedUpdatedAt?: Date;
+  rereadFailure?: "not-found" | "rejected";
+  /** Rows the scoped source lookup answers: the documents the caller can read. */
+  readableSources?: readonly {
+    entityId: string;
+    workspaceId: string;
+    name: string;
+    workspaceName: string;
+  }[];
+  storedPositions?: readonly Record<string, unknown>[];
+} = {}) => {
   const writes: Record<string, unknown>[] = [];
+  let lockedReadCompleted = false;
   const savedAt = new Date("2026-09-20T10:05:00.000Z");
   const scopedDb = asTestRaw<
     McpRequestContext["scopedDb"] & ReturnType<typeof mock>
@@ -166,16 +192,31 @@ const createPlaybookWriteScopedDb = ({
         query: {
           documentTypes: { findFirst: async () => undefined },
           playbookDefinitions: {
-            findFirst: async () => ({
-              ...STORED_PLAYBOOK,
-              ...(writes.length === 0 ? {} : { updatedAt: savedAt }),
-            }),
+            findFirst: async () => {
+              if (lockedReadCompleted && rereadFailure === "not-found") {
+                return undefined;
+              }
+              if (lockedReadCompleted && rereadFailure === "rejected") {
+                throw new Error("Conflict reread unavailable");
+              }
+              return {
+                ...STORED_PLAYBOOK,
+                positions: { version: 3, items: storedPositions },
+                updatedAt: writes.length === 0 ? lockedUpdatedAt : savedAt,
+              };
+            },
           },
         },
         select: () => ({
           from: () => ({
             where: () => ({
-              for: async () => [{ updatedAt: lockedUpdatedAt }],
+              for: async () => {
+                lockedReadCompleted = true;
+                return [{ updatedAt: lockedUpdatedAt }];
+              },
+            }),
+            innerJoin: () => ({
+              where: () => ({ limit: async () => readableSources }),
             }),
           }),
         }),
@@ -199,7 +240,7 @@ const createPlaybookWriteScopedDb = ({
       return await run(tx);
     }),
   );
-  return { savedAt, scopedDb, writes };
+  return { savedAt, scopedDb, writes, wasLocked: () => lockedReadCompleted };
 };
 
 const createPlaybookWriteContext = (
@@ -226,6 +267,7 @@ const createClauseDetailScopedDb = (clause: unknown) =>
     mock(
       async (run: (tx: unknown) => unknown) =>
         await run({
+          $count: async () => 0,
           query: {
             clauses: { findFirst: async () => clause },
           },
@@ -416,9 +458,14 @@ describe("MCP knowledge tools", () => {
         error: {
           code: "validation_error",
           hint: expect.stringContaining("save_clause"),
-          issues: [
+          issues: expect.arrayContaining([
+            {
+              path: "",
+              code: CLAUSE_DIRECTIVES_INVALID_CODE,
+              message: expect.stringContaining("invalid directives"),
+            },
             { path: "body.0", message: expect.stringContaining("Unclosed") },
-          ],
+          ]),
         },
       });
       expect(insertedBodies).toEqual([]);
@@ -536,6 +583,7 @@ describe("MCP knowledge tools", () => {
     const scopedDb = asTestRaw<McpRequestContext["scopedDb"]>(
       async (run: (tx: unknown) => unknown) =>
         await run({
+          $count: async () => stored.variants.length,
           query: { clauses: { findFirst: async () => stored } },
           select: () => ({
             from: () => ({ where: () => ({ for: async () => [stored] }) }),
@@ -679,6 +727,159 @@ describe("MCP knowledge tools", () => {
     });
   });
 
+  test("save_playbook stores a source under the matter the caller's lookup resolved, and refuses an entry citing a document it did not", async () => {
+    const { scopedDb, writes } = createPlaybookWriteScopedDb({
+      readableSources: [READABLE_SOURCE_ROW],
+    });
+    const unreadableId = "00000000-0000-4000-8000-0000000000d9";
+
+    const result = await handleMcpToolCall({
+      args: {
+        name: "MSA playbook",
+        positions: [
+          {
+            mode: "extract",
+            issue: "Term",
+            ask: { question: "How long is the term?" },
+            sources: [READABLE_SOURCE_ROW.entityId],
+          },
+          {
+            mode: "extract",
+            issue: "Notice",
+            ask: { question: "How much notice?" },
+            sources: [unreadableId],
+          },
+        ],
+      },
+      context: createPlaybookWriteContext(scopedDb),
+      toolName: "save_playbook",
+    });
+
+    expect(result.isError).toBeFalsy();
+    expect(writes[0]?.["positions"]).toMatchObject({
+      items: [
+        {
+          issue: "Term",
+          sources: [
+            {
+              workspaceId: READABLE_SOURCE_ROW.workspaceId,
+              entityId: READABLE_SOURCE_ROW.entityId,
+            },
+          ],
+        },
+      ],
+    });
+    const payload = parseToolPayload(result);
+    expect(payload).toMatchObject({
+      positionCount: 1,
+      issues: [
+        {
+          code: "unreadable_source",
+          path: "positions.1.sources.0",
+          hint: expect.stringContaining("list_documents"),
+        },
+      ],
+    });
+    // Neither the stored position nor the refusal carries a document name.
+    expect(JSON.stringify([writes, payload])).not.toContain(
+      READABLE_SOURCE_ROW.name,
+    );
+  });
+
+  test("save_playbook leaves an approved playbook alone when a position is resent with the sources a read showed", async () => {
+    const hidden = {
+      workspaceId: "00000000-0000-4000-8000-0000000000e1",
+      entityId: "00000000-0000-4000-8000-0000000000e2",
+    };
+    const { scopedDb, writes } = createPlaybookWriteScopedDb({
+      readableSources: [READABLE_SOURCE_ROW],
+      storedPositions: [
+        {
+          ...STORED_EXTRACT_POSITION,
+          sources: [
+            hidden,
+            {
+              workspaceId: READABLE_SOURCE_ROW.workspaceId,
+              entityId: READABLE_SOURCE_ROW.entityId,
+            },
+          ],
+        },
+      ],
+    });
+    const resend = {
+      mode: "extract",
+      source_id: STORED_EXTRACT_POSITION.sourceId,
+      issue: STORED_EXTRACT_POSITION.issue,
+      ask: { question: STORED_EXTRACT_POSITION.ask.question },
+    };
+
+    for (const position of [
+      resend,
+      { ...resend, sources: [READABLE_SOURCE_ROW.entityId] },
+    ]) {
+      const result = await handleMcpToolCall({
+        args: {
+          playbook_id: PLAYBOOK_ID,
+          expected_updated_at: STORED_UPDATED_AT.toISOString(),
+          positions: [position],
+        },
+        context: createPlaybookWriteContext(scopedDb),
+        toolName: "save_playbook",
+      });
+      expect(result.isError).toBeFalsy();
+    }
+    expect(writes).toEqual([]);
+  });
+
+  test("list_playbooks shows a position only the sources the caller can read", async () => {
+    const { scopedDb } = createPlaybookWriteScopedDb({
+      readableSources: [READABLE_SOURCE_ROW],
+      storedPositions: [
+        {
+          ...STORED_EXTRACT_POSITION,
+          sources: [
+            {
+              workspaceId: "00000000-0000-4000-8000-0000000000e1",
+              entityId: "00000000-0000-4000-8000-0000000000e2",
+            },
+            {
+              workspaceId: READABLE_SOURCE_ROW.workspaceId,
+              entityId: READABLE_SOURCE_ROW.entityId,
+            },
+          ],
+        },
+      ],
+    });
+
+    const result = await handleMcpToolCall({
+      args: { playbook_id: PLAYBOOK_ID },
+      context: createPlaybookWriteContext(scopedDb),
+      toolName: "list_playbooks",
+    });
+
+    expect(result.isError).toBeFalsy();
+    const payload = parseToolPayload(result);
+    expect(payload).toMatchObject({
+      playbook: {
+        positions: {
+          items: [
+            {
+              sources: [
+                {
+                  workspaceId: READABLE_SOURCE_ROW.workspaceId,
+                  entityId: READABLE_SOURCE_ROW.entityId,
+                },
+              ],
+            },
+          ],
+        },
+      },
+    });
+    expect(JSON.stringify(payload)).not.toContain(
+      "00000000-0000-4000-8000-0000000000e2",
+    );
+  });
+
   test("save_playbook stores an empty scope as unscoped", async () => {
     const { scopedDb, writes } = createPlaybookWriteScopedDb();
 
@@ -775,9 +976,10 @@ describe("MCP knowledge tools", () => {
     },
   );
 
-  test("save_playbook answers a stale token with the calls that recover from it", async () => {
+  test("save_playbook answers a stale token with the current one and the calls that recover from it", async () => {
+    const currentUpdatedAt = new Date("2026-09-20T10:03:00.000Z");
     const { scopedDb, writes } = createPlaybookWriteScopedDb({
-      lockedUpdatedAt: new Date("2026-09-20T10:03:00.000Z"),
+      lockedUpdatedAt: currentUpdatedAt,
     });
 
     const result = await handleMcpToolCall({
@@ -795,10 +997,45 @@ describe("MCP knowledge tools", () => {
     expect(parseToolPayload(result)).toMatchObject({
       error: {
         code: "conflict",
-        hint: expect.stringContaining("list_playbooks with playbook_id"),
+        message: expect.stringContaining(currentUpdatedAt.toISOString()),
+        hint: expect.stringMatching(
+          new RegExp(
+            `expected_updated_at ${currentUpdatedAt.toISOString()}.*list_playbooks with playbook_id`,
+            "u",
+          ),
+        ),
       },
     });
   });
+
+  test.each([
+    ["not-found", "not_found"],
+    ["rejected", "internal_error"],
+  ] as const)(
+    "save_playbook reports a %s conflict reread without inventing a current token",
+    async (rereadFailure, code) => {
+      const { scopedDb, writes, wasLocked } = createPlaybookWriteScopedDb({
+        lockedUpdatedAt: new Date("2026-09-20T10:03:00.000Z"),
+        rereadFailure,
+      });
+      const result = await handleMcpToolCall({
+        args: {
+          playbook_id: PLAYBOOK_ID,
+          expected_updated_at: STORED_UPDATED_AT.toISOString(),
+          name: "Renamed",
+        },
+        context: createPlaybookWriteContext(scopedDb),
+        toolName: "save_playbook",
+      });
+      expect(result.isError).toBe(true);
+      expect(wasLocked()).toBe(true);
+      expect(writes).toEqual([]);
+      expect(parseToolPayload(result)).toMatchObject({ error: { code } });
+      expect(JSON.stringify(parseToolPayload(result))).not.toContain(
+        "expected_updated_at",
+      );
+    },
+  );
 
   test("save_playbook writes nothing when every entry is refused, and says how to fix each", async () => {
     const { scopedDb, writes } = createPlaybookWriteScopedDb();
@@ -997,6 +1234,103 @@ describe("MCP knowledge tools", () => {
       propertyIds: [toSafeId<"property">("p1"), toSafeId<"property">("p2")],
       workspaceId: MATTER_ID,
     });
+  });
+
+  const runRefusals = {
+    file_property_type_immutable: {
+      ok: false,
+      status: 422,
+      code: FILE_PROPERTY_TYPE_IMMUTABLE_CODE,
+      retryable: false,
+      message: "File property types cannot be changed.",
+      hint: "Keep the existing ASK content.type, or add a new playbook position.",
+    },
+    playbook_scope_unresolved: {
+      ok: false,
+      status: 400,
+      code: "playbook_scope_unresolved",
+      retryable: false,
+      message: "The document-type scope cannot be resolved.",
+      hint: "Configure a matching Document Type classifier before running it.",
+    },
+    properties_limit_reached: {
+      ok: false,
+      status: 400,
+      code: "properties_limit_reached",
+      message: "The matter has reached its property limit.",
+    },
+  } as const satisfies Record<
+    Extract<MaterializePlaybookRunResult, { ok: false }>["code"],
+    Extract<MaterializePlaybookRunResult, { ok: false }>
+  >;
+
+  test.each(Object.values(runRefusals))(
+    "run_playbook preserves $code and its corrective action",
+    async (refusal) => {
+      loadLatestApprovedVersionMock.mockResolvedValue(null);
+      materializePlaybookRunMock.mockResolvedValue(refusal);
+      const result = await handleMcpToolCall({
+        args: { matter_id: MATTER_ID, playbook_id: PLAYBOOK_ID },
+        context: createContext({
+          scopedDb: createPlaybookScopedDb({
+            id: PLAYBOOK_ID,
+            name: "Playbook",
+            positions: positionsSaying("File content"),
+            scope: null,
+          }),
+        }),
+        toolName: "run_playbook",
+      });
+      const { ok: _ok, status: _status, code, ...details } = refusal;
+      expect(materializePlaybookRunMock).toHaveBeenCalledTimes(1);
+      expect(result.isError).toBe(true);
+      expect(parseToolPayload(result)).toEqual({
+        error: {
+          code: "validation_error",
+          ...details,
+          issues: [{ path: "", code, message: refusal.message }],
+        },
+      });
+      expect(createPlaybookTableRunsMock).not.toHaveBeenCalled();
+      expect(startWorkflowMock).not.toHaveBeenCalled();
+    },
+  );
+
+  test("run_playbook forwards the real unresolved-scope refusal before materialization", async () => {
+    loadLatestApprovedVersionMock.mockResolvedValue(null);
+    const result = await handleMcpToolCall({
+      args: { matter_id: MATTER_ID, playbook_id: PLAYBOOK_ID },
+      context: createContext({
+        scopedDb: createPlaybookScopedDb({
+          id: PLAYBOOK_ID,
+          name: "Scoped playbook",
+          positions: positionsSaying("Scoped content"),
+          scope: { documentTypeKey: "missing_type" },
+        }),
+      }),
+      toolName: "run_playbook",
+    });
+    expect(result.isError).toBe(true);
+    expect(parseToolPayload(result)).toEqual({
+      error: {
+        code: "validation_error",
+        message:
+          "This playbook is scoped to a document type, but the workspace has no matching Document Type classifier to gate on.",
+        hint: "Configure a matching Document Type classifier or change the playbook document-type scope before running it.",
+        retryable: false,
+        issues: [
+          {
+            path: "",
+            code: "playbook_scope_unresolved",
+            message:
+              "This playbook is scoped to a document type, but the workspace has no matching Document Type classifier to gate on.",
+          },
+        ],
+      },
+    });
+    expect(materializePlaybookRunMock).not.toHaveBeenCalled();
+    expect(createPlaybookTableRunsMock).not.toHaveBeenCalled();
+    expect(startWorkflowMock).not.toHaveBeenCalled();
   });
 
   test("run_playbook reports a workflow that never started instead of a run count", async () => {

@@ -1,4 +1,5 @@
 import type { McpDefaultResourceScope } from "@stll/api-contract";
+import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
 
 import { unreachable } from "@/api/lib/errors/tagged-errors";
 import { BILLING_TOOL_SET } from "@/api/mcp/billing-tools";
@@ -10,6 +11,7 @@ import {
   MCP_DEFAULT_RESOURCE_SCOPES,
 } from "@/api/mcp/constants";
 import type { McpMode } from "@/api/mcp/constants";
+import { DECISION_READER_TOOL_SET } from "@/api/mcp/decision-reader-tools";
 import { DOCUMENT_TOOL_SET } from "@/api/mcp/document-tools";
 import { FEEDBACK_TOOL_SET } from "@/api/mcp/feedback-tools";
 import { KNOWLEDGE_TOOL_SET } from "@/api/mcp/knowledge-tools";
@@ -34,6 +36,7 @@ import type {
 export const DEFAULT_MCP_TOOL_SETS = [
   COMPAT_TOOL_SET,
   STELLA_TOOL_SET,
+  DECISION_READER_TOOL_SET,
   LEGISLATION_TOOL_SET,
   TEMPLATE_TOOL_SET,
   DOCUMENT_TOOL_SET,
@@ -54,6 +57,7 @@ export const DEFAULT_MCP_TOOL_SETS = [
 export const DEFAULT_MCP_TOOL_DEFINITIONS = [
   ...COMPAT_TOOL_SET.definitions,
   ...STELLA_TOOL_SET.definitions,
+  ...DECISION_READER_TOOL_SET.definitions,
   ...LEGISLATION_TOOL_SET.definitions,
   ...TEMPLATE_TOOL_SET.definitions,
   ...DOCUMENT_TOOL_SET.definitions,
@@ -245,11 +249,13 @@ export const ANONYMIZED_MCP_TOOL_DEFINITIONS = scopeDefinitionsToSurface(
   }),
 ) satisfies readonly McpToolDefinition[];
 
-const invokeCapabilityDefinition = CAPABILITY_TOOL_SET.definitions.find(
-  ({ name }) => name === "invoke_capability",
+const writeCapabilityDefinition = CAPABILITY_TOOL_SET.definitions.find(
+  ({ name }) => name === MCP_CAPABILITY_EXECUTORS.write,
 );
-if (invokeCapabilityDefinition === undefined) {
-  unreachable("The documents MCP surface requires invoke_capability");
+if (writeCapabilityDefinition === undefined) {
+  unreachable(
+    `The documents MCP surface requires ${MCP_CAPABILITY_EXECUTORS.write}`,
+  );
 }
 const DOCUMENT_MCP_TOOL_DEFINITION_SET: ReadonlySet<McpToolDefinition> =
   new Set(DOCUMENT_TOOL_SET.definitions);
@@ -262,7 +268,7 @@ export const DOCUMENTS_MCP_TOOL_DEFINITIONS = scopeDefinitionsToSurface(
       // The upload MCP App drives the canonical presign/PUT/finalize pipeline
       // through this existing capability seam. tools.ts applies a mode-specific
       // capability allowlist, so guessed non-upload capability IDs fail closed.
-      tool === invokeCapabilityDefinition,
+      tool === writeCapabilityDefinition,
   ),
 ) satisfies readonly McpToolDefinition[];
 
@@ -319,7 +325,11 @@ export const LAW_MCP_TOOL_DISPOSITION = {
   fetch: "corpus",
   search_case_law: "corpus",
   lookup_case_law: "corpus",
+  case_law_coverage: "corpus",
   read_case_law_decision: "corpus",
+  open_case_law_decision: "corpus",
+  read_case_law_decision_blocks: "corpus",
+  preview_cited_provision: "corpus",
   read_case_law_citations: "corpus",
   search_legislation: "corpus",
   read_statute: "corpus",

@@ -28,13 +28,16 @@ instructions, because an orchestrator picks tools from the names it was handed:
   Tenant and personal text is redacted on egress; mutating tools and the dynamic
   gateway are not exposed.
 - `/mcp-documents`: the least-privilege document surface. Document tools plus
-  the version-upload lifecycle through `invoke_capability`, whose capability IDs
+  the version-upload lifecycle through `write_capability`, whose capability IDs
   are allowlisted for that surface.
-- `/mcp-law`: the public legal corpus. Exactly ten read tools (`search`,
+- `/mcp-law`: the public legal corpus. Exactly twelve read tools (`search`,
   `fetch`, `search_case_law`, `lookup_case_law`, `read_case_law_decision`,
-  `read_case_law_citations`, `search_legislation`, `read_statute`,
-  `read_statute_provisions`, `read_provision_history`) under `stella:search`
-  and `stella:read`. No matter, document, contact or billing data is reachable
+  `read_case_law_citations`, `open_case_law_decision`, `case_law_coverage`,
+  `search_legislation`, `read_statute`, `read_statute_provisions`,
+  `read_provision_history`) under `stella:search` and `stella:read`. The
+  decision reader app also calls two app-only tools there; `tools/list` keeps
+  them for the host, which hides them from the model, and they are not
+  counted here. No matter, document, contact or billing data is reachable
   through it. `search`/`fetch` are the OpenAI-compatible pair, defined and
   handled separately from the default audience's pair of the same names
   (`compat-law-tools.ts`), because a handler never sees the request mode.
@@ -125,7 +128,7 @@ Only the outer MCP transport boundary serializes the finished result into a
 `CallToolResult`. Anonymize-before-window keeps entity names from splitting
 across a window edge and keeps placeholders stable across windows of one
 document. With no mode in scope, per-mode divergence inside a handler is
-structurally impossible. Tools with compound windowing (e.g.
+structurally impossible. Tools that page by number (e.g.
 `read_case_law_decision`) keep that logic tool-local and mode-agnostic.
 
 Most read tools use the generic `{ egress: "structured" }` plan: the handler
@@ -173,23 +176,48 @@ returns a single text content of
 with `isError` set. `hint` and `retryable` are omitted when absent. Build these
 with `structuredErrorResult` (or the `notFoundResult` shorthand) in
 `tool-utils.ts`; the arg parsers there already emit `validation_error`. The
-`code` set is closed (`error-codes.ts`): `validation_error`, `missing_scope`,
-`feature_disabled`, `not_found`, `confirmation_required`, `rate_limited`,
-`unknown_tool`, `internal_error`. Agents branch on `code`; `hint` states the
+`code` set is closed and defined in [`error-codes.ts`](./error-codes.ts).
+Verification active and daily run limits preserve their distinct codes from
+`@stll/api-contract/verification-run-caps`. Agents branch on `code`; `hint` states the
 next step (e.g. `missing_scope` tells the client to re-run OAuth consent). The
 CLI keys its exit codes off `error.code` (e.g. `feature_disabled` -> exit 5), so
 the string values are a stable contract. `internal_error` never leaks internals:
 the real exception is captured for observability and the caller gets a generic
 message plus the feedback-tool hint.
 
+## Reauthorization
+
+A connected client should almost never need a manual reconnect. Grants carry
+`offline_access`, so a client refreshes its access token (15 minutes) with the
+refresh token (30 days, rotated on use) without the user, and a refresh grant
+survives the browser session that created it. When the user must act, the
+server says so in two standard forms:
+
+- **Missing, expired or revoked token:** the transport answers HTTP 401 with
+  `WWW-Authenticate: Bearer error="invalid_token", ..., resource_metadata="<protected-resource metadata URL>"`
+  (no `error` when no credential was sent). Clients refresh or rerun OAuth
+  from this; it is the signal every MCP client acts on.
+- **Valid token without a scope the call needs:** the tool returns the
+  `missing_scope` envelope (`isError`), and `tool-auth-challenge.ts` adds
+  `_meta["mcp/www_authenticate"]` with an `insufficient_scope` challenge naming
+  the same metadata. Hosts that read tool-level challenges offer to reconnect
+  in place; hosts that ignore `_meta` still show the envelope's `hint`.
+
 ## Destructive-op confirm guardrail
 
-Every tool with `annotations.destructiveHint === true` (the `delete_*` tools)
-advertises a `confirm` boolean (`confirmProp()`) and is refused before dispatch
-unless the call sets `confirm: true`. The gate lives in `handleMcpToolCall`,
-before any DB access, and returns `confirmation_required`. This stops an agent
-from deleting tenant data without an explicit, human-approved confirmation; the
-handlers themselves tolerate and ignore the extra `confirm` arg.
+`annotations.destructiveHint` tells clients that a tool can change existing
+stored data, including updates and deletions. It does not require a server
+confirmation gate: reversible updates may declare the hint without a
+`destructiveBehavior` or a `confirm` input.
+
+`destructiveBehavior` declares the server confirmation policy. The `always`
+behavior (used by the `delete_*` tools) requires `confirm: true` on every call;
+`input-discriminator` requires it only for the declared actions. These tools
+advertise a `confirm` boolean (`confirmProp()`). The gate in
+`handleMcpToolCall` returns `confirmation_required` before dispatch when
+confirmation is required and absent. Catalog-dispatched capabilities resolve
+their confirmation policy from the selected target; upstream servers own their
+operation-specific confirmation protocol.
 
 ## Feedback pipeline
 
@@ -342,3 +370,20 @@ behind the estimates with the Anthropic count_tokens endpoint; it needs
 - `server.ts` and `server-core.ts`: MCP HTTP transport wiring.
 - `../handlers/mcp/routes-core.ts`: Elysia routes that expose the MCP resources.
 - `../handlers/mcp-connectors/`: connector management APIs used by the web app.
+
+## Output projection contracts
+
+Bind successful payloads with `projectionPayload(schema, payload)` from
+`lib/projection-totality.ts` before a handler return annotation widens their
+source types. It checks undeclared fields recursively, including forwarded
+objects, arrays, unions and spreads. A domain field must be declared in the
+strict schema or explicitly removed when constructing the payload. Open JSON
+fields remain explicit schema decisions. Dispatch still strict-parses the
+served result; the compile-time gate does not replace runtime validation.
+
+The `weak-mcp-projection-ties` ratchet prevents new satisfies-only projection
+ties. `contracts/mcp-output-projection.ts` exercises producer-field drift and
+binds the case-law facet tree to its source type. The case-law source-facet
+database tests feed real SQL output through the production count builder and
+the MCP projection, covering exact counts, lower bounds and unknown-field
+rejection.

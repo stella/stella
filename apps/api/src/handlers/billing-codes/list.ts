@@ -3,7 +3,7 @@ import { and, asc, eq, gt, or } from "drizzle-orm";
 import { t } from "elysia";
 
 import { billingCodes } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
@@ -33,6 +33,8 @@ const config = {
     "then code, with cursor pagination. Filter by type (task or activity) " +
     "and by whether the code is still active.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  featureAccess: { featureId: "time-billing", type: "required" },
   mcp: {
     type: "capability",
     readClass: "tenant",

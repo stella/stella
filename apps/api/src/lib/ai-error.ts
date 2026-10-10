@@ -8,12 +8,14 @@ import { panic, Result } from "better-result";
  * The wire values live in @stll/api-contract so producers and consumers are
  * checked against one source.
  */
-import { AI_ERROR_KINDS, type AIErrorKind } from "@stll/api-contract";
+import type { AIErrorKind } from "@stll/api-contract";
 import { classifyFailure } from "@stll/errors";
 import type { FailureReason } from "@stll/errors";
+import { isNonNullObject } from "@stll/template-conditions/path";
 
 import { MANAGED_PROVIDER_UNAVAILABLE_CODE } from "@/api/lib/chat/provider-data-policy";
 import { INCOMPLETE_STREAM_CODE } from "@/api/lib/chat/provider-stream-contract";
+import { ProviderCallError } from "@/api/lib/errors/provider-call-error";
 import {
   AIGenerationCancelledError,
   ChatEmptyCompletionError,
@@ -34,7 +36,6 @@ import {
   readProviderStatus,
 } from "@/api/lib/observability/failure-evidence";
 
-export { AI_ERROR_KINDS };
 export type { AIErrorKind };
 
 const HTTP_SERVER_ERROR_MIN = 500;
@@ -57,9 +58,6 @@ const PROVIDER_CREDENTIAL_REJECTION_MARKERS = new Set([
 const hasProviderCredentialRejectionMarker = (value: unknown): boolean =>
   typeof value === "string" && PROVIDER_CREDENTIAL_REJECTION_MARKERS.has(value);
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  value !== null && typeof value === "object";
-
 /**
  * The provider HTTP status one link of an error chain carries, or `null` when
  * that link carries none of its own.
@@ -78,7 +76,7 @@ export const providerStatusCode = (error: unknown): number | null =>
   readProviderStatus(error)?.status ?? null;
 
 const isProviderCredentialRejection = (error: unknown): boolean => {
-  if (!isRecord(error)) {
+  if (!isNonNullObject(error)) {
     return false;
   }
 
@@ -91,7 +89,7 @@ const isProviderCredentialRejection = (error: unknown): boolean => {
 
   const body = error["error"];
   return (
-    isRecord(body) &&
+    isNonNullObject(body) &&
     (hasProviderCredentialRejectionMarker(body["code"]) ||
       hasProviderCredentialRejectionMarker(body["type"]))
   );
@@ -126,7 +124,7 @@ const isAwsExceptionName = (name: unknown): name is AwsExceptionName =>
 // `$fault` marks an AWS SDK service exception; the name alone does not, since
 // any error can be named `ThrottlingException`.
 const awsExceptionKind = (error: unknown): AIErrorKind | null => {
-  if (!isRecord(error) || !AWS_FAULTS.has(String(error["$fault"]))) {
+  if (!isNonNullObject(error) || !AWS_FAULTS.has(String(error["$fault"]))) {
     return null;
   }
   const name = error["name"];
@@ -134,7 +132,7 @@ const awsExceptionKind = (error: unknown): AIErrorKind | null => {
 };
 
 const isProviderError = (error: unknown): boolean =>
-  isRecord(error) &&
+  isNonNullObject(error) &&
   (providerStatusCode(error) !== null || isProviderCredentialRejection(error));
 
 /**
@@ -163,11 +161,11 @@ export const providerErrorBody = (
   if (Result.isError(parsed)) {
     return undefined;
   }
-  return isRecord(parsed.value) ? parsed.value : undefined;
+  return isNonNullObject(parsed.value) ? parsed.value : undefined;
 };
 
 const errorCause = (error: unknown): unknown => {
-  if (!isRecord(error)) {
+  if (!isNonNullObject(error)) {
     return undefined;
   }
   return error["cause"];
@@ -177,14 +175,20 @@ const classifyAIErrorInternal = (
   error: unknown,
   seen: Set<object>,
 ): AIErrorKind => {
-  if (isRecord(error)) {
+  if (error instanceof ProviderCallError) {
+    return error.kind;
+  }
+  if (isNonNullObject(error)) {
     if (seen.has(error)) {
       return "unknown";
     }
     seen.add(error);
   }
 
-  if (isRecord(error) && error["code"] === MANAGED_PROVIDER_UNAVAILABLE_CODE) {
+  if (
+    isNonNullObject(error) &&
+    error["code"] === MANAGED_PROVIDER_UNAVAILABLE_CODE
+  ) {
     return "model_unavailable";
   }
 
@@ -196,7 +200,10 @@ const classifyAIErrorInternal = (
   }
   // A stream that stopped before its terminal event, named by the provider
   // stream contract or by the adapter itself.
-  if (isRecord(error) && INCOMPLETE_STREAM_CODES.has(String(error["code"]))) {
+  if (
+    isNonNullObject(error) &&
+    INCOMPLETE_STREAM_CODES.has(String(error["code"]))
+  ) {
     return "provider_stream_incomplete";
   }
   // TanStack wraps provider RUN_ERROR events in a 502 HandlerError. Preserve a
@@ -400,11 +407,31 @@ export const AI_ERROR_KIND_FAILURE_REASON = {
  * unbounded walk, is the one a sink records, so a bare provider error and the
  * same error wrapped by `aiHandlerError` grade alike.
  */
+/**
+ * Grade a provider 400 that no kind names as a request this service built
+ * and the provider refused (`provider_request_rejected`, a defect), rather
+ * than leaving it unclassified. A kind already decided keeps its own grade.
+ */
+export const classifyRejectedProviderRequest = (
+  error: unknown,
+  kind: AIErrorKind,
+): void => {
+  if (
+    kind === "unknown" &&
+    typeof error === "object" &&
+    error !== null &&
+    providerStatusCode(error) === 400
+  ) {
+    classifyFailure(error, "provider_request_rejected");
+  }
+};
+
 export const classifyAIBoundaryFailure = (error: unknown): AIErrorKind => {
   const kind = classifyAIError(error);
   if (kind !== "unknown" && typeof error === "object" && error !== null) {
     classifyFailure(error, AI_ERROR_KIND_FAILURE_REASON[kind]);
   }
+  classifyRejectedProviderRequest(error, kind);
   return kind;
 };
 
@@ -495,7 +522,27 @@ export const aiHandlerError = (
   fallback: AIHandlerErrorFallback,
 ): HandlerError => {
   const kind = classifyAIBoundaryFailure(error);
-  const handlerError = aiKindHandlerError(kind, error, fallback);
+  const mapped = aiKindHandlerError(kind, error, fallback);
+  const handlerError =
+    error instanceof ProviderCallError
+      ? new ProviderCallError({
+          model: { provider: error.provider, keySource: error.keySource },
+          status: mapped.status,
+          code: error.code,
+          kind: error.kind,
+          requestId: error.requestId,
+          facts:
+            error.providerStatus === undefined
+              ? undefined
+              : {
+                  status: error.providerStatus,
+                  ...(isNonNullObject(error.cause) &&
+                  typeof error.cause["isRetryable"] === "boolean"
+                    ? { isRetryable: error.cause["isRetryable"] }
+                    : {}),
+                },
+        })
+      : mapped;
   return kind === "unknown"
     ? handlerError
     : classifyFailure(handlerError, AI_ERROR_KIND_FAILURE_REASON[kind]);

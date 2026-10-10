@@ -1,6 +1,11 @@
 import { panic } from "better-result";
 import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 
+import {
+  FILE_PROPERTY_TYPE_IMMUTABLE_CODE,
+  isFileProperty,
+} from "@stll/api-contract/property-policy";
 import type { ConditionNode } from "@stll/conditions";
 
 import type { Transaction } from "@/api/db/root";
@@ -14,6 +19,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { remapNodePropertyIds } from "@/api/lib/conditions/ast-utils";
+import { PLAYBOOK_RUN_FAILURE_CODE } from "@/api/lib/document-review/playbook-run-refusal";
 import { LIMITS } from "@/api/lib/limits";
 import { createDefaultTool } from "@/api/lib/properties/create-schema";
 import { deletePlaybookColumns } from "@/api/lib/properties/delete-playbook-columns";
@@ -109,7 +115,7 @@ export type DocTypeClassifier = { id: SafeId<"property"> };
 // bounded per workspace (LIMITS.propertiesCount) and content/tool are JSONB, so
 // the shape checks run in app code. Null when the workspace has no classifier.
 export const resolveDocTypeClassifier = async (
-  tx: Transaction,
+  tx: Pick<PgAsyncDatabase<PgQueryResultHKT>, "select">,
   workspaceId: SafeId<"workspace">,
 ): Promise<DocTypeClassifier | null> => {
   const candidates = await tx
@@ -153,13 +159,13 @@ export const resolveDocTypeClassifier = async (
 // its classified type matches. Returns null (ungated, legacy behavior) when the
 // scope's type slug is unknown for the org or the workspace has no matching
 // single-select AI classifier.
-export const resolveDocTypeGate = async ({
+const resolveDocTypeGate = async ({
   tx,
   workspaceId,
   organizationId,
   documentTypeKey,
 }: {
-  tx: Transaction;
+  tx: MaterializePlaybookRunArgs["tx"];
   workspaceId: SafeId<"workspace">;
   organizationId: SafeId<"organization">;
   documentTypeKey: string;
@@ -192,9 +198,16 @@ export const resolveDocTypeGate = async ({
   };
 };
 
-type ScopedGateResult =
-  | { ok: true; gate: DocTypeGate | null }
-  | { ok: false; status: 400; message: string };
+type ScopeRefusal = {
+  ok: false;
+  status: 400;
+  code: typeof PLAYBOOK_RUN_FAILURE_CODE.SCOPE_UNRESOLVED;
+  message: string;
+  hint: string;
+  retryable: false;
+};
+
+type ScopedGateResult = { ok: true; gate: DocTypeGate | null } | ScopeRefusal;
 
 // Resolves a playbook's document-type gate, rejecting a scoped playbook whose
 // classifier does not resolve (which would otherwise materialize ungated and
@@ -205,7 +218,7 @@ export const resolveScopedGate = async ({
   organizationId,
   scope,
 }: {
-  tx: Transaction;
+  tx: MaterializePlaybookRunArgs["tx"];
   workspaceId: SafeId<"workspace">;
   organizationId: SafeId<"organization">;
   scope: PlaybookScope | null;
@@ -224,6 +237,9 @@ export const resolveScopedGate = async ({
     return {
       ok: false,
       status: 400,
+      code: PLAYBOOK_RUN_FAILURE_CODE.SCOPE_UNRESOLVED,
+      retryable: false,
+      hint: "Configure a matching Document Type classifier or change the playbook document-type scope before running it.",
       message:
         "This playbook is scoped to a document type, but the workspace has no matching Document Type classifier to gate on.",
     };
@@ -233,10 +249,28 @@ export const resolveScopedGate = async ({
 
 export type MaterializePlaybookRunResult =
   | { ok: true; materializedPropertyIds: SafeId<"property">[] }
-  | { ok: false; status: 400; message: string };
+  | ScopeRefusal
+  | {
+      ok: false;
+      status: 400;
+      code: typeof PLAYBOOK_RUN_FAILURE_CODE.PROPERTIES_LIMIT;
+      message: string;
+    }
+  | {
+      ok: false;
+      status: 422;
+      code: typeof FILE_PROPERTY_TYPE_IMMUTABLE_CODE;
+      retryable: false;
+      message: string;
+      hint: string;
+    };
 
 type MaterializePlaybookRunArgs = {
-  tx: Transaction;
+  tx: Pick<
+    PgAsyncDatabase<PgQueryResultHKT>,
+    "select" | "insert" | "delete" | "execute" | "$count"
+  > &
+    Pick<Transaction, "query" | "rollback">;
   workspaceId: SafeId<"workspace">;
   organizationId: SafeId<"organization">;
   playbookId: SafeId<"playbookDefinition">;
@@ -328,6 +362,7 @@ export const materializePlaybookRun = async ({
       id: properties.id,
       playbookSourceId: properties.playbookSourceId,
       tool: properties.tool,
+      content: properties.content,
     })
     .from(properties)
     .where(
@@ -341,11 +376,16 @@ export const materializePlaybookRun = async ({
           ),
         ),
       ),
-    );
+    )
+    .for("update");
 
   // ASK vs verdict materialized columns share a position's sourceId; the tool
   // type disambiguates which existing row to update in place.
   const askIdBySourceId = new Map<string, SafeId<"property">>();
+  const askContentBySourceId = new Map<
+    string,
+    (typeof owned)[number]["content"]
+  >();
   const verdictIdBySourceId = new Map<string, SafeId<"property">>();
   for (const row of owned) {
     if (row.playbookSourceId === null) {
@@ -355,6 +395,7 @@ export const materializePlaybookRun = async ({
       verdictIdBySourceId.set(row.playbookSourceId, row.id);
     } else {
       askIdBySourceId.set(row.playbookSourceId, row.id);
+      askContentBySourceId.set(row.playbookSourceId, row.content);
     }
   }
 
@@ -372,6 +413,21 @@ export const materializePlaybookRun = async ({
 
   for (const position of enabledPositions) {
     const ask = resolveEffectiveAsk(position);
+    const storedContent = askContentBySourceId.get(position.sourceId);
+    if (
+      storedContent &&
+      isFileProperty(storedContent) !== isFileProperty(ask.content)
+    ) {
+      return {
+        ok: false,
+        status: 422,
+        code: FILE_PROPERTY_TYPE_IMMUTABLE_CODE,
+        retryable: false,
+        message:
+          "File property types cannot be changed. Keep the existing type; create a custom property for other values.",
+        hint: "Keep the existing ASK content.type, or add a new playbook position for values of another type.",
+      };
+    }
     const askTool = buildAskTool(ask);
     const askId =
       askIdBySourceId.get(position.sourceId) ?? createSafeId<"property">();
@@ -506,7 +562,12 @@ export const materializePlaybookRun = async ({
   const retainedCount =
     existingCount - obsoleteVerdictIds.length - obsoleteAskIds.length;
   if (retainedCount + newCount > LIMITS.propertiesCount) {
-    return { ok: false, status: 400, message: "Properties limit reached" };
+    return {
+      ok: false,
+      status: 400,
+      code: PLAYBOOK_RUN_FAILURE_CODE.PROPERTIES_LIMIT,
+      message: "Properties limit reached",
+    };
   }
 
   // ASK rows first so the verdict rows' `askPropertyId` FK targets exist.

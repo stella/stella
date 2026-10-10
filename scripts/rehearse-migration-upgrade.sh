@@ -15,13 +15,12 @@
 #   DATABASE_URL                       an EMPTY database (refused otherwise);
 #                                      every row written to it is disposable
 #   REHEARSAL_BASE_REF                 stable tag to upgrade from (vX.Y.Z);
-#                                      default: the version production
-#                                      reports, else the newest stable tag
+#                                      default: the latest production promotion
+#                                      in the committed release record
 #   REHEARSAL_BASE_IMAGE_REPOSITORY    default ghcr.io/stella/stella-api
 #   REHEARSAL_BASE_DATABASE_URL        DATABASE_URL as seen from inside the
 #                                      base image's container; default
 #                                      DATABASE_URL (Linux host network)
-#   REHEARSAL_PRODUCTION_READY_URL     default https://api.stll.app/ready
 #   REHEARSAL_DECISIONS                decisions to seed; the other tables
 #                                      are fixed multiples (see
 #                                      apps/api/src/scripts/seed-migration-rehearsal-plan.ts)
@@ -45,7 +44,6 @@ set -euo pipefail
 base_ref="${REHEARSAL_BASE_REF:-}"
 image_repository="${REHEARSAL_BASE_IMAGE_REPOSITORY:-ghcr.io/stella/stella-api}"
 base_database_url="${REHEARSAL_BASE_DATABASE_URL:-$DATABASE_URL}"
-ready_url="${REHEARSAL_PRODUCTION_READY_URL:-https://api.stll.app/ready}"
 decisions="${REHEARSAL_DECISIONS:-}"
 budget="${REHEARSAL_MIGRATE_BUDGET_SECONDS:-900}"
 summary="${GITHUB_STEP_SUMMARY:-/dev/null}"
@@ -61,25 +59,13 @@ fail() {
   exit 1
 }
 
-# The promoted release is what an upgrade starts from; production reports
-# it. Without that (no network, a fork), the newest stable tag reachable in
-# the clone is the best available stand-in, and the summary says which was
-# used.
 resolve_base_ref() {
-  local version
   if [[ -n "$base_ref" ]]; then
     base_source="given"
     return
   fi
-  version="$(curl -fsS --max-time 15 "$ready_url" 2>/dev/null | jq -r '.version // empty' 2>/dev/null || true)"
-  if [[ -n "$version" ]]; then
-    base_ref="v${version}"
-    base_source="production ($ready_url)"
-    return
-  fi
-  git -C "$repo_root" fetch --quiet --no-tags origin 'refs/tags/v*:refs/tags/v*' || true
-  base_ref="$(git -C "$repo_root" tag --list 'v[0-9]*' --sort=-v:refname | grep -E "$stable_tag" | head -n 1 || true)"
-  base_source="newest stable tag (production unreachable)"
+  base_ref="$(bun --preload "$repo_root/scripts/offline-network-preload.ts" "$repo_root/scripts/resolve-promoted-release.ts" --check)"
+  base_source="committed release publication manifest"
 }
 
 base_source=""
@@ -99,6 +85,7 @@ if ! docker image inspect "$base_image" >/dev/null 2>&1; then
 fi
 docker run --rm --network host \
   --env "DATABASE_URL=${base_database_url}" \
+  --env DB_LOAD_GATE_EBS_SIGNAL --env DB_LOAD_GATE_BUSY_WINDOWS \
   "$base_image" \
   bun /app/apps/api/src/db/migrate.js
 

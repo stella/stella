@@ -9,6 +9,7 @@ import type {
   CorrespondenceProvenance,
   ParsedCorrespondence,
 } from "@stll/api-contract/correspondence";
+import { createSha256 } from "@stll/sha256/bun";
 
 import type { AttachmentScanVerdict } from "@/api/lib/email/inbound/acceptance";
 import { parseInboundAddressToken } from "@/api/lib/email/inbound/address";
@@ -22,6 +23,7 @@ import {
 } from "@/api/lib/email/inbound/authentication";
 import { INBOUND_MAIL_LIMITS } from "@/api/lib/email/inbound/limits";
 import {
+  correspondenceFromMessage,
   InboundMessageError,
   parseInboundMessage,
   type InboundAttachment,
@@ -38,7 +40,7 @@ const AUTH_PROJECTION = {
   temperror: "unknown",
   permerror: "fail",
 } as const satisfies Record<MailAuthResult, CorrespondenceAuthResult>;
-const PARSE_DROP_REASON = {
+export const PARSE_DROP_REASON = {
   invalidMime: "malformed_message",
   invalidFrom: "malformed_message",
   rawTooLarge: "message_too_large",
@@ -81,7 +83,7 @@ type ClassifiedDelivery =
   | {
       status: "candidate";
       sender: string;
-      message: ParsedCorrespondence;
+      message: Extract<ParsedCorrespondence, { source: "delivery" }>;
       attachments: InboundAttachment[];
       authentication: MailAuthentication;
     };
@@ -146,12 +148,14 @@ const projectProvenance = async ({
   switch (parsed.forwardSource) {
     case "none":
       return Result.ok({
+        source: "delivery",
         intake: "direct",
         authenticatedSender,
         originalSignature: null,
       } as const satisfies CorrespondenceProvenance);
     case "inline":
       return Result.ok({
+        source: "delivery",
         intake: "forwarded_inline",
         authenticatedSender,
         originalSignature: { status: "unverified" },
@@ -161,6 +165,7 @@ const projectProvenance = async ({
       return signature.map(
         (originalSignature) =>
           ({
+            source: "delivery",
             intake: "forwarded_attachment",
             authenticatedSender,
             originalSignature,
@@ -324,8 +329,11 @@ export const ingestInboundMail = async ({
       reason: "malformed_message",
     };
   } else {
-    const { outerSender, message } = parsed.value;
-    const from = parsed.value.message.from;
+    const { outerSender } = parsed.value;
+    const message = {
+      ...parsed.value.message,
+      from: parsed.value.message.from,
+    };
     const authenticated = await verify({
       raw,
       envelope,
@@ -394,27 +402,16 @@ export const ingestInboundMail = async ({
         sender: outerSender,
         attachments: message.attachments,
         authentication: authenticated.value,
-        message: {
-          ...provenance.value,
-          channel: "email",
-          direction: from === outerSender ? "out" : "in",
-          from: { address: from, name: null },
-          to: message.to.map((address) => ({ address, name: null })),
-          cc: message.cc.map((address) => ({ address, name: null })),
-          subject: message.subject ?? "",
-          sentAt: message.date,
+        message: correspondenceFromMessage({
+          message,
+          provenance: provenance.value,
+          sender: outerSender,
           receivedAt,
-          messageId: message.messageId,
-          contentHash: message.contentHash,
-          inReplyTo: message.inReplyTo,
-          references: message.references,
-          bodyText: message.text,
-          bodyHtml: message.html,
-        },
+        }),
       };
     }
   }
-  const deliveryKey = new Bun.CryptoHasher("sha256")
+  const deliveryKey = createSha256()
     .update(String(raw.byteLength))
     .update(raw.subarray(0, INBOUND_MAIL_LIMITS.rawBytes))
     .digest("hex");

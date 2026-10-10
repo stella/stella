@@ -4,7 +4,8 @@ import {
   flowRunParamsSchema,
   reviewFlowRunBodySchema,
 } from "@/api/handlers/flows/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { flowRunRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { resolveFlowReviewGate } from "@/api/lib/flows/flow-executor";
 
@@ -14,6 +15,8 @@ const config = {
     "rejected, with an optional note. The run continues or stops " +
     "accordingly, and its id and new status come back.",
   permissions: { flow: ["review"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: flowRunRealtimeUpdates,
   access: "write",
   mcp: {
     type: "capability",

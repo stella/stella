@@ -3,6 +3,7 @@ import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { BreadcrumbItem } from "@stll/ui/breadcrumb";
 
 import { shouldFetchChatThreadTitle } from "@/components/breadcrumbs/chat-breadcrumb.logic";
+import { BreadcrumbQueryContent } from "@/components/breadcrumbs/query-content";
 import { ChatTitleRename } from "@/features/chat/components/chat-title-rename";
 import {
   chatThreadOptions,
@@ -13,6 +14,7 @@ import {
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
+import { useQueryView } from "@/lib/use-query-view";
 
 // Thread-title crumb for chat routes. Reuses the grouped-threads list already
 // primed by the sidebar / threads sheet (a lightweight query that never
@@ -37,10 +39,13 @@ export const ChatBreadcrumb = ({
   workspaceId?: string | undefined;
 }) => {
   const { activeOrganizationId, id: userId } = useAuthenticatedUser();
-  const { data: groupedThread } = useInfiniteQuery({
+  const groupedQuery = useInfiniteQuery({
     ...groupedChatThreadsOptions({ activeOrganizationId, userId }),
     select: (data) => selectThreadTitleSummary(data.pages, threadId),
   });
+  const groupedView = useQueryView(groupedQuery);
+  const groupedThread =
+    groupedView.type === "items" ? groupedView.items : undefined;
 
   // The route loader already primes this allow-missing query. Use its
   // activity timestamp as the existence signal for the title fallback: a
@@ -60,24 +65,29 @@ export const ChatBreadcrumb = ({
     context: { allowMissingThread: true },
     key: threadRef,
   });
-  const { data: threadData } = useQuery({
+  const threadQuery = useQuery({
     ...threadOptions,
     enabled: groupedThread === null,
   });
+  const threadView = useQueryView(threadQuery);
+  const threadData = threadView.type === "items" ? threadView.items : undefined;
 
   // The grouped list only holds its first loaded pages, so an older thread that
   // has scrolled out of that window is absent (`groupedThread === null`). Fall
   // back to a bounded by-id title read, enabled only on that miss so a thread
   // already in the list never triggers a redundant fetch.
+  const titleEnabled = shouldFetchChatThreadTitle({
+    groupedTitle: groupedThread?.title ?? null,
+    threadExists: threadData?.threadExists,
+  });
   const titleOptions = chatThreadTitleOptions({
     activeOrganizationId,
-    enabled: shouldFetchChatThreadTitle({
-      groupedTitle: groupedThread?.title ?? null,
-      threadExists: threadData?.threadExists,
-    }),
+    enabled: titleEnabled,
     key: { threadId, workspaceId },
   });
-  const { data: byIdTitle } = useQuery(titleOptions);
+  const titleQuery = useQuery(titleOptions);
+  const titleView = useQueryView(titleQuery);
+  const byIdTitle = titleView.type === "items" ? titleView.items : undefined;
 
   const title = groupedThread?.title ?? byIdTitle ?? null;
   const currentTitle = title && !isPlaceholderThreadTitle(title) ? title : "";
@@ -88,18 +98,32 @@ export const ChatBreadcrumb = ({
   const usedAnonymization =
     groupedThread?.usedAnonymization ?? threadData?.usedAnonymization ?? false;
 
+  if (groupedView.type !== "items") {
+    return <BreadcrumbQueryContent view={groupedView} />;
+  }
+  if (groupedThread === null && threadView.type !== "items") {
+    return <BreadcrumbQueryContent view={threadView} />;
+  }
+  if (titleEnabled && titleView.type !== "items") {
+    return <BreadcrumbQueryContent view={titleView} />;
+  }
+
   return (
-    <BreadcrumbItem className="min-w-0 shrink has-[input]:flex-1">
-      <ChatTitleRename
-        hasMessages={hasMessages}
-        editClassName="w-full"
-        inputClassName="flex-1 text-sm"
-        ownsRenameCommand
-        threadRef={threadRef}
-        title={currentTitle}
-        usedAnonymization={usedAnonymization}
-      />
-    </BreadcrumbItem>
+    <>
+      <BreadcrumbQueryContent view={groupedView} />
+      {groupedThread === null && <BreadcrumbQueryContent view={threadView} />}
+      {titleEnabled && <BreadcrumbQueryContent view={titleView} />}
+      <BreadcrumbItem className="min-w-0 flex-1">
+        <ChatTitleRename
+          hasMessages={hasMessages}
+          editClassName="w-full"
+          ownsRenameCommand
+          threadRef={threadRef}
+          title={currentTitle}
+          usedAnonymization={usedAnonymization}
+        />
+      </BreadcrumbItem>
+    </>
   );
 };
 

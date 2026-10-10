@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import { lookupByEstablishmentId, searchByName } from "./client.js";
 import {
   DenueAPIError,
@@ -14,7 +16,7 @@ const readFixture = async (name: string): Promise<DenueResponse> => {
   const value: unknown = await Bun.file(new URL(name, FIXTURE_DIR)).json();
   // SAFETY: fixtures are committed JSON payloads shaped like DENUE
   // responses; parser tests below assert the important fields.
-  // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   return value as DenueResponse;
 };
 
@@ -133,11 +135,13 @@ describe("lookupByEstablishmentId (fixture)", () => {
     );
 
     expect(
-      lookupByEstablishmentId("6281106", {
-        observer: "unobserved",
-        token: "bad-token",
-      }),
-    ).rejects.toBeInstanceOf(DenueAuthError);
+      await rejectionOf(
+        lookupByEstablishmentId("6281106", {
+          observer: "unobserved",
+          token: "bad-token",
+        }),
+      ),
+    ).toBeInstanceOf(DenueAuthError);
   });
 
   test("wraps malformed successful JSON as DenueAPIError", async () => {
@@ -150,11 +154,13 @@ describe("lookupByEstablishmentId (fixture)", () => {
     );
 
     expect(
-      lookupByEstablishmentId("6281106", {
-        observer: "unobserved",
-        token: "test-token",
-      }),
-    ).rejects.toBeInstanceOf(DenueAPIError);
+      await rejectionOf(
+        lookupByEstablishmentId("6281106", {
+          observer: "unobserved",
+          token: "test-token",
+        }),
+      ),
+    ).toBeInstanceOf(DenueAPIError);
   });
 
   test("rejects malformed optional fields as DenueAPIError", async () => {
@@ -170,11 +176,13 @@ describe("lookupByEstablishmentId (fixture)", () => {
     );
 
     expect(
-      lookupByEstablishmentId("6281106", {
-        observer: "unobserved",
-        token: "test-token",
-      }),
-    ).rejects.toBeInstanceOf(DenueAPIError);
+      await rejectionOf(
+        lookupByEstablishmentId("6281106", {
+          observer: "unobserved",
+          token: "test-token",
+        }),
+      ),
+    ).toBeInstanceOf(DenueAPIError);
   });
 });
 
@@ -242,8 +250,13 @@ describe("searchByName (fixture)", () => {
     );
 
     expect(
-      searchByName("Marriott", { observer: "unobserved", token: "test-token" }),
-    ).rejects.toBeInstanceOf(DenueAPIError);
+      await rejectionOf(
+        searchByName("Marriott", {
+          observer: "unobserved",
+          token: "test-token",
+        }),
+      ),
+    ).toBeInstanceOf(DenueAPIError);
   });
 
   test("redacts tokens echoed by DENUE error-string responses", async () => {
@@ -274,32 +287,40 @@ describe("searchByName (fixture)", () => {
 describe("DENUE client validation", () => {
   test("rejects invalid establishment ids", async () => {
     expect(
-      lookupByEstablishmentId("ABC123", {
-        observer: "unobserved",
-        token: "test-token",
-      }),
-    ).rejects.toBeInstanceOf(DenueValidationError);
+      await rejectionOf(
+        lookupByEstablishmentId("ABC123", {
+          observer: "unobserved",
+          token: "test-token",
+        }),
+      ),
+    ).toBeInstanceOf(DenueValidationError);
   });
 
   test("rejects empty tokens", async () => {
     expect(
-      lookupByEstablishmentId("6281106", {
-        observer: "unobserved",
-        token: " ",
-      }),
-    ).rejects.toBeInstanceOf(DenueAuthError);
+      await rejectionOf(
+        lookupByEstablishmentId("6281106", {
+          observer: "unobserved",
+          token: " ",
+        }),
+      ),
+    ).toBeInstanceOf(DenueAuthError);
   });
 
   test("rejects empty search names and invalid state codes", async () => {
     expect(
-      searchByName("", { observer: "unobserved", token: "test-token" }),
-    ).rejects.toBeInstanceOf(DenueValidationError);
-    expect(
-      searchByName(
-        "Marriott",
-        { observer: "unobserved", token: "test-token" },
-        { stateCode: "99" },
+      await rejectionOf(
+        searchByName("", { observer: "unobserved", token: "test-token" }),
       ),
-    ).rejects.toBeInstanceOf(DenueValidationError);
+    ).toBeInstanceOf(DenueValidationError);
+    expect(
+      await rejectionOf(
+        searchByName(
+          "Marriott",
+          { observer: "unobserved", token: "test-token" },
+          { stateCode: "99" },
+        ),
+      ),
+    ).toBeInstanceOf(DenueValidationError);
   });
 });

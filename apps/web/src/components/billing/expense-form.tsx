@@ -3,6 +3,10 @@ import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
 import { EXPENSE_CATEGORIES, type ExpenseCategory } from "@stll/api-contract";
+import {
+  CURRENCY_CODE_LENGTH,
+  currencyCodeSchema,
+} from "@stll/api-contract/currency-code";
 import { tryToMinorUnits } from "@stll/money";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
@@ -44,6 +48,7 @@ type ExpenseFormProps = {
   onSubmit: (values: ExpenseFormValues) => void | Promise<void>;
   onCancel?: () => void;
   submitLabel?: string;
+  contextState?: "available" | "unavailable";
 };
 
 export const ExpenseForm = ({
@@ -52,6 +57,7 @@ export const ExpenseForm = ({
   onSubmit,
   onCancel,
   submitLabel,
+  contextState = "available",
 }: ExpenseFormProps) => {
   const t = useTranslations();
   const initialCurrency = defaultValues?.currency ?? DEFAULT_CURRENCY;
@@ -62,10 +68,20 @@ export const ExpenseForm = ({
     v.strictObject({
       matterId: v.pipe(
         v.string(),
-        v.check((matterId) => matterId.length > 0, t("billing.matterRequired")),
+        v.check(
+          (matterId) => matterId.length > 0 || contextState === "unavailable",
+          t("billing.matterRequired"),
+        ),
       ),
       dateIncurred: v.string(),
-      currency: v.string(),
+      // One message per field: stop at the first failing currency check.
+      currency: v.config(
+        v.message(
+          currencyCodeSchema,
+          t("billing.sellerProfiles.invalidCurrency"),
+        ),
+        { abortPipeEarly: true },
+      ),
       category: v.picklist(EXPENSE_CATEGORIES),
       description: v.string(),
       billable: v.boolean(),
@@ -123,12 +139,15 @@ export const ExpenseForm = ({
   );
 
   const currentCurrency = useSelector(form.store, (s) => s.values.currency);
-  const formErrors = useSelector(form.store, (state) =>
-    toFormErrors(state.fieldMeta),
-  );
+  const { formErrors, dirty } = useSelector(form.store, (state) => ({
+    formErrors: toFormErrors(state.fieldMeta),
+    dirty: !state.isDefaultValue,
+  }));
 
   return (
     <Form
+      dirty={dirty}
+      onDiscard={() => form.reset()}
       className="flex flex-col gap-4"
       errors={formErrors}
       onSubmit={(e) => {
@@ -141,11 +160,15 @@ export const ExpenseForm = ({
         {(field) => (
           <Field name={field.name}>
             <FieldLabel>{t("common.matter")}</FieldLabel>
-            <MatterCombobox
-              onChange={field.handleChange}
-              value={field.state.value}
-              workspaceId={workspaceId}
-            />
+            {contextState === "unavailable" ? (
+              <span>{t("common.unavailable")}</span>
+            ) : (
+              <MatterCombobox
+                onChange={field.handleChange}
+                value={field.state.value}
+                workspaceId={workspaceId}
+              />
+            )}
             <FieldError />
           </Field>
         )}
@@ -223,21 +246,22 @@ export const ExpenseForm = ({
             </Field>
           )}
         </form.Field>
-        <div className="flex w-20 flex-col gap-1.5">
-          <Label>{t("common.currency")}</Label>
-          <form.Field name="currency">
-            {(field) => (
+        <form.Field name="currency">
+          {(field) => (
+            <Field className="w-20" name={field.name}>
+              <FieldLabel>{t("common.currency")}</FieldLabel>
               <Input
                 dir="ltr"
-                maxLength={3}
+                maxLength={CURRENCY_CODE_LENGTH}
                 onChange={(e) =>
                   field.handleChange(e.currentTarget.value.toUpperCase())
                 }
                 value={field.state.value}
               />
-            )}
-          </form.Field>
-        </div>
+              <FieldError />
+            </Field>
+          )}
+        </form.Field>
       </div>
 
       <div className="flex flex-col gap-1.5">

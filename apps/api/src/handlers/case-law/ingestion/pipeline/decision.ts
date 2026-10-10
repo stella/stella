@@ -35,8 +35,8 @@ import {
   PROCESS_DECISION_STATUS,
 } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import type { ProcessResult } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
-import { createSourceMetadataUrlSchemaResolver } from "@/api/handlers/case-law/ingestion/pipeline/source-metadata-schema";
-import type { SourceMetadataUrlSchemaResolver } from "@/api/handlers/case-law/ingestion/pipeline/source-metadata-schema";
+import { createSourceContractResolver } from "@/api/handlers/case-law/ingestion/pipeline/source-contract";
+import type { SourceContractResolver } from "@/api/handlers/case-law/ingestion/pipeline/source-contract";
 import {
   CONTENTION_RECONCILIATION,
   DECISION_REFRESH,
@@ -135,6 +135,7 @@ const settleRowWriteStatus = async ({
  */
 const runDecisionAttempt = async ({
   metadataUrlSchema,
+  statedEcliIdentity,
   input,
   judges,
   sourceId,
@@ -145,7 +146,10 @@ const runDecisionAttempt = async ({
   corpus,
   corpusBatch,
   polarityRules,
+  signal,
+  s3Policy,
 }: ProcessDecisionAttemptOptions): Promise<AttemptStep> => {
+  signal?.throwIfAborted();
   const observation = observeDecision({ input, sourceId, metadataUrlSchema });
   const proposedDecisionId = createSafeId<"caseLawDecision">();
 
@@ -162,6 +166,7 @@ const runDecisionAttempt = async ({
       await resolveDecisionIdentityTx(tx, {
         ...observation,
         sourceId,
+        statedEcliIdentity,
         proposedDecisionId,
       }),
   );
@@ -197,7 +202,10 @@ const runDecisionAttempt = async ({
     return existingPolicyOutcome;
   }
 
+  signal?.throwIfAborted();
   const sourceRawArtifact = await acquireSourceRawArtifact({
+    ...(signal === undefined ? {} : { signal }),
+    ...(s3Policy === undefined ? {} : { s3Policy }),
     result,
     existing,
     preservesExistingDetail: shape.preservesExistingDetail,
@@ -220,6 +228,8 @@ const runDecisionAttempt = async ({
   const attempted = await Result.tryPromise({
     try: async () => {
       const planned = await planDecisionWrite({
+        ...(signal === undefined ? {} : { signal }),
+        ...(s3Policy === undefined ? {} : { s3Policy }),
         metadataUrlSchema,
         result,
         existing,
@@ -237,7 +247,10 @@ const runDecisionAttempt = async ({
       if ("status" in plan) {
         return Result.ok(RECONCILE_CONTENTION);
       }
+      signal?.throwIfAborted();
       const write: DecisionRowWrite = {
+        ...(signal === undefined ? {} : { signal }),
+        ...(s3Policy === undefined ? {} : { s3Policy }),
         ...identity,
         persistedDecisionDate: observation.persistedDecisionDate,
         sourceId,
@@ -300,6 +313,7 @@ const runDecisionAttempt = async ({
     return settled;
   }
 
+  signal?.throwIfAborted();
   const flushed = await enqueueCorpusMirror({
     scopedDb,
     write,
@@ -356,14 +370,17 @@ export const processDecision = async (
     judges = CASE_LAW_JUDGE_DEPENDENCIES,
     ...options
   }: ProcessDecisionOptions,
-  resolveMetadataUrlSchema: SourceMetadataUrlSchemaResolver = createSourceMetadataUrlSchemaResolver(
+  resolveSourceContract: SourceContractResolver = createSourceContractResolver(
     options.scopedDb,
   ),
 ): Promise<ProcessResult> => {
-  const metadataUrlSchema = await resolveMetadataUrlSchema(options.sourceId);
+  const { metadataUrlSchema, statedEcliIdentity } = await resolveSourceContract(
+    options.sourceId,
+  );
   return await processDecisionAttempt({
     ...options,
     metadataUrlSchema,
+    statedEcliIdentity,
     contentionReconciliation: CONTENTION_RECONCILIATION.INITIAL,
     refresh,
     corpus,

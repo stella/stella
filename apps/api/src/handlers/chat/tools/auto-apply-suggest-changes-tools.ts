@@ -33,6 +33,15 @@ import {
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  authorizeDocumentWrite,
+  documentWriteRefusalChatToolError,
+  DocumentWriteRefusedError,
+} from "@/api/lib/entities/authorize-document-write";
+import type {
+  DocumentWriteAccess,
+  NewDocumentVersionOperation,
+} from "@/api/lib/entities/authorize-document-write";
 import { createEntityVersionFromBuffer } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import { loadEntityVersionDocxBuffer } from "@/api/lib/entity-versions/load-entity-version-file-buffer";
 import { resolveDocxEditAuthorName } from "@/api/lib/entity-versions/resolve-docx-edit-author-name";
@@ -41,6 +50,7 @@ import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { openScannedDocxReviewer } from "@/api/lib/file-scan/document-parsers";
 import { scanFile } from "@/api/lib/file-scan/scan";
 import { getScanWarnings } from "@/api/lib/file-scan/warnings";
+import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 /**
@@ -256,8 +266,7 @@ export type CreateAutoApplySuggestChangesToolsProps = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
-  workspaceId: SafeId<"workspace">;
-  entityId: SafeId<"entity">;
+  access: DocumentWriteAccess<NewDocumentVersionOperation>;
   fileFieldId: SafeId<"field">;
   recordAuditEvent: AuditRecorder;
   docxEditRepresentation: DocxEditRepresentation;
@@ -282,8 +291,11 @@ export type CreateAutoApplySuggestChangesToolsProps = {
  * on skips as a whole instead of writing on top of a version the model never
  * saw. The version write re-checks the same id transactionally.
  *
- * `entityId` / `workspaceId` are threaded in from the request's
- * server-validated active-file context, never taken from tool input.
+ * The target document comes from `access`, minted by
+ * `authorizeDocumentWriteAccess` for the request's server-validated active
+ * file, never from tool input. Each call re-runs `authorizeDocumentWrite`
+ * before loading the document, so a document that became read-only after
+ * registration refuses the call before any edit is applied.
  * `docxEditRepresentation` is threaded from the chat session's setting
  * (`chat-schema.ts`), never a model argument.
  */
@@ -291,8 +303,7 @@ export const createAutoApplySuggestChangesTools = ({
   safeDb,
   organizationId,
   userId,
-  workspaceId,
-  entityId,
+  access,
   fileFieldId,
   recordAuditEvent,
   docxEditRepresentation,
@@ -323,6 +334,20 @@ export const createAutoApplySuggestChangesTools = ({
       const applied = await (async (): Promise<
         Result<AutoApplySuggestChangesOutput, ChatToolError>
       > => {
+        const authorized = await authorizeDocumentWrite({ access, safeDb });
+        if (Result.isError(authorized)) {
+          return Result.err(
+            DocumentWriteRefusedError.is(authorized.error)
+              ? documentWriteRefusalChatToolError(authorized.error)
+              : new ChatToolError({
+                  kind: "server-defect",
+                  message: "The document edit could not be authorized",
+                  cause: authorized.error,
+                }),
+          );
+        }
+        const { workspaceId, entityId } = authorized.value.operation;
+
         const authorName = await resolveDocxEditAuthorName({ safeDb, userId });
         if (
           !authorName &&
@@ -454,6 +479,7 @@ export const createAutoApplySuggestChangesTools = ({
               buffer: edited,
               fileName: loaded.fileName,
               mimeType: DOCX_MIME_TYPE,
+              encryption: serverBuiltFileEncryption(),
               source: null,
               writePolicy: {
                 type: "automatic-docx-edit",

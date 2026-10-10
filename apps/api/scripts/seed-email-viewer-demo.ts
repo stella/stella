@@ -33,7 +33,7 @@ import { buildDefaultViewRows } from "@/api/lib/views";
 import { requireLocalDevOpen } from "@/api/runtime-mode";
 
 import { createSeedEmail, SEED_EMAIL_FILE_NAMES } from "./seed-dev";
-import { seedId } from "./seed-utils";
+import { seedFileIdentity, seedId } from "./seed-utils";
 
 const EMAIL_QA_MATTER_NAME = "Email Viewer QA";
 const EMAIL_QA_MATTER_REFERENCE = "DEV/EMAIL";
@@ -235,9 +235,7 @@ const seedEmailViewerDemo = async () => {
       `email-viewer-demo-${target.workspaceId}-${fileName}-file`,
     );
     const content = createSeedEmail(fileName);
-    const sha256Hex = new Bun.CryptoHasher("sha256")
-      .update(content)
-      .digest("hex");
+    const { sha256Hex, sizeBytes } = seedFileIdentity(content);
     const createdAt = new Date(Date.UTC(2026, 6, 14 + index, 9, index * 7));
 
     await db.transaction(
@@ -282,11 +280,14 @@ const seedEmailViewerDemo = async () => {
     );
 
     const s3Key = `${target.organizationId}/${target.workspaceId}/${fileId}.eml`;
-    await writeS3ObjectWithRetry({
-      contentType: EML_MIME_TYPE,
-      data: new Uint8Array(content),
-      key: s3Key,
-    });
+    await writeS3ObjectWithRetry(
+      {
+        contentType: EML_MIME_TYPE,
+        data: new Uint8Array(content),
+        key: s3Key,
+      },
+      { type: "fixture" },
+    );
 
     const fileContent = {
       version: 1,
@@ -294,7 +295,7 @@ const seedEmailViewerDemo = async () => {
       id: fileId,
       fileName,
       mimeType: EML_MIME_TYPE,
-      sizeBytes: content.length,
+      sizeBytes,
       encrypted: false,
       sha256Hex,
       pdfFileId: null,

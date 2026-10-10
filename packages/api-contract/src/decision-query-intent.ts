@@ -529,11 +529,14 @@ export const exactDecisionMatches = <THit extends DecisionHitIdentity>(
  *   is siblings in one file, or one number at several courts;
  *   `selector_unmatched` is a sheet or part that no candidate is known to
  *   carry, so the file's decisions come back rather than one of them, even
- *   when the file shows one; `file_incomplete` is a bare docket finding one
+ *   when the file shows one; for a sheet, only those whose sheet is unknown,
+ *   since one known under another sheet is not the decision named.
+ * - `incomplete_identifier`: a bare docket finding one
  *   decision where stored dockets can still carry their sheet
  *   (`DECISION_DOCKETS_STORED_WITH_SHEETS`), so the file may hold members the
  *   read did not reach.
- * - `none`: nothing answers to it.
+ * - `none`: nothing answers to it, which includes a sheet where every
+ *   candidate is known under another sheet.
  *
  * A docket, a court and a date together are still not a decision: two
  * decisions of one file can be issued on one day, so nothing here ever
@@ -549,7 +552,12 @@ export type DecisionIdentityResolution<THit> =
   | {
       readonly status: "ambiguous";
       readonly candidates: readonly THit[];
-      readonly reason: "several" | "selector_unmatched" | "file_incomplete";
+      readonly reason: "several" | "selector_unmatched";
+    }
+  | {
+      readonly status: "incomplete_identifier";
+      readonly candidates: readonly THit[];
+      readonly missing: readonly ["sheet"];
     };
 
 /** A digit run as a number would read it, so `05` and `5` compare equal. */
@@ -614,55 +622,150 @@ export const ecliSheetOf = (
 const CASE_NUMBER_IDENTIFIER = "case-number";
 const ECLI_IDENTIFIER = "ecli";
 
+/**
+ * How a sheet source's values are read: as a docket spelling of the file
+ * (whose tail may be a sheet or a part), as an ECLI (whose scheme may end on
+ * the sheet), or as a sheet the source stated beside a docket.
+ */
+export type DecisionSheetReading = "docket" | "ecli" | "stated";
+
+/**
+ * Every place a decision's sheet can be known from, and how each is read.
+ * Which of these carries the sheet never changes which decision a lookup
+ * (`resolveDecisionIdentity`) says a reference names. The citation
+ * resolver's SQL maps this one list with a total map of its own, declaring
+ * per source whether it reads it, so a source added here without a decision
+ * on either side fails typecheck.
+ *
+ * - `case-number`: the stored docket, which keeps a sheet the row was
+ *   written with (`DECISION_DOCKETS_STORED_WITH_SHEETS`).
+ * - `published-case-number`: the reference as the court published it.
+ * - `case-number-identifier`: a full file number a publisher supplied.
+ * - `recorded-sheet`: the sheet the source's adapter split off and recorded
+ *   in the decision's metadata, a sheet of the file it was split from only.
+ * - `ecli`, `ecli-identifier`: an ECLI whose scheme ends on the sheet
+ *   (`DECISION_ECLI_SHEET_SCHEMES`).
+ */
+export const DECISION_SHEET_SOURCES = [
+  { source: "case-number", reading: "docket" },
+  { source: "published-case-number", reading: "docket" },
+  { source: "case-number-identifier", reading: "docket" },
+  { source: "recorded-sheet", reading: "stated" },
+  { source: "ecli", reading: "ecli" },
+  { source: "ecli-identifier", reading: "ecli" },
+] as const satisfies readonly {
+  source: string;
+  reading: DecisionSheetReading;
+}[];
+
+export type DecisionSheetSource =
+  (typeof DECISION_SHEET_SOURCES)[number]["source"];
+
+/** The longest sheet a source states on its own that is read as one. */
+export const DECISION_STATED_SHEET_MAX_DIGITS = 8;
+
+const identifierValuesOf = (hit: DecisionHitIdentity, type: string): string[] =>
+  (hit.identifiers ?? [])
+    .filter((identifier) => identifier.type === type)
+    .map(({ value }) => value);
+
+const HIT_SHEET_SOURCE_VALUES = {
+  "case-number": (hit) => [hit.caseNumber],
+  "published-case-number": (hit) =>
+    hit.publishedCaseNumber ? [hit.publishedCaseNumber] : [],
+  "case-number-identifier": (hit) =>
+    identifierValuesOf(hit, CASE_NUMBER_IDENTIFIER),
+  "recorded-sheet": (hit) => (hit.sheetNumber ? [hit.sheetNumber] : []),
+  ecli: (hit) => (hit.ecli === null ? [] : [hit.ecli]),
+  "ecli-identifier": (hit) => identifierValuesOf(hit, ECLI_IDENTIFIER),
+} as const satisfies Record<
+  DecisionSheetSource,
+  (hit: DecisionHitIdentity) => readonly string[]
+>;
+
+const STATED_SHEET_RE = new RegExp(
+  String.raw`^\d{1,${String(DECISION_STATED_SHEET_MAX_DIGITS)}}$`,
+  "u",
+);
+
+type SheetReadingContext = {
+  familyCanonical: string;
+  grammar: DecisionDocketGrammar;
+};
+
+/** A docket spelling as a reference within the file, or null for another. */
+const fileReferenceOf = (
+  docket: string,
+  { familyCanonical, grammar }: SheetReadingContext,
+): DecisionDocketReference | null => {
+  const reference = readDecisionDocketReference(docket, { grammar });
+  return reference?.family.canonical === familyCanonical ? reference : null;
+};
+
+const SHEET_READINGS = {
+  docket: (value, context) =>
+    fileReferenceOf(value, context)?.selector ?? { kind: "none" },
+  ecli: (value, { familyCanonical }) => {
+    const sheet = ecliSheetOf(value, familyCanonical);
+    return sheet === null ? { kind: "none" } : { kind: "sheet", value: sheet };
+  },
+  // Ingestion splits the recorded sheet off the reference as the court
+  // published it and stores the docket that remains (`splitCaseReference`),
+  // so it is a sheet of the stored docket's file only: a hit reached through
+  // a parallel file number does not carry it here. The remainder is read
+  // rather than the published reference, whose sheet the grammar may not
+  // take (more than four digits) though the split did.
+  stated: (value, context, { caseNumber }) => {
+    const stated = value.trim();
+    return STATED_SHEET_RE.test(stated) &&
+      fileReferenceOf(caseNumber, context) !== null
+      ? { kind: "sheet", value: numeral(stated) }
+      : { kind: "none" };
+  },
+} as const satisfies Record<
+  DecisionSheetReading,
+  (
+    value: string,
+    context: SheetReadingContext,
+    hit: DecisionHitIdentity,
+  ) => DecisionDocketSelector
+>;
+
 type CarriedSelectors = { sheets: Set<string>; parts: Set<string> };
 
 /**
- * Every selector a hit is known to carry within the file: from each docket
- * spelling of the file it stores (its own, the reference as the court
- * published it, and a full file number a publisher supplied beside it), from
- * the sheet its source recorded, and from each ECLI whose scheme ends on the
- * sheet.
+ * Every selector a hit is known to carry within the file, read from each of
+ * `DECISION_SHEET_SOURCES` in `sources` (all of them when absent). A docket
+ * spelling of another file carries none of this one's.
  */
 const selectorsOfHit = (
   hit: DecisionHitIdentity,
-  familyCanonical: string,
-  grammar: DecisionDocketGrammar,
+  context: SheetReadingContext,
+  sources: ReadonlySet<DecisionSheetSource> | undefined,
 ): CarriedSelectors => {
   const sheets = new Set<string>();
   const parts = new Set<string>();
-  const dockets = [
-    hit.caseNumber,
-    ...(hit.publishedCaseNumber ? [hit.publishedCaseNumber] : []),
-    ...(hit.identifiers ?? [])
-      .filter(({ type }) => type === CASE_NUMBER_IDENTIFIER)
-      .map(({ value }) => value),
-  ];
-  for (const docket of dockets) {
-    const reference = readDecisionDocketReference(docket, { grammar });
-    if (reference === null || reference.family.canonical !== familyCanonical) {
+  for (const { source, reading } of DECISION_SHEET_SOURCES) {
+    if (sources !== undefined && !sources.has(source)) {
       continue;
     }
-    if (reference.selector.kind === "sheet") {
-      sheets.add(reference.selector.value);
-    } else if (reference.selector.kind === "part") {
-      parts.add(reference.selector.value);
+    for (const value of HIT_SHEET_SOURCE_VALUES[source](hit)) {
+      const selector = SHEET_READINGS[reading](value, context, hit);
+      switch (selector.kind) {
+        case "none":
+          break;
+        case "sheet":
+          sheets.add(selector.value);
+          break;
+        case "part":
+          parts.add(selector.value);
+          break;
+        default: {
+          selector satisfies never;
+          return panic(`Unhandled docket selector: ${String(selector)}`);
+        }
+      }
     }
-  }
-  const eclis = [
-    ...(hit.ecli === null ? [] : [hit.ecli]),
-    ...(hit.identifiers ?? [])
-      .filter(({ type }) => type === ECLI_IDENTIFIER)
-      .map(({ value }) => value),
-  ];
-  for (const ecli of eclis) {
-    const sheet = ecliSheetOf(ecli, familyCanonical);
-    if (sheet !== null) {
-      sheets.add(sheet);
-    }
-  }
-  const stated = hit.sheetNumber?.trim();
-  if (stated !== undefined && /^\d{1,8}$/u.test(stated)) {
-    sheets.add(numeral(stated));
   }
   return { sheets, parts };
 };
@@ -686,10 +789,19 @@ const resolvedAmong = <THit>(
  * file; a sheet or part narrows it to the decision known to carry that
  * selector, and to nothing arbitrary when none is.
  */
+type ResolveDecisionIdentityOptions = ExactDecisionMatchesOptions & {
+  /**
+   * The sheet sources a selector is read from; every one when absent. A
+   * reader that adjudicates sheets from only some of them (the citation
+   * resolver's SQL) is held to the answer a lookup gives over the same ones.
+   */
+  readonly sheetSources?: ReadonlySet<DecisionSheetSource> | undefined;
+};
+
 export const resolveDecisionIdentity = <THit extends DecisionHitIdentity>(
   identifier: DecisionIdentifierIntent,
   hits: readonly THit[],
-  options: ExactDecisionMatchesOptions = {},
+  options: ResolveDecisionIdentityOptions = {},
 ): DecisionIdentityResolution<THit> => {
   const family = exactDecisionMatches(identifier, hits, options);
   if (identifier.kind !== "docket") {
@@ -709,9 +821,9 @@ export const resolveDecisionIdentity = <THit extends DecisionHitIdentity>(
       DECISION_DOCKETS_STORED_WITH_SHEETS[identifier.jurisdiction]
     ) {
       return {
-        status: "ambiguous",
+        status: "incomplete_identifier",
         candidates: family,
-        reason: "file_incomplete",
+        missing: ["sheet"],
       };
     }
     return resolvedAmong(family, "docket");
@@ -722,7 +834,11 @@ export const resolveDecisionIdentity = <THit extends DecisionHitIdentity>(
     grammar,
   );
   const known = family.map((hit) => {
-    const { parts, sheets } = selectorsOfHit(hit, familyCanonical, grammar);
+    const { parts, sheets } = selectorsOfHit(
+      hit,
+      { familyCanonical, grammar },
+      options.sheetSources,
+    );
     return { hit, carried: selector.kind === "sheet" ? sheets : parts };
   });
   const selected = known
@@ -733,9 +849,21 @@ export const resolveDecisionIdentity = <THit extends DecisionHitIdentity>(
   }
   // Nothing known to carry what the reference printed: the file comes back,
   // even when it shows one decision, which may be a sibling of the one named.
+  // A sibling known under another sheet is not it, whichever source states
+  // that sheet; the read never reaches a row stored under another sheet, so
+  // counting the others in would let storage decide the answer. Where every
+  // candidate is known under another sheet nothing answers (`none`), as when
+  // the read reaches no row at all. A part selector keeps the whole file.
+  const open =
+    selector.kind === "sheet"
+      ? known.filter(({ carried }) => carried.size === 0).map(({ hit }) => hit)
+      : family;
+  if (open.length === 0) {
+    return { status: "none" };
+  }
   return {
     status: "ambiguous",
-    candidates: family,
+    candidates: open,
     reason: "selector_unmatched",
   };
 };
@@ -760,6 +888,7 @@ export const namedDecisionsOf = <THit extends DecisionHitIdentity>(
     case "unique":
       return [resolution.decision];
     case "ambiguous":
+    case "incomplete_identifier":
       return resolution.candidates;
     default: {
       resolution satisfies never;

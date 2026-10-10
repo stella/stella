@@ -52,7 +52,7 @@ type Success<T extends (...args: never[]) => unknown> = Exclude<
 
 // Display caps cover the stored identity columns at four bytes per code point.
 const identity = {
-  id: boundedString(36),
+  id: tSafeId("caseLawDecision"),
   caseNumber: boundedString(1024),
   slug: nullableBoundedString(1024),
   country: boundedString(12),
@@ -78,6 +78,23 @@ const page = <T extends Parameters<typeof t.Array>[0]>(
       items: t.Array(item, { maxItems }),
       limit: t.Number(),
       nextCursor: nullableBoundedString(4096),
+    },
+    { additionalProperties: false },
+  );
+// A sitemap answers one whole index or shard: its limit is the fixed capacity
+// and there is never a next page.
+const sitemapPage = <
+  T extends Parameters<typeof t.Array>[0],
+  TLimit extends number,
+>(
+  item: T,
+  limit: TLimit,
+) =>
+  t.Object(
+    {
+      items: t.Array(item, { maxItems: limit }),
+      limit: t.Literal(limit),
+      nextCursor: t.Null(),
     },
     { additionalProperties: false },
   );
@@ -194,7 +211,8 @@ export const corpusStatusResponseSchema = t.Object(
 const relatedDecision = t.Object(
   {
     ...decision,
-    id: tSafeId("caseLawDecision"),
+    courtAbbreviation: nullableBoundedString(2048),
+    sourceUrl: nullableBoundedString(8192),
     caseNumberType: t.UnionEnum(DECISION_PRIMARY_REFERENCE_TYPES),
     citationAuthority: t.Number(),
   } satisfies Record<
@@ -205,7 +223,7 @@ const relatedDecision = t.Object(
 );
 const citation = t.Object(
   {
-    id: boundedString(36),
+    id: tSafeId("caseLawCitation"),
     citationText: boundedString(16_384),
     sectionIndex: numberOrNull,
     treatment: t.UnionEnum(CITATION_TREATMENTS),
@@ -217,7 +235,7 @@ const citation = t.Object(
 // carries unresolved rows.
 const leadingCitation = t.Object(
   {
-    id: boundedString(36),
+    id: tSafeId("caseLawCitation"),
     citationText: boundedString(16_384),
     sectionIndex: numberOrNull,
     treatment: t.UnionEnum(CITATION_TREATMENTS),
@@ -271,7 +289,7 @@ export const citationSummaryResponseSchema = t.Object(
   >,
   { additionalProperties: false },
 );
-export const sitemapShardsResponseSchema = page(
+export const sitemapShardsResponseSchema = sitemapPage(
   t.Object(
     {
       bucket: boundedString(128),
@@ -288,7 +306,7 @@ export const sitemapShardsResponseSchema = page(
   LIMITS.caseLawSitemapIndexEntryLimit,
 );
 const sitemapDecision = { ...identity, updatedAt: boundedString(128) };
-export const sitemapDecisionsResponseSchema = page(
+export const sitemapDecisionsResponseSchema = sitemapPage(
   t.Object(
     {
       ...sitemapDecision,

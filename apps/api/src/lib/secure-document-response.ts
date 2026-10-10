@@ -1,4 +1,5 @@
 import { contentDisposition } from "@/api/lib/content-disposition";
+import { markContentDeliveryIntent } from "@/api/lib/files/content-delivery";
 import type { SanitizedFileName } from "@/api/lib/sanitize-filename";
 import { RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS } from "@/api/lib/security-headers";
 
@@ -46,5 +47,6 @@ export const secureDocumentResponse = ({
     headers.delete("Content-Length");
   }
 
+  markContentDeliveryIntent();
   return new Response(body, { headers });
 };

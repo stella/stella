@@ -3,10 +3,17 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
-import { clauseCategories, clauses } from "@/api/db/schema";
+import { auditLogs, clauseCategories, clauses } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
+import {
+  createAuditRecorder,
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+} from "@/api/lib/audit-log";
+import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -22,6 +29,7 @@ import { importHandler } from "./import";
 let testDb: TestDatabase;
 let ids: TestIds;
 let safeDb: SafeDb;
+let recordAuditEvent: AuditRecorder;
 const seededClauseIds: SafeId<"clause">[] = [];
 const seededCategoryIds: SafeId<"clauseCategory">[] = [];
 
@@ -31,6 +39,13 @@ beforeAll(async () => {
   ids = fixture.ids;
   const scoped = createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1);
   safeDb = toSafeDbMock(asTestRaw<ScopedDb>(scoped));
+  recordAuditEvent = createAuditRecorder({
+    organizationId: ids.orgA,
+    workspaceId: null,
+    userId: ids.userA1,
+    request: new Request("https://example.test/clauses/export"),
+    server: null,
+  });
 });
 
 afterAll(async () => {
@@ -46,6 +61,26 @@ afterAll(async () => {
 });
 
 describe("JSON and CSV Export/Import Integration", () => {
+  test.each(["csv", "json"] as const)(
+    "withholds %s export when audit recording fails",
+    async (format) => {
+      const res = await Result.gen(() =>
+        exportHandler({
+          safeDb,
+          organizationId: ids.orgA,
+          query: { format },
+          recordAuditEvent: async () => {
+            throw new HandlerError({
+              status: 500,
+              message: "Audit fixture unavailable",
+            });
+          },
+        }),
+      );
+      expect(Result.isError(res)).toBe(true);
+    },
+  );
+
   test("exports existing clauses to CSV when requested", async () => {
     const clauseId = toSafeId<"clause">(Bun.randomUUIDv7());
     seededClauseIds.push(clauseId);
@@ -65,9 +100,14 @@ describe("JSON and CSV Export/Import Integration", () => {
       createdBy: ids.userA1,
     });
 
+    const priorDeliveryRows = await testDb
+      .select({ id: auditLogs.id })
+      .from(auditLogs)
+      .where(eq(auditLogs.resourceId, "clause-library"));
     const res = await Result.gen(() =>
       exportHandler({
         safeDb,
+        recordAuditEvent,
         organizationId: ids.orgA,
         query: { ids: clauseId, format: "csv" },
       }),
@@ -78,6 +118,20 @@ describe("JSON and CSV Export/Import Integration", () => {
       const response = res.value;
       expect(response.status).toBe(200);
       expect(response.headers.get("Content-Type")).toBe("text/csv");
+      const deliveryRows = await testDb
+        .select()
+        .from(auditLogs)
+        .where(eq(auditLogs.resourceId, "clause-library"));
+      const currentDeliveryRows = deliveryRows.filter(
+        (row) => !priorDeliveryRows.some((prior) => prior.id === row.id),
+      );
+      expect(currentDeliveryRows).toHaveLength(1);
+      expect(currentDeliveryRows.at(0)).toMatchObject({
+        action: AUDIT_ACTION.DOWNLOAD,
+        resourceType: AUDIT_RESOURCE_TYPE.CLAUSE,
+        userId: ids.userA1,
+        metadata: { format: "csv" },
+      });
 
       const csvText = await response.text();
       expect(
@@ -107,9 +161,14 @@ describe("JSON and CSV Export/Import Integration", () => {
       createdBy: ids.userA1,
     });
 
+    const priorDeliveryRows = await testDb
+      .select({ id: auditLogs.id })
+      .from(auditLogs)
+      .where(eq(auditLogs.resourceId, "clause-library"));
     const res = await Result.gen(() =>
       exportHandler({
         safeDb,
+        recordAuditEvent,
         organizationId: ids.orgA,
         query: { ids: clauseId },
       }),
@@ -120,6 +179,20 @@ describe("JSON and CSV Export/Import Integration", () => {
       const response = res.value;
       expect(response.status).toBe(200);
       expect(response.headers.get("Content-Type")).toBe("application/json");
+      const deliveryRows = await testDb
+        .select()
+        .from(auditLogs)
+        .where(eq(auditLogs.resourceId, "clause-library"));
+      const currentDeliveryRows = deliveryRows.filter(
+        (row) => !priorDeliveryRows.some((prior) => prior.id === row.id),
+      );
+      expect(currentDeliveryRows).toHaveLength(1);
+      expect(currentDeliveryRows.at(0)).toMatchObject({
+        action: AUDIT_ACTION.DOWNLOAD,
+        resourceType: AUDIT_RESOURCE_TYPE.CLAUSE,
+        userId: ids.userA1,
+        metadata: { format: "json" },
+      });
 
       const jsonText = await response.text();
       const payload = JSON.parse(jsonText);
@@ -197,6 +270,7 @@ describe("JSON and CSV Export/Import Integration", () => {
     const exportResult = await Result.gen(() =>
       exportHandler({
         safeDb,
+        recordAuditEvent,
         organizationId: ids.orgA,
         query: { ids: clauseId, format: "csv" },
       }),

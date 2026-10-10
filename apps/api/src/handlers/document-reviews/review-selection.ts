@@ -5,6 +5,7 @@ import type { DocumentReviewRef } from "@/api/handlers/document-reviews/schemas"
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ReviewFile } from "@/api/lib/document-review/prepare-review-files";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { encryptedContentError } from "@/api/lib/files/detect-file-encryption";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 type ReviewEntityRow = {
@@ -67,6 +68,9 @@ const resolveOne = (
         message: "Reference comparison currently supports DOCX files only.",
       }),
     );
+  }
+  if (field.content.encrypted) {
+    return Result.err(encryptedContentError());
   }
 
   return Result.ok({

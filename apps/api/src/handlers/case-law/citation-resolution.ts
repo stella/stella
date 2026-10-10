@@ -25,9 +25,12 @@
  *   one that reads an identity rather than a word. One docket names a case
  *   file, and a court can rule in it more than once, so the docket alone
  *   leaves those decisions indistinguishable. The court names the one it
- *   means by the sheet the document sits on — "č. j. 8 As 287/2020-33" — and
- *   that sheet is the last segment of the decision's ECLI. When exactly one
- *   time-valid candidate answers to it, the link goes there.
+ *   means by the sheet the document sits on — "č. j. 8 As 287/2020-33" —
+ *   which a candidate is known to carry from its recorded sheet or an ECLI
+ *   in a sheet scheme (`SQL_READ_SHEET_SOURCES`), read as a lookup reads
+ *   them. A sheet known only from a docket spelling is left to a lookup.
+ *   When exactly one time-valid candidate answers to it, the link goes
+ *   there.
  * - **The text names the date.** The second adjudication rule, for the
  *   citations that print no sheet: "rozsudek … ze dne 17. 2. 2021, č. j. …".
  *   When exactly one candidate carries that date, the link goes there. Two
@@ -85,6 +88,13 @@ import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import type { CaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
+import {
+  DECISION_ECLI_SHEET_SCHEMES,
+  DECISION_SHEET_SOURCES,
+  DECISION_STATED_SHEET_MAX_DIGITS,
+} from "@stll/api-contract/decision-query-intent";
+import type { DecisionSheetSource } from "@stll/api-contract/decision-query-intent";
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifierType } from "@stll/legal-ast/decision-identifier";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -99,6 +109,11 @@ import {
   CITATION_DECISION_TYPE_HINT_FAMILIES,
   CITATION_DECISION_TYPE_HINTS,
 } from "@/api/handlers/case-law/citation-decision-type-hint";
+import {
+  runCitationGraphTransaction,
+  tryCitationGraphTransaction,
+  type CitationGraphTransaction,
+} from "@/api/handlers/case-law/citation-graph-transaction";
 import { citationResolutionPolicyRows } from "@/api/handlers/case-law/citation-jurisdiction-policy";
 import {
   CITATION_RESOLUTION_RULE,
@@ -120,12 +135,7 @@ import { executedRows } from "@/api/lib/db/executed-rows";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 import { isRecord } from "@/api/lib/type-guards";
 
-/**
- * Structural, not the `Transaction` type: the pipeline passes its open
- * transaction and the tests pass a pglite handle, and importing the concrete
- * type would pull the connection singleton into a module that only ever
- * executes SQL. Same shape the citation-authority recompute takes.
- */
+/** Read-only queries need SQL execution without the graph mutation capability. */
 type CitationResolutionTx = {
   execute: (query: SQL) => Promise<unknown>;
 };
@@ -136,36 +146,219 @@ const decisionTypeArray = (types: readonly string[]): SQL =>
     sql`, `,
   )}]::varchar[]`;
 
+/** A digit run as a number reads, so `033` and `33` compare equal. */
+const numeralSql = (digits: SQL): SQL =>
+  sql`regexp_replace(${digits}, '^0+(?=[0-9])', '')`;
+
+/** A file key's numbers in order, without leading zeros: `8.287.2020`. */
+const familyNumbersSql = (familyKey: SQL): SQL => sql`
+  btrim(regexp_replace(regexp_replace(
+    '.' || regexp_replace(${familyKey}, '[^0-9]+', '.', 'g') || '.',
+    '\\.0+(?=[0-9])', '.', 'g'),
+    '\\.\\.+', '.', 'g'), '.')`;
+
+const ECLI_SHEET_SCHEMES = Object.keys(DECISION_ECLI_SHEET_SCHEMES);
+
+/** An ECLI's ordinal: everything after its fourth colon, or null. */
+const ecliOrdinalSql = (ecli: SQL): SQL =>
+  sql`substring(${ecli} from '^(?:[^:]*:){4}(.*)$')`;
+
 /**
- * A candidate that answers to the sheet number the citing text printed.
- *
- * Two published spellings carry it, and a court uses whichever it uses. The
- * ECLI's last segment is the sheet
- * (`ECLI:CZ:NSS:2021:8.As.287.2020.33` is sheet 33 of `8 As 287/2020`), and a
- * publisher that supplies the full file number instead leaves it on a
- * `case-number` identifier row, where docket normalisation keeps the sheet on
- * the key. Both are matched by concatenation rather than a pattern built from
- * the column, so the sheet travels as a bind parameter; the column's CHECK
- * keeps it to digits, which carry no `LIKE` metacharacter.
- *
- * `holder` is the candidate decision's alias and `sheetNumber` the printed
- * sheet.
+ * The all-digit segments of an ordinal before its last one, each without
+ * leading zeros, between dots: `8.As.287.2020.33` reads `.8.287.2020.`.
  */
-export const holderAnswersSheetSql = (holder: SQL, sheetNumber: SQL): SQL =>
-  // sql-perf-allow: bounded by CITATION_CANDIDATE_SCAN_CAP candidates per walk (its one reader)
-  sql`
-  ${sheetNumber} IS NOT NULL
-  AND (
-        ${holder}.ecli LIKE ('%.' || ${sheetNumber})
-     OR EXISTS (
+const ecliLeadingNumbersSql = (ordinal: SQL): SQL => sql`
+  regexp_replace(regexp_replace(
+    '.' || regexp_replace(${ordinal}, '\\.?[^.]*$', '') || '.',
+    '\\.(?=\\.)|\\.[^.]*[^0-9.][^.]*(?=\\.)', '', 'g'),
+    '\\.0+(?=[0-9])', '.', 'g')`;
+
+const identifierValuesSql = (
+  holder: SQL,
+  type: DecisionIdentifierType,
+): SQL => sql`
+  SELECT sheet_identifier.value
+    FROM ${caseLawDecisionIdentifiers} sheet_identifier
+   WHERE sheet_identifier.decision_id = ${holder}.id
+     AND sheet_identifier.type = ${type}`;
+
+/**
+ * Whether the resolver's SQL adjudicates a cited sheet from a sheet source.
+ *
+ * - `read`: `values` is where the source is stored on a candidate, as a
+ *   relation of text values, read where a lookup (`readDecisionIdentityHits`)
+ *   reads it.
+ * - `lookup-only`: the source is read by a lookup alone. A docket spelling
+ *   is read there through its jurisdiction's grammar (citation prefixes,
+ *   junk tails, case-sensitive registry marks), which SQL cannot reproduce
+ *   without mirroring the grammar by hand, so a citation is not resolved on
+ *   a sheet known only from one.
+ */
+type SheetSourceSql =
+  | { kind: "read"; values: (holder: SQL) => SQL }
+  | { kind: "lookup-only"; reason: string };
+
+const DOCKET_READ_BY_GRAMMAR =
+  "a docket spelling is read through its jurisdiction's grammar";
+
+/**
+ * Every sheet source's disposition in SQL. Total, so a source added to
+ * `DECISION_SHEET_SOURCES` must be declared read or lookup-only here. The
+ * recorded sheet is the metadata the adapter wrote, never the `sheet_number`
+ * column, which the public reader is not granted.
+ */
+const SHEET_SOURCE_SQL = {
+  "case-number": { kind: "lookup-only", reason: DOCKET_READ_BY_GRAMMAR },
+  "published-case-number": {
+    kind: "lookup-only",
+    reason: DOCKET_READ_BY_GRAMMAR,
+  },
+  "case-number-identifier": {
+    kind: "lookup-only",
+    reason: DOCKET_READ_BY_GRAMMAR,
+  },
+  "recorded-sheet": {
+    kind: "read",
+    values: (holder) => sql`VALUES (${holder}.metadata ->> 'sheetNumber')`,
+  },
+  ecli: {
+    kind: "read",
+    values: (holder) => sql`VALUES (${holder}.ecli::text)`,
+  },
+  "ecli-identifier": {
+    kind: "read",
+    values: (holder) =>
+      identifierValuesSql(holder, DECISION_IDENTIFIER_TYPES.ECLI),
+  },
+} as const satisfies Record<DecisionSheetSource, SheetSourceSql>;
+
+type SqlReadSheetSource = {
+  [
+    TSource in DecisionSheetSource
+  ]: (typeof SHEET_SOURCE_SQL)[TSource]["kind"] extends "read"
+    ? TSource
+    : never;
+}[DecisionSheetSource];
+
+type SqlReadSheetSourceEntry = Extract<
+  (typeof DECISION_SHEET_SOURCES)[number],
+  { source: SqlReadSheetSource }
+>;
+
+const SQL_READ_SHEET_SOURCE_ENTRIES = DECISION_SHEET_SOURCES.filter(
+  (entry): entry is SqlReadSheetSourceEntry =>
+    SHEET_SOURCE_SQL[entry.source].kind === "read",
+);
+
+/**
+ * The sheet sources the resolver's SQL adjudicates from, which a lookup
+ * restricted to them (`resolveDecisionIdentity`'s `sheetSources`) must agree
+ * with.
+ */
+export const SQL_READ_SHEET_SOURCES: ReadonlySet<DecisionSheetSource> = new Set(
+  SQL_READ_SHEET_SOURCE_ENTRIES.map(({ source }) => source),
+);
+
+type CitedSheet = {
+  /** The printed sheet, digits only. */
+  sheetNumber: SQL;
+  /** The cited file's key, as a citation's `citation_key` holds it. */
+  familyKey: SQL;
+};
+
+/**
+ * The readings of the sources SQL reads, each the predicate that a value
+ * carries the cited sheet of the cited file. Total over exactly those
+ * readings, so declaring a docket source `read` fails typecheck until a
+ * docket reading exists here. The function a lookup reads them by is
+ * `selectorsOfHit` in `decision-query-intent.ts`;
+ * `citation-sheet-sources.db.test.ts` holds the two to one answer.
+ */
+const SHEET_READING_SQL = {
+  // The segment after this file's own numbers, in a scheme that puts the
+  // sheet there (`ecliSheetOf`).
+  ecli: (value, { familyKey, sheetNumber }) => {
+    const ordinal = ecliOrdinalSql(value);
+    const last = sql`substring(${ordinal} from '([^.]*)$')`;
+    const suffix = sql`('.' || ${familyNumbersSql(familyKey)} || '.')`;
+    return sql`(
+          upper(split_part(${value}, ':', 2) || ':' || split_part(${value}, ':', 3))
+            IN (${sql.join(
+              ECLI_SHEET_SCHEMES.map((scheme) => sql`${scheme}`),
+              sql`, `,
+            )})
+      AND ${last} ~ '^[0-9]+$'
+      AND ${numeralSql(last)} = ${numeralSql(sheetNumber)}
+      AND ${familyNumbersSql(familyKey)} <> ''
+      AND right(${ecliLeadingNumbersSql(ordinal)}, length(${suffix})) = ${suffix}
+    )`;
+  },
+  // A sheet of the file it was split from only: the candidate's stored
+  // docket, which the adapter split it off, is the cited file under the
+  // citation key and read as a file by its grammar at ingestion
+  // (`docket_family_key`). The key alone folds the letter case a grammar
+  // keeps (`NAD 224/2014` reads as no file).
+  stated: (value, { sheetNumber, familyKey }, holder) => sql`(
+        btrim(${value}) ~ ${String.raw`^[0-9]{1,${String(DECISION_STATED_SHEET_MAX_DIGITS)}}$`}
+    AND ${numeralSql(sql`btrim(${value})`)} = ${numeralSql(sheetNumber)}
+    AND ${holder}.citation_key = ${familyKey}
+    AND ${holder}.docket_family_key IS NOT NULL
+  )`,
+} as const satisfies Record<
+  SqlReadSheetSourceEntry["reading"],
+  (value: SQL, cited: CitedSheet, holder: SQL) => SQL
+>;
+
+/**
+ * The candidate columns `holderAnswersSheetSql` reads, which every relation
+ * it is applied to must carry.
+ */
+const HOLDER_SHEET_COLUMNS = [
+  "metadata",
+  "citation_key",
+  "docket_family_key",
+] as const;
+
+const holderSheetColumnsSql = (holder: SQL): SQL =>
+  sql.join(
+    HOLDER_SHEET_COLUMNS.map((column) => sql`${holder}.${sql.raw(column)}`),
+    sql`, `,
+  );
+
+type HolderAnswersSheetSqlOptions = CitedSheet & {
+  /** The candidate decision's alias. */
+  holder: SQL;
+};
+
+/**
+ * A candidate that answers to the sheet the citing text printed, known from
+ * a sheet source SQL reads (`SQL_READ_SHEET_SOURCES`): the sheet recorded
+ * off its stored docket of the cited file, or an ECLI in a sheet scheme. The court prints the sheet the document sits on
+ * ("č. j. 8 As 287/2020-33"); a sheet known only from a docket spelling is
+ * left to a lookup, so such a citation stays unresolved rather than resolved
+ * by a reading that disagrees with the lookup's. The sheet travels as a bind
+ * parameter, never as a pattern.
+ */
+export const holderAnswersSheetSql = ({
+  holder,
+  sheetNumber,
+  familyKey,
+}: HolderAnswersSheetSqlOptions): SQL => {
+  const value = sql.raw("sheet_source.value");
+  return sql`(
+    ${sheetNumber} IS NOT NULL
+    AND (${sql.join(
+      SQL_READ_SHEET_SOURCE_ENTRIES.map(
+        ({ source, reading }) => sql`EXISTS (
           SELECT 1
-          FROM ${caseLawDecisionIdentifiers} sheet_identifier
-          WHERE sheet_identifier.decision_id = ${holder}.id
-            AND sheet_identifier.type = 'case-number'
-            AND sheet_identifier.normalized_value
-                  LIKE ('%-' || ${sheetNumber})
-        )
-      )`;
+            FROM (${SHEET_SOURCE_SQL[source].values(holder)}) AS sheet_source(value)
+           WHERE ${SHEET_READING_SQL[reading](value, { sheetNumber, familyKey }, holder)}
+        )`,
+      ),
+      sql` OR `,
+    )})
+  )`;
+};
 
 /**
  * A candidate's stored decision type as the type rules compare it: folded by
@@ -175,11 +368,6 @@ export const holderAnswersSheetSql = (holder: SQL, sheetNumber: SQL): SQL =>
  */
 export const decisionTypeKeySql = (holder: SQL): SQL =>
   sql`lower(${holder}.decision_type)`;
-
-const sheetMatchSql = holderAnswersSheetSql(
-  sql.raw("k"),
-  sql.raw("b.cited_sheet_number"),
-);
 
 /**
  * The hint vocabulary as a CTE, one row per family: which stored
@@ -265,40 +453,6 @@ const toCount = (value: unknown): number => {
   return Number.isFinite(n) ? n : 0;
 };
 
-/**
- * The key every writer of the citation graph serializes on.
- *
- * Read Committed is not enough here, and the anomaly is not obvious. A batch
- * of the standing walk snapshots a citation as pending; ingestion then commits
- * a decision that matches it and announces the arrival, sees the row still
- * pending in its own snapshot, and correctly concludes there is nothing to
- * reopen; the older batch then commits `unmatched`. The row is terminal, the
- * decision that answers it is stored, and nothing will ever put the two
- * together again.
- *
- * So the walk and the ingestion path take the same transaction-scoped advisory
- * lock — the walk conditionally, because a held walk is a reason to come back
- * later rather than to wait, and ingestion unconditionally, because its work is
- * bounded and must not be dropped. One key, so there is no lock order to get
- * wrong.
- */
-const CITATION_GRAPH_LOCK = sql`hashtext('case_law'), hashtext('citation_resolution_walk')`;
-
-/**
- * Serialize this transaction's citation-graph writes against the standing
- * walk. Taken inside every helper that mutates the graph rather than left to
- * call sites: a caller that forgot would reintroduce exactly the interleaving
- * above, and nothing about the resulting rows would look wrong.
- *
- * Re-entrant within a transaction, so a path that reopens and then resolves
- * pays one wait, not two.
- */
-export const lockCitationGraph = async (
-  tx: CitationResolutionTx,
-): Promise<void> => {
-  await tx.execute(sql`SELECT pg_advisory_xact_lock(${CITATION_GRAPH_LOCK})`);
-};
-
 /** The SQL column name a rule's counter is read from: `unique-key` → `by_rule_unique_key`. */
 const ruleCountColumn = (rule: CitationResolutionRule): string =>
   `by_rule_${rule.replaceAll("-", "_")}`;
@@ -376,7 +530,8 @@ const citationMatchingHoldersSql = ({
          candidate.court,
          candidate.decision_type,
          candidate.ecli,
-         candidate.decision_date
+         candidate.decision_date,
+         ${holderSheetColumnsSql(sql.raw("candidate"))}
   FROM (
     SELECT ${holder}.id,
            ${holder}.court,
@@ -384,6 +539,7 @@ const citationMatchingHoldersSql = ({
            ${holder}.ecli,
            ${holder}.decision_date,
            ${holder}.language,
+           ${holderSheetColumnsSql(holder)},
            CASE
              WHEN ${holder}.language_group_key IS NULL
                THEN 'decision:' || ${holder}.id::text
@@ -408,6 +564,7 @@ const citationMatchingHoldersSql = ({
            ${holder}.ecli,
            ${holder}.decision_date,
            ${holder}.language,
+           ${holderSheetColumnsSql(holder)},
            CASE
              WHEN ${holder}.language_group_key IS NULL
                THEN 'decision:' || ${holder}.id::text
@@ -463,9 +620,9 @@ const classificationCtes = (batch: SQL): SQL => sql`
            m.date_id,
            j.blocked,
            -- The text named the sheet the decision sits on, and exactly one
-           -- candidate answers to it. The sheet is the last segment of the
-           -- decision's ECLI, so this is the decision's own published
-           -- identity rather than a word about it, and it is asked before
+           -- candidate answers to it. The sheet is part of the decision's
+           -- own published identity rather than a word about it, and it is
+           -- asked before
            -- every hint. Bounded like the rules below: a count taken on a
            -- truncated candidate set is a guess.
            (
@@ -553,10 +710,8 @@ const classificationCtes = (batch: SQL): SQL => sql`
                    AND ${courtNameKeySql(sql.raw("k.court"))}
                      = ${courtNameKeySql(sql.raw("b.cited_court_hint"))}
                ))[1] AS court_id,
-               count(*) FILTER (WHERE ${sheetMatchSql}
-               )::int AS sheet_n,
-               (array_agg(k.id) FILTER (WHERE ${sheetMatchSql}
-               ))[1] AS sheet_id,
+               count(*) FILTER (WHERE k.answers_sheet)::int AS sheet_n,
+               (array_agg(k.id) FILTER (WHERE k.answers_sheet))[1] AS sheet_id,
                count(*) FILTER (
                  WHERE b.cited_decision_date IS NOT NULL
                    AND k.decision_date = b.cited_decision_date
@@ -575,6 +730,14 @@ const classificationCtes = (batch: SQL): SQL => sql`
                  WHERE ${decisionTypeKeySql(sql.raw("k"))} = ANY (${decisionTypeArray(PROCEDURAL_DECISION_TYPES)})
                )::int AS procedural_n
           FROM (
+            -- Read once per candidate rather than once per aggregate.
+            SELECT holder.*,
+                   ${holderAnswersSheetSql({
+                     holder: sql.raw("holder"),
+                     sheetNumber: sql.raw("b.cited_sheet_number"),
+                     familyKey: sql.raw("b.citation_key"),
+                   })} AS answers_sheet
+              FROM (
             ${citationMatchingHoldersSql({
               holder: sql.raw("cited"),
               citationKey: sql.raw("b.citation_key"),
@@ -588,6 +751,7 @@ const classificationCtes = (batch: SQL): SQL => sql`
               jurisdictionPredicate: sql`cited.country = ANY (pol.resolves_to)`,
               limit: CITATION_CANDIDATE_SCAN_CAP,
             })}
+              ) holder
           ) k
       ) m ON true
       LEFT JOIN LATERAL (
@@ -752,7 +916,7 @@ const countsOf = (row: Record<string, unknown>): CitationResolutionCounts => ({
  * candidate lookups is `limit`, whatever the corpus holds.
  */
 const resolveCitationBatchIn = async (
-  tx: CitationResolutionTx,
+  tx: CitationGraphTransaction,
   { limit, after }: ResolveCitationBatchOptions,
 ): Promise<CitationResolutionBatch> => {
   // audit: skip — derived citation graph, not a user action
@@ -787,20 +951,18 @@ const resolveCitationBatchIn = async (
  * Settle one batch from an explicit position, waiting for the walk rather than
  * skipping it.
  *
- * Every exported entry point that touches the graph takes the lock, including
- * this one: an unlocked variant sitting beside the locked ones is the call site
- * that reintroduces the interleaving, and the rows it produces look correct.
- * The daemon uses `tryResolveCitationBatch`, which declines instead of waiting
+ * Graph mutations require a transaction admitted by the graph owner. The
+ * daemon uses `tryResolveCitationBatch`, which declines instead of waiting
  * because a held walk is a reason to come back later.
  */
 export const resolveCitationBatch = async (
   scopedDb: ScopedDb,
   options: ResolveCitationBatchOptions,
 ): Promise<CitationResolutionBatch> =>
-  await scopedDb(async (tx) => {
-    await lockCitationGraph(tx);
-    return await resolveCitationBatchIn(tx, options);
-  });
+  await runCitationGraphTransaction(
+    scopedDb,
+    async (tx) => await resolveCitationBatchIn(tx, options),
+  );
 
 /**
  * Settle one batch, or report that another writer is already walking.
@@ -823,15 +985,7 @@ export const tryResolveCitationBatch = async (
   scopedDb: ScopedDb,
   { limit }: { limit: number },
 ): Promise<CitationResolutionBatch | null> =>
-  await scopedDb(async (tx) => {
-    const lockResult: unknown = await tx.execute(
-      sql`SELECT pg_try_advisory_xact_lock(${CITATION_GRAPH_LOCK}) AS locked`,
-    );
-    const lockRow = executedRows(lockResult).at(0);
-    if (!isRecord(lockRow) || lockRow["locked"] !== true) {
-      return null;
-    }
-
+  await tryCitationGraphTransaction(scopedDb, async (tx) => {
     const after = await readCitationResolutionCursor(tx);
     const batch = await resolveCitationBatchIn(tx, { limit, after });
     await writeCitationResolutionCursor(
@@ -869,7 +1023,7 @@ const readCitationResolutionCursor = async (
 };
 
 const writeCitationResolutionCursor = async (
-  tx: CitationResolutionTx,
+  tx: CitationGraphTransaction,
   cursor: CitationResolutionCursor | null,
 ): Promise<void> => {
   // Written as SQL rather than through the query builder: the cursor travels
@@ -908,10 +1062,9 @@ const writeCitationResolutionCursor = async (
  * Bounded by the decision's own citation count, which the extractor caps.
  */
 export const resolveCitationsForDecision = async (
-  tx: CitationResolutionTx,
+  tx: CitationGraphTransaction,
   decisionId: SafeId<"caseLawDecision">,
 ): Promise<CitationResolutionCounts> => {
-  await lockCitationGraph(tx);
   // audit: skip — derived citation graph, not a user action
   const result: unknown = await tx.execute(
     resolutionStatement(sql`AND c.citing_decision_id = ${decisionId}::uuid`),
@@ -966,7 +1119,7 @@ const isCitationResolutionRule = (
  * resolution policy.
  */
 export const classifyCitationsBeforeWrite = async (
-  tx: CitationResolutionTx,
+  tx: CitationGraphTransaction,
   {
     citingDecisionId,
     citations,
@@ -981,7 +1134,6 @@ export const classifyCitationsBeforeWrite = async (
   if (resolvable.length === 0) {
     return new Map();
   }
-  await lockCitationGraph(tx);
   // One jsonb parameter rather than a VALUES list, so the statement's text is
   // the same whatever the decision's citation count and one prepared plan
   // serves every call.
@@ -1085,7 +1237,7 @@ export type ReopenCitationsForKeyOptions = {
  * again. The ambiguity tier reopens the same way.
  */
 export const reopenCitationsForDecisionKey = async (
-  tx: CitationResolutionTx,
+  tx: CitationGraphTransaction,
   {
     citationKey,
     decisionId,
@@ -1093,7 +1245,6 @@ export const reopenCitationsForDecisionKey = async (
     decisionDate,
   }: ReopenCitationsForKeyOptions,
 ): Promise<number> => {
-  await lockCitationGraph(tx);
   const reachedFrom = sql`(
     SELECT pol.citing_country
       FROM (VALUES ${sql.join(
@@ -1171,7 +1322,7 @@ type ReopenCitationsForDecisionIdentifiersOptions = {
 
 /** Reopen typed citations whose candidate set changed with one decision. */
 export const reopenCitationsForDecisionIdentifiers = async (
-  tx: CitationResolutionTx,
+  tx: CitationGraphTransaction,
   {
     identifiers,
     decisionId,
@@ -1183,7 +1334,6 @@ export const reopenCitationsForDecisionIdentifiers = async (
   if (identifiers.length === 0) {
     return 0;
   }
-  await lockCitationGraph(tx);
   const identifierRows = sql.join(
     identifiers.map(
       (identifier) =>
@@ -1283,13 +1433,12 @@ export const reopenCitationsForDecisionIdentifiers = async (
  * creates and the one that leaves an arbitrary authority edge behind.
  */
 export const reopenCitationsForKeys = async (
-  tx: CitationResolutionTx,
+  tx: CitationGraphTransaction,
   citationKeys: readonly string[],
 ): Promise<number> => {
   if (citationKeys.length === 0) {
     return 0;
   }
-  await lockCitationGraph(tx);
   const keys = sql`ARRAY[${sql.join(
     citationKeys.map((key) => sql`${key}`),
     sql`, `,
@@ -1339,10 +1488,9 @@ export const reopenCitationsForKeys = async (
  * citations rather than the table.
  */
 export const reopenCitationsResolvedTo = async (
-  tx: CitationResolutionTx,
+  tx: CitationGraphTransaction,
   decisionId: SafeId<"caseLawDecision">,
 ): Promise<number> => {
-  await lockCitationGraph(tx);
   // audit: skip — derived citation graph, not a user action
   const result: unknown = await tx.execute(sql`
     WITH retracted AS (
@@ -1380,10 +1528,9 @@ export const reopenCitationsResolvedTo = async (
  * Bounded by the citing index, so the cost is this decision's own citations.
  */
 export const reopenCitationsFrom = async (
-  tx: CitationResolutionTx,
+  tx: CitationGraphTransaction,
   decisionId: SafeId<"caseLawDecision">,
 ): Promise<number> => {
-  await lockCitationGraph(tx);
   // audit: skip — derived citation graph, not a user action
   const result: unknown = await tx.execute(sql`
     WITH requeued AS (
@@ -1413,13 +1560,12 @@ export const reopenCitationsFrom = async (
  * this refuses an unbounded one by construction because it takes ids.
  */
 export const reopenCitations = async (
-  tx: CitationResolutionTx,
+  tx: CitationGraphTransaction,
   citationIds: readonly SafeId<"caseLawCitation">[],
 ): Promise<number> => {
   if (citationIds.length === 0) {
     return 0;
   }
-  await lockCitationGraph(tx);
   // audit: skip — derived citation graph, not a user action
   const result: unknown = await tx.execute(sql`
     WITH reopened AS (
@@ -1469,8 +1615,7 @@ export const readjudicateAmbiguousCitations = async (
   scopedDb: ScopedDb,
   { limit, after }: ReadjudicateAmbiguousCitationsOptions,
 ): Promise<ReadjudicateAmbiguousCitationsBatch> =>
-  await scopedDb(async (tx) => {
-    await lockCitationGraph(tx);
+  await runCitationGraphTransaction(scopedDb, async (tx) => {
     // audit: skip — derived citation graph, not a user action
     const picked: unknown = await tx.execute(sql`
       WITH slice AS (

@@ -76,14 +76,14 @@ test("membership is enforced for a resolved base commit", () => {
   }
 });
 
-test("an unresolved base skips only the membership comparison", () => {
+test("an unresolved base fails the membership guard", () => {
   const root = createBaseRepo();
   try {
     writeFileSync(
       path.join(root, "scripts/ledger.txt"),
       "existing\nnew-entry\n",
     );
-    const logs: string[] = [];
+    const errors: string[] = [];
     expect(
       runLedgerMembershipGuard({
         ledgerRel: "scripts/ledger.txt",
@@ -92,14 +92,14 @@ test("an unresolved base skips only the membership comparison", () => {
         label: "test",
         remediation: "remove the entry",
         args: ["--base", "missing-base"],
-        log: (message) => {
-          logs.push(message);
+        log: () => {},
+        error: (message) => {
+          errors.push(message);
         },
-        error: () => {},
       }),
-    ).toBe(0);
-    expect(logs.join("\n")).toContain("membership check skipped");
-    expect(logs.join("\n")).toContain("missing-base");
+    ).toBe(2);
+    expect(errors.join("\n")).toContain("membership cannot be checked");
+    expect(errors.join("\n")).toContain("missing-base");
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

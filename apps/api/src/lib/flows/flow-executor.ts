@@ -10,11 +10,11 @@ import {
 
 import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
 import { drainFanOut } from "@stll/concurrency";
-import { Temporal } from "@stll/time";
+import { todayFor } from "@stll/time";
 
 import type { rootDb, Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
-import { resultTx } from "@/api/db/safe-db";
+import { abortTransaction, resultTx } from "@/api/db/safe-db";
 import {
   entities,
   flowRuns,
@@ -36,13 +36,16 @@ import {
   createAuditRecorder,
 } from "@/api/lib/audit-log";
 import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
+import { resolveMemberAuthorization } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent } from "@/api/lib/content-encryption";
 import { markdownToStellaDocx } from "@/api/lib/docx-authoring/from-markdown";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { TASK_STATUS } from "@/api/lib/entity-constants";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { applicationErrorMessage } from "@/api/lib/errors/application-error-message";
+import { FlowStepError, HandlerError } from "@/api/lib/errors/tagged-errors";
+import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import {
   flowRunCompletedNotification,
   resolveActorUserId,
@@ -81,6 +84,8 @@ import type { NotificationPing } from "@/api/lib/notifications";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { readWorkspaceOrganizationTimeZone } from "@/api/lib/organization-time-zone";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { createRootSafeDb, createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { brandPersistedFlowRunId } from "@/api/lib/safe-id-boundaries";
 import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
@@ -117,11 +122,7 @@ const unwrapOrFlowStepError = <T>(
   return result.value;
 };
 
-/** Expected step-execution failure (bad AI output, doc-compile error, etc). */
-export class FlowStepError extends TaggedError("FlowStepError")<{
-  message: string;
-  cause?: unknown;
-}> {}
+export { FlowStepError } from "@/api/lib/errors/tagged-errors";
 
 /**
  * The completion notice for a run a reviewer finished could not be filed.
@@ -154,6 +155,7 @@ export const executeFlowStep = async (
   { runId: rawRunId, stepIndex }: FlowStepJobData,
   signal: AbortSignal,
   {
+    admission,
     database,
     generateTextForRole = generateTanStackTextForRole,
     makeScopedDb = createRootScopedDb,
@@ -163,7 +165,13 @@ export const executeFlowStep = async (
     createEntity = createEntityFromBuffer,
     loadAIConfig = loadOrgAIConfig,
     taskFeatures = deployedTaskFeatures(),
+    flushSearchRepairs = flushEntitySearchRepairs,
   }: {
+    /**
+     * The step job's admission. Null only when the worker found no tenant or
+     * actor for the run, which the scope check below refuses before any step.
+     */
+    admission: ModelDispatchAdmission | null;
     /** The worker's connection, for the run, step and scope reads. */
     database: Pick<typeof rootDb, "query">;
     /** External model-dispatch boundary; supplied by focused integration tests. */
@@ -176,6 +184,7 @@ export const executeFlowStep = async (
     loadAIConfig?: typeof loadOrgAIConfig | undefined;
     /** Which task features the deployment enables; tests pin it. */
     taskFeatures?: TaskDeploymentFeatures | undefined;
+    flushSearchRepairs?: typeof flushEntitySearchRepairs | undefined;
   },
 ): Promise<void> => {
   const runId = brandPersistedFlowRunId(rawRunId);
@@ -237,6 +246,21 @@ export const executeFlowStep = async (
     ) {
       return null;
     }
+    const authorization = await resolveMemberAuthorization(
+      {
+        organizationId: scope.organizationId,
+        workspaceId: run.workspaceId,
+        userId: actorUserId,
+      },
+      tx,
+    );
+    if (!authorization?.workspace) {
+      abortTransaction(
+        new FlowStepError({
+          message: "The workflow actor is no longer a member of this matter.",
+        }),
+      );
+    }
     await tx
       .update(flowRunSteps)
       .set({ status: "running", startedAt: new Date() })
@@ -265,10 +289,14 @@ export const executeFlowStep = async (
         scopedDb,
         broadcastUpdate,
         taskFeatures,
+        flushSearchRepairs,
       });
       return;
     case "ai": {
       const output = await runAiStep({
+        admission:
+          admission ??
+          panic("flow ai step reached without the step job's admission"),
         stepDef,
         stepIndex,
         run,
@@ -389,6 +417,7 @@ const resolveRunScope = async (
 // ── Step executors ──────────────────────────────────────
 
 type RunAiStepArgs = {
+  admission: ModelDispatchAdmission;
   stepDef: Extract<FlowStep, { kind: "ai" }>;
   stepIndex: number;
   run: LoadedRun;
@@ -405,6 +434,7 @@ const FLOW_AI_SYSTEM_PROMPT =
   "You are a legal-workflow step executor. Follow the step instruction using the provided prior outputs and documents. Respond in Markdown with only the requested content, no preamble.";
 
 const runAiStep = async ({
+  admission,
   stepDef,
   stepIndex,
   run,
@@ -471,6 +501,7 @@ const runAiStep = async ({
     dataClass: "customer",
     role: "chat",
     organizationId,
+    admission,
     tenantWorkspaceIds: [run.workspaceId],
     orgAIConfig,
     managedAIResidency,
@@ -830,6 +861,7 @@ const runCreateDocumentStep = async ({
         // before the extension-preserving pass could protect it.
         fileName: `${stepDef.documentTitle}.docx`,
         mimeType: DOCX_MIME_TYPE,
+        encryption: serverBuiltFileEncryption(),
         afterCreate: async (tx, document) => {
           // The entity creator holds the workspace cap lock before this run lock.
           // Keep the artifact and its owning step in the same commit: cancellation
@@ -1008,6 +1040,11 @@ const raiseReviewTask = async ({
     )
     .limit(1);
   const actorIsMember = membership.length > 0;
+  const workingTargetDate = features.governedWorkflow
+    ? todayFor(
+        await readWorkspaceOrganizationTimeZone(tx, workspaceId),
+      ).toString()
+    : null;
   const task = await Result.gen(() =>
     createTaskEntityHandler({
       tx,
@@ -1020,10 +1057,9 @@ const raiseReviewTask = async ({
         ...(features.governedWorkflow
           ? {
               ...(actorIsMember ? { ownerUserId: actorUserId } : {}),
-              // A gate is due the moment the run reaches it.
-              workingTargetDate: Temporal.Now.instant()
-                .toString({ fractionalSecondDigits: 3 })
-                .slice(0, 10),
+              // A gate is due the moment the run reaches it, on the
+              // organization's day.
+              workingTargetDate,
             }
           : {}),
       },
@@ -1060,6 +1096,7 @@ const pauseAtReviewGate = async ({
   scopedDb,
   broadcastUpdate,
   taskFeatures,
+  flushSearchRepairs,
 }: {
   run: LoadedRun;
   stepIndex: number;
@@ -1069,6 +1106,7 @@ const pauseAtReviewGate = async ({
   scopedDb: ReturnType<typeof createRootScopedDb>;
   broadcastUpdate: typeof broadcastFlowRunUpdate;
   taskFeatures: TaskDeploymentFeatures;
+  flushSearchRepairs: typeof flushEntitySearchRepairs;
 }): Promise<void> => {
   const runId = run.id;
   const workspaceId = run.workspaceId;
@@ -1146,7 +1184,7 @@ const pauseAtReviewGate = async ({
   const { payload, pings, taskEntityId } = paused;
   broadcastUpdate(workspaceId, payload);
   pingNotificationRecipients(pings);
-  flushEntitySearchRepairs([taskEntityId]).catch(captureError);
+  flushSearchRepairs([taskEntityId]).catch(captureError);
 };
 
 const readRunProgress = async (
@@ -1181,8 +1219,7 @@ const readRunProgress = async (
 
 // ── Worker failure finalization ─────────────────────────
 
-const errorMessage = (error: unknown): string =>
-  error instanceof Error ? error.message : "Flow step failed";
+const FLOW_STEP_FAILED_MESSAGE = "Flow step failed";
 
 /**
  * Flip a run (and its current step) to `failed` after the worker exhausts its
@@ -1210,7 +1247,7 @@ export const failFlowRunFromWorker = async (
     return;
   }
   const scope = await resolveRunScope(run, database);
-  const message = errorMessage(error);
+  const message = applicationErrorMessage(error, FLOW_STEP_FAILED_MESSAGE);
   const now = new Date();
 
   const writeFailure = async (

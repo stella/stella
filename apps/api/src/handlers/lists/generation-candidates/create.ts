@@ -9,7 +9,8 @@ import {
   legalListGenerationCandidateSources,
   legalListGenerationRuns,
 } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { legalListRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -17,6 +18,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { ENTITY_PRIORITIES, TASK_STATUSES } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { LIMITS } from "@/api/lib/limits";
 import { parseLegalListSourceLocator } from "@/api/lib/lists/source-locator";
 import type { LegalListSourceLocator } from "@/api/lib/lists/types";
@@ -62,6 +64,7 @@ const bodySchema = t.Object({
   }),
 });
 const config = {
+  featureAccess: { type: "required", featureId: LEGAL_LISTS_FEATURE_ID },
   description:
     "Submit the candidates a generation run produced: per candidate a name, " +
     "description, item type, status, priority, due date, suggested " +
@@ -70,6 +73,8 @@ const config = {
     "the run's own source versions. The run moves from running to review; " +
     "candidates stay proposals until they are accepted or rejected.",
   permissions: { entity: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: legalListRealtimeUpdates,
   mcp: {
     type: "capability",
     reason: "workflow_orchestration",

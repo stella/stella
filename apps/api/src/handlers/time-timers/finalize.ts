@@ -54,6 +54,68 @@ const CONFIRMED_ENTRY_COLUMNS = {
   billedMinutes: timeEntries.billedMinutes,
 };
 type TimeEntryRow = typeof timeEntries.$inferSelect;
+// Exact legacy values travel together; every persisted field is either here
+// or explicitly classified as contextual, recomputed, or reset below.
+// The no-charge disposition and invoice wording were written for the draft's
+// own matter; completing it in another matter starts them over, as it does the
+// rate snapshot.
+const preservedLegacyBilling = (legacy: TimeEntryRow, sameMatter: boolean) => ({
+  dateWorked: legacy.dateWorked,
+  timezoneId: legacy.timezoneId,
+  narrativeLanguage: legacy.narrativeLanguage,
+  noCharge: sameMatter ? legacy.noCharge : false,
+  invoiceNarrative: sameMatter ? legacy.invoiceNarrative : null,
+  taskCode: legacy.taskCode,
+  activityCode: legacy.activityCode,
+});
+const CONTEXTUAL_OR_RESET_LEGACY_FIELDS = [
+  // Identity, matter context and owner are validated for the replacement.
+  "id",
+  "organizationId",
+  "workspaceId",
+  "userId",
+  "activityGroup",
+  "workItemId",
+  // Rate and currency retain their snapshot only in the same matter; the owner
+  // can override billability, and completion supplies the timer narrative.
+  "rateAtEntry",
+  "currency",
+  "billable",
+  "narrative",
+  // Elapsed time, lifecycle and approval provenance belong to the new entry.
+  "durationMinutes",
+  "billedMinutes",
+  "status",
+  "source",
+  "invoiceId",
+  "invoiceAttachment",
+  "splitGroupId",
+  "timerStartedAt",
+  "timerStoppedAt",
+  "createdAt",
+  "updatedAt",
+  "approverUserId",
+  "approvedByUserId",
+  "approvedAt",
+  "returnedByUserId",
+  "returnedAt",
+  "returnComment",
+] as const satisfies readonly (keyof TimeEntryRow)[];
+true satisfies UnprojectedColumns<
+  TimeEntryRow,
+  ReturnType<typeof preservedLegacyBilling>,
+  (typeof CONTEXTUAL_OR_RESET_LEGACY_FIELDS)[number]
+> extends never
+  ? true
+  : never;
+true satisfies UnbackedProjectionKeys<
+  TimeEntryRow,
+  ReturnType<typeof preservedLegacyBilling>,
+  (typeof CONTEXTUAL_OR_RESET_LEGACY_FIELDS)[number]
+> extends never
+  ? true
+  : never;
+
 const UNPROJECTED_CONFIRMED_ENTRY_COLUMNS = [
   // Scope and attribution remain on the owner's draft, not this completion receipt.
   "organizationId",
@@ -300,8 +362,11 @@ const prepareTimer = async ({
           ? { hourlyRate: legacy.rateAtEntry, currency: legacy.currency }
           : undefined,
       body: {
-        dateWorked: legacy?.dateWorked ?? dateResult.value,
+        dateWorked: dateResult.value,
         timezoneId,
+        ...(legacy
+          ? preservedLegacyBilling(legacy, legacy.workspaceId === workspaceId)
+          : {}),
         durationMinutes,
         narrative,
         billable:
@@ -310,9 +375,6 @@ const prepareTimer = async ({
             : legacy?.billable,
         workItemId:
           legacy?.workspaceId === workspaceId ? legacy.workItemId : null,
-        narrativeLanguage: legacy?.narrativeLanguage,
-        taskCode: legacy?.taskCode,
-        activityCode: legacy?.activityCode,
       },
     });
     return Result.ok({

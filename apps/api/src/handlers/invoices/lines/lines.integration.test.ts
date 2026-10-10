@@ -11,6 +11,8 @@ import { Elysia } from "elysia";
 
 import { calculateDocumentTotals } from "@stll/invoicing";
 
+import { user as authUser } from "@/api/db/auth-schema";
+import type { ScopedDb } from "@/api/db/safe-db";
 import {
   BILLING_STATUS,
   expenses,
@@ -18,6 +20,7 @@ import {
   invoiceLines,
   invoices,
   timeEntries,
+  featureEnrolments,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import deleteExpense from "@/api/handlers/expenses/delete";
@@ -27,7 +30,10 @@ import addEntries from "@/api/handlers/invoices/entries/add";
 import readInvoiceById from "@/api/handlers/invoices/get";
 import transitionInvoice from "@/api/handlers/invoices/transition";
 import batchUpdateTimeEntries from "@/api/handlers/time-entries/batch/update";
+import { exportCsvHandler } from "@/api/handlers/time-entries/csv/export";
 import deleteTimeEntryById from "@/api/handlers/time-entries/delete";
+import { exportLedesHandler } from "@/api/handlers/time-entries/ledes/export";
+import { exportPdfHandler } from "@/api/handlers/time-entries/pdf/export";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import {
   AUDIT_ACTION,
@@ -64,6 +70,21 @@ beforeAll(async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
   ids = fixture.ids;
+
+  await testDb
+    .update(authUser)
+    .set({ emailVerified: true })
+    .where(inArray(authUser.id, [ids.userA1]));
+  await testDb
+    .insert(featureEnrolments)
+    .values([
+      {
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+        featureId: "time-billing",
+      },
+    ])
+    .onConflictDoNothing();
 });
 
 afterAll(async () => {
@@ -453,6 +474,114 @@ describe("invoice lines", () => {
       [second, "0.1667", 3333],
     ]);
   });
+
+  test.each(["create", "add", "line"] as const)(
+    "%s retains no-charge time at zero alongside charged time",
+    async (path) => {
+      const free = await seedTimeEntry({ billedMinutes: 60, noCharge: true });
+      const charged = await seedTimeEntry({ billedMinutes: 60 });
+      const dateWorked = {
+        create: "2026-07-21",
+        add: "2026-07-22",
+        line: "2026-07-23",
+      }[path];
+      await testDb
+        .update(timeEntries)
+        .set({ dateWorked })
+        .where(inArray(timeEntries.id, [free, charged]));
+      let invoiceId: SafeId<"invoice">;
+      if (path === "create") {
+        const created = await createInvoice.handler(
+          contextFor(createInvoice.handler, {
+            body: {
+              invoiceNumber: `INV-NC-${free}`,
+              invoiceDate: "2026-09-29",
+              currency: "USD",
+              timeEntryIds: [free, charged],
+            },
+            params: { workspaceId: ids.wsA1 },
+          }),
+        );
+        expect(created).toMatchObject({ totalAmount: 20_000, entryCount: 2 });
+        invoiceId = readId(created, "invoice");
+        seededInvoiceIds.push(invoiceId);
+      } else {
+        invoiceId = await seedInvoice();
+        if (path === "add") {
+          expect(await runAddEntries(invoiceId, [free, charged])).toMatchObject(
+            { totalAmount: 20_000 },
+          );
+        } else {
+          for (const timeEntryId of [free, charged]) {
+            await expectCreated(invoiceId, {
+              source: { type: "time_entry", timeEntryId },
+              vatRateBps: STANDARD_RATE,
+              vatTreatment: "domestic_vat",
+            });
+          }
+        }
+      }
+      const detail = await runGet(invoiceId);
+      expect(detail).toMatchObject({
+        netAmount: 20_000,
+        totalAmount: path === "line" ? 24_200 : 20_000,
+      });
+      expect(
+        readLines(detail).map((line) => [line.timeEntryId, line.netAmount]),
+      ).toEqual([
+        [free, 0],
+        [charged, 20_000],
+      ]);
+      const stored = await testDb.query.invoiceLines.findMany({
+        where: { invoiceId: { eq: invoiceId } },
+        orderBy: { position: "asc" },
+      });
+      expect(
+        stored.map((line) => [
+          line.unitPrice,
+          line.netAmount,
+          line.grossAmount,
+        ]),
+      ).toEqual([
+        [cents(0), cents(0), cents(0)],
+        [
+          cents(20_000),
+          cents(20_000),
+          cents(path === "line" ? 24_200 : 20_000),
+        ],
+      ]);
+      const exportContext = {
+        organizationId: ids.orgA,
+        workspaceId: ids.wsA1,
+        scopedDb: asTestRaw<ScopedDb>(
+          createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+        ),
+        query: {
+          workItemId: ids.entityA1,
+          dateFrom: dateWorked,
+          dateTo: dateWorked,
+        },
+      };
+      const csv = await exportCsvHandler(exportContext);
+      const courtesy = csv
+        .split("\n")
+        .filter((row) => row.includes("Courtesy work"));
+      expect(courtesy).toHaveLength(1);
+      expect(courtesy.every((row) => row.includes(",200.00,USD,0.00,"))).toBe(
+        true,
+      );
+      const pdf = new TextDecoder().decode(
+        await exportPdfHandler(exportContext),
+      );
+      expect(pdf).toContain("Rate: USD 200.00/hr  Amount: USD 0.00");
+      expect(pdf).toContain("Total Amount: USD 200.00");
+      const ledes = await exportLedesHandler(exportContext);
+      const ledesText = ledes.unwrap();
+      expect(ledesText).not.toContain("Courtesy work");
+      expect(ledesText).toContain("|200.00|");
+      expect(ledesText).toContain("Drafted the response");
+    },
+  );
 
   test("reading an invoice from before invoice lines totals its attached entries", async () => {
     const legacy = await seedLegacyDraft();
@@ -977,7 +1106,13 @@ const setStatus = async (
     .where(eq(invoices.id, invoiceId));
 };
 
-const seedTimeEntry = async ({ billedMinutes }: { billedMinutes: number }) => {
+const seedTimeEntry = async ({
+  billedMinutes,
+  noCharge = false,
+}: {
+  billedMinutes: number;
+  noCharge?: boolean;
+}) => {
   const id = createSafeId<"timeEntry">();
   seededTimeEntryIds.push(id);
   await testDb.insert(timeEntries).values({
@@ -992,7 +1127,8 @@ const seedTimeEntry = async ({ billedMinutes }: { billedMinutes: number }) => {
     billedMinutes,
     rateAtEntry: cents(20_000),
     currency: "USD",
-    narrative: "Drafted the response",
+    narrative: noCharge ? "Courtesy work" : "Drafted the response",
+    noCharge,
     status: BILLING_STATUS.APPROVED,
   });
   return id;

@@ -18,10 +18,7 @@ import {
   CONTACT_CURSOR_MAX_LENGTH,
   listContactsPage,
 } from "@/api/handlers/contacts/list-query";
-import {
-  MAX_CONTACT_NATIONALITY_CODES,
-  validatePersonDetails,
-} from "@/api/handlers/contacts/person-details";
+import { validatePersonDetails } from "@/api/handlers/contacts/person-details";
 import { updateContactHandler } from "@/api/handlers/contacts/update";
 import { deleteEntitiesHandler } from "@/api/handlers/entities/delete";
 import { addAssigneeHandler } from "@/api/handlers/tasks/assignees/add";
@@ -51,17 +48,17 @@ import {
   runEntityCheckShared,
 } from "@/api/lib/business-registries/entity-checks";
 import type { CounterpartyCheckSubject } from "@/api/lib/business-registries/entity-checks";
+import { MAX_CONTACT_NATIONALITY_CODES } from "@/api/lib/business-registries/nationality-codes";
 import { lookupBusinessRegistryShared } from "@/api/lib/business-registries/registry-lookup";
 import { SANCTIONS_COMPANY_ID_COUNTRIES } from "@/api/lib/business-registries/sanctions-check-vocabulary";
 import {
-  type AssertNoExtraFields,
   DELETED_TRUE_PROJECTION,
-  type LINK_MATTER_CONTACT_LINK_PROJECTION,
-  type LINK_MATTER_CONTACT_UNLINK_PROJECTION,
+  LINK_MATTER_CONTACT_LINK_PROJECTION,
+  LINK_MATTER_CONTACT_UNLINK_PROJECTION,
   LINK_MATTER_CONTACT_PROJECTION,
   LIST_CONTACTS_PROJECTION,
-  type LIST_TASKS_DETAIL_PROJECTION,
-  type LIST_TASKS_LIST_PROJECTION,
+  LIST_TASKS_DETAIL_PROJECTION,
+  LIST_TASKS_LIST_PROJECTION,
   LIST_TASKS_PROJECTION,
   CHECK_COUNTERPARTY_PROJECTION,
   LOOKUP_BUSINESS_REGISTRY_PROJECTION,
@@ -71,7 +68,9 @@ import {
 } from "@/api/lib/chat/projections";
 import { ENTITY_PRIORITIES, TASK_STATUSES } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { LIMITS } from "@/api/lib/limits";
+import { projectionPayload } from "@/api/lib/projection-totality";
 import {
   brandPersistedContactId,
   brandPersistedEntityId,
@@ -83,6 +82,10 @@ import {
 } from "@/api/lib/safe-id-boundaries";
 import { TASK_ASSIGNEE_FILTERS } from "@/api/lib/tasks/assigned";
 import { createTaskEntityHandler } from "@/api/lib/tasks/create-task-entity";
+import {
+  nativeTaskInputUsesLegalLists,
+  projectNativeTaskListInput,
+} from "@/api/lib/tasks/legal-list-access";
 import { updateTaskHandler } from "@/api/lib/tasks/update-task";
 import { includes } from "@/api/lib/type-guards";
 import {
@@ -96,6 +99,7 @@ import {
   deriveTextFieldPaths,
   runTextFieldSpecs,
 } from "@/api/mcp/text-field-spec";
+import { withThirdPartyOutbound } from "@/api/mcp/third-party-outbound";
 import type {
   McpTextFieldSpec,
   McpToolDefinition,
@@ -104,7 +108,6 @@ import type {
 } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
-  invalidCursorResult,
   bindWorkspaceRecorder,
   countryInputSchema,
   countryNormalization,
@@ -114,11 +117,14 @@ import {
   errorResult,
   getWorkspaceStatus,
   internalFailureResult,
+  invalidCursorResult,
   ISO_DATE_SCHEMA,
   notFoundResult,
   nullAsAbsent,
+  structuredEgressPlan,
   toolDataResult,
   uuidInputSchema,
+  entityIdInputSchema,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
 import {
@@ -397,6 +403,7 @@ const handleSaveMatterTool: TypedMcpToolHandler<
     const workspaceId = createSafeId<"workspace">();
     const created = await Result.gen(() =>
       createWorkspaceHandler({
+        userEmail: context.userEmail,
         safeDb: context.safeDb,
         organizationId: context.organizationId,
         userId: context.userId,
@@ -414,9 +421,11 @@ const handleSaveMatterTool: TypedMcpToolHandler<
     if (Result.isError(created)) {
       return internalFailureResult(created.error);
     }
-    return toolDataResult({
-      matterId: created.value.id,
-    } satisfies v.InferInput<typeof SAVE_MATTER_PROJECTION>);
+    return toolDataResult(
+      projectionPayload(SAVE_MATTER_PROJECTION, {
+        matterId: created.value.id,
+      }),
+    );
   }
 
   // Update branch.
@@ -459,6 +468,7 @@ const handleSaveMatterTool: TypedMcpToolHandler<
   ) {
     const updated = await Result.gen(() =>
       updateWorkspaceHandler({
+        userEmail: context.userEmail,
         safeDb: context.safeDb,
         organizationId: context.organizationId,
         workspaceId,
@@ -503,10 +513,12 @@ const handleSaveMatterTool: TypedMcpToolHandler<
     }
   }
 
-  return toolDataResult({
-    matterId: workspaceId,
-    updated: true,
-  } satisfies v.InferInput<typeof SAVE_MATTER_PROJECTION>);
+  return toolDataResult(
+    projectionPayload(SAVE_MATTER_PROJECTION, {
+      matterId: workspaceId,
+      updated: true,
+    }),
+  );
 };
 
 // --- delete_matter ------------------------------------------------------
@@ -559,9 +571,11 @@ const handleDeleteMatterTool: TypedMcpToolHandler<
   if (Result.isError(deleted)) {
     return internalFailureResult(deleted.error);
   }
-  return toolDataResult({
-    deleted: true,
-  } satisfies v.InferInput<typeof DELETED_TRUE_PROJECTION>);
+  return toolDataResult(
+    projectionPayload(DELETED_TRUE_PROJECTION, {
+      deleted: true,
+    }),
+  );
 };
 
 // --- list_contacts ------------------------------------------------------
@@ -623,14 +637,14 @@ const handleListContactsTool: TypedMcpToolHandler<
   if (Result.isError(listed)) {
     return internalFailureResult(listed.error);
   }
-  const page = {
+  const page = projectionPayload(LIST_CONTACTS_PROJECTION, {
     ...listed.value,
     items: listed.value.items.map(({ createdAt, ...contact }) =>
       Object.assign(contact, {
         createdAt: createdAt.toISOString(),
       }),
     ),
-  } satisfies v.InferInput<typeof LIST_CONTACTS_PROJECTION>;
+  });
 
   return toolDataResult(page);
 };
@@ -880,9 +894,11 @@ const handleSaveContactTool: TypedMcpToolHandler<
     if (Result.isError(created)) {
       return internalFailureResult(created.error);
     }
-    return toolDataResult({
-      contactId: created.value.id,
-    } satisfies v.InferInput<typeof SAVE_CONTACT_PROJECTION>);
+    return toolDataResult(
+      projectionPayload(SAVE_CONTACT_PROJECTION, {
+        contactId: created.value.id,
+      }),
+    );
   }
 
   // Update branch.
@@ -921,9 +937,11 @@ const handleSaveContactTool: TypedMcpToolHandler<
   if (Result.isError(updated)) {
     return internalFailureResult(updated.error);
   }
-  return toolDataResult({
-    contactId: updated.value.id,
-  } satisfies v.InferInput<typeof SAVE_CONTACT_PROJECTION>);
+  return toolDataResult(
+    projectionPayload(SAVE_CONTACT_PROJECTION, {
+      contactId: updated.value.id,
+    }),
+  );
 };
 
 // --- delete_contact -----------------------------------------------------
@@ -966,9 +984,11 @@ const handleDeleteContactTool: TypedMcpToolHandler<
   if (Result.isError(deleted)) {
     return internalFailureResult(deleted.error);
   }
-  return toolDataResult({
-    deleted: true,
-  } satisfies v.InferInput<typeof DELETED_TRUE_PROJECTION>);
+  return toolDataResult(
+    projectionPayload(DELETED_TRUE_PROJECTION, {
+      deleted: true,
+    }),
+  );
 };
 
 // --- lookup_business_registry -------------------------------------------
@@ -996,9 +1016,9 @@ const lookupBusinessRegistryArgsSchema = nullAsAbsent(
   }),
 );
 
-const handleLookupBusinessRegistryTool: TypedMcpToolHandler<
+const handleLookupBusinessRegistryTool = withThirdPartyOutbound<
   v.InferInput<typeof LOOKUP_BUSINESS_REGISTRY_PROJECTION>
-> = async ({ args, context }) => {
+>(async ({ args, context, permit }) => {
   if (!hasEffectiveAuthority(context, { workspace: ["read"] })) {
     return errorResult("Forbidden");
   }
@@ -1014,6 +1034,7 @@ const handleLookupBusinessRegistryTool: TypedMcpToolHandler<
   );
   const result = await lookupBusinessRegistryShared({
     observer,
+    permit,
     scopedDb: context.scopedDb,
     organizationId: context.organizationId,
     registry: parsed.output.registry,
@@ -1027,12 +1048,10 @@ const handleLookupBusinessRegistryTool: TypedMcpToolHandler<
   // Passthrough: the output is public business-register data and the query is
   // caller-supplied, so no tenant-authored text needs redaction. Forwarded
   // verbatim, so the projection tie is on the shared lookup's return type.
-  type LookupBusinessRegistryPayload = AssertNoExtraFields<
-    typeof result.value,
-    v.InferInput<typeof LOOKUP_BUSINESS_REGISTRY_PROJECTION>
-  >;
-  return toolDataResult(result.value satisfies LookupBusinessRegistryPayload);
-};
+  return toolDataResult(
+    projectionPayload(LOOKUP_BUSINESS_REGISTRY_PROJECTION, result.value),
+  );
+});
 
 // --- check_counterparty -------------------------------------------------
 
@@ -1208,9 +1227,9 @@ export const toCounterpartyCheckSubject = (
   }
 };
 
-const handleCheckCounterpartyTool: TypedMcpToolHandler<
+const handleCheckCounterpartyTool = withThirdPartyOutbound<
   v.InferInput<typeof CHECK_COUNTERPARTY_PROJECTION>
-> = async ({ args, context }) => {
+>(async ({ args, context, permit }) => {
   if (!hasEffectiveAuthority(context, { workspace: ["read"] })) {
     return errorResult("Forbidden");
   }
@@ -1230,6 +1249,7 @@ const handleCheckCounterpartyTool: TypedMcpToolHandler<
   );
   const result = await runEntityCheckShared({
     observer,
+    permit,
     check: parsed.output.check,
     subject: subject.value,
     runCheck: context.testDependencies?.runEntityCheck,
@@ -1245,12 +1265,10 @@ const handleCheckCounterpartyTool: TypedMcpToolHandler<
   }
   // Passthrough: public-register and public-list data about a subject the
   // caller named.
-  type CheckCounterpartyPayload = AssertNoExtraFields<
-    typeof result.value,
-    v.InferInput<typeof CHECK_COUNTERPARTY_PROJECTION>
-  >;
-  return toolDataResult(result.value satisfies CheckCounterpartyPayload);
-};
+  return toolDataResult(
+    projectionPayload(CHECK_COUNTERPARTY_PROJECTION, result.value),
+  );
+});
 
 // --- list_tasks ---------------------------------------------------------
 
@@ -1293,11 +1311,15 @@ const listTasksArgsSchema = nullAsAbsent(
     matter_id: v.optional(
       uuidInputSchema("Matter ID to list tasks in; omit for every matter"),
     ),
-    task_id: v.optional(uuidInputSchema("Task entity ID to read in detail")),
+    task_id: v.optional(
+      entityIdInputSchema("Task entity ID to read in detail"),
+    ),
     assignee: v.optional(
       v.pipe(
         v.picklist(TASK_ASSIGNEE_FILTERS),
-        v.description("'me': only tasks assigned to you. Default 'any'"),
+        v.description(
+          "'me': your assignments; 'unassigned': tasks with no assignee. Default 'any'",
+        ),
       ),
     ),
     date_from: v.optional(
@@ -1449,7 +1471,7 @@ const handleListTasksTool: TypedMcpToolHandler<
       return errorResult("Not a task entity");
     }
     if (owner.status !== "ok") {
-      return notFoundResult("Task not found or not accessible");
+      return notFoundResult("Not found");
     }
     // When matter_id is also supplied it must name the task's own matter;
     // otherwise a task from a different accessible matter would be returned.
@@ -1466,7 +1488,7 @@ const handleListTasksTool: TypedMcpToolHandler<
       workspaceId: owner.workspaceId,
     });
     if (!taskRow) {
-      return notFoundResult("Task not found or not accessible");
+      return notFoundResult("Not found");
     }
     const workspaceId = owner.workspaceId;
 
@@ -1512,13 +1534,10 @@ const handleListTasksTool: TypedMcpToolHandler<
       },
     );
 
-    return {
-      egress: "structured",
-      payload: { task } satisfies v.InferInput<
-        typeof LIST_TASKS_DETAIL_PROJECTION
-      >,
+    return structuredEgressPlan({
+      payload: projectionPayload(LIST_TASKS_DETAIL_PROJECTION, { task }),
       textFields,
-    };
+    });
   }
 
   // List mode: one matter when matter_id is given, otherwise every matter in
@@ -1563,14 +1582,13 @@ const handleListTasksTool: TypedMcpToolHandler<
   const tasks = listed.value.items;
   const textFields = runTextFieldSpecs(TASK_LIST_TEXT_FIELD_SPECS, { tasks });
 
-  return {
-    egress: "structured",
-    payload: {
+  return structuredEgressPlan({
+    payload: projectionPayload(LIST_TASKS_LIST_PROJECTION, {
       tasks,
       nextCursor: listed.value.nextCursor,
-    } satisfies v.InferInput<typeof LIST_TASKS_LIST_PROJECTION>,
+    }),
     textFields,
-  };
+  });
 };
 
 // --- save_task ----------------------------------------------------------
@@ -1579,7 +1597,7 @@ const saveTaskArgsSchema = nullAsAbsent(
   v.pipe(
     v.strictObject({
       task_id: v.optional(
-        uuidInputSchema("Task entity ID to update; omit to create"),
+        entityIdInputSchema("Task entity ID to update; omit to create"),
       ),
       matter_id: v.optional(
         uuidInputSchema(
@@ -1652,7 +1670,7 @@ const saveTaskArgsSchema = nullAsAbsent(
         ),
       ),
       link_entity_id: v.optional(
-        uuidInputSchema(
+        entityIdInputSchema(
           "Entity ID to link to the task (document, folder, or another task)",
         ),
       ),
@@ -1984,9 +2002,11 @@ const handleSaveTaskTool: TypedMcpToolHandler<
     if (Result.isError(created)) {
       return internalFailureResult(created.error);
     }
-    return toolDataResult({
-      taskId: created.value.entityId,
-    } satisfies v.InferInput<typeof SAVE_TASK_PROJECTION>);
+    return toolDataResult(
+      projectionPayload(SAVE_TASK_PROJECTION, {
+        taskId: created.value.entityId,
+      }),
+    );
   }
 
   // Update branch.
@@ -1999,7 +2019,7 @@ const handleSaveTaskTool: TypedMcpToolHandler<
     return errorResult("Not a task entity");
   }
   if (owner.status !== "ok") {
-    return notFoundResult("Task not found or not accessible");
+    return notFoundResult("Not found");
   }
   const workspaceId = owner.workspaceId;
   // A task in an archived matter is read-only, matching the HTTP task routes
@@ -2120,17 +2140,19 @@ const handleSaveTaskTool: TypedMcpToolHandler<
     }
   }
 
-  return toolDataResult({
-    taskId,
-    updated: true,
-  } satisfies v.InferInput<typeof SAVE_TASK_PROJECTION>);
+  return toolDataResult(
+    projectionPayload(SAVE_TASK_PROJECTION, {
+      taskId,
+      updated: true,
+    }),
+  );
 };
 
 // --- delete_task --------------------------------------------------------
 
 const deleteTaskArgsSchema = nullAsAbsent(
   v.strictObject({
-    task_id: uuidInputSchema("Task entity ID to delete"),
+    task_id: entityIdInputSchema("Task entity ID to delete"),
     confirm: v.optional(
       v.pipe(
         v.boolean(),
@@ -2159,7 +2181,7 @@ const handleDeleteTaskTool: TypedMcpToolHandler<
     return errorResult("Not a task entity");
   }
   if (owner.status !== "ok") {
-    return notFoundResult("Task not found or not accessible");
+    return notFoundResult("Not found");
   }
   const workspaceId = owner.workspaceId;
   // Same rule as save_task: an archived matter is read-only.
@@ -2179,9 +2201,11 @@ const handleDeleteTaskTool: TypedMcpToolHandler<
   if (Result.isError(deleted)) {
     return internalFailureResult(deleted.error);
   }
-  return toolDataResult({
-    deleted: true,
-  } satisfies v.InferInput<typeof DELETED_TRUE_PROJECTION>);
+  return toolDataResult(
+    projectionPayload(DELETED_TRUE_PROJECTION, {
+      deleted: true,
+    }),
+  );
 };
 
 // --- link_matter_contact ------------------------------------------------
@@ -2320,9 +2344,11 @@ const handleLinkMatterContactTool: TypedMcpToolHandler<
     if (Result.isError(removed)) {
       return internalFailureResult(removed.error);
     }
-    return toolDataResult({
-      unlinked: true,
-    } satisfies v.InferInput<typeof LINK_MATTER_CONTACT_UNLINK_PROJECTION>);
+    return toolDataResult(
+      projectionPayload(LINK_MATTER_CONTACT_UNLINK_PROJECTION, {
+        unlinked: true,
+      }),
+    );
   }
 
   // Link branch. The schema guarantees contact_id is present alongside role.
@@ -2344,9 +2370,11 @@ const handleLinkMatterContactTool: TypedMcpToolHandler<
   if (Result.isError(created)) {
     return internalFailureResult(created.error);
   }
-  return toolDataResult({
-    workspaceContactId: created.value.id,
-  } satisfies v.InferInput<typeof LINK_MATTER_CONTACT_LINK_PROJECTION>);
+  return toolDataResult(
+    projectionPayload(LINK_MATTER_CONTACT_LINK_PROJECTION, {
+      workspaceContactId: created.value.id,
+    }),
+  );
 };
 
 // --- tool definitions -----------------------------------------------------
@@ -2368,12 +2396,25 @@ export const MATTER_TOOL_DEFINITIONS = [
     },
     annotations: {
       title: "Save matter",
-      destructiveHint: false,
+      destructiveHint: true,
       idempotentHint: false,
       openWorldHint: false,
       readOnlyHint: false,
     },
     access: "write",
+    accountAccess: "sandbox",
+    permissions: {
+      type: "input",
+      select: {
+        by: "presence",
+        property: "matter_id",
+        present: {
+          operation: "update",
+          permissions: { workspace: ["update"] },
+        },
+        absent: { operation: "create", permissions: { workspace: ["create"] } },
+      },
+    },
     anonymized: { exposure: "excluded", reason: "write" },
     name: "save_matter",
     scope: "stella:matters_write",
@@ -2392,6 +2433,8 @@ export const MATTER_TOOL_DEFINITIONS = [
       "chat history. This is irreversible.",
     inputSchema: deleteMatterArgsSchema,
     access: "write",
+    accountAccess: "sandbox",
+    permissions: { type: "all", permissions: { workspace: ["delete"] } },
     anonymized: { exposure: "excluded", reason: "write" },
     destructiveBehavior: { type: "always" },
     name: "delete_matter",
@@ -2442,12 +2485,22 @@ export const MATTER_TOOL_DEFINITIONS = [
     },
     annotations: {
       title: "Save contact",
-      destructiveHint: false,
+      destructiveHint: true,
       idempotentHint: false,
       openWorldHint: false,
       readOnlyHint: false,
     },
     access: "write",
+    accountAccess: "sandbox",
+    permissions: {
+      type: "input",
+      select: {
+        by: "presence",
+        property: "contact_id",
+        present: { operation: "update", permissions: { contact: ["update"] } },
+        absent: { operation: "create", permissions: { contact: ["create"] } },
+      },
+    },
     anonymized: { exposure: "excluded", reason: "write" },
     name: "save_contact",
     scope: "stella:contacts_write",
@@ -2467,6 +2520,8 @@ export const MATTER_TOOL_DEFINITIONS = [
       "irreversible.",
     inputSchema: deleteContactArgsSchema,
     access: "write",
+    accountAccess: "sandbox",
+    permissions: { type: "all", permissions: { contact: ["delete"] } },
     anonymized: { exposure: "excluded", reason: "write" },
     destructiveBehavior: { type: "always" },
     name: "delete_contact",
@@ -2574,6 +2629,13 @@ export const MATTER_TOOL_DEFINITIONS = [
       "(add_assignee_user_id / remove_assignee_user_id); link the task to " +
       "another entity (link_entity_id) or remove a link (unlink_link_id). " +
       "Returns the task ID.",
+    featureInput: {
+      featureId: LEGAL_LISTS_FEATURE_ID,
+      usesFeature: nativeTaskInputUsesLegalLists,
+      projectInputSchema: projectNativeTaskListInput,
+      unavailableDescription:
+        "Create or update an ordinary task, manage its assignees and entity links. Omit task_id to create (matter_id and name required). Pass task_id to update name, status, priority or due_date, add or remove an assignee, or manage entity links. Returns the task ID.",
+    },
     inputSchema: saveTaskArgsSchema,
     jsonSchemaProjectionWaiver: {
       ignoreActions: ["trim", "partial_check"],
@@ -2582,12 +2644,22 @@ export const MATTER_TOOL_DEFINITIONS = [
     },
     annotations: {
       title: "Save task",
-      destructiveHint: false,
+      destructiveHint: true,
       idempotentHint: false,
       openWorldHint: false,
       readOnlyHint: false,
     },
     access: "write",
+    accountAccess: "sandbox",
+    permissions: {
+      type: "input",
+      select: {
+        by: "presence",
+        property: "task_id",
+        present: { operation: "update", permissions: { entity: ["update"] } },
+        absent: { operation: "create", permissions: { entity: ["create"] } },
+      },
+    },
     anonymized: { exposure: "excluded", reason: "write" },
     name: "save_task",
     scope: "stella:matters_write",
@@ -2607,6 +2679,8 @@ export const MATTER_TOOL_DEFINITIONS = [
       "archived. This is irreversible.",
     inputSchema: deleteTaskArgsSchema,
     access: "write",
+    accountAccess: "sandbox",
+    permissions: { type: "all", permissions: { entity: ["delete"] } },
     anonymized: { exposure: "excluded", reason: "write" },
     destructiveBehavior: { type: "always" },
     name: "delete_task",
@@ -2620,7 +2694,8 @@ export const MATTER_TOOL_DEFINITIONS = [
       "other), or remove such a link. Pass contact_id with role to link. To " +
       "unlink, pass matter_contact_id (precise, from list_matters) " +
       "or contact_id alone; contact_id alone is rejected when the contact " +
-      "holds several roles on the matter.",
+      "holds several roles on the matter. At the contact limit, unlink an existing " +
+      "matter_contact_id (without role) before linking another contact.",
     inputSchema: linkMatterContactArgsSchema,
     jsonSchemaProjectionWaiver: {
       ignoreActions: ["partial_check"],
@@ -2629,12 +2704,14 @@ export const MATTER_TOOL_DEFINITIONS = [
     },
     annotations: {
       title: "Link contact to matter",
-      destructiveHint: false,
+      destructiveHint: true,
       idempotentHint: false,
       openWorldHint: false,
       readOnlyHint: false,
     },
     access: "write",
+    accountAccess: "sandbox",
+    permissions: { type: "all", permissions: { workspace: ["update"] } },
     anonymized: { exposure: "excluded", reason: "write" },
     name: "link_matter_contact",
     scope: "stella:matters_write",

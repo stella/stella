@@ -5,7 +5,7 @@ import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 
 import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -28,6 +28,7 @@ const config = {
   description:
     "Restore a historical document version by copying it into a new current version; the prior history remains intact.",
   permissions: { entity: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "document_processing",

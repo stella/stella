@@ -36,7 +36,11 @@ describe("scrollable calendar month window", () => {
   test("renders anchors for every month in the window", () => {
     const windowStart = Temporal.PlainDate.from("2026-01-01");
     const anchors = getMonthAnchors("en", windowStart);
-    const rows = getMonthWeekRows("en", windowStart);
+    const rows = getMonthWeekRows(
+      "en",
+      windowStart,
+      Temporal.PlainDate.from("2026-03-15"),
+    );
 
     expect(anchors.map((anchor) => anchor.key)).toEqual([
       "2026-01",

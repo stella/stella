@@ -62,6 +62,10 @@ export const OPEN_FILE_COMPARISON_TOOL_DEFINITION = defineValibotMcpTool({
     "you cannot upload attached files yourself. Takes no input.",
   inputSchema: OPEN_FILE_COMPARISON_INPUT_SCHEMA,
   access: "write",
+  accountAccess: "sandbox",
+  nonDestructiveReason:
+    "Returns file-comparison panel metadata without uploading files or modifying stored documents.",
+  permissions: { type: "all", permissions: { entity: ["update"] } },
   anonymized: { exposure: "excluded", reason: "write" },
   name: FILE_COMPARISON_TRANSPORT.pickerToolName,
   scope: "stella:documents_write",

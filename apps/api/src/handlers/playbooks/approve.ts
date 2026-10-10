@@ -9,7 +9,7 @@ import {
   approvePlaybookDefinitionBodySchema,
   playbookDefinitionParamsSchema,
 } from "@/api/handlers/playbooks/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -27,6 +27,7 @@ const config = {
     "conflict. Approving an already-approved playbook is allowed and simply " +
     "appends another version.",
   permissions: { playbook: ["approve"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "write",
   mcp: {
     type: "capability",

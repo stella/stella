@@ -12,7 +12,7 @@ import {
   entityVersions,
   folioCollabRooms,
 } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -42,7 +42,7 @@ import { FOLIO_COLLAB_ROOM_ACTIVITY_TIMEOUT_MS } from "@/api/lib/folio-collab-ro
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 
-export const openDesktopEditSessionBodySchema = t.Object({
+const openDesktopEditSessionBodySchema = t.Object({
   entityId: tSafeId("entity"),
   force: t.Optional(t.Boolean()),
   propertyId: tSafeId("property"),
@@ -628,8 +628,14 @@ export const openDesktopEditSessionHandler = async function* ({
 };
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Provides working-copy URLs covered by the edit-session lifecycle audit.",
+  },
   body: openDesktopEditSessionBodySchema,
   permissions: { entity: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "session_token_exchange" },
 } satisfies WorkspaceHandlerConfig;
 

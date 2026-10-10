@@ -1,6 +1,7 @@
 import { t } from "elysia";
 
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { timeEntryRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { narrativeLanguageSchema } from "@/api/lib/billing/narrative-language";
 import { createTimeEntryHandler } from "@/api/lib/billing/time-entry-insert";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -63,6 +64,9 @@ const createTimeEntry = createSafeHandler(
       "The timekeeper's effective matter rate is resolved server-side. " +
       "durations are whole minutes. Returns the time entry ID.",
     permissions: { timeEntry: ["create"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: { featureId: "time-billing", type: "required" },
+    realtime: timeEntryRealtimeUpdates,
     mcp: { type: "tool", name: "save_time_entry" },
     body: createTimeEntryBodySchema,
   },

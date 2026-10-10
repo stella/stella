@@ -11,6 +11,7 @@ import {
   removeOrganizationMemberWithAuthArtifacts as removeMember,
   revokeOrganizationMemberAuthArtifacts,
 } from "@/api/lib/auth-artifacts";
+import { removeOrganizationMemberInTransaction } from "@/api/lib/member-assignment-offboarding";
 
 declare const db: {
   delete: (table: unknown) => unknown;
@@ -28,6 +29,9 @@ declare const Result: {
   }) => Promise<unknown>;
 };
 declare const toError: (cause: unknown) => Error;
+declare const offboarding: Parameters<
+  typeof removeOrganizationMemberInTransaction
+>[1];
 
 export const notificationOrganizationOptions = {
   // oxlint-disable-next-line auth-lifecycle/member-removal-revokes-artifacts -- fixture: required before hook
@@ -247,5 +251,19 @@ export const resultWrappedWithoutTransactionHooks = {
       catch: toError,
     });
     return removal;
+  },
+};
+export const offboardingHooks = {
+  // expect-clean: auth-lifecycle/member-removal-revokes-artifacts
+  beforeRemoveMember: async () => {
+    await rootDb.transaction(async (tx) => {
+      await removeOrganizationMemberInTransaction(tx, offboarding);
+    });
+  },
+};
+export const offboardingOutsideTransactionHooks = {
+  // oxlint-disable-next-line auth-lifecycle/member-removal-revokes-artifacts -- fixture: offboarding still needs the root transaction
+  beforeRemoveMember: async () => {
+    await removeOrganizationMemberInTransaction(transaction, offboarding);
   },
 };

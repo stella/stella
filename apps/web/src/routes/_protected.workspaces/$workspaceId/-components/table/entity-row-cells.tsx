@@ -1,13 +1,13 @@
 import { useCallback, useRef, useState } from "react";
 import type React from "react";
 
-import { draggable } from "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
 import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/utils/set-custom-native-drag-preview";
 import { flexRender } from "@tanstack/react-table";
 import {
   row_getIsExpanded,
   row_getIsSelected,
 } from "@tanstack/react-table/static-functions";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { DirectionalIcon } from "@stll/ui/directional-icon";
@@ -30,7 +30,11 @@ import { RowActions } from "@/components/workspaces/row-actions";
 import type { VirtualAnchor } from "@/components/workspaces/row-actions";
 import { getOcrSource } from "@/components/workspaces/row-actions.logic";
 import type { TableRowRenderInput } from "@/components/workspaces/table/row-host";
-import { SelectRowContent } from "@/components/workspaces/table/select-row-content";
+import {
+  FirstLineStrut,
+  ROW_FIRST_LINE,
+  SelectRowContent,
+} from "@/components/workspaces/table/select-row-content";
 import type {
   TableCell,
   TableColumn,
@@ -55,12 +59,18 @@ import {
 } from "@/components/workspaces/table/workspace-table/internals-helpers";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
+import { draggable } from "@/lib/drag-and-drop/element-registration";
 import { toSafeId } from "@/lib/safe-id";
 import type { PropertyId } from "@/lib/types";
 import { ENTITY_DRAG_TYPE } from "@/lib/workspaces/drag-constants";
 import type { TableContentMode } from "@/lib/workspaces/table-store";
 import { VersionOrNewFileDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/version-or-new-file-dialog";
 import { useVersionOrNewFileDrop } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-version-or-new-file-drop";
+
+// Matter cells hold editable values, whose text sits inside a py-1 control.
+// The number cell, every value cell and the folder name read this one key, so
+// short content (a file chip, a placeholder) centres on the same line.
+const FIRST_LINE = "control";
 
 const shouldIgnoreRowExpansionClick = (target: EventTarget) => {
   if (!(target instanceof HTMLElement)) {
@@ -190,6 +200,7 @@ export const DraggableRow = ({
   onStopEditing,
   onToggleExpandedCell,
 }: DraggableRowProps) => {
+  const selected = table.state.rowSelection[row.id] === true;
   const rowRef = useRef<HTMLDivElement>(null);
   // Stable ref callback so React doesn't re-run TanStack Virtual's
   // measureElement on every render.
@@ -308,6 +319,7 @@ export const DraggableRow = ({
 
   const selectCellContent = (
     <SelectRowContent
+      firstLine={FIRST_LINE}
       index={index}
       label={rowLabel}
       lastSelectedIndex={lastSelectedIndex}
@@ -427,6 +439,7 @@ export const DraggableRow = ({
         renderColumns={renderColumns}
         row={row}
         selectCellWithActions={selectCellWithActions}
+        selected={selected}
         visibleCells={visibleCells}
       />
     );
@@ -436,7 +449,7 @@ export const DraggableRow = ({
     <>
       <WorkspaceGridRow
         aria-rowindex={index + 2}
-        aria-selected={row_getIsSelected(row)}
+        aria-selected={selected}
         className={cn(
           "transition-opacity duration-150",
           contentMode === "tight" && TOOLBAR_ROW_HEIGHT,
@@ -447,7 +460,7 @@ export const DraggableRow = ({
         data-active={activeRow || undefined}
         data-drop-target={isDropTarget || undefined}
         data-index={index}
-        data-state={row_getIsSelected(row) ? "selected" : undefined}
+        data-state={selected ? "selected" : undefined}
         key={row.id}
         onClick={containedEventHandler(handleRowClick)}
         onContextMenu={containedEventHandler(handleContextMenu)}
@@ -459,17 +472,18 @@ export const DraggableRow = ({
           hasExpandedCell={isFocusedExpansionRow}
           onCellClick={handleCellClick}
           selectCellWithActions={selectCellWithActions}
+          selected={selected}
           visibleCells={visibleCells}
         />
         <RowEndFillerCell
           addPropertyColumn={addPropertyColumn}
           renderColumns={renderColumns}
-          selected={row_getIsSelected(row)}
+          selected={selected}
         />
         <AddPropertyCell
           cell={addPropertyCell}
           columnIndex={renderColumns.length + 1}
-          selected={row_getIsSelected(row)}
+          selected={selected}
         />
       </WorkspaceGridRow>
       {pendingDrop && <VersionOrNewFileDialog {...pendingDrop} />}
@@ -492,6 +506,7 @@ type FolderTableRowProps = {
   renderColumns: TableColumn[];
   row: TableRow;
   selectCellWithActions: React.ReactNode;
+  selected: boolean;
   visibleCells: TableCell[];
 };
 
@@ -510,6 +525,7 @@ const FolderTableRow = ({
   renderColumns,
   row,
   selectCellWithActions,
+  selected,
   visibleCells,
 }: FolderTableRowProps) => {
   const selectCell = visibleCells[0];
@@ -521,7 +537,7 @@ const FolderTableRow = ({
   return (
     <WorkspaceGridRow
       aria-rowindex={index + 2}
-      aria-selected={row_getIsSelected(row)}
+      aria-selected={selected}
       className={cn(
         "transition-opacity duration-150",
         TOOLBAR_ROW_HEIGHT,
@@ -529,7 +545,7 @@ const FolderTableRow = ({
       )}
       data-active={entity.entityId === activeEntityId || undefined}
       data-index={index}
-      data-state={row_getIsSelected(row) ? "selected" : undefined}
+      data-state={selected ? "selected" : undefined}
       key={row.id}
       onContextMenu={containedEventHandler(onRowContextMenu)}
       ref={ref}
@@ -539,7 +555,7 @@ const FolderTableRow = ({
         className={cn(
           isPinnedBoundaryColumn(selectCell.column) && "border-e-0",
         )}
-        data-state={row_getIsSelected(row) ? "selected" : undefined}
+        data-state={selected ? "selected" : undefined}
         key={selectCell.id}
         style={{
           gridColumn: 1,
@@ -555,7 +571,7 @@ const FolderTableRow = ({
           "cursor-pointer",
           isPinnedBoundaryColumn(nameCell.column) && "border-e-0",
         )}
-        data-state={row_getIsSelected(row) ? "selected" : undefined}
+        data-state={selected ? "selected" : undefined}
         key={nameCell.id}
         onClick={() => row.toggleExpanded()}
         style={{
@@ -577,14 +593,14 @@ const FolderTableRow = ({
       <WorkspaceGridCell
         aria-colindex={3}
         className="cursor-pointer border-e-0"
-        data-state={row_getIsSelected(row) ? "selected" : undefined}
+        data-state={selected ? "selected" : undefined}
         onClick={() => row.toggleExpanded()}
         style={{ gridColumn: addPropertyCell ? "3 / -2" : "3 / -1" }}
       />
       <AddPropertyCell
         cell={addPropertyCell}
         columnIndex={renderColumns.length + 1}
-        selected={row_getIsSelected(row)}
+        selected={selected}
       />
     </WorkspaceGridRow>
   );
@@ -600,6 +616,7 @@ type DataRowCellsProps = {
     canExpandCell: boolean,
   ) => void;
   selectCellWithActions: React.ReactNode;
+  selected: boolean;
   visibleCells: TableCell[];
 };
 
@@ -609,6 +626,7 @@ const DataRowCells = ({
   hasExpandedCell,
   onCellClick,
   selectCellWithActions,
+  selected,
   visibleCells,
 }: DataRowCellsProps) =>
   visibleCells.map((cell, cellIndex) => {
@@ -617,13 +635,6 @@ const DataRowCells = ({
     const canExpandCell = !isSelectCell && !isAddPropertyCell;
     const canFlagCell = canExpandCell && !cell.column.id.startsWith("_");
     const isExpandedCell = expandedCellId === cell.column.id;
-    const propertyId = canFlagCell
-      ? toSafeId<"property">(cell.column.id)
-      : null;
-    const fieldContent = propertyId
-      ? cell.row.original.fields[propertyId]?.content
-      : undefined;
-    const isExpandedTextCell = isExpandedCell && fieldContent?.type === "text";
 
     return (
       <WorkspaceGridCell
@@ -646,7 +657,7 @@ const DataRowCells = ({
             "after:bg-info after:pointer-events-none after:absolute after:end-0 after:top-0 after:bottom-0 after:z-50 after:w-px",
         )}
         data-expanded-cell={isExpandedCell || undefined}
-        data-state={row_getIsSelected(cell.row) ? "selected" : undefined}
+        data-state={selected ? "selected" : undefined}
         data-table-property-id={canFlagCell ? cell.column.id : undefined}
         key={cell.id}
         onClick={(event) => onCellClick(event, cell.column.id, canExpandCell)}
@@ -659,21 +670,82 @@ const DataRowCells = ({
         {isSelectCell ? (
           selectCellWithActions
         ) : (
-          <span
-            className={cn(
-              "flex w-full min-w-0 items-center gap-1.5",
-              (contentMode === "fit-content" || isExpandedTextCell) &&
-                "items-start",
-              isExpandedCell &&
-                "border-border/80 bg-background absolute inset-x-0 top-0 z-40 max-h-96 min-h-24 items-start overflow-y-auto border p-2 pb-8 shadow-lg",
-            )}
+          <EntityCellContent
+            layout={getCellContentLayout({ contentMode, isExpandedCell })}
           >
             {flexRender(cell.column.columnDef.cell, cell.getContext())}
-          </span>
+          </EntityCellContent>
         )}
       </WorkspaceGridCell>
     );
   });
+
+/**
+ * How a value cell lays out its content: on one line, centred in the first
+ * line's box; wrapped, with every item's first line on that box's centre; or
+ * opened over the rows below it.
+ */
+type CellContentLayout = "line" | "wrap" | "expanded";
+
+const getCellContentLayout = ({
+  contentMode,
+  isExpandedCell,
+}: {
+  contentMode: TableContentMode;
+  isExpandedCell: boolean;
+}): CellContentLayout => {
+  if (isExpandedCell) {
+    return "expanded";
+  }
+  return contentMode === "fit-content" ? "wrap" : "line";
+};
+
+const EntityCellContent = ({
+  children,
+  layout,
+}: {
+  children: React.ReactNode;
+  layout: CellContentLayout;
+}) => {
+  switch (layout) {
+    case "line":
+      return (
+        <span
+          className={cn(
+            "flex w-full min-w-0 items-center gap-1.5",
+            ROW_FIRST_LINE[FIRST_LINE].content,
+          )}
+        >
+          {children}
+        </span>
+      );
+    case "wrap":
+      // Centring would drop a short item to the middle of a wrapped neighbour,
+      // and top alignment leaves an item without the control's padding above
+      // the line. Baselines put each item's first line on the strut's line.
+      return (
+        <span
+          className={cn(
+            "flex w-full min-w-0 items-baseline",
+            ROW_FIRST_LINE[FIRST_LINE].content,
+          )}
+        >
+          <FirstLineStrut firstLine={FIRST_LINE} />
+          <span className="flex min-w-0 flex-1 items-baseline gap-1.5">
+            {children}
+          </span>
+        </span>
+      );
+    case "expanded":
+      return (
+        <span className="border-border/80 bg-background absolute inset-x-0 top-0 z-40 flex max-h-96 min-h-24 w-full min-w-0 items-start gap-1.5 overflow-y-auto border p-2 pb-8 shadow-lg">
+          {children}
+        </span>
+      );
+    default:
+      return panic(`Unhandled cell content layout: ${String(layout)}`);
+  }
+};
 
 // -- Folder cell --
 
@@ -712,7 +784,10 @@ const FolderCell = ({
 
   return (
     <div
-      className="flex w-full items-center gap-1"
+      className={cn(
+        "flex w-full items-center gap-1",
+        ROW_FIRST_LINE[FIRST_LINE].content,
+      )}
       style={{
         paddingLeft: depth > 0 ? `${depth * 20}px` : undefined,
       }}
@@ -743,7 +818,6 @@ const FolderCell = ({
       />
       {isEditing ? (
         <InlineEdit
-          inputClassName="w-48"
           onCancel={() => {
             onStopEditing();
             setEditValue(name);
@@ -754,7 +828,7 @@ const FolderCell = ({
         />
       ) : (
         <button
-          className="truncate text-start text-sm"
+          className="overflow-hidden text-start text-sm text-ellipsis whitespace-pre"
           dir="auto"
           onDoubleClick={(e) => {
             e.stopPropagation();

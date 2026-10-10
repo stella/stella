@@ -1,10 +1,19 @@
 import { BUSINESS_REGISTRY_CREDENTIAL_SLUGS } from "@stll/api-contract";
+import type { TimeZoneId } from "@stll/time";
 
+import { entityFeaturePolicies } from "@/api/db/entity-feature-policies";
 import {
   DEFAULT_MANAGED_AI_RESIDENCY,
   MANAGED_AI_RESIDENCIES,
 } from "@/api/lib/chat/ai-data-policy";
+import { SANCTIONS_MONITORING_MODES } from "@/api/lib/lists/sanctions/monitoring-vocabulary";
+import { PERSONAL_API_KEY_POLICIES } from "@/api/lib/machine-api-key-config";
 
+import {
+  entityFeatureGateChecks,
+  entityFeatureGateColumns,
+  entityFeatureWorkspaceGateColumns,
+} from "../entity-feature-gate-columns";
 import {
   bytea,
   jsonb,
@@ -106,7 +115,7 @@ export const documentCounters = p.pgTable(
   },
   (table) => [
     p.uniqueIndex("document_counters_ws_uidx").on(table.workspaceId),
-    ...wsPolicies(),
+    ...wsPolicies({ columns: table }),
   ],
 );
 
@@ -172,6 +181,14 @@ export const organizationSettings = p.pgTable(
       .notNull()
       .unique()
       .references(() => organization.id, { onDelete: "cascade" }),
+    personalApiKeyPolicy: p
+      .text("personal_api_key_policy", { enum: PERSONAL_API_KEY_POLICIES })
+      .notNull()
+      .default("enabled"),
+    sanctionsMonitoringMode: p
+      .text("sanctions_monitoring_mode", { enum: SANCTIONS_MONITORING_MODES })
+      .notNull()
+      .default("enabled"),
     matterNumberPattern: p
       .varchar("matter_number_pattern", { length: 128 })
       .notNull()
@@ -193,6 +210,14 @@ export const organizationSettings = p.pgTable(
       .boolean("time_narrative_required")
       .notNull()
       .default(DEFAULT_TIME_NARRATIVE_REQUIRED),
+    /**
+     * IANA zone whose calendar decides the organization's "today" (lock
+     * months, invoice dates, due work). Null means the default derived from
+     * the primary practice jurisdiction at read time; see
+     * `lib/organization-time-zone.ts`. Written only through
+     * `parseTimeZoneId`.
+     */
+    timeZone: p.text("time_zone").$type<TimeZoneId>(),
     documentStampEnabled: p
       .boolean("document_stamp_enabled")
       .notNull()
@@ -304,6 +329,13 @@ export const organizationSettings = p.pgTable(
   },
   (table) => [
     p.check(
+      "organization_settings_personal_api_key_policy_check",
+      sql`${table.personalApiKeyPolicy} IN (${sql.join(
+        PERSONAL_API_KEY_POLICIES.map((policy) => sql.raw(`'${policy}'`)),
+        sql`, `,
+      )})`,
+    ),
+    p.check(
       "organization_settings_managed_ai_residency_check",
       sql`${table.managedAIResidency} IN (${sql.join(
         MANAGED_AI_RESIDENCIES.map((region) => sql.raw(`'${region}'`)),
@@ -332,6 +364,13 @@ export const organizationSettings = p.pgTable(
       .where(
         sql`${table.memoryExtractionEnabled} = true AND ${table.memoryExtractionScheduledAt} IS NOT NULL`,
       ),
+    p.check(
+      "organization_settings_sanctions_monitoring_mode_check",
+      sql`${table.sanctionsMonitoringMode} IN (${sql.join(
+        SANCTIONS_MONITORING_MODES.map((mode) => sql`${mode}`),
+        sql`, `,
+      )})`,
+    ),
     ...orgPolicies(),
   ],
 );
@@ -357,6 +396,8 @@ export const organizationSettings = p.pgTable(
 export const anonymizationAllowlistEntries = p.pgTable(
   "anonymization_allowlist_entries",
   {
+    ...entityFeatureGateColumns(),
+    ...entityFeatureWorkspaceGateColumns(),
     id: pUuid<"anonymizationAllowlistEntry">().primaryKey(),
     organizationId: safeOrganizationId("organization_id").notNull(),
     workspaceId: safeWorkspaceId("workspace_id").references(
@@ -374,6 +415,13 @@ export const anonymizationAllowlistEntries = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
+    ...entityFeaturePolicies(
+      table,
+      new Map([
+        [table.entityId, { target: "entities", kind: "owned-content" }],
+      ]),
+    ),
     // Named explicitly: drizzle's generated name exceeds PostgreSQL's 63-byte
     // identifier limit and was silently truncated in the catalog until
     // 20260813110000 renamed it.

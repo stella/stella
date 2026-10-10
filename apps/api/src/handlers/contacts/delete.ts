@@ -5,7 +5,7 @@ import { t } from "elysia";
 import type { SafeDb } from "@/api/db/safe-db";
 import { contacts, workspaceContacts, workspaces } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -153,6 +153,7 @@ const deleteContactById = createSafeRootHandler(
       "Rejected while the contact is still the client of any matter. This is " +
       "irreversible.",
     permissions: { contact: ["delete"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "tool", name: "delete_contact" },
     params: deleteContactParamsSchema,
   },

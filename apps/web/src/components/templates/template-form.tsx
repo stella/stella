@@ -12,6 +12,7 @@ import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import {
   Dialog,
+  DialogFormState,
   DialogFooter,
   DialogHeader,
   DialogPanel,
@@ -80,7 +81,10 @@ import {
   groupFieldsByPrefix,
   readAiFieldErrorPaths,
   readClauseWarnings,
+  readUndecidedConditionLabels,
   runLeadingSingleFlight,
+  visibleItemFields,
+  savedFillNotices,
 } from "@/components/templates/template-form.logic";
 import Tooltip from "@/components/tooltip";
 import { useMountEffect } from "@/hooks/use-effect";
@@ -855,9 +859,11 @@ const ArrayFieldRenderer = ({
   errors,
   touched,
   onEditField,
+  conditions,
 }: {
   field: ResolvedField;
   values: FormValues;
+  conditions: readonly NamedCondition[];
   onChange: (path: string, value?: unknown) => void;
   onBlur: (path: string) => void;
   onClearPaths: (paths: string[]) => void;
@@ -972,7 +978,13 @@ const ArrayFieldRenderer = ({
             <TrashIcon />
           </Button>
 
-          {itemFields.map((subField) => {
+          {visibleItemFields({
+            field,
+            index,
+            itemCount: items.length,
+            values,
+            conditions,
+          }).map((subField) => {
             const itemPath = `${field.path}[${index}].${subField.path}`;
             return (
               <FieldRenderer
@@ -1022,12 +1034,19 @@ const buildSubmitValues = ({
     if (field.kind === "array") {
       const arrayKey = arrayIndexKey(field.path);
       const items = readArrayIndices(values, arrayKey);
-      const itemFields = optionalArray(field.itemFields);
       const arrayValues: Record<string, unknown>[] = [];
 
       for (let i = 0; i < items.length; i++) {
         const itemObj = createNullRecord();
-        for (const subField of itemFields) {
+        // Like a hidden field, an item field this item's branch prunes is
+        // not sent.
+        for (const subField of visibleItemFields({
+          field,
+          index: i,
+          itemCount: items.length,
+          values,
+          conditions,
+        })) {
           const path = `${field.path}[${i}].${subField.path}`;
           const val = values[path];
           if (
@@ -1119,10 +1138,15 @@ const collectValidatableFields = (
     if (field.kind === "array") {
       const arrayKey = arrayIndexKey(field.path);
       const items = readArrayIndices(values, arrayKey);
-      const itemFields = optionalArray(field.itemFields);
 
       for (let i = 0; i < items.length; i++) {
-        for (const sub of itemFields) {
+        for (const sub of visibleItemFields({
+          field,
+          index: i,
+          itemCount: items.length,
+          values,
+          conditions,
+        })) {
           const itemPath = `${field.path}[${i}].${sub.path}`;
           result.push({ path: itemPath, field: sub });
         }
@@ -1161,6 +1185,7 @@ const isFieldRequired = (field: ResolvedField): boolean =>
 const collectEmptyArrayFields = (
   field: ResolvedField,
   values: FormValues,
+  conditions: readonly NamedCondition[],
   push: (field: ResolvedField) => void,
 ) => {
   const items = readArrayIndices(values, arrayIndexKey(field.path));
@@ -1171,8 +1196,13 @@ const collectEmptyArrayFields = (
     return;
   }
   for (let i = 0; i < items.length; i++) {
-    const itemFields = optionalArray(field.itemFields);
-    for (const sub of itemFields) {
+    for (const sub of visibleItemFields({
+      field,
+      index: i,
+      itemCount: items.length,
+      values,
+      conditions,
+    })) {
       if (isFieldRequired(sub)) {
         continue;
       }
@@ -1206,7 +1236,7 @@ const collectEmptyOptionalFields = (
       continue;
     }
     if (field.kind === "array") {
-      collectEmptyArrayFields(field, values, push);
+      collectEmptyArrayFields(field, values, conditions, push);
       continue;
     }
     if (
@@ -1420,6 +1450,7 @@ export const TemplateForm = ({
     ...initialValues,
   });
   const [values, setValues] = useState<FormValues>(seedValues);
+  const [initialFormValues] = useState(seedValues);
   // The decision model is asked about a settled form, not every keystroke:
   // this snapshot trails the live values, and the query keyed on it aborts a
   // superseded request through the signal its queryFn consumed.
@@ -1920,6 +1951,24 @@ export const TemplateForm = ({
         });
       }
 
+      const undecidedLabels = readUndecidedConditionLabels(
+        response.response.headers,
+      );
+      if (Result.isError(undecidedLabels)) {
+        getAnalytics().captureError(undecidedLabels.error);
+        stellaToast.add({
+          type: "warning",
+          title: t("common.unexpectedError"),
+        });
+      } else if (undecidedLabels.value.length > 0) {
+        stellaToast.add({
+          type: "warning",
+          title: t("templates.aiConditionsUndecided", {
+            list: undecidedLabels.value.join(", "),
+          }),
+        });
+      }
+
       const clauseWarnings = readClauseWarnings(response.response.headers);
       if (clauseWarnings.isErr()) {
         getAnalytics().captureError(clauseWarnings.error);
@@ -2025,37 +2074,66 @@ export const TemplateForm = ({
       for (const warning of created.clauseWarnings) {
         stellaToast.add({
           type: "warning",
-          title: t("clauses.legacyDirectiveWarning", {
-            clauseName: warning.clauseName,
-            version:
-              warning.version === null ? "none" : String(warning.version),
-          }),
+          title:
+            warning.code === "CLAUSE_OVERRIDE_NOT_RENDERED"
+              ? t("clauses.overrideNotRenderedWarning", {
+                  clauseName: warning.clauseName,
+                })
+              : t("clauses.legacyDirectiveWarning", {
+                  clauseName: warning.clauseName,
+                  version:
+                    warning.version === null ? "none" : String(warning.version),
+                }),
         });
       }
-      stellaToast.add({
-        type: "success",
-        title: t("success.documentCreated"),
-      });
-      if (created.unmatchedPlaceholders.length > 0) {
-        stellaToast.add({
-          type: "warning",
-          title: t("templates.unmatchedPlaceholders", {
-            list: created.unmatchedPlaceholders.join(", "),
-          }),
-        });
-      }
-      // A field whose draft failed is unfilled, so it is already listed above
-      // as an unmatched placeholder; this names the ones the model could not
-      // write, which the person filling the template has to write instead.
-      if (created.aiFieldErrors.length > 0) {
-        stellaToast.add({
-          type: "warning",
-          title: t("templates.aiFieldsNotDrafted", {
-            list: created.aiFieldErrors
-              .map((fieldError) => fieldError.fieldPath)
-              .join(", "),
-          }),
-        });
+      for (const notice of savedFillNotices(created)) {
+        switch (notice.kind) {
+          case "created":
+            stellaToast.add({
+              type: "success",
+              title: t("success.documentCreated"),
+            });
+            break;
+          case "createdIncomplete":
+            stellaToast.add({
+              type: "warning",
+              title: t("templates.documentCreatedIncomplete"),
+            });
+            break;
+          case "unmatchedPlaceholders":
+            stellaToast.add({
+              type: "warning",
+              title: t("templates.unmatchedPlaceholders", {
+                list: notice.list,
+              }),
+            });
+            break;
+          case "aiFieldsNotDrafted":
+            stellaToast.add({
+              type: "warning",
+              title: t("templates.aiFieldsNotDrafted", { list: notice.list }),
+            });
+            break;
+          case "aiConditionsUndecided":
+            stellaToast.add({
+              type: "warning",
+              title: t("templates.aiConditionsUndecided", {
+                list: notice.list,
+              }),
+            });
+            break;
+          case "structureErrors":
+            stellaToast.add({
+              type: "warning",
+              title: t("templates.structureErrorsInDocument", {
+                count: String(notice.count),
+              }),
+            });
+            break;
+          default:
+            notice satisfies never;
+            panic("Unhandled saved-fill notice");
+        }
       }
 
       setMatterDialogOpen(false);
@@ -2247,6 +2325,18 @@ export const TemplateForm = ({
 
   return (
     <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit}>
+      <DialogFormState
+        dirty={
+          JSON.stringify({ values, clauseOverrides }) !==
+          JSON.stringify({ values: initialFormValues, clauseOverrides: {} })
+        }
+        onDiscard={() => {
+          setValues(initialFormValues);
+          setClauseOverrides({});
+          setTouched({});
+          setErrors({});
+        }}
+      />
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-2xl p-6">
           {/* Transient (upload) fill shows the form header + "upload different";
@@ -2373,6 +2463,7 @@ export const TemplateForm = ({
 
             {arrayFields.map((field) => (
               <ArrayFieldRenderer
+                conditions={conditions}
                 errors={errors}
                 field={field}
                 key={field.path}
@@ -2481,6 +2572,10 @@ export const TemplateForm = ({
           so its buttons cannot implicitly submit it. */}
       <Dialog onOpenChange={setMatterDialogOpen} open={matterDialogOpen}>
         <DialogPopup className="max-w-lg">
+          <DialogFormState
+            dirty={matterTarget !== null}
+            onDiscard={() => setMatterTarget(null)}
+          />
           <DialogHeader>
             <DialogTitle>{t("templates.moveToMatter")}</DialogTitle>
           </DialogHeader>

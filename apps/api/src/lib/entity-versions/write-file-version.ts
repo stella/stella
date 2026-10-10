@@ -27,6 +27,7 @@ import {
   cloneFieldsForRevision,
   nextEntityVersionNumber,
 } from "@/api/lib/entity-versions/version-utils";
+import type { FileEncryption } from "@/api/lib/files/detect-file-encryption";
 import { fileContentWithMintedObject } from "@/api/lib/files/file-object-ids";
 import type { MintedFileId } from "@/api/lib/files/file-object-ids";
 import { pdfDerivativeStateForFile } from "@/api/lib/files/gotenberg";
@@ -105,6 +106,8 @@ type WriteFileVersionInput = {
   fileId: MintedFileId;
   fileName: string;
   mimeType: string;
+  /** From `detect-file-encryption.ts`; the new bytes decide it, not the old version. */
+  encryption: FileEncryption;
   sizeBytes: number;
   sha256Hex: string;
   source: DocumentSource | null;
@@ -265,6 +268,7 @@ export const writeFileVersion = async ({
   fileId,
   fileName,
   mimeType,
+  encryption,
   sizeBytes,
   sha256Hex,
   source,
@@ -502,7 +506,7 @@ export const writeFileVersion = async ({
   });
 
   const replacementContent = fileContentWithMintedObject({
-    encrypted: false,
+    encryption,
     fileName,
     id: fileId,
     mimeType,
@@ -512,12 +516,12 @@ export const writeFileVersion = async ({
     type: "file",
     version: 1,
     pdfDerivative: pdfDerivativeStateForFile({
-      encrypted: false,
+      encrypted: encryption.encrypted,
       mimeType,
     }),
     thumbnailFileId: null,
     thumbnailDerivative: thumbnailDerivativeStateForFile({
-      encrypted: false,
+      encrypted: encryption.encrypted,
       mimeType,
     }),
     ...(scanWarnings !== undefined && { scanWarnings }),

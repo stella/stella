@@ -1,9 +1,16 @@
+// parser-output-unchanged: array partitions use the shared owner with identical items and boundaries; parsed content is unchanged.
+// parser-output-unchanged: Read scope passes through the gate; successful decision text and parsing are unchanged.
 import { Result, TaggedError, panic } from "better-result";
 import * as cheerio from "cheerio";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { classifyFailure } from "@stll/errors";
 import { DECISION_IDENTIFIER_MAX_COUNT } from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
+// parser-output-unchanged: imports the document AST from its package owner
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
+// parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
+import { sha256Hex as hashContent } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import {
@@ -11,7 +18,6 @@ import {
   ADAPTER_TIMEOUT,
   PARSER_VERSIONS,
 } from "@/api/handlers/case-law/consts";
-import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import {
   decodeSourceRawEnvelope,
   defineSourceAdapter,
@@ -50,8 +56,11 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/cz-us-throttle";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import {
+  readGatedResponseText,
+  unreadPublisherError,
+} from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
+import {
   adapterCatch,
-  hashContent,
   parseCeDate,
   stripHtml,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
@@ -75,6 +84,15 @@ import {
   type DecisionTextFields,
   type TextField,
 } from "@/api/lib/case-law/decision-text";
+import {
+  READ_OUTCOME_METADATA_KEY,
+  readOutcomeOfStatus,
+  storedReadUnavailable,
+  type ReadOutcome,
+  type ReadRefusalScope,
+  type ReadUnavailableCause,
+  type StoredReadOutcome,
+} from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
@@ -1993,7 +2011,10 @@ const fetchSearchPage = async ({
  */
 export type CzUsBuildResult =
   | { type: "built"; decision: IngestionResult }
-  /** NALUS lists the record but serves no readable text for it. */
+  /**
+   * NALUS lists the record but serves no readable text for it, or refused the
+   * text (the row then states the typed refusal).
+   */
   | { type: "detail-unavailable"; decision: IngestionResult };
 
 /**
@@ -2009,12 +2030,31 @@ export type NalusSession = { readonly cookie: string };
 export const openNalusSession = async (
   signal?: AbortSignal,
 ): Promise<NalusSession> => {
-  const response = await nalusOkResponse({
+  const response = await nalusResponse(SEARCH_URL, {
     fetchStage: "listing",
-    subject: "session",
-    url: SEARCH_URL,
     signal,
   });
+  // The court refusing the session refuses the crawl: a typed source stop.
+  const outcome = readOutcomeOfStatus(
+    response.status,
+    "source",
+    response.headers.get("Retry-After"),
+  );
+  if (outcome.type === "refused") {
+    await response.body?.cancel();
+    throw unreadPublisherError({
+      outcome,
+      message: "NALUS session refused",
+      adapterKey: ADAPTER_KEYS.CZ_US,
+      cursor: null,
+    });
+  }
+  if (!response.ok) {
+    await response.body?.cancel();
+    throw new NalusResponseError({
+      message: `NALUS session returned ${httpFailureReason(response, SEARCH_URL)}`,
+    });
+  }
   await response.text();
   return { cookie: cookieHeader([response]) };
 };
@@ -2040,31 +2080,111 @@ export type NalusRecordCardOutcome =
       status: number | null;
     };
 
+/**
+ * One NALUS document-stage read whose body is text, typed by what the court's
+ * answer established. Only a 404 or 410 states an absence; an empty body is
+ * unread. The court's rate-limit refusal stays the halt it is.
+ */
+const readNalusText = async (
+  url: string,
+  {
+    refusalScope,
+    ...init
+  }: NalusRequestInit & { refusalScope: ReadRefusalScope },
+): Promise<ReadOutcome<string>> => {
+  const read = await readGatedResponseText({
+    request: async () => await nalusResponse(url, { ...init, refusalScope }),
+    signal: init.signal,
+    refusalScope,
+  });
+  if (
+    read.type === "unavailable" &&
+    read.cause.kind === "thrown" &&
+    read.cause.error instanceof NalusRateLimitedError
+  ) {
+    throw read.cause.error;
+  }
+  return read;
+};
+
+/**
+ * A NALUS read that established nothing, as the failure the crawl raises or
+ * reports: a request that threw keeps its own error.
+ */
+const unreadNalusFailure = ({
+  subject,
+  cause,
+}: {
+  subject: string;
+  cause: ReadUnavailableCause;
+}): Error => {
+  switch (cause.kind) {
+    case "thrown":
+      return cause.error instanceof Error
+        ? cause.error
+        : new NalusResponseError({
+            message: `NALUS ${subject} failed: ${String(cause.error)}`,
+          });
+    case "status":
+      return new NalusResponseError({
+        message: `NALUS ${subject} returned HTTP ${cause.status}`,
+      });
+    case "no-content":
+    case "empty-body":
+      return new NalusResponseError({
+        message: `NALUS ${subject} returned HTTP ${cause.status} with no body`,
+      });
+    case "too-large":
+      return new NalusResponseError({
+        message: `NALUS ${subject} body exceeded ${cause.maxBytes} bytes`,
+      });
+    default:
+      cause satisfies never;
+      return panic(`Unhandled NALUS read failure: ${String(cause)}`);
+  }
+};
+
+const readNalusRecordCard = async (
+  nalusRecordId: string,
+  session: NalusSession,
+  signal: AbortSignal | undefined,
+): Promise<ReadOutcome<string>> => {
+  const url = new URL(RESULT_DETAIL_URL);
+  url.searchParams.set("id", nalusRecordId);
+  return await readNalusText(url.href, {
+    fetchStage: "document",
+    signal,
+    headers: { Cookie: session.cookie },
+    refusalScope: "part",
+  });
+};
+
 export const fetchNalusRecordCard = async (
   nalusRecordId: string,
   session: NalusSession,
   signal?: AbortSignal,
 ): Promise<NalusRecordCardOutcome> => {
-  const url = new URL(RESULT_DETAIL_URL);
-  url.searchParams.set("id", nalusRecordId);
-  const response = await nalusResponse(url.href, {
-    fetchStage: "document",
-    signal,
-    headers: { Cookie: session.cookie },
-  });
-  if (response.ok) {
-    return {
-      type: CZ_US_RECORD_CARD_STATE.READ,
-      html: await response.text(),
-    };
-  }
-  await response.text();
-  return response.status === 404 || response.status === 410
-    ? { type: CZ_US_RECORD_CARD_STATE.ABSENT }
-    : {
+  const read = await readNalusRecordCard(nalusRecordId, session, signal);
+  switch (read.type) {
+    case "present":
+      return { type: CZ_US_RECORD_CARD_STATE.READ, html: read.value };
+    case "absent":
+      return { type: CZ_US_RECORD_CARD_STATE.ABSENT };
+    case "refused":
+      // Asked again, like any card the court did not serve.
+      return { type: CZ_US_RECORD_CARD_STATE.UNAVAILABLE, status: read.status };
+    case "unavailable":
+      if (read.cause.kind === "thrown") {
+        throw read.cause.error;
+      }
+      return {
         type: CZ_US_RECORD_CARD_STATE.UNAVAILABLE,
-        status: response.status,
+        status: read.cause.kind === "too-large" ? null : read.cause.status,
       };
+    default:
+      read satisfies never;
+      return panic(`Unhandled record-card read: ${String(read)}`);
+  }
 };
 
 /** No response was served, so the row states the recoverable gap. */
@@ -2087,26 +2207,8 @@ const storedRecordCardOutcome = (
     ? { type: CZ_US_RECORD_CARD_STATE.ABSENT }
     : CARD_NOT_ASKED;
 
-/**
- * The record card beside the document, where the court served one.
- *
- * A failed card is not a failed decision: the document is the row, and the
- * card's fields are recoverable by the backfill that re-reads it. The outcome
- * is carried through whole rather than collapsed to "no card", so the row
- * states which of the two gaps it is in and only the recoverable one is
- * asked about again.
- */
-const fetchRecordCard = async (
-  listed: ListedDecision,
-  session: NalusSession,
-  signal: AbortSignal | undefined,
-): Promise<NalusRecordCardOutcome> =>
-  listed.nalusRecordId === undefined
-    ? CARD_NOT_ASKED
-    : await fetchNalusRecordCard(listed.nalusRecordId, session, signal);
-
 /** Every response the court served for one decision. */
-export type CzUsDecisionPayloads = {
+type CzUsDecisionPayloads = {
   listed: ListedDecision;
   textHtml: string;
   /** What the court answered when asked for the record card. */
@@ -2172,7 +2274,7 @@ const czUsSourceHash = (payloads: CzUsSourceHashInput) => {
  * decision from the same payloads, so what the suite certifies is what a
  * crawl stores.
  */
-export const buildCzUsDecision = ({
+const buildCzUsDecision = ({
   listed,
   textHtml,
   recordCard,
@@ -2240,6 +2342,41 @@ const detailReadFailed = failureSink({
   expected: [],
 });
 
+/** A page read for one decision, named as the failure report names it. */
+type NalusPage = "text" | "record-card" | "abstract";
+
+/** A NALUS read that established no page: refused or failed. */
+type UnreadNalusPage = Extract<
+  ReadOutcome<string>,
+  { readonly type: "refused" | "unavailable" }
+>;
+
+/**
+ * An unread page beside the text, as the decision stores it. The adapter
+ * sees one cycle; counting consecutive ones is the pipeline's.
+ */
+const storedPartReadOutcome = (read: UnreadNalusPage): StoredReadOutcome =>
+  read.type === "refused"
+    ? read
+    : storedReadUnavailable({
+        cause: read.cause,
+        scope: "part",
+        consecutiveCycles: 1,
+      });
+
+/**
+ * Build one listed record from the court's pages: the text, the record card
+ * and the abstract.
+ *
+ * A failed text read fails the page; a refused text is the document refused,
+ * held listing-only with its typed refusal, and does not stop the crawl. A
+ * record card or abstract the court did not answer for, or refused, is a page
+ * beside the text: the decision is stored, the page's state is the typed gap
+ * `unavailable` (asked again by the judges backfill and on cadence), the
+ * read's typed outcome is stored under `metadata.readOutcome`, and the read
+ * is reported with the page it concerns. Only the court's 404 or 410 is an
+ * absence the row states.
+ */
 const fetchListedDecision = async (
   listed: ListedDecision,
   session: NalusSession,
@@ -2257,39 +2394,19 @@ const fetchListedDecision = async (
       decision: listedOnlyDecision(listed, "missing-text-action"),
     };
   }
-  const response = await nalusResponse(listed.sourceUrl, {
-    fetchStage: "document",
-    signal,
-  });
-  if (!response.ok) {
-    if (response.status === 404 || response.status === 410) {
-      return {
-        type: "detail-unavailable",
-        decision: listedOnlyDecision(listed, `http-${response.status}`),
-      };
-    }
-    throw new NalusResponseError({
-      message: `NALUS decision ${listed.sourceDocumentId} returned ${httpFailureReason(
-        response,
-        listed.sourceUrl,
-      )}`,
-    });
-  }
-  const responseHtml = await response.text();
-
-  // A page beside the document: failing to read one is not failing to read
-  // the decision, so the caller states what the gap looks like on the row.
-  // A failed read is reported with the page it concerns, graded as the
-  // upstream being unavailable.
-  const reportUnreadPage = (
-    part: "record-card" | "abstract",
-    error: unknown,
-  ): void => {
+  // A refusal is reported with its typed `ReadRefusal`; a failed read with
+  // the court's status or its own thrown error.
+  const reportUnreadPage = (part: NalusPage, read: UnreadNalusPage): void => {
     observeFailure(
       classifyFailure(
-        typeof error === "object" && error !== null
-          ? error
-          : new Error("NALUS read failed", { cause: error }),
+        read.type === "refused"
+          ? unreadPublisherError({
+              outcome: read,
+              message: `NALUS ${part} refused`,
+              adapterKey: ADAPTER_KEYS.CZ_US,
+              cursor: null,
+            })
+          : unreadNalusFailure({ subject: part, cause: read.cause }),
         "upstream_unavailable",
       ),
       {
@@ -2302,75 +2419,126 @@ const fetchListedDecision = async (
       },
     );
   };
-  const optionalPage = async <T>(
-    part: "record-card" | "abstract",
-    read: () => Promise<T>,
-    whenUnread: T,
-  ): Promise<T> => {
-    try {
-      return await read();
-    } catch (error) {
-      // The publisher's rate limit is not an absent page: recording it as one
-      // would store the decision without the field and never ask again.
-      if (signal?.aborted || error instanceof NalusRateLimitedError) {
-        throw error;
-      }
-      reportUnreadPage(part, error);
-      return whenUnread;
-    }
-  };
-
-  const recordCard = await optionalPage(
-    "record-card",
-    async () => await fetchRecordCard(listed, session, signal),
-    CARD_NOT_ASKED,
-  );
-  // The court's 404 or 410 is its answer that the record has no abstract
-  // page. Every other status is a failed read, reported as a failed request
-  // is, and the row states `unavailable`, which the reconciliation reads
-  // again.
-  const abstract = await optionalPage(
-    "abstract",
-    async (): Promise<NalusAbstractOutcome> => {
-      const abstractUrl = `${ABSTRACT_URL}?${new URLSearchParams({
-        sz: listed.sz ?? "",
-      }).toString()}`;
-      const abstractResponse = await nalusResponse(abstractUrl, {
-        fetchStage: "document",
-        signal,
-      });
-      if (abstractResponse.ok) {
-        return {
-          type: CZ_US_ABSTRACT_STATE.READ,
-          html: await abstractResponse.text(),
-        };
-      }
-      await abstractResponse.text();
-      if (abstractResponse.status === 404 || abstractResponse.status === 410) {
-        return { type: CZ_US_ABSTRACT_STATE.ABSENT };
-      }
-      reportUnreadPage(
-        "abstract",
-        new NalusResponseError({
-          message: `NALUS abstract returned ${httpFailureReason(
-            abstractResponse,
-            abstractUrl,
-          )}`,
+  const text = await readNalusText(listed.sourceUrl, {
+    fetchStage: "document",
+    signal,
+    refusalScope: "document",
+  });
+  switch (text.type) {
+    case "present":
+      break;
+    case "absent":
+      return {
+        type: "detail-unavailable",
+        decision: listedOnlyDecision(listed, text.evidence),
+      };
+    case "refused": {
+      reportUnreadPage("text", text);
+      const held = listedOnlyDecision(listed, `text-refused-${text.status}`);
+      return {
+        type: "detail-unavailable",
+        decision: plainTextIngestionResult({
+          ...held,
+          metadata: { ...held.metadata, [READ_OUTCOME_METADATA_KEY]: text },
         }),
-      );
-      return { type: CZ_US_ABSTRACT_STATE.UNAVAILABLE };
-    },
-    { type: CZ_US_ABSTRACT_STATE.UNAVAILABLE },
-  );
+      };
+    }
+    case "unavailable":
+      throw unreadNalusFailure({
+        subject: `decision ${listed.sourceDocumentId}`,
+        cause: text.cause,
+      });
+    default:
+      text satisfies never;
+      return panic(`Unhandled NALUS text read: ${String(text)}`);
+  }
+  const responseHtml = text.value;
 
-  const decision = buildCzUsDecision({
+  // The first page beside the text that went unread; its own state field
+  // (`recordCard`, `abstractState`) states each page's gap.
+  let unreadPart: StoredReadOutcome | null = null;
+  let recordCard: NalusRecordCardOutcome = CARD_NOT_ASKED;
+  if (listed.nalusRecordId !== undefined) {
+    const card = await readNalusRecordCard(
+      listed.nalusRecordId,
+      session,
+      signal,
+    );
+    switch (card.type) {
+      case "present":
+        recordCard = { type: CZ_US_RECORD_CARD_STATE.READ, html: card.value };
+        break;
+      case "absent":
+        recordCard = { type: CZ_US_RECORD_CARD_STATE.ABSENT };
+        break;
+      case "refused":
+        reportUnreadPage("record-card", card);
+        recordCard = {
+          type: CZ_US_RECORD_CARD_STATE.UNAVAILABLE,
+          status: card.status,
+        };
+        unreadPart = storedPartReadOutcome(card);
+        break;
+      case "unavailable":
+        reportUnreadPage("record-card", card);
+        recordCard =
+          card.cause.kind === "thrown"
+            ? CARD_NOT_ASKED
+            : {
+                type: CZ_US_RECORD_CARD_STATE.UNAVAILABLE,
+                status:
+                  card.cause.kind === "too-large" ? null : card.cause.status,
+              };
+        unreadPart = storedPartReadOutcome(card);
+        break;
+      default:
+        card satisfies never;
+        return panic(`Unhandled record-card read: ${String(card)}`);
+    }
+  }
+
+  const abstract = await readNalusText(
+    `${ABSTRACT_URL}?${new URLSearchParams({ sz: listed.sz }).toString()}`,
+    { fetchStage: "document", signal, refusalScope: "part" },
+  );
+  switch (abstract.type) {
+    case "present":
+    case "absent":
+      break;
+    case "refused":
+    case "unavailable":
+      reportUnreadPage("abstract", abstract);
+      unreadPart ??= storedPartReadOutcome(abstract);
+      break;
+    default:
+      abstract satisfies never;
+      return panic(`Unhandled abstract read: ${String(abstract)}`);
+  }
+
+  const built = buildCzUsDecision({
     listed,
     textHtml: responseHtml,
     recordCard,
-    ...(abstract.type === CZ_US_ABSTRACT_STATE.READ
-      ? { abstractHtml: abstract.html }
-      : { abstractHtml: undefined, abstractState: abstract.type }),
+    ...(abstract.type === "present"
+      ? { abstractHtml: abstract.value }
+      : {
+          abstractHtml: undefined,
+          abstractState:
+            abstract.type === "absent"
+              ? CZ_US_ABSTRACT_STATE.ABSENT
+              : CZ_US_ABSTRACT_STATE.UNAVAILABLE,
+        }),
   });
+  const decision =
+    built === null || unreadPart === null
+      ? built
+      : plainTextIngestionResult({
+          ...built,
+          metadata: {
+            ...built.metadata,
+            [READ_OUTCOME_METADATA_KEY]: unreadPart,
+          },
+        });
   if (!decision) {
     return {
       type: "detail-unavailable",
@@ -2499,8 +2667,12 @@ const fetchListedDecisions = async (
 ): Promise<CzUsPageItems> => {
   const decisions: IngestionResult[] = [];
   let failed = 0;
-  for (let start = 0; start < listed.length; start += DOCUMENT_CONCURRENCY) {
-    const batch = listed.slice(start, start + DOCUMENT_CONCURRENCY);
+  for (const [batchIndex, batch] of chunkItems(
+    listed,
+    DOCUMENT_CONCURRENCY,
+  ).entries()) {
+    const start = batchIndex * DOCUMENT_CONCURRENCY;
+
     const built = await Promise.all(
       batch.map(
         async (item) =>
@@ -2673,6 +2845,16 @@ const isListedDecision = (value: unknown): value is ListedDecision => {
 };
 
 /**
+ * One listed record built through a fresh session, by the reads and parse the
+ * crawl uses.
+ */
+export const buildCzUsListedRecord = async (
+  listed: ListedDecision,
+  signal?: AbortSignal,
+): Promise<CzUsBuildResult> =>
+  await fetchListedDecision(listed, await openNalusSession(signal), signal);
+
+/**
  * Replay one listed record through the adapter's own fetch and parse path.
  *
  * A record the listing names but whose text NALUS does not serve is reported,
@@ -2690,11 +2872,7 @@ const buildCzUsFromPayload = async (
   ) {
     return { type: "unkeyable" };
   }
-  const built = await fetchListedDecision(
-    payload,
-    await openNalusSession(signal),
-    signal,
-  );
+  const built = await buildCzUsListedRecord(payload, signal);
   switch (built.type) {
     case "built":
       return { type: "built", decision: built.decision };

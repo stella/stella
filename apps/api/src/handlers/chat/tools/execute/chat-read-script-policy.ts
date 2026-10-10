@@ -3,14 +3,29 @@ import type {
   RegistryReadToolName,
   READ_TOOL_REF_FIELD_MAP,
 } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
+import type { ThirdPartyOutboundReadToolName } from "@/api/handlers/chat/tools/registry-adapter/run-registry-tool";
 
 type ChatProjectableReadToolName = ChatProjectableToolName<
   typeof READ_TOOL_REF_FIELD_MAP
 >;
 
-export const CHAT_READ_SCRIPT_POLICIES = ["script", "direct-only"] as const;
+const CHAT_READ_SCRIPT_POLICIES = ["script", "direct-only"] as const;
 
-export type ChatReadScriptPolicy = (typeof CHAT_READ_SCRIPT_POLICIES)[number];
+type ChatReadScriptPolicy = (typeof CHAT_READ_SCRIPT_POLICIES)[number];
+
+/**
+ * A script runs without outbound approval and holds no third-party outbound
+ * permit, so a read whose handler needs one is `direct-only`: the policy map
+ * fails to compile when it marks one `script`.
+ */
+type ChatReadScriptPolicyMap = Record<
+  Exclude<ChatProjectableReadToolName, ThirdPartyOutboundReadToolName>,
+  ChatReadScriptPolicy
+> &
+  Record<
+    Extract<ChatProjectableReadToolName, ThirdPartyOutboundReadToolName>,
+    "direct-only"
+  >;
 
 /**
  * How each chat-projectable read is offered. `script` reads are script
@@ -37,6 +52,7 @@ export const CHAT_READ_SCRIPT_POLICY = {
   get_usage: "script",
   search_case_law: "script",
   lookup_case_law: "script",
+  case_law_coverage: "script",
   read_case_law_decision: "script",
   read_case_law_citations: "script",
   search_legislation: "script",
@@ -45,7 +61,7 @@ export const CHAT_READ_SCRIPT_POLICY = {
   read_provision_history: "script",
   search_boe_legislation: "direct-only",
   lookup_business_registry: "direct-only",
-} as const satisfies Record<ChatProjectableReadToolName, ChatReadScriptPolicy>;
+} as const satisfies ChatReadScriptPolicyMap;
 
 type DirectOnlyChatReadToolName = {
   [

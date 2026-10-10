@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/handlers/hosted-usage-webhook/replay.ts",
+  "delta": 1,
+  "reason": "Replay commits or releases a savepoint for each explicitly selected receipt in order so later receipts observe earlier dispatch effects; each failure rolls back only its own attempt."
+}

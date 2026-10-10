@@ -16,3 +16,17 @@ test("admission refusals distinguish retryable failures from operator action", (
     EXIT_CODES.server,
   );
 });
+
+test.each([
+  "properties_limit_reached",
+  "playbook_scope_unresolved",
+  "file_property_type_immutable",
+])(
+  "%s is an issue code; its validation envelope remains correctable",
+  (code) => {
+    expect(resolveMcpErrorCodeExit(code)).toBeUndefined();
+    expect(resolveMcpErrorCodeExit("validation_error")).toBe(
+      EXIT_CODES.validation,
+    );
+  },
+);

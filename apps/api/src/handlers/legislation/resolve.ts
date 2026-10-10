@@ -110,8 +110,8 @@ export const resolveStatutesHandler = async (
         return {
           ...work,
           statute: null,
-          unresolvedReason: countryRead.response.reason,
-          availability: countryRead.response,
+          unresolvedReason: countryRead.answer.response.reason,
+          availability: countryRead.answer.response,
         };
       }
       const key = String(index);

@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { and, eq, isNull, like, or, sql } from "drizzle-orm";
+import { and, eq, isNull, or, sql } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
@@ -8,8 +8,8 @@ import {
   RESOURCE_TYPE,
   toChatResourceHref,
 } from "@stll/api-contract";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
-import { jsonField } from "@/api/db/json-utils";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
@@ -21,33 +21,44 @@ import {
   fields,
   workspaces,
 } from "@/api/db/schema";
-import { env } from "@/api/env";
 import {
   UPLOAD_ENTITY_ORIGIN,
   uploadTriggeredFlowPolicy,
 } from "@/api/handlers/entities/upload-origin";
+import { entityFileRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { captureError } from "@/api/lib/analytics/capture";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  cleanupObjectAfterWriter,
+  lockObjectCleanupIntentsForWriter,
+  reserveObjectCleanupIntent,
+  retirePublishedObjectCleanupIntentsInTransaction,
+} from "@/api/lib/buffer-intent-reconciliation";
 import { hasPersistedGeneratedDocumentActiveDraftContext } from "@/api/lib/chat/active-draft-context";
 import { getGeneratedDocumentDraftState } from "@/api/lib/chat/created-draft";
 import { expandThreadDataScopeOnTx } from "@/api/lib/chat/data-scope";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
+import { insertNamedEntity } from "@/api/lib/entities/sibling-name-insert";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { insertEntityVersion } from "@/api/lib/entity-versions/insert-entity-version";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { escapeLike } from "@/api/lib/escape-like";
 import {
   enqueueImageThumbnailOrMarkFailed,
   enqueuePdfDerivativeOrMarkFailed,
 } from "@/api/lib/file-derivative-queue";
 import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload-handler";
 import { deleteOrganizationFilesWithSignal } from "@/api/lib/files/delete-organization-file";
+import {
+  detectFileEncryption,
+  uploadFileEncryption,
+} from "@/api/lib/files/detect-file-encryption";
 import {
   allocateFileObject,
   fileContentWithMintedObject,
@@ -56,21 +67,32 @@ import { pdfDerivativeStateForFile } from "@/api/lib/files/gotenberg";
 import { thumbnailDerivativeStateForFile } from "@/api/lib/files/image-derivative";
 import {
   organizationFileUsageHandlerError,
+  OrganizationFileUsageError,
   writeOrganizationFile,
 } from "@/api/lib/files/organization-file-usage";
-import { isEncryptedPdf } from "@/api/lib/files/pdf-utils";
 import { storedDocumentBytes } from "@/api/lib/files/stored-document-bytes";
 import { createFileKey } from "@/api/lib/files/utils";
 import { maybeStartUploadTriggeredFlows } from "@/api/lib/flows/maybe-start-upload-triggered-flows";
 import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
-import { writeS3ObjectWithRetry } from "@/api/lib/s3";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
+import {
+  S3_OBJECT_WRITE_CERTAINTY,
+  writeS3ObjectWithRetry,
+} from "@/api/lib/s3";
+import type { S3ObjectWriteCertainty } from "@/api/lib/s3";
 import type { SanitizedFileName } from "@/api/lib/sanitize-filename";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import {
   processExtraction,
   requestNativeExtractionRun,
 } from "@/api/lib/search/process-extraction";
-import { PDF_MIME_TYPE } from "@/api/mime-types";
+import { resolveEntityCreateFileName } from "@/api/lib/uploads/entity-create";
+
+const cleanupSettlementFailure = failureSink({
+  event: "entities.upload_cleanup_settlement_failed",
+  expected: [],
+});
 
 const uploadEntityBodySchema = t.Object({
   file: t.File({
@@ -91,6 +113,8 @@ const uploadGeneratedDocumentBodySchema = t.Object({
 });
 
 type UploadEntityHandlerProps = {
+  fileUsageDb?: Parameters<typeof writeOrganizationFile>[0]["db"];
+  processEntity?: typeof processExtraction;
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
@@ -188,12 +212,6 @@ export const resolveGeneratedDocumentDraftThreadLinkPreflight = ({
   hasExistingLink: boolean;
 }): "conflict" | "continue" => (hasExistingLink ? "conflict" : "continue");
 
-type ResolveFileNameProps = {
-  tx: Transaction;
-  propertyId: SafeId<"property">;
-  name: SanitizedFileName;
-};
-
 type UploadWriteFailureReason =
   | "content-mismatch"
   | "draft-thread-not-bound"
@@ -257,9 +275,8 @@ const uploadWriteFailureStatus = (
   }
 };
 
-const MAX_FILENAME_LENGTH = 255;
-
 type CleanupUploadedS3KeysOptions = {
+  fileUsageDb?: Parameters<typeof writeOrganizationFile>[0]["db"];
   keys: string[];
   fileId: string;
   workspaceId: SafeId<"workspace">;
@@ -277,13 +294,15 @@ const cleanupUploadedS3Keys = async ({
   keys,
   fileId,
   workspaceId,
-}: CleanupUploadedS3KeysOptions): Promise<void> => {
+  fileUsageDb,
+}: CleanupUploadedS3KeysOptions): Promise<boolean> => {
   const cleanup = Result.flatten(
     await Result.tryPromise({
       try: async () =>
         await deleteOrganizationFilesWithSignal(
           keys,
           AbortSignal.timeout(10_000),
+          fileUsageDb === undefined ? {} : { fileUsageDb },
         ),
       catch: (cause) => cause,
     }),
@@ -295,6 +314,7 @@ const cleanupUploadedS3Keys = async ({
       workspaceId,
     });
   }
+  return Result.isOk(cleanup);
 };
 
 type ResolveSavedGeneratedDocumentProps = {
@@ -720,42 +740,9 @@ const preflightGeneratedDocumentDraft = async ({
     }
   });
 
-const resolveFileName = async ({
-  tx,
-  propertyId,
-  name,
-}: ResolveFileNameProps) => {
-  const lastDot = name.lastIndexOf(".");
-  const base = lastDot === -1 ? name : name.slice(0, lastDot);
-  const ext = lastDot === -1 ? "" : name.slice(lastDot);
-
-  const pattern = `${escapeLike(base)}%${escapeLike(ext)}`;
-
-  const fieldsCount = await tx.$count(
-    fields,
-    and(
-      eq(fields.propertyId, propertyId),
-      like(jsonField(fields.content, "v1")("fileName"), pattern),
-    ),
-  );
-
-  if (fieldsCount === 0) {
-    return { renamed: false as const, value: name };
-  }
-
-  // Reserve space for the suffix so truncation cannot eat it.
-  const suffix = `_${fieldsCount}`;
-  const maxBase = MAX_FILENAME_LENGTH - suffix.length - ext.length;
-  const truncatedBase = maxBase > 0 ? base.slice(0, maxBase) : base;
-
-  // SAFETY: name is already sanitized; the suffix is digits and underscore only
-  return {
-    renamed: true as const,
-    value: sanitizeFilename(`${truncatedBase}${suffix}${ext}`),
-  };
-};
-
-const uploadEntityHandler = async function* ({
+export const uploadEntityHandler = async function* ({
+  fileUsageDb,
+  processEntity = processExtraction,
   safeDb,
   organizationId,
   workspaceId,
@@ -846,9 +833,7 @@ const uploadEntityHandler = async function* ({
   }
 
   const fileBuffer = await file.arrayBuffer();
-  const sha256Hex = new Bun.CryptoHasher("sha256")
-    .update(fileBuffer)
-    .digest("hex");
+  const sha256Hex = hashSha256Hex(new Uint8Array(fileBuffer));
 
   if (
     generatedDraft !== undefined &&
@@ -881,29 +866,21 @@ const uploadEntityHandler = async function* ({
     await storedDocumentBytes(fileBuffer);
   const storedSizeBytes = storedBytes.byteLength;
   const storedSha256Hex =
-    strippedArchive === null
-      ? sha256Hex
-      : new Bun.CryptoHasher("sha256").update(storedBytes).digest("hex");
+    strippedArchive === null ? sha256Hex : hashSha256Hex(storedBytes);
 
-  let encrypted = false;
-  if (file.type === PDF_MIME_TYPE) {
-    const result = await isEncryptedPdf(scanned);
-
-    if (Result.isError(result)) {
-      captureError(result.error, {
-        mimeType: PDF_MIME_TYPE,
-        sizeBytes: String(fileBuffer.byteLength),
-      });
-      return Result.err(
-        new HandlerError({
-          status: 422,
-          message: "Failed to open PDF: file appears corrupted",
-        }),
-      );
-    }
-
-    encrypted = result.value;
+  const encryption = uploadFileEncryption(
+    await detectFileEncryption({ mimeType: file.type, scanned }),
+    { mimeType: file.type, sizeBytes: String(fileBuffer.byteLength) },
+  );
+  if (encryption === null) {
+    return Result.err(
+      new HandlerError({
+        status: 422,
+        message: "Failed to open PDF: file appears corrupted",
+      }),
+    );
   }
+  const { encrypted } = encryption;
 
   const fileId = allocateFileObject();
   const sourceKey = createFileKey({
@@ -914,40 +891,64 @@ const uploadEntityHandler = async function* ({
   });
 
   const s3Keys = [sourceKey];
-  if (!env.FEATURE_FILE_USAGE_LIMITS) {
-    await writeS3ObjectWithRetry({
-      contentType: file.type,
-      data: storedBytes,
-      key: sourceKey,
-    });
-  }
-  // `yield*` on an Err suspends this generator via `.return()`, not `.throw()`,
-  // so a database error here skips `catch` entirely (finally still runs).
-  // Track intent to keep the object instead of relying on catch to clean it up.
+  const cleanupIntentId = yield* Result.await(
+    reserveObjectCleanupIntent({
+      objectKey: sourceKey,
+      organizationId,
+      safeDb,
+      workspaceId,
+    }),
+  );
+  // Exhausted attempts can still finish late; only a confirmed write narrows this.
+  let writeState: S3ObjectWriteCertainty | "never-written" = "never-written";
   let keepUploadedFile = false;
-  let writeOutcomeUncertain = false;
   try {
-    if (env.FEATURE_FILE_USAGE_LIMITS) {
+    if (isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")) {
       const organizationFileWrite = await writeOrganizationFile({
         organizationId,
         objectKey: sourceKey,
         sizeBytes: storedSizeBytes,
-        write: async () =>
-          await writeS3ObjectWithRetry({
-            contentType: file.type,
-            data: storedBytes,
-            key: sourceKey,
-          }),
+        content: storedBytes,
+        ...(fileUsageDb === undefined ? {} : { db: fileUsageDb }),
+        write: async ({ content, objectKey }) => {
+          writeState = S3_OBJECT_WRITE_CERTAINTY.UNCERTAIN;
+          return await writeS3ObjectWithRetry(
+            {
+              contentType: file.type,
+              data: content,
+              key: objectKey,
+            },
+            { type: "cleanup-intent", intent: cleanupIntentId },
+          );
+        },
       });
       if (Result.isError(organizationFileWrite)) {
-        // A storage timeout or failed ledger commit can leave an object behind.
-        // The reservation remains until object-state reconciliation settles it.
-        writeOutcomeUncertain =
-          organizationFileWrite.error.reason === "storage_unavailable";
         return Result.err(
           organizationFileUsageHandlerError(organizationFileWrite.error),
         );
       }
+      writeState = organizationFileWrite.value;
+    } else {
+      writeState = S3_OBJECT_WRITE_CERTAINTY.UNCERTAIN;
+      writeState = yield* Result.await(
+        Result.tryPromise({
+          try: async () =>
+            await writeS3ObjectWithRetry(
+              {
+                contentType: file.type,
+                data: storedBytes,
+                key: sourceKey,
+              },
+              { type: "cleanup-intent", intent: cleanupIntentId },
+            ),
+          catch: (cause) =>
+            new OrganizationFileUsageError({
+              reason: "storage_unavailable",
+              message: "Organization file usage is unavailable",
+              cause,
+            }),
+        }),
+      );
     }
     const entityId = createSafeId<"entity">();
     const entityVersionId = createSafeId<"entityVersion">();
@@ -958,6 +959,7 @@ const uploadEntityHandler = async function* ({
         // See `lockWorkspacesForEntityCap` for the canonical lock
         // order every entity-creating path follows (issue #1139).
         await lockWorkspacesForEntityCap(tx, [workspaceId]);
+        await lockObjectCleanupIntentsForWriter(tx, [cleanupIntentId]);
 
         let generatedDraftLocator: {
           partIndex: number;
@@ -1046,14 +1048,19 @@ const uploadEntityHandler = async function* ({
           return { ok: false as const, reason: "entity-limit" as const };
         }
 
-        const resolvedName = await resolveFileName({ tx, propertyId, name });
+        const resolvedName = await resolveEntityCreateFileName({
+          tx,
+          workspaceId,
+          parentId: null,
+          name,
+        });
 
         const entityStamp = await allocateEntityStamp(tx, workspaceId);
 
-        await tx.insert(entities).values({
+        await insertNamedEntity(tx, {
           id: entityId,
           workspaceId,
-          name: resolvedName.value,
+          name: resolvedName.name,
           createdBy: userId,
           docSequence: entityStamp.docSequence,
         });
@@ -1083,7 +1090,7 @@ const uploadEntityHandler = async function* ({
             fileName: resolvedName.value,
             mimeType: file.type,
             sizeBytes: storedSizeBytes,
-            encrypted,
+            encryption,
             sha256Hex: storedSha256Hex,
             pdfFileId: null,
             pdfDerivative: pdfDerivativeStateForFile({
@@ -1198,6 +1205,10 @@ const uploadEntityHandler = async function* ({
           },
         });
 
+        await retirePublishedObjectCleanupIntentsInTransaction({
+          intentIds: [cleanupIntentId],
+          tx,
+        });
         return { ok: true as const, resolvedName, status: "created" as const };
       }),
     );
@@ -1220,7 +1231,7 @@ const uploadEntityHandler = async function* ({
     keepUploadedFile = true;
     const fileName = writeResult.resolvedName;
 
-    await processExtraction(entityId).catch((error: unknown) =>
+    await processEntity(entityId).catch((error: unknown) =>
       captureError(error, { entityId, mimeType: file.type }),
     );
 
@@ -1275,13 +1286,35 @@ const uploadEntityHandler = async function* ({
       renamed: fileName.renamed,
     });
   } finally {
-    if (!keepUploadedFile && !writeOutcomeUncertain) {
-      await cleanupUploadedS3Keys({ keys: s3Keys, fileId, workspaceId });
+    if (!keepUploadedFile) {
+      const settled = await cleanupObjectAfterWriter({
+        safeDb,
+        intentId: cleanupIntentId,
+        writeState,
+        deleteObject: async () =>
+          await cleanupUploadedS3Keys({
+            keys: s3Keys,
+            fileId,
+            workspaceId,
+            fileUsageDb,
+          }),
+      });
+      if (Result.isError(settled)) {
+        observeFailure(settled.error, {
+          sink: cleanupSettlementFailure,
+          ctx: { workspaceId },
+        });
+      }
     }
   }
 };
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Stores document content and returns operation metadata rather than stored-file bytes.",
+  },
   description:
     "Upload a file as a new document in the current matter over a multipart " +
     "request: the file, a name, and the propertyId of the matter's file " +
@@ -1291,6 +1324,8 @@ const config = {
     "cannot send multipart: use uploads.create with purpose entity_create " +
     "and then uploads.update.",
   permissions: { entity: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: entityFileRealtimeUpdates,
   mcp: {
     type: "capability",
     reason: "document_processing",
@@ -1330,7 +1365,14 @@ const uploadEntity = createSafeHandler(
 );
 
 const generatedDocumentConfig = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Stores document content and returns operation metadata rather than stored-file bytes.",
+  },
   permissions: { entity: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: entityFileRealtimeUpdates,
   mcp: { type: "internal", reason: "assistant_chat" },
   body: uploadGeneratedDocumentBodySchema,
 } satisfies WorkspaceHandlerConfig;

@@ -1,6 +1,8 @@
+import { panic } from "better-result";
 import * as v from "valibot";
 
 import { LEGISLATION_LIST_VALIDITIES } from "@stll/api-contract/legislation-status";
+import { readStatuteQueryScope } from "@stll/api-contract/statute-query-capability";
 import {
   parseStatuteQuery,
   type StatuteQueryIntent,
@@ -10,7 +12,6 @@ import {
   publicLawPageSearchSchema,
   publicLawPageSizeSearchSchema,
 } from "@/components/public-law-table/public-law-pagination.logic";
-import { isStatuteCountry } from "@/lib/statute-route";
 
 export const STATUTE_MAX_QUERY_LENGTH = 256;
 
@@ -41,10 +42,7 @@ export type StatutesIndexSearch = v.InferOutput<
   typeof statutesIndexSearchSchema
 >;
 
-/**
- * What an entry asks for in this jurisdiction. A country the grammar does
- * not know reads every entry as text.
- */
+/** What an entry asks for in this jurisdiction. */
 export const readStatuteIntent = (
   country: string,
   q: string | undefined,
@@ -52,9 +50,19 @@ export const readStatuteIntent = (
   if (q === undefined) {
     return { type: "empty" };
   }
-  return isStatuteCountry(country)
-    ? parseStatuteQuery(country, q)
-    : { type: "text", text: q };
+  const scope = readStatuteQueryScope(country);
+  switch (scope.type) {
+    case "supported":
+      return parseStatuteQuery(scope.country, q);
+    case "unsupported":
+      // Without an act grammar the entry can still match titles, so it is
+      // searched as text rather than refused.
+      return { type: "text", text: q };
+    default: {
+      scope satisfies never;
+      return panic(`Unhandled statute query scope: ${String(scope)}`);
+    }
+  }
 };
 
 type ChangeStatutesIndexQueryOptions = {

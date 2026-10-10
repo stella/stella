@@ -1,6 +1,6 @@
 {
   "name": "@stll/ai-catalog",
-  "version": "0.4.0",
+  "version": "0.6.1",
   "description": "Provider-neutral AI model roles, capabilities, and curated model metadata.",
   "keywords": [
     "ai",
@@ -26,7 +26,9 @@
   "type": "module",
   "sideEffects": false,
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./benchmark-frontier": "./src/benchmark-frontier.ts",
+    "./benchmarks": "./src/benchmarks.ts"
   },
   "publishConfig": {
     "access": "public"
@@ -34,10 +36,13 @@
   "scripts": {
     "clean": "git clean -xdf dist .cache .turbo node_modules",
     "build": "tsdown",
-    "gen:capabilities": "bun ../scripts/src/model-catalog-capabilities-gen.ts",
-    "gen:rates": "bun ../scripts/src/model-catalog-rates-gen.ts",
+    "gen:benchmarks": "bun ../scripts/src/model-catalog-benchmarks-gen.ts",
+    "gen:capabilities": "bun --preload ../../scripts/offline-network-preload.ts ../scripts/src/model-catalog-capabilities-gen.ts",
+    "check:generations": "bun --preload ../../scripts/offline-network-preload.ts ../scripts/src/model-catalog-generation-check.ts",
+    "gen:rates": "bun --preload ../../scripts/offline-network-preload.ts ../scripts/src/model-catalog-rates-gen.ts",
     "pack:dry-run": "bun pm pack --dry-run",
     "test": "bun test src",
+    "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src --include='*.test.ts')",
     "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/ai-catalog",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/ai-catalog",
@@ -48,6 +53,7 @@
     "valibot": "catalog:"
   },
   "devDependencies": {
+    "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",
     "@tanstack/ai-anthropic": "catalog:",
     "@tanstack/ai-bedrock": "catalog:",
@@ -55,6 +61,7 @@
     "@tanstack/ai-mistral": "catalog:",
     "@tanstack/ai-openrouter": "catalog:",
     "bun-types": "catalog:",
+    "fast-check": "catalog:",
     "tsdown": "catalog:"
   }
 }

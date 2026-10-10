@@ -1,106 +1,17 @@
-import { panic, Result } from "better-result";
-import { afterEach, describe, expect, setDefaultTimeout, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
+import { describe, expect, setDefaultTimeout, test } from "bun:test";
 
-const REPOSITORY_ROOT = path.resolve(import.meta.dir, "../..");
+import { lintSingleRule } from "./lint-single-rule.ts";
+
 const SEARCH_INPUT_RULE = "no-decorated-search-input";
 const DIALOG_FOOTER_RULE = "dialog-footer-owns-actions";
 const LEGAL_CLICHE_RULE = "no-legal-cliche-glyph";
-const temporaryDirectories: string[] = [];
 
 setDefaultTimeout(20_000);
 
-afterEach(async () => {
-  await Promise.all(
-    temporaryDirectories
-      .splice(0)
-      .map(
-        async (directory) =>
-          await rm(directory, { force: true, recursive: true }),
-      ),
+const lint = async (rule: string, source: string) =>
+  (await lintSingleRule(rule, source, { sourcePath: "surface.tsx" })).map(
+    () => rule,
   );
-});
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null;
-
-const isUnknownArray = (value: unknown): value is readonly unknown[] =>
-  Array.isArray(value);
-
-/**
- * The rule name a diagnostic reports, or null when the report shape is not the
- * one oxlint documents. Narrowed rather than asserted: the report is another
- * process's output, so its shape is a claim to check.
- */
-const reportedRule = (diagnostic: unknown): string | null => {
-  if (!isRecord(diagnostic) || typeof diagnostic.code !== "string") {
-    return null;
-  }
-  const openingParenthesis = diagnostic.code.indexOf("(");
-  return openingParenthesis === -1
-    ? diagnostic.code
-    : diagnostic.code.slice(0, openingParenthesis);
-};
-
-/**
- * The rules that fired over `source`, in report order.
- *
- * Read out of oxlint's JSON report rather than its rendered output: the
- * rendering varies with terminal and environment, and a test that parses it
- * reads as a rule regression when it drifts.
- */
-const lint = async (rule: string, source: string): Promise<string[]> => {
-  const directory = await mkdtemp(
-    path.join(tmpdir(), "stella-oxlint-design-system-"),
-  );
-  temporaryDirectories.push(directory);
-  const configPath = path.join(directory, "oxlint.config.ts");
-  await Bun.write(
-    configPath,
-    `export default ${JSON.stringify({
-      categories: { correctness: "off" },
-      jsPlugins: [path.join(REPOSITORY_ROOT, ".oxlint-plugins", `${rule}.ts`)],
-      rules: { [`${rule}/${rule}`]: "error" },
-    })};\n`,
-  );
-  const sourcePath = path.join(directory, "surface.tsx");
-  await Bun.write(sourcePath, source);
-
-  const spawned = Bun.spawn(
-    [
-      process.execPath,
-      "--bun",
-      "oxlint",
-      "-c",
-      configPath,
-      "-f",
-      "json",
-      sourcePath,
-    ],
-    { cwd: REPOSITORY_ROOT, stderr: "pipe", stdout: "pipe" },
-  );
-  const [stdout, stderr] = await Promise.all([
-    new Response(spawned.stdout).text(),
-    new Response(spawned.stderr).text(),
-    spawned.exited,
-  ]);
-  const output = `stdout:\n${stdout}\nstderr:\n${stderr}`;
-  const report = Result.try((): unknown => JSON.parse(stdout));
-  if (Result.isError(report)) {
-    return panic(`oxlint did not produce valid JSON:\n${output}`);
-  }
-  const diagnostics = isRecord(report.value)
-    ? report.value.diagnostics
-    : undefined;
-  if (!isUnknownArray(diagnostics)) {
-    return panic(`oxlint reported no diagnostics array:\n${output}`);
-  }
-  return diagnostics
-    .map(reportedRule)
-    .filter((name): name is string => name !== null);
-};
 
 const UI_IMPORTS = [
   'import { SearchIcon, SlidersHorizontalIcon } from "lucide-react";',

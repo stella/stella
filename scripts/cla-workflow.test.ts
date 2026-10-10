@@ -11,6 +11,9 @@ const BASE = "b".repeat(40);
 const OTHER_HEAD = "c".repeat(40);
 const BLOB = "d".repeat(40);
 const NEXT_BLOB = "e".repeat(40);
+// The merge queue squashes: each entry head is a synthetic commit on its predecessor.
+const SQUASH = "9".repeat(40);
+const PREDECESSOR = "8".repeat(40);
 const stepSchema = v.looseObject({
   name: v.string(),
   uses: v.string(),
@@ -62,6 +65,9 @@ const commit = ({
   sha?: string;
   committer?: typeof author;
 } = {}) => ({ sha, author: user, committer });
+type CompareCommit = ReturnType<typeof commit> & {
+  parents?: { sha: string }[];
+};
 const signature = (id = author.id) => ({
   name: "original-name",
   id,
@@ -104,8 +110,7 @@ type FixtureOptions = {
   accountsByLogin?: Record<string, typeof author>;
   changedPull?: ReturnType<typeof pull>;
   comparedCommits?: ReturnType<typeof commit>[];
-  groupAncestor?: string;
-  groupedCommits?: ReturnType<typeof commit>[];
+  groupedCommits?: CompareCommit[];
   comments?: ReturnType<typeof comment>[];
   signatures?: ReturnType<typeof signature>[];
   conflicts?: number;
@@ -127,7 +132,6 @@ const fixture = ({
   accountsByLogin = {},
   changedPull,
   comparedCommits,
-  groupAncestor,
   groupedCommits,
   comments = [],
   signatures = [],
@@ -138,14 +142,14 @@ const fixture = ({
   queuePages = [
     [
       {
-        headCommit: { oid: HEAD },
-        baseCommit: { oid: OTHER_HEAD },
+        headCommit: { oid: SQUASH },
+        baseCommit: { oid: PREDECESSOR },
         pullRequest: { number: 17 },
       },
     ],
     [
       {
-        headCommit: { oid: OTHER_HEAD },
+        headCommit: { oid: PREDECESSOR },
         baseCommit: { oid: BASE },
         pullRequest: { number: 18 },
       },
@@ -313,9 +317,6 @@ const fixture = ({
           (candidate) =>
             `${candidate.base.sha}...${candidate.head.sha}` === basehead,
         );
-        const ancestryPull = pulls.find((candidate) =>
-          basehead.startsWith(`${candidate.head.sha}...`),
-        );
         const entry = queuePages
           .flat()
           .find(
@@ -325,21 +326,29 @@ const fixture = ({
               basehead ===
                 `${candidate.baseCommit.oid}...${candidate.headCommit.oid}`,
           );
-        // Group fixtures may share their SHA with a PR; either route represents the same commits.
         const groupPull = entry
           ? pulls.find(
               (candidate) => candidate.number === entry.pullRequest.number,
             )
           : undefined;
-        const candidate = selected ?? groupPull;
-        const commits =
-          (entry && !selected ? groupedCommits : undefined) ??
-          comparedCommits ??
-          (candidate
-            ? (commitsByPull?.[candidate.number] ?? [
-                commit({ user: candidate.user, sha: candidate.head.sha }),
-              ])
-            : []);
+        const squash: CompareCommit[] =
+          entry?.headCommit && entry.baseCommit && groupPull
+            ? [
+                {
+                  ...commit({
+                    user: groupPull.user,
+                    sha: entry.headCommit.oid,
+                  }),
+                  parents: [{ sha: entry.baseCommit.oid }],
+                },
+              ]
+            : [];
+        const commits: CompareCommit[] = selected
+          ? (comparedCommits ??
+            commitsByPull?.[selected.number] ?? [
+              commit({ user: selected.user, sha: selected.head.sha }),
+            ])
+          : (groupedCommits ?? squash);
         return {
           data: {
             commits:
@@ -350,9 +359,6 @@ const fixture = ({
                   )
                 : commits.slice(0, 250),
             total_commits: commits.length,
-            merge_base_commit: {
-              sha: groupAncestor ?? ancestryPull?.head.sha ?? BASE,
-            },
           },
         };
       }
@@ -767,16 +773,16 @@ describe("contributor signature workflow", () => {
             event,
             payload: {
               merge_group: {
-                head_sha: HEAD,
+                head_sha: SQUASH,
                 base_sha: BASE,
                 base_ref: "refs/heads/main",
-                head_ref: `refs/heads/gh-readonly-queue/main/pr-17-${HEAD}`,
+                head_ref: `refs/heads/gh-readonly-queue/main/pr-17-${BASE}`,
               },
             },
             queuePages: [
               [
                 {
-                  headCommit: { oid: HEAD },
+                  headCommit: { oid: SQUASH },
                   baseCommit: { oid: BASE },
                   pullRequest: { number: 17 },
                 },
@@ -1206,50 +1212,90 @@ describe("contributor signature workflow", () => {
     expect(changed.errors).toEqual(["CLA_PULL_CHANGED"]);
   });
 
-  test("merge groups cannot verify a replaced PR head or additional old commits", async () => {
-    const groupHead = "f".repeat(40);
-    const predecessor = "1".repeat(40);
+  test("merge groups verify one squash commit per entry and fail closed on any other shape", async () => {
     const options = {
       event: "merge_group",
       payload: {
         merge_group: {
-          head_sha: groupHead,
+          head_sha: SQUASH,
           base_sha: BASE,
           base_ref: "refs/heads/main",
-          head_ref: "refs/heads/gh-readonly-queue/main/pr-17-deadbeef",
+          head_ref: `refs/heads/gh-readonly-queue/main/pr-17-${PREDECESSOR}`,
         },
       },
       pulls: [pull(), pull(18, author, OTHER_HEAD)],
       signatures: [signature()],
-      queuePages: [
-        [
-          {
-            baseCommit: { oid: predecessor },
-            headCommit: { oid: groupHead },
-            pullRequest: { number: 17 },
-          },
-          {
-            baseCommit: { oid: BASE },
-            headCommit: { oid: predecessor },
-            pullRequest: { number: 18 },
-          },
-        ],
-      ],
     } satisfies FixtureOptions;
     const verified = fixture(options);
     await verified.execute();
     expect(verified.errors).toEqual([]);
     expect(lastOutput(verified).conclusion).toBe("success");
-    const changed = fixture({ ...options, groupAncestor: BASE });
-    await changed.execute();
-    expect(changed.errors).toEqual(["CLA_GROUP_PULL_CHANGED"]);
-    expect(lastOutput(changed).conclusion).toBe("failure");
-    const extra = fixture({
+    for (const groupedCommits of [
+      // A merge commit that carries the PR's own commits.
+      [
+        commit(),
+        { ...commit({ sha: SQUASH }), parents: [{ sha: PREDECESSOR }] },
+      ],
+      [
+        {
+          ...commit({ sha: SQUASH }),
+          parents: [{ sha: PREDECESSOR }, { sha: HEAD }],
+        },
+      ],
+      [{ ...commit({ sha: SQUASH }), parents: [{ sha: BASE }] }],
+      [{ ...commit({ sha: OTHER_HEAD }), parents: [{ sha: PREDECESSOR }] }],
+      [commit({ sha: SQUASH })],
+    ]) {
+      const run = fixture({ ...options, groupedCommits });
+      await run.execute();
+      expect(run.errors, JSON.stringify(groupedCommits)).toEqual([
+        "CLA_UNEXPECTED_GROUP_COMMIT",
+      ]);
+      expect(lastOutput(run).conclusion).toBe("failure");
+    }
+    const replaced = fixture({
       ...options,
-      groupedCommits: [commit(), commit({ sha: "2".repeat(40) })],
+      changedPull: pull(17, author, OTHER_HEAD),
     });
-    await extra.execute();
-    expect(extra.errors).toEqual(["CLA_GROUP_COMMIT_SNAPSHOT_CHANGED"]);
+    await replaced.execute();
+    expect(replaced.errors).toEqual(["CLA_PULL_CHANGED"]);
+  });
+
+  test("the recorded squash merge group verifies although the PR head is not its ancestor", async () => {
+    // Shape of a merged queue group: one squash commit on main, PR branch diverged.
+    const prHead = "d92bf5ed9b866b7303f31e2e16dffb50186d1b02";
+    const groupBase = "45fca906f1d0b73949f9aee64a0daed90f09b206";
+    const groupHead = "9eb492bf1d7cd44c24ecf417ce2297200d4bab10";
+    const run = fixture({
+      event: "merge_group",
+      payload: {
+        merge_group: {
+          head_sha: groupHead,
+          head_ref: `refs/heads/gh-readonly-queue/main/pr-4694-${groupBase}`,
+          base_sha: groupBase,
+          base_ref: "refs/heads/main",
+        },
+      },
+      pulls: [pull(4694, author, prHead)],
+      signatures: [signature()],
+      queuePages: [
+        [
+          {
+            baseCommit: { oid: groupBase },
+            headCommit: { oid: groupHead },
+            pullRequest: { number: 4694 },
+          },
+        ],
+      ],
+    });
+    await run.execute();
+    expect(run.errors).toEqual([]);
+    expect(lastOutput(run).conclusion).toBe("success");
+    expect(
+      run.requests.some(
+        ({ params }) => params["basehead"] === `${prHead}...${groupHead}`,
+      ),
+    ).toBe(false);
   });
 
   test("a group rebuilt during verification ends neutral; a group still queued fails", async () => {
@@ -1292,8 +1338,7 @@ describe("contributor signature workflow", () => {
       ],
     } satisfies FixtureOptions;
     for (const changes of [
-      { groupAncestor: BASE },
-      { groupedCommits: [commit(), commit({ sha: "3".repeat(40) })] },
+      { changedPull: pull(17, author, "3".repeat(40)) },
       { pulls: [pull(), { ...pull(18, author, OTHER_HEAD), state: "closed" }] },
     ]) {
       const rebuilt = fixture({ ...options, ...changes });
@@ -1374,6 +1419,14 @@ describe("contributor signature workflow", () => {
     await brokenChain.execute();
     expect(brokenChain.errors).toEqual(["CLA_INCOMPLETE_MERGE_GROUP"]);
     expect(lastOutput(brokenChain).conclusion).toBe("failure");
+    // An unexpected commit shape is not a membership change, even in a rebuilt group.
+    const reshaped = fixture({
+      ...options,
+      groupedCommits: [commit({ sha: groupHead })],
+    });
+    await reshaped.execute();
+    expect(reshaped.errors).toEqual(["CLA_UNEXPECTED_GROUP_COMMIT"]);
+    expect(lastOutput(reshaped).conclusion).toBe("failure");
     // Only membership changes end neutral: an unsigned author in a rebuilt
     // group still fails.
     const unsigned = fixture({ ...options, signatures: [] });
@@ -1381,7 +1434,7 @@ describe("contributor signature workflow", () => {
     expect(lastOutput(unsigned).conclusion).toBe("failure");
   });
 
-  test("a 250 commit PR and its synthetic queue commit verify across comparison pages", async () => {
+  test("a 250 commit PR squashed into one queue commit verifies with one group comparison", async () => {
     const groupHead = "f".repeat(40);
     const commits = Array.from({ length: 250 }, (_, index) =>
       commit({
@@ -1401,7 +1454,6 @@ describe("contributor signature workflow", () => {
       pulls: [{ ...pull(), commits: 250 }],
       signatures: [signature()],
       commitsByPull: { 17: commits },
-      groupedCommits: [...commits, commit({ sha: groupHead })],
       queuePages: [
         [
           {
@@ -1422,7 +1474,7 @@ describe("contributor signature workflow", () => {
           params["basehead"] === `${BASE}...${groupHead}`,
       )
       .map(({ params }) => params["page"]);
-    expect(pages).toEqual([1, 2, 3]);
+    expect(pages).toEqual([undefined]);
   });
 
   test("more than 250 commits and incomplete commit lists fail closed", async () => {
@@ -1614,10 +1666,10 @@ describe("contributor signature workflow", () => {
   test("merge-group success requires every PR in the complete paginated queue chain", async () => {
     const payload = {
       merge_group: {
-        head_sha: HEAD,
+        head_sha: SQUASH,
         base_sha: BASE,
         base_ref: "refs/heads/main",
-        head_ref: `refs/heads/gh-readonly-queue/main/pr-17-${HEAD}`,
+        head_ref: `refs/heads/gh-readonly-queue/main/pr-17-${BASE}`,
       },
     };
     for (const signedSecond of [false, true]) {
@@ -1634,7 +1686,7 @@ describe("contributor signature workflow", () => {
       await run.execute();
       expect(run.errors).toEqual([]);
       expect(run.created).toHaveLength(1);
-      expect(run.created.at(0)?.["head_sha"]).toBe(HEAD);
+      expect(run.created.at(0)?.["head_sha"]).toBe(SQUASH);
       expect(lastOutput(run).conclusion).toBe(
         signedSecond ? "success" : "failure",
       );
@@ -1648,7 +1700,7 @@ describe("contributor signature workflow", () => {
       queuePages: [
         [
           {
-            headCommit: { oid: HEAD },
+            headCommit: { oid: SQUASH },
             baseCommit: { oid: OTHER_HEAD },
             pullRequest: { number: 17 },
           },
@@ -1665,12 +1717,12 @@ describe("contributor signature workflow", () => {
       queuePages: [
         [
           {
-            headCommit: { oid: HEAD },
+            headCommit: { oid: SQUASH },
             baseCommit: { oid: OTHER_HEAD },
             pullRequest: { number: 17 },
           },
           {
-            headCommit: { oid: HEAD },
+            headCommit: { oid: SQUASH },
             baseCommit: { oid: BASE },
             pullRequest: { number: 18 },
           },
@@ -1707,7 +1759,7 @@ describe("contributor signature workflow", () => {
       `\${{ !cancelled() && steps.credentials.outcome == 'success' }}`,
     );
     expect(workflow.jobs["verify-signatures"]?.if).toContain(
-      "(github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.actor.login == 'dependabot[bot]'))",
+      "(github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.actor.login == 'dependabot[bot]' && github.event.workflow_run.head_repository.full_name == github.repository && github.event.workflow_run.path == '.github/workflows/cla-notify.yml' && github.event.workflow_run.event == 'pull_request'))",
     );
     expect(workflow.permissions).toEqual({
       contents: "read",

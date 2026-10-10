@@ -7,7 +7,7 @@ import {
   publicCaseLawCountry,
   PUBLIC_CASE_LAW_COUNTRIES,
 } from "@stll/api-contract/case-law-launch-readiness";
-import { publicCountryUnavailable } from "@stll/api-contract/public-country-capability";
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
 import {
   caseLawDecisions,
@@ -15,6 +15,7 @@ import {
   caseLawSources,
 } from "@/api/db/schema";
 import { arrayOrEmpty } from "@/api/lib/array";
+import type { SafeId } from "@/api/lib/branded-types";
 import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
@@ -27,7 +28,7 @@ import {
   SITEMAP_UNDATED_MONTH,
   SITEMAP_UNDATED_YEAR,
 } from "@/api/lib/case-law/sitemap-shard-sql";
-import { chunked } from "@/api/lib/chunked";
+import { publicLawCountryUnavailable } from "@/api/lib/legal-search/public-law-country";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
 
@@ -63,7 +64,7 @@ type SitemapDecisionAlternate = {
   caseNumber: string;
   country: string;
   court: string;
-  id: string;
+  id: SafeId<"caseLawDecision">;
   language: string;
   slug: string | null;
   updatedAt: Date;
@@ -244,9 +245,9 @@ export const listSitemapShardDecisionsHandler = async (
   query: SitemapShardDecisionsQuery,
   caseLawDb: CaseLawPublicReadDb,
 ) => {
-  const unavailable = publicCountryUnavailable(query.country);
+  const unavailable = publicLawCountryUnavailable(query.country);
   if (unavailable !== null) {
-    return status(503, unavailable);
+    return unavailable;
   }
   const country = publicCaseLawCountry(query.country);
   if (country === null) {
@@ -279,7 +280,7 @@ export const listSitemapShardDecisionsHandler = async (
     // would make the read unbounded. Hitting the cap is a data-integrity anomaly
     // (a group exceeding the expected variant count), not a normal case: warn and
     // proceed with what loaded rather than 500 the whole sitemap.
-    for (const groupKeyBatch of chunked(
+    for (const groupKeyBatch of chunkItems(
       languageGroupKeys,
       SITEMAP_LANGUAGE_ALTERNATE_GROUP_BATCH_SIZE,
     )) {

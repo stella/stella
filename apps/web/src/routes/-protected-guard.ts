@@ -9,7 +9,6 @@ import { roleOptions } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
 import { notificationsOptions } from "@/lib/notification-queries";
 import { aiAvailabilityOptions } from "@/lib/organization/ai-config-queries";
-import { usePinnedStore } from "@/lib/pinned-store";
 import {
   prefetchNonCriticalInfiniteQuery,
   prefetchRouteQuery,
@@ -55,25 +54,36 @@ export const loadProtectedContext = async ({
   }
 
   const activeOrganizationId = authContext.session.activeOrganizationId;
-
-  if (
-    location.pathname === "/settings/organization/time-policy" &&
-    isTimeBillingRouteEnabled()
-  ) {
-    detached(
-      context.queryClient.query({
-        ...organizationSettingsOptions(activeOrganizationId),
-        staleTime: "static",
-      }),
-      "protected-layout.time-policy-prefetch",
-    );
-  }
+  const userId = authContext.session.userId;
 
   // Start optional shell data immediately. The loader settles the role before
   // chrome mounts, while child loaders fetch their independent data in parallel.
   const onPrefetchError = (error: unknown) => {
     getAnalytics().captureError(error);
   };
+  if (location.pathname === "/settings/organization/time-policy") {
+    detached(
+      (async () => {
+        if (
+          !(await isTimeBillingRouteEnabled(context.queryClient, {
+            userId,
+            organizationId: activeOrganizationId,
+          }))
+        ) {
+          return;
+        }
+        await context.queryClient.query({
+          ...organizationSettingsOptions({
+            organizationId: activeOrganizationId,
+            userId,
+          }),
+          staleTime: "static",
+        });
+      })(),
+      "protected-layout.time-policy-prefetch",
+    );
+  }
+
   detached(
     prefetchRouteQuery(
       context.queryClient,
@@ -97,11 +107,6 @@ export const loadProtectedContext = async ({
       "protected-layout.notifications-prefetch",
     );
   }
-  // Seed the pinned-matters store from localStorage before the
-  // sidebar renders. The store's `init` is idempotent (skips when
-  // the same userId is already loaded), so re-runs on navigation
-  // cost nothing and a render-time effect is unnecessary.
-  usePinnedStore.getState().init(authContext.session.userId);
 
   return {
     user: {

@@ -54,7 +54,8 @@ export const lockDocxEditTarget = lockDesktopEditTarget;
 export const asDesktopEditableFileContent = (
   content: FieldContent,
 ): DesktopEditableFileTarget | null => {
-  if (content.type !== "file") {
+  // An encrypted file opens nowhere an editor would write it back from.
+  if (content.type !== "file" || content.encrypted) {
     return null;
   }
 
@@ -72,7 +73,11 @@ export const asDesktopEditableFileContent = (
 export const asDocxFieldContent = (
   content: FieldContent,
 ): DocxFieldContent | null => {
-  if (content.type !== "file" || content.mimeType !== DOCX_MIME_TYPE) {
+  if (
+    content.type !== "file" ||
+    content.mimeType !== DOCX_MIME_TYPE ||
+    content.encrypted
+  ) {
     return null;
   }
 
@@ -82,7 +87,7 @@ export const asDocxFieldContent = (
   };
 };
 
-export const findDocxFieldForProperty = ({
+const findDocxFieldForProperty = ({
   fieldEntries,
   propertyId,
 }: {

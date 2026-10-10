@@ -7,6 +7,7 @@
   "scripts": {
     "build": "wxt build -b chrome && bun scripts/assert-manifest.ts",
     "build:dev": "wxt build -b chrome --mode development",
+    "build:staging": "wxt build -b chrome --mode staging && bun scripts/assert-manifest.ts staging",
     "clean": "git clean -xdf .output .wxt .cache .turbo node_modules",
     "dev": "wxt -b chrome",
     "format": "bun ../../scripts/run-oxfmt.ts .",
@@ -21,13 +22,14 @@
   },
   "dependencies": {
     "@stll/api-contract": "workspace:*",
+    "@stll/concurrency": "workspace:*",
     "better-result": "catalog:",
     "valibot": "catalog:"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
     "@stll/typescript-config": "workspace:*",
-    "@types/chrome": "0.3.0",
+    "@types/chrome": "0.3.4",
     "bun-types": "catalog:",
     "vite": "catalog:",
     "wxt": "0.21.4"

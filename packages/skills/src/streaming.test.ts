@@ -21,6 +21,26 @@ describe("readCappedBytes", () => {
     expect(stream.locked).toBe(false);
   });
 
+  test("shows every chunk read to the observer, including the overflowing one", async () => {
+    const chunks = [new Uint8Array([1, 2]), new Uint8Array([3, 4])];
+    const seen: Uint8Array[] = [];
+    const stream = new ReadableStream<Uint8Array>({
+      start: (controller) => {
+        for (const chunk of chunks) {
+          controller.enqueue(chunk);
+        }
+        controller.close();
+      },
+    });
+
+    expect(
+      await readCappedBytes(stream, 3, (chunk) => {
+        seen.push(chunk);
+      }),
+    ).toBeNull();
+    expect(seen).toEqual(chunks);
+  });
+
   test("releases its reader lock when reading fails", async () => {
     const stream = new ReadableStream<Uint8Array>({
       pull: () => {

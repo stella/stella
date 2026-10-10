@@ -1,0 +1,202 @@
+[
+  {
+    "tag": "v0.9.42",
+    "commit": "364373070aa362baeafa27533e4bd6aba982a904",
+    "source": {
+      "desktopEdit": "v0.9.42:apps/desktop/src-tauri/src/deep_link.rs",
+      "pdfSigning": "v0.9.42:apps/desktop/src-tauri/src/pdf_signing.rs",
+      "httpClient": "v0.9.42:apps/desktop/src-tauri/src/http_client.rs"
+    },
+    "requests": [
+      {
+        "method": "POST",
+        "path": "/v1/desktop-edit-handoffs/redeem",
+        "headers": {
+          "content-type": "application/json",
+          "user-agent": "stella-desktop"
+        },
+        "body": {
+          "handoffToken": "abababababababababababababababababababababababababababababababab"
+        }
+      },
+      {
+        "method": "POST",
+        "path": "/v1/pdf-signing-handoffs/redeem",
+        "headers": {
+          "content-type": "application/json",
+          "user-agent": "stella-desktop"
+        },
+        "body": {
+          "handoffToken": "abababababababababababababababababababababababababababababababab"
+        }
+      }
+    ]
+  },
+  {
+    "tag": "v0.9.43",
+    "commit": "8c02411f403ef0d8bedaf4a515e0b17cf99f9df7",
+    "source": {
+      "desktopEdit": "v0.9.43:apps/desktop/src-tauri/src/deep_link.rs",
+      "pdfSigning": "v0.9.43:apps/desktop/src-tauri/src/pdf_signing.rs",
+      "httpClient": "v0.9.43:apps/desktop/src-tauri/src/http_client.rs"
+    },
+    "requests": [
+      {
+        "method": "POST",
+        "path": "/v1/desktop-edit-handoffs/redeem",
+        "headers": {
+          "content-type": "application/json",
+          "user-agent": "stella-desktop"
+        },
+        "body": {
+          "handoffToken": "abababababababababababababababababababababababababababababababab"
+        }
+      },
+      {
+        "method": "POST",
+        "path": "/v1/pdf-signing-handoffs/redeem",
+        "headers": {
+          "content-type": "application/json",
+          "user-agent": "stella-desktop"
+        },
+        "body": {
+          "handoffToken": "abababababababababababababababababababababababababababababababab"
+        }
+      }
+    ]
+  },
+  {
+    "tag": "v0.9.44",
+    "commit": "a83cb0de58d48617d9f59476e1bd5ddbf9abd199",
+    "source": {
+      "desktopEdit": "v0.9.44:apps/desktop/src-tauri/src/deep_link.rs",
+      "pdfSigning": "v0.9.44:apps/desktop/src-tauri/src/pdf_signing.rs",
+      "httpClient": "v0.9.44:apps/desktop/src-tauri/src/http_client.rs"
+    },
+    "requests": [
+      {
+        "method": "POST",
+        "path": "/v1/desktop-edit-handoffs/redeem",
+        "headers": {
+          "content-type": "application/json",
+          "user-agent": "stella-desktop"
+        },
+        "body": {
+          "handoffToken": "abababababababababababababababababababababababababababababababab"
+        }
+      },
+      {
+        "method": "POST",
+        "path": "/v1/pdf-signing-handoffs/redeem",
+        "headers": {
+          "content-type": "application/json",
+          "user-agent": "stella-desktop"
+        },
+        "body": {
+          "handoffToken": "abababababababababababababababababababababababababababababababab"
+        }
+      }
+    ]
+  },
+  {
+    "tag": "v0.9.45",
+    "commit": "66c6dd391e9d2675282629fcca18c9a5f1cf3f7e",
+    "source": {
+      "desktopEdit": "v0.9.45:apps/desktop/src-tauri/src/deep_link.rs",
+      "pdfSigning": "v0.9.45:apps/desktop/src-tauri/src/pdf_signing.rs",
+      "httpClient": "v0.9.45:apps/desktop/src-tauri/src/http_client.rs"
+    },
+    "requests": [
+      {
+        "method": "POST",
+        "path": "/v1/desktop-edit-handoffs/redeem",
+        "headers": {
+          "content-type": "application/json",
+          "user-agent": "stella-desktop"
+        },
+        "body": {
+          "handoffToken": "abababababababababababababababababababababababababababababababab"
+        }
+      },
+      {
+        "method": "POST",
+        "path": "/v1/pdf-signing-handoffs/redeem",
+        "headers": {
+          "content-type": "application/json",
+          "user-agent": "stella-desktop"
+        },
+        "body": {
+          "handoffToken": "abababababababababababababababababababababababababababababababab"
+        }
+      }
+    ]
+  },
+  {
+    "tag": "v0.9.46",
+    "commit": "ff89fa08e3f25fdbd01081ac28253690eb9d3434",
+    "source": {
+      "desktopEdit": "v0.9.46:apps/desktop/src-tauri/src/deep_link.rs",
+      "pdfSigning": "v0.9.46:apps/desktop/src-tauri/src/pdf_signing.rs",
+      "httpClient": "v0.9.46:apps/desktop/src-tauri/src/http_client.rs"
+    },
+    "requests": [
+      {
+        "method": "POST",
+        "path": "/v1/desktop-edit-handoffs/redeem",
+        "headers": {
+          "content-type": "application/json",
+          "user-agent": "stella-desktop"
+        },
+        "body": {
+          "handoffToken": "abababababababababababababababababababababababababababababababab"
+        }
+      },
+      {
+        "method": "POST",
+        "path": "/v1/pdf-signing-handoffs/redeem",
+        "headers": {
+          "content-type": "application/json",
+          "user-agent": "stella-desktop"
+        },
+        "body": {
+          "handoffToken": "abababababababababababababababababababababababababababababababab"
+        }
+      }
+    ]
+  },
+  {
+    "tag": "v0.9.47",
+    "commit": "1f389f384c20ec8de098de6af7de27bd63ca7249",
+    "source": {
+      "desktopEdit": "v0.9.47:apps/desktop/src-tauri/src/deep_link.rs",
+      "pdfSigning": "v0.9.47:apps/desktop/src-tauri/src/pdf_signing.rs",
+      "httpClient": "v0.9.47:apps/desktop/src-tauri/src/http_client.rs"
+    },
+    "requests": [
+      {
+        "method": "POST",
+        "path": "/v1/desktop-edit-handoffs/redeem",
+        "headers": {
+          "content-type": "application/json",
+          "user-agent": "stella-desktop",
+          "authorization": "Bearer released-desktop-account-key"
+        },
+        "body": {
+          "handoffToken": "abababababababababababababababababababababababababababababababab"
+        }
+      },
+      {
+        "method": "POST",
+        "path": "/v1/pdf-signing-handoffs/redeem",
+        "headers": {
+          "content-type": "application/json",
+          "user-agent": "stella-desktop",
+          "authorization": "Bearer released-desktop-account-key"
+        },
+        "body": {
+          "handoffToken": "abababababababababababababababababababababababababababababababab"
+        }
+      }
+    ]
+  }
+]

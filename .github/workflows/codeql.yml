@@ -1,8 +1,8 @@
 name: CodeQL
 
 on:
-  push:
-    branches: [main]
+  # Scans run nightly on main and on release pull requests. Other pull
+  # requests and pushes to main are covered by those two scans.
   pull_request:
     branches: [main]
     types: [opened, synchronize, reopened, ready_for_review]
@@ -50,7 +50,11 @@ permissions:
 
 jobs:
   scope:
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
+    if: >-
+      github.event_name != 'pull_request'
+      || (github.event.pull_request.draft != true
+          && (startsWith(github.event.pull_request.head.ref, 'chore/release-')
+              || startsWith(github.event.pull_request.head.ref, 'changeset-release/')))
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -87,7 +91,7 @@ jobs:
     needs: scope
     if: >-
       always()
-      && (github.event_name != 'pull_request' || github.event.pull_request.draft != true)
+      && needs.scope.result != 'skipped'
       && (needs.scope.result != 'success' || needs.scope.outputs.required != 'false')
     runs-on: ubuntu-latest
     permissions:

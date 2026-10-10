@@ -7,6 +7,7 @@ import {
 } from "@stll/api-contract";
 
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   executeRegistryLookup,
@@ -168,6 +169,7 @@ export const createBusinessRegistryTools = ({
       }
       const result = await executeRegistryLookup({
         observer,
+        permit: grantThirdPartyOutboundPermit(),
         handler,
         query,
         detail,

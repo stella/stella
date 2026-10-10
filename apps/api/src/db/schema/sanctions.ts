@@ -1,5 +1,7 @@
 import type { SanctionsEntry } from "@stll/sanctions";
 
+import { publicSanctionsReaderPolicies } from "@/api/db/rls";
+
 import type { AnyPgColumn } from "./common";
 import {
   globalCaseLawPolicies,
@@ -104,6 +106,7 @@ export const sanctionsSources = p.pgTable(
       sql`(${table.lastFailureAt} IS NULL) = (${table.lastFailureCode} IS NULL)`,
     ),
     ...globalCaseLawPolicies(),
+    ...publicSanctionsReaderPolicies(),
   ],
 );
 
@@ -167,6 +170,7 @@ export const sanctionsEditions = p.pgTable(
       sql`${table.markerKey} ~ '^[0-9a-f]{64}$' AND ${table.contentHash} ~ '^[0-9a-f]{64}$'`,
     ),
     ...globalCaseLawPolicies(),
+    ...publicSanctionsReaderPolicies(),
   ],
 );
 
@@ -186,6 +190,7 @@ export const sanctionsEntryPayloads = p.pgTable(
       sql`jsonb_typeof(${table.payload}) = 'object'`,
     ),
     ...globalCaseLawPolicies(),
+    ...publicSanctionsReaderPolicies(),
   ],
 );
 
@@ -209,5 +214,6 @@ export const sanctionsEditionEntries = p.pgTable(
       .onDelete("restrict"),
     p.index("sanctions_edition_entries_content_hash_idx").on(table.contentHash),
     ...globalCaseLawPolicies(),
+    ...publicSanctionsReaderPolicies(),
   ],
 );

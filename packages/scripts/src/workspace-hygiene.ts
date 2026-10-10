@@ -6,6 +6,16 @@ import { validateWorkspaceAppBoundaries } from "./workspace-app-boundaries";
 import type { AppBoundaryOptions } from "./workspace-app-boundaries";
 
 export const WORKSPACE_PARENT_DIRS = ["apps", "packages"] as const;
+// Computed filesystem reads retain these repository Markdown inputs.
+export const CI_MARKDOWN_READER_INPUTS = [
+  "apps/**/*.md",
+  "packages/**/*.md",
+  "scripts/**/*.md",
+  "docs/**/*.md",
+];
+export const CI_MARKDOWN_READER_COMMAND =
+  "bun packages/scripts/src/workspace-hygiene.ts";
+
 const DEPENDENCY_FIELDS = [
   "dependencies",
   "devDependencies",
@@ -41,9 +51,9 @@ const BABEL_TOOLCHAINS = [
 ] as const;
 const TYPESCRIPT_TOOLCHAIN = {
   native: "npm:typescript@7.0.2",
-  oxlint: "1.83.0",
+  oxlint: "1.86.0",
   oxlintConfig: "0.7.0",
-  tsgolint: "7.0.2002",
+  tsgolint: "7.0.2003",
   typescript6Compatibility: "6.0.3",
 } as const;
 const TYPESCRIPT6_COMPATIBILITY = {

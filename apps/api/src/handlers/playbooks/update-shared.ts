@@ -1,9 +1,13 @@
-import { panic, Result } from "better-result";
+import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
+import { resultTx } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
 import { playbookDefinitions } from "@/api/db/schema";
-import { assertPlaybookDocumentType } from "@/api/handlers/playbooks/assert-document-type";
+import {
+  assertPlaybookDocumentType,
+  mapPlaybookDocumentTypeError,
+} from "@/api/handlers/playbooks/assert-document-type";
 import { deriveAutoAsks } from "@/api/handlers/playbooks/derive-ask";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
@@ -14,6 +18,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { assertUnchangedSince } from "@/api/lib/optimistic-concurrency";
+import type { ModelActionAdmitter } from "@/api/lib/rate-limit/model-action-admission";
 import type {
   PlaybookPositions,
   PlaybookScope,
@@ -35,8 +40,12 @@ type UpdatePlaybookDefinitionBody = {
 };
 
 type UpdatePlaybookDefinitionArgs = {
+  /** Admits the save's ask derivations; see `deriveAutoAsks`. */
+  admitModelAction: ModelActionAdmitter;
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
+  /** Matters the caller can access; a newly added source must be in one. */
+  accessibleWorkspaceIds: readonly SafeId<"workspace">[];
   playbookId: SafeId<"playbookDefinition">;
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
@@ -47,8 +56,10 @@ type UpdatePlaybookDefinitionArgs = {
 };
 
 export const updatePlaybookDefinitionHandler = async function* ({
+  admitModelAction,
   safeDb,
   organizationId,
+  accessibleWorkspaceIds,
   playbookId,
   orgAIConfig,
   managedAIResidency,
@@ -57,11 +68,36 @@ export const updatePlaybookDefinitionHandler = async function* ({
   recordAuditEvent,
   body,
 }: UpdatePlaybookDefinitionArgs): SafeHandlerGenerator<{ updatedAt: string }> {
+  // Read the stored positions to tell which sources this save adds and which
+  // the playbook already had; only added sources need an access check. This
+  // read happens before the row lock below. That is safe because both callers
+  // send `expectedUpdatedAt`: if the playbook changes in between, the save
+  // fails instead of being checked against an outdated list. A caller that
+  // omits the token can at worst keep a source that was stored a moment ago.
+  const stored = yield* Result.await(
+    safeDb((tx) =>
+      tx.query.playbookDefinitions.findFirst({
+        where: {
+          id: { eq: playbookId },
+          organizationId: { eq: organizationId },
+        },
+        columns: { positions: true },
+      }),
+    ),
+  );
+  if (!stored) {
+    return Result.err(
+      new HandlerError({ status: 404, message: "Playbook not found" }),
+    );
+  }
+
   yield* Result.await(
     assertPositionsValid({
       safeDb,
       organizationId,
+      accessibleWorkspaceIds,
       positions: body.positions,
+      storedPositions: stored.positions,
     }),
   );
 
@@ -69,6 +105,7 @@ export const updatePlaybookDefinitionHandler = async function* ({
   // `derived` whose `rulesHash` still matches is reused (no LLM call); a
   // failed derivation persists with `derived` absent.
   const positions = await deriveAutoAsks(body.positions, {
+    admitModelAction,
     organizationId,
     orgAIConfig,
     managedAIResidency,
@@ -76,12 +113,8 @@ export const updatePlaybookDefinitionHandler = async function* ({
     promptCachingEnabled,
   });
 
-  yield* Result.await(
-    assertPlaybookDocumentType({ safeDb, organizationId, scope: body.scope }),
-  );
-
   const updated = yield* Result.await(
-    safeDb(async (tx) => {
+    resultTx(safeDb, async (tx) => {
       // Lock before comparing `updatedAt`: a check outside the row lock
       // races the very overwrite it is meant to reject.
       const [locked] = await tx
@@ -96,7 +129,9 @@ export const updatePlaybookDefinitionHandler = async function* ({
         .for("update");
 
       if (!locked) {
-        return { type: "not-found" as const };
+        return Result.err(
+          new HandlerError({ status: 404, message: "Playbook not found" }),
+        );
       }
 
       const conflict = assertUnchangedSince({
@@ -105,7 +140,16 @@ export const updatePlaybookDefinitionHandler = async function* ({
         resource: "Playbook",
       });
       if (conflict) {
-        return { type: "version-conflict" as const, error: conflict };
+        return Result.err(conflict);
+      }
+
+      const documentType = await assertPlaybookDocumentType({
+        tx,
+        organizationId,
+        scope: body.scope,
+      });
+      if (documentType.isErr()) {
+        return Result.err(documentType.error);
       }
 
       const updatedAt = new Date();
@@ -133,7 +177,9 @@ export const updatePlaybookDefinitionHandler = async function* ({
         .returning({ updatedAt: playbookDefinitions.updatedAt });
 
       if (!row) {
-        return { type: "not-found" as const };
+        return Result.err(
+          new HandlerError({ status: 404, message: "Playbook not found" }),
+        );
       }
 
       await recordAuditEvent(tx, {
@@ -148,24 +194,10 @@ export const updatePlaybookDefinitionHandler = async function* ({
         },
       });
 
-      return { type: "updated" as const, updatedAt: row.updatedAt };
-    }),
+      return Result.ok({ updatedAt: row.updatedAt });
+    }).then((result) => result.mapError(mapPlaybookDocumentTypeError)),
   );
 
-  switch (updated.type) {
-    case "updated":
-      // Handed back so a writer reseeds its concurrency token in place,
-      // without a refetch, and the next save still guards.
-      return Result.ok({ updatedAt: updated.updatedAt.toISOString() });
-    case "not-found":
-      return Result.err(
-        new HandlerError({ status: 404, message: "Playbook not found" }),
-      );
-    case "version-conflict":
-      return Result.err(updated.error);
-    default: {
-      updated satisfies never;
-      return panic(`Unhandled updated: ${String(updated)}`);
-    }
-  }
+  // Return the new concurrency token without a refetch.
+  return Result.ok({ updatedAt: updated.updatedAt.toISOString() });
 };

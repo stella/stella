@@ -6,6 +6,7 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { CHAT_TURN_INTENT } from "@stll/api-contract";
 
+import { member } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   chatMessages,
@@ -34,12 +35,14 @@ import { CHAT_THREAD_NAME_KIND } from "@/api/lib/chat/thread-name-kinds";
 import { HandlerError, DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
-  ActionAdmissionError,
   actionAdmissionRefusal,
+  type ActionAdmissionError,
 } from "@/api/lib/rate-limit/action-admission";
 import type { AdmittedActionIdentity } from "@/api/lib/rate-limit/action-kinds";
+import { actionAdmissionErrorFor } from "@/api/tests/helpers/action-admission-error";
 import { CHAT_ORACLE, violationsOf } from "@/api/tests/helpers/chat-oracles";
 import { testFileKey } from "@/api/tests/helpers/file-key";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -162,24 +165,35 @@ const startedThreadNames = [
   { kind: CHAT_THREAD_NAME_KIND.ledgerStart, name: "", target: null },
 ];
 
+// Feature access resolves the caller through the member join; no identity
+// means no enrolment, so chat sends run without enrolment-gated tools.
+const noMemberIdentity = {
+  innerJoin: () => ({ where: () => ({ limit: async () => [] }) }),
+};
+
+const fromSharedReads = (table: unknown, otherwise: () => unknown) => {
+  if (table === member) {
+    return noMemberIdentity;
+  }
+  if (table === chatThreadNames) {
+    return { where: async () => startedThreadNames };
+  }
+  return otherwise();
+};
+
 const selectChatMessages = () => ({
   from: (table: unknown) =>
-    table === chatThreadNames
-      ? { where: async () => startedThreadNames }
-      : {
-          where: () => ({
-            for: async () => [],
-            limit: async () => [],
-            orderBy: emptyOrderedRows,
-          }),
-        },
+    fromSharedReads(table, () => ({
+      where: () => ({
+        for: async () => [],
+        limit: async () => [],
+        orderBy: emptyOrderedRows,
+      }),
+    })),
 });
 
 const withThreadNameReads = (select: () => { from: () => unknown }) => () => ({
-  from: (table: unknown) =>
-    table === chatThreadNames
-      ? { where: async () => startedThreadNames }
-      : select().from(),
+  from: (table: unknown) => fromSharedReads(table, () => select().from()),
 });
 
 // Settlement closes the turn's run log in the transaction that ends the turn.
@@ -211,8 +225,16 @@ const withRegistryCredentialQuery = (transaction: unknown): unknown => {
       }
       return { rows: [{ taken: false }] };
     },
-    select: selectChatMessages,
     ...transaction,
+    select: (selection: unknown) => {
+      if ("select" in transaction && typeof transaction.select === "function") {
+        const result: unknown = Reflect.apply(transaction.select, transaction, [
+          selection,
+        ]);
+        return result;
+      }
+      return selectChatMessages();
+    },
     query: {
       businessRegistryCredentials: { findMany: async () => [] },
       ...(typeof query === "object" && query !== null ? query : {}),
@@ -251,6 +273,11 @@ const createContext = ({
 }): SendMessageCtx => {
   const { safeDb, scopedDb } = createScopedDbMock(
     withRegistryCredentialQuery(transaction),
+    {
+      featureAccess: {
+        identity: { email: "member@example.test", emailVerified: true },
+      },
+    },
   );
   const observedSafeDb: SafeDb = async (operation, retry) => {
     onSafeDbTransaction?.();
@@ -1242,23 +1269,20 @@ describe("send message disconnect handling", () => {
   const refusalReasons = {
     busy: "busy",
     period_exhausted: "period_exhausted",
+    daily_exhausted: "daily_exhausted",
     not_enabled: "not_enabled",
+    not_on_plan: "not_on_plan",
     unavailable: "unavailable",
   } as const satisfies { [Reason in ActionAdmissionError["reason"]]: Reason };
   for (const reason of Object.values(refusalReasons)) {
     for (const phase of ["period", "context", "dispatch"] as const) {
       test(`${reason} ${phase} phase persists its canonical outcome before any provider work`, async () => {
         const refusal = actionAdmissionRefusal(
-          new ActionAdmissionError({
-            reason,
-            message: "Admission refused",
-          }),
+          actionAdmissionErrorFor(reason, "Admission refused"),
         );
         const admission = new AbortController();
         const loseAdmission = () =>
-          admission.abort(
-            new ActionAdmissionError({ reason, message: "Admission refused" }),
-          );
+          admission.abort(actionAdmissionErrorFor(reason, "Admission refused"));
         const turnUpdates: unknown[] = [];
         const selectWithThreadLock = () => ({
           from: () => ({
@@ -1350,6 +1374,7 @@ describe("send message disconnect handling", () => {
               release: async () => {
                 releases += 1;
               },
+              modelAdmission: testModelAdmission(options.organizationId),
               reservePeriod: async (identity: AdmittedActionIdentity) => {
                 expect(turnUpdates).toContainEqual({ runId: "run-test" });
                 expect(identity).toEqual({

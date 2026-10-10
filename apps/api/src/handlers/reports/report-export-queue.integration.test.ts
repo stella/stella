@@ -16,10 +16,13 @@ import {
   test,
 } from "bun:test";
 import { eq } from "drizzle-orm";
+import JSZip from "jszip";
+
+import { filtersFromFieldConfig } from "@stll/template-conditions";
 
 import { member } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
-import { reportExports, workspaceMembers } from "@/api/db/schema";
+import { reportExports, templates, workspaceMembers } from "@/api/db/schema";
 import type { ViewLayout } from "@/api/db/schema";
 import type { RlsDatabase } from "@/api/db/scoped";
 import * as reportData from "@/api/handlers/reports/build-report-data";
@@ -28,11 +31,18 @@ import {
   initBuiltinReportTemplates,
 } from "@/api/handlers/reports/builtin-templates";
 import { processReportExport } from "@/api/handlers/reports/report-export-queue";
+import { createSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
 import * as chatRuntime from "@/api/lib/chat/tanstack-chat-runtime";
+import type { FieldMeta } from "@/api/lib/docx/types";
+import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
 import { createRootRunActor } from "@/api/lib/root-scoped-db";
 import { brandPersistedReportExportId } from "@/api/lib/safe-id-boundaries";
 import * as modelTransport from "@/api/lib/tanstack-ai-generate";
+import * as decisions from "@/api/lib/workflow/decisions/decide";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
+import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -90,6 +100,9 @@ const reportDataSpy = spyOn(reportData, "buildReportData");
 const textModelSpy = spyOn(modelTransport, "generateTanStackTextForRole");
 const objectModelSpy = spyOn(modelTransport, "generateTanStackObjectForRole");
 const chatObjectSpy = spyOn(chatRuntime, "generateChatObject");
+// Every model run resolves its model here, and every AI condition decides here.
+const resolveModelSpy = spyOn(modelTransport, "resolveTanStackTextModel");
+const decideSpy = spyOn(decisions, "decide");
 
 const readExport = async () =>
   (
@@ -108,7 +121,15 @@ beforeEach(async () => {
   textModelSpy.mockClear();
   objectModelSpy.mockClear();
   chatObjectSpy.mockClear();
-  for (const spy of [textModelSpy, objectModelSpy, chatObjectSpy]) {
+  resolveModelSpy.mockClear();
+  decideSpy.mockClear();
+  for (const spy of [
+    textModelSpy,
+    objectModelSpy,
+    chatObjectSpy,
+    resolveModelSpy,
+    decideSpy,
+  ]) {
     spy.mockImplementation(async () => panic("Unexpected model call"));
   }
   fakeS3.requests.length = 0;
@@ -142,12 +163,19 @@ afterAll(async () => {
   textModelSpy.mockRestore();
   objectModelSpy.mockRestore();
   chatObjectSpy.mockRestore();
+  resolveModelSpy.mockRestore();
+  decideSpy.mockRestore();
   fakeS3.stop();
   await releaseRlsFixture();
 });
 
 const expectStoppedBeforeReading = async () => {
-  await processReportExport(actor, { format: "docx", aiNarrative: true });
+  await processReportExport(actor, {
+    admission: testModelAdmission(actor.organizationId),
+    signal: new AbortController().signal,
+    format: "docx",
+    aiNarrative: true,
+  });
   expect(await readExport()).toMatchObject({
     status: "failed",
     error: "The report source is no longer available.",
@@ -178,7 +206,12 @@ describe("report export run", () => {
       .update(reportExports)
       .set({ aiNarrative: false })
       .where(eq(reportExports.id, exportId));
-    await processReportExport(actor, { format: "docx", aiNarrative: false });
+    await processReportExport(actor, {
+      admission: testModelAdmission(actor.organizationId),
+      signal: new AbortController().signal,
+      format: "docx",
+      aiNarrative: false,
+    });
     const row = await readExport();
     expect(row).toMatchObject({ status: "completed", error: null });
     expect(reportDataSpy).toHaveBeenCalledTimes(1);
@@ -188,5 +221,176 @@ describe("report export run", () => {
     expect(textModelSpy).not.toHaveBeenCalled();
     expect(objectModelSpy).not.toHaveBeenCalled();
     expect(chatObjectSpy).not.toHaveBeenCalled();
+  });
+
+  /** A stored report template in org A whose body is `paragraphs`, with
+   *  `conditions` authored as AI-decided conditions. */
+  const insertStoredTemplate = async ({
+    paragraphs,
+    conditions,
+  }: {
+    paragraphs: readonly string[];
+    conditions: readonly FieldMeta[];
+  }) => {
+    const templateId = createSafeId<"template">();
+    const s3Key = `report-templates/${templateId}.docx`;
+    const body = paragraphs
+      .map((text) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`)
+      .join("");
+    const zip = new JSZip();
+    zip.file(
+      "word/document.xml",
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${body}</w:body></w:document>`,
+    );
+    zip.file(
+      "[Content_Types].xml",
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/></Types>',
+    );
+    const { file } = await writeFieldFilters(
+      testDocxFile(await zip.generateAsync({ type: "uint8array" })),
+      [],
+      conditions.map((condition) => ({
+        path: condition.path,
+        expression: undefined,
+        filters: filtersFromFieldConfig(condition),
+      })),
+    );
+    fakeS3.put("stella", s3Key, new Uint8Array(file.bytes));
+    await testDb.insert(templates).values({
+      id: templateId,
+      organizationId: ids.orgA,
+      name: "Consumer report",
+      fileName: "consumer-report.docx",
+      s3Key,
+      sizeBytes: file.bytes.byteLength,
+      scanState: "scanned",
+      createdBy: ids.userA1,
+    });
+    return templateId;
+  };
+
+  const readTemplateUse = async (templateId: SafeId<"template">) =>
+    (
+      await testDb
+        .select({
+          useCount: templates.useCount,
+          lastUsedAt: templates.lastUsedAt,
+        })
+        .from(templates)
+        .where(eq(templates.id, templateId))
+        .limit(1)
+    ).at(0);
+
+  /** Run a deterministic export of the stored template. */
+  const exportStoredTemplate = async (templateId: SafeId<"template">) => {
+    await testDb
+      .update(reportExports)
+      .set({
+        aiNarrative: false,
+        templateRef: { type: "stored", templateId },
+      })
+      .where(eq(reportExports.id, exportId));
+    await processReportExport(actor, {
+      admission: testModelAdmission(actor.organizationId),
+      signal: new AbortController().signal,
+      format: "docx",
+      aiNarrative: false,
+    });
+  };
+
+  test("a stored template whose AI condition stays undecided fails the export with the condition named and no use recorded", async () => {
+    const templateId = await insertStoredTemplate({
+      paragraphs: [
+        "Report.",
+        "{% if is_consumer %}",
+        "Consumer notice.",
+        "{% endif %}",
+      ],
+      conditions: [
+        {
+          path: "is_consumer",
+          label: "Consumer contract",
+          inputType: "boolean",
+          aiPrompt: "Is this a consumer contract?",
+        },
+      ],
+    });
+    try {
+      // A deterministic export runs no AI tier, so the condition is
+      // undecided (no backend) and its block would render as if false.
+      await exportStoredTemplate(templateId);
+
+      expect(await readExport()).toMatchObject({
+        status: "failed",
+        error:
+          "Report template fill incomplete; AI-decided conditions left undecided: is_consumer (no-backend)",
+        resultS3Key: null,
+      });
+      expect(
+        objectWrites().filter((request) => request.key.startsWith("exports/")),
+      ).toEqual([]);
+      // The export produced nothing, so the template was not used.
+      expect(await readTemplateUse(templateId)).toEqual({
+        useCount: 0,
+        lastUsedAt: null,
+      });
+    } finally {
+      await testDb.delete(templates).where(eq(templates.id, templateId));
+    }
+  });
+
+  test("a deterministic export of a stored template with an AI condition calls no model", async () => {
+    const templateId = await insertStoredTemplate({
+      paragraphs: [
+        "Report.",
+        "{% if is_consumer %}",
+        "Consumer notice.",
+        "{% endif %}",
+      ],
+      conditions: [
+        {
+          path: "is_consumer",
+          label: "Consumer contract",
+          inputType: "boolean",
+          aiPrompt: "Is this a consumer contract?",
+        },
+      ],
+    });
+    try {
+      await exportStoredTemplate(templateId);
+
+      expect(await readExport()).toMatchObject({ status: "failed" });
+      for (const spy of [
+        textModelSpy,
+        objectModelSpy,
+        chatObjectSpy,
+        resolveModelSpy,
+        decideSpy,
+      ]) {
+        expect(spy).not.toHaveBeenCalled();
+      }
+    } finally {
+      await testDb.delete(templates).where(eq(templates.id, templateId));
+    }
+  });
+
+  test("a stored template export that completes records one use", async () => {
+    const templateId = await insertStoredTemplate({
+      paragraphs: ["Report."],
+      conditions: [],
+    });
+    try {
+      await exportStoredTemplate(templateId);
+
+      expect(await readExport()).toMatchObject({
+        status: "completed",
+        error: null,
+      });
+      const used = await readTemplateUse(templateId);
+      expect(used?.useCount).toBe(1);
+      expect(used?.lastUsedAt).toBeInstanceOf(Date);
+    } finally {
+      await testDb.delete(templates).where(eq(templates.id, templateId));
+    }
   });
 });

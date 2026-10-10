@@ -10,12 +10,12 @@ import {
   extractCaseLawDecisionIdFromIdRouteParam,
   normalizeCaseLawLanguageSegment,
 } from "@stll/api-contract/case-law-decision-route";
+import { decisionHasNoDocument } from "@stll/decision-reader/decision-body-state.logic";
 
 import {
   isPublicCaseLawCountry,
   publicCaseLawCountryFromParam,
 } from "@/features/case-law/case-law-jurisdiction";
-import { decisionHasNoDocument } from "@/features/case-law/components/case-viewer/decision-body-state.logic";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 import { PUBLIC_DECISION_MATCH } from "@/features/case-law/public-decision-match";
 import {
@@ -33,8 +33,8 @@ import {
 import { getAnalytics } from "@/lib/analytics/provider";
 import { createCaseLawLanguageAlternateLinks } from "@/lib/case-law-language-alternates";
 import { detached } from "@/lib/detached";
-import { APIError } from "@/lib/errors/api";
 import { pageTitleLiteral } from "@/lib/page-title";
+import { isPublicLawMissError } from "@/lib/public-law-api";
 import {
   createCaseLawDecisionJsonLd,
   createPublicLawCanonicalUrl,
@@ -99,10 +99,7 @@ type PublicDecisionHeadOptions = {
   params: PublicDecisionRouteParams;
 };
 
-export type {
-  PublicCaseLawDecision,
-  PublicDecisionLanguageAlternate,
-} from "@/features/case-law/public-decision";
+export type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 
 type PublicLawAlternateLink = {
   href: string;
@@ -193,7 +190,7 @@ const ensurePublicDecision = async <T>(load: () => Promise<T>): Promise<T> => {
   try {
     return await load();
   } catch (error) {
-    if (error instanceof APIError && error.status === 404) {
+    if (isPublicLawMissError(error)) {
       // The entry screen, not the results screen: a dead decision link leaves
       // the reader with nothing to show results for, so they land where a new
       // entry starts and the miss is named there.
@@ -236,6 +233,9 @@ const canonicalDecisionHash = async ({
   decision: { documentAst, resolution },
   hash,
 }: CanonicalDecisionHashOptions): Promise<string> => {
+  if (hash.startsWith("par=")) {
+    return hash;
+  }
   // Loaded on redirect only: the document parser stays out of the chunks
   // every page preloads.
   const { anchorAfterResolution } =

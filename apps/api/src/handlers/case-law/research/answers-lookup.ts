@@ -6,7 +6,7 @@ import {
   lookupResearchAnswersBodySchema,
   toResearchAnswerResponse,
 } from "@/api/handlers/case-law/research/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -17,6 +17,7 @@ const config = {
     "and the columns the organization holds; the client polls this while any " +
     "cell is pending.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
   mcp: { type: "internal", reason: "search_ui" },
   body: lookupResearchAnswersBodySchema,

@@ -6,7 +6,7 @@ import {
   legalListGenerationCandidates,
   legalListGenerationCandidateSources,
 } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -15,6 +15,7 @@ import {
   workspaceParams,
 } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { LIMITS } from "@/api/lib/limits";
 import {
   createCursorPage,
@@ -39,12 +40,14 @@ const querySchema = t.Object({
   cursor: t.Optional(tPaginationCursor()),
 });
 const config = {
+  featureAccess: { type: "required", featureId: LEGAL_LISTS_FEATURE_ID },
   description:
     "List one generation run's candidates in proposal order with cursor " +
     "pagination: the proposed item fields, the candidate's status, the item " +
     "it was accepted as when it has one, and the sources it cites. The run's " +
     "own status is returned alongside the page.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
   mcp: {
     type: "capability",

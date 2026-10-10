@@ -1,4 +1,5 @@
-import { useRef, useState } from "react";
+import { useImperativeHandle, useRef, useState } from "react";
+import type { Ref } from "react";
 
 import {
   CommentModeController,
@@ -11,7 +12,7 @@ import {
   OffsetRange,
   StringValue,
 } from "@vscode/markdown-editor";
-import { createEffect } from "@vscode/observables";
+import { createEffect, observableValue } from "@vscode/observables";
 import { panic } from "better-result";
 // The editor takes keyboard input through the EditContext API, which WebKit and
 // Gecko do not ship yet. The polyfill installs itself only when the API is
@@ -67,9 +68,17 @@ export type MarkdownEditorComment = {
  * trigger an outbound request driven by its content. `"unrestricted"` renders
  * every image url as-is. Every host must pick one explicitly.
  */
-export type MarkdownImagePolicy = "data-only" | "unrestricted";
+type MarkdownImagePolicy = "data-only" | "unrestricted";
+
+export type MarkdownHybridEditorHandle = {
+  /** Flush the current source and lock input before publication begins. */
+  captureForSave: () => string;
+  /** Replace the source without allowing a pending edit to reappear later. */
+  resetMarkdown: (markdown: string) => void;
+};
 
 export type MarkdownHybridEditorProps = {
+  ref?: Ref<MarkdownHybridEditorHandle> | undefined;
   /** The markdown to edit. Read once per mount; the editor owns its state after
    * that (the host keys the component per file to force a reload on switch). */
   markdown: string;
@@ -116,6 +125,7 @@ export type MarkdownHybridEditorProps = {
  * concerns (skill frontmatter, workspace file persistence) live in the host.
  */
 export const MarkdownHybridEditor = ({
+  ref,
   markdown,
   onMarkdownChange,
   imagePolicy,
@@ -136,6 +146,9 @@ export const MarkdownHybridEditor = ({
     return created;
   });
   const [commentsModel] = useState(() => new CommentsModel());
+  const [hostReadOnly] = useState(() =>
+    observableValue("markdown host read-only", readOnly),
+  );
   // The ids this host last pushed into `commentsModel`. A deletion the user
   // performs in a comment widget mutates the model directly, so the difference
   // between this set and the model's current ids is exactly "removed in the
@@ -144,6 +157,22 @@ export const MarkdownHybridEditor = ({
   // echoed back.
   const pushedCommentIds = useRef<ReadonlySet<string>>(new Set());
   const emit = useDebouncedCallback(onMarkdownChange, EMIT_DELAY_MS);
+  useImperativeHandle(ref, () => ({
+    captureForSave: () => {
+      hostReadOnly.set(true, undefined);
+      model.readonlyMode.set(true, undefined);
+      emit.flush();
+      return model.sourceText.get().value;
+    },
+    resetMarkdown: (nextMarkdown) => {
+      emit.cancel();
+      model.replaceSourceText(new StringValue(nextMarkdown));
+      // Replacing the model notifies its subscription synchronously, which
+      // schedules a new emission. Reset publishes immediately instead.
+      emit.cancel();
+      onMarkdownChange(nextMarkdown);
+    },
+  }));
   const addComment = useLatestCallback(
     (input: { start: number; end: number; text: string }) => {
       onAddComment?.(input);
@@ -160,6 +189,8 @@ export const MarkdownHybridEditor = ({
     }
     const view = new EditorView(model, {
       classNames: ["md-theme-vscode-default", "md-theme-stella"],
+      // The host owns permissions and publication locking.
+      showReadonlyToggle: false,
       onOpenLink: (url) => {
         openIsolatedWindow(url);
       },
@@ -199,6 +230,12 @@ export const MarkdownHybridEditor = ({
     }
     const controller = new EditorController(model, view, {
       historyStrategy: new LocalHistoryStrategy(model),
+    });
+    const readonlySubscription = createEffect((reader) => {
+      if (hostReadOnly.read(reader) && !model.readonlyMode.read(reader)) {
+        // Engine commands may toggle its mode; a host lock is authoritative.
+        model.readonlyMode.set(true, undefined);
+      }
     });
     const commentsView = new CommentsView(commentsModel, view);
     // The engine only shows the affordance in read-only mode, so mounting it
@@ -244,6 +281,7 @@ export const MarkdownHybridEditor = ({
       imageObserver?.disconnect();
       commentsSubscription.dispose();
       subscription.dispose();
+      readonlySubscription.dispose();
       commentModeController?.dispose();
       commentsView.dispose();
       controller.dispose();
@@ -253,8 +291,9 @@ export const MarkdownHybridEditor = ({
   });
 
   useExternalSyncEffect(() => {
+    hostReadOnly.set(readOnly, undefined);
     model.readonlyMode.set(readOnly, undefined);
-  }, [model, readOnly]);
+  }, [hostReadOnly, model, readOnly]);
 
   useExternalSyncEffect(() => {
     model.baseline.set(

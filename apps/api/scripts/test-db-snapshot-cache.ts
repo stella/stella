@@ -1,5 +1,4 @@
 import { TaggedError } from "better-result";
-import { createHash } from "node:crypto";
 import {
   accessSync,
   constants,
@@ -17,6 +16,9 @@ import {
 import { homedir } from "node:os";
 import path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
+
+import { compareCodeUnit } from "@stll/collation";
+import { createSha256 } from "@stll/sha256/bun";
 
 const SNAPSHOT_FORMAT = "1";
 const LOCK_TIMEOUT_MS = 5 * 60_000;
@@ -132,7 +134,7 @@ export const snapshotInputPaths = (
 };
 
 export const snapshotKey = (repositoryRoot: string, entryPoint: string) => {
-  const hash = createHash("sha256");
+  const hash = createSha256();
   const canonicalRoot = realpathSync(repositoryRoot);
   hash.update(SNAPSHOT_FORMAT);
   hash.update("\0");
@@ -147,7 +149,7 @@ export const snapshotKey = (repositoryRoot: string, entryPoint: string) => {
       }
       return { filePath, identity };
     })
-    .toSorted((a, b) => a.identity.localeCompare(b.identity));
+    .toSorted((a, b) => compareCodeUnit(a.identity, b.identity));
   for (const { filePath, identity } of inputs) {
     hash.update("\0");
     hash.update(identity);
@@ -165,7 +167,7 @@ export const snapshotCacheDir = (env: NodeJS.ProcessEnv) =>
   );
 
 export const snapshotDigest = async (filePath: string) => {
-  const hash = createHash("sha256");
+  const hash = createSha256();
   for await (const chunk of createReadStream(filePath)) {
     hash.update(chunk);
   }
@@ -439,6 +441,7 @@ export const acquireCachedSnapshot = async ({
         } catch {
           // Treat an unreadable entry exactly like a corrupt one.
         }
+        assertNotAborted(signal);
         if (!valid) {
           rmSync(finalPath);
           rmSync(path.join(cacheDir, `${key}.sha256`), { force: true });
@@ -467,7 +470,15 @@ export const acquireCachedSnapshot = async ({
         rmSync(temporaryPath, { force: true });
         rmSync(temporaryDigestPath, { force: true });
       }
-      if (!(await validate(finalPath))) {
+      let valid: boolean;
+      try {
+        valid = await validate(finalPath);
+      } catch (error) {
+        assertNotAborted(signal);
+        throw error;
+      }
+      assertNotAborted(signal);
+      if (!valid) {
         return {
           status: "fallback",
           reason: "built snapshot is unreadable or corrupt",

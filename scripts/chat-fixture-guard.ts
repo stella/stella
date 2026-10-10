@@ -31,6 +31,8 @@ import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
+import { compareCodeUnit } from "@stll/collation";
+
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 const LEDGER_REL = "scripts/chat-fixture-guard-ledger.json";
 const OWNER_REL = "apps/api/src/tests/helpers/chat-fixtures.ts";
@@ -270,7 +272,7 @@ const scanTree = async (): Promise<SnapshotLiteral[]> => {
   }
   return found.toSorted(
     (left, right) =>
-      left.path.localeCompare(right.path) || left.line - right.line,
+      compareCodeUnit(left.path, right.path) || left.line - right.line,
   );
 };
 

@@ -1,7 +1,6 @@
-import { useTranslations } from "use-intl";
-
 import { Button } from "@stll/ui/button";
 import { LaptopIcon } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 import { cn } from "@stll/ui/utils";
 
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
@@ -9,8 +8,13 @@ import {
   type DesktopOpenTarget,
   useDesktopFileOpen,
 } from "@/components/inspector/use-desktop-file-open";
+import {
+  DesktopRequiredDialog,
+  useDesktopActionGate,
+} from "@/features/desktop/desktop-action-gate";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
+import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 
 const DESKTOP_OPEN_ATTENTION_TIMEOUT_MS = 2500;
 
@@ -23,8 +27,8 @@ export const DesktopOpenButton = ({
   propertyId,
   workspaceId,
 }: DesktopOpenButtonProps) => {
-  const t = useTranslations();
-  const label = t("workspaces.files.desktopEdit.openAction");
+  const gate = useDesktopActionGate("edit-file");
+  const { label } = gate;
   const target = {
     entityId,
     fileType,
@@ -56,30 +60,45 @@ export const DesktopOpenButton = ({
   }, [attentionSequence, clearDesktopOpenAttention]);
 
   return (
-    <Button
-      aria-label={label}
-      className={cn(
-        attentionSequence !== null &&
-          "bg-primary/10 text-primary ring-primary/60 animate-[pulse_700ms_ease-in-out_3] ring-2 motion-reduce:animate-none",
-      )}
-      disabled={isOpening}
-      key={attentionSequence ?? "idle"}
-      onClick={() => {
-        detached(open(), "desktop-open-button.open");
-      }}
-      onAnimationEnd={(event) => {
-        if (event.target !== event.currentTarget) {
-          return;
-        }
-        if (attentionSequence !== null) {
-          clearDesktopOpenAttention(attentionSequence);
-        }
-      }}
-      size="icon-xs"
-      tooltip={label}
-      variant="ghost"
-    >
-      <LaptopIcon className={cn("size-3.5", isOpening && "animate-pulse")} />
-    </Button>
+    <>
+      <CapabilityAction action={{ capability: "desktop" }} surface="control">
+        {(capabilityProps) => (
+          <Button
+            aria-busy={isOpening || undefined}
+            aria-label={label}
+            className={cn(
+              attentionSequence !== null &&
+                "bg-primary/10 text-primary ring-primary/60 animate-[pulse_700ms_ease-in-out_3] ring-2 motion-reduce:animate-none",
+            )}
+            disabled={isOpening}
+            key={attentionSequence ?? "idle"}
+            onClick={() => {
+              gate.run(() => {
+                detached(open(), "desktop-open-button.open");
+              });
+            }}
+            onAnimationEnd={(event) => {
+              if (event.target !== event.currentTarget) {
+                return;
+              }
+              if (attentionSequence !== null) {
+                clearDesktopOpenAttention(attentionSequence);
+              }
+            }}
+            size="icon-xs"
+            tooltip={label}
+            variant="ghost"
+            {...capabilityProps}
+          >
+            {isOpening ? (
+              <Loader className="size-3.5" size="sm" variant="decorative" />
+            ) : (
+              <LaptopIcon className="size-3.5" />
+            )}
+          </Button>
+        )}
+      </CapabilityAction>
+      <DesktopRequiredDialog {...gate.requiredDialog} />
+    </>
   );
 };

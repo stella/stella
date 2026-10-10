@@ -28,7 +28,7 @@ export const SERVICE_TIER_MULTIPLIERS = {
  * because model work is attributed to the org's configured
  * provider account.
  */
-export const BYOK_MULTIPLIER = 0;
+const BYOK_MULTIPLIER = 0;
 
 type UsageUnitCostInput = {
   actionType: UsageActionType;

@@ -9,12 +9,14 @@ import {
   legalListFactDetails,
   legalListItems,
 } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { legalListRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { FieldDiffs } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import {
   FACT_CONFIDENCES,
   FACT_DATE_PRECISIONS,
@@ -22,6 +24,7 @@ import {
   FACT_SCORING,
 } from "@/api/lib/lists/fact-details";
 import type { FactDatePrecision } from "@/api/lib/lists/fact-details";
+import { LIST_VERIFICATION_ITEM_OPERATION } from "@/api/lib/lists/item-operations";
 import type {
   UnbackedProjectionKeys,
   UnprojectedColumns,
@@ -56,6 +59,7 @@ const bodySchema = t.Object({
 });
 
 const config = {
+  featureAccess: { featureId: LIST_VERIFICATION_FEATURE_ID, type: "required" },
   description:
     "Set the evidential detail of one fact item, replacing what it had: when " +
     "it happened (a date with day, month or year precision; a partial date " +
@@ -64,6 +68,8 @@ const config = {
     "is contested, and whether verifications may rely on it (`held` keeps it " +
     "out until confirmed). Only `fact` items carry detail.",
   permissions: { entity: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: legalListRealtimeUpdates,
   mcp: {
     type: "capability",
     reason: "workspace_schema",
@@ -188,7 +194,10 @@ const updateFactDetails = createSafeHandler(
           resourceType: AUDIT_RESOURCE_TYPE.LEGAL_LIST_ITEM,
           resourceId: itemEntityId,
           changes,
-          metadata: { operation: "fact_details_set", listId },
+          metadata: {
+            operation: LIST_VERIFICATION_ITEM_OPERATION.factDetailsSet,
+            listId,
+          },
         });
         return { type: "updated" } as const;
       }),
@@ -220,6 +229,7 @@ type FactDetailsProjection = Pick<
 >;
 
 const UNPROJECTED_FACT_DETAIL_COLUMNS = [
+  "entityFeatureGate", // RLS state is internal to the gate.
   // Scope keys the caller sent in the request.
   "workspaceId",
   "listId",

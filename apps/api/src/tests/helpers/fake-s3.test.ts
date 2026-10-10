@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+import { sha256Base64 as hashSha256Base64 } from "@stll/sha256/node";
+
 import { envBase } from "@/api/env-base";
 import {
   deleteS3ObjectWithSignal,
@@ -33,6 +36,23 @@ describe("fake S3 carries the real s3 helpers", () => {
     fake.stop();
   });
 
+  test("a held PUT exposes completion only after applying its bytes", async () => {
+    const key = "org_1/ws_1/held.txt";
+    const hold = fake.holdNext({ method: "PUT", keyIncludes: key });
+    const pending = writeS3ObjectWithRetry(
+      { key, data: "held bytes" },
+      { type: "fixture" },
+    );
+    await hold.reached;
+    expect(fake.objects.has(`${bucket}/${key}`)).toBe(false);
+    hold.release();
+    await hold.completed;
+    expect(
+      new TextDecoder().decode(fake.objects.get(`${bucket}/${key}`)?.bytes),
+    ).toBe("held bytes");
+    await pending;
+  });
+
   test("round-trips an object through the SDK and presigned transports", async () => {
     const bytes = new TextEncoder().encode("hello object");
     await putS3ObjectWithSignal(
@@ -64,6 +84,31 @@ describe("fake S3 carries the real s3 helpers", () => {
     await deleteS3ObjectWithSignal("org_1/ws_1/doc.txt", signal);
     expect(fake.objects.size).toBe(0);
   });
+
+  test.each([
+    new Uint8Array(),
+    new Uint8Array([0, 255, 128, 1]),
+    new TextEncoder().encode("Žluťoučký kůň Łódź e\u0301"),
+  ])(
+    "requested checksum receipts preserve the legacy digest for %j",
+    async (bytes) => {
+      const key = "sha256/exact-bytes";
+      const written = await fetch(`${fake.endpoint}/${bucket}/${key}`, {
+        signal,
+        method: "PUT",
+        headers: { "x-amz-checksum-algorithm": "SHA256" },
+        body: bytes,
+      });
+      expect(written.ok).toBe(true);
+      const expected = hashSha256Base64(bytes);
+      const read = await fetch(`${fake.endpoint}/${bucket}/${key}`, {
+        signal,
+        headers: { "x-amz-checksum-mode": "ENABLED" },
+      });
+      expect(read.headers.get("x-amz-checksum-sha256")).toBe(expected);
+      expect(new Uint8Array(await read.arrayBuffer())).toEqual(bytes);
+    },
+  );
 
   test("copies preserve bytes while validators change and checksums are requested or inherited", async () => {
     const requestSignal = AbortSignal.timeout(5000);
@@ -105,9 +150,7 @@ describe("fake S3 carries the real s3 helpers", () => {
         "x-amz-copy-source-if-match": sourceValidator ?? "",
       },
     });
-    const expected = new Bun.CryptoHasher("sha256")
-      .update(bytes)
-      .digest("base64");
+    const expected = hashSha256Base64(bytes);
     expect(await requested.text()).toContain(
       `<ChecksumSHA256>${expected}</ChecksumSHA256>`,
     );
@@ -219,13 +262,21 @@ describe("fake S3 carries the real s3 helpers", () => {
 
   test("retries a transient write and stops on a terminal rejection", async () => {
     fake.failNext({ method: "PUT", code: "InternalError", status: 500 });
-    await writeS3ObjectWithRetry({ key: "retry/ok", data: "payload" });
+    await writeS3ObjectWithRetry(
+      { key: "retry/ok", data: "payload" },
+      { type: "fixture" },
+    );
     expect(fake.objects.has(`${bucket}/retry/ok`)).toBe(true);
 
     fake.failNext({ method: "PUT", code: "AccessDenied", status: 403 });
     expect(
-      writeS3ObjectWithRetry({ key: "retry/denied", data: "payload" }),
-    ).rejects.toThrow(/AccessDenied/u);
+      await rejectionOf(
+        writeS3ObjectWithRetry(
+          { key: "retry/denied", data: "payload" },
+          { type: "fixture" },
+        ),
+      ),
+    ).toHaveProperty("message", expect.stringMatching(/AccessDenied/u));
     expect(fake.objects.has(`${bucket}/retry/denied`)).toBe(false);
   });
 });

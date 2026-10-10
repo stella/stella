@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-/* oxlint-disable typescript-eslint/promise-function-async -- fetch mock callbacks return Promise.resolve without being async */
+/* oxlint-disable typescript/promise-function-async -- fetch mock callbacks return Promise.resolve without being async */
 import {
   afterAll,
   afterEach,
@@ -26,7 +26,6 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import type { CzNsListingRow } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
-import { hashContent } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import {
   citationKeyOf,
   decisionIdentifiersFromMetadata,
@@ -839,25 +838,22 @@ describe("cz-ns buildDecision", () => {
     // The refresh check skips a row whose source hash stands still. The court
     // writes both after publishing the decision and edits them later, so a row
     // stored before that has to hash differently once the page states the new
-    // text; otherwise the update never lands. The two are hashed in fixed
-    // positions, so a headnote alone and an annotation alone cannot collide.
+    // text; otherwise the update never lands. The hash covers the whole stored
+    // detail page, so a headnote alone and an annotation alone cannot collide.
     expect(new Set(hashes).size).toBe(hashes.length);
   });
 
-  test("the day the court published the document is part of the hash", async () => {
+  test("the source hash of a fixed crawl is pinned", async () => {
     const decision = await crawledWithSummary({});
 
-    // Every stored row's hash moved once when the publication day joined this
-    // literal, and again when the deciding court did; each pass is what
-    // carries the new field, and the multi-part raw beside it, onto rows
-    // written before it existed, because the refresh check skips a row whose
-    // hash stands still. The literal is here so the next such move is a
-    // decision somebody makes rather than a side effect of editing the parser.
-    expect(decision.metadata["zverejnenoNaWebu"] === "2026-06-10").toBe(true);
+    // Every stored row's hash moved when it became the fingerprint of the
+    // stored detail, print and listing parts; that move is what carries the
+    // listing part onto rows written before it existed, because the refresh
+    // check skips a row whose hash stands still. The value is pinned so the
+    // next such move is a decision somebody makes rather than a side effect
+    // of editing the parser or the stored envelope.
     expect(decision.rawHash).toBe(
-      hashContent(
-        `${JSON.stringify([DOCKET.FIRST])}|ECLI:CZ:NS:2026:30.CDO.3000.2025.1|Nejvyšší soud|28. 5. 2026|2026-06-10`,
-      ),
+      "f9c98ab4a68ae755d850d04660e583ab737df59473cad7ec09f49c6dadbf9b05",
     );
   });
 
@@ -899,7 +895,11 @@ describe("cz-ns buildDecision", () => {
 
     expect(
       await buildCzNsDecision({ unid: UNID.FIRST, caseNumber: DOCKET.FIRST }),
-    ).toEqual({ type: "detail-unavailable", httpStatus: 503 });
+    ).toEqual({
+      type: "detail-unavailable",
+      page: "detail",
+      read: { type: "unavailable", cause: { kind: "status", status: 503 } },
+    });
   });
 
   test("a payload this adapter no longer recognises is unkeyable, unasked", async () => {

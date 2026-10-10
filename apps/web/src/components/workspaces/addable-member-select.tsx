@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import {
@@ -9,83 +10,105 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { UserIdentity } from "@/components/user-avatar";
+import { addableMembersView } from "@/components/workspaces/addable-member-select.logic";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { organizationOptions } from "@/lib/organization/queries";
+import { useQueryView } from "@/lib/use-query-view";
 import { workspaceMembersOptions } from "@/lib/workspaces/queries/workspace-members";
 
 /** Organization members who are not yet members of the workspace. */
 export const useAddableMembers = (workspaceId: string) => {
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
-  const { data: org, isPending: isOrganizationPending } = useQuery(
-    organizationOptions(activeOrganizationId),
+  const organizationView = useQueryView(
+    useQuery(organizationOptions(activeOrganizationId)),
   );
-  const { data: existingMembers = [] } = useQuery(
-    workspaceMembersOptions(workspaceId),
+  const membersView = useQueryView(
+    useQuery(workspaceMembersOptions(workspaceId)),
   );
-
-  const existingUserIds = new Set(existingMembers.map((m) => m.userId));
-  const organizationMembers = org ? org.members : [];
-  const items = organizationMembers
-    .filter((m) => !existingUserIds.has(m.userId))
-    .map((m) => ({
-      email: m.user.email,
-      image: m.user.image,
-      name: m.user.name,
-      value: m.userId,
-    }));
-
-  return { isOrganizationPending, items };
+  const view = addableMembersView(organizationView, membersView);
+  return { view, organizationView, membersView };
 };
 
 type AddableMemberSelectProps = {
-  items: ReturnType<typeof useAddableMembers>["items"];
+  query: ReturnType<typeof useAddableMembers>;
   onValueChange: (userId: string | null) => void;
   value: string | null;
 };
 
 export const AddableMemberSelect = ({
-  items,
+  query,
   onValueChange,
   value,
 }: AddableMemberSelectProps) => {
   const t = useTranslations();
 
+  const { view, organizationView, membersView } = query;
+  const feedback = (
+    <>
+      <QueryViewFeedback view={organizationView} />
+      <QueryViewFeedback view={membersView} />
+    </>
+  );
+  switch (view.type) {
+    case "pending":
+    case "error":
+      return feedback;
+    case "empty":
+      return (
+        <>
+          {feedback}
+          <p className="text-muted-foreground text-sm">
+            {t("workspaces.leadPicker.noMatchingMembers")}
+          </p>
+        </>
+      );
+    case "items":
+      break;
+    default:
+      view satisfies never;
+      return panic("Unhandled addable members state");
+  }
+  const items = view.items;
   return (
-    <Select onValueChange={onValueChange} value={value}>
-      <SelectTrigger>
-        <SelectValue>
-          {(current) => {
-            const found = items.find((m) => m.value === current);
-            if (!found) {
-              return t("workspaces.members.selectMember");
-            }
+    <>
+      {feedback}
+      <Select onValueChange={onValueChange} value={value}>
+        <SelectTrigger>
+          <SelectValue>
+            {(current) => {
+              const found = items.find((m) => m.value === current);
+              if (!found) {
+                return t("workspaces.members.selectMember");
+              }
 
-            return (
+              return (
+                <UserIdentity
+                  avatarClassName="size-7 shrink-0 text-3xs"
+                  className="min-w-0"
+                  image={found.image}
+                  name={found.name}
+                  secondaryText={found.email}
+                />
+              );
+            }}
+          </SelectValue>
+        </SelectTrigger>
+        <SelectPopup>
+          {items.map((item) => (
+            <SelectItem key={item.value} value={item.value}>
               <UserIdentity
                 avatarClassName="size-7 shrink-0 text-3xs"
                 className="min-w-0"
-                image={found.image}
-                name={found.name}
-                secondaryText={found.email}
+                image={item.image}
+                name={item.name}
+                secondaryText={item.email}
               />
-            );
-          }}
-        </SelectValue>
-      </SelectTrigger>
-      <SelectPopup>
-        {items.map((item) => (
-          <SelectItem key={item.value} value={item.value}>
-            <UserIdentity
-              avatarClassName="size-7 shrink-0 text-3xs"
-              className="min-w-0"
-              image={item.image}
-              name={item.name}
-              secondaryText={item.email}
-            />
-          </SelectItem>
-        ))}
-      </SelectPopup>
-    </Select>
+            </SelectItem>
+          ))}
+        </SelectPopup>
+      </Select>
+    </>
   );
 };

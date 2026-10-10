@@ -9,9 +9,11 @@ import {
   mintMachineApiKey,
   validateGrantablePermissions,
 } from "@/api/handlers/api-keys/mint";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { API_KEY_KIND } from "@/api/lib/machine-api-key-config";
 
 const rotateApiKeyBody = t.Object({
   keyId: t.String({ minLength: 1, maxLength: 128 }),
@@ -20,6 +22,7 @@ const rotateApiKeyBody = t.Object({
 
 const config = {
   permissions: { organizationSettings: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: { type: "internal", reason: "provider_secret" },
   body: rotateApiKeyBody,
 } satisfies HandlerConfig;
@@ -53,6 +56,12 @@ const rotateMachineApiKey = createSafeRootHandler(
         organizationId: session.activeOrganizationId,
       }),
     );
+
+    if (existing.kind !== API_KEY_KIND.machine) {
+      return Result.err(
+        new HandlerError({ status: 404, message: "API key not found" }),
+      );
+    }
 
     // Refuse to rotate an already-revoked key. Minting off a disabled row
     // (a retried rotation, or a rotate racing a revoke) would resurrect the

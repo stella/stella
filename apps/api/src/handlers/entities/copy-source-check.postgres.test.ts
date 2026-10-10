@@ -20,6 +20,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { lockDesktopEditTarget } from "@/api/lib/entity-versions/desktop-edit-session-utils";
 import { writeFileVersion } from "@/api/lib/entity-versions/write-file-version";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import { allocateFileObject } from "@/api/lib/files/file-object-ids";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
@@ -352,6 +353,7 @@ if (!databaseUrl || !runPostgresTests) {
                       fileId: allocateFileObject(),
                       fileName: "New.txt",
                       mimeType: "text/plain",
+                      encryption: serverBuiltFileEncryption(),
                       sizeBytes: 8,
                       sha256Hex: "b".repeat(64),
                       source: null,
@@ -595,6 +597,7 @@ if (!databaseUrl || !runPostgresTests) {
                     fileId: allocateFileObject(),
                     fileName: "New.txt",
                     mimeType: "text/plain",
+                    encryption: serverBuiltFileEncryption(),
                     sizeBytes: 8,
                     sha256Hex: "b".repeat(64),
                     source: null,

@@ -1,4 +1,4 @@
-// parser-output-unchanged: the deferred-document key set is derived from manifest declarations; parsed decision output is unchanged.
+// parser-output-unchanged: manifest policy and derived deferred-document keys do not change parsed decision output.
 import { panic } from "better-result";
 
 import {
@@ -54,6 +54,24 @@ type AdapterJurisdictionDeclaration = {
   };
 }[CaseLawJurisdiction];
 
+/**
+ * Whether the ECLI a source states names one decision within that source.
+ *
+ * A source's record id is not the decision's identity: a publisher can
+ * reissue a decision's document under a new id and withdraw the old one.
+ * Where the stated ECLI names exactly one decision, the pipeline recognises
+ * the stored row under the old id by that ECLI and re-keys it. Where it does
+ * not (no ECLI, an ECLI the adapter derives itself, or one shared by several
+ * documents the source stores apart), an unknown id is a new decision.
+ */
+export const STATED_ECLI_IDENTITY = {
+  DECISION: "decision",
+  NONE: "none",
+} as const;
+
+export type StatedEcliIdentity =
+  (typeof STATED_ECLI_IDENTITY)[keyof typeof STATED_ECLI_IDENTITY];
+
 type AdapterManifest<TKey extends string> = {
   readonly key: TKey;
   readonly documentStage: DocumentStage;
@@ -89,6 +107,8 @@ type AdapterManifest<TKey extends string> = {
    */
   readonly publicHomeUrl: string;
   readonly ecliCourtCodes: Readonly<Record<string, string>>;
+  /** See {@link STATED_ECLI_IDENTITY}. */
+  readonly statedEcliIdentity: StatedEcliIdentity;
   readonly placeholderPatterns: readonly SourcePlaceholderPattern[];
   readonly dateRange: AdapterDateRange;
 } & AdapterJurisdictionDeclaration;
@@ -155,6 +175,7 @@ export const ADAPTER_MANIFESTS = {
     publicHomeUrl: "https://rozhodnuti.justice.cz",
     ...ADAPTER_JURISDICTIONS.CZE,
     ecliCourtCodes: CZ_ECLI_COURTS,
+    statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
     dateRange: {
       type: "publication-date",
@@ -170,6 +191,7 @@ export const ADAPTER_MANIFESTS = {
     publicHomeUrl: "https://rozhodnuti.nsoud.cz",
     ...ADAPTER_JURISDICTIONS.CZE,
     ecliCourtCodes: CZ_ECLI_COURTS,
+    statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
     dateRange: {
       type: "publication-date",
@@ -185,6 +207,7 @@ export const ADAPTER_MANIFESTS = {
     publicHomeUrl: "https://vyhledavac.nssoud.cz",
     ...ADAPTER_JURISDICTIONS.CZE,
     ecliCourtCodes: CZ_ECLI_COURTS,
+    statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
     placeholderPatterns: [
       { type: "exact", text: "-" },
       { type: "exact", text: "–" },
@@ -205,6 +228,7 @@ export const ADAPTER_MANIFESTS = {
     publicHomeUrl: "https://nalus.usoud.cz",
     ...ADAPTER_JURISDICTIONS.CZE,
     ecliCourtCodes: CZ_ECLI_COURTS,
+    statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
     placeholderPatterns: [
       { type: "exact", text: "Abstrakt není k dispozici." },
       { type: "exact", text: "Právní věta není k dispozici." },
@@ -223,6 +247,9 @@ export const ADAPTER_MANIFESTS = {
     publicHomeUrl: "https://obcan.justice.sk",
     ...ADAPTER_JURISDICTIONS.SVK,
     ecliCourtCodes: SK_ECLI_COURTS,
+    // The portal can reissue a decision under a new document id and
+    // withdraw the old one; the ECLI it states stays with the decision.
+    statedEcliIdentity: STATED_ECLI_IDENTITY.DECISION,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
     dateRange: {
       type: "decision-date",
@@ -238,6 +265,7 @@ export const ADAPTER_MANIFESTS = {
     publicHomeUrl: "https://www.ustavnysud.sk",
     ...ADAPTER_JURISDICTIONS.SVK,
     ecliCourtCodes: SK_ECLI_COURTS,
+    statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
     dateRange: {
       type: "decision-date",
@@ -253,6 +281,7 @@ export const ADAPTER_MANIFESTS = {
     publicHomeUrl: "https://www.saos.org.pl",
     ...ADAPTER_JURISDICTIONS.POL,
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
+    statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
     dateRange: {
       type: "decision-date",
@@ -269,6 +298,7 @@ export const ADAPTER_MANIFESTS = {
     ...ADAPTER_JURISDICTIONS.POL,
     // Poland issues no ECLI, so there is no court code to resolve one against.
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
+    statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
     dateRange: {
       type: "decision-date",
@@ -290,6 +320,7 @@ export const ADAPTER_MANIFESTS = {
     publicHomeUrl: "https://orzeczenia.uzp.gov.pl",
     ...ADAPTER_JURISDICTIONS.POL,
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
+    statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
     dateRange: {
       type: "decision-date",
@@ -308,6 +339,7 @@ export const ADAPTER_MANIFESTS = {
     publicHomeUrl: "https://ipo.trybunal.gov.pl/ipo/",
     ...ADAPTER_JURISDICTIONS.POL,
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
+    statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
     dateRange: {
       type: "decision-date",
@@ -328,6 +360,7 @@ export const ADAPTER_MANIFESTS = {
     ...ADAPTER_JURISDICTIONS.POL,
     // Poland issues no ECLI, so there is no court code to resolve one against.
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
+    statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
     dateRange: {
       // The oldest and newest decision dates the pinned revision holds.
@@ -344,6 +377,7 @@ export const ADAPTER_MANIFESTS = {
     publicHomeUrl: "https://orzeczenia.ms.gov.pl",
     ...ADAPTER_JURISDICTIONS.POL,
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
+    statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
     dateRange: {
       type: "decision-date",
@@ -360,6 +394,7 @@ export const ADAPTER_MANIFESTS = {
     publicHomeUrl: "https://www.ris.bka.gv.at",
     ...ADAPTER_JURISDICTIONS.AUT,
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
+    statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
     dateRange: {
       type: "decision-date",
@@ -375,6 +410,7 @@ export const ADAPTER_MANIFESTS = {
     publicHomeUrl: "https://www.ris.bka.gv.at",
     ...ADAPTER_JURISDICTIONS.AUT,
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
+    statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
     dateRange: {
       type: "decision-date",
@@ -390,6 +426,7 @@ export const ADAPTER_MANIFESTS = {
     publicHomeUrl: "https://www.ris.bka.gv.at",
     ...ADAPTER_JURISDICTIONS.AUT,
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
+    statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
     dateRange: {
       type: "decision-date",
@@ -405,6 +442,7 @@ export const ADAPTER_MANIFESTS = {
     publicHomeUrl: "https://www.ris.bka.gv.at",
     ...ADAPTER_JURISDICTIONS.AUT,
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
+    statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
     dateRange: {
       type: "decision-date",
@@ -420,6 +458,7 @@ export const ADAPTER_MANIFESTS = {
     publicHomeUrl: "https://www.ris.bka.gv.at",
     ...ADAPTER_JURISDICTIONS.AUT,
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
+    statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
     dateRange: {
       type: "decision-date",
@@ -435,6 +474,7 @@ export const ADAPTER_MANIFESTS = {
     publicHomeUrl: "https://www.ris.bka.gv.at",
     ...ADAPTER_JURISDICTIONS.AUT,
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
+    statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
     dateRange: {
       type: "decision-date",
@@ -450,6 +490,7 @@ export const ADAPTER_MANIFESTS = {
     publicHomeUrl: "https://www.ris.bka.gv.at",
     ...ADAPTER_JURISDICTIONS.AUT,
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
+    statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
     dateRange: {
       type: "decision-date",
@@ -465,6 +506,7 @@ export const ADAPTER_MANIFESTS = {
     publicHomeUrl: "https://www.ris.bka.gv.at",
     ...ADAPTER_JURISDICTIONS.AUT,
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
+    statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
     dateRange: {
       type: "decision-date",
@@ -480,6 +522,7 @@ export const ADAPTER_MANIFESTS = {
     publicHomeUrl: "https://www.ris.bka.gv.at",
     ...ADAPTER_JURISDICTIONS.AUT,
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
+    statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
     dateRange: {
       type: "decision-date",
@@ -495,6 +538,7 @@ export const ADAPTER_MANIFESTS = {
     publicHomeUrl: "https://www.ris.bka.gv.at",
     ...ADAPTER_JURISDICTIONS.AUT,
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
+    statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
     dateRange: {
       type: "decision-date",
@@ -510,6 +554,7 @@ export const ADAPTER_MANIFESTS = {
     publicHomeUrl: "https://www.ris.bka.gv.at",
     ...ADAPTER_JURISDICTIONS.AUT,
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
+    statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
     dateRange: {
       type: "decision-date",
@@ -525,6 +570,7 @@ export const ADAPTER_MANIFESTS = {
     publicHomeUrl: "https://findok.bmf.gv.at",
     ...ADAPTER_JURISDICTIONS.AUT,
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
+    statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
     dateRange: {
       type: "decision-date",
@@ -541,6 +587,7 @@ export const ADAPTER_MANIFESTS = {
     ...ADAPTER_JURISDICTIONS.HUN,
     // Hungary issues no ECLI, so there is no court code to resolve one against.
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
+    statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
     // The collection prints no "not available" stand-in: a decision without a
     // résumé states `Rezume: null`.
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
@@ -561,6 +608,7 @@ export const ADAPTER_MANIFESTS = {
     publicHomeUrl: "https://eureka.mf.gov.pl",
     ...ADAPTER_JURISDICTIONS.POL,
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
+    statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
     dateRange: {
       // One general interpretation of 2004 predates the individual ones, which
@@ -579,6 +627,7 @@ export const ADAPTER_MANIFESTS = {
     ...ADAPTER_JURISDICTIONS.POL,
     // Poland issues no ECLI, so there is no court code to resolve one against.
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
+    statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
     dateRange: {
       // The authority's own decisions start in 2018; the court rulings the
@@ -598,6 +647,7 @@ export const ADAPTER_MANIFESTS = {
     ...ADAPTER_JURISDICTIONS.POL,
     // Poland issues no ECLI, so there is no court code to resolve one against.
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
+    statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
     dateRange: {
       // The register's oldest decision is dated 4 January 2000.
@@ -614,6 +664,7 @@ export const ADAPTER_MANIFESTS = {
     publicHomeUrl: "https://eur-lex.europa.eu",
     ...ADAPTER_JURISDICTIONS.EU,
     ecliCourtCodes: EU_ECLI_COURTS,
+    statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
     dateRange: {
       type: "decision-date",
@@ -633,11 +684,86 @@ export const IMPORT_SOURCE_MANIFESTS = {
     publicHomeUrl: "https://www.courtlistener.com",
     ...ADAPTER_JURISDICTIONS.USA,
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
+    statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
   },
 } as const satisfies {
   readonly [TKey in ImportSourceKey]: Omit<AdapterManifest<TKey>, "dateRange">;
 };
+
+/**
+ * What the MCP in-app reader shows a person for a source whose full text may
+ * not reach a model. `full` renders the text in the reader UI through the
+ * app-only tools while model-visible results stay metadata; `metadata-only`
+ * shows metadata and the link to open the decision in stella.
+ */
+// parser-output-unchanged: [eu-ecj] Reader rendering policy only; parsed decision output is unchanged.
+// parser-output-unchanged: [us-courtlistener] Reader rendering policy only; parsed decision output is unchanged.
+export const APP_READER_TEXT = {
+  FULL: "full",
+  METADATA_ONLY: "metadata-only",
+} as const;
+
+export type AppReaderText =
+  (typeof APP_READER_TEXT)[keyof typeof APP_READER_TEXT];
+
+// parser-output-unchanged: [eu-ecj] Seed-only reader keys; parsed decision output is unchanged.
+// parser-output-unchanged: [us-courtlistener] Seed-only reader keys; parsed decision output is unchanged.
+/** Seed-only source keys: these are reader fixtures, never crawlable adapters. */
+export const FIXTURE_SOURCE_KEYS = {
+  SYNTHETIC_CZ: "synthetic-cz",
+  SYNTHETIC_SK: "synthetic-sk",
+} as const;
+
+export type FixtureSourceKey =
+  (typeof FIXTURE_SOURCE_KEYS)[keyof typeof FIXTURE_SOURCE_KEYS];
+
+const FIXTURE_SOURCE_APP_READER_TEXT = {
+  [FIXTURE_SOURCE_KEYS.SYNTHETIC_CZ]: APP_READER_TEXT.FULL,
+  [FIXTURE_SOURCE_KEYS.SYNTHETIC_SK]: APP_READER_TEXT.FULL,
+} as const satisfies Record<FixtureSourceKey, AppReaderText>;
+
+/**
+ * Per source, so one source can move to `metadata-only` when its terms require
+ * it. Total over every adapter and import key: a new source cannot land
+ * without a decision.
+ */
+export const SOURCE_APP_READER_TEXT = {
+  [ADAPTER_KEYS.CZ_REGIONAL]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.CZ_NS]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.CZ_NSS]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.CZ_US]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.SK_COURTS]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.SK_US]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.PL_COURTS]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.PL_SN]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.PL_KIO]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.PL_TK]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.PL_NSA]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.PL_NCOURT]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.AT_COURTS]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.AT_VFGH]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.AT_VWGH]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.AT_BVWG]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.AT_LVWG]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.AT_ASYLGH]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.AT_UBAS]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.AT_UVS]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.AT_VERG]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.AT_UMSE]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.AT_BKS]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.AT_FINDOK]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.EU_ECJ]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.HU_BHGY]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.PL_KIS]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.PL_UODO]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.PL_UOKIK]: APP_READER_TEXT.FULL,
+  [IMPORT_SOURCE_KEYS.COURTLISTENER]: APP_READER_TEXT.FULL,
+  ...FIXTURE_SOURCE_APP_READER_TEXT,
+} as const satisfies Record<
+  AdapterKey | ImportSourceKey | FixtureSourceKey,
+  AppReaderText
+>;
 
 export type DeferredDocumentAdapterKey = {
   [

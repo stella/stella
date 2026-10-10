@@ -6,7 +6,12 @@ import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
 
 import { env } from "@/api/env";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  admitFiniteAction,
+  configuredModelAdmission,
+  createSafeRootHandler,
+} from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { toSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -19,7 +24,9 @@ import {
   currentActionCostIdentity,
   type ActionCostObservation,
 } from "@/api/lib/usage/action-costs/context";
+import { createTestDemoActionBudget } from "@/api/tests/helpers/demo-action-budget";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 const context = (signal?: AbortSignal) => ({
   request: new Request("https://example.test/action", {
@@ -37,6 +44,7 @@ const context = (signal?: AbortSignal) => ({
 const config = {
   actionAdmission: { type: "handler", actionKind: "chat.improve-prompt" },
   permissions: { chat: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "assistant_chat" },
 } satisfies HandlerConfig;
 
@@ -247,7 +255,7 @@ describe("finite HTTP action admission", () => {
         config,
         async function* (input) {
           expect(input.request).toBe(ctx.request);
-          expect(input.actionSignal).toBeUndefined();
+          expect(input.actionSignal?.aborted).toBe(false);
           return Result.ok(payload);
         },
         deps,
@@ -273,6 +281,48 @@ describe("finite HTTP action admission", () => {
       });
       expect(deps.counts()).toEqual({ acquisitions: 0, releases: 0 });
     });
+  });
+
+  test("flags off still count the demo account's finite actions", async () => {
+    const previous = env.FEATURE_ACTION_COST_RECORDS;
+    env.FEATURE_ACTION_COST_RECORDS = false;
+    try {
+      await withFeature(false, async () => {
+        const demo = createTestDemoActionBudget({
+          demoUserId: context().user.id,
+          nowMs: Date.UTC(2026, 0, 15),
+        });
+        const deps = dependencies();
+        const admit: typeof withActionAdmission = async (options) =>
+          await deps.admit({ ...options, demoActionBudget: demo.budget });
+        const endpoint = createSafeRootHandler(
+          config,
+          async function* () {
+            return Result.ok({ ok: true });
+          },
+          { admit },
+        );
+        expect(await endpoint.handler(asTestRaw(context()))).toEqual({
+          ok: true,
+        });
+        const finite = await Result.gen(() =>
+          admitFiniteAction({
+            ctx: { ...context(), scopedDb: createScopedDbMock({}).scopedDb },
+            actionKind: config.actionAdmission.actionKind,
+            admit,
+            async *handler() {
+              return Result.ok({ ok: true });
+            },
+          }),
+        );
+        expect(Result.isOk(finite)).toBe(true);
+        expect(demo.increments()).toBe(2);
+        expect(demo.count()).toBe(2);
+        expect(deps.counts()).toEqual({ acquisitions: 0, releases: 0 });
+      });
+    } finally {
+      env.FEATURE_ACTION_COST_RECORDS = previous;
+    }
   });
 
   test("finite work holds the lease until settlement and preserves payload identity", async () => {
@@ -304,7 +354,11 @@ describe("finite HTTP action admission", () => {
     await withFeature(true, async () => {
       const deps = dependencies(0);
       const endpoint = createSafeRootHandler(
-        { permissions: config.permissions, mcp: config.mcp },
+        {
+          permissions: config.permissions,
+          accountAccess: config.accountAccess,
+          mcp: config.mcp,
+        },
         async function* ({ actionSignal }) {
           expect(actionSignal).toBeUndefined();
           return Result.ok({ ok: true });
@@ -566,4 +620,50 @@ describe("finite HTTP action admission", () => {
       });
     },
   );
+
+  test("admitted finite work hands its handler the proof of its organization and kind", async () => {
+    await withFeature(false, async () => {
+      const proofs: unknown[] = [];
+      const endpoint = createSafeRootHandler(
+        config,
+        async function* ({ modelAdmission }) {
+          proofs.push(configuredModelAdmission({ modelAdmission }));
+          return Result.ok({ ok: true });
+        },
+      );
+      expect(await endpoint.handler(asTestRaw(context()))).toEqual({
+        ok: true,
+      });
+      const finite = await Result.gen(() =>
+        admitFiniteAction({
+          ctx: { ...context(), scopedDb: createScopedDbMock({}).scopedDb },
+          actionKind: "chat.suggested-prompts",
+          async *handler({ modelAdmission }) {
+            proofs.push(modelAdmission);
+            return Result.ok({ ok: true });
+          },
+        }),
+      );
+      expect(Result.isOk(finite)).toBe(true);
+      const organizationId = context().session.activeOrganizationId;
+      expect(proofs).toEqual([
+        expect.objectContaining({
+          type: "organization",
+          organizationId,
+          actionKind: config.actionAdmission.actionKind,
+        }),
+        expect.objectContaining({
+          type: "organization",
+          organizationId,
+          actionKind: "chat.suggested-prompts",
+        }),
+      ]);
+    });
+  });
+
+  test("a handler without a configured admission holds no model proof", () => {
+    expect(() => configuredModelAdmission({})).toThrow(
+      "A handler dispatched a model without its configured admission",
+    );
+  });
 });

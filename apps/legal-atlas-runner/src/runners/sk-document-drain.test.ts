@@ -11,13 +11,13 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import {
   DOCUMENT_FETCH_EVENT,
   type DocumentStageObservation,
 } from "@stll/legal-atlas/document-fetch-diagnostics";
 
 import { toSafeId } from "@/api/lib/branded-types";
-import type { DocumentAst } from "@/api/lib/case-law/document-ast";
 import type {
   DecisionDocumentOutcome,
   PendingDocument,
@@ -76,6 +76,8 @@ const OUTCOMES = {
   },
   unavailable: { status: "unavailable" },
   claimed: { status: "claimed" },
+  busy: { status: "busy" },
+  lost: { status: "lost" },
   superseded: { status: "superseded" },
   deferred: {
     status: "deferred",
@@ -713,7 +715,12 @@ describe("sk document drain", () => {
       parked: 1,
       filled: 1,
       failed: 0,
-      failures: { "publisher-status": 1, network: 0, unparseable: 1 },
+      failures: {
+        "publisher-status": 1,
+        network: 0,
+        "too-large": 0,
+        unparseable: 1,
+      },
       lastFailureDetail: OUTCOMES.parked.detail,
     });
   });

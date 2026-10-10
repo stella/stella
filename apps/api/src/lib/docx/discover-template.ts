@@ -20,6 +20,8 @@ import {
   qualifyLoopPath,
   qualifyRowScopedPlaceholder,
   rowScopePaths,
+  scanMarkers,
+  substitutionKey,
   type ConditionNode,
   type FilterCall,
   type RowScope,
@@ -44,7 +46,7 @@ import { parseInlineConditions } from "./inline-conditions";
 import type { InlineGroup } from "./inline-conditions";
 import {
   MAIN_DOCUMENT_PART_PATH,
-  paragraphText,
+  paragraphOwnText,
   templateContentPartPaths,
   W_NS,
 } from "./ooxml";
@@ -64,6 +66,7 @@ import type {
   DiscoveredField,
   DiscoveredPlaceholder,
   DiscoveredTemplate,
+  EnclosingScope,
   FieldMeta,
   TemplateFieldKind,
   TemplateStructureError,
@@ -202,6 +205,52 @@ const requireRowScopes = (
 };
 
 // ── Condition map building ─────────────────────────────
+
+const sameEnclosingScope = (
+  left: EnclosingScope,
+  right: EnclosingScope,
+): boolean =>
+  left.condition === right.condition &&
+  left.rowScopes.length === right.rowScopes.length &&
+  left.rowScopes.every((scope, index) => {
+    const other = right.rowScopes[index];
+    return (
+      other !== undefined &&
+      scope.alias === other.alias &&
+      scope.declaredPath === other.declaredPath &&
+      scope.scopedPath === other.scopedPath
+    );
+  });
+
+/** A slot every marker of which sits in one scope renders its clause there;
+ *  markers that disagree leave the clause read at document scope. */
+const recordClauseSlotScope = (
+  scopes: Map<string, EnclosingScope | null>,
+  slotKey: string,
+  scope: EnclosingScope | null,
+): void => {
+  const existing = scopes.get(slotKey);
+  if (existing === undefined) {
+    scopes.set(slotKey, scope);
+    return;
+  }
+  if (
+    existing !== null &&
+    (scope === null || !sameEnclosingScope(existing, scope))
+  ) {
+    scopes.set(slotKey, null);
+  }
+};
+
+/** Slot scopes of several containers (body, headers, footers) as one. */
+const mergeClauseSlotScopes = (
+  into: Map<string, EnclosingScope | null>,
+  from: ReadonlyMap<string, EnclosingScope | null>,
+): void => {
+  for (const [slotKey, scope] of from) {
+    recordClauseSlotScope(into, slotKey, scope);
+  }
+};
 
 /**
  * Negate a condition expression.
@@ -412,7 +461,31 @@ type DocumentFieldDeclaration = {
   scope: "value" | "array";
 };
 
+/** The template's own parts render at document scope; a clause body renders
+ *  wherever its slot marker sits, so its markers are read through the slot's
+ *  loops and branch. */
+const DOCUMENT_SCOPE: EnclosingScope = { rowScopes: [], condition: undefined };
+
+/** One value marker, as the fill renders it. */
+export type LocatedFieldMarker = {
+  /** The path as authored, which the values in scope where it renders
+   *  resolve (a loop alias inside its loop). */
+  expr: string;
+  /** The manifest path it fills. */
+  path: string;
+  /** Inside an inline `{% for %}`, whose iterations share one paragraph and
+   *  so carry no per-iteration scope of their own. */
+  inInlineLoop: boolean;
+  /** No loop or branch encloses it, so it renders whatever the values. */
+  unconditional: boolean;
+};
+
 type AnalysisResult = {
+  /** Per paragraph, its value markers in text order. */
+  fieldMarkers: Map<slimdom.Element, LocatedFieldMarker[]>;
+  /** Per clause slot key, the scope its markers render the slot in; `null`
+   *  when two markers of the slot disagree or one sits in an inline loop. */
+  clauseSlotScopes: Map<string, EnclosingScope | null>;
   fields: FieldAccumulator;
   errors: TemplateStructureError[];
   placeholderCounts: Map<string, number>;
@@ -502,6 +575,7 @@ type ContainerStructureOptions = {
   fields: FieldAccumulator;
   loopAliases: Map<string, Set<string>>;
   warnings: TemplateWarning[];
+  enclosing: EnclosingScope;
 };
 
 const collectContainerStructure = ({
@@ -512,6 +586,7 @@ const collectContainerStructure = ({
   fields,
   loopAliases,
   warnings,
+  enclosing,
 }: ContainerStructureOptions) => {
   const paragraphs = body.getElementsByTagNameNS(W_NS, "p");
   // Positions to report. Everything below indexes `paragraphs`, which carries
@@ -528,7 +603,13 @@ const collectContainerStructure = ({
     });
   }
   const arrayScopes = new Map<number, readonly RowScope[]>();
-  const activeArrays: RowScope[] = [];
+  const activeArrays: RowScope[] = [...enclosing.rowScopes];
+  for (const { scopedPath } of enclosing.rowScopes) {
+    // The enclosing arrays belong to the template that places this content;
+    // they are seeded only so item paths written here reach them, and count
+    // nothing (a merge adds `count - 1`).
+    fields.set(scopedPath, { kind: "array", count: 0, itemPaths: new Set() });
+  }
   const directiveByParagraph = new Map(
     directives.map((directive) => [directive.paragraphIndex, directive]),
   );
@@ -582,7 +663,7 @@ const collectContainerStructure = ({
         ...collectParagraphWarnings({
           loops: activeArrays,
           paragraphIndex: authoredIndices[i] ?? i,
-          text: paragraphText(paragraph),
+          text: paragraphOwnText(paragraph),
         }),
       );
     }
@@ -598,6 +679,7 @@ const collectContainerStructure = ({
     blocks,
     conditionMap: buildConditionMapFromRanges(directives, paragraphs.length),
     directiveIndices,
+    enclosing,
     paragraphs,
   };
 };
@@ -637,7 +719,7 @@ const collectLoopItemFields = ({
       const prefixes = [...new Set([block.alias, block.arrayPath])].map(
         (head) => `${head}.`,
       );
-      for (const { name } of scanPlaceholders(paragraphText(para))) {
+      for (const { name } of scanPlaceholders(paragraphOwnText(para))) {
         const prefix = prefixes.find((candidate) => name.startsWith(candidate));
         if (prefix !== undefined) {
           entry?.itemPaths.add(name.slice(prefix.length));
@@ -650,12 +732,15 @@ const collectLoopItemFields = ({
 const collectParagraphPlaceholders = ({
   arrayScopes,
   authoredIndices,
+  clauseSlotScopes,
   conditionMap,
   conditionPaths,
   directiveIndices,
   documentFilters,
+  enclosing,
   errors,
   fieldConditions,
+  fieldMarkers,
   fields,
   loopAliases,
   paragraphs,
@@ -670,8 +755,11 @@ const collectParagraphPlaceholders = ({
     if (!para) {
       continue;
     }
-    const text = paragraphText(para);
-    const paraCondition = conditionMap.get(i);
+    const text = paragraphOwnText(para);
+    const paraCondition = combineConditions(
+      enclosing.condition,
+      conditionMap.get(i),
+    );
     const inlineBranchConditions: {
       condition: string | undefined;
       end: number;
@@ -702,12 +790,16 @@ const collectParagraphPlaceholders = ({
         groups: readonly InlineGroup[],
         span: string,
         offset: number,
+        enclosingCondition: string | undefined,
       ): void => {
         for (const group of groups) {
           if (group.kind === "for") {
             const scopedPath = qualifyLoopPath(group.arrayPath, [
               ...requireRowScopes(arrayScopes, i),
-              ...inlineLoopScopes,
+              ...inlineLoopScopes.filter(
+                ({ start, end }) =>
+                  start <= offset + group.start && offset + group.start < end,
+              ),
             ]);
             registerField(fields, scopedPath, "array");
             recordLoopAlias(loopAliases, group.alias, scopedPath);
@@ -747,6 +839,7 @@ const collectParagraphPlaceholders = ({
                 nested.groups,
                 content,
                 offset + group.contentStart,
+                enclosingCondition,
               );
             }
             continue;
@@ -760,13 +853,17 @@ const collectParagraphPlaceholders = ({
               fields,
               rowScopes: [
                 ...requireRowScopes(arrayScopes, i),
-                ...inlineLoopScopes.map(
-                  ({ alias, declaredPath, scopedPath }) => ({
+                ...inlineLoopScopes
+                  .filter(
+                    ({ start, end }) =>
+                      start <= offset + branch.contentStart &&
+                      offset + branch.contentStart < end,
+                  )
+                  .map(({ alias, declaredPath, scopedPath }) => ({
                     alias,
                     declaredPath,
                     scopedPath,
-                  }),
-                ),
+                  })),
               ],
             });
             const branchCondition =
@@ -778,7 +875,7 @@ const collectParagraphPlaceholders = ({
                   ].join(" and ");
             inlineBranchConditions.push({
               condition: combineConditions(
-                paraCondition,
+                enclosingCondition,
                 branchCondition || undefined,
               ),
               end: offset + branch.contentEnd,
@@ -795,12 +892,38 @@ const collectParagraphPlaceholders = ({
                 nested.groups,
                 span.slice(branch.contentStart, branch.contentEnd),
                 offset + branch.contentStart,
+                combineConditions(
+                  enclosingCondition,
+                  branchCondition || undefined,
+                ),
               );
             }
           }
         }
       };
-      visitInlineGroups(inline.groups, text, 0);
+      visitInlineGroups(inline.groups, text, 0, paraCondition);
+    }
+
+    for (const { meta, start: markerStart } of scanMarkers(text)) {
+      if (meta.kind !== "clause") {
+        continue;
+      }
+      const inInlineLoop = inlineLoopScopes.some(
+        ({ end, start }) => start <= markerStart && markerStart < end,
+      );
+      const inlineBranch = inlineBranchConditions.findLast(
+        ({ end, start }) => start <= markerStart && markerStart < end,
+      );
+      recordClauseSlotScope(
+        clauseSlotScopes,
+        substitutionKey(meta) ?? panic("A clause marker has no slot key"),
+        inInlineLoop
+          ? null
+          : {
+              rowScopes: requireRowScopes(arrayScopes, i),
+              condition: inlineBranch?.condition ?? paraCondition,
+            },
+      );
     }
 
     for (const {
@@ -832,14 +955,34 @@ const collectParagraphPlaceholders = ({
         path: name,
       });
 
-      const inlineCondition = inlineBranchConditions.find(
+      const inlineBranch = inlineBranchConditions.findLast(
         ({ end, start }) => start <= markerStart && markerStart < end,
-      )?.condition;
+      );
+      const loops = [...scopedArrayPaths, ...enclosingLoops];
+      const isItemField = loops.some(({ scopedPath }) =>
+        name.startsWith(`${scopedPath}.`),
+      );
+      // A document-level field written inside a loop renders when any
+      // iteration renders it; no one condition over the document's values
+      // says that, so the form keeps it visible.
       recordFieldCondition(
         fieldConditions,
         name,
-        inlineCondition ?? paraCondition,
+        loops.length > 0 && !isItemField
+          ? undefined
+          : (inlineBranch?.condition ?? paraCondition),
       );
+      const located = arrayOrEmpty(fieldMarkers.get(para));
+      fieldMarkers.set(para, located);
+      located.push({
+        expr: declaredName,
+        path: name,
+        inInlineLoop: enclosingLoops.length > 0,
+        unconditional:
+          loops.length === 0 &&
+          inlineBranch === undefined &&
+          paraCondition === undefined,
+      });
 
       // Infer field kind from path structure
       if (name.includes(".")) {
@@ -876,7 +1019,10 @@ const collectParagraphPlaceholders = ({
  * Analyze a container element (w:body, w:hdr, or w:ftr) to
  * extract field information from its paragraphs.
  */
-const analyzeContainer = (body: slimdom.Element): AnalysisResult => {
+const analyzeContainer = (
+  body: slimdom.Element,
+  enclosing: EnclosingScope = DOCUMENT_SCOPE,
+): AnalysisResult => {
   // Same rewrite the fill pipeline applies, so a row-form loop is discovered
   // with its item paths and warns exactly as the own-paragraph form does.
   normalizeRowBlockMarkers(body);
@@ -893,6 +1039,8 @@ const analyzeContainer = (body: slimdom.Element): AnalysisResult => {
   const conditionPaths = new Set<string>();
   const documentFilters = new Map<string, DocumentFieldDeclaration>();
   const loopAliases = new Map<string, Set<string>>();
+  const fieldMarkers = new Map<slimdom.Element, LocatedFieldMarker[]>();
+  const clauseSlotScopes = new Map<string, EnclosingScope | null>();
   const structure = collectContainerStructure({
     body,
     conditionPaths,
@@ -901,14 +1049,17 @@ const analyzeContainer = (body: slimdom.Element): AnalysisResult => {
     fields,
     loopAliases,
     warnings,
+    enclosing,
   });
   collectLoopItemFields({ ...structure, fields });
   collectParagraphPlaceholders({
     ...structure,
+    clauseSlotScopes,
     conditionPaths,
     documentFilters,
     errors,
     fieldConditions,
+    fieldMarkers,
     fields,
     loopAliases,
     placeholderCounts,
@@ -916,6 +1067,8 @@ const analyzeContainer = (body: slimdom.Element): AnalysisResult => {
   });
 
   return {
+    fieldMarkers,
+    clauseSlotScopes,
     fields,
     errors,
     placeholderCounts,
@@ -924,6 +1077,64 @@ const analyzeContainer = (body: slimdom.Element): AnalysisResult => {
     conditionPaths,
     documentFilters,
     loopAliases,
+  };
+};
+
+/**
+ * A clause body read where its slot renders it. A slot whose markers disagree
+ * (or that sits in an inline loop) renders its body at more than one scope,
+ * so the body is read at document scope and nothing in it counts as
+ * rendering whatever the values.
+ */
+const analyzeClauseBody = (
+  container: slimdom.Element,
+  enclosing: EnclosingScope | null | undefined,
+): AnalysisResult => {
+  const analysis = analyzeContainer(container, enclosing ?? DOCUMENT_SCOPE);
+  if (!enclosing) {
+    for (const markers of analysis.fieldMarkers.values()) {
+      for (const marker of markers) {
+        marker.unconditional = false;
+      }
+    }
+  }
+  return analysis;
+};
+
+/** Every value marker of a template part, or of a clause body placed by the
+ *  slot scopes the template's parts declare, read as discovery reads it. */
+export const locateFieldMarkers = (
+  container: slimdom.Element,
+  clauseSlot?: { scope: EnclosingScope | null | undefined },
+): Pick<AnalysisResult, "fieldMarkers" | "clauseSlotScopes"> => {
+  const { fieldMarkers, clauseSlotScopes } =
+    clauseSlot === undefined
+      ? analyzeContainer(container)
+      : analyzeClauseBody(container, clauseSlot.scope);
+  return { fieldMarkers, clauseSlotScopes };
+};
+
+/**
+ * `scoped`: fields whose value markers the directive pass places, so each is
+ * required exactly where it renders. `unconditional`: fields with a marker no
+ * loop, branch or clause slot encloses, which render whatever the values.
+ */
+const renderedFieldPaths = (
+  fieldMarkers: ReadonlyMap<slimdom.Element, readonly LocatedFieldMarker[]>,
+): { scoped: string[]; unconditional: string[] } => {
+  const placed = new Set<string>();
+  const unconditional = new Set<string>();
+  for (const markers of fieldMarkers.values()) {
+    for (const marker of markers) {
+      placed.add(marker.path);
+      if (marker.unconditional) {
+        unconditional.add(marker.path);
+      }
+    }
+  }
+  return {
+    scoped: [...placed].toSorted(compareCodeUnit),
+    unconditional: [...unconditional].toSorted(compareCodeUnit),
   };
 };
 
@@ -951,6 +1162,10 @@ const mergeAnalysis = (
     }
   }
 
+  for (const [paragraph, markers] of secondary.fieldMarkers) {
+    primary.fieldMarkers.set(paragraph, markers);
+  }
+  mergeClauseSlotScopes(primary.clauseSlotScopes, secondary.clauseSlotScopes);
   primary.errors.push(...secondary.errors);
   primary.warnings.push(...secondary.warnings);
   for (const [alias, paths] of secondary.loopAliases) {
@@ -1003,6 +1218,8 @@ const analyzeHeadersAndFooters = async (
   slots: Map<string, ClauseSlot>,
 ): Promise<AnalysisResult> => {
   const result: AnalysisResult = {
+    fieldMarkers: new Map(),
+    clauseSlotScopes: new Map(),
     fields: new Map(),
     errors: [],
     placeholderCounts: new Map(),
@@ -1111,11 +1328,36 @@ export const discoverTemplate = async (
     err.source = "body";
   }
 
+  // Headers and footers are merged after the clauses, but the clause slots
+  // they hold place clause bodies too.
+  const hfAnalysis = await analyzeHeadersAndFooters(zip, slots);
+  const slotScopes = new Map(primary.clauseSlotScopes);
+  mergeClauseSlotScopes(slotScopes, hfAnalysis.clauseSlotScopes);
+
+  const templateFieldPaths = new Set([
+    ...primary.placeholderCounts.keys(),
+    ...hfAnalysis.placeholderCounts.keys(),
+  ]);
   const clauseFieldPaths = new Set<string>();
+  const clausePathsBySlot = new Map<string, Set<string>>();
   for (const { container, clause } of additionalContent) {
-    const analysis = analyzeContainer(container);
+    const enclosing = slotScopes.get(clause.slotKey);
+    const analysis = analyzeClauseBody(container, enclosing);
+    const slotPaths =
+      clausePathsBySlot.get(clause.slotKey) ?? new Set<string>();
+    clausePathsBySlot.set(clause.slotKey, slotPaths);
+    const seeded = new Set(
+      enclosing?.rowScopes.map(({ scopedPath }) => scopedPath),
+    );
     for (const path of analysis.fields.keys()) {
+      if (!seeded.has(path)) {
+        clauseFieldPaths.add(path);
+        slotPaths.add(path);
+      }
+    }
+    for (const [path] of foldRenderedLookups(analysis.documentFilters, [])) {
       clauseFieldPaths.add(path);
+      slotPaths.add(path);
     }
     for (const declaration of analysis.documentFilters.values()) {
       declaration.clause = clause;
@@ -1133,8 +1375,6 @@ export const discoverTemplate = async (
     }
   }
 
-  // Scan headers and footers for additional fields
-  const hfAnalysis = await analyzeHeadersAndFooters(zip, slots);
   mergeAnalysis(primary, hfAnalysis);
 
   const { fields, errors, placeholderCounts, fieldConditions } = primary;
@@ -1180,11 +1420,27 @@ export const discoverTemplate = async (
     }
 
     if (info.kind === "array" && info.itemPaths.size > 0) {
-      field.itemFields = [...info.itemPaths].toSorted().map((p) => ({
-        path: p,
-        kind: "string" as const,
-        count: placeholderCounts.get(`${path}.${p}`) ?? 1,
-      }));
+      field.itemFields = [...info.itemPaths].toSorted().map((p) => {
+        const item: DiscoveredField = {
+          path: p,
+          kind: "string" as const,
+          count: placeholderCounts.get(`${path}.${p}`) ?? 1,
+        };
+        // Written in the loop body's terms: each item evaluates it with the
+        // loop alias bound to that item.
+        const itemCondition = fieldConditions.get(`${path}.${p}`);
+        if (typeof itemCondition === "string") {
+          item.visibleWhen = itemCondition;
+        }
+        return item;
+      });
+      const aliases = [...primary.loopAliases]
+        .filter(([, paths]) => paths.has(path))
+        .map(([alias]) => alias)
+        .toSorted(compareCodeUnit);
+      if (aliases.length > 0) {
+        field.itemAliases = aliases;
+      }
     }
 
     discoveredFields.push(field);
@@ -1196,6 +1452,16 @@ export const discoverTemplate = async (
   return {
     clauseSlots: [...slots.values()],
     clauseFieldPaths: [...clauseFieldPaths],
+    clauseScopedFieldPaths: Object.fromEntries(
+      [...clausePathsBySlot].map(([slotKey, paths]) => [
+        slotKey,
+        [...paths]
+          .filter((path) => !templateFieldPaths.has(path))
+          .toSorted(compareCodeUnit),
+      ]),
+    ),
+    clauseSlotScopes: Object.fromEntries(slotScopes),
+    renderedFieldPaths: renderedFieldPaths(primary.fieldMarkers),
     placeholders,
     fields: discoveredFields,
     structureErrors: errors,

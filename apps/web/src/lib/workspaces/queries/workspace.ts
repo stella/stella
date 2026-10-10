@@ -6,6 +6,7 @@ import { unwrapEden } from "@/lib/errors/api";
 import type { QueryOptionsInput } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceJustification } from "@/lib/types";
+import { useQueryView } from "@/lib/use-query-view";
 import {
   workspaceJustificationsQueryRoot,
   workspaceWorkflowQueryRoot,
@@ -102,13 +103,13 @@ export const useIsWorkflowRunning = (inputWorkspaceId?: string) => {
   });
   const workspaceId = inputWorkspaceId ?? workspaceMatch?.params.workspaceId;
 
-  const { data } = useQuery({
+  const query = useQuery({
     ...workflowOptions({ key: { workspaceId: workspaceId ?? "" } }),
     enabled: workspaceId !== undefined,
     select: (d) => d.running,
   });
 
-  return data ?? false;
+  return useQueryView(query);
 };
 
 export const useWorkflowStatus = (workspaceId: string) =>

@@ -18,8 +18,9 @@ import {
   rollbackS3Copies,
   snapshotOfCurrentVersion,
 } from "@/api/handlers/entities/copy-utils";
+import { entityFileRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { captureError } from "@/api/lib/analytics/capture";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -44,7 +45,7 @@ const duplicateEntityBodySchema = t.Object({
   name: t.Optional(
     t.String({ minLength: 1, maxLength: LIMITS.entityNameMaxLength }),
   ),
-  targetEntityId: t.Optional(tSafeId("entity")),
+  targetEntityId: t.Optional(tSafeId("entity", { usage: "creation" })),
 });
 
 type DuplicateEntityHandlerProps = {
@@ -288,6 +289,11 @@ const duplicateEntityHandler = async function* ({
 };
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Copies stored content and returns operation metadata rather than file bytes.",
+  },
   description:
     "Copy one document, or a folder with its whole subtree, inside the same " +
     "matter, placing the copy alongside the original. Stored files are " +
@@ -295,6 +301,8 @@ const config = {
     "extraction and PDF and thumbnail derivatives. Use " +
     "entities.copy to copy into a different matter.",
   permissions: { entity: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: entityFileRealtimeUpdates,
   mcp: {
     type: "capability",
     reason: "document_processing",

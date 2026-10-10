@@ -51,7 +51,7 @@
 // flagged when no `try` with a `catch` or `finally` can override the exit.
 // A return-site or an immediately following exit is independent of unrelated
 // continues; a later exit still requires no `continue` targeting the loop.
-// One DB hit per constant-bounded round is exempt: canonical chunked inputs
+// One DB hit per constant-bounded round is exempt: canonical chunk inputs
 // (literal/const size >= 2), array slice-step loops with that stride, fixed
 // sets of at most 16 elements, and nonnegative constant-start counters bounded by <= 16.
 // The counter must not be written in the body. Multiple DB hits, fan-out,
@@ -82,9 +82,11 @@
 // Usage: bun scripts/db-await-in-loop.ts
 
 import { panic } from "better-result";
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
+
+import { compareCodeUnit } from "@stll/collation";
 
 import { createProgram } from "../packages/scripts/src/typescript-program.ts";
 
@@ -206,7 +208,6 @@ export type ScanDbAwaitInLoopOptions = {
   readonly isInScope: (relativePath: string) => boolean;
   // Repository-relative paths of the modules that declare handle types.
   readonly handleDeclarationFiles: readonly string[];
-  readonly chunkHelperFiles?: readonly string[];
 };
 
 type Match =
@@ -801,7 +802,6 @@ export const scanDbAwaitInLoop = ({
   repositoryRoot,
   isInScope,
   handleDeclarationFiles,
-  chunkHelperFiles = ["apps/api/src/lib/chunked.ts"],
 }: ScanDbAwaitInLoopOptions): DbAwaitInLoopReport => {
   const checker = program.getTypeChecker();
   const handleFiles = new Set(
@@ -810,8 +810,12 @@ export const scanDbAwaitInLoop = ({
     ),
   );
 
-  const chunkFiles = new Set(
-    chunkHelperFiles.map((file) => toPosix(path.resolve(repositoryRoot, file))),
+  // preserveSymlinks gives workspace imports a node_modules path; ownership
+  // follows the physical source rather than that spelling.
+  const chunkFile = toPosix(
+    realpathSync(
+      path.resolve(repositoryRoot, "packages/concurrency/src/chunk.ts"),
+    ),
   );
   const symbolOf = (expression: ts.Expression): ts.Symbol | undefined => {
     const symbol = checker.getSymbolAtLocation(unwrap(expression));
@@ -837,8 +841,9 @@ export const scanDbAwaitInLoop = ({
     seen.add(symbol);
     return (symbol.declarations ?? []).some((declaration) => {
       if (
-        symbol.getName() === "chunked" &&
-        chunkFiles.has(toPosix(declaration.getSourceFile().fileName))
+        symbol.getName() === "chunk" &&
+        toPosix(realpathSync(declaration.getSourceFile().fileName)) ===
+          chunkFile
       ) {
         return true;
       }
@@ -1133,10 +1138,19 @@ export const scanDbAwaitInLoop = ({
       return false;
     }
     const iterable = unwrap(loop.expression);
-    if (ts.isCallExpression(iterable) && isChunkHelper(iterable.expression)) {
-      const size = iterable.arguments.at(1);
+    let batches = iterable;
+    if (
+      ts.isCallExpression(batches) &&
+      batches.arguments.length === 0 &&
+      ts.isPropertyAccessExpression(batches.expression) &&
+      ["entries", "keys", "values"].includes(batches.expression.name.text)
+    ) {
+      batches = unwrap(batches.expression.expression);
+    }
+    if (ts.isCallExpression(batches) && isChunkHelper(batches.expression)) {
+      const size = batches.arguments.at(1);
       const number = size === undefined ? null : literalNumber(size);
-      return iterable.arguments.length === 2 && number !== null && number >= 2;
+      return batches.arguments.length === 2 && number !== null && number >= 2;
     }
     const length = fixedSetLength(iterable);
     return length !== null && length <= 16;
@@ -1821,7 +1835,7 @@ export const scanDbAwaitInLoop = ({
   const byLocation = <T extends { file: string; line: number }>(
     a: T,
     b: T,
-  ): number => a.file.localeCompare(b.file) || a.line - b.line;
+  ): number => compareCodeUnit(a.file, b.file) || a.line - b.line;
 
   return {
     hits: hits.toSorted(byLocation),

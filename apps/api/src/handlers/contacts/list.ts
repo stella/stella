@@ -6,7 +6,7 @@ import {
   listContactsPage,
 } from "@/api/handlers/contacts/list-query";
 import { contactTypeSchema } from "@/api/handlers/contacts/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { tPaginationCursor, tPaginationLimit } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -30,6 +30,7 @@ const readContacts = createSafeRootHandler(
       "unpaginated lookup that also matches first, last, and organization " +
       "names.",
     permissions: { workspace: ["read"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "tool", name: "list_contacts" },
     access: "read",
     query: readContactsQuerySchema,

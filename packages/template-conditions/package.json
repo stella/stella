@@ -1,6 +1,6 @@
 {
   "name": "@stll/template-conditions",
-  "version": "0.6.3",
+  "version": "0.6.4",
   "description": "A document-template marker and condition engine: {{...}} marker grammar, parse, compute, serialize, field values.",
   "keywords": [
     "condition",
@@ -29,7 +29,8 @@
   "type": "module",
   "sideEffects": false,
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./path": "./src/path.ts"
   },
   "publishConfig": {
     "access": "public"

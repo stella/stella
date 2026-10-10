@@ -4,7 +4,7 @@ import { t } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { templateDeletionCleanupRequests, templates } from "@/api/db/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -16,14 +16,16 @@ const deleteTemplateParamsSchema = t.Object({
   templateId: tSafeId("template"),
 });
 
-type DeleteTemplateProps = {
+export type DeleteTemplateProps = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   templateId: SafeId<"template">;
   recordAuditEvent: AuditRecorder;
 };
 
-const deleteTemplateHandler = async function* ({
+// Shared template-delete logic reused by the HTTP handler and the review
+// organization reset, so both record the same storage cleanup and audit event.
+export const deleteTemplateHandler = async function* ({
   safeDb,
   organizationId,
   templateId,
@@ -110,6 +112,7 @@ const config = {
     "template survive as history, but the template and its files cannot be " +
     "recovered.",
   permissions: { template: ["delete"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "template_authoring_ui",

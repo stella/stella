@@ -20,6 +20,7 @@ import {
   setLogSinkForTesting,
   type LogRecord,
 } from "@/api/lib/observability/logger";
+import { DueSlot } from "@/api/lib/scheduler/due-slot";
 import {
   BACKFILL_AGENT_CLIENT_STORAGE_TASK,
   backfillAgentClientStorage,
@@ -141,6 +142,8 @@ if (!databaseUrl || !enabled) {
             db,
             job,
             payload: job.payload,
+            dueAt: DueSlot.of(job),
+
             runId: createSafeId<"schedulerJobRun">(),
             scheduleContinuation: () => undefined,
             signal: new AbortController().signal,
@@ -187,6 +190,8 @@ if (!databaseUrl || !enabled) {
           db,
           job,
           payload: job.payload,
+          dueAt: DueSlot.of(job),
+
           runId: createSafeId<"schedulerJobRun">(),
           scheduleContinuation: () => undefined,
           signal: new AbortController().signal,
@@ -277,6 +282,8 @@ if (!databaseUrl || !enabled) {
           db: unusedDatabase,
           job,
           payload: job.payload,
+          dueAt: DueSlot.of(job),
+
           runId: createSafeId<"schedulerJobRun">(),
           scheduleContinuation: () => undefined,
           signal: new AbortController().signal,

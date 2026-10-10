@@ -1,3 +1,4 @@
+import { panic, Result } from "better-result";
 /**
  * A reader's highlights and comments on case-law decisions and statutes, for
  * an agent: read them, place new ones, change or remove its user's own.
@@ -9,9 +10,6 @@
  * an agent leaves is the same record the reader would have written and shows
  * up in the reader's margin like any other.
  */
-
-import { panic, Result } from "better-result";
-import { CryptoHasher } from "bun";
 import * as v from "valibot";
 
 import {
@@ -25,6 +23,7 @@ import {
 } from "@stll/api-contract/legal-reader-annotations";
 import type { ReaderAnnotationTargetType } from "@stll/api-contract/legal-reader-annotations";
 import type { Block } from "@stll/legal-ast/document-ast";
+import { createSha256 } from "@stll/sha256/bun";
 
 import { createReaderAnnotationHandler } from "@/api/handlers/legal-reader/annotations/create";
 import { deleteReaderAnnotationHandler } from "@/api/handlers/legal-reader/annotations/delete";
@@ -43,6 +42,7 @@ import {
   UPDATE_READER_ANNOTATION_PROJECTION,
 } from "@/api/lib/chat/projections";
 import { LIMITS } from "@/api/lib/limits";
+import { projectionPayload } from "@/api/lib/projection-totality";
 import { brandPersistedLegalReaderAnnotationId } from "@/api/lib/safe-id-boundaries";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
@@ -65,6 +65,7 @@ import {
   internalFailureResult,
   notFoundResult,
   nullAsAbsent,
+  structuredEgressPlan,
   structuredErrorResult,
   toolDataResult,
   uuidInputSchema,
@@ -307,18 +308,17 @@ const handleListTool: TypedMcpToolHandler<
     });
   }
 
-  const payload = {
+  const payload = projectionPayload(LIST_READER_ANNOTATIONS_PROJECTION, {
     annotations: [...marks.values()],
     nextCursor: listed.value.nextCursor,
-  } satisfies v.InferInput<typeof LIST_READER_ANNOTATIONS_PROJECTION>;
-  return {
-    egress: "structured",
+  });
+  return structuredEgressPlan({
     payload,
     textFields: runTextFieldSpecs(
       readerAnnotationTextFieldSpecs(context.organizationId),
       payload,
     ),
-  };
+  });
 };
 
 // --- create_reader_annotation -------------------------------------------------
@@ -392,7 +392,7 @@ const HEX_DIGITS = "0123456789abcdef";
  * mark is, shaped as a UUID; the create handler compares the stored rows
  * with the request before it treats a present id as a replay.
  */
-const createRequestIdFor = ({
+export const createRequestIdFor = ({
   organizationId,
   request,
   userId,
@@ -401,7 +401,7 @@ const createRequestIdFor = ({
   request: unknown;
   userId: string;
 }) => {
-  const hex = new CryptoHasher("sha256")
+  const hex = createSha256()
     .update(JSON.stringify([organizationId, userId, request]))
     .digest("hex")
     .slice(0, UUID_HEX_LENGTH);
@@ -502,13 +502,15 @@ const handleCreateTool: TypedMcpToolHandler<
     return internalFailureResult(created.error);
   }
 
-  return toolDataResult({
-    annotationId: created.value.id,
-    passages: located.spans.map((span) => ({
-      anchor: span.blockAnchorId,
-      quote: span.quote,
-    })),
-  } satisfies v.InferInput<typeof CREATE_READER_ANNOTATION_PROJECTION>);
+  return toolDataResult(
+    projectionPayload(CREATE_READER_ANNOTATION_PROJECTION, {
+      annotationId: created.value.id,
+      passages: located.spans.map((span) => ({
+        anchor: span.blockAnchorId,
+        quote: span.quote,
+      })),
+    }),
+  );
 };
 
 // --- update_reader_annotation -------------------------------------------------
@@ -584,10 +586,12 @@ const handleUpdateTool: TypedMcpToolHandler<
   if (Result.isError(updated)) {
     return internalFailureResult(updated.error);
   }
-  return toolDataResult({
-    annotationId,
-    updated: true,
-  } satisfies v.InferInput<typeof UPDATE_READER_ANNOTATION_PROJECTION>);
+  return toolDataResult(
+    projectionPayload(UPDATE_READER_ANNOTATION_PROJECTION, {
+      annotationId,
+      updated: true,
+    }),
+  );
 };
 
 // --- delete_reader_annotation -------------------------------------------------
@@ -634,9 +638,11 @@ const handleDeleteTool: TypedMcpToolHandler<
   if (Result.isError(deleted)) {
     return internalFailureResult(deleted.error);
   }
-  return toolDataResult({
-    deleted: true,
-  } satisfies v.InferInput<typeof DELETED_TRUE_PROJECTION>);
+  return toolDataResult(
+    projectionPayload(DELETED_TRUE_PROJECTION, {
+      deleted: true,
+    }),
+  );
 };
 
 // --- registry -------------------------------------------------------------------
@@ -685,6 +691,11 @@ const READER_ANNOTATION_TOOL_DEFINITIONS = [
       "Resending the same call returns the mark it already made.",
     inputSchema: createArgsSchema,
     access: "write",
+    accountAccess: "sandbox",
+    permissions: {
+      type: "all",
+      permissions: { legalReaderAnnotation: ["create"] },
+    },
     anonymized: { exposure: "excluded", reason: "write" },
     name: "create_reader_annotation",
     scope: "stella:knowledge_write",
@@ -693,7 +704,7 @@ const READER_ANNOTATION_TOOL_DEFINITIONS = [
     consumesServices: false,
     annotations: {
       title: "Update reader annotation",
-      destructiveHint: false,
+      destructiveHint: true,
       idempotentHint: true,
       openWorldHint: false,
       readOnlyHint: false,
@@ -701,6 +712,11 @@ const READER_ANNOTATION_TOOL_DEFINITIONS = [
     description: `Change one of the user's highlights or comments: a comment's words, a highlight's colour or style, or who sees it. ${MARK_OWNERSHIP}`,
     inputSchema: updateArgsSchema,
     access: "write",
+    accountAccess: "sandbox",
+    permissions: {
+      type: "all",
+      permissions: { legalReaderAnnotation: ["update"] },
+    },
     anonymized: { exposure: "excluded", reason: "write" },
     name: "update_reader_annotation",
     scope: "stella:knowledge_write",
@@ -717,6 +733,11 @@ const READER_ANNOTATION_TOOL_DEFINITIONS = [
     description: `Permanently delete one of the user's highlights or comments, every passage of it. ${MARK_OWNERSHIP}`,
     inputSchema: deleteArgsSchema,
     access: "write",
+    accountAccess: "sandbox",
+    permissions: {
+      type: "all",
+      permissions: { legalReaderAnnotation: ["delete"] },
+    },
     anonymized: { exposure: "excluded", reason: "write" },
     destructiveBehavior: { type: "always" },
     name: "delete_reader_annotation",

@@ -4,10 +4,10 @@ import { status, t } from "elysia";
 import type { Static } from "elysia";
 
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import { desktopEditSessions, workspaces } from "@/api/db/schema";
-import { env } from "@/api/env";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
@@ -15,6 +15,7 @@ import {
 } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { desktopEditMimeTypeForFileType } from "@/api/lib/desktop-edit-file-types";
 import {
   authorizeDesktopEditSession,
@@ -32,6 +33,9 @@ import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import { writeS3ObjectWithRetry } from "@/api/lib/s3";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
+
+export const hashDesktopEditCheckpoint = (buffer: ArrayBuffer): string =>
+  hashSha256Hex(new Uint8Array(buffer));
 
 export const checkpointDesktopEditSessionParamsSchema = t.Object({
   sessionId: tSafeId("desktopEditSession"),
@@ -102,7 +106,7 @@ export const checkpointDesktopEditSessionHandler = async ({
 
   const fileName = authorizedSession.value.fileName;
   const buffer = await file.arrayBuffer();
-  const sha256Hex = new Bun.CryptoHasher("sha256").update(buffer).digest("hex");
+  const sha256Hex = hashDesktopEditCheckpoint(buffer);
 
   const validation = await validateDesktopEditFileBuffer({
     buffer,
@@ -251,16 +255,26 @@ export const checkpointDesktopEditSessionHandler = async ({
     // the persisted checkpointSha256Hex. The lock is held for one write on
     // a low-frequency, single-session path.
     const checkpointBytes = new Uint8Array(buffer);
-    if (!env.FEATURE_FILE_USAGE_LIMITS) {
-      await writeS3ObjectWithRetry({ data: checkpointBytes, key });
+    if (!isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")) {
+      await writeS3ObjectWithRetry(
+        { data: checkpointBytes, key },
+        { type: "fixed-key", reason: "Row-locked per-session checkpoint slot" },
+      );
     } else {
       const fileWrite = await writeOrganizationFile({
         organizationId: authorizedSession.value.organizationId,
         objectKey: key,
         sizeBytes: checkpointBytes.byteLength,
         contentSha256Hex: sha256Hex,
-        write: async () =>
-          await writeS3ObjectWithRetry({ data: checkpointBytes, key }),
+        content: checkpointBytes,
+        write: async ({ content, objectKey }) =>
+          await writeS3ObjectWithRetry(
+            { data: content, key: objectKey },
+            {
+              type: "fixed-key",
+              reason: "Row-locked per-session checkpoint slot",
+            },
+          ),
       });
       if (Result.isError(fileWrite)) {
         let responseStatus: 409 | 413 | 503 = 503;

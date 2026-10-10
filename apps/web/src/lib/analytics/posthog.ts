@@ -4,6 +4,10 @@ import { posthog } from "posthog-js";
 import type { CaptureResult, SupportedWebVitalsMetrics } from "posthog-js";
 
 import { POSTHOG_ORGANIZATION_GROUP_TYPE } from "@stll/analytics-config";
+import {
+  API_FILE_SECURITY_REJECTED_ERROR_CODE,
+  CHAT_CONTINUATION_REJECTED_ERROR_CODE,
+} from "@stll/api-contract";
 
 import { env } from "@/env";
 import { normalizeTelemetryErrorTypeName } from "@/lib/analytics/error-diagnostics";
@@ -123,7 +127,72 @@ const domExceptionClass = (type: string, value: string): string => {
 // handler still names no defect, only that a request was cut short.
 const CANCELLED_REQUEST_CLASS = "AbortError";
 
-const isNoiseException = (event: {
+// Errors whose type names an expected outcome, handled where it happens: no
+// desktop app running, a public-law source down, a signed-out session.
+const EXPECTED_OUTCOME_TYPES: ReadonlySet<string> = new Set([
+  "AuthClientError",
+  "DesktopBridgeUnavailableError",
+  "PublicLawUnavailableError",
+]);
+
+// Messages that name no defect of ours: React reconciling a DOM another
+// script (a translator, an extension) already changed, and a request the
+// network dropped (the route's own offline state reports connectivity).
+const ENVIRONMENT_NOISE_PATTERNS: readonly RegExp[] = [
+  /Failed to execute '(?:removeChild|insertBefore)' on 'Node'/u,
+  /The node (?:to be removed )?is not a child of this node/iu,
+  /^(?:TypeError: )?(?:Failed to fetch|Load failed|NetworkError when attempting to fetch resource\.?)$/u,
+];
+
+const EXTENSION_FRAME = /^(?:chrome|moz|safari(?:-web)?)-extension:\/\//u;
+
+// API answers the UI already turns into a state (sign in, no access, not
+// found, a rejected provider key or continuation, a file the upload scan
+// refused). Other 4xx and every 5xx stay reported.
+const API_ERROR_TYPES: ReadonlySet<string> = new Set([
+  "ApiError",
+  "StreamReadError",
+]);
+const EXPECTED_API_STATUSES: ReadonlySet<number> = new Set([401, 403, 404]);
+const EXPECTED_API_CODES: ReadonlySet<string> = new Set([
+  "ai_config_provider_validation_failed",
+  CHAT_CONTINUATION_REJECTED_ERROR_CODE,
+  API_FILE_SECURITY_REJECTED_ERROR_CODE,
+]);
+
+const hasExtensionFrame = (entry: unknown): boolean => {
+  const stacktrace = isRecord(entry) ? entry["stacktrace"] : undefined;
+  const frames = isRecord(stacktrace) ? stacktrace["frames"] : undefined;
+  if (!Array.isArray(frames)) {
+    return false;
+  }
+  const list: unknown[] = frames;
+  return list.some((frame) =>
+    EXTENSION_FRAME.test(readStringField(frame, "filename")),
+  );
+};
+
+const isExpectedApiOutcome = (
+  type: string,
+  properties: Record<string, unknown> | undefined,
+): boolean => {
+  if (!API_ERROR_TYPES.has(type) || properties === undefined) {
+    return false;
+  }
+  const status = properties["error_status"];
+  const code = properties["error_code"];
+  return (
+    (typeof status === "number" && EXPECTED_API_STATUSES.has(status)) ||
+    (typeof code === "string" && EXPECTED_API_CODES.has(code))
+  );
+};
+
+const NOISE_PATTERNS = [
+  ...EXCEPTION_NOISE_PATTERNS,
+  ...ENVIRONMENT_NOISE_PATTERNS,
+];
+
+export const isNoiseException = (event: {
   properties?: Record<string, unknown>;
 }): boolean => {
   const list = event.properties?.["$exception_list"];
@@ -136,7 +205,10 @@ const isNoiseException = (event: {
     const type = readStringField(entry, "type");
     return (
       domExceptionClass(type, value) === CANCELLED_REQUEST_CLASS ||
-      EXCEPTION_NOISE_PATTERNS.some(
+      EXPECTED_OUTCOME_TYPES.has(type) ||
+      isExpectedApiOutcome(type, event.properties) ||
+      hasExtensionFrame(entry) ||
+      NOISE_PATTERNS.some(
         (pattern) => pattern.test(value) || pattern.test(type),
       )
     );
@@ -237,10 +309,19 @@ const apiErrorIdentity = (
 // Free-text fields (context lines, local variables, function names) never
 // pass through. Function names are unsafe even when identifier-shaped:
 // engines infer them from computed property keys, which can be user data.
+//
+// PostHog's ingestion parses each raw frame by `platform` and requires
+// `function`; a frame without them fails the whole exception. These carry
+// posthog-js's own defaults for a browser frame, with the function always
+// reported as unknown.
+export const UNKNOWN_FRAME_FUNCTION = "?";
+const WEB_FRAME_PLATFORM = "web:javascript";
+
 type SanitizedFrame = {
-  platform?: string;
+  platform: string;
+  function: typeof UNKNOWN_FRAME_FUNCTION;
+  in_app: boolean;
   filename?: string;
-  in_app?: boolean;
   lineno?: number;
   colno?: number;
 };
@@ -250,22 +331,21 @@ const stripUrlMetadata = (url: string): string => {
   return terminator === -1 ? url : url.slice(0, terminator);
 };
 
-const sanitizeFrame = (frame: unknown): SanitizedFrame => {
-  if (!isRecord(frame)) {
-    return {};
-  }
-  const filename = frame["filename"];
-  const platform = frame["platform"];
-  const inApp = frame["in_app"];
-  const lineno = frame["lineno"];
-  const colno = frame["colno"];
+export const sanitizeFrame = (frame: unknown): SanitizedFrame => {
+  const fields = isRecord(frame) ? frame : {};
+  const filename = fields["filename"];
+  const platform = fields["platform"];
+  const inApp = fields["in_app"];
+  const lineno = fields["lineno"];
+  const colno = fields["colno"];
   return {
-    ...(typeof platform === "string" ? { platform } : {}),
+    platform: typeof platform === "string" ? platform : WEB_FRAME_PLATFORM,
+    function: UNKNOWN_FRAME_FUNCTION,
+    in_app: typeof inApp === "boolean" ? inApp : true,
     // URL metadata on asset URLs can carry tokens; keep only the path.
     ...(typeof filename === "string"
       ? { filename: stripUrlMetadata(filename) }
       : {}),
-    ...(typeof inApp === "boolean" ? { in_app: inApp } : {}),
     ...(typeof lineno === "number" ? { lineno } : {}),
     ...(typeof colno === "number" ? { colno } : {}),
   };
@@ -679,11 +759,31 @@ export const createPostHogAnalytics = ({
   });
 
   // Attach build metadata as super-properties so every captured
-  // event carries the exact deployed build.
-  posthog.register({
-    app_commit: __APP_COMMIT_SHA__,
-    app_version: __APP_VERSION__,
-  });
+  // event carries the exact deployed build. `reset` clears super-properties,
+  // so every identity change goes through `resetIdentity`, which registers
+  // them again.
+  const registerBuildProperties = () => {
+    posthog.register({
+      app_commit: __APP_COMMIT_SHA__,
+      app_version: __APP_VERSION__,
+    });
+  };
+  registerBuildProperties();
+
+  // Persistence is off, so every page load starts with a fresh anonymous
+  // distinct id. `identify()` would merge that id into the person on every
+  // load until the person hits PostHog's distinct-id limit; bootstrapping the
+  // known user id switches identity without a merge. Anonymous activity before
+  // sign-in stays unlinked, which `person_profiles: "identified_only"` already
+  // implies.
+  const resetIdentity = (userId: string | null) => {
+    posthog.reset(
+      userId === null
+        ? undefined
+        : { bootstrap: { distinctID: userId, isIdentifiedID: true } },
+    );
+    registerBuildProperties();
+  };
 
   const analytics: Analytics = {
     captureError: (error, context) => {
@@ -766,15 +866,11 @@ export const createPostHogAnalytics = ({
         return;
       }
 
-      if (posthog._isIdentified() && distinctId !== user.id) {
-        posthog.reset();
-      }
-
-      // Identify by the stable user id only. Profile attributes such as
+      // The stable user id is the whole identity. Profile attributes such as
       // name and email already live server-side keyed by this id, so
       // duplicating them into PostHog person properties adds no analytical
       // value and only widens the person-property surface.
-      posthog.identify(user.id);
+      resetIdentity(user.id);
       // Group properties (name, practice jurisdictions) are set server-side
       // via groupIdentify; the browser only attaches the opaque key.
       posthog.group(POSTHOG_ORGANIZATION_GROUP_TYPE, user.activeOrganizationId);
@@ -784,7 +880,7 @@ export const createPostHogAnalytics = ({
         return;
       }
 
-      posthog.reset();
+      resetIdentity(null);
     },
   };
 

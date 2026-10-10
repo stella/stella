@@ -2,6 +2,8 @@ import { statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { childExitStatus } from "@stll/scripts/src/child-exit-status";
+
 import { planTestRuns } from "./test-run-plan";
 import type { PathKind } from "./test-run-plan";
 
@@ -48,7 +50,6 @@ for (const run of runs) {
   });
   if (!child.success) {
     console.error(`The ${run.label} tests failed.`);
-    // A run killed by a signal has no positive exit code of its own.
-    process.exit(child.exitCode > 0 ? child.exitCode : 1);
+    process.exit(childExitStatus(child));
   }
 }

@@ -105,7 +105,26 @@ const fixture = async () => {
   };
   const writeObject: NonNullable<
     Parameters<typeof writeStoredTemplate>[0]["writeObject"]
-  > = async ({ key, data }) => {
+  > = async ({ key, data }, ownership) => {
+    expect(ownership.type).toBe("cleanup-intent");
+    if (ownership.type !== "cleanup-intent") {
+      throw new HandlerError({
+        status: 500,
+        message: "Template write has no cleanup intent",
+      });
+    }
+    const matchingIntents = await testDb
+      .select()
+      .from(bufferObjectCleanupIntents)
+      .where(eq(bufferObjectCleanupIntents.objectKey, key));
+    const intentIds =
+      typeof ownership.intent === "string"
+        ? [ownership.intent]
+        : ownership.intent;
+    expect(intentIds.length).toBeGreaterThan(0);
+    expect(matchingIntents.map(({ id }) => id).toSorted()).toEqual(
+      [...intentIds].toSorted(),
+    );
     expect(typeof data).not.toBe("string");
     if (typeof data === "string") {
       throw new HandlerError({ status: 500, message: "Expected bytes" });
@@ -155,8 +174,8 @@ test.each(
         ...f.options,
         mode: modeFor(first),
         prepare: f.prepare,
-        async writeObject(object) {
-          await f.writeObject(object);
+        async writeObject(object, ownership) {
+          await f.writeObject(object, ownership);
           if (!injected) {
             injected = true;
             const winner = await Result.gen(() =>
@@ -258,8 +277,8 @@ test("an upload failure keeps its exact key recoverable without publishing", asy
       ...f.options,
       mode: { type: "current-version" },
       prepare: f.prepare,
-      async writeObject(object) {
-        await f.writeObject(object);
+      async writeObject(object, ownership) {
+        await f.writeObject(object, ownership);
         throw new HandlerError({
           status: 500,
           message: "Injected upload failure",
@@ -312,8 +331,8 @@ test("an upload with an outstanding timed-out PUT remains quarantined instead of
       ...f.options,
       mode: { type: "current-version" },
       prepare: f.prepare,
-      async writeObject(object) {
-        await f.writeObject(object);
+      async writeObject(object, ownership) {
+        await f.writeObject(object, ownership);
         return S3_OBJECT_WRITE_CERTAINTY.UNCERTAIN;
       },
     }),
@@ -350,9 +369,9 @@ test("storage and preparation never run inside a database transaction", async ()
         expect(active).toBe(0);
         return await f.prepare(snapshot);
       },
-      async writeObject(object) {
+      async writeObject(object, ownership) {
         expect(active).toBe(0);
-        return await f.writeObject(object);
+        return await f.writeObject(object, ownership);
       },
     }),
   );
@@ -374,8 +393,8 @@ test("a reclaimed upload cannot publish after its writer ownership expires", asy
       ...f.options,
       mode: { type: "current-version" },
       prepare: f.prepare,
-      async writeObject(object) {
-        await f.writeObject(object);
+      async writeObject(object, ownership) {
+        await f.writeObject(object, ownership);
         await testDb
           .update(bufferObjectCleanupIntents)
           .set({ nextAttemptAt: new Date(0) })
@@ -497,8 +516,8 @@ test("repeated competing writes exhaust a bounded retry budget without publishin
       ...f.options,
       mode: { type: "new-version", userId: ids.userA1 },
       prepare: f.prepare,
-      async writeObject(object) {
-        await f.writeObject(object);
+      async writeObject(object, ownership) {
+        await f.writeObject(object, ownership);
         conflicts += 1;
         const winner = await Result.gen(() =>
           writeStoredTemplate({

@@ -3,7 +3,11 @@ import { t } from "elysia";
 
 import { prepareTemplateFromDocument } from "@/api/handlers/templates/prepare-template";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  configuredModelAdmission,
+  createSafeRootHandler,
+} from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
@@ -16,6 +20,7 @@ const prepareBodySchema = t.Object({
 });
 
 const config = {
+  actionAdmission: { type: "handler", actionKind: "templates.suggest-fields" },
   description:
     "Turn a finished DOCX into a template: the model proposes which literal " +
     "values should become fields, those spans are rewritten as markers, and " +
@@ -27,6 +32,7 @@ const config = {
   // docx), so it needs `template: ["create"]` like `/create`, not bare workspace
   // read; this also keeps a read-only role from spending org AI here.
   permissions: { template: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "template_authoring_ui",
@@ -55,6 +61,7 @@ const config = {
 const prepareTemplate = createSafeRootHandler(
   config,
   async function* ({
+    modelAdmission,
     session,
     body,
     safeDb,
@@ -103,6 +110,7 @@ const prepareTemplate = createSafeRootHandler(
             // prepare request — capturing it first so it isn't silent.
             suggest: async (documentText) =>
               await suggestTemplateFieldsOrEmpty({
+                admission: configuredModelAdmission({ modelAdmission }),
                 documentText,
                 orgAIConfig,
                 managedAIResidency,

@@ -3,6 +3,7 @@ import type { AuthorizedToolWorkspaceIds } from "@/api/handlers/chat/tools/autho
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import {
   credentialPermissionsForContext,
   roleForDisplay,
@@ -24,6 +25,7 @@ export type ChatRegistryContextDeps = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   userEmail: string;
+  featureAccessSnapshot?: FeatureAccessSnapshot | undefined;
   memberRole: AuthorizedMemberRole;
   /**
    * Pin a workspace into the request's RLS identity only when request auth
@@ -63,7 +65,7 @@ export type ChatRegistryContextDeps = {
     | undefined;
 };
 
-// oxlint-disable-next-line promise-function-async -- read tools never record audit events; this returns a resolved promise directly, and `async` would only add a redundant wrapper with nothing to await (which `require-await` then rejects)
+// oxlint-disable-next-line typescript/promise-function-async -- read tools never record audit events; this returns a resolved promise directly, and `async` would only add a redundant wrapper with nothing to await (which `require-await` then rejects)
 const NO_OP_AUDIT_RECORDER: AuditRecorder = () => Promise.resolve();
 
 const deriveWorkspaceStatusMap = ({
@@ -87,7 +89,7 @@ const deriveWorkspaceStatusMap = ({
  *
  * Scope/feature gating is deliberately NOT applied here. MCP dispatch gates a
  * tool on its `ToolScope` (the caller's OAuth scope) and its
- * `McpToolFeatureFlag` (a deploy flag). OAuth scopes have no meaning for a
+ * `DeploymentFeatureFlag` (a deploy flag). OAuth scopes have no meaning for a
  * session-authed chat turn: reaching `getChatTools` already means the request
  * passed the coarser workspace/role authorization that governs reads, so scope
  * gating is dropped. Feature-flag gating still matters (a tool's backing surface
@@ -110,6 +112,7 @@ export const buildMcpContextFromChat = (
       )
     : undefined;
   return {
+    featureAccessSnapshot: deps.featureAccessSnapshot,
     ...(deps.testDependencies === undefined
       ? {}
       : { testDependencies: deps.testDependencies }),
@@ -131,6 +134,10 @@ export const buildMcpContextFromChat = (
     recordAuditEvent: deps.recordAuditEvent ?? NO_OP_AUDIT_RECORDER,
     safeDb: deps.safeDb,
     scopedDb: deps.scopedDb,
+    // Chat reaches third-party services only through its native tools. A
+    // registry handler run from a chat script, which has no outbound approval,
+    // or as a projected write holds no permit, so it cannot send to one.
+    thirdPartyOutboundPermit: undefined,
     userId: deps.userId,
     userEmail: deps.userEmail,
   };

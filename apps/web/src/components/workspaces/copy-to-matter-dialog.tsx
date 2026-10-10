@@ -8,6 +8,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
+  DialogFormState,
   DialogDescription,
   DialogFooter,
   DialogHeader,
@@ -214,6 +215,28 @@ export const CopyToMatterDialog = ({
   return (
     <Dialog onOpenChange={handleClose} open={open}>
       <DialogPopup className="max-w-lg">
+        <DialogFormState
+          dirty={
+            mode !== "copy" ||
+            (initialTargetWorkspaceId
+              ? target?.type !== "existing" ||
+                target.workspaceId !== initialTargetWorkspaceId ||
+                target.parentId !== null
+              : target !== null)
+          }
+          onDiscard={() => {
+            setMode("copy");
+            setTarget(
+              initialTargetWorkspaceId
+                ? {
+                    type: "existing",
+                    workspaceId: initialTargetWorkspaceId,
+                    parentId: null,
+                  }
+                : null,
+            );
+          }}
+        />
         <DialogHeader>
           <DialogTitle>{t("workspaces.copyToMatter.title")}</DialogTitle>
           <DialogDescription>

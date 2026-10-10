@@ -2,6 +2,7 @@ import { Result, TaggedError, panic } from "better-result";
 
 import type { CountryCode } from "@stll/country-codes";
 
+import { ObjectColumn } from "./compact-storage";
 import type {
   BirthDate,
   EntityType,
@@ -9,9 +10,27 @@ import type {
   ParsedList,
   SanctionsEntry,
 } from "./entry";
-import { buildNameIndex, matchNames } from "./name-match";
-import type { NameIndex, NameMatch } from "./name-match";
-import { nameTokens } from "./normalise";
+import {
+  matchNames,
+  MAX_SCREENING_WORK,
+  nameIndexSteps,
+  runSteps,
+  spendScreeningWork,
+} from "./name-match";
+import type {
+  NameIndex,
+  NameMatch,
+  NameMatches,
+  ScreeningWorkBudget,
+} from "./name-match";
+import {
+  nameReading,
+  hasExcessQueryTokens,
+  MAX_QUERY_TOKENS,
+} from "./normalise";
+import type { NameReading } from "./normalise";
+import { IdentifierPostings, ScreeningEntries } from "./screening-entries";
+import type { ScreeningEntry } from "./screening-entries";
 import { isCalendarDate } from "./values";
 
 /**
@@ -43,44 +62,74 @@ const CIRCA_YEARS = 1;
 
 /** Built once per set of list editions and reused for every screening. */
 export type ScreeningIndex = {
-  readonly entries: readonly SanctionsEntry[];
+  readonly entries: Readonly<
+    Pick<ObjectColumn<ScreeningEntry>, "get" | "length">
+  >;
+  readonly entryStorage: Pick<ScreeningEntries, "hydrate">;
   readonly versions: readonly ListVersion[];
   readonly names: NameIndex;
-  readonly identifierEntries: ReadonlyMap<string, readonly number[]>;
+  readonly identifierEntries: Pick<IdentifierPostings, "get">;
 };
 
 const identifierKey = (value: string): string =>
   value.toUpperCase().replaceAll(/[^\p{L}\p{N}]/gu, "");
 
-export const buildScreeningIndex = (
+function* screeningIndexSteps(
   lists: readonly ParsedList[],
-): ScreeningIndex => {
-  const entries = lists.flatMap((list) => list.entries);
-  const identifierEntries = new Map<string, number[]>();
-  for (const [entryIndex, entry] of entries.entries()) {
-    for (const { number, status, kind } of entry.identifiers) {
-      // A document the list itself marks as false is no proof of identity.
-      if (status === "known-false" || kind === "unknown") {
-        continue;
+): Generator<void, ScreeningIndex, void> {
+  const sourceEntries = new ObjectColumn<SanctionsEntry>();
+  const entries = new ScreeningEntries();
+  const identifierEntries = new IdentifierPostings();
+  for (const list of lists) {
+    for (const entry of list.entries) {
+      const entryIndex = entries.push(entry);
+      sourceEntries.push(entry);
+      const entryKeys = new Set<string>();
+      for (const { number, status, kind } of entry.identifiers) {
+        // A document the list itself marks as false is no proof of identity.
+        if (status === "known-false" || kind === "unknown") {
+          continue;
+        }
+        const key = identifierKey(number);
+        if (key.length < MIN_IDENTIFIER_LENGTH || entryKeys.has(key)) {
+          continue;
+        }
+        entryKeys.add(key);
+        identifierEntries.add(key, entryIndex);
       }
-      const key = identifierKey(number);
-      if (key.length < MIN_IDENTIFIER_LENGTH) {
-        continue;
-      }
-      const known = identifierEntries.get(key);
-      if (known === undefined) {
-        identifierEntries.set(key, [entryIndex]);
-      } else if (!known.includes(entryIndex)) {
-        known.push(entryIndex);
-      }
+      yield;
     }
   }
   return {
-    entries,
+    entries: entries.entries,
+    entryStorage: entries,
     versions: lists.map((list) => list.version),
-    names: buildNameIndex(entries),
+    names: yield* nameIndexSteps(sourceEntries),
     identifierEntries,
   };
+}
+
+export const buildScreeningIndex = (
+  lists: readonly ParsedList[],
+): ScreeningIndex => runSteps(screeningIndexSteps(lists));
+
+/**
+ * The same index as {@link buildScreeningIndex}, built one entry at a time:
+ * `pause` runs after every entry, so a caller on a serving event loop can give
+ * way to other work while a large list is indexed.
+ */
+export const buildScreeningIndexCooperatively = async (
+  lists: readonly ParsedList[],
+  pause: () => Promise<void>,
+): Promise<ScreeningIndex> => {
+  const steps = screeningIndexSteps(lists);
+  for (;;) {
+    const step = steps.next();
+    if (step.done === true) {
+      return step.value;
+    }
+    await pause();
+  }
 };
 
 /** A birth date as a registry or client record gives it. */
@@ -170,6 +219,7 @@ const compareBirthDates = (
 
 export type ScreeningQuery = {
   name: string;
+  nameSource?: "free-text" | "register";
   /** Omit when the kind of party is unknown. */
   entityType?: EntityType;
   birthDate?: QueryBirthDate;
@@ -211,20 +261,37 @@ export type ScreeningResult = {
   versions: readonly ListVersion[];
   /** The best `limit` of the entries at or above the cutoff. */
   possibleMatches: PossibleMatch[];
-  /** Every entry at or above the cutoff, including those past the limit. */
+  /** Count found at or above the cutoff; a lower bound when candidate scoring is truncated. */
   totalMatches: number;
   truncated: boolean;
 };
 
 export class ScreeningQueryError extends TaggedError("ScreeningQueryError")<{
-  code: "empty-query" | "invalid-birth-date";
+  code: "empty-query" | "invalid-birth-date" | "excess-query-tokens";
   message: string;
 }> {}
+
+export class ScreeningWorkLimitError extends TaggedError(
+  "ScreeningWorkLimitError",
+)<{
+  code: "work-limit";
+  message: string;
+}> {}
+
+const workLimit = () =>
+  Result.err(
+    new ScreeningWorkLimitError({
+      code: "work-limit",
+      message: "screening exceeded its work limit",
+    }),
+  );
 
 type ScreenOptions = {
   /** Minimum score (0..1) for an entry to be reported as a possible match. */
   cutoff: number;
   limit?: number;
+  /** Optional tighter budget; callers cannot exceed the global work bound. */
+  maxWork?: number;
 };
 
 const validBirthDate = ({ year, month, day }: QueryBirthDate): boolean => {
@@ -242,12 +309,15 @@ const moveToward = (score: number, share: number) =>
 
 const nationalityComparison = (
   query: readonly CountryCode[] | undefined,
-  entry: SanctionsEntry,
+  entry: Pick<SanctionsEntry, "nationalities">,
 ): FieldComparison => {
+  if (query === undefined || query.length === 0) {
+    return "not-compared";
+  }
   const known = entry.nationalities.flatMap((country) =>
     country.code === null ? [] : [country.code],
   );
-  if (query === undefined || query.length === 0 || known.length === 0) {
+  if (known.length === 0) {
     return "not-compared";
   }
   return query.some((country) => known.includes(country))
@@ -257,7 +327,7 @@ const nationalityComparison = (
 
 const entityTypeComparison = (
   query: EntityType | undefined,
-  entry: SanctionsEntry,
+  entry: Pick<SanctionsEntry, "entityType">,
 ): FieldComparison => {
   if (
     query === undefined ||
@@ -271,7 +341,7 @@ const entityTypeComparison = (
 
 type IdentifierComparisonInput = {
   query: ScreeningQuery;
-  entry: SanctionsEntry;
+  entry: Pick<SanctionsEntry, "identifiers">;
   identifierMatch: boolean;
 };
 
@@ -294,26 +364,34 @@ const identifierComparison = ({
 
 type EntryEvidenceInput = {
   cutoff: number;
-  entry: SanctionsEntry;
+  entry: ScreeningEntry;
+  entryIndex: number;
   query: ScreeningQuery;
   nameScore: number;
   matchedName: string | null;
   identifierMatch: boolean;
 };
 
-const scoreEntry = ({
-  cutoff,
-  entry,
-  query,
-  nameScore,
-  matchedName,
-  identifierMatch,
-}: EntryEvidenceInput): PossibleMatch => {
-  const birth = compareBirthDates(query.birthDate, entry.birthDates);
-  const nationality = nationalityComparison(query.nationality, entry);
-  const entityType = entityTypeComparison(query.entityType, entry);
-  const identifier = identifierComparison({ query, entry, identifierMatch });
+type ScreenedPossibleMatch = Omit<PossibleMatch, "entry"> & {
+  entry: ScreeningEntry;
+  entryIndex: number;
+};
 
+type NameEvidenceScoreOptions = {
+  cutoff: number;
+  nameScore: number;
+  birth: BirthDateComparison;
+  nationality: FieldComparison;
+  entityType: FieldComparison;
+};
+
+const scoreNameEvidence = ({
+  cutoff,
+  nameScore,
+  birth,
+  nationality,
+  entityType,
+}: NameEvidenceScoreOptions): number => {
   let score = nameScore;
   switch (birth) {
     case "exact":
@@ -340,6 +418,38 @@ const scoreEntry = ({
   if (entityType === "mismatch") {
     score *= ENTITY_TYPE_MISMATCH_FACTOR;
   }
+  if (
+    (birth === "mismatch" ||
+      nationality === "mismatch" ||
+      entityType === "mismatch") &&
+    nameScore >= STRONG_NAME_SCORE
+  ) {
+    score = Math.max(score, Math.min(cutoff, nameScore));
+  }
+  return score;
+};
+
+const scoreEntry = ({
+  cutoff,
+  entry,
+  entryIndex,
+  query,
+  nameScore,
+  matchedName,
+  identifierMatch,
+}: EntryEvidenceInput): ScreenedPossibleMatch => {
+  const birth = compareBirthDates(query.birthDate, entry.birthDates);
+  const nationality = nationalityComparison(query.nationality, entry);
+  const entityType = entityTypeComparison(query.entityType, entry);
+  const identifier = identifierComparison({ query, entry, identifierMatch });
+
+  let score = scoreNameEvidence({
+    cutoff,
+    nameScore,
+    birth,
+    nationality,
+    entityType,
+  });
   const birthDate =
     birth === "exact" || birth === "approximate" ? "match" : birth;
   const conflicts = (
@@ -351,15 +461,13 @@ const scoreEntry = ({
   ).flatMap(([field, comparison]) =>
     comparison === "mismatch" ? [field] : [],
   );
-  if (conflicts.length > 0 && nameScore >= STRONG_NAME_SCORE) {
-    score = Math.max(score, Math.min(cutoff, nameScore));
-  }
   // A shared document number identifies the entry regardless of the name.
   if (identifier === "match") {
     score = 1;
   }
   return {
     entry,
+    entryIndex,
     score,
     evidence: {
       nameScore,
@@ -373,21 +481,70 @@ const scoreEntry = ({
   };
 };
 
-/**
- * Screens one party against the index and returns every entry scoring at or
- * above `cutoff`, best first. Each result is a possible match for review.
- */
-export const screen = (
-  index: ScreeningIndex,
+type ScreenNameReadingsOptions = {
+  index: NameIndex;
+  readings: readonly NameReading[];
+  ceiling: (queryShare: number) => number;
+  rankEntry: (entry: number, nameScore: number) => number | undefined;
+  cutoff: number;
+  work: ScreeningWorkBudget;
+};
+
+// Both interpretations of an unknown party share a budget and their best evidence.
+const screenNameReadings = ({
+  index,
+  readings,
+  ceiling,
+  rankEntry,
+  cutoff,
+  work,
+}: ScreenNameReadingsOptions): Result<NameMatches, ScreeningWorkLimitError> => {
+  const nameMatches = new Map<number, NameMatch>();
+  let truncated = false;
+  const distinctReadings = new Map(
+    readings.map((reading) => [
+      `${reading.tokens.map((token) => token.raw).join(" ")}|${reading.adjacent.join(";")}`,
+      reading,
+    ]),
+  );
+  for (const reading of distinctReadings.values()) {
+    if (reading.tokens.length === 0) {
+      continue;
+    }
+    const matched = matchNames({
+      index,
+      reading,
+      ceiling,
+      rankEntry,
+      cutoff,
+      work,
+    });
+    if (matched === undefined) {
+      return workLimit();
+    }
+    truncated ||= matched.truncated;
+    for (const [entryIndex, match] of matched.matches) {
+      const known = nameMatches.get(entryIndex);
+      if (known === undefined || match.score > known.score) {
+        nameMatches.set(entryIndex, match);
+      }
+    }
+  }
+  return Result.ok({ matches: nameMatches, truncated });
+};
+
+type PreparedScreeningQuery = {
+  readings: NameReading[];
+  identifierKeys: Set<string>;
+};
+type PreparedScreeningQueryResult = Result<
+  PreparedScreeningQuery,
+  ScreeningQueryError
+>;
+
+const prepareScreeningQuery = (
   query: ScreeningQuery,
-  { cutoff, limit = DEFAULT_LIMIT }: ScreenOptions,
-): Result<ScreeningResult, ScreeningQueryError> => {
-  if (!(cutoff >= 0 && cutoff <= 1)) {
-    panic(`cutoff must be within 0..1, got ${cutoff}`);
-  }
-  if (!Number.isInteger(limit) || limit < 1) {
-    panic(`limit must be a positive integer, got ${limit}`);
-  }
+): PreparedScreeningQueryResult => {
   if (query.birthDate !== undefined && !validBirthDate(query.birthDate)) {
     return Result.err(
       new ScreeningQueryError({
@@ -398,14 +555,23 @@ export const screen = (
   }
   // An unknown party is read both ways: as an organisation, with legal forms
   // stripped, and as a person, whose "Ag" or "Sa" may be part of the name.
-  const readings =
+  const kinds =
     query.entityType === undefined
-      ? [
-          nameTokens(query.name, "organisation"),
-          nameTokens(query.name, "person"),
-        ]
-      : [nameTokens(query.name, query.entityType)];
-  const tokens = readings[0] ?? [];
+      ? (["organisation", "person"] as const)
+      : [query.entityType];
+  if (
+    query.nameSource !== "register" &&
+    kinds.some((kind) => hasExcessQueryTokens(query.name, kind))
+  ) {
+    return Result.err(
+      new ScreeningQueryError({
+        code: "excess-query-tokens",
+        message: `the name must contain at most ${MAX_QUERY_TOKENS} normalized tokens`,
+      }),
+    );
+  }
+  const readings = kinds.map((kind) => nameReading(query.name, kind));
+  const tokens = readings.at(0)?.tokens ?? [];
   const identifierKeys = new Set(
     (query.identifiers ?? [])
       .map(identifierKey)
@@ -420,6 +586,41 @@ export const screen = (
     );
   }
 
+  return Result.ok({ readings, identifierKeys });
+};
+
+/**
+ * Screens one party against the index and returns every entry scoring at or
+ * above `cutoff`, best first. Each result is a possible match for review.
+ */
+export const screen = (
+  index: ScreeningIndex,
+  query: ScreeningQuery,
+  {
+    cutoff,
+    limit = DEFAULT_LIMIT,
+    maxWork = MAX_SCREENING_WORK,
+  }: ScreenOptions,
+): Result<ScreeningResult, ScreeningQueryError | ScreeningWorkLimitError> => {
+  if (!(cutoff >= 0 && cutoff <= 1)) {
+    panic(`cutoff must be within 0..1, got ${cutoff}`);
+  }
+  if (!Number.isInteger(limit) || limit < 1) {
+    panic(`limit must be a positive integer, got ${limit}`);
+  }
+  if (
+    !Number.isInteger(maxWork) ||
+    maxWork < 1 ||
+    maxWork > MAX_SCREENING_WORK
+  ) {
+    panic(`maxWork must be within 1..${MAX_SCREENING_WORK}, got ${maxWork}`);
+  }
+  const prepared = prepareScreeningQuery(query);
+  if (prepared.isErr()) {
+    return prepared;
+  }
+  const { readings, identifierKeys } = prepared.value;
+
   // The best final score a name could reach if every identity field matched,
   // given the share of the query it explains; the geometric mean with the
   // listed side's share is at most the square root.
@@ -433,45 +634,72 @@ export const screen = (
     }
     return score;
   };
-  const nameMatches = new Map<number, NameMatch>();
-  const distinctReadings = new Map(
-    readings.map((reading) => [
-      reading.map((token) => token.raw).join(" "),
-      reading,
-    ]),
-  );
-  for (const reading of tokens.length === 0 ? [] : distinctReadings.values()) {
-    for (const [entryIndex, match] of matchNames(
-      index.names,
-      reading,
-      ceiling,
-      cutoff,
-    )) {
-      const known = nameMatches.get(entryIndex);
-      if (known === undefined || match.score > known.score) {
-        nameMatches.set(entryIndex, match);
+  const work = {
+    remaining: maxWork,
+    exhausted: false,
+    selection: "complete" as const,
+  };
+  const matched = screenNameReadings({
+    index: index.names,
+    readings,
+    ceiling,
+    rankEntry: (entryIndex, nameScore) => {
+      const entry = index.entries.get(entryIndex);
+      if (
+        !spendScreeningWork(
+          work,
+          entry.birthDates.length +
+            entry.nationalities.length +
+            entry.identifiers.length +
+            1,
+        )
+      ) {
+        return undefined;
       }
+      return scoreNameEvidence({
+        cutoff,
+        nameScore,
+        birth: compareBirthDates(query.birthDate, entry.birthDates),
+        nationality: nationalityComparison(query.nationality, entry),
+        entityType: entityTypeComparison(query.entityType, entry),
+      });
+    },
+    cutoff,
+    work,
+  });
+  if (matched.isErr()) {
+    return matched;
+  }
+  const nameMatches = matched.value.matches;
+  const identifierMatches = new Set<number>();
+  for (const key of identifierKeys) {
+    for (const entryIndex of index.identifierEntries.get(key) ?? []) {
+      if (!spendScreeningWork(work)) {
+        return workLimit();
+      }
+      identifierMatches.add(entryIndex);
     }
   }
-  const identifierMatches = new Set(
-    [...identifierKeys].flatMap(
-      (key) => index.identifierEntries.get(key) ?? [],
-    ),
-  );
 
-  const possibleMatches: PossibleMatch[] = [];
+  const possibleMatches: ScreenedPossibleMatch[] = [];
   for (const entryIndex of new Set([
     ...nameMatches.keys(),
     ...identifierMatches,
   ])) {
-    const entry = index.entries[entryIndex];
-    if (entry === undefined) {
-      continue;
+    const entry = index.entries.get(entryIndex);
+    const cost =
+      entry.birthDates.length +
+      entry.nationalities.length +
+      entry.identifiers.length +
+      1;
+    if (!spendScreeningWork(work, cost)) {
+      return workLimit();
     }
     const best = nameMatches.get(entryIndex);
     const match = scoreEntry({
       cutoff,
       entry,
+      entryIndex,
       query,
       nameScore: best?.score ?? 0,
       matchedName: best?.name ?? null,
@@ -481,17 +709,27 @@ export const screen = (
       possibleMatches.push(match);
     }
   }
+  const sortingWork =
+    possibleMatches.length * Math.ceil(Math.log2(possibleMatches.length + 1));
+  if (!spendScreeningWork(work, sortingWork)) {
+    return workLimit();
+  }
   possibleMatches.sort(
     (left, right) =>
       right.score - left.score ||
       left.entry.source.localeCompare(right.entry.source) ||
       left.entry.sourceId.localeCompare(right.entry.sourceId),
   );
+  const selectedMatches = possibleMatches.slice(0, limit).map((match) => ({
+    score: match.score,
+    evidence: match.evidence,
+    entry: index.entryStorage.hydrate(match.entryIndex),
+  }));
   return Result.ok({
     cutoff,
     versions: index.versions,
-    possibleMatches: possibleMatches.slice(0, limit),
+    possibleMatches: selectedMatches,
     totalMatches: possibleMatches.length,
-    truncated: possibleMatches.length > limit,
+    truncated: matched.value.truncated || possibleMatches.length > limit,
   });
 };

@@ -67,6 +67,19 @@ A file over the ceiling is refused, naming the limit; send such a document from
 an MCP host that can attach it to the tool's file reference rather than
 re-exporting it to fit.
 
+## Case-law coverage
+
+Use `stella case-law coverage --json` before concluding a decision is missing.
+It reports availability, decision counts, year ranges, court breakdowns, and
+the data's `asOf` timestamp. Omit `--country` for all jurisdictions, or pass a
+country code or name:
+
+```sh
+stella case-law coverage --country CZE --json
+```
+
+Jurisdictions in preparation report held counts; public search is unavailable.
+
 ## Legislation search
 
 `stella legislation search --json` reports each hit's `match.type` as `strict`
@@ -119,6 +132,14 @@ Release automation runs this command from the exact packed tarball against
 production before publishing a new CLI version. Compatibility is negotiated by
 wire protocol, server revision, and required capabilities rather than by the
 CLI package version.
+
+## Capability execution
+
+Generated capability commands select `read_capability` or `write_capability`
+from the catalog's access classification. For an explicit capability id, use
+`stella capability read --capability <id> --input '<json>'` or
+`stella capability write --capability <id> --input '<json>'`. Discover its input schema with
+`stella capability describe --capability <id>`.
 
 ## Links
 

@@ -2,6 +2,7 @@ import type { TSchema } from "@sinclair/typebox";
 import { Type } from "@sinclair/typebox";
 import { t } from "elysia";
 
+import { STATED_DATE_RELATIONS } from "@stll/api-contract/provision-applied-version";
 import { PROVISION_LINK_STATUS_TYPES } from "@stll/api-contract/provision-link-status";
 
 import { caseLawProvisionCitations } from "@/api/db/schema";
@@ -16,13 +17,44 @@ import {
   nullableBoundedString,
 } from "@/api/lib/search/response-text-bounds";
 
+const evidenceFields = { start: t.Number(), end: t.Number() };
+const expression = t.Union([
+  t.Object({ date: boundedString(128), eli: boundedString(2048) }),
+  t.Null(),
+]);
+const versionBasisSchema = t.Union([
+  t.Object({ type: t.Literal("inferred"), kind: t.Literal("decision_date") }),
+  t.Object({ type: t.Literal("not_stated") }),
+  t.Object({
+    type: t.Literal("stated_date"),
+    date: boundedString(128),
+    relation: t.UnionEnum(STATED_DATE_RELATIONS),
+    expression,
+    evidence: t.Object({ ...evidenceFields, kind: t.Literal("stated_date") }),
+  }),
+  t.Object({
+    type: t.Literal("stated_version"),
+    amendmentWorkIdentifier: boundedString(1024),
+    expression,
+    evidence: t.Object({
+      ...evidenceFields,
+      kind: t.Literal("stated_version"),
+    }),
+  }),
+]);
+const inferredVersionCandidateSchema = t.Object({
+  type: t.Literal("inferred"),
+  kind: t.Literal("decision_date"),
+  versionValidFrom: nullableBoundedString(128),
+});
+
 const nullableNumber = t.Union([t.Number(), t.Null()]);
 const date = nullableBoundedString(128);
 const shortText = nullableBoundedString(1024);
 const cursor = nullableBoundedString(4096);
 export const PROVISION_PREVIEW_BLOCKS_MAX = 32;
 export const PROVISION_PREVIEW_HEADINGS_MAX = 32;
-export const PROVISION_PREVIEW_TEXT_BYTES = 4096;
+const PROVISION_PREVIEW_TEXT_BYTES = 4096;
 
 type ProvisionItem = Extract<
   Awaited<ReturnType<typeof listDecisionProvisionsHandler>>,
@@ -50,6 +82,8 @@ const citationFields = {
   openEnded: t.Boolean(),
   anchor: boundedString(1024),
   versionValidFrom: date,
+  versionBasis: versionBasisSchema,
+  inferredVersionCandidate: inferredVersionCandidateSchema,
   sentenceText: boundedString(16_384),
   spanStart: t.Number(),
   spanEnd: t.Number(),
@@ -71,7 +105,7 @@ const citationFields = {
     t.Null(),
   ]),
   printedWorkIdentifier: shortText,
-  targetDocumentId: nullableBoundedString(36),
+  targetDocumentId: t.Union([tSafeId("legislationDocument"), t.Null()]),
   targetStatus: t.Union([
     t.UnionEnum(caseLawProvisionCitations.targetStatus.enumValues),
     t.Null(),
@@ -133,14 +167,19 @@ export const decisionProvisionsSuccessResponseSchema = t.Object({
 export const citingDecisionsSuccessResponseSchema = t.Object({
   items: t.Array(
     t.Object({
-      decisionId: boundedString(36),
+      decisionId: tSafeId("caseLawDecision"),
       caseNumber: boundedString(1024),
       slug: nullableBoundedString(1024),
       court: boundedString(2048),
+      courtAbbreviation: nullableBoundedString(2048),
+      sourceUrl: nullableBoundedString(8192),
       country: boundedString(12),
       language: boundedString(32),
       decisionDate: date,
-      citationAuthority: nullableNumber,
+      versionBasis: versionBasisSchema,
+      versionValidFrom: date,
+      inferredVersionCandidate: inferredVersionCandidateSchema,
+      citationAuthority: t.Number(),
       sentenceText: nullableBoundedString(16_384),
       spanStart: t.Number(),
       spanEnd: t.Number(),

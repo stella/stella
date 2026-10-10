@@ -3,7 +3,7 @@ import { and, eq, isNull } from "drizzle-orm";
 
 import { vatRates } from "@/api/db/schema";
 import { vatRateParams } from "@/api/handlers/vat-rates/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { lockVatRateOrganization } from "@/api/lib/billing/vat-rates";
@@ -12,6 +12,8 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 const config = {
   description: "Archive a VAT rate period in the active organization.",
   permissions: { organizationSettings: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.standard,
+  featureAccess: { featureId: "time-billing", type: "required" },
   mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   params: vatRateParams,
 } satisfies HandlerConfig;

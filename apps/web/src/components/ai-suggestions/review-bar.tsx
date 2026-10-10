@@ -71,6 +71,10 @@ import type { ReviewSuggestion } from "@/components/ai-suggestions/review-store"
 import { useFolioDocumentBlocks } from "@/components/ai-suggestions/use-folio-document-blocks";
 import { useReviewActions } from "@/components/ai-suggestions/use-review-actions";
 import { useReviewChangeSummary } from "@/components/ai-suggestions/use-review-change-summary";
+import {
+  DockedChatSurface,
+  useDockedChatSlot,
+} from "@/components/chat/docked-chat-stack";
 import type {
   DocxEditBlockReason,
   DocxEditModeResult,
@@ -112,6 +116,7 @@ export const ReviewBar = ({
   requestDocxEditMode,
 }: ReviewBarProps) => {
   const t = useTranslations();
+  const reviewSlot = useDockedChatSlot("review");
   const hotkeyPlatform = useHydrationSafeHotkeyPlatform();
   // Effective (user-rebindable) bindings for the four review shortcuts. The
   // capture-phase handler below matches against these, and the tooltips render
@@ -309,7 +314,7 @@ export const ReviewBar = ({
     return null;
   }
 
-  return (
+  const bar = (
     <div
       aria-label={t("docxReview.barLabel")}
       data-docx-review-bar=""
@@ -318,9 +323,14 @@ export const ReviewBar = ({
         // surface and inside a 320px inspector pane on another, and what it
         // can show depends on the width it actually got, not on the width of
         // whatever it floats over.
-        "text-popover-foreground border-foreground/15 @container/review-bar pointer-events-auto absolute start-1/2 bottom-24 flex -translate-x-1/2 items-center gap-1 rounded-2xl border py-0.5 ps-1.5 pe-1",
-        OVERLAY_LAYER_CLASS_NAMES["chrome-raised"],
-        DOCKED_COMPOSER_WIDTH_CLASS,
+        "text-popover-foreground border-foreground/15 @container/review-bar pointer-events-auto flex items-center gap-1 rounded-2xl border py-0.5 ps-1.5 pe-1",
+        reviewSlot === null
+          ? cn(
+              "absolute start-1/2 bottom-24 -translate-x-1/2",
+              OVERLAY_LAYER_CLASS_NAMES["chrome-raised"],
+              DOCKED_COMPOSER_WIDTH_CLASS,
+            )
+          : "relative w-full",
         "bg-(--doc-float-surface) [--doc-float-surface:var(--color-white)] dark:[--doc-float-surface:var(--popover)]",
         "shadow-floating-ring",
         "animate-in fade-in-0 slide-in-from-bottom-1 motion-reduce:animate-none",
@@ -464,6 +474,13 @@ export const ReviewBar = ({
         </>
       )}
     </div>
+  );
+  // With a composer on this host the pill docks in its column, on the bar;
+  // a host without one (chat off) keeps it over the document's foot.
+  return reviewSlot === null ? (
+    bar
+  ) : (
+    <DockedChatSurface slot="review">{bar}</DockedChatSurface>
   );
 };
 

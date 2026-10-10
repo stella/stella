@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 
 import { Temporal } from "@stll/time";
 
+import { appToday } from "@/lib/local-iso-date";
 import type { CalendarTask } from "@/lib/workspaces/queries/calendar-tasks";
 import type { CalendarEntry } from "@/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-day-cell";
 import {
@@ -42,7 +43,7 @@ const toCalendarDayKey = (value: string | null | undefined): string | null => {
   ).unwrapOr(null);
 };
 
-export const getCalendarTaskDate = (
+const getCalendarTaskDate = (
   task: CalendarTask,
   propertyId: string,
 ): string | null => {
@@ -101,18 +102,25 @@ export const getCalendarQueryRange = (
     case "month": {
       const fallback = `${input.year}-${String(input.month + 1).padStart(2, "0")}-01`;
       return getBoundedCalendarRange(
-        getMonthDays(
-          input.year,
-          input.month,
-          input.firstWeekday,
-          input.weekend,
-        ),
+        // The range does not depend on which day is today.
+        getMonthDays({
+          year: input.year,
+          month: input.month,
+          firstWeekday: input.firstWeekday,
+          weekend: input.weekend,
+          today: appToday(),
+        }),
         fallback,
       );
     }
     case "week":
       return getBoundedCalendarRange(
-        getWeekDays(input.viewDate, input.firstWeekday, input.weekend),
+        getWeekDays(
+          input.viewDate,
+          input.firstWeekday,
+          input.weekend,
+          appToday(),
+        ),
         toUTCDateKey(input.viewDate),
       );
     default: {

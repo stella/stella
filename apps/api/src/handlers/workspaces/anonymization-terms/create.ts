@@ -2,9 +2,10 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import { anonymizationBlacklistEntries } from "@/api/db/schema";
+import { workspaceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { normalizeAnonymizationBlacklistEntries } from "@/api/lib/anonymization-blacklist";
 import { loadWorkspaceAnonymizationTermsForWrite } from "@/api/lib/anonymization-write-cap";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -30,6 +31,8 @@ const config = {
     "matter past its term limit. Organization-wide terms are managed " +
     "separately.",
   permissions: { workspace: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: workspaceRealtimeUpdates,
   mcp: {
     type: "capability",
     reason: "anonymization_admin",

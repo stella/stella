@@ -121,10 +121,12 @@ const WORKFLOW_STEPS: readonly WorkflowStep[] = [
       "you did not just " +
       "create. `fields[]` (`path`, " +
       "`label`, `input_type`, `required`, `hint`, `options`, `options_from`, " +
-      "`date_format`, and `source`: who fills the field, " +
+      "`date_format`, `visibleWhen` (the branch condition, or null), and `source`: who fills the field, " +
       "as one object with a `type`), " +
       "`arrays[]` (one entry per `{% for %}` loop: its `path` plus the " +
-      "`itemFieldPaths` it repeats), `conditions[]` (every `{% if %}` " +
+      "`itemFieldPaths` it repeats and `itemAliases` used in branch conditions). " +
+      "Evaluate an item field’s `visibleWhen` per array item with its alias bound to that item; " +
+      "required fields apply only where their markers render. `conditions[]` (every `{% if %}` " +
       "block, by governing `path` and `kind`), `computed[]` " +
       "(each `path` + its `formula`) and the same " +
       "`warnings[]`. Compare `fields[].path` against the markers you wrote: a " +
@@ -228,15 +230,19 @@ const WORKFLOW_STEPS: readonly WorkflowStep[] = [
 const COMPLETION_GATE_NOTE =
   `Completion gate: both ${FILL_TEMPLATE} and ${SAVE_FILLED_TEMPLATE} take ` +
   "`completion_mode` (default `require_complete`) and run one gate. Under " +
-  "the default, an unfilled placeholder or a failed AI draft is a " +
-  "`validation_error` naming every offending path, and the persisting tool " +
-  "refuses before anything is written. `allow_partial` lets the same fill " +
-  `through instead: ${FILL_TEMPLATE} reports \`completionStatus: "partial"\` ` +
-  `and ${SAVE_FILLED_TEMPLATE} writes the document with the shortfall in ` +
-  "`unmatchedPlaceholders` and `aiFieldErrors`. Set it only when a document " +
-  "with live markers is what the user asked for; otherwise collect the " +
-  "missing values and retry. A missing required value is refused in either " +
-  "mode, before the gate.";
+  "the default, an unfilled placeholder, a failed AI draft, an AI-decided " +
+  "condition left undecided (its blocks render as if false; supply true or " +
+  "false under its path), or a template directive that could not be " +
+  "applied is a `validation_error` naming every offending path, and the " +
+  "persisting tool refuses before anything is written. Unused values and " +
+  "`clauseWarnings` (a stored clause kept as written) are reported but " +
+  "never block. `allow_partial` lets the same fill through instead: " +
+  `${FILL_TEMPLATE} reports \`completionStatus: "partial"\` and ` +
+  `${SAVE_FILLED_TEMPLATE} writes the document and reports the shortfall ` +
+  "in `unmatchedPlaceholders`, `aiFieldErrors` and `undecidedConditions`. Set it " +
+  "only when an incomplete document is what the user asked for; otherwise " +
+  "collect the missing values and retry. A missing required value is " +
+  "refused in either mode, before the gate.";
 
 const AUTHORING_RULES = [
   {

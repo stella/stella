@@ -3,6 +3,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { Buffer } from "node:buffer";
 
 import { streamWithConcurrency } from "@stll/concurrency";
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
@@ -11,6 +12,8 @@ import { PayloadBudgetError } from "@/api/lib/compression";
 import { settleBoth } from "@/api/lib/corpus-index/core";
 import { errorFingerprint } from "@/api/lib/errors/utils";
 import {
+  CORPUS_INDEX_AGGREGATION_TIMEOUT_MS,
+  CORPUS_INDEX_INGEST_TIMEOUT_MS,
   type CorpusIndexClient,
   CorpusIndexError,
 } from "@/api/lib/legal-search/corpus-index-client";
@@ -58,7 +61,6 @@ import {
   readCorpusText,
 } from "@/api/lib/legal-search/corpus-reads";
 import { readCorpusAtAuthoritativePointer } from "@/api/lib/legal-search/corpus-storage";
-import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
 import type { IngestionTransactionRunner } from "@/api/lib/replay-safe-ingestion";
 import { S3ObjectBudgetError } from "@/api/lib/s3";
@@ -119,7 +121,7 @@ const mapSequentially = async <Input, Output>(
   return mapSequentially(values, operation, index + 1, outputs);
 };
 
-export const CORPUS_PROJECTION_PAYLOAD_READ_CONCURRENCY_MAX = 32;
+const CORPUS_PROJECTION_PAYLOAD_READ_CONCURRENCY_MAX = 32;
 
 type ExecuteCorpusProjectionAppendCycleOptions<
   Family extends CorpusProjectionIntentLease["family"],
@@ -141,7 +143,7 @@ type ExecuteCorpusProjectionAppendCycleOptions<
 };
 
 /** Wall-clock milliseconds per phase, summed over the cycle, for the caller's logs. */
-export type CorpusProjectionAppendCycleTiming = {
+type CorpusProjectionAppendCycleTiming = {
   reservationMs: number;
   materialReadMs: number;
   /**
@@ -464,8 +466,21 @@ type ProjectionAppendTail<Entry extends ProjectionAppendPart> = {
   earliestLeaseExpiresAtMs: number;
 };
 
-const CORPUS_PROJECTION_APPEND_START_MARGIN_MS =
-  LIMITS.corpusObjectIoTimeoutMs + CORPUS_PROJECTION_UNKNOWN_APPEND_MARGIN_MS;
+/**
+ * Lease an append must still hold when it starts: the ingest's whole budget,
+ * one presence-confirmation aggregate per census batch of a full request, and
+ * the unknown-outcome margin. The expired-lease sweep turns an
+ * `append_started` row whose lease has passed into cleanup, so any shorter
+ * margin lets it reclaim an append that is still in flight.
+ */
+export const CORPUS_PROJECTION_APPEND_START_MARGIN_MS =
+  CORPUS_INDEX_INGEST_TIMEOUT_MS +
+  Math.ceil(
+    CORPUS_PROJECTION_APPEND_MAX_REVISIONS /
+      CORPUS_PROJECTION_DELETE_MAX_REVISIONS,
+  ) *
+    CORPUS_INDEX_AGGREGATION_TIMEOUT_MS +
+  CORPUS_PROJECTION_UNKNOWN_APPEND_MARGIN_MS;
 
 type AdvanceProjectionAppendTailsOptions<Entry extends ProjectionAppendPart> = {
   tails: Map<string, ProjectionAppendTail<Entry>>;
@@ -756,15 +771,10 @@ const confirmProjectionAppend = async ({
   indexId,
   entries,
 }: ConfirmProjectionAppendOptions): Promise<Result<void, CorpusIndexError>> => {
-  for (
-    let offset = 0;
-    offset < entries.length;
-    offset += CORPUS_PROJECTION_DELETE_MAX_REVISIONS
-  ) {
-    const batch = entries.slice(
-      offset,
-      offset + CORPUS_PROJECTION_DELETE_MAX_REVISIONS,
-    );
+  for (const batch of chunkItems(
+    entries,
+    CORPUS_PROJECTION_DELETE_MAX_REVISIONS,
+  )) {
     const census = await censusCorpusProjectionRevisions({
       client,
       indexId,

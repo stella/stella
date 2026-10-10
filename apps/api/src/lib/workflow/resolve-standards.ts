@@ -1,6 +1,6 @@
 import { and, asc, eq, inArray, or } from "drizzle-orm";
+import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 
-import type { Transaction } from "@/api/db/root";
 import { clauses, clauseVariants, clauseVersions } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { clauseBodyToPlainText } from "@/api/lib/clauses/clause-to-patch";
@@ -43,7 +43,7 @@ type ClauseSnapshot = {
 };
 
 export const loadClauseSnapshots = async (
-  tx: Transaction,
+  tx: Pick<PgAsyncDatabase<PgQueryResultHKT>, "select">,
   organizationId: SafeId<"organization">,
   positions: readonly Position[],
 ): Promise<Map<string, ClauseSnapshot>> => {

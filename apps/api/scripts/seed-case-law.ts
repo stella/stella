@@ -1,8 +1,10 @@
 /**
- * Seed the database with real decisions pulled from production for
- * local testing of the Case Law feature.
+ * Seed the database with case-law decisions for local testing of the Case
+ * Law feature: recorded production decisions, plus the synthetic decisions
+ * of `seed-case-law-synthetic.ts` that give the public browser enough rows
+ * to page, wrap and facet.
  *
- * Data lives in `__fixtures__/case-law/<adapterKey>.json.gz` — one file per
+ * Recorded data lives in `__fixtures__/case-law/<adapterKey>.json.gz` — one file per
  * source (cz-ns, cz-nss, cz-regional, cz-us, eu-ecj, pl-courts,
  * sk-courts, sk-us). Each fixture holds the source row plus the three
  * most recent decisions, taken verbatim from prod RDS so the dev DB
@@ -22,22 +24,26 @@ import { readdir } from "node:fs/promises";
 import path from "node:path";
 import * as v from "valibot";
 
+import { compareCodeUnit } from "@stll/collation";
 import type { PersistedDecisionAnalysis } from "@stll/legal-ast/analysis";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { backfillCaseLawSlugs } from "@/api/handlers/case-law/decisions/slug-backfill";
+import type { SafeId } from "@/api/lib/branded-types";
 import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
 import type { CaseLawWriteHandles } from "@/api/lib/case-law/maintenance-lane";
 import { canonicalDecisionDate } from "@/api/lib/dates";
 import { readGzipJson } from "@/api/lib/gzip-json";
 import { indexDecision } from "@/api/lib/legal-search/case-law-search-index";
+import type { CorpusSourceDescriptor } from "@/api/lib/legal-search/corpus-source";
 import type {
   DecisionSection,
   EmptyAst,
 } from "@/api/lib/legal-search/document-types";
 import { requireLocalDevOpen } from "@/api/runtime-mode";
 
+import { syntheticCaseLawFixtures } from "./seed-case-law-synthetic";
 import { seedId } from "./seed-utils";
 
 const FIXTURES_DIR = path.join(import.meta.dir, "__fixtures__", "case-law");
@@ -55,9 +61,11 @@ type FixtureSource = {
   name: string;
   enabled: boolean;
   config: Record<string, unknown> | null;
+  /** Absent on the recorded sources, which predate descriptors. */
+  descriptor?: CorpusSourceDescriptor;
 };
 
-type FixtureDecision = {
+export type FixtureDecision = {
   case_number: string;
   slug: string | null;
   ecli: string | null;
@@ -81,7 +89,7 @@ type FixtureDecision = {
   source_hash: string | null;
 };
 
-type CaseLawFixture = {
+export type CaseLawFixture = {
   source: FixtureSource;
   decisions: FixtureDecision[];
 };
@@ -105,7 +113,7 @@ const fixtureSchema = v.looseObject({
   ),
 });
 
-const loadFixtures = async (): Promise<CaseLawFixture[]> => {
+const loadRecordedFixtures = async (): Promise<CaseLawFixture[]> => {
   const entries = await readdir(FIXTURES_DIR);
   const fixtures: CaseLawFixture[] = [];
   for (const entry of entries) {
@@ -117,11 +125,11 @@ const loadFixtures = async (): Promise<CaseLawFixture[]> => {
     // SAFETY: structural fields validated by fixtureSchema; deep JSON
     // (sections, document_ast, analysis) is checked into the repo
     // and matches the prod schema by construction.
-    // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- narrows validated fixture; deep JSON is repo-checked, not untrusted input
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- narrows validated fixture; deep JSON is repo-checked, not untrusted input
     fixtures.push(raw as CaseLawFixture);
   }
   fixtures.sort((a, b) =>
-    a.source.adapter_key.localeCompare(b.source.adapter_key),
+    compareCodeUnit(a.source.adapter_key, b.source.adapter_key),
   );
   return fixtures;
 };
@@ -157,6 +165,60 @@ const ensureSearchPreviewConfig = async (
   `);
 };
 
+/** The `case_law_sources` row a fixture's source seeds. */
+export const fixtureSourceRow = (source: FixtureSource) => ({
+  id: sourceIdFor(source.adapter_key),
+  adapterKey: source.adapter_key,
+  name: source.name,
+  enabled: source.enabled,
+  lastSyncAt: new Date(),
+  config: source.config ?? {},
+  descriptor: source.descriptor ?? null,
+});
+
+type FixtureDecisionRowOptions = {
+  adapterKey: string;
+  sourceId: SafeId<"caseLawSource">;
+  decision: FixtureDecision;
+};
+
+/** The `case_law_decisions` row a fixture decision seeds. */
+export const fixtureDecisionRow = ({
+  adapterKey,
+  sourceId,
+  decision: d,
+}: FixtureDecisionRowOptions) => ({
+  id: decisionIdFor(adapterKey, d.case_number, d.language),
+  sourceId,
+  caseNumber: d.case_number,
+  slug: d.slug,
+  ecli: d.ecli,
+  court: d.court,
+  country: d.country,
+  language: d.language,
+  languageGroupKey: d.language_group_key,
+  // Fixtures are verbatim rows, some of them older than the write-path
+  // guard; the same guard runs here so the table's bounds CHECK sees what
+  // the ingest would have stored.
+  decisionDate:
+    d.decision_date === null
+      ? null
+      : canonicalDecisionDate(d.decision_date, d.country),
+  decisionType: d.decision_type,
+  fulltext: d.fulltext ?? d.sections?.map((s) => s.text).join("\n\n") ?? "",
+  sections: d.sections,
+  documentAst: d.document_ast,
+  analysis: d.analysis,
+  parserVersion: d.parser_version ?? 0,
+  sourceRaw: d.source_raw,
+  sourceRawS3Key: d.source_raw_s3_key,
+  sourceRawContentType: d.source_raw_content_type,
+  sourceUrl: d.source_url,
+  documentUrl: d.document_url,
+  metadata: d.metadata ?? {},
+  sourceHash: d.source_hash,
+});
+
 // Index + slug writes target the global `case_law_*` tables, which only
 // the `stella_ingestion` role may write under RLS. The decision rows below
 // go in via the lane's `rootDb` (table owner), but `indexDecision` and the
@@ -164,7 +226,10 @@ const ensureSearchPreviewConfig = async (
 const seedFixtures = async ({ rootDb, ingestionDb }: CaseLawWriteHandles) => {
   await ensureSearchPreviewConfig(rootDb);
 
-  const fixtures = await loadFixtures();
+  const fixtures = [
+    ...(await loadRecordedFixtures()),
+    ...syntheticCaseLawFixtures(),
+  ];
   console.log(`Found ${fixtures.length} fixtures.`);
 
   let totalDecisions = 0;
@@ -189,14 +254,7 @@ const seedFixtures = async ({ rootDb, ingestionDb }: CaseLawWriteHandles) => {
         async (tx) =>
           await tx
             .insert(caseLawSources)
-            .values({
-              id: sourceIdFor(adapterKey),
-              adapterKey,
-              name: source.name,
-              enabled: source.enabled,
-              lastSyncAt: new Date(),
-              config: source.config ?? {},
-            })
+            .values(fixtureSourceRow(source))
             .onConflictDoNothing()
             .returning({ id: caseLawSources.id }),
       );
@@ -213,45 +271,11 @@ const seedFixtures = async ({ rootDb, ingestionDb }: CaseLawWriteHandles) => {
 
     let inserted = 0;
     for (const d of decisions) {
-      const id = decisionIdFor(adapterKey, d.case_number, d.language);
-      const fulltext =
-        d.fulltext ?? d.sections?.map((s) => s.text).join("\n\n") ?? "";
-
       const result = await rootDb.transaction(
         async (tx) =>
           await tx
             .insert(caseLawDecisions)
-            .values({
-              id,
-              sourceId,
-              caseNumber: d.case_number,
-              slug: d.slug,
-              ecli: d.ecli,
-              court: d.court,
-              country: d.country,
-              language: d.language,
-              languageGroupKey: d.language_group_key,
-              // Fixtures are verbatim rows, some of them older than the
-              // write-path guard; the same guard runs here so the table's
-              // bounds CHECK sees what the ingest would have stored.
-              decisionDate:
-                d.decision_date === null
-                  ? null
-                  : canonicalDecisionDate(d.decision_date, d.country),
-              decisionType: d.decision_type,
-              fulltext,
-              sections: d.sections,
-              documentAst: d.document_ast,
-              analysis: d.analysis,
-              parserVersion: d.parser_version ?? 0,
-              sourceRaw: d.source_raw,
-              sourceRawS3Key: d.source_raw_s3_key,
-              sourceRawContentType: d.source_raw_content_type,
-              sourceUrl: d.source_url,
-              documentUrl: d.document_url,
-              metadata: d.metadata ?? {},
-              sourceHash: d.source_hash,
-            })
+            .values(fixtureDecisionRow({ adapterKey, sourceId, decision: d }))
             .onConflictDoNothing()
             .returning({ id: caseLawDecisions.id }),
       );

@@ -3,9 +3,10 @@ import { t } from "elysia";
 
 import { createPlaybookDefinitionHandler } from "@/api/handlers/playbooks/create-shared";
 import { instantiateStarterPositions } from "@/api/handlers/playbooks/instantiate-starter";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { createModelActionAdmitter } from "@/api/lib/rate-limit/model-action-admission";
 import {
   findStarterPlaybook,
   STARTER_PLAYBOOK_IDS,
@@ -24,6 +25,7 @@ const config = {
     "existing playbook instead of creating a copy. Browse the starters with " +
     "playbooks.starters.list.",
   permissions: { playbook: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "knowledge_library_admin",
@@ -40,13 +42,16 @@ const createPlaybookFromStarter = createSafeRootHandler(
   config,
   async function* ({
     body,
+    getActiveWorkspaceIds,
     orgAIConfig,
     managedAIResidency,
     orgAIConfigStatus,
     promptCachingEnabled,
     recordAuditEvent,
     safeDb,
+    scopedDb,
     session,
+    user,
   }) {
     const starter = findStarterPlaybook(body.starterId);
     if (!starter) {
@@ -55,9 +60,19 @@ const createPlaybookFromStarter = createSafeRootHandler(
       );
     }
 
+    const accessibleWorkspaceIds = yield* Result.await(
+      Result.tryPromise(async () => await getActiveWorkspaceIds()),
+    );
     return yield* createPlaybookDefinitionHandler({
+      admitModelAction: createModelActionAdmitter({
+        organizationId: session.activeOrganizationId,
+        userId: user.id,
+        organizationStateDb: scopedDb,
+        actionKind: "playbooks.derive-ask",
+      }),
       safeDb,
       organizationId: session.activeOrganizationId,
+      accessibleWorkspaceIds,
       orgAIConfig,
       managedAIResidency,
       orgAIConfigStatus,

@@ -11,10 +11,9 @@ import {
   tSafeId,
 } from "@/api/lib/custom-schema";
 import { CORPUS_SEARCH_CURSOR_WITH_PHASE_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
-import { tPublicCountryUnavailable } from "@/api/lib/legal-search/public-law-country";
+import { withPublicCountryUnavailable } from "@/api/lib/legal-search/public-law-country";
 import { LIMITS } from "@/api/lib/limits";
 import { searchPaginationOutcomeSchema } from "@/api/lib/search/pagination-outcome-schema";
-import { safePublicHandlerErrorOrStatusTextResponseSchema } from "@/api/lib/search/public-error-response";
 import {
   boundedString,
   nullableBoundedString,
@@ -87,12 +86,8 @@ export const searchLegislationSuccessResponseSchema = t.Object(
   { additionalProperties: false },
 );
 
-export const searchLegislationResponseSchema = {
-  ...safePublicHandlerResponseSchemasWithStatusText(
+export const searchLegislationResponseSchema = withPublicCountryUnavailable(
+  safePublicHandlerResponseSchemasWithStatusText(
     searchLegislationSuccessResponseSchema,
   ),
-  503: t.Union([
-    safePublicHandlerErrorOrStatusTextResponseSchema,
-    tPublicCountryUnavailable,
-  ]),
-};
+);

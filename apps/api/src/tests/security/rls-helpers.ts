@@ -2,6 +2,7 @@ import { eq, sql } from "drizzle-orm";
 import type { AnyPgTable } from "drizzle-orm/pg-core";
 
 import type { FolioAIEditOperation } from "@stll/folio-core/ai-edits";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
 import { Temporal } from "@stll/time";
 
 import { member, organization, user } from "@/api/db/auth-schema";
@@ -1197,9 +1198,7 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       scope: "organization" as const,
       kind: "preference" as const,
       content: "Firm A cites OSCOLA",
-      dedupKey: new Bun.CryptoHasher("sha256")
-        .update(ids.aiMemoryFirmA)
-        .digest("hex"),
+      dedupKey: hashSha256Hex(ids.aiMemoryFirmA),
       source: "user" as const,
       status: "active" as const,
       createdBy: ids.userA1,
@@ -1210,9 +1209,7 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       scope: "organization" as const,
       kind: "preference" as const,
       content: "Firm B cites Bluebook",
-      dedupKey: new Bun.CryptoHasher("sha256")
-        .update(ids.aiMemoryFirmB)
-        .digest("hex"),
+      dedupKey: hashSha256Hex(ids.aiMemoryFirmB),
       source: "user" as const,
       status: "active" as const,
       createdBy: ids.userB1,
@@ -1374,9 +1371,7 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       entityId: ids.entityA1,
       entityVersionId: ids.entityVersionA1,
       promptVersion: 1,
-      sourceTextHash: new Bun.CryptoHasher("sha256")
-        .update(ids.entityVersionA1)
-        .digest("hex"),
+      sourceTextHash: hashSha256Hex(ids.entityVersionA1),
       summary: "Summary of agreement A1",
       language: "en",
       modelProvider: "anthropic",
@@ -1389,9 +1384,7 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       entityId: ids.entityB1,
       entityVersionId: ids.entityVersionB1,
       promptVersion: 1,
-      sourceTextHash: new Bun.CryptoHasher("sha256")
-        .update(ids.entityVersionB1)
-        .digest("hex"),
+      sourceTextHash: hashSha256Hex(ids.entityVersionB1),
       summary: "Summary of agreement B1",
       language: "en",
       modelProvider: "anthropic",
@@ -1549,7 +1542,7 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       templateId: ids.templateA,
       userId: ids.userA1,
       format: "docx",
-      status: "completed",
+      status: "success",
     },
     {
       id: ids.templateFillB,
@@ -1557,7 +1550,7 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       templateId: ids.templateB,
       userId: ids.userB1,
       format: "docx",
-      status: "completed",
+      status: "success",
     },
   ]);
 };

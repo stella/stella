@@ -92,7 +92,7 @@ const installDatabaseBoundary = (database: TestDatabase) => {
   });
   Object.defineProperty(rlsDb, "transaction", {
     configurable: true,
-    value: database.transaction.bind(database),
+    value: rootDb.transaction.bind(rootDb),
   });
 };
 

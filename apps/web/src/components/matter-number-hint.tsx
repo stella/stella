@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { useTranslations } from "use-intl";
+import { useNow, useTranslations } from "use-intl";
 
 import {
   matchesMatterReferencePattern,
@@ -13,15 +13,24 @@ import { cn } from "@stll/ui/utils";
 
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { organizationSettingsOptions } from "@/lib/organization/settings-queries";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 export type MatterNumberHintProps = InlineProps | PopoverProps;
 
 export const MatterNumberHint = (props: MatterNumberHintProps) => {
   const t = useTranslations();
-  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
-  const { data: settings } = useQuery(
-    organizationSettingsOptions(activeOrganizationId),
+  const now = useNow();
+  const { activeOrganizationId, id: userId } = useAuthenticatedUser();
+  const settingsQuery = useQuery(
+    organizationSettingsOptions({
+      organizationId: activeOrganizationId,
+      userId,
+    }),
   );
+  const settingsView = useQueryView(settingsQuery);
+  useQueryViewError(settingsView);
+  const settings =
+    settingsView.type === "items" ? settingsView.items : undefined;
 
   if (!settings) {
     return null;
@@ -30,7 +39,7 @@ export const MatterNumberHint = (props: MatterNumberHintProps) => {
   const { matterNumberPattern: pattern, matterNumberPadding: padding } =
     settings;
   const example = renderMatterReference({
-    now: new Date(),
+    now,
     padding,
     pattern,
     seq: 1,

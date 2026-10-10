@@ -51,11 +51,18 @@ if (
   panic("the supply matter fixture holds three documents");
 }
 
-const graded = (issue: string, rule: string): Position => ({
+type PositionSources = NonNullable<Position["sources"]>;
+
+const graded = (
+  issue: string,
+  rule: string,
+  sources: PositionSources | null = null,
+): Position => ({
   mode: "graded",
   sourceId: `${issue}-id`,
   issue,
   severity: "medium",
+  ...(sources === null ? {} : { sources }),
   standard: {
     source: "tiers",
     tiers: {
@@ -68,8 +75,16 @@ const graded = (issue: string, rule: string): Position => ({
   enabled: true,
 });
 
+/** The two executed agreements the script picks, as a position cites them. */
+const PICKED_SOURCES: PositionSources = [keller, brandt].map((entityId) => ({
+  workspaceId: supplyMatterId,
+  entityId,
+}));
+
 const playbook = (
   perspective: "buyer" | "seller" | "neutral" | undefined,
+  /** null for a playbook that cites nothing. */
+  liabilitySources: PositionSources | null = PICKED_SOURCES,
 ): StoredPlaybook => ({
   id: "playbook",
   name: "IT services",
@@ -78,7 +93,7 @@ const playbook = (
   positions: {
     version: 3,
     items: [
-      graded("Liability cap", "Capped at 12 months of fees"),
+      graded("Liability cap", "Capped at 12 months of fees", liabilitySources),
       graded("Payment", "30 days"),
       graded("Term", "24 months"),
     ],
@@ -495,4 +510,119 @@ describe("shared scoring", () => {
       "ended turn 1 with an offer: Next, I can keep building the playbook with the main supplier terms.",
     ]);
   });
+});
+
+describe("source scoring", () => {
+  /** The described contracts-later run over `stored`: its only defects are
+   *  the stored playbook's own. */
+  const storedDefects = (stored: StoredPlaybook, id = "contracts-later") =>
+    score(id, contractsLaterRun(), stored).filter(
+      (defect) => defect.includes("source") || defect.includes("sources"),
+    );
+
+  const withLiability = (
+    overrides: Record<string, unknown>,
+  ): StoredPlaybook => {
+    const stored = playbook(undefined);
+    const [liability, ...rest] = stored.positions.items;
+    if (liability?.mode !== "graded") {
+      return panic("the first fixture position is graded");
+    }
+    return {
+      ...stored,
+      positions: {
+        version: 3,
+        items: [{ ...liability, ...overrides }, ...rest],
+      },
+    };
+  };
+
+  test("a position that names a counterparty is a defect, reported by field and name", () => {
+    expect(
+      storedDefects(
+        withLiability({ guidance: "Take the cap from the KELLER agreement." }),
+      ),
+    ).toEqual(['positions[0].guidance names a source: "keller"']);
+  });
+
+  // The needles are the fixtures' own names, so every document a read can
+  // list is covered without a second list to keep in step.
+  test("every listed document is caught by its file name, with or without the extension", () => {
+    const documents = matters.flatMap(({ id }) =>
+      listedRows(
+        answerMatterTool("list_documents", { matter_id: id }),
+        "documents",
+      ),
+    );
+    expect(documents).toHaveLength(4);
+    for (const { name } of documents) {
+      for (const written of [name, name.replace(/\.[a-z]+$/u, "")]) {
+        expect(
+          storedDefects(withLiability({ purpose: `As agreed in ${written}.` })),
+        ).not.toEqual([]);
+      }
+    }
+  });
+
+  test("a matter name or reference in the playbook's own description is a defect", () => {
+    for (const { name } of matters) {
+      expect(
+        storedDefects({ ...playbook(undefined), description: `From ${name}` }),
+      ).toContain(`description names a source: "${name.toLowerCase()}"`);
+    }
+    expect(
+      storedDefects({ ...playbook(undefined), name: "Supply (NWL-2024-017)" }),
+    ).toEqual(['name names a source: "nwl-2024-017"']);
+  });
+
+  test("a text field nobody listed is still read", () => {
+    expect(
+      storedDefects(
+        withLiability({
+          negotiation: { talkingPoints: ["Brandt AG accepted this in 2025."] },
+        }),
+      ),
+    ).toEqual([
+      'positions[0].negotiation.talkingPoints[0] names a source: "brandt"',
+    ]);
+  });
+
+  test("a term of art that shares a word with a counterparty is not a name", () => {
+    expect(
+      storedDefects(
+        withLiability({
+          guidance: "Check the safe harbour for late invoices.",
+        }),
+      ),
+    ).toEqual([]);
+  });
+
+  test("citing a document the user did not pick is a defect", () => {
+    expect(
+      storedDefects(
+        withLiability({
+          sources: [
+            ...PICKED_SOURCES,
+            { workspaceId: supplyMatterId, entityId: vogel },
+          ],
+        }),
+      ),
+    ).toEqual([
+      "cited a source the user did not pick: Services Agreement Nordwind - Vogel (DRAFT v3, supplier markup).docx",
+    ]);
+  });
+
+  test("a run that read picked contracts and recorded no source is a defect", () => {
+    expect(storedDefects(playbook(undefined, null))).toEqual([
+      "no position records the contracts it rests on in sources",
+    ]);
+  });
+
+  test.each(["no-documents", "with-documents"])(
+    "%s has no document to pick, so any source is a defect and none is fine",
+    (id) => {
+      expect(storedDefects(playbook(undefined, null), id)).toEqual([]);
+      expect(storedDefects(playbook(undefined), id)).toHaveLength(2);
+    },
+  );
 });

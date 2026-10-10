@@ -2,6 +2,10 @@ import type { TProperties, TSchema } from "@sinclair/typebox";
 import { Type } from "@sinclair/typebox";
 import { t } from "elysia";
 
+import {
+  CURRENCY_CODE_LENGTH,
+  CURRENCY_CODE_PATTERN,
+} from "@stll/api-contract/currency-code";
 import { UUID_PATTERN } from "@stll/uuid-codec";
 
 import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
@@ -37,9 +41,21 @@ export const withDescription = <T extends TSchema>(
 ): T => ({ ...schema, description });
 
 export const tSafeId = <T extends SafeIdType>(
-  _type: T,
-  options?: { description: string },
-) => Type.Unsafe<SafeId<T>>({ ...tUuid, ...options });
+  resourceKind: T,
+  {
+    usage = "reference",
+    ...options
+  }: {
+    description?: string;
+    usage?: "reference" | "creation";
+  } = {},
+) =>
+  Type.Unsafe<SafeId<T>>({
+    ...tUuid,
+    ...options,
+    "x-stella-resource-kind": resourceKind,
+    "x-stella-resource-usage": usage,
+  });
 
 export const tUserId = t.String({
   minLength: 1,
@@ -74,9 +90,9 @@ export const tJsonObject = t.Intersect([
  * which buckets by the raw string.
  */
 export const tCurrencyCode = t.String({
-  minLength: 3,
-  maxLength: 3,
-  pattern: "^[A-Z]{3}$",
+  minLength: CURRENCY_CODE_LENGTH,
+  maxLength: CURRENCY_CODE_LENGTH,
+  pattern: CURRENCY_CODE_PATTERN,
 });
 
 export const tPaginationLimit = (maximum: number) =>

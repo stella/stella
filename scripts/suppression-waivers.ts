@@ -34,6 +34,8 @@ import { panic, Result } from "better-result";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
+import { compareCodeUnit } from "@stll/collation";
+
 import {
   collectLintDirectives,
   directiveReason,
@@ -245,7 +247,7 @@ export const observeSecurityDirectives = (
 
   return {
     observed: [...counts.values()].toSorted((left, right) =>
-      identityKey(left).localeCompare(identityKey(right)),
+      compareCodeUnit(identityKey(left), identityKey(right)),
     ),
     bare: [...new Set(bare)].toSorted(),
   };
@@ -558,7 +560,7 @@ const runSeed = (): number => {
   }
 
   const merged = [...ledger.waivers, ...drafted].toSorted((left, right) =>
-    left.id.localeCompare(right.id),
+    compareCodeUnit(left.id, right.id),
   );
   writeFileSync(
     LEDGER_PATH,

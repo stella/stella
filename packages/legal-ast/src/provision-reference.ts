@@ -1,3 +1,5 @@
+import * as v from "valibot";
+
 /**
  * The jurisdiction-neutral shape a provision citation resolves to.
  *
@@ -30,3 +32,24 @@ export type ProvisionReference = {
   subsection: string | null;
   unit: ProvisionUnit;
 };
+
+const designatorSchema = v.pipe(
+  v.string(),
+  v.minLength(1),
+  v.check(
+    (value) => value.isWellFormed() && !/[\p{Cc}\p{Cf}]/u.test(value),
+    "Invalid provision designator",
+  ),
+  v.transform((value) => value.normalize("NFC")),
+);
+
+export const provisionReferenceSchema = v.object({
+  letter: v.nullable(designatorSchema),
+  openEnded: v.boolean(),
+  point: v.nullable(designatorSchema),
+  section: v.pipe(v.number(), v.integer(), v.minValue(1)),
+  sectionSuffix: v.nullable(designatorSchema),
+  sentence: v.nullable(designatorSchema),
+  subsection: v.nullable(designatorSchema),
+  unit: v.picklist(["article", "section"]),
+}) satisfies v.GenericSchema<ProvisionReference>;

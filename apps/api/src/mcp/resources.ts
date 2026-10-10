@@ -10,10 +10,14 @@ import {
 } from "@stll/api-contract";
 
 import { envBase } from "@/api/env-base";
+import type { DeploymentFeatureFlag } from "@/api/lib/deployment-feature";
+import type { FeatureId } from "@/api/lib/feature-access/registry";
 import documentUploadAppHtml from "@/api/mcp/apps/document-upload/generated/app.html.txt" with { type: "text" };
 import fileComparisonAppHtml from "@/api/mcp/apps/file-comparison/generated/app.html.txt" with { type: "text" };
 import type { McpMode } from "@/api/mcp/constants";
 import { DOCUMENT_UPLOAD_APP_RESOURCE_URI } from "@/api/mcp/document-file-upload";
+import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access";
+import type { McpFeatureAccessContext } from "@/api/mcp/feature-access";
 import {
   buildFeedbackWorkflowReference,
   FEEDBACK_WORKFLOW_REFERENCE_URI,
@@ -25,7 +29,7 @@ import {
   LEGISLATION_WORKFLOW_REFERENCE_URI,
 } from "@/api/mcp/legislation-workflow-reference";
 import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
-import { unlistedToolNamesIn } from "@/api/mcp/surface-tool-mentions";
+import { surfaceToolVocabulary } from "@/api/mcp/surface-tool-mentions";
 import {
   buildFieldReference,
   TEMPLATE_FIELD_REFERENCE_URI,
@@ -39,7 +43,12 @@ import {
   TEMPLATE_WORKFLOW_REFERENCE_URI,
 } from "@/api/mcp/template-workflow-reference";
 import { isMcpToolFeatureEnabled } from "@/api/mcp/tool-feature";
-import type { McpToolFeatureFlag } from "@/api/mcp/tool-types";
+import { unlistedToolNames } from "@/api/mcp/tool-mentions";
+
+import { isMcpAppAvailable } from "./app-policy";
+import caseLawResultsAppHtml from "./apps/case-law-results/generated/app.html.txt" with { type: "text" };
+import decisionReaderAppHtml from "./apps/decision-reader/generated/app.html.txt" with { type: "text" };
+import { CASE_LAW_RESULTS_APP, DECISION_READER_APP } from "./apps/manifest";
 
 /**
  * MCP resources are static, no-argument documents (the textbook fit for a
@@ -67,13 +76,17 @@ type StaticResource = {
    * it is neither listed nor readable while the gate is closed: the same
    * predicate, on both surfaces.
    */
-  feature?: McpToolFeatureFlag;
+  feature?: DeploymentFeatureFlag;
+  featureId?: FeatureId;
   /**
    * Whether this audience serves the resource at all, beyond the deployment
    * gate and the per-mode URI allowlist below. A reference that renders to
    * nothing on a surface is not a reference there.
    */
-  isServedInMode?: (mode: McpMode) => boolean;
+  isServedInMode?: (
+    mode: McpMode,
+    context?: McpFeatureAccessContext,
+  ) => boolean;
   /** Rendered for one audience; a reference may omit what that surface lacks. */
   read: (mode: McpMode) => string | Promise<string>;
   resourceMeta?: () => Record<string, unknown>;
@@ -94,14 +107,16 @@ const servedWhereItsToolsAreListed = (
   },
 ): StaticResource => ({
   ...resource,
-  isServedInMode: (mode) =>
-    unlistedToolNamesIn(`${resource.description}\n${resource.read(mode)}`, mode)
-      .length === 0,
+  isServedInMode: (mode, context) =>
+    unlistedToolNames(
+      `${resource.description}\n${resource.read(mode)}`,
+      surfaceToolVocabulary(mode, context),
+    ).length === 0,
 });
 
 const PRODUCT_IDENTITY_URI = "stella://about";
 
-export const STELLA_PRODUCT_IDENTITY = {
+const STELLA_PRODUCT_IDENTITY = {
   name: "stella",
   display_name: "stella",
   preferred_casing: "lowercase",
@@ -117,6 +132,37 @@ const buildProductIdentity = (): string =>
   JSON.stringify(STELLA_PRODUCT_IDENTITY, null, 2);
 
 const STATIC_RESOURCES: readonly StaticResource[] = [
+  {
+    uri: DECISION_READER_APP.uri,
+    name: "decision-reader",
+    title: "Decision reader",
+    description: "Read a case-law decision and its cited provisions.",
+    mimeType: MCP_APP_RESOURCE_MIME_TYPE,
+    listed: false,
+    read: () => decisionReaderAppHtml,
+    resourceMeta: () => ({
+      ui: {
+        csp: { connectDomains: [], resourceDomains: [] },
+        prefersBorder: true,
+      },
+    }),
+  },
+  {
+    uri: CASE_LAW_RESULTS_APP.uri,
+    name: "case-law-results",
+    title: "Case-law results",
+    description:
+      "Interactive results for case-law searches and identifier lookups.",
+    mimeType: MCP_APP_RESOURCE_MIME_TYPE,
+    listed: false,
+    read: () => caseLawResultsAppHtml,
+    resourceMeta: () => ({
+      ui: {
+        csp: { connectDomains: [], resourceDomains: [] },
+        prefersBorder: true,
+      },
+    }),
+  },
   {
     uri: PRODUCT_IDENTITY_URI,
     name: "stella-product-identity",
@@ -271,21 +317,37 @@ const MCP_RESOURCE_URIS_BY_MODE = {
 const isResourceServedInMode = (
   resource: StaticResource,
   mode: McpMode,
+  context: McpFeatureAccessContext | undefined,
 ): boolean => {
-  if (!isAvailable(resource)) {
+  if (
+    !isAvailable(resource) ||
+    !isMcpDescriptorFeatureEnabled({
+      context,
+      kind: "resources",
+      id: resource.uri,
+      featureId: resource.featureId,
+    })
+  ) {
     return false;
+  }
+  if (resource.uri.startsWith("ui://")) {
+    return isMcpAppAvailable({ uri: resource.uri, mode, context });
   }
   const served = MCP_RESOURCE_URIS_BY_MODE[mode];
   if (served !== "all" && !served.some((entry) => entry === resource.uri)) {
     return false;
   }
   const { isServedInMode } = resource;
-  return isServedInMode === undefined || isServedInMode(mode);
+  return isServedInMode === undefined || isServedInMode(mode, context);
 };
 
-export const listMcpResources = (mode: McpMode): Resource[] =>
+export const listMcpResources = (
+  mode: McpMode,
+  context?: McpFeatureAccessContext,
+): Resource[] =>
   STATIC_RESOURCES.filter(
-    (resource) => resource.listed && isResourceServedInMode(resource, mode),
+    (resource) =>
+      resource.listed && isResourceServedInMode(resource, mode, context),
   ).map(({ description, mimeType, name, title, uri }) => ({
     uri,
     name,
@@ -297,9 +359,10 @@ export const listMcpResources = (mode: McpMode): Resource[] =>
 export const readMcpResource = async (
   uri: string,
   mode: McpMode,
+  context?: McpFeatureAccessContext,
 ): Promise<ReadResourceResult> => {
   const resource = STATIC_RESOURCES.find((entry) => entry.uri === uri);
-  if (!resource || !isResourceServedInMode(resource, mode)) {
+  if (!resource || !isResourceServedInMode(resource, mode, context)) {
     throw new ProtocolError(
       ProtocolErrorCode.InvalidParams,
       `Unknown resource: ${uri}`,
@@ -317,4 +380,26 @@ export const readMcpResource = async (
       },
     ],
   };
+};
+
+export const scopeMcpResourceReferences = (
+  text: string,
+  {
+    mode,
+    context,
+  }: {
+    mode: McpMode;
+    context?: McpFeatureAccessContext | undefined;
+  },
+): string => {
+  const hiddenUris = STATIC_RESOURCES.filter(
+    (resource) => !isResourceServedInMode(resource, mode, context),
+  ).map((resource) => resource.uri);
+  if (!hiddenUris.some((uri) => text.includes(uri))) {
+    return text;
+  }
+  return text
+    .split(/(?<=[.!?])\s+/u)
+    .filter((sentence) => !hiddenUris.some((uri) => sentence.includes(uri)))
+    .join(" ");
 };

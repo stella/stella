@@ -17,18 +17,17 @@ describe("PDF worker runtime artifact", () => {
 
       writeFileSync(
         entrypoint,
-        `import { Result } from "better-result";
-import { isEncryptedPdf } from ${JSON.stringify(path.join(import.meta.dir, "pdf-utils.ts"))};
+        `import { isEncryptedPdf } from ${JSON.stringify(path.join(import.meta.dir, "pdf-utils.ts"))};
 
-const result = await isEncryptedPdf(new ArrayBuffer(0));
-if (!Result.isError(result)) {
+const result = await isEncryptedPdf({ bytes: new ArrayBuffer(0) });
+if (result.status !== "unreadable") {
   throw new Error("Expected empty PDF to fail parsing");
 }
-if (result.error.message.includes("Module not found")) {
-  throw new Error(result.error.message);
+if (result.cause.message.includes("Module not found")) {
+  throw new Error(result.cause.message);
 }
-if (!result.error.message.includes("pdf-worker error")) {
-  throw new Error(result.error.message);
+if (!result.cause.message.includes("pdf-worker error")) {
+  throw new Error(result.cause.message);
 }
 `,
       );

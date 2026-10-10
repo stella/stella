@@ -1,0 +1,5 @@
+{
+  "metric": "unclassified-realtime-write-capabilities",
+  "delta": 151,
+  "reason": "The list is introduced here: it records the write capabilities that predate the realtime declaration on handler configs (apps/api/src/lib/resource-set-realtime.registry.test.ts). From now on it only shrinks."
+}

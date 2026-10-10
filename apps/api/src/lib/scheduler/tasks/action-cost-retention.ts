@@ -1,4 +1,5 @@
 import { env } from "@/api/env";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
 import {
   ACTION_COST_RETENTION_BATCH_SIZE,
@@ -42,7 +43,7 @@ export const sweepActionCostRecords: SchedulerTask = async ({
   scheduleContinuation,
 }) => {
   if (
-    !env.FEATURE_ACTION_COST_RECORDS ||
+    !isDeploymentFeatureEnabled("FEATURE_ACTION_COST_RECORDS") ||
     env.ACTION_COST_RETENTION_DAYS === undefined
   ) {
     return;

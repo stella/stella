@@ -1,13 +1,14 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import { Temporal } from "@stll/time";
 
 import { entities, fields } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
+import type { SafeId } from "@/api/lib/branded-types";
 import { tConditionNode } from "@/api/lib/conditions/contract";
 import {
   buildFilterConditions,
@@ -15,6 +16,7 @@ import {
 } from "@/api/lib/entity-filters";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { brandValidatedPropertyId } from "@/api/lib/safe-id-boundaries";
 import { tViewSortSchema } from "@/api/lib/views-schema";
 
 const INTERNAL_DATE_IDS = ["_created-at", "_updated-at"] as const;
@@ -46,6 +48,7 @@ const config = {
     "endDatePropertyId supplies the end of a range. Filters and sorts follow " +
     "the same contract as the table views.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "covered", by: "list_tasks" },
   access: "read",
   body: calendarTasksBodySchema,
@@ -75,8 +78,17 @@ type CalendarTask = {
   fields: CalendarTaskField[];
 };
 
-const isBuiltInDatePropertyId = (propertyId: string): boolean =>
-  BUILT_IN_DATE_ID_SET.has(propertyId);
+type BuiltInDatePropertyId = (typeof BUILT_IN_DATE_IDS)[number];
+
+// Calendar windows select inclusive UTC days, independent of request offsets or DB timezone.
+type CalendarDayRange = {
+  from: Temporal.PlainDate;
+  to: Temporal.PlainDate;
+};
+
+const isBuiltInDatePropertyId = (
+  propertyId: string,
+): propertyId is BuiltInDatePropertyId => BUILT_IN_DATE_ID_SET.has(propertyId);
 
 const unique = (values: readonly string[]): string[] => [
   ...new Set(values.filter((value) => value.length > 0)),
@@ -118,51 +130,46 @@ const requiredDateValueToIsoDateTime = (value: Date | string): string => {
     .toString({ fractionalSecondDigits: 3 });
 };
 
-const dateExprForProperty = (propertyId: string) => {
+const dateExprForProperty = (propertyId: BuiltInDatePropertyId) => {
   switch (propertyId) {
     case "_created-at":
-      return sql`(${entities.createdAt})::date`;
+      return sql`(${entities.createdAt} AT TIME ZONE 'UTC')::date`;
     case "_updated-at":
-      return sql`(${entities.updatedAt})::date`;
+      return sql`(${entities.updatedAt} AT TIME ZONE 'UTC')::date`;
     case "_due-date":
-      return sql`(${entities.dueDate})::date`;
+      return sql`${entities.dueDate}`;
     case "_start-date":
-      return sql`(COALESCE(${entities.startAt}, ${entities.occurredAt}, ${entities.dueDate}::timestamptz))::date`;
+      return sql`COALESCE((${entities.startAt} AT TIME ZONE 'UTC')::date, (${entities.occurredAt} AT TIME ZONE 'UTC')::date, ${entities.dueDate})`;
     default:
-      return null;
+      propertyId satisfies never;
+      return panic(`Unhandled calendar date property: ${String(propertyId)}`);
   }
 };
 
-const builtInDateInRange = (
-  propertyId: string,
-  dateFrom: string,
-  dateTo: string,
-) => {
-  const dateExpr = dateExprForProperty(propertyId);
-  if (!dateExpr) {
+const builtInDateInRange = (propertyId: string, range: CalendarDayRange) => {
+  if (!isBuiltInDatePropertyId(propertyId)) {
     return null;
   }
-
-  return sql`${dateExpr} BETWEEN ${dateFrom}::date AND ${dateTo}::date`;
+  const dateExpr = dateExprForProperty(propertyId);
+  return sql`${dateExpr} BETWEEN ${range.from.toString()}::date AND ${range.to.toString()}::date`;
 };
 
 const customDateInRange = (
   propertyId: string,
-  dateFrom: string,
-  dateTo: string,
+  range: CalendarDayRange,
 ) => sql`EXISTS (
   SELECT 1 FROM ${fields}
   WHERE ${fields.workspaceId} = ${entities.workspaceId}
     AND ${fields.entityVersionId} = ${entities.currentVersionId}
     AND ${fields.propertyId} = ${propertyId}
     AND ${fields.content}->>'type' = 'date'
-    AND NULLIF(${fields.content}->>'value', '')::date BETWEEN ${dateFrom}::date AND ${dateTo}::date
+    AND NULLIF(${fields.content}->>'value', '')::date BETWEEN ${range.from.toString()}::date AND ${range.to.toString()}::date
 )`;
 
-const dateOnOrBefore = (propertyId: string, dateTo: string) => {
-  const dateExpr = dateExprForProperty(propertyId);
-  if (dateExpr) {
-    return sql`${dateExpr} <= ${dateTo}::date`;
+const dateOnOrBefore = (propertyId: string, dateTo: Temporal.PlainDate) => {
+  if (isBuiltInDatePropertyId(propertyId)) {
+    const dateExpr = dateExprForProperty(propertyId);
+    return sql`${dateExpr} <= ${dateTo.toString()}::date`;
   }
 
   return sql`EXISTS (
@@ -171,14 +178,14 @@ const dateOnOrBefore = (propertyId: string, dateTo: string) => {
       AND ${fields.entityVersionId} = ${entities.currentVersionId}
       AND ${fields.propertyId} = ${propertyId}
       AND ${fields.content}->>'type' = 'date'
-      AND NULLIF(${fields.content}->>'value', '')::date <= ${dateTo}::date
+      AND NULLIF(${fields.content}->>'value', '')::date <= ${dateTo.toString()}::date
   )`;
 };
 
-const dateOnOrAfter = (propertyId: string, dateFrom: string) => {
-  const dateExpr = dateExprForProperty(propertyId);
-  if (dateExpr) {
-    return sql`${dateExpr} >= ${dateFrom}::date`;
+const dateOnOrAfter = (propertyId: string, dateFrom: Temporal.PlainDate) => {
+  if (isBuiltInDatePropertyId(propertyId)) {
+    const dateExpr = dateExprForProperty(propertyId);
+    return sql`${dateExpr} >= ${dateFrom.toString()}::date`;
   }
 
   return sql`EXISTS (
@@ -187,31 +194,29 @@ const dateOnOrAfter = (propertyId: string, dateFrom: string) => {
       AND ${fields.entityVersionId} = ${entities.currentVersionId}
       AND ${fields.propertyId} = ${propertyId}
       AND ${fields.content}->>'type' = 'date'
-      AND NULLIF(${fields.content}->>'value', '')::date >= ${dateFrom}::date
+      AND NULLIF(${fields.content}->>'value', '')::date >= ${dateFrom.toString()}::date
   )`;
 };
 
 const buildCalendarDateConditions = ({
-  dateFrom,
+  range,
   datePropertyIds,
-  dateTo,
   endDatePropertyId,
 }: {
-  dateFrom: string;
+  range: CalendarDayRange;
   datePropertyIds: readonly string[];
-  dateTo: string;
   endDatePropertyId: string | undefined;
 }) => {
   const conditions = datePropertyIds.map((propertyId) => {
-    const builtIn = builtInDateInRange(propertyId, dateFrom, dateTo);
-    return builtIn ?? customDateInRange(propertyId, dateFrom, dateTo);
+    const builtIn = builtInDateInRange(propertyId, range);
+    return builtIn ?? customDateInRange(propertyId, range);
   });
 
   const primaryDatePropertyId = datePropertyIds.at(0);
   if (primaryDatePropertyId && endDatePropertyId) {
     const spanCondition = and(
-      dateOnOrBefore(primaryDatePropertyId, dateTo),
-      dateOnOrAfter(endDatePropertyId, dateFrom),
+      dateOnOrBefore(primaryDatePropertyId, range.to),
+      dateOnOrAfter(endDatePropertyId, range.from),
     );
     if (spanCondition) {
       conditions.push(spanCondition);
@@ -224,7 +229,25 @@ const buildCalendarDateConditions = ({
 const calendarTasks = createSafeHandler(
   config,
   async function* ({ body, safeDb, session, workspaceId }) {
-    if (body.dateFrom > body.dateTo) {
+    const { from, to } = yield* Result.try({
+      try: () => ({
+        from: Temporal.Instant.from(body.dateFrom),
+        to: Temporal.Instant.from(body.dateTo),
+      }),
+      catch: () =>
+        new HandlerError({
+          status: 400,
+          message: "Invalid calendar date range",
+        }),
+    });
+    const range = {
+      from: from.toZonedDateTimeISO("UTC").toPlainDate(),
+      to: to.toZonedDateTimeISO("UTC").toPlainDate(),
+    } satisfies CalendarDayRange;
+    if (
+      Temporal.Instant.compare(from, to) > 0 ||
+      Temporal.PlainDate.compare(range.from, range.to) > 0
+    ) {
       return Result.err(
         new HandlerError({
           status: 400,
@@ -234,16 +257,27 @@ const calendarTasks = createSafeHandler(
     }
 
     const datePropertyIds = unique(body.datePropertyIds);
-    const fieldPropertyIds = unique([
+    const fieldPropertyIds: SafeId<"property">[] = [];
+    for (const requestedId of unique([
       ...datePropertyIds.filter((id) => !isBuiltInDatePropertyId(id)),
       ...(body.endDatePropertyId &&
       !isBuiltInDatePropertyId(body.endDatePropertyId)
         ? [body.endDatePropertyId]
         : []),
-    ]);
+    ])) {
+      const propertyId = brandValidatedPropertyId(requestedId);
+      if (!propertyId) {
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "Invalid calendar date property",
+          }),
+        );
+      }
+      fieldPropertyIds.push(propertyId);
+    }
     const dateConditions = buildCalendarDateConditions({
-      dateFrom: body.dateFrom,
-      dateTo: body.dateTo,
+      range,
       datePropertyIds,
       endDatePropertyId: body.endDatePropertyId,
     });
@@ -328,7 +362,7 @@ const calendarTasks = createSafeHandler(
                   .where(
                     and(
                       eq(fields.workspaceId, workspaceId),
-                      sql`${fields.propertyId} = ANY(${fieldPropertyIds}::uuid[])`,
+                      inArray(fields.propertyId, fieldPropertyIds),
                       sql`${fields.content}->>'type' = 'date'`,
                     ),
                   ),

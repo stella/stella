@@ -1,0 +1,5 @@
+{
+  "metric": "throw-outside-boundary",
+  "delta": 2,
+  "reason": "apps/api/src/handlers/chat/tools/workspace-tools.ts: the field tool refuses an inactive matter and a conversation without an audit recorder with ChatToolError, the tool runner's error contract, like the file's existing refusals."
+}

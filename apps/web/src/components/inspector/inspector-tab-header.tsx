@@ -113,8 +113,8 @@ export const InspectorTabHeader = ({
         </Button>
         {rename?.active ? (
           <InlineEdit
+            className="text-xs font-medium"
             action={rename.action}
-            inputClassName="w-40 text-xs"
             onCancel={rename.onCancel}
             onChange={rename.onChange}
             onCommit={rename.onCommit}
@@ -124,7 +124,7 @@ export const InspectorTabHeader = ({
         ) : (
           <span
             className={cn(
-              "truncate text-xs font-medium",
+              "overflow-hidden text-xs font-medium text-ellipsis whitespace-pre",
               onStartRename !== undefined && "cursor-text",
             )}
             onContextMenu={onLabelContextMenu}

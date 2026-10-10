@@ -7,8 +7,12 @@ import {
   expenseCategorySchema,
   timeEntryStatusSchema,
 } from "@/api/db/billing-validators";
+import {
+  entityContextId,
+  entityContextReference,
+} from "@/api/db/entity-feature-policies";
 import { expenses } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tPaginationCursor, tSafeId, tUserId } from "@/api/lib/custom-schema";
@@ -46,6 +50,8 @@ const config = {
     "item carries the amount in minor currency units, currency, category, " +
     "markup percentage, status, and the recording user's name.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  featureAccess: { featureId: "time-billing", type: "required" },
   mcp: {
     type: "capability",
     readClass: "tenant",
@@ -134,7 +140,8 @@ const readExpenses = createSafeHandler(
           .select({
             id: expenses.id,
             userId: expenses.userId,
-            matterId: expenses.matterId,
+            matterId: entityContextId(expenses.matterId),
+            matterReference: entityContextReference(expenses.matterId),
             dateIncurred: expenses.dateIncurred,
             amount: expenses.amount,
             currency: expenses.currency,
@@ -195,6 +202,7 @@ const readExpenses = createSafeHandler(
         id: row.id,
         userId: row.userId,
         matterId: row.matterId,
+        matterReference: row.matterReference,
         dateIncurred: row.dateIncurred,
         amount: row.amount,
         currency: row.currency,

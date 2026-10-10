@@ -4,17 +4,19 @@ import { t } from "elysia";
 import type { Static } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
+import { resultTx } from "@/api/db/safe-db";
 import { clauseVariants } from "@/api/db/schema";
 import type { AuditRecorder, FieldDiffs } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { clauseBodySchema } from "@/api/lib/clauses/body-schema";
 import { validateClauseBodyDirectives } from "@/api/lib/clauses/clause-directives";
 import { tDefaultVarchar } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { LIMITS } from "@/api/lib/limits";
 import { pickDefined } from "@/api/lib/pick-defined";
+
+import { insertClauseVariants } from "./variant-insert";
+import { clauseVariantReadLimit } from "./variant-read";
 
 // ── Schemas ─────────────────────────────────────────
 
@@ -82,8 +84,13 @@ export const listVariantsHandler = async function* ({
   }
 
   const result = yield* Result.await(
-    safeDb((tx) =>
-      tx.query.clauseVariants.findMany({
+    safeDb(async (tx) => {
+      const limit = await clauseVariantReadLimit({
+        tx,
+        organizationId,
+        clauseId,
+      });
+      return await tx.query.clauseVariants.findMany({
         where: {
           clauseId: { eq: clauseId },
           organizationId: { eq: organizationId },
@@ -96,10 +103,10 @@ export const listVariantsHandler = async function* ({
           createdAt: true,
           updatedAt: true,
         },
-        orderBy: { sortOrder: "asc" },
-        limit: LIMITS.clauseVariantsPerClause,
-      }),
-    ),
+        orderBy: { sortOrder: "asc", createdAt: "asc", id: "asc" },
+        limit,
+      });
+    }),
   );
 
   return Result.ok({ variants: result });
@@ -124,78 +131,29 @@ export const createVariantHandler = async function* ({
 }: CreateVariantProps) {
   yield* validateClauseBodyDirectives(body.body);
 
-  const clauseResult = await verifyClauseOwnership(
-    safeDb,
-    clauseId,
-    organizationId,
-  );
-
-  if (Result.isError(clauseResult)) {
-    return yield* Result.err(clauseResult.error);
-  }
-
-  if (!clauseResult.value) {
-    return Result.err(
-      new HandlerError({ status: 404, message: "Clause not found" }),
-    );
-  }
-
-  const existingCount = yield* Result.await(
-    safeDb((tx) =>
-      tx.$count(clauseVariants, eq(clauseVariants.clauseId, clauseId)),
+  const inserted = yield* Result.await(
+    resultTx(
+      safeDb,
+      async (tx) =>
+        await insertClauseVariants({
+          tx,
+          organizationId,
+          variants: [{ clauseId, label: body.label, body: body.body }],
+          recordAuditEvent,
+        }),
     ),
   );
-
-  if (existingCount >= LIMITS.clauseVariantsPerClause) {
-    return Result.err(
-      new HandlerError({
-        status: 400,
-        message: "Variant limit reached for this clause",
-      }),
-    );
-  }
-
-  const inserted = yield* Result.await(
-    safeDb(async (tx) => {
-      const [row] = await tx
-        .insert(clauseVariants)
-        .values({
-          id: createSafeId<"clauseVariant">(),
-          organizationId,
-          clauseId,
-          label: body.label,
-          body: body.body,
-        })
-        .returning({
-          id: clauseVariants.id,
-          label: clauseVariants.label,
-          sortOrder: clauseVariants.sortOrder,
-          createdAt: clauseVariants.createdAt,
-        });
-
-      if (row) {
-        await recordAuditEvent(tx, {
-          action: AUDIT_ACTION.CREATE,
-          resourceType: AUDIT_RESOURCE_TYPE.CLAUSE_VARIANT,
-          resourceId: row.id,
-          changes: {
-            created: {
-              old: null,
-              new: { clauseId, label: row.label },
-            },
-          },
-        });
-      }
-
-      return row;
-    }),
-  );
-
-  if (!inserted) {
+  const row = inserted.at(0);
+  if (!row) {
     panic("Failed to create clause variant");
   }
 
-  return Result.ok(inserted);
+  return Result.ok({
+    id: row.id,
+    label: row.label,
+    sortOrder: row.sortOrder,
+    createdAt: row.createdAt,
+  });
 };
 
 // ── Update ──────────────────────────────────────────

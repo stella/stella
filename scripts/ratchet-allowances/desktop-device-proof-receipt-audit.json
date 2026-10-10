@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 2,
+  "reason": "ephemeral replay receipts; auth events audited at link lifecycle"
+}

@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { issueDesktopAccountGrant } from "@/api/lib/auth";
 import { DESKTOP_ACCOUNT_PERMISSION } from "@/api/lib/business-registries/desktop/config";
 import {
@@ -14,10 +14,16 @@ import {
 export default createSafeRootHandler(
   {
     permissions: DESKTOP_ACCOUNT_PERMISSION,
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "auth_plumbing" },
     body: t.Object(
       {
         correlationId: t.String({ format: "uuid" }),
+        deviceJkt: t.String({
+          minLength: 43,
+          maxLength: 43,
+          pattern: "^[A-Za-z0-9_-]{43}$",
+        }),
         verifierHash: t.String({
           minLength: 64,
           maxLength: 64,

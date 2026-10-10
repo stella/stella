@@ -1,4 +1,3 @@
-/* oxlint-disable typescript-eslint/promise-function-async -- fetch mock callbacks return Promise.resolve without being async */
 import {
   afterAll,
   afterEach,
@@ -10,6 +9,9 @@ import {
   test,
 } from "bun:test";
 
+/* oxlint-disable typescript/promise-function-async -- fetch mock callbacks return Promise.resolve without being async */
+import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
+
 import {
   buildSkUsDecision,
   skUsAdapter,
@@ -18,7 +20,15 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/sk-us";
 import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
+import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
 import { errorTag } from "@/api/lib/errors/error-tag";
+import {
+  isReadRefusal,
+  READ_OUTCOME_METADATA_KEY,
+  type ReadRefusal,
+  readAbsent,
+  readPresent,
+} from "@/api/lib/errors/read-outcome";
 import {
   AdapterFetchError,
   UNPERSISTABLE_DECISION_FIELDS,
@@ -28,6 +38,7 @@ import { readGzipJson } from "@/api/lib/gzip-json";
 import {
   decodeSourceRawEnvelope,
   encodeSourceRawEnvelope,
+  type IngestionResult,
   listingIdentityKey,
   SOURCE_DOCUMENT_ID_MAX_LENGTH,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
@@ -37,6 +48,32 @@ import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry"
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 const reconciliation = requireReconciliation(skUsAdapter);
+
+/**
+ * The stored refusal marker, typed as the stored shape: metadata values are
+ * branded plain text, so the narrowed metadata value cannot be compared with
+ * a literal directly.
+ */
+const storedRefusal = (decision: IngestionResult): ReadRefusal => {
+  const marker = decision.metadata[READ_OUTCOME_METADATA_KEY];
+  if (!isReadRefusal(marker)) {
+    throw new Error("expected a stored refusal");
+  }
+  return marker;
+};
+
+/**
+ * Whether the reconciliation walk reads this held row again: its row states
+ * a value the adapter's `recheckHeld` rule names.
+ */
+const readAgainByReconciliation = (decision: IngestionResult): boolean => {
+  const recheck = reconciliation.recheckHeld;
+  if (recheck === undefined) {
+    return false;
+  }
+  const stated = decision.metadata[recheck.metadataKey];
+  return recheck.values.some((value) => value === stated);
+};
 
 const SEARCH_PATH = "/o/v1/dms/search";
 const CONTENT_PATH = "/o/v1/dms/content";
@@ -173,7 +210,9 @@ type DownloadStub =
   | { type: "not-a-pdf" }
   | { type: "status"; status: number }
   /** The request fails before any response, as a dropped connection does. */
-  | { type: "fails"; error: Error };
+  | { type: "fails"; error: Error }
+  /** A 200 whose body resets after its first bytes. */
+  | { type: "body-resets" };
 
 type MockOptions = {
   /** Listing responses, one per request, in order. */
@@ -184,9 +223,63 @@ type MockOptions = {
   onSearch?: (body: SearchBody, headers: Headers) => void;
   /** Judges the per-docket facet query reports as dissenting. */
   dissenters?: readonly string[];
-  /** Every supplementary surface answers nothing, as this service does under load. */
-  supplementaryUnavailable?: boolean;
+  /** How each supplementary surface answers; unnamed ones serve their response. */
+  supplementary?: Partial<Record<SupplementarySurface, SurfaceAnswer>>;
   collection?: SearchStub;
+};
+
+/** The responses served for one decision beside its listing row and its file. */
+const SUPPLEMENTARY_SURFACES = [
+  "content",
+  "facets",
+  "collection",
+  "file",
+  "codelist",
+] as const;
+
+type SupplementarySurface = (typeof SUPPLEMENTARY_SURFACES)[number];
+
+/** How a surface answers in place of the response it serves. */
+type SurfaceAnswer =
+  | { type: "status"; status: number }
+  | { type: "empty-200" }
+  | { type: "timeout" };
+
+/** The answers that are failures to read, not the service stating an absence. */
+const FAILED_READS = [
+  { type: "status", status: 500 },
+  { type: "status", status: 204 },
+  { type: "empty-200" },
+  { type: "timeout" },
+] as const satisfies readonly SurfaceAnswer[];
+
+const surfaceAnswer = (
+  answer: SurfaceAnswer | undefined,
+  served: () => Response,
+): Promise<Response> => {
+  if (answer === undefined) {
+    return Promise.resolve(served());
+  }
+  switch (answer.type) {
+    case "status":
+      return Promise.resolve(
+        new Response(answer.status === 204 ? null : "", {
+          status: answer.status,
+        }),
+      );
+    case "empty-200":
+      return Promise.resolve(new Response("", { headers: JSON_HEADERS }));
+    case "timeout":
+      return Promise.reject(
+        new DOMException("The operation timed out.", "TimeoutError"),
+      );
+    default: {
+      const exhaustive: never = answer;
+      throw new Error(
+        `unhandled surface answer: ${JSON.stringify(exhaustive)}`,
+      );
+    }
+  }
 };
 
 /**
@@ -219,6 +312,18 @@ const downloadResponse = (stub: DownloadStub): Response => {
       return new Response(null, { status: stub.status });
     case "fails":
       throw stub.error;
+    case "body-resets":
+      return new Response(
+        new ReadableStream<Uint8Array>({
+          start: (controller) => {
+            controller.enqueue(PDF_BYTES.slice(0, 8));
+          },
+          pull: (controller) => {
+            controller.error(new TypeError("Connection reset by peer"));
+          },
+        }),
+        { headers: { "Content-Type": "application/pdf" } },
+      );
     default: {
       const exhaustive: never = stub;
       throw new Error(`unhandled download stub: ${JSON.stringify(exhaustive)}`);
@@ -271,31 +376,28 @@ const mockFetch = ({
   onSearch,
   search,
   searchFor,
-  supplementaryUnavailable = false,
+  supplementary = {},
   collection = { type: "page", documents: [], numFound: 0 },
 }: MockOptions): MockHandle => {
   let searchCall = 0;
   let downloadCall = 0;
   let facetCall = 0;
-  const unavailable = () => new Response(null, { status: 204 });
   globalThis.fetch = asFetchMock(
     (input: string | URL | Request, init?: RequestInit) => {
       const url = new URL(input instanceof Request ? input.url : String(input));
       if (url.pathname === SEARCH_PATH) {
         const body = parseSearchBody(init);
         if (body.docType === "USSR_ZNAU") {
-          return Promise.resolve(
-            supplementaryUnavailable
-              ? unavailable()
-              : searchResponse(collection),
+          return surfaceAnswer(supplementary.collection, () =>
+            searchResponse(collection),
           );
         }
         if (isFacetQuery(body)) {
           facetCall += 1;
-          return Promise.resolve(
-            supplementaryUnavailable
-              ? unavailable()
-              : new Response(facetsBody(dissenters), { headers: JSON_HEADERS }),
+          return surfaceAnswer(
+            supplementary.facets,
+            () =>
+              new Response(facetsBody(dissenters), { headers: JSON_HEADERS }),
           );
         }
         onSearch?.(body, new Headers(init?.headers));
@@ -310,29 +412,27 @@ const mockFetch = ({
         );
       }
       if (url.pathname === CONTENT_PATH) {
-        return Promise.resolve(
-          supplementaryUnavailable
-            ? unavailable()
-            : new Response(
-                JSON.stringify({
-                  content: Buffer.from(DOCUMENT_XHTML).toString("base64"),
-                }),
-                { headers: JSON_HEADERS },
-              ),
+        return surfaceAnswer(
+          supplementary.content,
+          () =>
+            new Response(
+              JSON.stringify({
+                content: Buffer.from(DOCUMENT_XHTML).toString("base64"),
+              }),
+              { headers: JSON_HEADERS },
+            ),
         );
       }
       if (url.pathname === CODELIST_PATH) {
-        return Promise.resolve(
-          supplementaryUnavailable
-            ? unavailable()
-            : new Response(CODELIST_BODY, { headers: JSON_HEADERS }),
+        return surfaceAnswer(
+          supplementary.codelist,
+          () => new Response(CODELIST_BODY, { headers: JSON_HEADERS }),
         );
       }
       if (url.pathname.startsWith(COURT_FILE_PREFIX)) {
-        return Promise.resolve(
-          supplementaryUnavailable
-            ? unavailable()
-            : new Response(COURT_FILE_BODY, { headers: JSON_HEADERS }),
+        return surfaceAnswer(
+          supplementary.file,
+          () => new Response(COURT_FILE_BODY, { headers: JSON_HEADERS }),
         );
       }
       if (url.pathname.startsWith(DOWNLOAD_PREFIX)) {
@@ -883,14 +983,16 @@ describe("sk-us buildDecision", () => {
         collectionListing: async ({ caseNumber, decisionDate }) => {
           expect(caseNumber).toBe(PLENARY_OPINION.mkRSAPNumberOfFile);
           expect(decisionDate).toBe("2020-03-12");
-          return await Promise.resolve(collectionJson);
+          return await Promise.resolve(readPresent(collectionJson));
         },
         facets: async () =>
           await Promise.resolve(
-            JSON.stringify({ documents: [PLENARY_OPINION], numFound: 1 }),
+            readPresent(
+              JSON.stringify({ documents: [PLENARY_OPINION], numFound: 1 }),
+            ),
           ),
-        courtFile: async () => await Promise.resolve(undefined),
-        codelist: async () => await Promise.resolve(undefined),
+        courtFile: async () => await Promise.resolve(readAbsent("http-404")),
+        codelist: async () => await Promise.resolve(readAbsent("http-404")),
       },
     });
     if (built.type !== "built") {
@@ -964,68 +1066,32 @@ describe("sk-us buildDecision", () => {
     });
   });
 
-  test.each([204, 500])(
-    "collection listing failure (%s) remains visible beside the publisher inclusion flag",
-    async (status) => {
-      const logs = installRecordingLogger();
-      try {
-        for (const [includeToZnaU, publicationStatus] of [
-          [true, "selected"],
-          [false, "not_included"],
-        ] as const) {
-          mockFetch({ search: [], collection: { type: "status", status } });
-          const built = await buildSkUsDecision({
-            ...PLENARY_OPINION,
-            mkIncludeToZnaU: includeToZnaU,
-          });
-          if (built.type !== "built") {
-            throw new Error(`expected a built decision, got ${built.type}`);
-          }
-          expect(
-            Bun.deepEquals(built.decision.metadata["publishedInCollection"], {
-              status: publicationStatus,
-              reason: "unavailable",
-            }),
-          ).toBe(true);
-          expect(
-            decodeSourceRawEnvelope(built.decision.sourceRaw ?? "")?.[
-              "collection-listing"
-            ],
-          ).toBeUndefined();
-        }
-        expect(
-          logs
-            .at("WARN")
-            .filter(
-              ({ message }) =>
-                message === "case_law.ingestion.collection_fetch_failed",
-            ),
-        ).toHaveLength(2);
-        expect(
-          logs
-            .at("WARN")
-            .filter(
-              ({ message }) =>
-                message === "case_law.ingestion.collection_fetch_failed",
-            )
-            .map(({ attributes }) => attributes),
-        ).toEqual([
-          expect.objectContaining({
-            adapterKey: "sk-us",
-            caseNumber: PLENARY_OPINION.mkRSAPNumberOfFile,
-            reason: "unavailable",
-          }),
-          expect.objectContaining({
-            adapterKey: "sk-us",
-            caseNumber: PLENARY_OPINION.mkRSAPNumberOfFile,
-            reason: "unavailable",
-          }),
-        ]);
-      } finally {
-        logs.restore();
+  test("a collection listing the service states nothing for stays visible beside the publisher inclusion flag", async () => {
+    for (const [includeToZnaU, publicationStatus] of [
+      [true, "selected"],
+      [false, "not_included"],
+    ] as const) {
+      mockFetch({ search: [], collection: { type: "status", status: 404 } });
+      const built = await buildSkUsDecision({
+        ...PLENARY_OPINION,
+        mkIncludeToZnaU: includeToZnaU,
+      });
+      if (built.type !== "built") {
+        throw new Error(`expected a built decision, got ${built.type}`);
       }
-    },
-  );
+      expect(
+        Bun.deepEquals(built.decision.metadata["publishedInCollection"], {
+          status: publicationStatus,
+          reason: "unavailable",
+        }),
+      ).toBe(true);
+      expect(
+        decodeSourceRawEnvelope(built.decision.sourceRaw ?? "")?.[
+          "collection-listing"
+        ],
+      ).toBeUndefined();
+    }
+  });
 
   test("the judges the source states structurally reach the row", async () => {
     mockFetch({ search: [], dissenters: ["Peter Straka"] });
@@ -1105,22 +1171,232 @@ describe("sk-us buildDecision", () => {
     ).toBe(true);
   });
 
-  test("a decision the supplementary surfaces answer nothing for still builds", async () => {
-    mockFetch({ search: [], supplementaryUnavailable: true });
+  /** The envelope part each per-decision surface is kept as. */
+  const SURFACE_PART = {
+    content: "document",
+    facets: "facets",
+    collection: "collection-listing",
+    file: "file",
+    codelist: "codelists",
+  } as const satisfies Record<SupplementarySurface, string>;
 
-    const outcome = await reconciliation.buildDecision(PLENARY_OPINION);
-    if (outcome.type !== "built") {
-      throw new Error(`expected a built decision, got ${outcome.type}`);
+  const PER_DECISION_SURFACES = SUPPLEMENTARY_SURFACES.filter(
+    (surface) => surface !== "codelist",
+  );
+
+  test.each(
+    PER_DECISION_SURFACES.flatMap((surface) =>
+      FAILED_READS.map((answer) => [surface, answer] as const),
+    ),
+  )(
+    "a %s read that fails is an unavailable unread item (%o)",
+    async (surface, answer) => {
+      mockFetch({ search: [], supplementary: { [surface]: answer } });
+      const built = await buildSkUsDecision(PLENARY_OPINION);
+      expect(built).toMatchObject({
+        type: "unread",
+        part: SURFACE_PART[surface],
+        item: {
+          listing: {
+            sourceDocumentId: PLENARY_OPINION.documentId,
+            isListingOnly: true,
+          },
+          outcome: { type: "unavailable" },
+        },
+      });
+      // Nothing the failed read would have stated is on the row.
+      const parts = Object.keys(
+        decodeSourceRawEnvelope(
+          built.type === "unread" ? (built.item.listing.sourceRaw ?? "") : "",
+        ) ?? {},
+      );
+      expect(parts).not.toContain(SURFACE_PART[surface]);
+      expect(parts).not.toContain("document-file");
+
+      mockFetch({ search: [], supplementary: { [surface]: answer } });
+      expect(await reconciliation.buildDecision(PLENARY_OPINION)).toEqual({
+        type: "detail-unavailable",
+      });
+    },
+  );
+
+  test.each([401, 403, 451] as const)(
+    "a refused text read (%d) is a refused unread item, scope document",
+    async (status) => {
+      mockFetch({
+        search: [],
+        supplementary: { content: { type: "status", status } },
+      });
+      expect(await buildSkUsDecision(PLENARY_OPINION)).toMatchObject({
+        type: "unread",
+        part: "document",
+        item: {
+          listing: { isListingOnly: true },
+          outcome: {
+            type: "refused",
+            status,
+            scope: "document",
+            cause: { kind: "http-status", retryAfter: null },
+          },
+        },
+      });
+    },
+  );
+
+  const PART_SURFACES = ["facets", "collection", "file", "codelist"] as const;
+
+  test.each(
+    PART_SURFACES.flatMap((surface) =>
+      ([401, 403] as const).map((status) => [surface, status] as const),
+    ),
+  )(
+    "a refused %s read (%d) builds without the part and types the refusal",
+    async (surface, status) => {
+      mockFetch({
+        search: [],
+        supplementary: { [surface]: { type: "status", status } },
+      });
+      const built = await buildSkUsDecision(PLENARY_OPINION);
+      expect(built.type).toBe("built");
+      if (built.type !== "built") {
+        return;
+      }
+      expect(storedRefusal(built.decision)).toEqual({
+        type: "refused",
+        status,
+        scope: "part",
+        cause: { kind: "http-status", retryAfter: null },
+      });
+      const { refusal, ...served } =
+        decodeSourceRawEnvelope(built.decision.sourceRaw ?? "") ?? {};
+      expect(Object.keys(served)).not.toContain(SURFACE_PART[surface]);
+      expect(JSON.parse(refusal ?? "null")).toEqual(
+        storedRefusal(built.decision),
+      );
+      // The row holds its document, so only the recheck rule reads it again.
+      expect(built.decision.isListingOnly).not.toBe(true);
+      expect(readAgainByReconciliation(built.decision)).toBe(true);
+
+      // The same part stated absent stores the same responses without the
+      // refusal, so the stored bytes, and with them the fingerprint, differ.
+      mockFetch({
+        search: [],
+        supplementary: { [surface]: { type: "status", status: 404 } },
+      });
+      const absent = await buildSkUsDecision(PLENARY_OPINION);
+      if (absent.type !== "built") {
+        throw new Error(`expected a built decision, got ${absent.type}`);
+      }
+      expect(absent.decision.metadata[READ_OUTCOME_METADATA_KEY]).toBe(
+        undefined,
+      );
+      expect(decodeSourceRawEnvelope(absent.decision.sourceRaw ?? "")).toEqual(
+        served,
+      );
+      expect(absent.decision.sourceRaw).not.toBe(built.decision.sourceRaw);
+      expect(absent.decision.rawHash).not.toBe(built.decision.rawHash);
+      for (const { decision } of [built, absent]) {
+        expect(decision.rawHash).toBe(
+          sourceFingerprint({
+            sourceRaw: decision.sourceRaw ?? "",
+            sourceRawObjects: decision.sourceRawObjects,
+          }),
+        );
+      }
+      expect(readAgainByReconciliation(absent.decision)).toBe(false);
+    },
+  );
+
+  test("a served decision carries no read-outcome marker", async () => {
+    mockFetch({ search: [] });
+    const built = await buildSkUsDecision(PLENARY_OPINION);
+    if (built.type !== "built") {
+      throw new Error(`expected a built decision, got ${built.type}`);
     }
-    // A surface the service will not serve leaves its part out rather than
-    // halting the crawl: the listing row still names the decision, and the
-    // envelope states exactly what arrived.
     expect(
-      Object.keys(
-        decodeSourceRawEnvelope(outcome.decision.sourceRaw ?? "") ?? {},
-      ),
-    ).toEqual(["listing"]);
+      Object.hasOwn(built.decision.metadata, READ_OUTCOME_METADATA_KEY),
+    ).toBe(false);
+    expect(readAgainByReconciliation(built.decision)).toBe(false);
   });
+
+  test.each(["content", "facets", "file", "codelist"] as const)(
+    "a %s read answering 429 ends the cycle as the publisher's typed refusal after one request",
+    async (surface) => {
+      let requests = 0;
+      mockFetch({
+        search: [],
+        supplementary: { [surface]: { type: "status", status: 429 } },
+      });
+      const served = globalThis.fetch;
+      globalThis.fetch = asFetchMock(
+        async (input: string | URL | Request, init?: RequestInit) => {
+          requests += 1;
+          return await served(input, init);
+        },
+      );
+      const rejection = await rejectionOf(buildSkUsDecision(PLENARY_OPINION));
+      expect(rejection).toBeInstanceOf(AdapterFetchError);
+      expect(
+        rejection instanceof AdapterFetchError
+          ? { stopKind: rejection.stopKind, httpStatus: rejection.httpStatus }
+          : null,
+      ).toEqual({
+        stopKind: INGESTION_STOP_KIND.PUBLISHER_REFUSAL,
+        httpStatus: 429,
+      });
+      // No read after the refusal: the codelist is read first, then the text.
+      expect(requests).toBeLessThanOrEqual(
+        { codelist: 1, content: 2, facets: 3, file: 5 }[surface],
+      );
+    },
+  );
+
+  test.each(FAILED_READS)(
+    "a codelist read that fails is an unavailable unread item (%o)",
+    async (answer) => {
+      mockFetch({ search: [], supplementary: { codelist: answer } });
+      expect(await buildSkUsDecision(PLENARY_OPINION)).toMatchObject({
+        type: "unread",
+        part: "codelist",
+        item: {
+          listing: { isListingOnly: true },
+          outcome: { type: "unavailable" },
+        },
+      });
+
+      mockFetch({ search: [], supplementary: { codelist: answer } });
+      expect(await reconciliation.buildDecision(PLENARY_OPINION)).toEqual({
+        type: "detail-unavailable",
+      });
+    },
+  );
+
+  test.each(SUPPLEMENTARY_SURFACES)(
+    "a %s surface that states it holds nothing builds without its part",
+    async (surface) => {
+      mockFetch({
+        search: [],
+        supplementary: { [surface]: { type: "status", status: 404 } },
+      });
+
+      const outcome = await reconciliation.buildDecision(PLENARY_OPINION);
+      if (outcome.type !== "built") {
+        throw new Error(`expected a built decision, got ${outcome.type}`);
+      }
+      const parts = Object.keys(
+        decodeSourceRawEnvelope(outcome.decision.sourceRaw ?? "") ?? {},
+      );
+      expect(parts).not.toContain(SURFACE_PART[surface]);
+      expect(parts.toSorted()).toEqual(
+        [
+          ...Object.values(SURFACE_PART).filter(
+            (part) => part !== SURFACE_PART[surface],
+          ),
+          "listing",
+        ].toSorted(),
+      );
+    },
+  );
 
   test("the identity the walk keys is the identity the build stores", async () => {
     mockFetch({ search: [] });
@@ -1271,6 +1547,202 @@ describe("sk-us crawl and reconciliation dispose of a missing document different
     );
   });
 
+  test("a document whose text read fails is reported as an unread item beside the page's other decisions", async () => {
+    mockFetch({
+      search: [
+        {
+          type: "page",
+          documents: [PLENARY_OPINION, CHAMBER_RESOLUTION],
+          numFound: 2,
+        },
+      ],
+    });
+    const served = globalThis.fetch;
+    globalThis.fetch = asFetchMock(
+      async (input: string | URL | Request, init?: RequestInit) => {
+        const url = new URL(
+          input instanceof Request ? input.url : String(input),
+        );
+        if (
+          url.pathname === CONTENT_PATH &&
+          typeof init?.body === "string" &&
+          init.body.includes(CHAMBER_RESOLUTION.documentId)
+        ) {
+          return new Response("", { status: 500 });
+        }
+        return await served(input, init);
+      },
+    );
+
+    const page = (await skUsAdapter.fetchPage("2021:0", {})).unwrap();
+
+    expect(
+      page.decisions.map(({ sourceDocumentId }) => sourceDocumentId),
+    ).toEqual([PLENARY_OPINION.documentId]);
+    expect(
+      page.unreadItems?.map(({ listing, outcome }) => ({
+        sourceDocumentId: listing.sourceDocumentId,
+        isListingOnly: listing.isListingOnly,
+        outcome,
+      })),
+    ).toEqual([
+      {
+        sourceDocumentId: CHAMBER_RESOLUTION.documentId,
+        isListingOnly: true,
+        outcome: {
+          type: "unavailable",
+          cause: { kind: "status", status: 500 },
+        },
+      },
+    ]);
+  });
+
+  test.each([
+    ["500", { type: "status", status: 500 }],
+    ["204", { type: "status", status: 204 }],
+    [
+      "timeout",
+      {
+        type: "fails",
+        error: new DOMException("The operation timed out.", "TimeoutError"),
+      },
+    ],
+  ] as const)(
+    "a document file read answering %s is an unavailable unread item that keeps every other response",
+    async (_label, download) => {
+      mockFetch({
+        search: [{ type: "page", documents: [PLENARY_OPINION], numFound: 1 }],
+        download,
+      });
+
+      const page = (await skUsAdapter.fetchPage("2021:0", {})).unwrap();
+
+      expect(page.decisions).toEqual([]);
+      const unread = page.unreadItems?.at(0);
+      expect(unread?.outcome.type).toBe("unavailable");
+      expect(unread?.listing).toMatchObject({
+        sourceDocumentId: PLENARY_OPINION.documentId,
+        isListingOnly: true,
+      });
+      // Listing-only: the pipeline keeps a stored row's detail over it,
+      // and a never-stored row keeps every response that was read.
+      expect(
+        Object.keys(
+          decodeSourceRawEnvelope(unread?.listing.sourceRaw ?? "") ?? {},
+        ),
+      ).toContain("document");
+      expect(unread?.listing.sourceRawObjects).toBeUndefined();
+    },
+  );
+
+  test.each([401, 403] as const)(
+    "a refused document file (%d) is a refused unread item, scope document",
+    async (status) => {
+      mockFetch({
+        search: [{ type: "page", documents: [PLENARY_OPINION], numFound: 1 }],
+        download: { type: "status", status },
+      });
+
+      const page = (await skUsAdapter.fetchPage("2021:0", {})).unwrap();
+
+      expect(page.decisions).toEqual([]);
+      expect(page.unreadItems?.map(({ outcome }) => outcome)).toEqual([
+        {
+          type: "refused",
+          status,
+          scope: "document",
+          cause: { kind: "http-status", retryAfter: null },
+        },
+      ]);
+    },
+  );
+
+  test("a document file answering 429 fails the page as the publisher's typed refusal", async () => {
+    mockFetch({
+      search: [{ type: "page", documents: [PLENARY_OPINION], numFound: 1 }],
+      download: { type: "status", status: 429 },
+    });
+
+    const page = await skUsAdapter.fetchPage("2021:0", {});
+
+    expect(page.isErr()).toBe(true);
+    if (page.isOk()) {
+      return;
+    }
+    expect(page.error.httpStatus).toBe(429);
+    expect(page.error.stopKind).toBe(INGESTION_STOP_KIND.PUBLISHER_REFUSAL);
+  });
+
+  test("a document file served with an empty body is unavailable, not a document the court withholds", async () => {
+    mockFetch({ search: [], download: { type: "status", status: 200 } });
+
+    expect(await buildSkUsDecision(CHAMBER_RESOLUTION)).toMatchObject({
+      type: "unread",
+      part: "document-file",
+      item: {
+        outcome: { type: "unavailable", cause: { kind: "empty-body" } },
+      },
+    });
+  });
+
+  test("a document file whose body resets after the headers keeps its listed identity as an unread item", async () => {
+    mockFetch({
+      search: [{ type: "page", documents: [PLENARY_OPINION], numFound: 1 }],
+      download: { type: "body-resets" },
+    });
+
+    const page = (await skUsAdapter.fetchPage("2021:0", {})).unwrap();
+
+    expect(page.decisions).toEqual([]);
+    expect(
+      page.unreadItems?.map(({ listing, outcome }) => ({
+        sourceDocumentId: listing.sourceDocumentId,
+        outcome:
+          outcome.type === "unavailable" ? outcome.cause.kind : outcome.type,
+      })),
+    ).toEqual([
+      { sourceDocumentId: PLENARY_OPINION.documentId, outcome: "thrown" },
+    ]);
+  });
+
+  test.each([
+    ["404", { type: "status", status: 404 }],
+    ["a 200 that is not a PDF", { type: "not-a-pdf" }],
+  ] as const)(
+    "a document file the court states it does not serve (%s) keeps a listing-only row",
+    async (_label, download) => {
+      mockFetch({
+        search: [{ type: "page", documents: [PLENARY_OPINION], numFound: 1 }],
+        download,
+      });
+
+      const page = (await skUsAdapter.fetchPage("2021:0", {})).unwrap();
+
+      expect(
+        page.decisions.map(({ sourceDocumentId, isListingOnly }) => ({
+          sourceDocumentId,
+          isListingOnly,
+        })),
+      ).toEqual([
+        { sourceDocumentId: PLENARY_OPINION.documentId, isListingOnly: true },
+      ]);
+    },
+  );
+
+  test("a codelist read that fails leaves the page's items unread, so the pipeline holds the page", async () => {
+    mockFetch({
+      search: [{ type: "page", documents: [PLENARY_OPINION], numFound: 1 }],
+      supplementary: { codelist: { type: "status", status: 500 } },
+    });
+
+    const page = (await skUsAdapter.fetchPage("2021:0", {})).unwrap();
+
+    expect(page.decisions).toEqual([]);
+    expect(page.unreadItems?.map(({ outcome }) => outcome)).toEqual([
+      { type: "unavailable", cause: { kind: "status", status: 500 } },
+    ]);
+  });
+
   test("stored-raw replay keeps the stated type and derives the same comparison key", async () => {
     const outcome = await skUsAdapter.reparseStoredRaw?.({
       raw: new TextEncoder().encode(
@@ -1302,7 +1774,7 @@ describe("sk-us crawl and reconciliation dispose of a missing document different
     });
   });
 
-  test("holds a row whose document download fails and reports the download", async () => {
+  test("builds nothing for a document whose download fails and reports the download", async () => {
     mockFetch({
       search: [],
       download: { type: "fails", error: new TypeError("fetch failed") },
@@ -1312,8 +1784,9 @@ describe("sk-us crawl and reconciliation dispose of a missing document different
       const built = await buildSkUsDecision(CHAMBER_RESOLUTION);
 
       expect(built).toMatchObject({
-        type: "detail-unavailable",
-        decision: { isListingOnly: true },
+        type: "unread",
+        part: "document-file",
+        item: { outcome: { type: "unavailable", cause: { kind: "thrown" } } },
       });
       expect(
         logs

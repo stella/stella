@@ -1,7 +1,9 @@
-/** Durable native extraction request and worker-side execution. */
-
 import { panic, Result } from "better-result";
+/** Durable native extraction request and worker-side execution. */
 import { and, eq, sql } from "drizzle-orm";
+
+import { isEmailMimeType } from "@stll/api-contract/email-mime-types";
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
 import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
@@ -14,18 +16,22 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import { encryptContent } from "@/api/lib/content-encryption";
+import { lockForWrite } from "@/api/lib/db/lock-for-write";
 import { requestAutomaticDocumentOcr } from "@/api/lib/document-processing-automatic-request";
 import { DOCUMENT_NATIVE_EXTRACTION_PROCESSOR_VERSION } from "@/api/lib/document-processing-contract";
 import { enqueueDocumentProcessingRun } from "@/api/lib/document-processing-enqueue";
 import { restoreManualOcrRunAfterProjectionLoss } from "@/api/lib/document-processing-manual-ocr-restore";
 import { readDocxDeclaredSourceLanguage } from "@/api/lib/document-translation/docx-language";
 import { recordEntityVersionDetectedLanguage } from "@/api/lib/document-translation/version-language";
+import { enqueueUploadedMailFiling } from "@/api/lib/email/inbound/upload-enqueue";
 import type { FileKey } from "@/api/lib/file-key";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import { shouldGeneratePdfDerivative } from "@/api/lib/files/pdf-derivative-policy";
 import { createFileKey } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   extractFileTextResult,
   resolveExtractionMimeType,
@@ -175,7 +181,17 @@ export const persistNativeExtractionProjection = async (
   database: Pick<typeof rootDb, "transaction">,
 ): Promise<NativeExtractionProjectionOutcome> =>
   await database.transaction(async (tx) => {
-    // Manual OCR request and projection transactions take this same lock first.
+    const parents = await lockForWrite(tx, {
+      organizationIds: [organizationId],
+      workspaceIds: [workspaceId],
+    });
+    if (
+      !parents.organizationIds.has(organizationId) ||
+      !parents.workspaceIds.has(workspaceId)
+    ) {
+      return "source_cancelled";
+    }
+    // The entity lock also serializes with manual OCR requests and projections.
     // Keeping the conditional write in the next statement gives it a fresh
     // READ COMMITTED snapshot after any lock waiter ahead of us commits.
     const lockedSources =
@@ -353,6 +369,58 @@ const recordDocxVersionLanguage = async ({
   }
 };
 
+const UPLOADED_MAIL_HANDOFF_SINK = failureSink({
+  event: "native_extraction.uploaded_mail_handoff_failed",
+  expected: [],
+});
+
+type RecordUploadedMailOptions = {
+  source: ExtractionSource;
+  enqueueUploadedMail: ExecuteNativeExtractionDependencies["enqueueUploadedMail"];
+  run: NativeExtractionRun;
+};
+
+/**
+ * Hand an email document to the job that files it as matter correspondence.
+ *
+ * Every transport that stores a file version reaches this run, so uploads
+ * from the web, desktop, CLI, MCP and folder imports are covered without
+ * per-handler calls. The filing runs in the API's worker, not here: this
+ * worker's import graph must stay clear of the API environment. A failed
+ * hand-off is reported, and the file stays a fully indexed document.
+ */
+const recordUploadedMail = async ({
+  source,
+  enqueueUploadedMail,
+  run,
+}: RecordUploadedMailOptions): Promise<void> => {
+  if (!isEmailMimeType(source.extractionMimeType)) {
+    return;
+  }
+  const handedOff = await Result.tryPromise({
+    try: async () =>
+      await enqueueUploadedMail({
+        file: {
+          sourceFileId: source.fileId,
+          storageMimeType: source.storageMimeType,
+          mimeType: source.extractionMimeType,
+        },
+        scope: {
+          organizationId: run.organizationId,
+          workspaceId: run.workspaceId,
+          entityId: run.entityId,
+        },
+      }),
+    catch: (cause) => cause,
+  });
+  if (Result.isError(handedOff)) {
+    observeFailure(handedOff.error, {
+      sink: UPLOADED_MAIL_HANDOFF_SINK,
+      ctx: { entityId: run.entityId, workspaceId: run.workspaceId },
+    });
+  }
+};
+
 export const executeNativeExtraction = async ({
   database,
   fileField,
@@ -373,6 +441,7 @@ export const executeNativeExtraction = async ({
   dependencies?: ExecuteNativeExtractionDependencies | undefined;
 }): Promise<NativeExtractionProjectionOutcome> => {
   const {
+    enqueueUploadedMail,
     extractText,
     persistProjection,
     recordLanguage,
@@ -438,6 +507,8 @@ export const executeNativeExtraction = async ({
     text,
   });
 
+  await recordUploadedMail({ source, enqueueUploadedMail, run });
+
   if (source.extractionMimeType === PDF_MIME_TYPE) {
     await restoreManualOcr({
       db: database,
@@ -477,6 +548,7 @@ export const executeNativeExtraction = async ({
  * connection of its own.
  */
 export type ExecuteNativeExtractionDependencies = {
+  enqueueUploadedMail: typeof enqueueUploadedMailFiling;
   extractText: typeof extractFileTextResult;
   persistProjection: typeof persistNativeExtractionProjection;
   recordLanguage: typeof recordEntityVersionDetectedLanguage;
@@ -486,6 +558,7 @@ export type ExecuteNativeExtractionDependencies = {
 
 const EXECUTE_NATIVE_EXTRACTION_DEPENDENCIES: ExecuteNativeExtractionDependencies =
   {
+    enqueueUploadedMail: enqueueUploadedMailFiling,
     extractText: extractFileTextResult,
     persistProjection: persistNativeExtractionProjection,
     recordLanguage: recordEntityVersionDetectedLanguage,
@@ -595,11 +668,7 @@ export const nativeExtractionRunRequestForFields = ({
   filePropertyId,
 }: NativeExtractionRequestOptions): NativeExtractionRequestResult => {
   const fileFieldRow = findExtractionFileFieldRow(fields, filePropertyId);
-  if (
-    !fileFieldRow ||
-    fileFieldRow.content.type !== "file" ||
-    !requiresDurableNativeExtraction(fileFieldRow.content)
-  ) {
+  if (!fileFieldRow || !requiresDurableNativeExtraction(fileFieldRow.content)) {
     return null;
   }
   return {
@@ -659,23 +728,24 @@ export const requestNativeExtractionRuns = async ({
   tx: Transaction;
 }): Promise<SafeId<"documentProcessingRun">[]> => {
   const insertedRunIds: SafeId<"documentProcessingRun">[] = [];
-  const insertFrom = async (start: number): Promise<void> => {
-    if (start >= requests.length) {
+  const itemBatches = chunkItems(
+    requests,
+    NATIVE_EXTRACTION_RUN_INSERT_BATCH_SIZE,
+  )[Symbol.iterator]();
+  const insertFrom = async (): Promise<void> => {
+    const nextBatch = itemBatches.next();
+    if (nextBatch.done) {
       return;
     }
     const inserted = await tx
       .insert(documentProcessingRuns)
-      .values(
-        requests
-          .slice(start, start + NATIVE_EXTRACTION_RUN_INSERT_BATCH_SIZE)
-          .map(nativeExtractionRunValues),
-      )
+      .values(nextBatch.value.map(nativeExtractionRunValues))
       .onConflictDoNothing({ target: NATIVE_EXTRACTION_SOURCE_TARGET })
       .returning({ id: documentProcessingRuns.id });
     insertedRunIds.push(...inserted.map(({ id }) => id));
-    await insertFrom(start + NATIVE_EXTRACTION_RUN_INSERT_BATCH_SIZE);
+    await insertFrom();
   };
-  await insertFrom(0);
+  await insertFrom();
   return insertedRunIds;
 };
 

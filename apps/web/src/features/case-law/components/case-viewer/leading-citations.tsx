@@ -1,8 +1,10 @@
 import { useRef, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import type { CitationAnchorSource } from "@stll/decision-reader/reader-types";
 import type { CitationPassageMatch } from "@stll/legal-ast/citation-passage";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
@@ -12,7 +14,11 @@ import { cn } from "@stll/ui/utils";
 
 import { createCaseDecisionViewTab } from "@/components/inspector/case-decision-view";
 import { useInspectorView } from "@/components/inspector/use-inspector-view";
-import type { CitationAnchorSource } from "@/features/case-law/citation-anchors";
+import { CitedDecisionLink } from "@/components/legal-reader/cited-decision-link";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
+import { decisionCitationCourtLabel } from "@/components/references/decision-citation-chip.logic";
+import { decisionCitationPresentationsById } from "@/components/references/decision-citation-presentation.logic";
+import type { DecisionCitationPresentation } from "@/components/references/decision-citation-presentation.logic";
 import {
   CITATION_TREATMENT_DOT,
   CITATION_TREATMENT_LABEL,
@@ -45,6 +51,7 @@ import { optionalArray } from "@/lib/arrays";
 import { citedDecisionLabel } from "@/lib/cited-decision-label";
 import { formatDecisionDate } from "@/lib/decision-date";
 import type { SafeId } from "@/lib/safe-id";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { forceReflow } from "@/lib/utils";
 
 type LeadingCitationsProps = {
@@ -63,14 +70,16 @@ export const LeadingCitations = ({
   decision,
   decisionId,
 }: LeadingCitationsProps) => {
-  const { data: summary } = useQuery(
-    decisionCitationSummaryOptions(decisionId),
-  );
+  const summaryQuery = useQuery(decisionCitationSummaryOptions(decisionId));
+  const summaryView = useQueryView(summaryQuery);
+  useQueryViewError(summaryView);
+  const summary = summaryView.type === "items" ? summaryView.items : undefined;
   if (summary === undefined) {
-    return null;
+    return <QueryViewFeedback view={summaryView} />;
   }
   return (
     <div className="flex flex-col gap-6">
+      <QueryViewFeedback view={summaryView} />
       {(["incoming", "outgoing"] as const satisfies CitationDirection[]).map(
         (direction) => {
           if (
@@ -141,14 +150,26 @@ const DirectionSection = ({
 }) => {
   const t = useTranslations();
   const format = useFormatter();
-  const { data: leading } = useQuery(
+  const leadingQuery = useQuery(
     decisionLeadingCitationsOptions(decisionId, direction),
   );
+  const leadingView = useQueryView(leadingQuery);
+  useQueryViewError(leadingView);
+  const leading = leadingView.type === "items" ? leadingView.items : undefined;
   const [showingAll, setShowingAll] = useState(false);
   const total = totalCitations(counts);
+  const presentations = decisionCitationPresentationsById(
+    optionalArray(leading)
+      .filter((row) => counts[row.treatment] > 0)
+      .map(({ decision: cited }) => ({
+        decisionId: cited.id,
+        courtShortCode: decisionCitationCourtLabel(cited),
+      })),
+  );
 
   return (
     <section className="flex flex-col gap-3">
+      <QueryViewFeedback view={leadingView} />
       <div className="flex flex-col gap-1.5">
         <h3 className="text-foreground-strong-muted flex items-baseline gap-1.5 text-xs font-medium">
           {t(DIRECTION_TITLE[direction])}
@@ -191,6 +212,10 @@ const DirectionSection = ({
                     direction={direction}
                     key={row.id}
                     row={row}
+                    presentation={
+                      presentations.get(row.decision.id) ??
+                      panic("Leading citation missing collected identity")
+                    }
                   />
                 ))}
               </ul>
@@ -237,9 +262,11 @@ const LeadingRow = ({
   decisionId,
   direction,
   row,
+  presentation,
 }: LeadingCitationsProps & {
   direction: CitationDirection;
   row: LeadingCitation;
+  presentation: DecisionCitationPresentation;
 }) => {
   const format = useFormatter();
   const inspector = useInspectorView();
@@ -281,6 +308,26 @@ const LeadingRow = ({
           </span>
         </span>
       </button>
+      <div className="ps-4">
+        <CitedDecisionLink
+          decision={row.decision}
+          presentation={presentation}
+          treatment={row.treatment}
+          passage={{
+            type: "citation",
+            textDecisionId,
+            citation: {
+              citationText: row.citationText,
+              decision: cited,
+              id: row.id,
+              sectionIndex: row.sectionIndex,
+              treatment: row.treatment,
+            },
+          }}
+        >
+          {null}
+        </CitedDecisionLink>
+      </div>
       {open && (
         <div className="ps-4">
           <LeadingPassage

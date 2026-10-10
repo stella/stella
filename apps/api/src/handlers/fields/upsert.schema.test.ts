@@ -1,7 +1,7 @@
 import { Value } from "@sinclair/typebox/value";
 import { describe, expect, test } from "bun:test";
 
-import { upsertFieldContentSchema } from "./upsert";
+import { upsertFieldContentSchema } from "@/api/lib/fields/write-field";
 
 describe("upsert field content schema", () => {
   test("accepts exactly the empty person sentinel used to clear a cell", () => {

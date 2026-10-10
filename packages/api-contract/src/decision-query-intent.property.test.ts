@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
@@ -360,6 +361,151 @@ test(
           });
         }
       }),
+    );
+  },
+  propertyTestTimeout(10_000),
+);
+
+/** Every typed source a sibling's sheet can be known from, or none. */
+const SHEET_SOURCES = [
+  "ecli",
+  "parallel-identifier",
+  "recorded-sheet",
+  "published-reference",
+  "stored-docket",
+  "other-file-recorded-sheet",
+  "unknown",
+] as const;
+
+type SheetSource = (typeof SHEET_SOURCES)[number];
+
+/**
+ * Whether the sheet a source states is a sheet of `SHEET_FILE`. One recorded
+ * off another file's docket is not, even on a decision `SHEET_FILE` reaches
+ * through a parallel file number.
+ */
+const STATES_A_SHEET_OF_THE_FILE = {
+  ecli: true,
+  "parallel-identifier": true,
+  "recorded-sheet": true,
+  "published-reference": true,
+  "stored-docket": true,
+  "other-file-recorded-sheet": false,
+  unknown: false,
+} as const satisfies Record<SheetSource, boolean>;
+
+const SHEET_FILE = "3 Afs 41/2008";
+const OTHER_FILE = "5 As 12/2009";
+
+/** A sibling of `SHEET_FILE` whose sheet only `source` states. */
+const siblingWithSheetIn = (id: string, source: SheetSource, sheet: number) => {
+  const full = `${SHEET_FILE} - ${String(sheet)}`;
+  const bare = { id, caseNumber: SHEET_FILE, ecli: null };
+  switch (source) {
+    case "ecli":
+      return {
+        ...bare,
+        ecli: `ECLI:CZ:NSS:2010:3.AFS.41.2008.${String(sheet)}`,
+      };
+    case "parallel-identifier":
+      return { ...bare, identifiers: [{ type: "case-number", value: full }] };
+    case "recorded-sheet":
+      return { ...bare, sheetNumber: String(sheet) };
+    case "published-reference":
+      return { ...bare, publishedCaseNumber: full };
+    case "stored-docket":
+      return { ...bare, caseNumber: full };
+    case "other-file-recorded-sheet":
+      // Stored and published under another file, its sheet split off there,
+      // and reached here only through the parallel file number.
+      return {
+        ...bare,
+        caseNumber: OTHER_FILE,
+        publishedCaseNumber: `${OTHER_FILE}-${String(sheet)}`,
+        sheetNumber: String(sheet),
+        identifiers: [{ type: "case-number", value: SHEET_FILE }],
+      };
+    case "unknown":
+      return bare;
+    default: {
+      source satisfies never;
+      return panic(`Unhandled sheet source: ${String(source)}`);
+    }
+  }
+};
+
+test(
+  "a sheet selects the same siblings whichever source states each sibling's sheet",
+  () => {
+    assertProperty(
+      "a sheet selects the same siblings whichever source states each sibling's sheet",
+      fc.property(
+        fc.array(
+          fc.record({
+            source: fc.constantFrom(...SHEET_SOURCES),
+            sheet: fc.integer({ min: 1, max: 5 }),
+            // An identity read reaches a row stored under another sheet
+            // only through some other spelling; the answer may not depend
+            // on whether it did.
+            reached: fc.boolean(),
+          }),
+          { minLength: 1, maxLength: 6 },
+        ),
+        fc.integer({ min: 1, max: 6 }),
+        (siblings, requested) => {
+          const read = parseDecisionQuery(`${SHEET_FILE}-${requested}`, {
+            grammar: DECISION_DOCKET_GRAMMARS.CZE,
+          });
+          const intent =
+            read.type === "identifier"
+              ? read
+              : panic("A sheet reference must read as an identifier");
+          const modelled = siblings.map(
+            ({ reached, sheet, source }, index) => ({
+              id: `sibling-${String(index)}`,
+              sheet: STATES_A_SHEET_OF_THE_FILE[source] ? sheet : null,
+              present:
+                reached || source !== "stored-docket" || sheet === requested,
+              hit: siblingWithSheetIn(
+                `sibling-${String(index)}`,
+                source,
+                sheet,
+              ),
+            }),
+          );
+          const hits = modelled
+            .filter(({ present }) => present)
+            .map(({ hit }) => hit);
+          // The abstract answer, from sheet values alone.
+          const holders = modelled.filter(({ sheet }) => sheet === requested);
+          const unknown = modelled.filter(
+            ({ present, sheet }) => present && sheet === null,
+          );
+          const resolution = resolveDecisionIdentity(intent, hits);
+          const [onlyHolder] = holders;
+          if (holders.length === 1 && onlyHolder !== undefined) {
+            expect(resolution).toEqual({
+              status: "unique",
+              decision: onlyHolder.hit,
+              basis: "selector",
+            });
+          } else if (holders.length > 1) {
+            expect(resolution).toEqual({
+              status: "ambiguous",
+              candidates: holders.map(({ hit }) => hit),
+              reason: "several",
+            });
+          } else if (unknown.length > 0) {
+            expect(resolution).toEqual({
+              status: "ambiguous",
+              candidates: unknown.map(({ hit }) => hit),
+              reason: "selector_unmatched",
+            });
+          } else {
+            expect(resolution).toEqual({ status: "none" });
+          }
+        },
+      ),
     );
   },
   propertyTestTimeout(10_000),

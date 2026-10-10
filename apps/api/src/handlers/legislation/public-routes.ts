@@ -59,20 +59,25 @@ import {
   listStatuteVersionsQuerySchema,
 } from "@/api/handlers/legislation/versions";
 import {
+  ACCOUNT_ACCESS,
   createSafeBoundedPublicHandler,
   safePublicHandlerResponseSchemasWithStatusText,
 } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
-import { isPublicLawEnabled } from "@/api/lib/legal-search/public-law-feature";
+import { withPublicCountryUnavailable } from "@/api/lib/legal-search/public-law-country";
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
 import { safePublicHandlerErrorOrStatusTextResponseSchema } from "@/api/lib/search/public-error-response";
 
 const listStatutes = createSafeBoundedPublicHandler(
   {
-    response: safePublicHandlerResponseSchemasWithStatusText(
-      listStatutesSuccessResponseSchema,
+    response: withPublicCountryUnavailable(
+      safePublicHandlerResponseSchemasWithStatusText(
+        listStatutesSuccessResponseSchema,
+      ),
     ),
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "public_indexing" },
     cache: { kind: "none" },
     query: listStatutesQuerySchema,
@@ -90,9 +95,12 @@ const listStatutes = createSafeBoundedPublicHandler(
 
 const readLegislationShelf = createSafeBoundedPublicHandler(
   {
-    response: safePublicHandlerResponseSchemasWithStatusText(
-      legislationShelfSuccessResponseSchema,
+    response: withPublicCountryUnavailable(
+      safePublicHandlerResponseSchemasWithStatusText(
+        legislationShelfSuccessResponseSchema,
+      ),
     ),
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "public_indexing" },
     cache: { kind: "none" },
     query: legislationShelfQuerySchema,
@@ -111,9 +119,12 @@ const readLegislationShelf = createSafeBoundedPublicHandler(
 
 const readLegislationFacets = createSafeBoundedPublicHandler(
   {
-    response: safePublicHandlerResponseSchemasWithStatusText(
-      legislationFacetsSuccessResponseSchema,
+    response: withPublicCountryUnavailable(
+      safePublicHandlerResponseSchemasWithStatusText(
+        legislationFacetsSuccessResponseSchema,
+      ),
     ),
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "public_indexing" },
     cache: { kind: "none" },
     query: legislationFacetsQuerySchema,
@@ -141,6 +152,7 @@ const readStatuteByEli = createSafeBoundedPublicHandler(
         publisherWindowInconsistentResponseSchema,
       ]),
     },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "covered", by: "read_statute" },
     cache: { kind: "none" },
     query: readStatuteByEliQuerySchema,
@@ -164,6 +176,7 @@ const resolveStatutes = createSafeBoundedPublicHandler(
     ),
     // The batch form of `by-eli`: one read per Work is what `read_statute`
     // already answers, so an agent gains nothing from a second tool.
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "covered", by: "read_statute" },
     cache: { kind: "none" },
     body: resolveStatutesBodySchema,
@@ -181,7 +194,7 @@ const resolveStatutes = createSafeBoundedPublicHandler(
 
 const readStatuteBySlug = createSafeBoundedPublicHandler(
   {
-    response: {
+    response: withPublicCountryUnavailable({
       ...safePublicHandlerResponseSchemasWithStatusText(
         statuteReaderSuccessResponseSchema,
       ),
@@ -189,7 +202,8 @@ const readStatuteBySlug = createSafeBoundedPublicHandler(
         safePublicHandlerErrorOrStatusTextResponseSchema,
         publisherWindowInconsistentResponseSchema,
       ]),
-    },
+    }),
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "public_indexing" },
     cache: { kind: "none" },
     params: readStatuteBySlugParamsSchema,
@@ -216,6 +230,7 @@ const readStatute = createSafeBoundedPublicHandler(
     response: safePublicHandlerResponseSchemasWithStatusText(
       statuteReaderSuccessResponseSchema,
     ),
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "covered", by: "read_statute" },
     cache: { kind: "none" },
     params: t.Object({ documentId: tSafeId("legislationDocument") }),
@@ -240,6 +255,7 @@ const listStatuteVersions = createSafeBoundedPublicHandler(
     response: safePublicHandlerResponseSchemasWithStatusText(
       statuteVersionsSuccessResponseSchema,
     ),
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "covered", by: "read_statute" },
     cache: { kind: "none" },
     params: listStatuteVersionsParamsSchema,
@@ -266,6 +282,7 @@ const readProvisionHistory = createSafeBoundedPublicHandler(
     response: safePublicHandlerResponseSchemasWithStatusText(
       provisionHistorySuccessResponseSchema,
     ),
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "tool", name: "read_provision_history" },
     cache: { kind: "none" },
     params: provisionHistoryParamsSchema,
@@ -293,6 +310,7 @@ const listStatuteSitemapShards = createSafeBoundedPublicHandler(
     response: safePublicHandlerResponseSchemasWithStatusText(
       statuteSitemapShardsSuccessResponseSchema,
     ),
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "public_indexing" },
     cache: { kind: "none" },
   },
@@ -310,9 +328,12 @@ const listStatuteSitemapShards = createSafeBoundedPublicHandler(
 
 const listStatuteSitemapStatutes = createSafeBoundedPublicHandler(
   {
-    response: safePublicHandlerResponseSchemasWithStatusText(
-      statuteSitemapStatutesSuccessResponseSchema,
+    response: withPublicCountryUnavailable(
+      safePublicHandlerResponseSchemasWithStatusText(
+        statuteSitemapStatutesSuccessResponseSchema,
+      ),
     ),
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "public_indexing" },
     cache: { kind: "none" },
     query: sitemapShardStatutesQuerySchema,
@@ -339,7 +360,11 @@ const listStatuteSitemapStatutes = createSafeBoundedPublicHandler(
 export const publicLegislationRoute = new Elysia({
   prefix: "/law",
 })
-  .use(deploymentFeatureGate(isPublicLawEnabled))
+  .use(
+    deploymentFeatureGate(() =>
+      isDeploymentFeatureEnabled("FEATURE_PUBLIC_LAW"),
+    ),
+  )
   .get("/statutes", listStatutes.handler, {
     query: listStatutes.config.query,
     response: listStatutes.config.response,

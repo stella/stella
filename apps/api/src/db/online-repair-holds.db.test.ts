@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import type { ReservedSQL, SQL } from "bun";
 import { describe, expect, test } from "bun:test";
 import { getTableName } from "drizzle-orm";
@@ -10,6 +11,7 @@ import {
 import { defaultConfig, type Verdict } from "@stll/db-load-gate/health";
 import { Temporal } from "@stll/time";
 
+import { readOnlineIndexConfig } from "../env-online-index";
 import { CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT } from "../lib/decision-date-bounds-sql";
 import { withGatedTestClients } from "../tests/gated-test-database";
 import { createCorpusProjectionDeleteReceiptRepair } from "./corpus-projection-delete-receipt-repair";
@@ -20,6 +22,7 @@ import {
   ONLINE_MIGRATION_INDEX_CUTOVERS,
   ONLINE_MIGRATION_INDEXES,
   runOnlineMigrations,
+  type OnlineRepairOptions,
 } from "./online-migrations";
 import { APPLICATION_RLS_ROLE_NAME } from "./role-names";
 import {
@@ -67,7 +70,9 @@ const repairConnection = (
   release: () => connection.release(),
 });
 
-const withScratch = async (work: (client: SQL) => Promise<void>) => {
+const withScratch = async (
+  work: (client: SQL, openClient: () => SQL) => Promise<void>,
+) => {
   if (databaseUrl === undefined) {
     throw new TypeError("DATABASE_URL required");
   }
@@ -101,7 +106,7 @@ const withScratch = async (work: (client: SQL) => Promise<void>) => {
           for (const statement of migration.split("--> statement-breakpoint")) {
             await client.unsafe(statement);
           }
-          await work(client);
+          await work(client, () => openScratchClient().sql);
         },
       );
     } finally {
@@ -196,6 +201,199 @@ const createFixture = async (client: SQL, kind: "date" | "receipt") => {
 describe.skipIf(!enabled)(
   "online repairs survive durable holds on PostgreSQL 18",
   () => {
+    for (const reason of ["wait", "cancel"] as const) {
+      test(`a staged index ${reason} preserves the existing cutover index on PostgreSQL`, async () => {
+        await withScratch(async (client, openClient) => {
+          const cutover = ONLINE_MIGRATION_INDEX_CUTOVERS.at(0);
+          if (cutover === undefined) {
+            throw new TypeError("Expected an online index cutover");
+          }
+          const { final, staged } = cutover;
+          await client.unsafe(
+            "CREATE TABLE case_law_decisions (id uuid PRIMARY KEY, updated_at timestamptz NOT NULL)",
+          );
+          await client.unsafe(
+            "INSERT INTO case_law_decisions VALUES ('00000000-0000-0000-0000-000000000001', now())",
+          );
+          await client.unsafe(
+            `CREATE INDEX "${final.name}" ON case_law_decisions (updated_at, id)`,
+          );
+          const readFinal = async () =>
+            await client.unsafe<
+              { oid: number; definition: string; valid: boolean }[]
+            >(
+              "SELECT i.indexrelid::int AS oid, pg_get_indexdef(i.indexrelid) AS definition, i.indisvalid AS valid FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid WHERE c.relname = $1",
+              [final.name],
+            );
+          const before = await readFinal();
+          expect(before).toHaveLength(1);
+          expect(before.at(0)?.valid).toBe(true);
+          expect(before.at(0)?.definition).not.toContain("DESC");
+
+          const builder = await openClient().reserve();
+          const observer = await openClient().reserve();
+          const blocker = await openClient().reserve();
+          try {
+            const pid = (
+              await builder.unsafe<{ pid: number }[]>(
+                "SELECT pg_backend_pid() AS pid",
+              )
+            ).at(0)?.pid;
+            if (pid === undefined) {
+              throw new TypeError("Missing online builder pid");
+            }
+            if (reason === "cancel") {
+              await blocker.unsafe("BEGIN");
+              await blocker.unsafe(
+                "UPDATE case_law_decisions SET updated_at = now()",
+              );
+            }
+            const prerequisites = repairConnection(builder);
+            const statements: string[] = [];
+            // Only unrelated catalog prerequisites are faked. The staged build,
+            // cancellation, final index, and both sessions use real PostgreSQL.
+            const connection: OnlineMigrationConnection = {
+              execute: async (statement, parameters = []) => {
+                statements.push(statement);
+                await builder.unsafe(statement, [...parameters]);
+              },
+              query: async (statement, parameters = []) => {
+                const isCutover = [final.name, staged.name].some((name) =>
+                  statement.includes("starts_with")
+                    ? parameters.at(2) === `${name.slice(0, 57)}_ccnew`
+                    : parameters.at(1) === name,
+                );
+                if (statement.includes("pg_catalog.pg_index") && !isCutover) {
+                  return await prerequisites.query(statement, parameters);
+                }
+                return await builder.unsafe(statement, [...parameters]);
+              },
+              terminate: async () => {
+                await builder.close({ timeout: 0 });
+              },
+              release: () => undefined,
+            };
+            let readings = 0;
+            let repairs = 0;
+            const now = Date.now() + 60_000;
+            const config = {
+              ...readOnlineIndexConfig({}),
+              health: {
+                ...defaultConfig,
+                busyWindows: [],
+                longTxMaxAgeMs: 3_600_000,
+              },
+              pollMs: 1,
+              retryMs: 7,
+            };
+            const outcome = await runOnlineMigrations(
+              { reserve: async () => connection },
+              {
+                indexGate: {
+                  config,
+                  clock: () => now,
+                  log: () => undefined,
+                  ebs: {
+                    type: "reader",
+                    read: async () => {
+                      readings += 1;
+                      const reading =
+                        reason === "wait"
+                          ? ({ kind: "unknown", value: null } as const)
+                          : ({
+                              kind: readings === 1 ? "normal" : "stop",
+                              value: readings === 1 ? 100 : 1,
+                            } as const);
+                      return {
+                        indicator: "ebs_balance",
+                        ...reading,
+                        threshold:
+                          reading.kind === "stop"
+                            ? config.health.hardFloor
+                            : config.health.startFloor,
+                        observedAt:
+                          reading.kind === "unknown"
+                            ? null
+                            : new Date(now).toISOString(),
+                        reason: "Injected staged build health",
+                      };
+                    },
+                  },
+                  wait: async () => {
+                    for (let attempt = 0; attempt < 400; attempt += 1) {
+                      const progress = await observer.unsafe<
+                        { phase: string }[]
+                      >(
+                        "SELECT phase FROM pg_stat_progress_create_index WHERE pid = $1",
+                        [pid],
+                      );
+                      if (
+                        progress.at(0)?.phase ===
+                        "waiting for writers before build"
+                      ) {
+                        return;
+                      }
+                      await Bun.sleep(5);
+                    }
+                    throw new TypeError(
+                      "Staged index did not reach its writer barrier",
+                    );
+                  },
+                },
+                reserveObserver: async () => ({
+                  execute: async (statement, parameters = []) => {
+                    await observer.unsafe(statement, [...parameters]);
+                  },
+                  query: async (statement, parameters = []) =>
+                    await observer.unsafe(statement, [...parameters]),
+                  release: () => undefined,
+                }),
+                repairs: [
+                  {
+                    name: "later-repair",
+                    readCompletion: async () => {
+                      repairs += 1;
+                      return { type: "complete" };
+                    },
+                    repair: async () => {
+                      throw new TypeError("Completed repair ran");
+                    },
+                  },
+                ],
+              },
+            );
+            expect(outcome).toEqual({
+              type: "deferred",
+              index: staged.name,
+              retryAfterMs: config.retryMs,
+            });
+            expect(await readFinal()).toEqual(before);
+            expect(repairs).toBe(0);
+            expect(
+              statements.filter(
+                (statement) =>
+                  statement.startsWith("DROP INDEX") ||
+                  statement.startsWith("ALTER INDEX"),
+              ),
+            ).toEqual([]);
+            const stageState = await client.unsafe<{ valid: boolean }[]>(
+              "SELECT i.indisvalid AS valid FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid WHERE c.relname = $1",
+              [staged.name],
+            );
+            expect(stageState).toEqual(
+              reason === "cancel" ? [{ valid: false }] : [],
+            );
+            expect(readings).toBe(reason === "cancel" ? 3 : 1);
+          } finally {
+            await blocker.unsafe("ROLLBACK");
+            blocker.release();
+            observer.release();
+            builder.release();
+          }
+        });
+      });
+    }
+
     for (const kind of ["date", "receipt"] as const) {
       test(`${kind} repair deploys pending and resumes its committed batch exactly once`, async () => {
         await withScratch(async (client) => {
@@ -242,8 +440,14 @@ describe.skipIf(!enabled)(
           };
           const runnerOptions = {
             repairs: [repair],
-            log: (record: unknown) => events.push(record),
-          };
+            indexGate: { ebs: { type: "disabled" } },
+            // The adapter reports every index ready, so no build observes.
+            reserveObserver: () =>
+              panic("Repair holds never build an online index"),
+            log: (record: unknown) => {
+              events.push(record);
+            },
+          } satisfies OnlineRepairOptions;
           await runOnlineMigrations(pool, runnerOptions);
           const processed = (
             await client.unsafe<{ processed: number }[]>(
@@ -253,7 +457,7 @@ describe.skipIf(!enabled)(
           expect(processed).toBe(fixture.firstBatch);
           const connection = repairConnection(await client.reserve());
           const pending = await repair.readCompletion(connection);
-          connection.release();
+          await connection.release();
           expect(pending).toMatchObject({
             type: "pending",
             heldSince: now,

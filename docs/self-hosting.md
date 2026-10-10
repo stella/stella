@@ -34,7 +34,7 @@ The production Compose contract contains exactly these services:
 
 Its generated environment template is `deploy/selfhost/.env.example`.
 
-Non-RDS, self-hosted and local databases must set `DB_LOAD_GATE_EBS_SIGNAL=disabled` to explicitly disable the EBS signal. The logged not_configured signal allows other health gates to govern maintenance. If neither setting is supplied, maintenance holds and an error event names the missing configuration.
+Non-RDS, self-hosted and local databases must set `DB_LOAD_GATE_EBS_SIGNAL=disabled` to explicitly disable the EBS signal. The logged not_configured signal allows other health gates to govern maintenance. If neither setting is supplied, migrate fails before connecting, and background maintenance holds with an error event naming the missing configuration.
 <!-- END GENERATED SELF-HOST CONTRACT -->
 
 ```bash
@@ -43,6 +43,18 @@ cp apps/web/.env.example apps/web/.env
 
 bun install
 ```
+
+## Feature grants
+
+Promote the image that registers a feature before setting its
+`API_FEATURE_ACCESS_GRANTS`; before rolling back, set grants to `{}`.
+Unknown feature IDs are dropped at startup and emit the count-only ERROR event
+`feature_access.unknown_grant`. Invalid JSON or malformed grant shapes remain
+fatal configuration errors.
+
+The optional layout preview for generated views is available only in stella's
+cloud; on a self-hosted instance the assistant is told the preview is
+unavailable and the view is still published.
 
 ## Frontend (web app)
 
@@ -170,6 +182,10 @@ before contacting any service:
 bun run selfhost:doctor
 ```
 
+Time billing requires the API deployment flag `FEATURE_TIME_BILLING="true"`
+and each user's enrolment in Settings > Account > Beta. The web follows that server
+response; a web build variable cannot enable it.
+
 The stock profile enables local email/password authentication and requires the
 setup token when the first account is created. The web sign-up form prompts for
 that token. After the first account exists, remove
@@ -244,7 +260,7 @@ docker compose --env-file deploy/selfhost/.env \
 
 The results file stays inside the one-off API container and is removed with it by `--rm`; capture stdout to retain the printed results.
 
-The seed writes JSON Lines containing each policy key and its `inserted`, `updated`, `unchanged`, `hidden`, or `failed` outcome (with a redacted failure reason), even when its transaction rolls back; failures exit non-zero. Omit `--results` for a timestamped path in `/tmp`; an existing results file is never overwritten. The command prints the path and the same rows in a fenced JSON Lines block, so operators can retrieve one-off ECS task results from its CloudWatch stdout logs after the container exits.
+The seed writes JSON Lines containing each policy key, its `mode` (`apply` or `dry_run`), and its `inserted`, `updated`, `unchanged`, `hidden`, `deactivated`, or `failed` outcome (with a redacted failure reason), even when its transaction rolls back; failures exit non-zero. A free policy absent from the configuration is deactivated, including when the configuration is empty (`[]`); an empty configuration hides no other policy. Add `--dry-run` to preview a configuration: the seed performs the same writes inside a transaction it then rolls back, so it reports the outcomes and exit code a real run would produce and changes nothing. Omit `--results` for a timestamped path in `/tmp`; an existing results file is never overwritten. The command prints the path and the same rows in a fenced JSON Lines block, so operators can retrieve one-off ECS task results from its CloudWatch stdout logs after the container exits.
 
 ## Container images
 

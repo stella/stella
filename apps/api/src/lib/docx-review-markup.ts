@@ -42,7 +42,7 @@ const DOCX_REVIEW_TAG_TEXT_PATTERN = new RegExp(
   "gu",
 );
 
-export const escapeDocxReviewText = (value: string): string =>
+const escapeDocxReviewText = (value: string): string =>
   value.replaceAll(DOCX_REVIEW_TAG_TEXT_PATTERN, (tag) =>
     tag.replaceAll("<", "&lt;"),
   );

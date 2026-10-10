@@ -39,7 +39,6 @@ import {
   chatThreads,
 } from "@/api/db/schema";
 import type { ChatCompactionMemoryEligibility } from "@/api/db/schema";
-import { env } from "@/api/env";
 import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
 import type { TanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -70,6 +69,8 @@ import {
 } from "@/api/lib/chat/thread-stored-content-send-mode";
 import type { ThreadStoredContentSendMode } from "@/api/lib/chat/thread-stored-content-send-mode";
 import type { TimestampIdCursor } from "@/api/lib/db-pagination";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
 
 /**
@@ -148,6 +149,8 @@ export type ChatCompactionOutcome =
 
 type RunChatThreadCompactionOptions = {
   abortSignal: AbortSignal;
+  /** The drain's background admission; the thread's sends drew the actions. */
+  admission: ModelDispatchAdmission;
   dataWorkspaceIds: readonly SafeId<"workspace">[];
   /**
    * Whether this deployment may derive AI memory from chat. Passed in rather
@@ -693,6 +696,7 @@ const createModelSummarizer =
       ...COMPACTION_GENERATION_POLICY,
       modelId: options.modelId,
       organizationId: options.organizationId,
+      admission: options.admission,
       orgAIConfig: options.orgAIConfig,
       managedAIResidency: options.managedAIResidency,
       reasoningEffort: options.reasoningEffort,
@@ -776,7 +780,8 @@ const advanceCheckpointOnTx = async ({
 
   const memoryEligibility = resolveCheckpointMemoryEligibility({
     extractionFeatureEnabled:
-      options.extractionFeatureEnabled ?? env.FEATURE_AI_MEMORY,
+      options.extractionFeatureEnabled ??
+      isDeploymentFeatureEnabled("FEATURE_AI_MEMORY"),
     previous: observed.checkpoint?.memoryEligibility ?? null,
     segmentMessages: plan.messagesToSummarize,
   });

@@ -532,6 +532,34 @@ const drizzleQuery =
     return executedRows(await tx.execute(sql.join(parts, sql``)));
   };
 
+/** Read settled health signals without holding a transaction across replay I/O. */
+export const createScriptBackfillHealthReader = ({
+  db,
+  tableName,
+  clock,
+  config = defaultConfig,
+}: {
+  db: { transaction: IngestionTransactionRunner<Transaction> };
+  tableName: string;
+  clock: () => number;
+  config?: HealthConfig;
+}) => {
+  const bounded = createBoundedIndicatorQuery({
+    runInTransaction: db.transaction.bind(db),
+    transactionQuery: (tx: Transaction) => drizzleQuery(tx),
+    readTimeoutMs: config.readTimeoutMs,
+  });
+  return {
+    readVerdict: createVerdictReader({
+      query: bounded.query,
+      tableName,
+      clock,
+      config,
+    }),
+    settle: bounded.settle,
+  };
+};
+
 const INDICATOR_WARNING_INTERVAL_MS = 10 * 60_000;
 const indicatorWarnings = new Map<string, number>();
 

@@ -35,6 +35,22 @@ const registry = {
   ukonceny_string: "false",
   skratka_string: "MSBA1",
 };
+/** The registry's refusal of its record, as the decision stores it. */
+const refusedRegistry = (status: 401 | 403) =>
+  ({
+    status: "refused",
+    refusal: {
+      type: "refused",
+      status,
+      scope: "part",
+      cause: { kind: "http-status", retryAfter: null },
+    },
+  }) as const;
+
+/** The registry's statement that it holds no record, as the decision stores it. */
+const absentRegistry = (evidence: "http-404" | "http-410") =>
+  ({ status: "absent", absence: { type: "absent", evidence } }) as const;
+
 const item = {
   guid: "decision",
   spisovaZnacka: "7C/221/1991",
@@ -53,6 +69,8 @@ describe("court registry enrichment", () => {
         { status: "available", record: { ...registry, nazov: name } },
         { status: "unavailable", httpStatus: 404, reason: "http-refusal" },
         { status: "unavailable", httpStatus: 200, reason: "invalid-shape" },
+        refusedRegistry(403),
+        absentRegistry("http-404"),
       ] as const) {
         const decision = assembleSkCourtsDecision({
           item: listedItem,
@@ -298,7 +316,7 @@ describe("court registry enrichment", () => {
     }
   });
 
-  test("court metadata changes affect the content hash while registry presentation does not", () => {
+  test("every stored court registry field reaches the content hash", () => {
     const build = (courtRegistry: typeof registry) =>
       assembleSkCourtsDecision({
         item,
@@ -318,15 +336,25 @@ describe("court registry enrichment", () => {
         record: { ...registry, foto: "changed" },
       },
     });
-    expect(withPhoto?.rawHash).toBe(before?.rawHash);
+    // The record is stored verbatim, so a field the decision does not read
+    // still changes the stored bytes, and with them the fingerprint.
+    expect(withPhoto?.rawHash).not.toBe(before?.rawHash);
   });
 
-  test("classifies permanent refusals and malformed JSON separately from transient failures", async () => {
+  test("types refusals and absences, and classifies malformed JSON separately from transient failures", async () => {
+    for (const [body, status, observation] of [
+      ["unauthorized", 401, refusedRegistry(401)],
+      ["forbidden", 403, refusedRegistry(403)],
+      ["not found", 404, absentRegistry("http-404")],
+      ["gone", 410, absentRegistry("http-410")],
+    ] as const) {
+      globalThis.fetch = asFetchMock(
+        async () => new Response(body, { status }),
+      );
+      const result = await createSkCourtRegistryReader()(registry.registreGuid);
+      expect(result.unwrap()).toEqual(observation);
+    }
     for (const [body, status, reason] of [
-      ["unauthorized", 401, "http-refusal"],
-      ["forbidden", 403, "http-refusal"],
-      ["not found", 404, "http-refusal"],
-      ["gone", 410, "http-refusal"],
       ["<html>not JSON</html>", 200, "invalid-json"],
       [
         JSON.stringify({ ...registry, registreGuid: "other" }),
@@ -346,9 +374,16 @@ describe("court registry enrichment", () => {
         reason,
       });
     }
-    for (const status of [408, 425, 429, 503]) {
+    for (const answer of [
+      ...[408, 425, 429, 503].map(
+        (status) => () => new Response("retry", { status }),
+      ),
+      // A served answer with no record states nothing about the court.
+      () => new Response(null, { status: 204 }),
+      () => new Response(""),
+    ]) {
       globalThis.fetch = asFetchMock(
-        async () => new Response("retry", { status }),
+        async () => await Promise.resolve(answer()),
       );
       const result = await createSkCourtRegistryReader()(registry.registreGuid);
       expect(result.isErr()).toBe(true);
@@ -361,12 +396,31 @@ describe("court registry enrichment", () => {
     );
   });
 
-  test("permanent registry refusals keep the decision and advance the page", async () => {
-    for (const [body, status, reason] of [
-      ["not found", 404, "http-refusal"],
-      ["<html>not JSON</html>", 200, "invalid-json"],
-      [JSON.stringify({ typSudu: 42 }), 200, "invalid-shape"],
-      ["x".repeat(1024 * 1024 + 1), 200, "response-too-large"],
+  test("a refused, absent or unusable registry record keeps the decision and advances the page", async () => {
+    for (const [body, status, observation] of [
+      ["unauthorized", 401, refusedRegistry(401)],
+      ["forbidden", 403, refusedRegistry(403)],
+      ["not found", 404, absentRegistry("http-404")],
+      ["gone", 410, absentRegistry("http-410")],
+      [
+        "<html>not JSON</html>",
+        200,
+        { status: "unavailable", httpStatus: 200, reason: "invalid-json" },
+      ],
+      [
+        JSON.stringify({ typSudu: 42 }),
+        200,
+        { status: "unavailable", httpStatus: 200, reason: "invalid-shape" },
+      ],
+      [
+        "x".repeat(1024 * 1024 + 1),
+        200,
+        {
+          status: "unavailable",
+          httpStatus: 200,
+          reason: "response-too-large",
+        },
+      ],
     ] as const) {
       globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
         const url = new URL(
@@ -391,12 +445,10 @@ describe("court registry enrichment", () => {
       expect(decision?.caseNumber === item.spisovaZnacka).toBe(true);
       expect(decision?.court === item.sud.nazov).toBe(true);
       expect(
-        Bun.deepEquals(decision?.metadata["courtRegistry"], {
-          status: "unavailable",
-          httpStatus: status,
-          reason,
-        }),
+        Bun.deepEquals(decision?.metadata["courtRegistry"], observation),
       ).toBe(true);
+      // A withheld part: the decision itself is complete.
+      expect(decision?.isListingOnly).toBeUndefined();
       expect(decision?.metadata["courtSuccession"]).toEqual(
         assembleSkCourtsDecision({ item, detail: null })?.metadata[
           "courtSuccession"
@@ -470,56 +522,61 @@ describe("court registry enrichment", () => {
     expect(registryCalls).toBe(2);
   });
 
-  test("replay retains the typed permanent refusal without inventing a registry record", async () => {
-    const observation = {
-      status: "unavailable",
-      httpStatus: 404,
-      reason: "http-refusal",
-    } as const;
-    const decision = assembleSkCourtsDecision({
-      item,
-      detail: null,
-      courtRegistry: observation,
-    });
-    expect(decision).not.toBeNull();
-    if (decision === null) {
-      return;
-    }
-    const parts = decodeSourceRawEnvelope(decision.sourceRaw ?? "");
-    expect(parts?.["court-registry"]).toBeUndefined();
-    expect(JSON.parse(parts?.["court-registry-unavailable"] ?? "null")).toEqual(
-      observation,
-    );
-    const outcome = await skCourtsAdapter.reparseStoredRaw?.({
-      raw: new TextEncoder().encode(decision.sourceRaw),
-      contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-      caseNumber: item.spisovaZnacka,
-      sourceDocumentId: null,
-      language: "sk",
-      court: item.sud.nazov,
-      ecli: null,
-      decisionDate: null,
-      decisionType: null,
-      sourceUrl: null,
-      documentUrl: null,
-      metadata: {},
-    });
-    expect(outcome?.type).toBe("parsed");
-    if (outcome?.type !== "parsed") {
-      return;
-    }
-    expect(
-      Bun.deepEquals(outcome.result.metadata["courtRegistry"], observation),
-    ).toBe(true);
-    expect(outcome.result.metadata["courtSuccession"]).toMatchObject({
-      eli: "eli/sk/zz/2004/371",
-      edgeIds: expect.arrayContaining([expect.any(String)]),
-    });
-    expect(outcome.result.parserVersion).toBe(
-      PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS],
-    );
-    expect(outcome.result.rawHash).toBe(decision.rawHash);
-  });
+  test.each([
+    ["an absence", absentRegistry("http-404")],
+    ["a refusal", refusedRegistry(403)],
+    [
+      "a disposition stored before typed outcomes",
+      { status: "unavailable", httpStatus: 404, reason: "http-refusal" },
+    ],
+  ] as const)(
+    "replay retains %s without inventing a registry record",
+    async (_label, observation) => {
+      const decision = assembleSkCourtsDecision({
+        item,
+        detail: null,
+        courtRegistry: observation,
+      });
+      expect(decision).not.toBeNull();
+      if (decision === null) {
+        return;
+      }
+      const parts = decodeSourceRawEnvelope(decision.sourceRaw ?? "");
+      expect(parts?.["court-registry"]).toBeUndefined();
+      expect(
+        JSON.parse(parts?.["court-registry-unavailable"] ?? "null"),
+      ).toEqual(observation);
+      const outcome = await skCourtsAdapter.reparseStoredRaw?.({
+        raw: new TextEncoder().encode(decision.sourceRaw),
+        contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+        caseNumber: item.spisovaZnacka,
+        sourceDocumentId: null,
+        language: "sk",
+        court: item.sud.nazov,
+        ecli: null,
+        decisionDate: null,
+        decisionType: null,
+        sourceUrl: null,
+        documentUrl: null,
+        metadata: {},
+      });
+      expect(outcome?.type).toBe("parsed");
+      if (outcome?.type !== "parsed") {
+        return;
+      }
+      expect(
+        Bun.deepEquals(outcome.result.metadata["courtRegistry"], observation),
+      ).toBe(true);
+      expect(outcome.result.metadata["courtSuccession"]).toMatchObject({
+        eli: "eli/sk/zz/2004/371",
+        edgeIds: expect.arrayContaining([expect.any(String)]),
+      });
+      expect(outcome.result.parserVersion).toBe(
+        PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS],
+      );
+      expect(outcome.result.rawHash).toBe(decision.rawHash);
+    },
+  );
 
   test("replay retains registry enrichment, aliases, raw fields, and its hash", async () => {
     const record = { ...registry, publisherExtra: "kept in raw" };

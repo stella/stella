@@ -5,6 +5,7 @@ import { t } from "elysia";
 import { abortableTx } from "@/api/db/safe-db";
 import { agentSkillProposals, agentSkills } from "@/api/db/schema";
 import type { AgentSkillProposalStatus } from "@/api/db/schema";
+import { skillRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import {
   canManageSkill,
   loadVisibleSkill,
@@ -12,7 +13,7 @@ import {
 import { auditedSkillBody } from "@/api/lib/agent-skills/audited-body";
 import { skillContentHashAfter } from "@/api/lib/agent-skills/content-hash";
 import { loadLatestSkillRevision } from "@/api/lib/agent-skills/revisions";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -39,6 +40,8 @@ const config = {
     "rejecting leaves the skill untouched. Either way the decision is final. " +
     "Requires the rights to edit the skill itself.",
   permissions: { agentSkill: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: skillRealtimeUpdates,
   mcp: {
     type: "capability",
     reason: "agent_tool_authoring",

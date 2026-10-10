@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 
 import { classifyExpoDoctorResult } from "./expo-doctor";
 
@@ -59,4 +62,45 @@ describe("Expo Doctor Bun-store compatibility guard", () => {
       reason: "expo has no Bun store resolution",
     });
   });
+});
+
+test("known Doctor output is accepted only after ordinary child termination", () => {
+  expect(classifyExpoDoctorResult(BUN_DUPLICATE_OUTPUT, 1).type).toBe(
+    "known-bun-store-layout",
+  );
+  const directory = mkdtempSync(
+    path.join(tmpdir(), "expo-doctor-termination-"),
+  );
+  const binaries = path.join(directory, "node_modules/.bin");
+  mkdirSync(binaries, { recursive: true });
+  try {
+    for (const termination of ["ordinary", "signal"]) {
+      writeFileSync(
+        path.join(binaries, "expo-doctor"),
+        `#!/usr/bin/env bun
+await Bun.write(Bun.stdout, ${JSON.stringify(BUN_DUPLICATE_OUTPUT)});
+${termination === "signal" ? 'process.kill(process.pid, "SIGTERM");' : "process.exit(1);"}
+`,
+        { mode: 0o755 },
+      );
+      const result = Bun.spawnSync(
+        [
+          process.execPath,
+          "--no-env-file",
+          path.join(import.meta.dir, "expo-doctor.ts"),
+          directory,
+        ],
+        {
+          stdout: "pipe",
+          stderr: "pipe",
+        },
+      );
+      expect(result.stdout.toString()).toContain(BUN_DUPLICATE_OUTPUT);
+      expect(result.exitCode, result.stderr.toString()).toBe(
+        termination === "ordinary" ? 0 : 1,
+      );
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });

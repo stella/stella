@@ -8,8 +8,9 @@ import {
   provisionPreviewSuccessResponseSchema,
 } from "@/api/handlers/legislation/reader-response";
 import {
-  safePublicHandlerResponseSchemasWithStatusText,
+  ACCOUNT_ACCESS,
   createSafeBoundedPublicHandler,
+  safePublicHandlerResponseSchemasWithStatusText,
 } from "@/api/lib/api-handlers";
 import type { PublicHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -23,6 +24,7 @@ import {
   readVersionBlocks,
   versionAstColumns,
 } from "@/api/lib/legal-search/legislation-version-blocks";
+import { buildLegislationDocumentAppUrl } from "@/api/lib/legal-search/public-law-app-urls";
 import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
 
@@ -37,6 +39,7 @@ const config = {
   // by the public-law route hook, neither of
   // which the generic invoke path can honor. Agents read provision text
   // through `read_statute_provisions`, which is where the MCP contract lives.
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "public_indexing" },
   params: t.Object({
     documentId: tSafeId("legislationDocument"),
@@ -111,7 +114,17 @@ export const readProvisionPreviewHandler = async ({
     return status(404, { message: "Provision not found" });
   }
 
-  return projectProvisionPreview(preview);
+  return {
+    ...projectProvisionPreview(preview),
+    appUrl: buildLegislationDocumentAppUrl({
+      country: version.country,
+      documentId: version.id,
+      eli: version.eli,
+      slug: version.slug,
+      version: version.versionValidFrom,
+      anchor: citedAnchor ?? anchor,
+    }),
+  };
 };
 
 const readProvisionPreview = createSafeBoundedPublicHandler(
@@ -129,7 +142,9 @@ const readProvisionPreview = createSafeBoundedPublicHandler(
       ),
     );
 
-    return Result.ok(response);
+    return Result.ok(
+      "blocks" in response ? projectProvisionPreview(response) : response,
+    );
   },
 );
 

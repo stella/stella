@@ -7,8 +7,8 @@ import {
   organizationConfiguredAccess,
   usageEntitlements,
 } from "@/api/db/schema";
-import { env } from "@/api/env";
 import type { SafeId } from "@/api/lib/branded-types";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import {
   CONFIGURED_ACCESS_STATE,
   type ConfiguredAccess,
@@ -30,14 +30,18 @@ export const readOriginalOrganizationAccessSnapshot = async (
     .limit(1)
     .then((rows) => rows.at(0));
 
+export type OriginalOrganizationAccessSnapshot = Pick<
+  typeof organizationAccessStates.$inferSelect,
+  "state" | "evaluationEndsAt"
+>;
+
 export type OrganizationAccessSnapshot =
-  | Pick<
-      typeof organizationAccessStates.$inferSelect,
-      "state" | "evaluationEndsAt"
-    >
+  | OriginalOrganizationAccessSnapshot
   | {
       state: typeof CONFIGURED_ACCESS_STATE;
       configuredAccess: ConfiguredAccess;
+      /** The recorded standing the configured access overlays. */
+      original: OriginalOrganizationAccessSnapshot | undefined;
     };
 
 export const decodeConfiguredAccess = (
@@ -111,7 +115,7 @@ export const readOrganizationAccessSnapshot = async (
     db,
     organizationId,
   );
-  if (env.FEATURE_CONFIGURED_ACCESS) {
+  if (isDeploymentFeatureEnabled("FEATURE_CONFIGURED_ACCESS")) {
     const source = await db
       .select({
         status: usageEntitlements.status,
@@ -141,6 +145,7 @@ export const readOrganizationAccessSnapshot = async (
       return {
         state: CONFIGURED_ACCESS_STATE,
         configuredAccess: { status: "disabled" },
+        original,
       } as const satisfies OrganizationAccessSnapshot;
     }
     const configured = source.configured;
@@ -153,6 +158,7 @@ export const readOrganizationAccessSnapshot = async (
       return {
         state: CONFIGURED_ACCESS_STATE,
         configuredAccess: decodeConfiguredAccess(configured),
+        original,
       } as const satisfies OrganizationAccessSnapshot;
     }
   }

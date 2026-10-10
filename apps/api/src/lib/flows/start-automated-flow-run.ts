@@ -1,7 +1,6 @@
 import { Result } from "better-result";
 
 import type { rootDb } from "@/api/db/root";
-import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { resolveCredentialMemberAuthorization } from "@/api/lib/auth";
 import { resolveMemberAuthorization } from "@/api/lib/auth";
@@ -19,6 +18,7 @@ import { buildFlowRunRows } from "@/api/lib/flows/start-flow-run";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { snapshotOperationInput } from "@/api/lib/proofs/checked-transaction";
 import { QUEUED_ACTION_KIND } from "@/api/lib/rate-limit/action-kinds";
 import { runQueuedKickoff } from "@/api/lib/rate-limit/queued-action-admission";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
@@ -110,16 +110,7 @@ export const automatedFlowRunDependencies = (
 });
 
 export const startAutomatedFlowRun = async (
-  {
-    definitionId,
-    organizationId,
-    workspaceId,
-    createdByUserId,
-    triggerSource,
-    inputEntityIds,
-    enqueueDelayMs,
-    logContext,
-  }: StartAutomatedFlowRunArgs,
+  input: StartAutomatedFlowRunArgs,
   {
     findDefinition,
     resolveAuthorization,
@@ -128,6 +119,16 @@ export const startAutomatedFlowRun = async (
     kickoff = runQueuedKickoff,
   }: StartAutomatedFlowRunDependencies,
 ): Promise<void> => {
+  const {
+    definitionId,
+    organizationId,
+    workspaceId,
+    createdByUserId,
+    triggerSource,
+    inputEntityIds,
+    enqueueDelayMs,
+    logContext,
+  } = snapshotOperationInput(input);
   if (createdByUserId === null) {
     logger.warn("flow.automated_run_skipped_no_actor", logContext);
     return;
@@ -147,7 +148,7 @@ export const startAutomatedFlowRun = async (
     });
     return;
   }
-  const definition = definitionResult.value;
+  const definition = snapshotOperationInput(definitionResult.value);
   if (!definition) {
     logger.info("flow.automated_run_definition_missing", logContext);
     return;
@@ -255,10 +256,6 @@ export const startAutomatedFlowRun = async (
       triggerType: triggerSource.type,
     });
   };
-  if (!env.FEATURE_ACTION_ADMISSION) {
-    await createAndEnqueue();
-    return;
-  }
   const started = await Result.tryPromise({
     try: async () =>
       await kickoff({

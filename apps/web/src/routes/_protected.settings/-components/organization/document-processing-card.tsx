@@ -7,9 +7,11 @@ import { Checkbox } from "@stll/ui/checkbox";
 import { Field, FieldLabel } from "@stll/ui/field";
 import { Frame, FramePanel } from "@stll/ui/frame";
 
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { unwrapEden } from "@/lib/errors/api";
+import { useQueryView } from "@/lib/use-query-view";
 import {
   organizationSettingsKeys,
   organizationSettingsOptions,
@@ -22,10 +24,16 @@ const DOCUMENT_PROCESSING_OFF_MODE = "off";
 export const DocumentProcessingCard = () => {
   const t = useTranslations();
   const checkboxId = useId();
-  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
-  const { data: settings } = useQuery(
-    organizationSettingsOptions(activeOrganizationId),
+  const { activeOrganizationId, id: userId } = useAuthenticatedUser();
+  const settingsQuery = useQuery(
+    organizationSettingsOptions({
+      organizationId: activeOrganizationId,
+      userId,
+    }),
   );
+  const settingsView = useQueryView(settingsQuery);
+  const settings =
+    settingsView.type === "items" ? settingsView.items : undefined;
 
   const mutation = useSettingsMutation({
     mutationFn: async (nextEnabled: boolean) =>
@@ -44,12 +52,13 @@ export const DocumentProcessingCard = () => {
   });
 
   if (!settings) {
-    return null;
+    return <QueryViewFeedback view={settingsView} />;
   }
 
   const enabled = settings.documentProcessingMode === SEARCHABLE_TEXT_MODE;
   return (
     <Frame>
+      <QueryViewFeedback view={settingsView} />
       <FramePanel>
         <div className="flex flex-col gap-3 p-1">
           <h2 className="text-sm font-medium">

@@ -44,15 +44,26 @@ const resolveApiModule = (
   );
 };
 
+/** The specifiers `module` imports, as written; none for an imported asset. */
+export const scanModuleImports = async (module: string): Promise<string[]> => {
+  // Imported assets (JSON data) remain graph nodes but do not contain imports.
+  if (!/\.(?:[cm]?js|jsx|tsx?)$/u.test(module)) {
+    return [];
+  }
+  const source = await Bun.file(module).text();
+  const loader = module.endsWith(".tsx") ? "tsx" : "ts";
+  return new Bun.Transpiler({ loader })
+    .scan(source)
+    .imports.map(({ path }) => path);
+};
+
 /** The modules `entrypoint` imports itself, static and dynamic alike. */
 export const collectApiImports = async (
   entrypoint: string,
 ): Promise<string[]> => {
-  const source = await Bun.file(entrypoint).text();
-  const loader = entrypoint.endsWith(".tsx") ? "tsx" : "ts";
-  const imports = new Bun.Transpiler({ loader }).scan(source).imports;
+  const imports = await scanModuleImports(entrypoint);
   return imports
-    .map(({ path }) => resolveApiModule(path, entrypoint))
+    .map((path) => resolveApiModule(path, entrypoint))
     .filter((path): path is string => path !== null);
 };
 

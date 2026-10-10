@@ -1,7 +1,11 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  configuredModelAdmission,
+  createSafeRootHandler,
+} from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { summarizeVersionChange } from "@/api/lib/entity-versions/version-change-summary";
@@ -15,12 +19,19 @@ const templateVersionSummarizeParamsSchema = t.Object({
 });
 
 const config = {
+  actionAdmission: { type: "handler", actionKind: "versions.summarize" },
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Processes template content and returns parsed data or saved-document metadata rather than stored-file bytes.",
+  },
   description:
     "Summarize in prose what changed in one template version compared with " +
     "its predecessor, over the same diff templates.versions.diff returns. " +
     "Returns summary null when the two are identical, skipping the model " +
     "call. Consumes AI usage.",
   permissions: { workspace: ["read"], chat: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "template_authoring_ui",
@@ -40,6 +51,7 @@ const config = {
 const templateVersionSummarize = createSafeRootHandler(
   config,
   async function* ({
+    modelAdmission,
     scopedDb,
     session,
     params,
@@ -79,6 +91,7 @@ const templateVersionSummarize = createSafeRootHandler(
 
     const summary = yield* Result.await(
       summarizeVersionChange({
+        admission: configuredModelAdmission({ modelAdmission }),
         prevText: sources.prevText,
         currentText: sources.currentText,
         feature: "templates.version_summary",

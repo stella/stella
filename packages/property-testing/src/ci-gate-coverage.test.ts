@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { existsSync, statSync } from "node:fs";
 import path from "node:path";
 
+import { flattenWorkflowSteps } from "../../../scripts/workflow-steps";
+
 // Repo root, four levels up from this file (packages/property-testing/src).
 const REPO_ROOT = path.resolve(import.meta.dir, "../../..");
 
@@ -33,7 +35,8 @@ const REPO_ROOT = path.resolve(import.meta.dir, "../../..");
  *
  * Dynamic runners declare their gate, activation value, and discovery glob in
  * their workspace's `package.json#ciGateTestRunners`. The workflow must invoke
- * the matching package script from that workspace. The runner reads the same
+ * the matching package script from that workspace, or invoke the declared
+ * runner directly with its gate activated in that step. The runner reads the same
  * declaration, so its runtime discovery and this guard cannot drift into
  * mirrored lists.
  * Grep discovery steps are matched by their own environment, search directory,
@@ -52,6 +55,8 @@ const LOCAL_ONLY_GATES = new Set<string>([
   "STELLA_UPDATE_PLAN_CONTRACTS",
   // Physical statistics are a local comparison; CI reports the synthetic profile.
   "STELLA_QUERY_PLAN_SCALE_PROFILE",
+  // Regenerates the read-fault baseline locally; CI runs the read-only comparison.
+  "READ_FAULT_BASELINE",
 ]);
 
 // Live-API smoke suites not wired into a workflow. Remove an entry once its
@@ -199,6 +204,7 @@ type CiGateTestRunner = {
   gate: string;
   gateValue: string;
   packageRoot: string;
+  runner: string;
   script: string;
   testFileGlob: string;
 };
@@ -273,6 +279,7 @@ const readCiGateTestRunners = async (): Promise<CiGateTestRunner[]> => {
         gate: requireString(declaration, "gate", relativePath),
         gateValue: requireString(declaration, "gateValue", relativePath),
         packageRoot,
+        runner,
         script,
         testFileGlob: requireString(declaration, "testFileGlob", relativePath),
       });
@@ -310,6 +317,12 @@ const parseWorkflow = (workflow: Workflow): Record<string, unknown> => {
   return parsed;
 };
 
+const isDisabledWorkflowCondition = (condition: unknown): boolean =>
+  condition === false ||
+  (typeof condition === "string" &&
+    (condition.trim() === "false" ||
+      /^\$\{\{\s*false\s*\}\}$/u.test(condition.trim())));
+
 const collectWorkflowSteps = (workflow: Workflow): WorkflowStep[] => {
   const parsed = parseWorkflow(workflow);
   const jobs = parsed["jobs"];
@@ -326,7 +339,7 @@ const collectWorkflowSteps = (workflow: Workflow): WorkflowStep[] => {
     const jobAllowsFailure =
       jobContinueOnError !== undefined && jobContinueOnError !== false;
     const jobCondition = job["if"];
-    if (jobCondition === false) {
+    if (isDisabledWorkflowCondition(jobCondition)) {
       continue;
     }
     const jobIsUnconditional =
@@ -335,16 +348,13 @@ const collectWorkflowSteps = (workflow: Workflow): WorkflowStep[] => {
     if (!Array.isArray(steps)) {
       continue;
     }
-    for (const step of steps) {
-      if (!isRecord(step)) {
-        continue;
-      }
+    for (const step of flattenWorkflowSteps(steps)) {
       const run = step["run"];
       const workingDirectory = step["working-directory"];
       if (typeof run === "string" && typeof workingDirectory === "string") {
         const stepContinueOnError = step["continue-on-error"];
         const stepCondition = step["if"];
-        if (stepCondition === false) {
+        if (isDisabledWorkflowCondition(stepCondition)) {
           continue;
         }
         workflowSteps.push({
@@ -365,17 +375,36 @@ const collectWorkflowSteps = (workflow: Workflow): WorkflowStep[] => {
   return workflowSteps;
 };
 
+const environmentSetsGate = (
+  environment: unknown,
+  declaration: Pick<GateDeclaration, "gate" | "gateValue">,
+): boolean => {
+  if (!isRecord(environment)) {
+    return false;
+  }
+  const value = environment[declaration.gate];
+  if (
+    typeof value !== "string" &&
+    typeof value !== "number" &&
+    typeof value !== "boolean"
+  ) {
+    return false;
+  }
+  return String(value) === declaration.gateValue;
+};
+
 const workflowRunsPackageScript = (
   workflow: Workflow,
   runner: CiGateTestRunner,
 ): boolean => {
   const invocation = `bun run ${runner.script}`;
   return collectWorkflowSteps(workflow).some(
-    ({ allowsFailure, isUnconditional, run, workingDirectory }) =>
+    ({ allowsFailure, env, isUnconditional, run, workingDirectory }) =>
       !allowsFailure &&
-      isUnconditional &&
       workingDirectory === runner.packageRoot &&
-      run.trim() === invocation,
+      ((isUnconditional && run.trim() === invocation) ||
+        (run.trim() === `bun ${runner.runner}` &&
+          environmentSetsGate(env, runner))),
   );
 };
 
@@ -409,24 +438,6 @@ const runnerCovers = ({
   );
 };
 
-const environmentSetsGate = (
-  environment: unknown,
-  declaration: GateDeclaration,
-): boolean => {
-  if (!isRecord(environment)) {
-    return false;
-  }
-  const value = environment[declaration.gate];
-  if (
-    typeof value !== "string" &&
-    typeof value !== "number" &&
-    typeof value !== "boolean"
-  ) {
-    return false;
-  }
-  return String(value) === declaration.gateValue;
-};
-
 const workflowSetsGate = (
   workflow: Workflow,
   declaration: GateDeclaration,
@@ -450,8 +461,8 @@ const workflowSetsGate = (
     if (!Array.isArray(steps)) {
       continue;
     }
-    for (const step of steps) {
-      if (isRecord(step) && environmentSetsGate(step["env"], declaration)) {
+    for (const step of flattenWorkflowSteps(steps)) {
+      if (environmentSetsGate(step["env"], declaration)) {
         return true;
       }
     }
@@ -565,6 +576,195 @@ const isWired = ({
 };
 
 describe("ci-gate coverage convention", () => {
+  test("sees a gated runner nested in a parallel group and rejects a missing gate", () => {
+    const declaration = {
+      file: "apps/api/src/db/root.test.ts",
+      gate: "STELLA_RUN_POSTGRES_TESTS",
+      gateValue: "true",
+    };
+    const runner = {
+      gate: declaration.gate,
+      gateValue: declaration.gateValue,
+      packageRoot: "apps/api",
+      script: "test:postgres",
+      runner: "scripts/run-postgres-tests.ts",
+      testFileGlob: "src/**/*.test.ts",
+    };
+    const workflow = (gate: string | undefined) => ({
+      path: ".github/workflows/ci.yml",
+      text: `jobs:
+  postgres-suites:
+    runs-on: ubuntu-latest
+    steps:
+      - parallel:
+          - id: nested-runner
+            working-directory: apps/api
+            env:${gate ? `\n              ${gate}` : ""}
+            run: bun scripts/run-postgres-tests.ts`,
+    });
+
+    expect(
+      runnerCovers({
+        declaration,
+        runner,
+        workflows: [workflow('STELLA_RUN_POSTGRES_TESTS: "true"')],
+      }),
+    ).toBe(true);
+    expect(
+      runnerCovers({
+        declaration,
+        runner,
+        workflows: [workflow(undefined)],
+      }),
+    ).toBe(false);
+  });
+
+  test.each([
+    {
+      file: "apps/api/src/new-corpus-suite.test.ts",
+      env: 'STELLA_RUN_CORPUS_ENGINE_TESTS: "true"',
+      run: "bun scripts/run-corpus-engine-suites.ts",
+      directory: "apps/api",
+      condition: "!cancelled()",
+      allowsFailure: false,
+      covered: true,
+    },
+    {
+      file: "apps/api/src/nested/new-corpus-suite.test.ts",
+      env: 'STELLA_RUN_CORPUS_ENGINE_TESTS: "true"',
+      run: "bun scripts/run-corpus-engine-suites.ts",
+      directory: "apps/api",
+      condition: "true",
+      allowsFailure: false,
+      covered: true,
+    },
+    {
+      file: "apps/api/src/new-corpus-suite.test.ts",
+      env: 'STELLA_RUN_CORPUS_ENGINE_TESTS: "false"',
+      run: "bun scripts/run-corpus-engine-suites.ts",
+      directory: "apps/api",
+      condition: "true",
+      allowsFailure: false,
+      covered: false,
+    },
+    {
+      file: "apps/api/src/new-corpus-suite.test.ts",
+      env: 'OTHER_GATE: "true"',
+      run: "bun scripts/run-corpus-engine-suites.ts",
+      directory: "apps/api",
+      condition: "true",
+      allowsFailure: false,
+      covered: false,
+    },
+    {
+      file: "apps/api/src/new-corpus-suite.test.ts",
+      env: 'STELLA_RUN_CORPUS_ENGINE_TESTS: "true"',
+      run: "bun scripts/run-corpus-engine-suites.ts || true",
+      directory: "apps/api",
+      condition: "true",
+      allowsFailure: false,
+      covered: false,
+    },
+    {
+      file: "apps/api/src/new-corpus-suite.test.ts",
+      env: 'STELLA_RUN_CORPUS_ENGINE_TESTS: "true"',
+      run: "bun scripts/run-corpus-engine-suites-disabled.ts",
+      directory: "apps/api",
+      condition: "true",
+      allowsFailure: false,
+      covered: false,
+    },
+    {
+      file: "apps/api/src/new-corpus-suite.test.ts",
+      env: 'STELLA_RUN_CORPUS_ENGINE_TESTS: "true"',
+      run: "bun scripts/run-corpus-engine-suites.ts",
+      directory: "apps/api",
+      condition: "false",
+      allowsFailure: false,
+      covered: false,
+    },
+    {
+      file: "apps/api/src/new-corpus-suite.test.ts",
+      env: 'STELLA_RUN_CORPUS_ENGINE_TESTS: "true"',
+      run: "bun scripts/run-corpus-engine-suites.ts",
+      directory: "apps/api",
+      condition: `\${{ false }}`,
+      allowsFailure: false,
+      covered: false,
+    },
+    {
+      file: "apps/api/src/new-corpus-suite.test.ts",
+      env: 'STELLA_RUN_CORPUS_ENGINE_TESTS: "true"',
+      run: "bun scripts/run-corpus-engine-suites.ts",
+      directory: "apps/api",
+      condition: "true",
+      allowsFailure: true,
+      covered: false,
+    },
+    {
+      file: "apps/api/src/new-corpus-suite.test.ts",
+      env: 'STELLA_RUN_CORPUS_ENGINE_TESTS: "true"',
+      run: "bun scripts/run-corpus-engine-suites.ts",
+      directory: "apps/web",
+      condition: "true",
+      allowsFailure: false,
+      covered: false,
+    },
+    {
+      file: "apps/web/src/new-corpus-suite.test.ts",
+      env: 'STELLA_RUN_CORPUS_ENGINE_TESTS: "true"',
+      run: "bun scripts/run-corpus-engine-suites.ts",
+      directory: "apps/api",
+      condition: "true",
+      allowsFailure: false,
+      covered: false,
+    },
+    {
+      file: "apps/api/scripts/new-corpus-suite.test.ts",
+      env: 'STELLA_RUN_CORPUS_ENGINE_TESTS: "true"',
+      run: "bun scripts/run-corpus-engine-suites.ts",
+      directory: "apps/api",
+      condition: "true",
+      allowsFailure: false,
+      covered: false,
+    },
+  ])(
+    "declared direct runners preserve gate, invocation and file scope: %o",
+    ({ file, env, run, directory, condition, allowsFailure, covered }) => {
+      const runner = {
+        gate: "STELLA_RUN_CORPUS_ENGINE_TESTS",
+        gateValue: "true",
+        packageRoot: "apps/api",
+        script: "test:corpus",
+        runner: "scripts/run-corpus-engine-suites.ts",
+        testFileGlob: "src/**/*.test.ts",
+      };
+      const workflow = {
+        path: ".github/workflows/ci.yml",
+        text: `jobs:
+  engine:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          STELLA_RUN_CORPUS_ENGINE_TESTS: "true"
+        run: echo gate in another step does not activate the runner
+      - working-directory: ${directory}
+        if: ${condition}
+        continue-on-error: ${allowsFailure}
+        env:
+          ${env}
+        run: ${run}`,
+      };
+      expect(
+        runnerCovers({
+          declaration: { file, gate: runner.gate, gateValue: runner.gateValue },
+          runner,
+          workflows: [workflow],
+        }),
+      ).toBe(covered);
+    },
+  );
+
   test.each([
     {
       run: `mapfile -t files < <(grep -rl --include="*.test.ts" EXAMPLE_GATE src)\n          bun test "\${files[@]}"`,
@@ -800,6 +1000,7 @@ describe.skipIf(SKIP_INDIRECT)("indirect", () => {});`,
       gateValue: "true",
       packageRoot: "apps/api",
       script: "test:postgres",
+      runner: "scripts/run-postgres-tests.ts",
       testFileGlob: "src/**/*.test.{ts,tsx}",
     };
     const workflows = [
@@ -824,6 +1025,7 @@ describe.skipIf(SKIP_INDIRECT)("indirect", () => {});`,
       gateValue: "true",
       packageRoot: "apps/api",
       script: "test:postgres",
+      runner: "scripts/run-postgres-tests.ts",
       testFileGlob: "src/**/*.test.{ts,tsx}",
     };
     const workflow = {
@@ -846,6 +1048,7 @@ describe.skipIf(SKIP_INDIRECT)("indirect", () => {});`,
       gateValue: "true",
       packageRoot: "apps/api",
       script: "test:postgres",
+      runner: "scripts/run-postgres-tests.ts",
       testFileGlob: "src/**/*.test.{ts,tsx}",
     };
     const shellMasked = {
@@ -900,6 +1103,7 @@ describe.skipIf(SKIP_INDIRECT)("indirect", () => {});`,
       gateValue: "true",
       packageRoot: "apps/api",
       script: "test:postgres",
+      runner: "scripts/run-postgres-tests.ts",
       testFileGlob: "src/**/*.test.{ts,tsx}",
     };
     const separateSteps = {

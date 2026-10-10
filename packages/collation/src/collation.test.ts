@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
-import { compareByLocale, compareCodeUnit, getCollator } from "./collation";
+import {
+  BoundedLruCache,
+  compareByLocale,
+  compareCodeUnit,
+  getCollator,
+} from "./collation";
 
 describe("getCollator", () => {
   test("caches one collator instance per locale", () => {
@@ -75,5 +80,28 @@ describe("compareCodeUnit", () => {
     // code-unit order that JavaScript `<` and the default sort share. Stored
     // orderings depend on this staying put.
     expect(compareCodeUnit("\u{1F600}", "\uE000")).toBe(-1);
+  });
+});
+
+describe("BoundedLruCache", () => {
+  test("evicts the least recently used entry", () => {
+    const cache = new BoundedLruCache<string, number>(2);
+    cache.set("a", 1);
+    cache.set("b", 2);
+    cache.get("a");
+    cache.set("c", 3);
+    expect(cache.get("b")).toBeUndefined();
+    expect(cache.get("a")).toBe(1);
+    expect(cache.get("c")).toBe(3);
+  });
+
+  test("treats overwriting an entry as a use", () => {
+    const cache = new BoundedLruCache<string, number>(2);
+    cache.set("a", 1);
+    cache.set("b", 2);
+    cache.set("a", 10);
+    cache.set("c", 3);
+    expect(cache.get("b")).toBeUndefined();
+    expect(cache.get("a")).toBe(10);
   });
 });

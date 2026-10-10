@@ -3,7 +3,8 @@ import { eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import { billingCodes } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { billingCodeRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -26,6 +27,9 @@ const config = {
     "duplicate of the same type is refused, and the matter has a fixed cap " +
     "on how many codes it may hold.",
   permissions: { billingCode: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  featureAccess: { featureId: "time-billing", type: "required" },
+  realtime: billingCodeRealtimeUpdates,
   mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   body: createBillingCodeBodySchema,
 } satisfies WorkspaceHandlerConfig;

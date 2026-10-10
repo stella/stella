@@ -3,8 +3,10 @@ import type { ReactNode } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { Temporal } from "@stll/time";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
 
@@ -21,15 +23,19 @@ import { ViewerOverlayBar } from "@/components/inspector/viewer-overlay-bar";
 import { ZoomControls } from "@/components/inspector/zoom-controls";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
 import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
-import { useReaderTextScale } from "@/components/legal-reader/use-reader-text-scale";
+import { useWebReaderTextScale as useReaderTextScale } from "@/components/legal-reader/use-web-reader-text-scale";
+import { decisionCitationCourtLabel } from "@/components/references/decision-citation-chip.logic";
+import { decisionCitationPresentationsById } from "@/components/references/decision-citation-presentation.logic";
+import { pickVersionAt } from "@/features/case-law/statute-version";
 import {
   CitingDecisionItem,
   ProvisionCitingDecisions,
 } from "@/features/statutes/components/provision-citing-decisions";
 import type { CitingDecisionRow } from "@/features/statutes/components/provision-citing-decisions";
 import { ProvisionHistory } from "@/features/statutes/components/provision-history";
+import { ProvisionLeadingDecisions } from "@/features/statutes/components/provision-leading-decisions";
+import { ProvisionVersionContext } from "@/features/statutes/components/provision-version-context";
 import { ProvisionWording } from "@/features/statutes/components/provision-wording";
-import { StatuteValidityIndicator } from "@/features/statutes/components/statute-validity-indicator";
 import { StatuteVersionSwitcher } from "@/features/statutes/components/statute-version-switcher";
 import type { ProvisionViewPayload } from "@/features/statutes/provision-inspector.logic";
 import { topCitingDecisionsOptions } from "@/features/statutes/queries/citing-decisions";
@@ -37,8 +43,10 @@ import {
   statuteOptions,
   statuteVersionsOptions,
 } from "@/features/statutes/queries/statutes";
+import { resolveStatuteDisplayStatus } from "@/features/statutes/statute-status";
 import { optionalArray } from "@/lib/arrays";
-import { createStatuteLinkTarget } from "@/lib/statute-route";
+import { createStatuteLinkTarget } from "@/lib/statutes/statute-route";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 // The ask actions pull the prompt builders the chat needs; the pane is read
 // far more often than it is asked a question, so they arrive on demand.
@@ -62,14 +70,28 @@ export const ProvisionInspectorView = ({
   const { payload } = tab;
   const textScale = useReaderTextScale();
   const updateView = useInspectorTabsStore((state) => state.updateView);
-  const { data: versions } = useQuery(
-    statuteVersionsOptions(payload.documentId),
-  );
+  const versionsQuery = useQuery(statuteVersionsOptions(payload.documentId));
+  const versionsView = useQueryView(versionsQuery);
+  useQueryViewError(versionsView);
+  const versions =
+    versionsView.type === "items" ? versionsView.items : undefined;
   const availableVersions = optionalArray(versions);
   // The opener's seed stands only until the list arrives: an opener with no
   // reason to read the work's versions carries one.
   const versionCount =
     versions === undefined ? payload.versionCount : availableVersions.length;
+  const today = Temporal.Now.plainDateISO(Temporal.Now.timeZoneId()).toString();
+  const currentVersion = pickVersionAt(
+    availableVersions.filter(
+      (version) =>
+        resolveStatuteDisplayStatus({
+          status: version.status,
+          validFrom: version.versionValidFrom,
+          today,
+        }) === "current",
+    ),
+    today,
+  );
   const selectedVersion = availableVersions.find(
     (version) => version.id === payload.documentId,
   );
@@ -90,15 +112,23 @@ export const ProvisionInspectorView = ({
     };
     updateView({ id: tab.id, label: tab.label, payload: nextPayload });
   };
-  const { data: leading } = useQuery(
-    topCitingDecisionsOptions({
-      anchor: payload.anchorId,
-      eli: payload.eli,
-      jurisdiction: payload.jurisdiction,
-    }),
+  const leadingView = useQueryView(
+    useQuery(
+      topCitingDecisionsOptions({
+        anchor: payload.anchorId,
+        eli: payload.eli,
+        jurisdiction: payload.jurisdiction,
+      }),
+    ),
   );
   const leadingDecisions =
-    leading === undefined ? [] : uniqueByDecision(leading);
+    leadingView.type === "items" ? uniqueByDecision(leadingView.items) : [];
+  const leadingPresentations = decisionCitationPresentationsById(
+    leadingDecisions.map((decision) => ({
+      decisionId: decision.decisionId,
+      courtShortCode: decisionCitationCourtLabel(decision),
+    })),
+  );
   const panelRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
   // The wording's own query, read here only for whether there is text to
@@ -133,7 +163,11 @@ export const ProvisionInspectorView = ({
       <InspectorFindBar find={find} />
       {/* The bar floats over the provision the way it floats over a PDF page;
           the scroll area below it moves, the corner does not. */}
-      <LegalReaderAIChat activeLegal={activeLegal} className="min-h-0 flex-1">
+      <LegalReaderAIChat
+        activeLegal={activeLegal}
+        aiMode="enabled"
+        className="min-h-0 flex-1"
+      >
         <ScrollArea axis="vertical" className="h-full">
           {/* The gutter and the trailing room the composer needs belong to the
               column; the text root inside it carries the reader's own scale. */}
@@ -147,7 +181,11 @@ export const ProvisionInspectorView = ({
             >
               {selectedVersion !== undefined && (
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <StatuteValidityIndicator
+                  <ProvisionVersionContext
+                    decisionContext={payload.decisionContext}
+                    documentId={payload.documentId}
+                    currentVersionId={currentVersion?.id}
+                    onVersionChange={switchVersion}
                     expression={selectedVersion}
                     status={selectedVersion.status}
                     validFrom={selectedVersion.versionValidFrom}
@@ -190,17 +228,23 @@ export const ProvisionInspectorView = ({
                 highlightAnchorId={payload.highlightAnchorId}
               />
 
-              {leadingDecisions.length > 0 && (
-                <ProvisionSection title={t("statutes.leadingDecisions")}>
+              <ProvisionSection title={t("statutes.leadingDecisions")}>
+                <ProvisionLeadingDecisions view={leadingView}>
                   <ul className="m-0 flex list-none flex-col p-0">
                     {leadingDecisions.map((decision) => (
                       <li key={decision.decisionId}>
-                        <CitingDecisionItem decision={decision} />
+                        <CitingDecisionItem
+                          decision={decision}
+                          presentation={
+                            leadingPresentations.get(decision.decisionId) ??
+                            panic("Leading decision missing collected identity")
+                          }
+                        />
                       </li>
                     ))}
                   </ul>
-                </ProvisionSection>
-              )}
+                </ProvisionLeadingDecisions>
+              </ProvisionSection>
 
               <ProvisionSection title={t("caseLaw.viewer.citedBy")}>
                 <ProvisionCitingDecisions

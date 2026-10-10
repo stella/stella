@@ -17,6 +17,7 @@ use crate::{
   desktop_telemetry::{
     DesktopTelemetry, DesktopTelemetrySpan, DesktopTelemetryWindow, DesktopTimingReport,
   },
+  local_window::ClipboardCaller,
 };
 
 const HISTORY_EVENT: &str = "clipboard-history-changed";
@@ -41,6 +42,7 @@ fn lock_error() -> String {
 
 #[tauri::command]
 pub fn clipboard_get_snapshot(
+  caller: ClipboardCaller,
   state: State<'_, ClipboardAppState>,
   telemetry: State<'_, DesktopTelemetry>,
   startup: State<'_, ClipboardStartupTrace>,
@@ -50,7 +52,7 @@ pub fn clipboard_get_snapshot(
   let lock_wait = lock_requested.elapsed();
   let build_started = Instant::now();
   manager.prune_expired(chrono::Utc::now())?;
-  let snapshot = manager.snapshot();
+  let snapshot = manager.snapshot(&caller);
   let build = build_started.elapsed();
   drop(manager);
 
@@ -76,15 +78,17 @@ pub fn clipboard_get_snapshot(
 
 #[tauri::command]
 pub fn clipboard_complete_welcome(
+  caller: ClipboardCaller,
   state: State<'_, ClipboardAppState>,
 ) -> Result<ClipboardSnapshot, String> {
   let mut manager = state.lock().map_err(|_| lock_error())?;
   manager.complete_welcome()?;
-  Ok(manager.snapshot())
+  Ok(manager.snapshot(&caller))
 }
 
 #[tauri::command]
 pub fn clipboard_set_capture_status(
+  caller: ClipboardCaller,
   status: ClipboardCaptureStatus,
   state: State<'_, ClipboardAppState>,
   window: WebviewWindow,
@@ -92,7 +96,7 @@ pub fn clipboard_set_capture_status(
   let snapshot = {
     let mut manager = state.lock().map_err(|_| lock_error())?;
     manager.set_capture_status(status)?;
-    manager.snapshot()
+    manager.snapshot(&caller)
   };
   let _ = window.emit(HISTORY_EVENT, ());
   Ok(snapshot)
@@ -100,6 +104,7 @@ pub fn clipboard_set_capture_status(
 
 #[tauri::command]
 pub fn clipboard_exclude_item_source_app(
+  caller: ClipboardCaller,
   id: String,
   state: State<'_, ClipboardAppState>,
   window: WebviewWindow,
@@ -107,7 +112,7 @@ pub fn clipboard_exclude_item_source_app(
   let snapshot = {
     let mut manager = state.lock().map_err(|_| lock_error())?;
     manager.exclude_source_app(&id)?;
-    manager.snapshot()
+    manager.snapshot(&caller)
   };
   let _ = window.emit(HISTORY_EVENT, ());
   Ok(snapshot)
@@ -115,6 +120,7 @@ pub fn clipboard_exclude_item_source_app(
 
 #[tauri::command]
 pub fn clipboard_remove_source_app_exclusion(
+  caller: ClipboardCaller,
   identifier: String,
   state: State<'_, ClipboardAppState>,
   window: WebviewWindow,
@@ -122,7 +128,7 @@ pub fn clipboard_remove_source_app_exclusion(
   let snapshot = {
     let mut manager = state.lock().map_err(|_| lock_error())?;
     manager.remove_source_app_exclusion(&identifier)?;
-    manager.snapshot()
+    manager.snapshot(&caller)
   };
   let _ = window.emit(HISTORY_EVENT, ());
   Ok(snapshot)
@@ -130,6 +136,7 @@ pub fn clipboard_remove_source_app_exclusion(
 
 #[tauri::command]
 pub fn clipboard_set_retention(
+  caller: ClipboardCaller,
   retention: ClipboardRetention,
   state: State<'_, ClipboardAppState>,
   window: WebviewWindow,
@@ -137,7 +144,7 @@ pub fn clipboard_set_retention(
   let snapshot = {
     let mut manager = state.lock().map_err(|_| lock_error())?;
     manager.set_retention(retention)?;
-    manager.snapshot()
+    manager.snapshot(&caller)
   };
   let _ = window.emit(HISTORY_EVENT, ());
   Ok(snapshot)
@@ -149,6 +156,7 @@ pub fn clipboard_set_retention(
 /// window created later never disagrees with the ones already open.
 #[tauri::command]
 pub fn clipboard_set_screen_capture(
+  caller: ClipboardCaller,
   capture: ClipboardScreenCapture,
   state: State<'_, ClipboardAppState>,
   app: AppHandle,
@@ -165,13 +173,14 @@ pub fn clipboard_set_screen_capture(
     let mut manager = state.lock().map_err(|_| lock_error())?;
     manager
       .set_screen_capture(capture)
-      .map(|()| manager.snapshot())
+      .map(|()| manager.snapshot(&caller))
   };
   stored.inspect_err(|_| rollback())
 }
 
 #[tauri::command]
 pub fn clipboard_delete_item(
+  caller: ClipboardCaller,
   id: String,
   state: State<'_, ClipboardAppState>,
   window: WebviewWindow,
@@ -181,7 +190,7 @@ pub fn clipboard_delete_item(
     if !manager.delete_item(&id)? {
       return Err(ITEM_NOT_FOUND_ERROR.to_string());
     }
-    manager.snapshot()
+    manager.snapshot(&caller)
   };
   let _ = window.emit(HISTORY_EVENT, ());
   Ok(snapshot)
@@ -189,6 +198,7 @@ pub fn clipboard_delete_item(
 
 #[tauri::command]
 pub fn clipboard_duplicate_item(
+  caller: ClipboardCaller,
   id: String,
   state: State<'_, ClipboardAppState>,
   window: WebviewWindow,
@@ -198,7 +208,7 @@ pub fn clipboard_duplicate_item(
     if !manager.duplicate_item(&id)? {
       return Err(ITEM_NOT_FOUND_ERROR.to_string());
     }
-    manager.snapshot()
+    manager.snapshot(&caller)
   };
   let _ = window.emit(HISTORY_EVENT, ());
   Ok(snapshot)
@@ -206,13 +216,14 @@ pub fn clipboard_duplicate_item(
 
 #[tauri::command]
 pub fn clipboard_clear_history(
+  caller: ClipboardCaller,
   state: State<'_, ClipboardAppState>,
   window: WebviewWindow,
 ) -> Result<ClipboardSnapshot, String> {
   let snapshot = {
     let mut manager = state.lock().map_err(|_| lock_error())?;
     manager.clear()?;
-    manager.snapshot()
+    manager.snapshot(&caller)
   };
   let _ = window.emit(HISTORY_EVENT, ());
   Ok(snapshot)
@@ -220,6 +231,7 @@ pub fn clipboard_clear_history(
 
 #[tauri::command]
 pub fn clipboard_create_group(
+  caller: ClipboardCaller,
   color: ClipboardGroupColor,
   item_id: Option<String>,
   name: String,
@@ -229,7 +241,7 @@ pub fn clipboard_create_group(
   let snapshot = {
     let mut manager = state.lock().map_err(|_| lock_error())?;
     manager.create_group(&name, color, item_id.as_deref())?;
-    manager.snapshot()
+    manager.snapshot(&caller)
   };
   let _ = window.emit(HISTORY_EVENT, ());
   Ok(snapshot)
@@ -237,6 +249,7 @@ pub fn clipboard_create_group(
 
 #[tauri::command]
 pub fn clipboard_delete_group(
+  caller: ClipboardCaller,
   id: String,
   mode: ClipboardGroupDeletionMode,
   state: State<'_, ClipboardAppState>,
@@ -247,7 +260,7 @@ pub fn clipboard_delete_group(
     if !manager.delete_group(&id, mode)? {
       return Err(GROUP_NOT_FOUND_ERROR.to_string());
     }
-    manager.snapshot()
+    manager.snapshot(&caller)
   };
   let _ = window.emit(HISTORY_EVENT, ());
   Ok(snapshot)
@@ -255,6 +268,7 @@ pub fn clipboard_delete_group(
 
 #[tauri::command]
 pub fn clipboard_update_group(
+  caller: ClipboardCaller,
   color: ClipboardGroupColor,
   id: String,
   name: String,
@@ -266,7 +280,26 @@ pub fn clipboard_update_group(
     if !manager.update_group(&id, &name, color)? {
       return Err(GROUP_NOT_FOUND_ERROR.to_string());
     }
-    manager.snapshot()
+    manager.snapshot(&caller)
+  };
+  let _ = window.emit(HISTORY_EVENT, ());
+  Ok(snapshot)
+}
+
+#[tauri::command]
+pub fn clipboard_move_group(
+  caller: ClipboardCaller,
+  id: String,
+  index: usize,
+  state: State<'_, ClipboardAppState>,
+  window: WebviewWindow,
+) -> Result<ClipboardSnapshot, String> {
+  let snapshot = {
+    let mut manager = state.lock().map_err(|_| lock_error())?;
+    if !manager.move_group(&id, index)? {
+      return Err(GROUP_NOT_FOUND_ERROR.to_string());
+    }
+    manager.snapshot(&caller)
   };
   let _ = window.emit(HISTORY_EVENT, ());
   Ok(snapshot)
@@ -274,6 +307,7 @@ pub fn clipboard_update_group(
 
 #[tauri::command]
 pub fn clipboard_update_item(
+  caller: ClipboardCaller,
   id: String,
   plain_text: String,
   html: Option<String>,
@@ -286,7 +320,7 @@ pub fn clipboard_update_item(
     if !manager.update_item(&id, &plain_text, html.as_deref(), group_id)? {
       return Err(ITEM_NOT_FOUND_ERROR.to_string());
     }
-    manager.snapshot()
+    manager.snapshot(&caller)
   };
   let _ = window.emit(HISTORY_EVENT, ());
   Ok(snapshot)
@@ -294,6 +328,7 @@ pub fn clipboard_update_item(
 
 #[tauri::command]
 pub fn clipboard_set_item_group(
+  caller: ClipboardCaller,
   id: String,
   group_id: Option<String>,
   state: State<'_, ClipboardAppState>,
@@ -304,7 +339,7 @@ pub fn clipboard_set_item_group(
     if !manager.set_item_group(&id, group_id)? {
       return Err(ITEM_NOT_FOUND_ERROR.to_string());
     }
-    manager.snapshot()
+    manager.snapshot(&caller)
   };
   let _ = window.emit(HISTORY_EVENT, ());
   Ok(snapshot)
@@ -312,6 +347,7 @@ pub fn clipboard_set_item_group(
 
 #[tauri::command]
 pub fn clipboard_set_item_name(
+  caller: ClipboardCaller,
   id: String,
   name: String,
   state: State<'_, ClipboardAppState>,
@@ -322,7 +358,7 @@ pub fn clipboard_set_item_name(
     if !manager.set_item_name(&id, &name)? {
       return Err(ITEM_NOT_FOUND_ERROR.to_string());
     }
-    manager.snapshot()
+    manager.snapshot(&caller)
   };
   let _ = window.emit(HISTORY_EVENT, ());
   Ok(snapshot)
@@ -330,6 +366,7 @@ pub fn clipboard_set_item_name(
 
 #[tauri::command]
 pub fn clipboard_open_editor(
+  _caller: ClipboardCaller,
   id: String,
   app: AppHandle,
   editor_state: State<'_, ClipboardEditorState>,
@@ -347,6 +384,7 @@ pub fn clipboard_open_editor(
 
 #[tauri::command]
 pub fn clipboard_get_editor_context(
+  caller: ClipboardCaller,
   editor_state: State<'_, ClipboardEditorState>,
   state: State<'_, ClipboardAppState>,
 ) -> Result<ClipboardEditorContext, String> {
@@ -358,7 +396,7 @@ pub fn clipboard_get_editor_context(
   let mut manager = state.lock().map_err(|_| lock_error())?;
   manager.prune_expired(chrono::Utc::now())?;
   let item = manager
-    .item_for_webview(&id)
+    .item_for_webview(&id, &caller)
     .ok_or_else(|| ITEM_NOT_FOUND_ERROR.to_string())?;
   let source_app_visual = manager.source_app_visual(&item);
   Ok(ClipboardEditorContext {
@@ -371,12 +409,13 @@ pub fn clipboard_get_editor_context(
 
 #[tauri::command]
 pub fn clipboard_get_image_preview(
+  caller: ClipboardCaller,
   id: String,
   state: State<'_, ClipboardAppState>,
 ) -> Result<String, String> {
   let preview = {
     let manager = state.lock().map_err(|_| lock_error())?;
-    manager.image_preview(&id)?
+    manager.image_preview(&id, &caller)?
   }
   .load()?;
   Ok(format!(
@@ -387,6 +426,7 @@ pub fn clipboard_get_image_preview(
 
 #[tauri::command]
 pub fn clipboard_save_editor_item(
+  _caller: ClipboardCaller,
   id: String,
   plain_text: String,
   html: Option<String>,
@@ -405,7 +445,10 @@ pub fn clipboard_save_editor_item(
 }
 
 #[tauri::command]
-pub fn clipboard_close_editor(window: WebviewWindow) -> Result<(), String> {
+pub fn clipboard_close_editor(
+  _caller: ClipboardCaller,
+  window: WebviewWindow,
+) -> Result<(), String> {
   window.destroy().map_err(|error| {
     tracing::warn!(error = %error, "clipboard editor could not be closed");
     format!("clipboard editor could not be closed: {error}")
@@ -461,6 +504,7 @@ fn write_history_item(
 
 #[tauri::command]
 pub fn clipboard_copy_item(
+  _caller: ClipboardCaller,
   format: ClipboardCopyFormat,
   id: String,
   state: State<'_, ClipboardAppState>,
@@ -479,17 +523,18 @@ pub fn clipboard_copy_item(
 }
 
 #[tauri::command]
-pub fn clipboard_hide(window: WebviewWindow) -> Result<(), String> {
+pub fn clipboard_hide(
+  _caller: ClipboardCaller,
+  window: WebviewWindow,
+) -> Result<(), String> {
   clipboard_window::hide(&window)
 }
 
 #[tauri::command]
-pub fn clipboard_show(app: tauri::AppHandle) {
-  clipboard_window::show(&app);
-}
-
-#[tauri::command]
-pub fn clipboard_open_stella(window: WebviewWindow) -> Result<(), String> {
+pub fn clipboard_open_stella(
+  _caller: ClipboardCaller,
+  window: WebviewWindow,
+) -> Result<(), String> {
   opener::open(STELLA_WEB_APP_URL).map_err(|error| {
     tracing::warn!(error = %error, "stella web app could not be opened");
     "stella web app could not be opened".to_string()

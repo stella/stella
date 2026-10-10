@@ -2,7 +2,7 @@ import { panic, Result } from "better-result";
 import { eq } from "drizzle-orm";
 
 import { billingArrangements } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { readBillingUsage } from "@/api/lib/billing/arrangements";
 import { evaluateBillingCap } from "@/api/lib/billing/arrangements.logic";
 
@@ -11,6 +11,8 @@ const readMatterBillingSummary = createSafeHandler(
     description:
       "Read matter time billing usage: non-void invoice time-line net reservations (including drafts) plus approved unbilled client time, in one currency. Amounts are exact decimal minor-unit strings. Currency mismatch makes cap status unavailable; the summary field is null when no arrangement exists; configure one with rates.arrangement.update. remainingInvoiceCapAmount excludes approved unbilled work; remainingWipCapAmount includes it. No events are emitted by reads.",
     permissions: { rate: ["read"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: { featureId: "time-billing", type: "required" },
     mcp: {
       type: "capability",
       readClass: "tenant",

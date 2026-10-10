@@ -1,14 +1,15 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
+import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 
 import { member, organization, user } from "@/api/db/auth-schema";
-import type { Transaction } from "@/api/db/root";
 import {
   auditLogs,
   rateTables,
   workspaceMembers,
   workspaces,
+  featureEnrolments,
 } from "@/api/db/schema";
 import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
 import {
@@ -22,7 +23,10 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_DB,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 
 import createRateTable from "./create";
 import updateRateTable from "./update";
@@ -30,7 +34,10 @@ import updateRateTable from "./update";
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgres = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
-const observeBlocking = async (tx: Transaction, pid: number) => {
+const observeBlocking = async (
+  tx: Pick<PgAsyncDatabase<PgQueryResultHKT>, "select">,
+  pid: number,
+) => {
   for (let attempt = 0; attempt < 200; attempt += 1) {
     const rows = await tx
       .select({
@@ -86,6 +93,11 @@ if (!databaseUrl || !runPostgres) {
           userId,
           role: "owner",
           createdAt: new Date(),
+        });
+        await firstDb.insert(featureEnrolments).values({
+          organizationId,
+          userId,
+          featureId: "time-billing",
         });
         await firstDb.insert(workspaces).values({
           id: workspaceId,
@@ -174,12 +186,12 @@ if (!databaseUrl || !runPostgres) {
         ) =>
           await createRateTable.handler(
             createTestHandlerContext<CreateContext>({
+              scopedDb: NO_DB,
               workspaceId,
               session: { activeOrganizationId: organizationId },
               user: { id: userId },
               safeDb,
-              recordAuditEvent,
-              createAuditRecorder: () => recordAuditEvent,
+              audit: recordAuditEvent,
               body: { name, currency: "USD", isDefault: true },
             }),
           );
@@ -227,12 +239,12 @@ if (!databaseUrl || !runPostgres) {
         ) =>
           await updateRateTable.handler(
             createTestHandlerContext<UpdateContext>({
+              scopedDb: NO_DB,
               workspaceId,
               session: { activeOrganizationId: organizationId },
               user: { id: userId },
               safeDb,
-              recordAuditEvent,
-              createAuditRecorder: () => recordAuditEvent,
+              audit: recordAuditEvent,
               body: { id, isDefault },
             }),
           );

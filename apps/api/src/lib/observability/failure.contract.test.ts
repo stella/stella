@@ -225,6 +225,7 @@ const HANDLER_STATUS_EXPECTED = {
   409: ["conflict", "client"],
   413: ["request_invalid", "client"],
   422: ["request_invalid", "client"],
+  426: ["precondition_required", "client"],
   428: ["precondition_required", "client"],
   429: ["rate_limited", "client"],
 } as const satisfies Record<
@@ -233,7 +234,7 @@ const HANDLER_STATUS_EXPECTED = {
 >;
 
 const CLIENT_STATUSES = [
-  400, 401, 402, 403, 404, 409, 413, 422, 428, 429,
+  400, 401, 402, 403, 404, 409, 413, 422, 426, 428, 429,
 ] as const satisfies readonly (keyof typeof HANDLER_STATUS_EXPECTED)[];
 
 const entriesOf = <TKey extends string | number, TValue>(
@@ -511,6 +512,18 @@ const GRADING_ROWS: readonly GradingRow[] = [
       rule: "brand" as const,
     },
   ]),
+  {
+    name: "a provider 400 no kind names, at the AI boundary",
+    error: () =>
+      Object.assign(new Error(SENTINEL), {
+        status: 400,
+        error: { type: "invalid_request_error", param: "input" },
+      }),
+    boundary: "ai",
+    reason: "provider_request_rejected",
+    grade: "defect",
+    rule: "brand",
+  },
   {
     name: "a bare provider 429 that never met the AI boundary",
     error: () => Object.assign(new Error(SENTINEL), { statusCode: 429 }),

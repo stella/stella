@@ -11,11 +11,12 @@
  *
  * Admission stays with the caller. `publicCaseLawCountry` and
  * `publicLegislationCountry` answer whether a country has a corpus here, and
- * non-admitted advertised countries answer with typed unavailability.
+ * non-admitted advertised countries answer with typed unavailability. That
+ * answer is built here, status included, so no handler spells its status.
  */
 
-import type { TSchema } from "@sinclair/typebox";
-import { t } from "elysia";
+import type { TSchema, TUnion } from "@sinclair/typebox";
+import { status, t } from "elysia";
 
 import type { CountryAlpha3 } from "@stll/agent-input";
 import {
@@ -24,6 +25,7 @@ import {
   normalizeCountry,
 } from "@stll/agent-input";
 import {
+  PUBLIC_COUNTRY_UNAVAILABLE_STATUS,
   publicCountryUnavailable,
   publicCountryUnavailableSchema,
   type PublicCountryUnavailable,
@@ -51,6 +53,55 @@ export const tPublicCountryUnavailable = t.Object(
   { additionalProperties: false },
 );
 
+/** The refusal as an HTTP answer, at the status the contract names. */
+export const publicCountryUnavailableAnswer = (
+  response: PublicCountryUnavailable,
+) => status(PUBLIC_COUNTRY_UNAVAILABLE_STATUS, response);
+
+export type PublicCountryUnavailableAnswer = ReturnType<
+  typeof publicCountryUnavailableAnswer
+>;
+
+/** The answer for a country an HTTP route names, or null when it is admitted
+ *  or not advertised at all. */
+export const publicLawCountryUnavailable = (
+  input: string,
+): PublicCountryUnavailableAnswer | null => {
+  const response = publicCountryUnavailable(input);
+  return response === null ? null : publicCountryUnavailableAnswer(response);
+};
+
+type PublicCountryUnavailableStatus = typeof PUBLIC_COUNTRY_UNAVAILABLE_STATUS;
+
+type WithPublicCountryUnavailable<
+  TResponses extends { readonly [PUBLIC_COUNTRY_UNAVAILABLE_STATUS]: TSchema },
+> = Omit<TResponses, PublicCountryUnavailableStatus> & {
+  readonly [PUBLIC_COUNTRY_UNAVAILABLE_STATUS]: TUnion<
+    [
+      TResponses[PublicCountryUnavailableStatus],
+      typeof tPublicCountryUnavailable,
+    ]
+  >;
+};
+
+/**
+ * Declares the refusal on a route's response map, beside whatever else its
+ * status already answers (a plain miss). Every route that can refuse a
+ * country declares it through here, so it cannot be declared under any other
+ * status.
+ */
+export const withPublicCountryUnavailable = <
+  TResponses extends { readonly [PUBLIC_COUNTRY_UNAVAILABLE_STATUS]: TSchema },
+>(
+  responses: TResponses,
+): WithPublicCountryUnavailable<TResponses> => ({
+  ...responses,
+  [PUBLIC_COUNTRY_UNAVAILABLE_STATUS]: t.Union([
+    responses[PUBLIC_COUNTRY_UNAVAILABLE_STATUS],
+    tPublicCountryUnavailable,
+  ]),
+});
+
 /**
  * A declared country query property.
  *
@@ -70,7 +121,7 @@ export const tPublicLawCountry = t.String({
 export type PublicLawCountryRead =
   | { kind: "read"; country: CountryAlpha3 }
   | { kind: "unreadable"; message: string }
-  | { kind: "unavailable"; response: PublicCountryUnavailable };
+  | { kind: "unavailable"; answer: PublicCountryUnavailableAnswer };
 
 type PublicLawCountryOptions = {
   /** The canonical codes this surface holds law for, named in the ask so a
@@ -97,9 +148,9 @@ export const readPublicLawCountry = (
     parameter,
   });
   if (normalized.ok) {
-    const unavailable = publicCountryUnavailable(normalized.value.alpha3);
-    if (unavailable !== null) {
-      return { kind: "unavailable", response: unavailable };
+    const answer = publicLawCountryUnavailable(normalized.value.alpha3);
+    if (answer !== null) {
+      return { kind: "unavailable", answer };
     }
     return { kind: "read", country: normalized.value.alpha3 };
   }

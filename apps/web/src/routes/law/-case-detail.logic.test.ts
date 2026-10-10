@@ -5,6 +5,7 @@ import { describe, expect, test } from "bun:test";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import { publicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { decisionBySlugOptions } from "@/features/case-law/queries/decisions";
 import { createPublicLawHead } from "@/lib/public-law-seo";
@@ -164,27 +165,29 @@ test("a readable decision omits textless language variants from alternate links"
     },
   });
   expect(
-    head.links.flatMap((link) => ("hreflang" in link ? [link.hreflang] : [])),
+    head.links.flatMap((link) => ("hrefLang" in link ? [link.hrefLang] : [])),
   ).toEqual(["cs", "en", "x-default"]);
 });
 
 describe("public case-law decision route readiness", () => {
-  test("rejects a route outside the generated country list", () => {
+  test("rejects a route outside the generated country list", async () => {
     expect(
-      loadPublicCaseLawDecisionRoute({
-        hash: "",
-        params: {
-          country: "xaa",
-          court: "synthetic-court",
-          slug: "synthetic-decision",
-        },
-        queryClient: new QueryClient(),
-        search: {},
-      }),
-    ).rejects.toMatchObject({ isNotFound: true });
+      await rejectionOf(
+        loadPublicCaseLawDecisionRoute({
+          hash: "",
+          params: {
+            country: "xaa",
+            court: "synthetic-court",
+            slug: "synthetic-decision",
+          },
+          queryClient: new QueryClient(),
+          search: {},
+        }),
+      ),
+    ).toMatchObject({ isNotFound: true });
   });
 
-  test("rejects a fetched decision outside the generated country list", () => {
+  test("rejects a fetched decision outside the generated country list", async () => {
     const queryClient = new QueryClient();
     const options = decisionBySlugOptions({
       country: PUBLIC_COUNTRY,
@@ -193,17 +196,19 @@ describe("public case-law decision route readiness", () => {
     queryClient.setQueryData(options.queryKey, UNPUBLISHED_DECISION);
 
     expect(
-      loadPublicCaseLawDecisionRoute({
-        hash: "",
-        params: {
-          country: "cze",
-          court: "synthetic-court",
-          slug: "synthetic-decision",
-        },
-        queryClient,
-        search: {},
-      }),
-    ).rejects.toMatchObject({ isNotFound: true });
+      await rejectionOf(
+        loadPublicCaseLawDecisionRoute({
+          hash: "",
+          params: {
+            country: "cze",
+            court: "synthetic-court",
+            slug: "synthetic-decision",
+          },
+          queryClient,
+          search: {},
+        }),
+      ),
+    ).toMatchObject({ isNotFound: true });
   });
 });
 
@@ -218,31 +223,34 @@ describe("canonical decision redirect", () => {
     return queryClient;
   };
 
-  test("carries the passage the reader came for to the canonical path", async () => {
-    // A citation chip opens the decision at a block. Canonicalising the path
-    // must not drop the fragment, or the reader lands at the top of the
-    // decision instead of on the passage the answer cited.
-    const redirected = await loadPublicCaseLawDecisionRoute({
-      hash: "p-12",
-      params: {
-        country: "cze",
-        court: "synthetic-court",
-        slug: "stale-slug",
-      },
-      queryClient: seedStaleSlug(),
-      search: {},
-    }).then(
-      () => panic("Expected the stale slug to redirect."),
-      (error: unknown) => error,
-    );
+  test.each(["p-12", "par=48", "par=48-53", "par=garbage"])(
+    "carries fragment %s to the canonical path",
+    async (hash) => {
+      // A citation chip opens the decision at a block. Canonicalising the path
+      // must not drop the fragment, or the reader lands at the top of the
+      // decision instead of on the passage the answer cited.
+      const redirected = await loadPublicCaseLawDecisionRoute({
+        hash,
+        params: {
+          country: "cze",
+          court: "synthetic-court",
+          slug: "stale-slug",
+        },
+        queryClient: seedStaleSlug(),
+        search: {},
+      }).then(
+        () => panic("Expected the stale slug to redirect."),
+        (error: unknown) => error,
+      );
 
-    expect(redirected).toMatchObject({
-      options: { params: { slug: "synthetic-decision" } },
-    });
-    // The same path the no-fragment case asserts the absence of, so that
-    // assertion cannot pass by naming a property neither case carries.
-    expect(redirected).toHaveProperty("options.hash", "p-12");
-  });
+      expect(redirected).toMatchObject({
+        options: { params: { slug: "synthetic-decision" } },
+      });
+      // The same path the no-fragment case asserts the absence of, so that
+      // assertion cannot pass by naming a property neither case carries.
+      expect(redirected).toHaveProperty("options.hash", hash);
+    },
+  );
 
   test("a decision opened at no passage keeps a bare canonical URL", async () => {
     const redirected = await loadPublicCaseLawDecisionRoute({
@@ -344,6 +352,16 @@ describe("absorbed supplement redirect", () => {
     });
     expect(redirected).toHaveProperty("options.hash", `${ANCHOR_PREFIX}h-1`);
   });
+
+  test.each(["par=48", "par=48-53", "par=garbage"])(
+    "preserves court range %s when reasons resolve to a judgment",
+    async (hash) => {
+      expect(await redirectFromReasons(hash)).toHaveProperty(
+        "options.hash",
+        hash,
+      );
+    },
+  );
 
   test("maps a passage of the reasons onto the same block in the judgment", async () => {
     const redirected = await redirectFromReasons("p-4");

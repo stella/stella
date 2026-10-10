@@ -10,7 +10,7 @@ import {
   mintMachineApiKey,
   validateGrantablePermissions,
 } from "@/api/handlers/api-keys/mint";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 
@@ -27,6 +27,7 @@ const config = {
   // an organization-configuration act, and this is the same statement the other
   // org-scoped secret endpoints (AI provider config, DeepL key) are gated on.
   permissions: { organizationSettings: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.accountControl,
   // Secret material must never transit an agent surface: the response carries
   // the plaintext credential, and an agent able to mint credentials could grant
   // itself durable access outside the consent flow that granted it its own.

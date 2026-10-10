@@ -8,12 +8,13 @@
 
 import { describe, expect, test } from "bun:test";
 
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
+
 import {
   isDeferredDocumentFetchable,
   readThroughDeferredDocument,
 } from "@/api/handlers/case-law/decisions/document-on-demand";
 import type { OnDemandDocumentDeps } from "@/api/handlers/case-law/decisions/document-on-demand";
-import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
@@ -396,3 +397,32 @@ describe("deferred document read-through", () => {
     );
   });
 });
+
+for (const status of ["busy", "lost"] as const) {
+  test(`source ownership ${status} reads as metadata-only with a typed reason`, async () => {
+    const decision = pending();
+    const reasons: string[] = [];
+    const requested: string[] = [];
+    const deps: OnDemandDocumentDeps = {
+      withFetchBudget: availableBudget,
+      recordRequest: async (id) => {
+        requested.push(id);
+      },
+      recordPacingOutcome: (id, reason) => {
+        expect(id).toBe(decision.id);
+        reasons.push(reason);
+      },
+      fetchDocument: async () => ({ status }),
+    };
+    expect(
+      await readThroughDeferredDocument({
+        decision,
+        adapterKey: "sk-courts",
+        deps,
+        recordDemand: true,
+      }),
+    ).toBeNull();
+    expect(reasons).toEqual([`ownership-${status}`]);
+    expect(requested).toEqual([decision.id]);
+  });
+}

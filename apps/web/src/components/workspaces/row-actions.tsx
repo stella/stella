@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMatch, useNavigate, useRouteContext } from "@tanstack/react-router";
+import { useMatch, useNavigate } from "@tanstack/react-router";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -39,6 +39,7 @@ import {
   PencilIcon,
   RefreshCwIcon,
   ScanTextIcon,
+  SignatureIcon,
   Trash2Icon,
   UploadIcon,
 } from "@stll/ui/icons";
@@ -67,9 +68,13 @@ import {
   type DownloadVariant,
 } from "@/components/inspector/file-download-service.logic";
 import { openInspectorSelection } from "@/components/inspector/inspector-actions";
+import {
+  PdfSignDialogs,
+  usePdfSignFlow,
+} from "@/components/inspector/pdf-sign-action";
+import { resolvePdfSignTarget } from "@/components/inspector/pdf-signing.logic";
 import Tooltip from "@/components/tooltip";
 import { TranslateDocumentDialog } from "@/components/translate-document-dialog";
-import { canTranslateDocument } from "@/components/translate-document-dialog.logic";
 import {
   CellLockMenuItem,
   CellMetadataMenuSection,
@@ -101,7 +106,12 @@ import {
   type RowActionContext,
 } from "@/components/workspaces/row-actions.logic";
 import type { TableTreeNode } from "@/components/workspaces/table/types";
+import { WorkflowQueryFeedback } from "@/components/workspaces/workflow-query-feedback";
 import { PDF_MIME_TYPE } from "@/consts";
+import {
+  DesktopRequiredDialog,
+  useDesktopActionGate,
+} from "@/features/desktop/desktop-action-gate";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -109,7 +119,6 @@ import { externalApiOrigin } from "@/lib/api-origins";
 import { apiUrl } from "@/lib/api-url";
 import { getFreshLinkedAccount } from "@/lib/auth-session";
 import { DOCX_MIME } from "@/lib/consts";
-import { deepLAvailabilityOptions } from "@/lib/deepl/queries";
 import {
   DesktopBridgeIncompatibleError,
   openFileInDesktop,
@@ -127,6 +136,7 @@ import { isUnauthorizedError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { getExtension } from "@/lib/files/file-extension";
+import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 import { toSafeId } from "@/lib/safe-id";
 import type {
   OcrExportStatus,
@@ -134,6 +144,7 @@ import type {
   WorkspaceCellMetadata,
   WorkspaceEntity,
 } from "@/lib/types";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { downloadFile } from "@/lib/utils";
 import {
   useCreateEntities,
@@ -143,6 +154,7 @@ import { useUploadVersion } from "@/lib/workspaces/mutations/use-upload-version"
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 import { useIsWorkflowRunning } from "@/lib/workspaces/queries/workspace";
+import { workflowActionsDisabled } from "@/lib/workspaces/queries/workspace.logic";
 import { useWorkspaceStore } from "@/lib/workspaces/store";
 
 export type VirtualAnchor = {
@@ -243,29 +255,6 @@ const getPDFPageEditorTarget = (
   return target?.mimeType === PDF_MIME_TYPE ? target : null;
 };
 
-const useAvailableTranslationTarget = (
-  target: TranslationTarget | null,
-): TranslationTarget | null => {
-  const activeOrganizationId = useRouteContext({
-    from: "/_protected",
-    select: (context) => context.user.activeOrganizationId,
-  });
-  const { data: deepLAvailability } = useQuery({
-    ...deepLAvailabilityOptions({ organizationId: activeOrganizationId }),
-    enabled: target !== null && target.mimeType !== DOCX_MIME,
-  });
-  if (
-    target === null ||
-    !canTranslateDocument({
-      canUseDeepL: deepLAvailability?.configured === true,
-      isDocx: target.mimeType === DOCX_MIME,
-    })
-  ) {
-    return null;
-  }
-  return target;
-};
-
 type UseOpenPDFPageEditorOptions = {
   entityId: string;
   target: TranslationTarget | null;
@@ -328,6 +317,28 @@ const OcrExportMenuItems = ({
   );
 };
 
+type ExportableOcrSourcesOptions = {
+  isBulk: boolean;
+  isCellContext: boolean;
+  ocrSource: OcrSource | undefined;
+  ocrSources: readonly OcrSource[];
+};
+
+const getExportableOcrSources = ({
+  isBulk,
+  isCellContext,
+  ocrSource,
+  ocrSources,
+}: ExportableOcrSourcesOptions): readonly OcrSource[] => {
+  if (isBulk) {
+    return [];
+  }
+  if (isCellContext) {
+    return ocrSource && hasOcrExport(ocrSource) ? [ocrSource] : [];
+  }
+  return ocrSources.filter(hasOcrExport);
+};
+
 export const RowActions = ({
   duplicatePresentation = "menu-only",
   entity,
@@ -365,7 +376,11 @@ export const RowActions = ({
   const [isOcrPending, setIsOcrPending] = useState(false);
   const [translationDialogState, setTranslationDialogState] =
     useState<TranslationDialogState>({ type: "closed" });
-  const { data: properties } = useQuery(propertiesOptions(workspaceId));
+  const propertiesQuery = useQuery(propertiesOptions(workspaceId));
+  const propertiesView = useQueryView(propertiesQuery);
+  useQueryViewError(propertiesView);
+  const properties =
+    propertiesView.type === "items" ? propertiesView.items : undefined;
   const duplicateTargetIdsRef = useRef(new Map<string, string>());
   const file = getFirstFile(entity);
   const name = getEntityName(entity);
@@ -374,13 +389,12 @@ export const RowActions = ({
   const bulkTargets = isBulk ? selectedEntities : [entity];
   const isCellContext =
     !isBulk && cellMetadataTarget !== null && cellMetadataTarget !== undefined;
-  const rawTranslationTarget = getTranslationTarget({
+  const translationTarget = getTranslationTarget({
     cellMetadataTarget,
     entity,
     file,
     isBulk,
   });
-  const translationTarget = useAvailableTranslationTarget(rawTranslationTarget);
   const pdfPageEditorTarget = getPDFPageEditorTarget({
     cellMetadataTarget,
     entity,
@@ -441,6 +455,16 @@ export const RowActions = ({
     lockState: desktopEditLockState,
     readOnly: entity.readOnly,
   });
+  const desktopEditGate = useDesktopActionGate("edit-file");
+  const pdfSignFlow = usePdfSignFlow();
+  // A folder has no file; a row always shows the current version.
+  const pdfSignTarget = resolvePdfSignTarget({
+    canUpdateEntity: !entity.readOnly,
+    entityId: entity.entityId,
+    file: isBulk ? null : file,
+    isCurrentVersion: true,
+    workspaceId,
+  });
   const openCopyToMatterDialog = () => {
     setCopyToMatterEntities(
       toCopyToMatterEntities(bulkTargets, getAncestorIds),
@@ -484,12 +508,12 @@ export const RowActions = ({
 
   const hasPdfConversion =
     file !== null && file.pdfFileId !== null && file.mimeType !== PDF_MIME_TYPE;
-  let exportableOcrSources: readonly OcrSource[] = [];
-  if (!isBulk && isCellContext && ocrSource && hasOcrExport(ocrSource)) {
-    exportableOcrSources = [ocrSource];
-  } else if (!isBulk && !isCellContext) {
-    exportableOcrSources = ocrSources.filter(hasOcrExport);
-  }
+  const exportableOcrSources = getExportableOcrSources({
+    isBulk,
+    isCellContext,
+    ocrSource,
+    ocrSources,
+  });
   // A bulk selection keeps the originals: it spans files whose versions do not
   // share one answer, so no rendition is offered for all of them.
   const downloadRenditions =
@@ -517,6 +541,9 @@ export const RowActions = ({
       DESKTOP_EDIT_FILE_TYPE_DETAILS[desktopEditFileType].application;
     await showDesktopEditOpenResultToast({
       messages: {
+        accountRequiredTitle: t(
+          "workspaces.files.desktopEdit.accountRequiredTitle",
+        ),
         notOpenedDescription: t.rich(
           "workspaces.files.desktopEdit.notOpenedDescription",
           {
@@ -1066,7 +1093,12 @@ export const RowActions = ({
           isBulk={isBulk}
           isCellContext={isCellContext}
           isFolder={isFolder}
-          onOpenInDesktop={handleOpenInDesktop}
+          onOpenInDesktop={() => {
+            desktopEditGate.run(() => {
+              detached(handleOpenInDesktop(), "row-actions.open-in-desktop");
+            });
+          }}
+          openInDesktopLabel={desktopEditGate.label}
           onReleaseDesktopLock={handleReleaseLock}
           onSubfolderCreated={onSubfolderCreated}
           workspaceId={workspaceId}
@@ -1084,6 +1116,8 @@ export const RowActions = ({
           onChatAbout={handleChatAbout}
           onOpenVersionHistory={openVersionHistory}
           onEditPages={openPDFPageEditor}
+          onSign={pdfSignTarget === null ? undefined : pdfSignFlow.start}
+          signLabel={pdfSignFlow.label}
           onTranslate={openTranslationDialog}
           translationTarget={translationTarget}
         />
@@ -1139,6 +1173,10 @@ export const RowActions = ({
         }
         workspaceId={workspaceId}
       />
+      {pdfSignTarget !== null && (
+        <PdfSignDialogs flow={pdfSignFlow} target={pdfSignTarget} />
+      )}
+      <DesktopRequiredDialog {...desktopEditGate.requiredDialog} />
     </Menu>
   );
 };
@@ -1222,7 +1260,7 @@ const RowOpenMenuActions = ({
   );
 };
 
-const RowOcrMenuActions = ({
+export const RowOcrMenuActions = ({
   canRunOcr,
   isPending,
   onRun,
@@ -1239,34 +1277,52 @@ const RowOcrMenuActions = ({
   return (
     <>
       {canRunOcr && (
-        <MenuItem
-          className="min-h-11 sm:min-h-11"
-          disabled={isPending}
-          onClick={() => detached(onRun(selectedSource), "row-actions.run-ocr")}
-        >
-          <ScanTextIcon />
-          {t("workspaces.files.runOcr")}
-        </MenuItem>
+        <CapabilityAction action={{ capability: "ocr" }}>
+          {(capabilityProps) => (
+            <MenuItem
+              disabled={isPending}
+              onClick={() =>
+                detached(onRun(selectedSource), "row-actions.run-ocr")
+              }
+              {...capabilityProps}
+            >
+              <ScanTextIcon />
+              {t("workspaces.files.runOcr")}
+            </MenuItem>
+          )}
+        </CapabilityAction>
       )}
       {rowSources.length > 0 && (
         <MenuSub>
-          <MenuSubTrigger className="min-h-11 sm:min-h-11">
-            <ScanTextIcon />
-            {t("workspaces.files.runOcr")}
-          </MenuSubTrigger>
+          <CapabilityAction action={{ capability: "ocr" }}>
+            {(capabilityProps) => (
+              <MenuSubTrigger {...capabilityProps}>
+                <ScanTextIcon />
+                {t("workspaces.files.runOcr")}
+              </MenuSubTrigger>
+            )}
+          </CapabilityAction>
           <MenuSubPopup>
             {rowSources.map((source) => (
-              <MenuItem
-                className="min-h-11 sm:min-h-11"
-                disabled={isPending}
+              <CapabilityAction
                 key={source.fieldId}
-                onClick={() => detached(onRun(source), "row-actions.run-ocr")}
+                action={{ capability: "ocr" }}
               >
-                <ScanTextIcon />
-                <BidiText as="span" className="max-w-64 truncate">
-                  {source.fileName}
-                </BidiText>
-              </MenuItem>
+                {(capabilityProps) => (
+                  <MenuItem
+                    disabled={isPending}
+                    onClick={() =>
+                      detached(onRun(source), "row-actions.run-ocr")
+                    }
+                    {...capabilityProps}
+                  >
+                    <ScanTextIcon />
+                    <BidiText as="span" className="max-w-64 truncate">
+                      {source.fileName}
+                    </BidiText>
+                  </MenuItem>
+                )}
+              </CapabilityAction>
             ))}
           </MenuSubPopup>
         </MenuSub>
@@ -1332,6 +1388,7 @@ const RowFolderDesktopMenuActions = ({
   isCellContext,
   isFolder,
   onOpenInDesktop,
+  openInDesktopLabel,
   onReleaseDesktopLock,
   onSubfolderCreated,
   workspaceId,
@@ -1342,7 +1399,8 @@ const RowFolderDesktopMenuActions = ({
   isBulk: boolean;
   isCellContext: boolean;
   isFolder: boolean;
-  onOpenInDesktop: () => Promise<void>;
+  onOpenInDesktop: () => void;
+  openInDesktopLabel: string;
   onReleaseDesktopLock: () => Promise<void>;
   onSubfolderCreated: RowActionsProps["onSubfolderCreated"];
   workspaceId: string;
@@ -1361,14 +1419,14 @@ const RowFolderDesktopMenuActions = ({
         />
       )}
       {canOpenInDesktop && (
-        <MenuItem
-          onClick={() =>
-            detached(onOpenInDesktop(), "row-actions.open-in-desktop")
-          }
-        >
-          <LaptopIcon />
-          {t("workspaces.files.desktopEdit.action")}
-        </MenuItem>
+        <CapabilityAction action={{ capability: "desktop" }}>
+          {(capabilityProps) => (
+            <MenuItem onClick={onOpenInDesktop} {...capabilityProps}>
+              <LaptopIcon />
+              {openInDesktopLabel}
+            </MenuItem>
+          )}
+        </CapabilityAction>
       )}
       {canReleaseDesktopLock && (
         <MenuItem
@@ -1384,7 +1442,7 @@ const RowFolderDesktopMenuActions = ({
   );
 };
 
-const RowFeatureMenuActions = ({
+export const RowFeatureMenuActions = ({
   canCreateEntity,
   entity,
   file,
@@ -1393,7 +1451,9 @@ const RowFeatureMenuActions = ({
   onChatAbout,
   onEditPages,
   onOpenVersionHistory,
+  onSign,
   onTranslate,
+  signLabel,
   translationTarget,
 }: {
   canCreateEntity: boolean;
@@ -1404,7 +1464,9 @@ const RowFeatureMenuActions = ({
   onChatAbout: () => void;
   onEditPages: (() => void) | undefined;
   onOpenVersionHistory: (() => void) | undefined;
+  onSign: (() => void) | undefined;
   onTranslate: () => void;
+  signLabel: string;
   translationTarget: TranslationTarget | null;
 }) => {
   const t = useTranslations();
@@ -1429,15 +1491,44 @@ const RowFeatureMenuActions = ({
           {t("workspaces.pdf.pageEditor.editPages")}
         </MenuItem>
       )}
-      <MenuItem onClick={onChatAbout}>
-        <MessageSquareIcon />
-        {t("chat.chatAbout")}
-      </MenuItem>
+      {onSign !== undefined && (
+        <CapabilityAction action={{ capability: "desktop" }}>
+          {(capabilityProps) => (
+            <MenuItem onClick={onSign} {...capabilityProps}>
+              <SignatureIcon />
+              {signLabel}
+            </MenuItem>
+          )}
+        </CapabilityAction>
+      )}
+      <CapabilityAction action={{ capability: "ai" }}>
+        {(capabilityProps) => (
+          <MenuItem onClick={onChatAbout} {...capabilityProps}>
+            <MessageSquareIcon />
+            {t("chat.chatAbout")}
+          </MenuItem>
+        )}
+      </CapabilityAction>
       {translationTarget !== null && (
-        <MenuItem disabled={!canCreateEntity} onClick={onTranslate}>
-          <LanguagesIcon />
-          {t("common.translate")}
-        </MenuItem>
+        <CapabilityAction
+          action={{
+            capability:
+              translationTarget.mimeType === DOCX_MIME
+                ? "translation"
+                : "deepl",
+          }}
+        >
+          {(capabilityProps) => (
+            <MenuItem
+              disabled={!canCreateEntity}
+              onClick={onTranslate}
+              {...capabilityProps}
+            >
+              <LanguagesIcon />
+              {t("common.translate")}
+            </MenuItem>
+          )}
+        </CapabilityAction>
       )}
     </>
   );
@@ -1708,7 +1799,8 @@ const CreateSubfolderMenuItem = ({
 }: CreateSubfolderMenuItemProps) => {
   const t = useTranslations();
   const createEntities = useCreateEntities();
-  const isWorkflowRunning = useIsWorkflowRunning(workspaceId);
+  const workflowView = useIsWorkflowRunning(workspaceId);
+  const workflowDisabled = workflowActionsDisabled(workflowView);
   const isEntitiesLimitReached = useEntitiesCountLimit(workspaceId);
 
   if (isEntitiesLimitReached) {
@@ -1740,13 +1832,16 @@ const CreateSubfolderMenuItem = ({
   };
 
   return (
-    <MenuItem
-      disabled={isWorkflowRunning || createEntities.isPending}
-      onClick={handleCreateSubfolder}
-    >
-      <FolderPlusIcon />
-      {t("workspaces.filesystem.newSubfolder")}
-    </MenuItem>
+    <>
+      <WorkflowQueryFeedback display="menu" view={workflowView} />
+      <MenuItem
+        disabled={workflowDisabled || createEntities.isPending}
+        onClick={handleCreateSubfolder}
+      >
+        <FolderPlusIcon />
+        {t("workspaces.filesystem.newSubfolder")}
+      </MenuItem>
+    </>
   );
 };
 

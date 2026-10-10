@@ -1,9 +1,14 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
+import type { createEuCompletionStore } from "@/api/handlers/case-law/ingestion/eu-completion-store";
 import {
   CASE_LAW_MAINTENANCE_LANE,
+  enterCaseLawMaintenanceLane,
   holdCaseLawMaintenanceLane,
 } from "@/api/lib/case-law/maintenance-lane";
 
@@ -42,7 +47,29 @@ const CASE_LAW_TABLE_MARKERS = ["case_law_", "caseLaw"] as const;
  * transitively: a script that never imports one, directly or through a
  * helper, issues no statements and needs no door.
  */
-const DATABASE_MODULES = ["@/api/db/root", "@/api/db/scoped"] as const;
+const DATABASE_MODULES = [
+  "@/api/db/root",
+  "@/api/db/scoped",
+  "@/api/db/long-running-connection",
+] as const;
+
+type EuCompletionStore = ReturnType<typeof createEuCompletionStore>;
+
+/**
+ * Scripts that write only their own job's control rows. A stop or approval
+ * must not queue behind the job it controls, so these take no door; the
+ * census checks they call nothing beyond the declared control methods.
+ */
+const CONTROL_PLANE_SCRIPTS = {
+  "eu-completion-control.ts": {
+    reason:
+      "Writes only EU completion controls and supervised approvals; a stop must not wait behind the running tick.",
+    methods: ["setControl", "approveSupervisedDryRun"],
+  },
+} as const satisfies Record<
+  string,
+  { reason: string; methods: readonly (keyof EuCompletionStore)[] }
+>;
 
 /** How far the resolver follows imports when looking for database reach. */
 const IMPORT_DEPTH_LIMIT = 6;
@@ -159,6 +186,29 @@ const doorsOpened = (name: string): string[] =>
   );
 
 describe("case-law maintenance lane", () => {
+  test("an aborted bounded door refuses work before database initialization", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const rejected1 = await Result.tryPromise({
+      try: async () =>
+        await enterCaseLawMaintenanceLane({
+          mode: "bounded",
+          signal: controller.signal,
+          statementTimeout: 5000,
+          lockTimeout: 5000,
+          work: async () => "must not run",
+        }),
+      catch: (cause) => cause,
+    });
+    expect(rejected1.isErr()).toBe(true);
+    if (rejected1.isErr()) {
+      expect(rejected1.error).toBeInstanceOf(Error);
+      if (rejected1.error instanceof Error) {
+        expect(rejected1.error.message).toContain("abort");
+      }
+    }
+  });
+
   // The structural rule: a case-law script that can reach the database does
   // so through one of the two doors and nothing else. A script that imports
   // a handle directly has found a third way and fails here; one that opens
@@ -169,7 +219,11 @@ describe("case-law maintenance lane", () => {
     const findings: string[] = [];
     let caseLawScripts = 0;
     for (const name of scriptFiles()) {
-      if (!isCaseLawScript(name) || !reachesDatabase(name)) {
+      if (
+        !isCaseLawScript(name) ||
+        !reachesDatabase(name) ||
+        Object.hasOwn(CONTROL_PLANE_SCRIPTS, name)
+      ) {
         continue;
       }
       caseLawScripts += 1;
@@ -182,6 +236,33 @@ describe("case-law maintenance lane", () => {
       }
     }
     expect(caseLawScripts).toBeGreaterThan(0);
+    expect(findings).toEqual([]);
+  });
+
+  // A control-plane script stops or approves a job that may hold the lane,
+  // so it must never wait for the lane: it opens no door, and its only
+  // writes are the control methods it declares.
+  test("control-plane scripts open no door and call only their declared control methods", () => {
+    const findings: string[] = [];
+    for (const [name, { methods }] of Object.entries(CONTROL_PLANE_SCRIPTS)) {
+      if (!scriptFiles().includes(name) || !reachesDatabase(name)) {
+        findings.push(`${name}: stale control-plane exemption`);
+        continue;
+      }
+      if (doorsOpened(name).length > 0) {
+        findings.push(`${name}: a control-plane script opens a door`);
+      }
+      const called = Array.from(
+        readSource(name).matchAll(/\bstore\.(\w+)\(/gu),
+        (match) => match[1] ?? "",
+      );
+      const declared: readonly string[] = methods;
+      for (const method of called) {
+        if (!declared.includes(method)) {
+          findings.push(`${name}: calls undeclared store method ${method}`);
+        }
+      }
+    }
     expect(findings).toEqual([]);
   });
 
@@ -261,6 +342,9 @@ describe("case-law maintenance lane", () => {
       },
     };
     const hold = await holdCaseLawMaintenanceLane({ sql: fake, now: () => 0 });
-    expect(hold.release()).rejects.toThrow("Maintenance lane was not held");
+    expect(await rejectionOf(hold.release())).toHaveProperty(
+      "message",
+      expect.stringContaining("Maintenance lane was not held"),
+    );
   });
 });

@@ -12,9 +12,16 @@ import {
   DEFAULT_MODELS,
   isBYOKModelRoleSupported,
 } from "@stll/ai-catalog";
+import { BUILT_IN_CHAT_TOOL_POLICY_KINDS } from "@stll/api-contract";
+import { VISUAL_PREVIEW_TOOL_NAME } from "@stll/api-contract/visual-preview";
 
 import type { OrgAIConfig } from "@/api/lib/ai-config";
+import {
+  FEATURE_REGISTRY,
+  CHAT_ONLY_FEATURE_TOOL_DEFINITIONS,
+} from "@/api/lib/feature-access/registry";
 import { createTanStackTextAdapterFactory } from "@/api/lib/tanstack-ai-models";
+import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 
 import {
   buildCanaryChatToolsets,
@@ -356,6 +363,37 @@ const emptyStringEnumPaths = (value: unknown, path = "request"): string[] => {
 };
 
 describe("AI provider production chat tool matrix", () => {
+  test("an unenrolled canary accounts for gated tools without requiring their admission", () => {
+    const featureDefinitions = [
+      ...DEFAULT_MCP_TOOL_DEFINITIONS,
+      ...CHAT_ONLY_FEATURE_TOOL_DEFINITIONS,
+    ].filter((definition) => "featureId" in definition);
+    for (const { featureId } of featureDefinitions) {
+      expect(Object.hasOwn(FEATURE_REGISTRY, featureId)).toBe(true);
+    }
+    const catalogNames = Object.keys(BUILT_IN_CHAT_TOOL_POLICY_KINDS);
+    const gated = new Set(
+      catalogNames.filter((name) =>
+        featureDefinitions.some((definition) => definition.name === name),
+      ),
+    );
+    expect(
+      catalogNames.filter((name) => gated.has(name)).length,
+    ).toBeGreaterThan(0);
+    const registered = new Set(
+      buildCanaryChatToolsets(canaryConfig("openai")).flatMap(({ tools }) =>
+        tools.map(({ name }) => name),
+      ),
+    );
+    expect(registered.has(VISUAL_PREVIEW_TOOL_NAME)).toBe(false);
+    expect(DEFAULT_MCP_TOOL_DEFINITIONS).not.toContainEqual(
+      expect.objectContaining({ name: VISUAL_PREVIEW_TOOL_NAME }),
+    );
+    expect([...registered].toSorted()).toEqual(
+      catalogNames.filter((name) => !gated.has(name)).toSorted(),
+    );
+  });
+
   test("maps every advertised chat model and DOCX registry through its real SDK adapter with accepted enums", async () => {
     const transport = installRequestCaptureTransport();
     try {

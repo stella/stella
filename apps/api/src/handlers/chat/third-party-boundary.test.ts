@@ -7,6 +7,7 @@ import * as v from "valibot";
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { BROWSER_CONTROL_TOOL_NAME } from "@stll/api-contract/browser-control";
 import { propertyConfig, propertySeed } from "@stll/property-testing";
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { TEXT_PLAIN_MIME_TYPE } from "@/api/handlers/chat/attachment-validation";
 import {
@@ -1293,7 +1294,7 @@ describe("chat third-party anonymization boundary", () => {
     });
   });
 
-  test("rejects sensitive MCP tool names instead of corrupting identifiers", () => {
+  test("rejects sensitive MCP tool names instead of corrupting identifiers", async () => {
     const organizationId = toSafeId<"organization">(
       "11111111-1111-4111-8111-111111111111",
     );
@@ -1327,8 +1328,11 @@ describe("chat third-party anonymization boundary", () => {
       },
     });
 
-    expect(source.tools()).rejects.toThrow(
-      "MCP tool names that contain sensitive data cannot cross an anonymized third-party boundary.",
+    expect(await rejectionOf(source.tools())).toHaveProperty(
+      "message",
+      expect.stringContaining(
+        "MCP tool names that contain sensitive data cannot cross an anonymized third-party boundary.",
+      ),
     );
   });
 

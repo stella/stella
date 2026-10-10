@@ -15,7 +15,11 @@ import type {
 } from "@/api/handlers/templates/prefill-fields";
 import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  admitFiniteAction,
+  createSafeRootHandler,
+} from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
@@ -28,6 +32,7 @@ import { mergeManifestWithDiscovery } from "@/api/lib/docx/template-manifest";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload-handler";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { parsePickedEntityIdsJson } from "@/api/lib/safe-id-boundaries";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { extractFileText } from "@/api/lib/search/extract-content";
@@ -123,6 +128,7 @@ const boundSources = (sources: PrefillSource[]): PrefillSource[] => {
 };
 
 const extractFieldValues = async ({
+  admission,
   targets,
   sources,
   orgAIConfig,
@@ -131,6 +137,7 @@ const extractFieldValues = async ({
   aiAnalytics,
   timezone,
 }: {
+  admission: ModelDispatchAdmission;
   targets: readonly PrefillTarget[];
   sources: readonly PrefillSource[];
   orgAIConfig: OrgAIConfig | null;
@@ -141,6 +148,7 @@ const extractFieldValues = async ({
 }): Promise<PrefillSuggestion[]> => {
   const { fields } = await generateTanStackObjectForRole({
     dataClass: "customer",
+    admission,
     role: "fast",
     orgAIConfig,
     managedAIResidency,
@@ -167,6 +175,11 @@ const extractFieldValues = async ({
 };
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Processes template content and returns parsed data or saved-document metadata rather than stored-file bytes.",
+  },
   description:
     "Suggest values for one stored template's fields from source material: " +
     "an uploaded DOCX or PDF, pasted text, or the stored extracted text of " +
@@ -176,6 +189,7 @@ const config = {
     "dates are anchored to your calendar day rather than the server's. " +
     "Consumes AI usage.",
   permissions: { template: ["use"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "write",
   mcp: {
     type: "capability",
@@ -212,9 +226,8 @@ const config = {
  * maps them back to field paths. Nothing is filled server-side — the client
  * shows the proposals for review.
  */
-const prefillTemplate = createSafeRootHandler(
-  config,
-  async function* ({
+const prefillTemplate = createSafeRootHandler(config, async function* (ctx) {
+  const {
     safeDb,
     session,
     params,
@@ -223,240 +236,245 @@ const prefillTemplate = createSafeRootHandler(
     managedAIResidency,
     orgAIConfigStatus,
     user,
-  }) {
-    const organizationId = session.activeOrganizationId;
+  } = ctx;
+  const organizationId = session.activeOrganizationId;
 
-    yield* requireTanStackAIAvailableForRole({
-      dataClass: "customer",
-      configStatus: orgAIConfigStatus,
-      orgConfig: orgAIConfig,
-      role: "fast",
-    });
+  yield* requireTanStackAIAvailableForRole({
+    dataClass: "customer",
+    configStatus: orgAIConfigStatus,
+    orgConfig: orgAIConfig,
+    role: "fast",
+  });
 
-    const template = yield* Result.await(
-      safeDb((tx) =>
-        tx.query.templates.findFirst({
-          where: {
-            id: { eq: params.templateId },
-            organizationId: { eq: organizationId },
-          },
-          columns: { ...STORED_TEMPLATE_FILE_COLUMNS, fileName: true },
-        }),
-      ),
+  const template = yield* Result.await(
+    safeDb((tx) =>
+      tx.query.templates.findFirst({
+        where: {
+          id: { eq: params.templateId },
+          organizationId: { eq: organizationId },
+        },
+        columns: { ...STORED_TEMPLATE_FILE_COLUMNS, fileName: true },
+      }),
+    ),
+  );
+  if (!template) {
+    return Result.err(
+      new HandlerError({ status: 404, message: "Template not found" }),
     );
-    if (!template) {
+  }
+
+  const sources: PrefillSource[] = [];
+
+  if (body.text !== undefined && body.text.trim() !== "") {
+    sources.push({ label: "Pasted text", text: body.text });
+  }
+
+  if (body.file !== undefined) {
+    const file = body.file;
+    if (file.type !== DOCX_MIME_TYPE && file.type !== PDF_MIME_TYPE) {
       return Result.err(
-        new HandlerError({ status: 404, message: "Template not found" }),
-      );
-    }
-
-    const sources: PrefillSource[] = [];
-
-    if (body.text !== undefined && body.text.trim() !== "") {
-      sources.push({ label: "Pasted text", text: body.text });
-    }
-
-    if (body.file !== undefined) {
-      const file = body.file;
-      if (file.type !== DOCX_MIME_TYPE && file.type !== PDF_MIME_TYPE) {
-        return Result.err(
-          new HandlerError({
-            status: 400,
-            message: "Source file must be a DOCX or PDF document.",
-          }),
-        );
-      }
-      const scanned = yield* Result.await(
-        scanUploadForHandler({
-          bytes: await file.arrayBuffer(),
-          declaredMimeType: file.type,
-          fileName: sanitizeFilename(file.name),
+        new HandlerError({
+          status: 400,
+          message: "Source file must be a DOCX or PDF document.",
         }),
       );
-      const text = yield* Result.await(
+    }
+    const scanned = yield* Result.await(
+      scanUploadForHandler({
+        bytes: await file.arrayBuffer(),
+        declaredMimeType: file.type,
+        fileName: sanitizeFilename(file.name),
+      }),
+    );
+    const text = yield* Result.await(
+      Result.tryPromise({
+        try: async () =>
+          await extractFileText(scanned, {
+            source: "template-prefill",
+          }),
+        catch: (cause) =>
+          new HandlerError({
+            status: 500,
+            message: "Failed to read the source document",
+            cause,
+          }),
+      }),
+    );
+    if (text === null || text.trim() === "") {
+      return Result.err(
+        new HandlerError({
+          status: 422,
+          message: "No text could be extracted from the source document.",
+        }),
+      );
+    }
+    sources.push({ label: file.name, text });
+  }
+
+  if (body.entityIds !== undefined) {
+    const entityIds = parsePickedEntityIdsJson(
+      body.entityIds,
+      MAX_PICKED_ENTITIES,
+    );
+    if (entityIds === null) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: `'entityIds' must be a JSON array of at most ${String(MAX_PICKED_ENTITIES)} entity ids.`,
+        }),
+      );
+    }
+
+    if (entityIds.length > 0) {
+      // Stored extracted text (the search pipeline's output), scoped to the
+      // caller's organization and accessible workspaces — the same gate the
+      // chat document tools apply.
+      const contentRows = yield* Result.await(
+        safeDb((tx) =>
+          tx
+            .select({
+              ciphertext: extractedContent.ciphertext,
+              iv: extractedContent.iv,
+              name: entities.name,
+            })
+            .from(extractedContent)
+            .innerJoin(
+              entities,
+              and(
+                eq(entities.id, extractedContent.entityId),
+                eq(entities.workspaceId, extractedContent.workspaceId),
+              ),
+            )
+            .innerJoin(
+              workspaces,
+              eq(workspaces.id, extractedContent.workspaceId),
+            )
+            .where(
+              and(
+                inArray(extractedContent.entityId, entityIds),
+                eq(extractedContent.organizationId, organizationId),
+                ne(workspaces.status, "deleting"),
+              ),
+            )
+            // One extractedContent row per entity, and entityIds is capped at
+            // MAX_PICKED_ENTITIES above, so the result set stays bounded.
+            .limit(MAX_PICKED_ENTITIES),
+        ),
+      );
+
+      const decrypted = yield* Result.await(
         Result.tryPromise({
           try: async () =>
-            await extractFileText(scanned, {
-              source: "template-prefill",
-            }),
+            await Promise.all(
+              contentRows.map(async (row) => ({
+                label: row.name,
+                text: await decryptContent(
+                  organizationId,
+                  row.ciphertext,
+                  row.iv,
+                ),
+              })),
+            ),
           catch: (cause) =>
             new HandlerError({
               status: 500,
-              message: "Failed to read the source document",
+              message: "Failed to read the selected documents",
               cause,
             }),
         }),
       );
-      if (text === null || text.trim() === "") {
-        return Result.err(
-          new HandlerError({
-            status: 422,
-            message: "No text could be extracted from the source document.",
-          }),
-        );
-      }
-      sources.push({ label: file.name, text });
+      sources.push(...decrypted);
     }
+  }
 
-    if (body.entityIds !== undefined) {
-      const entityIds = parsePickedEntityIdsJson(
-        body.entityIds,
-        MAX_PICKED_ENTITIES,
-      );
-      if (entityIds === null) {
-        return Result.err(
-          new HandlerError({
-            status: 400,
-            message: `'entityIds' must be a JSON array of at most ${String(MAX_PICKED_ENTITIES)} entity ids.`,
-          }),
+  const boundedSources = boundSources(sources);
+  if (boundedSources.length === 0) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Provide at least one source: text, a file, or documents.",
+      }),
+    );
+  }
+
+  // The template's fillable shape, merged from the embedded manifest and
+  // marker discovery — the same field set the fill form renders.
+  const templateFile = yield* Result.await(
+    readStoredTemplateFile({
+      safeDb,
+      organizationId,
+      row: template,
+      fileName: template.fileName,
+    }),
+  );
+  const targets = yield* Result.await(
+    Result.tryPromise({
+      try: async () => {
+        const discovered = await discoverTemplate(templateFile);
+        return buildPrefillTargets(
+          mergeManifestWithDiscovery(deriveManifest(discovered), discovered),
         );
-      }
-
-      if (entityIds.length > 0) {
-        // Stored extracted text (the search pipeline's output), scoped to the
-        // caller's organization and accessible workspaces — the same gate the
-        // chat document tools apply.
-        const contentRows = yield* Result.await(
-          safeDb((tx) =>
-            tx
-              .select({
-                ciphertext: extractedContent.ciphertext,
-                iv: extractedContent.iv,
-                name: entities.name,
-              })
-              .from(extractedContent)
-              .innerJoin(
-                entities,
-                and(
-                  eq(entities.id, extractedContent.entityId),
-                  eq(entities.workspaceId, extractedContent.workspaceId),
-                ),
-              )
-              .innerJoin(
-                workspaces,
-                eq(workspaces.id, extractedContent.workspaceId),
-              )
-              .where(
-                and(
-                  inArray(extractedContent.entityId, entityIds),
-                  eq(extractedContent.organizationId, organizationId),
-                  ne(workspaces.status, "deleting"),
-                ),
-              )
-              // One extractedContent row per entity, and entityIds is capped at
-              // MAX_PICKED_ENTITIES above, so the result set stays bounded.
-              .limit(MAX_PICKED_ENTITIES),
-          ),
-        );
-
-        const decrypted = yield* Result.await(
-          Result.tryPromise({
-            try: async () =>
-              await Promise.all(
-                contentRows.map(async (row) => ({
-                  label: row.name,
-                  text: await decryptContent(
-                    organizationId,
-                    row.ciphertext,
-                    row.iv,
-                  ),
-                })),
-              ),
-            catch: (cause) =>
-              new HandlerError({
-                status: 500,
-                message: "Failed to read the selected documents",
-                cause,
-              }),
-          }),
-        );
-        sources.push(...decrypted);
-      }
-    }
-
-    const boundedSources = boundSources(sources);
-    if (boundedSources.length === 0) {
-      return Result.err(
+      },
+      catch: (cause) =>
         new HandlerError({
-          status: 400,
-          message: "Provide at least one source: text, a file, or documents.",
+          status: 500,
+          message: "Failed to read the template",
+          cause,
+        }),
+    }),
+  );
+
+  if (targets.length === 0) {
+    return Result.ok({ fields: [] });
+  }
+
+  const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+    dataClass: "customer",
+    usageMetering: {
+      actionType: "chat",
+      organizationId,
+      safeDb,
+      serviceTier: "standard",
+      userId: user.id,
+      workspaceId: null,
+    },
+    feature: "templates.prefill",
+    modelRole: "fast",
+    orgAIConfig,
+    properties: { organization_id: organizationId },
+    traceId: Bun.randomUUIDv7(),
+  });
+
+  return yield* admitFiniteAction({
+    actionKind: "templates.prefill",
+    ctx,
+    async *handler({ modelAdmission }) {
+      const fields = yield* Result.await(
+        Result.tryPromise({
+          try: async () =>
+            await extractFieldValues({
+              admission: modelAdmission,
+              targets,
+              sources: boundedSources,
+              orgAIConfig,
+              managedAIResidency,
+              organizationId,
+              aiAnalytics,
+              timezone: body.timezone ?? "UTC",
+            }),
+          catch: (cause) => {
+            aiAnalytics.captureError(cause);
+            return new HandlerError({
+              status: 500,
+              message: "Failed to extract values from the sources",
+              cause,
+            });
+          },
         }),
       );
-    }
-
-    // The template's fillable shape, merged from the embedded manifest and
-    // marker discovery — the same field set the fill form renders.
-    const templateFile = yield* Result.await(
-      readStoredTemplateFile({
-        safeDb,
-        organizationId,
-        row: template,
-        fileName: template.fileName,
-      }),
-    );
-    const targets = yield* Result.await(
-      Result.tryPromise({
-        try: async () => {
-          const discovered = await discoverTemplate(templateFile);
-          return buildPrefillTargets(
-            mergeManifestWithDiscovery(deriveManifest(discovered), discovered),
-          );
-        },
-        catch: (cause) =>
-          new HandlerError({
-            status: 500,
-            message: "Failed to read the template",
-            cause,
-          }),
-      }),
-    );
-
-    if (targets.length === 0) {
-      return Result.ok({ fields: [] });
-    }
-
-    const aiAnalytics = createTanStackAIAnalyticsCallbacks({
-      dataClass: "customer",
-      usageMetering: {
-        actionType: "chat",
-        organizationId,
-        safeDb,
-        serviceTier: "standard",
-        userId: user.id,
-        workspaceId: null,
-      },
-      feature: "templates.prefill",
-      modelRole: "fast",
-      orgAIConfig,
-      properties: { organization_id: organizationId },
-      traceId: Bun.randomUUIDv7(),
-    });
-
-    const fields = yield* Result.await(
-      Result.tryPromise({
-        try: async () =>
-          await extractFieldValues({
-            targets,
-            sources: boundedSources,
-            orgAIConfig,
-            managedAIResidency,
-            organizationId,
-            aiAnalytics,
-            timezone: body.timezone ?? "UTC",
-          }),
-        catch: (cause) => {
-          aiAnalytics.captureError(cause);
-          return new HandlerError({
-            status: 500,
-            message: "Failed to extract values from the sources",
-            cause,
-          });
-        },
-      }),
-    );
-
-    return Result.ok({ fields });
-  },
-);
+      return Result.ok({ fields });
+    },
+  });
+});
 
 export default prefillTemplate;

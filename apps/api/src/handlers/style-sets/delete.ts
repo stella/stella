@@ -4,8 +4,7 @@ import { t } from "elysia";
 
 import { abortableTx } from "@/api/db/safe-db";
 import { styleSets } from "@/api/db/schema";
-import { env } from "@/api/env";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -13,6 +12,7 @@ import {
   timestampCasToken,
   timestampMatchesCasToken,
 } from "@/api/lib/db/timestamp-cas";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
 import { getS3 } from "@/api/lib/s3";
@@ -25,6 +25,7 @@ const config = {
     "behind it. Documents and templates already created from the style set are " +
     "unaffected, because they copied its styles at creation time.",
   permissions: { styleSet: ["delete"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "template_authoring_ui",
@@ -121,7 +122,7 @@ export default createSafeRootHandler(
               Result.ok(undefined),
             ),
             ...deleted.s3Keys.map(async (s3Key) => {
-              if (env.FEATURE_FILE_USAGE_LIMITS) {
+              if (isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")) {
                 return await deleteOrganizationFileWithSignal(
                   s3Key,
                   AbortSignal.timeout(10_000),

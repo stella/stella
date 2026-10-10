@@ -1,7 +1,5 @@
 import Elysia from "elysia";
 
-import { RESOURCE_TYPE } from "@stll/api-contract";
-
 import createBilingualEntity from "@/api/handlers/entities/bilingual/create";
 import createBlankDocument from "@/api/handlers/entities/blank-document/create";
 import checkpointFolioCollabRoom from "@/api/handlers/entities/checkpoint-folio-collab-room";
@@ -60,31 +58,15 @@ import { API_RATE_LIMITS } from "@/api/lib/limits";
 import { rateLimit } from "@/api/lib/rate-limit/rate-limit";
 import { createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
 import {
-  resourceRealtime,
-  workspaceResourceSetUpdates,
-} from "@/api/lib/resource-realtime-macro";
-import {
   ENTITY_UPLOAD_ROUTE_PATHS,
   isTranslateRateLimitedPath,
   isUploadRateLimitedPath,
 } from "@/api/lib/upload-rate-limit";
 
-const entityRealtimeUpdates = workspaceResourceSetUpdates(RESOURCE_TYPE.ENTITY);
-const entityFileRealtimeUpdates = workspaceResourceSetUpdates([
-  RESOURCE_TYPE.ENTITY,
-  RESOURCE_TYPE.USER_FILE,
-]);
-const entityVersionRealtimeUpdates = workspaceResourceSetUpdates([
-  RESOURCE_TYPE.ENTITY,
-  RESOURCE_TYPE.ENTITY_VERSION,
-  RESOURCE_TYPE.USER_FILE,
-]);
-
 export const entitiesRoute = new Elysia({
   prefix: "/entities/:workspaceId",
 })
   .use(workspaceAccessMacro)
-  .use(resourceRealtime)
   .use(permissionMacro)
   .use(
     rateLimit({
@@ -113,22 +95,18 @@ export const entitiesRoute = new Elysia({
   })
   .put("/", createEntities.handler, {
     body: createEntities.config.body,
-    resourceSetUpdated: entityRealtimeUpdates,
     permissions: createEntities.config.permissions,
   })
   .put("/blank-document", createBlankDocument.handler, {
     body: createBlankDocument.config.body,
-    resourceSetUpdated: entityFileRealtimeUpdates,
     permissions: createBlankDocument.config.permissions,
   })
   .put("/blank-document-from-style-set", createDocumentFromStyleSet.handler, {
     body: createDocumentFromStyleSet.config.body,
-    resourceSetUpdated: entityFileRealtimeUpdates,
     permissions: createDocumentFromStyleSet.config.permissions,
   })
   .post(ENTITY_UPLOAD_ROUTE_PATHS.entity, uploadEntity.handler, {
     body: uploadEntity.config.body,
-    resourceSetUpdated: entityFileRealtimeUpdates,
     permissions: uploadEntity.config.permissions,
   })
   .post(
@@ -136,7 +114,6 @@ export const entitiesRoute = new Elysia({
     uploadGeneratedDocument.handler,
     {
       body: uploadGeneratedDocument.config.body,
-      resourceSetUpdated: entityFileRealtimeUpdates,
       permissions: uploadGeneratedDocument.config.permissions,
     },
   )
@@ -206,11 +183,9 @@ export const entitiesRoute = new Elysia({
   )
   .post("/clip", clipEndpoint.handler, {
     ...clipEndpoint.config,
-    resourceSetUpdated: entityFileRealtimeUpdates,
   })
   .post("/create-from-legal-source", createFromLegalSource.handler, {
     body: createFromLegalSource.config.body,
-    resourceSetUpdated: entityFileRealtimeUpdates,
     permissions: createFromLegalSource.config.permissions,
   })
   .post("/query", readEntities.handler, {
@@ -251,27 +226,22 @@ export const entitiesRoute = new Elysia({
   })
   .delete("/", deleteEntities.handler, {
     body: deleteEntities.config.body,
-    resourceSetUpdated: entityFileRealtimeUpdates,
     permissions: deleteEntities.config.permissions,
   })
   .patch("/move", moveEntity.handler, {
     body: moveEntity.config.body,
-    resourceSetUpdated: entityRealtimeUpdates,
     permissions: moveEntity.config.permissions,
   })
   .patch("/rename", renameEntity.handler, {
     body: renameEntity.config.body,
-    resourceSetUpdated: entityRealtimeUpdates,
     permissions: renameEntity.config.permissions,
   })
   .post("/duplicate", duplicateEntity.handler, {
     body: duplicateEntity.config.body,
-    resourceSetUpdated: entityFileRealtimeUpdates,
     permissions: duplicateEntity.config.permissions,
   })
   .post("/copy-to-workspace", copyToWorkspace.handler, {
     body: copyToWorkspace.config.body,
-    resourceSetUpdated: entityRealtimeUpdates,
     permissions: copyToWorkspace.config.permissions,
   })
   .post("/check-stamp", checkStamp.handler, {
@@ -329,7 +299,6 @@ export const entitiesRoute = new Elysia({
     updateVersionLabel.handler,
     {
       body: updateVersionLabel.config.body,
-      resourceSetUpdated: entityVersionRealtimeUpdates,
       params: updateVersionLabel.config.params,
       permissions: updateVersionLabel.config.permissions,
     },
@@ -339,7 +308,6 @@ export const entitiesRoute = new Elysia({
     updateVersionDescription.handler,
     {
       body: updateVersionDescription.config.body,
-      resourceSetUpdated: entityVersionRealtimeUpdates,
       params: updateVersionDescription.config.params,
       permissions: updateVersionDescription.config.permissions,
     },
@@ -358,11 +326,9 @@ export const entitiesRoute = new Elysia({
   })
   .post(ENTITY_UPLOAD_ROUTE_PATHS.version, uploadVersion.handler, {
     body: uploadVersion.config.body,
-    resourceSetUpdated: entityVersionRealtimeUpdates,
     permissions: uploadVersion.config.permissions,
   })
   .post("/bilingual", createBilingualEntity.handler, {
     body: createBilingualEntity.config.body,
-    resourceSetUpdated: entityFileRealtimeUpdates,
     permissions: createBilingualEntity.config.permissions,
   });

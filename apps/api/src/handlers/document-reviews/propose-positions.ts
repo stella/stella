@@ -6,16 +6,25 @@ import { prepareReferenceProposal } from "@/api/handlers/document-reviews/prepar
 import { proposeReferencePositions } from "@/api/handlers/document-reviews/reference-positions";
 import { proposeReviewPositionsBodySchema } from "@/api/handlers/document-reviews/schemas";
 import { aiHandlerError } from "@/api/lib/ai-error";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  configuredModelAdmission,
+  createSafeHandler,
+} from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { pinProposedPositions } from "@/api/lib/document-review/reference-passages";
 
 const TIMEOUT_MS = 120_000;
 
 const config = {
+  actionAdmission: {
+    type: "handler",
+    actionKind: "document-reviews.propose-positions",
+  },
   description:
     "Propose review positions from one or more reference documents: one reviewable term each, with its kind, its severity, what the term is for and what to compare, and the reference passages that state the standard for it, plus what was read and deliberately not compared.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
   mcp: { type: "internal", reason: "document_processing" },
   body: proposeReviewPositionsBodySchema,
@@ -33,6 +42,7 @@ export const createProposePositions = ({
   createSafeHandler(
     config,
     async function* ({
+      modelAdmission,
       safeDb,
       workspaceId,
       body,
@@ -56,6 +66,7 @@ export const createProposePositions = ({
 
       const serviceTier = "standard" as const;
       const proposal = await proposePositions({
+        admission: configuredModelAdmission({ modelAdmission }),
         target: prepared.target,
         references: prepared.references,
         seededPositions: body.seededPositions,

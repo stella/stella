@@ -11,14 +11,10 @@ import {
   parseBrowserControlCommand,
 } from "@stll/api-contract/browser-control";
 import type { BrowserControlCommand } from "@stll/api-contract/browser-control";
+import { requiresPerCallChatApproval } from "@stll/api-contract/chat-secret";
 import { Button } from "@stll/ui/button";
-import {
-  CheckIcon,
-  GlobeIcon,
-  LoaderIcon,
-  PencilIcon,
-  XIcon,
-} from "@stll/ui/icons";
+import { CheckIcon, GlobeIcon, PencilIcon, XIcon } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 import { cn } from "@stll/ui/utils";
 
 import { AuthorNameRequiredDialog } from "@/components/chat/author-name-required-dialog";
@@ -41,8 +37,6 @@ import type {
   SuggestChangesApplyOutput,
 } from "@/components/chat/chat-ui-tools";
 import { findMcpConnectorIconHref } from "@/components/chat/mcp-connector-icon";
-import { SpawnSubagentsSubtaskList } from "@/components/chat/spawn-subagents-card";
-import { getSpawnSubagentsCallStatus } from "@/components/chat/spawn-subagents-card.logic";
 import {
   describeSuggestChangesApplyOutcome,
   hasAutomaticApproval,
@@ -57,6 +51,7 @@ import {
   humanizeIdentifier,
 } from "@/components/chat/tool-approval-summary";
 import type { ReaderAnnotationMark } from "@/components/chat/tool-approval-summary";
+import type { ToolCallAction } from "@/components/chat/tool-call-card";
 import { readerAnnotationKeys } from "@/components/legal-reader/annotations/reader-annotations-query";
 import { MatterIcon } from "@/components/matter-icon";
 import {
@@ -70,10 +65,13 @@ import {
   type BrowserApprovalDetail,
 } from "@/features/chat/browser-control/browser-approval-summary";
 import { useMountEffect } from "@/hooks/use-effect";
+import { SIGNED_OUT_QUERY_OWNER } from "@/lib/account/queries";
+import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import type { DocxEditRepresentation } from "@/lib/chat-edit-mode";
 import { DOCX_EDIT_REPRESENTATION } from "@/lib/chat-edit-mode";
 import { detached } from "@/lib/detached";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 
 type UpdateEntityFieldsInput = ChatUITools["update-entity-fields"]["input"];
@@ -399,6 +397,7 @@ const SuggestChangesApplyResult = ({
 // -- Main card --
 
 type ToolApprovalCardProps = {
+  action?: ToolCallAction | undefined;
   /** Threaded through for the `suggest_changes` approval summary; see
    *  `ChatThreadMessagesProps.activeFileName`. */
   activeFileName?: string | undefined;
@@ -426,6 +425,7 @@ const AutomaticApprovalResponse = ({ respond }: { respond: () => void }) => {
 };
 
 export const ToolApprovalCard = ({
+  action,
   activeFileName,
   isAwaitingUser,
   isTurnActive,
@@ -468,13 +468,14 @@ export const ToolApprovalCard = ({
     isTurnActive,
     responded,
   });
-  const { data: mcpConnectorsData } = useQuery({
+  const mcpConnectorsQuery = useQuery({
     ...mcpConnectorsOptions(activeOrganizationId),
     enabled: externalMcpConnectorSlug !== null,
   });
-  const availableConnectors = mcpConnectorsData
-    ? mcpConnectorsData.connectors
-    : [];
+  const connectorsView = useQueryView(mcpConnectorsQuery);
+  // Connector reads only decorate sources with icons; the source and approval stay usable without them.
+  const availableConnectors =
+    connectorsView.type === "items" ? connectorsView.items.connectors : [];
   const mcpIconHref =
     externalMcpConnectorSlug === null
       ? undefined
@@ -493,6 +494,7 @@ export const ToolApprovalCard = ({
     useBrowserCommandAutoApproved(browserCommand);
   const shouldAutoApprove =
     !isBlocked &&
+    !requiresPerCallChatApproval(name) &&
     (hasAutomaticApproval({
       alwaysApprovedTools,
       canAlwaysAllow,
@@ -554,10 +556,10 @@ export const ToolApprovalCard = ({
         <ToolApprovalLeadingIcon iconHref={mcpIconHref} toolName={name} />
         <span className="font-medium">{label}</span>
         {isProcessing && (
-          <LoaderIcon
-            aria-label={t("common.running")}
-            className="text-muted-foreground ms-auto size-3.5 shrink-0 animate-spin"
-            role="img"
+          <Loader
+            className="ms-auto size-3.5 shrink-0"
+            label={t("common.running")}
+            size="sm"
           />
         )}
         {isApproved && (
@@ -573,6 +575,17 @@ export const ToolApprovalCard = ({
             className="text-destructive ms-auto size-3.5 shrink-0"
             role="img"
           />
+        )}
+        {action !== undefined && (
+          <Button
+            className="-me-1 shrink-0"
+            onClick={action.onClick}
+            size="xs"
+            type="button"
+            variant="ghost"
+          >
+            {action.label}
+          </Button>
         )}
       </div>
 
@@ -721,12 +734,6 @@ const ToolApprovalSummary = ({
           query={part.input.query}
         />
       )}
-      {part.name === "spawn_subagents" && part.input !== undefined && (
-        <SpawnSubagentsSubtaskList
-          callStatus={getSpawnSubagentsCallStatus(part)}
-          subagents={part.input.subagents}
-        />
-      )}
       {name === BROWSER_CONTROL_TOOL_NAME && input !== undefined && (
         <BrowserControlInputSummary
           input={input}
@@ -758,7 +765,17 @@ type SummaryMatter = { color: string | null; id: string; name: string };
  */
 const useMattersById = (): ReadonlyMap<string, SummaryMatter> => {
   const { activeOrganizationId } = useChatApproval();
-  const { data } = useQuery(workspacesNavigationOptions(activeOrganizationId));
+  const user = useMaybeAuthenticatedUser();
+  const dataQuery = useQuery({
+    ...workspacesNavigationOptions({
+      organizationId: activeOrganizationId,
+      userId: user?.id ?? SIGNED_OUT_QUERY_OWNER,
+    }),
+    enabled: user !== null,
+  });
+  const dataView = useQueryView(dataQuery);
+  useQueryViewError(dataView);
+  const data = dataView.type === "items" ? dataView.items : undefined;
   const byId = new Map<string, SummaryMatter>();
   if (!data) {
     return byId;
@@ -851,7 +868,9 @@ const getToolApprovalState = ({
   // grant can auto-approve a later call.
   const isApprovalOnce = isApprovalOnceChatToolName(name);
   const canAllowInConversation =
-    !isApprovalOnce && !isNonPersistentGrantChatToolName(name);
+    !requiresPerCallChatApproval(name) &&
+    !isApprovalOnce &&
+    !isNonPersistentGrantChatToolName(name);
   const externalMcpProviderName = getExternalMcpProviderName(name);
 
   return {

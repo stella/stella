@@ -1,3 +1,5 @@
+import type { AppliedProvisionVersion } from "@stll/api-contract/provision-applied-version";
+
 /**
  * A jurisdiction profile: what a citation reader needs to know about a legal
  * culture, as data.
@@ -56,6 +58,13 @@ export type WorkIdentifier = {
   /** The collection's canonical spelling: `Sb.`, `Z. z.`, `Zb.`, `Ú. l.`. */
   collection: string;
 };
+
+/** The canonical work spelling used for provision identity and persistence. */
+export const formatWorkIdentifier = ({
+  number,
+  year,
+  collection,
+}: WorkIdentifier): string => `${String(number)}/${String(year)} ${collection}`;
 
 /** The jurisdictions this build can read. Corpus country codes (ISO alpha-3). */
 export const PROVISION_CITATION_JURISDICTIONS = ["CZE", "SVK"] as const;
@@ -189,7 +198,22 @@ export type AnchorScheme = {
   render: Readonly<Record<AnchorLevel, (value: string) => string>>;
 };
 
+/** Explicit version language; generic as-amended wording has no entry. */
+export type VersionGrammar = {
+  dateStatements: readonly {
+    prefix: string;
+    relation: Extract<
+      AppliedProvisionVersion,
+      { type: "stated_date" }
+    >["relation"];
+  }[];
+  amendmentPrefixes: readonly string[];
+  /** Inflected month spellings, mapped to calendar month numbers. */
+  monthNames: Readonly<Record<string, number>>;
+};
+
 export type JurisdictionProfile = {
+  versionGrammar: VersionGrammar;
   jurisdiction: ProvisionCitationJurisdiction;
   /** BCP-47 primary subtag of the language the profile's vocabulary is in. */
   language: string;

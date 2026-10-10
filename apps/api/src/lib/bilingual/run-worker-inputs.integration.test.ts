@@ -42,6 +42,7 @@ import { createRootRunActor } from "@/api/lib/root-scoped-db";
 import { brandPersistedBilingualTranslationRunId } from "@/api/lib/safe-id-boundaries";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -64,13 +65,18 @@ const originalOrganizationMember = (
     .where(eq(member.id, ids.memberA1org))
     .limit(1)
 ).at(0);
-const originalMatterMember = await testDb.query.workspaceMembers.findFirst({
-  where: { id: { eq: ids.memberA1wsA1 } },
+// Leaving the organization also ends every matter membership in it, so the
+// restore covers all of them, not only the one a test removes directly.
+const originalMatterMembers = await testDb.query.workspaceMembers.findMany({
+  where: {
+    userId: { eq: ids.userA1 },
+    workspaceId: { in: [ids.wsA1, ids.wsA2] },
+  },
 });
 const sourceDocument = getBuiltinReportTemplate(DD_REPORT_KEY);
 if (
   !originalOrganizationMember ||
-  !originalMatterMember ||
+  originalMatterMembers.length === 0 ||
   sourceDocument?.kind !== "docx"
 ) {
   panic("Bilingual run fixture is incomplete");
@@ -186,7 +192,7 @@ afterEach(async () => {
     .onConflictDoNothing();
   await testDb
     .insert(workspaceMembers)
-    .values(originalMatterMember)
+    .values(originalMatterMembers)
     .onConflictDoNothing();
 });
 
@@ -199,7 +205,7 @@ afterAll(async () => {
 });
 
 const expectStoppedBeforeReading = async () => {
-  await processBilingualRun(actor);
+  await processBilingualRun(actor, testModelAdmission(actor.organizationId));
   const run = await readRun();
   expect(run).toMatchObject({
     status: "failed",
@@ -226,7 +232,7 @@ describe("bilingual run", () => {
   });
 
   test("a run completes while its requester keeps access", async () => {
-    await processBilingualRun(actor);
+    await processBilingualRun(actor, testModelAdmission(actor.organizationId));
     expect(await readRun()).toMatchObject({
       status: "completed",
       errorCode: null,

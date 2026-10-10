@@ -71,7 +71,16 @@ the default provider chain (see `getTanStackTextModelById`).
   `list_templates` as production does, answered with an empty library. A read
   rejected at the boundary, a failed script, a chat read the skill did not
   document written before `discover_tools` named it, work handed to
-  subagents, or a search for starter playbooks is a defect. The
+  subagents, or a search for starter playbooks is a defect. So is a saved
+  text that names a source: every string of the stored playbook is searched,
+  case-insensitively, for the fixtures' document names (with and without the
+  extension), counterparties, matter names, and matter references, and the
+  defect reports the field and the name. A position's `sources` may cite only
+  documents the user picked; a run that read picked contracts records at
+  least one, and a scenario with nothing to pick (no contracts, or attached
+  ones, which have no document id) stores none. On the chat surface the
+  playbook read and the save run through chat's ref mediation, so a source is
+  a document ref there and an id on the MCP surface. The
   behavior tier is a pass criterion on `gpt-5.6-luna` and `gpt-6-sol`;
   `gpt-5.4-mini` stays in the default set to track the floor, not to gate.
 - `extraction.ts`: does the structured-extraction path (`generateWorkflowData`)

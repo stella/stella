@@ -22,8 +22,13 @@ import {
   readCourtRegistry,
 } from "@/api/lib/case-law/court-presentation";
 import type { CourtWeightMap } from "@/api/lib/case-law/court-weights";
+import {
+  decisionPageRequestRefusal,
+  tDecisionPageOffset,
+} from "@/api/lib/case-law/decision-page-offset";
 import { publicDecisionRowColumns } from "@/api/lib/case-law/decision-row-columns";
 import { readDecisionHeadnote } from "@/api/lib/case-law/decision-text";
+import { decisionTypeFilterSql } from "@/api/lib/case-law/decision-type-filter-sql";
 import { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
 import { loadPublicCourtWeights } from "@/api/lib/case-law/public-case-law-config";
 import {
@@ -56,6 +61,9 @@ import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 export const listDecisionsQuerySchema = t.Object({
   limit: t.Optional(tPaginationLimit(LIMITS.caseLawSearchPageSizeMax)),
   cursor: t.Optional(tPaginationCursor()),
+  // A page addressed by number; exclusive with `cursor` and bounded like the
+  // search's (`LIMITS.caseLawResultDepthMax`).
+  offset: t.Optional(tDecisionPageOffset()),
   court: t.Optional(t.String({ maxLength: 512 })),
   country: tPublicLawCountry,
   dateFrom: t.Optional(t.String({ format: "date" })),
@@ -152,7 +160,9 @@ const decisionFilterConditions = (
     conditions.push(sql`${decision.decisionDate} <= ${query.dateTo}`);
   }
   if (query.decisionType) {
-    conditions.push(eq(decision.decisionType, query.decisionType));
+    conditions.push(
+      decisionTypeFilterSql(decision.decisionType, query.decisionType),
+    );
   }
   if (query.sourceId) {
     conditions.push(eq(decision.sourceId, query.sourceId));
@@ -167,6 +177,11 @@ type ListDecisionsPageQueryOptions = {
   query: ListDecisionsQuery;
   limit: number;
   cursor: DecisionDateCursor | undefined;
+  /**
+   * Rows ahead of a page addressed by number. Absent for a first page and for
+   * a cursor page, whose keyset predicate already places it.
+   */
+  offset?: number | undefined;
   tx: CaseLawPublicReadTransaction;
 };
 
@@ -175,6 +190,7 @@ export const listDecisionsPageQuery = ({
   query,
   limit,
   cursor,
+  offset = 0,
   tx,
 }: ListDecisionsPageQueryOptions) => {
   const conditions: SQL[] = [
@@ -223,7 +239,8 @@ export const listDecisionsPageQuery = ({
       desc(decisionDateSortKeySql(caseLawDecisions.decisionDate)),
       desc(caseLawDecisions.id),
     )
-    .limit(limit + 1);
+    .limit(limit + 1)
+    .offset(offset);
 };
 
 export const listDecisionsHandler = async (
@@ -240,7 +257,7 @@ export const listDecisionsHandler = async (
     admitted: PUBLIC_CASE_LAW_COUNTRIES,
   });
   if (countryRead.kind === "unavailable") {
-    return status(503, countryRead.response);
+    return countryRead.answer;
   }
   if (countryRead.kind === "unreadable") {
     return status(400, { message: countryRead.message });
@@ -253,6 +270,14 @@ export const listDecisionsHandler = async (
   const limit = normalizeTenantPageLimit(
     query.limit ?? LIMITS.caseLawSearchPageSizeDefault,
   );
+  const pageRefusal = decisionPageRequestRefusal({
+    cursor: query.cursor,
+    limit,
+    offset: query.offset,
+  });
+  if (pageRefusal !== null) {
+    return status(400, { message: pageRefusal });
+  }
   const cursor = query.cursor
     ? decodeDecisionDateCursor(query.cursor)
     : undefined;
@@ -261,7 +286,13 @@ export const listDecisionsHandler = async (
   }
 
   const decisions = await caseLawDb((tx) =>
-    listDecisionsPageQuery({ query: scopedQuery, limit, cursor, tx }),
+    listDecisionsPageQuery({
+      query: scopedQuery,
+      limit,
+      cursor,
+      offset: query.offset,
+      tx,
+    }),
   );
 
   const languageGroupKeys = [

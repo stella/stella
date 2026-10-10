@@ -20,6 +20,7 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
+  DialogFormState,
   DialogFooter,
   DialogHeader,
   DialogPopup,
@@ -28,11 +29,11 @@ import {
 import {
   BookmarkIcon,
   BookmarkPlusIcon,
-  LoaderIcon,
   PencilIcon,
   Trash2Icon,
 } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
+import { Loader } from "@stll/ui/loader";
 import { MenuSection } from "@stll/ui/menu-section";
 import type { OverlayLayer } from "@stll/ui/overlay-layer";
 import { contentDir } from "@stll/ui/use-content-dir";
@@ -236,7 +237,11 @@ export const SavedSearches = ({
         <MenuSection title={t("search.savedSearches")}>
           {savedSearchesQuery.isPending && (
             <div className="flex h-11 items-center px-2">
-              <LoaderIcon className="text-muted-foreground size-4 animate-spin" />
+              <Loader
+                className="size-4"
+                label={t("common.loading")}
+                size="sm"
+              />
             </div>
           )}
           {savedSearchesQuery.isError && (
@@ -311,11 +316,12 @@ export const SavedSearches = ({
               }}
               variant="ghost"
             >
-              {savedSearchesQuery.isFetchingNextPage ? (
-                <LoaderIcon className="size-4 animate-spin" />
-              ) : (
-                t("common.loadMore")
+              {savedSearchesQuery.isFetchingNextPage && (
+                <Loader size="sm" variant="decorative" />
               )}
+              {savedSearchesQuery.isFetchingNextPage
+                ? t("common.loading")
+                : t("common.loadMore")}
             </Button>
           )}
         </MenuSection>
@@ -330,6 +336,13 @@ export const SavedSearches = ({
         open={dialog.type === "create" || dialog.type === "rename"}
       >
         <DialogPopup layer={overlayLayer}>
+          <DialogFormState
+            dirty={
+              dialog.type === "create"
+                ? dialog.name !== ""
+                : dialog.type === "rename" && dialog.name !== dialog.search.name
+            }
+          />
           <DialogHeader>
             <DialogTitle>
               {dialog.type === "rename"
@@ -373,7 +386,13 @@ export const SavedSearches = ({
                 disabled={!dialogName.trim() || isSaving}
                 type="submit"
               >
-                {isSaving && <LoaderIcon className="size-4 animate-spin" />}
+                {isSaving && (
+                  <Loader
+                    className="size-4"
+                    label={t("common.loading")}
+                    size="sm"
+                  />
+                )}
                 {t("common.save")}
               </Button>
             </DialogFooter>
@@ -424,7 +443,11 @@ export const SavedSearches = ({
               variant="destructive"
             >
               {deleteMutation.isPending && (
-                <LoaderIcon className="size-4 animate-spin" />
+                <Loader
+                  className="size-4"
+                  label={t("common.loading")}
+                  size="sm"
+                />
               )}
               {t("common.delete")}
             </Button>

@@ -2,28 +2,30 @@ import { Result, TaggedError } from "better-result";
 import type { TaggedErrorClass } from "better-result";
 import { and, asc, eq, gt } from "drizzle-orm";
 
-import { buildScreeningIndex } from "@stll/sanctions";
+import { createEventLoopSlicer } from "@stll/concurrency/event-loop";
+import { buildScreeningIndexCooperatively } from "@stll/sanctions";
 import type {
+  ParsedList,
   SanctionsEntry,
   SanctionsSource,
   ScreeningIndex,
 } from "@stll/sanctions";
 import { Temporal } from "@stll/time";
 
-import type { ScopedDb } from "@/api/db/safe-db";
 import {
   sanctionsEditionEntries,
   sanctionsEntryPayloads,
 } from "@/api/db/schema";
 import type { SanctionsSourceFreshness } from "@/api/lib/lists/sanctions/freshness";
+import type { SanctionsReadDb } from "@/api/lib/lists/sanctions/read-db";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 
 // Entries are read in keyset pages so no single statement carries a whole
 // list; the largest list holds tens of thousands of entries. Each page is an
-// await, so a long read yields to other requests between pages. The index
-// build itself is one synchronous pass in the matcher package; it is linear
-// in the entries and runs once per edition, so it is not split further.
+// await, so a long read yields to other requests between pages. Building the
+// index of a large list takes seconds of CPU, so it is built cooperatively,
+// giving way to requests between entries, on a cache miss and on a refresh.
 const ENTRY_PAGE_SIZE = 2000;
 
 /**
@@ -55,38 +57,54 @@ class SanctionsIndexLoadFailure extends SanctionsIndexLoadFailureBase<{
   cause?: unknown;
 }> {}
 
-const loadEditionEntries = async (
-  db: ScopedDb,
-  edition: SanctionsActiveEdition,
-): Promise<SanctionsEntry[]> => {
+type LoadEditionEntriesOptions = {
+  db: SanctionsReadDb;
+  edition: SanctionsActiveEdition;
+  signal?: AbortSignal;
+};
+
+export const loadEditionEntries = async ({
+  db,
+  edition,
+  signal,
+}: LoadEditionEntriesOptions): Promise<SanctionsEntry[]> => {
   const entries: SanctionsEntry[] = [];
   const loadPage = async (cursor: string | null): Promise<void> => {
-    const page = await db(
-      async (tx) =>
-        await tx
-          .select({
-            sourceEntryId: sanctionsEditionEntries.sourceEntryId,
-            payload: sanctionsEntryPayloads.payload,
-          })
-          .from(sanctionsEditionEntries)
-          .innerJoin(
-            sanctionsEntryPayloads,
-            eq(
-              sanctionsEditionEntries.contentHash,
-              sanctionsEntryPayloads.contentHash,
-            ),
-          )
-          .where(
-            and(
-              eq(sanctionsEditionEntries.editionId, edition.id),
-              cursor === null
-                ? undefined
-                : gt(sanctionsEditionEntries.sourceEntryId, cursor),
-            ),
-          )
-          .orderBy(asc(sanctionsEditionEntries.sourceEntryId))
-          .limit(ENTRY_PAGE_SIZE),
-    );
+    if (signal?.aborted) {
+      return;
+    }
+    const page = await db(async (tx) => {
+      // Acquiring a transaction may outlive cancellation; never issue its page.
+      if (signal?.aborted) {
+        return [];
+      }
+      return await tx
+        .select({
+          sourceEntryId: sanctionsEditionEntries.sourceEntryId,
+          payload: sanctionsEntryPayloads.payload,
+        })
+        .from(sanctionsEditionEntries)
+        .innerJoin(
+          sanctionsEntryPayloads,
+          eq(
+            sanctionsEditionEntries.contentHash,
+            sanctionsEntryPayloads.contentHash,
+          ),
+        )
+        .where(
+          and(
+            eq(sanctionsEditionEntries.editionId, edition.id),
+            cursor === null
+              ? undefined
+              : gt(sanctionsEditionEntries.sourceEntryId, cursor),
+          ),
+        )
+        .orderBy(asc(sanctionsEditionEntries.sourceEntryId))
+        .limit(ENTRY_PAGE_SIZE);
+    });
+    if (signal?.aborted) {
+      return;
+    }
     for (const row of page) {
       entries.push(row.payload);
     }
@@ -99,10 +117,12 @@ const loadEditionEntries = async (
   return entries;
 };
 
-type BuildSanctionsIndex = typeof buildScreeningIndex;
+type BuildSanctionsIndex = (
+  lists: readonly ParsedList[],
+) => ScreeningIndex | Promise<ScreeningIndex>;
 
 type LoadIndexProps = {
-  db: ScopedDb;
+  db: SanctionsReadDb;
   source: SanctionsSource;
   edition: SanctionsActiveEdition;
   build: BuildSanctionsIndex;
@@ -117,7 +137,7 @@ const loadIndex = async ({
   Result<ScreeningIndex, SanctionsIndexLoadFailure>
 > => {
   const loaded = await Result.tryPromise({
-    try: async () => await loadEditionEntries(db, edition),
+    try: async () => await loadEditionEntries({ db, edition }),
     catch: (cause) =>
       new SanctionsIndexLoadFailure({
         stage: "read-failed",
@@ -139,9 +159,9 @@ const loadIndex = async ({
     );
   }
   const entries = loaded.value;
-  return Result.try({
-    try: () =>
-      build([
+  return await Result.tryPromise({
+    try: async () =>
+      await build([
         {
           version: {
             source,
@@ -161,7 +181,7 @@ const loadIndex = async ({
 };
 
 type CacheProps = {
-  db: ScopedDb;
+  db: SanctionsReadDb;
   source: SanctionsSource;
   edition: SanctionsActiveEdition;
 };
@@ -181,6 +201,7 @@ export type SanctionsIndexCache = {
 };
 
 type CreateSanctionsIndexCacheOptions = {
+  /** Defaults to a build that gives way to requests; tests may count builds. */
   build?: BuildSanctionsIndex | undefined;
   failureMemoMs?: number | undefined;
   nowMs?: (() => number) | undefined;
@@ -212,6 +233,9 @@ const observeLoadFailure: NonNullable<
   });
 };
 
+const buildGivingWay: BuildSanctionsIndex = async (lists) =>
+  await buildScreeningIndexCooperatively(lists, createEventLoopSlicer());
+
 /**
  * One screening index per source, keyed by the active edition it was built
  * from. Editions are immutable, so an index stays valid until the source
@@ -222,7 +246,7 @@ const observeLoadFailure: NonNullable<
  * re-reading the edition, and the first one after it tries again.
  */
 export const createSanctionsIndexCache = ({
-  build = buildScreeningIndex,
+  build = buildGivingWay,
   failureMemoMs = SANCTIONS_INDEX_FAILURE_MEMO_MS,
   nowMs = () => Temporal.Now.instant().epochMilliseconds,
   reportFailure = observeLoadFailure,
@@ -300,6 +324,6 @@ export const createSanctionsIndexCache = ({
   };
 };
 
-/** Shared by every screening in this process: the in-product check and public search. */
+/** Shared by signed-in screening callers in this process. */
 export const sharedSanctionsIndexCache: SanctionsIndexCache =
   createSanctionsIndexCache();

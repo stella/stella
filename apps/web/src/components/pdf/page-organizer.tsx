@@ -1,14 +1,8 @@
 import { useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 
-import {
-  attachClosestEdge,
-  extractClosestEdge,
-} from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge";
-import {
-  draggable,
-  dropTargetForElements,
-} from "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
+import { attachClosestEdge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge/attach-closest-edge";
+import { extractClosestEdge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge/extract-closest-edge";
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
 import { preserveOffsetOnSource } from "@atlaskit/pragmatic-drag-and-drop/utils/preserve-offset-on-source";
 import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/utils/set-custom-native-drag-preview";
@@ -29,6 +23,7 @@ import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import {
   Dialog,
+  DialogFormState,
   DialogClose,
   DialogDescription,
   DialogFooter,
@@ -71,6 +66,10 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
+import {
+  draggable,
+  dropTargetForElements,
+} from "@/lib/drag-and-drop/element-registration";
 import { unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { filesKeys, fileOptions } from "@/lib/files/queries";
@@ -1254,6 +1253,14 @@ const LoadedPDFPageOrganizer = ({
 
       <Dialog onOpenChange={setIsCropOpen} open={isCropOpen}>
         <DialogPopup>
+          <DialogFormState
+            dirty={
+              JSON.stringify(cropMargins) !== JSON.stringify(EMPTY_CROP_MARGINS)
+            }
+            onDiscard={() => {
+              setCropMargins(EMPTY_CROP_MARGINS);
+            }}
+          />
           <DialogHeader>
             <DialogTitle>{tPageEditor("cropTitle")}</DialogTitle>
             <DialogDescription>

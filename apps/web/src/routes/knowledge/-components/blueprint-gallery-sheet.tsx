@@ -6,6 +6,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
+  DialogFormState,
   DialogClose,
   DialogFooter,
   DialogHeader,
@@ -16,10 +17,10 @@ import {
 import {
   ClipboardCheckIcon,
   LibraryIcon,
-  LoaderIcon,
   PencilLineIcon,
   type LucideIcon,
 } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 import {
   Select,
   SelectItem,
@@ -140,6 +141,10 @@ const BlueprintGallerySheetBody = ({
 
   return (
     <DialogPopup className="sm:max-w-2xl">
+      <DialogFormState
+        dirty={scope !== "private"}
+        onDiscard={() => setScope("private")}
+      />
       <DialogHeader>
         <DialogTitle>{tGallery("title")}</DialogTitle>
         <p className="text-muted-foreground text-sm">{tGallery("subtitle")}</p>
@@ -189,7 +194,11 @@ const BlueprintGallerySheetBody = ({
             >
               <span className="bg-muted text-foreground flex size-9 shrink-0 items-center justify-center rounded-md">
                 {pendingId === card.id ? (
-                  <LoaderIcon className="size-4 animate-spin" />
+                  <Loader
+                    className="size-4"
+                    label={t("common.loading")}
+                    size="sm"
+                  />
                 ) : (
                   <card.Icon className="size-4" />
                 )}
@@ -218,7 +227,11 @@ const BlueprintGallerySheetBody = ({
           type="button"
         >
           {pendingId === "blank" && (
-            <LoaderIcon className="me-2 size-4 shrink-0 animate-spin" />
+            <Loader
+              className="me-2 size-4 shrink-0"
+              label={t("common.loading")}
+              size="sm"
+            />
           )}
           <span className="text-foreground font-medium">
             {tGallery("startBlank")}

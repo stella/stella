@@ -7,26 +7,11 @@
  * row the same two parts whichever way the publisher wrote the title.
  */
 
+import { statuteGazetteAbbreviation } from "@stll/api-contract/statute-gazette";
+
 /** `…/eli/<country>/<collection>/<year>/<number>`, optionally with a tail. */
 const ELI_ACT_TAIL_RE =
   /\/eli\/[a-z]{2}\/([a-z0-9]+)\/(\d{4})\/(\d{1,5})(?:\/|$)/u;
-
-/** The first year the Slovak collection was the `Zbierka zákonov` of the Slovak Republic. */
-const SLOVAK_ZZ_FROM_YEAR = 1993;
-
-/**
- * How each gazette abbreviates itself in a given year. Slovak law cites acts
- * of the federal era as `Zb.` and its own as `Z. z.`, though the ELI files both
- * under `zz`. A collection not listed here prints the bare number rather than
- * a guessed abbreviation.
- */
-const COLLECTION_ABBREVIATIONS: Readonly<
-  Record<string, (year: number) => string>
-> = {
-  sb: () => "Sb.",
-  sbms: () => "Sb. m. s.",
-  zz: (year) => (year < SLOVAK_ZZ_FROM_YEAR ? "Zb." : "Z. z."),
-};
 
 /** The same prefix the API strips for name matching (`legislationTitleName`). */
 const TITLE_NUMBER_PREFIX_RE = /^\d+\/\d{4} [^,]*, /u;
@@ -41,10 +26,8 @@ const statuteActNumber = (eli: string): string | null => {
     return null;
   }
   const number = `${String(Number(ordinal))}/${year}`;
-  const abbreviation = COLLECTION_ABBREVIATIONS[collection];
-  return abbreviation === undefined
-    ? number
-    : `${number} ${abbreviation(Number(year))}`;
+  const abbreviation = statuteGazetteAbbreviation(collection, Number(year));
+  return abbreviation === null ? number : `${number} ${abbreviation}`;
 };
 
 /** How a listed act names itself: its number, then its name. */

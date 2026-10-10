@@ -34,6 +34,8 @@ import path from "node:path";
 import { analyse } from "scslre";
 import ts from "typescript";
 
+import { compareCodeUnit } from "@stll/collation";
+
 import { MCP_WRITE_ONLY_RESOURCE_SCOPES } from "../packages/api-contract/src/mcp";
 import { countDbAwaitInLoopDirectives } from "./db-await-in-loop";
 import {
@@ -44,7 +46,16 @@ import {
   TRACKED_SUPPRESSION_RULES,
   type TrackedRule,
 } from "./lint-suppressions";
-import { ROOT_CONNECTION_DOORS } from "./ownership";
+import {
+  isApiProductionModule,
+  isOutboundProductionModule,
+  LOCAL_MODULE_CAPABILITIES,
+  outboundTransportReferences,
+} from "./outbound-transport-ownership";
+import {
+  ROOT_CONNECTION_DOORS,
+  STATUS_TRANSITION_OWNERSHIP,
+} from "./ownership";
 import { memoizeRecent, parseSource, sourceDialect } from "./parse-memo";
 import {
   isResultConventionExcludedFile,
@@ -55,11 +66,21 @@ import {
   countRootConnectionShapes,
   countRootConnectionTypeImports,
 } from "./root-connection-shapes";
+import { schemaIntrospectionPaths } from "./schema-introspection";
 import {
   ALL_SOURCE_GLOBS,
   isExcludedSource,
   isExcludedTestInclusiveSource,
 } from "./source-globs";
+import {
+  unmanagedTransitionTables,
+  statusWriteCalls,
+} from "./status-write-shapes";
+import {
+  countUnsignalledSkips,
+  isExcludedSkipSource,
+  UNSIGNALLED_SKIP_SOURCE_GLOBS,
+} from "./unsignalled-skip";
 
 const SCRIPTS_DIR = import.meta.dir;
 const REPO_ROOT = path.resolve(SCRIPTS_DIR, "..");
@@ -1172,6 +1193,34 @@ const countDirectRedistributableCalls: FileCounter = (content, { file }) => {
   return total;
 };
 
+// A satisfies tie only checks fresh literal keys. Forwarded domain objects
+// need projectionPayload's recursive exactness gate before return annotations.
+const countWeakMcpProjectionTies: FileCounter = (content, { file }) => {
+  const source = parseSource({ fileName: file, text: content });
+  let total = 0;
+  const visit = (node: ts.Node) => {
+    if (ts.isSatisfiesExpression(node)) {
+      const type = node.type;
+      if (
+        ts.isTypeReferenceNode(type) &&
+        ts.isQualifiedName(type.typeName) &&
+        type.typeName.right.text === "InferInput" &&
+        type.typeArguments?.some(
+          (argument) =>
+            ts.isTypeQueryNode(argument) &&
+            ts.isIdentifier(argument.exprName) &&
+            argument.exprName.text.endsWith("_PROJECTION"),
+        )
+      ) {
+        total += 1;
+      }
+    }
+    node.forEachChild(visit);
+  };
+  visit(source);
+  return total;
+};
+
 const BOUNDARY_HELPER = "pgTimestampCursorBoundary";
 
 const countRepeatedTimestampCursorBoundaries: FileCounter = (
@@ -1661,7 +1710,7 @@ const countTruncatedCapabilitySchemas = (content: string): number => {
 // A capability suppressed from the generic transport by its `transport`
 // disposition: it returns bytes (`file-response`/`file-both`), or it REQUIRES a
 // file input. Suppressed entries are dropped from the CLI tree
-// (`insertCapabilities`) and refused pre-execution by `invoke_capability`, so
+// (`insertCapabilities`) and refused pre-execution by capability executors, so
 // each one is a capability an agent surface simply cannot reach. This metric
 // freezes that count: a newly file-shaped capability cannot silently disappear
 // from both clients, and the burn-down is a reviewed baseline bump rather than a
@@ -1759,7 +1808,7 @@ const countDomainActionVerbs: RoleSensitiveFileCounter = (
 /**
  * Namespaces where a curated, hand-written command still shares a top-level name
  * with generated capability commands, so `stella <namespace> …` mixes the named
- * MCP tool path and the generic `invoke_capability` path. Must reach zero.
+ * MCP tool path and the generic capability executors path. Must reach zero.
  */
 const countShadowedNamespaces = (content: string): number => {
   const block =
@@ -1767,6 +1816,35 @@ const countShadowedNamespaces = (content: string): number => {
       content,
     )?.[1];
   return block === undefined ? 0 : (block.match(/^[ \t]*"/gmu) ?? []).length;
+};
+
+const UNCLASSIFIED_REALTIME_WRITE_CAPABILITIES_FILE =
+  "apps/api/src/lib/resource-set-realtime.registry.test.ts";
+
+/**
+ * Write capabilities that do not yet declare what they announce to open tabs
+ * (UNCLASSIFIED_WRITE_CAPABILITIES in the resource-set realtime registry
+ * test). The list only shrinks; it is absent from trees older than the
+ * declaration, and a head tree that renames or drops the constant fails
+ * loudly rather than reading as zero.
+ */
+const countUnclassifiedRealtimeWriteCapabilities: RoleSensitiveFileCounter = (
+  content,
+  { role },
+) => {
+  const block =
+    /const UNCLASSIFIED_WRITE_CAPABILITIES: readonly string\[\] = \[([\s\S]*?)\];/u.exec(
+      content,
+    )?.[1];
+  if (block === undefined) {
+    if (role === "base") {
+      return 0;
+    }
+    return panic(
+      "unclassified-realtime-write-capabilities: UNCLASSIFIED_WRITE_CAPABILITIES not found",
+    );
+  }
+  return (block.match(/^[ \t]*"/gmu) ?? []).length;
 };
 
 const PG_TABLE_MARKER = "p.pgTable(";
@@ -2268,7 +2346,7 @@ type RepoMetricResult = {
 
 type RepoCounter = (context: ScanContext) => RepoMetricResult;
 
-export type RatchetMetric =
+export type RatchetMetric = (
   | ({
       readonly scope: "file";
       readonly id: string;
@@ -2300,7 +2378,10 @@ export type RatchetMetric =
       readonly id: string;
       readonly description: string;
       readonly count: RepoCounter;
-    };
+      /** Gate each measured member independently, including virtual file keys. */
+      readonly perFile?: true;
+    }
+) & { readonly growth?: "shrink-only" };
 
 // One decrease-only budget per tracked rule, derived from the single
 // tracked-rule table rather than hand-listed here: a rule added to that table
@@ -2346,6 +2427,27 @@ const countParserValidatorLedgerEntries: FileCounter = (content) => {
     panic("parser-validator-call ledger must be a JSON array");
   }
   return parsed.length;
+};
+
+const countOutboundIndirectAccessExceptions = (
+  context: ScanContext,
+): RepoMetricResult => {
+  const flagged = scanRepoFiles(context, [
+    "apps/api/**/*.{ts,tsx,js,jsx,mjs,cjs,mts,cts}",
+    "apps/{web,collab}/src/**/*.{ts,tsx,js,jsx,mjs,cjs,mts,cts}",
+    "packages/*/src/**/*.{ts,tsx,js,jsx,mjs,cjs,mts,cts}",
+  ]).filter(
+    (file) =>
+      isOutboundProductionModule(file) &&
+      outboundTransportReferences({
+        file,
+        text: readSource(context, file),
+      }).includes("indirect:transport"),
+  );
+  const files: Record<string, number> = Object.fromEntries(
+    flagged.map((file) => [file, 1]),
+  );
+  return { count: flagged.length, files };
 };
 
 // --- Repo-scope counters ----------------------------------------------------
@@ -2886,7 +2988,122 @@ const RESULT_BOUNDARY_METRICS = [
   },
 ] as const satisfies readonly RatchetMetric[];
 
+const countUnsignalledSkipMetric: FileCounter = (content, { file }) =>
+  countUnsignalledSkips(content, { file });
+
 export const RATCHET_METRICS: readonly RatchetMetric[] = [
+  {
+    scope: "file",
+    id: "unsignalled-skip",
+    description:
+      "data-boundary catch outcomes and failed parse/lookup item skips without observation or typed disposition; empty literal ??/|| fallbacks on valueAtPath/asString/fieldOf/extractId, parse/find/lookup helpers or Map lookups; per-file shrink-only",
+    include: UNSIGNALLED_SKIP_SOURCE_GLOBS,
+    exclude: isExcludedSkipSource,
+    perFile: true,
+    growth: "shrink-only",
+    count: countUnsignalledSkipMetric,
+  },
+  {
+    scope: "repo",
+    id: "outbound-indirect-access-exceptions",
+    description:
+      "Unclassified indirect transport acquisition outside the bounded local module owner; each owner only shrinks",
+    perFile: true,
+    growth: "shrink-only",
+    count: countOutboundIndirectAccessExceptions,
+  },
+  {
+    scope: "repo",
+    id: "api-legacy-outbound-transports",
+    description:
+      "Raw transport and client capabilities acquired by each classified API owner; each file's capability set only shrinks",
+    perFile: true,
+    growth: "shrink-only",
+    count: (context) => {
+      const keys: string[] = [];
+      for (const file of scanRepoFiles(context, [
+        "apps/api/**/*.{ts,tsx,js,jsx,mjs,cjs,mts,cts}",
+      ])) {
+        if (
+          !isApiProductionModule(file) ||
+          file === "apps/api/src/lib/safe-outbound-fetch.ts"
+        ) {
+          continue;
+        }
+        for (const capability of outboundTransportReferences({
+          file,
+          text: readSource(context, file),
+        })) {
+          if (
+            capability !== "permit:grant" &&
+            !LOCAL_MODULE_CAPABILITIES.has(capability)
+          ) {
+            keys.push(`${file}#${capability}`);
+          }
+        }
+      }
+      return {
+        count: keys.length,
+        files: Object.fromEntries(keys.map((key) => [key, 1])),
+      };
+    },
+  },
+  {
+    scope: "repo",
+    id: "schema-introspection-files",
+    description:
+      "Shared schema introspection paths, gated independently; additions require a justified allowance and pass the schema-only dependency guard",
+    perFile: true,
+    count: (context) => {
+      const paths = schemaIntrospectionPaths(
+        readSource(context, "scripts/ownership.ts"),
+      );
+      return {
+        count: paths.length,
+        files: Object.fromEntries(paths.map((file) => [file, 1])),
+      };
+    },
+  },
+  {
+    scope: "file",
+    id: "direct-status-writes",
+    description:
+      "lifecycle keys in direct/conflict Drizzle updates and visible raw SQL assignments outside the transition owner; opaque handles/payloads count conservatively and each file's debt can only shrink",
+    include: ["apps/api/src/**/*.{ts,tsx}", "apps/api/scripts/**/*.ts"],
+    exclude: (file) =>
+      isExcludedSource(file) ||
+      STATUS_TRANSITION_OWNERSHIP.owner.some((owner) => file === owner),
+    perFile: true,
+    growth: "shrink-only",
+    count: ((content, { file }) =>
+      statusWriteCalls({
+        content,
+        file,
+        columns: STATUS_TRANSITION_OWNERSHIP.enforcement.columns,
+      }).length) satisfies FileCounter,
+  },
+  {
+    scope: "repo",
+    id: "unmanaged-transition-specs",
+    description:
+      "reasoned unmanaged status-table entries, each table independently shrink-only; before specs exist, every inventoried status table is unmanaged",
+    perFile: true,
+    growth: "shrink-only",
+    count: (context) => {
+      const file = "apps/api/src/lib/db/transition-specs.ts";
+      const tables =
+        existsSync(path.join(context.root, file)) &&
+        (context.trackedFiles === undefined || context.trackedFiles.has(file))
+          ? unmanagedTransitionTables(readSource(context, file))
+          : Object.keys(STATUS_TRANSITION_OWNERSHIP.enforcement.columns);
+      return {
+        count: tables.length,
+        files: Object.fromEntries(
+          tables.map((table) => [`${file}#${table}`, 1]),
+        ),
+      };
+    },
+  },
   {
     scope: "file",
     id: "as-casts",
@@ -3190,6 +3407,15 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
   },
   {
     scope: "file",
+    id: "weak-mcp-projection-ties",
+    description:
+      "satisfies-only MCP projection ties miss nested producer fields; use projectionPayload to bind forwarded domain results recursively. Stays at 0",
+    include: ["apps/api/src/mcp/**/*.ts"],
+    exclude: isExcludedSource,
+    count: countWeakMcpProjectionTies,
+  },
+  {
+    scope: "file",
     id: "lib-to-handler-imports",
     description:
       "imports from shared API lib code into handler slices; dependency direction must flow from handlers to lib",
@@ -3221,7 +3447,7 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
     scope: "file",
     id: "capability-file-transport-suppressed",
     description:
-      "capabilities whose transport disposition suppresses them from the generic transport (a file response, or a REQUIRED file input): dropped from the CLI tree and refused by invoke_capability, so no agent surface can reach them. An OPTIONAL file input is not counted — its JSON modes stay invokable",
+      "capabilities whose transport disposition suppresses them from the generic transport (a file response, or a REQUIRED file input): dropped from the CLI tree and refused by capability executors, so no agent surface can reach them. An OPTIONAL file input is not counted — its JSON modes stay invokable",
     include: ["packages/cli/capabilities/*.json"],
     // Generated artifacts are the subject here, so the shared source
     // exclusions (which skip `.gen.`/generated paths) must not apply.
@@ -3257,6 +3483,16 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
     include: ["packages/cli/src/generate-capability-tree.test.ts"],
     exclude: () => false,
     count: countShadowedNamespaces,
+  },
+  {
+    scope: "file",
+    id: "unclassified-realtime-write-capabilities",
+    description:
+      "write capabilities listed in UNCLASSIFIED_WRITE_CAPABILITIES because their handler does not yet declare what it announces to open tabs (a resource set or noResourceSetUpdates); classify a capability and remove it from the list, never add one",
+    include: [UNCLASSIFIED_REALTIME_WRITE_CAPABILITIES_FILE],
+    exclude: () => false,
+    measurement: "role-sensitive",
+    count: countUnclassifiedRealtimeWriteCapabilities,
   },
   {
     scope: "file",
@@ -3399,9 +3635,9 @@ const printReportOnlyMetrics = (context: ScanContext): void => {
 };
 
 const PER_FILE_METRIC_IDS: ReadonlySet<string> = new Set(
-  RATCHET_METRICS.filter(
-    (metric) => metric.scope === "file" && metric.perFile === true,
-  ).map(({ id }) => id),
+  RATCHET_METRICS.filter((metric) => metric.perFile === true).map(
+    ({ id }) => id,
+  ),
 );
 
 // How `--check` gates a metric: per file, and whether below-baseline files
@@ -3412,7 +3648,7 @@ const metricGate = (metric: RatchetMetric): DiffOptions =>
         perFile: metric.allowlist === undefined ? metric.perFile : true,
         allowlist: metric.allowlist === undefined ? undefined : true,
       }
-    : {};
+    : { perFile: metric.perFile };
 
 // --- Scanning ---------------------------------------------------------------
 
@@ -3851,7 +4087,7 @@ const diffMetric = (
       regressedFiles.push({ file, from, to });
     }
   }
-  regressedFiles.sort((a, b) => a.file.localeCompare(b.file));
+  regressedFiles.sort((a, b) => compareCodeUnit(a.file, b.file));
 
   const staleFiles: RegressedFile[] = [];
   if (allowlist === true) {
@@ -3861,7 +4097,7 @@ const diffMetric = (
         staleFiles.push({ file, from, to });
       }
     }
-    staleFiles.sort((a, b) => a.file.localeCompare(b.file));
+    staleFiles.sort((a, b) => compareCodeUnit(a.file, b.file));
   }
 
   const totalStatus = metricStatus(current.count, baseline.count);
@@ -4060,6 +4296,12 @@ const parseAllowance = (filename: string, head: string): AllowanceParse => {
     };
   }
   const perFile = metricGate(metric).perFile === true;
+  if (metric.growth === "shrink-only") {
+    return {
+      type: "invalid",
+      message: `${filename}: shrink-only metric takes no allowances ${metric.id}`,
+    };
+  }
   const { file } = value;
   if (perFile && !isRepositoryPath(file)) {
     return {
@@ -4082,6 +4324,27 @@ const parseAllowance = (filename: string, head: string): AllowanceParse => {
       reason: value.reason,
     },
   };
+};
+
+const shellArgument = (value: string): string =>
+  `'${value.replaceAll("'", "'\\''")}'`;
+
+export const allowanceRemovalCommand = (paths: readonly string[]): string =>
+  `rm -- ${paths.map(shellArgument).join(" ")}`;
+
+type AllowanceAdjustmentCommandOptions = {
+  target: string;
+  remove: readonly string[];
+  template: RatchetAllowance;
+};
+export const allowanceAdjustmentCommand = ({
+  target,
+  remove,
+  template,
+}: AllowanceAdjustmentCommandOptions): string => {
+  const consolidate =
+    remove.length === 0 ? "" : `${allowanceRemovalCommand(remove)} && `;
+  return `mkdir -p ${shellArgument(ALLOWANCE_DIRECTORY)} && ${consolidate}printf '%s\\n' ${shellArgument(JSON.stringify(template))} > ${shellArgument(target)}`;
 };
 
 // Presence in the measured base makes an allowance inert, even if the head
@@ -4149,6 +4412,12 @@ const checkAllowances = ({
             ({ delta }) => delta > 0,
           );
     for (const { file, delta } of increases) {
+      if (metric.growth === "shrink-only") {
+        errors.push(
+          `${diff.id}${file === undefined ? "" : ` (${file})`}: actual increase ${delta}; shrink-only metric takes no allowances.`,
+        );
+        continue;
+      }
       const key = allowanceKey({ metric: diff.id, file });
       const funded = funding.get(key);
       funding.delete(key);
@@ -4167,14 +4436,25 @@ const checkAllowances = ({
         delta,
         reason: "Explain why this increase is needed",
       };
+      const command = allowanceAdjustmentCommand({
+        target: filename,
+        remove: funded?.paths.slice(1) ?? [],
+        template,
+      });
+      const adjustment =
+        funded === undefined
+          ? `Add ${filename}`
+          : `Adjust ${funded.paths.join(", ")}, merging their funding into ${filename}`;
       errors.push(
-        `${diff.id}${file === undefined ? "" : ` (${file})`}: actual increase ${delta}, funded ${funded?.delta ?? 0} (${(funded?.delta ?? 0) > delta ? "over-funded" : "unfunded increase"}). ${funded === undefined ? "Add" : "Adjust"} ${filename} so added deltas total exactly ${delta}: ${JSON.stringify(template)}`,
+        `${diff.id}${file === undefined ? "" : ` (${file})`}: actual increase ${delta}, funded ${funded?.delta ?? 0} (${(funded?.delta ?? 0) > delta ? "over-funded" : "unfunded increase"}). ${adjustment} so added deltas total exactly ${delta}: ${JSON.stringify(template)}\n` +
+          `    After deciding the increase is required, run: ${command}\n` +
+          "    Replace the reason with the justification, review all added deltas, then run `bun scripts/ratchet.ts --check`.",
       );
     }
   }
   for (const [key, { paths, delta }] of funding) {
     errors.push(
-      `${paths.join(", ")}: ${key} actual increase 0, funded ${delta}; allowance with no increase, remove the added allowance`,
+      `${paths.join(", ")}: ${key} actual increase 0, funded ${delta}; allowance with no increase, remove it with: ${allowanceRemovalCommand(paths)}`,
     );
   }
   return errors;
@@ -4277,7 +4557,7 @@ const runCheck = (): number => {
     console.error(`\n${remedy}`);
   }
   console.error(
-    "\nIncreases relative to the measured base tree require exact, justified allowances added in this PR.",
+    "\nIncreases relative to the measured base tree require exact, justified allowances added in this PR. Recheck with `bun scripts/ratchet.ts --check`.",
   );
   return 1;
 };
@@ -4766,6 +5046,7 @@ const EXPECTED_NAMED_FIXTURE_SUPPRESSIONS = {
   "no-direct-buffer-cleanup-intent-delete/no-direct-buffer-cleanup-intent-delete": 0,
   "no-direct-ingestion-checkpoint-write/no-direct-ingestion-checkpoint-write": 0,
   "require-buffer-cleanup-intent-status/require-buffer-cleanup-intent-status": 0,
+  "no-direct-clause-variant-insert/no-direct-clause-variant-insert": 0,
   "require-query-limit/require-query-limit": 6,
   "no-network-await-in-loop/no-network-await-in-loop": 0,
   "require-bounded-request-schema/require-bounded-request-schema": 0,
@@ -5651,6 +5932,56 @@ const inlineClipboardSelfTestFailures = (snapshot: Baseline): string[] => {
   return failures;
 };
 
+// Two listed capabilities; the comment line and the neighbouring array are
+// not entries.
+const SELF_TEST_UNCLASSIFIED_REALTIME_WRITE_CAPABILITIES = `
+const OTHER_LIST: readonly string[] = ["not.counted"];
+const UNCLASSIFIED_WRITE_CAPABILITIES: readonly string[] = [
+  // grouped by domain
+  "clauses.create",
+  "clauses.delete",
+];
+`;
+const EXPECTED_UNCLASSIFIED_REALTIME_WRITE_CAPABILITIES = 2;
+
+const unclassifiedRealtimeWriteCapabilitiesSelfTestFailures = (
+  snapshot: Baseline,
+): string[] => {
+  const failures: string[] = [];
+  const metric = requireSnapshot(
+    snapshot,
+    "unclassified-realtime-write-capabilities",
+  );
+  if (metric.count !== EXPECTED_UNCLASSIFIED_REALTIME_WRITE_CAPABILITIES) {
+    failures.push(
+      `unclassified-realtime-write-capabilities counted ${metric.count}, expected ${EXPECTED_UNCLASSIFIED_REALTIME_WRITE_CAPABILITIES}`,
+    );
+  }
+  const withoutList = "export {};\n";
+  if (
+    countUnclassifiedRealtimeWriteCapabilities(withoutList, {
+      file: UNCLASSIFIED_REALTIME_WRITE_CAPABILITIES_FILE,
+      role: "base",
+    }) !== 0
+  ) {
+    failures.push(
+      "unclassified-realtime-write-capabilities did not read a base without the list as 0",
+    );
+  }
+  const renamed = Result.try(() =>
+    countUnclassifiedRealtimeWriteCapabilities(withoutList, {
+      file: UNCLASSIFIED_REALTIME_WRITE_CAPABILITIES_FILE,
+      role: "head",
+    }),
+  );
+  if (renamed.isOk()) {
+    failures.push(
+      "unclassified-realtime-write-capabilities read a head without the list as a count",
+    );
+  }
+  return failures;
+};
+
 const legacyPaintSelfTestFailures = (snapshot: Baseline): string[] => {
   const metric = requireSnapshot(snapshot, "legacy-paint-transitions");
   if ("apps/web/dist/generated.css" in metric.files) {
@@ -5698,6 +6029,10 @@ const ledgerSelfTestFailures = (snapshot: Baseline): string[] => {
     {
       id: "internal-module-mock-ledger-entries",
       expected: EXPECTED_INTERNAL_MODULE_MOCK_LEDGER_ENTRIES,
+    },
+    {
+      id: "outbound-indirect-access-exceptions",
+      expected: 1,
     },
   ]) {
     const metric = requireSnapshot(snapshot, id);
@@ -5919,8 +6254,123 @@ const dependencyMetricSelfTestFailures = (root: string): string[] => {
   return failures;
 };
 
+const schemaIntrospectionSelfTestFailures = (snapshot: Baseline): string[] => {
+  const failures: string[] = [];
+  const schemaIntrospectionMetric = requireSnapshot(
+    snapshot,
+    "schema-introspection-files",
+  );
+  if (
+    schemaIntrospectionMetric.count !== 2 ||
+    Object.keys(schemaIntrospectionMetric.files).length !== 2 ||
+    schemaIntrospectionMetric.files["scripts/inventory-a.test.ts"] !== 1 ||
+    schemaIntrospectionMetric.files["scripts/inventory-b.test.ts"] !== 1
+  ) {
+    failures.push(
+      "schema-introspection-files did not measure exact path membership",
+    );
+  }
+
+  return failures;
+};
+
+const unsignalledSkipSelfTestFailures = (): string[] => {
+  const failures: string[] = [];
+  const skipFixtures = [
+    {
+      name: "nullable computed value skipped",
+      code: "for (const item of items) { const head = sentenceHeadPattern(item.text); if (head === null) { continue; } }",
+      expected: 1,
+    },
+    {
+      name: "empty text extraction fallback",
+      code: 'return { kind: "windowed-text", text: asString(valueAtPath(payload, textPath)) ?? "", nextCursor: asString(fieldOf(payload, "nextCursor")) };',
+      expected: 1,
+    },
+    {
+      name: "catch without signal",
+      code: "try { read(); } catch {}",
+      expected: 1,
+    },
+    {
+      name: "catch with telemetry",
+      code: "read().catch(cause => captureException(cause));",
+      expected: 0,
+    },
+    {
+      name: "catch with result",
+      code: "try { read(); } catch { return Result.err(cause); }",
+      expected: 0,
+    },
+  ];
+  const skipMetric = RATCHET_METRICS.find(
+    ({ id }) => id === "unsignalled-skip",
+  );
+  if (
+    skipMetric?.scope !== "file" ||
+    skipMetric.measurement === "role-sensitive"
+  ) {
+    failures.push("unsignalled-skip requires a file counter");
+  } else {
+    for (const fixture of skipFixtures) {
+      const actual = skipMetric.count(fixture.code, {
+        file: "apps/api/src/shapes.ts",
+      });
+      if (actual !== fixture.expected) {
+        failures.push(
+          `unsignalled-skip ${fixture.name}: counted ${actual}, expected ${fixture.expected}`,
+        );
+      }
+    }
+  }
+  return failures;
+};
+
+const projectionTieSelfTestFailures = (): string[] => {
+  const failures: string[] = [];
+  const projectionTieCases = [
+    {
+      code: "payload satisfies v.InferInput<typeof SEARCH_CASE_LAW_PROJECTION>;",
+      expected: 1,
+    },
+    {
+      code: "payload satisfies v.InferInput<\n typeof READ_STATUTE_PROJECTION\n>;",
+      expected: 1,
+    },
+    {
+      code: "payload satisfies v.InferInput<typeof INPUT_SCHEMA>;",
+      expected: 0,
+    },
+    {
+      code: "payload satisfies AssertNoExtraFields<typeof payload, v.InferInput<typeof READ_STATUTE_PROJECTION>>;",
+      expected: 0,
+    },
+    {
+      code: "projectionPayload(READ_STATUTE_PROJECTION, payload);",
+      expected: 0,
+    },
+    {
+      code: "// payload satisfies v.InferInput<typeof READ_STATUTE_PROJECTION>;",
+      expected: 0,
+    },
+  ];
+  for (const { code, expected } of projectionTieCases) {
+    const counted = countWeakMcpProjectionTies(code, {
+      file: "apps/api/src/mcp/tool.ts",
+    });
+    if (counted !== expected) {
+      failures.push(
+        `weak-mcp-projection-ties counted ${counted}, expected ${expected}, for: ${code}`,
+      );
+    }
+  }
+
+  return failures;
+};
+
 const runSelfTest = (): number => {
   const failures: string[] = [];
+  failures.push(...unsignalledSkipSelfTestFailures());
   const root = mkdtempSync(path.join(tmpdir(), "ratchet-selftest-"));
 
   failures.push(...dependencyMetricSelfTestFailures(root));
@@ -6001,6 +6451,11 @@ const runSelfTest = (): number => {
   }
 
   try {
+    writeFixture(
+      root,
+      "scripts/ownership.ts",
+      'export const SCHEMA_INTROSPECTION = [{ path: "scripts/inventory-a.test.ts", reason: "Table metadata." }, { path: "scripts/inventory-b.test.ts", reason: "Column metadata." }];',
+    );
     writeFixture(root, "apps/api/src/casts.ts", SELF_TEST_AS_CASTS);
     writeFixture(
       root,
@@ -6027,6 +6482,11 @@ const runSelfTest = (): number => {
       root,
       "apps/api/src/legacy-realtime-invalidations.ts",
       SELF_TEST_LEGACY_REALTIME_INVALIDATIONS,
+    );
+    writeFixture(
+      root,
+      UNCLASSIFIED_REALTIME_WRITE_CAPABILITIES_FILE,
+      SELF_TEST_UNCLASSIFIED_REALTIME_WRITE_CAPABILITIES,
     );
     writeFixture(
       root,
@@ -6206,6 +6666,11 @@ const runSelfTest = (): number => {
       root,
       INTERNAL_MODULE_MOCK_LEDGER_REL,
       SELF_TEST_INTERNAL_MODULE_MOCK_LEDGER,
+    );
+    writeFixture(
+      root,
+      "apps/web/src/runtime.ts",
+      "const module = await import(mod);",
     );
     writeFixture(
       root,
@@ -6392,6 +6857,8 @@ const runSelfTest = (): number => {
     writeFileSync(path.join(root, "bun.lock"), "{ packages: {} }");
     const snapshot = scanAll(root);
 
+    failures.push(...schemaIntrospectionSelfTestFailures(snapshot));
+
     failures.push(...asCastSelfTestFailures(snapshot));
     failures.push(...failureSinkSelfTestFailures(snapshot));
     failures.push(...ownerHandleAllowlistSelfTestFailures(snapshot));
@@ -6414,6 +6881,10 @@ const runSelfTest = (): number => {
         `legacy-realtime-invalidation-producers counted ${legacyRealtimeMetric.count}, expected ${EXPECTED_LEGACY_REALTIME_INVALIDATIONS}`,
       );
     }
+
+    failures.push(
+      ...unclassifiedRealtimeWriteCapabilitiesSelfTestFailures(snapshot),
+    );
 
     const adHocSubjectGateMetric = requireSnapshot(
       snapshot,
@@ -6744,6 +7215,8 @@ const runSelfTest = (): number => {
         );
       }
     }
+
+    failures.push(...projectionTieSelfTestFailures());
 
     // Diff behavior: equal passes, a rise regresses, a fall is a drop.
     const equal = diffMetric(

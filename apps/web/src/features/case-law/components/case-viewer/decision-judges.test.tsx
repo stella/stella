@@ -11,11 +11,12 @@ import {
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
+import { WebDecisionReader as DecisionText } from "@/components/legal-reader/web-decision-reader";
+import { WebReaderPresentationProvider } from "@/components/legal-reader/web-reader-presentation";
 import {
   DecisionJudges,
   judgePortraitSrc,
 } from "@/features/case-law/components/case-viewer/decision-judges";
-import { DecisionText } from "@/features/case-law/components/case-viewer/decision-text";
 import type { DecisionJudge } from "@/features/case-law/decision-judges";
 import { FormattingProvider } from "@/i18n/formatting-context";
 import messages from "@/i18n/langs/en.json";
@@ -78,7 +79,11 @@ const render = (node: ReactNode): string =>
   renderToStaticMarkup(
     <IntlProvider locale="en" messages={messages} timeZone="UTC">
       <FormattingProvider locale="en" timeZone="UTC">
-        {node}
+        <WebReaderPresentationProvider>
+          <FormattingProvider locale="en" timeZone="UTC">
+            {node}
+          </FormattingProvider>
+        </WebReaderPresentationProvider>
       </FormattingProvider>
     </IntlProvider>,
   );
@@ -86,10 +91,11 @@ const render = (node: ReactNode): string =>
 const renderDecision = (judges: readonly DecisionJudge[]): string =>
   render(
     <DecisionText
-      activeMatchIndex={-1}
+      surface="development"
       decision={{
         caseNumber: "Pl. ÚS 1/2026",
         caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+        country: "CZE",
         court: "Ústavní soud",
         courtAbbreviation: null,
         courtTier: "constitutional",
@@ -110,7 +116,6 @@ const renderDecision = (judges: readonly DecisionJudge[]): string =>
         },
       }}
       decisionId="dec-1"
-      searchQuery=""
     />,
   );
 

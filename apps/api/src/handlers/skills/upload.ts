@@ -2,7 +2,8 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import { AGENT_SKILL_SCOPES } from "@/api/db/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { skillRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { validateDocxArchive } from "@/api/lib/docx-archive";
 import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload-handler";
@@ -24,12 +25,18 @@ const uploadSkillBodySchema = t.Object({
 });
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason: "Stores a skill upload without delivering stored-file bytes.",
+  },
   description:
     "Install an agent skill by uploading a skill pack or a bare SKILL.md " +
     "file; the parser reads the bytes rather than trusting the declared " +
     "media type. It is stored with an upload origin and stays editable. Team " +
     "scope requires admin or owner.",
   permissions: { agentSkill: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: skillRealtimeUpdates,
   mcp: {
     type: "capability",
     reason: "agent_tool_authoring",

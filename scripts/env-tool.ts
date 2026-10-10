@@ -557,6 +557,7 @@ const AUDIT_GLOBS = [
 const AUDIT_IGNORE_FILES = new Set([
   // These tests contain environment syntax as source-text fixtures or use
   // test-process-only variables that are not repository configuration.
+  "apps/api/scripts/deployment-feature-guard.test.ts",
   "packages/property-testing/src/ci-gate-coverage.test.ts",
   "scripts/detect-desktop-release-changes.test.sh",
   "scripts/env-tool.test.ts",
@@ -1007,6 +1008,7 @@ const validateApiEnvironment = (input: DoctorInput): DoctorValidationResult => {
     contentEncryptionKey: output.CONTENT_ENCRYPTION_KEY,
     redisUrl: output.REDIS_URL,
     runtimeMode,
+    scheduledJobsMode: output.SCHEDULED_JOBS_MODE,
   });
   if (documentProcessingIssue !== null) {
     issues.push(documentProcessingIssue);
@@ -1207,14 +1209,17 @@ export const validateDoctorEnvironment = ({
   return ENV_APP_CONFIG[app].validate(normalizeEmptyEnvironment(selectedInput));
 };
 
-const runDoctor = (app: EnvApp, mode: EnvMode | undefined) => {
-  const { examplePath, owners } = ENV_APP_CONFIG[app];
-  const envDirectory = path.dirname(examplePath);
-  const baseEnvPath = path.join(envDirectory, ".env");
-  const envPaths = doctorEnvFileNames({ app, mode }).map((name) =>
-    path.join(envDirectory, name),
-  );
-  const existingEnvPaths = envPaths.filter(existsSync);
+type ReadDoctorInputOptions = {
+  app: EnvApp;
+  mode: EnvMode | undefined;
+};
+
+/** The layered env files an app loads in `mode`, under the process env. */
+export const readDoctorInput = ({ app, mode }: ReadDoctorInputOptions) => {
+  const envDirectory = path.dirname(ENV_APP_CONFIG[app].examplePath);
+  const existingEnvPaths = doctorEnvFileNames({ app, mode })
+    .map((name) => path.join(envDirectory, name))
+    .filter(existsSync);
   const doctorProcessEnvironment = resolveDoctorProcessEnvironment({
     environment: process.env,
     mode,
@@ -1223,11 +1228,21 @@ const runDoctor = (app: EnvApp, mode: EnvMode | undefined) => {
     existingEnvPaths.map((envPath) => readFileSync(envPath, "utf-8")),
     doctorProcessEnvironment,
   );
-  const validation = validateDoctorEnvironment({
-    app,
+  return {
+    envDirectory,
+    existingEnvPaths,
+    fileValues,
     input: { ...fileValues, ...doctorProcessEnvironment },
-    mode,
-  });
+  };
+};
+
+const runDoctor = (app: EnvApp, mode: EnvMode | undefined) => {
+  const { owners } = ENV_APP_CONFIG[app];
+  const { envDirectory, existingEnvPaths, fileValues, input } = readDoctorInput(
+    { app, mode },
+  );
+  const baseEnvPath = path.join(envDirectory, ".env");
+  const validation = validateDoctorEnvironment({ app, input, mode });
   const displayedEnvPaths = (
     existingEnvPaths.length > 0 ? existingEnvPaths : [baseEnvPath]
   ).map((envPath) => path.relative(REPO_ROOT, envPath));

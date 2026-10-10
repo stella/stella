@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import { isPageTransformRequest } from "./page-editor-protocol";
 import { transformPDFInWorker } from "./page-editor-worker-client";
 
@@ -88,8 +90,9 @@ describe("PDF page editor worker boundary", () => {
   test("rejects an already-aborted operation before creating a worker", async () => {
     const controller = new AbortController();
     controller.abort();
-    expect(request(controller.signal)).rejects.toThrow(
-      "PDF transformation cancelled",
+    expect(await rejectionOf(request(controller.signal))).toHaveProperty(
+      "message",
+      expect.stringContaining("PDF transformation cancelled"),
     );
   });
 
@@ -122,14 +125,20 @@ describe("PDF page editor worker boundary", () => {
     await withFakeWorker(async (worker) => {
       const promise = request(new AbortController().signal);
       worker.emitMessage({ status: "success", outputs: [] });
-      expect(promise).rejects.toThrow("invalid response");
+      expect(await rejectionOf(promise)).toHaveProperty(
+        "message",
+        expect.stringContaining("invalid response"),
+      );
       expect(worker.terminated).toBe(true);
     });
 
     await withFakeWorker(async (worker) => {
       const promise = request(new AbortController().signal);
       worker.emitError();
-      expect(promise).rejects.toThrow("worker failed");
+      expect(await rejectionOf(promise)).toHaveProperty(
+        "message",
+        expect.stringContaining("worker failed"),
+      );
       expect(worker.terminated).toBe(true);
     });
   });
@@ -139,7 +148,10 @@ describe("PDF page editor worker boundary", () => {
       const controller = new AbortController();
       const promise = request(controller.signal);
       controller.abort();
-      expect(promise).rejects.toThrow("PDF transformation cancelled");
+      expect(await rejectionOf(promise)).toHaveProperty(
+        "message",
+        expect.stringContaining("PDF transformation cancelled"),
+      );
       expect(worker.terminated).toBe(true);
     });
   });

@@ -119,7 +119,12 @@ test("live anonymization demo does not expose runtime errors", async ({
   await page.route(/\.wasm(?:\?|$)/u, async (route) => {
     await route.abort("failed");
   });
-  await page.goto(DEMO_URL, { waitUntil: "domcontentloaded" });
+  // Prove the runtime reaches the injected failure rather than failing before
+  // the WASM fetch (which would show the same generic status).
+  await Promise.all([
+    page.waitForRequest(/\.wasm(?:\?|$)/u, { timeout: 30_000 }),
+    page.goto(DEMO_URL, { waitUntil: "domcontentloaded" }),
+  ]);
 
   await expect(page.locator(DEMO_SELECTORS.textarea)).toBeVisible();
   await expect(page.locator(DEMO_SELECTORS.status)).toHaveText(

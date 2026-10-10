@@ -9,6 +9,7 @@ import {
 } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
 
+import { user as authUser } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   auditLogs,
@@ -17,6 +18,7 @@ import {
   invoiceLines,
   timeEntries,
   workspaces,
+  featureEnrolments,
 } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import { createAuditRecorder } from "@/api/lib/audit-log";
@@ -27,7 +29,11 @@ import {
 import { createSafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
 import { isPgError } from "@/api/lib/pg-error";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_DB,
+  NO_AUDIT,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -58,6 +64,31 @@ beforeAll(async () => {
   const fixture = await getRlsFixture();
   db = fixture.testDb;
   ids = fixture.ids;
+
+  await db
+    .update(authUser)
+    .set({ emailVerified: true })
+    .where(inArray(authUser.id, [ids.userA1, ids.userAdmin]));
+  await db
+    .insert(featureEnrolments)
+    .values([
+      {
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+        featureId: "time-billing",
+      },
+      {
+        organizationId: ids.orgA,
+        userId: ids.userAdmin,
+        featureId: "time-billing",
+      },
+      {
+        organizationId: ids.orgB,
+        userId: ids.userA1,
+        featureId: "time-billing",
+      },
+    ])
+    .onConflictDoNothing();
   await db.insert(workspaces).values(
     testWorkspaceIds.map((id) => ({
       id,
@@ -106,11 +137,12 @@ const set = async (
 ) =>
   await setArrangement.handler(
     createTestHandlerContext<Parameters<typeof setArrangement.handler>[0]>({
+      scopedDb: NO_DB,
       workspaceId,
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userAdmin },
       safeDb: safeDb(),
-      recordAuditEvent: audit(),
+      audit: audit(),
       createAuditRecorder: audit,
       body,
     }),
@@ -118,8 +150,12 @@ const set = async (
 const summary = async () => {
   const response = await getSummary.handler(
     createTestHandlerContext<Parameters<typeof getSummary.handler>[0]>({
+      audit: NO_AUDIT,
+      scopedDb: NO_DB,
       workspaceId,
       safeDb: safeDb(),
+      session: { activeOrganizationId: ids.orgA },
+      user: { id: ids.userAdmin },
     }),
   );
   if (!("summary" in response)) {
@@ -162,8 +198,12 @@ const crossingEvents = async () =>
 test("missing billing arrangements preserve the existing hourly default without inventing a currency", async () => {
   const result = await getArrangement.handler(
     createTestHandlerContext<Parameters<typeof getArrangement.handler>[0]>({
+      audit: NO_AUDIT,
+      scopedDb: NO_DB,
       workspaceId,
       safeDb: safeDb(),
+      session: { activeOrganizationId: ids.orgA },
+      user: { id: ids.userAdmin },
     }),
   );
   expect(result).toEqual({ arrangement: null });
@@ -269,13 +309,19 @@ test("another organization cannot read or replace an arrangement under a foreign
   expect(
     await getArrangement.handler(
       createTestHandlerContext<Parameters<typeof getArrangement.handler>[0]>({
+        audit: NO_AUDIT,
+        scopedDb: NO_DB,
         workspaceId,
         safeDb: foreign,
+        session: { activeOrganizationId: ids.orgB },
+        user: { id: ids.userA1 },
       }),
     ),
   ).toEqual({ arrangement: null });
   const result = await setArrangement.handler(
     createTestHandlerContext<Parameters<typeof setArrangement.handler>[0]>({
+      audit: NO_AUDIT,
+      scopedDb: NO_DB,
       workspaceId,
       safeDb: foreign,
       session: { activeOrganizationId: ids.orgB },
@@ -290,8 +336,12 @@ test("another organization cannot read or replace an arrangement under a foreign
   expect(
     await getArrangement.handler(
       createTestHandlerContext<Parameters<typeof getArrangement.handler>[0]>({
+        audit: NO_AUDIT,
+        scopedDb: NO_DB,
         workspaceId,
         safeDb: safeDb(),
+        session: { activeOrganizationId: ids.orgA },
+        user: { id: ids.userAdmin },
       }),
     ),
   ).toMatchObject({ arrangement: capped });
@@ -515,7 +565,14 @@ test("GET configuration can be resent unchanged and stale revisions are refused"
   await set(capped);
   const context = createTestHandlerContext<
     Parameters<typeof getArrangement.handler>[0]
-  >({ workspaceId, safeDb: safeDb() });
+  >({
+    audit: NO_AUDIT,
+    scopedDb: NO_DB,
+    workspaceId,
+    session: { activeOrganizationId: ids.orgA },
+    user: { id: ids.userAdmin },
+    safeDb: safeDb(),
+  });
   const response = await getArrangement.handler(context);
   if (!("arrangement" in response)) {
     panic("Billing arrangement request was refused");

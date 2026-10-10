@@ -2,10 +2,11 @@ import { panic, Result, TaggedError } from "better-result";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { t } from "elysia";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
+
 import type { Transaction } from "@/api/db/root";
 import { defaultDatabaseRetry } from "@/api/db/safe-db";
 import { chatMessages, chatThreads, userFiles } from "@/api/db/schema";
-import { env } from "@/api/env";
 import {
   attachTerminalTurnOutcome,
   cancelPendingChatToolCalls,
@@ -29,19 +30,23 @@ import type {
   PersistableChatMessage,
 } from "@/api/handlers/chat/types";
 import { captureError } from "@/api/lib/analytics/capture";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { consumeInBatches } from "@/api/lib/destructive-effect-chunks";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { FileKey } from "@/api/lib/file-key";
 import { copyOrganizationFiles } from "@/api/lib/files/copy-organization-files";
 import { deleteOrganizationFilesWithSignal } from "@/api/lib/files/delete-organization-file";
 import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
-import { OrganizationFileUsageError } from "@/api/lib/files/organization-file-usage";
+import {
+  type CheckedFileCopy,
+  OrganizationFileUsageError,
+} from "@/api/lib/files/organization-file-usage";
 import { createUserFileKey } from "@/api/lib/files/utils";
 import { isMissingS3ObjectError } from "@/api/lib/s3";
 import type { S3PresignError } from "@/api/lib/s3-presign";
@@ -50,6 +55,11 @@ import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
 import { parseUserFileId, toUserFileUrl } from "@/api/lib/user-files/types";
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Copies thread attachments and returns thread metadata rather than stored-file bytes.",
+  },
   description:
     "Fork one of your own chat threads into a new thread that keeps the " +
     "history up to a chosen answer, so another direction or model can be " +
@@ -61,6 +71,7 @@ const config = {
     "either thread leaves the other's files intact. The fork records where " +
     "it came from and starts with no compaction state of its own.",
   permissions: { chat: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "write",
   mcp: {
     type: "capability",
@@ -271,7 +282,7 @@ const stageUserFileCopies = (
 const prepareUserFileCopy = async (
   copy: ReturnType<typeof stageUserFileCopies>[number],
 ) => {
-  const mainHead = env.FEATURE_FILE_USAGE_LIMITS
+  const mainHead = isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")
     ? await headObject(copy.source.s3Key)
     : undefined;
   if (mainHead !== undefined && Result.isError(mainHead)) {
@@ -305,7 +316,8 @@ const prepareUserFileThumbnail = async (
           userId,
         });
   const thumbnailHead =
-    thumbnailSource !== null && env.FEATURE_FILE_USAGE_LIMITS
+    thumbnailSource !== null &&
+    isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")
       ? await headObject(thumbnailSource)
       : undefined;
   return { ...copy, thumbnailSource, thumbnailHead };
@@ -326,12 +338,10 @@ const copyUserFiles = async ({
 }): Promise<Result<UserFileCopyOutcome[], HandlerError<409 | 500 | 503>>> => {
   const staged = stageUserFileCopies(files, userId);
   const prepared: Awaited<ReturnType<typeof prepareUserFileCopy>>[] = [];
-  for (let start = 0; start < staged.length; start += FORK_COPY_CONCURRENCY) {
+  for (const itemBatch of chunkItems(staged, FORK_COPY_CONCURRENCY)) {
     prepared.push(
       ...(await Promise.all(
-        staged
-          .slice(start, start + FORK_COPY_CONCURRENCY)
-          .map(async (copy) => await prepareUserFileCopy(copy)),
+        itemBatch.map(async (copy) => await prepareUserFileCopy(copy)),
       )),
     );
   }
@@ -352,11 +362,12 @@ const copyUserFiles = async ({
         organizationId,
         objectKey: destinationKey,
         sizeBytes,
-        copy: async () => {
-          const copied = await copyObject(sourceKey, destinationKey);
+        source: sourceKey,
+        copy: async (checked: CheckedFileCopy<string>) => {
+          const copied = await copyObject(checked.source, checked.objectKey);
           return Result.isError(copied)
             ? Result.err(copied.error)
-            : Result.ok(destinationKey);
+            : Result.ok(checked.objectKey);
         },
         confirmedDestinationAbsentOnCopyError: (error: S3PresignError) =>
           isMissingS3ObjectError(error.cause),
@@ -421,16 +432,12 @@ const copyUserFiles = async ({
     successful.push(copy);
   }
   const inspected: Awaited<ReturnType<typeof prepareUserFileThumbnail>>[] = [];
-  for (
-    let start = 0;
-    start < successful.length;
-    start += FORK_COPY_CONCURRENCY
-  ) {
+  for (const itemBatch of chunkItems(successful, FORK_COPY_CONCURRENCY)) {
     inspected.push(
       ...(await Promise.all(
-        successful
-          .slice(start, start + FORK_COPY_CONCURRENCY)
-          .map(async (copy) => await prepareUserFileThumbnail(copy, userId)),
+        itemBatch.map(
+          async (copy) => await prepareUserFileThumbnail(copy, userId),
+        ),
       )),
     );
   }

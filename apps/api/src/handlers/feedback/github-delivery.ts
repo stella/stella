@@ -11,25 +11,27 @@
 import { Result, TaggedError } from "better-result";
 
 import type { FeedbackKind } from "@stll/api-contract/feedback";
-import { fetchWithTimeout } from "@stll/fetch";
 
-const GITHUB_API_BASE = "https://api.github.com";
-const GITHUB_API_VERSION = "2022-11-28";
-const GITHUB_REQUEST_TIMEOUT_MS = 10_000;
+import { githubWrite } from "@/api/lib/github/github-write";
+import { githubMarkdown } from "@/api/lib/github/outbound-text";
+import type {
+  GithubSafeText,
+  GithubSafeTitle,
+} from "@/api/lib/github/outbound-text";
 
 /** Applied to every filed issue so the maintainers can triage the stream. */
-const GITHUB_FEEDBACK_LABEL = "agent-feedback";
+const GITHUB_FEEDBACK_LABEL = githubMarkdown`agent-feedback`;
 
 /**
  * The tracker label each kind maps to. Total over `FeedbackKind`: a new kind
  * is a labelling decision, not a silent fall-through to the bug label.
  */
 const GITHUB_LABEL_BY_KIND = {
-  bug: "🐞 bug",
-  idea: "enhancement",
-  missing_capability: "enhancement",
-  docs: "docs",
-} as const satisfies Record<FeedbackKind, string>;
+  bug: githubMarkdown`🐞 bug`,
+  idea: githubMarkdown`enhancement`,
+  missing_capability: githubMarkdown`enhancement`,
+  docs: githubMarkdown`docs`,
+} as const satisfies Record<FeedbackKind, GithubSafeText>;
 
 export class GithubDeliveryError extends TaggedError("GithubDeliveryError")<{
   message: string;
@@ -38,9 +40,13 @@ export class GithubDeliveryError extends TaggedError("GithubDeliveryError")<{
 
 export type GithubDeliveryConfig = { repo: string; token: string };
 
+/**
+ * Title and body are the reporter's text, so they arrive only as values the
+ * GitHub outbound owner produced; a plain string does not type-check.
+ */
 type GithubIssueRequest = {
-  title: string;
-  body: string;
+  title: GithubSafeTitle;
+  body: GithubSafeText;
   kind: FeedbackKind;
 };
 
@@ -66,52 +72,23 @@ export const createGithubFeedbackIssue: GithubIssueCreator = async ({
   config,
   issue,
 }) => {
-  const response = await Result.tryPromise({
-    try: async () =>
-      await fetchWithTimeout(`${GITHUB_API_BASE}/repos/${config.repo}/issues`, {
-        method: "POST",
-        timeoutMs: GITHUB_REQUEST_TIMEOUT_MS,
-        headers: {
-          accept: "application/vnd.github+json",
-          authorization: `Bearer ${config.token}`,
-          "content-type": "application/json",
-          "x-github-api-version": GITHUB_API_VERSION,
-        },
-        body: JSON.stringify({
-          title: issue.title,
-          body: issue.body,
-          labels: [GITHUB_LABEL_BY_KIND[issue.kind], GITHUB_FEEDBACK_LABEL],
-        }),
-      }),
-    catch: (cause) =>
-      new GithubDeliveryError({
-        message: "GitHub issue creation failed",
-        cause,
-      }),
-  });
-  if (Result.isError(response)) {
-    return response;
-  }
-  if (!response.value.ok) {
-    // The status alone: a GitHub error body can echo the request back, and
-    // this message reaches telemetry.
-    return Result.err(
-      new GithubDeliveryError({
-        message: `GitHub refused the issue with status ${response.value.status}`,
-      }),
-    );
-  }
-
-  const payload = await Result.tryPromise({
-    try: async (): Promise<unknown> => await response.value.json(),
-    catch: (cause) =>
-      new GithubDeliveryError({
-        message: "GitHub returned an unreadable body",
-        cause,
-      }),
+  const payload = await githubWrite({
+    token: config.token,
+    method: "POST",
+    path: `repos/${config.repo}/issues`,
+    body: {
+      title: issue.title,
+      body: issue.body,
+      labels: [GITHUB_LABEL_BY_KIND[issue.kind], GITHUB_FEEDBACK_LABEL],
+    },
   });
   if (Result.isError(payload)) {
-    return payload;
+    return Result.err(
+      new GithubDeliveryError({
+        message: payload.error.message,
+        cause: payload.error,
+      }),
+    );
   }
 
   const url = issueUrlFromResponse(payload.value);

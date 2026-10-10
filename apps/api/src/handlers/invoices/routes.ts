@@ -1,7 +1,5 @@
 import Elysia from "elysia";
 
-import { RESOURCE_TYPE } from "@stll/api-contract";
-
 import createInvoice from "@/api/handlers/invoices/create";
 import deleteInvoice from "@/api/handlers/invoices/delete";
 import addEntries from "@/api/handlers/invoices/entries/add";
@@ -11,23 +9,24 @@ import createInvoiceLine from "@/api/handlers/invoices/lines/create";
 import deleteInvoiceLine from "@/api/handlers/invoices/lines/delete";
 import updateInvoiceLine from "@/api/handlers/invoices/lines/update";
 import readInvoices from "@/api/handlers/invoices/list";
+import exportInvoicePdf from "@/api/handlers/invoices/pdf/export";
 import transitionInvoice from "@/api/handlers/invoices/transition";
 import updateInvoice from "@/api/handlers/invoices/update";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
-import {
-  resourceRealtime,
-  workspaceResourceSetUpdates,
-} from "@/api/lib/resource-realtime-macro";
-
-const invoiceRealtimeUpdates = workspaceResourceSetUpdates(
-  RESOURCE_TYPE.INVOICE,
-);
+import { featureAccessGate } from "@/api/lib/auth/feature-access/route";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 
 export const invoicesRoute = new Elysia({
   prefix: "/invoices/:workspaceId",
 })
+  .use(
+    deploymentFeatureGate(() =>
+      isDeploymentFeatureEnabled("FEATURE_TIME_BILLING"),
+    ),
+  )
+  .use(featureAccessGate("time-billing"))
   .use(workspaceAccessMacro)
-  .use(resourceRealtime)
   .use(permissionMacro)
   .guard({
     validateWorkspaceAccess: true,
@@ -42,52 +41,47 @@ export const invoicesRoute = new Elysia({
   })
   .put("/", createInvoice.handler, {
     body: createInvoice.config.body,
-    resourceSetUpdated: invoiceRealtimeUpdates,
     permissions: createInvoice.config.permissions,
   })
   .patch("/:invoiceId", updateInvoice.handler, {
     body: updateInvoice.config.body,
-    resourceSetUpdated: invoiceRealtimeUpdates,
     params: updateInvoice.config.params,
     permissions: updateInvoice.config.permissions,
   })
   .post("/:invoiceId/transition", transitionInvoice.handler, {
     body: transitionInvoice.config.body,
-    resourceSetUpdated: invoiceRealtimeUpdates,
     params: transitionInvoice.config.params,
     permissions: transitionInvoice.config.permissions,
   })
   .delete("/:invoiceId", deleteInvoice.handler, {
-    resourceSetUpdated: invoiceRealtimeUpdates,
     params: deleteInvoice.config.params,
     permissions: deleteInvoice.config.permissions,
   })
   .post("/:invoiceId/entries", addEntries.handler, {
     body: addEntries.config.body,
-    resourceSetUpdated: invoiceRealtimeUpdates,
     params: addEntries.config.params,
     permissions: addEntries.config.permissions,
   })
   .delete("/:invoiceId/entries", removeEntries.handler, {
     body: removeEntries.config.body,
-    resourceSetUpdated: invoiceRealtimeUpdates,
     params: removeEntries.config.params,
     permissions: removeEntries.config.permissions,
   })
   .post("/:invoiceId/lines", createInvoiceLine.handler, {
     body: createInvoiceLine.config.body,
-    resourceSetUpdated: invoiceRealtimeUpdates,
     params: createInvoiceLine.config.params,
     permissions: createInvoiceLine.config.permissions,
   })
   .patch("/:invoiceId/lines/:lineId", updateInvoiceLine.handler, {
     body: updateInvoiceLine.config.body,
-    resourceSetUpdated: invoiceRealtimeUpdates,
     params: updateInvoiceLine.config.params,
     permissions: updateInvoiceLine.config.permissions,
   })
   .delete("/:invoiceId/lines/:lineId", deleteInvoiceLine.handler, {
-    resourceSetUpdated: invoiceRealtimeUpdates,
     params: deleteInvoiceLine.config.params,
     permissions: deleteInvoiceLine.config.permissions,
+  })
+  .post("/:invoiceId/pdf", exportInvoicePdf.handler, {
+    params: exportInvoicePdf.config.params,
+    permissions: exportInvoicePdf.config.permissions,
   });

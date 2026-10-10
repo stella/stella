@@ -45,7 +45,6 @@ type LegislationShelfQuery = Static<typeof legislationShelfQuerySchema>;
 export type LegislationShelf = Static<
   typeof legislationShelfSuccessResponseSchema
 >;
-export type LegislationShelfItem = LegislationShelf["recentlyInForce"][number];
 
 class LegislationShelfError extends TaggedError("LegislationShelfError")<{
   message: string;
@@ -192,7 +191,7 @@ export const readLegislationShelfHandler = async (
     admitted: PUBLIC_LEGISLATION_COUNTRIES,
   });
   if (countryRead.kind === "unavailable") {
-    return status(503, countryRead.response);
+    return countryRead.answer;
   }
   if (countryRead.kind === "unreadable") {
     return status(400, { message: countryRead.message });

@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { modelSelectionLabel } from "@stll/chat/model-selector";
@@ -18,6 +19,7 @@ import {
   type ComposerModelsMenuProps,
 } from "@/components/chat/chat-model-options-menu";
 import { modelOptionsOptions } from "@/features/chat/queries";
+import { useQueryView } from "@/lib/use-query-view";
 
 type ChatModelSelectorProps = {
   disabled?: boolean;
@@ -34,15 +36,20 @@ export const ChatModelSelector = ({
     models;
   const [open, setOpen] = useState(false);
   const [detailsRequested, setDetailsRequested] = useState(false);
-  const { data } = useQuery({
+  const modelsQuery = useQuery({
     ...modelOptionsOptions(activeOrganizationId),
     enabled: open || detailsRequested || selectedModel !== null,
   });
-  const selectedOption = data?.options.find(
-    (option) => option.value === selectedModel,
-  );
-  const triggerLabel = selectedOption
-    ? modelSelectionLabel({
+  const modelsView = useQueryView(modelsQuery);
+  const selectedOption =
+    modelsView.type === "items"
+      ? modelsView.items.options.find(
+          (option) => option.value === selectedModel,
+        )
+      : undefined;
+  const triggerLabel = (() => {
+    if (selectedOption) {
+      return modelSelectionLabel({
         defaultEffortLabel: t(
           "chat.modelSelector.effortValues.providerDefault",
         ),
@@ -52,8 +59,24 @@ export const ChatModelSelector = ({
         providerDefaultEffort: selectedOption.defaultReasoningEffort,
         reasoningEffort: selectedReasoningEffort,
         translateEffort: (effort) => t(EFFORT_LABEL_KEY[effort]),
-      })
-    : t("chat.modelSelector.autoLabel");
+      });
+    }
+    if (selectedModel === null) {
+      return t("chat.modelSelector.autoLabel");
+    }
+    switch (modelsView.type) {
+      case "pending":
+        return t("common.loading");
+      case "error":
+        return t("common.somethingWentWrong");
+      case "empty":
+      case "items":
+        return selectedModel;
+      default:
+        modelsView satisfies never;
+        return panic("Unhandled model selector query state");
+    }
+  })();
 
   return (
     <Menu onOpenChange={setOpen} open={open}>

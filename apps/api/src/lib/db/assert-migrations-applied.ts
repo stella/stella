@@ -49,7 +49,7 @@ export const assertApplicationRlsRolePosture = async (): Promise<void> => {
   }
 };
 
-export const assertIngestionRolePosture = async (): Promise<void> => {
+const assertIngestionRolePosture = async (): Promise<void> => {
   const result = await rootDb.execute<IngestionRolePosture>(sql`
     SELECT pg_has_role(CURRENT_USER, ingestion_role.oid, 'SET') AS "canAssumeRole"
     FROM pg_catalog.pg_roles ingestion_role

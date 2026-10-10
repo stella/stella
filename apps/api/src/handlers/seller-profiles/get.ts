@@ -2,7 +2,7 @@ import { Result } from "better-result";
 
 import type { sellerProfiles } from "@/api/db/schema";
 import { sellerProfileParams } from "@/api/handlers/seller-profiles/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type {
@@ -55,6 +55,8 @@ true satisfies UnexpectedSellerProfileGetColumn extends never ? true : never;
 const config = {
   description: "Read one active issuer profile in the active organization.",
   permissions: { organizationSettings: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.standard,
+  featureAccess: { featureId: "time-billing", type: "required" },
   mcp: {
     type: "capability",
     readClass: "tenant",

@@ -1,4 +1,3 @@
-import { KindGuard } from "@sinclair/typebox";
 // Dev-only exporter: projects the safe-handler universe down to a capability
 // catalog and writes a deterministic JSON snapshot
 // (`packages/cli/capabilities/*.json`).
@@ -40,29 +39,30 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
+import { parseCapabilityCatalog } from "../../../packages/cli/src/capability-catalog-load";
+import { expandSchemaDefs } from "../../../packages/cli/src/expand-schema-defs";
+import { buildCliRouteTree } from "../../../packages/cli/src/generate-capability-tree";
+import type { RouteNode } from "../../../packages/cli/src/route-types";
 // Pure CLI generator modules (constants, classes, pure functions; no env, no
 // I/O at import time), imported relatively because `@stll/cli`'s exports map
 // only exposes its bin entry. The coverage doc computes each capability's REAL
 // generated command path through the same `buildCliRouteTree` codegen uses, so
 // collision fallbacks (curated command wins, capability relocates under
 // `stella capability <domain> <action>`) are never hand-replicated here.
-import { parseCapabilityCatalog } from "../../../packages/cli/src/capability-catalog-load";
-import { expandSchemaDefs } from "../../../packages/cli/src/expand-schema-defs";
-import { buildCliRouteTree } from "../../../packages/cli/src/generate-capability-tree";
-import type { RouteNode } from "../../../packages/cli/src/route-types";
+import { hasPreparedGeneratedSources } from "../../../packages/scripts/src/prepared-generated-sources";
 import type { CapabilityTransport } from "../src/lib/capability-transport";
 import {
   isTransportInvocable,
   transportFileResponse,
 } from "../src/lib/capability-transport";
+import { FEATURE_REGISTRY } from "../src/lib/feature-access/registry";
 import {
   VALIDATED_INPUT_SERVICE_CLASSIFICATION,
   type CatalogServiceClassification,
   type ServiceClassification,
 } from "../src/lib/rate-limit/service-classification";
-import { advertisedSchema } from "../src/mcp/advertised-schema";
+import type { HandlerKind } from "../src/lib/safe-handler-factories";
 import { CONTEXT_FIDELITY_WAIVERS } from "../src/mcp/capability-waivers";
-import { PUBLIC_FIELD_NAME } from "../src/mcp/public-field-names";
 import type { McpReadClass, McpToolDefinition } from "../src/mcp/tool-types";
 import { WRITE_PRIMITIVE_SCOPES } from "../src/mcp/write-primitive-scopes";
 import { generateCapabilityRuntime } from "./generate-capability-runtime";
@@ -102,6 +102,10 @@ import {
   writePrimitivesImportedBy,
 } from "./lib/capability-catalog";
 import {
+  buildInputSchema,
+  parseFeatureRequirement,
+} from "./lib/capability-input-schema";
+import {
   serializeCapabilityShard,
   syncCapabilityShards,
 } from "./lib/capability-shards";
@@ -111,11 +115,11 @@ import {
 } from "./lib/compact-schema-defs";
 import {
   discoverSafeHandlers,
-  type HandlerKind,
   isRecord,
   type ParsedExposure,
   REPO_ROOT,
 } from "./lib/enumerate-safe-handlers";
+import { assertFeatureAccessDeclarations } from "./lib/feature-access-declarations";
 
 const CATALOG_PATH = path.resolve(REPO_ROOT, "packages/cli/capabilities");
 
@@ -127,10 +131,9 @@ const DISPATCH_PATH = path.resolve(
 // Generated capability-coverage table: one section per domain plus the
 // permanent internal-waiver summary, drift-guarded alongside the JSON/dispatch
 // artifacts above (see `serializeCoverageDoc`).
-const COVERAGE_DOC_PATH = path.resolve(
-  REPO_ROOT,
-  "docs/capability-coverage.md",
-);
+const COVERAGE_DOC_INPUT = "docs/capability-coverage.md";
+export const CI_MARKDOWN_READER_INPUTS = [COVERAGE_DOC_INPUT];
+const COVERAGE_DOC_PATH = path.resolve(REPO_ROOT, COVERAGE_DOC_INPUT);
 
 const OXFMT_BIN = path.resolve(REPO_ROOT, "node_modules/.bin/oxfmt");
 const OXFMT_CONFIG = path.resolve(REPO_ROOT, ".oxfmtrc.json");
@@ -465,7 +468,8 @@ const readApiModule = (importPath: string): string | undefined => {
  *  - FEATURE_TIME_BILLING gates the billing tool family (list/save/delete
  *    time entries, resolve_rate, list_invoices) and the billing app routes;
  *    the whole billing capability surface (time-entries, rates, invoices,
- *    expenses, billing-codes) rides the same flag.
+ *    expenses, billing-codes, and the invoicing configuration: seller
+ *    profiles, number series, VAT rates) rides the same flag.
  *  - FEATURE_PUBLIC_LAW gates the public legal-corpus surface (search_case_law,
  *    read_case_law_decision, the legislation corpus tools search_legislation,
  *    read_statute, read_statute_provisions and read_provision_history, the BOE
@@ -493,11 +497,14 @@ const DOMAIN_FEATURE: Record<string, string> = {
   invoices: "FEATURE_TIME_BILLING",
   legislation: "FEATURE_PUBLIC_LAW",
   lists: "FEATURE_LEGAL_LISTS",
+  "number-series": "FEATURE_TIME_BILLING",
   rates: "FEATURE_TIME_BILLING",
   "saved-time-narratives": "FEATURE_TIME_BILLING",
+  "seller-profiles": "FEATURE_TIME_BILLING",
   "template-packs": "FEATURE_TEMPLATE_PACKS",
   "time-entries": "FEATURE_TIME_BILLING",
   "time-timers": "FEATURE_TIME_BILLING",
+  "vat-rates": "FEATURE_TIME_BILLING",
   "work-obligations": "FEATURE_GOVERNED_WORKFLOW",
 };
 
@@ -545,6 +552,8 @@ type CapabilityEntry = {
    * Consulted by list_capabilities/describe/invoke (see capability-feature.ts).
    */
   feature?: string;
+  featureId?: string;
+  featureAccess?: "required" | "conditional";
   permissions?: unknown;
   /**
    * The handler config's `body`/`params`/`query`, `$defs`-compacted: repeated
@@ -592,127 +601,6 @@ const extractVerbs = (permissions: unknown): string[] => {
     }
   }
   return verbs;
-};
-
-// The config's `body`/`params`/`query` are TypeBox schemas: plain JSON Schema
-// objects at runtime plus non-enumerable symbol metadata. The final
-// `JSON.stringify` of the whole catalog drops those symbols, leaving clean JSON
-// Schema on disk, so the raw schema value can go straight into the entry.
-const buildInputSchema = (
-  config: Record<string, unknown>,
-): CapabilityInputSchema => {
-  const inputSchema: CapabilityInputSchema = {};
-  if ("body" in config) {
-    inputSchema.body = withPublicFieldNames(advertisedPart(config["body"]));
-  }
-  if ("params" in config) {
-    inputSchema.params = withPublicFieldNames(advertisedPart(config["params"]));
-  }
-  if ("query" in config) {
-    inputSchema.query = withPublicFieldNames(advertisedPart(config["query"]));
-  }
-  return inputSchema;
-};
-
-/**
- * The catalog carries the same projection `describe_capability` advertises
- * (coercion unions flattened to their scalar), so the CLI's generated flags
- * and the MCP surface enforce one contract. A part that is not a TypeBox
- * schema is left as the handler declared it.
- */
-const advertisedPart = (part: unknown): unknown =>
-  KindGuard.IsSchema(part) ? advertisedSchema(part) : part;
-
-/** Schema keywords whose value is itself a schema node. */
-const SCHEMA_NODE_KEYWORDS = ["items", "additionalProperties", "not"] as const;
-/** Schema keywords whose value is a list of schema nodes. */
-const SCHEMA_NODE_LIST_KEYWORDS = ["anyOf", "oneOf", "allOf"] as const;
-/** Schema keywords whose value maps names to schema nodes. */
-const SCHEMA_NODE_MAP_KEYWORDS = [
-  "properties",
-  "$defs",
-  "definitions",
-] as const;
-
-/**
- * Rename internal input fields to their public spelling on the way out, at
- * every depth.
- *
- * The container is a `workspaceId` in the DB, the handler config and the REST
- * route; it is a `matterId` to every agent. This is the outbound half of that
- * split: `describe_capability` and the CLI's generated `--matter-id` flag both
- * read this schema. The inbound half is `withInternalFieldNames`
- * (apps/api/src/mcp/capability-tools.ts), which renames the field back before
- * the handler's own schema validates it, so the two names never both reach a
- * handler. Both halves derive from `PUBLIC_FIELD_NAME`'s one table.
- *
- * The walk covers every place a schema node can hide (`properties`, `items`,
- * `additionalProperties`, `anyOf`/`oneOf`/`allOf`, `$defs`), because the
- * container is not always top level: `flows.create` carries it inside a union
- * branch of `body.trigger`, `playbooks.create` inside an array of passages,
- * `signals.acceptances.create` inside `body.result`. Renaming only the top
- * level would advertise `--matter-id` on one capability and
- * `--body-trigger-workspace-id` on the next.
- *
- * The exemption is evaluated per NODE, not per part: a node that already owns
- * the public name (`expenses.create` body declares its own `matterId`) has no
- * internal name to rename, so the two cannot meet.
- */
-const withPublicFieldNames = (node: unknown): unknown => {
-  if (Array.isArray(node)) {
-    return node.map((entry) => withPublicFieldNames(entry));
-  }
-  if (!isRecord(node)) {
-    return node;
-  }
-  const rename = (name: string): string => PUBLIC_FIELD_NAME[name] ?? name;
-  const projected: Record<string, unknown> = { ...node };
-
-  for (const keyword of SCHEMA_NODE_KEYWORDS) {
-    if (keyword in node) {
-      projected[keyword] = withPublicFieldNames(node[keyword]);
-    }
-  }
-  for (const keyword of SCHEMA_NODE_LIST_KEYWORDS) {
-    const branches = node[keyword];
-    if (Array.isArray(branches)) {
-      projected[keyword] = branches.map((branch) =>
-        withPublicFieldNames(branch),
-      );
-    }
-  }
-  for (const keyword of SCHEMA_NODE_MAP_KEYWORDS) {
-    const members = node[keyword];
-    if (!isRecord(members)) {
-      continue;
-    }
-    // `$defs`/`definitions` name reusable schemas, not input fields, so only
-    // `properties` keys are renamed; every value is still descended into.
-    const renameKeys = keyword === "properties";
-    if (renameKeys) {
-      for (const [internal, publicName] of Object.entries(PUBLIC_FIELD_NAME)) {
-        if (internal in members && publicName in members) {
-          panic(
-            `capability input declares both ${internal} and ${publicName}; the public rename would drop one`,
-          );
-        }
-      }
-    }
-    projected[keyword] = Object.fromEntries(
-      Object.entries(members).map(([name, member]) => [
-        renameKeys ? rename(name) : name,
-        withPublicFieldNames(member),
-      ]),
-    );
-  }
-
-  const required = node["required"];
-  if (Array.isArray(required)) {
-    projected["required"] = required.map((name) =>
-      typeof name === "string" ? rename(name) : name,
-    );
-  }
-  return projected;
 };
 
 /**
@@ -937,6 +825,9 @@ type BuildCatalogEntryOptions = {
   compactedInputSchema: CompactedCapabilityInputSchema;
   exposure: ParsedExposure;
   feature: string | undefined;
+  featureAccess:
+    | { featureId: string; type: "required" | "conditional" }
+    | undefined;
   /** Declared transport, already cross-checked against the live schema. */
   transport: CapabilityTransport;
 };
@@ -963,6 +854,7 @@ const buildCatalogEntry = ({
   compactedInputSchema,
   exposure,
   feature,
+  featureAccess,
   transport,
 }: BuildCatalogEntryOptions): CapabilityEntry => ({
   id,
@@ -983,6 +875,12 @@ const buildCatalogEntry = ({
     : {}),
   transport,
   ...(feature === undefined ? {} : { feature }),
+  ...(featureAccess === undefined
+    ? {}
+    : {
+        featureId: featureAccess.featureId,
+        featureAccess: featureAccess.type,
+      }),
   ...(hasPermissions ? { permissions } : {}),
   inputSchema: compactedInputSchema,
   mcp: toCapabilityMcp(exposure),
@@ -1127,7 +1025,7 @@ const collectClassGuardErrors = ({
   });
   for (const { routeFile, id } of routeHooks.violations) {
     errors.push(
-      `route-hook: capability "${id}" is mounted under a route-level hook (onBeforeHandle, beforeHandle, onRequest or deploymentFeatureGate) in ${routeFile} that invoke_capability bypasses (a hook that only checks a FEATURE_ flag passes when the catalog entry carries that feature tag). Move the gate into the handler config (like case-law.ingestion.get), or add "${id}" to ROUTE_HOOK_WAIVERS with a justification`,
+      `route-hook: capability "${id}" is mounted under a route-level hook (onBeforeHandle, beforeHandle, onRequest or deploymentFeatureGate) in ${routeFile} that capability executors bypass (a hook that only checks a FEATURE_ flag passes when the catalog entry carries that feature tag). Move the gate into the handler config (like case-law.ingestion.get), or add "${id}" to ROUTE_HOOK_WAIVERS with a justification`,
     );
   }
   for (const { routeFile, route } of routeHooks.childRouteMounts) {
@@ -1199,10 +1097,48 @@ const collectClassGuardErrors = ({
   return errors;
 };
 
+const readFeatureDeclarationSources = async () => {
+  const featureSources = new Map<string, string>();
+  for (const file of new Bun.Glob(
+    "apps/api/{src,scripts}/**/*.{ts,tsx}",
+  ).scanSync({ cwd: REPO_ROOT, onlyFiles: true })) {
+    if (/\.(?:test|spec)\.tsx?$/u.test(file) || file.includes("/tests/")) {
+      continue;
+    }
+    featureSources.set(file, await Bun.file(path.join(REPO_ROOT, file)).text());
+  }
+  return featureSources;
+};
+
+type GeneratedFeatureDeclarationOptions = Parameters<
+  typeof assertFeatureAccessDeclarations
+>[0] & { dispatchRecords: readonly CapabilityDispatchRecord[] };
+
+/** Validate emitted dispatch entries rather than previously generated shards. */
+const validateGeneratedFeatureDeclarations = ({
+  registry,
+  endpoints,
+  sources: sourceModules,
+  dispatchRecords,
+}: GeneratedFeatureDeclarationOptions): void => {
+  const sources = new Map(sourceModules);
+  for (const file of sources.keys()) {
+    if (file.startsWith("apps/api/src/mcp/generated/capability-dispatch/")) {
+      sources.delete(file);
+    }
+  }
+  sources.set(
+    "apps/api/src/mcp/generated/capability-dispatch.ts",
+    serializeDispatchModule(dispatchRecords),
+  );
+  assertFeatureAccessDeclarations({ registry, endpoints, sources });
+};
+
 const buildCatalog = async (): Promise<BuildResult> => {
   const { endpoints, files, routeFiles, importErrors } =
     await discoverSafeHandlers();
   const errors: string[] = [];
+  const featureSources = await readFeatureDeclarationSources();
 
   for (const { id, message } of importErrors) {
     errors.push(`import failed: ${id}: ${message}`);
@@ -1234,7 +1170,7 @@ const buildCatalog = async (): Promise<BuildResult> => {
       return typeof feature === "string" ? [[tool.name, feature] as const] : [];
     }),
   );
-  // DOMAIN_FEATURE values are plain strings (the McpToolFeatureFlag key-of-env
+  // DOMAIN_FEATURE values are plain strings (the DeploymentFeatureFlag key-of-env
   // type collapses outside the app tsconfig), so validate every flag against
   // the REAL deployment env at export time: a typo'd or removed flag fails the
   // build here instead of silently fail-closing every entry at runtime.
@@ -1352,7 +1288,7 @@ const buildCatalog = async (): Promise<BuildResult> => {
       exportName: endpoint.exportName,
     });
     if (!isWellFormedCapabilityId(id)) {
-      // Capability ids are public (CLI command paths, `invoke_capability`
+      // Capability ids are public (CLI command paths, capability executors
       // arguments), so an id segment must never be an internal identifier. The
       // only way to produce a non-kebab segment is a NAMED export, whose TS
       // identifier gets suffixed onto the path-derived id.
@@ -1363,7 +1299,7 @@ const buildCatalog = async (): Promise<BuildResult> => {
     }
     if (!isAllowedActionVerb(id)) {
       // The final id segment is the PUBLIC action verb (`stella contacts list`,
-      // `invoke_capability contacts.list`). Keeping it inside a small canonical
+      // `read_capability contacts.list`). Keeping it inside a small canonical
       // set plus a reviewed domain list is what stops the surface drifting back
       // into synonym soup (`read` vs `list` vs `get` for the same shape).
       errors.push(
@@ -1634,6 +1570,9 @@ const buildCatalog = async (): Promise<BuildResult> => {
         compactedInputSchema,
         exposure: endpoint.exposure,
         feature: inheritedFeature ?? DOMAIN_FEATURE[domain],
+        featureAccess: parseFeatureRequirement(
+          endpoint.config["featureAccess"],
+        ),
         transport,
       }),
     );
@@ -1641,6 +1580,7 @@ const buildCatalog = async (): Promise<BuildResult> => {
       id,
       importPath: deriveHandlerImportPath(endpoint.file),
       exportName: endpoint.exportName,
+      featureAccess: parseFeatureRequirement(endpoint.config["featureAccess"]),
     });
     const source = sourceByFile.get(endpoint.file);
     if (source !== undefined) {
@@ -1651,6 +1591,13 @@ const buildCatalog = async (): Promise<BuildResult> => {
   for (const endpoint of endpoints) {
     projectEndpoint(endpoint);
   }
+
+  validateGeneratedFeatureDeclarations({
+    registry: FEATURE_REGISTRY,
+    endpoints,
+    sources: featureSources,
+    dispatchRecords,
+  });
 
   // Class guards over the built entries (context-fidelity, file-response,
   // route-hook, archived-flag). Extracted to keep buildCatalog's complexity in
@@ -1825,8 +1772,17 @@ const computeCliCommandPaths = async (
   return { cliCommandPathById, errors };
 };
 
-const main = async (): Promise<number> => {
-  const checkMode = process.argv.includes("--check");
+// Repeated calls rescan handler files; already imported modules remain warm.
+// Callers must start a new process when changing an existing handler's source.
+export const exportCapabilityCatalog = async (
+  mode: "write" | "check",
+): Promise<number> => {
+  const checkMode = mode === "check";
+  if (
+    !hasPreparedGeneratedSources(new URL("../../../", import.meta.url).pathname)
+  ) {
+    await generateCapabilityRuntime();
+  }
   const { entries, dispatchRecords, errors, internalWaiverCounts } =
     await buildCatalog();
 
@@ -1900,7 +1856,6 @@ const main = async (): Promise<number> => {
     internalWaiverCounts,
   });
 
-  const mode = checkMode ? "check" : "write";
   const catalogDrift = await syncCapabilityShards({
     directory: CATALOG_PATH,
     shards: catalogShards,
@@ -1947,4 +1902,10 @@ const main = async (): Promise<number> => {
 // The handler graph transitively opens a Redis subscriber (lib/sse.ts) at import
 // time and never unrefs it, so this one-off script's event loop would hang. The
 // work is done here; exit explicitly like export-mcp-tool-registry.ts.
-process.exit(await main());
+if (import.meta.main) {
+  process.exit(
+    await exportCapabilityCatalog(
+      process.argv.includes("--check") ? "check" : "write",
+    ),
+  );
+}

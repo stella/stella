@@ -71,7 +71,7 @@ describe("memory extraction claim", () => {
 
   test("requires the compaction to remain active after the provider call", () => {
     expect(extractorSource).toContain(
-      `eq(chatThreadCompactions.status, "active"),\n          isNull(chatThreadCompactions.memoryExtractedAt)`,
+      `eq(chatThreadCompactions.status, "active"),\n        isNull(chatThreadCompactions.memoryExtractedAt)`,
     );
   });
 });

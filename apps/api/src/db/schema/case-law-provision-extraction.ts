@@ -13,6 +13,8 @@
  * the owner.
  */
 
+import type { SQLWrapper } from "drizzle-orm";
+
 import { caseLawDecisions } from "./case-law";
 import {
   bytea,
@@ -30,6 +32,14 @@ const sqlValues = (values: readonly string[]) =>
     values.map((value) => sql.raw(`'${value}'`)),
     sql.raw(","),
   );
+
+const claimableProvisionExtraction = ({
+  dueAt,
+  workStatus,
+}: {
+  dueAt: SQLWrapper;
+  workStatus: SQLWrapper;
+}) => sql`${dueAt} IS NOT NULL AND ${workStatus} <> 'blocked'`;
 
 /**
  * Row security is forced on every table here (migration
@@ -347,7 +357,11 @@ export const caseLawProvisionExtractions = p.pgTable(
     p
       .index("case_law_provision_extractions_due_idx")
       .on(t.lane, t.dueAt, t.decisionId)
-      .where(sql`${t.dueAt} IS NOT NULL AND ${t.workStatus} <> 'blocked'`),
+      .where(claimableProvisionExtraction(t)),
+    p
+      .index("case_law_provision_extractions_jurisdiction_due_idx")
+      .on(t.jurisdiction, t.lane, t.dueAt, t.decisionId)
+      .where(claimableProvisionExtraction(t)),
     p
       .index("case_law_provision_extractions_retry_idx")
       .on(t.retryNotBefore, t.decisionId)

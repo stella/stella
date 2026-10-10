@@ -1,4 +1,6 @@
 import { panic, Result } from "better-result";
+
+import { createSha256 } from "@stll/sha256/bun";
 /**
  * Morphological query expansion for the case-law corpus index.
  *
@@ -20,7 +22,6 @@ import { panic, Result } from "better-result";
  * all produce the query the reader would have gotten anyway. Expansion is
  * allowed to add recall and is never allowed to remove it or to fail a search.
  */
-
 import { Temporal } from "@stll/time";
 
 import { detached } from "@/api/lib/analytics/capture";
@@ -233,7 +234,7 @@ const readDictionaryPayload = async (
     compressed,
     MORPHOLOGY_DICTIONARY_MAX_BYTES,
   );
-  const hasher = new Bun.CryptoHasher("sha256");
+  const hasher = createSha256();
   hasher.update(payload);
   if (hasher.digest("hex") !== contentHash) {
     return { reason: "content_hash_mismatch", status: "rejected" };
@@ -616,7 +617,7 @@ export const shadowExpansionAttributes = ({
 });
 
 /** Record what expansion would have done to a query that ran unexpanded. */
-export const logShadowExpansion = (log: ShadowExpansionLog): void => {
+const logShadowExpansion = (log: ShadowExpansionLog): void => {
   logger.info(EXPANSION_SHADOW, shadowExpansionAttributes(log));
 };
 

@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 2,
+  "reason": "monitoring-diff.ts persistCheckpoint and persistMonitoringDiff: derived screening coverage checkpoint and sanctions match state with append-only transitions written atomically in sanctions_screening_events"
+}

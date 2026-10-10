@@ -1,4 +1,3 @@
-import { QueryClient } from "@tanstack/react-query";
 import { createRouter } from "@tanstack/react-router";
 import { setupRouterSsrQueryIntegration } from "@tanstack/react-router-ssr-query";
 import { enableMapSet } from "immer";
@@ -11,17 +10,17 @@ import {
   DefaultPendingComponent,
 } from "@/components/route-components";
 import { installChatRuntimeCleanup } from "@/features/chat/queries";
+import { installUserScopedStorage } from "@/lib/account/install-user-scoped-storage";
 import { installSessionChangeListener } from "@/lib/account/session-change-listener";
 import { listenForSessionDocumentRestore } from "@/lib/account/session-document";
 import { listenForSessionChange } from "@/lib/account/session-signal";
-import { installUserScopedStorage } from "@/lib/account/user-scoped-storage";
 import { createAnalyticsValue } from "@/lib/analytics/provider";
 import {
   createRouteErrorLifecycleController,
   resolveCaughtRouteTemplate,
 } from "@/lib/analytics/route-error-lifecycle";
-import { STALE_TIME } from "@/lib/consts";
 import { installPDFDocumentCleanup } from "@/lib/pdf/hooks/use-pdf-document";
+import { createAppQueryClient } from "@/lib/react-query";
 import { isAuthFlowPathname } from "@/lib/redirect";
 import { installSessionCacheGuard } from "@/lib/session-cache-guard";
 import { installTableStoreReconcile } from "@/lib/workspaces/table-store";
@@ -34,13 +33,7 @@ export function getRouter() {
   const routeErrorLifecycle = createRouteErrorLifecycleController(
     analyticsValue.analytics,
   );
-  const queryClient = new QueryClient({
-    defaultOptions: {
-      queries: {
-        staleTime: STALE_TIME.FIVE.MINUTES,
-      },
-    },
-  });
+  const queryClient = createAppQueryClient();
   installPDFDocumentCleanup(queryClient);
   installDocxDocumentCacheInvalidation(queryClient);
   installChatRuntimeCleanup(queryClient);
@@ -130,7 +123,7 @@ export function getRouter() {
 }
 
 declare module "@tanstack/react-router" {
-  // oxlint-disable-next-line consistent-type-definitions -- module augmentation requires interface for declaration merging
+  // oxlint-disable-next-line typescript/consistent-type-definitions -- module augmentation requires interface for declaration merging
   interface Register {
     router: ReturnType<typeof getRouter>;
   }

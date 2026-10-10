@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, or, sql } from "drizzle-orm";
 
 import { renderMatterReference } from "@stll/api-contract";
 import type { InvoiceDocumentType } from "@stll/invoicing";
@@ -96,6 +96,7 @@ export const allocateNumber = async (
 export const findDefaultNumberSeries = async (
   tx: Transaction,
   documentType: InvoiceDocumentType,
+  sellerProfileId: SafeId<"sellerProfile"> | null,
 ) => {
   const rows = await tx
     .select({ id: numberSeries.id })
@@ -103,11 +104,18 @@ export const findDefaultNumberSeries = async (
     .where(
       and(
         eq(numberSeries.documentType, documentType),
+        sellerProfileId === null
+          ? isNull(numberSeries.sellerProfileId)
+          : or(
+              eq(numberSeries.sellerProfileId, sellerProfileId),
+              isNull(numberSeries.sellerProfileId),
+            ),
         eq(numberSeries.isDefault, true),
         isNull(numberSeries.archivedAt),
         sql`${numberSeries.organizationId} = current_setting('app.organization_id', true)`,
       ),
     )
+    .orderBy(desc(sql`${numberSeries.sellerProfileId} IS NOT NULL`))
     .limit(1);
   return rows.at(0);
 };

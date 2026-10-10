@@ -58,12 +58,14 @@ trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
-postgres_image=postgres:18.6@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280
-redis_image=redis:8@sha256:298e5b3bc566bade82f46ad5511777a4a07a294097ce16ada2f6a42be5239df5
+postgres_image=${POSTGRES_IMAGE:-postgres:18.6@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280}
+redis_image=${REDIS_IMAGE:-redis:8@sha256:298e5b3bc566bade82f46ad5511777a4a07a294097ce16ada2f6a42be5239df5}
 # Pull the service images up front, retried: a registry hiccup is not a
 # release failure.
 for service_image in "$postgres_image" "$redis_image"; do
-  bash "$repo/scripts/retry.sh" docker pull --quiet "$service_image" >/dev/null
+  if ! docker image inspect "$service_image" >/dev/null 2>&1; then
+    bash "$repo/scripts/retry.sh" docker pull --quiet "$service_image" >/dev/null
+  fi
 done
 
 # Internal bridge: no production access and no host ports or host networking.
@@ -96,7 +98,10 @@ run_probe() {
   docker run --rm --name "$probe" --label "$owner_label=$run_id" --network "$network" "$@"
 }
 migrate() {
+  # Non-RDS database: online index builds must not wait on EBS metrics or a
+  # wall-clock busy window.
   run_probe --env DATABASE_URL=postgres://postgres:smoke-only@smoke-postgres:5432/stella \
+    --env DB_LOAD_GATE_EBS_SIGNAL=disabled --env 'DB_LOAD_GATE_BUSY_WINDOWS=[]' \
     "$image_id" bun /app/apps/api/src/db/migrate.js
 }
 
@@ -173,7 +178,7 @@ if grep -qiE 'cannot (find|resolve) (module|package)' <<< "$output" \
 fi
 echo 'PASS: collab reached environment validation'
 
-for entrypoint in /app/document-processing-worker.js /app/backfill.js /app/complete-sk-us-raw.js; do
+for entrypoint in /app/document-processing-worker.js /app/backfill.js /app/complete-sk-us-raw.js /app/review-account.js; do
   output=$(run_probe "$image_id" timeout 20 bun "$entrypoint" 2>&1 || true)
   if grep -qiE 'cannot (find|resolve) (module|package)' <<< "$output" \
     || ! grep -q 'Invalid environment variables' <<< "$output"; then

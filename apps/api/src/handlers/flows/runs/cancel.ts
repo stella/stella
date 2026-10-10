@@ -1,7 +1,8 @@
 import { Result } from "better-result";
 
 import { flowRunParamsSchema } from "@/api/handlers/flows/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { flowRunRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { cancelFlowRun } from "@/api/lib/flows/flow-executor";
@@ -12,6 +13,8 @@ const config = {
     "run id and the status it settled on. Work already committed by steps " +
     "that finished is not undone.",
   permissions: { flow: ["run"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: flowRunRealtimeUpdates,
   access: "write",
   mcp: {
     type: "capability",

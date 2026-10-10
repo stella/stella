@@ -4,10 +4,10 @@ import { and, eq, inArray } from "drizzle-orm";
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
 import { isChatFileMimeType } from "@stll/api-contract/chat-file-types";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { chatThreads, userFiles } from "@/api/db/schema";
-import { env } from "@/api/env";
 import { refuseAnonymizedCrossing } from "@/api/handlers/chat/anonymization-refusal";
 import {
   CHAT_MAX_FILE_BYTES,
@@ -42,6 +42,7 @@ import {
   parseDataUrl,
   toDataUrl,
 } from "@/api/lib/data-url";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { FileKey } from "@/api/lib/file-key";
 import { scannedDocxToMarkdown } from "@/api/lib/file-scan/document-parsers";
@@ -54,8 +55,12 @@ import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
 import {
+  detectFileEncryption,
+  encryptedContentError,
+} from "@/api/lib/files/detect-file-encryption";
+import {
   generateImageThumbnail,
-  shouldGenerateImageThumbnail,
+  isThumbnailableMimeType,
   THUMBNAIL_MIME_TYPE,
 } from "@/api/lib/files/image-derivative";
 import {
@@ -63,6 +68,7 @@ import {
   organizationFileUsageHandlerError,
   writeOrganizationFile,
 } from "@/api/lib/files/organization-file-usage";
+import type { CheckedFileWrite } from "@/api/lib/files/organization-file-usage";
 import { createUserFileKey, deleteS3Keys } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
 import { putS3ObjectWithSignal } from "@/api/lib/s3";
@@ -650,6 +656,23 @@ const chatAttachmentStoreError = (
         cause: error,
       });
 
+/**
+ * No send mode can hand an encrypted attachment's content to the model: its
+ * text cannot be extracted and providers refuse the encrypted bytes. PDF and
+ * Office attachments share the detector's answer.
+ */
+const refuseEncryptedAttachment = async (
+  scanned: ScannedFile,
+): Promise<Result<void, HandlerError<422>>> => {
+  const detection = await detectFileEncryption({
+    mimeType: scanned.mimeType,
+    scanned,
+  });
+  return detection.encryption.encrypted
+    ? Result.err(encryptedContentError())
+    : Result.ok();
+};
+
 type UploadUserFileInput = {
   dependencies?: UploadUserFileDependencies;
   file: {
@@ -702,9 +725,7 @@ export const uploadUserFile = async ({
     }
 
     const sanitizedFileName = sanitizeFilename(file.fileName);
-    const sha256Hex = new Bun.CryptoHasher("sha256")
-      .update(file.bytes)
-      .digest("hex");
+    const sha256Hex = hashSha256Hex(file.bytes);
     const id = createSafeId<"userFile">();
 
     const s3Key = createUserFileKey({
@@ -714,7 +735,7 @@ export const uploadUserFile = async ({
     });
 
     let organizationId: SafeId<"organization"> | undefined;
-    if (env.FEATURE_FILE_USAGE_LIMITS) {
+    if (isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")) {
       const thread = yield* Result.await(
         safeDb(
           async (tx) =>
@@ -762,6 +783,7 @@ export const uploadUserFile = async ({
 
     const scanned = scanResult.value;
     const scanWarnings = scanned.scanWarnings;
+    yield* Result.await(refuseEncryptedAttachment(scanned));
 
     const extractedText =
       file.mimeType === XLSX_MIME_TYPE
@@ -797,7 +819,8 @@ export const uploadUserFile = async ({
       key: string;
       placeholder: string;
     } | null = null;
-    if (shouldGenerateImageThumbnail({ mimeType: file.mimeType })) {
+    // Image types carry no encryption, so the type alone decides here.
+    if (isThumbnailableMimeType(file.mimeType)) {
       const thumbnailResult = await generateThumbnail(file.bytes);
       if (Result.isError(thumbnailResult)) {
         captureError(thumbnailResult.error, {
@@ -854,24 +877,38 @@ export const uploadUserFile = async ({
     let thumbnailFileId: string | null = null;
     let placeholder: string | null = null;
     let thumbnailKey: string | null = null;
-    const writeSource = async () =>
+    const writeSource = async ({
+      content,
+      objectKey,
+    }: CheckedFileWrite<Uint8Array>) =>
       await withTimeout(
         async (signal) =>
-          await putS3Object(s3Key, file.bytes, file.mimeType, signal),
+          await putS3Object(objectKey, content, file.mimeType, signal),
         {
           label: "chat-attachment-put",
           timeoutMs: BUFFER_INTENT_WRITE_TIMEOUT_MS,
         },
       );
-    const writeSourceResult = env.FEATURE_FILE_USAGE_LIMITS
+    const writeSourceResult = isDeploymentFeatureEnabled(
+      "FEATURE_FILE_USAGE_LIMITS",
+    )
       ? await writeOrganizationFile({
           organizationId: organizationId ?? panic("Missing chat organization"),
           objectKey: s3Key,
           sizeBytes: file.bytes.byteLength,
+          content: file.bytes,
           write: writeSource,
           ...ledgerWriteOptions,
         })
-      : await Result.tryPromise({ try: writeSource, catch: (cause) => cause });
+      : await Result.tryPromise({
+          try: async () =>
+            await writeSource({
+              objectKey: s3Key,
+              sizeBytes: file.bytes.byteLength,
+              content: file.bytes,
+            }),
+          catch: (cause) => cause,
+        });
     if (Result.isError(writeSourceResult)) {
       const cleanupResult = Result.flatten(
         await Result.tryPromise({
@@ -918,31 +955,37 @@ export const uploadUserFile = async ({
     }
 
     if (preparedThumbnail !== null) {
-      const writeThumbnail = async () =>
+      const writeThumbnail = async ({
+        content,
+        objectKey,
+      }: CheckedFileWrite<Uint8Array>) =>
         await withTimeout(
           async (signal) =>
-            await putS3Object(
-              preparedThumbnail.key,
-              preparedThumbnail.bytes,
-              THUMBNAIL_MIME_TYPE,
-              signal,
-            ),
+            await putS3Object(objectKey, content, THUMBNAIL_MIME_TYPE, signal),
           {
             label: "chat-thumbnail-put",
             timeoutMs: BUFFER_INTENT_WRITE_TIMEOUT_MS,
           },
         );
-      const writeThumbnailResult = env.FEATURE_FILE_USAGE_LIMITS
+      const writeThumbnailResult = isDeploymentFeatureEnabled(
+        "FEATURE_FILE_USAGE_LIMITS",
+      )
         ? await writeOrganizationFile({
             organizationId:
               organizationId ?? panic("Missing chat organization"),
             objectKey: preparedThumbnail.key,
             sizeBytes: preparedThumbnail.bytes.byteLength,
+            content: preparedThumbnail.bytes,
             write: writeThumbnail,
             ...ledgerWriteOptions,
           })
         : await Result.tryPromise({
-            try: writeThumbnail,
+            try: async () =>
+              await writeThumbnail({
+                objectKey: preparedThumbnail.key,
+                sizeBytes: preparedThumbnail.bytes.byteLength,
+                content: preparedThumbnail.bytes,
+              }),
             catch: (cause) => cause,
           });
       if (Result.isError(writeThumbnailResult)) {

@@ -1,21 +1,28 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { t } from "elysia";
+import type { Static } from "elysia";
 import * as v from "valibot";
 
 import { getAuth } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
+  API_KEY_KIND,
+  API_KEY_POLICY,
   MACHINE_API_KEY_CONFIG_ID,
   MACHINE_API_KEY_EXPIRY,
-  MACHINE_API_KEY_GRANTABLE_AUDIENCES,
   MACHINE_API_KEY_GRANTABLE_SCOPES,
   MACHINE_API_KEY_NAME_MAX_LENGTH,
   machineApiKeyMetadataSchema,
   machineApiKeyPermissionsSchema,
   parseMachineApiKeyPermissions,
 } from "@/api/lib/machine-api-key-config";
-import type { MachineApiKeyScope } from "@/api/lib/machine-api-key-config";
+import type {
+  MACHINE_API_KEY_GRANTABLE_AUDIENCES,
+  MachineApiKeyScope,
+  ApiKeyKind,
+  MachineApiKeyMetadata,
+} from "@/api/lib/machine-api-key-config";
 import { findOrganizationMachineApiKey } from "@/api/lib/machine-api-key-queries";
 import type { MachineApiKeyRow } from "@/api/lib/machine-api-key-queries";
 import { logger } from "@/api/lib/observability/logger";
@@ -98,10 +105,24 @@ export const machineApiKeyAudienceSchema = t.Optional(
   // `t.Union` of literals rather than `t.UnionEnum`: the latter coerces an
   // absent field to its first member, which would silently bind every key that
   // named no audience to the default one instead of leaving it unbound.
-  t.Union(
-    MACHINE_API_KEY_GRANTABLE_AUDIENCES.map((audience) => t.Literal(audience)),
-  ),
+  t.Union([t.Literal("default"), t.Literal("documents"), t.Literal("law")]),
 );
+
+// The literal list mirrors MACHINE_API_KEY_GRANTABLE_AUDIENCES: a member on
+// one side only fails to compile here.
+type GrantableAudience = (typeof MACHINE_API_KEY_GRANTABLE_AUDIENCES)[number];
+type AudienceSchemaValue = Static<typeof machineApiKeyAudienceSchema>;
+type MissingAudienceSchemaValue = Exclude<
+  GrantableAudience,
+  AudienceSchemaValue
+>;
+type UnexpectedAudienceSchemaValue = Exclude<
+  AudienceSchemaValue,
+  GrantableAudience
+>;
+
+true satisfies MissingAudienceSchemaValue extends never ? true : never;
+true satisfies UnexpectedAudienceSchemaValue extends never ? true : never;
 
 export const machineApiKeyExpiresInDaysSchema = t.Optional(
   t.Integer({
@@ -191,6 +212,7 @@ export const validateGrantablePermissions = ({
 };
 
 type MintMachineApiKeyOptions = {
+  kind?: ApiKeyKind;
   name: string;
   scopes: MachineApiKeyScope[];
   permissions: Record<string, string[]>;
@@ -228,36 +250,79 @@ export type MintedMachineApiKey = {
  * are parameters rather than body fields precisely so this path cannot be
  * pointed at another user or organization.
  */
-export const mintMachineApiKey = async ({
-  name,
-  scopes,
-  permissions,
-  expiresInDays,
-  audience,
-  userId,
-  organizationId,
-}: MintMachineApiKeyOptions): Promise<
-  Result<MintedMachineApiKey, HandlerError>
-> => {
+type CreateApiKey = (options: {
+  body: {
+    configId: string;
+    name: string;
+    userId: string;
+    permissions: Record<string, string[]>;
+    metadata: v.InferInput<typeof machineApiKeyMetadataSchema>;
+    expiresIn: number;
+  };
+}) => Promise<{
+  id: string;
+  start: string | null;
+  key: string;
+  expiresAt: Date | null;
+}>;
+
+export const mintMachineApiKey = async (
+  {
+    kind = API_KEY_KIND.machine,
+    name,
+    scopes,
+    permissions,
+    expiresInDays,
+    audience,
+    userId,
+    organizationId,
+  }: MintMachineApiKeyOptions,
+  createApiKey: CreateApiKey = getAuth().api.createApiKey,
+): Promise<Result<MintedMachineApiKey, HandlerError>> => {
+  const policy = API_KEY_POLICY[kind];
+  const days = expiresInDays ?? policy.defaultDays;
+  if (
+    !Number.isInteger(days) ||
+    days < policy.minDays ||
+    days > policy.maxDays
+  ) {
+    return Result.err(
+      new HandlerError({ status: 400, message: "Invalid API key expiry" }),
+    );
+  }
+  const metadata = v.safeParse(machineApiKeyMetadataSchema, {
+    ...(kind === API_KEY_KIND.machine ? {} : { kind }),
+    ...(audience === undefined ? {} : { audience }),
+    organizationId,
+    scopes,
+  });
+  if (!metadata.success) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Invalid API key scopes or audience",
+      }),
+    );
+  }
   const created = await Result.tryPromise({
     try: async () =>
-      await getAuth().api.createApiKey({
+      await createApiKey({
         body: {
           configId: MACHINE_API_KEY_CONFIG_ID,
           name,
           userId,
           permissions,
-          // The audience key is omitted rather than written as null when the
-          // caller named none: the metadata schema is strict, and an unbound
-          // key's row stays byte-identical to what this endpoint wrote before.
-          metadata: {
-            ...(audience === undefined ? {} : { audience }),
-            organizationId,
-            scopes,
-          },
-          ...(expiresInDays === undefined
-            ? {}
-            : { expiresIn: expiresInDays * SECONDS_PER_DAY }),
+          metadata:
+            metadata.output.kind === API_KEY_KIND.personal
+              ? metadata.output
+              : {
+                  ...(metadata.output.audience === undefined
+                    ? {}
+                    : { audience: metadata.output.audience }),
+                  organizationId: metadata.output.organizationId,
+                  scopes: metadata.output.scopes,
+                },
+          expiresIn: days * SECONDS_PER_DAY,
         },
       }),
     catch: (error: unknown) => error,
@@ -290,21 +355,19 @@ export const mintMachineApiKey = async ({
 export type LoadedMachineApiKey = {
   id: string;
   name: string;
-  scopes: MachineApiKeyScope[];
   permissions: Record<string, string[]>;
-  /**
-   * The audience the key is bound to, carried so a rotation reproduces it.
-   * Rotating a bound key into an unbound one would widen the credential.
-   */
-  audience: McpMode | undefined;
   enabled: boolean;
-  /**
-   * The member who minted the key. Lifecycle is organization-scoped, so this is
-   * frequently somebody other than the caller; the plugin's update endpoint
-   * still wants it (see `disableMachineApiKey`).
-   */
   ownerUserId: string;
-};
+} & (
+  | Pick<
+      Extract<MachineApiKeyMetadata, { kind: "machine" }>,
+      "kind" | "scopes" | "audience"
+    >
+  | Pick<
+      Extract<MachineApiKeyMetadata, { kind: "personal" }>,
+      "kind" | "scopes" | "audience"
+    >
+);
 
 /**
  * Load one machine key from the caller's organization.
@@ -414,15 +477,32 @@ export const toMachineApiKeySummary = (
     return reportUnreadableKey(row.id, "name", UNREADABLE_KEY_REASON.missing);
   }
 
-  return {
-    audience: metadata.output.audience,
+  const fields = {
     enabled: row.enabled,
     id: row.id,
     name,
     ownerUserId: row.referenceId,
     permissions: permissions.output,
-    scopes: metadata.output.scopes,
   };
+  switch (metadata.output.kind) {
+    case API_KEY_KIND.machine:
+      return {
+        ...fields,
+        kind: API_KEY_KIND.machine,
+        scopes: metadata.output.scopes,
+        audience: metadata.output.audience,
+      };
+    case API_KEY_KIND.personal:
+      return {
+        ...fields,
+        kind: API_KEY_KIND.personal,
+        scopes: metadata.output.scopes,
+        audience: metadata.output.audience,
+      };
+    default:
+      metadata.output satisfies never;
+      return panic("Unexpected parsed API key kind");
+  }
 };
 
 /**

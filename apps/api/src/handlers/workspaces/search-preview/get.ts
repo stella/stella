@@ -1,13 +1,14 @@
 import { Result } from "better-result";
 
 import { readSearchPreviewHandler } from "@/api/handlers/workspaces/read-search-preview.query";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 
 const config = {
   description:
     "Return bounded task and document highlights for a matter search-result preview.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "covered", by: "list_matters" },
   access: "read",
 } satisfies WorkspaceHandlerConfig;

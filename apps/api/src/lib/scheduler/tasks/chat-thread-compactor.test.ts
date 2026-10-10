@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import type { ChatCompactionOutcome } from "@/api/lib/chat/thread-compaction";
-
-import { settlementForOutcome } from "./chat-thread-compactor";
+import {
+  OWNER_ACCESS_LOST_REASON,
+  settlementForOutcome,
+} from "./chat-thread-compactor";
+import type { ChatCompactorOutcome } from "./chat-thread-compactor";
 import { CHAT_COMPACTION_SETTLEMENT } from "./chat-thread-compactor-queue";
 
 /**
@@ -16,7 +18,12 @@ const OUTCOMES = [
   { type: "no-summary" },
   { type: "superseded" },
   { type: "anonymized" },
-] as const satisfies readonly ChatCompactionOutcome[];
+  {
+    reason: OWNER_ACCESS_LOST_REASON.ORGANIZATION,
+    type: "owner-access-lost",
+  },
+  { reason: OWNER_ACCESS_LOST_REASON.THREAD, type: "owner-access-lost" },
+] as const satisfies readonly ChatCompactorOutcome[];
 
 describe("compaction outcome settlement", () => {
   test("only a run that is still behind comes straight back", () => {
@@ -47,6 +54,14 @@ describe("compaction outcome settlement", () => {
     expect(settlementForOutcome({ type: "up-to-date" })).toBe(
       CHAT_COMPACTION_SETTLEMENT.DRAINED,
     );
+  });
+
+  test("a thread whose owner lost access leaves the queue", () => {
+    for (const reason of Object.values(OWNER_ACCESS_LOST_REASON)) {
+      expect(settlementForOutcome({ reason, type: "owner-access-lost" })).toBe(
+        CHAT_COMPACTION_SETTLEMENT.DRAINED,
+      );
+    }
   });
 
   test("a superseded run leaves the follow-up to whatever superseded it", () => {

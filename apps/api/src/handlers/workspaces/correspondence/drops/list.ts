@@ -4,6 +4,7 @@ import { t } from "elysia";
 
 import { correspondenceDropLogs } from "@/api/db/schema";
 import {
+  ACCOUNT_ACCESS,
   createSafeHandler,
   type WorkspaceHandlerConfig,
 } from "@/api/lib/api-handlers";
@@ -53,6 +54,7 @@ const cursorCodec = createTimestampIdCursorCodec({
 });
 const config = {
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "document_processing" },
   access: "read",
   query: t.Object({

@@ -4,10 +4,20 @@
 // same rule).
 
 import { panic } from "better-result";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import {
+  closeSync,
+  mkdtempSync,
+  openSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
+import { childExitStatus } from "../packages/scripts/src/child-exit-status.ts";
 import { isRecord } from "./oxlint-config-scopes.ts";
 
 export type BuiltinRule = {
@@ -21,11 +31,27 @@ export const builtinRules = (): BuiltinRule[] => {
   // short when the process exits before the pipe drains.
   const directory = mkdtempSync(path.join(tmpdir(), "oxlint-rules-"));
   const output = path.join(directory, "rules.json");
-  const result = Bun.spawnSync(
-    ["bun", "--bun", "oxlint", "--rules", "-f", "json"],
-    { cwd: import.meta.dir, stdout: Bun.file(output) },
+  // The catalog loads independently of the project config.
+  const config = path.join(directory, "oxlint.config.json");
+  writeFileSync(config, "{}");
+  const descriptor = openSync(output, "w");
+  const result = spawnSync(
+    process.execPath,
+    [
+      fileURLToPath(
+        new URL("../node_modules/oxlint/bin/oxlint", import.meta.url),
+      ),
+      "-c",
+      config,
+      "--rules",
+      "-f",
+      "json",
+    ],
+    { stdio: ["ignore", descriptor, "pipe"] },
   );
-  const text = result.success ? readFileSync(output, "utf-8") : undefined;
+  closeSync(descriptor);
+  const text =
+    childExitStatus(result) === 0 ? readFileSync(output, "utf-8") : undefined;
   rmSync(directory, { recursive: true, force: true });
   if (text === undefined) {
     return panic("oxlint --rules failed; cannot resolve built-in rules");
@@ -44,8 +70,10 @@ export const builtinRules = (): BuiltinRule[] => {
 };
 
 // Config spellings of a built-in plugin, keyed to the scope `--rules` reports.
-const PLUGIN_ALIASES: Readonly<Record<string, string>> = {
+export const PLUGIN_ALIASES: Readonly<Record<string, string>> = {
   "@typescript-eslint": "typescript",
+  "typescript-eslint": "typescript",
+  "react-hooks": "react",
   "import-x": "import",
   "jsx-a11y": "jsx_a11y",
   n: "node",
@@ -53,6 +81,30 @@ const PLUGIN_ALIASES: Readonly<Record<string, string>> = {
 };
 
 export const pluginScope = (plugin: string) => PLUGIN_ALIASES[plugin] ?? plugin;
+
+// ESLint core rules oxlint also accepts under the typescript prefix; it
+// configures the ESLint rule for either spelling
+// (crates/oxc_linter/src/utils/mod.rs, TYPESCRIPT_COMPATIBLE_ESLINT_RULES).
+const TYPESCRIPT_ADAPTED_ESLINT_RULES: ReadonlySet<string> = new Set([
+  "class-methods-use-this",
+  "default-param-last",
+  "init-declarations",
+  "max-params",
+  "no-array-constructor",
+  "no-dupe-class-members",
+  "no-empty-function",
+  "no-invalid-this",
+  "no-loop-func",
+  "no-loss-of-precision",
+  "no-magic-numbers",
+  "no-redeclare",
+  "no-restricted-imports",
+  "no-shadow",
+  "no-unused-expressions",
+  "no-unused-vars",
+  "no-use-before-define",
+  "no-useless-constructor",
+]);
 
 /** Resolves a config rule key to `scope/name`; JS-plugin keys pass through. */
 export const ruleCanonicalizer = (rules: readonly BuiltinRule[]) => {
@@ -73,7 +125,14 @@ export const ruleCanonicalizer = (rules: readonly BuiltinRule[]) => {
       const named = owners.get(key) ?? [];
       return named.length === 1 ? (named[0] ?? key) : key;
     }
-    const id = `${pluginScope(key.slice(0, separator))}/${key.slice(separator + 1)}`;
-    return ids.has(id) ? id : key;
+    const scope = pluginScope(key.slice(0, separator));
+    const name = key.slice(separator + 1);
+    const id = `${scope}/${name}`;
+    if (ids.has(id)) {
+      return id;
+    }
+    return scope === "typescript" && TYPESCRIPT_ADAPTED_ESLINT_RULES.has(name)
+      ? `eslint/${name}`
+      : key;
   };
 };

@@ -15,7 +15,7 @@ import {
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -178,7 +178,7 @@ export const decideFolioCollabSeedClaim = ({
   return "claimable";
 };
 
-export const claimFolioCollabRoomSeed = async ({
+const claimFolioCollabRoomSeed = async ({
   expectedGeneration,
   expectedSeedState,
   now,
@@ -212,7 +212,7 @@ export const claimFolioCollabRoomSeed = async ({
   return claimed.at(0) ?? null;
 };
 
-export const joinFolioCollabRoomHandler = async function* ({
+const joinFolioCollabRoomHandler = async function* ({
   body: { entityId, propertyId },
   organizationId,
   recordAuditEvent,
@@ -496,8 +496,14 @@ export const joinFolioCollabRoomHandler = async function* ({
 };
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Provides working-copy URLs covered by the collaboration-room lifecycle audit.",
+  },
   body: joinFolioCollabRoomBodySchema,
   permissions: { entity: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "session_token_exchange" },
 } satisfies WorkspaceHandlerConfig;
 

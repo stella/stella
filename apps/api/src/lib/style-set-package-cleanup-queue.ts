@@ -1,16 +1,13 @@
-import { Result } from "better-result";
-import { Worker } from "bullmq";
+import { Result, TaggedError } from "better-result";
 import { and, asc, eq, isNotNull, lt } from "drizzle-orm";
 
 import { Temporal } from "@stll/time";
 
 import type { rootDb } from "@/api/db/root";
 import { styleSets } from "@/api/db/schema";
-import { env } from "@/api/env";
-import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
-import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
+import { BullMqWorker, createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
 import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import {
   QUEUE_REQUEUE_OUTCOME,
@@ -21,6 +18,7 @@ import type {
   RequeueableQueue,
 } from "@/api/lib/bullmq-requeue";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { errorTag } from "@/api/lib/errors/utils";
 import {
   deleteOrganizationFileWithSignal,
@@ -149,6 +147,18 @@ type ReconcilePendingStyleSetPackageCleanupsOptions = {
   db: Pick<typeof rootDb, "select">;
 };
 
+type StyleSetPackageCleanupReconcileResult = ReconcileScanResult & {
+  failed: number;
+};
+
+export class StyleSetPackageCleanupRequeueError extends TaggedError(
+  "StyleSetPackageCleanupRequeueError",
+)<{
+  cause: unknown;
+  message: string;
+  summary: StyleSetPackageCleanupReconcileResult;
+}> {}
+
 /**
  * Re-drive package cleanups a row still owes.
  *
@@ -168,7 +178,15 @@ type ReconcilePendingStyleSetPackageCleanupsOptions = {
 export const reconcilePendingStyleSetPackageCleanups = async ({
   cleanupQueue = getQueue(),
   db,
-}: ReconcilePendingStyleSetPackageCleanupsOptions): Promise<ReconcileScanResult> => {
+}: ReconcilePendingStyleSetPackageCleanupsOptions): Promise<
+  Result<
+    StyleSetPackageCleanupReconcileResult,
+    StyleSetPackageCleanupRequeueError
+  >
+> => {
+  let failure: { cause: unknown; count: number } | undefined;
+  // The scan's concurrent handlers update this state across an await.
+  const readFailure = () => failure;
   const settledBefore = new Date(
     Temporal.Now.instant().epochMilliseconds - RECONCILE_SETTLE_MS,
   );
@@ -241,7 +259,15 @@ export const reconcilePendingStyleSetPackageCleanups = async ({
       catch: (cause) => cause,
     });
     if (Result.isError(outcome)) {
-      captureError(outcome.error, { styleSetId: id });
+      failure = {
+        cause: failure === undefined ? outcome.error : failure.cause,
+        count: (failure?.count ?? 0) + 1,
+      };
+      // The scheduler runner captures the aggregate failure once per tick.
+      logger.warn("style_set.package_cleanup_requeue_failed", {
+        stage: "requeue",
+        styleSetId: id,
+      });
       return false;
     }
     // Only a job this sweep actually added spends budget. A key the queue
@@ -252,7 +278,19 @@ export const reconcilePendingStyleSetPackageCleanups = async ({
     return outcome.value === QUEUE_REQUEUE_OUTCOME.REQUEUED;
   };
 
-  return await scanPendingRows({ handle, readPage });
+  const scan = await scanPendingRows({ handle, readPage });
+  const queueFailure = readFailure();
+  const summary = { ...scan, failed: queueFailure?.count ?? 0 };
+  if (queueFailure !== undefined) {
+    return Result.err(
+      new StyleSetPackageCleanupRequeueError({
+        cause: queueFailure.cause,
+        message: "Requeueing style set package cleanups did not complete",
+        summary,
+      }),
+    );
+  }
+  return Result.ok(summary);
 };
 
 export const deleteQueuedStyleSetPackages = async (
@@ -307,7 +345,7 @@ export const deleteUnreferencedStyleSetPackage = async (
     });
     return;
   }
-  if (env.FEATURE_FILE_USAGE_LIMITS) {
+  if (isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")) {
     const deleted = await deleteOrganizationFileWithSignal(
       s3Key,
       AbortSignal.timeout(10_000),
@@ -331,7 +369,7 @@ export const initStyleSetPackageCleanupWorker = ({
   const workerConnection = createBullMqConnection({
     storeClass: "durable-coordination",
   });
-  const worker = new Worker<StyleSetPackageCleanupJobData>(
+  const worker = new BullMqWorker<StyleSetPackageCleanupJobData>(
     QUEUE_NAME,
     async (job) => {
       await deleteUnreferencedStyleSetPackage(job.data.s3Key, db);

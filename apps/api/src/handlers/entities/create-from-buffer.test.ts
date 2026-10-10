@@ -10,8 +10,9 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 
+import { stella } from "@/api/db/rls";
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
@@ -31,15 +32,28 @@ import { envBase } from "@/api/env-base";
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  authorizeDocumentWrite,
+  DocumentWriteRefusedError,
+} from "@/api/lib/entities/authorize-document-write";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import type { CreateEntityFromBufferDependencies } from "@/api/lib/entities/create-from-buffer";
+import {
+  detectFileEncryption,
+  serverBuiltFileEncryption,
+} from "@/api/lib/files/detect-file-encryption";
+import type { FileEncryption } from "@/api/lib/files/detect-file-encryption";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
+import { PDF_MIME_TYPE } from "@/api/mime-types";
+import { memberDocumentWriteAccess } from "@/api/tests/helpers/document-write-access";
 import { entityVersionInsertResult } from "@/api/tests/helpers/entity-version-insert-mock";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
+import { testScannedFile } from "@/api/tests/helpers/scanned-file";
+import { createEncryptedPdf } from "@/api/tests/helpers/signed-pdf";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
+import { createScopedDbMock, toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
   getRlsFixture,
   releaseRlsFixture,
@@ -68,12 +82,28 @@ const createEntityFromBufferDependencies = {
 } satisfies CreateEntityFromBufferDependencies;
 
 const createEntityFromBufferForTest = async (
-  input: Omit<Parameters<typeof createEntityFromBuffer>[0], "dependencies">,
+  input: Omit<
+    Parameters<typeof createEntityFromBuffer>[0],
+    "dependencies" | "encryption"
+  > & { encryption?: FileEncryption },
 ) =>
   await createEntityFromBuffer({
+    encryption: serverBuiltFileEncryption(),
     ...input,
     dependencies: createEntityFromBufferDependencies,
   });
+
+const detectedEncryptedPdf = async (): Promise<FileEncryption> => {
+  const detection = await detectFileEncryption({
+    mimeType: PDF_MIME_TYPE,
+    scanned: testScannedFile({
+      bytes: new Uint8Array(await createEncryptedPdf()).slice().buffer,
+      mimeType: PDF_MIME_TYPE,
+    }),
+  });
+  expect(detection.status).toBe("known");
+  return detection.encryption;
+};
 
 const organizationId = toSafeId<"organization">(
   "00000000-0000-0000-0000-000000000001",
@@ -312,7 +342,7 @@ describe("createEntityFromBuffer", () => {
       buffer: new TextEncoder().encode("pdf bytes"),
       fileName: "Encrypted Agreement.pdf",
       mimeType: "application/pdf",
-      encrypted: true,
+      encryption: await detectedEncryptedPdf(),
       parentId,
       provenance: {
         type: "email_attachment",
@@ -324,6 +354,9 @@ describe("createEntityFromBuffer", () => {
     });
 
     expect(Result.isOk(result)).toBe(true);
+    expect(result).toMatchObject({
+      value: { fileName: "Encrypted Agreement.pdf", renamed: false },
+    });
     expect(recordedAuditEvents).toHaveLength(1);
     expect(recordedAuditEvents.at(0)).toEqual({
       action: "create",
@@ -430,7 +463,9 @@ describe("createEntityFromBuffer", () => {
       );
     }
     expect(getCallCount()).toBe(4);
-    expect(locks).toEqual(["share", "update"]);
+    // Intent reservation share-locks the workspace; the insert transaction
+    // then locks the workspace row and the parent row for update.
+    expect(locks).toEqual(["share", "update", "update"]);
     // The rejected parent leaves nothing behind: the published object is
     // reclaimed under the same key it was written to.
     expect(requestKeys("PUT")).toHaveLength(1);
@@ -763,6 +798,72 @@ describe("service-owned buffer publication in the database", () => {
     }
   });
 
+  test("generated and template documents keep numbered bases and fill sibling gaps", async () => {
+    const requestedName = "report_2024.txt";
+    const occupied = [requestedName, "report_2024_1.txt", "report_2024_3.txt"];
+    const siblingRows = occupied.map((name) => ({
+      id: createSafeId<"entity">(),
+      workspaceId: ids.wsA1,
+      kind: "folder" as const,
+      name,
+      parentId: null,
+    }));
+    await db.insert(entities).values(siblingRows);
+    createdEntityIds.push(...siblingRows.map(({ id }) => id));
+    const createNamedDocument = async (creator: SafeId<"user"> | null) =>
+      await createEntityFromBufferForTest({
+        scopedDb: asTestRaw<ScopedDb>(
+          createScopedDb(db, [ids.wsA1], ids.orgA, creator),
+        ),
+        organizationId: ids.orgA,
+        workspaceId: ids.wsA1,
+        userId: creator,
+        recordAuditEvent: async () => undefined,
+        buffer: new TextEncoder().encode("generated document"),
+        fileName: requestedName,
+        mimeType: "text/plain",
+      });
+    const serviceResult = await createNamedDocument(null);
+    const templateResult = await createNamedDocument(ids.userA1);
+    expect(Result.isOk(serviceResult)).toBe(true);
+    expect(Result.isOk(templateResult)).toBe(true);
+    if (Result.isError(serviceResult) || Result.isError(templateResult)) {
+      throw new TypeError("Expected generated documents to be created");
+    }
+    const results = [serviceResult.value, templateResult.value];
+    createdEntityIds.push(...results.map(({ entityId }) => entityId));
+    expect(results.map(({ fileName }) => fileName)).toEqual([
+      "report_2024_2.txt",
+      "report_2024_4.txt",
+    ]);
+    expect(results).toEqual([
+      expect.objectContaining({ renamed: true }),
+      expect.objectContaining({ renamed: true }),
+    ]);
+    for (const result of results) {
+      const entity = await db.query.entities.findFirst({
+        where: { id: { eq: result.entityId } },
+      });
+      const field = await db.query.fields.findFirst({
+        where: { id: { eq: result.fieldId } },
+      });
+      expect(entity?.name).toBe(result.fileName);
+      expect(field?.content).toMatchObject({ fileName: result.fileName });
+    }
+    const finalized = await db.query.pendingUploads.findMany({
+      where: { workspaceId: { eq: ids.wsA1 } },
+    });
+    expect(
+      finalized.some(
+        ({ finalizedResult }) =>
+          finalizedResult?.type === "entity_create" &&
+          finalizedResult.entityId === templateResult.value.entityId &&
+          finalizedResult.fileName === "report_2024_4.txt" &&
+          finalizedResult.renamed,
+      ),
+    ).toBe(true);
+  });
+
   test("commits a service document with null attribution and retires its exact-key intent", async () => {
     const pendingBefore = await db.$count(
       pendingUploads,
@@ -776,6 +877,10 @@ describe("service-owned buffer publication in the database", () => {
         }
       | undefined;
     const created = await createServiceDocument(async (tx) => {
+      // Writer attribution and object keys are outside the request role's
+      // column grants; observe them as the owner, then hand the transaction
+      // back to the request role for the rest of publication.
+      await tx.execute(sql`RESET ROLE`);
       intentDuringTransaction = (
         await tx
           .select({
@@ -786,6 +891,7 @@ describe("service-owned buffer publication in the database", () => {
           .from(bufferObjectCleanupIntents)
           .where(eq(bufferObjectCleanupIntents.objectKey, objectKey()))
       ).at(0);
+      await tx.execute(sql`SELECT set_config('role', ${stella.name}, true)`);
     });
     if (Result.isError(created)) {
       throw created.error;
@@ -830,6 +936,51 @@ describe("service-owned buffer publication in the database", () => {
     );
     expect(objectKeysInStore()).toHaveLength(1);
     expect(requestKeys("DELETE")).toEqual([]);
+  });
+
+  test("refuses a create whose matter is archived after authorization, writing nothing", async () => {
+    const authorized = await authorizeDocumentWrite({
+      access: memberDocumentWriteAccess({
+        type: "create",
+        workspaceId: ids.wsA1,
+      }),
+      safeDb: toSafeDbMock(serviceScopedDb),
+    });
+    expect(Result.isOk(authorized)).toBe(true);
+    const entitiesBefore = await db.$count(
+      entities,
+      eq(entities.workspaceId, ids.wsA1),
+    );
+    // Archive while the bytes are in flight: after every earlier status read,
+    // before the insert transaction.
+    const put = fake.holdNext({ method: "PUT", keyIncludes: ids.wsA1 });
+    try {
+      const pending = createServiceDocument();
+      await put.reached;
+      await db
+        .update(workspaces)
+        .set({ status: "archived" })
+        .where(eq(workspaces.id, ids.wsA1));
+      put.release();
+      const created = await pending;
+
+      expect(
+        Result.isError(created) && DocumentWriteRefusedError.is(created.error)
+          ? created.error.code
+          : null,
+      ).toBe("workspace-not-active");
+      expect(
+        await db.$count(entities, eq(entities.workspaceId, ids.wsA1)),
+      ).toBe(entitiesBefore);
+      expect(requestKeys("DELETE")).toEqual(requestKeys("PUT"));
+      expect(objectKeysInStore()).toEqual([]);
+      expect(enqueuePdfDerivativeOrMarkFailedMock).not.toHaveBeenCalled();
+    } finally {
+      await db
+        .update(workspaces)
+        .set({ status: "active" })
+        .where(eq(workspaces.id, ids.wsA1));
+    }
   });
 
   test("rolls back the entity and attachment link when the callback fails, then removes the bytes", async () => {
@@ -919,21 +1070,30 @@ const createParentSelect =
     onLock,
     workspaceStatus = "active",
   }: CreateParentSelectOptions) =>
-  (_selection: unknown) => ({
-    from: (table: unknown) => ({
-      where: () => ({
-        limit: () => ({
-          for: async (strength: unknown) => {
-            onLock?.(strength);
-            if (table === workspaces) {
-              return [{ status: workspaceStatus }];
-            }
-            if (parentKind !== null) {
-              return [{ id: parentId, kind: parentKind }];
-            }
-            return [];
-          },
+  (selection: unknown) => {
+    if (
+      typeof selection === "object" &&
+      selection !== null &&
+      "name" in selection
+    ) {
+      return { from: () => ({ where: async () => [] }) };
+    }
+    return {
+      from: (table: unknown) => ({
+        where: () => ({
+          limit: () => ({
+            for: async (strength: unknown) => {
+              onLock?.(strength);
+              if (table === workspaces) {
+                return [{ status: workspaceStatus }];
+              }
+              if (parentKind !== null) {
+                return [{ id: parentId, kind: parentKind }];
+              }
+              return [];
+            },
+          }),
         }),
       }),
-    }),
-  });
+    };
+  };

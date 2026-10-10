@@ -10,10 +10,13 @@ import {
   isBYOKProviderRoleSupported,
   MODEL_ROLES,
 } from "@stll/ai-catalog";
+import { AI_ERROR_KINDS, type AIErrorKind } from "@stll/api-contract";
 
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import type { CachingDecision } from "@/api/lib/ai-config";
+import { ProviderCallError } from "@/api/lib/errors/provider-call-error";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 import { createScriptedTextAdapter } from "@/api/tests/helpers/chat-round-trip";
@@ -46,6 +49,16 @@ import {
   toolRoundTripPromptForProvider,
 } from "./ai-provider-canary";
 import { CANARY_PROVIDERS } from "./ai-provider-canary-config";
+
+class ProviderStatusError extends Error {
+  readonly status: number;
+
+  constructor(status: number) {
+    super(`Synthetic provider HTTP ${status}`);
+    this.name = "ProviderStatusError";
+    this.status = status;
+  }
+}
 
 describe("AI provider canary probe deadlines", () => {
   test("gives the budget-edge probe the extended structured-output deadline", () => {
@@ -130,6 +143,7 @@ const generateProbeTextFinishing = async (finish: ProbeFinish) => {
     finishPolicy: CANARY_TEXT_FINISH_POLICY,
     maxOutputTokens: 16,
     organizationId: null,
+    admission: NO_ORGANIZATION_MODEL_DISPATCH,
     orgAIConfig: null,
     prompt: "Reply with exactly OK.",
     resolveTextModel: () => model,
@@ -522,16 +536,6 @@ describe("AI provider canary error summaries", () => {
   });
 });
 
-class ProviderStatusError extends Error {
-  readonly status: number;
-
-  constructor(status: number) {
-    super(`Synthetic provider HTTP ${status}`);
-    this.name = "ProviderStatusError";
-    this.status = status;
-  }
-}
-
 describe("AI provider canary retry contract", () => {
   test("retries exactly once for every retryable HTTP status class", async () => {
     const statuses = [
@@ -665,6 +669,76 @@ describe("AI provider canary retry contract", () => {
         signal,
       ),
     ).toBe(false);
+  });
+
+  test("uses ProviderCallError kind only after retryability facts and provider status", () => {
+    const signal = new AbortController().signal;
+    const expectedRetryability = {
+      quota_exhausted: true,
+      provider_billing: false,
+      provider_credentials_rejected: false,
+      model_unavailable: false,
+      provider_unavailable: true,
+      provider_stream_incomplete: true,
+      loop_detected: false,
+      empty_completion: false,
+      unknown: false,
+    } as const satisfies Record<AIErrorKind, boolean>;
+
+    expect(Object.keys(expectedRetryability).toSorted()).toEqual(
+      [...AI_ERROR_KINDS].toSorted(),
+    );
+    expect(
+      AI_ERROR_KINDS.map((kind) =>
+        isRetryableCanaryError(
+          new ProviderCallError({
+            model: { provider: "openai", keySource: "instance" },
+            status: 502,
+            code: "provider_error",
+            kind,
+          }),
+          signal,
+        ),
+      ),
+    ).toEqual(AI_ERROR_KINDS.map((kind) => expectedRetryability[kind]));
+
+    const statusResults = AI_ERROR_KINDS.flatMap((kind) =>
+      [503, 401].map((status) =>
+        isRetryableCanaryError(
+          new ProviderCallError({
+            model: { provider: "openai", keySource: "instance" },
+            status: 502,
+            code: "provider_error",
+            kind,
+            facts: { status },
+          }),
+          signal,
+        ),
+      ),
+    );
+    expect(statusResults).toEqual(AI_ERROR_KINDS.flatMap(() => [true, false]));
+
+    const explicitRetryabilityResults = AI_ERROR_KINDS.flatMap((kind) =>
+      [
+        { isRetryable: false, status: 503 },
+        { isRetryable: true, status: 401 },
+        { isRetryable: true, status: 400 },
+      ].map(({ isRetryable, status }) =>
+        isRetryableCanaryError(
+          new ProviderCallError({
+            model: { provider: "openai", keySource: "instance" },
+            status: 502,
+            code: "provider_error",
+            kind,
+            facts: { isRetryable, status },
+          }),
+          signal,
+        ),
+      ),
+    );
+    expect(explicitRetryabilityResults).toEqual(
+      AI_ERROR_KINDS.flatMap(() => [false, false, true]),
+    );
   });
 
   test("prefers a provider status nested beneath a generic transport wrapper", () => {

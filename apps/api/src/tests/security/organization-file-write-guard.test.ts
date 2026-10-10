@@ -63,8 +63,9 @@ const exemptions = {
   "scripts/seed-templates.ts:writeScannedObject:1": "fixture",
   "scripts/seed-dev.ts:writeS3ObjectWithRetry:0": "fixture",
   "scripts/seed-dev.ts:writeS3ObjectWithRetry:1": "fixture",
-  "src/handlers/uploads/update.ts:copyObject:0": "reservation_flow",
-  "src/handlers/uploads/update.ts:writeS3ObjectWithRetry:0": "reservation_flow",
+  "src/lib/uploads/promote-tmp-object.ts:copyObject:0": "reservation_flow",
+  "src/lib/uploads/promote-tmp-object.ts:writeS3ObjectWithRetry:0":
+    "reservation_flow",
 } as const satisfies Record<
   string,
   "export" | "public_corpus" | "temporary" | "fixture" | "reservation_flow"
@@ -89,7 +90,6 @@ const expectedWriteCounts = {
   "src/handlers/entities/upload.ts": 2,
   "src/handlers/reports/report-export-queue.ts": 1,
   "src/handlers/style-sets/storage.ts": 2,
-  "src/handlers/uploads/update.ts": 2,
   "src/handlers/workspaces/duplicate.ts": 1,
   "src/lib/document-processing-queue.ts": 1,
   "src/lib/entities/create-from-buffer.ts": 2,
@@ -99,6 +99,7 @@ const expectedWriteCounts = {
   "src/lib/legal-search/raw-source-storage.ts": 5,
   "src/lib/templates/create-template.ts": 1,
   "src/lib/templates/write-template.ts": 1,
+  "src/lib/uploads/promote-tmp-object.ts": 2,
   "src/mcp/document-file-upload.ts": 1,
   "src/mcp/file-comparison-links-tool.ts": 1,
 } as const satisfies Record<string, number>;
@@ -129,28 +130,36 @@ const invokedName = (
   return null;
 };
 
+// The one gating form: the flag read through its owner. Compared with
+// whitespace and the formatter's trailing comma removed.
+const FILE_USAGE_LIMITS_ENABLED =
+  'isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")';
+const FILE_USAGE_LIMITS_DISABLED = `!${FILE_USAGE_LIMITS_ENABLED}`;
+
+const normalizedCondition = (condition: ts.Expression): string =>
+  condition.getText().replaceAll(/\s/gu, "").replaceAll(",)", ")");
+
 const isFlagOff = (node: ts.Node): boolean => {
   let child = node;
   let current = node.parent;
   while (!ts.isSourceFile(current)) {
     if (ts.isIfStatement(current)) {
-      const condition = current.expression.getText();
+      const condition = normalizedCondition(current.expression);
       if (
-        (condition === "!env.FEATURE_FILE_USAGE_LIMITS" &&
+        (condition === FILE_USAGE_LIMITS_DISABLED &&
           child === current.thenStatement) ||
-        (condition === "env.FEATURE_FILE_USAGE_LIMITS" &&
+        (condition === FILE_USAGE_LIMITS_ENABLED &&
           child === current.elseStatement)
       ) {
         return true;
       }
     }
     if (ts.isConditionalExpression(current)) {
-      const condition = current.condition.getText();
+      const condition = normalizedCondition(current.condition);
       if (
-        (condition === "!env.FEATURE_FILE_USAGE_LIMITS" &&
+        (condition === FILE_USAGE_LIMITS_DISABLED &&
           child === current.whenTrue) ||
-        (condition === "env.FEATURE_FILE_USAGE_LIMITS" &&
-          child === current.whenFalse)
+        (condition === FILE_USAGE_LIMITS_ENABLED && child === current.whenFalse)
       ) {
         return true;
       }
@@ -593,8 +602,8 @@ describe("durable organization file writes", () => {
         copy: async () => await copyObject(file.source, file.target),
       });
       const prepared = [];
-      for (let start = 0; start < files.length; start += 4) {
-        prepared.push(...(await Promise.all(files.slice(start, start + 4).map(prepareFile))));
+      for (const batch of chunk(files, 4)) {
+        prepared.push(...(await Promise.all(batch.map(prepareFile))));
       }
       const inputs = Result.all(prepared);
       await copyOrganizationFiles({ inputs: inputs.value });
@@ -630,7 +639,7 @@ describe("durable organization file writes", () => {
   test("recognizes a shared callback inside mapped writes and its flag-off path", () => {
     const source = `
       const write = async (file) => await writeS3ObjectWithRetry({ key: file.key });
-      if (env.FEATURE_FILE_USAGE_LIMITS) {
+      if (isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")) {
         await writeOrganizationFiles(files.map((file) => ({ write: async () => await write(file) })));
       } else {
         for (const file of files) { await write(file); }
@@ -780,7 +789,7 @@ describe("durable organization file writes", () => {
           const source = await Bun.file(
             path.join(root, "apps/api", site.file),
           ).text();
-          expect(source).toContain("reserveOrganizationFileBytes(");
+          expect(source).toContain("authorizeOrganizationFileWrite(");
           expect(source).toContain("commitOrganizationFileBytes(");
           break;
         }

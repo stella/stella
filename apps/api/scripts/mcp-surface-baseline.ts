@@ -299,7 +299,7 @@ export const measureMcpSurfaces = async (): Promise<SurfaceRows> => {
   const rows: SurfaceRows = { instructions: {}, tools: {} };
 
   for (const mode of registry.modes) {
-    const tools = registry.toMcpTools(registry.listDefinitions(mode), mode);
+    const tools = registry.toMcpTools(registry.listDefinitions(mode), { mode });
     rows.instructions[mode] = registry.instructions[mode].length;
     for (const tool of tools) {
       const audiences = rows.tools[tool.name] ?? {};

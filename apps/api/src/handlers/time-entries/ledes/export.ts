@@ -2,8 +2,9 @@ import { Result } from "better-result";
 import { and, eq, ne } from "drizzle-orm";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
-import { MoneyTotals, prorateHourlyCents } from "@stll/money";
+import { timeEntryAmount, MoneyTotals } from "@stll/money";
 import type { CentsAmount } from "@stll/money";
+import { Temporal, todayFor } from "@stll/time";
 
 import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
 import { exportAmountText } from "@/api/handlers/time-entries/export-amount";
@@ -13,12 +14,13 @@ import {
   timeEntryExportQuerySchema,
 } from "@/api/handlers/time-entries/export-query";
 import type { TimeEntryExportHandlerProps } from "@/api/handlers/time-entries/export-query";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { readOrganizationTimeZone } from "@/api/lib/organization-time-zone";
 
 /**
  * Neutralize a user-controlled value for a LEDES 1998B field. The format is
@@ -52,6 +54,7 @@ export const exportLedesHandler = async ({
   workspaceId,
   organizationId,
   query,
+  at = Temporal.Now.instant(),
 }: TimeEntryExportHandlerProps) => {
   const conditions = timeEntryExportConditions({ workspaceId, query });
 
@@ -61,8 +64,9 @@ export const exportLedesHandler = async ({
   conditions.push(eq(timeEntries.noCharge, false));
   conditions.push(ne(timeEntries.status, BILLING_STATUS.WRITTEN_OFF));
 
-  const rows = await scopedDb((tx) =>
-    tx
+  const { rows, timeZone } = await scopedDb(async (tx) => ({
+    timeZone: await readOrganizationTimeZone(tx, organizationId),
+    rows: await tx
       .select({
         id: timeEntries.id,
         activityGroup: timeEntries.activityGroup,
@@ -84,7 +88,7 @@ export const exportLedesHandler = async ({
       .where(and(...conditions))
       .orderBy(timeEntries.dateWorked)
       .limit(LIMITS.exportRowLimit),
-  );
+  }));
 
   const userMap = await loadTimekeeperNames({
     scopedDb,
@@ -133,10 +137,7 @@ export const exportLedesHandler = async ({
         }),
       );
     }
-    const totalCents = prorateHourlyCents({
-      billedMinutes: row.billedMinutes,
-      hourlyRateCents: row.rateAtEntry,
-    });
+    const totalCents = timeEntryAmount(row);
     const userName = escapeLedesField(
       row.userId ? (userMap.get(row.userId) ?? "") : "",
     );
@@ -199,11 +200,8 @@ export const exportLedesHandler = async ({
   const billingEndFormatted = billingEnd.replace(/-/gu, "");
 
   const lines = ["LEDES1998B[]", header];
-  const now = new Date();
-  const invoiceDate = (now.toISOString().split("T")[0] ?? "").replace(
-    /-/gu,
-    "",
-  );
+  // The invoice is dated on the organization's day, not the server's.
+  const invoiceDate = todayFor(timeZone, at).toString().replace(/-/gu, "");
 
   let lineItemNumber = 0;
 
@@ -245,6 +243,8 @@ export const exportLedesHandler = async ({
 };
 
 const config = {
+  accountAccess: ACCOUNT_ACCESS.standard,
+  featureAccess: { featureId: "time-billing", type: "required" },
   description:
     "Export a matter's client time entries as a LEDES 1998B e-billing file. Only " +
     "billable, charged, not-written-off entries are included, so the " +

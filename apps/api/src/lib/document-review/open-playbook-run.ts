@@ -28,13 +28,14 @@ import {
   materializePlaybookRun,
   resolveScopedGate,
 } from "@/api/lib/workflow/materialize-playbook-run";
+import type { MaterializePlaybookRunResult } from "@/api/lib/workflow/materialize-playbook-run";
 import type { PlaybookScope } from "@/api/lib/workflow/playbook-positions";
 import { PLAYBOOK_RUN_PROJECTION } from "@/api/lib/workflow/playbook-run-projection";
 import type { McpRequestContext } from "@/api/mcp/context";
 
 /** The live definition a run starts from: what to pin when it was never
  *  approved, plus the scope that gates which documents it reaches. */
-export type PlaybookDefinitionForRun = PlaybookDefinitionForPin & {
+type PlaybookDefinitionForRun = PlaybookDefinitionForPin & {
   scope: PlaybookScope | null;
 };
 
@@ -60,7 +61,7 @@ export type OpenPlaybookRunResult =
       materializedPropertyIds: SafeId<"property">[];
       tableRuns: CreatePlaybookTableRunsResult;
     }
-  | { ok: false; status: 400; message: string };
+  | Extract<MaterializePlaybookRunResult, { ok: false }>;
 
 export const openPlaybookRun = async ({
   tx,

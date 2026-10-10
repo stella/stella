@@ -1,4 +1,5 @@
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { taskCreateRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import {
   createTaskBodySchema,
   createTaskEntityHandler,
@@ -7,6 +8,7 @@ import {
   deployedTaskFeatures,
   type TaskDeploymentFeatures,
 } from "@/api/lib/tasks/deployment-features";
+import { LEGAL_LIST_TASK_FEATURE_ACCESS } from "@/api/lib/tasks/legal-list-access";
 
 export const createTaskForFeatures = (features: TaskDeploymentFeatures) =>
   createSafeHandler(
@@ -19,7 +21,10 @@ export const createTaskForFeatures = (features: TaskDeploymentFeatures) =>
         "placement, and, where the deployment enables governed work, its " +
         "owner and target and deadline dates. Change one afterwards with " +
         "tasks.update.",
+      featureAccess: LEGAL_LIST_TASK_FEATURE_ACCESS,
       permissions: { entity: ["create"] },
+      accountAccess: ACCOUNT_ACCESS.sandbox,
+      realtime: taskCreateRealtimeUpdates,
       mcp: { type: "tool", name: "save_task" },
       body: createTaskBodySchema,
     },

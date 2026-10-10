@@ -1,10 +1,17 @@
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
-import { createHash } from "node:crypto";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
+
+import { createSha256 } from "@stll/sha256/node";
 
 const script = path.join(
   import.meta.dirname,
@@ -102,7 +109,7 @@ const expectLanguageCoverage = (language: string, detector = script) => {
 };
 
 test("the documented extension baseline is the unchanged pinned upstream table", () => {
-  expect(createHash("sha256").update(documentation).digest("hex")).toBe(
+  expect(createSha256().update(documentation).digest("hex")).toBe(
     "6d76b52b5f1f1f571ec586326299d606f75a4b42cdc5a9d6ff1edca17e017fdc",
   );
 });
@@ -198,29 +205,49 @@ test("CodeQL selects code, workflow configuration and dependency inputs", () => 
   expect(detect("codeql", ["README.md", "source.ts"])).toBe("true");
 });
 
-test("migration coverage preserves every prior dependency and excludes unrelated code", () => {
+test("migration coverage includes schema, runtime and check inputs and excludes unrelated code", () => {
+  const config = readFileSync(
+    new URL("../apps/api/drizzle.config.ts", import.meta.url),
+    "utf-8",
+  );
+  const schemaSources = [...config.matchAll(/"(\.\/src\/db\/[^"\n]+)"/gu)].map(
+    (match) => match[1],
+  );
+  expect(schemaSources.length).toBeGreaterThan(0);
+  for (const source of schemaSources) {
+    if (source === undefined) {
+      panic("Schema source did not match");
+    }
+    expect(detect("migrations", [`apps/api/${source.slice(2)}`]), source).toBe(
+      "true",
+    );
+  }
   for (const file of [
     "apps/api/drizzle/20261001/migration.sql",
     "apps/api/src/db/schema/tables.ts",
-    "apps/api/src/lib/db/client.ts",
-    "apps/api/src/server.ts",
     "apps/api/drizzle.config.ts",
-    "scripts/check-migration-safety.ts",
-    "scripts/check-migration-index-builds.test.ts",
-    "scripts/migration-index-findings.json",
-    "scripts/fixtures/migration-index-builds/create-index/good.sql",
-    "scripts/check-migrations.sh",
-    "scripts/rehearse-better-auth-constraint-retry.sh",
-    ".squawk.toml",
+    "apps/api/src/db/migrate.ts",
+    "apps/api/src/db/shared-pool-timeouts.ts",
+    "apps/api/src/db/adaptive-backfill.test.ts",
+    "apps/api/src/lib/db/client.ts",
     ".github/workflows/db-migrations.yml",
-    ".github/workflows/release.yml",
     "scripts/detect-security-workflow-changes.sh",
+    "scripts/detect-security-workflow-changes.test.ts",
+    "scripts/rehearse-better-auth-constraint-retry.sh",
+    "scripts/fixtures/migration-example/input.sql",
+    ...readdirSync(import.meta.dirname)
+      .filter((entry) => entry.includes("migrat"))
+      .map((entry) => `scripts/${entry}`),
   ]) {
     expect(detect("migrations", [file]), file).toBe("true");
   }
-  expect(detect("migrations", ["apps/web/src/view.ts", "README.md"])).toBe(
-    "false",
-  );
+  expect(
+    detect("migrations", [
+      "apps/web/src/view.ts",
+      "README.md",
+      "apps/api/src/server.ts",
+    ]),
+  ).toBe("false");
 });
 
 test("unknown PR bases, diff failures and non-PR events run the checks", () => {
@@ -333,12 +360,10 @@ test("both workflows gate every expensive job and run on detector failure", () =
   expect(migrations.on.pull_request.paths).toBeUndefined();
   const triggers = v.parse(
     v.looseObject({
-      push: v.object({ branches: v.array(v.string()) }),
       schedule: v.array(v.object({ cron: v.string() })),
     }),
     codeql.on,
   );
-  expect(triggers.push.branches).toContain("main");
   expect(triggers.schedule).toHaveLength(1);
   expect(triggers.schedule.at(0)?.cron.split(" ").slice(2)).toEqual([
     "*",
@@ -425,14 +450,10 @@ test("CodeQL trigger coverage rejects missing extensions and unknown languages",
   );
 });
 
-test("CodeQL retains unfiltered main, nightly and manual full scans", () => {
+test("CodeQL scans nightly, manually and on release pull requests only", () => {
+  expect(Object.keys(codeql.on)).not.toContain("push");
   const triggers = v.parse(
     v.looseObject({
-      push: v.looseObject({
-        branches: v.array(v.string()),
-        paths: v.optional(v.array(v.string())),
-        "paths-ignore": v.optional(v.array(v.string())),
-      }),
       pull_request: v.looseObject({
         branches: v.array(v.string()),
         types: v.array(v.string()),
@@ -443,9 +464,16 @@ test("CodeQL retains unfiltered main, nightly and manual full scans", () => {
     }),
     codeql.on,
   );
-  expect(triggers.push.branches).toEqual(["main"]);
-  expect(triggers.push.paths).toBeUndefined();
-  expect(triggers.push["paths-ignore"]).toBeUndefined();
+  const scope = v.parse(
+    v.looseObject({ if: v.string() }),
+    codeql.jobs["scope"],
+  );
+  expect(scope.if).toContain(
+    "startsWith(github.event.pull_request.head.ref, 'chore/release-')",
+  );
+  expect(scope.if).toContain(
+    "startsWith(github.event.pull_request.head.ref, 'changeset-release/')",
+  );
   expect(triggers.pull_request.branches).toEqual(["main"]);
   expect(triggers.pull_request.types).toEqual([
     "opened",

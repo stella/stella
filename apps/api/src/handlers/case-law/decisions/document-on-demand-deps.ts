@@ -11,12 +11,11 @@ import {
   recordDocumentPacingOutcome,
   type OnDemandDocumentDeps,
 } from "@/api/handlers/case-law/decisions/document-on-demand";
-import { DEFERRED_DOCUMENT_FETCHERS } from "@/api/handlers/case-law/ingestion/adapters/deferred-document-fetchers";
+import { DEFERRED_DOCUMENT_PROCESSORS } from "@/api/handlers/case-law/ingestion/adapters/deferred-document-processors";
 import { withImmediatePublisherSlot } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { getCaseLawIngestionDb } from "@/api/lib/case-law-ingestion-db";
 import {
   DOCUMENT_FETCH_BUDGET_MS,
-  fetchDecisionDocument,
   recordDocumentFetchRequest,
 } from "@/api/lib/legal-search/sk-document-backfill";
 import { withTimeout } from "@/api/lib/with-timeout";
@@ -34,9 +33,8 @@ export const onDemandDocumentDeps: OnDemandDocumentDeps = {
   withFetchBudget: async (adapterKey, operation) =>
     await withImmediatePublisherSlot({ adapterKey, operation }),
   fetchDocument: async (decision, adapterKey) =>
-    await fetchDecisionDocument({
+    await DEFERRED_DOCUMENT_PROCESSORS[adapterKey]({
       decisionId: decision.id,
-      fetchDocument: DEFERRED_DOCUMENT_FETCHERS[adapterKey],
       scopedDb: getCaseLawIngestionDb(),
       // The unit races its own wall-clock budget; the signal aborts the download.
       signal: AbortSignal.timeout(DOCUMENT_FETCH_BUDGET_MS),

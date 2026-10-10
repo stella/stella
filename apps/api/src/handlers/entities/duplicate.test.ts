@@ -1,6 +1,20 @@
 import { Result } from "better-result";
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  test,
+} from "bun:test";
+import { sql, TransactionRollbackError } from "drizzle-orm";
+import fc from "fast-check";
 
+import { assertProperty } from "@stll/property-testing";
+
+import { organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
@@ -9,20 +23,29 @@ import {
   entities,
   entityVersions,
   fields,
+  workspaces,
 } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { envBase } from "@/api/env-base";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
+import { createSiblingNamePlan } from "@/api/lib/entities/sibling-name-insert";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { createFileKey } from "@/api/lib/file-key";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { sanitizeFilename } from "@/api/lib/sanitize-filename";
+import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { entityVersionInsertResult } from "@/api/tests/helpers/entity-version-insert-mock";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
+import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
+import type {
+  TestDatabase,
+  TestDatabaseTransaction,
+} from "@/api/tests/security/test-utils";
 
 import { copyFileObject, resolveEntityName } from "./copy-utils";
 import { createDuplicateEntity } from "./duplicate";
@@ -237,148 +260,447 @@ const createContext = ({
 };
 
 describe("duplicate name collisions", () => {
-  test("reserves room for the collision suffix and extension", async () => {
-    const requestedName = `${"a".repeat(250)}.docx`;
-    const firstCollisionName = `${"a".repeat(248)}_1.docx`;
-    const tx = {
-      select: () => ({
-        from: () => ({
-          where: async () => [
-            { name: requestedName },
-            { name: firstCollisionName },
-          ],
-        }),
-      }),
-    };
+  let nameDb: TestDatabase;
 
-    const resolved = await resolveEntityName({
-      tx: asTestRaw<Transaction>(tx),
-      workspaceId,
-      parentId: null,
-      name: requestedName,
-    });
+  beforeAll(
+    async () => {
+      nameDb = await getTestDb();
+    },
+    { timeout: 30_000 },
+  );
 
-    expect(resolved).toBe(`${"a".repeat(248)}_2.docx`);
-    expect(resolved).toHaveLength(255);
+  afterAll(async () => {
+    await releaseTestDb();
   });
 
-  test("detects collisions after truncating an oversized extension", async () => {
-    const extension = `.${"x".repeat(253)}`;
-    const requestedName = `a${extension}`;
-    const boundedExtension = extension.slice(0, 253);
-    const firstCollisionName = `_1${boundedExtension}`;
-    const tx = {
-      select: () => ({
-        from: () => ({
-          where: async () => [
-            { name: requestedName },
-            { name: firstCollisionName },
-          ],
+  const withNameTransaction = async (
+    check: (tx: TestDatabaseTransaction) => Promise<void>,
+  ) => {
+    const result = await Result.tryPromise({
+      try: async () =>
+        await nameDb.transaction(async (tx) => {
+          await tx.execute(sql.raw("RESET ROLE"));
+          await check(tx);
+          return tx.rollback();
         }),
-      }),
-    };
-
-    const resolved = await resolveEntityName({
-      tx: asTestRaw<Transaction>(tx),
-      workspaceId,
-      parentId: null,
-      name: requestedName,
+      catch: (error) => error,
     });
+    if (Result.isOk(result)) {
+      throw new TypeError("Expected the name fixture transaction to roll back");
+    }
+    if (!(result.error instanceof TransactionRollbackError)) {
+      throw result.error;
+    }
+  };
 
-    expect(resolved).toBe(`_2${boundedExtension}`);
-    expect(resolved).toHaveLength(255);
+  const seedNameScope = async (tx: TestDatabaseTransaction) => {
+    const seededOrganizationId = mintAuthProviderId<"organization">();
+    const targetWorkspaceId = toSafeId<"workspace">(Bun.randomUUIDv7());
+    const otherWorkspaceId = toSafeId<"workspace">(Bun.randomUUIDv7());
+    const targetParentId = toSafeId<"entity">(Bun.randomUUIDv7());
+    const otherParentId = toSafeId<"entity">(Bun.randomUUIDv7());
+    const otherMatterParentId = toSafeId<"entity">(Bun.randomUUIDv7());
+    await tx.insert(organization).values({
+      id: seededOrganizationId,
+      name: "Copy name test",
+      slug: `copy-name-${Bun.randomUUIDv7()}`,
+      createdAt: new Date(),
+    });
+    await tx.insert(workspaces).values([
+      {
+        id: targetWorkspaceId,
+        organizationId: seededOrganizationId,
+        name: "Target matter",
+        reference: "copy-target",
+      },
+      {
+        id: otherWorkspaceId,
+        organizationId: seededOrganizationId,
+        name: "Other matter",
+        reference: "copy-other",
+      },
+    ]);
+    await tx.insert(entities).values([
+      {
+        id: targetParentId,
+        workspaceId: targetWorkspaceId,
+        name: "Target folder",
+        kind: "folder",
+      },
+      {
+        id: otherParentId,
+        workspaceId: targetWorkspaceId,
+        name: "Other folder",
+        kind: "folder",
+      },
+    ]);
+    await tx.insert(entities).values({
+      id: otherMatterParentId,
+      workspaceId: otherWorkspaceId,
+      name: "Other matter folder",
+      kind: "folder",
+    });
+    return {
+      targetWorkspaceId,
+      otherWorkspaceId,
+      otherMatterParentId,
+      targetParentId,
+      otherParentId,
+    };
+  };
+
+  test("keeps free names across parent and matter boundaries", async () => {
+    await withNameTransaction(async (tx) => {
+      const scope = await seedNameScope(tx);
+      await tx.insert(entities).values([
+        {
+          workspaceId: scope.targetWorkspaceId,
+          parentId: scope.otherParentId,
+          name: "contract.md",
+        },
+        {
+          workspaceId: scope.otherWorkspaceId,
+          parentId: null,
+          name: "contract.md",
+        },
+        {
+          workspaceId: scope.otherWorkspaceId,
+          parentId: scope.otherMatterParentId,
+          name: "contract.md",
+        },
+        {
+          workspaceId: scope.targetWorkspaceId,
+          parentId: scope.targetParentId,
+          name: "contract_final.md",
+        },
+        {
+          workspaceId: scope.targetWorkspaceId,
+          parentId: null,
+          name: "contract_final.md",
+        },
+      ]);
+      for (const parentId of [null, scope.targetParentId]) {
+        const resolved = await resolveEntityName({
+          tx: asTestRaw<Transaction>(tx),
+          workspaceId: scope.targetWorkspaceId,
+          parentId,
+          name: "contract.md",
+          kind: "document",
+        });
+        expect(String(resolved.name)).toBe("contract.md");
+      }
+    });
+  });
+
+  test("uses the lowest free copy suffix among all sibling kinds", async () => {
+    await withNameTransaction(async (tx) => {
+      const scope = await seedNameScope(tx);
+      await tx.insert(entities).values([
+        {
+          workspaceId: scope.targetWorkspaceId,
+          parentId: scope.targetParentId,
+          name: "contract.md",
+          kind: "folder",
+        },
+        {
+          workspaceId: scope.targetWorkspaceId,
+          parentId: scope.targetParentId,
+          name: "contract_2.md",
+          kind: "task",
+        },
+        {
+          workspaceId: scope.targetWorkspaceId,
+          parentId: scope.otherParentId,
+          name: "contract_1.md",
+        },
+        {
+          workspaceId: scope.otherWorkspaceId,
+          parentId: scope.otherMatterParentId,
+          name: "contract_1.md",
+        },
+      ]);
+      const resolved = await resolveEntityName({
+        tx: asTestRaw<Transaction>(tx),
+        workspaceId: scope.targetWorkspaceId,
+        parentId: scope.targetParentId,
+        name: "contract.md",
+        kind: "document",
+      });
+      expect(String(resolved.name)).toBe("contract_1.md");
+    });
+  });
+
+  test("retains numeric names when copying", async () => {
+    await withNameTransaction(async (tx) => {
+      const scope = await seedNameScope(tx);
+      await tx.insert(entities).values([
+        { workspaceId: scope.targetWorkspaceId, name: "report_2024.docx" },
+        { workspaceId: scope.targetWorkspaceId, name: "x_1", kind: "folder" },
+      ]);
+      const cases = [
+        {
+          name: "report_2024.docx",
+          kind: "document",
+          expected: "report_2024_1.docx",
+        },
+        { name: "x_1", kind: "folder", expected: "x_1_1" },
+      ] as const;
+      for (const { name, kind, expected } of cases) {
+        const resolved = await resolveEntityName({
+          tx: asTestRaw<Transaction>(tx),
+          workspaceId: scope.targetWorkspaceId,
+          parentId: null,
+          name,
+          kind,
+        });
+        expect(String(resolved.name)).toBe(expected);
+      }
+    });
+  });
+
+  test("appends the copy suffix after a dotted folder name", async () => {
+    await withNameTransaction(async (tx) => {
+      const scope = await seedNameScope(tx);
+      await tx.insert(entities).values({
+        workspaceId: scope.targetWorkspaceId,
+        name: "v1.2",
+        kind: "folder",
+      });
+      const resolved = await resolveEntityName({
+        tx: asTestRaw<Transaction>(tx),
+        workspaceId: scope.targetWorkspaceId,
+        parentId: null,
+        name: "v1.2",
+        kind: "folder",
+      });
+      expect(String(resolved.name)).toBe("v1.2_1");
+    });
+  });
+
+  test("copy batches reserve exact display labels within each target parent", async () => {
+    await withNameTransaction(async (tx) => {
+      const scope = await seedNameScope(tx);
+      await tx.insert(entities).values([
+        {
+          workspaceId: scope.targetWorkspaceId,
+          parentId: scope.targetParentId,
+          name: "a_.docx",
+        },
+        {
+          workspaceId: scope.targetWorkspaceId,
+          parentId: scope.targetParentId,
+          name: "a__2.docx",
+        },
+        {
+          workspaceId: scope.otherWorkspaceId,
+          parentId: scope.otherMatterParentId,
+          name: "a_.docx",
+        },
+      ]);
+      const resolvePlannedName = await createSiblingNamePlan({
+        tx: asTestRaw<Transaction>(tx),
+        workspaceId: scope.targetWorkspaceId,
+      });
+      const first = resolvePlannedName({
+        parentId: scope.targetParentId,
+        name: "a?.docx",
+        kind: "document",
+      });
+      const second = resolvePlannedName({
+        parentId: scope.targetParentId,
+        name: "a*.docx",
+        kind: "document",
+      });
+      const otherParent = resolvePlannedName({
+        parentId: scope.otherParentId,
+        name: "a*.docx",
+        kind: "document",
+      });
+      const otherParentPending = resolvePlannedName({
+        parentId: scope.otherParentId,
+        name: "a?.docx",
+        kind: "document",
+      });
+      expect([
+        String(first.name),
+        String(second.name),
+        String(otherParent.name),
+        String(otherParentPending.name),
+      ]).toEqual(["a?.docx", "a*.docx", "a*.docx", "a?.docx"]);
+    });
+  });
+
+  test("reserves room for suffixes and finds truncated-extension collisions", async () => {
+    await withNameTransaction(async (tx) => {
+      const scope = await seedNameScope(tx);
+      const extension = `.${"x".repeat(253)}`;
+      const boundedExtension = extension.slice(0, 253);
+      await tx.insert(entities).values([
+        {
+          workspaceId: scope.targetWorkspaceId,
+          name: `${"a".repeat(250)}.docx`,
+        },
+        {
+          workspaceId: scope.targetWorkspaceId,
+          name: `${"a".repeat(248)}_1.docx`,
+        },
+        { workspaceId: scope.targetWorkspaceId, name: `a${extension}` },
+        { workspaceId: scope.targetWorkspaceId, name: `_1${boundedExtension}` },
+      ]);
+      const cases = [
+        {
+          name: `${"a".repeat(250)}.docx`,
+          expected: `${"a".repeat(248)}_2.docx`,
+        },
+        { name: `a${extension}`, expected: `_2${boundedExtension}` },
+      ];
+      for (const { name, expected } of cases) {
+        const resolved = await resolveEntityName({
+          tx: asTestRaw<Transaction>(tx),
+          workspaceId: scope.targetWorkspaceId,
+          parentId: null,
+          name,
+          kind: "document",
+        });
+        expect(String(resolved.name)).toBe(expected);
+        expect(String(resolved.name)).toHaveLength(255);
+      }
+    });
+  });
+  test("insertion plans preserve arbitrary display labels and derive both file names", async () => {
+    await assertProperty(
+      "insertion plans preserve arbitrary display labels and derive both file names",
+      fc.asyncProperty(
+        fc.string({ minLength: 1, maxLength: 80 }),
+        async (label) => {
+          await withNameTransaction(async (tx) => {
+            const scope = await seedNameScope(tx);
+            // Copy/move/duplicate submit display labels; uploads normalize before this owner.
+            for (const requested of [
+              `${label}:?.docx`,
+              sanitizeFilename(`${label}:?.docx`),
+            ]) {
+              const plan = await createSiblingNamePlan({
+                tx: asTestRaw<Transaction>(tx),
+                workspaceId: scope.targetWorkspaceId,
+              });
+              const first = plan({
+                parentId: scope.targetParentId,
+                name: requested,
+                kind: "document",
+              });
+              const second = plan({
+                parentId: scope.targetParentId,
+                name: requested,
+                kind: "document",
+              });
+              expect(String(first.name)).toBe(requested);
+              expect(second.name).not.toBe(first.name);
+              expect(first.fileName).toBe(sanitizeFilename(first.name));
+              expect(second.fileName).toBe(sanitizeFilename(second.name));
+              expect(second.fileName).not.toBe(first.fileName);
+            }
+          });
+        },
+      ),
+    );
   });
 });
 
 describe("duplicate entity", () => {
-  test("uses the requested identity and renames only the primary file", async () => {
-    const insertedEntities: InsertedEntity[] = [];
-    const insertedFields: InsertedField[] = [];
+  test.each(["Child (copy).docx", "Client: Smith.docx"])(
+    "uses the requested identity and primary filename for %s",
+    async (label) => {
+      const insertedEntities: InsertedEntity[] = [];
+      const insertedFields: InsertedField[] = [];
 
-    const source = sourceEntities.at(1);
-    if (!source) {
-      throw new Error("Expected source document fixture");
-    }
-    const sourceDocument = {
-      ...source,
-      currentVersion: {
-        ...source.currentVersion,
-        fields: [
-          { id: sourceFileFieldId, propertyId, content: fileContent },
-          {
-            id: secondaryFileFieldId,
-            propertyId: secondaryPropertyId,
-            content: secondaryFileContent,
+      const source = sourceEntities.at(1);
+      if (!source) {
+        throw new Error("Expected source document fixture");
+      }
+      const sourceDocument = {
+        ...source,
+        currentVersion: {
+          ...source.currentVersion,
+          fields: [
+            { id: sourceFileFieldId, propertyId, content: fileContent },
+            {
+              id: secondaryFileFieldId,
+              propertyId: secondaryPropertyId,
+              content: secondaryFileContent,
+            },
+          ],
+        },
+      };
+      let entityLookupCount = 0;
+      const tx = {
+        query: {
+          entities: {
+            findFirst: async () => {
+              entityLookupCount++;
+              return entityLookupCount === 1 ? sourceDocument : undefined;
+            },
           },
-        ],
-      },
-    };
-    let entityLookupCount = 0;
-    const tx = {
-      query: {
-        entities: {
-          findFirst: async () => {
-            entityLookupCount++;
-            return entityLookupCount === 1 ? sourceDocument : undefined;
+          workspaces: { findFirst: async () => ({ reference: null }) },
+        },
+        $count: async () => 1,
+        select: () => ({
+          from: () => ({ where: async () => [{ name: sourceDocument.name }] }),
+        }),
+        insert: (table: unknown) => ({
+          values: (value: unknown) => {
+            if (table === documentCounters) {
+              return {
+                onConflictDoUpdate: () => ({
+                  returning: async () => [{ lastValue: 1 }],
+                }),
+              };
+            }
+            if (table === entities && Array.isArray(value)) {
+              insertedEntities.push(...value.filter(isInsertedEntity));
+            } else if (table === entityVersions) {
+              return entityVersionInsertResult(value);
+            } else if (table === fields && Array.isArray(value)) {
+              insertedFields.push(...value.filter(isInsertedField));
+            }
+            return undefined;
           },
-        },
-        workspaces: { findFirst: async () => ({ reference: null }) },
-      },
-      $count: async () => 1,
-      select: () => ({
-        from: () => ({ where: async () => [{ name: sourceDocument.name }] }),
-      }),
-      insert: (table: unknown) => ({
-        values: (value: unknown) => {
-          if (table === documentCounters) {
-            return {
-              onConflictDoUpdate: () => ({
-                returning: async () => [{ lastValue: 1 }],
-              }),
-            };
-          }
-          if (table === entities && Array.isArray(value)) {
-            insertedEntities.push(...value.filter(isInsertedEntity));
-          } else if (table === entityVersions) {
-            return entityVersionInsertResult(value);
-          } else if (table === fields && Array.isArray(value)) {
-            insertedFields.push(...value.filter(isInsertedField));
-          }
-          return undefined;
-        },
-      }),
-      update: () => ({ set: () => ({ where: async () => {} }) }),
-    };
-    const { safeDb } = createScopedDbMock(tx);
+        }),
+        update: () => ({ set: () => ({ where: async () => {} }) }),
+      };
+      const { safeDb } = createScopedDbMock(tx, {
+        visibleResources: { entity: [rootFolderId, documentId] },
+      });
 
-    const result = await duplicateEntity.handler(
-      createContext({
-        body: {
-          entityId: documentId,
-          name: "Child (copy).docx",
-          targetEntityId: requestedDuplicateId,
-        },
-        safeDb,
-      }),
-    );
+      const result = await duplicateEntity.handler(
+        createContext({
+          body: {
+            entityId: documentId,
+            name: label,
+            targetEntityId: requestedDuplicateId,
+          },
+          safeDb,
+        }),
+      );
 
-    expect(result).toEqual({
-      entityId: requestedDuplicateId,
-      fieldId: expect.any(String),
-      name: "Child (copy).docx",
-    });
-    expect(insertedEntities.at(0)?.name).toBe("Child (copy).docx");
-    const primaryContent = insertedFields.at(0)?.content;
-    expect(primaryContent?.type).toBe("file");
-    if (primaryContent?.type === "file") {
-      expect(primaryContent.fileName).toBe("Child (copy).docx");
-    }
-    const secondaryContent = insertedFields.at(1)?.content;
-    expect(secondaryContent?.type).toBe("file");
-    if (secondaryContent?.type === "file") {
-      expect(secondaryContent.fileName).toBe("Schedule.xlsx");
-    }
-  });
+      expect(result).toEqual({
+        entityId: requestedDuplicateId,
+        fieldId: expect.any(String),
+        name: label,
+      });
+      expect(insertedEntities.at(0)?.name).toBe(label);
+      const primaryContent = insertedFields.at(0)?.content;
+      expect(primaryContent?.type).toBe("file");
+      if (primaryContent?.type === "file") {
+        expect(primaryContent.fileName).toBe(sanitizeFilename(label));
+      }
+      const secondaryContent = insertedFields.at(1)?.content;
+      expect(secondaryContent?.type).toBe("file");
+      if (secondaryContent?.type === "file") {
+        expect(secondaryContent.fileName).toBe("Schedule.xlsx");
+      }
+    },
+  );
 
   test("returns the committed target when the same request is replayed", async () => {
     const sourceDocument = sourceEntities.at(1);
@@ -432,7 +754,9 @@ describe("duplicate entity", () => {
       }),
       update: () => ({ set: () => ({ where: async () => {} }) }),
     };
-    const { safeDb } = createScopedDbMock(tx);
+    const { safeDb } = createScopedDbMock(tx, {
+      visibleResources: { entity: [rootFolderId, documentId] },
+    });
 
     const result = await duplicateEntity.handler(
       createContext({
@@ -471,6 +795,7 @@ describe("duplicate entity", () => {
   test("retains copied objects when a lost commit acknowledgement replays", async () => {
     const sourceDocument = sourceEntities.at(1);
     let entityLookupCount = 0;
+    let commitState: "pending" | "written" | "acknowledgement-lost" = "pending";
     const replayFieldId = toSafeId<"field">("committed_copy_field");
     const tx = {
       query: {
@@ -500,6 +825,9 @@ describe("duplicate entity", () => {
       }),
       insert: (table: unknown) => ({
         values: (value: unknown) => {
+          if (table === entities) {
+            commitState = "written";
+          }
           if (table === documentCounters) {
             return {
               onConflictDoUpdate: () => ({
@@ -514,12 +842,13 @@ describe("duplicate entity", () => {
       }),
       update: () => ({ set: () => ({ where: async () => {} }) }),
     };
-    const { safeDb: committedSafeDb } = createScopedDbMock(tx);
-    let safeDbCallCount = 0;
+    const { safeDb: committedSafeDb } = createScopedDbMock(tx, {
+      visibleResources: { entity: [rootFolderId, documentId] },
+    });
     const safeDb: SafeDb = async (callback, retry) => {
-      safeDbCallCount++;
       const result = await committedSafeDb(callback, retry);
-      if (safeDbCallCount === 3 && !Result.isError(result)) {
+      if (commitState === "written" && !Result.isError(result)) {
+        commitState = "acknowledgement-lost";
         return Result.err(
           new DatabaseError({ message: "commit acknowledgement lost" }),
         );
@@ -557,27 +886,59 @@ describe("duplicate entity", () => {
     enqueueEntitySearchRepairsMock.mockClear();
     flushEntitySearchRepairsMock.mockClear();
 
+    const documentSource = sourceEntities.at(1);
+    if (!documentSource) {
+      throw new TypeError("Missing source document");
+    }
+    const sources = [
+      ...sourceEntities,
+      {
+        ...documentSource,
+        id: toSafeId<"entity">("second_document"),
+        currentVersion: {
+          id: toSafeId<"entityVersion">("version_second_document"),
+          fields: [
+            {
+              id: toSafeId<"field">("second_primary"),
+              propertyId,
+              content: fileContent,
+            },
+            {
+              id: secondaryFileFieldId,
+              propertyId: secondaryPropertyId,
+              content: secondaryFileContent,
+            },
+          ],
+        },
+      },
+    ];
     const insertedEntities: InsertedEntity[] = [];
     const insertedVersions: unknown[] = [];
     const insertedFields: unknown[] = [];
     const insertedAuditLogs: unknown[] = [];
     let nextDocumentSequence = 0;
+    let siblingReads = 0;
 
     const tx = {
       query: {
         entities: {
-          findFirst: async () => sourceEntities.at(0),
-          findMany: async () => sourceEntities,
+          findFirst: async () => sources.at(0),
+          findMany: async () => sources,
         },
         workspaces: {
           findFirst: async () => ({ reference: null }),
         },
       },
-      $count: async () => sourceEntities.length,
+      $count: async () => sources.length,
       select: () => ({
         from: () => ({
+          // Descendant target parents are new folders with no persisted children.
           where: async () =>
-            sourceEntities.map((entity) => ({ name: entity.name })),
+            siblingReads++ === 0
+              ? sources
+                  .filter(({ parentId }) => parentId === null)
+                  .map(({ name }) => ({ name }))
+              : [],
         }),
       }),
       insert: (table: unknown) => ({
@@ -586,7 +947,9 @@ describe("duplicate entity", () => {
             return {
               onConflictDoUpdate: () => ({
                 returning: async () => {
-                  nextDocumentSequence += 1;
+                  nextDocumentSequence += sources.filter(
+                    ({ kind }) => kind === "document",
+                  ).length;
                   return [{ lastValue: nextDocumentSequence }];
                 },
               }),
@@ -620,7 +983,9 @@ describe("duplicate entity", () => {
       }),
     };
 
-    const { safeDb } = createScopedDbMock(tx);
+    const { safeDb } = createScopedDbMock(tx, {
+      visibleResources: { entity: [rootFolderId, documentId] },
+    });
     const result = await duplicateEntity.handler(createContext({ safeDb }));
 
     expect(result).toEqual({
@@ -628,18 +993,24 @@ describe("duplicate entity", () => {
       fieldId: null,
       name: "Root_1",
     });
-    expect(insertedEntities).toHaveLength(3);
-    expect(insertedVersions).toHaveLength(3);
+    expect(insertedEntities).toHaveLength(4);
+    expect(insertedVersions).toHaveLength(4);
     expect(insertedFields).toHaveLength(1);
     expect(insertedAuditLogs).toHaveLength(1);
     const auditBatch = insertedAuditLogs.at(0);
-    expect(isArrayWithLength(auditBatch, 3)).toBe(true);
+    expect(isArrayWithLength(auditBatch, 4)).toBe(true);
     const fieldBatch = insertedFields.at(0);
-    expect(isArrayWithLength(fieldBatch, 1)).toBe(true);
-    if (!isArrayWithLength(fieldBatch, 1)) {
+    expect(isArrayWithLength(fieldBatch, 3)).toBe(true);
+    if (!isArrayWithLength(fieldBatch, 3)) {
       throw new Error("Expected duplicated file field batch");
     }
 
+    expect(fieldBatch).toMatchObject([
+      { content: { type: "file", fileName: "Child.docx" } },
+      { content: { type: "file", fileName: "Child_1.docx" } },
+      { content: { type: "file", fileName: "Schedule.xlsx" } },
+    ]);
+    expect(insertedEntities.at(3)?.name).toBe("Child_1.docx");
     const duplicatedFileField = fieldBatch.at(0);
     expect(isInsertedField(duplicatedFileField)).toBe(true);
     if (!isInsertedField(duplicatedFileField)) {
@@ -663,7 +1034,7 @@ describe("duplicate entity", () => {
     }
     expect(
       fake.requests.filter(({ method }) => method === "COPY"),
-    ).toHaveLength(1);
+    ).toHaveLength(3);
 
     const rootDuplicate = insertedEntities.at(0);
     const documentDuplicate = insertedEntities.at(1);
@@ -692,6 +1063,7 @@ describe("duplicate entity", () => {
     expect(requestNativeExtractionRunsMock).toHaveBeenCalledTimes(1);
     expect(enqueueDocumentProcessingRunMock.mock.calls).toEqual([
       [toSafeId<"documentProcessingRun">("run_0")],
+      [toSafeId<"documentProcessingRun">("run_1")],
     ]);
     expect(enqueueEntitySearchRepairsMock).toHaveBeenCalledTimes(1);
     expect(enqueueEntitySearchRepairsMock.mock.calls.at(0)?.at(1)).toEqual([
@@ -752,7 +1124,9 @@ describe("duplicate entity", () => {
       update: () => ({ set: () => ({ where: async () => {} }) }),
     };
 
-    const { safeDb } = createScopedDbMock(tx);
+    const { safeDb } = createScopedDbMock(tx, {
+      visibleResources: { entity: [rootFolderId, documentId] },
+    });
     const result = await duplicateEntity.handler(createContext({ safeDb }));
 
     // The abort travels as the same rejection the caller always answered.

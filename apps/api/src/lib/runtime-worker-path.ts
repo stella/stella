@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import path from "node:path";
 
 const WORKER_DIR_ENV = "STELLA_WORKER_DIR";
@@ -16,6 +17,7 @@ export const RUNTIME_WORKER_FILES = {
   ocrLocal: "ocr-local-worker.js",
   ocrSearchablePdf: "ocr-searchable-pdf-worker.js",
   pdf: "pdf-worker.js",
+  sanctionsMatcher: "sanctions-matcher-worker.js",
 } as const;
 
 export type RuntimeWorkerFile =
@@ -61,14 +63,25 @@ export const RUNTIME_WORKER_NATIVE_LOOKUPS = runtimeWorkerNativeLookups({
   arch: process.arch,
 });
 
+const physicalRuntimePath = (value: string | undefined): string | undefined => {
+  if (!value) {
+    return value;
+  }
+  const resolved = path.resolve(value);
+  if (resolved === "/$bunfs" || resolved.startsWith("/$bunfs/")) {
+    panic("External runtime assets must use a physical filesystem path");
+  }
+  return resolved;
+};
+
 export const runtimeWorkerDir = (): string | undefined =>
-  process.env[WORKER_DIR_ENV];
+  physicalRuntimePath(process.env[WORKER_DIR_ENV]);
 
 export const runtimeOcrPdfFontPath = (): string | undefined =>
-  process.env[OCR_PDF_FONT_PATH_ENV];
+  physicalRuntimePath(process.env[OCR_PDF_FONT_PATH_ENV]);
 
 export const runtimeYaraRulesDir = (): string | undefined =>
-  process.env[YARA_RULES_DIR_ENV];
+  physicalRuntimePath(process.env[YARA_RULES_DIR_ENV]);
 
 export const resolveRuntimeWorkerPath = ({
   outputFile,

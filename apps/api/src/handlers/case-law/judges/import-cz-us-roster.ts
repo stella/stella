@@ -1,3 +1,4 @@
+import { panic, Result, TaggedError } from "better-result";
 /**
  * Import the Czech Constitutional Court's published roster of its justices
  * into `case_law_judges`, then re-link the decision rows whose printed name
@@ -14,13 +15,13 @@
  * implementations pull their connections in on first use: importing this
  * module opens nothing.
  */
-
-import { panic, Result, TaggedError } from "better-result";
 import * as cheerio from "cheerio";
 import type { AnyNode } from "domhandler";
 import { and, eq } from "drizzle-orm";
 
 import { fetchWithTimeout } from "@stll/fetch";
+// parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
+import { createSha256 } from "@stll/sha256/bun";
 
 import { caseLawJudges } from "@/api/db/schema";
 import { createPublisherGateSlot } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
@@ -437,7 +438,7 @@ type PortraitBytes = ServedPortraitType & {
 };
 
 const sha256Of = (bytes: Uint8Array): string =>
-  new Bun.CryptoHasher("sha256").update(bytes).digest("hex");
+  createSha256().update(bytes).digest("hex");
 
 const orNull = (value: string | undefined): string | null => value ?? null;
 
@@ -928,12 +929,12 @@ export const courtSiteFetch: RosterFetch = async (url, init) => {
 export const corpusPortraitStore: RosterPortraitStore = {
   put: async ({ key, bytes, contentType }) => {
     const { putCorpusS3ObjectWithSignal } = await import("@/api/lib/s3");
-    await putCorpusS3ObjectWithSignal(
+    await putCorpusS3ObjectWithSignal({
       key,
       bytes,
-      contentType,
-      AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    );
+      mimeType: contentType,
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
   },
 };
 

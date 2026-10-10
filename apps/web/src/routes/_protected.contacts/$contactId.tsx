@@ -319,14 +319,12 @@ function ContactDetailPage() {
                 value={contact.taxId}
               />
               <EditableRow
+                // A draft is typed in one currency's units; a currency change
+                // remounts the row; its commit guard discards the old draft.
+                key={`default-hourly-rate-${contact.currency ?? "none"}`}
                 contact={contact}
                 field="defaultHourlyRate"
                 label={t("contacts.fields.defaultHourlyRate")}
-                value={
-                  contact.defaultHourlyRate !== null
-                    ? String(contact.defaultHourlyRate)
-                    : null
-                }
               />
               <EditableRow
                 contact={contact}

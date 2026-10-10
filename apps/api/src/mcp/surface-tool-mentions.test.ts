@@ -19,6 +19,7 @@ import {
   surfaceToolVocabulary,
   unlistedToolNamesIn,
 } from "@/api/mcp/surface-tool-mentions";
+import { MCP_INTERNAL_TOOL_FAILURE } from "@/api/mcp/tool-call-outcome";
 import { namedToolNames, scopeProseToSurface } from "@/api/mcp/tool-mentions";
 import * as toolUtils from "@/api/mcp/tool-utils";
 import { handleMcpToolCall } from "@/api/mcp/tools";
@@ -141,11 +142,12 @@ describe("prose scoping", () => {
         message: "Tool execution failed",
         hint: toolUtils.MCP_INTERNAL_ERROR_HINT,
       }),
-      "law",
+      { mode: "law" },
     );
     expect(scoped.status === "error" && scoped.error).toEqual({
       type: "structured",
       code: "internal_error",
+      [MCP_INTERNAL_TOOL_FAILURE]: true,
       message: "Tool execution failed",
       hint: "This is a server-side failure; changing the arguments will not fix it. Tell the human this step failed on the server, then continue without it.",
     });
@@ -157,10 +159,11 @@ describe("prose scoping", () => {
       message: "Tool execution failed",
       hint: "Draft a report with prepare_feedback.",
     });
-    const scoped = scopeToolResultToSurface(result, "law");
+    const scoped = scopeToolResultToSurface(result, { mode: "law" });
     expect(scoped.status === "error" && scoped.error).toEqual({
       type: "structured",
       code: "internal_error",
+      [MCP_INTERNAL_TOOL_FAILURE]: true,
       message: "Tool execution failed",
     });
   });
@@ -170,7 +173,7 @@ describe.each(MCP_MODES.map((mode) => ({ mode })))(
   "the $mode surface names only tools it lists",
   ({ mode }) => {
     test("in every tool description and schema description", () => {
-      const tools = toMcpTools(listStaticMcpToolDefinitions(mode), mode);
+      const tools = toMcpTools(listStaticMcpToolDefinitions(mode), { mode });
       const texts = tools.flatMap((tool) =>
         descriptionsIn(tool).map((text) => ({ where: tool.name, text })),
       );
@@ -208,7 +211,7 @@ describe.each(MCP_MODES.map((mode) => ({ mode })))(
       const served = new Set(listMcpResources(mode).map(({ uri }) => uri));
       const texts = [
         MCP_INSTRUCTIONS[mode],
-        ...toMcpTools(listStaticMcpToolDefinitions(mode), mode).flatMap(
+        ...toMcpTools(listStaticMcpToolDefinitions(mode), { mode }).flatMap(
           descriptionsIn,
         ),
       ];
@@ -222,7 +225,7 @@ describe.each(MCP_MODES.map((mode) => ({ mode })))(
 
     test("in every shared hint once scoped, which still states a next step", () => {
       for (const { name, value } of HINT_CONSTANTS) {
-        const scoped = scopeHintToSurface(value, mode);
+        const scoped = scopeHintToSurface(value, { mode });
         expect({ name, scoped: scoped ?? "" }).toMatchObject({
           name,
           scoped: expect.stringMatching(/\S/u),
@@ -278,7 +281,7 @@ describe("the dispatch boundary scopes the hints it emits", () => {
   test("the law surface keeps the server-side step and drops the report step", async () => {
     const hint = await hintOf("law");
     expect(hint).toBe(
-      scopeHintToSurface(toolUtils.MCP_INTERNAL_ERROR_HINT, "law"),
+      scopeHintToSurface(toolUtils.MCP_INTERNAL_ERROR_HINT, { mode: "law" }),
     );
     expect(unlistedToolNamesIn(hint ?? "", "law")).toEqual([]);
     expect(hint).not.toContain("prepare_feedback");

@@ -19,12 +19,14 @@ import {
   resolveRunConflictAttachment,
   restoreReviewRun,
   reviewDecisionProgress,
+  reviewHistoryPresentation,
   reviewSkeletonCardCount,
 } from "@/components/ai-suggestions/document-review-run.logic";
 import type {
   ReviewRunHistoryEntry,
   ReviewRunSkeletonEntry,
 } from "@/components/ai-suggestions/document-review-run.logic";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
 
 const ACTIVE_RUN_ID = "0198f2c4-6a55-7c31-9a10-3b1d2f4c5e60";
@@ -32,6 +34,144 @@ const NEWER_COMPLETED_RUN_ID = "0198f2c4-5a11-7c31-9a10-3b1d2f4c5e61";
 const OLDER_COMPLETED_RUN_ID = "0198f2c4-4b22-7c31-9a10-3b1d2f4c5e62";
 const FAILED_RUN_ID = "0198f2c4-3c33-7c31-9a10-3b1d2f4c5e63";
 const CANCELLED_RUN_ID = "0198f2c4-2d44-7c31-9a10-3b1d2f4c5e64";
+
+describe("presenting review history", () => {
+  const error = new Error("History read failed");
+  const retry = async () => {
+    throw error;
+  };
+
+  test("failed history cannot show the launcher without a known run", () => {
+    const history = queryView({
+      status: "error",
+      fetchStatus: "idle",
+      isPlaceholderData: false,
+      data: undefined,
+      error,
+      refetch: retry,
+    });
+    for (const restoreAllowed of [true, false]) {
+      for (const sessionRunId of [null, ACTIVE_RUN_ID]) {
+        expect(
+          reviewHistoryPresentation({
+            history,
+            restoreAllowed,
+            sessionRunId,
+            shownRunId: null,
+          }),
+        ).toEqual({ type: "error", error, retry });
+      }
+    }
+  });
+
+  test("keeps a known run visible when history fails and exposes retry", () => {
+    expect(
+      reviewHistoryPresentation({
+        history: queryView({
+          status: "error",
+          fetchStatus: "idle",
+          isPlaceholderData: false,
+          data: undefined,
+          error,
+          refetch: retry,
+        }),
+        restoreAllowed: false,
+        sessionRunId: ACTIVE_RUN_ID,
+        shownRunId: ACTIVE_RUN_ID,
+      }),
+    ).toEqual({ type: "ready", feedback: { error, retry } });
+  });
+
+  test("failed history refetch blocks the launcher and preserves known runs", () => {
+    for (const runs of [[], [historyEntry(ACTIVE_RUN_ID, "running")]]) {
+      const history = queryView({
+        status: "error",
+        fetchStatus: "idle",
+        isPlaceholderData: false,
+        data: runs,
+        error,
+        refetch: retry,
+      });
+      const shownRunId = runs.at(0)?.id ?? null;
+      expect(
+        reviewHistoryPresentation({
+          history,
+          restoreAllowed: true,
+          sessionRunId: null,
+          shownRunId,
+        }),
+      ).toEqual(
+        shownRunId === null
+          ? { type: "error", error, retry }
+          : { type: "ready", feedback: { error, retry } },
+      );
+      expect(
+        reviewHistoryPresentation({
+          history,
+          restoreAllowed: false,
+          sessionRunId: null,
+          shownRunId: null,
+        }),
+      ).toEqual({ type: "error", error, retry });
+      if (history.type === "items") {
+        expect(history.items).toBe(runs);
+      }
+    }
+  });
+
+  test("waits for the first history read before restoring or starting", () => {
+    expect(
+      reviewHistoryPresentation({
+        history: { type: "pending" },
+        restoreAllowed: true,
+        sessionRunId: null,
+        shownRunId: null,
+      }),
+    ).toEqual({ type: "pending" });
+    expect(
+      reviewHistoryPresentation({
+        history: { type: "empty" },
+        restoreAllowed: true,
+        sessionRunId: null,
+        shownRunId: null,
+      }),
+    ).toEqual({ type: "ready", feedback: null });
+  });
+
+  test("keeps tracked runs and deliberately reopened launchers visible while history loads", () => {
+    expect(
+      reviewHistoryPresentation({
+        history: { type: "pending" },
+        restoreAllowed: true,
+        sessionRunId: ACTIVE_RUN_ID,
+        shownRunId: ACTIVE_RUN_ID,
+      }),
+    ).toEqual({ type: "ready", feedback: null });
+    expect(
+      reviewHistoryPresentation({
+        history: { type: "pending" },
+        restoreAllowed: false,
+        sessionRunId: null,
+        shownRunId: null,
+      }),
+    ).toEqual({ type: "ready", feedback: null });
+    expect(
+      reviewHistoryPresentation({
+        history: queryView({
+          status: "success",
+          fetchStatus: "idle",
+          isPlaceholderData: false,
+          data: [historyEntry(ACTIVE_RUN_ID, "running")],
+          error: null,
+          refetch: retry,
+        }),
+        restoreAllowed: true,
+        sessionRunId: null,
+        shownRunId: ACTIVE_RUN_ID,
+      }),
+    ).toEqual({ type: "ready", feedback: null });
+  });
+});
 
 const historyEntry = (
   id: string,

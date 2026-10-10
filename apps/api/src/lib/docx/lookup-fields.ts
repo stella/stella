@@ -88,6 +88,7 @@ import { validateVatFormat } from "@stll/business-registries/vies";
 import { assertNever, resolvePath } from "@stll/template-conditions";
 import { parseIsoDateLocal } from "@stll/time";
 
+import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type {
   BusinessRegistryHit,
   RegistryHandler,
@@ -168,6 +169,7 @@ export type LookupResolver = (input: {
 
 type CreateDispatchLookupResolverOptions = {
   observer: RegistryRequestObservation;
+  permit: ThirdPartyOutboundPermit;
   dispatch?: Record<LookupRegistry, RegistryHandler>;
 };
 
@@ -181,6 +183,7 @@ export const createDispatchLookupResolver =
   ({
     dispatch = BUSINESS_REGISTRY_DISPATCH,
     observer,
+    permit,
   }: CreateDispatchLookupResolverOptions): LookupResolver =>
   async ({ registry, query }) => {
     const handler = dispatch[registry];
@@ -195,7 +198,12 @@ export const createDispatchLookupResolver =
         message: `The ${registry} registry is not available in this deployment.`,
       };
     }
-    const response = await executeRegistryLookup({ handler, query, observer });
+    const response = await executeRegistryLookup({
+      handler,
+      query,
+      observer,
+      permit,
+    });
     if (response instanceof Error) {
       return { type: "error", message: response.message };
     }
@@ -651,7 +659,7 @@ export const lookupValueFromRendered = (text: string): RichPatchValue => {
 
 // ── Resolution over manifest fields ──────────────────────
 
-export type LookupFieldError = {
+type LookupFieldError = {
   /** Manifest path of the lookup field. */
   path: string;
   message: string;
@@ -828,7 +836,7 @@ const resolveLookupValue = async ({
       : lookupValueFromRendered(text);
   };
 
-  // The formats list is non-empty (isFieldLookup invariant). EVERY format is a
+  // The formats list is non-empty (lookup schema invariant). EVERY format is a
   // keyed `{{company.<key>}}` rendering of the SAME hit, so a template can
   // address the whole set by key and never write a bare marker; duplicate keys
   // keep the last template. The first format is additionally the default the

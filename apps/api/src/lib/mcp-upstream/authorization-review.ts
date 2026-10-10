@@ -8,9 +8,68 @@ import {
   mcpConnectorAuthorizationReviews,
   mcpUserConnections,
 } from "@/api/db/schema";
+import { arrayOrEmpty } from "@/api/lib/array";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { McpIssuerBinding } from "@/api/lib/mcp-upstream/oauth";
+
+type ResolveMcpIssuerBindingOptions = {
+  curatedApproval: {
+    issuer: string;
+    endpointOrigins: readonly string[];
+  } | null;
+  connectorIssuer: string | null;
+  connectorConfirmedEndpointOrigins: readonly string[] | null;
+  reviewApprovedIssuer: string | null;
+  reviewApprovedEndpointOrigins: readonly string[] | null;
+};
+
+/**
+ * The issuer a connector may use in an organization, by precedence: the
+ * organization's approved review, the issuer stored when the connector was
+ * created, then the curated catalogue's approval. Endpoint origins come from
+ * the same source as the issuer they were approved with.
+ */
+export const resolveMcpIssuerBinding = ({
+  curatedApproval,
+  connectorIssuer,
+  connectorConfirmedEndpointOrigins,
+  reviewApprovedIssuer,
+  reviewApprovedEndpointOrigins,
+}: ResolveMcpIssuerBindingOptions): McpIssuerBinding => {
+  if (reviewApprovedIssuer !== null) {
+    return {
+      type: "approved",
+      issuer: reviewApprovedIssuer,
+      endpointOrigins: arrayOrEmpty(reviewApprovedEndpointOrigins),
+    };
+  }
+  if (connectorIssuer !== null) {
+    return {
+      type: "approved",
+      issuer: connectorIssuer,
+      endpointOrigins:
+        connectorConfirmedEndpointOrigins ??
+        (curatedApproval?.issuer === connectorIssuer
+          ? curatedApproval.endpointOrigins
+          : []),
+    };
+  }
+  if (curatedApproval !== null) {
+    return {
+      type: "approved",
+      issuer: curatedApproval.issuer,
+      endpointOrigins: curatedApproval.endpointOrigins,
+    };
+  }
+  return { type: "unconfigured" };
+};
+
+export const approvedMcpAuthorizationReview = sql<boolean>`(
+  ${mcpConnectorAuthorizationReviews.status} IS NULL OR
+  ${mcpConnectorAuthorizationReviews.status} = 'approved'
+)`;
 
 /**
  * What recording a review does to the observing user's own connection.

@@ -128,6 +128,8 @@ export const VERIFICATION_RUN_ERROR_CODES = [
   "extraction_failed",
   "grading_failed",
   "enqueue_failed",
+  "access_revoked",
+  "run_limit_reached",
   "internal",
 ] as const;
 export type VerificationRunErrorCode =

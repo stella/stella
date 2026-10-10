@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import Elysia from "elysia";
 
+import { PUBLIC_COUNTRY_UNAVAILABLE_STATUS } from "@stll/api-contract/public-country-capability";
 import {
   SEARCH_PAGINATION_COMPLETE,
   SEARCH_TOTAL_TYPE,
@@ -97,7 +98,9 @@ test.each(["Freedonia", "SVK"])(
         `http://localhost/law/statutes/search?query=text&country=${country}`,
       ),
     );
-    expect(response.status).toBe(country === "SVK" ? 503 : 400);
+    expect(response.status).toBe(
+      country === "SVK" ? PUBLIC_COUNTRY_UNAVAILABLE_STATUS : 400,
+    );
     expect(calls).toHaveLength(0);
   },
 );

@@ -20,8 +20,10 @@ describe("document property storage boundaries", () => {
 
     for (const { fileName, source } of handlers) {
       expect(source, fileName).toContain("async (signal) =>");
+      // Either the raw reader with the signal as its last argument, or the
+      // stored-file owner with the signal in its input.
       expect(source, fileName).toMatch(
-        /readS3ArrayBuffer\([\s\S]*?\n\s+signal,\n\s+\),/u,
+        /readS3ArrayBuffer\([\s\S]*?\n\s+signal,\n\s+\),|readStoredFile\(\{[\s\S]*?\n\s+signal,\n\s+\}\)/u,
       );
     }
   });

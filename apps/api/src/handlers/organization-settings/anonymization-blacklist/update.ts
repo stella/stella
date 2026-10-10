@@ -5,7 +5,7 @@ import {
   normalizeAnonymizationBlacklistEntries,
   replaceOrganizationAnonymizationBlacklist,
 } from "@/api/lib/anonymization-blacklist";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { LIMITS } from "@/api/lib/limits";
@@ -35,6 +35,7 @@ const config = {
     "rather than a merge, and an empty list clears every organization-wide " +
     "term. Matter-scoped terms in the same table are left untouched.",
   permissions: { organizationSettings: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.standard,
   mcp: {
     type: "capability",
     reason: "anonymization_admin",

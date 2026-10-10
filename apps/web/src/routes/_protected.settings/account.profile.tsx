@@ -18,6 +18,7 @@ import {
 } from "@stll/ui/destructive-action-confirmation";
 import {
   Dialog,
+  DialogFormState,
   DialogDescription,
   DialogFooter,
   DialogHeader,
@@ -34,6 +35,7 @@ import {
 } from "@stll/ui/frame";
 import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
+import { Loader } from "@stll/ui/loader";
 import {
   Select,
   SelectItem,
@@ -54,7 +56,7 @@ import {
 import { pendingDeletionTasksOptions } from "@/lib/account/queries";
 import { hideSessionDocument } from "@/lib/account/session-document";
 import { signalSessionChange } from "@/lib/account/session-signal";
-import { releaseUserStorage } from "@/lib/account/user-scoped-storage";
+import { forgetUserStorage } from "@/lib/account/user-scoped-storage";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
@@ -69,9 +71,15 @@ import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
 import { COMMON_TIMEZONES } from "@/lib/timezones";
 import type { CommonTimezone } from "@/lib/timezones";
+import { ChatNotificationsCard } from "@/routes/_protected.settings/-components/account/chat-notifications-card";
 import { SessionsCard } from "@/routes/_protected.settings/-components/account/sessions-card";
 import { TwoFactorCard } from "@/routes/_protected.settings/-components/account/two-factor-card";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
+
+import {
+  accountDeletionLeavesTasksUnassigned,
+  validAccountDeletionReassignments,
+} from "./-components/account/deletion-reassignments.logic";
 
 export const Route = createFileRoute("/_protected/settings/account/profile")({
   component: ProfilePage,
@@ -278,10 +286,13 @@ function ProfilePageBody() {
       }[];
     }) => {
       setOtpError(null);
+      // Named before the delete: afterwards the session may name no one.
+      const deletedUserId = authenticatedUser.id;
       const res = await api.me.delete.verify.post(payload);
-      return unwrapEden(res);
+      unwrapEden(res);
+      return { deletedUserId };
     },
-    onSuccess: async () => {
+    onSuccess: async ({ deletedUserId }) => {
       stellaToast.add({
         title: t("settings.account.deleteAccountSuccess"),
         type: "success",
@@ -291,7 +302,7 @@ function ProfilePageBody() {
       } catch {
         // Session might already be invalidated on the server
       }
-      releaseUserStorage();
+      forgetUserStorage(deletedUserId);
       signalSessionChange();
       hideSessionDocument();
       window.location.href = "/auth";
@@ -398,17 +409,14 @@ function ProfilePageBody() {
     }
     group.tasks.push(task);
   }
-  const allActiveTasksHaveReassignments = activeTasks.every((task) => {
-    const reassignedUserId = reassignments[task.entityId];
-    if (!reassignedUserId) {
-      return false;
-    }
-
-    return activeTaskMembers.some(
-      (member) =>
-        member.workspaceId === task.workspaceId &&
-        member.userId === reassignedUserId,
-    );
+  const selectedTaskReassignmentsAreValid = validAccountDeletionReassignments({
+    tasks: activeTasks,
+    members: activeTaskMembers,
+    reassignments,
+  });
+  const tasksLeftUnassigned = accountDeletionLeavesTasksUnassigned({
+    tasks: activeTasks,
+    reassignments,
   });
   let dialogStep:
     | "loading"
@@ -578,6 +586,8 @@ function ProfilePageBody() {
 
       <LocalePreferences />
 
+      <ChatNotificationsCard />
+
       <TwoFactorCard />
 
       <SessionsCard />
@@ -622,6 +632,13 @@ function ProfilePageBody() {
         }}
       >
         <DialogPopup>
+          <DialogFormState
+            dirty={otpCode !== "" || Object.keys(reassignments).length > 0}
+            onDiscard={() => {
+              setOtpCode("");
+              setReassignments({});
+            }}
+          />
           <DialogHeader>
             <DialogTitle>{dialogTitle}</DialogTitle>
             <DialogDescription>{dialogDescription}</DialogDescription>
@@ -635,7 +652,11 @@ function ProfilePageBody() {
               )}
               {dialogStep === "loading" && (
                 <div className="flex justify-center py-4">
-                  <span className="border-primary h-6 w-6 animate-spin rounded-full border-2 border-t-transparent" />
+                  <Loader
+                    className="size-6"
+                    label={t("common.loading")}
+                    size="sm"
+                  />
                 </div>
               )}
               {dialogStep === "pendingTasksError" && (
@@ -662,6 +683,11 @@ function ProfilePageBody() {
                   <p className="text-muted-foreground text-sm">
                     {t("settings.account.deleteAccountTasksDescription")}
                   </p>
+                  {tasksLeftUnassigned && (
+                    <p className="text-sm" role="status">
+                      {t("settings.account.deleteAccountTasksUnassignedNotice")}
+                    </p>
+                  )}
                   <div className="flex max-h-[280px] flex-col gap-3 overflow-y-auto pe-1">
                     {activeTaskGroups.map((group) => (
                       <div
@@ -882,7 +908,7 @@ function ProfilePageBody() {
                   dialogStep === "loading" ||
                   dialogStep === "pendingTasksError" ||
                   !deleteAccountConfirmation.confirmed ||
-                  (dialogStep === "tasks" && !allActiveTasksHaveReassignments)
+                  (dialogStep === "tasks" && !selectedTaskReassignmentsAreValid)
                 }
                 loading={sendOtpMutation.isPending}
               >

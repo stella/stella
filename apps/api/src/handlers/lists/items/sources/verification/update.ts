@@ -6,11 +6,14 @@ import {
   LEGAL_LIST_SOURCE_VERIFICATION_STATUSES,
   legalListItemSources,
 } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { legalListRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
+import { LIST_VERIFICATION_ITEM_OPERATION } from "@/api/lib/lists/item-operations";
 import { includes } from "@/api/lib/type-guards";
 
 const bodySchema = t.Object({
@@ -20,11 +23,14 @@ const bodySchema = t.Object({
   status: t.String({ minLength: 1, maxLength: 32 }),
 });
 const config = {
+  featureAccess: { featureId: LIST_VERIFICATION_FEATURE_ID, type: "required" },
   description:
     "Set the verification status of one source attached to a list item. Any " +
     "status other than unverified records who set it and when; setting it " +
     "back to unverified clears both.",
   permissions: { entity: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: legalListRealtimeUpdates,
   mcp: {
     type: "capability",
     reason: "workspace_schema",
@@ -74,7 +80,8 @@ const verifyItemSource = createSafeHandler(
           resourceType: AUDIT_RESOURCE_TYPE.LEGAL_LIST_ITEM,
           resourceId: body.itemEntityId,
           metadata: {
-            operation: "source_verification_changed",
+            operation:
+              LIST_VERIFICATION_ITEM_OPERATION.sourceVerificationChanged,
             sourceId: body.id,
             status: verificationStatus,
           },

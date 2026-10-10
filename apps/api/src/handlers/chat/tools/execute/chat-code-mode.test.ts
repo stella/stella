@@ -7,8 +7,15 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
-import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
-import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
+import {
+  installRecordingAnalytics,
+  installRecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
+import type {
+  RecordingAnalytics,
+  RecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -183,14 +190,14 @@ describe("buildChatCodeMode", () => {
   });
 
   test("refuses to re-execute a call that already failed with a server defect", async () => {
-    // Doctored row: `reference` holds a raw UUID the ref map never mediates,
-    // so the projection's UUID backstop fails the call as a server defect
-    // (same trip wire as run-registry-tool.test.ts's fail-closed case).
+    // Doctored row: the declared `reference` string is null, so the
+    // projection's strict parse fails the call as a server defect (same trip
+    // wire as run-registry-tool.test.ts's fail-closed case).
     const rows = [
       {
         id: WS_UUID,
         name: "Acme",
-        reference: "4e919658-a448-5354-8e3a-e99911214d2c",
+        reference: null,
         status: "active",
         lastActivityAt: new Date("2026-01-01T00:00:00.000Z"),
         createdAt: new Date("2026-01-01T00:00:00.000Z"),
@@ -224,16 +231,15 @@ describe("buildChatCodeMode", () => {
 
     // The defect is reported once, by the run that actually executed; the
     // memoized refusal reports nothing new.
-    expect(
-      analytics.exceptions().map((event) => event.properties),
-    ).toMatchObject([
+    const exceptions = analytics.exceptions().map((event) => event.properties);
+    expect(exceptions).toMatchObject([
       {
         "error.class": "ChatToolError",
-        path: "matters[].reference",
         source: "run-registry-tool",
         toolName: "list_matters",
       },
     ]);
+    expect(JSON.stringify(exceptions)).toContain("matters[].reference");
   });
 
   test("does not memoize non-defect failures: a corrected call still runs", async () => {
@@ -369,14 +375,130 @@ return "saved";`,
   });
 });
 
+// A failed script's error text is document content: it reaches the model
+// through the tool result and nowhere else. patches/@tanstack%2Fai-code-mode
+// removes the dependency's console.error of it; these tests fail if a version
+// bump restores that log or text reaches any other process sink.
+describe("a failed chat script keeps its error text out of process logs", () => {
+  const MARKER = "Synthetic Private Marker";
+
+  const silenceProcessSinks = () => [
+    spyOn(console, "error").mockImplementation(() => {}),
+    spyOn(console, "warn").mockImplementation(() => {}),
+    spyOn(console, "info").mockImplementation(() => {}),
+    spyOn(console, "log").mockImplementation(() => {}),
+    spyOn(console, "debug").mockImplementation(() => {}),
+    spyOn(process.stdout, "write").mockImplementation(() => true),
+    spyOn(process.stderr, "write").mockImplementation(() => true),
+  ];
+
+  let logger: RecordingLogger;
+  let sinks: ReturnType<typeof silenceProcessSinks> = [];
+
+  beforeEach(() => {
+    logger = installRecordingLogger();
+    sinks = silenceProcessSinks();
+  });
+
+  afterEach(() => {
+    for (const sink of sinks) {
+      sink.mockRestore();
+    }
+    logger.restore();
+  });
+
+  const expectMarkerOnlyInResult = (output: unknown) => {
+    expect(output).toMatchObject({
+      success: false,
+      error: { name: "runtime", message: expect.stringContaining(MARKER) },
+    });
+    for (const sink of sinks) {
+      expect(Bun.inspect(sink.mock.calls)).not.toContain(MARKER);
+    }
+    expect(Bun.inspect(logger.records)).not.toContain(MARKER);
+    expect(Bun.inspect(analytics.events)).not.toContain(MARKER);
+  };
+
+  test("text the script threw itself", async () => {
+    const execute =
+      buildChatCodeMode(buildProps(selectScopedDb([]))).tool.execute ??
+      expect.unreachable("execute_typescript has no execute");
+
+    const output = await execute({
+      typescriptCode: `throw new Error(${JSON.stringify(MARKER)});`,
+    });
+
+    expectMarkerOnlyInResult(output);
+  });
+
+  test("completion events omit error text while the tool result retains it", async () => {
+    const execute =
+      buildChatCodeMode(buildProps(selectScopedDb([]))).tool.execute ??
+      expect.unreachable("execute_typescript has no execute");
+    const events: { name: string; value: unknown }[] = [];
+
+    const output = await execute(
+      { typescriptCode: `throw new Error(${JSON.stringify(MARKER)});` },
+      {
+        emitCustomEvent: (name, value) => {
+          events.push({ name, value });
+        },
+      },
+    );
+
+    expectMarkerOnlyInResult(output);
+    const finished = events.filter(
+      ({ name }) => name === "code_mode:execution_finished",
+    );
+    expect(finished).toHaveLength(1);
+    const event = finished.at(0) ?? expect.unreachable("no completion event");
+    expect(event.value).toMatchObject({
+      success: false,
+      phase: "execute",
+      error: { name: "runtime" },
+    });
+    expect(event.value).not.toHaveProperty("error.message");
+    expect(event.value).not.toHaveProperty("error.stack");
+    expect(Bun.inspect(events)).not.toContain(MARKER);
+  });
+
+  test("text the script read from a tool and then threw", async () => {
+    const rows = [
+      {
+        id: WS_UUID,
+        name: MARKER,
+        reference: "REF-1",
+        status: "active",
+        lastActivityAt: new Date("2026-01-01T00:00:00.000Z"),
+        createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      },
+    ];
+    const execute =
+      buildChatCodeMode(buildProps(selectScopedDb(rows))).tool.execute ??
+      expect.unreachable("execute_typescript has no execute");
+
+    const output = await execute({
+      typescriptCode: `const { matters } = await external_list_matters({});
+throw new Error(matters[0].name);`,
+    });
+
+    expectMarkerOnlyInResult(output);
+  });
+});
+
 describe("the chat read script policy", () => {
   const directOnly = Object.entries(CHAT_READ_SCRIPT_POLICY).flatMap(
     ([name, policy]) => (policy === "direct-only" ? [name] : []),
   );
 
   test("the script catalog follows each read's declared policy", () => {
+    // Without a caller, enrolment-gated reads stay hidden.
     const scriptReads = Object.entries(CHAT_READ_SCRIPT_POLICY).flatMap(
-      ([name, policy]) => (policy === "script" ? [name] : []),
+      ([name, policy]) =>
+        policy === "script" &&
+        getStaticMcpToolDefinition(name)?.featureId === undefined
+          ? [name]
+          : [],
     );
     expect(directOnly).toEqual([
       "search_boe_legislation",

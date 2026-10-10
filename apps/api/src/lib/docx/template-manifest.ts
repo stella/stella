@@ -287,6 +287,10 @@ const mergeField = (
     resolved.visibleWhen = discovered.visibleWhen;
   }
 
+  if (discovered.itemAliases !== undefined) {
+    resolved.itemAliases = discovered.itemAliases;
+  }
+
   if (discovered.itemFields) {
     // Item paths are relative to the array root; their manifest entries are
     // stored dotted ("lawyers.name"), so resolve item metadata through the

@@ -3,8 +3,14 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-grammar";
+import {
+  DECISION_DOCKET_IDENTITY_FIXTURES,
+  DOCKET_IDENTITY_FIXTURE_NUMBER_MAX,
+  DOCKET_IDENTITY_PART_NUMERAL,
+  docketReaderEntryArbitrary,
+} from "@stll/api-contract/decision-docket-identity.fixtures";
 import { parseDecisionQuery } from "@stll/api-contract/decision-query-intent";
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty, propertyConfig } from "@stll/property-testing";
 
 import { docketFamilyCitationKeys } from "@/api/handlers/case-law/decisions/lookup-by-identity";
 import { citationKeyOf } from "@/api/handlers/case-law/ingestion/citation-extractor";
@@ -153,3 +159,110 @@ describe("the docket a query reads is keyed as the stored docket", () => {
     }
   });
 });
+
+test("a reader entry's family keys as the filed docket, and its part as the stored sibling", () => {
+  // An entry with a part reads by the citation keys alone, never by the
+  // case-file key, so its stored sibling is reached only when the family
+  // keys exactly as the filed docket does.
+  const part = DOCKET_IDENTITY_PART_NUMERAL;
+  assertProperty(
+    "a reader entry's family keys as the filed docket, and its part as the stored sibling",
+    fc.property(
+      docketReaderEntryArbitrary,
+      ({ entry, filed: stored, jurisdiction, partSibling }) => {
+        const grammar = DECISION_DOCKET_GRAMMARS[jurisdiction];
+        const label = `${jurisdiction}: ${entry}`;
+        const familyIn = (text: string) => {
+          const intent = parseDecisionQuery(text, { grammar });
+          return intent.type === "identifier" && intent.kind === "docket"
+            ? intent
+            : panic(`Not a docket: ${jurisdiction}: ${text}`);
+        };
+        expect(keyOf(familyIn(entry).family), label).toBe(keyOf(stored));
+        const withPart = familyIn(`${entry} - ${part}.`);
+        expect(keyOf(withPart.family), label).toBe(keyOf(stored));
+        // Pinned both ways: a declared gap that closes has to be
+        // redeclared, and an undeclared one fails.
+        const reached = docketFamilyCitationKeys(withPart).includes(
+          keyOf(`${stored} - ${part}.`),
+        );
+        switch (partSibling.type) {
+          case "keyed":
+            expect(reached, label).toBe(true);
+            break;
+          case "apart":
+            expect(reached, `${label}: ${partSibling.reason}`).toBe(false);
+            break;
+          default: {
+            partSibling satisfies never;
+            panic("Unhandled part sibling declaration");
+          }
+        }
+      },
+    ),
+    propertyConfig(),
+  );
+});
+
+describe.each(
+  Object.values(DECISION_DOCKET_GRAMMARS).map(
+    ({ jurisdiction }) => jurisdiction,
+  ),
+)(
+  "a %s docket is read under the keys its file is stored with",
+  (jurisdiction) => {
+    const grammar = DECISION_DOCKET_GRAMMARS[jurisdiction];
+    const fixture = DECISION_DOCKET_IDENTITY_FIXTURES[jurisdiction];
+    const { sheet } = fixture;
+    const n = DOCKET_IDENTITY_FIXTURE_NUMBER_MAX;
+    const docket = fixture.filed(n);
+    const part = DOCKET_IDENTITY_PART_NUMERAL;
+
+    const familyIn = (entry: string) => {
+      const intent = parseDecisionQuery(entry, { grammar });
+      return intent.type === "identifier" && intent.kind === "docket"
+        ? intent
+        : panic(`Not a ${jurisdiction} docket: ${entry}`);
+    };
+
+    test("the filed docket is read under its own citation key", () => {
+      expect(docketFamilyCitationKeys(familyIn(docket))).toContain(
+        keyOf(docket),
+      );
+    });
+
+    test("every reader spelling is read under the filed docket's citation key", () => {
+      for (const entry of fixture.readerSpellings(n)) {
+        const intent = familyIn(entry);
+        expect(docketFamilyCitationKeys(intent), entry).toContain(
+          keyOf(docket),
+        );
+        expect(keyOf(intent.family), entry).toBe(keyOf(docket));
+      }
+    });
+
+    test("a member stored with a part numeral is read under its file's keys", () => {
+      const keys = docketFamilyCitationKeys(familyIn(docket));
+      for (const separator of ["- ", " - ", "/", ", "]) {
+        const stored = `${docket}${separator}${part}.`;
+        expect(keyOf(stored), stored).not.toBe(keyOf(docket));
+        expect(keys, stored).toContain(keyOf(stored));
+      }
+    });
+
+    if (sheet.type === "supported") {
+      test("a member stored with its sheet is read under its own key, and no other sheet's", () => {
+        const keys = docketFamilyCitationKeys(
+          familyIn(`${docket}-${sheet.held}`),
+        );
+        expect(keys).toContain(keyOf(docket));
+        for (const dash of ["-", " - ", " – "]) {
+          const stored = `${docket}${dash}${sheet.held}`;
+          expect(keys, stored).toContain(keyOf(stored));
+        }
+        expect(keys).not.toContain(keyOf(`${docket} - ${sheet.unheld}`));
+        expect(keys).not.toContain(keyOf(fixture.filed(n + 1)));
+      });
+    }
+  },
+);

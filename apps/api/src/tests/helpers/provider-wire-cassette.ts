@@ -19,7 +19,7 @@ import { AI_ERROR_KINDS } from "@stll/api-contract";
 // corrupted and cut-off streams). A recording replaces the synthetic entry
 // for its scenario.
 
-export const PROVIDER_WIRE_DIR = path.resolve(
+const PROVIDER_WIRE_DIR = path.resolve(
   import.meta.dir,
   "../fixtures/provider-wire",
 );

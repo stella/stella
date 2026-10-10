@@ -2,12 +2,18 @@ import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 
 import oxlintConfig from "../oxlint.config.ts";
+import { readScopes } from "./oxlint-config-scopes.ts";
+import { severityOf } from "./oxlint-effective-config.ts";
 
 const PLUGIN_DIRECTORY = ".oxlint-plugins";
 const FIXTURE_DIRECTORY = path.join(PLUGIN_DIRECTORY, "__fixtures__");
 const CONFIG_PATH = "oxlint.config.ts";
 const README_PATH = path.join(PLUGIN_DIRECTORY, "README.md");
 const NON_PLUGIN_MODULES = new Set([
+  "aggregate-lock-sites.ts",
+  "budget-ledger.ts",
+  "database-access.ts",
+  "module-id.ts",
   "physical-properties.ts",
   "restricted-import.ts",
   "utils.ts",
@@ -22,16 +28,12 @@ const fixtureFiles = readdirSync(FIXTURE_DIRECTORY).filter((file) =>
   file.includes(".fixture."),
 );
 const config = readFileSync(CONFIG_PATH, "utf-8");
-const productionConfig = config.slice(
-  config.indexOf("export default defineConfig"),
-);
 const enabledRuleIds = new Set(
-  Array.from(
-    productionConfig.matchAll(
-      /"(?<ruleId>[a-z0-9-]+\/[a-z0-9-]+)"\s*:\s*(?:"error"|\[\s*"error")/gu,
-    ),
-    (match) => match.groups?.["ruleId"],
-  ).filter((ruleId): ruleId is string => ruleId !== undefined),
+  readScopes(oxlintConfig).flatMap((scope) =>
+    Object.entries(scope.rules)
+      .filter(([, value]) => severityOf(value) === "error")
+      .map(([ruleId]) => ruleId),
+  ),
 );
 const readme = readFileSync(README_PATH, "utf-8");
 const errors: string[] = [];

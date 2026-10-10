@@ -6,7 +6,7 @@ import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-a
 import { CreatingBBoxes } from "@/components/pdf/creating-citations";
 import { PageAnonymization } from "@/components/pdf/page-anonymization";
 import { PageCitation } from "@/components/pdf/page-citation";
-import { StellaMark } from "@/components/stella-mark";
+import { DefaultPendingComponent } from "@/components/route-components";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
 import { fileOptions } from "@/lib/files/queries";
@@ -41,9 +41,13 @@ const FullscreenPdfViewer = () => {
   // The page count lives in the PDF store (scoped to this document), but the
   // toolbar that displays it (PdfViewerControls) can render outside the
   // PDFProvider tree, so it reads from the workspace store instead. Push the
-  // count across on change.
+  // count across on change, and clear it on unmount so the next viewer
+  // never shows this document's count.
   useExternalSyncEffect(() => {
     setPdfPageCount(pageCount);
+    return () => {
+      setPdfPageCount(0);
+    };
   }, [pageCount, setPdfPageCount]);
 
   const { data: file } = useSuspenseQuery(
@@ -161,8 +165,4 @@ const PageOverlays = ({ pageId }: { pageId: string }) => {
   );
 };
 
-export const PDFSuspenseFallback = () => (
-  <div className="flex h-full w-full items-center justify-center">
-    <StellaMark className="text-muted-foreground size-8 animate-pulse" />
-  </div>
-);
+export const PDFSuspenseFallback = DefaultPendingComponent;

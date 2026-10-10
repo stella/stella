@@ -13,6 +13,7 @@ import { SPAWN_SUBAGENTS_TOOL_NAME } from "@/api/handlers/chat/tools/subagent-to
 import { attachmentText } from "@/api/handlers/chat/upload-files";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ReadablePositionSource } from "@/api/lib/workflow/playbook-position-sources";
 import type {
   PlaybookScope,
   Position,
@@ -99,6 +100,13 @@ export type BuilderScenario = {
   /** The `scope.perspective` values the user's side maps to; `undefined`
    *  is the omission the skill asks for when the side maps to none. */
   perspectives: readonly (PlaybookPerspective | undefined)[];
+  /**
+   * The matter documents the script picks when offered candidates: the only
+   * documents a position may cite in `sources`. Empty when the scenario has
+   * no matter document to pick (none wanted, or contracts only attached,
+   * which have no document id to cite).
+   */
+  pickedDocuments: readonly FixtureDocument[];
   /** The script's answer, given the calls the run made before asking. */
   answer: (question: AskedQuestion, history: readonly BuilderEvent[]) => string;
   check: (evidence: BuilderEvidence) => string[];
@@ -125,6 +133,13 @@ type FixtureDocument = {
   id: SafeId<"entity">;
   matterId: SafeId<"workspace">;
   name: string;
+  /**
+   * How a lawyer would refer to the other party in prose ("as in the Keller
+   * agreement"). A model names a source this way far more often than by file
+   * name, so the saved-text check looks for it. Never the organization's own
+   * name: the playbook is written from its side.
+   */
+  counterparty: string;
   text: string;
 };
 
@@ -153,6 +168,7 @@ const KELLER = {
   id: toSafeId<"entity">("7a0c1e2f-3b4d-4c5e-8f6a-7b8c9d0e1f01"),
   matterId: SUPPLY_MATTER.id,
   name: "Services Agreement Nordwind - Keller GmbH (signed 2025-03-14).pdf",
+  counterparty: "Keller",
   text: servicesAgreement({
     supplier: "Keller GmbH",
     cap: "Each party's total liability is capped at the fees paid in the 12 months before the claim. The cap does not apply to intent or gross negligence.",
@@ -164,6 +180,7 @@ const BRANDT = {
   id: toSafeId<"entity">("7a0c1e2f-3b4d-4c5e-8f6a-7b8c9d0e1f02"),
   matterId: SUPPLY_MATTER.id,
   name: "Services Agreement Nordwind - Brandt AG (executed).docx",
+  counterparty: "Brandt",
   text: servicesAgreement({
     supplier: "Brandt AG",
     cap: "Total liability of either party is limited to the fees paid in the 12 months preceding the event giving rise to the claim, except for intent and gross negligence.",
@@ -177,6 +194,7 @@ const VOGEL_DRAFT = {
   id: toSafeId<"entity">("7a0c1e2f-3b4d-4c5e-8f6a-7b8c9d0e1f03"),
   matterId: SUPPLY_MATTER.id,
   name: "Services Agreement Nordwind - Vogel (DRAFT v3, supplier markup).docx",
+  counterparty: "Vogel",
   text: servicesAgreement({
     supplier: "Vogel Systems GmbH",
     cap: "The Supplier's total liability is capped at EUR 10,000.",
@@ -189,6 +207,8 @@ const HARBOUR = {
   id: toSafeId<"entity">("7a0c1e2f-3b4d-4c5e-8f6a-7b8c9d0e1f04"),
   matterId: DISPUTE_MATTER.id,
   name: "Services Agreement Nordwind - Harbour Co (executed).pdf",
+  // Two words: "harbour" alone is also a term of art ("safe harbour").
+  counterparty: "Harbour Co",
   text: servicesAgreement({
     supplier: "Harbour Co Ltd",
     cap: "Liability is uncapped.",
@@ -203,8 +223,67 @@ const DOCUMENTS: readonly FixtureDocument[] = [
   HARBOUR,
 ];
 
+const dpa = ({
+  processor,
+  liability,
+}: {
+  processor: string;
+  liability: string;
+}) =>
+  [
+    `DATA PROCESSING AGREEMENT between Nordwind Logistik GmbH (Controller) and ${processor} (Processor). Executed.`,
+    "1. Subject matter. The Processor processes personal data of the Controller's employees and customers only on documented instructions.",
+    "2. Personal data breaches. The Processor notifies the Controller of a personal data breach without undue delay and in any event within 48 hours of becoming aware of it.",
+    "3. Sub-processors. The Processor engages a new sub-processor only after 30 days' prior written notice, during which the Controller may object.",
+    "4. Audits. The Controller may audit the Processor once a year on 30 days' notice.",
+    `5. Liability. ${liability}`,
+    "6. Governing law. This agreement is governed by the laws of the Netherlands.",
+  ].join("\n\n");
+
+/**
+ * The contracts the `with-documents` brief attaches. They live in the
+ * conversation, not in a matter, so they have no document id and cannot be a
+ * position's source; their names are still names a saved text must not carry.
+ */
+const ATTACHED_DPAS = [
+  {
+    name: "DPA Nordwind - CloudStore BV (executed).docx",
+    counterparty: "CloudStore",
+    text: dpa({
+      processor: "CloudStore BV",
+      liability:
+        "Each party's liability under this agreement is subject to the limitation of liability in the main services agreement.",
+    }),
+  },
+  {
+    name: "DPA Nordwind - Payroll Partners BV (executed).docx",
+    counterparty: "Payroll Partners",
+    text: dpa({
+      processor: "Payroll Partners BV",
+      liability:
+        "The Processor's liability for breaches of this agreement or of data protection law is unlimited.",
+    }),
+  },
+];
+
 const matterOf = (matterId: string) =>
   MATTERS.find(({ id }) => id === matterId);
+
+/**
+ * The fixture documents as the scoped source lookup answers them
+ * (`readablePositionSources`): every document in a matter the user can
+ * access. What the eval's store serves, so the production readability check
+ * of `save_playbook` runs over the same documents the reads list.
+ */
+export const READABLE_DOCUMENTS: readonly ReadablePositionSource[] =
+  DOCUMENTS.filter(({ matterId }) =>
+    ACCESSIBLE_MATTER_IDS.includes(matterId),
+  ).map(({ id, matterId, name }) => ({
+    entityId: id,
+    workspaceId: matterId,
+    name,
+    workspaceName: matterOf(matterId)?.name ?? "",
+  }));
 
 const stringArg = (input: unknown, key: string): string | undefined => {
   if (typeof input !== "object" || input === null || !(key in input)) {
@@ -562,7 +641,9 @@ const savesInsideScripts = (events: readonly BuilderEvent[]): string[] =>
     .map(() => `called ${SAVE_PLAYBOOK} inside a script`);
 
 /**
- * Defects every scenario shares: one playbook, enough positions, no resends,
+ * Defects of the calls every scenario shares (the saved text and sources are
+ * scored beside these in `scoreScenario`): one playbook, enough positions, no
+ * resends,
  * no matter read or script refused, no save written inside a script, no work
  * handed to subagents, no search for starter playbooks, side options that
  * each name one role, and on the chat surface no read written before its
@@ -634,12 +715,101 @@ const perspectiveDefects = (
         `saved scope.perspective ${String(perspective)}; the side maps to ${perspectives.map(String).join(" or ")}`,
     );
 
+const withoutExtension = (fileName: string): string =>
+  fileName.replace(/\.[a-z0-9]+$/iu, "");
+
+/**
+ * Every name a saved text must not carry, built from the fixtures a run can
+ * meet: each document's file name (with and without its extension) and
+ * counterparty, and each matter's name and reference. A playbook is visible
+ * to the whole organization; where a position came from belongs in `sources`.
+ */
+const SOURCE_NAME_NEEDLES: readonly string[] = [
+  ...new Set(
+    [
+      ...[...DOCUMENTS, ...ATTACHED_DPAS].flatMap(({ name, counterparty }) => [
+        name,
+        withoutExtension(name),
+        counterparty,
+      ]),
+      ...MATTERS.flatMap(({ name, reference }) => [name, reference]),
+    ].map((needle) => needle.toLowerCase()),
+  ),
+];
+
+/**
+ * Every string a stored playbook holds, with its path. Walked rather than
+ * listed field by field, so a text field added to a position is checked
+ * without anyone remembering to add it here; enumerated values and ids are
+ * strings too, and none can contain a needle.
+ */
+const textLeaves = (value: unknown, path: string): [string, string][] => {
+  if (typeof value === "string") {
+    return [[path, value]];
+  }
+  if (Array.isArray(value)) {
+    return value.flatMap((item: unknown, index) =>
+      textLeaves(item, `${path}[${String(index)}]`),
+    );
+  }
+  if (typeof value !== "object" || value === null) {
+    return [];
+  }
+  return Object.entries(value).flatMap(([key, child]) =>
+    textLeaves(child, path === "" ? key : `${path}.${key}`),
+  );
+};
+
+/** A saved text that names a document, a matter, or a counterparty. */
+const namedSourceDefects = (playbooks: readonly StoredPlaybook[]): string[] =>
+  playbooks.flatMap(({ name, description, positions }) =>
+    textLeaves({ name, description, positions: positions.items }, "").flatMap(
+      ([path, text]) =>
+        SOURCE_NAME_NEEDLES.filter((needle) =>
+          text.toLowerCase().includes(needle),
+        ).map((needle) => `${path} names a source: "${needle}"`),
+    ),
+  );
+
+/**
+ * A position's `sources` are documents the user picked, and a run that
+ * revised positions from picked contracts records at least one. A scenario
+ * with nothing to pick stores none.
+ */
+const sourceDefects = (
+  playbooks: readonly StoredPlaybook[],
+  pickedDocuments: readonly FixtureDocument[],
+): string[] => {
+  const cited = playbooks.flatMap(({ positions }) =>
+    positions.items.flatMap(({ sources }) => sources ?? []),
+  );
+  const unpicked = [
+    ...new Set(
+      cited
+        .map(({ entityId }) => entityId)
+        .filter(
+          (entityId) => !pickedDocuments.some(({ id }) => id === entityId),
+        ),
+    ),
+  ];
+  const defects = unpicked.map(
+    (entityId) =>
+      `cited a source the user did not pick: ${DOCUMENTS.find(({ id }) => id === entityId)?.name ?? entityId}`,
+  );
+  if (pickedDocuments.length > 0 && cited.length === 0) {
+    defects.push("no position records the contracts it rests on in sources");
+  }
+  return defects;
+};
+
 /** Every defect of a run: the shared checks, then the scenario's own. */
 export const scoreScenario = (
   scenario: BuilderScenario,
   evidence: BuilderEvidence,
 ): string[] => [
   ...commonDefects(evidence),
+  ...namedSourceDefects(evidence.playbooks),
+  ...sourceDefects(evidence.playbooks, scenario.pickedDocuments),
   ...perspectiveDefects(evidence.playbooks, scenario.perspectives),
   ...scenario.check(evidence),
 ];
@@ -651,6 +821,7 @@ const noDocuments: BuilderScenario = {
   brief: "Help me build a playbook for reviewing NDAs.",
   followUps: [],
   perspectives: [undefined],
+  pickedDocuments: [],
   answer: answerByTopic({
     contracts: "No, I have none to share. Start without them.",
     language: "Czech.",
@@ -689,8 +860,10 @@ const noDocuments: BuilderScenario = {
 };
 
 const CONFIRMED_DOCUMENTS = [KELLER, BRANDT];
-const CONFIRMED_MARKERS = ["Keller", "Brandt"];
-const CANDIDATE_MARKERS = [...CONFIRMED_MARKERS, "Vogel", "Harbour"];
+const CONFIRMED_MARKERS = CONFIRMED_DOCUMENTS.map(
+  ({ counterparty }) => counterparty,
+);
+const CANDIDATE_MARKERS = DOCUMENTS.map(({ counterparty }) => counterparty);
 
 /**
  * A matter's name can carry a marker ("Harbour Co v Nordwind"), so the
@@ -769,6 +942,7 @@ const discovery: BuilderScenario = {
     "I want a playbook for the IT services agreements we sign with our suppliers.",
   followUps: [],
   perspectives: [undefined],
+  pickedDocuments: CONFIRMED_DOCUMENTS,
   answer: (question) =>
     isCandidatesQuestion(question)
       ? pickConfirmedCandidates(question)
@@ -821,6 +995,7 @@ const contractsLater: BuilderScenario = {
     "Use the existing contracts in my matters to inform the remaining positions.",
   ],
   perspectives: [undefined],
+  pickedDocuments: CONFIRMED_DOCUMENTS,
   answer: (question) =>
     isCandidatesQuestion(question)
       ? pickConfirmedCandidates(question)
@@ -913,6 +1088,7 @@ const groundingLater: BuilderScenario = {
     "Help me build a playbook for the IT services agreements our software suppliers send us.",
   followUps: [],
   perspectives: [undefined],
+  pickedDocuments: CONFIRMED_DOCUMENTS,
   answer: (question, history) => {
     if (isCandidatesQuestion(question)) {
       return pickConfirmedCandidates(question);
@@ -955,23 +1131,6 @@ const groundingLater: BuilderScenario = {
   },
 };
 
-const dpa = ({
-  processor,
-  liability,
-}: {
-  processor: string;
-  liability: string;
-}) =>
-  [
-    `DATA PROCESSING AGREEMENT between Nordwind Logistik GmbH (Controller) and ${processor} (Processor). Executed.`,
-    "1. Subject matter. The Processor processes personal data of the Controller's employees and customers only on documented instructions.",
-    "2. Personal data breaches. The Processor notifies the Controller of a personal data breach without undue delay and in any event within 48 hours of becoming aware of it.",
-    "3. Sub-processors. The Processor engages a new sub-processor only after 30 days' prior written notice, during which the Controller may object.",
-    "4. Audits. The Controller may audit the Processor once a year on 30 days' notice.",
-    `5. Liability. ${liability}`,
-    "6. Governing law. This agreement is governed by the laws of the Netherlands.",
-  ].join("\n\n");
-
 const answerDpaTopic = answerByTopic({
   contracts: "Only the two I attached.",
   language: "English.",
@@ -986,27 +1145,14 @@ const withDocuments: BuilderScenario = {
   brief: [
     "Build a playbook for the data processing agreements we sign as controller, from these two executed DPAs. Write it in English.",
     "Non-standard breach notification terms go to our privacy counsel.",
-    "",
-    attachmentText({
-      fileName: "DPA Nordwind - CloudStore BV (executed).docx",
-      content: dpa({
-        processor: "CloudStore BV",
-        liability:
-          "Each party's liability under this agreement is subject to the limitation of liability in the main services agreement.",
-      }),
-    }),
-    "",
-    attachmentText({
-      fileName: "DPA Nordwind - Payroll Partners BV (executed).docx",
-      content: dpa({
-        processor: "Payroll Partners BV",
-        liability:
-          "The Processor's liability for breaches of this agreement or of data protection law is unlimited.",
-      }),
-    }),
+    ...ATTACHED_DPAS.flatMap(({ name, text }) => [
+      "",
+      attachmentText({ fileName: name, content: text }),
+    ]),
   ].join("\n"),
   followUps: [],
   perspectives: [undefined],
+  pickedDocuments: [],
   answer: (question) =>
     /liabilit/iu.test(questionText(question))
       ? "The processor's liability for its own data protection breaches may be unlimited; everything else falls under the main agreement's cap."

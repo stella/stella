@@ -4,7 +4,11 @@ import { eq, inArray, sql } from "drizzle-orm";
 
 import { organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
-import { abortableTx, transactionAbortError } from "@/api/db/safe-db";
+import {
+  abortTransaction,
+  abortableTx,
+  transactionAbortError,
+} from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
 import { workspaces } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -114,7 +118,9 @@ test("a HandlerError thrown after a write rolls that write back", async () => {
 
   const outcome = await abortableTx(testSafeDb, async (tx) => {
     await insertWorkspace(tx, organizationId);
-    throw new HandlerError({ status: 400, message: "Matter limit reached" });
+    abortTransaction(
+      new HandlerError({ status: 400, message: "Matter limit reached" }),
+    );
   });
 
   expect(Result.isError(outcome)).toBe(true);

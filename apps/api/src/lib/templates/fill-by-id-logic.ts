@@ -5,20 +5,23 @@ import { Result } from "better-result";
  * `{ config, handler }` export while this generator stays directly testable.
  */
 
-import { CLAUSE_WARNINGS_HEADER } from "@stll/api-contract/template-fill-headers";
-
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
-import { templateFills } from "@/api/db/schema";
 import type { AuditRecorder } from "@/api/lib/audit-log";
-import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { AUDIT_ACTION } from "@/api/lib/audit-log";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ClauseBody } from "@/api/lib/clauses/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { convertToPdf } from "@/api/lib/files/gotenberg";
 import { DOCX_EXT_RE, sanitizeFilename } from "@/api/lib/sanitize-filename";
 import type { SecureDocumentResponseOptions } from "@/api/lib/secure-document-response";
-import { recordTemplateUse } from "@/api/lib/templates/record-use";
+import { fillDiagnosticHeaders } from "@/api/lib/templates/fill-diagnostic-headers";
+import {
+  recordTemplateFill,
+  recordTemplateUse,
+} from "@/api/lib/templates/record-use";
 import { containsNull } from "@/api/lib/templates/template-data";
+import { fillDiagnosticsOf } from "@/api/lib/templates/template-fill-completion";
 import {
   fillTemplateDocx,
   loadStoredTemplateSource,
@@ -75,6 +78,7 @@ export const fillByIdLogic = async function* ({
     values,
     scopedDb,
     organizationId,
+    thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
     clauseOverrides,
     // A required, user-entered field left absent or empty must never download
     // as an invented value or a raw `{{marker}}`.
@@ -116,41 +120,26 @@ export const fillByIdLogic = async function* ({
     );
   }
 
-  const { unusedValues } = result;
-  // A failed AI draft leaves its field unfilled, so it counts against the
-  // fill the same way an unmatched placeholder does.
-  const fillStatus =
-    result.unmatchedPlaceholders.length > 0 || result.aiFieldErrors.length > 0
-      ? "partial"
-      : "success";
+  // The recorded status is the completion decision over every diagnostic: a
+  // failed AI draft, an undecided AI condition or an unresolved clause counts
+  // against the fill the same way an unmatched placeholder does.
+  const diagnostics = fillDiagnosticsOf(result);
 
   yield* Result.await(
     Result.tryPromise({
       try: async () =>
         await scopedDb(async (tx) => {
           await recordTemplateUse({ tx, templateId });
-          await tx.insert(templateFills).values({
-            organizationId,
+          // A download from the template library: no workspace.
+          await recordTemplateFill({
+            tx,
             templateId,
+            organizationId,
             userId,
             format,
-            status: fillStatus,
-            unmatchedCount: result.unmatchedPlaceholders.length,
-            unusedCount: unusedValues.length,
-            structureErrors:
-              result.structureErrors.length > 0 ? result.structureErrors : null,
-          });
-
-          await recordAuditEvent(tx, {
-            action: AUDIT_ACTION.DOWNLOAD,
-            resourceType: AUDIT_RESOURCE_TYPE.TEMPLATE,
-            resourceId: templateId,
-            workspaceId: null,
-            metadata: {
-              format,
-              status: fillStatus,
-              unmatchedCount: result.unmatchedPlaceholders.length,
-            },
+            diagnostics,
+            recordAuditEvent,
+            auditAction: AUDIT_ACTION.DOWNLOAD,
           });
         }),
       catch: (cause) =>
@@ -164,19 +153,7 @@ export const fillByIdLogic = async function* ({
 
   const baseName = result.fileName;
 
-  const additionalHeaders = new Headers();
-  if (result.clauseWarnings.length > 0) {
-    additionalHeaders.set(
-      CLAUSE_WARNINGS_HEADER,
-      String(result.clauseWarnings.length),
-    );
-  }
-  if (result.aiFieldErrors.length > 0) {
-    additionalHeaders.set(
-      "X-Ai-Field-Errors",
-      encodeURIComponent(JSON.stringify(result.aiFieldErrors)),
-    );
-  }
+  const additionalHeaders = fillDiagnosticHeaders({ diagnostics, format });
 
   // PDF conversion via Gotenberg
   if (format === "pdf") {
@@ -217,26 +194,6 @@ export const fillByIdLogic = async function* ({
     } satisfies SecureDocumentResponseOptions);
   }
 
-  if (result.unmatchedPlaceholders.length > 0) {
-    additionalHeaders.set(
-      "X-Unmatched-Placeholders",
-      // Headers are ISO-8859-1; field paths carry diacritics (Polish/Czech),
-      // so the diagnostic lists travel URI-encoded.
-      encodeURIComponent(result.unmatchedPlaceholders.join(",")),
-    );
-  }
-  if (unusedValues.length > 0) {
-    additionalHeaders.set(
-      "X-Unused-Values",
-      encodeURIComponent(unusedValues.join(",")),
-    );
-  }
-  if (result.structureErrors.length > 0) {
-    additionalHeaders.set(
-      "X-Structure-Errors",
-      JSON.stringify(result.structureErrors),
-    );
-  }
   return Result.ok({
     additionalHeaders,
     body: new Uint8Array(result.file.bytes),

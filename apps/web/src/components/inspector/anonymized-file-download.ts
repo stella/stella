@@ -4,12 +4,10 @@ import { Result } from "better-result";
 import { fetchPrintPdf } from "@/components/pdf/peek/peek-pdf-print";
 import { PDF_MIME_TYPE } from "@/consts";
 import { detectFileAnonymizationTerms } from "@/lib/anonymize/file-anonymization-policy";
+import { extractPdfAnonymizationText } from "@/lib/anonymize/pdf-anonymization-geometry";
 import { ClientOperationError } from "@/lib/errors/client";
 import { rasterizeAnonymizedPdf } from "@/lib/pdf/anonymized-export";
-import {
-  buildAnonymizedExportMasks,
-  extractAnonymizedExportText,
-} from "@/lib/pdf/anonymized-export.logic";
+import { buildAnonymizedExportMasks } from "@/lib/pdf/anonymized-export.logic";
 import { downloadFile } from "@/lib/utils";
 
 type DownloadAnonymizedFileOptions = {
@@ -32,7 +30,7 @@ export const downloadAnonymizedFile = async ({
         import("@libpdf/core"),
       ]);
       const source = await PDF.load(new Uint8Array(buffer));
-      const extraction = extractAnonymizedExportText(source.getPages());
+      const extraction = extractPdfAnonymizationText(source.getPages());
       if (!extraction.text.trim()) {
         return Result.err(
           new ClientOperationError({

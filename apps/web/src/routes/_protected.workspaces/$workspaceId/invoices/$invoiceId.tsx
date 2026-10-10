@@ -10,7 +10,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
-import { applyMarkupCents, prorateHourlyCents } from "@stll/money";
+import { applyMarkupCents, timeEntryAmount } from "@stll/money";
 import { Temporal } from "@stll/time";
 import {
   AlertDialog,
@@ -63,6 +63,7 @@ import {
 } from "@/lib/workspaces/queries/invoices";
 import type { InvoiceStatus } from "@/lib/workspaces/queries/invoices";
 import { timeEntriesKeys } from "@/lib/workspaces/queries/time-entries";
+import { InvoicePdfDownloadButton } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-pdf-download-button";
 import { InvoiceStatusBadge } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-status-badge";
 
 export const Route = createFileRoute(
@@ -337,6 +338,10 @@ const InvoiceDetail = ({
           )}
         </div>
         <div className="flex items-center gap-2">
+          <InvoicePdfDownloadButton
+            invoiceId={invoiceId}
+            workspaceId={workspaceId}
+          />
           <InvoiceActions
             invoiceStatus={invoiceStatus}
             onDelete={() => deleteMutation.mutate()}
@@ -442,10 +447,7 @@ const InvoiceDetail = ({
                     </td>
                     <td className="px-4 py-2 text-end tabular-nums">
                       {formatCurrencyAmount(
-                        prorateHourlyCents({
-                          billedMinutes: entry.billedMinutes,
-                          hourlyRateCents: entry.rateAtEntry,
-                        }),
+                        timeEntryAmount(entry),
                         entry.currency,
                       )}
                     </td>
@@ -711,7 +713,7 @@ const ConfirmAction = ({
 
   return (
     <AlertDialog>
-      <AlertDialogTrigger render={children} />
+      <AlertDialogTrigger nativeButton render={children} />
       <AlertDialogPopup>
         <AlertDialogHeader>
           <AlertDialogTitle>{t("confirmAction")}</AlertDialogTitle>
@@ -805,10 +807,15 @@ const EditInvoiceForm = ({
     }),
   );
 
-  const formErrors = useSelector(form.store, (s) => toFormErrors(s.fieldMeta));
+  const { formErrors, dirty } = useSelector(form.store, (s) => ({
+    formErrors: toFormErrors(s.fieldMeta),
+    dirty: !s.isDefaultValue,
+  }));
 
   return (
     <Form
+      dirty={dirty}
+      onDiscard={() => form.reset()}
       className="flex flex-col gap-4 p-4"
       errors={formErrors}
       onSubmit={(e) => {

@@ -7,6 +7,7 @@ import { Temporal } from "@stll/time";
 
 import { verification } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
+import type { Transaction } from "@/api/db/root";
 import { lockAccountRowByEmail } from "@/api/lib/db/account-row";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -15,7 +16,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
  * verification-table identifier (`${purpose}:${email}`) so codes issued for
  * different flows never collide, even for the same email.
  */
-export type ConfirmationOtpPurpose = "delete-account" | "two-factor-manage";
+type ConfirmationOtpPurpose = "delete-account" | "two-factor-manage";
 
 const CONFIRMATION_OTP_EXPIRY_MS = 5 * 60 * 1000;
 
@@ -127,8 +128,9 @@ type ConfirmationOtpConsumeDb = {
  * Test-only seam for {@link verifyConfirmationOtp}. Runs the atomic
  * consume-and-verify against the supplied *root* database handle so a test can
  * inject its PGlite instance. Production code must call
- * `verifyConfirmationOtp`, which binds this to the module-level `rootDb` pool;
- * do not call this with a caller transaction (see the class note below).
+ * `verifyConfirmationOtp`, which binds this to the module-level `rootDb` pool,
+ * or `runConfirmedTransaction`, which commits a refused code's burn itself; do
+ * not call this with any other caller transaction (see the class note below).
  */
 export const consumeConfirmationOtp = async (
   db: ConfirmationOtpConsumeDb,
@@ -193,3 +195,37 @@ export const verifyConfirmationOtp = async (
   params: VerifyConfirmationOtpParams,
 ): Promise<Result<void, HandlerError>> =>
   await consumeConfirmationOtp(rootDb, params);
+
+type ConfirmedTransactionOptions<T> = {
+  confirmation: VerifyConfirmationOtpParams;
+  /**
+   * Locks taken before the code is read. A refusal here (for example a busy
+   * row) rolls back without touching the code, so the same code retries.
+   */
+  beforeConsume: (tx: Transaction) => Promise<void>;
+  /**
+   * The confirmed work. An abort here rolls the consume back with it, so a
+   * correct code stays usable for a retry; nothing else can observe it.
+   */
+  afterConsume: (tx: Transaction) => Promise<T>;
+};
+
+/**
+ * Runs confirmed work in one transaction with the code's consume. A wrong or
+ * expired code is returned rather than thrown, so the transaction commits and
+ * that guess stays burned — the same guarantee as `verifyConfirmationOtp`.
+ * Only a correct code can be restored, by a later abort of the confirmed work.
+ */
+export const runConfirmedTransaction = async <T>({
+  confirmation,
+  beforeConsume,
+  afterConsume,
+}: ConfirmedTransactionOptions<T>): Promise<Result<T, HandlerError>> =>
+  await rootDb.transaction(async (tx) => {
+    await beforeConsume(tx);
+    const consumed = await consumeConfirmationOtp(tx, confirmation);
+    if (Result.isError(consumed)) {
+      return Result.err(consumed.error);
+    }
+    return Result.ok(await afterConsume(tx));
+  });

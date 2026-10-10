@@ -23,7 +23,7 @@ import {
   getBuiltinReportTemplate,
   isCloneableBuiltin,
 } from "@/api/handlers/reports/builtin-templates";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -32,6 +32,10 @@ import { createStoredTemplate } from "@/api/lib/templates/create-template";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason: "Clones a report template without delivering stored-file bytes.",
+  },
   description:
     "Copy one built-in report template into the organization so it can be " +
     "edited in Template Studio and picked like any other template. Pass the " +
@@ -39,6 +43,7 @@ const config = {
     "so it fills identically, and its name gains a (copy) suffix when a " +
     "template of that name already exists.",
   permissions: { workspace: ["read"], template: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "reporting_export",

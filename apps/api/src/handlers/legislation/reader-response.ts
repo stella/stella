@@ -122,6 +122,9 @@ export const statuteReaderSuccessResponseSchema = t.Object(
 
 const provisionHistoryItemSchema = t.Object(
   {
+    country: boundedString(readerTextBytes.country),
+    slug: nullableBoundedString(readerTextBytes.slug),
+    sourceUrl: nullableBoundedString(readerTextBytes.sourceUrl),
     documentId: tSafeId("legislationDocument"),
     allowsDerivedAi: t.Boolean(),
     ...windowFields,
@@ -232,6 +235,9 @@ export const projectStatuteReader = (row: ReaderRow): Reader => {
 
 type HistoryItem = Static<typeof provisionHistoryItemSchema>;
 export const projectProvisionHistoryItem = (row: HistoryItem): HistoryItem => ({
+  country: truncateTextBytes(row.country, readerTextBytes.country),
+  slug: nullableText(row.slug, readerTextBytes.slug),
+  sourceUrl: nullableText(row.sourceUrl, readerTextBytes.sourceUrl),
   documentId: row.documentId,
   allowsDerivedAi: row.allowsDerivedAi,
   expressionKind: row.expressionKind,

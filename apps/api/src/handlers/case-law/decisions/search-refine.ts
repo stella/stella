@@ -1,12 +1,10 @@
 import { Result } from "better-result";
-import { status, t } from "elysia";
-import type { ElysiaCustomStatusResponse } from "elysia";
+import { t } from "elysia";
 
 import {
   PUBLIC_CASE_LAW_COUNTRIES,
   publicCaseLawCountry,
 } from "@stll/api-contract/case-law-launch-readiness";
-import type { PublicCountryUnavailable } from "@stll/api-contract/public-country-capability";
 
 import {
   CASE_LAW_SEARCH_REFINE_SYSTEM,
@@ -16,7 +14,11 @@ import {
 import { resolveCaching } from "@/api/lib/ai-config";
 import { aiHandlerError } from "@/api/lib/ai-error";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  configuredModelAdmission,
+  createSafeRootHandler,
+} from "@/api/lib/api-handlers";
 import type {
   HandlerConfig,
   SafeHandlerGenerator,
@@ -28,6 +30,7 @@ import {
   readPublicLawCountry,
   tPublicLawCountry,
 } from "@/api/lib/legal-search/public-law-country";
+import type { PublicCountryUnavailableAnswer } from "@/api/lib/legal-search/public-law-country";
 import { LIMITS } from "@/api/lib/limits";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
@@ -37,6 +40,7 @@ const CASE_LAW_REFINE_TIMEOUT_MS = 20_000;
 const REFINE_FAILED_MESSAGE = "Failed to improve search query";
 
 const config = {
+  actionAdmission: { type: "handler", actionKind: "case-law.search-refine" },
   description:
     "Rewrite a case-law search into the words court decisions of the " +
     "jurisdiction use, in the corpus language: statutory terms for everyday " +
@@ -45,6 +49,7 @@ const config = {
   // The grant AI chat carries: one AI spend, withheld from roles that may
   // not start a chat.
   permissions: { chat: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "search_ui" },
   body: t.Object({
     query: t.String({ minLength: 1, maxLength: LIMITS.searchQueryMaxLength }),
@@ -57,6 +62,7 @@ const config = {
 const refineCaseLawSearch = createSafeRootHandler(
   config,
   async function* ({
+    modelAdmission,
     body,
     orgAIConfig,
     managedAIResidency,
@@ -66,15 +72,12 @@ const refineCaseLawSearch = createSafeRootHandler(
     safeDb,
     session,
     user,
-  }): SafeHandlerGenerator<
-    | { query: string }
-    | ElysiaCustomStatusResponse<503, PublicCountryUnavailable>
-  > {
+  }): SafeHandlerGenerator<{ query: string } | PublicCountryUnavailableAnswer> {
     const countryRead = readPublicLawCountry(body.country, {
       admitted: PUBLIC_CASE_LAW_COUNTRIES,
     });
     if (countryRead.kind === "unavailable") {
-      return Result.ok(status(503, countryRead.response));
+      return Result.ok(countryRead.answer);
     }
     if (countryRead.kind === "unreadable") {
       return Result.err(
@@ -139,6 +142,7 @@ const refineCaseLawSearch = createSafeRootHandler(
         try: async () =>
           await generateTanStackObjectForRole({
             dataClass: "customer",
+            admission: configuredModelAdmission({ modelAdmission }),
             role: "fast",
             serviceTier: "standard",
             orgAIConfig,

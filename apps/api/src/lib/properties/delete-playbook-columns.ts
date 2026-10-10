@@ -15,13 +15,13 @@
  */
 
 import { and, eq, inArray } from "drizzle-orm";
+import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 
-import type { Transaction } from "@/api/db/root";
 import { properties } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 
 export type DeletePlaybookColumnsArgs = {
-  tx: Transaction;
+  tx: Pick<PgAsyncDatabase<PgQueryResultHKT>, "delete">;
   workspaceId: SafeId<"workspace">;
   /** Verdict columns to drop. Deleted first; their dependency edges cascade. */
   verdictIds: readonly SafeId<"property">[];
@@ -30,7 +30,7 @@ export type DeletePlaybookColumnsArgs = {
 };
 
 type DeletePlaybookPositionColumnsArgs = {
-  tx: Transaction;
+  tx: Pick<PgAsyncDatabase<PgQueryResultHKT>, "select" | "delete">;
   workspaceId: SafeId<"workspace">;
   playbookSourceId: string;
 };

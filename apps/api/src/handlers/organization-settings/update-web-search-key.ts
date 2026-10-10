@@ -3,7 +3,7 @@ import { t } from "elysia";
 
 import { organizationSettings } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -30,6 +30,7 @@ const WEB_SEARCH_KEY_ERROR_CODE = {
 
 const config = {
   permissions: { organizationSettings: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: { type: "internal", reason: "provider_secret" },
   body: updateWebSearchKeyBody,
 } satisfies HandlerConfig;
@@ -104,7 +105,21 @@ const updateWebSearchKey = createSafeRootHandler(
           })
           .onConflictDoUpdate({
             target: organizationSettings.organizationId,
-            set: { ...columns, updatedAt: new Date() },
+            set: {
+              ...(columns.webSearchApiKeyEncrypted !== undefined
+                ? { webSearchApiKeyEncrypted: columns.webSearchApiKeyEncrypted }
+                : {}),
+              ...(columns.webSearchApiKeyIv !== undefined
+                ? { webSearchApiKeyIv: columns.webSearchApiKeyIv }
+                : {}),
+              ...(columns.urlFetchApiKeyEncrypted !== undefined
+                ? { urlFetchApiKeyEncrypted: columns.urlFetchApiKeyEncrypted }
+                : {}),
+              ...(columns.urlFetchApiKeyIv !== undefined
+                ? { urlFetchApiKeyIv: columns.urlFetchApiKeyIv }
+                : {}),
+              updatedAt: new Date(),
+            },
           });
 
         await recordAuditEvent(tx, {

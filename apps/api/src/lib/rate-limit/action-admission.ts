@@ -13,12 +13,15 @@ import {
   type AdmissionRedisReady,
 } from "@/api/lib/admission-redis";
 import type { SafeId } from "@/api/lib/branded-types";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import {
   ActionAdmissionError,
   actionAdmissionRefusal as configuredActionAdmissionRefusal,
 } from "@/api/lib/errors/action-admission-error";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { withAdmittedOperation } from "@/api/lib/proofs/checked-transaction";
+import type { AdmittedOperationContext } from "@/api/lib/proofs/checked-transaction";
 import { ACTION_KINDS } from "@/api/lib/rate-limit/action-kinds";
 import type {
   AdmittedActionIdentity,
@@ -30,10 +33,18 @@ import {
   ACTION_SERVICE_DEADLINE_SCRIPT,
   actionPeriodArguments,
   staleActionPeriodTime,
+  PER_KIND_PERIOD_SCOPE,
   resolveActionPeriodBudget,
   type ActionPeriodBudget,
+  type ActionPeriodBudgetError,
   type ActionPeriodPolicy,
+  type ActionPeriodScope,
 } from "@/api/lib/rate-limit/action-period-budget";
+import {
+  configuredDemoActionBudget,
+  withDemoActionBudget,
+  type DemoActionBudget,
+} from "@/api/lib/rate-limit/demo-action-budget";
 import { withCommandTimeout } from "@/api/lib/rate-limit/redis-command-timeout";
 import { coordinationKey, type CoordinationKey } from "@/api/lib/redis-keys";
 import {
@@ -44,7 +55,10 @@ import {
   getActionCostRecorder,
   reportMissingActionCostIdentity,
 } from "@/api/lib/usage/action-costs/recorder";
+import { resolveOrganizationAccess } from "@/api/lib/usage/organization-access";
 import {
+  actionDrawsServiceBudget,
+  actionPlanAvailability,
   readOrganizationActionState,
   resolveOrganizationActionBudget,
   type OrganizationActionBudgetConfig,
@@ -215,6 +229,7 @@ type ActionAdmissionOptions<T = unknown> = {
   createId?: () => string;
   timing?: AdmissionTiming;
   costRecorder?: ActionCostRecorder | null;
+  demoActionBudget?: DemoActionBudget;
 } & ActionAdmissionReservation &
   (
     | {
@@ -365,7 +380,7 @@ const createAdmissionExecutor = ({
             ? staleActionPeriodTime(reply)
             : null;
         if (budget === null || storeNow === null) {
-          return Result.ok(reply);
+          return Result.ok({ reply, window: budget });
         }
 
         // A stale window has not reserved anything. Retry once using store time,
@@ -377,6 +392,7 @@ const createAdmissionExecutor = ({
             periodMs: budget.endMs - budget.startMs,
             limit: budget.limit,
           },
+          scope: budget.scope,
           nowMs: storeNow,
         });
         if (Result.isError(refreshed)) {
@@ -388,22 +404,25 @@ const createAdmissionExecutor = ({
             }),
           );
         }
-        if (refreshed.value === null) {
-          return Result.ok(-2);
+        const window = refreshed.value;
+        if (window === null) {
+          return Result.ok({ reply: -2, window });
         }
-        const retried = await send(refreshed.value, [
+        const retried = await send(window, [
           ...args.slice(0, 4),
-          ...actionPeriodArguments(refreshed.value),
+          ...actionPeriodArguments(window),
         ]);
-        return retried.mapError((cause) =>
-          ActionAdmissionError.is(cause)
-            ? cause
-            : new ActionAdmissionError({
-                message: "Action admission is unavailable",
-                reason: "unavailable",
-                cause,
-              }),
-        );
+        return retried
+          .map((retriedReply) => ({ reply: retriedReply, window }))
+          .mapError((cause) =>
+            ActionAdmissionError.is(cause)
+              ? cause
+              : new ActionAdmissionError({
+                  message: "Action admission is unavailable",
+                  reason: "unavailable",
+                  cause,
+                }),
+          );
       },
       catch: (error: unknown) =>
         ActionAdmissionError.is(error)
@@ -483,6 +502,45 @@ type ResolveAdmissionBudgetOptions = Pick<
   budgetNow: () => number;
 };
 
+/**
+ * The period count an admitted action draws. `uncounted`: the action draws no
+ * count by design (a kind that consumes no services, or free-floor work on the
+ * organization's own key). `unconfigured`: the deployment sets no period limit.
+ */
+type AdmissionPeriod =
+  | {
+      type: "counted";
+      budget: ActionPeriodBudget;
+      serviceDeadlineMs: number | null;
+    }
+  | { type: "uncounted" }
+  | { type: "unconfigured" };
+
+type CountedAdmissionPeriod = Extract<AdmissionPeriod, { type: "counted" }>;
+
+const admittedPeriodBudget = (period: AdmissionPeriod) => {
+  switch (period.type) {
+    case "counted":
+      return {
+        budget: period.budget,
+        serviceDeadlineMs: period.serviceDeadlineMs,
+      };
+    case "uncounted":
+    case "unconfigured":
+      return { budget: null, serviceDeadlineMs: null };
+    default:
+      period satisfies never;
+      return panic("Unhandled admission period");
+  }
+};
+
+const periodBudgetRefusal = (error: ActionPeriodBudgetError) =>
+  new ActionAdmissionError({
+    message: error.message,
+    reason: "unavailable",
+    cause: error,
+  });
+
 const resolveAdmissionBudget = async ({
   organizationId,
   userId,
@@ -493,10 +551,13 @@ const resolveAdmissionBudget = async ({
   readOrganizationState,
   organizationStateDb,
   budgetNow,
-}: ResolveAdmissionBudgetOptions) => {
+}: ResolveAdmissionBudgetOptions): Promise<
+  Result<AdmissionPeriod, ActionAdmissionError>
+> => {
   let serviceDeadlineMs: number | null = null;
   let nowMs = budgetNow();
   let resolvedPeriodPolicy = periodPolicy;
+  let periodScope: ActionPeriodScope = PER_KIND_PERIOD_SCOPE;
   let consumesServices = true;
   if (serviceBudgetsEnabled) {
     if (periodIdentity === undefined) {
@@ -539,12 +600,37 @@ const resolveAdmissionBudget = async ({
         return state;
       }
       nowMs = budgetNow();
-      const organizationBudget = resolveOrganizationActionBudget({
-        state: state.value,
+      const access = resolveOrganizationAccess({
+        snapshot: state.value.snapshot,
         now: new Date(nowMs),
-        ...serviceBudgetConfig,
+        freeTier: state.value.freeTier,
       });
+      if (
+        actionPlanAvailability({
+          access,
+          actionKind: periodIdentity.actionKind,
+          modelCredentials: state.value.modelCredentials,
+        }) === "not_on_plan"
+      ) {
+        return Result.err(
+          new ActionAdmissionError({
+            message: "This action is not offered on the organization's plan",
+            reason: "not_on_plan",
+          }),
+        );
+      }
+      consumesServices = actionDrawsServiceBudget({
+        access,
+        serviceCredentials:
+          ACTION_KINDS[periodIdentity.actionKind].serviceCredentials,
+        modelCredentials: state.value.modelCredentials,
+      });
+      const organizationBudget = consumesServices
+        ? resolveOrganizationActionBudget({ access, ...serviceBudgetConfig })
+        : ({ status: "uncounted" } as const);
       switch (organizationBudget.status) {
+        case "uncounted":
+          break;
         case "not_enabled":
           return Result.err(
             new ActionAdmissionError({
@@ -561,6 +647,7 @@ const resolveAdmissionBudget = async ({
           );
         case "resolved":
           resolvedPeriodPolicy = organizationBudget.policy;
+          periodScope = organizationBudget.scope;
           serviceDeadlineMs = organizationBudget.serviceDeadlineMs;
           break;
         default:
@@ -569,25 +656,71 @@ const resolveAdmissionBudget = async ({
       }
     }
   }
-  const resolvedBudget = consumesServices
-    ? resolveActionPeriodBudget({
-        organizationId,
-        identity: periodIdentity,
-        policy: resolvedPeriodPolicy,
-        nowMs,
-      })
-    : Result.ok(null);
-  return Result.map(
-    Result.mapError(
-      resolvedBudget,
-      (error) =>
-        new ActionAdmissionError({
-          message: error.message,
-          reason: "unavailable",
-          cause: error,
-        }),
-    ),
-    (budget) => ({ budget, serviceDeadlineMs }),
+  if (!consumesServices) {
+    return Result.ok({ type: "uncounted" });
+  }
+  const resolvedBudget = resolveActionPeriodBudget({
+    organizationId,
+    identity: periodIdentity,
+    policy: resolvedPeriodPolicy,
+    scope: periodScope,
+    nowMs,
+  });
+  if (Result.isError(resolvedBudget)) {
+    return Result.err(periodBudgetRefusal(resolvedBudget.error));
+  }
+  const budget = resolvedBudget.value;
+  return Result.ok(
+    budget === null
+      ? { type: "unconfigured" }
+      : { type: "counted", budget, serviceDeadlineMs },
+  );
+};
+
+// A queued kickoff relinquishes its slot after enqueue; its period cap bounds
+// backlog. Work that draws no service count still takes the per-kind cap.
+const resolveQueuedBudget = async (
+  options: ResolveAdmissionBudgetOptions,
+): Promise<Result<CountedAdmissionPeriod, ActionAdmissionError>> => {
+  const resolved = await resolveAdmissionBudget(options);
+  if (Result.isError(resolved)) {
+    return Result.err(resolved.error);
+  }
+  const period = resolved.value;
+  switch (period.type) {
+    case "counted":
+      return Result.ok(period);
+    case "uncounted": {
+      const backlog = resolveActionPeriodBudget({
+        organizationId: options.organizationId,
+        identity: options.periodIdentity,
+        policy: options.periodPolicy,
+        scope: PER_KIND_PERIOD_SCOPE,
+        nowMs: options.budgetNow(),
+      });
+      if (Result.isError(backlog)) {
+        return Result.err(periodBudgetRefusal(backlog.error));
+      }
+      if (backlog.value !== null) {
+        return Result.ok({
+          type: "counted",
+          budget: backlog.value,
+          serviceDeadlineMs: null,
+        });
+      }
+      break;
+    }
+    case "unconfigured":
+      break;
+    default:
+      period satisfies never;
+      return panic("Unhandled admission period");
+  }
+  return Result.err(
+    new ActionAdmissionError({
+      message: "Queued action admission requires a configured period budget",
+      reason: "unavailable",
+    }),
   );
 };
 
@@ -597,20 +730,35 @@ const configuredServiceBudgets = () => ({
   selfManagedActions: env.SERVICE_ACTIONS_SELF_MANAGED_ACTIONS,
 });
 
-const acquisitionRefusal = (reply: unknown): ActionAdmissionError | null => {
+type AdmissionReply = {
+  reply: unknown;
+  /** The period window the reply answered for, after any stale-window retry. */
+  window: ActionPeriodBudget | null;
+};
+
+const acquisitionRefusal = ({
+  reply,
+  window,
+}: AdmissionReply): ActionAdmissionError | null => {
   if (reply === ACTION_SERVICE_DEADLINE_EXPIRED) {
     return new ActionAdmissionError({
       message: "Organization service actions are not enabled",
       reason: "not_enabled",
     });
   }
-  if (reply === 0 || reply === -1) {
+  if (reply === 0) {
     return new ActionAdmissionError({
-      message:
-        reply === -1
-          ? "Action period limit reached"
-          : "Concurrent action limit reached",
-      reason: reply === -1 ? "period_exhausted" : "busy",
+      message: "Concurrent action limit reached",
+      reason: "busy",
+    });
+  }
+  // Only a counted window refuses for its period; the refusal names the
+  // window's own reset, whichever budget (generic or service) it belongs to.
+  if (reply === -1 && window !== null) {
+    return new ActionAdmissionError({
+      message: "Action period limit reached",
+      reason: "period_exhausted",
+      retryAtMs: window.endMs,
     });
   }
   if (reply !== 1) {
@@ -661,6 +809,7 @@ const reuseAdmissionScope = async <T>({
       organizationId,
       identity: periodIdentity,
       policy: periodPolicy,
+      scope: PER_KIND_PERIOD_SCOPE,
       nowMs: budgetNow(),
     });
     if (Result.isError(budget)) {
@@ -720,16 +869,23 @@ const createPeriodReservationScope = ({
         }),
       );
     }
-    const resolved = await resolveAdmissionBudget({
+    const reservationOptions = {
       ...organizationBudgetOptions,
       periodIdentity: identity,
       organizationStateDb:
         organizationStateDb ?? organizationBudgetOptions.organizationStateDb,
-    });
+    };
+    // A queued kickoff reserves its backlog cap even when it draws no count.
+    const resolved =
+      queuedIdentity === undefined
+        ? await resolveAdmissionBudget(reservationOptions)
+        : await resolveQueuedBudget(reservationOptions);
     if (Result.isError(resolved)) {
       return resolved;
     }
-    const { budget: reservedBudget, serviceDeadlineMs } = resolved.value;
+    const { budget: reservedBudget, serviceDeadlineMs } = admittedPeriodBudget(
+      resolved.value,
+    );
     if (reservedBudget === null) {
       return Result.ok(undefined);
     }
@@ -803,7 +959,7 @@ const createPeriodReservationScope = ({
 };
 
 export const reserveQueuedKickoffPeriod = async () => {
-  if (!env.FEATURE_ACTION_ADMISSION) {
+  if (!isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION")) {
     return Result.ok(undefined);
   }
   const scope = admissionScope.getStore();
@@ -813,23 +969,6 @@ export const reserveQueuedKickoffPeriod = async () => {
     );
   }
   return await scope.control.reservePeriod(scope.queuedIdentity);
-};
-
-const resolveQueuedBudget = async (options: ResolveAdmissionBudgetOptions) => {
-  const resolved = await resolveAdmissionBudget(options);
-  if (Result.isError(resolved)) {
-    return resolved;
-  }
-  // A queued kickoff relinquishes its slot after enqueue; its period cap bounds backlog.
-  if (resolved.value.budget === null) {
-    return Result.err(
-      new ActionAdmissionError({
-        message: "Queued action admission requires a configured period budget",
-        reason: "unavailable",
-      }),
-    );
-  }
-  return resolved;
 };
 
 type InheritedQueuedAdmissionOptions<T> = {
@@ -919,10 +1058,14 @@ const resolveExecutionBudget = async ({
   if (mode === "concurrency-only" || execution === "background-job") {
     return Result.ok({ budget: null, serviceDeadlineMs: null });
   }
-  if (execution === "queued-kickoff") {
-    return await resolveQueuedBudget(organizationBudgetOptions);
+  const resolved =
+    execution === "queued-kickoff"
+      ? await resolveQueuedBudget(organizationBudgetOptions)
+      : await resolveAdmissionBudget(organizationBudgetOptions);
+  if (Result.isError(resolved)) {
+    return Result.err(resolved.error);
   }
-  return await resolveAdmissionBudget(organizationBudgetOptions);
+  return Result.ok(admittedPeriodBudget(resolved.value));
 };
 
 const settledAdmissionOutcome = <T>(
@@ -1086,7 +1229,7 @@ const withEnabledActionAdmission = async <T>({
       String(limits.leaseMs),
     ]);
     if (Result.isOk(result)) {
-      if (result.value !== 1) {
+      if (result.value.reply !== 1) {
         loseLease();
         return;
       }
@@ -1151,9 +1294,23 @@ const withEnabledActionAdmission = async <T>({
   return settledAdmissionOutcome(outcome, controller.signal);
 };
 
-export const withActionAdmission = async <T>(
-  options: ActionAdmissionOptions<T>,
-): Promise<Result<T, unknown>> => {
+const ACTION_ADMITTED = "ActionAdmitted";
+
+type ActionExecution = {
+  signal: AbortSignal;
+  control: ActionAdmissionControl;
+};
+
+export const runCheckedAction = async <T, N, A>({
+  proof,
+}: AdmittedOperationContext<
+  typeof ACTION_ADMITTED,
+  ActionAdmissionOptions<T>,
+  ActionExecution,
+  N,
+  A
+>): Promise<T> => {
+  const options = proof.input.value;
   const observedRun = createObservedAdmissionRun({
     organizationId: options.organizationId,
     userId: options.userId,
@@ -1161,29 +1318,73 @@ export const withActionAdmission = async <T>(
     costRecorder: options.costRecorder,
     run: options.run,
   });
-  if (!(options.enabled ?? env.FEATURE_ACTION_ADMISSION)) {
-    return await Result.tryPromise({
-      try: async () =>
-        await observedRun(new AbortController().signal, disabledControl),
-      catch: (error: unknown) => error,
-    });
-  }
-  return await withEnabledActionAdmission({
-    ...options,
-    run: observedRun,
-    organizationBudgetOptions: {
-      organizationId: options.organizationId,
-      userId: options.userId,
-      periodIdentity: options.periodIdentity,
-      periodPolicy: options.periodPolicy,
-      serviceBudgetsEnabled:
-        options.serviceBudgetsEnabled ?? env.FEATURE_ORG_SERVICE_BUDGETS,
-      serviceBudgetConfig:
-        options.serviceBudgetConfig ?? configuredServiceBudgets(),
-      organizationStateDb: options.organizationStateDb,
-      readOrganizationState: options.readOrganizationState,
-      budgetNow:
-        options.budgetNow ?? (() => Temporal.Now.instant().epochMilliseconds),
-    },
-  });
+  return await observedRun(
+    proof.admission.value.signal,
+    proof.admission.value.control,
+  );
 };
+
+export const withActionAdmission = async <T>(
+  options: ActionAdmissionOptions<T>,
+): Promise<Result<T, unknown>> =>
+  await withAdmittedOperation({
+    kind: ACTION_ADMITTED,
+    input: options,
+    run: runCheckedAction,
+    // The demo account's daily admission limit also applies when admission is disabled.
+    admit: async (
+      checkedOptions,
+      execute: (admission: ActionExecution) => Promise<T>,
+    ) =>
+      await withDemoActionBudget({
+        budget: checkedOptions.demoActionBudget ?? configuredDemoActionBudget,
+        organizationId: checkedOptions.organizationId,
+        userId: checkedOptions.userId,
+        scope:
+          checkedOptions.execution === "background-job"
+            ? "independent"
+            : (checkedOptions.scope ?? "inherit"),
+        run: async (markStarted) => {
+          const startedRun = async (
+            signal: AbortSignal,
+            control: ActionAdmissionControl,
+          ) => {
+            markStarted();
+            return await execute({ signal, control });
+          };
+          if (
+            !(
+              checkedOptions.enabled ??
+              isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION")
+            )
+          ) {
+            return await Result.tryPromise({
+              try: async () =>
+                await startedRun(new AbortController().signal, disabledControl),
+              catch: (error: unknown) => error,
+            });
+          }
+          return await withEnabledActionAdmission({
+            ...checkedOptions,
+            run: startedRun,
+            organizationBudgetOptions: {
+              organizationId: checkedOptions.organizationId,
+              userId: checkedOptions.userId,
+              periodIdentity: checkedOptions.periodIdentity,
+              periodPolicy: checkedOptions.periodPolicy,
+              serviceBudgetsEnabled:
+                checkedOptions.serviceBudgetsEnabled ??
+                isDeploymentFeatureEnabled("FEATURE_ORG_SERVICE_BUDGETS"),
+              serviceBudgetConfig:
+                checkedOptions.serviceBudgetConfig ??
+                configuredServiceBudgets(),
+              organizationStateDb: checkedOptions.organizationStateDb,
+              readOrganizationState: checkedOptions.readOrganizationState,
+              budgetNow:
+                checkedOptions.budgetNow ??
+                (() => Temporal.Now.instant().epochMilliseconds),
+            },
+          });
+        },
+      }),
+  });

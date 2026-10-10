@@ -582,7 +582,10 @@ const heuristicCommandPath = (name: string): readonly string[] => {
     return [kebabCase(name)];
   }
   const head = name.slice(0, underscore);
-  const rest = name.slice(underscore + 1);
+  const rest = name.slice(underscore + 1).replace(/^[_-]+/u, "");
+  if (rest.length === 0) {
+    return [kebabCase(name)];
+  }
   if (VERB_PREFIXES.has(head)) {
     return [kebabCase(rest), head];
   }
@@ -623,6 +626,27 @@ const resolveLocalFileProp = ({
   return prop;
 };
 
+const toolMetadata = ({
+  listing,
+  annotation,
+}: {
+  listing: RegistryToolListing;
+  annotation: ToolAnnotation | undefined;
+}) => {
+  const feature = annotation?.feature ?? listing.feature;
+  const featureId = annotation?.featureId ?? listing.featureId;
+  const additionalScopes = annotation?.additionalScopes;
+  const requestTimeoutMs = annotation?.requestTimeoutMs;
+  const scope = annotation ? scopeOf(annotation) : undefined;
+  return {
+    ...(feature === undefined ? {} : { feature }),
+    ...(featureId === undefined ? {} : { featureId }),
+    ...(additionalScopes === undefined ? {} : { additionalScopes }),
+    ...(requestTimeoutMs === undefined ? {} : { requestTimeoutMs }),
+    ...(scope === undefined ? {} : { scope }),
+  };
+};
+
 const leafSpecsForTool = ({
   listing,
   annotation,
@@ -639,9 +663,7 @@ const leafSpecsForTool = ({
   const destructiveHint = listing.annotations?.destructiveHint === true;
 
   const command = annotation?.command ?? heuristicCommandPath(listing.name);
-  const additionalScopes = annotation?.additionalScopes;
-  const requestTimeoutMs = annotation?.requestTimeoutMs;
-  const scope = annotation ? scopeOf(annotation) : undefined;
+  const metadata = toolMetadata({ listing, annotation });
   const itemsKey = annotation?.itemsKey;
   const textPath = annotation?.windowedText?.textPath;
   const windowedText = textPath !== undefined;
@@ -717,9 +739,7 @@ const leafSpecsForTool = ({
         destructive: sub?.destructive ?? destructiveHint,
         ...(confirmPassthrough === undefined ? {} : { confirmPassthrough }),
         ...(localFileBase64Prop === undefined ? {} : { localFileBase64Prop }),
-        ...(additionalScopes === undefined ? {} : { additionalScopes }),
-        ...(requestTimeoutMs === undefined ? {} : { requestTimeoutMs }),
-        ...(scope === undefined ? {} : { scope }),
+        ...metadata,
         inputSchema: schema,
       });
     }
@@ -749,9 +769,7 @@ const leafSpecsForTool = ({
       destructive: confirmPassthrough === true ? false : destructiveHint,
       ...(confirmPassthrough === undefined ? {} : { confirmPassthrough }),
       ...(localFileBase64Prop === undefined ? {} : { localFileBase64Prop }),
-      ...(additionalScopes === undefined ? {} : { additionalScopes }),
-      ...(requestTimeoutMs === undefined ? {} : { requestTimeoutMs }),
-      ...(scope === undefined ? {} : { scope }),
+      ...metadata,
       inputSchema: schema,
     },
   ];

@@ -1,6 +1,7 @@
 // parser-output-unchanged: The public corpus search address budget affects admission only, not parsed records.
 // parser-output-unchanged: Minimum public corpus request budgets affect admission only, not parsed records.
 // parser-output-unchanged: Search ranking and query variant configuration do not change ingestion parser output.
+// parser-output-unchanged: Case-law search guidance affects the MCP tool text only, not parsed records.
 /**
  * Base environment variables shared by all entrypoints
  * (API server, ingestion scripts, CLI tools).
@@ -19,6 +20,7 @@ import {
   DATABASE_COMPONENT_KEYS,
   hasSecureDatabaseTransport,
 } from "@/api/db-url";
+import { CASE_LAW_SEARCH_GUIDANCE_MODES } from "@/api/lib/case-law/search-guidance-mode";
 import { resolveConfigurationPlaceholders } from "@/api/lib/configuration-placeholders";
 import {
   CORPUS_STORAGE_MODES,
@@ -26,6 +28,7 @@ import {
   corpusStorageInvariantViolation,
   resolveCorpusStorageMode,
 } from "@/api/lib/corpus-storage-mode";
+import { featureAccessGrantsEnvSchema } from "@/api/lib/feature-access/grants-schema";
 import { CORPUS_MEMBER_LAYOUTS } from "@/api/lib/legal-search/corpus-member-layout";
 import { CORPUS_INDEX_QUERY_VARIANTS } from "@/api/lib/legal-search/corpus-query-variant-policy";
 import { CORPUS_INDEX_RANKING_MODES } from "@/api/lib/legal-search/corpus-ranking-policy";
@@ -115,6 +118,7 @@ const isSecureOrPrivateQ09MutationEndpoint = (value: string) => {
 };
 
 export const envBaseServerSchema = {
+  API_FEATURE_ACCESS_GRANTS: featureAccessGrantsEnvSchema,
   STELLA_VERSION: v.optional(v.string()),
   STELLA_COMMIT_SHA: v.optional(v.string()),
   STELLA_WORKER_DIR: v.optional(v.string()),
@@ -202,6 +206,11 @@ export const envBaseServerSchema = {
   ),
   CORPUS_INDEX_QUERY_VARIANT: v.optional(
     v.picklist(CORPUS_INDEX_QUERY_VARIANTS),
+    "off",
+  ),
+  // Query guidance in the search_case_law contract; off until evaluated.
+  MCP_CASE_LAW_SEARCH_GUIDANCE: v.optional(
+    v.picklist(CASE_LAW_SEARCH_GUIDANCE_MODES),
     "off",
   ),
   CORPUS_INDEX_Q09_SEARCH_ENDPOINT: v.optional(v.pipe(v.string(), v.url())),

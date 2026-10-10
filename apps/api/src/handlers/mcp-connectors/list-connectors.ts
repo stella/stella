@@ -7,22 +7,25 @@ import {
 } from "@/api/db/schema";
 import { mcpConnectorUrlIdentity } from "@/api/handlers/mcp-connectors/url-normalization";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { isBusinessRegistryNativeToolDeployAvailable } from "@/api/lib/business-registries/dispatch";
 import { LIMITS } from "@/api/lib/limits";
 import {
+  getCuratedMcpOAuthApproval,
   getNativeToolCatalog,
   isMcpConnectorRecommendedForPractice,
   isNativeToolEnabledForOrg,
   mcpConnectorCatalogMetadata,
 } from "@/api/lib/mcp-connectors/catalog-metadata";
+import { resolveMcpIssuerBinding } from "@/api/lib/mcp-upstream/authorization-review";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 
 import createMcpConnector from "./create-connector";
 
 const config = {
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "mcp_transport" },
   access: "read",
 } satisfies HandlerConfig;
@@ -43,6 +46,13 @@ const listMcpConnectors = createSafeRootHandler(
             authType: mcpConnectors.authType,
             isCurated: mcpConnectors.isCurated,
             oauthRequestedScopes: mcpConnectors.oauthRequestedScopes,
+            oauthIssuer: mcpConnectors.oauthIssuer,
+            oauthConfirmedEndpointOrigins:
+              mcpConnectors.oauthConfirmedEndpointOrigins,
+            reviewApprovedIssuer:
+              mcpConnectorAuthorizationReviews.approvedIssuer,
+            reviewApprovedEndpointOrigins:
+              mcpConnectorAuthorizationReviews.approvedEndpointOrigins,
             reviewObservedIssuer:
               mcpConnectorAuthorizationReviews.observedIssuer,
             reviewEndpointOrigins:
@@ -155,21 +165,44 @@ const CONNECTOR_AUTHORIZATION_STATUS = {
   approved: "approved",
   needsReapproval: "needs_reapproval",
   notRequired: "not_required",
+  unconfigured: "unconfigured",
 } as const;
 
-const connectorAuthorizationStatus = ({
-  authType,
-  authorizationReviewExists,
-}: {
+type ConnectorAuthorizationRow = {
   authType: typeof mcpConnectors.$inferSelect.authType;
   authorizationReviewExists: boolean;
-}) => {
-  if (authType !== "oauth2") {
+  url: string;
+  oauthIssuer: string | null;
+  oauthConfirmedEndpointOrigins: string[] | null;
+  reviewApprovedIssuer: string | null;
+  reviewApprovedEndpointOrigins: string[] | null;
+};
+
+// Classified from the same binding connect and token use resolve, so an
+// unconfigured issuer is reported before its first use records a review.
+const connectorAuthorizationStatus = (connector: ConnectorAuthorizationRow) => {
+  if (connector.authType !== "oauth2") {
     return CONNECTOR_AUTHORIZATION_STATUS.notRequired;
   }
-  return authorizationReviewExists
-    ? CONNECTOR_AUTHORIZATION_STATUS.needsReapproval
-    : CONNECTOR_AUTHORIZATION_STATUS.approved;
+  if (connector.authorizationReviewExists) {
+    return CONNECTOR_AUTHORIZATION_STATUS.needsReapproval;
+  }
+  const binding = resolveMcpIssuerBinding({
+    curatedApproval: getCuratedMcpOAuthApproval(connector.url),
+    connectorIssuer: connector.oauthIssuer,
+    connectorConfirmedEndpointOrigins: connector.oauthConfirmedEndpointOrigins,
+    reviewApprovedIssuer: connector.reviewApprovedIssuer,
+    reviewApprovedEndpointOrigins: connector.reviewApprovedEndpointOrigins,
+  });
+  switch (binding.type) {
+    case "approved":
+      return CONNECTOR_AUTHORIZATION_STATUS.approved;
+    case "unconfigured":
+      return CONNECTOR_AUTHORIZATION_STATUS.unconfigured;
+    default:
+      binding satisfies never;
+      return panic("Unhandled issuer binding");
+  }
 };
 
 type PendingAuthorizationReviewRow = {

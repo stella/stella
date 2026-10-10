@@ -28,9 +28,10 @@ draft that a person approves in the editor; you never approve it.
   `matter_id`. A document's text comes from `read_content_across_matters`;
   `read_document` returns its metadata, not its text.
 - In the stella chat these reads are the `external_*` functions inside
-  `execute_typescript`, documented in full in your instructions while this
-  skill is active; write each call from the signature there. A script has
-  no imports and returns plain JSON. If a call is rejected, re-read the
+  `execute_typescript`, such as `external_list_playbooks`. Write each call
+  from its signature: your instructions document it in full when this skill
+  is active; otherwise call `discover_tools` for it first. A script has no
+  imports and returns plain JSON. If a call is rejected, re-read the
   signature and correct the call yourself.
 - `save_playbook` and `ask-user` are direct tool calls, never functions in a
   script. Read in a script, then save with a tool call.
@@ -139,8 +140,12 @@ For each graded position, fill every field that applies:
   why the term matters from the organization's side.
 - `tiers`: `acceptable` rules, `ideal` wording, `fallback` alternatives from
   best to worst, and `not_acceptable` red lines.
-- `guidance`: what a reviewer examines in the clause. When a position comes
-  from the contracts, name the documents it rests on here.
+- `guidance`: what a reviewer examines in the clause.
+- `sources`: the documents the position was taken or revised from, by the
+  ids the listing returned. An extract position takes `sources` too. This
+  list is the only record of where a position came from: a playbook is
+  visible to the whole organization, so never write a document, matter, or
+  counterparty name in any saved text.
 - `negotiation`: `rationale`, `talking_points`, and `escalation`. Who decides
   a deviation, and when to route it to them, goes in `escalation`, never in a
   tier rule.
@@ -166,6 +171,8 @@ them.
   position you did not change.
 - To change a stored position, pass its `sourceId` as `source_id`; to add one,
   omit `source_id`. Remove with `remove_source_ids`.
+- On a change, leave `sources` out to keep the stored list; a list you send
+  replaces it.
 - A refused entry comes back in `issues` with its fix; apply the fix.
 - The user may be editing the playbook beside the chat. A version conflict
   means they did: read the playbook again with `list_playbooks`, keep their
@@ -178,4 +185,5 @@ them.
 
 When the positions are settled, summarize the playbook in a few lines: its
 name, the positions, and what the user still needs to decide. Tell the user it
-is a draft to review and approve in the playbook editor before it can run.
+is a draft to review and approve in the playbook editor before it can run,
+and to check before approving that no position names a document or a matter.

@@ -88,7 +88,7 @@ describe("case-law adapter registries", () => {
     const keys = listLazyAdapterKeys();
     const adapters = await Promise.all(keys.map(loadAdapterByKey));
     expect(adapters.map((adapter) => adapter?.key)).toEqual([...keys]);
-    expect(loadAdapterByKey("not-an-adapter")).resolves.toBeUndefined();
+    expect(await loadAdapterByKey("not-an-adapter")).toBeUndefined();
   });
 
   test("lazy loading rejects a module registered under the wrong key", async () => {

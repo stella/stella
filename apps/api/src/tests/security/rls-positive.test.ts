@@ -394,7 +394,7 @@ describe("organization UPDATE — correct scope", () => {
       query: (tx) =>
         tx
           .update(templateFills)
-          .set({ status: "pending" })
+          .set({ status: "partial" })
           .where(eq(templateFills.id, ids.templateFillA))
           .returning({ id: templateFills.id }),
     },
@@ -964,7 +964,7 @@ describe("organization INSERT — correct scope", () => {
           templateId: ids.templateA,
           userId: ids.userA2,
           format: "docx",
-          status: "completed",
+          status: "success",
         })
         .returning({ id: templateFills.id });
       expect(rows).toHaveLength(1);
@@ -1481,7 +1481,7 @@ describe("organization DELETE — correct scope", () => {
         templateId: ids.templateA,
         userId: ids.userA2,
         format: "docx",
-        status: "completed",
+        status: "success",
       });
       const rows = await tx
         .delete(templateFills)

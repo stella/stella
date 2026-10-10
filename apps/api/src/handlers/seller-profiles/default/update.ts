@@ -3,7 +3,7 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 
 import { sellerProfiles } from "@/api/db/schema";
 import { sellerProfileParams } from "@/api/handlers/seller-profiles/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -13,6 +13,8 @@ const config = {
     "Make one active issuer profile the organization's default. An archived " +
     "profile cannot be selected.",
   permissions: { organizationSettings: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.standard,
+  featureAccess: { featureId: "time-billing", type: "required" },
   mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   params: sellerProfileParams,
 } satisfies HandlerConfig;

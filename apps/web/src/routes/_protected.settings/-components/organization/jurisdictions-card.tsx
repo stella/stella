@@ -6,6 +6,7 @@ import { useTranslations } from "use-intl";
 import { Frame, FramePanel } from "@stll/ui/frame";
 
 import { JurisdictionPicker } from "@/components/jurisdiction-picker";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { unwrapEden } from "@/lib/errors/api";
@@ -14,14 +15,21 @@ import {
   organizationSettingsKeys,
   organizationSettingsOptions,
 } from "@/lib/organization/settings-queries";
+import { useQueryView } from "@/lib/use-query-view";
 import { useSettingsMutation } from "@/routes/_protected.settings/-hooks/use-settings-mutation";
 
 export const OrganizationJurisdictionsCard = () => {
   const t = useTranslations();
-  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
-  const { data: settings } = useQuery(
-    organizationSettingsOptions(activeOrganizationId),
+  const { activeOrganizationId, id: userId } = useAuthenticatedUser();
+  const settingsQuery = useQuery(
+    organizationSettingsOptions({
+      organizationId: activeOrganizationId,
+      userId,
+    }),
   );
+  const settingsView = useQueryView(settingsQuery);
+  const settings =
+    settingsView.type === "items" ? settingsView.items : undefined;
   const serverSelected = settings ? settings.practiceJurisdictions : [];
 
   // `useOptimistic` mirrors the server value and applies the latest user
@@ -51,8 +59,13 @@ export const OrganizationJurisdictionsCard = () => {
     errorToast: { title: t("errors.actionFailed") },
   });
 
+  if (settingsView.type !== "items") {
+    return <QueryViewFeedback view={settingsView} />;
+  }
+
   return (
     <Frame>
+      <QueryViewFeedback view={settingsView} />
       <FramePanel>
         <div className="flex flex-col gap-3 p-1">
           <p className="text-muted-foreground text-sm">

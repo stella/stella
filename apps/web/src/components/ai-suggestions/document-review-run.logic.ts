@@ -30,6 +30,69 @@ import type {
   DocumentReviewRunSummary,
   ReviewFinding,
 } from "@/components/ai-suggestions/document-review-queries";
+import type { QueryView } from "@/lib/query-view.logic";
+
+type ReviewHistoryPresentationArgs<TData, TError> = {
+  history: QueryView<TData, TError>;
+  restoreAllowed: boolean;
+  sessionRunId: string | null;
+  shownRunId: string | null;
+};
+
+type ReviewHistoryFailure<TData, TError> = Pick<
+  Extract<QueryView<TData, TError>, { type: "error" }>,
+  "error" | "retry"
+>;
+
+type ReviewHistoryPresentation<TData, TError> =
+  | { type: "pending" }
+  | ({ type: "error" } & ReviewHistoryFailure<TData, TError>)
+  | { type: "ready"; feedback: ReviewHistoryFailure<TData, TError> | null };
+
+export const reviewHistoryPresentation = <TData, TError>({
+  history,
+  restoreAllowed,
+  sessionRunId,
+  shownRunId,
+}: ReviewHistoryPresentationArgs<TData, TError>): ReviewHistoryPresentation<
+  TData,
+  TError
+> => {
+  switch (history.type) {
+    case "pending":
+      return restoreAllowed && sessionRunId === null
+        ? { type: "pending" }
+        : { type: "ready", feedback: null };
+    case "error":
+      if (shownRunId === null) {
+        return { type: "error", error: history.error, retry: history.retry };
+      }
+      return {
+        type: "ready",
+        feedback: { error: history.error, retry: history.retry },
+      };
+    case "empty":
+      return { type: "ready", feedback: null };
+    case "items":
+      if (history.refetchError === undefined) {
+        return { type: "ready", feedback: null };
+      }
+      if (shownRunId === null) {
+        return {
+          type: "error",
+          error: history.refetchError,
+          retry: history.retry,
+        };
+      }
+      return {
+        type: "ready",
+        feedback: { error: history.refetchError, retry: history.retry },
+      };
+    default:
+      history satisfies never;
+      return panic("Unhandled review history query state");
+  }
+};
 
 /** Poll cadence while a run is still queued or executing. Fast enough that a
  *  short run feels immediate, slow enough that a long one costs little. */
@@ -189,7 +252,7 @@ export const reviewRunView = (
 
 /** Where the run's position list came from. `ephemeral` is the case "Save as
  *  playbook" exists for: positions confirmed for this run and never saved. */
-export type ReviewPlaybookProvenance =
+type ReviewPlaybookProvenance =
   DocumentReviewRunBasis["playbook"]["provenance"];
 
 /** One position exactly as the run pinned it. */
@@ -231,7 +294,7 @@ const pinnedReferenceFiles = (
     fileName: reference.name ?? "",
   }));
 
-export const restoreReviewBasis = ({
+const restoreReviewBasis = ({
   basis,
   skipped,
 }: Pick<DocumentReviewRunRow, "basis" | "skipped">): RestoredReviewBasis => ({

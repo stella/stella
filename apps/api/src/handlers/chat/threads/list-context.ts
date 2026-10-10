@@ -2,7 +2,10 @@ import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
-import { isEntityKind } from "@stll/api-contract";
+import {
+  CHAT_MENTION_UUID_HREF_PATTERN,
+  isEntityKind,
+} from "@stll/api-contract";
 import type { EntityKind } from "@stll/api-contract";
 import { USER_FILE_URL_PREFIX } from "@stll/api-contract/user-file-url";
 
@@ -15,27 +18,52 @@ import { isRecord } from "@/api/lib/type-guards";
  * Counts beyond it are still reported, so the history can say "+N".
  */
 export const CHAT_THREAD_CONTEXT_PREVIEW_LIMIT = 8;
+/**
+ * Most files an open thread names. Higher than the list preview because the
+ * open thread lists every file it attached; the message scan limit below
+ * bounds the candidates either way.
+ */
+const CHAT_THREAD_OPEN_FILES_LIMIT = 50;
 /** Most recent user messages per thread read for mentions and uploads. */
-export const CHAT_THREAD_CONTEXT_MESSAGE_SCAN_LIMIT = 25;
+const CHAT_THREAD_CONTEXT_MESSAGE_SCAN_LIMIT = 25;
 /** Most pinned and most data matter ids per thread read from its arrays. */
 export const CHAT_THREAD_CONTEXT_MATTER_SCAN_LIMIT = 50;
 
-export type ChatThreadContextMatter = {
+type ChatThreadContextMatter = {
   color: string | null;
   id: string;
   name: string;
 };
 
-export type ChatThreadContextFile = {
-  id: string;
-  kind: EntityKind;
-  mimeType: string | null;
-  name: string;
-};
+/** Where a thread's file comes from, which decides how it opens. */
+const CHAT_THREAD_FILE_TYPE = {
+  /** A matter document the thread is bound to or a user message mentioned. */
+  entity: "entity",
+  /** A file uploaded to a user message, served from the user-file store. */
+  upload: "upload",
+} as const;
+
+type ChatThreadContextFile =
+  | {
+      id: string;
+      kind: EntityKind;
+      /** The matter the document lives in, where it opens. */
+      matterId: string;
+      mimeType: null;
+      name: string;
+      type: typeof CHAT_THREAD_FILE_TYPE.entity;
+    }
+  | {
+      id: string;
+      kind: "document";
+      mimeType: string;
+      name: string;
+      type: typeof CHAT_THREAD_FILE_TYPE.upload;
+    };
 
 /**
  * The matters and files one thread drew on, as a bounded preview: at most
- * `CHAT_THREAD_CONTEXT_PREVIEW_LIMIT` of each, in display order, beside the
+ * the reader's preview limit of each, in display order, beside the
  * number the scan found. A count can exceed the preview, never the reverse.
  */
 export type ChatThreadContext = {
@@ -52,11 +80,16 @@ export const EMPTY_CHAT_THREAD_CONTEXT: ChatThreadContext = {
   matters: [],
 };
 
+type ChatThreadFileType =
+  (typeof CHAT_THREAD_FILE_TYPE)[keyof typeof CHAT_THREAD_FILE_TYPE];
+
 type ChatThreadContextRow = {
   color: string | null;
+  fileType: ChatThreadFileType | null;
   itemId: string;
   itemType: "file" | "matter";
   kind: string | null;
+  matterId: string | null;
   mimeType: string | null;
   name: string;
   threadId: string;
@@ -65,6 +98,10 @@ type ChatThreadContextRow = {
 
 const isNullableString = (value: unknown): value is string | null =>
   value === null || typeof value === "string";
+
+const isChatThreadFileType = (value: unknown): value is ChatThreadFileType =>
+  value === CHAT_THREAD_FILE_TYPE.entity ||
+  value === CHAT_THREAD_FILE_TYPE.upload;
 
 const isChatThreadContextRow = (
   value: unknown,
@@ -76,14 +113,92 @@ const isChatThreadContextRow = (
   typeof value["name"] === "string" &&
   typeof value["total"] === "number" &&
   isNullableString(value["color"]) &&
+  (value["fileType"] === null || isChatThreadFileType(value["fileType"])) &&
   isNullableString(value["kind"]) &&
+  isNullableString(value["matterId"]) &&
   isNullableString(value["mimeType"]);
 
 const UUID_PATTERN =
   "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$";
 
+/**
+ * Every mention a thread's recent user messages carry, per message in order.
+ * Versions 2 and 3 keep mentions in metadata; version 1 kept them as
+ * data-stella-mentions parts; the composer's mention chips persist only as
+ * mention links in the text.
+ */
+const mentionValuesQuery = sql`
+  SELECT
+    recent.thread_id,
+    recent.created_at,
+    mention.value->>'category' AS category,
+    mention.value->>'id' AS raw_id,
+    mention.ordinality AS position
+  FROM recent_user_messages recent
+  CROSS JOIN LATERAL jsonb_array_elements(
+    jsonb_path_query_array(
+      recent.content,
+      '$.metadata.mentions.mentions[*]'
+    ) || jsonb_path_query_array(
+      recent.content,
+      '$.data[*] ? (@.type == "data-stella-mentions").data.mentions[*]'
+    )
+  ) WITH ORDINALITY AS mention(value, ordinality)
+  UNION ALL
+  SELECT
+    recent.thread_id,
+    recent.created_at,
+    CASE WHEN link.groups[1] IS NOT NULL THEN 'entity' ELSE 'workspace' END,
+    COALESCE(link.groups[1], link.groups[2]),
+    link.ordinality
+  FROM recent_user_messages recent
+  CROSS JOIN LATERAL jsonb_array_elements_text(
+    jsonb_path_query_array(
+      recent.content,
+      '$.data[*] ? (@.type == "text").content ? (@.type() == "string")'
+    )
+  ) AS text_part(content)
+  CROSS JOIN LATERAL regexp_matches(
+    text_part.content,
+    ${CHAT_MENTION_UUID_HREF_PATTERN}::text,
+    'g'
+  ) WITH ORDINALITY AS link(groups, ordinality)
+`;
+
+/**
+ * Uploads the surviving messages still reference: image and document parts
+ * (versions 2 and 3) and legacy file parts (version 1). An upload whose
+ * message was edited away or truncated is not context any more.
+ */
+const attachmentRefsQuery = sql`
+  SELECT
+    recent.thread_id,
+    recent.created_at,
+    CASE
+      WHEN starts_with(ref.url, ${USER_FILE_URL_PREFIX})
+        AND substring(ref.url FROM ${USER_FILE_URL_PREFIX.length + 1}::int) ~* ${UUID_PATTERN}
+      THEN substring(ref.url FROM ${USER_FILE_URL_PREFIX.length + 1}::int)::uuid
+    END AS file_id
+  FROM recent_user_messages recent
+  CROSS JOIN LATERAL jsonb_array_elements_text(
+    jsonb_path_query_array(
+      recent.content,
+      '$.data[*] ? (@.type == "image" || @.type == "document").source.value ? (@.type() == "string")'
+    ) || jsonb_path_query_array(
+      recent.content,
+      '$.data[*] ? (@.type == "file").url ? (@.type() == "string")'
+    )
+  ) AS ref(url)
+`;
+
 /** The one statement behind `readChatThreadContexts`. */
-const chatThreadContextsQuery = (threadIds: readonly string[]): SQL => sql`
+const chatThreadContextsQuery = ({
+  previewLimit,
+  threadIds,
+}: {
+  previewLimit: number;
+  threadIds: readonly string[];
+}): SQL => sql`
     WITH page_threads AS (
       SELECT
         t.id AS thread_id,
@@ -107,54 +222,23 @@ const chatThreadContextsQuery = (threadIds: readonly string[]): SQL => sql`
         LIMIT ${CHAT_THREAD_CONTEXT_MESSAGE_SCAN_LIMIT}
       ) m
     ),
-    -- Every persisted version: version 2 and 3 keep mentions in metadata;
-    -- version 1 kept them as data-stella-mentions parts.
+    mention_values AS (
+      ${mentionValuesQuery}
+    ),
     mention_refs AS (
       SELECT
-        recent.thread_id,
-        recent.created_at,
-        mention.value->>'category' AS category,
-        CASE
-          WHEN mention.value->>'id' ~* ${UUID_PATTERN}
-          THEN (mention.value->>'id')::uuid
-        END AS ref_id,
+        thread_id,
+        created_at,
+        category,
+        CASE WHEN raw_id ~* ${UUID_PATTERN} THEN raw_id::uuid END AS ref_id,
         row_number() OVER (
-          PARTITION BY recent.thread_id
-          ORDER BY recent.created_at DESC, mention.ordinality
+          PARTITION BY thread_id
+          ORDER BY created_at DESC, position
         ) AS ord
-      FROM recent_user_messages recent
-      CROSS JOIN LATERAL jsonb_array_elements(
-        jsonb_path_query_array(
-          recent.content,
-          '$.metadata.mentions.mentions[*]'
-        ) || jsonb_path_query_array(
-          recent.content,
-          '$.data[*] ? (@.type == "data-stella-mentions").data.mentions[*]'
-        )
-      ) WITH ORDINALITY AS mention(value, ordinality)
+      FROM mention_values
     ),
-    -- Uploads the surviving messages still reference: image and document
-    -- parts (versions 2 and 3) and legacy file parts (version 1). An upload
-    -- whose message was edited away or truncated is not context any more.
     attachment_refs AS (
-      SELECT
-        recent.thread_id,
-        recent.created_at,
-        CASE
-          WHEN starts_with(ref.url, ${USER_FILE_URL_PREFIX})
-            AND substring(ref.url FROM ${USER_FILE_URL_PREFIX.length + 1}::int) ~* ${UUID_PATTERN}
-          THEN substring(ref.url FROM ${USER_FILE_URL_PREFIX.length + 1}::int)::uuid
-        END AS file_id
-      FROM recent_user_messages recent
-      CROSS JOIN LATERAL jsonb_array_elements_text(
-        jsonb_path_query_array(
-          recent.content,
-          '$.data[*] ? (@.type == "image" || @.type == "document").source.value ? (@.type() == "string")'
-        ) || jsonb_path_query_array(
-          recent.content,
-          '$.data[*] ? (@.type == "file").url ? (@.type() == "string")'
-        )
-      ) AS ref(url)
+      ${attachmentRefsQuery}
     ),
     thread_attachments AS (
       SELECT DISTINCT ON (thread_id, file_id) thread_id, file_id, created_at
@@ -223,6 +307,8 @@ const chatThreadContextsQuery = (threadIds: readonly string[]): SQL => sql`
         COALESCE(NULLIF(e.name, ''), e.display_name) AS name,
         e.kind,
         NULL::text AS mime_type,
+        ${CHAT_THREAD_FILE_TYPE.entity}::text AS file_type,
+        e.workspace_id::text AS matter_id,
         te.sort_at
       FROM thread_entities te
       JOIN entities e ON e.id = te.entity_id
@@ -233,6 +319,8 @@ const chatThreadContextsQuery = (threadIds: readonly string[]): SQL => sql`
         uf.file_name,
         'document',
         uf.mime_type,
+        ${CHAT_THREAD_FILE_TYPE.upload}::text,
+        NULL::text,
         ta.created_at
       FROM thread_attachments ta
       JOIN user_files uf ON uf.id = ta.file_id AND uf.thread_id = ta.thread_id
@@ -244,6 +332,8 @@ const chatThreadContextsQuery = (threadIds: readonly string[]): SQL => sql`
         name,
         kind,
         mime_type,
+        file_type,
+        matter_id,
         row_number() OVER (
           PARTITION BY thread_id ORDER BY sort_at DESC, item_id
         ) AS rank,
@@ -259,9 +349,11 @@ const chatThreadContextsQuery = (threadIds: readonly string[]): SQL => sql`
       NULL::text AS kind,
       NULL::text AS "mimeType",
       total::int AS total,
-      rank::int AS rank
+      rank::int AS rank,
+      NULL::text AS "fileType",
+      NULL::text AS "matterId"
     FROM ranked_matters
-    WHERE rank <= ${CHAT_THREAD_CONTEXT_PREVIEW_LIMIT}
+    WHERE rank <= ${previewLimit}
     UNION ALL
     SELECT
       thread_id::text,
@@ -272,11 +364,49 @@ const chatThreadContextsQuery = (threadIds: readonly string[]): SQL => sql`
       kind,
       mime_type,
       total::int,
-      rank::int
+      rank::int,
+      file_type,
+      matter_id
     FROM ranked_files
-    WHERE rank <= ${CHAT_THREAD_CONTEXT_PREVIEW_LIMIT}
+    WHERE rank <= ${previewLimit}
     ORDER BY 1, 2, 9
 `;
+
+const toContextFile = (
+  row: ChatThreadContextRow,
+): ChatThreadContextFile | null => {
+  switch (row.fileType) {
+    case null:
+      return panic("A chat thread file row has no file type");
+    case CHAT_THREAD_FILE_TYPE.upload:
+      return {
+        id: row.itemId,
+        kind: "document",
+        mimeType:
+          row.mimeType ?? panic("An uploaded chat file has no mime type"),
+        name: row.name,
+        type: CHAT_THREAD_FILE_TYPE.upload,
+      };
+    case CHAT_THREAD_FILE_TYPE.entity:
+      // A kind outside the closed set is a row this build cannot draw; it is
+      // left out of the preview but stays in the count.
+      if (!isEntityKind(row.kind)) {
+        return null;
+      }
+      return {
+        id: row.itemId,
+        kind: row.kind,
+        matterId: row.matterId ?? panic("A chat file document has no matter"),
+        mimeType: null,
+        name: row.name,
+        type: CHAT_THREAD_FILE_TYPE.entity,
+      };
+    default: {
+      row.fileType satisfies never;
+      return panic("Unhandled chat thread file type");
+    }
+  }
+};
 
 /**
  * Reads the context of a page of threads in one statement, never per row.
@@ -295,9 +425,12 @@ const chatThreadContextsQuery = (threadIds: readonly string[]): SQL => sql`
  * or document the user can no longer open is neither shown nor counted.
  */
 export const readChatThreadContexts = async ({
+  previewLimit,
   threadIds,
   tx,
 }: {
+  /** Most matters and most files named per thread; counts go beyond it. */
+  previewLimit: number;
   threadIds: readonly string[];
   tx: Pick<Transaction, "execute">;
 }): Promise<Map<string, ChatThreadContext>> => {
@@ -306,7 +439,9 @@ export const readChatThreadContexts = async ({
     return contexts;
   }
 
-  const result = await tx.execute(chatThreadContextsQuery(threadIds));
+  const result = await tx.execute(
+    chatThreadContextsQuery({ previewLimit, threadIds }),
+  );
 
   for (const row of executedRows(result)) {
     if (!isChatThreadContextRow(row)) {
@@ -329,18 +464,48 @@ export const readChatThreadContexts = async ({
       context.matterCount = Math.max(total, context.matters.length);
       continue;
     }
-    // A kind outside the closed set is a row this build cannot draw; it is
-    // left out of the preview but stays in the count.
-    if (isEntityKind(row.kind)) {
-      context.files.push({
-        id: row.itemId,
-        kind: row.kind,
-        mimeType: row.mimeType,
-        name: row.name,
-      });
+    const file = toContextFile(row);
+    if (file !== null) {
+      context.files.push(file);
     }
     context.fileCount = Math.max(total, context.files.length);
   }
 
   return contexts;
+};
+
+/** The files one open thread attached, beside the number the scan found. */
+export type ChatThreadAttachedFiles = Pick<
+  ChatThreadContext,
+  "fileCount" | "files"
+>;
+
+export const EMPTY_CHAT_THREAD_ATTACHED_FILES: ChatThreadAttachedFiles = {
+  fileCount: 0,
+  files: [],
+};
+
+/**
+ * The files an open thread attached, by the same definition and RLS scope as
+ * the history list's context, so the thread header and its history row cannot
+ * disagree. Read from the server rather than the loaded transcript, because
+ * older messages page in on demand.
+ */
+export const readChatThreadAttachedFiles = async ({
+  threadId,
+  tx,
+}: {
+  threadId: string;
+  tx: Pick<Transaction, "execute">;
+}): Promise<ChatThreadAttachedFiles> => {
+  const contexts = await readChatThreadContexts({
+    previewLimit: CHAT_THREAD_OPEN_FILES_LIMIT,
+    threadIds: [threadId],
+    tx,
+  });
+  const context = contexts.get(threadId);
+  if (context === undefined) {
+    return EMPTY_CHAT_THREAD_ATTACHED_FILES;
+  }
+  return { fileCount: context.fileCount, files: context.files };
 };

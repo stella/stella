@@ -1,4 +1,6 @@
 #!/usr/bin/env bun
+import { childExitStatus } from "../packages/scripts/src/child-exit-status";
+
 // Force dependency review to name both published versions. Bun's one-argument
 // form compares the lockfile against a moving "latest" target, which is useful
 // interactively but cannot produce a reproducible review artifact.
@@ -30,4 +32,5 @@ const child = Bun.spawn(["bun", "--no-env-file", "pm", "diff", ...args], {
   stdin: "inherit",
   stdout: "inherit",
 });
-process.exit(await child.exited);
+await child.exited;
+process.exit(childExitStatus(child));

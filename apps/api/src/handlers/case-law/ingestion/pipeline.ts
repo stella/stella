@@ -38,11 +38,17 @@ import {
   PROCESS_DECISION_STATUS,
   PROCESS_DECISION_RETRY_REASON,
 } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
-import { createSourceMetadataUrlSchemaResolver } from "@/api/handlers/case-law/ingestion/pipeline/source-metadata-schema";
+import { createSourceContractResolver } from "@/api/handlers/case-law/ingestion/pipeline/source-contract";
 import { allocateSourceObservationOrder } from "@/api/handlers/case-law/ingestion/pipeline/source-observation";
 import { readStoredRawFromS3 } from "@/api/handlers/case-law/ingestion/pipeline/stored-raw";
 import { processSupplement } from "@/api/handlers/case-law/ingestion/pipeline/supplement";
 import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/types";
+import {
+  loadUnavailableStreaks,
+  planUnreadItems,
+  sameStreaks,
+  writeUnavailableStreaks,
+} from "@/api/handlers/case-law/ingestion/pipeline/unread-items";
 import { refreshNextSourceStoredTotal } from "@/api/handlers/case-law/ingestion/source-totals";
 import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -51,6 +57,7 @@ import {
   CORPUS_SOURCE_TYPE,
   INGESTION_CHECKPOINT_STATUS,
 } from "@/api/lib/corpus-ingestion-checkpoint";
+import { UNAVAILABLE_CYCLES_BEFORE_MARKING } from "@/api/lib/errors/read-outcome";
 import {
   AdapterFetchError,
   ConcurrentModificationError,
@@ -200,9 +207,16 @@ const batchStopKind = (
   }
 };
 
-/** What a page asks the database to write: its decisions and supplements. */
-const pageItemCount = ({ decisions, supplements }: SyncPage): number =>
-  decisions.length + (supplements?.length ?? 0);
+/**
+ * What a page asks the database to write: its decisions, supplements and
+ * unread items.
+ */
+const pageItemCount = ({
+  decisions,
+  supplements,
+  unreadItems,
+}: SyncPage): number =>
+  decisions.length + (supplements?.length ?? 0) + (unreadItems?.length ?? 0);
 
 const PAGE_SLOT = {
   HELD: "held",
@@ -234,8 +248,7 @@ export const runIngestionPipeline = async ({
   dbSlot,
   corpus = CASE_LAW_CORPUS_DEPENDENCIES,
 }: PipelineInput): Promise<IngestionPipelineResult> => {
-  const resolveMetadataUrlSchema =
-    createSourceMetadataUrlSchemaResolver(scopedDb);
+  const resolveSourceContract = createSourceContractResolver(scopedDb);
   const adapter = getAdapter(source.adapterKey);
 
   if (!adapter) {
@@ -247,6 +260,11 @@ export const runIngestionPipeline = async ({
   const deadline = cycle === undefined ? undefined : startCycleDeadline(cycle);
 
   let cursor = source.syncCursor;
+  /** The held page's consecutive unavailable cycles, as last stored. */
+  let unavailableStreaks = loadUnavailableStreaks({
+    adapterKey: adapter.key,
+    config: source.config,
+  });
   let inserted = 0;
   let skipped = 0;
   let searchVectorFailures = 0;
@@ -495,7 +513,7 @@ export const runIngestionPipeline = async ({
           insertLimit:
             maxDecisions === undefined ? undefined : maxDecisions - inserted,
         },
-        resolveMetadataUrlSchema,
+        resolveSourceContract,
       );
       inserted += applied.inserted;
       skipped += applied.skipped;
@@ -557,7 +575,7 @@ export const runIngestionPipeline = async ({
               corpus,
               polarityRules,
             },
-            resolveMetadataUrlSchema,
+            resolveSourceContract,
           ),
         catch: (cause) => cause,
       });
@@ -601,7 +619,74 @@ export const runIngestionPipeline = async ({
     return await flushIngestionFailures(failures);
   };
 
-  /** Apply a page's decisions, then place its supplements. */
+  /**
+   * Settle a page's unread items once everything else on it is settled.
+   * Items whose read stays unavailable hold the cursor until their bound is
+   * spent; refusals and spent items are stored typed. The counts are written
+   * only from a cycle in which nothing else held the page, so a cycle that
+   * failed for another reason does not count against an item.
+   */
+  const settlePageUnreadItems = async ({
+    unreadItems,
+    observation,
+  }: {
+    unreadItems: SyncPage["unreadItems"];
+    observation: { order: bigint; observedAt: Date };
+  }): Promise<string | null> => {
+    if (
+      unreadItems === undefined &&
+      Object.keys(unavailableStreaks).length === 0
+    ) {
+      return null;
+    }
+    const plan = planUnreadItems(unreadItems, unavailableStreaks);
+    if (plan.terminal.length > 0) {
+      const s3FailuresBefore = s3UploadFailures;
+      const halted = await applyPageDecisions({
+        decisions: plan.terminal,
+        observation,
+      });
+      if (halted !== null) {
+        return halted;
+      }
+      if (s3UploadFailures > s3FailuresBefore) {
+        // The page's corpus-write hold reports this cycle; the counts stay.
+        return null;
+      }
+    }
+    if (!sameStreaks(plan.streaks, unavailableStreaks)) {
+      await sourceLease.beforeDatabaseMark();
+      const written = await writeUnavailableStreaks({
+        scopedDb,
+        sourceId: source.id,
+        leaseToken: sourceLease.leaseToken,
+        streaks: plan.streaks,
+      });
+      if (!written) {
+        stopKind = INGESTION_STOP_KIND.INTERNAL_ERROR;
+        return "Source ingestion lease was lost; cursor held for retry";
+      }
+      unavailableStreaks = plan.streaks;
+    }
+    if (plan.holding === 0) {
+      if (plan.terminal.length > 0) {
+        logger.warn("case_law.ingestion.unread_items_stored", {
+          adapterKey: adapter.key,
+          cursor: cursor ?? "",
+          stored: plan.terminal.length,
+        });
+      }
+      return null;
+    }
+    stopKind = INGESTION_STOP_KIND.SOURCE_UNREACHABLE;
+    return `${plan.holding} listed item(s) unavailable for fewer than ${UNAVAILABLE_CYCLES_BEFORE_MARKING} consecutive cycles; cursor held for retry`;
+  };
+
+  /**
+   * Apply a page's decisions, place its supplements, then settle its unread
+   * items. A page with failed corpus writes stops before the unread items:
+   * the cycle is held for those writes and does not count against an item.
+   */
   const applyPage = async ({
     page,
     observation,
@@ -609,6 +694,7 @@ export const runIngestionPipeline = async ({
     page: SyncPage;
     observation: { order: bigint; observedAt: Date };
   }): Promise<string | null> => {
+    const s3FailuresBefore = s3UploadFailures;
     const halted = await applyPageDecisions({
       decisions: page.decisions,
       observation,
@@ -616,9 +702,16 @@ export const runIngestionPipeline = async ({
     // After the page's packs are flushed, so a judgment written on this page
     // is settled before its supplement writes it again, and before the
     // cursor moves, so a supplement that could not be placed holds it.
-    return await placePageSupplements({
+    const placed = await placePageSupplements({
       supplements: page.supplements,
       halted,
+    });
+    if (placed !== null || s3UploadFailures > s3FailuresBefore) {
+      return placed;
+    }
+    return await settlePageUnreadItems({
+      unreadItems: page.unreadItems,
+      observation,
     });
   };
 

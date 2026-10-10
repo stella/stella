@@ -1,3 +1,4 @@
+import { panic, Result } from "better-result";
 /**
  * One unit of listing reconciliation for one source.
  *
@@ -22,8 +23,6 @@
  * on are counted in the summary and excluded from both, since a slice that
  * counted them could never settle.
  */
-
-import { panic, Result } from "better-result";
 import type { SQL } from "drizzle-orm";
 import {
   and,
@@ -40,6 +39,7 @@ import {
   asc,
 } from "drizzle-orm";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { DAY_IN_MS } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
@@ -59,9 +59,9 @@ import {
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import { PROCESS_DECISION_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import {
-  createSourceMetadataUrlSchemaResolver,
-  type SourceMetadataUrlSchemaResolver,
-} from "@/api/handlers/case-law/ingestion/pipeline/source-metadata-schema";
+  createSourceContractResolver,
+  type SourceContractResolver,
+} from "@/api/handlers/case-law/ingestion/pipeline/source-contract";
 import { allocateSourceObservationOrder } from "@/api/handlers/case-law/ingestion/pipeline/source-observation";
 import { readStoredRawFromS3 } from "@/api/handlers/case-law/ingestion/pipeline/stored-raw";
 import { processSupplement } from "@/api/handlers/case-law/ingestion/pipeline/supplement";
@@ -135,7 +135,7 @@ const PARKED_RETRY_BATCH = 25;
  * finite, and the slice records short afterwards, so it is selected again
  * rather than forgotten.
  */
-export const DEFAULT_SLICE_INGEST_BUDGET = 50;
+const DEFAULT_SLICE_INGEST_BUDGET = 50;
 /**
  * The most a unit may be asked to ingest. One walk holds the source lease for
  * its whole run, so the option is bounded here rather than trusted.
@@ -215,7 +215,7 @@ export const RECONCILIATION_LISTING_WORST_CASE_MS =
  */
 export const RECONCILIATION_UNIT_SETTLE_MS = 15 * 60_000;
 
-export type ReconciliationUnitSummary = {
+type ReconciliationUnitSummary = {
   unit: ReconciliationWorkUnit["type"];
   reason: SliceWalkReason | null;
   slice: string | null;
@@ -290,7 +290,7 @@ export type ReconciliationUnitOutcome =
  * enough that a slice nothing can serve costs its source one turn an hour
  * instead of one a minute.
  */
-export const RECONCILIATION_SLICE_RETRY_MS = 60 * 60_000;
+const RECONCILIATION_SLICE_RETRY_MS = 60 * 60_000;
 
 /** Longest `walk_error` text recorded; the ledger is a note, not a log. */
 const WALK_ERROR_MAX_LENGTH = 500;
@@ -357,8 +357,8 @@ const forEachChunk = async <T>(
   values: readonly T[],
   visit: (chunk: T[]) => Promise<void>,
 ): Promise<void> => {
-  for (let index = 0; index < values.length; index += HELD_LOOKUP_CHUNK) {
-    await visit(values.slice(index, index + HELD_LOOKUP_CHUNK));
+  for (const itemBatch of chunkItems(values, HELD_LOOKUP_CHUNK)) {
+    await visit(itemBatch);
   }
 };
 
@@ -1210,7 +1210,7 @@ type IngestItemOptions = {
   reconciliation: SourceReconciliation;
   reparseStoredRaw: SourceAdapter["reparseStoredRaw"];
   scopedDb: ScopedDb;
-  resolveMetadataUrlSchema: SourceMetadataUrlSchemaResolver;
+  resolveSourceContract: SourceContractResolver;
   slice: string;
   sourceId: SafeId<"caseLawSource">;
   summary: ReconciliationUnitSummary;
@@ -1234,7 +1234,7 @@ const ingestListedItem = async ({
   reconciliation,
   reparseStoredRaw,
   scopedDb,
-  resolveMetadataUrlSchema,
+  resolveSourceContract,
   slice,
   sourceId,
   summary,
@@ -1322,7 +1322,7 @@ const ingestListedItem = async ({
               observedAt: now,
               observationOrder,
             },
-            resolveMetadataUrlSchema,
+            resolveSourceContract,
           );
         };
         // The decision first, then what its page states beside it. A
@@ -1372,7 +1372,7 @@ const ingestListedItem = async ({
             reparseStoredRaw,
             readStoredRaw: readStoredRawFromS3,
           },
-          resolveMetadataUrlSchema,
+          resolveSourceContract,
         );
         if (placed.status === PROCESS_DECISION_STATUS.RETRYABLE) {
           await park(`retryable:${placed.reason}`);
@@ -1453,7 +1453,7 @@ type WalkSliceOptions = {
   reconciliation: SourceReconciliation;
   reparseStoredRaw: SourceAdapter["reparseStoredRaw"];
   scopedDb: ScopedDb;
-  resolveMetadataUrlSchema: SourceMetadataUrlSchemaResolver;
+  resolveSourceContract: SourceContractResolver;
   slice: string;
   sleep: (ms: number) => Promise<void>;
   sourceId: SafeId<"caseLawSource">;
@@ -1477,7 +1477,7 @@ const walkSlice = async ({
   reconciliation,
   reparseStoredRaw,
   scopedDb,
-  resolveMetadataUrlSchema,
+  resolveSourceContract,
   slice,
   sleep,
   sourceId,
@@ -1575,7 +1575,7 @@ const walkSlice = async ({
       reconciliation,
       reparseStoredRaw,
       scopedDb,
-      resolveMetadataUrlSchema,
+      resolveSourceContract,
       slice,
       sourceId,
       summary,
@@ -1626,7 +1626,7 @@ type RecheckTextlessHeldOptions = {
   reconciliation: SourceReconciliation;
   reparseStoredRaw: SourceAdapter["reparseStoredRaw"];
   scopedDb: ScopedDb;
-  resolveMetadataUrlSchema: SourceMetadataUrlSchemaResolver;
+  resolveSourceContract: SourceContractResolver;
   sleep: (ms: number) => Promise<void>;
   sourceId: SafeId<"caseLawSource">;
 };
@@ -1640,7 +1640,7 @@ const recheckTextlessHeldRows = async ({
   reconciliation,
   reparseStoredRaw,
   scopedDb,
-  resolveMetadataUrlSchema,
+  resolveSourceContract,
   sleep,
   sourceId,
 }: RecheckTextlessHeldOptions): Promise<ReconciliationUnitSummary> => {
@@ -1753,7 +1753,7 @@ const recheckTextlessHeldRows = async ({
       reconciliation,
       reparseStoredRaw,
       scopedDb,
-      resolveMetadataUrlSchema,
+      resolveSourceContract,
       slice: item.slice,
       sourceId,
       summary,
@@ -1773,7 +1773,7 @@ type RetryParkedOptions = {
   reconciliation: SourceReconciliation;
   reparseStoredRaw: SourceAdapter["reparseStoredRaw"];
   scopedDb: ScopedDb;
-  resolveMetadataUrlSchema: SourceMetadataUrlSchemaResolver;
+  resolveSourceContract: SourceContractResolver;
   sleep: (ms: number) => Promise<void>;
   sourceId: SafeId<"caseLawSource">;
 };
@@ -1792,7 +1792,7 @@ const retryParkedItems = async ({
   reconciliation,
   reparseStoredRaw,
   scopedDb,
-  resolveMetadataUrlSchema,
+  resolveSourceContract,
   sleep,
   sourceId,
 }: RetryParkedOptions): Promise<ReconciliationUnitSummary> => {
@@ -1877,7 +1877,7 @@ const retryParkedItems = async ({
       reconciliation,
       reparseStoredRaw,
       scopedDb,
-      resolveMetadataUrlSchema,
+      resolveSourceContract,
       slice: item.slice,
       sourceId,
       summary,
@@ -1928,8 +1928,7 @@ const executeReconciliationUnit = async ({
     return { type: "leased" };
   }
 
-  const resolveMetadataUrlSchema =
-    createSourceMetadataUrlSchemaResolver(scopedDb);
+  const resolveSourceContract = createSourceContractResolver(scopedDb);
   try {
     switch (unit.type) {
       case "parked-retries":
@@ -1943,7 +1942,7 @@ const executeReconciliationUnit = async ({
             reconciliation,
             reparseStoredRaw,
             scopedDb,
-            resolveMetadataUrlSchema,
+            resolveSourceContract,
             sleep,
             sourceId,
           }),
@@ -1960,7 +1959,7 @@ const executeReconciliationUnit = async ({
             reconciliation,
             reparseStoredRaw,
             scopedDb,
-            resolveMetadataUrlSchema,
+            resolveSourceContract,
             sleep,
             sourceId,
           }),
@@ -1978,7 +1977,7 @@ const executeReconciliationUnit = async ({
             reconciliation,
             reparseStoredRaw,
             scopedDb,
-            resolveMetadataUrlSchema,
+            resolveSourceContract,
             slice: unit.slice,
             sleep,
             sourceId,

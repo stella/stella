@@ -1,8 +1,10 @@
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
 
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { buildSearchResults } from "@stll/decision-reader/reader-search";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ChevronLeftIcon, ChevronRightIcon, XIcon } from "@stll/ui/icons";
@@ -18,6 +20,8 @@ type InspectorFindOptions = {
   contentRef: RefObject<HTMLElement | null>;
   /** While false the surface is not a candidate and its bar cannot open. */
   enabled: boolean;
+  /** Search terms supplied when this reader opens; later edits belong to the bar. */
+  initialQuery?: string | undefined;
   /**
    * Separates this reader's highlights from those of a reader mounted beside
    * it — the inspector keeps its background tabs mounted. Sanitized here, so
@@ -74,9 +78,14 @@ export const useInspectorFind = ({
   contentRef,
   enabled,
   highlightKey,
+  initialQuery,
   panelRef,
 }: InspectorFindOptions) => {
-  const [findState, setFindState] = useState<FindBarState>(FIND_CLOSED);
+  const [findState, setFindState] = useState<FindBarState>(() =>
+    initialQuery?.trim()
+      ? { ...FIND_OPENED, query: initialQuery.trim() }
+      : FIND_CLOSED,
+  );
   const safeKey = sanitizeHighlightKey(highlightKey);
   const allHighlightName = `stella-inspector-find-${safeKey}`;
   const activeHighlightName = `stella-inspector-find-active-${safeKey}`;
@@ -92,8 +101,9 @@ export const useInspectorFind = ({
   }, [activeHighlightName, allHighlightName]);
 
   const closeFind = useCallback(() => {
+    clearFind();
     setFindState(FIND_CLOSED);
-  }, []);
+  }, [clearFind]);
 
   const openFind = useCallback(() => {
     if (!enabled) {
@@ -103,7 +113,9 @@ export const useInspectorFind = ({
   }, [enabled]);
 
   const setFindQuery = useCallback((query: string) => {
-    setFindState((prev) => (prev.open ? { ...prev, query } : prev));
+    setFindState((prev) =>
+      prev.open ? { ...prev, query, activeIndex: 0 } : prev,
+    );
   }, []);
 
   const nextMatch = useCallback(() => {
@@ -154,9 +166,15 @@ export const useInspectorFind = ({
   // rather than travelling through a registry that has no opinion about it.
   useExternalSyncEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (enabled && findOpen && event.key === "Escape") {
+      if (
+        enabled &&
+        findOpen &&
+        event.key === "Escape" &&
+        event.target instanceof Node &&
+        panelRef.current?.contains(event.target)
+      ) {
         event.preventDefault();
-        setFindState(FIND_CLOSED);
+        closeFind();
       }
     };
 
@@ -164,7 +182,7 @@ export const useInspectorFind = ({
     return () => {
       document.removeEventListener("keydown", handleKeyDown, { capture: true });
     };
-  }, [enabled, findOpen]);
+  }, [closeFind, enabled, findOpen, panelRef]);
 
   // One collection for both things that change what matches: the bar's own
   // values, and the reader's text arriving later. Called with the values
@@ -415,50 +433,73 @@ export const InspectorFindBar = ({ find }: { find: InspectorFind }) => {
   );
 };
 
-/**
- * Case-folded text whose offsets still address the original: a character
- * whose lowercase form has a different UTF-16 length (`İ` becomes `i̇`)
- * stays as it is, so an index found in the folded text is valid as a range
- * offset in the node it came from.
- */
-const foldCase = (text: string): string => {
-  const folded = text.toLocaleLowerCase();
-  if (folded.length === text.length) {
-    return folded;
-  }
-  let out = "";
-  for (const char of text) {
-    const lower = char.toLocaleLowerCase();
-    out += lower.length === char.length ? lower : char;
-  }
-  return out;
-};
+type TextNodeSegment = { node: Node; start: number; end: number };
+type TextPiece = { id: string; text: string; nodes: TextNodeSegment[] };
 
+/** Inline markup shares a search piece; paragraph boundaries keep words apart. */
 const collectTextRanges = (root: HTMLElement, query: string): Range[] => {
-  const ranges: Range[] = [];
-  const normalizedQuery = foldCase(query);
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-
+  const pieces: TextPiece[] = [];
+  const textRoot = root.matches('[data-slot="reader-document-column"]')
+    ? root
+    : (root.querySelector<HTMLElement>(
+        '[data-slot="reader-document-column"]',
+      ) ?? root);
+  const walker = document.createTreeWalker(textRoot, NodeFilter.SHOW_TEXT);
+  let previousBlock: Element | null = null;
+  let piece: TextPiece | undefined;
   while (walker.nextNode()) {
     const node = walker.currentNode;
+    const parent = node.parentElement;
+    if (
+      parent?.closest(
+        "[data-reader-chrome], [aria-hidden='true'], .sr-only, script, style",
+      )
+    ) {
+      continue;
+    }
     const text = node.textContent ?? "";
-    const normalizedText = foldCase(text);
-    let from = 0;
-
-    while (from < normalizedText.length) {
-      const index = normalizedText.indexOf(normalizedQuery, from);
-      if (index === -1) {
-        break;
+    if (text.length === 0) {
+      continue;
+    }
+    const block =
+      parent?.closest(
+        "p, li, dt, dd, h1, h2, h3, h4, h5, h6, td, th, blockquote, pre, figcaption",
+      ) ?? textRoot;
+    if (piece === undefined || block !== previousBlock) {
+      piece = { id: String(pieces.length), text: "", nodes: [] };
+      pieces.push(piece);
+      previousBlock = block;
+    }
+    piece.nodes.push({
+      node,
+      start: piece.text.length,
+      end: piece.text.length + text.length,
+    });
+    piece.text += text;
+  }
+  const results = buildSearchResults({ pieces, query });
+  const ranges: Range[] = [];
+  for (const textPiece of pieces) {
+    const pieceRanges = results.rangesByPieceId[textPiece.id];
+    if (pieceRanges === undefined) {
+      continue;
+    }
+    for (const match of pieceRanges) {
+      const start = textPiece.nodes.find(
+        (segment) => match.start >= segment.start && match.start < segment.end,
+      );
+      const end = textPiece.nodes.find(
+        (segment) => match.end > segment.start && match.end <= segment.end,
+      );
+      if (start === undefined || end === undefined) {
+        panic("Reader search match must map to its source text nodes");
       }
-
       const range = document.createRange();
-      range.setStart(node, index);
-      range.setEnd(node, index + normalizedQuery.length);
+      range.setStart(start.node, match.start - start.start);
+      range.setEnd(end.node, match.end - end.start);
       ranges.push(range);
-      from = index + Math.max(normalizedQuery.length, 1);
     }
   }
-
   return ranges;
 };
 

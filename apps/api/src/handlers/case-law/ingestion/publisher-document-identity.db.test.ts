@@ -1,4 +1,4 @@
-/* oxlint-disable typescript-eslint/promise-function-async -- fetch mock callbacks return Promise.resolve without being async */
+/* oxlint-disable typescript/promise-function-async -- fetch mock callbacks return Promise.resolve without being async */
 /**
  * What happens to the rows a source already has when its adapter learns the
  * publisher's document id.
@@ -114,6 +114,11 @@ const installPublisherStub = (): (() => void) => {
             headers: { "Content-Type": "text/html" },
           }),
         );
+      }
+      if (url.pathname.startsWith("/o/v1/")) {
+        // The ÚS supplementary surfaces state nothing for these documents;
+        // the identity under test is read from the listing row.
+        return Promise.resolve(new Response(null, { status: 404 }));
       }
       if (url.hostname === "vyhledavac.nssoud.cz") {
         return Promise.resolve(

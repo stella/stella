@@ -388,7 +388,7 @@ describe("submitFeedbackReport", () => {
       },
     ]);
     const issue = create.mock.calls.at(0)?.[0].issue;
-    const serialized = `${issue?.title ?? ""}\n${issue?.body ?? ""}`;
+    const serialized = `${issue?.title.text ?? ""}\n${issue?.body.markdown ?? ""}`;
     expect(serialized).not.toContain("user_secret");
     expect(serialized).not.toContain("org_secret");
     expect(serialized).not.toContain("jane@example.com");

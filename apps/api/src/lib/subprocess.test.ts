@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import path from "node:path";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import {
   SubprocessError,
   SUBPROCESS_TERMINATION_REASON,
@@ -138,13 +140,18 @@ describe("spawnWorker", () => {
     abort.abort();
 
     expect(
-      spawnWorker({
-        workerPath: SLEEP_WORKER,
-        stdin: new Blob([""]),
-        timeoutMs: 600_000,
-        signal: abort.signal,
-      }),
-    ).rejects.toThrow("The operation was aborted.");
+      await rejectionOf(
+        spawnWorker({
+          workerPath: SLEEP_WORKER,
+          stdin: new Blob([""]),
+          timeoutMs: 600_000,
+          signal: abort.signal,
+        }),
+      ),
+    ).toHaveProperty(
+      "message",
+      expect.stringContaining("The operation was aborted."),
+    );
   });
 });
 

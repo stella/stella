@@ -1,7 +1,10 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { createSafeSessionHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  createSafeSessionHandler,
+} from "@/api/lib/api-handlers";
 import type { SessionHandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { disconnectOAuthConnectionForUser } from "@/api/lib/oauth-connections";
@@ -13,6 +16,7 @@ const routeParams = t.Object({
 });
 
 const config = {
+  accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: { type: "internal", reason: "auth_plumbing" },
   params: routeParams,
 } satisfies SessionHandlerConfig;

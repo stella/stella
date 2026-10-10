@@ -1,9 +1,14 @@
+import { panic } from "better-result";
 import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import type { OpenPlaybookRunResult } from "@/api/lib/document-review/open-playbook-run";
 import { PLAYBOOK_RUN_PROJECTION } from "@/api/lib/workflow/playbook-run-projection";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import { mapHandlerResult } from "@/api/mcp/capability-tools";
+import {
+  NO_AUDIT,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 const loadLatestApprovedVersionMock = mock();
@@ -63,6 +68,7 @@ const runColumnsProjection = async () => {
   });
   return await runPlaybook.handler(
     createTestHandlerContext<RunPlaybookCtx>({
+      audit: NO_AUDIT,
       body: { projection: PLAYBOOK_RUN_PROJECTION.COLUMNS },
       params: { playbookId },
       safeDb,
@@ -89,6 +95,63 @@ describe("run playbook handler", () => {
   afterAll(() => {
     mock.restore();
   });
+
+  const refusals = {
+    file_property_type_immutable: {
+      ok: false,
+      status: 422,
+      code: "file_property_type_immutable",
+      retryable: false,
+      message: "File property types cannot be changed.",
+      hint: "Keep the existing ASK content.type or add a new playbook position.",
+    },
+    playbook_scope_unresolved: {
+      ok: false,
+      status: 400,
+      code: "playbook_scope_unresolved",
+      retryable: false,
+      message: "The document-type scope cannot be resolved.",
+      hint: "Configure a matching Document Type classifier before running it.",
+    },
+    properties_limit_reached: {
+      ok: false,
+      status: 400,
+      code: "properties_limit_reached",
+      message: "The matter has reached its property limit.",
+    },
+  } as const satisfies Record<
+    Extract<OpenPlaybookRunResult, { ok: false }>["code"],
+    Extract<OpenPlaybookRunResult, { ok: false }>
+  >;
+
+  test.each(Object.values(refusals))(
+    "preserves $code over REST and capability MCP without starting extraction",
+    async (refusal) => {
+      openPlaybookRunMock.mockResolvedValue(refusal);
+      const result = await runColumnsProjection();
+      if (!("code" in result)) {
+        panic("Expected the playbook refusal status");
+      }
+      const { ok: _ok, status, ...details } = refusal;
+      expect(result.code).toBe(status);
+      expect(result.response).toEqual(details);
+      const mcp = mapHandlerResult({
+        id: "playbooks.run",
+        result,
+        access: "write",
+      });
+      expect(mcp).toMatchObject({
+        status: "error",
+        error: {
+          type: "structured",
+          ...details,
+          code: "validation_error",
+          issues: [{ path: "", code: refusal.code, message: refusal.message }],
+        },
+      });
+      expect(startWorkflowMock).not.toHaveBeenCalled();
+    },
+  );
 
   test("a failed enqueue is answered as a failure, not as an opened run", async () => {
     // The queue reports it in band rather than throwing, so nothing above

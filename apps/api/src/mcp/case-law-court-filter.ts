@@ -1,12 +1,15 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import type { VocabularyEntry } from "@stll/agent-input";
 import { normalizeVocabularyValue } from "@stll/agent-input";
+import {
+  apexCourtAbbreviations,
+  courtAbbreviation,
+} from "@stll/api-contract/case-law-court-abbreviations";
 import { Temporal } from "@stll/time";
 
 import { readCourtNames } from "@/api/handlers/case-law/decisions/shelf-courts";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
-import { courtAbbreviation } from "@/api/lib/case-law/court-abbreviations";
 import type { AgentCaseLawSearchWarning } from "@/api/lib/case-law/search-warnings";
 import {
   filterDroppedWarning,
@@ -25,8 +28,10 @@ import type { McpRequestContext } from "@/api/mcp/context";
  * decisions". Agents write the court the way their prompt or training did:
  * `NS`, `Constitutional Court`, `Ústavní soud České republiky`, or a country
  * where a court belongs. The corpus's own court list is the vocabulary, and
- * the shared reader decides which spellings name exactly one court. A value
- * that names none, or several, is dropped with a warning naming the courts,
+ * the shared reader decides which spellings name exactly one court. A court
+ * stored under several spellings is one court, and a value naming it filters
+ * by all of them. A value that names no court, or several different courts,
+ * is dropped with a warning naming the courts,
  * so the search still answers: an optional filter narrows a search, it never
  * empties one.
  *
@@ -56,50 +61,97 @@ const APEX_COURT_ENGLISH_NAMES: Readonly<Record<string, readonly string[]>> = {
 /** How many courts a dropped filter's hint names. */
 const LISTED_COURTS = 12;
 
-const courtVocabulary = (
+/**
+ * One court as the corpus stores it. A publisher spells an apex court more
+ * than one way ("Najvyšší súd", "Najvyšší súd Slovenskej republiky"), and the
+ * apex registry gives every spelling of one apex court the same abbreviation,
+ * so only those spellings share an identity. A regional or district citation
+ * code can name several courts: those remain separate identities, even when
+ * their display codes match.
+ */
+export type StoredCourtIdentity = {
+  abbreviation: string | undefined;
+  /** Every stored spelling, in the corpus list's order; never empty. */
+  spellings: readonly [string, ...string[]];
+};
+
+/** The country's stored courts, grouped by identity, apex courts first. */
+export const storedCourtIdentities = (
   country: string,
   courts: readonly string[],
+): StoredCourtIdentity[] => {
+  const apexAbbreviations = new Set(apexCourtAbbreviations(country));
+  const apex = new Map<string, [string, ...string[]]>();
+  const byName: StoredCourtIdentity[] = [];
+  for (const court of courts) {
+    const abbreviation = courtAbbreviation({ country, court });
+    if (abbreviation === undefined || !apexAbbreviations.has(abbreviation)) {
+      byName.push({ abbreviation, spellings: [court] });
+      continue;
+    }
+    const spellings = apex.get(abbreviation);
+    if (spellings === undefined) {
+      apex.set(abbreviation, [court]);
+    } else {
+      spellings.push(court);
+    }
+  }
+  // Apex courts first: they are the ones a caller names, so a dropped
+  // filter's hint leads with them.
+  return [
+    ...[...apex].map(([abbreviation, spellings]) => ({
+      abbreviation,
+      spellings,
+    })),
+    ...byName,
+  ];
+};
+
+/**
+ * One vocabulary entry per court, not per spelling. The shared reader treats
+ * two entries answering to one alias as two readings and asks; two spellings
+ * of one court are one reading, so they share an entry, its value the first
+ * spelling and the others its aliases.
+ */
+const courtVocabulary = (
+  identities: readonly StoredCourtIdentity[],
 ): VocabularyEntry[] =>
-  courts
-    .map((court) => {
-      const abbreviation = courtAbbreviation({ country, court });
-      return {
-        value: court,
-        aliases:
-          abbreviation === undefined
-            ? []
-            : [abbreviation, ...(APEX_COURT_ENGLISH_NAMES[abbreviation] ?? [])],
-        // Apex courts first: they are the ones a caller names, so a dropped
-        // filter's hint leads with them.
-        apex: abbreviation !== undefined,
-      };
-    })
-    .toSorted((left, right) => Number(right.apex) - Number(left.apex))
-    .map(({ value, aliases }) => ({ value, aliases }));
+  identities.map(({ abbreviation, spellings: [value, ...others] }) => ({
+    value,
+    aliases:
+      abbreviation === undefined
+        ? others
+        : [...others, ...apexCourtAliases(abbreviation)],
+  }));
+
+/** An apex court's abbreviation, and its English names where it has any. */
+const apexCourtAliases = (abbreviation: string): readonly string[] =>
+  Object.hasOwn(APEX_COURT_ENGLISH_NAMES, abbreviation)
+    ? [abbreviation, ...(APEX_COURT_ENGLISH_NAMES[abbreviation] ?? [])]
+    : [abbreviation];
 
 type CourtFilterReading =
-  | { type: "court"; court: string; warning: AgentCaseLawSearchWarning | null }
+  | {
+      type: "court";
+      /** Every stored spelling of the court the value named. */
+      courts: readonly [string, ...string[]];
+      warning: AgentCaseLawSearchWarning | null;
+    }
   | { type: "dropped"; warning: AgentCaseLawSearchWarning };
 
 /** Read one court filter against a country's stored courts. */
-const readCourtFilter = ({
-  country,
+export const readCourtFilter = ({
   court,
-  courts,
+  identities,
 }: {
-  country: string;
   court: string;
-  courts: readonly string[];
+  identities: readonly StoredCourtIdentity[];
 }): CourtFilterReading => {
-  const read = normalizeVocabularyValue(
-    court,
-    courtVocabulary(country, courts),
-    {
-      label: "The stored courts",
-      expected: "a court this corpus holds",
-      maxListed: LISTED_COURTS,
-    },
-  );
+  const read = normalizeVocabularyValue(court, courtVocabulary(identities), {
+    label: "The stored courts",
+    expected: "a court this corpus holds",
+    maxListed: LISTED_COURTS,
+  });
   const received = JSON.stringify(court);
   if (read.ok === "absent") {
     return {
@@ -121,14 +173,101 @@ const readCourtFilter = ({
       }),
     };
   }
+  const { spellings } =
+    identities.find((identity) => identity.spellings[0] === read.value) ??
+    panic(`Court vocabulary read a value it does not hold: ${read.value}`);
   return {
     type: "court",
-    court: read.value,
-    warning:
-      read.value === court
-        ? null
-        : filterReadWarning({ filter: "court", received, value: read.value }),
+    courts: spellings,
+    warning: courtReadWarning({ court, spellings }),
   };
+};
+
+/** The note for a court value read as these spellings; none when verbatim. */
+const courtReadWarning = ({
+  court,
+  spellings,
+}: {
+  court: string;
+  spellings: readonly [string, ...string[]];
+}): AgentCaseLawSearchWarning | null =>
+  spellings.length === 1 && spellings[0] === court
+    ? null
+    : filterReadWarning({
+        filter: "court",
+        received: JSON.stringify(court),
+        values: spellings,
+      });
+
+type CourtFilters = {
+  court: string | undefined;
+  courts: string[] | undefined;
+};
+
+type CombinedCourtFilters = CourtFilters & {
+  /** The spellings of `court` the combined filters search; its note's list. */
+  courtSpellings: readonly [string, ...string[]] | undefined;
+};
+
+/**
+ * The request's two court filters once each value is read as its court's
+ * spellings. The search ANDs `court` (one spelling) with `courts` (any
+ * listed), so a `court` naming a court stored under several spellings moves
+ * into `courts`, intersected with the list when there is one. An empty
+ * intersection is a contradiction the caller wrote; it is sent as written
+ * and matches nothing, exactly as the two filters ask.
+ */
+export const combineCourtFilters = ({
+  court,
+  courts,
+}: {
+  court: readonly [string, ...string[]] | undefined;
+  courts: readonly string[] | undefined;
+}): CombinedCourtFilters => {
+  const listed =
+    courts === undefined || courts.length === 0
+      ? undefined
+      : [...new Set(courts)];
+  if (court === undefined) {
+    return { court: undefined, courts: listed, courtSpellings: undefined };
+  }
+  const [only, ...others] = court;
+  if (others.length === 0) {
+    return { court: only, courts: listed, courtSpellings: [only] };
+  }
+  if (listed === undefined) {
+    return { court: undefined, courts: [...court], courtSpellings: court };
+  }
+  const [first, ...rest] = listed.filter((spelling) =>
+    court.includes(spelling),
+  );
+  return first === undefined
+    ? { court: only, courts: listed, courtSpellings: [only] }
+    : {
+        court: undefined,
+        courts: [first, ...rest],
+        courtSpellings: [first, ...rest],
+      };
+};
+
+/** The `court` value's note, from the spellings the combined filters search. */
+const combinedCourtWarning = ({
+  court,
+  reading,
+  spellings,
+}: {
+  court: string;
+  reading: CourtFilterReading;
+  spellings: CombinedCourtFilters["courtSpellings"];
+}): AgentCaseLawSearchWarning | null => {
+  if (reading.type === "dropped") {
+    return reading.warning;
+  }
+  return courtReadWarning({
+    court,
+    spellings:
+      spellings ?? panic("A court reading combined into no court spellings"),
+  });
 };
 
 /**
@@ -146,11 +285,7 @@ export const resolveCourtFilter = async ({
   country: string;
   court: string | undefined;
   courts?: string[] | undefined;
-}): Promise<{
-  court: string | undefined;
-  courts: string[] | undefined;
-  warnings: AgentCaseLawSearchWarning[];
-}> => {
+}): Promise<CourtFilters & { warnings: AgentCaseLawSearchWarning[] }> => {
   if (court === undefined && requestedCourts === undefined) {
     return { court, courts: undefined, warnings: [] };
   }
@@ -158,26 +293,36 @@ export const resolveCourtFilter = async ({
   if (courts === null) {
     return { court, courts: requestedCourts, warnings: [] };
   }
-  const warnings: AgentCaseLawSearchWarning[] = [];
-  const read = (value: string) => {
-    const reading = readCourtFilter({ country, court: value, courts });
-    if (reading.warning !== null) {
-      warnings.push(reading.warning);
-    }
-    return reading.type === "court" ? reading.court : undefined;
-  };
-  const resolvedCourt = court === undefined ? undefined : read(court);
-  const resolvedCourts = requestedCourts?.flatMap((value) => {
-    const resolved = read(value);
-    return resolved === undefined ? [] : [resolved];
+  const identities = storedCourtIdentities(country, courts);
+  const listWarnings: AgentCaseLawSearchWarning[] = [];
+  const courtReading =
+    court === undefined ? undefined : readCourtFilter({ court, identities });
+  const combined = combineCourtFilters({
+    court: courtReading?.type === "court" ? courtReading.courts : undefined,
+    courts: requestedCourts?.flatMap((value) => {
+      const reading = readCourtFilter({ court: value, identities });
+      if (reading.warning !== null) {
+        listWarnings.push(reading.warning);
+      }
+      return reading.type === "court" ? [...reading.courts] : [];
+    }),
   });
+  // A several-spelling `court` combined with `courts` searches only the
+  // spellings both allow, or its first spelling when they contradict, so its
+  // note is written from the combined filter, not from the reading alone.
+  const courtWarning =
+    court === undefined || courtReading === undefined
+      ? null
+      : combinedCourtWarning({
+          court,
+          reading: courtReading,
+          spellings: combined.courtSpellings,
+        });
   return {
-    court: resolvedCourt,
-    courts:
-      resolvedCourts !== undefined && resolvedCourts.length > 0
-        ? [...new Set(resolvedCourts)]
-        : undefined,
-    warnings,
+    court: combined.court,
+    courts: combined.courts,
+    warnings:
+      courtWarning === null ? listWarnings : [courtWarning, ...listWarnings],
   };
 };
 

@@ -11,11 +11,15 @@
  * reason the alias table is profile data and not a shared dictionary.
  */
 
+import { STATUTE_ACTS } from "@stll/api-contract/statute-acts";
+
 import { priorWindowed, succession } from "./provision-citation-profile";
 import type {
   JurisdictionProfile,
   WorkIdentifier,
 } from "./provision-citation-profile";
+
+const SVK = STATUTE_ACTS.svk;
 
 const zz = (number: number, year: number): WorkIdentifier => ({
   number,
@@ -43,7 +47,7 @@ const LABOUR_CODE_RECODIFICATION = "2002-04-01";
 const CRIMINAL_CODE_SUCCESSION = {
   older: zb(140, 1961),
   olderFrom: CRIMINAL_CODES_1962,
-  newer: zz(300, 2005),
+  newer: SVK.criminalCode.work,
   on: CRIMINAL_RECODIFICATION,
 };
 
@@ -57,13 +61,35 @@ const CRIMINAL_PROCEDURE_SUCCESSION = {
 const LABOUR_CODE_SUCCESSION = {
   older: zb(65, 1965),
   olderFrom: "1966-01-01",
-  newer: zz(311, 2001),
+  newer: SVK.labourCode.work,
   on: LABOUR_CODE_RECODIFICATION,
 };
 
 export const SK_PROFILE = {
   jurisdiction: "SVK",
   language: "sk",
+  versionGrammar: {
+    dateStatements: [
+      { prefix: "v znení účinnom do", relation: "until" },
+      { prefix: "v znení účinnom k", relation: "on" },
+      { prefix: "v znení účinnom od", relation: "from" },
+    ],
+    amendmentPrefixes: ["v znení zákona č.", "v znení novely č."],
+    monthNames: {
+      januára: 1,
+      februára: 2,
+      marca: 3,
+      apríla: 4,
+      mája: 5,
+      júna: 6,
+      júla: 7,
+      augusta: 8,
+      septembra: 9,
+      októbra: 10,
+      novembra: 11,
+      decembra: 12,
+    },
+  },
 
   sectionTerms: [
     { text: "§§", unit: "section" },
@@ -143,13 +169,16 @@ export const SK_PROFILE = {
       spellings: ["TP", "tr. por."],
       ...CRIMINAL_PROCEDURE_SUCCESSION,
     }),
-    { spellings: ["OZ", "obč. zák."], identifier: zb(40, 1964) },
-    { spellings: ["ObZ", "ObchZ", "obch. zák."], identifier: zb(513, 1991) },
+    { spellings: ["OZ", "obč. zák."], identifier: SVK.civilCode.work },
+    {
+      spellings: ["ObZ", "ObchZ", "obch. zák."],
+      identifier: SVK.commercialCode.work,
+    },
     ...succession({
       spellings: ["ZP", "Zák. práce"],
       ...LABOUR_CODE_SUCCESSION,
     }),
-    { spellings: ["CSP", "C. s. p."], identifier: zz(160, 2015) },
+    { spellings: ["CSP", "C. s. p."], identifier: SVK.civilDisputes.work },
     { spellings: ["CMP", "C. m. p."], identifier: zz(161, 2015) },
     { spellings: ["SSP", "S. s. p."], identifier: zz(162, 2015) },
     {
@@ -159,7 +188,10 @@ export const SK_PROFILE = {
     },
     { spellings: ["EP", "Exekučný poriadok"], identifier: zz(233, 1995) },
     { spellings: ["ZKR"], identifier: zz(7, 2005) },
-    { spellings: ["SP", "správny poriadok"], identifier: zb(71, 1967) },
+    {
+      spellings: ["SP", "správny poriadok"],
+      identifier: SVK.administrativeProcedure.work,
+    },
   ],
 
   titles: [
@@ -185,7 +217,7 @@ export const SK_PROFILE = {
       ],
       older: zb(141, 1950),
       olderFrom: "1951-01-01",
-      newer: zb(40, 1964),
+      newer: SVK.civilCode.work,
       on: "1964-04-01",
     }),
     {
@@ -202,7 +234,7 @@ export const SK_PROFILE = {
         "Obchodného zákonníka",
         "Obchodnom zákonníku",
       ],
-      identifier: zb(513, 1991),
+      identifier: SVK.commercialCode.work,
     },
     ...succession({
       spellings: ["Zákonník práce", "Zákonníka práce", "Zákonníku práce"],
@@ -214,7 +246,7 @@ export const SK_PROFILE = {
         "Civilného sporového poriadku",
         "Civilnom sporovom poriadku",
       ],
-      identifier: zz(160, 2015),
+      identifier: SVK.civilDisputes.work,
     },
     {
       spellings: [

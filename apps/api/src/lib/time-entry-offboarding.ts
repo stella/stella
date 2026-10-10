@@ -33,14 +33,18 @@ export const closeRemovedMemberActiveTimer = async ({
   organizationId,
   tx,
   userId,
+  lockWorkspaces,
 }: {
   organizationId: SafeId<"organization">;
   tx: Transaction;
   userId: SafeId<"user">;
+  lockWorkspaces?: (tx: Transaction) => Promise<void>;
 }) => {
   const owner = { organizationId, userId };
   await lockTimerOwner(tx, owner);
   await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${userId}))`);
+
+  await lockWorkspaces?.(tx);
 
   const [activeTimer] = await tx
     .select({

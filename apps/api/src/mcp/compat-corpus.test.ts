@@ -19,6 +19,7 @@ import { LIMITS } from "@/api/lib/limits";
 import { getAppBaseUrl } from "@/api/lib/mcp-connectors/app-urls";
 import {
   corpusCountryQuotas,
+  readCompatStatute,
   rankCorpusCountries,
   resolveCompatCorpusCountries,
 } from "@/api/mcp/compat-corpus";
@@ -75,6 +76,7 @@ const decisionHit = {
   languageAlternates: [],
   slug: "29-cdo-1234-2020",
   headline: "<b>promlčení</b>",
+  sourceUrl: "https://example.test/decision",
 };
 
 const statuteHit = {
@@ -165,12 +167,13 @@ const createContext = ({
 };
 
 type CompatPayload = {
-  results?: { id: string; title: string; url: string }[];
+  results?: { id: string; title: string; url: string; source_url?: string }[];
   nextCursor?: string | null;
   id?: string;
   title?: string;
   text?: string;
   url?: string;
+  source_url?: string;
   metadata?: { kind: string; workspaceId?: string };
   error?: { code: string; hint: string; issues?: { path: string }[] };
 };
@@ -451,9 +454,11 @@ describe("the corpus page cap split across countries", () => {
           0,
         );
 
-      expect(askedFor(searchDecisionsHandlerMock.mock.calls)).toBe(
-        LIMITS.mcpCompatDecisionPageSizeDefault,
-      );
+      expect(
+        askedFor(
+          searchDecisionsHandlerMock.mock.calls.map(([{ body }]) => [body]),
+        ),
+      ).toBe(LIMITS.mcpCompatDecisionPageSizeDefault);
       expect(askedFor(searchLegislationHandlerMock.mock.calls)).toBe(
         LIMITS.mcpCompatStatutePageSizeDefault,
       );
@@ -505,6 +510,7 @@ describe("compat search reaching the public corpus", () => {
         // The heading a `fetch` on this id answers with, minted once.
         title: "Nejvyšší soud 29 Cdo 1234/2020",
         url: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/29-cdo-1234-2020`,
+        source_url: "https://example.test/decision",
       });
       // A statute the corpus holds no slug for is addressed by the id form,
       // the same address the web routes it by.
@@ -596,7 +602,7 @@ describe("compat search reaching the public corpus", () => {
         ]);
         expect(
           searchDecisionsHandlerMock.mock.calls.map(
-            ([input]) => asTestRaw<{ country: string }>(input).country,
+            ([{ body }]) => asTestRaw<{ country: string }>(body).country,
           ),
         ).toEqual([...PUBLIC_CASE_LAW_COUNTRIES]);
         expect(
@@ -671,8 +677,8 @@ describe("compat search reaching the public corpus", () => {
       });
       // First page: no sub-cursor is passed for a country the cursor never
       // named, so nothing is skipped.
-      for (const [input] of searchDecisionsHandlerMock.mock.calls) {
-        expect(asTestRaw<{ cursor?: string }>(input).cursor).toBeUndefined();
+      for (const [{ body }] of searchDecisionsHandlerMock.mock.calls) {
+        expect(asTestRaw<{ cursor?: string }>(body).cursor).toBeUndefined();
       }
       expect(searchDecisionsHandlerMock).toHaveBeenCalledTimes(
         PUBLIC_CASE_LAW_COUNTRIES.length,
@@ -720,7 +726,7 @@ describe("compat search reaching the public corpus", () => {
         cursor: "matter-2",
       });
       expect(searchDecisionsHandlerMock.mock.calls.at(0)?.[0]).toMatchObject({
-        cursor: "decisions-2",
+        body: { cursor: "decisions-2" },
       });
       // Statutes ended on the first page, so they are not asked again.
       expect(searchLegislationHandlerMock).not.toHaveBeenCalled();
@@ -758,6 +764,7 @@ describe("compat fetch reaching the public corpus", () => {
       expect(payload.url).toBe(
         `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/29-cdo-1234-2020`,
       );
+      expect(payload.source_url).toBe("https://example.test/decision");
       expect(payload.metadata?.kind).toBe("decision");
       // `workspaceId` exists only on the branch that has one.
       expect(payload.metadata?.workspaceId).toBeUndefined();
@@ -772,6 +779,7 @@ describe("compat fetch reaching the public corpus", () => {
         handler: COMPAT_TOOL_HANDLERS.fetch,
       });
 
+      expect(payload.source_url).toBe(statuteHit.sourceUrl);
       expect(payload.title).toBe("Občanský zákoník");
       expect(payload.metadata?.kind).toBe("statute");
       expect(payload.url).toBe(
@@ -939,4 +947,25 @@ describe("the anonymized audience", () => {
       expect(anonymizeTextFieldsMock).not.toHaveBeenCalled();
     });
   });
+});
+
+test("compat statute read never fabricates an empty citation when no deployment or publisher URL exists", async () => {
+  await withPublicLaw(
+    { featurePublicLaw: false, localDevOpen: false },
+    async () => {
+      readPublicLegislationHandlerMock.mockResolvedValue({
+        ...statuteHit,
+        sourceUrl: null,
+        id: statuteHit.documentId,
+        documentAst: null,
+        fulltext: "§ 1",
+        allowsDerivedAi: true,
+        versionValidFrom: "2014-01-01",
+        versionValidTo: null,
+      });
+      expect(
+        await readCompatStatute({ context: createContext(), eli: STATUTE_ELI }),
+      ).toEqual({ type: "not_found" });
+    },
+  );
 });

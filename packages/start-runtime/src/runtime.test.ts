@@ -1,8 +1,9 @@
+import { Result } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import {
   createStartRuntime,
@@ -111,9 +112,30 @@ describe("server module graph verification", () => {
       "export const route = 'catalogue';",
     );
 
-    expect(verifyServerModuleGraph({ serverDirectoryUrl })).resolves.toEqual({
+    expect(await verifyServerModuleGraph({ serverDirectoryUrl })).toEqual({
       loadedModuleCount: 2,
       toleratedFailures: [],
+    });
+  });
+
+  test("treats local module containment failures as fatal startup errors", async () => {
+    const serverDirectoryUrl = await createDirectoryUrl();
+    const loaderUrl = new URL("local-module-loader.ts", import.meta.url);
+    await Bun.write(
+      new URL("server.js", serverDirectoryUrl),
+      [
+        `import { loadLocalModule } from ${JSON.stringify(loaderUrl.href)};`,
+        `const loaded = await loadLocalModule({ root: ${JSON.stringify(fileURLToPath(serverDirectoryUrl))}, modulePath: "../outside.js" });`,
+        "if (loaded.isErr()) { throw loaded.error; }",
+      ].join("\n"),
+    );
+    const verification = await Result.tryPromise({
+      try: async () => await verifyServerModuleGraph({ serverDirectoryUrl }),
+      catch: (error) => error,
+    });
+    expect(verification).toMatchObject({
+      status: "error",
+      error: { code: "server-module-resolution" },
     });
   });
 

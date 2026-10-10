@@ -18,16 +18,16 @@ import { lockContactCapacity } from "@/api/handlers/contacts/contact-capacity";
 import { normalizeContactMetadata } from "@/api/handlers/contacts/contact-metadata";
 import {
   dateOfBirthToColumns,
-  nationalityCodesSchema,
   validatePersonDetails,
 } from "@/api/handlers/contacts/person-details";
 import { createContactTypeSchema } from "@/api/handlers/contacts/schema";
 import { captureError } from "@/api/lib/analytics/capture";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { dateOfBirthSchema } from "@/api/lib/business-registries/date-of-birth";
+import { nationalityCodesSchema } from "@/api/lib/business-registries/nationality-codes";
 import { tMinorUnitAmount, tSafeId, tUserId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -35,7 +35,7 @@ import { cents } from "@/api/lib/money";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { flushContactSearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueContactSearchRepairs } from "@/api/lib/search/projection-repair-queue";
-import { validateOrgUserIds } from "@/api/lib/validated-org-user-id";
+import { lockOrgUserIdsForAssignment } from "@/api/lib/validated-org-user-id";
 
 export const createContactBodySchema = t.Object({
   id: tSafeId("contact"),
@@ -220,11 +220,11 @@ export const createContactHandler = async function* ({
         attorneyIds.push(body.responsibleAttorneyId);
       }
 
-      const validAttorneyIds = await validateOrgUserIds(
+      const validAttorneyIds = await lockOrgUserIdsForAssignment({
         tx,
-        attorneyIds.map((attorneyId) => brandPersistedUserId(attorneyId)),
+        userIds: attorneyIds.map(brandPersistedUserId),
         organizationId,
-      );
+      });
       if (!validAttorneyIds) {
         return { kind: "invalid_attorney" };
       }
@@ -274,6 +274,7 @@ const createContact = createSafeRootHandler(
       "once the organization holds its maximum number of contacts, or when " +
       "an attorney id is not a member of the organization.",
     permissions: { contact: ["create"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "tool", name: "save_contact" },
     body: createContactBodySchema,
   },

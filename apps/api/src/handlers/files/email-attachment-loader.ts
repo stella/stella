@@ -8,6 +8,7 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import { entities, entityVersions, fields } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import {
   createEmailAttachmentDescriptor,
   findEmailAttachmentIndex,
@@ -15,7 +16,6 @@ import {
 import { buildEmailPreview, parseEmail } from "@/api/lib/files/email-to-html";
 import { createFileKey, resolveUploadMime } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
-import { readS3ArrayBuffer } from "@/api/lib/s3";
 
 export const EMAIL_ATTACHMENT_LOAD_STATUS = {
   loaded: "loaded",
@@ -136,14 +136,17 @@ export const loadEmailAttachment = async function* ({
   const sourceBuffer = yield* Result.await(
     Result.tryPromise(
       async () =>
-        await readS3ArrayBuffer(
-          createFileKey({
-            organizationId,
-            workspaceId,
-            fileId: content.id,
+        (
+          await readStoredFile({
+            key: createFileKey({
+              organizationId,
+              workspaceId,
+              fileId: content.id,
+              mimeType: content.mimeType,
+            }),
             mimeType: content.mimeType,
-          }),
-        ),
+          })
+        ).bytes,
     ),
   );
   const parsedResult = await parseEmail(sourceBuffer, emailMimeType);

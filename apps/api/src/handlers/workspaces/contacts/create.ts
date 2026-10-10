@@ -4,19 +4,22 @@ import { t } from "elysia";
 import type { Static } from "elysia";
 
 import { WORKSPACE_CONTACT_ROLES } from "@stll/api-contract";
+import { MATTER_CONTACT_CAPACITY_CODE } from "@stll/api-contract/workspace-contacts";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { workspaceContacts } from "@/api/db/schema";
+import { workspaceContactRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { captureError } from "@/api/lib/analytics/capture";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
-import { PG_ERROR } from "@/api/lib/pg-error";
+import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
 import { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-queue";
 
@@ -35,11 +38,25 @@ const config = {
   description:
     "Link a contact to a matter in a party role (opposing party/counsel, " +
     "co-counsel, witness, expert witness, third party, judge, mediator, or " +
-    "other). Pass contactId with role to link.",
+    "other). Pass contactId with role to link. When the matter reaches its " +
+    "contact limit, remove an existing contact link before adding another.",
   permissions: { workspace: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: workspaceContactRealtimeUpdates,
   mcp: { type: "tool", name: "link_matter_contact" },
   body: createWorkspaceContactBodySchema,
 } satisfies WorkspaceHandlerConfig;
+
+const WORKSPACE_CONTACT_CAPACITY_CONSTRAINT =
+  "workspace_contacts_workspace_capacity";
+const CONTACT_CAPACITY_REFUSAL = {
+  status: 400,
+  code: MATTER_CONTACT_CAPACITY_CODE.reached,
+  retryable: false,
+  hint: "CLI: call matters.contacts.delete with matterId and matterContactId. MCP: call link_matter_contact with matter_id and matter_contact_id (without role). Then link the new contact.",
+  message:
+    "This matter has reached its contact limit. Remove a contact link before adding another.",
+} as const;
 
 export type CreateWorkspaceContactHandlerProps = {
   safeDb: SafeDb;
@@ -47,6 +64,9 @@ export type CreateWorkspaceContactHandlerProps = {
   workspaceId: SafeId<"workspace">;
   recordAuditEvent: AuditRecorder;
   body: Static<typeof createWorkspaceContactBodySchema>;
+  dependencies?: {
+    flushWorkspaceSearchRepairs: typeof flushWorkspaceSearchRepairs;
+  };
 };
 
 // Shared matter-contact link logic reused by the HTTP handler and the
@@ -58,8 +78,12 @@ export const createWorkspaceContactHandler = async function* ({
   workspaceId,
   recordAuditEvent,
   body,
+  dependencies = { flushWorkspaceSearchRepairs },
 }: CreateWorkspaceContactHandlerProps) {
   const txResult = await safeDb(async (tx) => {
+    // The parent matter lock precedes the contact count and insert, matching
+    // matter members and entity capacity.
+    await lockWorkspacesForEntityCap(tx, [workspaceId]);
     const contact = await tx.query.contacts.findFirst({
       where: {
         id: { eq: body.contactId },
@@ -76,19 +100,31 @@ export const createWorkspaceContactHandler = async function* ({
       };
     }
 
-    // Lock rows then count to serialize concurrent adds.
-    // PG rejects FOR UPDATE with aggregate functions.
-    const lockedRows = await tx
-      .select({ id: workspaceContacts.id })
-      .from(workspaceContacts)
-      .where(eq(workspaceContacts.workspaceId, workspaceId))
-      .for("update");
-
-    if (lockedRows.length >= LIMITS.workspaceContactsCount) {
+    const existing = await tx.query.workspaceContacts.findFirst({
+      where: {
+        organizationId: { eq: organizationId },
+        workspaceId: { eq: workspaceId },
+        contactId: { eq: body.contactId },
+        role: { eq: body.role },
+      },
+      columns: { id: true },
+    });
+    if (existing) {
       return {
         ok: false as const,
-        status: 400 as const,
-        message: "Workspace contacts limit reached",
+        status: 409 as const,
+        message: "Contact already has this role on the matter",
+      };
+    }
+
+    const linkCount = await tx.$count(
+      workspaceContacts,
+      eq(workspaceContacts.workspaceId, workspaceId),
+    );
+    if (linkCount >= LIMITS.workspaceContactsCount) {
+      return {
+        ok: false as const,
+        ...CONTACT_CAPACITY_REFUSAL,
       };
     }
 
@@ -141,6 +177,15 @@ export const createWorkspaceContactHandler = async function* ({
         }),
       );
     }
+    if (
+      isPgConstraintError(
+        txResult.error,
+        PG_ERROR.CHECK_VIOLATION,
+        WORKSPACE_CONTACT_CAPACITY_CONSTRAINT,
+      )
+    ) {
+      return yield* Result.err(new HandlerError(CONTACT_CAPACITY_REFUSAL));
+    }
     return yield* Result.err(txResult.error);
   }
 
@@ -149,11 +194,18 @@ export const createWorkspaceContactHandler = async function* ({
       new HandlerError({
         status: txResult.value.status,
         message: txResult.value.message,
+        ...("code" in txResult.value
+          ? {
+              code: txResult.value.code,
+              retryable: txResult.value.retryable,
+              hint: txResult.value.hint,
+            }
+          : {}),
       }),
     );
   }
 
-  flushWorkspaceSearchRepairs([workspaceId]).catch(captureError);
+  dependencies.flushWorkspaceSearchRepairs([workspaceId]).catch(captureError);
 
   const created = txResult.value.created;
   if (!created) {

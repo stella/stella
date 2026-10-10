@@ -1,6 +1,8 @@
 {
   "$schema": "./node_modules/oxfmt/configuration_schema.json",
   "ignorePatterns": [
+    "packages/legal-atlas/src/__fixtures__/cz-esbirka-500-2004-par-64.json",
+    "packages/legal-atlas/src/__fixtures__/cz-esbirka-262-2006-par-1a.json",
     "apps/api/src/handlers/case-law/ingestion/**/__fixtures__/**/*.html",
     "apps/api/src/handlers/case-law/ingestion/**/__fixtures__/**/*.json",
     "packages/business-registries/src/**/__fixtures__/**/*.html",
@@ -23,6 +25,7 @@
     "packages/template-packs/content/**",
     "apps/api/src/lib/legal-search/morphology/snowball/base-stemmer.ts",
     "apps/api/src/mcp/apps/**/generated/**",
+    "apps/api/src/handlers/visual-sandbox/generated/**",
     "apps/api/src/mcp/generated/capability-dispatch/*.ts",
     "packages/cli/capabilities/*.json",
     "packages/cli/src/generated/route-map.ts",
@@ -32,6 +35,7 @@
     "**/i18n-check-baseline.json",
     "**/i18n-lint-baseline.json",
     "apps/api/mcp-surface-baseline.json",
+    "apps/api/src/mcp/generated/capability-feature-bindings.ts",
     "apps/api/src/mcp/generated/capability-catalog.ts",
     "apps/api/src/mcp/generated/capability-dispatch.ts"
   ],

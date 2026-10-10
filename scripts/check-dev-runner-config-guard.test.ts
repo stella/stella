@@ -1,6 +1,8 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 
+import { compareCodeUnit } from "@stll/collation";
+
 const fixture = readFileSync(
   new URL(
     "../.oxlint-plugins/__fixtures__/forbid-dev-runner-config-reads.fixture.ts",
@@ -33,7 +35,7 @@ test("exercises every configured dev-runner environment name", () => {
     .filter((name): name is string => name !== undefined);
 
   const compareNames = (left: string, right: string) =>
-    left.localeCompare(right);
+    compareCodeUnit(left, right);
   expect([...new Set(exercisedNames)].toSorted(compareNames)).toEqual(
     [...new Set(configuredNames)].toSorted(compareNames),
   );

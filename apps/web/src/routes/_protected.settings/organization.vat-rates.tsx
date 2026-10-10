@@ -20,7 +20,10 @@ export const Route = createFileRoute(
     const role = await ensureRouteQueryData(context.queryClient, roleOptions);
     if (
       !isBillingSettingsAccessible({
-        previewEnabled: isTimeBillingPreviewEnabled(),
+        previewEnabled: await isTimeBillingPreviewEnabled(context.queryClient, {
+          userId: context.user.id,
+          organizationId: context.user.activeOrganizationId,
+        }),
         role,
       })
     ) {

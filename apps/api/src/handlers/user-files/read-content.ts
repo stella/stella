@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import { chatThreads, userFiles } from "@/api/db/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { auditedPresignDownload } from "@/api/lib/audited-download";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -11,7 +11,9 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const readUserFileContent = createSafeRootHandler(
   {
+    contentDelivery: { type: "audited" },
     permissions: { chat: ["create"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "upload_mechanics" },
     params: t.Object({ fileId: tSafeId("userFile") }),
   },

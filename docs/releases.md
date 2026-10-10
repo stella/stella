@@ -50,8 +50,13 @@ should lag the release that stopped using the old data.
 
 ## Staging Verification
 
-`deploy-staging.yml` runs on `main` only. It records a Deployment as
-`in_progress` after promotion and marks it `success` only when the gating web
+`deploy-staging.yml` runs on `main` only. Its optional `sha` input pins the
+commit to deploy; blank deploys the tip of `main`. A pinned commit must be a
+full SHA that `main` contains (`git merge-base --is-ancestor`), so a release
+candidate can be deployed and verified while `main` keeps moving. Any other
+value fails the run before anything is built. The run builds, promotes and
+smokes that one commit. It records a Deployment as `in_progress` after
+promotion and marks it `success` only when the gating web
 and API chat smokes pass. The `staging/verified` commit status records the same
 result on the deployed SHA and links to the workflow run. A new promotion resets
 that status to `pending`; a failed or incomplete gating smoke records `failure`.
@@ -125,13 +130,42 @@ marketing:reshoot` re-records only the stale captures (see
    `latest`, or equals it while the generated contract surface differs from
    the published tarball.
 
-5. Merge the commit to `main`. The `tag-on-version-bump.yml` workflow runs
-   the same CLI coupling check and pushes the matching `vX.Y.Z` tag. The tag
-   then triggers `release.yml`. If the check fails there (a CLI changeset
-   merged between the pull request check and the tag), apply it with
-   `bun run changeset:version` plus `bun run changeset --empty`, merge that,
-   and dispatch `tag-on-version-bump.yml` against `main` by hand.
-6. Wait for the release workflow. It builds and attests the immutable
+5. Merge the commit to `main` and note its SHA. `main` stays open: later
+   merges do not affect this release.
+6. Deploy that exact commit to staging:
+
+   ```bash
+   gh workflow run deploy-staging.yml --ref main -f sha=<release-sha> -F release_candidate=true
+   gh workflow run main-heavy.yml --ref main -f sha=<release-sha> -F release_candidate=true
+   ```
+
+   Both gates first refuse a candidate whose VERSION is already tagged or differs
+   from the pending VERSION on main. Ordinary pinned dispatches leave
+   `release_candidate` false and skip this check. The release-candidate heavy run dispatches
+   `main-pr-depth.yml` for the same SHA. The staging run also refuses a
+   SHA that `main` does not contain. When its smokes pass,
+   the commit carries `staging/verified` = `success`. `main-heavy.yml`
+   records `main/heavy`, while `main-pr-depth.yml` records `main/pr-depth`, on the same commit. If the run is cancelled because
+   a newer staging dispatch replaced it while it waited, dispatch it again
+   with the same `sha`; tagging refuses until `staging/verified` is green.
+
+7. Tag the commit once all three statuses are green:
+
+   ```bash
+   gh workflow run release-tag.yml --ref main -f sha=<release-sha>
+   ```
+
+   `release-tag.yml` tags exactly that commit, and refuses unless both
+   `staging/verified` and `main/heavy` are `success` on it; the refusal names
+   each status that is missing or not green. It checks both again right
+   before pushing the tag. Leaving `sha` blank selects the
+   newest commit on `main` that carries both. The workflow also runs the CLI
+   coupling check; if it fails (a CLI changeset merged after the release
+   commit), apply it with `bun run changeset:version` plus
+   `bun run changeset --empty` and release from the commit that merges it.
+   The tag then triggers `release.yml`.
+
+8. Wait for the release workflow. It builds and attests the immutable
    images, creates the GitHub release as a draft with the manifest attached,
    and promotes stable releases automatically; the release is published and
    the `latest` image aliases advance only after `https://api.stll.app/ready`
@@ -139,7 +173,7 @@ marketing:reshoot` re-records only the stale captures (see
    leaves the tag, the immutable images, and the draft; rerunning the
    workflow for the same tag reuses them. RCs continue to target staging and
    are published as prereleases once the staging promotion finishes.
-7. After a stable release succeeds, `publish-npm.yml` checks out the same
+9. After a stable release succeeds, `publish-npm.yml` checks out the same
    release commit, packs the CLI, installs that exact tarball under plain Node,
    and runs its unauthenticated compatibility canary against production. Only
    then can the hardened npm publishing job publish `@stll/cli`.

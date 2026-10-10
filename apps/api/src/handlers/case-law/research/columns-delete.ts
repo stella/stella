@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 
 import { caseLawResearchColumns } from "@/api/db/schema";
 import { researchColumnParamsSchema } from "@/api/handlers/case-law/research/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -12,6 +12,7 @@ const config = {
   description:
     "Remove one of the organization's question columns, with every answer it holds.",
   permissions: { caseLawResearch: ["delete"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "search_ui" },
   params: researchColumnParamsSchema,
 } satisfies HandlerConfig;

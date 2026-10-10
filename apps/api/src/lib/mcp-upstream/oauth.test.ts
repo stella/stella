@@ -4,6 +4,7 @@ import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
 
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import {
   bindDiscoveredMetadata,
   buildAuthorizeUrl,
@@ -36,6 +37,7 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const connectorUrl = "https://mcp.example.com/rpc";
 const issuer = "https://as.example.com";
+const outboundPermit = grantThirdPartyOutboundPermit();
 
 const discoveryTransport = ({
   resource = connectorUrl,
@@ -78,7 +80,9 @@ const discoveryTransport = ({
         status: 200,
       });
     },
-  } satisfies Parameters<typeof discoverOAuthMetadata>[1];
+  } satisfies NonNullable<
+    Parameters<typeof discoverOAuthMetadata>[0]["dependencies"]
+  >;
   return { dependencies, requests };
 };
 
@@ -109,20 +113,22 @@ describe("upstream metadata binding", () => {
       ],
     ] as const) {
       const transport = discoveryTransport({ tokenEndpoint });
-      const result = await discoverOAuthMetadata(
-        connectorUrl,
-        transport.dependencies,
+      const result = await discoverOAuthMetadata({
+        rawMcpUrl: connectorUrl,
+        permit: outboundPermit,
+        dependencies: transport.dependencies,
         confirmedEndpointOrigins,
-      );
+      });
       expect(Result.isOk(result)).toBe(accepted);
       if (Result.isError(result)) {
         expect(result.error.status).toBe(409);
         expect(result.error.code).toBe("mcp_authorization_approval_required");
       }
-      const review = await discoverOAuthMetadataForApproval(
-        connectorUrl,
-        transport.dependencies,
-      );
+      const review = await discoverOAuthMetadataForApproval({
+        rawMcpUrl: connectorUrl,
+        permit: outboundPermit,
+        dependencies: transport.dependencies,
+      });
       expect(Result.isOk(review)).toBe(true);
       if (Result.isOk(review)) {
         expect(getOAuthEndpointOrigins(review.value)).toContain(
@@ -146,6 +152,12 @@ describe("upstream metadata binding", () => {
       ["https://first.github.io", "https://second.github.io", false],
       ["https://first.github.io", "https://tokens.first.github.io", true],
       ["http://localhost:3000", "http://localhost:4000", false],
+      ["https://notexample.com", "https://example.com", false],
+      ["https://example.com.evil.net", "https://example.com", false],
+      ["https://192.0.2.1", "https://example.com", false],
+      ["https://192.0.2.1", "https://192.0.2.2", false],
+      ["https://[2001:db8::1]", "https://example.com", false],
+      ["https://192.0.2.1", "https://192.0.2.1:8443", false],
     ] as const) {
       expect(oauthDomainsMatch(first, second)).toBe(matches);
     }
@@ -236,10 +248,11 @@ describe("upstream metadata binding", () => {
     const transport = discoveryTransport({
       resource: "https://mcp.example.com/other",
     });
-    const result = await discoverOAuthMetadata(
-      connectorUrl,
-      transport.dependencies,
-    );
+    const result = await discoverOAuthMetadata({
+      rawMcpUrl: connectorUrl,
+      permit: outboundPermit,
+      dependencies: transport.dependencies,
+    });
     expect(Result.isError(result)).toBe(true);
     if (Result.isError(result)) {
       expect(result.error.status).toBe(502);
@@ -255,10 +268,11 @@ describe("upstream metadata binding", () => {
     const transport = discoveryTransport({
       resource: "https://mcp.example.com",
     });
-    const result = await discoverOAuthMetadata(
-      connectorUrl,
-      transport.dependencies,
-    );
+    const result = await discoverOAuthMetadata({
+      rawMcpUrl: connectorUrl,
+      permit: outboundPermit,
+      dependencies: transport.dependencies,
+    });
     expect(Result.isOk(result)).toBe(true);
     if (Result.isOk(result)) {
       expect(result.value.protectedResource.resource).toBe(
@@ -372,10 +386,11 @@ describe("upstream metadata binding", () => {
     const transport = discoveryTransport({
       metadataIssuer: "https://as.example.com/other",
     });
-    const result = await discoverOAuthMetadata(
-      connectorUrl,
-      transport.dependencies,
-    );
+    const result = await discoverOAuthMetadata({
+      rawMcpUrl: connectorUrl,
+      permit: outboundPermit,
+      dependencies: transport.dependencies,
+    });
     expect(Result.isError(result)).toBe(true);
     if (Result.isError(result)) {
       expect(result.error.status).toBe(502);
@@ -389,10 +404,11 @@ describe("upstream metadata binding", () => {
 
   test("builds authorization requests from configured metadata", async () => {
     const transport = discoveryTransport();
-    const result = await discoverOAuthMetadata(
-      connectorUrl,
-      transport.dependencies,
-    );
+    const result = await discoverOAuthMetadata({
+      rawMcpUrl: connectorUrl,
+      permit: outboundPermit,
+      dependencies: transport.dependencies,
+    });
     expect(Result.isOk(result)).toBe(true);
     if (Result.isError(result)) {
       return;
@@ -411,20 +427,32 @@ describe("upstream metadata binding", () => {
     expect(url.origin).toBe(issuer);
     expect(url.searchParams.get("resource")).toBe(connectorUrl);
     expect(url.searchParams.get("scope")).toBe("read");
-    expect(Result.isOk(validateApprovedOAuthIssuer(result.value, null))).toBe(
-      true,
-    );
-    expect(Result.isOk(validateApprovedOAuthIssuer(result.value, issuer))).toBe(
-      true,
-    );
-    const approval = validateApprovedOAuthIssuer(
-      result.value,
+    expect(
+      Result.isOk(
+        validateApprovedOAuthIssuer(result.value, {
+          type: "approved",
+          issuer,
+          endpointOrigins: [],
+        }),
+      ),
+    ).toBe(true);
+    for (const approvedIssuer of [
       `${issuer}/other`,
-    );
-    expect(Result.isError(approval)).toBe(true);
-    if (Result.isError(approval)) {
-      expect(approval.error.status).toBe(409);
-      expect(approval.error.code).toBe("mcp_authorization_approval_required");
+      `${issuer}/`,
+      "https://AS.example.com",
+      "https://as.example.com:443",
+      "http://as.example.com",
+    ]) {
+      const approval = validateApprovedOAuthIssuer(result.value, {
+        type: "approved",
+        issuer: approvedIssuer,
+        endpointOrigins: [],
+      });
+      expect(Result.isError(approval)).toBe(true);
+      if (Result.isError(approval)) {
+        expect(approval.error.status).toBe(409);
+        expect(approval.error.code).toBe("mcp_authorization_approval_required");
+      }
     }
   });
 
@@ -471,16 +499,18 @@ test("classifies refresh outcomes from the token endpoint", async () => {
     [400, "invalid_client", false],
   ] as const) {
     const transport = discoveryTransport();
-    const metadata = await discoverOAuthMetadata(
-      connectorUrl,
-      transport.dependencies,
-    );
+    const metadata = await discoverOAuthMetadata({
+      rawMcpUrl: connectorUrl,
+      permit: outboundPermit,
+      dependencies: transport.dependencies,
+    });
     expect(Result.isOk(metadata)).toBe(true);
     if (Result.isError(metadata)) {
       return;
     }
     const result = await refreshOAuthToken({
       metadata: metadata.value,
+      permit: outboundPermit,
       dependencies: {
         ...transport.dependencies,
         safeOutboundFetchBytes: async () =>
@@ -517,16 +547,18 @@ describe("authorization response metadata", () => {
         const transport = discoveryTransport({
           responseIssuerSupported: supported,
         });
-        const metadata = await discoverOAuthMetadata(
-          connectorUrl,
-          transport.dependencies,
-        );
+        const metadata = await discoverOAuthMetadata({
+          rawMcpUrl: connectorUrl,
+          permit: outboundPermit,
+          dependencies: transport.dependencies,
+        });
         expect(Result.isOk(metadata)).toBe(true);
         if (Result.isError(metadata)) {
           return;
         }
         const result = await exchangeAuthorizationCode({
           metadata: metadata.value,
+          permit: outboundPermit,
           dependencies: transport.dependencies,
           clientId: "client",
           clientSecret: null,

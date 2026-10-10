@@ -15,7 +15,7 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { discoverClauseSlots } from "@/api/lib/docx/discover-clause-slots";
@@ -31,6 +31,10 @@ const templateSlotPreviewParamsSchema = t.Object({
 });
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason: "Returns parsed template slot data rather than stored-file bytes.",
+  },
   description:
     "Resolve one template's clause slots to the plain text of the clauses " +
     "linked to them, keyed by slot name, using the same version and variant " +
@@ -38,6 +42,7 @@ const config = {
     "document. Slots that are unlinked, or whose target version cannot be " +
     "resolved, are left out and keep their marker visible.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     readClass: "tenant",

@@ -4,7 +4,7 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
-import { prorateHourlyCents } from "@stll/money";
+import { timeEntryAmount } from "@stll/money";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { Dialog, DialogPopup } from "@stll/ui/dialog";
@@ -31,6 +31,8 @@ import { useMatterNameMap } from "@/routes/_protected.workspaces/$workspaceId/-c
 import { TimeEntryForm } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-form";
 import type { TimeEntryFormValues } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-form";
 import { TimeEntryRow } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-row";
+
+import { timeEntryContextUpdate } from "./time-entry-context.logic";
 
 type TimesheetDayViewProps = {
   workspaceId: string;
@@ -71,10 +73,7 @@ export const TimesheetDayView = ({
     let total = 0;
     for (const e of entries) {
       if (e.billable) {
-        total += prorateHourlyCents({
-          billedMinutes: e.billedMinutes,
-          hourlyRateCents: e.rateAtEntry,
-        });
+        total += timeEntryAmount(e);
       }
     }
     return total;
@@ -114,14 +113,14 @@ export const TimesheetDayView = ({
   };
 
   const handleEdit = (values: TimeEntryFormValues) => {
-    if (!editingId) {
+    if (!editingId || !editingEntry) {
       return;
     }
     updateEntry.mutate(
       {
         workspaceId,
         id: editingId,
-        workItemId: values.matterId,
+        ...timeEntryContextUpdate(editingEntry, values.matterId),
         dateWorked: values.dateWorked,
         timezoneId: Intl.DateTimeFormat().resolvedOptions().timeZone,
         durationMinutes: values.durationMinutes,
@@ -219,9 +218,12 @@ export const TimesheetDayView = ({
       {entries.length > 0 ? (
         <div className="flex flex-col gap-1.5">
           {entries.map((entry) => {
-            const matterName = entry.workItemId
-              ? matterNameMap.get(entry.workItemId)
-              : undefined;
+            let matterName: string | undefined;
+            if (entry.workItemReference?.type === "unavailable") {
+              matterName = t("common.unavailable");
+            } else if (entry.workItemId) {
+              matterName = matterNameMap.get(entry.workItemId);
+            }
             return (
               <TimeEntryRow
                 entry={entry}
@@ -276,6 +278,9 @@ export const TimesheetDayView = ({
             </h3>
             {editingEntry && (
               <TimeEntryForm
+                contextState={
+                  editingEntry.workItemReference?.type ?? "available"
+                }
                 defaultValues={{
                   matterId: editingEntry.workItemId ?? "",
                   dateWorked: editingEntry.dateWorked,

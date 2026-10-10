@@ -15,8 +15,8 @@ import type {
   ContactEmail,
   ContactPhone,
 } from "@/api/db/schema-validators";
-import { MAX_CONTACT_NATIONALITY_CODES } from "@/api/handlers/contacts/person-details";
 import { createContactTypeSchema } from "@/api/handlers/contacts/schema";
+import { MAX_CONTACT_NATIONALITY_CODES } from "@/api/lib/business-registries/nationality-codes";
 import { LIMITS } from "@/api/lib/limits";
 
 /**
@@ -124,10 +124,6 @@ export const contactImportCandidateSchema = t.Object({
     }),
   ),
 });
-
-export type ContactImportCandidateInput = Static<
-  typeof contactImportCandidateSchema
->;
 
 // The draft sub-shapes relax constraints but must keep the persisted key
 // sets, so a valid draft is assignable to what the insert expects and a new

@@ -16,12 +16,14 @@ import {
   mcpConnectorUrlVariants,
   normalizeMcpConnectorUrl,
 } from "@/api/handlers/mcp-connectors/url-normalization";
+import { mcpConnectorRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import type {
   HandlerConfig,
   SafeHandlerGenerator,
 } from "@/api/lib/api-handlers";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -40,6 +42,8 @@ const requestBody = t.Object({
 
 const config = {
   permissions: { organizationSettings: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.accountControl,
+  realtime: mcpConnectorRealtimeUpdates,
   mcp: { type: "internal", reason: "mcp_transport" },
   body: requestBody,
 } satisfies HandlerConfig;
@@ -119,7 +123,8 @@ export const createMcpConnectorHandler = ({
         );
       }
 
-      const probeResult = await probeServer(normalizedUrl);
+      const permit = grantThirdPartyOutboundPermit();
+      const probeResult = await probeServer(normalizedUrl, permit);
       if (Result.isError(probeResult)) {
         return Result.err(
           new HandlerError({
@@ -166,7 +171,7 @@ export const createMcpConnectorHandler = ({
           organizationId: session.activeOrganizationId,
           safeDb,
         }),
-        discoverIconUrl(normalizedUrl),
+        discoverIconUrl(normalizedUrl, permit),
       ]);
 
       const inserted = yield* Result.await(

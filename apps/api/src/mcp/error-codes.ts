@@ -1,4 +1,7 @@
 import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
+import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-caps";
+
+import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 
 /**
  * Machine-readable error codes for the MCP tool-error envelope. The MCP server
@@ -10,6 +13,7 @@ import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
  */
 export const MCP_ERROR_CODES = [
   ...Object.values(ACTION_ADMISSION_CODES),
+  ...Object.values(VERIFICATION_RUN_CAP_CODES),
   /** Input failed validation at the tool boundary (shape, type, range). */
   "validation_error",
   /** The read result needs a smaller selection or page. */
@@ -48,6 +52,13 @@ export const MCP_ERROR_CODES = [
   "rate_limited",
   /** A named external dependency is temporarily unavailable; retry is safe. */
   "upstream_unavailable",
+  /**
+   * The case-law and legislation search index could not be reached (refused
+   * or reset connection, failed DNS lookup, timeout, or a 502/503/504 from
+   * the gateway in front of it). Nothing in the call caused it; resending the
+   * same call once the index is back succeeds.
+   */
+  "search_index_unavailable",
   /** No tool with the given name is exposed on this surface. */
   "unknown_tool",
   /** An unexpected server-side failure; details are not leaked to the caller. */
@@ -55,6 +66,9 @@ export const MCP_ERROR_CODES = [
 ] as const;
 
 export type McpErrorCode = (typeof MCP_ERROR_CODES)[number];
+
+const isMcpErrorCode = (code: unknown): code is McpErrorCode =>
+  MCP_ERROR_CODES.some((candidate) => candidate === code);
 
 /**
  * Map a backing safe handler's HTTP-ish status onto a stable envelope code,
@@ -93,8 +107,70 @@ export const statusCodeToErrorCode = (status: number): McpErrorCode => {
 /**
  * One structured validation issue in the error envelope. `path` is the dot-path
  * to the offending field (empty string for a whole-object / root issue);
- * `message` is the human-readable reason. Emitted under `error.issues` only for
- * `validation_error` envelopes, so agents and the CLI can pinpoint the field
- * that failed instead of parsing the collapsed summary message.
+ * `message` explains the refusal; `code` identifies a handler domain failure
+ * without extending the transport envelope's closed classification set.
  */
-export type McpValidationIssue = { path: string; message: string };
+export type McpValidationIssue = {
+  path: string;
+  message: string;
+  code?: string | undefined;
+};
+
+type McpRefusalOptions = {
+  status: number;
+  code?: string | undefined;
+  message: string;
+  issues?: unknown;
+  hint?: string | undefined;
+  retryable?: boolean | undefined;
+};
+
+/** A refusal ready for the structured envelope; absent fields are omitted. */
+export type McpRefusal = {
+  code: McpErrorCode;
+  message: string;
+  issues: McpValidationIssue[];
+  hint?: string;
+  retryable?: boolean;
+};
+
+/** Transport classifications stay closed; handler domain codes identify issues. */
+export const projectMcpRefusal = ({
+  status,
+  code,
+  message,
+  issues,
+  hint,
+  retryable,
+}: McpRefusalOptions): McpRefusal => {
+  const detailedIssues = isUnknownArray(issues)
+    ? issues.flatMap((issue) => {
+        if (
+          !isRecord(issue) ||
+          typeof issue["path"] !== "string" ||
+          typeof issue["message"] !== "string"
+        ) {
+          return [];
+        }
+        return [
+          {
+            path: issue["path"],
+            message: issue["message"],
+            ...(typeof issue["code"] === "string"
+              ? { code: issue["code"] }
+              : {}),
+          },
+        ];
+      })
+    : [];
+  return {
+    code: isMcpErrorCode(code) ? code : statusCodeToErrorCode(status),
+    message,
+    issues:
+      code !== undefined && !isMcpErrorCode(code)
+        ? [{ path: "", code, message }, ...detailedIssues]
+        : detailedIssues,
+    ...(hint === undefined ? {} : { hint }),
+    ...(retryable === undefined ? {} : { retryable }),
+  };
+};

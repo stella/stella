@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 
-import { Result } from "better-result";
+import { Result, panic } from "better-result";
 import { Prism, useTokenize } from "prism-react-renderer";
 import type { PrismTheme, Token } from "prism-react-renderer";
 import { useTranslations } from "use-intl";
@@ -9,6 +9,7 @@ import { copyToClipboard } from "@stll/clipboard";
 import { Button } from "@stll/ui/button";
 import { CopyIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
+import { cn } from "@stll/ui/utils";
 
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
@@ -51,14 +52,37 @@ const TOOL_CODE_THEME = {
   ],
 } satisfies PrismTheme;
 
+/**
+ * `call` is what the agent sent (foreground); `result` is what came
+ * back, rendered muted below it. No card chrome: the block sits flush
+ * under the tool row, and `label` names it for assistive tech only.
+ */
+export type ToolCallCodeTone = "call" | "result";
+
+const getToneClassName = (tone: ToolCallCodeTone): string | undefined => {
+  switch (tone) {
+    case "call":
+      return undefined;
+    case "result":
+      return "opacity-60";
+    default:
+      tone satisfies never;
+      return panic("Unhandled tool call code tone");
+  }
+};
+
 export const ToolCallCodeBlock = ({
   code,
+  label,
   language,
   lineNumbers,
+  tone,
 }: {
   code: string;
+  label: string;
   language: "json" | "text" | "typescript";
   lineNumbers?: boolean;
+  tone: ToolCallCodeTone;
 }) => {
   const t = useTranslations();
   const shouldShowLineNumbers = lineNumbers ?? false;
@@ -76,9 +100,11 @@ export const ToolCallCodeBlock = ({
   };
 
   return (
-    <div className="bg-background/50 overflow-hidden rounded-lg border">
-      <div className="text-muted-foreground text-2xs flex h-9 items-center justify-between px-2.5">
-        <span className="font-mono lowercase">{language}</span>
+    <section aria-label={label} className="group/code relative" dir="ltr">
+      <div
+        className="absolute end-1 top-1 opacity-0 transition-opacity duration-150 group-hover/code:opacity-100 focus-within:opacity-100 motion-reduce:transition-none pointer-coarse:opacity-100"
+        data-chat-copy-exclude
+      >
         <Button
           aria-label={t("common.copy")}
           onClick={() => {
@@ -92,13 +118,19 @@ export const ToolCallCodeBlock = ({
         </Button>
       </div>
       <pre
-        className="max-h-96 overflow-auto px-3 pb-3 font-mono text-xs leading-5"
+        className={cn(
+          "max-h-96 overflow-auto py-1 pe-8 font-mono text-xs leading-5",
+          getToneClassName(tone),
+        )}
         style={TOOL_CODE_THEME.plain}
       >
         {keyedLines.map(({ key, lineNumber, tokens: lineTokens }) => (
           <span className="block" key={key}>
             {shouldShowLineNumbers && (
-              <span className="text-foreground-ghost me-4 inline-block w-5 text-end tabular-nums select-none">
+              <span
+                className="text-foreground-ghost me-4 inline-block w-5 text-end tabular-nums select-none"
+                data-chat-copy-exclude
+              >
                 {lineNumber}
               </span>
             )}
@@ -110,7 +142,7 @@ export const ToolCallCodeBlock = ({
           </span>
         ))}
       </pre>
-    </div>
+    </section>
   );
 };
 

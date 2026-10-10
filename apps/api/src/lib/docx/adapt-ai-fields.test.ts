@@ -6,7 +6,11 @@ import { filtersFromFieldConfig } from "@stll/template-conditions";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 
-import { adaptAiFields, type AiOccurrenceAdapter } from "./adapt-ai-fields";
+import {
+  adaptAiFields,
+  AI_FIELD_ADAPTATION_FAILURE_MESSAGE,
+  type AiOccurrenceAdapter,
+} from "./adapt-ai-fields";
 import { deriveManifestFromDocx } from "./derived-manifest";
 import { fillTemplate } from "./patch-template";
 import type { FieldMeta } from "./types";
@@ -101,6 +105,7 @@ describe("adaptAiFields", () => {
     });
 
     expect(adapted.adaptedPaths).toEqual(["law"]);
+    expect(adapted.failures).toEqual([]);
     // One adapter call for the field, one occurrence entry per marker, each
     // carrying the surrounding text with the marker left in place.
     expect(seen).toHaveLength(1);
@@ -168,6 +173,16 @@ describe("adaptAiFields", () => {
     });
     expect(adapted.adaptedPaths).toEqual([]);
     expect(adapted.file).toBe(docx);
+    // The stub fills every occurrence, which nobody asked for: reported.
+    expect(adapted.failures).toEqual([
+      {
+        fieldPath: "law",
+        valuePath: "law",
+        itemIndex: null,
+        reason: "generation-failed",
+        message: AI_FIELD_ADAPTATION_FAILURE_MESSAGE,
+      },
+    ]);
 
     const { file } = await fillTemplate(adapted.file, {
       law: "czech law",
@@ -175,6 +190,21 @@ describe("adaptAiFields", () => {
     const text = await documentText(file);
     expect(text).toContain("A: czech law");
     expect(text).toContain("B: czech law");
+  });
+
+  test("reports a field the adapter returned nothing for, and adapts the rest", async () => {
+    const docx = await makeDocx(
+      WRAP([P("Law: {{law}}"), P("Court: {{court}}")].join("")),
+    );
+    const adapted = await adaptAiFields({
+      file: docx,
+      fields: [lawField, { path: "court", aiAdapt: true }],
+      values: { law: "czech law", court: "district court" },
+      adapt: async ({ fieldPath }) =>
+        fieldPath === "law" ? undefined : ["ADAPTED COURT"],
+    });
+    expect(adapted.adaptedPaths).toEqual(["court"]);
+    expect(adapted.failures.map(({ fieldPath }) => fieldPath)).toEqual(["law"]);
   });
 
   test("reads a nested stub for a dotted field path", async () => {
@@ -198,6 +228,8 @@ describe("adaptAiFields", () => {
       adapt: undefined,
     });
     expect(noAdapter.file).toBe(docx);
+    // No adapter means no adaptation was asked for: nothing failed.
+    expect(noAdapter.failures).toEqual([]);
 
     const noStub = await adaptAiFields({
       file: docx,

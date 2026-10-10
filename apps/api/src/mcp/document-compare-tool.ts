@@ -1,11 +1,10 @@
+import { panic, Result } from "better-result";
 /**
  * `compare_documents`: the curated tool over the document comparison the REST
  * endpoint serves. It owns no comparison logic — the same generator runs
  * behind both — only the agent-facing contract: a discriminated source, a
  * server-resolved matter and file property, and a bounded result summary.
  */
-
-import { panic, Result } from "better-result";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import * as v from "valibot";
 
@@ -17,6 +16,7 @@ import {
 import type { DocumentCompareResponse } from "@/api/handlers/documents/compare";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
+import { projectionPayload } from "@/api/lib/projection-totality";
 import {
   brandPersistedEntityVersionId,
   brandPersistedFileComparisonUploadId,
@@ -300,7 +300,7 @@ export const COMPARE_DOCUMENTS_TOOL_DEFINITION = defineValibotMcpTool({
   consumesServices: true,
   annotations: {
     title: "Compare document versions",
-    destructiveHint: false,
+    destructiveHint: true,
     idempotentHint: true,
     openWorldHint: false,
     readOnlyHint: false,
@@ -320,6 +320,8 @@ export const COMPARE_DOCUMENTS_TOOL_DEFINITION = defineValibotMcpTool({
     "Show the user each redline's openUrl or download link.",
   inputSchema: COMPARE_DOCUMENTS_INPUT_SCHEMA,
   access: "write",
+  accountAccess: "sandbox",
+  permissions: { type: "all", permissions: { entity: ["update"] } },
   anonymized: { exposure: "excluded", reason: "write" },
   name: "compare_documents",
   scope: "stella:documents_write",
@@ -532,49 +534,48 @@ const comparisonSummary = (comparison: ComparisonSummaryInput) => ({
   ),
 });
 
-const toToolOutput = (
-  response: DocumentCompareResponse,
-): CompareDocumentsOutput => ({
-  results: response.results.map((comparison) => {
-    if (comparison.status === "failed") {
+const toToolOutput = (response: DocumentCompareResponse) =>
+  projectionPayload(COMPARE_DOCUMENTS_OUTPUT_SCHEMA, {
+    results: response.results.map((comparison) => {
+      if (comparison.status === "failed") {
+        return {
+          status: "failed" as const,
+          baseVersionId: comparison.baseVersionId,
+          targetVersionId: comparison.targetVersionId,
+          error: comparison.error,
+        };
+      }
+      if (comparison.status === "previewed") {
+        return {
+          status: "previewed" as const,
+          baseVersionId: comparison.baseVersionId,
+          targetVersionId: comparison.targetVersionId,
+          ...comparisonSummary(comparison),
+        };
+      }
+      if (comparison.status === "downloadable") {
+        return {
+          status: "downloadable" as const,
+          baseVersionId: comparison.baseVersionId,
+          targetVersionId: comparison.targetVersionId,
+          fileName: comparison.fileName,
+          download: comparison.download,
+          ...comparisonSummary(comparison),
+        };
+      }
       return {
-        status: "failed" as const,
+        status: "created" as const,
         baseVersionId: comparison.baseVersionId,
         targetVersionId: comparison.targetVersionId,
-        error: comparison.error,
-      };
-    }
-    if (comparison.status === "previewed") {
-      return {
-        status: "previewed" as const,
-        baseVersionId: comparison.baseVersionId,
-        targetVersionId: comparison.targetVersionId,
+        redlineVersionId: comparison.redlineVersionId,
+        fileName: comparison.file.fileName,
+        versionNumber: comparison.file.versionNumber,
+        openUrl: comparison.file.openUrl,
+        download: comparison.file.download,
         ...comparisonSummary(comparison),
       };
-    }
-    if (comparison.status === "downloadable") {
-      return {
-        status: "downloadable" as const,
-        baseVersionId: comparison.baseVersionId,
-        targetVersionId: comparison.targetVersionId,
-        fileName: comparison.fileName,
-        download: comparison.download,
-        ...comparisonSummary(comparison),
-      };
-    }
-    return {
-      status: "created" as const,
-      baseVersionId: comparison.baseVersionId,
-      targetVersionId: comparison.targetVersionId,
-      redlineVersionId: comparison.redlineVersionId,
-      fileName: comparison.file.fileName,
-      versionNumber: comparison.file.versionNumber,
-      openUrl: comparison.file.openUrl,
-      download: comparison.file.download,
-      ...comparisonSummary(comparison),
-    };
-  }),
-});
+    }),
+  });
 
 const compareSelection = (
   source: Exclude<CompareToolInput["source"], { type: "uploads" }>,
@@ -613,39 +614,46 @@ const compareSelection = (
 };
 
 /** One result per staged pair, in the shape the tool's `results` array takes. */
-const uploadsResult = (
-  result: FileComparisonRunResult,
-): CompareDocumentsOutput["results"][number] => {
+const uploadsResult = (result: FileComparisonRunResult) => {
   switch (result.status) {
     case "upload_failed":
-      return {
-        status: "upload_failed",
-        baseUploadId: result.baseUploadId,
-        targetUploadId: result.targetUploadId,
-        error: result.error,
-      };
+      return projectionPayload(
+        COMPARE_DOCUMENTS_OUTPUT_SCHEMA.entries.results.item,
+        {
+          status: "upload_failed",
+          baseUploadId: result.baseUploadId,
+          targetUploadId: result.targetUploadId,
+          error: result.error,
+        },
+      );
     case "upload_previewed":
-      return {
-        status: "upload_previewed",
-        baseUploadId: result.baseUploadId,
-        targetUploadId: result.targetUploadId,
-        ...(result.scanWarnings.length > 0
-          ? { scanWarnings: result.scanWarnings }
-          : {}),
-        ...comparisonSummary(result.comparison),
-      };
+      return projectionPayload(
+        COMPARE_DOCUMENTS_OUTPUT_SCHEMA.entries.results.item,
+        {
+          status: "upload_previewed",
+          baseUploadId: result.baseUploadId,
+          targetUploadId: result.targetUploadId,
+          ...(result.scanWarnings.length > 0
+            ? { scanWarnings: result.scanWarnings }
+            : {}),
+          ...comparisonSummary(result.comparison),
+        },
+      );
     case "upload_downloadable":
-      return {
-        status: "upload_downloadable",
-        baseUploadId: result.baseUploadId,
-        targetUploadId: result.targetUploadId,
-        fileName: result.fileName,
-        download: result.download,
-        ...(result.scanWarnings.length > 0
-          ? { scanWarnings: result.scanWarnings }
-          : {}),
-        ...comparisonSummary(result.comparison),
-      };
+      return projectionPayload(
+        COMPARE_DOCUMENTS_OUTPUT_SCHEMA.entries.results.item,
+        {
+          status: "upload_downloadable",
+          baseUploadId: result.baseUploadId,
+          targetUploadId: result.targetUploadId,
+          fileName: result.fileName,
+          download: result.download,
+          ...(result.scanWarnings.length > 0
+            ? { scanWarnings: result.scanWarnings }
+            : {}),
+          ...comparisonSummary(result.comparison),
+        },
+      );
     default:
       result satisfies never;
       return panic("Unhandled staged comparison result");
@@ -696,7 +704,11 @@ export const handleCompareDocumentsTool = async (
     });
     return run.status === "error"
       ? run.response
-      : toolDataResult({ results: [uploadsResult(run.result)] });
+      : toolDataResult(
+          projectionPayload(COMPARE_DOCUMENTS_OUTPUT_SCHEMA, {
+            results: [uploadsResult(run.result)],
+          }),
+        );
   }
 
   const target = await resolveDocumentWriteTarget({

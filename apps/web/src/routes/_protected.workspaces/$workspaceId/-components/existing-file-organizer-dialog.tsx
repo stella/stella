@@ -1,9 +1,5 @@
 import { useMemo, useRef, useState } from "react";
 
-import {
-  draggable,
-  dropTargetForElements,
-} from "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
@@ -13,6 +9,7 @@ import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import {
   Dialog,
+  DialogFormState,
   DialogDescription,
   DialogFooter,
   DialogHeader,
@@ -24,7 +21,6 @@ import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
   ChevronDownIcon,
   ChevronRightIcon,
-  LoaderCircleIcon,
   RotateCcwIcon,
   Rows3Icon,
   SparklesIcon,
@@ -32,6 +28,7 @@ import {
   TriangleAlertIcon,
 } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
+import { Loader } from "@stll/ui/loader";
 import { Skeleton } from "@stll/ui/skeleton";
 import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
@@ -46,10 +43,14 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useI18nStore } from "@/i18n/i18n-store";
-import { userStorageKey } from "@/lib/account/user-scoped-storage";
+import { useUserStorageState } from "@/lib/account/use-user-storage-state";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
+import {
+  draggable,
+  dropTargetForElements,
+} from "@/lib/drag-and-drop/element-registration";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
@@ -62,19 +63,22 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-components/import-organizer.logic";
 import type { FileNameSuggestion } from "@/routes/_protected.workspaces/$workspaceId/-components/import-organizer.logic";
 
-export type ExistingImportFolder = {
+type ExistingImportFolder = {
   entityId: string;
   name: string;
   path: string;
   parentId: string | null;
 };
 
-export type ExistingOrganizerFile = {
+type ExistingOrganizerFile = {
   entityId: string;
   originalName: string;
   parentId: string | null;
   mimeType: string | null;
 };
+
+const decodeInstructions = (raw: string | null) => raw ?? "";
+const encodeInstructions = (value: string) => value;
 
 type ExistingFileOrganizerDialogProps = {
   workspaceId: string;
@@ -130,15 +134,13 @@ export const ExistingFileOrganizerDialog = ({
   const locale = useI18nStore((s) => s.loadedLang);
   const queryClient = useQueryClient();
   const analytics = useAnalytics();
-  const userInstructionsKey = userStorageKey(
-    `stella.organize-suggestions.user-instructions.${workspaceId}`,
-  );
-  const [userInstructions, setUserInstructions] = useState(() => {
-    if (typeof window === "undefined") {
-      return "";
-    }
-    return window.localStorage.getItem(userInstructionsKey) ?? "";
-  });
+  const { value: userInstructions, setValue: setUserInstructions } =
+    useUserStorageState({
+      baseKey: `stella.organize-suggestions.user-instructions.${workspaceId}`,
+      area: "local",
+      decode: decodeInstructions,
+      encode: encodeInstructions,
+    });
   const [showInstructions, setShowInstructions] = useState(false);
   const getSuggestionRequestContext = useLatestCallback(() => ({
     locale,
@@ -626,6 +628,17 @@ export const ExistingFileOrganizerDialog = ({
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
       <DialogPopup className="max-w-3xl">
+        <DialogFormState
+          dirty={
+            (rows.length > 0 &&
+              JSON.stringify(rows) !== JSON.stringify(initialRows)) ||
+            selectedDeleteFolders.length > 0
+          }
+          onDiscard={() => {
+            setRows(initialRows);
+            setDeleteFolders([]);
+          }}
+        />
         <DialogHeader>
           <DialogTitle>{t("workspaces.importOrganizer.title")}</DialogTitle>
           <DialogDescription>
@@ -642,12 +655,7 @@ export const ExistingFileOrganizerDialog = ({
           <UserInstructionsSection
             disabled={false}
             expanded={showInstructions}
-            onChange={(value) => {
-              setUserInstructions(value);
-              if (typeof window !== "undefined") {
-                window.localStorage.setItem(userInstructionsKey, value);
-              }
-            }}
+            onChange={setUserInstructions}
             onRegenerate={() => {
               detached(
                 requestAiSuggestions(),
@@ -712,7 +720,7 @@ export const ExistingFileOrganizerDialog = ({
               variant="outline"
             >
               {isGeneratingSuggestions ? (
-                <LoaderCircleIcon className="animate-spin" />
+                <Loader label={t("common.loading")} size="sm" />
               ) : (
                 <SparklesIcon />
               )}
@@ -744,8 +752,12 @@ const SummaryBar = ({ isGenerating, summary }: SummaryBarProps) => {
   return (
     <div className="bg-muted/40 mb-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-md border px-3 py-2 text-sm">
       {isGenerating ? (
-        <span className="text-muted-foreground flex items-center gap-2">
-          <LoaderCircleIcon className="size-3.5 animate-spin" />
+        <span
+          aria-busy="true"
+          className="text-muted-foreground flex items-center gap-2"
+          role="status"
+        >
+          <Loader className="size-3.5" size="sm" variant="decorative" />
           {t("workspaces.importOrganizer.generating")}
         </span>
       ) : (

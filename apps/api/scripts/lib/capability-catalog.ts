@@ -12,6 +12,8 @@
 import { panic } from "better-result";
 
 import { MCP_WRITE_ONLY_RESOURCE_SCOPES } from "@stll/api-contract";
+import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
+import { compareCodeUnit } from "@stll/collation";
 
 import type {
   CapabilityFileInput,
@@ -26,7 +28,7 @@ import {
   transportAlternative,
   transportFileInput,
 } from "../../src/lib/capability-transport";
-import type { HandlerKind } from "./enumerate-safe-handlers";
+import type { HandlerKind } from "../../src/lib/safe-handler-factories";
 
 /** Handler-tree prefix stripped to turn a file path into a capability id. */
 export const HANDLERS_ROOT_PREFIX = "apps/api/src/handlers/";
@@ -36,7 +38,7 @@ export const HANDLERS_ROOT_PREFIX = "apps/api/src/handlers/";
  * id. The client-engagement container is a `matter` to every user and agent and
  * a `workspace` only inside the code (the handler directory, the DB schema, the
  * HTTP routes), and a capability id is public: it is the CLI command path and
- * the `invoke_capability` argument. Substitution is per WORD, so one table
+ * a capability executor argument. Substitution is per WORD, so one table
  * covers the domain segment (`workspaces.*` -> `matters.*`) and any nested
  * resource or action word (`workspace-members` -> `matter-members`).
  *
@@ -83,7 +85,7 @@ export const deriveCapabilityId = ({
 /**
  * The one legal shape for a capability-id segment: lowercase kebab-case. Ids are
  * PUBLIC — the CLI derives its command path from them and MCP's
- * `invoke_capability` takes them verbatim — so they must never leak an internal
+ * capability executors take them verbatim — so they must never leak an internal
  * identifier. `deriveCapabilityId` suffixes a NAMED export's identifier, which is
  * a TS identifier and therefore camelCase; that is exactly how ids such as
  * `matters.anonymization-terms.deleteWorkspaceAnonymizationTerm` were minted.
@@ -512,7 +514,7 @@ export const findInlineCapabilityMismatches = ({
       mismatches.push({ id, inlineCount, allowed });
     }
   }
-  return mismatches.toSorted((a, b) => a.id.localeCompare(b.id));
+  return mismatches.toSorted((a, b) => compareCodeUnit(a.id, b.id));
 };
 
 /** Module-alias import specifier for a handler file: `apps/api/src/handlers/time-entries/create.ts` -> `@/api/handlers/time-entries/create`. */
@@ -531,6 +533,9 @@ export type CapabilityDispatchRecord = {
   id: string;
   importPath: string;
   exportName: string | undefined;
+  featureAccess?:
+    | { featureId: string; type: "required" | "conditional" }
+    | undefined;
 };
 
 /**
@@ -680,7 +685,7 @@ type CapabilityDispatchEntry = {
   /** Lazy module import; the endpoint definition is its default (or named) export. */
   load: () => Promise<Record<string, unknown>>;
   /** Present only for a named (non-default) export. */
-  exportName?: string;
+  exportName?: string;${records.some((record) => record.featureAccess !== undefined) ? '\n  featureId?: string;\n  featureAccess?: "required" | "conditional";' : ""}
 };
 
 export const CAPABILITY_DISPATCH = {
@@ -706,7 +711,11 @@ export const CAPABILITY_DISPATCH = {
         exportName === undefined
           ? ""
           : `, exportName: ${JSON.stringify(exportName)}`;
-      return `  ${JSON.stringify(id)}: { ${loader}${named} },`;
+      const feature =
+        record.featureAccess === undefined
+          ? ""
+          : `, featureId: ${JSON.stringify(record.featureAccess.featureId)}, featureAccess: ${JSON.stringify(record.featureAccess.type)}`;
+      return `  ${JSON.stringify(id)}: { ${loader}${named}${feature} },`;
     })
     .join("\n");
   const footer = `
@@ -717,7 +726,7 @@ export const CAPABILITY_DISPATCH = {
 };
 
 /**
- * Elysia-context features a synthesized `invoke_capability` context cannot
+ * Elysia-context features a synthesized capability-executor context cannot
  * honor: a handler that reaches for these needs the real HTTP request/response
  * plumbing the generic path does not reconstruct. Each pattern targets the
  * destructured-context usage handlers actually write (e.g. `set.status`,
@@ -787,7 +796,7 @@ export const scanContextFidelity = ({
   const staleWaivers = [...waivedIds]
     .filter((id) => !tripped.has(id))
     .toSorted();
-  violations.sort((a, b) => a.id.localeCompare(b.id));
+  violations.sort((a, b) => compareCodeUnit(a.id, b.id));
   return { violations, staleWaivers };
 };
 
@@ -926,7 +935,8 @@ export const scanBinarySchemaFields = (
     }
   }
   fields.sort(
-    (a, b) => a.part.localeCompare(b.part) || a.field.localeCompare(b.field),
+    (a, b) =>
+      compareCodeUnit(a.part, b.part) || compareCodeUnit(a.field, b.field),
   );
   return { fields, unnameableParts };
 };
@@ -1205,13 +1215,19 @@ const ROUTE_HOOK_SOURCE = String.raw`\.(?:onBeforeHandle|beforeHandle|onRequest)
 const ROUTE_HOOK_PATTERN = new RegExp(ROUTE_HOOK_SOURCE, "u");
 const ROUTE_HOOK_OCCURRENCES = new RegExp(ROUTE_HOOK_SOURCE, "gu");
 // The one hook the invoke path reproduces: `deploymentFeatureGate(() => <flag>)`
-// whose predicate is exactly a deployment flag (optionally opened in local
-// dev), or an imported helper whose whole body is that expression.
+// whose predicate is exactly the deployment-feature owner over one flag
+// (`isDeploymentFeatureEnabled("FEATURE_X")`), or an imported helper whose
+// whole body is that call.
 const FEATURE_GATE_CALL = /\.use\(\s*deploymentFeatureGate\(/u;
-const CANONICAL_FEATURE_EXPRESSION =
-  /^\s*(?:isLocalDevOpen\(\)\s*\|\|\s*)?env\.(?<flag>FEATURE_[A-Z0-9_]+)\s*$/u;
-const CANONICAL_FEATURE_PREDICATE =
-  /^\(\)\s*=>\s*(?:isLocalDevOpen\(\)\s*\|\|\s*)?env\.(?<flag>FEATURE_[A-Z0-9_]+)$/u;
+const CANONICAL_FEATURE_CALL = String.raw`isDeploymentFeatureEnabled\(\s*"(?<flag>FEATURE_[A-Z0-9_]+)",?\s*\)`;
+const CANONICAL_FEATURE_EXPRESSION = new RegExp(
+  String.raw`^\s*${CANONICAL_FEATURE_CALL}\s*$`,
+  "u",
+);
+const CANONICAL_FEATURE_PREDICATE = new RegExp(
+  String.raw`^\(\)\s*=>\s*${CANONICAL_FEATURE_CALL}$`,
+  "u",
+);
 const HELPER_REFERENCE = /^(?<name>[A-Za-z_$][\w$]*)$/u;
 // A `.use(x)` of a plain identifier mounts a plugin. One defined in this file
 // with `new Elysia`, or imported from a relative path or the handler tree, is a
@@ -1501,7 +1517,7 @@ export const scanRouteHookGuards = ({
     .toSorted();
   violations.sort(
     (a, b) =>
-      a.id.localeCompare(b.id) || a.routeFile.localeCompare(b.routeFile),
+      compareCodeUnit(a.id, b.id) || compareCodeUnit(a.routeFile, b.routeFile),
   );
   return { violations, childRouteMounts, staleWaivers };
 };
@@ -1650,8 +1666,8 @@ const COVERAGE_DOC_HEADER = `<!-- GENERATED by apps/api/scripts/export-capabilit
 
 Every safe handler the API exposes, grouped by domain: how it is classified
 (read/write, destructive) and how it is reachable — as a curated MCP tool,
-covered by one, or only through the generic \`invoke_capability\` path (shown
-here as its CLI form). Projected from the same handler enumeration that builds
+covered by one, or through \`${MCP_CAPABILITY_EXECUTORS.read}\` or
+\`${MCP_CAPABILITY_EXECUTORS.write}\` (shown here as its CLI form). Projected from the same handler enumeration that builds
 \`packages/cli/capabilities/*.json\`; see
 \`apps/api/scripts/export-capability-catalog.ts\`.
 
@@ -1741,7 +1757,7 @@ const renderDomainSection = ({
   cliCommandPathById: ReadonlyMap<string, readonly string[]>;
 }): string => {
   const rows = entries
-    .toSorted((a, b) => a.id.localeCompare(b.id))
+    .toSorted((a, b) => compareCodeUnit(a.id, b.id))
     .map(
       (entry) =>
         `| \`${entry.id}\` | ${renderAccessCell(entry)} | ${renderScopeCell(entry)} | ${entry.feature ?? "—"} | ${renderReachableViaCell(entry, cliCommandPathById)} |`,
@@ -1763,7 +1779,7 @@ const renderWaivedInternalSection = (
   internalWaiverCounts: Readonly<Record<string, number>>,
 ): string => {
   const counts = Object.entries(internalWaiverCounts).toSorted(([a], [b]) =>
-    a.localeCompare(b),
+    compareCodeUnit(a, b),
   );
   const rows = counts.map(([reason, count]) => `| ${reason} | ${count} |`);
   return `## Waived internal handlers
@@ -1806,7 +1822,7 @@ export const serializeCoverageDoc = ({
     byDomain.set(domain, bucket);
   }
   const domainSections = [...byDomain.keys()]
-    .toSorted((a, b) => a.localeCompare(b))
+    .toSorted(compareCodeUnit)
     .map((domain) =>
       renderDomainSection({
         domain,

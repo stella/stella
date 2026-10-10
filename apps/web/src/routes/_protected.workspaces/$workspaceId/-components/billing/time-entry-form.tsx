@@ -33,10 +33,13 @@ import {
 import { MatterCombobox } from "@/components/billing/matter-combobox";
 import { TimeEntryNarrativeField } from "@/components/billing/time-entry-narrative-field";
 import { DatePickerPopover } from "@/components/date-picker-popover";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
 import { localISODate } from "@/lib/local-iso-date";
+import type { QueryView } from "@/lib/query-view.logic";
 import { schemaFormOptions, toFormErrors } from "@/lib/schema";
+import { useQueryView } from "@/lib/use-query-view";
 import { billingCodesOptions } from "@/lib/workspaces/queries/billing-codes";
 import { resolvedRateOptions } from "@/lib/workspaces/queries/rates";
 
@@ -61,39 +64,21 @@ type TimeEntryFormProps = {
   onSubmit: (values: TimeEntryFormValues) => void | Promise<void>;
   onCancel?: () => void;
   submitLabel?: string;
+  contextState?: "available" | "unavailable";
 };
 
-export const TimeEntryForm = ({
-  workspaceId,
-  userId,
-  defaultValues,
-  onSubmit,
-  onCancel,
-  submitLabel,
-}: TimeEntryFormProps) => {
-  const t = useTranslations();
-  const [rateOverride, setRateOverride] = useState(
-    () => (defaultValues?.rateAtEntry ?? 0) > 0,
-  );
-  const [rateInputValue, setRateInputValue] = useState(() =>
-    (defaultValues?.rateAtEntry ?? 0) > 0
-      ? majorUnitInput(
-          defaultValues?.rateAtEntry ?? 0,
-          defaultValues?.currency ?? DEFAULT_CURRENCY,
-        )
-      : "",
-  );
-
-  const { data: taskCodes } = useQuery(
-    billingCodesOptions(workspaceId, "task"),
-  );
-  const { data: activityCodes } = useQuery(
-    billingCodesOptions(workspaceId, "activity"),
-  );
-
-  const today = localISODate();
-  const schema = v.strictObject({
-    matterId: v.pipe(v.string(), v.nonEmpty(t("billing.matterRequired"))),
+const timeEntryFormSchema = (
+  contextState: "available" | "unavailable",
+  matterRequired: string,
+) =>
+  v.strictObject({
+    matterId: v.pipe(
+      v.string(),
+      v.check(
+        (value) => value.length > 0 || contextState === "unavailable",
+        matterRequired,
+      ),
+    ),
     dateWorked: v.string(),
     durationMinutes: v.number(),
     narrative: v.string(),
@@ -105,24 +90,64 @@ export const TimeEntryForm = ({
     rateAtEntry: v.number(),
     currency: v.string(),
   });
+const initialRateInput = (entry: TimeEntryFormProps["defaultValues"]) =>
+  (entry?.rateAtEntry ?? 0) > 0
+    ? majorUnitInput(
+        entry?.rateAtEntry ?? 0,
+        entry?.currency ?? DEFAULT_CURRENCY,
+      )
+    : "";
+
+const initialTimeEntryValues = (
+  entry: TimeEntryFormProps["defaultValues"],
+) => ({
+  matterId: entry?.matterId ?? "",
+  dateWorked: entry?.dateWorked ?? localISODate(),
+  durationMinutes: entry?.durationMinutes ?? 6,
+  narrative: entry?.narrative ?? "",
+  narrativeLanguage: entry?.narrativeLanguage ?? null,
+  invoiceNarrative: entry?.invoiceNarrative ?? "",
+  billable: entry?.billable ?? true,
+  taskCode: entry?.taskCode ?? "",
+  activityCode: entry?.activityCode ?? "",
+  rateAtEntry: entry?.rateAtEntry ?? 0,
+  currency: entry?.currency ?? DEFAULT_CURRENCY,
+});
+
+const loadedItems = <TData, TError>(view: QueryView<TData, TError>) =>
+  view.type === "items" ? view.items : undefined;
+
+export const TimeEntryForm = ({
+  workspaceId,
+  userId,
+  defaultValues,
+  onSubmit,
+  onCancel,
+  submitLabel,
+  contextState = "available",
+}: TimeEntryFormProps) => {
+  const t = useTranslations();
+  const [rateOverride, setRateOverride] = useState(
+    () => (defaultValues?.rateAtEntry ?? 0) > 0,
+  );
+  const [rateInputValue, setRateInputValue] = useState(() =>
+    initialRateInput(defaultValues),
+  );
+
+  const taskCodesQuery = useQuery(billingCodesOptions(workspaceId, "task"));
+  const taskCodesView = useQueryView(taskCodesQuery);
+  const taskCodes = loadedItems(taskCodesView);
+  const activityCodesQuery = useQuery(
+    billingCodesOptions(workspaceId, "activity"),
+  );
+  const activityCodesView = useQueryView(activityCodesQuery);
+  const activityCodes = loadedItems(activityCodesView);
 
   const form = useForm(
     schemaFormOptions({
-      schema,
+      schema: timeEntryFormSchema(contextState, t("billing.matterRequired")),
       submitValues: "raw",
-      defaultValues: {
-        matterId: defaultValues?.matterId ?? "",
-        dateWorked: defaultValues?.dateWorked ?? today,
-        durationMinutes: defaultValues?.durationMinutes ?? 6,
-        narrative: defaultValues?.narrative ?? "",
-        narrativeLanguage: defaultValues?.narrativeLanguage ?? null,
-        invoiceNarrative: defaultValues?.invoiceNarrative ?? "",
-        billable: defaultValues?.billable ?? true,
-        taskCode: defaultValues?.taskCode ?? "",
-        activityCode: defaultValues?.activityCode ?? "",
-        rateAtEntry: defaultValues?.rateAtEntry ?? 0,
-        currency: defaultValues?.currency ?? DEFAULT_CURRENCY,
-      },
+      defaultValues: initialTimeEntryValues(defaultValues),
       onSubmit: async ({ value }) => {
         // The rate input holds MAJOR units and the currency input sits beside
         // it, so an overridden rate is scaled here, against the currency the
@@ -143,14 +168,14 @@ export const TimeEntryForm = ({
 
   const dateWorked = useSelector(form.store, (s) => s.values.dateWorked);
 
-  const { data: resolved } = useQuery(
+  const resolvedQuery = useQuery(
     resolvedRateOptions(workspaceId, userId, dateWorked),
   );
+  const resolvedView = useQueryView(resolvedQuery);
+  const resolved = loadedItems(resolvedView);
 
-  // Push the resolved rate into the form store whenever it changes, unless
-  // the user has taken over with a manual override. This synchronizes a
-  // query result into TanStack Form's external store; it cannot run during
-  // render because `setFieldValue` mutates that store.
+  // Resolved rates are automatic defaults, not unsaved user changes.
+  // Sync the external form store until the user overrides the rate.
   useExternalSyncEffect(() => {
     if (rateOverride) {
       return;
@@ -167,20 +192,38 @@ export const TimeEntryForm = ({
     (s) => s.values.narrativeLanguage,
   );
   const currentCurrency = useSelector(form.store, (s) => s.values.currency);
-  const formErrors = useSelector(form.store, (state) =>
-    toFormErrors(state.fieldMeta),
-  );
+  const { formErrors, dirty } = useSelector(form.store, (state) => ({
+    formErrors: toFormErrors(state.fieldMeta),
+    dirty:
+      Object.entries(state.fieldMeta).some(
+        ([name, meta]) =>
+          !meta.isDefaultValue &&
+          (rateOverride || (name !== "rateAtEntry" && name !== "currency")),
+      ) || rateInputValue !== initialRateInput(defaultValues),
+  }));
 
   return (
     <Form
+      dirty={dirty}
+      onDiscard={() => {
+        form.reset();
+        setRateOverride((defaultValues?.rateAtEntry ?? 0) > 0);
+        setRateInputValue(initialRateInput(defaultValues));
+      }}
       className="flex flex-col gap-4"
       errors={formErrors}
       onSubmit={(e) => {
         e.preventDefault();
         e.stopPropagation();
+        if (!rateOverride && resolvedView.type !== "items") {
+          return;
+        }
         detached(form.handleSubmit(), "time-entry-form.submit");
       }}
     >
+      <QueryViewFeedback view={taskCodesView} />
+      <QueryViewFeedback view={activityCodesView} />
+      <QueryViewFeedback view={resolvedView} />
       <div className="flex flex-col gap-1.5">
         <form.Field name="matterId">
           {(field) => (
@@ -188,6 +231,9 @@ export const TimeEntryForm = ({
               <FieldLabel>{t("common.matter")}</FieldLabel>
               <MatterCombobox
                 onChange={field.handleChange}
+                {...(contextState === "unavailable" && field.state.value === ""
+                  ? { placeholder: t("common.unavailable") }
+                  : {})}
                 value={field.state.value}
                 workspaceId={workspaceId}
               />
@@ -385,7 +431,12 @@ export const TimeEntryForm = ({
             {t("common.cancel")}
           </Button>
         )}
-        <Button type="submit">{submitLabel ?? t("common.save")}</Button>
+        <Button
+          type="submit"
+          disabled={!rateOverride && resolvedView.type !== "items"}
+        >
+          {submitLabel ?? t("common.save")}
+        </Button>
       </div>
     </Form>
   );

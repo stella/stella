@@ -684,8 +684,25 @@ type ProcessResult = {
   errors: TemplateStructureError[];
 };
 
+export type InlineIterationTextOptions = {
+  text: string;
+  values: Record<string, unknown>;
+  row: Record<string, unknown>;
+  alias: string;
+  arrayPath: string;
+  loop: ReturnType<typeof loopContext>;
+};
+
 export type DirectiveProcessingContext = {
+  scopeInlineText?:
+    | ((options: InlineIterationTextOptions) => string)
+    | undefined;
   inlineDataByParagraph: Map<slimdom.Element, Record<string, unknown>>;
+  inlineClauseScopes: Map<
+    string,
+    { patchKey: string; values: Record<string, unknown> }
+  >;
+  clauseScopeMode: "collect" | "ignore";
   nextEachExpansionId: () => number;
 };
 
@@ -694,6 +711,8 @@ export const createDirectiveProcessingContext =
     let eachExpansionId = 0;
     return {
       inlineDataByParagraph: new Map(),
+      inlineClauseScopes: new Map(),
+      clauseScopeMode: "ignore",
       nextEachExpansionId: () => {
         const current = eachExpansionId;
         eachExpansionId += 1;
@@ -1484,7 +1503,7 @@ export const processBlockDirectives = (
 
 /** The `loop` object one iteration exposes to conditions, mirroring the
  *  `{{ loop.* }}` output markers. */
-const loopContext = (
+export const loopContext = (
   index: number,
   count: number,
 ): Record<LoopProperty, number | boolean> => ({
@@ -1531,7 +1550,7 @@ export const registerLoopItemPatchValues = (
  * flattening nested objects into dot-joined keys so that
  * deep paths like `{{sellers.address.city}}` resolve.
  */
-export const registerItemPatchValues = (
+const registerItemPatchValues = (
   patchValues: Record<string, RichPatchValue>,
   item: Record<string, unknown>,
   arrayPath: string,
@@ -1886,7 +1905,7 @@ const directEachBodyMask = (
  * `{{path.field}}` placeholders are disjoint, so the order of the two rewrites
  * does not matter.
  */
-export const rewriteIterationTokensInText = (
+const rewriteIterationTokensInText = (
   text: string,
   index: number,
   count: number,

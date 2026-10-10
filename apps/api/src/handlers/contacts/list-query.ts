@@ -40,6 +40,8 @@ const UNPROJECTED_CONTACT_LIST_COLUMNS = [
   "dateOfBirthMonth",
   "dateOfBirthDay",
   "nationalityCodes",
+  // Monitoring state belongs to the screening surface.
+  "sanctionsMonitoringMode",
   // Free-text notes are a detail-view field, not a directory summary field.
   "notes",
   "addresses",

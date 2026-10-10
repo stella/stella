@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import { lookupBySiren, lookupBySiret, searchByName } from "./client.js";
 import { RechercheEntreprisesValidationError } from "./errors.js";
 import type { RechercheEntreprisesSearchResponse } from "./types.js";
@@ -13,7 +15,7 @@ const readFixture = async (
   // committed alongside the tests; runtime validation here would only
   // catch drift between an upstream payload and the committed JSON,
   // which is precisely what the assertions below check anyway.
-  // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   return value as RechercheEntreprisesSearchResponse;
 };
 
@@ -127,8 +129,8 @@ describe("lookupBySiren (fixture)", () => {
         ),
     );
     expect(
-      lookupBySiren("780129987", { observer: "unobserved" }),
-    ).rejects.toMatchObject({
+      await rejectionOf(lookupBySiren("780129987", { observer: "unobserved" })),
+    ).toMatchObject({
       name: "RechercheEntreprisesAPIError",
       httpStatus: 503,
       upstreamMessage: "Service temporarily unavailable",
@@ -147,8 +149,8 @@ describe("lookupBySiren (fixture)", () => {
         }),
     );
     expect(
-      lookupBySiren("780129987", { observer: "unobserved" }),
-    ).rejects.toMatchObject({
+      await rejectionOf(lookupBySiren("780129987", { observer: "unobserved" })),
+    ).toMatchObject({
       name: "RechercheEntreprisesAPIError",
       httpStatus: 200,
     });
@@ -256,47 +258,49 @@ describe("searchByName (fixture)", () => {
 // Validation
 // ---------------------------------------------------------------------------
 describe("lookupBySiren validation", () => {
-  test("rejects format violations", () => {
+  test("rejects format violations", async () => {
     expect(
-      lookupBySiren("12345", { observer: "unobserved" }),
-    ).rejects.toBeInstanceOf(RechercheEntreprisesValidationError);
+      await rejectionOf(lookupBySiren("12345", { observer: "unobserved" })),
+    ).toBeInstanceOf(RechercheEntreprisesValidationError);
     expect(
-      lookupBySiren("abcdefghi", { observer: "unobserved" }),
-    ).rejects.toBeInstanceOf(RechercheEntreprisesValidationError);
+      await rejectionOf(lookupBySiren("abcdefghi", { observer: "unobserved" })),
+    ).toBeInstanceOf(RechercheEntreprisesValidationError);
   });
 
-  test("rejects bad checksum", () => {
+  test("rejects bad checksum", async () => {
     // 780129987 is the genuine SIREN; bumping the last digit must fail.
     expect(
-      lookupBySiren("780129988", { observer: "unobserved" }),
-    ).rejects.toBeInstanceOf(RechercheEntreprisesValidationError);
+      await rejectionOf(lookupBySiren("780129988", { observer: "unobserved" })),
+    ).toBeInstanceOf(RechercheEntreprisesValidationError);
   });
 });
 
 describe("lookupBySiret validation", () => {
-  test("rejects format violations", () => {
+  test("rejects format violations", async () => {
     expect(
-      lookupBySiret("12345", { observer: "unobserved" }),
-    ).rejects.toBeInstanceOf(RechercheEntreprisesValidationError);
+      await rejectionOf(lookupBySiret("12345", { observer: "unobserved" })),
+    ).toBeInstanceOf(RechercheEntreprisesValidationError);
     expect(
-      lookupBySiret("780129987", { observer: "unobserved" }),
-    ).rejects.toBeInstanceOf(RechercheEntreprisesValidationError);
+      await rejectionOf(lookupBySiret("780129987", { observer: "unobserved" })),
+    ).toBeInstanceOf(RechercheEntreprisesValidationError);
   });
 
-  test("rejects bad checksum", () => {
+  test("rejects bad checksum", async () => {
     expect(
-      lookupBySiret("78012998704038", { observer: "unobserved" }),
-    ).rejects.toBeInstanceOf(RechercheEntreprisesValidationError);
+      await rejectionOf(
+        lookupBySiret("78012998704038", { observer: "unobserved" }),
+      ),
+    ).toBeInstanceOf(RechercheEntreprisesValidationError);
   });
 });
 
 describe("searchByName validation", () => {
-  test("rejects empty input", () => {
-    expect(searchByName("", { observer: "unobserved" })).rejects.toBeInstanceOf(
-      RechercheEntreprisesValidationError,
-    );
+  test("rejects empty input", async () => {
     expect(
-      searchByName("  ", { observer: "unobserved" }),
-    ).rejects.toBeInstanceOf(RechercheEntreprisesValidationError);
+      await rejectionOf(searchByName("", { observer: "unobserved" })),
+    ).toBeInstanceOf(RechercheEntreprisesValidationError);
+    expect(
+      await rejectionOf(searchByName("  ", { observer: "unobserved" })),
+    ).toBeInstanceOf(RechercheEntreprisesValidationError);
   });
 });

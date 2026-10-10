@@ -1,16 +1,46 @@
 import { Result } from "better-result";
 
-import { decisionHeadnoteLine } from "@stll/api-contract/case-law-text-field";
+import {
+  decisionHeadnoteLine,
+  type DecisionTextWithheldReason,
+} from "@stll/api-contract/case-law-text-field";
 
 import { suggestResearchColumnPromptBodySchema } from "@/api/handlers/case-law/research/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  configuredModelAdmission,
+  createSafeRootHandler,
+} from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { readPublicDecisionSummaries } from "@/api/lib/case-law/decision-summaries";
 import { suggestColumnPrompt } from "@/api/lib/properties/column-prompt-suggestion";
 import type { SuggestPromptDecisionSample } from "@/api/lib/properties/column-prompt-suggestion";
 
+type DecisionSampleSource = {
+  caseNumber: string;
+  court: string;
+  decisionDate: string | null;
+  headnote: Parameters<typeof decisionHeadnoteLine>[0];
+  textWithheldReason: DecisionTextWithheldReason | null;
+};
+
+export const decisionSampleForPrompt = ({
+  caseNumber,
+  court,
+  decisionDate,
+  headnote,
+  textWithheldReason,
+}: DecisionSampleSource): SuggestPromptDecisionSample => ({
+  caseNumber,
+  court,
+  decisionDate,
+  headnote:
+    textWithheldReason === null ? decisionHeadnoteLine(headnote) || null : null,
+});
+
 const config = {
+  actionAdmission: { type: "handler", actionKind: "properties.suggest-prompt" },
   description:
     "Draft or refine a question column's wording with the model, from the " +
     "answer kind, a free-text instruction, the question as it stands, and " +
@@ -21,6 +51,7 @@ const config = {
   // The grant the column itself carries: one capability, one AI spend, and a
   // reader who may not author a column has no draft to write.
   permissions: { caseLawResearch: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "search_ui" },
   body: suggestResearchColumnPromptBodySchema,
   requiresUsage: { actionType: "chat", modelRole: "fast" },
@@ -29,6 +60,7 @@ const config = {
 const suggestResearchColumnPrompt = createSafeRootHandler(
   config,
   async function* ({
+    modelAdmission,
     body,
     orgAIConfig,
     managedAIResidency,
@@ -51,16 +83,12 @@ const suggestResearchColumnPrompt = createSafeRootHandler(
           }),
       ),
     );
-    const samples: SuggestPromptDecisionSample[] = readable.map((decision) => ({
-      caseNumber: decision.caseNumber,
-      court: decision.court,
-      decisionDate: decision.decisionDate,
-      // A classification grounds a suggestion as well as a sentence does;
-      // what it must not do is arrive as nothing.
-      headnote: decisionHeadnoteLine(decision.headnote) || null,
-    }));
+    const samples: SuggestPromptDecisionSample[] = readable.map(
+      decisionSampleForPrompt,
+    );
 
     return await suggestColumnPrompt({
+      admission: configuredModelAdmission({ modelAdmission }),
       draft: {
         // A question column has no heading beside its question, so the
         // wording is the name the suggestion refines; there is no second

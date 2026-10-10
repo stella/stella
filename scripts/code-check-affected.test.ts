@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import {
   existsSync,
@@ -17,8 +18,12 @@ import {
 import {
   ALL_WORKSPACE_CACHE_INPUTS,
   ALL_WORKSPACE_TYPECHECK_CACHE_INPUTS,
+  CommandFailedError,
   DEPENDENCY_CACHE_INPUTS,
+  failureExitCode,
+  formatCheckFailure,
   LINT_ONLY_CACHE_INPUTS,
+  executeCheckCommands,
   planCheck,
   planFullCheck,
   planResultBoundaryLint,
@@ -29,6 +34,7 @@ import {
   TYPECHECK_ONLY_CACHE_INPUTS,
   resultBoundaryLintCommand,
   scopedCommands,
+  summarizeCheckFailure,
 } from "./code-check-affected";
 import { isChangedLintPath } from "./lint-paths";
 
@@ -268,6 +274,7 @@ describe("affected code-check planning", () => {
       "lint",
       "typecheck",
       "--concurrency=2",
+      "--continue=dependencies-successful",
       "--filter=./apps/web",
       "--filter=./packages/ui",
     ]);
@@ -278,6 +285,7 @@ describe("affected code-check planning", () => {
       "run",
       "typecheck:repo",
       "--concurrency=2",
+      "--continue=dependencies-successful",
     ]);
   });
 
@@ -288,7 +296,11 @@ describe("affected code-check planning", () => {
     }
     const commands = scopedCommands(planned);
 
-    expect(commands).toContainEqual(["bun", "run", "generate"]);
+    expect(commands).toContainEqual([
+      "bun",
+      "scripts/ci-generated-sources.ts",
+      "prepare",
+    ]);
     const oxc = commands.find((command) => command.includes("oxlint"));
     expect(oxc).toContain("--type-aware");
     expect(oxc).toContain("--type-check");
@@ -365,6 +377,19 @@ describe("affected code-check planning", () => {
     },
   );
 
+  test("a bounded-read owner change invalidates all lint and its owning typecheck", () => {
+    const planned = plan(["apps/api/src/lib/db/read-bounded.ts"], ["apps/api"]);
+    if (planned.type !== "scoped") {
+      throw new Error("Expected a scoped code-check plan");
+    }
+    expect(planned.lint).toEqual({ type: "all" });
+    expect(planned.typecheck).toEqual({
+      type: "targets",
+      targets: ["apps/api"],
+    });
+    expect(planned.rootChecks).toContain("plugin-fixtures");
+  });
+
   test("the shared tooling config invalidates only workspace lint", () => {
     expect(plan(["tsconfig.tooling.json"], [])).toEqual({
       type: "scoped",
@@ -432,6 +457,7 @@ describe("affected code-check planning", () => {
       "run",
       "lint",
       "--concurrency=2",
+      "--continue=dependencies-successful",
     ]);
     expect(commands).toContainEqual([
       "bun",
@@ -440,6 +466,7 @@ describe("affected code-check planning", () => {
       "run",
       "typecheck",
       "--concurrency=2",
+      "--continue=dependencies-successful",
       "--filter=./apps/web",
     ]);
   });
@@ -473,6 +500,7 @@ describe("affected code-check planning", () => {
       "lint",
       "typecheck",
       "--concurrency=2",
+      "--continue=dependencies-successful",
     ]);
   });
 
@@ -625,12 +653,14 @@ describe("full and affected code-check parity", () => {
     writeFileSync(
       path.join(directory, "git"),
       `#!/usr/bin/env bun
+import { childExitStatus } from ${JSON.stringify(path.join(import.meta.dir, "../packages/scripts/src/child-exit-status.ts"))};
+if (process.argv[2] === "rev-parse" && process.argv.at(-1) === "origin/main^{commit}") process.exit(0);
 if (process.argv[2] === "merge-base") {
   process.stderr.write("fatal: injected failure\\n");
   process.exit(128);
 }
 const result = Bun.spawnSync([${JSON.stringify(git)}, ...process.argv.slice(2)], { stdout: "inherit", stderr: "inherit" });
-process.exit(result.exitCode);
+process.exit(childExitStatus(result));
 `,
       { mode: 0o755 },
     );
@@ -659,9 +689,10 @@ process.exit(result.exitCode);
     writeFileSync(
       path.join(directory, "git"),
       `#!/usr/bin/env bun
+import { childExitStatus } from ${JSON.stringify(path.join(import.meta.dir, "../packages/scripts/src/child-exit-status.ts"))};
 if (process.argv[2] === "rev-parse" && process.argv.at(-1) === "origin/main^{commit}") process.exit(1);
 const result = Bun.spawnSync([${JSON.stringify(git)}, ...process.argv.slice(2)], { stdout: "inherit", stderr: "inherit" });
-process.exit(result.exitCode);
+process.exit(childExitStatus(result));
 `,
       { mode: 0o755 },
     );
@@ -743,6 +774,7 @@ process.exit(result.exitCode);
       "lint",
       "typecheck",
       "--concurrency=2",
+      "--continue=dependencies-successful",
     ]);
   });
 
@@ -894,8 +926,19 @@ const workspaceManifests = (): WorkspaceManifest[] =>
 describe("parallel code-quality legs", () => {
   test("runs result consumption with the same plan scope and owner in every leg", () => {
     const workflow = readFileSync(".github/workflows/ci.yml", "utf-8");
+    const jobs = new Map<string, string>();
+    const assertLeg = (job: string, leg: string) => {
+      expect(job).toContain(
+        `bun run check:result-consumption -- --all --leg ${leg}`,
+      );
+      expect(job).toContain(
+        `bun run check:result-consumption -- --base "origin/$BASE_REF" --leg ${leg}`,
+      );
+    };
     for (const leg of CODE_CHECK_LEGS) {
-      const start = workflow.indexOf(`\n  code-quality-${leg}:\n`);
+      const jobId =
+        leg === "api" ? "code-quality-api" : "code-quality-web-rest";
+      const start = workflow.indexOf(`\n  ${jobId}:\n`);
       expect(start).toBeGreaterThanOrEqual(0);
       const nextJob = workflow
         .slice(start + 1)
@@ -904,12 +947,21 @@ describe("parallel code-quality legs", () => {
         nextJob === -1
           ? workflow.slice(start)
           : workflow.slice(start, start + 1 + nextJob);
-      expect(job.match(/- name: Result consumption/gu)).toHaveLength(1);
-      expect(job).toContain(
+      jobs.set(jobId, job);
+      assertLeg(job, leg);
+    }
+    expect(
+      jobs.get("code-quality-api")?.match(/- name: Result consumption/gu),
+    ).toHaveLength(1);
+    expect(
+      jobs.get("code-quality-web-rest")?.match(/- name: Result consumption/gu),
+    ).toHaveLength(2);
+    for (const leg of ["web", "rest"] as const) {
+      const mutated = jobs
+        .get("code-quality-web-rest")
+        ?.replace(`bun run check:result-consumption -- --all --leg ${leg}`, "");
+      expect(() => assertLeg(mutated ?? "", leg)).toThrow(
         `bun run check:result-consumption -- --all --leg ${leg}`,
-      );
-      expect(job).toContain(
-        `bun run check:result-consumption -- --base "origin/$BASE_REF" --leg ${leg}`,
       );
     }
   });
@@ -992,5 +1044,334 @@ describe("parallel code-quality legs", () => {
         CODE_CHECK_LEGS.filter((leg) => ownsCodeCheckPath(file, leg)),
       ).toHaveLength(1);
     }
+  });
+});
+
+describe("check failure reporting", () => {
+  const commands = [
+    ["bun", "turbo", "lint"],
+    ["bun", "turbo", "typecheck"],
+    ["bun", "turbo", "typecheck:repo"],
+  ];
+  test("reports every failed command after executing the complete plan", async () => {
+    const executed: (readonly string[])[] = [];
+    const output: string[] = [];
+    expect(
+      await executeCheckCommands({
+        commands,
+        runner: async (command) => {
+          expect(output).toEqual([]);
+          executed.push(command);
+          return command.includes("typecheck")
+            ? Result.ok()
+            : Result.err(
+                new CommandFailedError({
+                  message: "Check failed",
+                  command,
+                  exitCode: 2,
+                  output: "check error",
+                }),
+              );
+        },
+        write: (line) => {
+          output.push(line);
+        },
+      }),
+    ).toBe(1);
+    expect(executed).toEqual(commands);
+    const report = output.join("");
+    expect(report).toContain("code-check: 2 failed command(s)\n");
+    expect(report).toContain("code-check: failed (exit 2): bun turbo lint");
+    expect(report).toContain(
+      "code-check: failed (exit 2): bun turbo typecheck:repo",
+    );
+    expect(report).not.toContain(
+      "code-check: failed (exit 2): bun turbo typecheck\n",
+    );
+  });
+  test("all successful commands and an empty plan exit zero without a failure summary", async () => {
+    for (const successfulCommands of [commands, []]) {
+      const executed: (readonly string[])[] = [];
+      const output: string[] = [];
+      expect(
+        await executeCheckCommands({
+          commands: successfulCommands,
+          runner: (command) => {
+            executed.push(command);
+            return Result.ok();
+          },
+          write: (line) => {
+            output.push(line);
+          },
+        }),
+      ).toBe(0);
+      expect(executed).toEqual(successfulCommands);
+      expect(output).toEqual([]);
+    }
+  });
+  test("dry runs show the same continuation flags without executing checks", async () => {
+    const plannedCommands = scopedCommands({
+      type: "scoped",
+      lint: { type: "all" },
+      typecheck: { type: "all" },
+      rootLintPaths: [],
+      rootChecks: ["repo-typecheck"],
+    });
+    const output: string[] = [];
+    expect(
+      await executeCheckCommands({
+        commands: plannedCommands,
+        dryRun: true,
+        runner: () => {
+          throw new Error("dry run executed a check");
+        },
+        write: (line) => {
+          output.push(line);
+        },
+      }),
+    ).toBe(0);
+    expect(output.join("")).toBe(
+      plannedCommands.map((command) => `  ${command.join(" ")}\n`).join(""),
+    );
+    expect(plannedCommands.length).toBeGreaterThan(0);
+    for (const command of plannedCommands) {
+      expect(command).toContain("--continue=dependencies-successful");
+    }
+  });
+});
+
+test("the CLI completes later checks, reports failures, and propagates its exit code", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "code-check-runner-"));
+  const log = path.join(directory, "commands.log");
+  const realGit = Bun.which("git");
+  if (realGit === null) {
+    throw new Error("CLI execution fixture requires Git");
+  }
+  writeFileSync(
+    path.join(directory, "git"),
+    `#!/bin/sh
+if [ "$*" = 'rev-parse --verify --quiet origin/main^{commit}' ]; then
+  exit 1
+fi
+exec "$CHECK_REAL_GIT" "$@"
+`,
+    { mode: 0o755 },
+  );
+  const fakeRunner = `#!/bin/sh
+printf '%s\n' "$*" >> "$CHECK_COMMAND_LOG"
+case "$CHECK_FAIL:$*" in
+  yes:*"turbo run lint"*|yes:*"turbo run typecheck:repo"*) exit 2 ;;
+esac
+`;
+  for (const executable of ["bun", "bash"]) {
+    writeFileSync(path.join(directory, executable), fakeRunner, {
+      mode: 0o755,
+    });
+  }
+  try {
+    for (const failure of ["yes", "no"]) {
+      writeFileSync(log, "");
+      const result = Bun.spawnSync(
+        [
+          process.execPath,
+          "--no-env-file",
+          path.join(import.meta.dir, "code-check-affected.ts"),
+          "--all",
+          "--leg",
+          "rest",
+        ],
+        {
+          cwd: path.resolve(import.meta.dir, ".."),
+          env: {
+            ...process.env,
+            PATH: `${directory}:${process.env["PATH"] ?? ""}`,
+            CHECK_COMMAND_LOG: log,
+            CHECK_REAL_GIT: realGit,
+            CHECK_FAIL: failure,
+          },
+          stdout: "pipe",
+          stderr: "pipe",
+        },
+      );
+      const output = result.stdout.toString();
+      const commands = readFileSync(log, "utf-8");
+      expect(commands).toContain("turbo run lint typecheck");
+      expect(commands).toContain("turbo run typecheck:repo");
+      expect(result.exitCode, result.stderr.toString()).toBe(
+        failure === "yes" ? 1 : 0,
+      );
+      if (failure === "yes") {
+        expect(output).toContain("code-check: 2 failed command(s)");
+        expect(output).toContain(
+          "code-check: failed (exit 2): bun --bun turbo run lint typecheck",
+        );
+        expect(output).toContain(
+          "code-check: failed (exit 2): bun --bun turbo run typecheck:repo",
+        );
+      } else {
+        expect(output).not.toContain("failed command(s)");
+      }
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+const TURBO_LINT_TYPECHECK = [
+  "bun",
+  "--bun",
+  "turbo",
+  "run",
+  "lint",
+  "typecheck",
+  "--concurrency=2",
+];
+
+const failure = (command: readonly string[], lines: readonly string[]) =>
+  new CommandFailedError({
+    message: "Command failed (1)",
+    command,
+    exitCode: 1,
+    output: lines.join("\n"),
+  });
+
+// Turbo 2 output shapes captured from real failing runs, with paths shortened.
+const turboRunSummary = (task: string) => [
+  `${task}:  ERROR  command (/repo/packages/errors) /tmp/bun run typecheck exited (1)`,
+  "",
+  " Tasks:    0 successful, 2 total",
+  "Cached:    0 cached, 2 total",
+  "  Time:    472ms ",
+  `Failed:    ${task}`,
+  "",
+  " ERROR  run failed: command  exited (1)",
+  'error: "turbo" exited with code 1',
+];
+const BUN_CACHE_STACK = [
+  "Panic: Command failed (1): bun --bun turbo run lint typecheck",
+  "      at panic (/home/runner/.bun/install/cache/better-result@3.0.1/dist/index.mjs:42:9)",
+  "      at run (/repo/node_modules/better-result/dist/index.mjs:7:1)",
+];
+
+const expectNoStackFrames = (text: string) => {
+  expect(text).not.toMatch(/^\s*at\s/mu);
+  expect(text).not.toContain("node_modules");
+  expect(text).not.toContain(".bun/install/cache");
+};
+
+describe("check failure summary", () => {
+  test("a failed check never exits 0", () => {
+    expect(failureExitCode(2)).toBe(2);
+    expect(failureExitCode(128)).toBe(128);
+    for (const code of [0, null, undefined, -1, 256, 1.5, Number.NaN]) {
+      expect(failureExitCode(code)).toBe(1);
+    }
+  });
+
+  test("names the failed Turbo task and its TypeScript errors from prefixed output", () => {
+    const summary = summarizeCheckFailure(
+      failure(TURBO_LINT_TYPECHECK, [
+        "@stll/errors:lint: cache miss, executing c50df39634620efa",
+        "@stll/errors:typecheck: $ bun ../../packages/scripts/src/tsc-native.ts --noEmit",
+        "@stll/errors:typecheck: src/zz-broken.ts(1,14): error TS2322: Type 'string' is not assignable to type 'number'.",
+        '@stll/errors:typecheck: error: script "typecheck" exited with code 1',
+        ...turboRunSummary("@stll/errors#typecheck"),
+        ...BUN_CACHE_STACK,
+      ]),
+    );
+    expect(summary.tasks).toEqual([
+      {
+        task: "@stll/errors#typecheck",
+        errors: [
+          "src/zz-broken.ts(1,14): error TS2322: Type 'string' is not assignable to type 'number'.",
+        ],
+      },
+    ]);
+    expectNoStackFrames(formatCheckFailure({ summary, annotations: true }));
+  });
+
+  test("attributes grouped GitHub Actions output and reads tool annotations", () => {
+    const summary = summarizeCheckFailure(
+      failure(TURBO_LINT_TYPECHECK, [
+        "::group::@stll/web:typecheck",
+        "src/fine.ts(1,1): error TS2322: belongs to a passing task",
+        "::endgroup::",
+        "\u001B[;31m@stll/errors:lint\u001B[;0m",
+        "$ cd ../.. && bun --bun oxlint -c oxlint.config.ts packages/errors",
+        "::error file=packages/errors/src/zz-broken.ts,line=1,col=26,title=eslint(no-debugger)::packages/errors/src/zz-broken.ts:1:26: `debugger` statement is not allowed",
+        "",
+        "Found 0 warnings and 1 error.",
+        'error: "oxlint" exited with code 1',
+        "::error::command (/repo/packages/errors) /tmp/bun run lint exited (1)",
+        ...turboRunSummary("@stll/errors#lint"),
+      ]),
+    );
+    expect(summary.tasks).toEqual([
+      {
+        task: "@stll/errors#lint",
+        errors: [
+          "eslint(no-debugger): packages/errors/src/zz-broken.ts:1:26: `debugger` statement is not allowed",
+          "Found 0 warnings and 1 error.",
+        ],
+      },
+    ]);
+    const formatted = formatCheckFailure({ summary, annotations: true });
+    expect(formatted).toContain(
+      "::error title=code-check%3A @stll/errors#lint failed::eslint(no-debugger): packages/errors/src/zz-broken.ts:1:26: `debugger` statement is not allowed%0AFound 0 warnings and 1 error.",
+    );
+    expect(formatCheckFailure({ summary, annotations: false })).not.toContain(
+      "::error",
+    );
+  });
+
+  test("keeps oxlint's diagnostic and location for each failed task", () => {
+    const summary = summarizeCheckFailure(
+      failure(TURBO_LINT_TYPECHECK, [
+        "@stll/errors:lint:   x eslint(no-debugger): `debugger` statement is not allowed",
+        "@stll/errors:lint:    ,-[packages/errors/src/zz-broken.ts:1:26]",
+        "@stll/errors:lint:  1 | export const f = () => { debugger; };",
+        "@stll/errors:lint: Found 0 warnings and 1 error.",
+        "@stll/web:typecheck: src/a.ts(2,3): error TS2304: Cannot find name 'x'.",
+        "Failed:    @stll/errors#lint, @stll/web#typecheck",
+      ]),
+    );
+    expect(summary.tasks).toEqual([
+      {
+        task: "@stll/errors#lint",
+        errors: [
+          "x eslint(no-debugger): `debugger` statement is not allowed",
+          ",-[packages/errors/src/zz-broken.ts:1:26]",
+          "Found 0 warnings and 1 error.",
+        ],
+      },
+      {
+        task: "@stll/web#typecheck",
+        errors: ["src/a.ts(2,3): error TS2304: Cannot find name 'x'."],
+      },
+    ]);
+  });
+
+  test("summarizes a non-Turbo command by its last lines without a stack", () => {
+    const command = ["bun", "scripts/check-oxlint-plugin-registry.ts"];
+    const summary = summarizeCheckFailure(
+      failure(command, [
+        "plugin registry: stella/no-foo is registered but has no fixture",
+        ...BUN_CACHE_STACK,
+      ]),
+    );
+    expect(summary.tasks).toEqual([
+      {
+        task: command.join(" "),
+        errors: [
+          "plugin registry: stella/no-foo is registered but has no fixture",
+          "Panic: Command failed (1): bun --bun turbo run lint typecheck",
+        ],
+      },
+    ]);
+    const formatted = formatCheckFailure({ summary, annotations: true });
+    expect(formatted).toContain(
+      "code-check: failed (exit 1): bun scripts/check-oxlint-plugin-registry.ts",
+    );
+    expectNoStackFrames(formatted);
   });
 });

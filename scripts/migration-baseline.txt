@@ -5,8 +5,9 @@
 # hash, so editing one to satisfy a newer rule would break the migrator on live
 # databases. Every migration NOT listed here is fully linted.
 #
-# This list may only shrink. Never add a new migration; a listed file that no
-# longer exists fails check-migration-safety.ts until the entry is removed.
+# Shrinks only. The single exception: a PR that introduces a new
+# migration-safety rule may add already-merged, unchanged migrations that the
+# new rule flags. scripts/check-migration-baseline.ts enforces both.
 apps/api/drizzle/20260429152450_entity-version-ai-summaries/migration.sql
 apps/api/drizzle/20260429205610_global-search-indexes/migration.sql
 apps/api/drizzle/20260429220500_global-search-unaccent/migration.sql
@@ -263,3 +264,19 @@ apps/api/drizzle/20260825135000_document_review_perspective_party/migration.sql
 apps/api/drizzle/20260825135100_document_review_rolling_basis_bridge/migration.sql
 apps/api/drizzle/20260825136000_document_review_application_state/migration.sql
 apps/api/drizzle/20260825136100_document_review_application_state_validate/migration.sql
+apps/api/drizzle/20260826004000_corpus_index_serving_generation/migration.sql
+apps/api/drizzle/20260827080000_agent_skill_revisions/migration.sql
+apps/api/drizzle/20260902090000_case_law_court_weight_seed/migration.sql
+apps/api/drizzle/20260911140000_case_law_court_weight_seed_pol/migration.sql
+apps/api/drizzle/20260911180000_case_law_court_weight_seed_pol_wsa/migration.sql
+apps/api/drizzle/20260913120000_document_reference_counters/migration.sql
+apps/api/drizzle/20260916110000_published_statute_citation_counts/migration.sql
+apps/api/drizzle/20260918210100_case_law_court_weight_seed_hun/migration.sql
+apps/api/drizzle/20260922150000_legislation_svk_window_shift/migration.sql
+apps/api/drizzle/20260925230400_agent_skill_default_backfill/migration.sql
+apps/api/drizzle/20260927200200_case_law_court_weight_seed_usa/migration.sql
+apps/api/drizzle/20261003122300_global_timers/migration.sql
+apps/api/drizzle/20261003122700_case_law_court_weight_seed_svk/migration.sql
+apps/api/drizzle/20261003122700_matter_correspondence_view/migration.sql
+apps/api/drizzle/20261003124800_registration_retention/migration.sql
+apps/api/drizzle/20261003125300_validate_playbook_document_type_reference/migration.sql

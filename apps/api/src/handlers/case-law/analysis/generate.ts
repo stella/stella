@@ -19,7 +19,7 @@ import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import { captureError, detached } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { AnalysisInput } from "@/api/lib/case-law/analysis-prompt";
@@ -27,9 +27,19 @@ import {
   analysisStore,
   storesAnalyses,
 } from "@/api/lib/case-law/analysis-store";
+import { reportCaseLawIncompleteAnswer } from "@/api/lib/case-law/incomplete-answer-telemetry";
 import { storedAnalysisState } from "@/api/lib/case-law/stored-analysis";
 import { tSafeId } from "@/api/lib/custom-schema";
-import type { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
+import { ModelRunError } from "@/api/lib/errors/provider-call-error";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  createDetachedModelActionStarter,
+  createModelActionAdmitter,
+  type DetachedModelActionStarter,
+  type ModelActionAdmitter,
+} from "@/api/lib/rate-limit/model-action-admission";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 import {
   getTanStackTextModelInfoForRole,
@@ -62,11 +72,13 @@ type RunGenerationOptions = {
   /** The sentinel the claim wrote; cleanup releases exactly this one. */
   sentinel: AnalysisGenerating;
   organizationId: SafeId<"organization">;
+  admission: ModelDispatchAdmission;
   orgAIConfig: OrgAIConfig | null;
   promptCachingEnabled: boolean;
 };
 
 const runGeneration = async ({
+  admission,
   anchorIds,
   contentHash,
   country,
@@ -93,6 +105,7 @@ const runGeneration = async ({
     sessionId: decisionId,
     traceId: Bun.randomUUIDv7(),
   });
+  const generationDeadline = AbortSignal.timeout(120_000);
 
   try {
     const { modelId } = getTanStackTextModelInfoForRole("fast", orgAIConfig, {
@@ -105,6 +118,7 @@ const runGeneration = async ({
       serviceTier: "standard",
       orgAIConfig,
       organizationId,
+      admission,
       // Case-law analysis is global, not workspace-scoped (see the store).
       tenantWorkspaceIds: [],
       analytics: aiAnalytics,
@@ -116,7 +130,7 @@ const runGeneration = async ({
       system: input.systemPrompt,
       prompt: input.userMessage,
       outputSchema: analysisOutputSchema,
-      abortSignal: AbortSignal.timeout(120_000),
+      abortSignal: generationDeadline,
     });
 
     const analysis = buildDecisionAnalysis({
@@ -130,6 +144,18 @@ const runGeneration = async ({
 
     await analysisStore().save({ analysis, contentHash, decisionId });
   } catch (error) {
+    let reason: "deadline" | "incomplete_output" | "invalid_output" =
+      "incomplete_output";
+    if (generationDeadline.aborted) {
+      reason = "deadline";
+    } else if (error instanceof ModelRunError) {
+      reason = "invalid_output";
+    }
+    reportCaseLawIncompleteAnswer({
+      surface: "analysis",
+      reason,
+      count: 1,
+    });
     captureError(error, {
       source: "case-law-analysis",
       decisionId,
@@ -155,14 +181,31 @@ type GenerateAnalysisResponse = {
   error?: string;
 };
 
-export const generateAnalysis = async (
-  decisionId: SafeId<"caseLawDecision">,
-  scopedDb: ScopedDb,
-  organizationId: SafeId<"organization">,
-  orgAIConfig: OrgAIConfig | null,
-  orgAIConfigStatus: OrgAIConfigStatus,
-  promptCachingEnabled: boolean,
-): Promise<Result<GenerateAnalysisResponse, HandlerError>> => {
+type GenerateAnalysisOptions = {
+  /** Admits a background significance refresh. */
+  admitModelAction: ModelActionAdmitter;
+  /** Admits a new generation, held until it settles after the response. */
+  startModelAction: DetachedModelActionStarter;
+  decisionId: SafeId<"caseLawDecision">;
+  scopedDb: ScopedDb;
+  organizationId: SafeId<"organization">;
+  orgAIConfig: OrgAIConfig | null;
+  orgAIConfigStatus: OrgAIConfigStatus;
+  promptCachingEnabled: boolean;
+};
+
+export const generateAnalysis = async ({
+  admitModelAction,
+  startModelAction,
+  decisionId,
+  scopedDb,
+  organizationId,
+  orgAIConfig,
+  orgAIConfigStatus,
+  promptCachingEnabled,
+}: GenerateAnalysisOptions): Promise<
+  Result<GenerateAnalysisResponse, ActionAdmissionError | HandlerError>
+> => {
   // audit: skip — background AI analysis output
   const resolution = await resolveAnalysisInput({ decisionId, scopedDb });
   switch (resolution.kind) {
@@ -172,6 +215,11 @@ export const generateAnalysis = async (
       return Result.ok({
         status: "error",
         error: "Decision has no parseable AST",
+      });
+    case "unsupported-language":
+      return Result.ok({
+        status: "error",
+        error: `Analysis is not available for decisions in language "${resolution.language}"`,
       });
     case "resolved":
       break;
@@ -197,6 +245,7 @@ export const generateAnalysis = async (
       if (storesAnalyses()) {
         detached(
           refreshSignificance({
+            admitModelAction,
             analysis: stored.analysis,
             contentHash: decision.contentHash,
             decisionId,
@@ -251,31 +300,47 @@ export const generateAnalysis = async (
     return Result.err(available.error);
   }
 
-  // Another request won the race: return generating.
-  const sentinel = await analysisStore().claim({
-    decisionId,
-    fingerprint: input.fingerprint,
-    observed,
+  // The generation draws one action when it starts and holds it until the
+  // background run settles, after this request has answered.
+  const started = await startModelAction({
+    label: "analysis-generate.run-generation",
+    // Another request won the race when the claim returns null.
+    start: async () =>
+      await analysisStore().claim({
+        decisionId,
+        fingerprint: input.fingerprint,
+        observed,
+      }),
+    // The proof aborts the generation's model call if the lease is lost.
+    background: async ({ admission }, sentinel) => {
+      if (sentinel === null) {
+        return;
+      }
+      await runGeneration({
+        admission,
+        anchorIds,
+        contentHash: decision.contentHash,
+        country: decision.country,
+        decisionId,
+        input,
+        orgAIConfig,
+        organizationId,
+        promptCachingEnabled,
+        sentinel,
+      });
+    },
   });
-  if (sentinel === null) {
-    return Result.ok({ status: "generating" });
+  if (Result.isError(started)) {
+    return Result.err(
+      ActionAdmissionError.is(started.error)
+        ? started.error
+        : new HandlerError({
+            status: 503,
+            message: "Analysis generation could not start",
+            cause: started.error,
+          }),
+    );
   }
-
-  // Fire-and-forget generation
-  detached(
-    runGeneration({
-      anchorIds,
-      contentHash: decision.contentHash,
-      country: decision.country,
-      decisionId,
-      input,
-      orgAIConfig,
-      organizationId,
-      promptCachingEnabled,
-      sentinel,
-    }),
-    "analysis-generate.run-generation",
-  );
 
   return Result.ok({ status: "generating" });
 };
@@ -285,10 +350,12 @@ const config = {
     "Read the structural analysis of one court decision, starting generation " +
     "when there is none yet. Returns status done with the stored analysis, " +
     "generating while a run is in flight (poll until it is done), or error " +
-    "when the decision is unknown or its text could not be parsed. " +
+    "when the decision is unknown, its text could not be parsed, or no " +
+    "analysis prompt exists for its language. " +
     "Generation runs in the background and a call made while one is already " +
     "running does not start a second.",
   permissions: { workspace: ["read"], chat: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "legal_corpus_admin",
@@ -309,6 +376,7 @@ const generateDecisionAnalysis = createSafeRootHandler(
     orgAIConfig,
     orgAIConfigStatus,
     promptCachingEnabled,
+    user,
   }) {
     // AI availability is enforced inside generateAnalysis, after its stored
     // and in-flight branches, so finished analyses stay readable when the
@@ -316,14 +384,28 @@ const generateDecisionAnalysis = createSafeRootHandler(
     const response = yield* Result.await(
       Result.tryPromise(
         async () =>
-          await generateAnalysis(
+          await generateAnalysis({
+            // Both runs continue after the response, outside its admission.
+            admitModelAction: createModelActionAdmitter({
+              organizationId: session.activeOrganizationId,
+              userId: user.id,
+              organizationStateDb: scopedDb,
+              actionKind: "case-law.analysis",
+              scope: "independent",
+            }),
+            startModelAction: createDetachedModelActionStarter({
+              organizationId: session.activeOrganizationId,
+              userId: user.id,
+              organizationStateDb: scopedDb,
+              actionKind: "case-law.analysis",
+            }),
             decisionId,
             scopedDb,
-            session.activeOrganizationId,
+            organizationId: session.activeOrganizationId,
             orgAIConfig,
             orgAIConfigStatus,
             promptCachingEnabled,
-          ),
+          }),
       ),
     );
 

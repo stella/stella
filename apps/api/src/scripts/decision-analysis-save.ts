@@ -116,8 +116,10 @@ for (const parsed of parsedRecords) {
     report(record.decisionId, rejectionLine(ANALYSIS_REJECTION.notFound));
     continue;
   }
-  const ast = await readRowAst(row, tombstones);
-  const resolved = resolveRowAnalysisInput({ ast, row });
+  const resolved = await resolveRowAnalysisInput({
+    readAst: async () => await readRowAst(row, tombstones),
+    row,
+  });
   if (resolved.status === "rejected") {
     report(record.decisionId, rejectionLine(resolved.reason));
     continue;

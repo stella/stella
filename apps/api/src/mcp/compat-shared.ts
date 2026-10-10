@@ -206,6 +206,9 @@ export const compatCorpusFetchResponse = async <TData>({
         text: read.text,
         title: read.title,
         url: read.url,
+        ...(read.source_url === undefined
+          ? {}
+          : { source_url: read.source_url }),
       };
     default:
       read satisfies never;

@@ -31,6 +31,8 @@ import { panic, Result } from "better-result";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
+import { compareCodeUnit } from "@stll/collation";
+
 import { BASELINE_PATHS } from "./baseline-paths";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
@@ -211,7 +213,7 @@ export const diffSummaries = (
         const from = before.files[file] ?? 0;
         return to > from ? [{ file, from, to }] : [];
       })
-      .toSorted((a, b) => a.file.localeCompare(b.file));
+      .toSorted((a, b) => compareCodeUnit(a.file, b.file));
 
     return {
       workspace,
@@ -223,7 +225,21 @@ export const diffSummaries = (
   });
 };
 
-// The workspaces `--write` may not record without an explicit flag.
+// `--check` fails on any file that rose, not only on a workspace total that
+// rose. A total leaves slack wherever other files dropped without a `--write`,
+// so a new unused export can pass against the branch's baseline yet fail once
+// main has locked that drop in. Per-file counts carry no such slack.
+export const checkRegressions = (
+  current: Summary,
+  baseline: Summary,
+): readonly WorkspaceDiff[] =>
+  diffSummaries(current, baseline).filter(
+    ({ status, regressedFiles }) =>
+      status === "regressed" || regressedFiles.length > 0,
+  );
+
+// The workspaces `--write` may not record without an explicit flag. Moves
+// between files keep the total, so they record without one.
 export const increasedWorkspaces = (
   current: Summary,
   baseline: Summary,
@@ -374,29 +390,35 @@ const runWrite = (): number => {
 const runCheck = (): number => {
   const report = runKnip();
   const current = summarizeKnipReport(report);
-  const diffs = diffSummaries(current, readBaseline());
+  const baseline = readBaseline();
+  const diffs = diffSummaries(current, baseline);
   const symbols = collectIssueSymbols(report);
 
-  for (const diff of diffs.filter(({ status }) => status === "dropped")) {
+  // A workspace whose total dropped while one of its files rose is a
+  // regression, not an improvement: `--write` would record that file's rise.
+  for (const diff of diffs.filter(
+    ({ status, regressedFiles }) =>
+      status === "dropped" && regressedFiles.length === 0,
+  )) {
     console.log(
       `knip dead exports: ${diff.workspace} dropped ${diff.baseline} -> ${diff.current}. Nice — run \`${WRITE_HINT}\` and commit ${BASELINE_REL} to lock it in.`,
     );
   }
 
-  const regressions = diffs.filter(({ status }) => status === "regressed");
+  const regressions = checkRegressions(current, baseline);
   if (regressions.length === 0) {
     console.log(
-      `knip dead exports --check: OK. ${diffs.length} workspace(s) at or below baseline.`,
+      `knip dead exports --check: OK. ${diffs.length} workspace(s) at or below baseline, no file above its count.`,
     );
     return 0;
   }
 
   console.error(
-    "\nknip dead exports --check: workspace(s) rose above baseline:\n",
+    "\nknip dead exports --check: file(s) rose above their baseline count:\n",
   );
   for (const diff of regressions) {
     console.error(
-      `  ${diff.workspace}: ${diff.baseline} -> ${diff.current} (+${diff.current - diff.baseline})`,
+      `  ${diff.workspace}: ${diff.baseline} -> ${diff.current} (${formatDelta(diff.current - diff.baseline)} in total)`,
     );
     for (const { file, from, to } of diff.regressedFiles) {
       console.error(`      ${file}: ${from} -> ${to}`);
@@ -407,7 +429,8 @@ const runCheck = (): number => {
   }
   console.error(
     "\nDelete the unused export, or reference it from a real runtime or test\n" +
-      `path. If the increase is genuinely justified, run\n` +
+      `path. If exports only moved between files, run \`${WRITE_HINT}\`.\n` +
+      `If the increase is genuinely justified, run\n` +
       `\`${WRITE_HINT} ${ALLOW_INCREASE_FLAG}\` and commit ${BASELINE_REL} with a\n` +
       "rationale in your pull request.",
   );

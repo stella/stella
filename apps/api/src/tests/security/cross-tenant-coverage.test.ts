@@ -121,21 +121,78 @@ const CROSS_TENANT_WAIVERS: Record<string, WaiverReason> = {
   "hosted-usage-webhook": WAIVER_REASON.noTenantReadSurface,
   // Fixed-CSP HTML shell with no database access or tenant-scoped input.
   "mcp-app-sandbox": WAIVER_REASON.noTenantReadSurface,
+  // Fixed-CSP HTML shell with no database access or tenant-scoped input.
+  "visual-sandbox": WAIVER_REASON.noTenantReadSurface,
   mcp: WAIVER_REASON.noTenantReadSurface,
   "mcp-connectors": WAIVER_REASON.noTenantReadSurface,
+  // Deployment-owned directory access, independent of tenant membership;
+  // credential denial and the projected read are covered by operator/routes.test.ts
+  // and lib/db/operator-registrations/read.postgres.test.ts.
+  operator: WAIVER_REASON.noTenantReadSurface,
   // Unauthenticated reads of bundled deployment content (public template
   // packs, starter playbooks); no database access or tenant-scoped input.
   "public-knowledge": WAIVER_REASON.noTenantReadSurface,
+  // Anonymous screening against the global sanctions lists, read through a
+  // role granted only those reference tables; no tenant-scoped input or rows.
+  sanctions: WAIVER_REASON.noTenantReadSurface,
   // Like mcp-connectors: the only reads are per-user+org connection state
   // (org+user RLS) and external Microsoft Graph data. Neither is a
   // workspace-scoped surface the A-vs-B RLS matrix can meaningfully isolate.
   sharepoint: WAIVER_REASON.noTenantReadSurface,
   smoke: WAIVER_REASON.noTenantReadSurface,
+  // Public corpus ingestion has no tenant data or tenant-facing read surface.
+  "soft-law": WAIVER_REASON.noTenantReadSurface,
   uploads: WAIVER_REASON.noTenantReadSurface,
   verify: WAIVER_REASON.noTenantReadSurface,
   // Static plain-text host-verification token from env; no database access.
   "well-known": WAIVER_REASON.noTenantReadSurface,
 };
+
+/** A test that stands in for the matrix while a dated waiver holds. */
+type SubstituteTest = {
+  /** Path relative to `apps/api/src`. */
+  readonly file: string;
+  /** Exact titles of the tests in `file` that prove the isolation. */
+  readonly titles: readonly string[];
+};
+
+type DatedWaiver = {
+  readonly reason: WaiverReason;
+  /** Last day (UTC, `YYYY-MM-DD`) the waiver holds; the guard fails after it. */
+  readonly expiresOn: `${number}-${number}-${number}`;
+  readonly substituteTests: readonly SubstituteTest[];
+};
+
+/**
+ * Waivers that must be replaced by a real matrix case. Each one expires, and
+ * until then names the dedicated tests that cover the domain; the guard checks
+ * those tests exist and fails once the date has passed.
+ */
+const DATED_CROSS_TENANT_WAIVERS: Record<string, DatedWaiver> = {
+  // Purpose-bound desktop credentials, not the session used by the matrix,
+  // bind the caller's organization. No request field selects another tenant.
+  "desktop-feature-access": {
+    reason: WAIVER_REASON.isolatedOutsideRlsHarness,
+    expiresOn: "2026-10-17",
+    substituteTests: [
+      {
+        file: "handlers/desktop-feature-access/routes.test.ts",
+        titles: [
+          "feature access requires the desktop account credential",
+          "a member grant does not cross the desktop account organization",
+        ],
+      },
+      { file: "handlers/desktop-registry/auth.test.ts", titles: [] },
+    ],
+  },
+};
+
+const waivedDomains = [
+  ...Object.keys(CROSS_TENANT_WAIVERS),
+  ...Object.keys(DATED_CROSS_TENANT_WAIVERS),
+];
+
+const apiSrcDir = path.resolve(import.meta.dir, "../..");
 
 /**
  * Domains whose coverage is checked handler by handler rather than by a
@@ -191,23 +248,61 @@ describe("cross-tenant matrix coverage guard", () => {
   test("every handler domain is in the cross-tenant matrix or explicitly waived", () => {
     const uncovered = handlerDomains.filter(
       (domain) =>
-        !coveredDomains.has(domain) && !(domain in CROSS_TENANT_WAIVERS),
+        !coveredDomains.has(domain) && !waivedDomains.includes(domain),
     );
     expect(uncovered).toEqual([]);
   });
 
   test("no covered domain is still waived (adding a matrix case removes the waiver)", () => {
-    const shadowed = Object.keys(CROSS_TENANT_WAIVERS).filter((domain) =>
+    const shadowed = waivedDomains.filter((domain) =>
       coveredDomains.has(domain),
     );
     expect(shadowed).toEqual([]);
   });
 
   test("every waiver names a real handler domain", () => {
-    const staleWaivers = Object.keys(CROSS_TENANT_WAIVERS).filter(
+    const staleWaivers = waivedDomains.filter(
       (domain) => !handlerDomains.includes(domain),
     );
     expect(staleWaivers).toEqual([]);
+  });
+
+  test("no domain carries both a standing and a dated waiver", () => {
+    expect(
+      Object.keys(DATED_CROSS_TENANT_WAIVERS).filter(
+        (domain) => domain in CROSS_TENANT_WAIVERS,
+      ),
+    ).toEqual([]);
+  });
+
+  test("no dated waiver is past its expiry", () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const expired = Object.entries(DATED_CROSS_TENANT_WAIVERS)
+      .filter(([, { expiresOn }]) => expiresOn < today)
+      .map(([domain, { expiresOn }]) => `${domain} (expired ${expiresOn})`);
+    expect(expired).toEqual([]);
+  });
+
+  test("every dated waiver names substitute tests that exist", () => {
+    const missing = Object.entries(DATED_CROSS_TENANT_WAIVERS).flatMap(
+      ([domain, { substituteTests }]) => {
+        if (substituteTests.length === 0) {
+          return [`${domain}: no substitute tests`];
+        }
+        return substituteTests.flatMap(({ file, titles }) => {
+          let source: string;
+          try {
+            source = readFileSync(path.join(apiSrcDir, file), "utf-8");
+          } catch {
+            return [`${domain}: ${file} missing`];
+          }
+          return titles
+            .filter((title) => !source.includes(JSON.stringify(title)))
+            .map((title) => `${domain}: ${file} has no test "${title}"`);
+        });
+      },
+    );
+    expect(missing).toEqual([]);
   });
 
   test.each(Object.keys(PER_HANDLER_WAIVERS))(

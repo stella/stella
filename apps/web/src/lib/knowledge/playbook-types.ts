@@ -1,4 +1,5 @@
 import type { api } from "@/lib/api";
+import { optionalArray } from "@/lib/arrays";
 import type {
   AskManual,
   DeterministicCheck,
@@ -11,7 +12,6 @@ import type {
   Position,
   PositionSeverity,
   PositionStandard,
-  PositionStandardSource,
   ReferencePassage,
   TierRule,
 } from "@/lib/eden-client";
@@ -30,7 +30,6 @@ export type {
   Position,
   PositionSeverity,
   PositionStandard,
-  PositionStandardSource,
   ReferencePassage,
   TierRule,
 };
@@ -49,6 +48,11 @@ export type PlaybookPositionsValue = PlaybookDetailData["positions"];
 // What the org's reviewers have done with each position, computed from their
 // findings on every read. Keyed by `position.sourceId`.
 export type PlaybookPositionDecisions = PlaybookDetailData["positionDecisions"];
+
+// The source documents this reader can open, with their names. A stored
+// source missing from this list is one the reader cannot open: it stays in
+// the position's data but is never shown.
+export type PlaybookPositionSources = PlaybookDetailData["positionSources"];
 
 export type PlaybookPerspective = NonNullable<PlaybookScope["perspective"]>;
 
@@ -211,6 +215,7 @@ export const gradedToExtract = (position: GradedPosition): ExtractPosition => {
     issue: position.issue,
     ask,
     ...(position.guidance !== undefined ? { guidance: position.guidance } : {}),
+    ...(position.sources !== undefined ? { sources: position.sources } : {}),
     enabled: position.enabled,
   };
 };
@@ -230,14 +235,31 @@ export const extractToGraded = (position: ExtractPosition): GradedPosition => ({
     content: position.ask.content,
   },
   ...(position.guidance !== undefined ? { guidance: position.guidance } : {}),
+  ...(position.sources !== undefined ? { sources: position.sources } : {}),
   enabled: position.enabled,
 });
+
+// ── Sources ───────────────────────────────────────────
+// The editor can remove a source the reader can see, but never adds one. An
+// empty list is never stored, so removing the last source drops the field.
+// A source is matched on matter and document together, the same key readers
+// resolve it by, so a removal never touches a source the reader cannot see.
+export const withoutPositionSource = (
+  position: Position,
+  removed: NonNullable<Position["sources"]>[number],
+): Position => {
+  const { sources, ...rest } = position;
+  const remaining = optionalArray(sources).filter(
+    (source) =>
+      source.workspaceId !== removed.workspaceId ||
+      source.entityId !== removed.entityId,
+  );
+  return remaining.length === 0 ? rest : { ...rest, sources: remaining };
+};
 
 // ── Deep duplicate ────────────────────────────────────
 // A duplicated position needs a fresh sourceId and fresh rule/entry ids so it is
 // a distinct materialized column/finding target, never an alias of the original.
-// Named (non-map-arrow) helpers so the id refresh does not spread the mapped
-// element inside the `map` callback (oxc/no-map-spread).
 const withFreshRuleId = (rule: TierRule): TierRule => ({
   id: crypto.randomUUID(),
   text: rule.text,

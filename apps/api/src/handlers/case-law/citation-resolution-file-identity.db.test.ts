@@ -4,7 +4,6 @@ import { drizzle } from "drizzle-orm/pglite";
 
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
-import type { Transaction } from "@/api/db/root";
 import {
   caseLawCitations,
   caseLawDecisionIdentifiers,
@@ -12,6 +11,7 @@ import {
   caseLawSources,
 } from "@/api/db/schema";
 import { CITATION_DECISION_TYPE_HINT } from "@/api/handlers/case-law/citation-decision-type-hint";
+import { runCitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
 import { resolveCitationsForDecision } from "@/api/handlers/case-law/citation-resolution";
 import {
   CITATION_RESOLUTION_RULE,
@@ -32,8 +32,8 @@ import { createTestPglite } from "@/api/tests/pglite-test-db";
  * identifies the decision — the sheet the document sits on, or its date — and
  * each case below is a shape those two rules must decide one way and no other.
  *
- * Identity is read from the database here (an ECLI's last segment, a
- * publisher's parallel file number, a stored decision date), so the rules are
+ * Identity is read from the database here (an ECLI's last segment, a stored
+ * decision date), so the rules are
  * join predicates rather than branches a unit test could reach.
  *
  * Mutation: with the `sheet_matched` arm removed from the statement the first
@@ -63,11 +63,6 @@ const sheetOverDateCitation = createSafeId<"caseLawCitation">();
 
 const DOCKET = "8 As 287/2020";
 const DOCKET_KEY = bareCitationKey(DOCKET);
-
-// The pglite handle stands in for a transaction, matching the pattern the
-// other case-law database tests use for their fakes.
-// oxlint-disable-next-line typescript/no-unsafe-type-assertion
-const asTx = () => db as unknown as Transaction;
 
 const court = {
   sourceId,
@@ -213,22 +208,25 @@ const AMBIGUOUS = {
 };
 
 test("the sheet a text names picks the decision out of its case file", async () => {
-  const counts = await resolveCitationsForDecision(asTx(), citing);
+  const counts = await runCitationGraphTransaction(
+    db.transaction.bind(db),
+    async (tx) => resolveCitationsForDecision(tx, citing),
+  );
 
   expect(counts.resolvedByRule).toMatchObject({
-    [CITATION_RESOLUTION_RULE.SHEET_NUMBER]: 3,
+    [CITATION_RESOLUTION_RULE.SHEET_NUMBER]: 2,
     [CITATION_RESOLUTION_RULE.DECISION_DATE]: 1,
   });
-  expect(counts.ambiguous).toBe(4);
+  expect(counts.ambiguous).toBe(5);
 
   // The sheet is the last segment of the decision's ECLI.
   expect(await rowOf(bySheetCitation)).toEqual(
     resolved(sheet33, CITATION_RESOLUTION_RULE.SHEET_NUMBER),
   );
-  // The same sheet, stated by the publisher as a parallel file number.
-  expect(await rowOf(byIdentifierSheetCitation)).toEqual(
-    resolved(sheet41, CITATION_RESOLUTION_RULE.SHEET_NUMBER),
-  );
+  // A sheet stated only on a parallel file number is a docket spelling, which
+  // only a lookup reads (through the jurisdiction's grammar), so the resolver
+  // leaves the citation ambiguous rather than link on a reading it lacks.
+  expect(await rowOf(byIdentifierSheetCitation)).toEqual(AMBIGUOUS);
   // A sheet is more specific than a date, so it decides where both are named.
   expect(await rowOf(sheetOverDateCitation)).toEqual(
     resolved(sheet33, CITATION_RESOLUTION_RULE.SHEET_NUMBER),

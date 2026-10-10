@@ -13,14 +13,12 @@ import type { PublicLawPageSize } from "@/components/public-law-table/public-law
 import type { StatuteWindowGap } from "@/features/statutes/statute-expression";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { APIError } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { nullableStringCursorSeed } from "@/lib/infinite-query";
-import { toPublicLawError, unwrapPublicLawEden } from "@/lib/public-law-api";
+import { isPublicLawMiss, unwrapPublicLawEden } from "@/lib/public-law-api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 
-const NOT_FOUND_STATUS = 404;
 const VERSIONS_PAGE_SIZE = 200;
 /**
  * Consolidated versions are read as a whole, because the switcher offers the
@@ -56,7 +54,7 @@ export type StatuteSlugKey = {
   slug: string;
 };
 
-export const statuteKeys = {
+const statuteKeys = {
   all: ["statutes"],
   list: (key: StatuteListKey) => [
     ...statuteKeys.all,
@@ -255,21 +253,6 @@ export const statuteOptions = (documentId: string) =>
     queryFn: async ({ signal }) => await readStatute(documentId, signal),
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
-
-/**
- * Whether a failed public-law response is a plain miss rather than a
- * transport, gate, or server failure. Classifying first is what lets a route
- * act on the miss while `unwrapPublicLawEden` still raises everything else,
- * the disabled-surface marker included.
- */
-const isPublicLawMiss = (
-  error: { status: number; value: unknown },
-  action: string,
-): boolean => {
-  const classified = toPublicLawError(error, action);
-
-  return APIError.is(classified) && classified.status === NOT_FOUND_STATUS;
-};
 
 /**
  * The statute a legacy document-id URL names, or null when the corpus no

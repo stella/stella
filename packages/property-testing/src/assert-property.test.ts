@@ -295,9 +295,7 @@ test("nightly time limits cannot truncate pinned replays", async () => {
   let calls = 0;
   const property = fc.asyncProperty(fc.constant(1), async () => {
     calls++;
-    await new Promise((resolve) => {
-      setTimeout(resolve, 2);
-    });
+    await Bun.sleep(2);
     return true;
   });
   // The generated run interrupts before its first result; the pin must finish first.

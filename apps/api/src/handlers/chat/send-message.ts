@@ -20,6 +20,7 @@ import type { SkillMetadata } from "@stll/skills";
 
 import type { SafeDb, SafeDbError, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads } from "@/api/db/schema";
+import { env } from "@/api/env";
 import {
   getActiveFileModelBinding,
   type ActiveFileModelBinding,
@@ -29,8 +30,6 @@ import {
   resolveActiveChatSkillContext,
   type ActiveChatSkillContext,
 } from "@/api/handlers/chat/active-skill-context";
-import { startChatExecutionAdmission } from "@/api/handlers/chat/chat-execution-admission";
-import type { ChatExecutionAdmission } from "@/api/handlers/chat/chat-execution-admission";
 import {
   chatMessageFromPersisted,
   getAwaitingUserInteractions,
@@ -211,16 +210,22 @@ import type {
 import { createRawChatFilePart } from "@/api/handlers/chat/upload-files";
 import type { UploadedChatFile } from "@/api/handlers/chat/upload-files";
 import { attachVerifiedEntityMentionKinds } from "@/api/handlers/chat/verified-mention-kinds";
+import { createVisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
+import { createVisualStore } from "@/api/handlers/visual-sandbox/store";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { captureError, detached } from "@/api/lib/analytics/capture";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import {
-  assertUsageAvailableForHandler,
+  ACCOUNT_ACCESS,
+  authorizeHandlerUsage,
   createSafeRootHandler,
 } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
+import { resolveCredentialMemberAuthorization } from "@/api/lib/auth";
+import { loadFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
 import { getOrganizationRegistryDispatch } from "@/api/lib/business-registries/credentials";
 import { resolveEffectiveChatModelSelection } from "@/api/lib/chat-model-selection";
@@ -252,6 +257,7 @@ import {
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
 import { rewriteWorkspaceUrlsToMentions } from "@/api/lib/chat/workspace-url-mentions";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import { createFileKey } from "@/api/lib/files/utils";
 import {
@@ -269,6 +275,9 @@ import {
   ActionAdmissionError,
   actionAdmissionRefusal,
 } from "@/api/lib/rate-limit/action-admission";
+import { startExecutionAdmission } from "@/api/lib/rate-limit/execution-admission";
+import type { ExecutionAdmission } from "@/api/lib/rate-limit/execution-admission";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { brandPersistedChatMessageId } from "@/api/lib/safe-id-boundaries";
 import { extractFileTextResult } from "@/api/lib/search/extract-content";
 import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
@@ -277,6 +286,7 @@ import {
   validateTanStackDevModelOverride,
 } from "@/api/lib/tanstack-ai-models";
 import type { UsageLaneDecision } from "@/api/lib/usage/lane-routing";
+import { previewVisual } from "@/api/lib/visual-preview";
 import { loadWebSearchProvidersForOrg } from "@/api/lib/web-search/load-org-keys";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 import { isLocalDevOpen } from "@/api/runtime-mode";
@@ -340,7 +350,13 @@ const normalizeOptionalArray = <T>(value: T[] | undefined): T[] => {
 };
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Processes document inputs in the chat operation and returns its response stream.",
+  },
   permissions: CHAT_TURN_PERMISSIONS,
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "realtime_stream" },
   body: agUiSendMessageBodySchema,
   requiresUsage: { actionType: "chat", laneRouting: true },
@@ -469,7 +485,7 @@ type ClaimedChatTurnOwnership =
   | { status: "handed-over" };
 
 type ChatSendLifecycleOptions = {
-  startAdmission?: typeof startChatExecutionAdmission;
+  startAdmission?: typeof startExecutionAdmission;
   indexThread: typeof upsertChatThreadSearchDocument;
   externalMcpToolsLoader: LazyExternalMcpToolsLoader;
   /** The boundary mode the turn's settlement is counted under. */
@@ -576,7 +592,7 @@ const CHAT_SEND_ACTION_KIND = "chat.send";
  */
 export class ChatSendLifecycle {
   private readonly options: ChatSendLifecycleOptions;
-  private admission: ChatExecutionAdmission | undefined;
+  private admission: ExecutionAdmission | undefined;
   private checkpoint: PersistableChatMessage | undefined;
   private claimedTurn: ClaimedChatTurnOwnership = { status: "unclaimed" };
   /** Ends this process's record of the claim; a no-op once ended. */
@@ -652,9 +668,9 @@ export class ChatSendLifecycle {
   }: {
     organizationId: SafeId<"organization">;
     checkpoint: PersistableChatMessage | undefined;
-  }): Promise<Result<void, HandlerError>> {
+  }): Promise<Result<ModelDispatchAdmission, HandlerError>> {
     const acquired = await (
-      this.options.startAdmission ?? startChatExecutionAdmission
+      this.options.startAdmission ?? startExecutionAdmission
     )({
       organizationId,
       userId: this.options.userId,
@@ -666,7 +682,7 @@ export class ChatSendLifecycle {
     }
     this.admission = acquired.value;
     this.checkpoint = checkpoint;
-    return Result.ok(undefined);
+    return Result.ok(acquired.value.modelAdmission);
   }
 
   async reserveExecutionPeriod(
@@ -1106,6 +1122,27 @@ type ThreadValidationState = InferOk<
   Awaited<ReturnType<typeof readThreadValidationState>>
 >;
 
+type CreateTurnVisualOriginOptions = {
+  incomingMessage: Pick<PersistableChatMessage, "id" | "role">;
+  persistedMessage: ThreadValidationState["persistedMessage"];
+};
+
+const createTurnVisualOrigin = ({
+  incomingMessage,
+  persistedMessage,
+}: CreateTurnVisualOriginOptions) =>
+  createVisualResourceOrigin({
+    persistedParts:
+      incomingMessage.role === "assistant" &&
+      persistedMessage?.role === "assistant"
+        ? chatMessageFromPersisted({
+            content: persistedMessage.content,
+            id: incomingMessage.id,
+            role: persistedMessage.role,
+          }).parts
+        : [],
+  });
+
 type AcceptIncomingTurnOptions = {
   accessibleSet: ReadonlySet<string>;
   accessibleWorkspaceIds: SafeId<"workspace">[];
@@ -1167,6 +1204,8 @@ const acceptIncomingTurn = async ({
 
     let messagesForPersistence: ChatThreadState["data"]["messages"] =
       thread.data.messages;
+    // Every decision below reads this history; acceptance holds the turn to it.
+    let plannedOnHistory = thread.data.historySnapshot;
     let deleteMessageIdsBeforeLatest: SafeId<"chatMessage">[] = [];
     let incomingMessageExists = false;
     if (replayTargetMessageId !== undefined) {
@@ -1194,6 +1233,7 @@ const acceptIncomingTurn = async ({
         );
       }
       messagesForPersistence = truncationTarget.messagesForPersistence;
+      plannedOnHistory = truncationTarget.snapshot;
       deleteMessageIdsBeforeLatest =
         truncationTarget.deleteMessageIdsBeforeLatest;
       if (isExplicitRegeneration && truncationTarget.hasLaterUserMessage) {
@@ -1402,6 +1442,7 @@ const acceptIncomingTurn = async ({
     } else {
       const persistenceResult = await persistAcceptedMessageWithClaim({
         ...persistenceProps,
+        plannedOnHistory,
         turnAcceptance,
       });
       if (Result.isError(persistenceResult)) {
@@ -1536,6 +1577,7 @@ type PrepareValidatedIncomingMessageOptions = {
     workspaceId: SafeId<"workspace"> | null;
   };
   tools: {
+    featureAccessSnapshot: FeatureAccessSnapshot;
     disabledNativeToolSlugs: ChatToolsInput["disabledNativeToolSlugs"];
     registryDispatch: ChatToolsInput["registryDispatch"];
     docxEditRepresentation: NonNullable<
@@ -1579,6 +1621,7 @@ const prepareValidatedIncomingMessage = async ({
     workspaceId,
   },
   tools: {
+    featureAccessSnapshot,
     disabledNativeToolSlugs,
     registryDispatch,
     docxEditRepresentation,
@@ -1649,6 +1692,7 @@ const prepareValidatedIncomingMessage = async ({
     // still honor thread/org gates for tools whose presence is an
     // explicit user or administrator opt-in.
     const validationTools = getChatValidationTools({
+      featureAccessSnapshot,
       organizationId,
       memberRole,
       orgAIConfig,
@@ -1834,7 +1878,7 @@ const prepareValidatedIncomingMessage = async ({
       const poolCheck = yield* Result.await(
         Result.tryPromise({
           try: async () =>
-            await assertUsageAvailableForHandler({
+            await authorizeHandlerUsage({
               metering: { actionType: "chat" },
               organizationId,
               orgAIConfig,
@@ -1850,10 +1894,12 @@ const prepareValidatedIncomingMessage = async ({
             }),
         }),
       );
-      if (poolCheck !== null) {
-        return Result.err(poolCheck);
+      if (Result.isError(poolCheck)) {
+        return Result.err(poolCheck.error);
       }
-      turnLane = { lane: "pool" };
+      turnLane = await poolCheck.value.execute(
+        async () => await Promise.resolve({ lane: "pool" as const }),
+      );
     } else if (turnLane.lane === "fallback") {
       chatModelOverride = turnLane.forcedModelSelection;
       chatReasoningEffort = undefined;
@@ -1988,12 +2034,17 @@ const assembleTurnSystemPrompt = ({
 });
 
 export type SendMessageDependencies = {
-  startAdmission?: typeof startChatExecutionAdmission;
+  startAdmission?: typeof startExecutionAdmission;
   compactMessagesForContext: typeof compactMessagesForContext;
   createRefRegistry: typeof createChatRefRegistry;
   indexThread: typeof upsertChatThreadSearchDocument;
   loadExternalMcpTools: typeof loadExternalMcpToolsForUser;
   loadWebSearchProviders: typeof loadWebSearchProvidersForOrg;
+  /**
+   * Reads the caller's membership when an approved write tool runs. Defaults
+   * to the credential-boundary read; tests bind it to their own database.
+   */
+  resolveCurrentMembership?: typeof resolveCredentialMemberAuthorization;
   rollbackSideEffects: typeof rollbackUnpersistedChatSideEffects;
   streamResponse: typeof streamChat;
   uploadMessageFiles: typeof uploadMessageFilesWithRollback;
@@ -2031,6 +2082,11 @@ const readOwnedTurnThreadNames = async ({
   }
   return read;
 };
+
+const currentMembershipReader = (
+  dependencies: SendMessageDependencies,
+): typeof resolveCredentialMemberAuthorization =>
+  dependencies.resolveCurrentMembership ?? resolveCredentialMemberAuthorization;
 
 export const createSendMessage = (
   dependencies: SendMessageDependencies = SEND_MESSAGE_DEPENDENCIES,
@@ -2319,13 +2375,13 @@ export const createSendMessage = (
           await dependencies.loadExternalMcpTools({
             nullUnionStrategy: externalMcpNullUnionStrategy,
             organizationId: session.activeOrganizationId,
+            permit: grantThirdPartyOutboundPermit(),
             safeDb,
             userId: user.id,
           }),
       );
       const lifecycle = new ChatSendLifecycle({
-        startAdmission:
-          dependencies.startAdmission ?? startChatExecutionAdmission,
+        startAdmission: dependencies.startAdmission ?? startExecutionAdmission,
         indexThread: dependencies.indexThread,
         externalMcpToolsLoader,
         mode: CHAT_TURN_BOUNDARY_MODE[body.sendMode],
@@ -2349,6 +2405,13 @@ export const createSendMessage = (
       // generator via `.return()`, which unwinds this `finally` like a normal
       // early `return` would.
       try {
+        const featureAccessSnapshot = yield* Result.await(
+          loadFeatureAccessSnapshot({
+            safeDb,
+            organizationId: session.activeOrganizationId,
+            userId: user.id,
+          }),
+        );
         const preparedIncomingMessageResult =
           await prepareValidatedIncomingMessage({
             dependencies: {
@@ -2379,6 +2442,7 @@ export const createSendMessage = (
               workspaceId,
             },
             tools: {
+              featureAccessSnapshot,
               disabledNativeToolSlugs,
               registryDispatch,
               docxEditRepresentation,
@@ -2407,7 +2471,7 @@ export const createSendMessage = (
           webSearchProviders,
         } = preparedIncomingMessageResult.value;
 
-        yield* Result.await(
+        const modelAdmission = yield* Result.await(
           lifecycle.admitExecution({
             organizationId: session.activeOrganizationId,
             checkpoint:
@@ -2561,6 +2625,7 @@ export const createSendMessage = (
         const messagesForContextResult =
           await dependencies.compactMessagesForContext({
             abortSignal: createMeteredAIAbortSignal(),
+            admission: modelAdmission,
             boundary: thirdPartyBoundary,
             chatModelOverride,
             messages: messagesForContextInput,
@@ -2622,7 +2687,28 @@ export const createSendMessage = (
         // catalog and connector tools, which are known only later. Skill
         // availability is decided over the same inputs before the catalog
         // reaches the prompt, so an offered skill always has its tools.
+        const visualOrigin = createTurnVisualOrigin({
+          incomingMessage: body.message,
+          persistedMessage: validationThreadState.persistedMessage,
+        });
+        const visualTools = {
+          origin: visualOrigin,
+          preview: async (document: string) =>
+            previewVisual({
+              document,
+              functionArn: env.VISUAL_PREVIEW_FUNCTION_NAME,
+            }),
+          store: createVisualStore({
+            recordAuditEvent,
+            safeDb,
+            threadId: body.threadId,
+            userId: user.id,
+            workspaceId,
+          }),
+        };
         const chatToolContext = {
+          visualTools,
+          featureAccessSnapshot,
           createAIAbortSignal: createMeteredAIAbortSignal,
           organizationId: session.activeOrganizationId,
           memberRole,
@@ -2633,6 +2719,7 @@ export const createSendMessage = (
           pinServerValidatedWorkspaceId,
           requestWorkspaceId: workspaceId,
           refRegistry,
+          resolveCurrentMembership: currentMembershipReader(dependencies),
           toolDefectMemo,
           safeDb,
           scopedDb,
@@ -2701,6 +2788,7 @@ export const createSendMessage = (
           return skillToolNames;
         };
         const chatContextResult = await prepareChatContext({
+          featureAccessSnapshot,
           activeDecision: body.activeDecision,
           activeDraft: body.activeDraft,
           activeExternal: body.activeExternal,
@@ -2717,6 +2805,7 @@ export const createSendMessage = (
           offeredToolNamesForSkills,
           safeDb,
           sendMode: body.sendMode,
+          threadId: thread.data.id,
           toolAvailability: {
             docxEditMode: registeredDocxEditMode,
             templateAuthoring: areTemplateAuthoringToolsRegistered(memberRole),
@@ -2791,6 +2880,7 @@ export const createSendMessage = (
         // mounts no watcher to resolve them.
         const chatTools = getChatTools({
           ...chatToolContext,
+          modelAdmission,
           externalTools: externalMcpTools?.tools ?? {},
           skillMetadata: chatContext.skillMetadata,
           activeSkillContext: chatContext.activeSkillContext,
@@ -3076,6 +3166,8 @@ export const createSendMessage = (
                 };
 
                 const outcome = await dependencies.streamResponse({
+                  modelAdmission,
+                  visualOrigin,
                   runId: body.runId,
                   ...(parentRunId === undefined ? {} : { parentRunId }),
                   ...(resume === undefined ? {} : { resume }),
@@ -3249,6 +3341,7 @@ export const shouldLoadExternalMcpToolsForStreaming = (
 ): boolean => runMode !== CHAT_RUN_MODE.agent;
 
 type PrepareChatContextProps = {
+  featureAccessSnapshot: FeatureAccessSnapshot;
   activeDecision: IncomingActiveDecision | undefined;
   activeDraft: IncomingActiveDraft | undefined;
   activeExternal: IncomingActiveExternal | undefined;
@@ -3267,6 +3360,7 @@ type PrepareChatContextProps = {
   refRegistry: ReturnType<typeof createChatRefRegistry>;
   safeDb: SafeDb;
   sendMode: ChatSendMode;
+  threadId: SafeId<"chatThread">;
   toolAvailability: ChatToolAvailability;
   userContext: IncomingUserContext | undefined;
   userId: SafeId<"user">;
@@ -3295,6 +3389,7 @@ type PrepareChatContextResult = Result<
 >;
 
 const prepareChatContext = async ({
+  featureAccessSnapshot,
   activeDecision,
   activeDraft,
   activeExternal,
@@ -3312,6 +3407,7 @@ const prepareChatContext = async ({
   refRegistry,
   safeDb,
   sendMode,
+  threadId,
   toolAvailability,
   userContext,
   userId,
@@ -3332,6 +3428,7 @@ const prepareChatContext = async ({
 
     const promptAndMessagesResult = await Result.allAsync([
       buildChatSystemPromptParts({
+        featureAccessContext: { featureAccessSnapshot, organizationId, userId },
         activeDecision,
         activeDraft,
         activeExternal,
@@ -3346,6 +3443,8 @@ const prepareChatContext = async ({
         practiceJurisdictions,
         refRegistry,
         safeDb,
+        messages: messageWindow,
+        threadId,
         toolAvailability,
         userContext,
         userId,

@@ -4,7 +4,7 @@ import { status } from "elysia";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawMatterLinks } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -60,6 +60,7 @@ const config = {
     "note recorded on it. The decision itself stays in the case-law corpus and " +
     "can be linked again.",
   permissions: { entity: ["delete"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "legal_corpus_admin",

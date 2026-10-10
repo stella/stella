@@ -1,6 +1,8 @@
 import { Panic } from "better-result";
 import { afterAll, beforeAll, expect, setDefaultTimeout, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
+import type { SQLWrapper } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 import { organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -10,6 +12,11 @@ import { updateTemplateCategoryHandler } from "@/api/handlers/templates/categori
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  isTreeParentGuardError,
+  TREE_PARENT_CYCLE_ERROR_CODE,
+  TREE_PARENT_GUARDS,
+} from "@/api/lib/db/tree-parent-guard";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -54,13 +61,15 @@ const reparent = async (
   categoryId: SafeId<"templateCategory">,
   parentId: SafeId<"templateCategory">,
 ) =>
-  await updateTemplateCategoryHandler({
-    scopedDb,
-    organizationId,
-    categoryId,
-    body: { parentId },
-    recordAuditEvent: noAuditRows,
-  });
+  (
+    await updateTemplateCategoryHandler({
+      scopedDb,
+      organizationId,
+      categoryId,
+      body: { parentId },
+      recordAuditEvent: noAuditRows,
+    })
+  ).unwrap();
 
 const parentOf = async (categoryId: SafeId<"templateCategory">) =>
   (
@@ -148,8 +157,10 @@ test("a move onto a grandchild is refused, so the walk climbs past one level", a
 });
 
 test("a chain that already loops is reported rather than walked forever", async () => {
-  // A stored cycle is a state this endpoint cannot create; the FK allows it and
-  // a repair could leave one behind. The walk has to end and say so.
+  // A stored cycle is a state neither this endpoint nor the tree trigger can
+  // create, but rows written before the trigger existed may hold one. The
+  // fixture writes it with the trigger switched off; the walk has to end and
+  // say so.
   const loopedA = createSafeId<"templateCategory">();
   const loopedB = createSafeId<"templateCategory">();
   const mover = createSafeId<"templateCategory">();
@@ -162,10 +173,20 @@ test("a chain that already loops is reported rather than walked forever", async 
         category(loopedB, "Looped B", loopedA),
         category(mover, "Mover", null),
       ]);
+    await tx.execute(
+      sql.raw(
+        `ALTER TABLE template_categories DISABLE TRIGGER ${TREE_PARENT_GUARDS.templateCategories.constraint}`,
+      ),
+    );
     await tx
       .update(templateCategories)
       .set({ parentId: loopedB })
       .where(eq(templateCategories.id, loopedA));
+    await tx.execute(
+      sql.raw(
+        `ALTER TABLE template_categories ENABLE TRIGGER ${TREE_PARENT_GUARDS.templateCategories.constraint}`,
+      ),
+    );
   });
 
   const result = await reparent(mover, loopedB);
@@ -196,34 +217,105 @@ test("a cycle check that cannot read its answer refuses rather than allowing", a
       return await callback(asTestRaw<Transaction>(proxied));
     });
 
-  let thrown: unknown;
-  try {
-    await updateTemplateCategoryHandler({
-      scopedDb: brokenExecute,
-      organizationId,
-      categoryId: root,
-      body: { parentId: middle },
-      recordAuditEvent: noAuditRows,
-    });
-  } catch (error) {
-    thrown = error;
-  }
+  const result = await updateTemplateCategoryHandler({
+    scopedDb: brokenExecute,
+    organizationId,
+    categoryId: root,
+    body: { parentId: middle },
+    recordAuditEvent: noAuditRows,
+  });
 
-  expect(thrown).toBeInstanceOf(Panic);
+  // The transaction fails with the guard's panic as its cause; nothing is written.
+  expect(result.isErr()).toBe(true);
+  expect(result.isErr() && result.error.cause).toBeInstanceOf(Panic);
   expect(await parentOf(root)).toBeNull();
 });
 
 test("another firm's category is not reachable from this firm's walk", async () => {
-  const result = await updateTemplateCategoryHandler({
-    scopedDb,
-    organizationId,
-    categoryId: sibling,
-    body: { parentId: foreign },
-    recordAuditEvent: noAuditRows,
-  });
+  const result = (
+    await updateTemplateCategoryHandler({
+      scopedDb,
+      organizationId,
+      categoryId: sibling,
+      body: { parentId: foreign },
+      recordAuditEvent: noAuditRows,
+    })
+  ).unwrap();
 
   expect(result).toMatchObject({
     code: 404,
     response: { message: "Parent category not found" },
   });
+});
+
+// The pre-check answers from the rows it read; when that answer is stale (a
+// writer that skipped the tree lock committed in between), the
+// `template_categories_parent_acyclic` trigger is what refuses the loop. Its
+// refusal must reach the caller as the pre-check's 400, not as a 500.
+test("a loop the pre-check misses is refused by the database with the same 400", async () => {
+  const dialect = new PgDialect();
+  const staleCycleCheck: ScopedDb = async (callback) =>
+    await testDb.transaction(async (tx) => {
+      await tx.execute(sql.raw("RESET ROLE"));
+      const proxied = new Proxy(tx, {
+        get: (target, property) => {
+          if (property === "execute") {
+            return async (query: SQLWrapper) =>
+              dialect
+                .sqlToQuery(query.getSQL())
+                .sql.includes("WITH RECURSIVE ancestor")
+                ? { rows: [{ cycle: false }] }
+                : await target.execute(query);
+          }
+          const value = Reflect.get(target, property);
+          return typeof value === "function" ? value.bind(target) : value;
+        },
+      });
+      return await callback(asTestRaw<Transaction>(proxied));
+    });
+
+  const result = (
+    await updateTemplateCategoryHandler({
+      scopedDb: staleCycleCheck,
+      organizationId,
+      categoryId: root,
+      body: { parentId: leaf },
+      recordAuditEvent: noAuditRows,
+    })
+  ).unwrap();
+
+  expect(result).toMatchObject({
+    code: 400,
+    response: {
+      code: TREE_PARENT_CYCLE_ERROR_CODE,
+      message: "Cannot create circular category hierarchy",
+    },
+  });
+  expect(await parentOf(root)).toBeNull();
+});
+
+test("the database refuses a category that names itself as parent, on insert and on update", async () => {
+  const selfParent = createSafeId<"templateCategory">();
+  const refusals = await Promise.all([
+    testDb
+      .insert(templateCategories)
+      .values(category(selfParent, "Self", selfParent))
+      .then(
+        () => undefined,
+        (error: unknown) => error,
+      ),
+    testDb
+      .update(templateCategories)
+      .set({ parentId: sibling })
+      .where(eq(templateCategories.id, sibling))
+      .then(
+        () => undefined,
+        (error: unknown) => error,
+      ),
+  ]);
+
+  for (const refusal of refusals) {
+    expect(isTreeParentGuardError(refusal, "templateCategories")).toBe(true);
+  }
+  expect(await parentOf(selfParent)).toBeUndefined();
 });

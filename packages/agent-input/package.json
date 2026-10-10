@@ -1,6 +1,6 @@
 {
   "name": "@stll/agent-input",
-  "version": "0.1.2",
+  "version": "0.1.4",
   "description": "Lenient readers for values agents write: dates, date bounds, date-format specs, numbers, booleans, locales, countries, enum and vocabulary values, ids, ELIs, string lists",
   "keywords": [
     "agent",

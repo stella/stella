@@ -1,17 +1,32 @@
 import { Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 
+import { member } from "@/api/db/auth-schema";
 import {
   entityVersions,
   taskAssignees,
   workObligations,
+  workspaceMembers,
+  workspaces,
 } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
+import {
+  createFeatureAccessSnapshot,
+  decideFeatureAccess,
+} from "@/api/lib/feature-access/policy";
+import {
+  FEATURE_REGISTRY,
+  LEGAL_LISTS_FEATURE_ID,
+} from "@/api/lib/feature-access/registry";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { createTaskEntityHandler } from "@/api/lib/tasks/create-task-entity";
 import { entityVersionInsertResult } from "@/api/tests/helpers/entity-version-insert-mock";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { createScopedDbMock, toSafeDbMock } from "@/api/tests/scoped-db-mock";
+import {
+  createScopedDbMock,
+  createSelectQueryMock,
+  toSafeDbMock,
+} from "@/api/tests/scoped-db-mock";
 
 import { createTaskForFeatures } from "./create";
 
@@ -59,6 +74,28 @@ const createHandlerContext = ({
 }): CreateTaskCtx =>
   asTestRaw<CreateTaskCtx>({
     workspaceId,
+    featureAccessSnapshot: createFeatureAccessSnapshot({
+      organizationId: "org_test123",
+      userId,
+      decisions: new Map([
+        [
+          LEGAL_LISTS_FEATURE_ID,
+          decideFeatureAccess({
+            registry: FEATURE_REGISTRY,
+            featureId: LEGAL_LISTS_FEATURE_ID,
+            grants: {
+              [LEGAL_LISTS_FEATURE_ID]: [
+                { type: "organization", organizationId: "org_test123" },
+              ],
+            },
+            organizationId: "org_test123",
+            userId,
+            membership: true,
+            user: { email: "member@example.test", emailVerified: true },
+          }),
+        ],
+      ]),
+    }),
     user: { id: userId },
     session: {
       activeOrganizationId: toSafeId<"organization">("org_test123"),
@@ -218,13 +255,14 @@ describe("createTaskHandler validation", () => {
     const { safeDb } = createScopedDbMock({
       $count: async () => 0,
       select: () => ({
-        from: () => ({
-          // The search-repair mark reads its tenant from the source row.
-          innerJoin: () => ({ where: () => [] }),
-          where: () => ({
-            limit: () => ({ for: async () => [{ userId }] }),
-          }),
-        }),
+        from: (table: unknown) =>
+          table === workspaces
+            ? createSelectQueryMock([{ organizationId: "org_test123" }]).from()
+            : createSelectQueryMock(
+                table === workspaceMembers || table === member
+                  ? [{ userId }]
+                  : [],
+              ).from(),
       }),
       insert: (table: unknown) => ({
         values: (
@@ -235,7 +273,7 @@ describe("createTaskHandler validation", () => {
           }
           return table === entityVersions
             ? entityVersionInsertResult(values)
-            : undefined;
+            : { onConflictDoUpdate: async () => [] };
         },
         select: () => ({ onConflictDoUpdate: async () => [] }),
       }),
@@ -298,13 +336,10 @@ describe("createTaskHandler validation", () => {
     const { safeDb } = createScopedDbMock({
       $count: async () => 0,
       select: () => ({
-        from: () => ({
-          // The search-repair mark reads its tenant from the source row.
-          innerJoin: () => ({ where: () => [] }),
-          where: () => ({
-            limit: () => ({ for: async () => [] }),
-          }),
-        }),
+        from: (table: unknown) =>
+          createSelectQueryMock(
+            table === workspaces ? [{ organizationId: "org_test123" }] : [],
+          ).from(),
       }),
       insert: (table: unknown) => ({
         values: (values: Record<string, unknown>) => {
@@ -382,14 +417,13 @@ describe("createTaskHandler validation", () => {
   test("a non-task List row is created without governed work", async () => {
     const obligationRows: Record<string, unknown>[] = [];
     const { safeDb } = createScopedDbMock({
+      execute: async () => [{ enabled: true }],
       $count: async () => 0,
       select: () => ({
-        from: () => ({
-          innerJoin: () => ({ where: () => [] }),
-          where: () => ({
-            limit: () => ({ for: async () => [{ userId }] }),
-          }),
-        }),
+        from: (table: unknown) =>
+          createSelectQueryMock(
+            table === workspaces ? [{ organizationId: "org_test123" }] : [],
+          ).from(),
       }),
       insert: (table: unknown) => ({
         values: (values: Record<string, unknown>) => {

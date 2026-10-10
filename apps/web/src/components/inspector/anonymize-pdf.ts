@@ -8,23 +8,24 @@ import {
 } from "@/components/inspector/pipeline-run-registry.logic";
 import { fetchPrintPdf } from "@/components/pdf/peek/peek-pdf-print";
 import { getAnalytics } from "@/lib/analytics/provider";
-import {
-  findFileAnonymizationMatches,
-  normalizeWhitespaceWithOffsets,
-} from "@/lib/anonymize/file-anonymization-matches.logic";
 import { detectFileAnonymizationTerms } from "@/lib/anonymize/file-anonymization-policy";
-import { extractPDFText } from "@/lib/anonymize/pdf-coords";
+import { extractPdfAnonymizationText } from "@/lib/anonymize/pdf-anonymization-geometry";
 import { ClientOperationError } from "@/lib/errors/client";
+import { readQueryResult } from "@/lib/errors/query-result";
 import {
   allocateEntityOverlayId,
   clearAnonymizationForField,
   commitAnonymizationForField,
 } from "@/lib/pdf/anonymization-cache";
-import { buildPerPage, getEntitySpans } from "@/lib/pdf/anonymization-helpers";
+import {
+  buildPerPage,
+  locateOverlayEntities,
+} from "@/lib/pdf/anonymization-helpers";
 import type {
   EntityOverlay,
   FileAnonymization,
 } from "@/lib/pdf/anonymization-types";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { anonymizationAllowlistOptions } from "@/lib/workspaces/queries/anonymization-allowlist";
 import { anonymizationTermsOptions } from "@/lib/workspaces/queries/anonymization-terms";
 
@@ -39,7 +40,7 @@ const anonymizePdf = async ({
   fieldId: string;
   entityId: string | null;
   queryClient: QueryClient;
-}): Promise<void> => {
+}) => {
   const run = pipelineRuns.start(fieldId);
   // Tell the inspector facet a producer is in flight so
   // it shows "Detecting entities…" while the wasm pipeline
@@ -70,9 +71,7 @@ const anonymizePdf = async ({
   // Release ownership before propagating an error. A cancelled run cannot
   // overwrite a successor's status, and no failure can leave this field locked.
   pipelineRuns.finish(fieldId, run);
-  if (Result.isError(result)) {
-    await Promise.reject(result.error);
-  }
+  return result;
 };
 
 export const useFileAnonymizationPipeline = ({
@@ -81,12 +80,14 @@ export const useFileAnonymizationPipeline = ({
   mimeType,
   workspaceId,
   entityId,
+  runPipeline = anonymizePdf,
 }: {
   enabled: boolean;
   fieldId: string;
   mimeType?: string | undefined;
   workspaceId: string;
   entityId: string | null;
+  runPipeline?: typeof anonymizePdf;
 }): void => {
   const retry = useInspectorAnonymizationStore(
     (state) => state.anonymizationRetryByFieldId[fieldId] ?? 0,
@@ -99,29 +100,31 @@ export const useFileAnonymizationPipeline = ({
     ...anonymizationTermsOptions(workspaceId),
     enabled,
   });
+  const vocabularyQueryView = useQueryView(vocabularyQuery);
+  useQueryViewError(vocabularyQueryView);
   const allowlistQuery = useQuery({
     ...anonymizationAllowlistOptions({ workspaceId, entityId }),
     enabled,
   });
+  const allowlistQueryView = useQueryView(allowlistQuery);
+  useQueryViewError(allowlistQueryView);
   useQuery({
     enabled:
       enabled &&
       pipelineStatus !== "error" &&
-      !vocabularyQuery.isPending &&
-      !allowlistQuery.isPending,
+      vocabularyQuery.status === "success" &&
+      allowlistQuery.status === "success",
     queryFn: async ({ client: queryClient }) => {
-      const result = await Result.tryPromise(async () => {
-        await anonymizePdf({
-          workspaceId,
-          fieldId,
-          entityId,
-          queryClient,
-        });
+      const result = await runPipeline({
+        workspaceId,
+        fieldId,
+        entityId,
+        queryClient,
       });
       if (Result.isError(result)) {
         getAnalytics().captureError(result.error);
-        await Promise.reject(result.error);
       }
+      readQueryResult(result);
       return "complete" as const;
     },
     queryKey: [
@@ -160,8 +163,8 @@ const runPipelineAndCommit = async ({
     import("@libpdf/core"),
   ]);
   const pdf = await PDF.load(new Uint8Array(buffer));
-  const { text, spans: charSpans } = extractPDFText(pdf);
-  if (!text.trim()) {
+  const extraction = extractPdfAnonymizationText(pdf.getPages());
+  if (!extraction.text.trim()) {
     await Promise.reject(
       new ClientOperationError({
         action: "anonymizePdf",
@@ -171,39 +174,34 @@ const runPipelineAndCommit = async ({
     return;
   }
   const terms = await detectFileAnonymizationTerms({
-    text,
+    text: extraction.text,
     workspaceId,
     entityId,
     queryClient,
   });
-  const normalizedText = normalizeWhitespaceWithOffsets(text);
   const overlayEntities: EntityOverlay[] = [];
   const seenRanges = new Set<string>();
   for (const term of terms) {
-    for (const { start, end } of findFileAnonymizationMatches(
-      normalizedText,
-      term.text,
-    )) {
-      const key = `${start}:${end}`;
-      if (seenRanges.has(key)) {
-        continue;
-      }
-      seenRanges.add(key);
-      const spans = getEntitySpans({
-        charSpans,
-        entityStart: start,
-        entityEnd: end,
-      });
-      if (spans.length === 0) {
-        continue;
-      }
-      overlayEntities.push({
-        id: allocateEntityOverlayId(),
-        label: term.label,
-        text: term.text,
-        spans,
-      });
+    const located = locateOverlayEntities({
+      extraction,
+      term: term.text,
+      label: term.label,
+      allocateId: allocateEntityOverlayId,
+      seenRanges,
+    });
+    if (located.isErr()) {
+      // Fail closed, as the export does: an overlay that leaves part of a
+      // term uncovered would read as anonymized while it is not.
+      await Promise.reject(
+        new ClientOperationError({
+          action: "anonymizePdf",
+          message: "An anonymized term could not be positioned on the page",
+          cause: located.error,
+        }),
+      );
+      return;
     }
+    overlayEntities.push(...located.value);
   }
 
   if (!pipelineRuns.canCommit(fieldId, run)) {
@@ -215,8 +213,7 @@ const runPipelineAndCommit = async ({
   const data: FileAnonymization = {
     entities: overlayEntities,
     perPage,
-    extractedText: text,
-    charSpans,
+    extraction,
   };
 
   commitAnonymizationForField(fieldId, data);

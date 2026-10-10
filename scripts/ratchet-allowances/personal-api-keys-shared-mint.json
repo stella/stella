@@ -1,0 +1,5 @@
+{
+  "metric": "lib-to-handler-imports",
+  "delta": 1,
+  "reason": "The personal transaction owner invokes the existing canonical API-key mint validator with a transaction-backed SDK storage collaborator, preserving one mint contract for machine and personal credentials."
+}

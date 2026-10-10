@@ -3,15 +3,17 @@ import { eq } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
+import { sha256HexToBase64 } from "@stll/sha256";
+
 import type { Transaction } from "@/api/db/root";
 import {
-  type entities,
   pendingUploads,
   type PendingUploadPurposeData,
   workspaces,
 } from "@/api/db/schema";
+import { entityUploadRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { captureError } from "@/api/lib/analytics/capture";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
@@ -19,6 +21,10 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import { insertInChunks } from "@/api/lib/db/bulk-write";
+import {
+  createSiblingNamePlan,
+  type NamedEntityInsert,
+} from "@/api/lib/entities/sibling-name-insert";
 import {
   type CurrentVersionAssignment,
   insertEntityBatch,
@@ -39,7 +45,6 @@ import {
 } from "@/api/lib/uploads/entity-create";
 import {
   PRESIGN_URL_EXPIRY_SECONDS,
-  sha256HexToBase64,
   tmpUploadKey,
 } from "@/api/lib/uploads/runtime";
 
@@ -381,7 +386,8 @@ const createDirectoryRows = async ({
   const auditEvents: AuditEvent[] = [];
   // Ids are minted here and each parent resolves from an earlier directory, so
   // the loop only builds rows and `insertEntityBatch` writes them after it.
-  const entityRows: (typeof entities.$inferInsert)[] = [];
+  const entityRows: NamedEntityInsert[] = [];
+  const resolvePlannedName = await createSiblingNamePlan({ tx, workspaceId });
   const currentVersions: CurrentVersionAssignment[] = [];
 
   for (const directory of directories) {
@@ -397,12 +403,17 @@ const createDirectoryRows = async ({
     const entityId = createSafeId<"entity">();
     const entityVersionId = createSafeId<"entityVersion">();
 
+    const resolvedName = resolvePlannedName({
+      parentId,
+      name: directory.name,
+      kind: "folder",
+    });
     entityRows.push({
       id: entityId,
       workspaceId,
       kind: "folder",
       parentId,
-      name: directory.name,
+      name: resolvedName.name,
       createdBy: userId,
     });
     currentVersions.push({ entityId, versionId: entityVersionId });
@@ -416,7 +427,7 @@ const createDirectoryRows = async ({
           old: null,
           new: {
             kind: "folder",
-            name: directory.name,
+            name: resolvedName.name,
             parentId,
           },
         },
@@ -529,6 +540,8 @@ const createPendingRows = async ({
 // the static gate; nothing is left for the handler to authorize.
 const config = {
   permissions: { entity: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: entityUploadRealtimeUpdates,
   mcp: { type: "internal", reason: "upload_mechanics" },
   body: bodySchema,
 } satisfies WorkspaceHandlerConfig;

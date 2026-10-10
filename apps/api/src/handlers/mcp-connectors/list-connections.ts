@@ -3,11 +3,12 @@ import { and, eq } from "drizzle-orm";
 
 import { mcpConnectors, mcpUserConnections } from "@/api/db/schema";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { LIMITS } from "@/api/lib/limits";
 
 const config = {
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "mcp_transport" },
   access: "read",
 } satisfies HandlerConfig;
@@ -22,6 +23,7 @@ const listMcpConnections = createSafeRootHandler(
             id: mcpUserConnections.id,
             connectorId: mcpUserConnections.connectorId,
             connectorSlug: mcpConnectors.slug,
+            responseDisposition: mcpUserConnections.responseDisposition,
             status: mcpUserConnections.status,
             enabled: mcpUserConnections.enabled,
             scope: mcpUserConnections.scope,

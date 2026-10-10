@@ -47,7 +47,7 @@ import { checkedSourceRegistrations } from "./source-registrations";
  * The deferred-document drains, carried here because the registry is how
  * anything outside this slice reaches an adapter.
  */
-export { listDeferredDocumentDrains } from "@/api/handlers/case-law/ingestion/adapters/deferred-document-fetchers";
+export { listDeferredDocumentDrains } from "@/api/handlers/case-law/ingestion/adapters/deferred-document-processors";
 
 type AdapterRegistry = {
   readonly [TKey in AdapterKey]: SourceAdapter & { readonly key: TKey };

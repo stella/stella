@@ -65,6 +65,8 @@ export const FAILURE_CONTEXT_KEYS = [
   "entityId",
   "feature",
   "jobId",
+  // Public corpus jurisdiction code.
+  "jurisdiction",
   "method",
   "mode",
   "modelId",
@@ -79,7 +81,7 @@ export const FAILURE_CONTEXT_KEYS = [
   "stage",
   "step",
   "threadId",
-  "toolName",
+  "tool",
   "userFileId",
   "versionId",
   "workspaceId",

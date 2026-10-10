@@ -7,7 +7,7 @@ import {
   ALLOWLIST_READ_BOUND,
   ALLOWLIST_READ_INVARIANT,
 } from "@/api/lib/anonymization-allowlist";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { boundedAll } from "@/api/lib/db/bounded-all";
@@ -40,6 +40,7 @@ const config = {
     "given, that document's own, merged into one list so a detection run can " +
     "be filtered in a single pass.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     readClass: "tenant",

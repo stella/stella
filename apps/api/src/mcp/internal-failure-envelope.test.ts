@@ -232,6 +232,36 @@ describe("internalFailureResult preserves expected handler errors", () => {
   ];
 
   for (const { code, status } of EXPECTED_BUSINESS_CASES) {
+    test(`a ${status} HandlerError forwards refusal metadata`, () => {
+      for (const retryable of [false, true]) {
+        const result = internalFailureResult(
+          new HandlerError({
+            status,
+            code: "handler_specific_code",
+            message: "The caller must correct the request",
+            hint: "Correct the request and call the tool again.",
+            retryable,
+          }),
+        );
+        expect(JSON.parse(envelopeText(result))).toEqual({
+          error: {
+            code,
+            message: "The caller must correct the request",
+            hint: "Correct the request and call the tool again.",
+            retryable,
+            issues: [
+              {
+                path: "",
+                code: "handler_specific_code",
+                message: "The caller must correct the request",
+              },
+            ],
+          },
+        });
+      }
+      expect(capturedExceptions()).toEqual([]);
+    });
+
     test(`a ${status} HandlerError surfaces its message as ${code} and is not captured`, () => {
       const message = `curated business message for ${status}`;
       const result = internalFailureResult(

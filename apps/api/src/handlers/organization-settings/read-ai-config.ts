@@ -12,7 +12,7 @@ import {
   storedAIConfigUnreadableError,
 } from "@/api/lib/ai-config-response";
 import { captureError } from "@/api/lib/analytics/capture";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
 import { hasInstanceDecisionModel } from "@/api/lib/workflow/decisions/decision-model";
@@ -53,6 +53,7 @@ type AIConfigResult = {
 
 const config = {
   permissions: { organizationSettings: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: { type: "internal", reason: "provider_secret" },
 } satisfies HandlerConfig;
 

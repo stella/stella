@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 1,
+  "reason": "Declare fast-check as a fetch test dependency to generate response chunk timings; the existing property-testing package owns deterministic execution and replay."
+}

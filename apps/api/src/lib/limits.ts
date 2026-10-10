@@ -15,6 +15,13 @@ import {
   VIEW_SORTS_MAX,
   WORKSPACES_PER_ORGANIZATION_MAX,
 } from "@stll/api-contract";
+import {
+  CASE_LAW_RESULT_DEPTH_MAX,
+  SEARCH_QUERY_MAX_LENGTH,
+  READER_PAGE_MAX_CHARS,
+  READER_PROVISION_ANCHOR_MIN_CHARS,
+  READER_PROVISION_ANCHOR_MAX_CHARS,
+} from "@stll/api-contract/limits";
 import { PUBLIC_STATUTE_SEARCH_PAGE_SIZE_MAX } from "@stll/api-contract/search";
 import { BETTER_AUTH_ORGANIZATION_OPTIONS } from "@stll/auth-model";
 import {
@@ -331,6 +338,17 @@ export const LIMITS = {
    *  version, read whole when the reader opens the document. */
   readerAnnotationsPageSizeDefault: 100,
   readerAnnotationsPageSizeMax: 100,
+  decisionReaderPageMaxChars: READER_PAGE_MAX_CHARS,
+  decisionReaderPageContentChars: 50_000,
+  decisionReaderOpenTextChars: 8000,
+  decisionReaderOutlineEntries: 40,
+  decisionReaderCursorOffsetMin: 0,
+  decisionReaderProvisionAnchorMinChars: READER_PROVISION_ANCHOR_MIN_CHARS,
+  decisionReaderProvisionAnchorMaxChars: READER_PROVISION_ANCHOR_MAX_CHARS,
+  // A reader cursor nests a provision page cursor (generation, span start and
+  // an anchor up to the limit above) beside two digests; its maximal encoding
+  // is under 900 characters.
+  decisionReaderCursorMaxChars: 1024,
   exportPdfRowLimit: 5000,
   /** Hard cap on rows (contracts) a single view-to-report export may span.
    *  A DD report drafts per-contract AI narrative, so the row count bounds
@@ -364,10 +382,12 @@ export const LIMITS = {
   workspaceMemberPreviewMembersMax: 4,
   /** Max governed obligations synchronously unassigned during member removal. */
   workspaceMemberRemovalWorkObligationsMax: 500,
+  /** Rows read and audited per iteration of atomic member cleanup. */
+  memberRemovalCleanupBatchSize: 500,
   practiceJurisdictionsPerOrganization: 12,
   entityNameMaxLength: ENTITY_NAME_MAX_LENGTH,
   workspaceContributors: 5,
-  searchQueryMaxLength: 500,
+  searchQueryMaxLength: SEARCH_QUERY_MAX_LENGTH,
   searchPageSizeDefault: 20,
   searchPageSizeMax: 100,
   /** Maximum visible text returned by any global-search preview response. */
@@ -436,6 +456,8 @@ export const LIMITS = {
   clauseImportBatchLimit: 200,
   templateFillsRetentionDays: 365,
   caseLawMatterLinksPerWorkspace: 1000,
+  /** An empty coverage country reads as unset: all jurisdictions. */
+  caseLawCoverageCountryMinLength: 1,
   /**
    * Question columns one organization may ADD. Enforced on create alone: the
    * columns that predate the organization-owned model were capped per research
@@ -497,6 +519,18 @@ export const LIMITS = {
   /** Decisions one batch read may ask for. */
   caseLawDecisionBatchMax: 20,
   /**
+   * Citing decisions a decision read names in its citation summary; the rest
+   * are paged by the citation read.
+   */
+  caseLawTopCitingDecisions: 5,
+  /** The page a decision read starts on; pages count from one. */
+  caseLawDecisionFirstPage: 1,
+  /**
+   * Characters a caller may pass back as a decision's text version. The
+   * token itself is shorter; the bound leaves room to change it.
+   */
+  caseLawDecisionTextVersionMaxLength: 24,
+  /**
    * References one identifier lookup may resolve. A brief cites dozens of
    * cases, and resolving them is what the tool is for; each one is an indexed
    * identity read, not a ranking.
@@ -524,6 +558,7 @@ export const LIMITS = {
   caseLawDecisionBatchHydrationsMax: 3,
   caseLawSearchPageSizeDefault: 20,
   caseLawSearchPageSizeMax: 100,
+  caseLawResultDepthMax: CASE_LAW_RESULT_DEPTH_MAX,
   /** Max language variants for one decision's languageGroupKey. Bounds the
    *  alternate-language reads (decision detail + sitemap hreflang) so a
    *  malformed/over-merged group key cannot load an unbounded set. */
@@ -555,6 +590,8 @@ export const LIMITS = {
   caseLawYearFacetLimit: 200,
   /** One-row budget for the headnote a list row shows under the case number. */
   caseLawHeadnoteMaxChars: 240,
+  mcpCaseLawHeadnoteMaxChars: 4000,
+  mcpCaseLawSearchPageMaxChars: 60_000,
   /**
    * Terms of a publisher's classification one row draws as tags. A subject
    * index runs to dozens of terms on some sources, and a row is a hook, not
@@ -580,6 +617,8 @@ export const LIMITS = {
     sourceUrl: 2048 * 4,
     headline: 4096,
   },
+  /** Kinds of act a statute facet response carries for one jurisdiction. */
+  legislationDocumentTypeBucketLimit: 1000,
   /** Rows per list on the law home's legislation shelf. */
   legislationShelfPerList: 5,
   /** Days either side of today the legislation shelf looks at. */
@@ -837,6 +876,9 @@ export const API_RATE_LIMITS = {
   /** REST API: 1000 req/min per IP. Covers normal navigation
    *  (5-10 requests per page load × frequent workspace switching). */
   api: { duration: 60_000, max: 1000 },
+  /** Anonymous sanctions searches: 20 req/min per IP. Each search matches
+   *  across the shared sanctions indexes, so it has a separate CPU budget. */
+  publicSanctionsSearch: { duration: 60_000, max: 20, maxConcurrent: 2 },
   /** Skill URL discovery/import: 10 req/min per IP. Each request performs
    *  bounded outbound source fetches, so this separate cap prevents the
    *  general API budget from amplifying third-party traffic. */

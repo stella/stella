@@ -8,6 +8,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
+  DialogFormState,
   DialogClose,
   DialogFooter,
   DialogHeader,
@@ -28,6 +29,7 @@ import {
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
@@ -42,6 +44,7 @@ import {
 } from "@/lib/knowledge/queries";
 import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
+import { useQueryView } from "@/lib/use-query-view";
 import { ClauseBody } from "@/routes/knowledge/-components/clause-body";
 
 // ── Types ────────────────────────────────────────────
@@ -94,10 +97,12 @@ export const LinkClauseDialog = ({
   const [customSlotName, setCustomSlotName] = useState("");
   const [linking, setLinking] = useState(false);
 
-  const { data: catData } = useQuery({
+  const catDataQuery = useQuery({
     ...clauseCategoriesOptions(activeOrganizationId),
     enabled: open,
   });
+  const catDataView = useQueryView(catDataQuery);
+  const catData = catDataView.type === "items" ? catDataView.items : undefined;
   const {
     data: clauseData,
     isLoading: clausesLoading,
@@ -109,14 +114,20 @@ export const LinkClauseDialog = ({
 
   // Slots discovered in the template document (clause markers
   // markers) and slots already taken by existing links.
-  const { data: previewData } = useQuery({
+  const previewDataQuery = useQuery({
     ...templatePreviewOptions(activeOrganizationId, templateId),
     enabled: open,
   });
-  const { data: linksData } = useQuery({
+  const previewDataView = useQueryView(previewDataQuery);
+  const previewData =
+    previewDataView.type === "items" ? previewDataView.items : undefined;
+  const linksDataQuery = useQuery({
     ...templateClausesOptions(activeOrganizationId, templateId),
     enabled: open,
   });
+  const linksDataView = useQueryView(linksDataQuery);
+  const linksData =
+    linksDataView.type === "items" ? linksDataView.items : undefined;
 
   const discoveredSlots =
     previewData && "clauseSlots" in previewData ? previewData.clauseSlots : [];
@@ -166,7 +177,7 @@ export const LinkClauseDialog = ({
   const clauses = clauseData && "items" in clauseData ? clauseData.items : [];
 
   // Variants of the currently selected clause, offered at link time.
-  const { data: variantsResult } = useQuery({
+  const variantsResultQuery = useQuery({
     queryKey: ["clause-variants", selectedClauseId],
     queryFn: async ({ signal }) => {
       if (!selectedClauseId) {
@@ -185,6 +196,9 @@ export const LinkClauseDialog = ({
     },
     enabled: open && selectedClauseId !== null,
   });
+  const variantsResultView = useQueryView(variantsResultQuery);
+  const variantsResult =
+    variantsResultView.type === "items" ? variantsResultView.items : undefined;
   const variants =
     variantsResult && "variants" in variantsResult
       ? variantsResult.variants
@@ -222,7 +236,13 @@ export const LinkClauseDialog = ({
   // No useCallback: React Compiler handles memoization, and the
   // closure depends on half the dialog state anyway.
   const handleLink = async () => {
-    if (!selectedClauseId || slotUnavailable) {
+    if (
+      !selectedClauseId ||
+      slotUnavailable ||
+      previewDataView.type !== "items" ||
+      linksDataView.type !== "items" ||
+      variantsResultView.type !== "items"
+    ) {
       return;
     }
 
@@ -272,10 +292,30 @@ export const LinkClauseDialog = ({
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
       <DialogPopup className="sm:max-w-lg">
+        <DialogFormState
+          dirty={
+            selectedClauseId !== null ||
+            selectedVariantId !== null ||
+            slotValue !== null ||
+            customSlotName !== ""
+          }
+          onDiscard={() => {
+            setSelectedClauseId(null);
+            setSelectedVariantId(null);
+            setSlotValue(null);
+            setCustomSlotName("");
+          }}
+        />
         <DialogHeader>
           <DialogTitle>{t("clauses.linkClause")}</DialogTitle>
         </DialogHeader>
         <DialogPanel className="grid gap-4">
+          <QueryViewFeedback view={catDataView} />
+          <QueryViewFeedback view={previewDataView} />
+          <QueryViewFeedback view={linksDataView} />
+          {selectedClauseId !== null && (
+            <QueryViewFeedback view={variantsResultView} />
+          )}
           <div className="flex gap-2">
             <div className="relative flex-1">
               <SearchIcon className="text-muted-foreground absolute start-2.5 top-2.5 size-4" />
@@ -461,7 +501,14 @@ export const LinkClauseDialog = ({
             {t("common.cancel")}
           </DialogClose>
           <Button
-            disabled={linking || !selectedClauseId || slotUnavailable}
+            disabled={
+              previewDataView.type !== "items" ||
+              linksDataView.type !== "items" ||
+              variantsResultView.type !== "items" ||
+              linking ||
+              !selectedClauseId ||
+              slotUnavailable
+            }
             onClick={() => {
               detached(handleLink(), "link-clause-dialog.link");
             }}

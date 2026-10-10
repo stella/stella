@@ -27,6 +27,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { DocumentReviewRunBasis } from "@/api/lib/document-review/run-contract";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { Position } from "@/api/lib/workflow/playbook-positions";
+import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -141,7 +142,7 @@ const readerOf = (extra: SafeId<"workspace">[]): SafeDb =>
 
 const handlerContext = (safeDb: SafeDb, rest: Record<string, unknown>) => ({
   memberRole: sessionMemberRole("member"),
-  recordAuditEvent: async () => undefined,
+  recordAuditEvent: auditRecorderDouble(),
   safeDb,
   session: { activeOrganizationId: ids.orgA },
   user: { id: ids.userA1 },

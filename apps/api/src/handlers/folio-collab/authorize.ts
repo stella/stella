@@ -6,12 +6,13 @@ import {
 } from "@stll/api-contract/folio-collab";
 
 import type { TokenHandlerConfig } from "@/api/lib/api-handlers";
-import { createSafeTokenHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeTokenHandler } from "@/api/lib/api-handlers";
 import { permissiveBodySchema } from "@/api/lib/permissive-route-schema";
 
 import { authorizeFolioCollabCredentials } from "./room-credentials";
 
 const config = {
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "session_token_exchange" },
   body: permissiveBodySchema({ keys: ["roomName", "token"] }),
 } satisfies TokenHandlerConfig;

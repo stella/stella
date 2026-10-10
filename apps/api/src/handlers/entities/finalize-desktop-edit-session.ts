@@ -4,14 +4,15 @@ import { status, t } from "elysia";
 import type { Static } from "elysia";
 
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
+import { safeDbFromScoped } from "@/api/db/safe-db";
 import {
   desktopEditSessions,
   entities,
   fields,
   workspaces,
 } from "@/api/db/schema";
-import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";
 import {
   AUDIT_ACTION,
@@ -20,7 +21,14 @@ import {
 } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  cleanupObjectAfterWriter,
+  lockObjectCleanupIntentsForWriter,
+  reserveObjectCleanupIntent,
+  retirePublishedObjectCleanupIntentsInTransaction,
+} from "@/api/lib/buffer-intent-reconciliation";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { desktopEditMimeTypeForFileType } from "@/api/lib/desktop-edit-file-types";
 import { closeSessionConnections } from "@/api/lib/desktop-edit-session-notifications";
 import {
@@ -41,6 +49,7 @@ import {
 } from "@/api/lib/entity-versions/version-utils";
 import { enqueuePdfDerivativeOrMarkFailed } from "@/api/lib/file-derivative-queue";
 import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
+import { officeFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import {
   allocateFileObject,
   fileContentWithMintedObject,
@@ -52,13 +61,30 @@ import {
 } from "@/api/lib/files/organization-file-usage";
 import { storedDocumentBytes } from "@/api/lib/files/stored-document-bytes";
 import { createFileKey } from "@/api/lib/files/utils";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
-import { getS3, readS3ArrayBuffer, writeS3ObjectWithRetry } from "@/api/lib/s3";
+import {
+  getS3,
+  readS3ArrayBuffer,
+  S3_OBJECT_WRITE_CERTAINTY,
+  writeS3ObjectWithRetry,
+} from "@/api/lib/s3";
+import type { S3ObjectWriteCertainty } from "@/api/lib/s3";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import {
   processExtraction,
   requestNativeExtractionRun,
 } from "@/api/lib/search/process-extraction";
+
+const cleanupFailure = failureSink({
+  event: "desktop_edit.finalize_cleanup_failed",
+  expected: [],
+});
+
+export const hashFinalizedDesktopEditBytes = (
+  storedBytes: Uint8Array,
+): string => hashSha256Hex(storedBytes);
 
 export const finalizeDesktopEditSessionParamsSchema = t.Object({
   sessionId: tSafeId("desktopEditSession"),
@@ -118,7 +144,25 @@ export const finalizeDesktopEditSessionHandler = async ({
   const canonicalMimeType = desktopEditMimeTypeForFileType(
     authorizedSession.value.fileType,
   );
-  const uploadedKeys: string[] = [];
+  const safeDb = safeDbFromScoped(authorizedSession.value.scopedDb);
+  const sourceFileId = allocateFileObject();
+  const sourceKey = createFileKey({
+    fileId: sourceFileId,
+    mimeType: canonicalMimeType,
+    organizationId: authorizedSession.value.organizationId,
+    workspaceId: authorizedSession.value.workspaceId,
+  });
+  const reservation = await reserveObjectCleanupIntent({
+    objectKey: sourceKey,
+    organizationId: authorizedSession.value.organizationId,
+    workspaceId: authorizedSession.value.workspaceId,
+    safeDb,
+  });
+  if (Result.isError(reservation)) {
+    return status(409, { message: "Desktop edit storage is unavailable." });
+  }
+  const intentId = reservation.value;
+  let writeState: S3ObjectWriteCertainty | "never-written" = "never-written";
   let checkpointKeyToDelete: string | null = null;
   let shouldRollbackUploadedKeys = true;
 
@@ -126,7 +170,7 @@ export const finalizeDesktopEditSessionHandler = async ({
     const result = Result.flatten(
       await Result.tryPromise({
         try: async () => {
-          if (env.FEATURE_FILE_USAGE_LIMITS) {
+          if (isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")) {
             return await deleteOrganizationFileWithSignal(
               checkpointKey,
               AbortSignal.timeout(10_000),
@@ -157,7 +201,7 @@ export const finalizeDesktopEditSessionHandler = async ({
     const result = Result.flatten(
       await Result.tryPromise({
         try: async () => {
-          if (env.FEATURE_FILE_USAGE_LIMITS) {
+          if (isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")) {
             return await deleteOrganizationFileWithSignal(
               uploadedKey,
               AbortSignal.timeout(10_000),
@@ -175,6 +219,7 @@ export const finalizeDesktopEditSessionHandler = async ({
         sessionId,
       });
     }
+    return Result.isOk(result);
   };
 
   const recordAuditEvent = createAuditRecorder({
@@ -496,36 +541,40 @@ export const finalizeDesktopEditSessionHandler = async ({
       const storedSha256Hex =
         strippedArchive === null
           ? editSession.checkpointSha256Hex
-          : new Bun.CryptoHasher("sha256").update(storedBytes).digest("hex");
+          : hashFinalizedDesktopEditBytes(storedBytes);
       const storedSizeBytes = storedBytes.byteLength;
 
       const nextVersionId = createSafeId<"entityVersion">();
-      const sourceFileId = allocateFileObject();
-      const sourceKey = createFileKey({
-        fileId: sourceFileId,
-        mimeType: canonicalMimeType,
-        organizationId: authorizedSession.value.organizationId,
-        workspaceId: authorizedSession.value.workspaceId,
-      });
-      uploadedKeys.push(sourceKey);
+      const encryption = officeFileEncryption(canonicalMimeType);
+      await lockObjectCleanupIntentsForWriter(tx, [intentId]);
 
-      if (!env.FEATURE_FILE_USAGE_LIMITS) {
-        await writeS3ObjectWithRetry({
-          contentType: canonicalMimeType,
-          data: storedBytes,
-          key: sourceKey,
-        });
+      if (!isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")) {
+        writeState = S3_OBJECT_WRITE_CERTAINTY.UNCERTAIN;
+        writeState = await writeS3ObjectWithRetry(
+          {
+            contentType: canonicalMimeType,
+            data: storedBytes,
+            key: sourceKey,
+          },
+          { type: "cleanup-intent", intent: intentId },
+        );
       } else {
         const fileWrite = await writeOrganizationFile({
           organizationId: authorizedSession.value.organizationId,
           objectKey: sourceKey,
           sizeBytes: storedSizeBytes,
-          write: async () =>
-            await writeS3ObjectWithRetry({
-              contentType: canonicalMimeType,
-              data: storedBytes,
-              key: sourceKey,
-            }),
+          content: storedBytes,
+          write: async ({ content, objectKey }) => {
+            writeState = S3_OBJECT_WRITE_CERTAINTY.UNCERTAIN;
+            return await writeS3ObjectWithRetry(
+              {
+                contentType: canonicalMimeType,
+                data: content,
+                key: objectKey,
+              },
+              { type: "cleanup-intent", intent: intentId },
+            );
+          },
         });
         if (Result.isError(fileWrite)) {
           return {
@@ -537,6 +586,7 @@ export const finalizeDesktopEditSessionHandler = async ({
             },
           } as const;
         }
+        writeState = fileWrite.value;
       }
 
       await insertEntityVersion(tx, {
@@ -553,13 +603,13 @@ export const finalizeDesktopEditSessionHandler = async ({
         entityVersionId: nextVersionId,
         propertyId: editSession.propertyId,
         replacementContent: fileContentWithMintedObject({
-          encrypted: false,
+          encryption,
           fileName: editSession.fileName,
           id: sourceFileId,
           mimeType: canonicalMimeType,
           pdfFileId: null,
           pdfDerivative: pdfDerivativeStateForFile({
-            encrypted: false,
+            encrypted: encryption.encrypted,
             mimeType: canonicalMimeType,
           }),
           sha256Hex: storedSha256Hex,
@@ -656,6 +706,10 @@ export const finalizeDesktopEditSessionHandler = async ({
         },
       ]);
 
+      await retirePublishedObjectCleanupIntentsInTransaction({
+        tx,
+        intentIds: [intentId],
+      });
       checkpointKeyToDelete = checkpointKey;
 
       return {
@@ -671,9 +725,6 @@ export const finalizeDesktopEditSessionHandler = async ({
     });
 
     if ("error" in result) {
-      await Promise.all(uploadedKeys.map(deleteUploadedKey));
-      shouldRollbackUploadedKeys = false;
-
       await deleteCheckpointKeyIfPresent(checkpointKeyToDelete);
 
       return status(result.error.statusCode, {
@@ -682,7 +733,7 @@ export const finalizeDesktopEditSessionHandler = async ({
       });
     }
 
-    shouldRollbackUploadedKeys = false;
+    shouldRollbackUploadedKeys = result.outcome !== "finalized";
 
     await deleteCheckpointKeyIfPresent(checkpointKeyToDelete);
 
@@ -703,7 +754,9 @@ export const finalizeDesktopEditSessionHandler = async ({
       });
 
       enqueuePdfDerivativeOrMarkFailed({
-        encrypted: false,
+        encrypted: officeFileEncryption(
+          desktopEditMimeTypeForFileType(result.fileType),
+        ).encrypted,
         entityId: result.entityId,
         fieldId: result.fieldId,
         mimeType: desktopEditMimeTypeForFileType(result.fileType),
@@ -733,9 +786,20 @@ export const finalizeDesktopEditSessionHandler = async ({
 
     return result;
   } finally {
-    // Reached with the flag still set only when something above threw.
+    // Unpublished attempts retain cleanup, including refusals and no changes.
     if (shouldRollbackUploadedKeys) {
-      await Promise.all(uploadedKeys.map(deleteUploadedKey));
+      const settled = await cleanupObjectAfterWriter({
+        safeDb,
+        intentId,
+        writeState,
+        deleteObject: async () => await deleteUploadedKey(sourceKey),
+      });
+      if (Result.isError(settled)) {
+        observeFailure(settled.error, {
+          sink: cleanupFailure,
+          ctx: { entityId: authorizedSession.value.entityId },
+        });
+      }
     }
   }
 };

@@ -1,0 +1,76 @@
+name: Disarm auto-merge on push
+
+on:
+  pull_request:
+    types: [synchronize]
+
+permissions: {}
+
+# Each push invalidation must run, including one followed by an autofix push.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  disarm:
+    permissions:
+      contents: write
+      pull-requests: write
+    # Avoid mutations with read-only fork and Dependabot tokens.
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository
+      && github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Disarm changed pull request
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          script: |
+            const shouldDisarm = ({ sender, autoMerge, pushedAt }) => {
+              if (autoMerge === null || (
+                sender?.login === "autofix-ci[bot]" &&
+                sender?.id === 114827586 &&
+                sender?.type === "Bot"
+              )) return false;
+              const enabled = Date.parse(autoMerge.enabledAt);
+              const pushed = Date.parse(pushedAt);
+              if (!Number.isFinite(enabled) || !Number.isFinite(pushed)) {
+                throw new Error("Cannot establish auto-merge and push ordering");
+              }
+              // GitHub timestamps have second precision: equal times cannot
+              // prove a fresh arm and conservatively invalidate the old one.
+              return enabled <= pushed;
+            };
+
+            const { owner, repo } = context.repo;
+            const number = context.payload.pull_request.number;
+            const { repository: { pullRequest: pull } } = await github.graphql(`
+              query($owner:String!, $repo:String!, $number:Int!) {
+                repository(owner:$owner,name:$repo) {
+                  pullRequest(number:$number) { id autoMergeRequest { enabledAt } }
+                }
+              }
+            `, { owner, repo, number });
+            // Freeze GitHub's PR update time from this synchronize event.
+            // Commit dates are author-controlled; a live updatedAt may include
+            // later PR edits. Preserve an arm established after this update.
+            if (!shouldDisarm({
+              sender: context.payload.sender,
+              autoMerge: pull.autoMergeRequest,
+              pushedAt: context.payload.pull_request.updated_at,
+            })) {
+              await core.summary.addRaw(`PR #${number}: auto-merge kept or already disabled.`).write();
+              return;
+            }
+            const { disablePullRequestAutoMerge: { pullRequest: after } } = await github.graphql(`
+              mutation($id:ID!) {
+                disablePullRequestAutoMerge(input:{pullRequestId:$id}) {
+                  pullRequest { id autoMergeRequest { enabledAt } }
+                }
+              }
+            `, { id: pull.id });
+            if (after.id !== pull.id || after.autoMergeRequest !== null) {
+              throw new Error("Auto-merge disable receipt did not confirm disarming");
+            }
+            await core.summary.addRaw(`PR #${number}: auto-merge disabled after push.`).write();

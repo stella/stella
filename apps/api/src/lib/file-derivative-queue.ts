@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { DelayedError, Worker } from "bullmq";
+import { DelayedError } from "bullmq";
 import { and, eq, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
@@ -14,7 +14,6 @@ import type {
   DerivativeFailureReason,
   FieldContent,
 } from "@/api/db/schema-validators";
-import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -27,12 +26,13 @@ import {
   settleObjectCleanupIntentsAfterWriter,
 } from "@/api/lib/buffer-intent-reconciliation";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
-import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
+import { BullMqWorker, createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
 import {
   QUEUE_REQUEUE_OUTCOME,
   requeueDeterministicJob,
 } from "@/api/lib/bullmq-requeue";
 import type { QueueRequeueOutcome } from "@/api/lib/bullmq-requeue";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { errorTag } from "@/api/lib/errors/utils";
 import { decidePdfDerivativeAction } from "@/api/lib/file-derivative-decision";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
@@ -205,7 +205,7 @@ const getQueue = createLazyBullMqQueue<FileDerivativeJobData>({
   },
 });
 
-export const enqueuePdfDerivative = async ({
+const enqueuePdfDerivative = async ({
   encrypted,
   entityId,
   fieldId,
@@ -264,7 +264,7 @@ export const enqueuePdfDerivativeOrMarkFailed = async (
   }
 };
 
-export const enqueueImageThumbnail = async ({
+const enqueueImageThumbnail = async ({
   encrypted,
   entityId,
   fieldId,
@@ -334,7 +334,7 @@ export const initFileDerivativeWorker = () => {
     storeClass: "durable-coordination",
   });
 
-  const worker = new Worker<FileDerivativeJobData>(
+  const worker = new BullMqWorker<FileDerivativeJobData>(
     QUEUE_NAME,
     async (job) => {
       try {
@@ -502,7 +502,7 @@ const processPdfDerivativeJob = async ({
   let writeState: "confirmed" | "uncertain" = "uncertain";
   try {
     const pdfBytes = new Uint8Array(conversionResult.value.buffer);
-    if (!env.FEATURE_FILE_USAGE_LIMITS) {
+    if (!isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")) {
       await withTimeout(
         async (signal) =>
           await putS3ObjectWithSignal(pdfKey, pdfBytes, PDF_MIME_TYPE, signal),
@@ -516,12 +516,16 @@ const processPdfDerivativeJob = async ({
         organizationId: branded.organizationId,
         objectKey: pdfKey,
         sizeBytes: pdfBytes.byteLength,
-        write: async () =>
+        content: pdfBytes,
+        write: async ({
+          content: checkedContent,
+          objectKey: checkedObjectKey,
+        }) =>
           await withTimeout(
             async (signal) =>
               await putS3ObjectWithSignal(
-                pdfKey,
-                pdfBytes,
+                checkedObjectKey,
+                checkedContent,
                 PDF_MIME_TYPE,
                 signal,
               ),
@@ -744,7 +748,7 @@ const processImageThumbnailJob = async ({
 
   let writeState: "confirmed" | "uncertain" = "uncertain";
   try {
-    if (!env.FEATURE_FILE_USAGE_LIMITS) {
+    if (!isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")) {
       await withTimeout(
         async (signal) =>
           await putS3ObjectWithSignal(
@@ -763,12 +767,16 @@ const processImageThumbnailJob = async ({
         organizationId: branded.organizationId,
         objectKey: thumbnailKey,
         sizeBytes: thumbnailResult.value.webp.byteLength,
-        write: async () =>
+        content: thumbnailResult.value.webp,
+        write: async ({
+          content: checkedContent,
+          objectKey: checkedObjectKey,
+        }) =>
           await withTimeout(
             async (signal) =>
               await putS3ObjectWithSignal(
-                thumbnailKey,
-                thumbnailResult.value.webp,
+                checkedObjectKey,
+                checkedContent,
                 THUMBNAIL_MIME_TYPE,
                 signal,
               ),

@@ -37,7 +37,7 @@ jobs:
   verify-signatures:
     # Notification runs for other authors complete with the job skipped; only a
     # successful dependabot notification requests verification.
-    if: (github.event_name != 'pull_request_target' || github.actor != 'dependabot[bot]') && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.actor.login == 'dependabot[bot]')) && (github.event_name != 'issue_comment' || (github.event.issue.pull_request && (github.event.comment.body == 'recheck' || github.event.comment.body == 'I have read the CLA Document and I hereby sign the CLA')))
+    if: (github.event_name != 'pull_request_target' || github.actor != 'dependabot[bot]') && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.actor.login == 'dependabot[bot]' && github.event.workflow_run.head_repository.full_name == github.repository && github.event.workflow_run.path == '.github/workflows/cla-notify.yml' && github.event.workflow_run.event == 'pull_request')) && (github.event_name != 'issue_comment' || (github.event.issue.pull_request && (github.event.comment.body == 'recheck' || github.event.comment.body == 'I have read the CLA Document and I hereby sign the CLA')))
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -122,7 +122,6 @@ jobs:
             const MAX_WRITE_ATTEMPTS = 3;
             const MAX_PULL_COMMITS = 250;
             const MAX_COMMIT_AUTHORS = 1000;
-            const MAX_GROUP_COMMITS = MAX_PULL_COMMITS + 1;
             const { owner, repo } = context.repo;
             const api = github;
             const store = process.env.CLA_STORE_TOKEN ? new github.constructor({ auth: process.env.CLA_STORE_TOKEN }) : api;
@@ -246,24 +245,16 @@ jobs:
                   comparison.commits.length !== pull.commits || comparison.commits.some(({ sha }) => !commitShas.has(sha)) ||
                   new Set(comparison.commits.map(({ sha }) => sha)).size !== pull.commits) fail("CLA_COMMIT_SNAPSHOT_CHANGED");
               if (groupEntry) {
-                const { data: ancestry } = await request("GET /repos/{owner}/{repo}/compare/{basehead}", {
-                  basehead: `${pull.head.sha}...${groupEntry.headCommit.oid}`,
+                // The queue squashes: each entry adds exactly one commit on its
+                // predecessor, so the PR head is never an ancestor of the entry. GitHub
+                // dequeues a PR whose head moves, and the re-read below confirms the
+                // verified head did not. Any other shape fails closed.
+                const { data: added } = await request("GET /repos/{owner}/{repo}/compare/{basehead}", {
+                  basehead: `${groupEntry.baseCommit.oid}...${groupEntry.headCommit.oid}`,
                 });
-                if (ancestry.merge_base_commit?.sha !== pull.head.sha) fail("CLA_GROUP_PULL_CHANGED");
-                const grouped = [];
-                let total;
-                for (let page = 1; page <= Math.ceil(MAX_GROUP_COMMITS / 100); page++) {
-                  const { data } = await request("GET /repos/{owner}/{repo}/compare/{basehead}", {
-                    basehead: `${groupEntry.baseCommit.oid}...${groupEntry.headCommit.oid}`, per_page: 100, page,
-                  });
-                  if (!positiveInteger(data.total_commits) || data.total_commits > MAX_GROUP_COMMITS || !Array.isArray(data.commits)) fail("CLA_INVALID_GROUP_COMMIT_LIST");
-                  total ??= data.total_commits;
-                  if (data.total_commits !== total) fail("CLA_GROUP_COMMIT_SNAPSHOT_CHANGED");
-                  grouped.push(...data.commits);
-                  if (grouped.length >= total) break;
-                }
-                if (grouped.length !== total || new Set(grouped.map(({ sha }) => sha)).size !== total ||
-                    grouped.some(({ sha }) => sha !== groupEntry.headCommit.oid && !commitShas.has(sha))) fail("CLA_GROUP_COMMIT_SNAPSHOT_CHANGED");
+                const squash = Array.isArray(added.commits) && added.commits.length === 1 ? added.commits[0] : undefined;
+                if (added.total_commits !== 1 || squash?.sha !== groupEntry.headCommit.oid || !Array.isArray(squash.parents) ||
+                    squash.parents.length !== 1 || squash.parents[0]?.sha !== groupEntry.baseCommit.oid) fail("CLA_UNEXPECTED_GROUP_COMMIT");
               }
               const current = await readPull(pull.number);
               if (current.head.sha !== pull.head.sha || current.commits !== pull.commits) fail("CLA_PULL_CHANGED");
@@ -386,7 +377,7 @@ jobs:
             // one does not. A head never seen (lagging or unbuilt entry) or still
             // queued fails as before.
             const GROUP_CHANGE_CODES = new Set(["CLA_GROUP_PULL_CHANGED", "CLA_INCOMPLETE_MERGE_GROUP",
-              "CLA_GROUP_COMMIT_SNAPSHOT_CHANGED", "CLA_PULL_CHANGED", "CLA_COMMIT_SNAPSHOT_CHANGED"]);
+              "CLA_PULL_CHANGED", "CLA_COMMIT_SNAPSHOT_CHANGED"]);
             const verifyGroup = async (group) => {
               const id = await startCheck(group?.head_sha);
               if (!validSha(group.base_sha) || typeof group.base_ref !== "string" || typeof group.head_ref !== "string") fail("CLA_INVALID_MERGE_GROUP");

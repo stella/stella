@@ -19,7 +19,11 @@ import * as v from "valibot";
 
 import { resolveCaching } from "@/api/lib/ai-config";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  configuredModelAdmission,
+  createSafeRootHandler,
+} from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { clauseBodySchema } from "@/api/lib/clauses/body-schema";
 import type { ClauseBody } from "@/api/lib/clauses/types";
@@ -85,6 +89,7 @@ ${numbered}`;
 };
 
 const config = {
+  actionAdmission: { type: "handler", actionKind: "clauses.rewrite" },
   description:
     "Rewrite the prose of a clause body with the model, following a " +
     "free-text instruction plus the clause title and usage notes when " +
@@ -96,6 +101,7 @@ const config = {
     "one that carries markers. A changed paragraph loses its inline " +
     "formatting. Consumes AI usage.",
   permissions: { clause: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "knowledge_library_admin",
@@ -108,6 +114,7 @@ const config = {
 const rewriteClause = createSafeRootHandler(
   config,
   async function* ({
+    modelAdmission,
     session,
     body,
     safeDb,
@@ -153,6 +160,7 @@ const rewriteClause = createSafeRootHandler(
         try: async () =>
           await generateTanStackObjectForRole({
             dataClass: "customer",
+            admission: configuredModelAdmission({ modelAdmission }),
             role: "fast",
             orgAIConfig,
             managedAIResidency,

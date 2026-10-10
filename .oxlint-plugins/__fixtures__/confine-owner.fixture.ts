@@ -10,6 +10,8 @@ import { chat as runChat } from "@tanstack/ai/chat";
 // Accepted: an unrelated export of the owned package's subpath.
 // expect-clean: confine-owner/confine-owner
 import { toolDefinition } from "@tanstack/ai/tools";
+// oxlint-disable-next-line confine-owner/confine-owner -- fixture proves the worker primitive is confined even through an import alias
+import { Queue, Worker as RawQueueWorker } from "bullmq";
 
 // oxlint-disable-next-line confine-owner/confine-owner -- fixture proves an aliased import of an owned binding is rejected
 import { compileLegalSourceToDocx as compile } from "@stll/docx-core";
@@ -21,6 +23,7 @@ import * as folio from "@stll/folio-core/server";
 // expect-clean: confine-owner/confine-owner
 import { paragraph } from "@stll/folio-core/server";
 
+import { auditLogs } from "@/api/db/schema";
 // oxlint-disable-next-line confine-owner/confine-owner -- fixture proves a static import of an owned module is rejected
 import { createRedisClient } from "@/api/lib/redis-client";
 // oxlint-disable-next-line confine-owner/confine-owner -- fixture proves a type-only import still opens the owned surface and is rejected
@@ -35,6 +38,11 @@ import { createRootRunActor } from "../../apps/api/src/lib/root-scoped-db.ts";
 // oxlint-disable-next-line confine-owner/confine-owner -- fixture proves a deep relative import of an owned package source file is rejected
 import { countryCodeFromAlpha3 } from "../../packages/country-codes/src/alpha3.ts";
 
+// oxlint-disable-next-line confine-owner/confine-owner -- fixture proves a raw audit change selection is confined to its projection owner
+export const rawAuditSelection = { changes: auditLogs.changes };
+// expect-clean: confine-owner/confine-owner
+export const auditIdentitySelection = { id: auditLogs.id };
+
 // oxlint-disable-next-line confine-owner/confine-owner -- fixture proves a facade re-exporting an owned binding is rejected
 export { createDocx as serialize } from "@stll/folio-core/server";
 // oxlint-disable-next-line confine-owner/confine-owner -- fixture proves a star re-export reaches every owned binding and is rejected
@@ -44,6 +52,33 @@ export { createRedisClient as client } from "@/api/lib/redis-client";
 // Accepted: a facade over a sibling export does not hand out the capability.
 // expect-clean: confine-owner/confine-owner
 export { heading } from "@stll/folio-core/server";
+
+// oxlint-disable-next-line confine-owner/confine-owner -- fixture proves a named stored-reader re-export is confined
+export { readS3ArrayBuffer as readStoredBytes } from "@/api/lib/s3";
+// oxlint-disable-next-line confine-owner/confine-owner -- fixture proves a star stored-reader re-export is confined
+export * from "@/api/lib/s3";
+// oxlint-disable-next-line confine-owner/confine-owner -- fixture proves a named tenant-reader re-export is confined
+export { readTenantS3ArrayBuffer as readTenantBytes } from "@/api/lib/s3-presign";
+// oxlint-disable-next-line confine-owner/confine-owner -- fixture proves a named signer re-export is confined
+export { presignDownloadUrl as signStoredBytes } from "@/api/lib/s3-presign";
+// oxlint-disable-next-line confine-owner/confine-owner -- x2: star re-export reaches the tenant reader and signer
+export * from "@/api/lib/s3-presign";
+
+export const loadStoredReaders = async () =>
+  // oxlint-disable-next-line confine-owner/confine-owner -- fixture proves a dynamic stored-reader import is confined
+  await import("@/api/lib/s3");
+
+export const loadTenantReadersAndSigner = async () =>
+  // oxlint-disable-next-line confine-owner/confine-owner -- x2: dynamic import reaches the tenant reader and signer
+  await import("@/api/lib/s3-presign");
+
+export const loadTenantReader = async () =>
+  // oxlint-disable-next-line confine-owner/confine-owner -- fixture proves a dynamic tenant-reader member is confined
+  (await import("@/api/lib/s3-presign")).readTenantS3ArrayBuffer;
+
+export const loadStoredSigner = async () =>
+  // oxlint-disable-next-line confine-owner/confine-owner -- fixture proves a dynamic signer member is confined
+  (await import("@/api/lib/s3-presign")).presignDownloadUrl;
 
 declare const navigator: {
   clipboard: {
@@ -117,6 +152,8 @@ void createDocx;
 void compile;
 void folio;
 void paragraph;
+void RawQueueWorker;
+void Queue;
 void runChat;
 void toolDefinition;
 void relativeClient;

@@ -3,7 +3,8 @@ export const rawStellaOrigins: string | undefined = import.meta.env
   .WXT_STELLA_ORIGINS;
 
 /**
- * WXT build mode: `production` for release builds, `development` for `wxt`
+ * WXT build mode: `production` for release builds, `staging` for
+ * `build:staging`, `development` for `wxt`
  * and `build:dev`, `e2e` for the Playwright build. Unset outside a WXT build.
  */
 export const buildMode: string | undefined = import.meta.env.MODE;

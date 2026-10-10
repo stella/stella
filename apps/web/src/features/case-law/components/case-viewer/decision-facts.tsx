@@ -2,6 +2,8 @@ import type { ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
 
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
+import { DetailsGrid, DetailsItem } from "@stll/ui/details-grid";
 import { ExternalLinkIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
@@ -17,7 +19,6 @@ import type {
 } from "@/features/case-law/components/case-viewer/decision-facts.logic";
 import { DecisionJudges } from "@/features/case-law/components/case-viewer/decision-judges";
 import type { TranslationKey } from "@/i18n/types";
-import { sanitizeHref } from "@/lib/sanitize-href";
 
 /**
  * How each fact is labelled and printed. One entry per fact kind, so a fact
@@ -55,6 +56,8 @@ const FACT_ROWS = {
 
 type DecisionFactsProps = DecisionFactsInput & {
   className?: string | undefined;
+  /** Core identifiers share the publisher facts' label tracks. */
+  children?: ReactNode;
   /** Which facts this surface prints; the rest are shown elsewhere. */
   facts: readonly DecisionFactKind[];
 };
@@ -69,6 +72,7 @@ type DecisionFactsProps = DecisionFactsInput & {
  */
 export const DecisionFacts = ({
   className,
+  children,
   facts,
   ...input
 }: DecisionFactsProps) => {
@@ -77,23 +81,19 @@ export const DecisionFacts = ({
   const shown = DECISION_FACT_KINDS.filter(
     (kind) => facts.includes(kind) && decisionFactIsPresent(values, kind),
   );
-  if (shown.length === 0) {
+  if (shown.length === 0 && children === undefined) {
     return null;
   }
 
   return (
-    <dl
-      className={cn(
-        "reader-chrome text-muted-foreground mb-6 grid grid-cols-[9rem_minmax(0,1fr)] gap-x-4 gap-y-1 text-xs print:mb-4",
-        className,
-      )}
-    >
+    <DetailsGrid className={cn("mb-6 print:mb-4", className)}>
+      {children}
       {shown.map((kind) => (
-        <Fact key={kind} label={t(FACT_ROWS[kind].label)}>
+        <DetailsItem key={kind} label={t(FACT_ROWS[kind].label)}>
           {FACT_ROWS[kind].render(values)}
-        </Fact>
+        </DetailsItem>
       ))}
-    </dl>
+    </DetailsGrid>
   );
 };
 
@@ -114,12 +114,3 @@ const SourceLink = ({ source }: { source: DecisionFactValues["source"] }) => {
     </a>
   );
 };
-
-const Fact = ({ children, label }: { children: ReactNode; label: string }) => (
-  <>
-    <dt className="text-foreground-disabled font-medium tracking-wide uppercase">
-      {label}
-    </dt>
-    <dd className="text-foreground-strong-muted min-w-0">{children}</dd>
-  </>
-);

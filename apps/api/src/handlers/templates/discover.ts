@@ -2,7 +2,7 @@ import { panic, Result } from "better-result";
 import { t } from "elysia";
 
 import type { ScopedDb } from "@/api/db/safe-db";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -105,10 +105,16 @@ export const discoverHandler = async ({
 };
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Processes template content and returns parsed data or saved-document metadata rather than stored-file bytes.",
+  },
   description:
     "Inspect DOCX fields, marker configuration, named conditions and structural errors. " +
     "With templateId, resolve the stored template and linked clauses; otherwise inspect uploaded bytes. Stores nothing.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     readClass: "tenant",

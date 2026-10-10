@@ -23,10 +23,13 @@ import { and, eq, sql } from "drizzle-orm";
 
 import { API_FILE_SECURITY_REJECTED_ERROR_CODE } from "@stll/api-contract";
 import type { ApiFileSecurityRejectionDetails } from "@stll/api-contract";
+import { sha256Base64ToHex } from "@stll/sha256";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { pendingUploads } from "@/api/db/schema";
 import type { PendingUploadFinalizedResult } from "@/api/db/schema";
+import { entityUploadRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { finalizeAgentSkill } from "@/api/handlers/uploads/agent-skill";
 import { finalizeEntityVersion } from "@/api/handlers/uploads/entity-version";
 import {
@@ -34,7 +37,7 @@ import {
   uploadRoutePermission,
 } from "@/api/handlers/uploads/permissions";
 import { captureError } from "@/api/lib/analytics/capture";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -45,20 +48,16 @@ import {
   scanUpload,
 } from "@/api/lib/file-scan/scan-upload";
 import { observeScanFailures } from "@/api/lib/file-scan/scan-upload-handler";
-import {
-  commitOrganizationFileBytes,
-  reserveOrganizationFileBytes,
-} from "@/api/lib/files/organization-file-usage";
 import { storedDocumentBytes } from "@/api/lib/files/stored-document-bytes";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
-import { getS3, readS3ArrayBuffer, writeS3ObjectWithRetry } from "@/api/lib/s3";
+import { getS3, readS3ArrayBuffer } from "@/api/lib/s3";
 import type { HeadObjectResult, S3PresignError } from "@/api/lib/s3-presign";
-import { copyObject, headObject } from "@/api/lib/s3-presign";
+import { headObject } from "@/api/lib/s3-presign";
 import { finalizeEntityCreate } from "@/api/lib/uploads/entity-create";
+import { promoteTmpObjectWithUsage } from "@/api/lib/uploads/promote-tmp-object";
 import {
   FINALIZE_CLAIM_TIMEOUT_MS,
   legacyTmpUploadKey,
-  sha256Base64ToHex,
   tmpUploadKey,
   tmpUploadKeys,
   UploadFinalizeError,
@@ -69,6 +68,10 @@ const finalizeParamsSchema = workspaceParams({
 });
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason: "Verifies an upload without delivering file content.",
+  },
   description:
     "Step 3 of 3 of the file-upload flow: finalize an upload whose bytes have " +
     "already been PUT to the presigned URL from uploads.create. Verifies the " +
@@ -83,76 +86,14 @@ const config = {
   // resource-appropriate grant depends on the upload's purpose, which
   // authorizeUploadPurpose (uploads/permissions.ts) checks in-handler.
   permissions: uploadRoutePermission,
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: entityUploadRealtimeUpdates,
   access: "write",
   mcp: { type: "capability", reason: "file_transport", consumesServices: true },
   params: finalizeParamsSchema,
 } satisfies WorkspaceHandlerConfig;
 
 type ClaimedRow = typeof pendingUploads.$inferSelect;
-
-type PromoteTmpObjectOptions = {
-  organizationId: SafeId<"organization">;
-  tmpKey: string;
-  finalKey: string;
-  storedBytes: Uint8Array;
-  declaredMime: string;
-  promotion: "copy" | "write";
-};
-
-const promoteTmpObjectWithUsage = async ({
-  organizationId,
-  tmpKey,
-  finalKey,
-  storedBytes,
-  declaredMime,
-  promotion,
-}: PromoteTmpObjectOptions) => {
-  const reservation = await reserveOrganizationFileBytes({
-    organizationId,
-    objectKey: finalKey,
-    sizeBytes: storedBytes.byteLength,
-  });
-  if (Result.isError(reservation)) {
-    return Result.err(
-      new UploadFinalizeError({
-        status: reservation.error.reason === "capacity_exceeded" ? 409 : 500,
-        message: reservation.error.message,
-        rejectReason: reservation.error.reason,
-      }),
-    );
-  }
-  const promoted =
-    promotion === "copy"
-      ? await copyObject(tmpKey, finalKey)
-      : await Result.tryPromise(
-          async () =>
-            await writeS3ObjectWithRetry({
-              contentType: declaredMime,
-              data: storedBytes,
-              key: finalKey,
-            }),
-        );
-  if (promoted.status === "error") {
-    return Result.err(
-      new UploadFinalizeError({
-        status: 500,
-        message: "Failed to promote tmp object",
-        rejectReason: promotion === "copy" ? "copy-failed" : "write-failed",
-      }),
-    );
-  }
-  const committed = await commitOrganizationFileBytes(reservation.value);
-  if (Result.isError(committed)) {
-    return Result.err(
-      new UploadFinalizeError({
-        status: 500,
-        message: committed.error.message,
-        rejectReason: "usage-commit-failed",
-      }),
-    );
-  }
-  return Result.ok(undefined);
-};
 
 const fileSecurityRejectionDetails = (
   error: UploadFinalizeError,
@@ -216,13 +157,9 @@ const finalizeUpload = createSafeHandler(
     const timeoutSec = Math.floor(FINALIZE_CLAIM_TIMEOUT_MS / 1000);
     const claimRequestId = Bun.randomUUIDv7().slice(0, 64);
     const claimedRows = yield* Result.await(
-      // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
-      safeDb((tx) => {
-        // audit: skip — claim FSM state transition on
-        // pending_uploads; ephemeral bookkeeping. The audit row for
-        // the resulting entity is emitted by `finalizeEntityCreate`
-        // inside the same domain transaction.
-        return tx
+      safeDb((tx) =>
+        // audit: skip — claim FSM state transition on pending_uploads; ephemeral bookkeeping. The audit row for the resulting entity is emitted by `finalizeEntityCreate` inside the same domain transaction.
+        tx
           .update(pendingUploads)
           .set({
             status: "scanning",
@@ -242,8 +179,8 @@ const finalizeUpload = createSafeHandler(
                 )
               )`,
           )
-          .returning();
-      }),
+          .returning(),
+      ),
     );
     const claimed = claimedRows.at(0);
 
@@ -278,11 +215,9 @@ const finalizeUpload = createSafeHandler(
         );
       }
       const expiredRows = yield* Result.await(
-        // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
-        safeDb((tx) => {
-          // audit: skip — expiry transition on pending_uploads;
-          // the upload never became a durable entity.
-          return tx
+        safeDb((tx) =>
+          // audit: skip — expiry transition on pending_uploads; the upload never became a durable entity.
+          tx
             .update(pendingUploads)
             .set({
               status: "rejected",
@@ -302,8 +237,8 @@ const finalizeUpload = createSafeHandler(
                   )
                 )`,
             )
-            .returning({ id: pendingUploads.id });
-        }),
+            .returning({ id: pendingUploads.id }),
+        ),
       );
       if (expiredRows.at(0)) {
         return Result.err(
@@ -337,11 +272,9 @@ const finalizeUpload = createSafeHandler(
       const error = finalizeResult.error;
       const terminalStatus = error.status === 500 ? "failed" : "rejected";
       const failedRows = yield* Result.await(
-        // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
-        safeDb((tx) => {
-          // audit: skip — terminal-state write on pending_uploads,
-          // no domain entity to attribute.
-          return tx
+        safeDb((tx) =>
+          // audit: skip — terminal-state write on pending_uploads, no domain entity to attribute.
+          tx
             .update(pendingUploads)
             .set({
               status: terminalStatus,
@@ -361,8 +294,8 @@ const finalizeUpload = createSafeHandler(
                 eq(pendingUploads.claimedByRequestId, claimRequestId),
               ),
             )
-            .returning({ id: pendingUploads.id });
-        }),
+            .returning({ id: pendingUploads.id }),
+        ),
       );
       if (!failedRows.at(0)) {
         panic("Pending upload failure marker update returned no rows");
@@ -521,9 +454,7 @@ const runFinalize = async function* ({
   // 3. Download for scan.
   const fileBuffer = await readS3ArrayBuffer(tmpKey);
   if (!head.checksumSHA256) {
-    const uploadedSha256 = new Bun.CryptoHasher("sha256")
-      .update(fileBuffer)
-      .digest("hex");
+    const uploadedSha256 = hashSha256Hex(new Uint8Array(fileBuffer));
     if (uploadedSha256 !== claimed.declaredSha256) {
       return Result.err(
         new UploadFinalizeError({
@@ -570,12 +501,14 @@ const runFinalize = async function* ({
   const storedSha256Hex =
     strippedArchive === null
       ? claimed.declaredSha256
-      : new Bun.CryptoHasher("sha256").update(storedBytes).digest("hex");
+      : hashSha256Hex(storedBytes);
 
   // A server-side copy is the cheap promotion, but it would publish the bytes
   // the client staged. Stripped bytes exist only here, so they are written.
   const promoteTmpObject = async (finalKey: string) =>
     await promoteTmpObjectWithUsage({
+      safeDb,
+      workspaceId,
       organizationId,
       tmpKey,
       finalKey,
@@ -626,7 +559,11 @@ const runFinalize = async function* ({
       scanned,
     });
   } else if (purposeData.type === "entity_version") {
-    purposeOk = yield* finalizeEntityVersion({ ...domainArgs, purposeData });
+    purposeOk = yield* finalizeEntityVersion({
+      ...domainArgs,
+      purposeData,
+      scanned,
+    });
   } else {
     purposeOk = yield* finalizeAgentSkill({
       safeDb,

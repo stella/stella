@@ -10,6 +10,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
+  corpusEngineScopeViolations,
   planServiceSuites,
   requiresServiceSuites,
   serviceSuiteDependencies,
@@ -19,11 +20,12 @@ import { GENERATORS } from "./generated-files";
 // The detector and the modules it imports, copied into fixture checkouts.
 const DETECTOR_SOURCES = Object.fromEntries(
   [
+    "../packages/scripts/src/generated-files.ts",
     "detect-service-suite-changes.ts",
     "generated-files.ts",
     "baseline-paths.ts",
   ].map((file) => [
-    `scripts/${file}`,
+    path.posix.normalize(`scripts/${file}`),
     readFileSync(new URL(file, import.meta.url), "utf-8"),
   ]),
 );
@@ -41,6 +43,9 @@ test("database, migrations, scheduler, backfills, suites, and harness changes re
     "apps/collab/src/server.test.ts",
     "bun.lock",
     "patches/new.patch",
+    "docker/postgres/Dockerfile",
+    "docker/postgres/.dockerignore",
+    "docker/postgres/init.sql",
     ".github/workflows/ci.yml",
   ]) {
     expect(requiresServiceSuites([file]), file).toBe(true);
@@ -121,6 +126,7 @@ test("a newly added transitive import is picked up without editing the detector"
   try {
     for (const [file, source] of Object.entries(sources)) {
       mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+      mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
       writeFileSync(path.join(root, file), source);
     }
     for (const file of [
@@ -199,6 +205,7 @@ test("each suite follows its own import closure without planning unrelated sibli
   try {
     for (const [file, source] of Object.entries(sources)) {
       mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+      mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
       writeFileSync(path.join(root, file), source);
     }
     for (const [suite, file] of [
@@ -219,12 +226,47 @@ test("each suite follows its own import closure without planning unrelated sibli
   }
 });
 
+test("every engine-reaching test remains inside the corpus dependency scope", () => {
+  expect(corpusEngineScopeViolations()).toEqual([]);
+});
+
+test("an engine-reaching test outside the corpus glob fails the scope census", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "corpus-engine-scope-"));
+  const sources = {
+    ...DETECTOR_SOURCES,
+    "apps/api/package.json": readFileSync(
+      new URL("../apps/api/package.json", import.meta.url),
+      "utf-8",
+    ),
+    "apps/api/src/tests/setup-env.ts": "",
+    "apps/api/src/db/migrate.ts": "",
+    "apps/api/scripts/run-postgres-tests.ts": "",
+    "apps/api/scripts/run-valkey-tests.ts": "",
+    "apps/collab/src/server.test.ts": "",
+    "apps/api/engine-tests/planted.contract.test.ts":
+      'const enabled = process.env["STELLA_RUN_CORPUS_ENGINE_TESTS"] === "true";',
+  };
+  try {
+    for (const [file, source] of Object.entries(sources)) {
+      mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+      writeFileSync(path.join(root, file), source);
+    }
+    expect(corpusEngineScopeViolations(root)).toEqual([
+      "apps/api/engine-tests/planted.contract.test.ts: engine test is outside the corpus scope",
+      "apps/api/scripts/run-corpus-engine-suites.test.ts: stale or unreasoned corpus engine census allowlist entry",
+    ]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("removed runner metadata widens the detector inside its guarded execution", () => {
   const root = mkdtempSync(path.join(tmpdir(), "service-runner-metadata-"));
   try {
     mkdirSync(path.join(root, "scripts"));
     mkdirSync(path.join(root, "apps/api"), { recursive: true });
     for (const [file, source] of Object.entries(DETECTOR_SOURCES)) {
+      mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
       writeFileSync(path.join(root, file), source);
     }
     for (const metadata of [

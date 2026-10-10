@@ -54,6 +54,17 @@
       "polish": "Vylepšit znění"
     }
   },
+  "aiColumns": {
+    "countSummary": "{columns} sloupců × {rows} řádků = {answers, plural, one {# odpověď} few {# odpovědi} many {# odpovědi} other {# odpovědí}}. Odpovědi čerpají rozpočet.",
+    "refusedBudget": "Nespuštěno: rozpočet na odpovědi není k dispozici",
+    "rerunAllPage": "Spustit vše znovu (tato stránka)",
+    "rerunColumnPage": "Spustit sloupec znovu (tato stránka)",
+    "runColumnPage": "Spustit sloupec (tato stránka)",
+    "runPageRows": "Spustit pro {count, plural, one {# řádek na této stránce} few {# řádky na této stránce} many {# řádku na této stránce} other {# řádků na této stránce}}",
+    "runRemainingPage": "Spustit zbývající (tato stránka)",
+    "runSelectedRows": "Spustit pro {count, plural, one {# vybraný řádek} few {# vybrané řádky} many {# vybraného řádku} other {# vybraných řádků}}",
+    "selectedRun": "Spustit AI sloupce pro {count, plural, one {# řádek} few {# řádky} many {# řádku} other {# řádků}}"
+  },
   "appearance": {
     "calendar": "Kalendář",
     "calendarGregorian": "Gregoriánský",
@@ -82,6 +93,9 @@
     "weekStartSunday": "Neděle"
   },
   "auth": {
+    "accessReset": {
+      "description": "Pokračováním odpojíte tyto způsoby přihlášení: <identity>{providers}</identity>, a odhlásíte ostatní zařízení. Tato propojení neověřila váš e-mail. Pokračovat?"
+    },
     "betaNoticeTitle": "Beta",
     "bootstrapToken": "Nastavovací token",
     "checkSpamHint": "Pokud kód nevidíte, podívejte se do složky Spam.",
@@ -97,7 +111,6 @@
     "createOrganizationButton": "Vytvořit organizaci",
     "emailPlaceholder": "vy@priklad.cz",
     "error": {
-      "accountNotLinked": "Tento e-mail se přihlašuje jiným způsobem. Použijte svůj původní způsob přihlášení, nebo to zkuste znovu.",
       "generic": "Při přihlašování se něco pokazilo. Zkuste to prosím znovu.",
       "title": "Nepodařilo se vás přihlásit"
     },
@@ -121,6 +134,13 @@
     "signIn": "Přihlásit se",
     "signInBeforeInvitation": "Pro přijetí pozvánky do organizace se musíte nejprve přihlásit.",
     "signInWithPassword": "Přihlásit se heslem",
+    "socialLink": {
+      "connect": "Propojit účet <identity>{provider}</identity> pro příště?",
+      "connectButton": "Propojit <identity>{provider}</identity>",
+      "emailProof": "Pokračujte přihlášením pomocí kódu z e-mailu.",
+      "methodHint": "Tento e-mail už používá <identity>{method}</identity>. Pokračujte přihlášením pomocí kódu z e-mailu.",
+      "skip": "Teď přeskočit"
+    },
     "subtitle": "Dokumenty, judikatura i revize pod kontrolou. S pomocí AI.",
     "twoFactor": {
       "backupCodePlaceholder": "Zadejte záložní kód",
@@ -134,6 +154,7 @@
       "useBackupCode": "Použít místo toho záložní kód"
     },
     "useDifferentEmail": "Použít jiný e-mail",
+    "usePassword": "Přihlásit se raději heslem",
     "weSentCodeTo": "Kód jsme odeslali na <email>{emailAddress}</email>"
   },
   "avt": {
@@ -264,6 +285,7 @@
     "runs": {
       "back": "Všechny dokumenty",
       "errors": {
+        "accessRevoked": "Ověřování bylo zastaveno, protože přístup není dostupný.",
         "aiUnavailable": "Pro ověření dokumentů není dostupný žádný model AI. Zkontrolujte nastavení AI organizace.",
         "enqueueFailed": "Ověření se nepodařilo spustit. Zkuste to znovu.",
         "extractionFailed": "Tvrzení v tomto dokumentu se nepodařilo extrahovat.",
@@ -290,9 +312,7 @@
     },
     "save": {
       "failed": "Neuloženo",
-      "failedTitle": "Vaše změna nebyla uložena",
-      "saved": "Uloženo",
-      "saving": "Ukládání…"
+      "failedTitle": "Vaše změna nebyla uložena"
     },
     "sourceMediumTooltip": "Médium zdroje — neutrální popis. Samo o sobě nesnižuje míru jistoty.",
     "states": {
@@ -336,6 +356,7 @@
     },
     "view": {
       "chooseList": "Vybrat seznam",
+      "createList": "Vytvořit seznam",
       "evidenceList": "Fakta ze seznamu",
       "noLists": "Tento spis nemá žádné seznamy.",
       "pickList": "Vyberte seznam, s jehož fakty se porovnávají dokumenty tohoto spisu."
@@ -545,6 +566,7 @@
     "numberSeries": {
       "add": "Přidat číselnou řadu",
       "advance": "Záloha",
+      "allSellers": "Všichni dodavatelé",
       "archiveConfirm": "Archivovat tuto číselnou řadu? Nebude již dostupná pro nové doklady.",
       "creditNote": "Dobropis",
       "default": "Výchozí řada",
@@ -562,6 +584,9 @@
       "preview": "Další číslo",
       "previewAllocated": "Toto číslo již bylo přiděleno.",
       "previewHelp": "Náhled používá uložený vzor a nerezervuje číslo.",
+      "sellerProfile": "Profil dodavatele",
+      "sellerUnavailable": "Dodavatel je archivovaný nebo nedostupný",
+      "sellerUnavailableHelp": "Tento dodavatel je archivovaný nebo nedostupný. Ponechte přiřazení nebo vyberte jiného dodavatele.",
       "setDefault": "Nastavit jako výchozí řadu",
       "title": "Číselné řady"
     },
@@ -682,6 +707,15 @@
     },
     "writeOff": "Odepsat"
   },
+  "capabilityActions": {
+    "aiMissing": "AI není nakonfigurována.",
+    "availabilityUnknown": "Dostupnost se nepodařilo ověřit.",
+    "deeplMissing": "DeepL není nakonfigurován.",
+    "desktopUnavailable": "Připojte nebo aktualizujte stella desktop.",
+    "featureUnavailable": "Tato funkce není k dispozici.",
+    "ocrUnavailable": "OCR není k dispozici.",
+    "translationMissing": "Není nakonfigurována žádná služba překladu."
+  },
   "caseLaw": {
     "analysis": {
       "abstract": "Abstrakt",
@@ -723,6 +757,7 @@
     "citation": {
       "citedAtLeast": "Citováno nejméně {count}krát",
       "citedSummary": "{count, plural, =0 {Necitováno} one {Citováno jednou} few {Citováno #krát} other {Citováno #krát}}",
+      "dateUnavailable": "Datum neuvedeno",
       "decisionCount": "{count, plural, =0 {Žádná rozhodnutí} one {# rozhodnutí} few {# rozhodnutí} other {# rozhodnutí}}",
       "lastNegative": "poslední negativní citace v roce {year}",
       "negativeCount": "{count, plural, one {# negativní} few {# negativní} many {# negativních} other {# negativních}}",
@@ -732,6 +767,7 @@
       "partialSummary": "Součty citací a časová osa jsou neúplné.",
       "passageNotFound": "Citující pasáž se v textu nepodařilo najít",
       "positiveCount": "{count, plural, one {# pozitivní} few {# pozitivní} many {# pozitivních} other {# pozitivních}}",
+      "referenceLabel": "{court}, {caseNumber}, {date}",
       "showAll": "{count, plural, one {Zobrazit # rozhodnutí} few {Zobrazit všechna # rozhodnutí} many {Zobrazit všech # rozhodnutí} other {Zobrazit všech # rozhodnutí}}",
       "stripLabel": "Citace podle let",
       "treatment": {
@@ -792,6 +828,34 @@
       "unavailable": "Údaje o pokrytí nejsou momentálně k dispozici."
     },
     "decisionNotFound": "Rozhodnutí nenalezeno",
+    "decisionTypes": {
+      "administrative_decision": "Správní rozhodnutí",
+      "binding_excise_information": "Závazná informace o spotřební dani",
+      "binding_rate_information": "Závazná informace o sazbě DPH",
+      "court_direction": "Opatření",
+      "decision": "Rozhodnutí",
+      "finding": "Nález",
+      "general_tax_ruling": "Obecná daňová interpretace",
+      "individual_tax_ruling": "Individuální daňová interpretace",
+      "judgment": "Rozsudek",
+      "leave_refused": "Odmítnuto pro nedostatek zásadní právní otázky",
+      "merits_decision": "Rozhodnutí ve věci samé",
+      "ministry_of_justice_decision": "Rozhodnutí ministerstva spravedlnosti",
+      "minutes_extract": "Výpis z protokolu",
+      "opinion": "Stanovisko",
+      "order": "Usnesení",
+      "other": "Ostatní",
+      "payment_order": "Platební rozkaz",
+      "penal_order": "Trestní příkaz",
+      "principle_decision": "Zásadní rozhodnutí",
+      "protective_opinion": "Zajišťovací stanovisko",
+      "resolution": "Usnesení (uchwała)",
+      "signalling_decision": "Signalizační usnesení",
+      "statement_of_reasons": "Odůvodnění",
+      "tax_explanations": "Daňová vysvětlení",
+      "top_up_tax_opinion": "Stanovisko k dorovnávací dani",
+      "uniformity_decision": "Rozhodnutí o sjednocení judikatury"
+    },
     "emptyState": "Žádná rozhodnutí nenalezena. Nastavte zdroj a spusťte synchronizaci pro import judikatury.",
     "filters": {
       "remove": "Odebrat filtr {filter}"
@@ -824,10 +888,16 @@
     "pagination": {
       "goToPage": "Přejít na stránku {page}",
       "label": "Stránky výsledků",
+      "pageOfCount": "Stránka {page} z {pageCount}",
+      "pageOfEstimatedCount": "Stránka {page} z ~{pageCount}",
+      "pageOfEstimatedCountLabel": "Stránka {page} z přibližně {pageCount}",
       "pageWithEstimatedResultCount": "Stránka {page} · přibližně {count, plural, one {# výsledek} few {# výsledky} other {# výsledků}}",
       "pageWithResultCount": "Stránka {page} · {count, plural, one {# výsledek} few {# výsledky} other {# výsledků}}",
-      "perPage": "Na stránku"
+      "perPage": "Na stránku",
+      "refineForMore": "Upřesněte hledání, abyste viděli další výsledky"
     },
+    "paragraphRangeNotFound": "{count, plural, one {Odstavec {range} v tomto textu nebyl nalezen.} few {Odstavce {range} v tomto textu nebyly nalezeny.} other {Odstavce {range} v tomto textu nebyly nalezeny.}}",
+    "paragraphRangeSelected": "{count, plural, one {Odstavec {range} je zvýrazněný.} few {Odstavce {range} jsou zvýrazněné.} other {Odstavce {range} jsou zvýrazněné.}}",
     "provision": {
       "article": "čl. {value}",
       "letter": "písm. {value})",
@@ -837,6 +907,8 @@
       "subsection": "odst. {value}"
     },
     "reader": {
+      "documentUpdated": "Dokument byl aktualizován.",
+      "expandProvisions": "Rozbalit ustanovení",
       "headMatter": "Úvodní část",
       "sourceAttribution": "Zdroj dat je volně dostupný na <link>{source}</link>."
     },
@@ -861,7 +933,9 @@
       },
       "deleteColumnConfirm": "Otázka i všechny její odpovědi se smažou pro celou organizaci, tedy ze všech vyhledávání a všem členům. Pokud ji chcete skrýt jen v tomto vyhledávání, zvolte „Odebrat z tohoto vyhledávání“.",
       "editQuestionHint": "Změna znění, typu odpovědi nebo jeho možností zahodí stávající odpovědi; sloupec poté spusťte znovu.",
+      "newQuestionColumn": "Nové",
       "nothingToRun": "Každá buňka už má odpověď",
+      "questionAdded": "„{question}“ přidáno do tabulky",
       "questionPlaceholder": "např. Shledal soud výpověď platnou?",
       "removeFromSearch": "Odebrat z tohoto vyhledávání",
       "runAll": "Odpovědět na vše",
@@ -913,8 +987,15 @@
     },
     "viewer": {
       "abstract": "Abstrakt",
+      "appliedVersionNotStated": "Použité znění neuvedeno",
+      "appliedVersionNotStatedCompact": "Znění neuvedeno",
+      "appliedVersionStatedAmendment": "Znění podle novely <reference>{amendment}</reference>",
+      "appliedVersionStatedAmendmentCompact": "Uvedeno: <reference>{amendment}</reference>",
+      "appliedVersionStatedDate": "{relation, select, on {Znění účinné k {date}} until {Znění účinné do {date}} from {Znění účinné od {date}} other {Znění účinné k {date}}}",
+      "appliedVersionStatedDateCompact": "{relation, select, on {Uvedeno: {date}} until {Uvedeno: do {date}} from {Uvedeno: od {date}} other {Uvedeno: {date}}}",
       "caseFileMayHoldOthers": "Tento spis může obsahovat i další rozhodnutí.",
       "citedBy": "Citováno v",
+      "citedDecisionPassage": "Pasáž v rozhodnutí",
       "cites": "Cituje",
       "dissentByline": "Odlišné stanovisko: <bdi>{names}</bdi>",
       "judgeRole": {
@@ -940,7 +1021,10 @@
       "textNotYetAvailable": "Soud text rozhodnutí nezveřejnil, nebo zde zatím není dostupný.",
       "textPending": "Text rozhodnutí se stále načítá",
       "textReadFailed": "Text rozhodnutí se nepodařilo načíst",
-      "textUnavailable": "K tomuto rozhodnutí není k dispozici text"
+      "textUnavailable": "K tomuto rozhodnutí není k dispozici text",
+      "versionAtDecisionDateInferred": "Znění k datu rozhodnutí (odvozené)",
+      "versionBasisInferredCompact": "Datum rozhodnutí · odvozeno",
+      "versionBasisInferredExplanation": "Znění je odvozeno z data rozhodnutí. Rozhodnutí neuvádí, které znění se použije."
     }
   },
   "catalogue": {
@@ -976,7 +1060,6 @@
     "packPartial": "Nainstalováno {installed}, {failed} selhalo",
     "removed": "Tento nástroj již není dostupný.",
     "sectionOthers": "Ostatní",
-    "sectionRecommended": "Doporučené",
     "settings": {
       "packTitle": "Doporučený balík"
     },
@@ -1119,6 +1202,13 @@
       "previewWaiting": "Čeká se na obsah…",
       "savePendingReview": "Před uložením dokumentu vyřešte návrhy AI čekající na revizi."
     },
+    "credentialPasteAction": "Použít soukromou kartu",
+    "credentialPasteDescription": "Tento text vypadá jako přístupový údaj. Použijte soukromou kartu, aby se nedostal do chatu. Až se zobrazí, vložte údaj znovu do karty.",
+    "credentialPasteRequest": "Požádejte o tento přístupový údaj pomocí soukromé karty.",
+    "credentialPasteTitle": "Vložení přístupového údaje pozastaveno",
+    "credentialSendAction": "Přesto odeslat",
+    "credentialSendDescription": "Odešlete ji pouze tehdy, pokud chcete tuto hodnotu sdílet v konverzaci.",
+    "credentialSendTitle": "Tato zpráva může obsahovat přístupový údaj",
     "deleteThread": "Smazat konverzaci",
     "editMode": {
       "autoDirect": "Automaticky · přepsat",
@@ -1144,6 +1234,8 @@
     "forkedFromUnavailable": "Vytvořeno z chatu, který už není dostupný",
     "forkedThread": "Z jiného chatu",
     "forkingThread": "Vytváří se nový chat…",
+    "generatedView": "Vygenerovaný přehled",
+    "generatedViewDrill": "Vyhledej rozhodnutí s filtrem soudu {court} a rokem {year}.",
     "greeting": "Na čem chcete pracovat?",
     "greetingSubtitle": "Začněte spisem, dokumentem nebo obyčejnou otázkou.",
     "hideThread": "Skrýt konverzaci",
@@ -1165,6 +1257,7 @@
       "noSkills": "Zatím žádné dovednosti",
       "pinnedMatters": "Připnuté spisy",
       "recentChats": "Nedávné chaty",
+      "skillEditedBy": "Upravil(a) {name} · {time}",
       "skills": "Dovednosti"
     },
     "loadEarlierMessages": "Načíst starší zprávy",
@@ -1183,8 +1276,10 @@
       "label": "Simulovaná AI"
     },
     "modelSelector": {
+      "allModels": "Všechny modely ({count, number})",
       "autoDescription": "Automaticky vybere model a úroveň uvažování.",
       "autoLabel": "Automaticky",
+      "belowFrontier": "Pod nejlepšími kompromisy",
       "effortHelpDescription": "Určuje, kolik uvažování model použije před odpovědí. Vyšší úrovně mohou pomoci u složité práce, ale obvykle trvají déle. Tečka označuje výchozí úroveň poskytovatele pro tento model.",
       "effortHelpLabel": "O úrovni uvažování",
       "effortLabel": "Úroveň uvažování",
@@ -1198,6 +1293,10 @@
         "providerDefault": "Výchozí",
         "xhigh": "Velmi vysoká"
       },
+      "newModel": "Nový",
+      "premiumCost": "Neobvykle vysoká cena",
+      "recommendedHelpDescription": "Žádný jiný dostupný model není zároveň levnější a lépe hodnocený. Modely, které jsou na hodnocení příliš nové, jsou označené jako nové. Kvalita: <link>{benchmark} od LMArena</link> ({licence}); cena: ceníkové ceny.",
+      "recommendedHelpLabel": "O doporučených modelech",
       "selectionLabel": "{model} | {effort}",
       "title": "Vybrat model chatu",
       "viaProvider": "přes {provider}"
@@ -1209,6 +1308,8 @@
     "officeCitationUnavailable": "Tato citace už není dostupná.",
     "openCitation": "Otevřít citaci {label}",
     "openThread": "Otevřít konverzaci",
+    "overlayLoadFailed": "Chat k dokumentu se nepodařilo načíst.",
+    "overlayUpdated": "stella byla aktualizována. Chcete-li používat chat k dokumentu, načtěte stránku znovu.",
     "pastedChars": "Vloženo · {count} znaků",
     "pastedText": {
       "expand": "Zobrazit celý text",
@@ -1246,6 +1347,31 @@
     "removeSuggestion": "(odebrat)",
     "renameThread": "Přejmenovat konverzaci",
     "renameUnavailableEmptyThread": "Nejprve odešlete zprávu, poté bude možné konverzaci přejmenovat.",
+    "requestSecret": {
+      "checkingTarget": "Ověřují se podrobnosti konektoru…",
+      "connectionDisposition": "Připojení: {disposition}",
+      "continuationError": "Vaše odpověď byla uložena, ale chat nemohl pokračovat.",
+      "declined": "Odmítnuto",
+      "description": "Asistent tento údaj potřebuje k pokračování",
+      "error": "Přístupový údaj se nepodařilo odeslat. Zkuste to znovu.",
+      "kind": {
+        "token": "Přístupový token"
+      },
+      "normalConnection": "Běžné připojení",
+      "private": "Asistent tuto hodnotu neuvidí.",
+      "provideAction": "Poskytnout",
+      "provided": "Poskytnuto",
+      "purposeByAi": "Účel napsaný umělou inteligencí: {purpose}",
+      "receiptOnlyConnection": "Pouze soukromé připojení",
+      "replaceOrdinaryConnection": "Nahradit běžné připojení soukromým použitím",
+      "retryContinuationAction": "Pokračovat v chatu",
+      "saveForFuture": "Uložit pro budoucí chaty",
+      "savedAvailabilityError": "Nepodařilo se ověřit, zda jsou přihlašovací údaje uložené.",
+      "target": "Cíl: {target}",
+      "title": "Požadavek na soukromý přístupový údaj",
+      "useSavedAction": "Použít uložený přístupový údaj",
+      "valueLabel": "Přístupový údaj"
+    },
     "resend": "Odeslat znovu",
     "resizeThread": "Změnit velikost konverzace",
     "richContentLoading": "Načítání interaktivního obsahu…",
@@ -1268,6 +1394,7 @@
     "sendErrorQuotaExhausted": "Kvóta poskytovatele AI je vyčerpaná. Zkuste to za minutu znovu nebo se obraťte na správce pracovního prostoru.",
     "sendErrorStreamIncomplete": "Odpověď AI se přerušila dřív, než byla dokončena. Zkuste to znovu.",
     "sendPrompt": "Odeslat zprávu",
+    "sendQueuedMessageNow": "Odeslat hned",
     "sendWithoutAnonymization": "Odeslat bez anonymizace",
     "skills": {
       "scope": {
@@ -1296,6 +1423,9 @@
     },
     "tabToAsk": "→ pro dotaz: \"{prompt}\"",
     "thinking": "Pracuji s kontextem",
+    "threadFiles": {
+      "title": "Soubory v tomto chatu"
+    },
     "tool": {
       "add_comment": "Přidávání komentáře",
       "apply-active-docx-edits": "Připravuji úpravy dokumentu",
@@ -1365,6 +1495,7 @@
       "read_story": "Čtení části dokumentu",
       "remember": "Ukládání do paměti",
       "reply_comment": "Odpovídání na komentář",
+      "request_secret": "Žádost o soukromý přístupový údaj",
       "resolve_comment": "Řešení komentáře",
       "review_folder_consistency": "Kontrola konzistence složky",
       "run-stella-query": "Čtu data spisu",
@@ -1398,6 +1529,7 @@
       "update-entity-fields": "Aktualizace metadat",
       "update_reader_annotation": "Upravit zvýraznění nebo komentář",
       "use-browser": "Používání vašeho prohlížeče",
+      "use_connector_secret": "Použití přístupového údaje konektoru",
       "web_search": "Vyhledávání na webu"
     },
     "toolCall": {
@@ -1412,6 +1544,14 @@
       "sourceCode": "Zdrojový kód",
       "toggleDetails": "Přepnout detaily",
       "unrestoredFields": "{count, plural, one {# pole se nepodařilo} few {# pole se nepodařilo} many {# pole se nepodařilo} other {# polí se nepodařilo}} v anonymizovaném režimu vyplnit skutečnými hodnotami. Zkontrolujte: {fields}"
+    },
+    "turnNotification": {
+      "failedBody": "Odpověď v chatu stelly se nedokončila.",
+      "failedTitle": "Odpověď selhala",
+      "needsInputBody": "Chat čeká na vaše schválení nebo odpověď.",
+      "needsInputTitle": "stella potřebuje váš vstup",
+      "replyReadyBody": "stella dokončila odpověď ve vašem chatu.",
+      "replyReadyTitle": "Odpověď je hotová"
     },
     "unsupportedFileType": "Nepodporovaný typ souboru",
     "uploadFailed": "Zpracování souboru selhalo",
@@ -1482,6 +1622,7 @@
     "noResults": "Zatím žádná vzorová ustanovení",
     "noVariants": "Žádné varianty",
     "outdatedVersion": "Je dostupná aktualizace",
+    "overrideNotRenderedWarning": "Náhrada ustanovení {clauseName} nebyla použita: jeho místo se v tomto dokumentu nezobrazuje.",
     "renameSlot": "Přejmenovat slot",
     "renameSlotInvalid": "Názvy slotů musí být jedinečné a nesmí obsahovat mezery, dvojtečky ani složené závorky.",
     "restoreVersion": "Obnovit tuto verzi",
@@ -1608,6 +1749,16 @@
     "currency": "Měna",
     "currentPage": "Aktuální stránka",
     "date": "Datum",
+    "datePicker": {
+      "label": "Výběr data",
+      "nextDecade": "Další desetiletí",
+      "nextMonth": "Další měsíc",
+      "nextYear": "Další rok",
+      "previousDecade": "Předchozí desetiletí",
+      "previousMonth": "Předchozí měsíc",
+      "previousYear": "Předchozí rok",
+      "time": "Čas"
+    },
     "decisions": "Rozhodnutí",
     "decline": "Odmítnout",
     "delete": "Smazat",
@@ -1616,6 +1767,8 @@
     "deletedCount": "{count, plural, one {# položka smazána} few {# položky smazány} other {# položek smazáno}}",
     "description": "Popis",
     "details": "Detaily",
+    "detailsHiddenFeatureUnavailable": "Podrobnosti jsou skryté: funkce není zapnutá",
+    "detailsUnavailable": "Podrobnosti nejsou dostupné",
     "disconnect": "Odpojit",
     "dismiss": "Zamítnout",
     "displayName": "Zobrazované jméno",
@@ -1751,6 +1904,8 @@
     "notes": "Poznámky",
     "open": "Otevřít",
     "openInNewTab": "Otevřít na nové kartě",
+    "openInStella": "Otevřít ve stelle",
+    "openOriginalSource": "Otevřít originál",
     "options": "Možnosti",
     "or": "Nebo",
     "organization": "Organizace",
@@ -1768,6 +1923,7 @@
     "properties": "Vlastnosti",
     "queued": "Ve frontě",
     "reason": "Důvod",
+    "recommended": "Doporučené",
     "reconnecting": "Obnovování spojení…",
     "reference": "Reference",
     "refresh": "Obnovit",
@@ -1790,6 +1946,8 @@
     "saveAndLeave": "Uložit a odejít",
     "saveAsPdf": "Uložit jako PDF",
     "saveChanges": "Uložit změny",
+    "saved": "Uloženo",
+    "saving": "Ukládání…",
     "scopeThisPage": "(tato stránka)",
     "scrollToBottom": "Posunout dolů",
     "scrollToTop": "Posunout nahoru",
@@ -1824,11 +1982,13 @@
     "type": "Typ",
     "typeNameToConfirm": "Pro potvrzení napište název",
     "unassigned": "Nepřiřazeno",
+    "unavailable": "Nedostupné",
     "uncategorized": "Nekategorizováno",
     "undo": "Zpět",
     "unexpectedError": "Došlo k neočekávané chybě. Kontaktujte podporu.",
     "unknownUser": "Neznámý uživatel",
     "unpin": "Odepnout",
+    "unsavedChangesEscape": "Neuložené změny. Dalším stisknutím Esc je zahodíte",
     "unsavedLeaveConfirm": "Máte neuložené změny. Odejít bez uložení?",
     "unverified": "Neověřeno",
     "unverifiedCitationHint": "Tuto citaci se nepodařilo spárovat se zdrojovým dokumentem.",
@@ -1849,15 +2009,23 @@
     "zoomOut": "Oddálit"
   },
   "consent": {
+    "actingAs": "{clientName} bude ve vaší organizaci {organizationName} jednat vaším jménem",
     "allow": "Povolit",
-    "appIdentity": "Identita aplikace",
+    "canChange": "Může měnit",
+    "canRead": "Může číst",
     "completeSetup": "Dokončit nastavení",
+    "connectTitle": "Připojit {clientName} ke stella",
+    "connectedTitle": "Připojeno k {clientName}",
+    "connectionDuration": "Zůstane připojena, dokud ji neodpojíte v Nastavení › Připojení",
     "defaultClientName": "Aplikace",
-    "description": "{clientName} žádá o přístup k vašemu pracovnímu prostoru stella",
+    "destinationDetails": "Podrobnosti přesměrování",
     "error": "Něco se pokazilo. Zkuste to prosím znovu.",
     "missingJurisdictions": "Vaše organizace stella zatím nemá nastavené jurisdikce, ve kterých působí. Dokud nastavení nedokončíte, nebudou některé nástroje závislé na jurisdikci dostupné.",
-    "permissions": "Tím aplikaci umožníte:",
-    "redirectDestination": "Cíl přesměrování",
+    "otherPermissions": "Další oprávnění",
+    "publishedBy": "Vydavatel: <host>{publisherHost}</host>",
+    "returnToAgent": "Vraťte se ke svému agentovi a pokračujte.",
+    "returnsLocally": "Vrátíte se do {clientName} na tomto počítači",
+    "returnsTo": "Vrátíte se do {clientName}",
     "scopeAdminRead": "Číst protokol auditu vaší organizace",
     "scopeAdminWrite": "Spravovat členy a nastavení organizace",
     "scopeBillingWrite": "Vytvoření, úprava a smazání vašich časových záznamů",
@@ -1878,8 +2046,11 @@
     "scopeSkills": "Použití vašich uložených dovedností stella",
     "scopeTemplates": "Zobrazení, vyplňování a vytváření vašich vzorů dokumentů",
     "scopeTemplatesAnonymized": "Zobrazení, vyplňování a vytváření anonymizovaných verzí vašich vzorů dokumentů",
+    "signedInAs": "Přihlášeni jako <email>{accountEmail}</email>",
     "title": "Povolit přístup",
-    "unverifiedApp": "Neověřená aplikace"
+    "unverifiedApp": "Neověřená aplikace",
+    "unverifiedExplanation": "Stella neověřila, kdo tuto aplikaci vydává.",
+    "useAnotherAccount": "Použít jiný účet"
   },
   "contacts": {
     "alsoPartyIn": "Také vystupuje jako strana v {count, plural, one {# dalším spisu} few {# dalších spisech} other {# dalších spisech}}",
@@ -1893,6 +2064,7 @@
       "addBankAccount": "Přidat bankovní účet",
       "noBillingData": "Žádné fakturační údaje.",
       "removeBankAccount": "Odebrat bankovní účet",
+      "selectCurrencyForRate": "Pro nastavení hodinové sazby vyberte měnu.",
       "title": "Fakturační údaje"
     },
     "columns": {
@@ -2132,6 +2304,7 @@
     "markHandled": "Označit jako vyřízené",
     "markNew": "Označit jako nové",
     "noAddress": "Není aktivní žádná e-mailová adresa.",
+    "openSourceFile": "Otevřít soubor e-mailu",
     "originalSender": "Původní odesílatel",
     "originalSenderUnverified": "Původní odesílatel (uvedený, neověřený)",
     "originalSignatureVerified": "Původní podpis ověřen (<identifier>d={domain}</identifier>)",
@@ -2140,11 +2313,14 @@
     "rotateAddress": "Změnit adresu",
     "sentAt": "Odesláno dne",
     "sharedMailboxFiler": "Sdílená schránka {address}, schválil(a) {approver}",
+    "statedInFile": "Hlavičky (jak jsou uvedeny v souboru)",
     "states": {
       "handled": "Vyřízené"
     },
     "title": "Korespondence",
-    "unknownApprover": "Neznámý schvalovatel"
+    "unknownApprover": "Neznámý schvalovatel",
+    "uploadedBy": "Nahrál/a {name}",
+    "uploadedFile": "Nahraný soubor e-mailu"
   },
   "docxReview": {
     "acceptAll": "Přijmout vše",
@@ -2262,16 +2438,25 @@
       "deeplKeyRejected": "Uložený klíč DeepL byl odmítnut. Nahraďte ho v nastavení organizace.",
       "deeplQuotaExceeded": "Limit znaků DeepL pro tuto organizaci byl vyčerpán.",
       "disposableEmailNotAllowed": "Dočasné e-mailové adresy nejsou povoleny. Použijte trvalou e-mailovou adresu.",
+      "encryptedContent": "Obsah šifrovaného dokumentu nelze extrahovat. Odstraňte ze souboru heslo a zkuste to znovu.",
+      "filePropertyTypeImmutable": "Typ souborové vlastnosti nelze změnit. Ponechte stávající typ; pro jiné hodnoty vytvořte vlastní vlastnost.",
+      "fileSecurityRejected": "Soubor neprošel bezpečnostní kontrolou. Odstraňte označený obsah a nahrajte upravenou kopii.",
       "forbidden": "K této akci nemáte oprávnění.",
+      "hostedCheckoutOpen": "Pro tuto organizaci už je otevřená objednávka. Dokončete ji, nebo začněte novou, až vyprší.",
+      "hostedSubscriptionLive": "Tato organizace už má předplatné. Změňte ho v části Spravovat hostované využití.",
       "internalServerError": "Něco se pokazilo. Zkuste to prosím znovu.",
       "legalSourceEntityLimitReached": "Tento spis dosáhl limitu položek, takže dokument nelze vytvořit.",
       "legalSourceFilePropertyMissing": "V tomto spisu chybí vlastnost souboru, takže dokument nelze vytvořit.",
+      "matterContactCapacityExceeded": "Tento spis obsahuje více kontaktů, než lze zobrazit. Odebráním viditelných propojení s kontakty zobrazíte zbývající kontakty.",
+      "matterContactCapacityReached": "Tento spis dosáhl limitu kontaktů. Před přidáním dalšího kontaktu odeberte jedno propojení s kontaktem.",
       "mcpAuthorizationApprovalRequired": "Než se budete moci připojit, správce musí tento konektor schválit.",
       "notOrganizationMember": "Nejste členem této organizace.",
       "providerKeyRejected": "Poskytovatel odmítl klíč API.",
       "providerRateLimited": "Byl dosažen limit požadavků poskytovatele. Zkuste to brzy znovu.",
       "thirdPartyBoundaryRefusal": "Požadavek se pokusil použít obsah mimo povolený kontext pracovního prostoru.",
       "usageLimitExceeded": "Byl dosažen limit využití.",
+      "verificationActiveLimitReached": "Vaše organizace dosáhla limitu současně probíhajících ověření. Počkejte na dokončení některého ověření a zkuste to znovu.",
+      "verificationDailyLimitReached": "Vaše organizace dosáhla denního limitu ověření. Zkuste to znovu po půlnoci (Europe/Prague).",
       "versionConflict": "Někdo jiný to během vaší úpravy změnil. Načtěte znovu aktuální verzi."
     },
     "failedToAcceptInvitation": "Nepodařilo se přijmout pozvánku",
@@ -2416,6 +2601,7 @@
     "current": "Aktuální",
     "deleteVersion": "Smazat verzi",
     "descriptionPlaceholder": "Přidejte poznámku k této verzi...",
+    "displayFailed": "Tento soubor se nepodařilo zobrazit.",
     "downloadRedline": "Stáhnout redline",
     "dropToUploadVersion": "Přetažením nahrajete jako novou verzi",
     "editLatestVersionDescription": "Tato verze není aktuální. Pokud ji chcete upravovat v prohlížeči, nejdřív z ní vytvořte nejnovější verzi a potom ji odemkněte pro úpravy.",
@@ -2683,6 +2869,12 @@
     "editSessionReleased": "Tento dokument byl otevřen k úpravám jinde, takže je tato karta jen pro čtení.",
     "editSessionReleasedUnsaved": "Vaše neuložené změny tu zůstávají.",
     "editSessionReopen": "Znovu otevřít k úpravám",
+    "editor": {
+      "outlineDepthAll": "Vše",
+      "outlineDepthLabel": "Hloubka osnovy",
+      "outlineDepthThree": "1–3",
+      "outlineDepthTwo": "1–2"
+    },
     "evidenceReferences": "Odkazy na důkazy",
     "evidenceUnavailable": "Tento odkaz na důkaz nelze v tomto spisu otevřít.",
     "findReplace": {
@@ -3448,12 +3640,18 @@
         "approvedOn": "Schváleno {date}",
         "approvedToast": "Playbook schválen",
         "saveBeforeApprove": "Před schválením playbooku uložte změny.",
+        "sourcesNotice": "Před schválením zkontrolujte, že žádná pozice nejmenuje dokument, spis ani protistranu: tento playbook může číst celá organizace.",
         "statusApproved": "Schváleno",
         "statusDraft": "Koncept"
       },
       "askContentLabel": "Typ odpovědi",
       "askQuestionLabel": "Otázka",
       "askQuestionPlaceholder": "Co se má z každého dokumentu vyčíst? Ponechte prázdné pro ruční zadání.",
+      "autosave": {
+        "failed": "Nepodařilo se uložit",
+        "nameMissing": "Neuloženo: zadejte název",
+        "positionsNeedAttention": "Neuloženo: {count, plural, one {# pozice vyžaduje} few {# pozice vyžadují} other {# pozic vyžaduje}} pozornost"
+      },
       "check": "Použít přesné pravidlo místo AI",
       "checkHint": "Pro měřitelné podmínky, například: splatnost ≤ 30 dnů.",
       "checkKind": {
@@ -3483,6 +3681,7 @@
       "deletePlaybook": "Smazat playbook",
       "deletePosition": "Smazat pozici",
       "deleted": "Playbook smazán",
+      "deletedElsewhere": "Tento playbook byl smazán.",
       "derivedAutomatically": "Otázka a formát odpovědi se vygenerují z této pozice. Není třeba nic nastavovat.",
       "derivedQuestion": "Otázka pro získání odpovědi",
       "derivedType": "Formát odpovědi",
@@ -3535,10 +3734,12 @@
       },
       "noPositions": "Zatím žádné pozice. Přidejte první.",
       "noSettledPosition": "Bez ustálené pozice",
+      "openInPane": "Otevřít playbook",
       "optionPlaceholder": "Hodnota možnosti",
       "optionsLabel": "Možnosti",
       "outline": "Osnova",
       "positionOfTotal": "Pozice {index} z {total}",
+      "positionRemoved": "Pozice odstraněna",
       "positions": "Pozice",
       "recent": "Nedávno použité",
       "recommended": "Doporučené výchozí playbooky",
@@ -3546,6 +3747,7 @@
       "referenceStandard": "Z reference",
       "removeCheck": "Odebrat kontrolu",
       "removeIdeal": "Odebrat ideální znění",
+      "removeSource": "Odebrat zdroj {documentName}",
       "reorderPosition": "Přeuspořádat pozici",
       "review": {
         "changePlaybook": "Vybrat jiný playbook",
@@ -3577,6 +3779,10 @@
         "blocker": "Blokující"
       },
       "severityLabel": "Závažnost",
+      "staleCopy": {
+        "loaded": "Byla načtena novější verze tohoto playbooku. Před úpravami ji načtěte znovu.",
+        "unavailable": "Nejnovější verzi tohoto playbooku se nepodařilo načíst. Zobrazuje se poslední načtená kopie, která může být zastaralá."
+      },
       "starters": {
         "addedToast": "Playbook přidán",
         "browseButton": "Procházet úvodní playbooky",
@@ -3685,11 +3891,15 @@
     }
   },
   "lawHome": {
+    "clearRecent": "Vymazat nedávné",
     "enteringIntoForce": "Brzy nabude účinnosti",
     "inForceFrom": "Účinné od {date}",
-    "noRecentSearches": "Zatím žádná hledání",
+    "noRecent": "Zatím žádná nedávná aktivita",
     "noSignals": "Zatím žádné signály",
     "prompt": "Co hledáte?",
+    "recent": "Nedávné",
+    "recentCasesFilter": "Rozhodnutí",
+    "recentSearchFilter": "Hledání",
     "recentlyInForce": "Nedávno nabylo účinnosti",
     "searchLabel": "Hledat v právní databázi",
     "searchPlaceholder": "Spisová značka, číslo předpisu, ECLI nebo klíčová slova",
@@ -3729,6 +3939,16 @@
       "citationWithQuote": "Citace s citátem",
       "quoteWithCitation": "Citát s citací",
       "textOnly": "Pouze text"
+    }
+  },
+  "lists": {
+    "sources": {
+      "add": "Přidat zdroj",
+      "documentRequired": "Vyberte dokument.",
+      "invalidPage": "Zadejte celé číslo stránky alespoň 1.",
+      "page": "Stránka PDF (volitelné)",
+      "quote": "Citovaný úryvek (volitelné)",
+      "quoteTooLong": "Zadejte nejvýše {limit} znaků."
     }
   },
   "markdownEditor": {
@@ -4263,6 +4483,11 @@
       "betaInbox": "Doručené a oznámení",
       "betaInboxDescription": "Zobrazit Doručené a zvonek oznámení",
       "betaTimeBillingDescription": "Zobrazit sledování času, faktury a výdaje",
+      "chatNotifications": "Oznámení z chatu",
+      "chatNotificationsBlocked": "Oznámení jsou pro stellu v tomto prohlížeči zablokovaná. Povolte je v nastavení webu v prohlížeči.",
+      "chatNotificationsDescription": "Dostanete oznámení z tohoto prohlížeče, když se odpověď v chatu dokončí, zatímco je stella na pozadí.",
+      "chatNotificationsToggle": "Upozornit mě, když je odpověď hotová nebo potřebuje můj vstup",
+      "chatNotificationsUnsupported": "Tento prohlížeč oznámení nepodporuje.",
       "confirmDelete": "Potvrdit smazání účtu",
       "dangerZone": "Nebezpečná zóna",
       "dangerZoneDescription": "Trvale smazat přístup k účtu a soukromá data účtu.",
@@ -4277,6 +4502,7 @@
       "deleteAccountTaskReassignPlaceholder": "Vybrat člena...",
       "deleteAccountTasksDescription": "Máte přiřazené aktivní úkoly. Převést je na jiné členy pracovního prostoru, aby práce pokračovala.",
       "deleteAccountTasksTitle": "Převést aktivní úkoly",
+      "deleteAccountTasksUnassignedNotice": "Úkoly bez vybraného člena zůstanou v pracovním prostoru bez řešitele.",
       "deleteAccountWarning": "Smazání je nezvratný krok. Přihlašovací údaje a soukromá data účtu budou odstraněny.",
       "deleteAccountWarningExplanation": "Na vaši e-mailovou adresu zašleme ověřovací kód pro potvrzení tohoto požadavku. Dokončená historie pracovních prostorů zůstane přiřazená ke smazanému účtu.",
       "desktop": "Aplikace pro počítač",
@@ -4380,6 +4606,7 @@
       "noMatches": "Hledanému výrazu „{query}“ neodpovídá žádné připojení",
       "notConnected": "Nepřipojeno",
       "permissionCount": "{count, plural, one {# oprávnění} few {# oprávnění} many {# oprávnění} other {# oprávnění}}",
+      "privateCredentialOnly": "Pouze soukromé přihlašovací údaje",
       "searchPlaceholder": "Hledat připojení",
       "title": "Připojení",
       "turnedOff": "Vypnuto"
@@ -4474,6 +4701,13 @@
         "minimumUnitHelp": "Čas se účtuje v násobcích tohoto počtu minut.",
         "narrativeRequired": "Vyžadovat popis",
         "title": "Pravidla vykazování času"
+      },
+      "timeZone": {
+        "description": "Uzamčené měsíce, data faktur a splatná práce se řídí kalendářním dnem v tomto časovém pásmu. Dokud žádné nevyberete, určuje ho hlavní jurisdikce: Europe/Prague pro Česko a Slovensko, jinak UTC.",
+        "followJurisdiction": "Podle hlavní jurisdikce",
+        "followingJurisdiction": "Podle hlavní jurisdikce ({timeZone})",
+        "title": "Časové pásmo",
+        "updated": "Časové pásmo bylo aktualizováno"
       },
       "usage": "Využití",
       "usageDescription": "Limity využití a stav oprávnění pro tuto organizaci",
@@ -4573,6 +4807,7 @@
     "compareVersionMissing": "Verze k porovnání v historii tohoto předpisu není.",
     "compareWholeAct": "Porovnat celý předpis",
     "compareWithVersion": "Porovnat se zněním {version}",
+    "currentWording": "Aktuální znění",
     "description": "Veřejná databáze konsolidovaných právních předpisů, indexovatelných podle předpisu a jeho znění.",
     "diffInserted": "Vloženo:",
     "diffRemoved": "Vypuštěno:",
@@ -4622,7 +4857,10 @@
       "unknown": "Stav nejasný"
     },
     "title": "Právní předpisy",
-    "validity": "Platné od {from} do {to}"
+    "validity": "Platné od {from} do {to}",
+    "versionAppliedInDecision": "Znění použité v rozhodnutí <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}",
+    "wordingValidFrom": "Znění účinné od {date}",
+    "wordingVersionUnknown": "Datum verze znění není k dispozici"
   },
   "styleSets": {
     "create": "Vytvořit",
@@ -4826,6 +5064,7 @@
     "addPart": "Přidat část",
     "addTag": "Přidat štítek",
     "aiAdaptHint": "AI přizpůsobí tuto formulaci každému místu v dokumentu, kde se objeví.",
+    "aiConditionsUndecided": "AI nedokázala rozhodnout tyto podmínky, proto byly jejich části vyplněny, jako by neplatily: {list}",
     "aiDecidedConditions": "Rozhoduje AI",
     "aiFieldsNotDrafted": "AI nedokázala vytvořit návrh těchto polí: {list}",
     "allTemplates": "Všechny vzory",
@@ -4917,6 +5156,7 @@
     "directiveFor": "Smyčka: {expression}",
     "directiveIf": "Pokud: {expression}",
     "discoveryFailed": "Nepodařilo se analyzovat vzor",
+    "documentCreatedIncomplete": "Dokument byl vytvořen, ale vyplnění není úplné",
     "downloadAnyway": "Přesto stáhnout",
     "downloadDocx": "Stáhnout DOCX",
     "downloadPdf": "Stáhnout PDF",
@@ -5012,6 +5252,7 @@
     "saveFailed": "Nepodařilo se uložit vzor",
     "savedLookupFormats": "Uložené výstupní formáty",
     "searchTemplates": "Hledat vzory…",
+    "structureErrorsInDocument": "Direktivy vzoru, které nebylo možné použít: {count}. Zkontrolujte dokument.",
     "structureWarningParagraph": "Odstavec {paragraph, number}",
     "structureWarnings": "{count, plural, one {# varování struktury} few {# varování struktury} other {# varování struktury}}",
     "studio": {
@@ -5199,7 +5440,6 @@
       "noLanguagesFound": "Žádné jazyky nenalezeny",
       "notConfigured": "DeepL není pro tuto organizaci nastaven. Pro povolení překladu přidejte v nastavení organizace API klíč DeepL.",
       "outputLabel": "Typ překladu",
-      "progress": "Průběh překladu",
       "progressCount": "Dokončeno {completed} z {total}",
       "providerUnavailable": "Překladová služba není dostupná. Zkuste to později nebo kontaktujte správce.",
       "runFailed": "Překlad se nepodařilo dokončit.",
@@ -5331,14 +5571,8 @@
     "exportToCsv": "Uložit do CSV",
     "fields": {
       "calculating": "Načítá se…",
-      "currencyLabel": "Měna (nepovinné)",
-      "currencyPlaceholder": "např. USD, EUR",
-      "editFieldValue": "Upravit hodnotu pole",
       "errored": "Chyba",
-      "fieldValueLabel": "Hodnota pole",
-      "fieldValuePlaceholder": "Zadejte hodnotu pole",
       "formatNotSupported": "Formát není podporován",
-      "numberPlaceholder": "Zadejte číslo",
       "selectAValue": "Vyberte hodnotu",
       "selectValues": "Vyberte hodnoty"
     },
@@ -5356,6 +5590,7 @@
         "unknownLocation": "Umístění vzoru: adresa, kterou stella nedokáže ověřit"
       },
       "desktopEdit": {
+        "accountRequiredTitle": "Připojte stella desktop ke svému účtu",
         "action": "Upravit v desktopu",
         "authRequiredDescription": "Před použitím desktopových úprav obnovte stella a znovu se přihlaste.",
         "authRequiredTitle": "Relace vypršela",
@@ -5378,6 +5613,18 @@
         "updateRequiredDescription": "stella desktop vyžaduje aktualizaci. Proběhne automaticky po dokončení aktivních desktopových úprav; zkuste to znovu po restartu.",
         "updateRequiredTitle": "Aktualizujte stella desktop"
       },
+      "desktopGate": {
+        "alreadyInstalled": "Už nainstalováno? Připojit",
+        "connect": "Připojit stella desktop",
+        "connected": "stella desktop je připojený",
+        "editNone": "Stáhněte stella desktop a upravte tento soubor",
+        "editOutdated": "Aktualizujte stella desktop a upravujte",
+        "editReason": "Úpravy na počítači otevírají soubor v aplikaci ve vašem počítači přes stella desktop.",
+        "signCurrent": "Podepsat ve stella desktop",
+        "signNone": "Stáhněte stella desktop a podepište toto PDF",
+        "signOutdated": "Aktualizujte stella desktop a podepisujte",
+        "signReason": "Podpis používá certifikát ve vašem počítači, proto probíhá ve stella desktop."
+      },
       "downloadAs": "Stáhnout jako…",
       "downloadAsZip": "Stáhnout .zip soubor",
       "downloadExtractedText": "Extrahovaný text (.txt)",
@@ -5391,7 +5638,7 @@
       "ocrQueueFailed": "Rozpoznávání textu se nepodařilo zařadit do fronty",
       "ocrQueued": "Rozpoznávání textu bylo zařazeno do příští dávky OCR",
       "pdfSigning": {
-        "action": "Podepsat v desktopu",
+        "alreadySigningTitle": "Podepisování ve stella desktop už probíhá",
         "cancelledBaseVersionDescription": "Dokument se během podepisování změnil. Otevřete nejnovější verzi a podepište ho znovu.",
         "cancelledCertificateDescription": "Vybraný certifikát nelze použít k podpisu. Zvolte certifikát, který umožňuje digitální podpis.",
         "cancelledCertifiedDescription": "Toto PDF je certifikované a jeho certifikace nepovoluje další podpisy.",
@@ -5412,6 +5659,9 @@
         "inProgressDescription": "Tento soubor se už podepisuje. Nejprve toto podepisování ve stella desktop dokončete nebo zrušte.",
         "noFileDescription": "K tomuto dokumentu není připojen žádný soubor k podpisu.",
         "notAPdfDescription": "Podepisovat lze pouze soubory PDF.",
+        "notOpeningConnect": "Neotevírá se? Připojte stella desktop",
+        "notPickedUpDescription": "stella desktop možná neběží nebo není připojený k tomuto účtu. Připojte ho a zkuste to znovu.",
+        "notPickedUpTitle": "stella desktop PDF neotevřel",
         "placementBox": "Umístění razítka",
         "placementConfirm": "Otevřít stella desktop",
         "placementDescription": "Zvolte, jak se podpis v PDF zobrazí.",
@@ -5426,10 +5676,12 @@
         "placementTooSmall": "Tato stránka je pro razítko příliš malá. Zvolte jinou stránku.",
         "placementVisible": "Viditelné razítko",
         "placementVisibleDescription": "Rámeček na stránce ukazuje, kdo a kdy podepsal.",
+        "preparingDescription": "Připravuje se PDF pro stella desktop.",
         "readOnlyDescription": "Tento dokument je jen pro čtení.",
         "signedDescription": "Podpis byl uložen jako verze {versionNumber, number}.",
         "signedDescriptionNoVersion": "Podpis byl uložen jako nová verze.",
         "signedTitle": "PDF podepsáno",
+        "signingLabel": "Podepisuje se ve stella desktop…",
         "stampLocation": "Místo",
         "stampRejectedDescription": "Razítko na toto místo nelze umístit. Umístěte ho znovu a zkuste to znovu.",
         "stampSignedBy": "Digitálně podepsal",
@@ -5919,7 +6171,6 @@
       "previewUnsupported": "Náhled není pro tento typ dokumentu podporovaný.",
       "readingFrom": "AI čerpá informace z",
       "referencesItself": "Vlastnost odkazuje sama na sebe přes jiné vlastnosti",
-      "rerunColumn": "Spustit znovu sloupec",
       "resultType": "Typ výsledku",
       "returnsLabel": "Formát",
       "scopeFile": "Aktuální soubor",

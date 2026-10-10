@@ -1,0 +1,5 @@
+{
+  "metric": "api-lib-top-level-entries",
+  "delta": 1,
+  "reason": "organization-time-zone.ts is the single owner of the organization's effective time zone and calendar day; scheduler, flow, work-obligation, export and settings readers call it."
+}

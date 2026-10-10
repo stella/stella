@@ -21,6 +21,7 @@ import {
   brandPersistedCaseLawSourceId,
 } from "@/api/lib/safe-id-boundaries";
 import type { SchedulerJob, SchedulerTask } from "@/api/lib/scheduler/types";
+import { recordSystemAudit } from "@/api/lib/system-audit/record";
 
 /**
  * The three recurring passes that keep per-decision raw storage honest.
@@ -53,13 +54,24 @@ const leaseFence = (job: SchedulerJob) =>
 
 /** Delete the raw prefixes owed a sweep: erased decisions, lost writes. */
 export const reconcileCaseLawRawSweepsTask: SchedulerTask = async ({
+  db,
   logger,
+  runId,
   signal,
 }) => {
   const result = await reconcileCaseLawRawSweeps({
     scopedDb: getCaseLawIngestionDb(),
     limit: SWEEP_LIMIT,
     signal,
+  });
+  await recordSystemAudit(db, "system:case-law-raw-storage", {
+    subject: runId,
+    counts: {
+      sweptPrefixes: result.swept,
+      failedSweeps: result.failed,
+      migratedRows: 0,
+      queuedSweeps: 0,
+    },
   });
   logger.info("scheduler.case_law_raw_sweeps_reconciled", {
     "caseLawRawSweeps.claimed": result.claimed,
@@ -90,6 +102,7 @@ export const reconcileCaseLawRawRowsTask: SchedulerTask = async ({
   db,
   job,
   logger,
+  runId,
   scheduleContinuation,
   signal,
 }) => {
@@ -102,11 +115,24 @@ export const reconcileCaseLawRawRowsTask: SchedulerTask = async ({
     mode: RAW_LAYOUT_MODE.APPLY,
     signal,
   });
-  // Checkpoint last, and only as far as every row before it is settled.
-  await db
-    .update(schedulerJobs)
-    .set({ payload: { cursor: page.resumeAfter } })
-    .where(leaseFence(job));
+  // Checkpoint last, and only as far as every row before it is settled. The
+  // audit row commits with the checkpoint: a cursor never passes a page whose
+  // changes went unrecorded.
+  await db.transaction(async (tx) => {
+    await tx
+      .update(schedulerJobs)
+      .set({ payload: { cursor: page.resumeAfter } })
+      .where(leaseFence(job));
+    await recordSystemAudit(tx, "system:case-law-raw-storage", {
+      subject: runId,
+      counts: {
+        sweptPrefixes: 0,
+        failedSweeps: 0,
+        migratedRows: page.counts.migrated,
+        queuedSweeps: 0,
+      },
+    });
+  });
   logger.info("scheduler.case_law_raw_rows_reconciled", {
     "caseLawRawRows.current": page.counts.current,
     "caseLawRawRows.migrated": page.counts.migrated,
@@ -163,6 +189,7 @@ export const censusCaseLawRawObjectsTask: SchedulerTask = async ({
   db,
   job,
   logger,
+  runId,
   signal,
 }) => {
   signal.throwIfAborted();
@@ -173,15 +200,30 @@ export const censusCaseLawRawObjectsTask: SchedulerTask = async ({
     mode: RAW_CENSUS_MODE.APPLY,
     signal,
   });
-  await db
-    .update(schedulerJobs)
-    .set({
-      payload:
-        page.next === null
-          ? null
-          : { sourceId: page.next.sourceId, startAfter: page.next.startAfter },
-    })
-    .where(leaseFence(job));
+  // The audit row commits with the checkpoint, as in the row pass.
+  await db.transaction(async (tx) => {
+    await tx
+      .update(schedulerJobs)
+      .set({
+        payload:
+          page.next === null
+            ? null
+            : {
+                sourceId: page.next.sourceId,
+                startAfter: page.next.startAfter,
+              },
+      })
+      .where(leaseFence(job));
+    await recordSystemAudit(tx, "system:case-law-raw-storage", {
+      subject: runId,
+      counts: {
+        sweptPrefixes: 0,
+        failedSweeps: 0,
+        migratedRows: 0,
+        queuedSweeps: page.counts.queued,
+      },
+    });
+  });
   logger.info("scheduler.case_law_raw_objects_censused", {
     "caseLawRawObjects.live": page.counts.live,
     "caseLawRawObjects.reserved": page.counts.reserved,

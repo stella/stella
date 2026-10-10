@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import * as v from "valibot";
 
+import { factoriesWhere } from "@/api/lib/safe-handler-factories";
 import {
   readModuleExports,
   readModuleMockFactories,
@@ -85,13 +86,21 @@ describe("custom oxlint guardrails", () => {
     const configSource = readRootFixture("oxlint.config.ts");
 
     expect(configSource).toContain("apps/api/src/handlers/**/public-routes.ts");
-    expect(configSource).toContain(
-      'importNames: ["createSafeHandler", "createSafeRootHandler"]',
-    );
+    // The ban is derived from the factory registry: every factory whose
+    // context is not anonymous, so a new authenticated factory is banned too.
+    expect(configSource).toContain("importNames: nonAnonymousHandlerFactories");
+    expect(
+      factoriesWhere(({ context }) => context !== "anonymous").toSorted(),
+    ).toEqual([
+      "createSafeHandler",
+      "createSafeRootHandler",
+      "createSafeSessionHandler",
+      "createSafeTokenHandler",
+    ]);
     expect(configSource).toContain('name: "@/api/lib/auth"');
     expect(configSource).toContain('name: "@/api/db/root"');
     expect(configSource).toContain(
-      "Public route files must use createSafePublicHandler",
+      "Public route files may use only the anonymous handler factories",
     );
   });
 
@@ -316,6 +325,19 @@ describe("custom oxlint guardrails", () => {
     expect(pluginSource).toContain(
       `export const FAILURE_CONTEXT_KEYS = [\n${listed}\n];`,
     );
+  });
+
+  test("no reviewed failure context key is one the logger drops", async () => {
+    const { FAILURE_CONTEXT_KEYS } =
+      await import("@/api/lib/observability/observe-failure");
+    const { SENSITIVE_LOG_ATTRIBUTE_KEY_PATTERN } =
+      await import("@/api/lib/observability/log-attribute-policy");
+
+    expect(
+      FAILURE_CONTEXT_KEYS.filter((key) =>
+        SENSITIVE_LOG_ATTRIBUTE_KEY_PATTERN.test(key),
+      ),
+    ).toEqual([]);
   });
 
   test("module mocks do not start dropping more of the real module's exports", () => {

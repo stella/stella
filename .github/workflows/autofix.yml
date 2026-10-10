@@ -1,9 +1,7 @@
 name: autofix.ci # autofix.ci uses this exact name as a security boundary
 
-# No `paths` filter: each job scopes itself. The Dependabot job runs only on
-# dependabot/bun/* heads, which always carry a bun.lock or
-# packages/*/package.json change, and the regeneration job reads the whole
-# source tree.
+# No `paths` filter: each job scopes itself. Dependency updates and ordinary
+# same-repository PRs share the Tauri alignment fixer and existing App push.
 on:
   pull_request:
     types: [opened, synchronize, reopened]
@@ -17,12 +15,13 @@ permissions:
 
 jobs:
   dependabot-bun-autofix:
-    name: Autofix Dependabot Bun update
+    name: Autofix Dependabot dependency update
     if: >-
-      github.actor == 'dependabot[bot]'
+      github.actor != 'autofix-ci[bot]'
       && github.event.pull_request.user.login == 'dependabot[bot]'
       && github.event.pull_request.head.repo.full_name == github.repository
-      && startsWith(github.event.pull_request.head.ref, 'dependabot/bun/')
+      && (startsWith(github.event.pull_request.head.ref, 'dependabot/bun/')
+          || startsWith(github.event.pull_request.head.ref, 'dependabot/cargo/'))
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
@@ -30,6 +29,7 @@ jobs:
       # autofix-ci/action v1.3.4 declares Node 24 support, but its action
       # metadata still names node20 for compatibility with older runners.
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      RUSTUP_TOOLCHAIN: stable
 
     steps:
       - name: Checkout Dependabot head
@@ -40,8 +40,9 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
+          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       # No install is needed. --lockfile-only and --ignore-scripts keep the
@@ -64,6 +65,22 @@ jobs:
           scripts/fix-resolution-ranges.ts
           scripts/json-text-edit.ts
           scripts/resolution-ranges.ts
+          scripts/bun-lock-text.ts
+          scripts/check-tauri-package-alignment.ts
+          scripts/fix-tauri-package-alignment.ts
+
+      - name: Align Tauri counterparts
+        id: tauri
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          git diff --name-only "$BASE_SHA" "$HEAD_SHA" > "$RUNNER_TEMP/tauri-paths"
+          mapfile -t paths < "$RUNNER_TEMP/tauri-paths"
+          required=$(bun --no-install --no-env-file scripts/check-tauri-package-alignment.ts --requires-check "${paths[@]}")
+          if [[ "$required" == true ]]; then
+            bun --no-install --no-env-file scripts/fix-tauri-package-alignment.ts
+          fi
 
       # A bump can move a dependent's declared floor above a root `resolutions`
       # pin. bun applies the pin anyway, so the graph installs and only breaks
@@ -96,6 +113,7 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          TAURI_ALLOWED: ${{ steps.tauri.outputs.allowed }}
         shell: bash
         run: |
           set -euo pipefail
@@ -105,10 +123,16 @@ jobs:
             exit 1
           fi
 
-          unexpected_tracked="$(git diff --name-only "$HEAD_SHA" -- . ':(exclude)bun.lock' ':(exclude)package.json' ":(exclude)$DEPENDABOT_CHANGESET_PATH")"
+          IFS='|' read -r -a tauri_paths <<< "$TAURI_ALLOWED"
+          tauri_excludes=()
+          for path in "${tauri_paths[@]}"; do
+            [[ -n "$path" ]] || continue
+            tauri_excludes+=(":(exclude,literal)$path")
+          done
+          unexpected_tracked="$(git diff --name-only "$HEAD_SHA" -- . ':(exclude)bun.lock' ':(exclude)package.json' ":(exclude)$DEPENDABOT_CHANGESET_PATH" "${tauri_excludes[@]}")"
           unexpected_untracked="$(git ls-files --others --exclude-standard -- . ":(exclude)$DEPENDABOT_CHANGESET_PATH")"
           if [[ -n "${unexpected_tracked}${unexpected_untracked}" ]]; then
-            echo "::error::Autofix changed files outside bun.lock, package.json and $DEPENDABOT_CHANGESET_PATH."
+            echo "::error::Autofix changed files outside dependency repair outputs."
             git status --short
             exit 1
           fi
@@ -126,14 +150,14 @@ jobs:
       - name: Push autofixes
         uses: autofix-ci/action@c5b2d67aa2274e7b5a18224e8171550871fc7e4a # v1.3.4
         with:
-          commit-message: "chore: autofix Dependabot Bun update"
+          commit-message: "chore: autofix dependency update"
 
   regenerate-scope:
     name: Scope autofixes
     # Same-repository pull requests only: the generators run the pull
     # request's own code, and the result lands on that pull request's branch,
-    # which its author can already push to. Fork and Dependabot pull requests
-    # keep the CI drift guards alone.
+    # which its author can already push to. Dependabot uses the dependency
+    # job above; fork pull requests keep the CI drift guards alone.
     if: >-
       github.event.pull_request.head.repo.full_name == github.repository
       && github.event.pull_request.user.login != 'dependabot[bot]'
@@ -150,6 +174,21 @@ jobs:
       ids: ${{ steps.scope.outputs.ids }}
       allowed: ${{ steps.scope.outputs.allowed }}
     steps:
+      - name: Checkout GitHub API tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .gh-retry
+          persist-credentials: false
+          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Preserve GitHub API tooling across source checkouts
+        run: |
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
+          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
+
       # Fetch paths before checking out pull request code. Only the planner
       # files are needed in this job; generators run in the later job.
       - name: Fetch changed paths
@@ -160,7 +199,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gh api --paginate "repos/$REPOSITORY/pulls/$PR_NUMBER/files" --jq '.[].filename' > "$RUNNER_TEMP/changed-paths"
+          bash "$GH_RETRY_SCRIPT" api --paginate "repos/$REPOSITORY/pulls/$PR_NUMBER/files" --jq '.[].filename' > "$RUNNER_TEMP/changed-paths"
 
       - name: Checkout pull request head
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -169,12 +208,14 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           sparse-checkout: |
             /scripts/
+            /packages/scripts/src/generated-files.ts
             /package.json
           sparse-checkout-cone-mode: false
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
+          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       - name: Check planner availability
@@ -182,7 +223,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for path in scripts/autofix-plan.ts scripts/generated-files.ts; do
+          for path in scripts/autofix-plan.ts scripts/autofix-protected-paths.ts scripts/baseline-paths.ts scripts/generated-files.ts packages/scripts/src/generated-files.ts; do
             if [[ -f "$path" ]]; then
               continue
             fi
@@ -220,6 +261,7 @@ jobs:
     timeout-minutes: 20
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      RUSTUP_TOOLCHAIN: stable
 
     steps:
       - name: Checkout pull request head
@@ -242,11 +284,35 @@ jobs:
             exit 1
           fi
           git diff --name-only -z --diff-filter=ACMR "$BASE_SHA"..."$HEAD_SHA" -- > "$RUNNER_TEMP/autofix-changed-paths"
+          git diff --name-only -z --no-renames --diff-filter=A "$BASE_SHA"..."$HEAD_SHA" -- apps/api/ > "$RUNNER_TEMP/autofix-added-paths"
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
+          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
+
+      - name: Align Tauri counterparts
+        id: tauri
+        env:
+          STELLA_LOCAL_AUTOFIX: "true"
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- \
+            scripts/bun-lock-text.ts scripts/check-tauri-package-alignment.ts \
+            scripts/fix-tauri-package-alignment.ts scripts/json-text-edit.ts; then
+            paths=()
+            while IFS= read -r -d '' path; do
+              paths+=("$path")
+            done < "$RUNNER_TEMP/autofix-changed-paths"
+            required=$(bun --no-install --no-env-file scripts/check-tauri-package-alignment.ts --requires-check "${paths[@]}")
+            if [[ "$required" == true ]]; then
+              bun --no-install --no-env-file scripts/fix-tauri-package-alignment.ts
+            fi
+          else
+            echo "::notice::Alignment fixer sources changed; CI enforces alignment without automatic edits."
+          fi
 
       - name: Install dependencies
         run: bash scripts/retry.sh bun ci --ignore-scripts
@@ -255,21 +321,38 @@ jobs:
           NPM_TOKEN: ""
 
       - name: Prepare environment
+        env:
+          STELLA_LOCAL_AUTOFIX: "true"
         run: |
-          cp apps/api/.env.example apps/api/.env
-          cp apps/web/.env.example apps/web/.env
+          for app in apps/api apps/web; do
+            [[ -f "$app/.env" ]] || cp "$app/.env.example" "$app/.env"
+          done
 
       - name: Regenerate selected files
         if: needs.regenerate-scope.outputs.run == 'true'
         env:
+          STELLA_LOCAL_AUTOFIX: "true"
           GENERATOR_IDS: ${{ needs.regenerate-scope.outputs.ids }}
-        run: bun scripts/autofix-plan.ts run "$GENERATOR_IDS"
+        run: |
+          if [[ -n "$GENERATOR_IDS" ]]; then
+            bun scripts/autofix-plan.ts run "$GENERATOR_IDS"
+          fi
 
       - name: Fix changed files
+        env:
+          STELLA_LOCAL_AUTOFIX: "true"
         shell: bash
         run: |
           set -euo pipefail
-          mapfile -d '' -t changed < "$RUNNER_TEMP/autofix-changed-paths"
+          changed=()
+          while IFS= read -r -d '' path; do
+            changed+=("$path")
+          done < "$RUNNER_TEMP/autofix-changed-paths"
+          bun scripts/autofix-protected-paths.ts > "$RUNNER_TEMP/autofix-protected-paths"
+          protected=()
+          while IFS= read -r pattern; do
+            protected+=("$pattern")
+          done < "$RUNNER_TEMP/autofix-protected-paths"
           format_paths=()
           lint_paths=()
           for path in "${changed[@]}"; do
@@ -278,16 +361,31 @@ jobs:
             if [[ "$path" == .github/workflows/* || "$path" == scripts/ratchet-baseline.json ]]; then
               continue
             fi
+            protected_path=false
+            for pattern in "${protected[@]}"; do
+              if [[ "$path" == $pattern ]]; then
+                protected_path=true
+                break
+              fi
+            done
+            [[ "$protected_path" == false ]] || continue
             format_paths+=("./$path")
-            if [[ "$path" =~ \.([cm]?[jt]s|[jt]sx)$ ]]; then
+            # Astro's checker owns apps/landing types (astro:* modules); the
+            # native compiler cannot build that graph, so it gets no type-aware
+            # fixes. CI's lint job still reports its findings.
+            if [[ "$path" =~ \.([cm]?[jt]s|[jt]sx)$ && "$path" != apps/landing/* ]]; then
               lint_paths+=("./$path")
             fi
           done
 
           if (( ${#lint_paths[@]} > 0 )); then
+            # Type-aware fixes need the complete generated type graph. set -e
+            # aborts on preparation or compiler errors before any fixer runs.
+            bun scripts/ci-generated-sources.ts prepare
+            bun scripts/typecheck-coverage.ts --autofix "${lint_paths[@]}"
             # --fix applies safe fixes only. CI's lint job reports anything left.
             lint_status=0
-            bun --bun oxlint -c oxlint.config.ts --no-error-on-unmatched-pattern --fix "${lint_paths[@]}" || lint_status=$?
+            bun --bun oxlint -c oxlint.config.ts --no-error-on-unmatched-pattern --type-aware --fix "${lint_paths[@]}" || lint_status=$?
             if (( lint_status > 1 )); then
               exit "$lint_status"
             fi
@@ -302,6 +400,7 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           GENERATOR_ALLOWED: ${{ needs.regenerate-scope.outputs.allowed }}
+          TAURI_ALLOWED: ${{ steps.tauri.outputs.allowed }}
         shell: bash
         run: |
           set -euo pipefail
@@ -318,8 +417,27 @@ jobs:
             exit 1
           fi
 
-          mapfile -d '' -t changed < "$RUNNER_TEMP/autofix-changed-paths"
+          # No changed-path or generator grant can authorize decision records.
+          bun scripts/autofix-protected-paths.ts > "$RUNNER_TEMP/autofix-protected-paths"
+          protected=()
+          while IFS= read -r pattern; do
+            protected+=("$pattern")
+          done < "$RUNNER_TEMP/autofix-protected-paths"
+          protected_specs=()
+          for pattern in "${protected[@]}"; do
+            protected_specs+=(":(glob)$pattern")
+          done
+          if ! git diff --quiet "$HEAD_SHA" -- "${protected_specs[@]}" || [[ -n "$(git ls-files --others --exclude-standard -- "${protected_specs[@]}")" ]]; then
+            echo "::error::Autofix cannot modify baselines, ledgers, waivers, allowances or changesets."
+            exit 1
+          fi
+
+          changed=()
+          while IFS= read -r -d '' path; do
+            changed+=("$path")
+          done < "$RUNNER_TEMP/autofix-changed-paths"
           IFS='|' read -r -a generated <<< "$GENERATOR_ALLOWED"
+          IFS='|' read -r -a tauri_paths <<< "$TAURI_ALLOWED"
           excludes=()
           for path in "${changed[@]}"; do
             if [[ "$path" == .github/workflows/* || "$path" == scripts/ratchet-baseline.json ]]; then
@@ -330,6 +448,10 @@ jobs:
           for path in "${generated[@]}"; do
             [[ -n "$path" ]] || continue
             excludes+=(":(exclude,glob)$path" ":(exclude,glob)$path/**")
+          done
+          for path in "${tauri_paths[@]}"; do
+            [[ -n "$path" ]] || continue
+            excludes+=(":(exclude,literal)$path")
           done
 
           unexpected_tracked="$(git diff --name-only -- . "${excludes[@]}")"

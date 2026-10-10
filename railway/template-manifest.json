@@ -55,6 +55,7 @@
         "BETTER_AUTH_URL": "https://${{api.RAILWAY_PUBLIC_DOMAIN}}",
         "CONTENT_ENCRYPTION_KEY": "${{secret(64, \"abcdef0123456789\")}}",
         "DATABASE_URL": "${{Postgres.DATABASE_URL}}",
+        "DB_LOAD_GATE_EBS_SIGNAL": "disabled",
         "FRONTEND_URL": "https://${{web.RAILWAY_PUBLIC_DOMAIN}}",
         "GOTENBERG_PASSWORD": "${{gotenberg.GOTENBERG_API_BASIC_AUTH_PASSWORD}}",
         "GOTENBERG_URL": "http://${{gotenberg.RAILWAY_PRIVATE_DOMAIN}}:3000",

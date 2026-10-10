@@ -3,6 +3,34 @@ export type TableRetention =
   | { boundedBy: string };
 
 export const TABLE_RETENTION = {
+  desktop_device_proof_replays: {
+    ttlColumn: "expires_at",
+    sweeper: "pruneDesktopProofReceipts",
+  },
+  mcp_user_connections: {
+    boundedBy:
+      "One saved connection per organization, account and connector; cascade-deleted with any owner.",
+  },
+  chat_secrets: {
+    boundedBy:
+      "One receipt per thread tool call, cascade-deleted with its thread; encrypted payloads expire through chat.purgeSecrets.",
+  },
+  desktop_presence: {
+    boundedBy:
+      "One observation per account, organization and installation, overwritten by heartbeats and cascade-deleted with the account or organization.",
+  },
+  task_assignees: {
+    boundedBy:
+      "Unique task and user assignments, cascade-deleted with either parent.",
+  },
+  work_obligation_events: {
+    boundedBy:
+      "Obligation lifecycle history, cascade-deleted with its matter or obligation.",
+  },
+  search_projection_repair_queue: {
+    boundedBy:
+      "One pending repair per projection target, removed by the repair drain after projection success or source deletion.",
+  },
   feedback_reports: {
     boundedBy:
       "Rate-limited public intake with fingerprint deduplication and receipt lifecycle.",
@@ -36,6 +64,10 @@ export const TABLE_RETENTION = {
   },
   audit_logs: {
     boundedBy: "Organization-owned audit history and organization deletion.",
+  },
+  system_audit_runs: {
+    ttlColumn: "created_at",
+    sweeper: "audit.purgeSystemRuns",
   },
   billing_arrangements: {
     boundedBy: "Organization-owned billing configuration and deletion.",
@@ -80,6 +112,10 @@ export const TABLE_RETENTION = {
   organization_file_usage: {
     boundedBy: "Organization-owned file accounting and deletion.",
   },
+  hosted_checkout_claims: {
+    boundedBy:
+      "At most one claim per organization, taken over in place once expired and deleted with its owner.",
+  },
   usage_allocations: {
     boundedBy: "Organization-owned usage accounting and deletion.",
   },
@@ -111,6 +147,26 @@ export const TABLE_RETENTION = {
   search_documents: {
     boundedBy:
       "Derived document projection replaced or deleted with its source.",
+  },
+  // A public decision read may fetch a deferred document itself, once per
+  // decision, and store it through the ingestion path.
+  case_law_search_documents: {
+    boundedBy:
+      "Derived document projection replaced or deleted with its source.",
+  },
+  case_law_search_document_preview_passages: {
+    boundedBy:
+      "Derived document projection replaced or deleted with its source.",
+  },
+  case_law_corpus_upload_intents: {
+    boundedBy:
+      "At most one active reservation per decision, deleted at settlement or by the upload cleanup task.",
+  },
+  case_law_corpus_pack_refs: {
+    boundedBy: "One row per decision pointer, rewritten with the pointer.",
+  },
+  corpus_index_projection_states: {
+    boundedBy: "One row per corpus entity and index generation.",
   },
   user: { boundedBy: "Account lifecycle and authenticated account deletion." },
   session: {

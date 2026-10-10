@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import { lookupByBusinessId, searchByName } from "./client.js";
 import { PrhRequestError, PrhValidationError } from "./errors.js";
 import type { PrhCompaniesResponse } from "./types.js";
@@ -11,7 +13,7 @@ const readFixture = async (name: string): Promise<PrhCompaniesResponse> => {
   // committed alongside the tests; runtime validation here would only
   // catch drift between an upstream payload and the committed JSON,
   // which is precisely what the assertions below check anyway.
-  // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   return value as PrhCompaniesResponse;
 };
 
@@ -121,8 +123,10 @@ describe("lookupByBusinessId (fixture)", () => {
     );
 
     expect(
-      lookupByBusinessId("0112038-9", { observer: "unobserved" }),
-    ).rejects.toMatchObject({
+      await rejectionOf(
+        lookupByBusinessId("0112038-9", { observer: "unobserved" }),
+      ),
+    ).toMatchObject({
       name: "PrhAPIError",
       httpStatus: 400,
       upstreamCode: 1005,
@@ -139,8 +143,10 @@ describe("lookupByBusinessId (fixture)", () => {
     );
 
     expect(
-      lookupByBusinessId("0112038-9", { observer: "unobserved" }),
-    ).rejects.toBeInstanceOf(PrhRequestError);
+      await rejectionOf(
+        lookupByBusinessId("0112038-9", { observer: "unobserved" }),
+      ),
+    ).toBeInstanceOf(PrhRequestError);
   });
 });
 
@@ -197,30 +203,36 @@ describe("searchByName (fixture)", () => {
 // Validation
 // ---------------------------------------------------------------------------
 describe("lookupByBusinessId validation", () => {
-  test("rejects format violations", () => {
+  test("rejects format violations", async () => {
     expect(
-      lookupByBusinessId("01120389", { observer: "unobserved" }),
-    ).rejects.toBeInstanceOf(PrhValidationError);
+      await rejectionOf(
+        lookupByBusinessId("01120389", { observer: "unobserved" }),
+      ),
+    ).toBeInstanceOf(PrhValidationError);
     expect(
-      lookupByBusinessId("abcdefg-1", { observer: "unobserved" }),
-    ).rejects.toBeInstanceOf(PrhValidationError);
+      await rejectionOf(
+        lookupByBusinessId("abcdefg-1", { observer: "unobserved" }),
+      ),
+    ).toBeInstanceOf(PrhValidationError);
   });
 
-  test("rejects bad checksum", () => {
+  test("rejects bad checksum", async () => {
     // 0112038-9 is valid; bump the check digit and it should fail.
     expect(
-      lookupByBusinessId("0112038-0", { observer: "unobserved" }),
-    ).rejects.toBeInstanceOf(PrhValidationError);
+      await rejectionOf(
+        lookupByBusinessId("0112038-0", { observer: "unobserved" }),
+      ),
+    ).toBeInstanceOf(PrhValidationError);
   });
 });
 
 describe("searchByName validation", () => {
-  test("rejects empty input", () => {
-    expect(searchByName("", { observer: "unobserved" })).rejects.toBeInstanceOf(
-      PrhValidationError,
-    );
+  test("rejects empty input", async () => {
     expect(
-      searchByName("  ", { observer: "unobserved" }),
-    ).rejects.toBeInstanceOf(PrhValidationError);
+      await rejectionOf(searchByName("", { observer: "unobserved" })),
+    ).toBeInstanceOf(PrhValidationError);
+    expect(
+      await rejectionOf(searchByName("  ", { observer: "unobserved" })),
+    ).toBeInstanceOf(PrhValidationError);
   });
 });

@@ -286,6 +286,15 @@ rules.
 - Create a package with `bun run new-package <name> --description "…"`; copying a
   helper between apps is not an option when a package can own it.
 
+## Finding Things
+
+- Stored data: `rg <word> apps/api/src/db/schema-index`, generated from the
+  schema with one line per column (`file:line` and comment included).
+- Owners: `bun scripts/ownership.ts --print` lists the module that owns each
+  capability; extend it rather than adding a second one.
+- Custom lint rules: the catalogue in `.oxlint-plugins/README.md`, one line per
+  rule. Read the rules for the area before writing code in it.
+
 ## Commands
 
 `bun run dev` | `dev:web` (3000) | `dev:api` (3001) |
@@ -332,7 +341,12 @@ Merges go through `bun scripts/merge-bar.ts <pr>`: it re-reads PR state,
 mergeability, the required checks on the exact head SHA, unresolved review
 threads, and migration identity (no merged migration renamed or deleted) in
 one invocation, then
-arms "merge when ready" pinned to that head. Release pull requests queue
+arms "merge when ready" with `expectedHeadOid` checked at arm time. The
+`disarm-auto-merge.yml` synchronize workflow disables arms at or before the
+push event's PR update time, preserving newer arms and CI autofix pushes.
+It skips fork and Dependabot runs with read-only tokens. HOLD means
+`bun scripts/merge-bar.ts --disarm <pr>`: disable auto-merge and dequeue.
+Release pull requests queue
 normally; only an explicit `--jump` enqueues a pull request at the front.
 Main has a merge queue: GitHub
 builds main plus the pull request, runs CI on that commit, and merges only if

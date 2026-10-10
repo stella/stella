@@ -14,15 +14,19 @@ import {
   PrinterIcon,
 } from "@stll/ui/icons";
 import { Separator } from "@stll/ui/separator";
+import { ToolbarIconAction } from "@stll/ui/toolbar-icon-action";
 
 import { DownloadSplitButton } from "@/components/inspector/download-rendition-menu";
 import { downloadTabFile } from "@/components/inspector/file-download-service";
 import type { DownloadRendition } from "@/components/inspector/file-download-service.logic";
+import { PdfSignButton } from "@/components/inspector/pdf-sign-action";
+import type { PdfSignTarget } from "@/components/inspector/pdf-sign-action";
 import {
   fetchPrintPdf,
   printPdfBuffer,
 } from "@/components/pdf/peek/peek-pdf-print";
 import { PeekPdfControls } from "@/components/pdf/peek/peek-pdf-viewer";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { DOCX_MIME } from "@/lib/consts";
@@ -36,6 +40,7 @@ import {
   PDF_MIN_SCALE_OFFSET,
   PDF_SCALE_OFFSET_STEP,
 } from "@/lib/pdf/pdf-zoom.logic";
+import { useQueryView } from "@/lib/use-query-view";
 import { useWorkspaceStore } from "@/lib/workspaces/store";
 
 const routeApi = getRouteApi(
@@ -52,6 +57,8 @@ type PdfViewerControlsProps = {
   onPrint?: (() => void) | undefined;
   printDisabled?: boolean | undefined;
   onEditPages?: (() => void) | undefined;
+  /** The current PDF the viewer may sign; `null` offers no signing. */
+  pdfSignTarget?: PdfSignTarget | null | undefined;
   extraControls?: ReactNode | undefined;
 };
 
@@ -65,15 +72,19 @@ export const PdfViewerControls = ({
   onPrint,
   printDisabled = false,
   onEditPages,
+  pdfSignTarget,
   extraControls,
 }: PdfViewerControlsProps) => {
   const t = useTranslations();
   const format = useFormatter();
   const analytics = useAnalytics();
-  const { data: fileMetadata } = useQuery({
+  const fileMetadataQuery = useQuery({
     ...fileMetadataOptions({ workspaceId, fieldId }),
     enabled: fieldId.length > 0,
   });
+  const fileMetadataView = useQueryView(fileMetadataQuery);
+  const fileMetadata =
+    fileMetadataView.type === "items" ? fileMetadataView.items : undefined;
 
   const totalPages = useWorkspaceStore((s) => s.pdfPageCount);
   const scaleOffset = useWorkspaceStore((s) => s.pdfViewer.scaleOffset);
@@ -150,6 +161,7 @@ export const PdfViewerControls = ({
 
   const primaryControls = (
     <div className="flex items-center gap-1">
+      {fieldId.length > 0 && <QueryViewFeedback view={fileMetadataView} />}
       <div className="flex items-center rounded-md border p-0.5">
         <PeekPdfControls
           atMax={scaleOffset >= PDF_MAX_SCALE_OFFSET}
@@ -249,15 +261,16 @@ export const PdfViewerControls = ({
         {showFileActions && (
           <>
             {onEditPages && !isDocx && (
-              <Button
+              <ToolbarIconAction
+                density="toolbar"
                 disabled={totalPages === 0}
+                icon={<FilePenLineIcon className="size-3.5" />}
+                label={t("workspaces.pdf.pageEditor.editPages")}
                 onClick={onEditPages}
-                size="sm"
-                variant="ghost"
-              >
-                <FilePenLineIcon />
-                {t("workspaces.pdf.pageEditor.editPages")}
-              </Button>
+              />
+            )}
+            {pdfSignTarget !== null && pdfSignTarget !== undefined && (
+              <PdfSignButton target={pdfSignTarget} />
             )}
             {fileMetadata !== undefined && fieldId.length > 0 && (
               <DownloadSplitButton

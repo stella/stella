@@ -1,0 +1,2286 @@
+[
+  {
+    "id": "apps/api/src/mcp/billing-tools.ts::listInvoicesArgsSchema::minValue:1::1",
+    "reason": "Existing listInvoicesArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/billing-tools.ts::listTimeEntriesArgsSchema::maxLength:10::1",
+    "reason": "Existing listTimeEntriesArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/billing-tools.ts::listTimeEntriesArgsSchema::maxLength:10::2",
+    "reason": "Existing listTimeEntriesArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/billing-tools.ts::listTimeEntriesArgsSchema::minLength:1::1",
+    "reason": "Existing listTimeEntriesArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/billing-tools.ts::listTimeEntriesArgsSchema::minValue:1::1",
+    "reason": "Existing listTimeEntriesArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/billing-tools.ts::resolveRateArgsSchema::maxLength:10::1",
+    "reason": "Existing resolveRateArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/billing-tools.ts::resolveRateArgsSchema::minLength:1::1",
+    "reason": "Existing resolveRateArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/billing-tools.ts::saveTimeEntryArgsSchema::maxLength:10000::1",
+    "reason": "Existing saveTimeEntryArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/billing-tools.ts::saveTimeEntryArgsSchema::maxLength:10000::2",
+    "reason": "Existing saveTimeEntryArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/billing-tools.ts::saveTimeEntryArgsSchema::maxLength:10::1",
+    "reason": "Existing saveTimeEntryArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/billing-tools.ts::saveTimeEntryArgsSchema::maxLength:20::1",
+    "reason": "Existing saveTimeEntryArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/billing-tools.ts::saveTimeEntryArgsSchema::maxLength:20::2",
+    "reason": "Existing saveTimeEntryArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/billing-tools.ts::saveTimeEntryArgsSchema::maxLength:64::1",
+    "reason": "Existing saveTimeEntryArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/billing-tools.ts::saveTimeEntryArgsSchema::minLength:0::1",
+    "reason": "Existing saveTimeEntryArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/billing-tools.ts::saveTimeEntryArgsSchema::minLength:1::1",
+    "reason": "Existing saveTimeEntryArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/billing-tools.ts::saveTimeEntryArgsSchema::minLength:2::1",
+    "reason": "Existing saveTimeEntryArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/billing-tools.ts::saveTimeEntryArgsSchema::minValue:1::1",
+    "reason": "Existing saveTimeEntryArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/capability-tools.ts::describeCapabilityArgsSchema::minLength:1::1",
+    "reason": "Existing describeCapabilityArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/capability-tools.ts::listCapabilitiesArgsSchema::minValue:1::1",
+    "reason": "Existing listCapabilitiesArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/compat-ids.ts::compatCorpusIdInputSchema::minLength:1::1",
+    "reason": "Existing compatCorpusIdInputSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/compat-ids.ts::compatIdInputSchema::minLength:1::1",
+    "reason": "Existing compatIdInputSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/compat-law-tools.ts::lawCompatSearchArgsSchema::minLength:1::1",
+    "reason": "Existing lawCompatSearchArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/compat-tools.ts::compatSearchArgsSchema::minLength:1::1",
+    "reason": "Existing compatSearchArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/document-compare-tool.ts::compareSourceSchema::minLength:1::1",
+    "reason": "Existing compareSourceSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/document-tools.ts::listDocumentsArgsSchema::minValue:1::1",
+    "reason": "Existing listDocumentsArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/document-tools.ts::listPropertiesArgsSchema::minValue:1::1",
+    "reason": "Existing listPropertiesArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/document-tools.ts::saveDocumentArgsSchema::maxLength:1024::1",
+    "reason": "Existing saveDocumentArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/document-tools.ts::saveDocumentArgsSchema::maxLength:128::1",
+    "reason": "Existing saveDocumentArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/document-tools.ts::saveDocumentArgsSchema::minLength:1::1",
+    "reason": "Existing saveDocumentArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/document-tools.ts::saveDocumentArgsSchema::minLength:1::2",
+    "reason": "Existing saveDocumentArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/document-tools.ts::saveDocumentArgsSchema::minLength:1::3",
+    "reason": "Existing saveDocumentArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/document-tools.ts::setFieldValueContentSchema::minLength:1::1",
+    "reason": "Existing setFieldValueContentSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/feedback-tools.ts::reportProperties::minLength:1::1",
+    "reason": "Existing reportProperties MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/feedback-tools.ts::reportProperties::minLength:1::2",
+    "reason": "Existing reportProperties MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/file-comparison-links-tool.ts::linkedFileSchema::maxLength:255::1",
+    "reason": "Existing linkedFileSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/file-comparison-links-tool.ts::linkedFileSchema::minLength:1::1",
+    "reason": "Existing linkedFileSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/file-comparison-prepare-tool.ts::comparisonFileSchema::maxLength:255::1",
+    "reason": "Existing comparisonFileSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/file-comparison-prepare-tool.ts::comparisonFileSchema::minLength:1::1",
+    "reason": "Existing comparisonFileSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/file-comparison-prepare-tool.ts::comparisonFileSchema::minValue:1::1",
+    "reason": "Existing comparisonFileSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/gateway/dynamic-tool-policy.ts::SKILL_TOOL_INPUT::minLength:1::1",
+    "reason": "Existing SKILL_TOOL_INPUT MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/knowledge-tools.ts::clauseBodyArgSchema::minLength:1::1",
+    "reason": "Existing clauseBodyArgSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/knowledge-tools.ts::listClausesArgsSchema::minLength:1::1",
+    "reason": "Existing listClausesArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/knowledge-tools.ts::listClausesArgsSchema::minValue:1::1",
+    "reason": "Existing listClausesArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/knowledge-tools.ts::listPlaybooksArgsSchema::minValue:1::1",
+    "reason": "Existing listPlaybooksArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/knowledge-tools.ts::saveClauseArgsSchema::maxLength:10::1",
+    "reason": "Existing saveClauseArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/knowledge-tools.ts::saveClauseArgsSchema::maxLength:2000::1",
+    "reason": "Existing saveClauseArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/knowledge-tools.ts::saveClauseArgsSchema::maxLength:2000::2",
+    "reason": "Existing saveClauseArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/knowledge-tools.ts::saveClauseArgsSchema::maxLength:256::1",
+    "reason": "Existing saveClauseArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/knowledge-tools.ts::saveClauseArgsSchema::minLength:1::1",
+    "reason": "Existing saveClauseArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/knowledge-tools.ts::saveClauseArgsSchema::minLength:1::2",
+    "reason": "Existing saveClauseArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/knowledge-tools.ts::saveClauseArgsSchema::minLength:1::3",
+    "reason": "Existing saveClauseArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/knowledge-tools.ts::savePlaybookArgsSchema::maxLength:128::1",
+    "reason": "Existing savePlaybookArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/knowledge-tools.ts::savePlaybookArgsSchema::maxLength:2000::1",
+    "reason": "Existing savePlaybookArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/knowledge-tools.ts::savePlaybookArgsSchema::maxLength:256::1",
+    "reason": "Existing savePlaybookArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/knowledge-tools.ts::savePlaybookArgsSchema::minLength:1::1",
+    "reason": "Existing savePlaybookArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/knowledge-tools.ts::savePlaybookArgsSchema::minLength:1::2",
+    "reason": "Existing savePlaybookArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/legislation-tools.ts::anchorInputSchema::maxLength:256::1",
+    "reason": "Existing anchorInputSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/legislation-tools.ts::anchorInputSchema::minLength:1::1",
+    "reason": "Existing anchorInputSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/legislation-tools.ts::asOfInputSchema::maxLength:10::1",
+    "reason": "Existing asOfInputSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/legislation-tools.ts::eliInputSchema::maxLength:512::1",
+    "reason": "Existing eliInputSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/legislation-tools.ts::eliInputSchema::minLength:1::1",
+    "reason": "Existing eliInputSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/legislation-tools.ts::languageInputSchema::maxLength:8::1",
+    "reason": "Existing languageInputSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/legislation-tools.ts::languageInputSchema::minLength:2::1",
+    "reason": "Existing languageInputSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/legislation-tools.ts::readProvisionHistoryArgsSchema::minValue:1::1",
+    "reason": "Existing readProvisionHistoryArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/legislation-tools.ts::searchLegislationArgsSchema::maxLength:10::1",
+    "reason": "Existing searchLegislationArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/legislation-tools.ts::searchLegislationArgsSchema::maxLength:10::2",
+    "reason": "Existing searchLegislationArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/legislation-tools.ts::searchLegislationArgsSchema::maxLength:128::1",
+    "reason": "Existing searchLegislationArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/legislation-tools.ts::searchLegislationArgsSchema::maxLength:32::1",
+    "reason": "Existing searchLegislationArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/legislation-tools.ts::searchLegislationArgsSchema::maxLength:8::1",
+    "reason": "Existing searchLegislationArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/legislation-tools.ts::searchLegislationArgsSchema::minLength:1::1",
+    "reason": "Existing searchLegislationArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/legislation-tools.ts::searchLegislationArgsSchema::minLength:1::2",
+    "reason": "Existing searchLegislationArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/legislation-tools.ts::searchLegislationArgsSchema::minLength:1::3",
+    "reason": "Existing searchLegislationArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/legislation-tools.ts::searchLegislationArgsSchema::minLength:1::4",
+    "reason": "Existing searchLegislationArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/legislation-tools.ts::searchLegislationArgsSchema::minValue:1::1",
+    "reason": "Existing searchLegislationArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/matter-tools.ts::birthMonthSchema::maxValue:12::1",
+    "reason": "Existing birthMonthSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/matter-tools.ts::birthMonthSchema::minValue:1::1",
+    "reason": "Existing birthMonthSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/matter-tools.ts::birthYearSchema::maxValue:9999::1",
+    "reason": "Existing birthYearSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/matter-tools.ts::birthYearSchema::minValue:1000::1",
+    "reason": "Existing birthYearSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/matter-tools.ts::checkCounterpartySubjectSchema::maxLength:100::1",
+    "reason": "Existing checkCounterpartySubjectSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/matter-tools.ts::checkCounterpartySubjectSchema::maxLength:100::2",
+    "reason": "Existing checkCounterpartySubjectSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/matter-tools.ts::checkCounterpartySubjectSchema::maxLength:10::1",
+    "reason": "Existing checkCounterpartySubjectSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/matter-tools.ts::checkCounterpartySubjectSchema::maxLength:32::1",
+    "reason": "Existing checkCounterpartySubjectSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/matter-tools.ts::checkCounterpartySubjectSchema::maxLength:32::2",
+    "reason": "Existing checkCounterpartySubjectSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/matter-tools.ts::checkCounterpartySubjectSchema::maxLength:32::3",
+    "reason": "Existing checkCounterpartySubjectSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/matter-tools.ts::checkCounterpartySubjectSchema::maxLength:512::1",
+    "reason": "Existing checkCounterpartySubjectSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/matter-tools.ts::checkCounterpartySubjectSchema::minLength:1::1",
+    "reason": "Existing checkCounterpartySubjectSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/matter-tools.ts::checkCounterpartySubjectSchema::minLength:1::2",
+    "reason": "Existing checkCounterpartySubjectSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/matter-tools.ts::checkCounterpartySubjectSchema::minLength:1::3",
+    "reason": "Existing checkCounterpartySubjectSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/matter-tools.ts::checkCounterpartySubjectSchema::minLength:1::4",
+    "reason": "Existing checkCounterpartySubjectSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/matter-tools.ts::checkCounterpartySubjectSchema::minLength:2::1",
+    "reason": "Existing checkCounterpartySubjectSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/matter-tools.ts::checkCounterpartySubjectSchema::minLength:2::2",
+    "reason": "Existing checkCounterpartySubjectSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/matter-tools.ts::dateOfBirthInputSchema::maxValue:31::1",
+    "reason": "Existing dateOfBirthInputSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/matter-tools.ts::dateOfBirthInputSchema::minValue:1::1",
+    "reason": "Existing dateOfBirthInputSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/matter-tools.ts::listContactsArgsSchema::maxLength:512::1",
+    "reason": "Existing listContactsArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/matter-tools.ts::listContactsArgsSchema::minValue:1::1",
+    "reason": "Existing listContactsArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/matter-tools.ts::listTasksArgsSchema::maxLength:10::1",
+    "reason": "Existing listTasksArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/matter-tools.ts::listTasksArgsSchema::maxLength:10::2",
+    "reason": "Existing listTasksArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/matter-tools.ts::listTasksArgsSchema::maxLength:32::1",
+    "reason": "Existing listTasksArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/matter-tools.ts::listTasksArgsSchema::minLength:1::1",
+    "reason": "Existing listTasksArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/matter-tools.ts::listTasksArgsSchema::minValue:1::1",
+    "reason": "Existing listTasksArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/matter-tools.ts::lookupBusinessRegistryArgsSchema::maxLength:256::1",
+    "reason": "Existing lookupBusinessRegistryArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/matter-tools.ts::lookupBusinessRegistryArgsSchema::minLength:1::1",
+    "reason": "Existing lookupBusinessRegistryArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/matter-tools.ts::saveContactArgsSchema::maxLength:256::1",
+    "reason": "Existing saveContactArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/matter-tools.ts::saveContactArgsSchema::maxLength:256::2",
+    "reason": "Existing saveContactArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/matter-tools.ts::saveContactArgsSchema::maxLength:512::1",
+    "reason": "Existing saveContactArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/matter-tools.ts::saveContactArgsSchema::maxLength:512::2",
+    "reason": "Existing saveContactArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/matter-tools.ts::saveContactArgsSchema::minLength:1::1",
+    "reason": "Existing saveContactArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/matter-tools.ts::saveMatterArgsSchema::maxLength:128::1",
+    "reason": "Existing saveMatterArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/matter-tools.ts::saveMatterArgsSchema::maxLength:256::1",
+    "reason": "Existing saveMatterArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/matter-tools.ts::saveMatterArgsSchema::maxLength:64::1",
+    "reason": "Existing saveMatterArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/matter-tools.ts::saveMatterArgsSchema::minLength:1::1",
+    "reason": "Existing saveMatterArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/matter-tools.ts::saveMatterArgsSchema::minLength:1::2",
+    "reason": "Existing saveMatterArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/matter-tools.ts::saveTaskArgsSchema::maxLength:10000::1",
+    "reason": "Existing saveTaskArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/matter-tools.ts::saveTaskArgsSchema::maxLength:1000::1",
+    "reason": "Existing saveTaskArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/matter-tools.ts::saveTaskArgsSchema::maxLength:10::1",
+    "reason": "Existing saveTaskArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/matter-tools.ts::saveTaskArgsSchema::maxLength:255::1",
+    "reason": "Existing saveTaskArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/matter-tools.ts::saveTaskArgsSchema::minLength:1::1",
+    "reason": "Existing saveTaskArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/matter-tools.ts::saveTaskArgsSchema::minLength:1::2",
+    "reason": "Existing saveTaskArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/matter-tools.ts::saveTaskArgsSchema::minLength:1::3",
+    "reason": "Existing saveTaskArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/matter-tools.ts::saveTaskArgsSchema::minLength:1::4",
+    "reason": "Existing saveTaskArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/playbook-position-input.ts::boundedText::minLength:1::1",
+    "reason": "Existing boundedText MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/reader-annotation-tools.ts::commentBodySchema::minLength:1::1",
+    "reason": "Existing commentBodySchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/reader-annotation-tools.ts::createArgsSchema::minLength:1::1",
+    "reason": "Existing createArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/reader-annotation-tools.ts::listArgsSchema::minValue:1::1",
+    "reason": "Existing listArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/reader-annotation-tools.ts::passageSchema::maxLength:64::1",
+    "reason": "Existing passageSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/reader-annotation-tools.ts::passageSchema::minLength:1::1",
+    "reason": "Existing passageSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/reader-annotation-tools.ts::passageSchema::minLength:1::2",
+    "reason": "Existing passageSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/research-admin-tools.ts::auditRangeBoundSchema::maxLength:40::1",
+    "reason": "Existing auditRangeBoundSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/research-admin-tools.ts::listAuditLogArgsSchema::minLength:1::1",
+    "reason": "Existing listAuditLogArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/research-admin-tools.ts::listAuditLogArgsSchema::minLength:1::2",
+    "reason": "Existing listAuditLogArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/research-admin-tools.ts::listAuditLogArgsSchema::minLength:1::3",
+    "reason": "Existing listAuditLogArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/research-admin-tools.ts::listAuditLogArgsSchema::minLength:1::4",
+    "reason": "Existing listAuditLogArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/research-admin-tools.ts::listAuditLogArgsSchema::minValue:1::1",
+    "reason": "Existing listAuditLogArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/research-admin-tools.ts::manageOrganizationArgsSchema::maxLength:128::1",
+    "reason": "Existing manageOrganizationArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/research-admin-tools.ts::manageOrganizationArgsSchema::maxValue:60::1",
+    "reason": "Existing manageOrganizationArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/research-admin-tools.ts::manageOrganizationArgsSchema::maxValue:6::1",
+    "reason": "Existing manageOrganizationArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/research-admin-tools.ts::manageOrganizationArgsSchema::minLength:1::1",
+    "reason": "Existing manageOrganizationArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/research-admin-tools.ts::manageOrganizationArgsSchema::minLength:1::2",
+    "reason": "Existing manageOrganizationArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/research-admin-tools.ts::manageOrganizationArgsSchema::minValue:0::1",
+    "reason": "Existing manageOrganizationArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/research-admin-tools.ts::manageOrganizationArgsSchema::minValue:1::1",
+    "reason": "Existing manageOrganizationArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/research-admin-tools.ts::manageOrganizationArgsSchema::minValue:1::2",
+    "reason": "Existing manageOrganizationArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/research-admin-tools.ts::searchBoeLegislationArgsSchema::maxLength:128::1",
+    "reason": "Existing searchBoeLegislationArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/research-admin-tools.ts::searchBoeLegislationArgsSchema::maxLength:256::1",
+    "reason": "Existing searchBoeLegislationArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/research-admin-tools.ts::searchBoeLegislationArgsSchema::maxLength:256::2",
+    "reason": "Existing searchBoeLegislationArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/research-admin-tools.ts::searchBoeLegislationArgsSchema::maxLength:32::1",
+    "reason": "Existing searchBoeLegislationArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/research-admin-tools.ts::searchBoeLegislationArgsSchema::maxLength:32::2",
+    "reason": "Existing searchBoeLegislationArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/research-admin-tools.ts::searchBoeLegislationArgsSchema::maxLength:32::3",
+    "reason": "Existing searchBoeLegislationArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/research-admin-tools.ts::searchBoeLegislationArgsSchema::maxLength:8::1",
+    "reason": "Existing searchBoeLegislationArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/research-admin-tools.ts::searchBoeLegislationArgsSchema::maxLength:8::2",
+    "reason": "Existing searchBoeLegislationArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/research-admin-tools.ts::searchBoeLegislationArgsSchema::maxValue:100::1",
+    "reason": "Existing searchBoeLegislationArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/research-admin-tools.ts::searchBoeLegislationArgsSchema::minLength:1::1",
+    "reason": "Existing searchBoeLegislationArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/research-admin-tools.ts::searchBoeLegislationArgsSchema::minLength:1::2",
+    "reason": "Existing searchBoeLegislationArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/research-admin-tools.ts::searchBoeLegislationArgsSchema::minLength:1::3",
+    "reason": "Existing searchBoeLegislationArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/research-admin-tools.ts::searchBoeLegislationArgsSchema::minLength:1::4",
+    "reason": "Existing searchBoeLegislationArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/research-admin-tools.ts::searchBoeLegislationArgsSchema::minLength:1::5",
+    "reason": "Existing searchBoeLegislationArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/research-admin-tools.ts::searchBoeLegislationArgsSchema::minLength:1::6",
+    "reason": "Existing searchBoeLegislationArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/research-admin-tools.ts::searchBoeLegislationArgsSchema::minValue:1::1",
+    "reason": "Existing searchBoeLegislationArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/stella-tools.ts::listMattersArgsSchema::minValue:1::1",
+    "reason": "Existing listMattersArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/stella-tools.ts::lookupCaseLawArgsSchema::minLength:1::1",
+    "reason": "Existing lookupCaseLawArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/stella-tools.ts::lookupCaseLawArgsSchema::minLength:1::2",
+    "reason": "Existing lookupCaseLawArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/stella-tools.ts::readCaseLawCitationsArgsSchema::minValue:1::1",
+    "reason": "Existing readCaseLawCitationsArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/stella-tools.ts::readCaseLawDecisionArgsSchema::minLength:1::1",
+    "reason": "Existing readCaseLawDecisionArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/stella-tools.ts::readCaseLawDecisionArgsSchema::minValue:1::1",
+    "reason": "Existing readCaseLawDecisionArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/stella-tools.ts::searchAcrossMattersArgsSchema::minLength:1::1",
+    "reason": "Existing searchAcrossMattersArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/stella-tools.ts::searchAcrossMattersArgsSchema::minValue:1::1",
+    "reason": "Existing searchAcrossMattersArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/stella-tools.ts::searchCaseLawArgsSchema::maxLength:10::1",
+    "reason": "Existing searchCaseLawArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/stella-tools.ts::searchCaseLawArgsSchema::maxLength:10::2",
+    "reason": "Existing searchCaseLawArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/stella-tools.ts::searchCaseLawArgsSchema::maxLength:128::1",
+    "reason": "Existing searchCaseLawArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/stella-tools.ts::searchCaseLawArgsSchema::maxLength:128::2",
+    "reason": "Existing searchCaseLawArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/stella-tools.ts::searchCaseLawArgsSchema::maxLength:16::1",
+    "reason": "Existing searchCaseLawArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/stella-tools.ts::searchCaseLawArgsSchema::maxLength:512::1",
+    "reason": "Existing searchCaseLawArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/stella-tools.ts::searchCaseLawArgsSchema::maxLength:512::2",
+    "reason": "Existing searchCaseLawArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/stella-tools.ts::searchCaseLawArgsSchema::maxLength:8::1",
+    "reason": "Existing searchCaseLawArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/stella-tools.ts::searchCaseLawArgsSchema::minLength:1::1",
+    "reason": "Existing searchCaseLawArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/stella-tools.ts::searchCaseLawArgsSchema::minLength:1::2",
+    "reason": "Existing searchCaseLawArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/stella-tools.ts::searchCaseLawArgsSchema::minLength:1::3",
+    "reason": "Existing searchCaseLawArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/stella-tools.ts::searchCaseLawArgsSchema::minLength:1::4",
+    "reason": "Existing searchCaseLawArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/stella-tools.ts::searchCaseLawArgsSchema::minLength:1::5",
+    "reason": "Existing searchCaseLawArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/stella-tools.ts::searchCaseLawArgsSchema::minLength:1::6",
+    "reason": "Existing searchCaseLawArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/stella-tools.ts::searchCaseLawArgsSchema::minLength:1::7",
+    "reason": "Existing searchCaseLawArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/stella-tools.ts::searchCaseLawArgsSchema::minLength:1::8",
+    "reason": "Existing searchCaseLawArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/stella-tools.ts::searchCaseLawArgsSchema::minValue:1::1",
+    "reason": "Existing searchCaseLawArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/stella-tools.ts::setPracticeJurisdictionsArgsSchema::minLength:1::1",
+    "reason": "Existing setPracticeJurisdictionsArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/template-field-input.ts::templateFieldSourceInputSchema::minLength:1::1",
+    "reason": "Existing templateFieldSourceInputSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/template-tools.ts::createTemplateArgsSchema::maxLength:256::1",
+    "reason": "Existing createTemplateArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/template-tools.ts::createTemplateArgsSchema::minLength:1::1",
+    "reason": "Existing createTemplateArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/template-tools.ts::createTemplateArgsSchema::minLength:1::2",
+    "reason": "Existing createTemplateArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/template-tools.ts::saveFilledTemplateArgsSchema::maxLength:128::1",
+    "reason": "Existing saveFilledTemplateArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/template-tools.ts::saveFilledTemplateArgsSchema::maxLength:255::1",
+    "reason": "Existing saveFilledTemplateArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/template-tools.ts::saveFilledTemplateArgsSchema::minLength:1::1",
+    "reason": "Existing saveFilledTemplateArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/template-tools.ts::saveFilledTemplateArgsSchema::minLength:1::2",
+    "reason": "Existing saveFilledTemplateArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/tool-utils.test.ts::parsed::minLength:1::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/api/src/mcp/tool-utils.test.ts::schema::minLength:1::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/api/src/mcp/tool-utils.test.ts::schema::minLength:1::2",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/api/src/mcp/tool-utils.ts::cursorInput::minLength:1::1",
+    "reason": "Existing cursorInput MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/valibot-tool-definition.test.ts::contract::maxLength:8::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/api/src/mcp/valibot-tool-definition.test.ts::contract::minLength:3::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/api/src/mcp/valibot-tool-definition.test.ts::inputSchema::maxValue:100::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/api/src/mcp/valibot-tool-definition.test.ts::inputSchema::minValue:1::1",
+    "reason": "Existing inputSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/valibot-tool-definition.test.ts::leafSourceArbitrary::maxValue:9::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/api/src/mcp/valibot-tool-definition.test.ts::leafSourceArbitrary::minValue:0::1",
+    "reason": "Existing leafSourceArbitrary MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/web/src/boot-prefetch.ts::BOOT_PREFETCH_PATHS::domain:[\"/get-session\",\"/organization/get-active-member-role\"]::1",
+    "reason": "Existing BOOT_PREFETCH_PATHS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/components/ai-config-role-models.logic.ts::PROVIDER_KEYS::domain:[\"google\",\"anthropic\",\"openai\",\"openrouter\",\"mistral\",\"bedrock\"]::1",
+    "reason": "Existing PROVIDER_KEYS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/components/ai-config-role-models.logic.ts::ROLE_KEYS::domain:[\"chat\",\"fast\",\"reasoning\",\"pdf\"]::1",
+    "reason": "Existing ROLE_KEYS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/components/ai-suggestions/review-bar.logic.test.ts::STATUSES::domain:[\"pending\",\"applying\",\"accepted\",\"rejected\",\"skipped\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/components/ai-suggestions/review-bar.logic.test.ts::generatedSession::max:8::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/components/ai-suggestions/review-bar.logic.test.ts::generatedSession::maxLength:12::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/components/ai-suggestions/review-position-row.tsx::PositionQuickRow::maxLength:256::1",
+    "reason": "Existing PositionQuickRow UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/components/ai-suggestions/review-position-row.tsx::SEVERITIES::domain:[\"blocker\",\"high\",\"medium\",\"low\"]::1",
+    "reason": "Existing SEVERITIES domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/components/ai-suggestions/review-store.ts::SEVERITY_ORDER::domain:[\"high\",\"medium\",\"low\",\"unspecified\"]::1",
+    "reason": "Existing SEVERITY_ORDER domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/components/ai-suggestions/review-verdict.ts::SEVERITY_ORDER::domain:[\"blocker\",\"high\",\"medium\",\"low\"]::1",
+    "reason": "Existing SEVERITY_ORDER domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/components/api-version-mismatch-refresh.tsx::healthSchema::minLength:1::1",
+    "reason": "Existing healthSchema UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/components/billing/duration-input.tsx::DurationInput::max:59::1",
+    "reason": "Existing DurationInput UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/components/billing/expense-form.tsx::ExpenseForm::max:100::1",
+    "reason": "Existing ExpenseForm UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/components/billing/time-entry-narrative-field.tsx::TimeEntryNarrativeField::maxLength:10000::1",
+    "reason": "Existing TimeEntryNarrativeField UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/components/chat-mention-category.tsx::MENTION_CATEGORY_ORDER::domain:[\"entity\",\"workspace\",\"decision\"]::1",
+    "reason": "Existing MENTION_CATEGORY_ORDER domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/components/chat-pasted-text-extension.ts::PASTED_TEXT_SOURCES::domain:[\"paste\",\"prompt\",\"skill\",\"command\"]::1",
+    "reason": "Existing PASTED_TEXT_SOURCES domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/components/chat/chat-message-actions-menu.tsx::FORK_DESTINATIONS::domain:[\"main\",\"inspector\"]::1",
+    "reason": "Existing FORK_DESTINATIONS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/components/chat/chat-prompt-improve-button.tsx::PLAIN_TEXT_NODE_NAMES::domain:[\"doc\",\"hardBreak\",\"paragraph\",\"text\"]::1",
+    "reason": "Existing PLAIN_TEXT_NODE_NAMES domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/components/chat/chat-user-actions.test.ts::<module>::domain:[\"idle\",\"pending\",\"failed\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/components/chat/composer-submenu-search.logic.ts::MENU_ITEM_ROLES::domain:[\"menuitem\",\"menuitemcheckbox\",\"menuitemradio\"]::1",
+    "reason": "Existing MENU_ITEM_ROLES domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/components/chat/composer-submenu-search.logic.ts::MENU_NAVIGATION_KEYS::domain:[\"Escape\",\"ArrowDown\",\"ArrowUp\",\"Enter\"]::1",
+    "reason": "Existing MENU_NAVIGATION_KEYS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/components/chat/entity-open.test.ts::<module>::domain:[\"attachments\",\"metadata\",\"versions\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/components/chat/prompt-slash-list.logic.ts::SECTION_ORDER::domain:[\"private\",\"team\",\"built-in\",\"commands\"]::1",
+    "reason": "Existing SECTION_ORDER domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/components/chat/tool-approval-summary.ts::READER_ANNOTATION_EDIT_TOOL_NAMES::domain:[\"delete_reader_annotation\",\"update_reader_annotation\"]::1",
+    "reason": "Existing READER_ANNOTATION_EDIT_TOOL_NAMES domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/components/chat/tool-call-card.tsx::CODE_SOURCE_INPUT_KEYS::domain:[\"typescriptCode\",\"code\"]::1",
+    "reason": "Existing CODE_SOURCE_INPUT_KEYS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/components/docx/docx-editor-host.logic.test.ts::slotOperations::maxLength:24::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/components/docx/docx-editor-host.logic.test.ts::slotOperations::minLength:1::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/components/docx/evidence-reference.test.ts::<module>::max:20::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/components/docx/evidence-reference.test.ts::<module>::maxLength:60::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/components/docx/evidence-reference.test.ts::<module>::minLength:1::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/components/docx/evidence-reference.ts::evidenceReferenceSchema::maxLength:512::1",
+    "reason": "Existing evidenceReferenceSchema UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/components/docx/use-folio-collaboration-room.ts::flushResponseSchema::minValue:0::1",
+    "reason": "Existing flushResponseSchema UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/components/docx/use-folio-collaboration-room.ts::joinResponseSchema::minValue:0::1",
+    "reason": "Existing joinResponseSchema UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/components/docx/use-folio-collaboration-room.ts::refreshResponseSchema::minValue:0::1",
+    "reason": "Existing refreshResponseSchema UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/components/entity-views/types.ts::PROPOSAL_TYPES::domain:[\"task\",\"deadline\"]::1",
+    "reason": "Existing PROPOSAL_TYPES domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/components/inspector/anonymization-facet.tsx::LABEL_OPTIONS::domain:[\"misc\",\"organization\",\"person\",\"address\",\"country\",\"phone number\",\"email address\",\"date\",\"date of birth\",\"bank account number\",\"iban\",\"tax identification number\",\"identity card number\",\"registration number\",\"case number\",\"credit card number\",\"passport number\",\"monetary amount\",\"land parcel\"]::1",
+    "reason": "Existing LABEL_OPTIONS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/components/inspector/compare-versions-panel.tsx::TRACKED_CHANGE_DISPOSITIONS::domain:[\"keep\",\"accept\",\"reject\"]::1",
+    "reason": "Existing TRACKED_CHANGE_DISPOSITIONS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/components/inspector/counterparty-note.logic.test.ts::EVERY_BLOCK_REASON::domain:[\"pendingCompatibility\",\"unsafe\",\"collaboration\",\"collaborationReadOnly\",\"opening\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/components/inspector/document-pane.ts::DOCUMENT_PANE_SEARCH_VALUES::domain:[\"review\",\"margin\"]::1",
+    "reason": "Existing DOCUMENT_PANE_SEARCH_VALUES domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/components/inspector/file-download-service.logic.test.ts::METADATA_OPTIONS::domain:[\"keep\",\"strip\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/components/inspector/file-download-service.logic.test.ts::REFERENCE_OPTIONS::domain:[\"omit\",\"include\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/components/inspector/file-download-service.logic.ts::DOWNLOAD_RENDITIONS::domain:[\"reference\",\"pdf\",\"scrubbed\"]::1",
+    "reason": "Existing DOWNLOAD_RENDITIONS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/components/inspector/inspector-group-controls.tsx::InspectorGroupEditor::maxLength:80::1",
+    "reason": "Existing InspectorGroupEditor UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/components/inspector/inspector-group-rail.test.tsx::<module>::domain:[\"en\",\"ar\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/components/inspector/inspector-route-boundary.test.ts::SHARED_INSPECTOR_MODULE_DIRS::domain:[\"components/inspector\",\"features/chat\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/components/inspector/inspector-tabs-slice.test.ts::entityIds::domain:[\"task-1\",\"file-1\",\"task-2\",\"file-2\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/components/inspector/pane-width-storage.ts::INSPECTOR_PANE_SURFACES::domain:[\"matter\",\"public-law\"]::1",
+    "reason": "Existing INSPECTOR_PANE_SURFACES domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/components/inspector/playbook-facet.tsx::CounterpartyNotePopover::maxLength:2000::1",
+    "reason": "Existing CounterpartyNotePopover UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/components/inspector/playbook-review-results.logic.ts::REVIEW_RESULT_FILTERS::domain:[\"coverage\",\"deviations\"]::1",
+    "reason": "Existing REVIEW_RESULT_FILTERS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/components/inspector/review-export-menu.tsx::REVIEW_EXPORT_FORMATS::domain:[\"xlsx\",\"docx\",\"csv\"]::1",
+    "reason": "Existing REVIEW_EXPORT_FORMATS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/components/inspector/skill-history/skill-history.logic.ts::SKILL_PROPOSAL_STATUSES::domain:[\"draft\",\"proposed\",\"accepted\",\"rejected\"]::1",
+    "reason": "Existing SKILL_PROPOSAL_STATUSES domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/components/inspector/use-file-tab-rename.dom.test.tsx::<module>::domain:[\"original\",\"pdf\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/components/inspector/view-registry-builtins.ts::BUILT_IN_KINDS::domain:[\"pdf\",\"task\",\"chat\",\"matter\",\"external\",\"skill-resource\"]::1",
+    "reason": "Existing BUILT_IN_KINDS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/components/legal-reader/annotations/annotation-toolbar.tsx::COPY_MODES::domain:[\"quoteWithCitation\",\"citationWithQuote\",\"blockQuoteWithCitation\",\"textOnly\",\"citationOnly\"]::1",
+    "reason": "Existing COPY_MODES domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/components/legal-reader/annotations/guest-annotation-store.logic.test.ts::<module>::max:3::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/components/legal-reader/annotations/guest-annotation-store.logic.test.ts::<module>::maxLength:4::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/components/legal-reader/annotations/guest-annotation-store.logic.test.ts::<module>::maxLength:8::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/components/legal-reader/annotations/guest-annotation-store.logic.test.ts::<module>::minLength:1::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/components/legal-reader/annotations/guest-annotation-store.logic.test.ts::<module>::minLength:1::2",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/components/legal-reader/annotations/guest-annotation-store.logic.ts::guestAnnotationSchema::minLength:1::1",
+    "reason": "Existing guestAnnotationSchema UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/components/legal-reader/annotations/guest-annotation-store.logic.ts::inputSchema::minLength:1::1",
+    "reason": "Existing inputSchema UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/components/legal-reader/annotations/guest-annotation-store.logic.ts::legacyGuestAnnotationStoreSchema::minLength:1::1",
+    "reason": "Existing legacyGuestAnnotationStoreSchema UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/components/legal-reader/annotations/guest-annotation-store.logic.ts::spanSchema::maxLength:64::1",
+    "reason": "Existing spanSchema UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/components/legal-reader/annotations/guest-annotation-store.logic.ts::spanSchema::minLength:1::1",
+    "reason": "Existing spanSchema UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/components/legal-reader/annotations/guest-annotation-store.logic.ts::spanSchema::minLength:1::2",
+    "reason": "Existing spanSchema UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/components/legal-reader/annotations/guest-annotation-store.logic.ts::spanSchema::minValue:0::1",
+    "reason": "Existing spanSchema UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/components/legal-reader/annotations/guest-annotation-store.logic.ts::spanSchema::minValue:1::1",
+    "reason": "Existing spanSchema UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/components/legal-reader/annotations/guest-annotation-store.logic.ts::spansSchema::minLength:1::1",
+    "reason": "Existing spansSchema UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/components/matter-icon.tsx::ALL_MATTERS_STACK_COLORS::domain:[\"var(--option-red)\",\"var(--option-blue)\",\"var(--option-green)\"]::1",
+    "reason": "Existing ALL_MATTERS_STACK_COLORS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/components/pdf/page-organizer.tsx::LoadedPDFPageOrganizer::domain:[\"top\",\"right\",\"bottom\",\"left\"]::1",
+    "reason": "Existing LoadedPDFPageOrganizer domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/components/pdf/versions-sidebar.tsx::MENU_OWNED_KEYS::domain:[\"Escape\",\"ArrowDown\",\"ArrowUp\"]::1",
+    "reason": "Existing MENU_OWNED_KEYS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/components/pdf/versions-sidebar.tsx::VersionLabelInput::maxLength:128::1",
+    "reason": "Existing VersionLabelInput UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/components/public-law-table/public-law-results-state.logic.test.ts::<module>::domain:[\"enter\",\"preload\",\"stay\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/components/registry-credential-setup.tsx::inputProps::maxLength:2000::1",
+    "reason": "Existing inputProps UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/components/route-components.logic.test.ts::<module>::domain:[\"anonymous\",\"checking\",\"unavailable\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/components/route-components.logic.test.ts::<module>::domain:[\"hosted\",\"selfHosted\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/components/search-dialog.logic.test.ts::<module>::domain:[\"all\",\"matters\",\"registries\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/components/search-dialog.logic.test.ts::modes::domain:[\"browse\",\"pick\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/components/search-dialog.logic.test.ts::modes::domain:[\"browse\",\"pick\"]::2",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/components/search-dialog.logic.test.ts::scopes::domain:[\"all\",\"matters\",\"registries\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/components/search-dialog.logic.test.ts::scopes::domain:[\"all\",\"matters\",\"registries\"]::2",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/components/templates/registry-format-config.ts::REGISTRY_BASE_RETURN_FIELDS::domain:[\"company name\",\"legal form\",\"seat\",\"address\",\"registry number\",\"postal code\",\"country\"]::1",
+    "reason": "Existing REGISTRY_BASE_RETURN_FIELDS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/components/templates/template-field-manifest.ts::INPUT_TYPES::domain:[\"text\",\"number\",\"boolean\",\"date\",\"select\"]::1",
+    "reason": "Existing INPUT_TYPES domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/components/theme-provider.tsx::PALETTES::domain:[\"nord\",\"neutral\",\"flexoki\"]::1",
+    "reason": "Existing PALETTES domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/components/theme-provider.tsx::THEMES::domain:[\"light\",\"dark\",\"system\"]::1",
+    "reason": "Existing THEMES domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/components/workspaces/cell-metadata-flags.tsx::TINT_PRIORITY::domain:[\"verified\",\"contradiction\",\"follow-up\",\"needs-review\",\"important\"]::1",
+    "reason": "Existing TINT_PRIORITY domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/components/workspaces/entity-utils.ts::INTERNAL_PROPERTIES::domain:[\"name\",\"created-by\",\"updated-at\",\"version\",\"kind\",\"list-item-type\",\"status\",\"priority\",\"due-date\",\"assignee\"]::1",
+    "reason": "Existing INTERNAL_PROPERTIES domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/components/workspaces/properties/composer-primitives.tsx::CREATABLE_CONTENT_TYPES::domain:[\"text\",\"int\",\"date\",\"single-select\",\"multi-select\"]::1",
+    "reason": "Existing CREATABLE_CONTENT_TYPES domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/components/workspaces/table/find-highlight.logic.test.ts::<module>::minLength:1::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/components/workspaces/table/workspace-table/skeleton-rows.logic.ts::SKELETON_ROW_KEYS::domain:[\"a\",\"b\",\"c\",\"d\",\"e\",\"f\",\"g\",\"h\",\"i\",\"j\",\"k\",\"l\"]::1",
+    "reason": "Existing SKELETON_ROW_KEYS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/components/workspaces/tasks/task-detail-constants.ts::WORK_TYPES::domain:[\"task\",\"deadline\"]::1",
+    "reason": "Existing WORK_TYPES domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/components/workspaces/tasks/task-detail-panel.tsx::TaskDetailPanelContent::maxLength:1000::1",
+    "reason": "Existing TaskDetailPanelContent UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/components/workspaces/view-toolbar-filters.tsx::ENTITY_KINDS::domain:[\"document\",\"task\"]::1",
+    "reason": "Existing ENTITY_KINDS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/env-schema.ts::envWebClientSchema::maxValue:65535::1",
+    "reason": "Existing envWebClientSchema UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/env-schema.ts::envWebClientSchema::minValue:1::1",
+    "reason": "Existing envWebClientSchema UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/features/avt/types.ts::CLAIM_OVERRIDE_STATES::domain:[\"supported\",\"tension\",\"contradicted\",\"nocover\",\"notverifiable\"]::1",
+    "reason": "Existing CLAIM_OVERRIDE_STATES domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/features/avt/types.ts::FACT_CONFIDENCES::domain:[\"high\",\"medium\",\"low\"]::1",
+    "reason": "Existing FACT_CONFIDENCES domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/features/avt/verification-view.logic.test.ts::<module>::max:10::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/features/avt/verification-view.logic.test.ts::<module>::max:3::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/features/avt/verification-view.logic.test.ts::<module>::max:9::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/features/avt/verification-view.logic.test.ts::<module>::maxLength:25::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/features/avt/verification-view.logic.test.ts::<module>::maxLength:30::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/features/avt/verification-view.logic.test.ts::<module>::minLength:1::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/features/avt/verification-view.tsx::STAT_STATES::domain:[\"contradicted\",\"tension\",\"supported\",\"recordconflict\",\"nocover\",\"notverifiable\"]::1",
+    "reason": "Existing STAT_STATES domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/features/case-law/case-decision-inspector.logic.test.ts::<module>::minLength:1::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/features/case-law/case-law-index-search.logic.ts::CASE_LAW_FILTER_KEYS::domain:[\"court\",\"lang\",\"sourceId\",\"type\"]::1",
+    "reason": "Existing CASE_LAW_FILTER_KEYS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/features/case-law/citation-format.ts::INDIGOBOOK_MONTHS::domain:[\"Jan.\",\"Feb.\",\"Mar.\",\"Apr.\",\"May\",\"June\",\"July\",\"Aug.\",\"Sept.\",\"Oct.\",\"Nov.\",\"Dec.\"]::1",
+    "reason": "Existing INDIGOBOOK_MONTHS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/features/case-law/citation-format.ts::POLISH_GENITIVE_MONTHS::domain:[\"stycznia\",\"lutego\",\"marca\",\"kwietnia\",\"maja\",\"czerwca\",\"lipca\",\"sierpnia\",\"wrze\u015bnia\",\"pa\u017adziernika\",\"listopada\",\"grudnia\"]::1",
+    "reason": "Existing POLISH_GENITIVE_MONTHS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/features/case-law/citation-treatment.ts::CITATION_TREATMENT_ORDER::domain:[\"negative\",\"mixed\",\"neutral\",\"positive\",\"supportive\",\"unclassified\"]::1",
+    "reason": "Existing CITATION_TREATMENT_ORDER domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/features/case-law/components/case-decision-inspector-view.tsx::HEADER_DECISION_FACTS::domain:[\"decisionType\",\"subject\",\"legalAreas\",\"keywords\",\"judges\"]::1",
+    "reason": "Existing HEADER_DECISION_FACTS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/features/case-law/components/case-viewer/analysis/types.ts::OPTION_VARS::domain:[\"--option-blue\",\"--option-amber\",\"--option-violet\",\"--option-emerald\",\"--option-cyan\",\"--option-orange\",\"--option-indigo\",\"--option-teal\"]::1",
+    "reason": "Existing OPTION_VARS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/features/case-law/components/case-viewer/decision-facts.logic.ts::DECISION_FACT_KINDS::domain:[\"decisionType\",\"legalAreas\",\"subject\",\"keywords\",\"judges\",\"source\"]::1",
+    "reason": "Existing DECISION_FACT_KINDS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/features/case-law/components/case-viewer/decision-workspace.logic.test.ts::<module>::domain:[\"all\",\"ai\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/features/case-law/components/case-viewer/decision-workspace.logic.test.ts::<module>::domain:[\"generating\",\"done\",\"error\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/features/case-law/components/case-viewer/leading-citations.test.tsx::<module>::domain:[\"en\",\"ar\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/features/case-law/components/case-viewer/leading-citations.test.tsx::<module>::domain:[\"incoming\",\"outgoing\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/features/case-law/components/case-viewer/leading-citations.test.tsx::numerals::domain:[\"0\",\"2,048\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/features/case-law/components/case-viewer/leading-citations.test.tsx::numerals::domain:[\"\u0660\",\"\u0662\u066c\u0660\u0664\u0668\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/features/case-law/components/case-viewer/leading-citations.tsx::LeadingCitations::domain:[\"incoming\",\"outgoing\"]::1",
+    "reason": "Existing LeadingCitations domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/features/case-law/decision-columns.logic.ts::DECISION_COLUMN_IDS::domain:[\"caseNumber\",\"summary\",\"court\",\"country\",\"date\",\"type\",\"headnote\",\"citedBy\",\"language\"]::1",
+    "reason": "Existing DECISION_COLUMN_IDS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/features/case-law/decision-columns.logic.ts::DECISION_IDENTITY_LINE_FIELDS::domain:[\"court\",\"date\",\"type\"]::1",
+    "reason": "Existing DECISION_IDENTITY_LINE_FIELDS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/features/case-law/decision-columns.logic.ts::DEFAULT_HIDDEN_DECISION_COLUMN_IDS::domain:[\"country\",\"headnote\",\"language\"]::1",
+    "reason": "Existing DEFAULT_HIDDEN_DECISION_COLUMN_IDS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/features/case-law/decision-find.logic.test.ts::<module>::domain:[\"caseNumber\",\"court\",\"headnote\",\"summary\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/features/case-law/decision-find.logic.test.ts::<module>::domain:[\"date\",\"citedBy\",\"language\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/features/case-law/open-decision-match.test.ts::<module>::domain:[\"identifier\",\"selector\",\"docket\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/features/case-law/queries/citations.ts::CITATION_DIRECTIONS::domain:[\"incoming\",\"outgoing\"]::1",
+    "reason": "Existing CITATION_DIRECTIONS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/features/case-law/queries/provisions.test.ts::<module>::domain:[\"default\",\"disabled\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/features/case-law/research/question-columns.logic.test.ts::<module>::domain:[\"intern\",\"external\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/features/case-law/research/question-columns.logic.test.ts::<module>::domain:[\"owner\",\"admin\",\"member\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/features/case-law/research/question-columns.logic.ts::QUESTION_COLUMN_ACTIONS::domain:[\"edit\",\"run\",\"remove\",\"delete\"]::1",
+    "reason": "Existing QUESTION_COLUMN_ACTIONS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/features/case-law/statute-version.test.ts::<module>::domain:[\"never-in-force\",\"invalid-window\",\"withdrawn\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/features/chat/chat-snapshot-history.test.ts::caseArb::max:2::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/features/chat/chat-snapshot-history.test.ts::caseArb::maxLength:8::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/features/chat/chat-snapshot-history.test.ts::caseArb::minLength:1::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/features/chat/hooks/use-chat-session-send-queue.logic.test.ts::<module>::domain:[\"submitted\",\"streaming\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/features/chat/lib/suggested-prompts-availability.test.ts::<module>::domain:[\"client-disconnected\",\"timeout\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/features/chat/lib/suggested-prompts-availability.test.ts::<module>::domain:[\"superseded\",\"user-stop\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/features/chat/queries.test.ts::<module>::domain:[\"http\",\"stream\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/features/chat/queries.ts::CHAT_CONTEXT_CAPABILITY_KEYS::domain:[\"getActiveDecision\",\"getActiveDraft\",\"getActiveExternal\",\"getActiveFile\",\"getActiveSkill\",\"getActiveStatute\",\"getActiveTemplate\",\"getContextMatterIds\",\"getDocxEditRepresentation\",\"getEditApplyMode\",\"getSendMode\",\"getUserContext\",\"getDocxSuggestionSurface\"]::1",
+    "reason": "Existing CHAT_CONTEXT_CAPABILITY_KEYS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/features/guides/guide-engine.ts::PRESERVED_TARGET_ATTRIBUTES::domain:[\"aria-controls\",\"aria-expanded\",\"aria-haspopup\"]::1",
+    "reason": "Existing PRESERVED_TARGET_ATTRIBUTES domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/features/knowledge/knowledge-audience.dom.test.tsx::<module>::domain:[\"empty\",\"missing\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/features/knowledge/public/public-knowledge-keys.ts::publicKnowledgeKeys::domain:[\"knowledge\",\"public\"]::1",
+    "reason": "Existing publicKnowledgeKeys domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/features/knowledge/public/tools/tool-contribute-page.tsx::AddSkillForm::maxLength:2::1",
+    "reason": "Existing AddSkillForm UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/features/knowledge/views/tools/tools-catalogue-view.tsx::FILTERS::domain:[\"all\",\"skill\",\"mcp\"]::1",
+    "reason": "Existing FILTERS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/features/statutes/components/statute-compare-view.tsx::SKELETON_ROWS::domain:[\"a\",\"b\",\"c\",\"d\",\"e\",\"f\"]::1",
+    "reason": "Existing SKELETON_ROWS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/features/statutes/components/statute-search-results.test.tsx::<module>::domain:[\"strict\",\"relaxed\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/features/statutes/statute-columns.logic.ts::STATUTE_COLUMN_IDS::domain:[\"act\",\"type\",\"validity\",\"firstVersion\",\"amendments\",\"lastAmended\",\"citedBy\"]::1",
+    "reason": "Existing STATUTE_COLUMN_IDS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/features/statutes/statute-compare.test.ts::listInsertion::max:12::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/features/statutes/statute-compare.test.ts::listInsertion::maxLength:4::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/features/statutes/statute-compare.test.ts::listInsertion::minLength:1::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/features/statutes/statute-compare.test.ts::neighbourBodies::max:16::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/features/statutes/statute-compare.test.ts::neighbourBodies::maxLength:4::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/features/statutes/statute-compare.test.ts::neighbourBodies::minLength:1::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/features/statutes/statute-compare.test.ts::neighbours::maxLength:3::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/features/statutes/statute-compare.test.ts::numberedWithDrops::max:99::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/features/statutes/statute-compare.test.ts::numberedWithDrops::maxLength:10::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/features/statutes/statute-compare.test.ts::numberedWithDrops::minLength:0::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/features/statutes/statute-compare.test.ts::numberedWithDrops::minLength:1::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/features/statutes/statute-compare.test.ts::sentences::max:99::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/features/statutes/statute-compare.test.ts::sentences::maxLength:5::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/features/statutes/statute-compare.test.ts::sentences::minLength:2::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/features/statutes/statute-diff-marks.test.ts::<module>::maxLength:12::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/features/statutes/statute-diff-marks.test.ts::blockArbitrary::max:999::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/features/statutes/statute-diff-marks.test.ts::blockArbitrary::maxLength:3::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/features/statutes/statute-diff-marks.test.ts::blockArbitrary::maxLength:3::2",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/features/statutes/statute-diff-marks.test.ts::blockArbitrary::minLength:1::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/features/statutes/statute-diff-marks.test.ts::blocksArbitrary::max:4::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/features/statutes/statute-diff-marks.test.ts::inlineArbitrary::maxLength:5::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/features/statutes/statute-diff-marks.test.ts::segmentText::maxLength:8::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/features/statutes/statute-diff-marks.test.ts::sideDiff::maxLength:6::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/features/statutes/statute-filters.logic.ts::STATUTE_FILTER_KEYS::domain:[\"type\",\"validity\"]::1",
+    "reason": "Existing STATUTE_FILTER_KEYS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/features/style-sets/style-set-editor-controls.tsx::FontField::maxLength:128::1",
+    "reason": "Existing FontField UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/features/style-sets/style-set-editor-controls.tsx::NumberingLevelSection::max:1440::1",
+    "reason": "Existing NumberingLevelSection UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/features/style-sets/style-set-editor-controls.tsx::NumberingLevelSection::max:1440::2",
+    "reason": "Existing NumberingLevelSection UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/features/style-sets/style-set-editor-controls.tsx::SpacingFields::max:1440::1",
+    "reason": "Existing SpacingFields UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/features/style-sets/style-set-editor-controls.tsx::SpacingFields::max:1440::2",
+    "reason": "Existing SpacingFields UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/features/style-sets/style-set-editor-controls.tsx::StyleSetEditorControls::max:1440::1",
+    "reason": "Existing StyleSetEditorControls UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/features/style-sets/style-set-editor-controls.tsx::StyleSetEditorControls::max:1440::2",
+    "reason": "Existing StyleSetEditorControls UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/features/style-sets/style-set-editor-controls.tsx::StyleSetEditorControls::max:1440::3",
+    "reason": "Existing StyleSetEditorControls UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/features/style-sets/style-set-editor-controls.tsx::StyleSetEditorControls::max:1440::4",
+    "reason": "Existing StyleSetEditorControls UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/features/style-sets/style-set-editor-controls.tsx::StyleSetEditorControls::max:1440::5",
+    "reason": "Existing StyleSetEditorControls UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/features/style-sets/style-set-editor-controls.tsx::StyleSetEditorControls::max:400::1",
+    "reason": "Existing StyleSetEditorControls UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/features/style-sets/style-set-editor-controls.tsx::StyleSizeField::max:400::1",
+    "reason": "Existing StyleSizeField UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/features/style-sets/style-set-editor-dialog.tsx::LoadedStyleSetEditor::maxLength:256::1",
+    "reason": "Existing LoadedStyleSetEditor UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/features/time-timers/timer-error.test.tsx::<module>::domain:[\"en\",\"ar\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/features/time-timers/timer-form.tsx::TimerForm::maxLength:10000::1",
+    "reason": "Existing TimerForm UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/features/time-timers/timer-form.tsx::form::maxLength:10000::1",
+    "reason": "Existing form UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/i18n/i18n-store.ts::supportedLanguages::domain:[\"en\",\"ar\",\"cs\",\"de\",\"es\",\"et\",\"fr\",\"hu\",\"lt\",\"lv\",\"pl\",\"pt-BR\",\"sk\"]::1",
+    "reason": "Existing supportedLanguages domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/lib/analytics/posthog-ingestion.ts::INGESTION_REQUIRED_KEYS::domain:[\"token\",\"distinct_id\",\"$cookieless_mode\"]::1",
+    "reason": "Existing INGESTION_REQUIRED_KEYS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/lib/analytics/posthog.test.ts::<module>::domain:[\"callsite\",\"v8\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/lib/analytics/posthog.ts::WEB_VITALS_CONTEXT_KEYS::domain:[\"$session_id\",\"$window_id\",\"$browser\",\"$browser_version\",\"$os\",\"$device_type\",\"$viewport_height\",\"$viewport_width\"]::1",
+    "reason": "Existing WEB_VITALS_CONTEXT_KEYS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/lib/analytics/stack-redaction.ts::sanitizeStackFrame::domain:[\"?\",\"#\"]::1",
+    "reason": "Existing sanitizeStackFrame domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/lib/case-law-language-preference.test.ts::variants::maxLength:12::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/lib/case-law-language-preference.test.ts::variants::minLength:1::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/lib/consts.ts::MARKDOWN_EXTENSIONS::domain:[\".md\",\".markdown\"]::1",
+    "reason": "Existing MARKDOWN_EXTENSIONS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/lib/desktop-bridge.test.ts::<module>::domain:[\"pending\",\"connected\",\"failed\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/lib/dynamic-validation.test.ts::nameSchema::minLength:1::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/lib/find-owner.logic.ts::FIND_OWNERS::domain:[\"docx\",\"inspector\",\"document\",\"table\"]::1",
+    "reason": "Existing FIND_OWNERS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/lib/hotkeys.ts::SHORTCUT_CONTEXTS::domain:[\"global\",\"workspace\",\"pdf\"]::1",
+    "reason": "Existing SHORTCUT_CONTEXTS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/lib/knowledge/catalogue-intent.ts::TEMPLATE_INTENTS::domain:[\"use\",\"add\",\"download\"]::1",
+    "reason": "Existing TEMPLATE_INTENTS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/lib/knowledge/catalogue-intent.ts::playbooksIntentSearchSchema::maxLength:64::1",
+    "reason": "Existing playbooksIntentSearchSchema UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/lib/knowledge/knowledge-cache.ts::memberKnowledgeKeys::domain:[\"knowledge\",\"member\"]::1",
+    "reason": "Existing memberKnowledgeKeys domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/lib/organization/ai-config-queries.test.ts::INSTANCE_SOURCES::domain:[\"preserve\",\"explicit\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/lib/pdf/pdf-color-mode.ts::PDF_COLOR_MODES::domain:[\"light\",\"dark\",\"system\"]::1",
+    "reason": "Existing PDF_COLOR_MODES domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/lib/prompts/types.ts::PROMPT_SCOPES::domain:[\"team\",\"private\"]::1",
+    "reason": "Existing PROMPT_SCOPES domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/lib/public-law-sitemap.ts::entries::domain:[\"/law\",\"/law/coverage\"]::1",
+    "reason": "Existing entries domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/lib/react-query.test.ts::queryKey::domain:[\"workspaces\",\"ws_1\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/lib/react-query.test.ts::queryKey::domain:[\"workspaces\",\"ws_2\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/lib/search.ts::TIME_PRESETS::domain:[\"day\",\"week\",\"month\",\"year\"]::1",
+    "reason": "Existing TIME_PRESETS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/lib/timezones.ts::COMMON_TIMEZONES::domain:[\"Pacific/Midway\",\"Pacific/Honolulu\",\"America/Anchorage\",\"America/Los_Angeles\",\"America/Denver\",\"America/Chicago\",\"America/New_York\",\"America/Halifax\",\"America/Sao_Paulo\",\"Atlantic/South_Georgia\",\"Atlantic/Azores\",\"UTC\",\"Europe/London\",\"Europe/Paris\",\"Europe/Berlin\",\"Europe/Prague\",\"Europe/Bratislava\",\"Europe/Warsaw\",\"Europe/Budapest\",\"Europe/Vilnius\",\"Europe/Riga\",\"Europe/Tallinn\",\"Europe/Helsinki\",\"Europe/Bucharest\",\"Europe/Athens\",\"Europe/Istanbul\",\"Europe/Moscow\",\"Asia/Dubai\",\"Asia/Karachi\",\"Asia/Kolkata\",\"Asia/Dhaka\",\"Asia/Bangkok\",\"Asia/Shanghai\",\"Asia/Hong_Kong\",\"Asia/Singapore\",\"Asia/Tokyo\",\"Asia/Seoul\",\"Australia/Sydney\",\"Pacific/Auckland\"]::1",
+    "reason": "Existing COMMON_TIMEZONES domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/lib/tools-catalogue.ts::TOOLS_KIND_FILTERS::domain:[\"all\",\"skill\",\"mcp\",\"native-tool\"]::1",
+    "reason": "Existing TOOLS_KIND_FILTERS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/lib/usage-queries.ts::organizationAccessKeys::domain:[\"usage\",\"access\"]::1",
+    "reason": "Existing organizationAccessKeys domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/lib/usage-queries.ts::usageEntitlementKeys::domain:[\"usage\",\"entitlement\"]::1",
+    "reason": "Existing usageEntitlementKeys domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/lib/usage-queries.ts::usageLaneKeys::domain:[\"usage\",\"lane\"]::1",
+    "reason": "Existing usageLaneKeys domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/lib/workspaces/calculations.test.ts::<module>::max:500::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/lib/workspaces/calculations.test.ts::<module>::maxLength:5::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/lib/workspaces/calculations.test.ts::<module>::maxLength:8::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/lib/workspaces/calculations.ts::COUNTING_KINDS::domain:[\"count\",\"count-filled\",\"count-empty\",\"count-unique\",\"percent-filled\",\"percent-empty\"]::1",
+    "reason": "Existing COUNTING_KINDS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/lib/workspaces/calculations.ts::NUMERIC_PROPERTY_TYPES::domain:[\"int\",\"money\"]::1",
+    "reason": "Existing NUMERIC_PROPERTY_TYPES domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/lib/workspaces/table-store.logic.ts::TABLE_CONTENT_MODES::domain:[\"tight\",\"fit-content\"]::1",
+    "reason": "Existing TABLE_CONTENT_MODES domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/lib/workspaces/types.ts::ALL_COLUMNS::domain:[\"client\",\"team\",\"reference\",\"entityCount\",\"lastActivityAt\",\"createdAt\"]::1",
+    "reason": "Existing ALL_COLUMNS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/lib/workspaces/types.ts::DATE_FILTER_PRESETS::domain:[\"today\",\"thisWeek\",\"last7d\",\"last30d\",\"thisMonth\",\"custom\"]::1",
+    "reason": "Existing DATE_FILTER_PRESETS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/lib/workspaces/types.ts::MATTERS_SORT_KEYS::domain:[\"name\",\"reference\",\"entityCount\",\"lastActivityAt\",\"createdAt\",\"clientName\"]::1",
+    "reason": "Existing MATTERS_SORT_KEYS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/public-crawl-policy.test.ts::<module>::domain:[\"/tools\",\"/knowledge/tools\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/routes/-app-frame.logic.test.ts::<module>::domain:[\"checking\",\"anonymous\",\"unavailable\",\"member\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/routes/-app-frame.logic.test.ts::<module>::domain:[\"checking\",\"unresolved\",\"none\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/routes/-protected-pending-skeleton.tsx::NAV_LABEL_WIDTHS::domain:[\"w-14\",\"w-10\",\"w-16\",\"w-20\",\"w-16\"]::1",
+    "reason": "Existing NAV_LABEL_WIDTHS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/routes/-protected-pending-skeleton.tsx::PINNED_ROW_KEYS::domain:[\"a\",\"b\",\"c\"]::1",
+    "reason": "Existing PINNED_ROW_KEYS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/routes/-session-activity.test.ts::<module>::domain:[\"abort\",\"dispose\",\"failure\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/routes/-session-activity.test.ts::<module>::domain:[\"visible\",\"hidden\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.contacts/-components/contact-communication-editor.tsx::ContactCommunicationEditor::maxLength:7::1",
+    "reason": "Existing ContactCommunicationEditor UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.contacts/-components/contact-custom-fields-editor.tsx::ContactCustomFieldsEditor::maxLength:128::1",
+    "reason": "Existing ContactCustomFieldsEditor UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.contacts/-components/contact-custom-fields-editor.tsx::ContactCustomFieldsEditor::maxLength:2000::1",
+    "reason": "Existing ContactCustomFieldsEditor UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.contacts/-components/contact-custom-fields-editor.tsx::CustomFieldRow::maxLength:128::1",
+    "reason": "Existing CustomFieldRow UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.contacts/-components/contact-custom-fields-editor.tsx::CustomFieldRow::maxLength:2000::1",
+    "reason": "Existing CustomFieldRow UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.contacts/-components/editable-row.logic.ts::EDITABLE_FIELD_POLICY::maxLength:256::1",
+    "reason": "Existing EDITABLE_FIELD_POLICY UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.contacts/-components/editable-row.logic.ts::EDITABLE_FIELD_POLICY::maxLength:256::2",
+    "reason": "Existing EDITABLE_FIELD_POLICY UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.contacts/-components/editable-row.logic.ts::EDITABLE_FIELD_POLICY::maxLength:256::3",
+    "reason": "Existing EDITABLE_FIELD_POLICY UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.contacts/-components/editable-row.logic.ts::EDITABLE_FIELD_POLICY::maxLength:32::1",
+    "reason": "Existing EDITABLE_FIELD_POLICY UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.contacts/-components/editable-row.logic.ts::EDITABLE_FIELD_POLICY::maxLength:32::2",
+    "reason": "Existing EDITABLE_FIELD_POLICY UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.contacts/-components/editable-row.logic.ts::EDITABLE_FIELD_POLICY::maxLength:3::1",
+    "reason": "Existing EDITABLE_FIELD_POLICY UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.contacts/-components/editable-row.logic.ts::EDITABLE_FIELD_POLICY::maxLength:512::1",
+    "reason": "Existing EDITABLE_FIELD_POLICY UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.contacts/-components/editable-row.logic.ts::EDITABLE_FIELD_POLICY::maxLength:512::2",
+    "reason": "Existing EDITABLE_FIELD_POLICY UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.contacts/-components/editable-row.logic.ts::EDITABLE_FIELD_POLICY::maxLength:64::1",
+    "reason": "Existing EDITABLE_FIELD_POLICY UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.contacts/-components/editable-row.logic.ts::EDITABLE_FIELD_POLICY::maxLength:64::2",
+    "reason": "Existing EDITABLE_FIELD_POLICY UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.contacts/-components/person-details-fields.tsx::PersonDetailsFields::maxLength:2::1",
+    "reason": "Existing PersonDetailsFields UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.contacts/-components/person-details-fields.tsx::PersonDetailsFields::maxLength:2::2",
+    "reason": "Existing PersonDetailsFields UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.contacts/-components/person-details-fields.tsx::PersonDetailsFields::maxLength:4::1",
+    "reason": "Existing PersonDetailsFields UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.contacts/-procuracao-extraction.tsx::PROCURACAO_REVIEW_FIELDS::domain:[\"type\",\"display_name\",\"tax_id\",\"primary_email\",\"address_line_1\"]::1",
+    "reason": "Existing PROCURACAO_REVIEW_FIELDS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.contacts/import.tsx::STEP_KEYS::domain:[\"contacts.importStudio.stepUpload\",\"contacts.importStudio.stepMap\",\"knowledge.playbooks.review.run\",\"common.done\"]::1",
+    "reason": "Existing STEP_KEYS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.settings/-components/organization/number-series-form.logic.test.ts::<module>::domain:[\"invoice\",\"advance\",\"credit_note\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.settings/-components/organization/number-series-form.logic.ts::numberSeriesFormSchema::maxLength:128::1",
+    "reason": "Existing numberSeriesFormSchema UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.settings/-components/organization/number-series-form.logic.ts::numberSeriesFormSchema::maxLength:128::2",
+    "reason": "Existing numberSeriesFormSchema UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.settings/-components/organization/number-series-form.logic.ts::numberSeriesFormSchema::maxValue:6::1",
+    "reason": "Existing numberSeriesFormSchema UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.settings/-components/organization/number-series-form.logic.ts::numberSeriesFormSchema::minLength:5::1",
+    "reason": "Existing numberSeriesFormSchema UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.settings/-components/organization/number-series-form.logic.ts::numberSeriesFormSchema::minValue:1::1",
+    "reason": "Existing numberSeriesFormSchema UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.settings/-components/organization/number-series-form.tsx::NumberSeriesForm::maxLength:128::1",
+    "reason": "Existing NumberSeriesForm UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.settings/-components/organization/number-series-form.tsx::NumberSeriesForm::maxLength:128::2",
+    "reason": "Existing NumberSeriesForm UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.settings/-components/organization/seller-profile-form.logic.ts::SELLER_PROFILE_FIELDS::domain:[\"legalName\",\"registrationId\",\"vatId\",\"addressLine1\",\"addressLine2\",\"city\",\"postalCode\",\"country\",\"iban\",\"bic\",\"accountNumber\",\"defaultCurrency\",\"footerNotes\"]::1",
+    "reason": "Existing SELLER_PROFILE_FIELDS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.settings/-components/organization/seller-profile-refusal.test.tsx::<module>::domain:[\"en\",\"ar\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.settings/-components/organization/time-policy-card.test.tsx::<module>::domain:[\"member\",\"intern\",\"external\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.settings/-components/organization/time-policy-card.test.tsx::<module>::domain:[\"minimumUnit\",\"minimumUnitHelp\",\"editWindow\",\"editWindowHelp\",\"lockedThrough\",\"lockedThroughHelp\",\"narrativeRequired\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.settings/-components/organization/time-policy-card.test.tsx::<module>::domain:[\"owner\",\"admin\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.settings/-components/organization/time-policy-card.test.tsx::ROLES::domain:[\"owner\",\"admin\",\"member\",\"intern\",\"external\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.settings/-components/organization/time-policy.logic.ts::TIME_POLICY_FIELDS::domain:[\"timeMinimumUnitMinutes\",\"timeEditWindowDays\",\"timeLockedThroughMonth\",\"timeNarrativeRequired\"]::1",
+    "reason": "Existing TIME_POLICY_FIELDS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.settings/-components/organization/time-policy.logic.ts::timePolicyFormSchema::maxValue:60::1",
+    "reason": "Existing timePolicyFormSchema UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.settings/-components/organization/time-policy.logic.ts::timePolicyFormSchema::minValue:1::1",
+    "reason": "Existing timePolicyFormSchema UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.settings/-components/organization/vat-rate-form.logic.ts::vatRateFormSchema::maxLength:128::1",
+    "reason": "Existing vatRateFormSchema UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.settings/-components/organization/vat-rate-form.logic.ts::vatRateFormSchema::maxLength:64::1",
+    "reason": "Existing vatRateFormSchema UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.settings/-components/organization/vat-rate-form.tsx::VatRateForm::maxLength:128::1",
+    "reason": "Existing VatRateForm UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.settings/-components/organization/vat-rate-form.tsx::VatRateForm::maxLength:64::1",
+    "reason": "Existing VatRateForm UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.settings/-queries/anonymization-blacklist.ts::organizationAnonymizationBlacklistKeys::domain:[\"organization-settings\",\"anonymization-blacklist\"]::1",
+    "reason": "Existing organizationAnonymizationBlacklistKeys domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.settings/-queries/connections.ts::connectedAppsKeys::domain:[\"settings\",\"connections\",\"connected-apps\"]::1",
+    "reason": "Existing connectedAppsKeys domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.settings/-queries/usage-policies.ts::usagePoliciesKeys::domain:[\"settings\",\"usage\",\"policies\"]::1",
+    "reason": "Existing usagePoliciesKeys domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.settings/account.memory.tsx::MEMORY_ROW_SKELETON_KEYS::domain:[\"primary\",\"secondary\",\"tertiary\"]::1",
+    "reason": "Existing MEMORY_ROW_SKELETON_KEYS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.settings/account.memory.tsx::MEMORY_TAB_PRIMED_STATUSES::domain:[\"suggested\",\"active\"]::1",
+    "reason": "Existing MEMORY_TAB_PRIMED_STATUSES domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.settings/account.memory.tsx::MEMORY_TAB_SKELETON_KEYS::domain:[\"mine\",\"firm\",\"matter\"]::1",
+    "reason": "Existing MEMORY_TAB_SKELETON_KEYS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.settings/account.profile.tsx::ProfilePageBody::maxLength:120::1",
+    "reason": "Existing ProfilePageBody UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.settings/account.profile.tsx::ProfilePageBody::maxLength:120::2",
+    "reason": "Existing ProfilePageBody UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.settings/account.profile.tsx::ProfilePageBody::maxLength:16::1",
+    "reason": "Existing ProfilePageBody UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.settings/account.profile.tsx::ProfilePageBody::maxLength:6::1",
+    "reason": "Existing ProfilePageBody UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.settings/organization.members.tsx::SKELETON_ROW_KEYS::domain:[\"a\",\"b\",\"c\",\"d\",\"e\",\"f\",\"g\",\"h\"]::1",
+    "reason": "Existing SKELETON_ROW_KEYS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx::Route::minValue:1::1",
+    "reason": "Existing Route UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx::Route::minValue:1::2",
+    "reason": "Existing Route UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.route.tsx::searchSchema::minValue:1::1",
+    "reason": "Existing searchSchema UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel.logic.test.ts::triggerTypes::domain:[\"direct\",\"user_dispatch\",\"agent_delegation\",\"schedule\",\"webhook\",\"credential\",\"system\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel.tsx::ACTIVITY_SKELETON_WIDTHS::domain:[\"w-24\",\"w-32\",\"w-28\",\"w-36\"]::1",
+    "reason": "Existing ACTIVITY_SKELETON_WIDTHS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/billing-codes-dialog.tsx::CreateCodeForm::maxLength:20::1",
+    "reason": "Existing CreateCodeForm UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/billing-codes-dialog.tsx::CreateCodeForm::maxLength:256::1",
+    "reason": "Existing CreateCodeForm UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/split-entry-dialog.tsx::SplitEntryDialog::max:100::1",
+    "reason": "Existing SplitEntryDialog UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-form.tsx::TimeEntryForm::maxLength:3::1",
+    "reason": "Existing TimeEntryForm UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-utils.ts::INTERNAL_DATE_IDS::domain:[\"_created-at\",\"_updated-at\"]::1",
+    "reason": "Existing INTERNAL_DATE_IDS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-utils.ts::TASK_DATE_IDS::domain:[\"_due-date\",\"_start-date\"]::1",
+    "reason": "Existing TASK_DATE_IDS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/correspondence-provenance.logic.test.ts::<module>::domain:[\"forwarded_inline\",\"forwarded_attachment\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/report-export-refusal.dom.test.tsx::<module>::domain:[\"docx\",\"pdf\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/report-export-refusal.dom.test.tsx::<module>::domain:[\"download\",\"workspace\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx::CALENDAR_MODES::domain:[\"year\",\"month\",\"week\"]::1",
+    "reason": "Existing CALENDAR_MODES domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx::ZOOM_OPTIONS::domain:[\"day\",\"week\",\"month\",\"quarter\"]::1",
+    "reason": "Existing ZOOM_OPTIONS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/correspondence/$correspondenceId.tsx::CorrespondenceDetailPage::domain:[\"spf\",\"dkim\",\"dmarc\"]::1",
+    "reason": "Existing CorrespondenceDetailPage domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices.tsx::SKELETON_ROW_KEYS::domain:[\"a\",\"b\",\"c\",\"d\",\"e\",\"f\",\"g\",\"h\"]::1",
+    "reason": "Existing SKELETON_ROW_KEYS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices/$invoiceId.tsx::ENTRY_COLUMN_KEYS::domain:[\"context\",\"date\",\"narrative\",\"hours\",\"amount\"]::1",
+    "reason": "Existing ENTRY_COLUMN_KEYS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices/$invoiceId.tsx::ENTRY_ROW_KEYS::domain:[\"a\",\"b\",\"c\",\"d\",\"e\"]::1",
+    "reason": "Existing ENTRY_ROW_KEYS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices/$invoiceId.tsx::EditInvoiceForm::maxLength:3::1",
+    "reason": "Existing EditInvoiceForm UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices/$invoiceId.tsx::INFO_CELL_KEYS::domain:[\"a\",\"b\",\"c\",\"d\"]::1",
+    "reason": "Existing INFO_CELL_KEYS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices/$invoiceId.tsx::editInvoiceSchema::maxLength:64::1",
+    "reason": "Existing editInvoiceSchema UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/lists.tsx::LegalListDetail::maxLength:255::1",
+    "reason": "Existing LegalListDetail UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/lists.tsx::LegalListDetail::maxLength:256::1",
+    "reason": "Existing LegalListDetail UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/lists.tsx::LegalListsPage::maxLength:256::1",
+    "reason": "Existing LegalListsPage UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.workspaces/index.tsx::SKELETON_CARD_KEYS::domain:[\"a\",\"b\",\"c\",\"d\",\"e\",\"f\"]::1",
+    "reason": "Existing SKELETON_CARD_KEYS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.workspaces/index.tsx::SKELETON_TABLE_ROW_KEYS::domain:[\"a\",\"b\",\"c\",\"d\",\"e\",\"f\",\"g\",\"h\"]::1",
+    "reason": "Existing SKELETON_TABLE_ROW_KEYS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/routes/agent-claim.tsx::AgentClaimPage::maxLength:32::1",
+    "reason": "Existing AgentClaimPage UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/auth/-components/dev-quick-start-storage.ts::devQuickStartAttemptSchema::maxLength:128::1",
+    "reason": "Existing devQuickStartAttemptSchema UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/auth/-components/dev-quick-start-storage.ts::devQuickStartAttemptSchema::maxLength:128::2",
+    "reason": "Existing devQuickStartAttemptSchema UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/auth/-components/dev-quick-start-storage.ts::devQuickStartAttemptSchema::maxLength:128::3",
+    "reason": "Existing devQuickStartAttemptSchema UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/auth/-components/dev-quick-start-storage.ts::devQuickStartAttemptSchema::maxLength:128::4",
+    "reason": "Existing devQuickStartAttemptSchema UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/auth/-components/dev-quick-start-storage.ts::devQuickStartAttemptSchema::maxLength:254::1",
+    "reason": "Existing devQuickStartAttemptSchema UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/auth/-components/dev-quick-start-storage.ts::devQuickStartAttemptSchema::minLength:1::1",
+    "reason": "Existing devQuickStartAttemptSchema UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/auth/-components/dev-quick-start-storage.ts::devQuickStartAttemptSchema::minLength:1::2",
+    "reason": "Existing devQuickStartAttemptSchema UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/auth/-components/dev-quick-start-storage.ts::devQuickStartAttemptSchema::minLength:1::3",
+    "reason": "Existing devQuickStartAttemptSchema UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/auth/-components/dev-quick-start-storage.ts::devQuickStartAttemptSchema::minLength:1::4",
+    "reason": "Existing devQuickStartAttemptSchema UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/auth/-components/dev-quick-start-storage.ts::devQuickStartAttemptSchema::minLength:1::5",
+    "reason": "Existing devQuickStartAttemptSchema UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/auth/-components/dev-quick-start.logic.test.ts::<module>::domain:[\"stored\",\"cached\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/routes/dev/-components/inspector-pane-playground.tsx::BENCH_TABLE_HEADERS::domain:[\"Polo\u017eka\",\"Rok\",\"Sazba\",\"Z\u00e1klad\",\"Koeficient\",\"\u00darok\",\"N\u00e1klady\",\"Da\u0148\",\"Celkem\",\"M\u011bna\",\"Splatnost\",\"Pozn\u00e1mka\"]::1",
+    "reason": "Existing BENCH_TABLE_HEADERS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/routes/dev/-components/inspector-pane-playground.tsx::BENCH_TABLE_ROW::domain:[\"N\u00e1hrada nemajetkov\u00e9 \u00fajmy\",\"2022\",\"14,25 %\",\"1 240 000\",\"1,35\",\"62 400\",\"18 150\",\"21 %\",\"1 341 700\",\"CZK\",\"30. 6. 2022\",\"\u00a7 2958 odst. 1 p\u00edsm. b)\"]::1",
+    "reason": "Existing BENCH_TABLE_ROW domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/routes/dev/-components/ui-playground.tsx::BUTTON_SIZES::domain:[\"xs\",\"sm\",\"default\",\"lg\",\"xl\"]::1",
+    "reason": "Existing BUTTON_SIZES domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/routes/dev/-components/ui-playground.tsx::BUTTON_VARIANTS::domain:[\"default\",\"secondary\",\"outline\",\"ghost\",\"link\",\"destructive\",\"destructive-outline\"]::1",
+    "reason": "Existing BUTTON_VARIANTS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/routes/dev/-components/ui-playground.tsx::UiPlayground::maxLength:6::1",
+    "reason": "Existing UiPlayground UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/dev/-components/workspace-table-playground.tsx::BENCH_HEADNOTES::domain:[\"An appeal filed after the statutory period lapsed cannot be cured by the appellate court's own summons; the period runs from service, not from notice of the hearing.\",\"Where the contract nominates a single forum, a counterclaim arising from the same performance belongs before that forum even when its value exceeds the forum's ordinary ceiling.\",\"A creditor who accepts partial performance without reservation does not thereby waive the remainder, but bears the burden of showing the reservation was made.\",\"Reasons that merely restate the operative part do not satisfy the duty to give reasons, and the defect is not repaired by reasons supplied on appeal.\",\"The limitation period for a claim in unjust enrichment begins when the enriched party could first have been called upon to return the benefit.\"]::1",
+    "reason": "Existing BENCH_HEADNOTES domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/routes/dev/-components/workspace-table-playground.tsx::BENCH_TYPES::domain:[\"judgment\",\"resolution\",\"order\"]::1",
+    "reason": "Existing BENCH_TYPES domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/routes/knowledge/-components/catalogue/add-custom-actions.logic.ts::ADD_CUSTOM_ACTIONS::domain:[\"mcp\",\"skill-blueprint\",\"skill-import\"]::1",
+    "reason": "Existing ADD_CUSTOM_ACTIONS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/routes/knowledge/-components/clause-form-dialog.tsx::ClauseFormDialogBody::maxLength:10::1",
+    "reason": "Existing ClauseFormDialogBody UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/knowledge/-components/clause-publication.dom.test.tsx::<module>::domain:[\"en\",\"ar\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/routes/knowledge/-components/flow-examples.ts::FLOW_EXAMPLE_KEYS::domain:[\"nda-intake\",\"due-diligence\",\"document-summary\"]::1",
+    "reason": "Existing FLOW_EXAMPLE_KEYS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/routes/knowledge/-components/skill-metadata-draft.logic.test.ts::FIELDS::domain:[\"command\",\"description\",\"enabled\",\"name\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/routes/knowledge/-components/template-field-filters.test.ts::CONFIGURED_FIELDS::max:10::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/routes/knowledge/-components/template-field-filters.test.ts::CONFIGURED_FIELDS::maxLength:8::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/routes/knowledge/-components/template-field-filters.test.ts::CONFIGURED_FIELDS::minLength:2::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/routes/knowledge/-components/template-list.tsx::TemplateGuidanceDialogBody::maxLength:10000::1",
+    "reason": "Existing TemplateGuidanceDialogBody UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/knowledge/-components/template-list.tsx::TemplateGuidanceDialogBody::maxLength:10000::2",
+    "reason": "Existing TemplateGuidanceDialogBody UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/knowledge/-components/template-markers.property.test.ts::<module>::maxLength:8::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/routes/knowledge/-components/template-markers.property.test.ts::<module>::minLength:1::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/routes/knowledge/-components/template-markers.property.test.ts::CONDITIONS::domain:[\"signed\",\"country == \\\"PL\\\"\",\"not signed\",\"rent > 1000 and \\\"guarantor\\\" in parties\",\"deposit is defined\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/routes/knowledge/-components/template-markers.property.test.ts::PATH_SEGMENTS::domain:[\"buyer\",\"name\",\"fee_2\",\"sub-total\",\"d\u00edl\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/routes/knowledge/-components/template-markers.property.test.ts::path::maxLength:3::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/routes/knowledge/-components/template-markers.property.test.ts::path::minLength:1::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/routes/knowledge/-components/template-studio-inspector.tsx::STUDIO_FACETS::domain:[\"fields\",\"guidance\",\"history\",\"fill\"]::1",
+    "reason": "Existing STUDIO_FACETS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/routes/knowledge/-components/template-studio-model.ts::INPUT_TYPE_VALUES::domain:[\"text\",\"number\",\"boolean\",\"date\",\"select\"]::1",
+    "reason": "Existing INPUT_TYPE_VALUES domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/routes/knowledge/-components/template-studio-model.ts::numericKeys::domain:[\"minLength\",\"maxLength\",\"min\",\"max\",\"minItems\",\"maxItems\"]::1",
+    "reason": "Existing numericKeys domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/routes/knowledge/-components/template-wizard.tsx::FIELD_TYPE_CHOICES::domain:[\"text\",\"number\",\"date\",\"select\",\"company\"]::1",
+    "reason": "Existing FIELD_TYPE_CHOICES domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/routes/knowledge/-components/use-clause-body-save.dom.test.tsx::<module>::maxLength:40::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/routes/knowledge/-components/use-clause-body-save.dom.test.tsx::<module>::maxLength:40::2",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/routes/knowledge/-components/use-clause-body-save.dom.test.tsx::<module>::maxLength:4::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/routes/knowledge/-components/use-clause-body-save.dom.test.tsx::<module>::maxLength:4::2",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/routes/knowledge/-components/use-clause-body-save.dom.test.tsx::<module>::minLength:1::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/routes/knowledge/tools.tsx::KIND_VALUES::domain:[\"all\",\"skill\",\"mcp\"]::1",
+    "reason": "Existing KIND_VALUES domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/routes/law/-case-detail.logic.ts::optionalPublicDecisionSearchQuerySchema::maxLength:512::1",
+    "reason": "Existing optionalPublicDecisionSearchQuerySchema UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/law/-law-coverage/coverage-page.tsx::PENDING_ROW_KEYS::domain:[\"a\",\"b\",\"c\",\"d\"]::1",
+    "reason": "Existing PENDING_ROW_KEYS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/routes/law/-law-coverage/coverage-page.tsx::PENDING_SECTION_KEYS::domain:[\"first\",\"second\"]::1",
+    "reason": "Existing PENDING_SECTION_KEYS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/routes/law/-law-home/law-scope-picker.tsx::SCOPE_ORDER::domain:[\"statutes\",\"decisions\"]::1",
+    "reason": "Existing SCOPE_ORDER domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/routes/law/-statutes-index.logic.test.ts::<module>::domain:[\"enter\",\"preload\",\"stay\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/routes/law/index.tsx::PENDING_ROW_KEYS::domain:[\"a\",\"b\",\"c\"]::1",
+    "reason": "Existing PENDING_ROW_KEYS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/routes/law/index.tsx::searchSchema::maxLength:3::1",
+    "reason": "Existing searchSchema UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/onboarding/-components/onboarding-layout-assets.test.ts::<module>::domain:[\"light\",\"dark\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/routes/onboarding/-components/steps/download-step.tsx::DOWNLOAD_TARGETS::domain:[\"desktop\",\"assistant\"]::1",
+    "reason": "Existing DOWNLOAD_TARGETS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/routes/onboarding/-components/steps/organization-step.tsx::OrganizationStep::maxLength:50::1",
+    "reason": "Existing OrganizationStep UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/onboarding/-components/steps/organization-step.tsx::makeSchema::maxLength:50::1",
+    "reason": "Existing makeSchema UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/onboarding/-queries.ts::onboardingKeys::domain:[\"onboarding\",\"native-tool-deploy-availability\"]::1",
+    "reason": "Existing onboardingKeys domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/routes/tools/-components/public-tools-index.logic.ts::PUBLIC_TOOL_GROUPS::domain:[\"skills\",\"data-sources\",\"included\"]::1",
+    "reason": "Existing PUBLIC_TOOL_GROUPS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/routes/tools/-components/public-tools-index.logic.ts::PUBLIC_TOOL_TASKS::domain:[\"review-agreements\",\"research-precedents\",\"verify-organizations\",\"protect-client-data\",\"prepare-documents\"]::1",
+    "reason": "Existing PUBLIC_TOOL_TASKS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/routes/tools/-components/tool-catalogue-card.tsx::DISTINCT_BUILT_IN_ICONS::domain:[\"anonymize\",\"create-docx\",\"web-search\"]::1",
+    "reason": "Existing DISTINCT_BUILT_IN_ICONS domain; contract ownership pending migration."
+  }
+]

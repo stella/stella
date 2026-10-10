@@ -2,7 +2,8 @@ import { panic, Result } from "better-result";
 import { t } from "elysia";
 
 import { billingArrangements } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { rateRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import {
   billingArrangementResponse,
@@ -19,6 +20,9 @@ const updateBillingArrangement = createSafeHandler(
     description:
       "Set the matter's current billing arrangement in integer minor currency units. Hourly supports an optional positive cap and alert threshold in basis points; flat fee supplies one amount. Refused for mixed-currency existing charged work or a cap below reserved invoice time. Changes do not change invoice snapshots.",
     permissions: { rate: ["update"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: { featureId: "time-billing", type: "required" },
+    realtime: rateRealtimeUpdates,
     mcp: {
       type: "capability",
       reason: "billing_admin",

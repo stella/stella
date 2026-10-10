@@ -7,16 +7,22 @@ import type {
   CreateIngestionDbOptions,
   SafeDbRetryConfig as BaseSafeDbRetryConfig,
 } from "@/api/db/scoped";
+import { withAggregateSavepoint } from "@/api/lib/db/aggregate-lock";
+import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { DatabaseRlsError } from "@/api/lib/errors/tagged-errors";
 import { PG_ERROR } from "@/api/lib/pg-error";
+
+export { abortTransaction };
 
 /**
  * Scoped database handle that wraps every operation in a short-lived RLS
  * transaction. Handlers receive this capability from auth and must not import
  * the owner-level database handle.
  */
-export type ScopedDb = <T>(fn: (tx: Transaction) => Promise<T>) => Promise<T>;
+export type ScopedDb<TTransaction = Transaction> = <T>(
+  fn: (tx: TTransaction) => Promise<T>,
+) => Promise<T>;
 
 /** Corpus operations can bound schema-lane waits; createIngestionDb honors these budgets. */
 export type IngestionScopedDb = <T>(
@@ -40,8 +46,8 @@ export const defaultDatabaseRetry: SafeDbRetryConfig = {
   },
 };
 
-export type SafeDb = <T>(
-  fn: (tx: Transaction) => Promise<T>,
+export type SafeDb<TTransaction = Transaction> = <T>(
+  fn: (tx: TTransaction) => Promise<T>,
   retry?: SafeDbRetryConfig,
 ) => Promise<Result<T, SafeDbError>>;
 
@@ -102,7 +108,7 @@ export const withResultSavepoint = async <T>(
   let refusal: HandlerError | SafeDbError | undefined;
   const result = await Result.tryPromise(
     async () =>
-      await tx.transaction(async (savepoint) => {
+      await withAggregateSavepoint(tx, async (savepoint) => {
         const outcome = await run(savepoint);
         if (outcome.isErr()) {
           refusal = outcome.error;
@@ -129,7 +135,7 @@ export const resultTx = async <T>(
   const result = await abortableTx(safeDb, async (tx) => {
     const outcome = await run(tx);
     if (outcome.isErr()) {
-      throw outcome.error;
+      abortTransaction(outcome.error);
     }
     return outcome.value;
   });

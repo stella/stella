@@ -35,7 +35,7 @@ export const SANDBOX_CONSOLE_METHODS = [
 export const SANDBOX_NAME_GUIDE_BRIDGE_GLOBAL = "__nameGuideCall" as const;
 
 /** Local alias in emitted prelude for the captured name-guide bridge. */
-export const SANDBOX_NAME_GUIDE_LOCAL_ALIAS = "__nameGuideBridge" as const;
+const SANDBOX_NAME_GUIDE_LOCAL_ALIAS = "__nameGuideBridge" as const;
 
 /**
  * `name` of the error a guided name throws when it stands for no script

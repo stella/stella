@@ -126,7 +126,7 @@ const calibrateSurface = async ({
   toolBaseTokens,
 }: CalibrateOptions): Promise<Result<SurfaceCalibration, CountTokensError>> =>
   await Result.gen(async function* () {
-    const tools = toMcpTools(listStaticMcpToolDefinitions(mode), mode);
+    const tools = toMcpTools(listStaticMcpToolDefinitions(mode), { mode });
     const bareTools = tools.map(({ name, inputSchema }) => ({
       name,
       input_schema: inputSchema,

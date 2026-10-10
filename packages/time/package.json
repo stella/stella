@@ -1,6 +1,6 @@
 {
   "name": "@stll/time",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "description": "Time helpers: named duration constants, calendar-date parsing and arithmetic, and a side-effect-free Temporal",
   "keywords": [
     "date",

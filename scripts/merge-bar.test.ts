@@ -1,16 +1,18 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import {
   chmodSync,
   existsSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import * as v from "valibot";
 
 import {
   extractPlanSelector,
@@ -18,6 +20,19 @@ import {
   runPlanScopes,
   runPlanSelector,
 } from "./ci-plan-selector";
+import { pilotFastJobs } from "./ci-pr-pilot-plan";
+import annotations0_0 from "./fixtures/merge-group-ejections/37727028977-113149115699-annotations.json" with { type: "json" };
+import annotations0_1 from "./fixtures/merge-group-ejections/37727028977-113149903942-annotations.json" with { type: "json" };
+import realJobs0 from "./fixtures/merge-group-ejections/37727028977-jobs.json" with { type: "json" };
+import realRun0 from "./fixtures/merge-group-ejections/37727028977-run.json" with { type: "json" };
+import annotations1_0 from "./fixtures/merge-group-ejections/37727864876-113150755188-annotations.json" with { type: "json" };
+import annotations1_1 from "./fixtures/merge-group-ejections/37727864876-113152580573-annotations.json" with { type: "json" };
+import realJobs1 from "./fixtures/merge-group-ejections/37727864876-jobs.json" with { type: "json" };
+import realRun1 from "./fixtures/merge-group-ejections/37727864876-run.json" with { type: "json" };
+import annotations2_0 from "./fixtures/merge-group-ejections/37728096499-113150751404-annotations.json" with { type: "json" };
+import annotations2_1 from "./fixtures/merge-group-ejections/37728096499-113151718553-annotations.json" with { type: "json" };
+import realJobs2 from "./fixtures/merge-group-ejections/37728096499-jobs.json" with { type: "json" };
+import realRun2 from "./fixtures/merge-group-ejections/37728096499-run.json" with { type: "json" };
 import {
   armAndVerify,
   checkEjectedHead,
@@ -31,11 +46,19 @@ import {
   formatQueuePlacementFailure,
   isReleasePullRequest,
   latestEjection,
+  MERGE_BAR_REPOSITORIES,
+  type MergeBarRepository,
   mergeBarRepositoryPolicy,
   mergeWhenReadyAction,
   parseMergeQueueRemovals,
+  readMergeGroupRecord,
+  parseMergeGroupAnnotations,
+  pullRequestCheckRuns,
+  type RatchetFreshness,
+  ratchetFreshnessFor,
   RatchetRecheckError,
   readFastRequiredJobs,
+  readMergeBarRepository,
   readMergeHandoff,
   requiredChecksSucceeded,
   unrunPlannedJobs,
@@ -45,7 +68,22 @@ import {
   type MergeQueueRemoval,
   type RunJob,
 } from "./merge-bar";
-import ratchetDefinitionPaths from "./ratchet-definition-paths.json";
+import {
+  parseCiCoverageLog,
+  type CiCoverageEvidence,
+  type CiRunEvidence,
+} from "./merge-bar-ci-coverage";
+import { RATCHET_METRICS } from "./ratchet";
+import ratchetDefinitionPaths from "./ratchet-definition-paths.json" with { type: "json" };
+
+// The CLI runs below spawn the real script offline against a fake gh, as a
+// local test run; its source freshness check is covered in
+// merge-bar-freshness.test.ts.
+const CLI_TEST_ENV = {
+  NODE_ENV: "test",
+  STELLA_LOCAL_DEV: "1",
+  STELLA_MERGE_BAR_TEST_SKIP_FRESHNESS: "1",
+};
 
 const HEAD_SHA = "1f0c3a7d9e5b4c2a8d6f0e1b3c5a7d9e5b4c2a8d";
 const OTHER_SHA = "9e5b4c2a8d6f0e1b3c5a7d9e5b4c2a8d6f0e1b3c";
@@ -57,6 +95,7 @@ type MigrationGatewayOptions = {
   repo?: string;
   detailsUrl?: string;
   claTitle?: string;
+  dispatchedCiConclusion?: string;
 };
 
 const runMigrationGateway = (
@@ -66,6 +105,7 @@ const runMigrationGateway = (
     repo = "stella/stella",
     detailsUrl = "https://github.com/stella/stella/actions/runs/1",
     claTitle = "",
+    dispatchedCiConclusion = "",
   }: MigrationGatewayOptions = {},
 ) => {
   const directory = mkdtempSync(path.join(tmpdir(), "merge-bar-files-"));
@@ -97,11 +137,19 @@ case "$*" in
   *reviewThreads*) printf '%s\\n' '{"nodes":[],"pageInfo":{"hasNextPage":false}}';;
   *'api graphql'*) printf '%s\\n' "$FIXTURE_PULL_REQUEST";;
   *rules/branches/main*) printf '%s\\n' '[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"ci-result"}]}}]';;
+  *'actions/runs?head_sha='*)
+    printf '7\\t.github/workflows/ci.yml\\tpull_request\\n'
+    if [ -n "$FIXTURE_DISPATCHED_CI" ]; then
+      printf '8\\t.github/workflows/ci.yml\\tworkflow_dispatch\\n'
+    fi;;
   *check-runs/1*) printf '%s\\n' "$FIXTURE_CHECK_RUN";;
   *actions/runs/1*) printf '%s\\n' '{"head_sha":"${HEAD_SHA}","pull_requests":[{"number":123,"head":{"sha":"${HEAD_SHA}"},"base":{"ref":"main","sha":"${OTHER_SHA}"}}]}';;
   *compare/*) printf '%s\\n' '{"status":"identical"}';;
   *check-runs*)
-    printf '1\\tci-result\\tcompleted\\tsuccess\\t\\n'
+    printf '1\\tci-result\\tcompleted\\tsuccess\\t\\t7\\n'
+    if [ -n "$FIXTURE_DISPATCHED_CI" ]; then
+      printf '9\\tci-result\\tcompleted\\t%s\\t\\t8\\n' "$FIXTURE_DISPATCHED_CI"
+    fi
     if [ -n "$FIXTURE_CLA_TITLE" ]; then
       case "$*" in
         *'.output.title'*) printf '2\\tcla\\tcompleted\\tfailure\\t%s\\n' "$FIXTURE_CLA_TITLE";;
@@ -128,10 +176,12 @@ esac
       ],
       env: {
         ...process.env,
+        ...CLI_TEST_ENV,
         PATH: `${directory}${path.delimiter}${process.env["PATH"] ?? ""}`,
         FIXTURE_PULL_REQUEST: pullRequest,
         FIXTURE_CHECK_RUN: JSON.stringify({ details_url: detailsUrl }),
         FIXTURE_CLA_TITLE: claTitle,
+        FIXTURE_DISPATCHED_CI: dispatchedCiConclusion,
         FIXTURE_FILES: files.map((file) => JSON.stringify(file)).join("\n"),
         FIXTURE_CHANGED_FILES: String(changedFiles),
       },
@@ -152,11 +202,22 @@ const checkRun = (
   name: string,
   status: string,
   conclusion: string | null,
-  { id = 1, outputTitle = "" } = {},
-) => ({ id, name, status, conclusion, outputTitle });
+  {
+    id = 1,
+    outputTitle = "",
+    checkSuiteId,
+  }: { id?: number; outputTitle?: string; checkSuiteId?: number } = {},
+) => ({
+  id,
+  name,
+  status,
+  conclusion,
+  outputTitle,
+  ...(checkSuiteId === undefined ? {} : { checkSuiteId }),
+});
 
-/** Any repository this one does not enumerate, which the bar treats alike. */
-const PRIVATE_REPO = "stella/private";
+/** A declared repository without stella's migrations or ratchet. */
+const PRIVATE_REPO = "stella/stella-infra";
 
 const REPO_ROOT = fileURLToPath(new URL("..", import.meta.url));
 
@@ -197,6 +258,7 @@ case "$*" in
   'variable get STELLA_MERGE_HOLD --repo '*) printf '%s\\n' 'variable STELLA_MERGE_HOLD was not found' >&2; exit 1;;
   *reviewThreads*) printf '%s\\n' '{"nodes":[],"pageInfo":{"hasNextPage":false}}';;
   *rules/branches/main*) printf '%s\\n' '[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"Overlay check"}]}}]';;
+  *'actions/runs?head_sha='*) ;;
   *check-runs/1*) printf '%s\\n' '{"details_url":"https://github.com/stella/stella/actions/runs/1"}';;
   *actions/runs/1*) printf '%s\\n' '{"head_sha":"${HEAD_SHA}","pull_requests":[{"number":123,"head":{"sha":"${HEAD_SHA}"},"base":{"ref":"main","sha":"${OTHER_SHA}"}}]}';;
   *compare/*) printf '%s\\n' '{"status":"identical"}';;
@@ -221,6 +283,7 @@ esac
         ],
         env: {
           ...process.env,
+          ...CLI_TEST_ENV,
           PATH: `${directory}${path.delimiter}${process.env["PATH"] ?? ""}`,
           GH_READ_TOKEN: "read-fixture",
           GH_TOKEN: "write-fixture",
@@ -281,6 +344,7 @@ esac
           ],
           env: {
             ...process.env,
+            ...CLI_TEST_ENV,
             PATH: `${directory}${path.delimiter}${process.env["PATH"] ?? ""}`,
           },
           stdout: "pipe",
@@ -407,13 +471,14 @@ case "$*" in
     esac;;
   *REMOVED_FROM_MERGE_QUEUE_EVENT*) printf '%s\\n' '[]';;
   *enqueuePullRequest*)
-    case "$*" in *'mergeQueueEntry { id position jump state headCommit { oid } }'*) ;; *) exit 97;; esac
+    case "$*" in *'mergeQueueEntry { id position jump state }'*) ;; *) exit 97;; esac
     printf '%s\\n' '{"data":{"enqueuePullRequest":{"mergeQueueEntry":{"id":"entry","position":1,"jump":${mutationJump},"state":"QUEUED","headCommit":{"oid":"${HEAD_SHA}"}}}}}';;
   *'mergeQueue(branch'*)
     case "$*" in *'position jump state pullRequest'*) ;; *) exit 98;; esac
     printf '%s\\n' '${queue}';;
   *reviewThreads*) printf '%s\\n' '{"nodes":[],"pageInfo":{"hasNextPage":false}}';;
   *rules/branches/main*) printf '%s\\n' '[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"ci-result"}]}},{"type":"merge_queue","parameters":{}}]';;
+  *'actions/runs?head_sha='*) ;;
   *check-runs/1*) printf '%s\\n' '{"details_url":"https://github.com/stella/stella/actions/runs/1"}';;
   *actions/runs/1*) printf '%s\\n' '{"head_sha":"${HEAD_SHA}","pull_requests":[{"number":123,"head":{"sha":"${HEAD_SHA}"},"base":{"ref":"main","sha":"${OTHER_SHA}"}}]}';;
   *compare/*) printf '%s\\n' '{"status":"identical"}';;
@@ -438,6 +503,7 @@ esac
           ],
           env: {
             ...process.env,
+            ...CLI_TEST_ENV,
             PATH: `${directory}${path.delimiter}${process.env["PATH"] ?? ""}`,
           },
           stdout: "pipe",
@@ -501,6 +567,7 @@ case "$*" in
   *REMOVED_FROM_MERGE_QUEUE_EVENT*) printf '%s\\n' '[]';;
   *reviewThreads*) printf '%s\\n' '{"nodes":[],"pageInfo":{"hasNextPage":false}}';;
   *rules/branches/main*) printf '%s\\n' '[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"ci-result"}]}},{"type":"merge_queue","parameters":{}}]';;
+  *'actions/runs?head_sha='*) ;;
   *check-runs/1*) printf '%s\\n' '{"details_url":"https://github.com/stella/stella/actions/runs/1"}';;
   *actions/runs/1*) printf '%s\\n' '{"head_sha":"${HEAD_SHA}","pull_requests":[{"number":123,"head":{"sha":"${HEAD_SHA}"},"base":{"ref":"main","sha":"${OTHER_SHA}"}}]}';;
   *compare/*) printf '%s\\n' '{"status":"identical"}';;
@@ -526,6 +593,7 @@ esac
           ],
           env: {
             ...process.env,
+            ...CLI_TEST_ENV,
             PATH: `${directory}${path.delimiter}${process.env["PATH"] ?? ""}`,
           },
           stdout: "pipe",
@@ -586,6 +654,15 @@ describe("migration file gateway", () => {
     ]);
     expect(withInventory.exitCode).toBe(0);
     expect(withInventory.stdout).toContain("verdict: MERGE (dry run");
+  });
+
+  test("a dispatched CI run on the head does not override the pull request's CI", () => {
+    const result = runMigrationGateway([], {
+      changedFiles: 0,
+      dispatchedCiConclusion: "failure",
+    });
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("verdict: MERGE (dry run");
   });
 
   test("a renamed inventory file is recognized as an inventory change", () => {
@@ -674,7 +751,7 @@ const failedGate = (snapshot: MergeBarSnapshot) => {
 describe("merge bar", () => {
   test("uses the target branch's live required checks for public repositories", () => {
     expect(
-      mergeBarRepositoryPolicy("stella/tooling", [
+      mergeBarRepositoryPolicy("stella/folio", [
         {
           type: "required_status_checks",
           parameters: { required_status_checks: [{ context: "checks" }] },
@@ -705,9 +782,6 @@ describe("merge bar", () => {
       migrationDirectory: "apps/api/drizzle",
       landing: "merge-when-ready",
     });
-    expect(mergeBarRepositoryPolicy("Stella/Stella", stellaRules).landing).toBe(
-      "merge-when-ready",
-    );
 
     const infraRules = [
       {
@@ -735,8 +809,8 @@ describe("merge bar", () => {
   });
 
   test("refuses a repository with no live required checks", () => {
-    expect(() => mergeBarRepositoryPolicy(PRIVATE_REPO, [])).toThrow(
-      "No required status checks are active for stella/private",
+    expect(() => mergeBarRepositoryPolicy("stella/folio", [])).toThrow(
+      "No required status checks are active for stella/folio",
     );
   });
 
@@ -1416,6 +1490,78 @@ describe("explicit merge queue jumps", () => {
   });
 });
 
+describe("pull request check runs", () => {
+  const ci = (checkSuiteId: number, event: string) => ({
+    checkSuiteId,
+    path: ".github/workflows/ci.yml",
+    event,
+  });
+
+  test("a dispatched CI run on the same head neither blocks nor passes the pull request", () => {
+    const required = ["ci-result"];
+    const prGreen = checkRun("ci-result", "completed", "success", {
+      id: 10,
+      checkSuiteId: 1,
+    });
+    const dispatchedRed = checkRun("ci-result", "completed", "failure", {
+      id: 20,
+      checkSuiteId: 2,
+    });
+    const workflowRuns = [ci(1, "pull_request"), ci(2, "workflow_dispatch")];
+
+    const judged = pullRequestCheckRuns({
+      checkRuns: [prGreen, dispatchedRed],
+      workflowRuns,
+    });
+    expect(judged).toEqual([prGreen]);
+    expect(
+      requiredChecksSucceeded({
+        checkRuns: judged,
+        requiredCheckRuns: required,
+      }),
+    ).toBe(true);
+
+    const dispatchedGreen = { ...dispatchedRed, conclusion: "success" };
+    const prRed = { ...prGreen, conclusion: "failure" };
+    expect(
+      requiredChecksSucceeded({
+        checkRuns: pullRequestCheckRuns({
+          checkRuns: [prRed, dispatchedGreen],
+          workflowRuns,
+        }),
+        requiredCheckRuns: required,
+      }),
+    ).toBe(false);
+  });
+
+  test("merge-group CI runs and check runs from other workflows are kept", () => {
+    const mergeGroup = checkRun("ci-result", "completed", "success", {
+      id: 30,
+      checkSuiteId: 3,
+    });
+    const cla = checkRun("cla", "completed", "success", {
+      id: 40,
+      checkSuiteId: 4,
+    });
+    const unknownSuite = checkRun("dependency-review", "completed", "success", {
+      id: 50,
+    });
+    expect(
+      pullRequestCheckRuns({
+        checkRuns: [mergeGroup, cla, unknownSuite],
+        workflowRuns: [
+          ci(3, "merge_group"),
+          {
+            checkSuiteId: 4,
+            path: ".github/workflows/cla.yml",
+            event: "workflow_dispatch",
+          },
+        ],
+      }),
+    ).toEqual([mergeGroup, cla, unknownSuite]);
+  });
+});
+
 describe("repository merge hold", () => {
   test.each([
     { checkedByWorkflow: "1", githubActions: "true", expectedReads: 0 },
@@ -1539,6 +1685,7 @@ esac
           ],
           env: {
             ...process.env,
+            ...CLI_TEST_ENV,
             PATH: `${directory}${path.delimiter}${process.env["PATH"] ?? ""}`,
           },
           stdout: "pipe",
@@ -1612,6 +1759,21 @@ describe("green result freshness", () => {
       },
     ],
   };
+  const baseDefinitions = ({
+    readDefinitionPaths = (branch: string) => {
+      expect(branch).toBe("main");
+      return ratchetDefinitionPaths;
+    },
+    recheck = () => {
+      throw new Error("unexpected ratchet recheck");
+    },
+  }: Partial<
+    Omit<Extract<RatchetFreshness, { type: "base-definitions" }>, "type">
+  >): RatchetFreshness => ({
+    type: "base-definitions",
+    readDefinitionPaths,
+    recheck,
+  });
   const readers = (comparison: unknown) => ({
     pullRequest: passingSnapshot().pullRequest,
     jump: false,
@@ -1624,19 +1786,80 @@ describe("green result freshness", () => {
     },
     readPullFiles: () => ["scripts/shared.ts"],
     readBaseWorkflow: () => null,
+    readTestedBaseWorkflow: () => "jobs: {}",
+    readHeadWorkflow: () => "jobs: {}",
     runSelector: () => {
       throw new Error("unexpected plan run");
     },
+    readRunCoverage: () => Result.ok({ profile: "normal-v1" as const }),
     readRunJobs: () => {
       throw new Error("unexpected run jobs read");
     },
-    readRatchetDefinitionPaths: (branch: string) => {
-      expect(branch).toBe("main");
-      return ratchetDefinitionPaths;
-    },
-    recheckRatchet: () => {
-      throw new Error("unexpected ratchet recheck");
-    },
+    ratchet: baseDefinitions({}),
+    mergeGroupRetests: true,
+  });
+
+  test("a direct merge still refuses a green result once main has moved", () => {
+    const direct = (comparison: unknown, pullFiles = ["scripts/shared.ts"]) =>
+      checkGreenResultFreshness({
+        ...readers(comparison),
+        readPullFiles: () => pullFiles,
+        mergeGroupRetests: false,
+      });
+    for (const [comparison, pullFiles, message] of [
+      [
+        { status: "ahead", ahead_by: 21, files: [] },
+        undefined,
+        "main advanced 21 commits since the green run (limit 20)",
+      ],
+      [
+        {
+          status: "ahead",
+          ahead_by: 1,
+          files: Array.from({ length: 300 }, () => ({
+            filename: "unrelated.ts",
+          })),
+        },
+        undefined,
+        "cannot establish complete changed-file coverage for main",
+      ],
+      [
+        {
+          status: "ahead",
+          ahead_by: 1,
+          files: [{ filename: "scripts/shared.ts" }],
+        },
+        undefined,
+        "main changed files also touched by this PR: scripts/shared.ts",
+      ],
+      [
+        {
+          status: "ahead",
+          ahead_by: 1,
+          files: [{ filename: "scripts/ownership.ts" }],
+        },
+        ["scripts/ratchet.ts"],
+        "main changed the ratchet since the green run (scripts/ownership.ts) and this PR changes it too",
+      ],
+      [
+        {
+          status: "ahead",
+          ahead_by: 1,
+          files: [{ filename: "scripts/ownership/example.ts" }],
+        },
+        ["scripts/ownership/another.ts"],
+        "main changed the ratchet since the green run (scripts/ownership/example.ts) and this PR changes it too",
+      ],
+    ] as const) {
+      const result = direct(
+        comparison,
+        pullFiles === undefined ? undefined : [...pullFiles],
+      );
+      expect(result.isErr(), message).toBe(true);
+      if (result.isErr()) {
+        expect(result.error.message).toContain(message);
+      }
+    }
   });
 
   test("unchanged base and up to twenty unrelated commits retain green results", () => {
@@ -1656,7 +1879,9 @@ describe("green result freshness", () => {
     }
   });
 
-  test("overlapping edits and rename sources require refreshed CI", () => {
+  // The merge group re-runs full CI on the real merge commit, so main moving
+  // under a green PR is never by itself a reason to run its CI again.
+  test("overlapping edits and rename sources keep a green result queueable", () => {
     for (const file of [
       { filename: "scripts/shared.ts" },
       {
@@ -1667,11 +1892,7 @@ describe("green result freshness", () => {
       const result = checkGreenResultFreshness(
         readers({ status: "ahead", ahead_by: 1, files: [file] }),
       );
-      expect(result.isErr()).toBe(true);
-      if (result.isErr()) {
-        expect(result.error.message).toContain("scripts/shared.ts");
-        expect(result.error.message).toContain("merge main and let CI re-run");
-      }
+      expect(result.isOk()).toBe(true);
     }
   });
 
@@ -1690,6 +1911,8 @@ describe("green result freshness", () => {
     }),
     readPullFiles: () => [PR_FILE],
     readBaseWorkflow: () => planWorkflow(rule),
+    readTestedBaseWorkflow: () => planWorkflow(rule),
+    readHeadWorkflow: () => planWorkflow(rule),
     runSelector: (input: {
       selector: string;
       files: readonly string[];
@@ -1753,6 +1976,67 @@ describe("green result freshness", () => {
     }
   });
 
+  const workflowWithJobs = (...jobs: string[]) =>
+    Bun.YAML.stringify({
+      jobs: Object.fromEntries(jobs.map((job) => [job, {}])),
+    });
+
+  test("a job the PR removed does not make its green result stale", () => {
+    const result = checkGreenResultFreshness({
+      ...planReaders({ rule: SELECTING_RULE, runJobs: [guard] }),
+      readTestedBaseWorkflow: () => workflowWithJobs("e2e-production-shard"),
+      readHeadWorkflow: () => workflowWithJobs("replacement-job"),
+    });
+
+    expect(result.isOk(), result.isErr() ? result.error.message : "").toBe(
+      true,
+    );
+  });
+
+  test.each([
+    {
+      name: "main added the unrun job after the tested base",
+      testedBaseWorkflow: workflowWithJobs("existing-job"),
+      headWorkflow: workflowWithJobs("replacement-job"),
+      detail: "STALE_PLAN: main's CI plan now selects e2e-production-shard",
+    },
+    {
+      name: "the PR head keeps the unrun job",
+      testedBaseWorkflow: workflowWithJobs("e2e-production-shard"),
+      headWorkflow: workflowWithJobs("e2e-production-shard"),
+      detail: "STALE_PLAN: main's CI plan now selects e2e-production-shard",
+    },
+    {
+      name: "the tested-base workflow is unreadable",
+      testedBaseWorkflow: null,
+      headWorkflow: workflowWithJobs("replacement-job"),
+      detail: "cannot compare CI jobs at the tested base and PR head",
+    },
+    {
+      name: "the head workflow is unreadable",
+      testedBaseWorkflow: workflowWithJobs("e2e-production-shard"),
+      headWorkflow: null,
+      detail: "cannot compare CI jobs at the tested base and PR head",
+    },
+  ])(
+    "$name refuses the green result",
+    ({ testedBaseWorkflow, headWorkflow, detail }) => {
+      const result = checkGreenResultFreshness({
+        ...planReaders({ rule: SELECTING_RULE, runJobs: [guard] }),
+        readTestedBaseWorkflow: (sha) => {
+          expect(sha).toBe(OTHER_SHA);
+          return testedBaseWorkflow;
+        },
+        readHeadWorkflow: () => headWorkflow,
+      });
+
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error.message).toContain(detail);
+      }
+    },
+  );
+
   test("a planner main cannot evaluate refuses rather than passes", () => {
     const result = checkGreenResultFreshness({
       ...planReaders({ rule: SELECTING_RULE, runJobs: [] }),
@@ -1794,33 +2078,449 @@ describe("green result freshness", () => {
     },
   );
 
+  test("green pilot coverage defers only jobs guarded by the actual pilot predicate", () => {
+    const source = readFileSync(
+      path.join(REPO_ROOT, ".github/workflows/ci.yml"),
+      "utf-8",
+    );
+    const jobs = readFastRequiredJobs(source) ?? [];
+    const fast = pilotFastJobs(Bun.YAML.parse(source));
+    if (fast.status !== "valid") {
+      panic(fast.message);
+    }
+    const deferred = jobs.filter(
+      (job) =>
+        job.pilotGate === "deferred-capable" && !fast.jobs.includes(job.id),
+    );
+    expect(deferred.map((job) => job.id)).toContain("dependency-malware");
+    expect(deferred.map((job) => job.id)).toContain("parser-version-guard");
+    const plan = new Map(
+      jobs.flatMap(({ scope }) =>
+        scope.type === "selector" ? [[scope.variable, true] as const] : [],
+      ),
+    );
+    const completed = jobs
+      .filter((job) => !deferred.includes(job))
+      .map((job) => ({ name: job.id, conclusion: "success" }));
+    const evaluateFreshness = (
+      profile: "normal-v1" | "pilot-fast-v1",
+      runs: readonly RunJob[],
+    ) =>
+      checkGreenResultFreshness({
+        ...readers({ status: "ahead", ahead_by: 1, files: [] }),
+        readBaseWorkflow: () => source,
+        runSelector: () => Result.ok(plan),
+        readRunJobs: () => runs,
+        readRunCoverage: () =>
+          Result.ok(
+            profile === "normal-v1"
+              ? { profile }
+              : { profile, jobs: fast.jobs },
+          ),
+      });
+    expect(evaluateFreshness("pilot-fast-v1", completed).isOk()).toBe(true);
+    const missing = evaluateFreshness(
+      "pilot-fast-v1",
+      completed.filter((job) => job.name !== "ci-tests"),
+    );
+    expect(missing.isErr() && missing.error.message).toContain(
+      "STALE_PLAN: main's CI plan now selects ci-tests",
+    );
+    const normal = evaluateFreshness("normal-v1", completed);
+    expect(normal.isErr() && normal.error.message).toContain(
+      "parser-version-guard",
+    );
+    expect(
+      evaluateFreshness(
+        "normal-v1",
+        jobs.map((job) => ({ name: job.id, conclusion: "success" })),
+      ).isOk(),
+    ).toBe(true);
+  });
+
+  test("every fast-required predicate rejects a planted unmodeled gate", () => {
+    const source = readFileSync(
+      path.join(REPO_ROOT, ".github/workflows/ci.yml"),
+      "utf-8",
+    );
+    const original = readFastRequiredJobs(source) ?? [];
+    expect(original.length).toBeGreaterThan(0);
+    for (const job of original) {
+      const workflow = v.parse(
+        v.record(v.string(), v.unknown()),
+        Bun.YAML.parse(source),
+      );
+      const jobs = v.parse(v.record(v.string(), v.unknown()), workflow["jobs"]);
+      const body = v.parse(v.record(v.string(), v.unknown()), jobs[job.id]);
+      jobs[job.id] = body;
+      workflow["jobs"] = jobs;
+      body["if"] =
+        `(${v.parse(v.string(), body["if"])}) && vars.UNMODELED_GATE == 'on'`;
+      expect(
+        () => readFastRequiredJobs(JSON.stringify(workflow)),
+        job.id,
+      ).toThrow(`Unmodeled fast-required predicate: ${job.id}`);
+      const condition = v.parse(v.string(), body["if"]);
+      const contexts = [
+        ...new Set(
+          Array.from(
+            condition.matchAll(
+              /(?:needs\.ci-plan\.outputs\.\w+|inputs\.heavy_only|github\.event_name)/gu,
+            ),
+            (match) => match[0],
+          ),
+        ),
+      ];
+      expect(contexts.length, job.id).toBeGreaterThan(0);
+      for (const gate of contexts) {
+        body["if"] = condition
+          .replaceAll(gate, "vars.UNMODELED_GATE")
+          .replace(" && vars.UNMODELED_GATE == 'on'", "");
+        expect(
+          () => readFastRequiredJobs(JSON.stringify(workflow)),
+          `${job.id}: ${gate}`,
+        ).toThrow(`Unmodeled fast-required predicate: ${job.id}`);
+      }
+    }
+  });
+
+  test("coverage log parsing retains the zero super-linear-regex budget", () => {
+    const metric = RATCHET_METRICS.find(
+      (entry) => entry.id === "super-linear-regexes",
+    );
+    if (metric?.scope !== "file" || metric.measurement !== undefined) {
+      panic("Missing super-linear regex file metric");
+    }
+    const file = "scripts/merge-bar-ci-coverage.ts";
+    const legacy = String.raw`const entry = /^\s+([A-Z_]+):\s*(.*)$/u;`;
+    expect(metric.count(legacy, { file })).toBe(1);
+    expect(
+      metric.count(readFileSync(path.join(REPO_ROOT, file), "utf-8"), { file }),
+    ).toBe(0);
+  });
+
+  test("coverage evidence follows timestamped entries across raw multiline values", () => {
+    const log = `2000-01-01T00:00:00.0000000Z ##[group]Run neutral command
+2000-01-01T00:00:00.0000000Z env:
+2000-01-01T00:00:00.0000000Z   NEEDS: {
+  "neutral": {
+    "result": "success"
+  }
+}
+2000-01-01T00:00:00.0000000Z   MULTILINE: neutral
+  COVERAGE_PROFILE: normal-v1
+  PILOT_FAST_JOBS: []
+##[endgroup]
+env:
+2000-01-01T00:00:00.0000000Z   COVERAGE_PROFILE: pilot-fast-v1
+2000-01-01T00:00:00.0000000Z   PILOT_FAST_JOBS: ["ci-tests"]
+2000-01-01T00:00:00.0000000Z ##[endgroup]
+`;
+    const result = parseCiCoverageLog(log);
+    expect(result.isOk() && result.value).toEqual({
+      profile: "pilot-fast-v1",
+      jobs: ["ci-tests"],
+    });
+    const forged = log.replace(
+      "2000-01-01T00:00:00.0000000Z   COVERAGE_PROFILE: pilot-fast-v1\n",
+      "",
+    );
+    expect(parseCiCoverageLog(forged).isErr()).toBe(true);
+    const continued = log.replace(
+      "  COVERAGE_PROFILE: pilot-fast-v1\n",
+      "  COVERAGE_PROFILE: pilot-fast-v1\ninvalid continuation\n",
+    );
+    expect(parseCiCoverageLog(continued).isErr()).toBe(true);
+  });
+
+  test("every saved real CI-result log yields its declared coverage evidence", () => {
+    const pilot = {
+      profile: "pilot-fast-v1",
+      jobs: [
+        "ci-checks-docs",
+        "ci-checks-generated",
+        "ci-checks-policy",
+        "ci-checks-rest",
+        "ci-generated-sources",
+        "ci-plan",
+        "ci-result",
+        "ci-tests",
+        "code-quality-api",
+        "code-quality-rest",
+        "code-quality-web",
+        "typecheck-baseline",
+      ],
+    } satisfies CiCoverageEvidence;
+    const expected = {
+      "merge-bar-coverage-pilot-pr-37632840538.log": pilot,
+      "merge-bar-coverage-pilot-pr-37636655670.log": pilot,
+      "merge-bar-coverage-queue-validation-37635149518.log": {
+        profile: "queue-validation",
+      },
+      "merge-bar-coverage-merge-group-37635202900.log": {
+        profile: "normal-v1",
+      },
+      "merge-bar-coverage-merge-group-37635199875.log": {
+        profile: "normal-v1",
+      },
+      "merge-bar-coverage-queue-validation-37646416358.log": {
+        profile: "queue-validation",
+      },
+      // Retain the previously saved single-line env envelope too.
+      "merge-bar-pilot-coverage.log": pilot,
+    } satisfies Record<string, CiRunEvidence>;
+    const directory = path.join(REPO_ROOT, "scripts/fixtures");
+    expect(
+      readdirSync(directory)
+        .filter(
+          (file) =>
+            file.startsWith("merge-bar-coverage-") ||
+            file === "merge-bar-pilot-coverage.log",
+        )
+        .toSorted(),
+    ).toEqual(Object.keys(expected).toSorted());
+    for (const [file, evidence] of Object.entries(expected)) {
+      const result = parseCiCoverageLog(
+        readFileSync(path.join(directory, file), "utf-8"),
+      );
+      expect(
+        result.isOk(),
+        `${file}: ${result.isErr() ? result.error.message : ""}`,
+      ).toBe(true);
+      expect(result.isOk() && result.value, file).toEqual(evidence);
+    }
+  });
+
+  describe("an ejected head's queue validation", () => {
+    // Real runs of one head: the pilot-fast coverage run, then the pull_request
+    // `enqueued` validation that outlived its ejected merge-queue entry.
+    const COVERAGE_RUN = 37_636_655_670;
+    const VALIDATION_RUN = 37_646_416_358;
+    const fixture = (file: string) =>
+      parseCiCoverageLog(
+        readFileSync(path.join(REPO_ROOT, "scripts/fixtures", file), "utf-8"),
+      );
+    const logs = new Map([
+      [COVERAGE_RUN, fixture("merge-bar-coverage-pilot-pr-37636655670.log")],
+      [
+        VALIDATION_RUN,
+        fixture("merge-bar-coverage-queue-validation-37646416358.log"),
+      ],
+    ]);
+    const source = readFileSync(
+      path.join(REPO_ROOT, ".github/workflows/ci.yml"),
+      "utf-8",
+    );
+    const jobs = readFastRequiredJobs(source) ?? [];
+    const fast = pilotFastJobs(Bun.YAML.parse(source));
+    if (fast.status !== "valid") {
+      panic(fast.message);
+    }
+    const fastJobs = fast.jobs;
+    const plan = new Map(
+      jobs.flatMap(({ scope }) =>
+        scope.type === "selector" ? [[scope.variable, true] as const] : [],
+      ),
+    );
+    // The validation run plans and aggregates; every other job is skipped.
+    const runJobs = new Map<number, RunJob[]>([
+      [
+        COVERAGE_RUN,
+        jobs
+          .filter(({ id }) => fastJobs.includes(id))
+          .map(({ id }) => ({ name: id, conclusion: "success" })),
+      ],
+      [
+        VALIDATION_RUN,
+        jobs.map(({ id }) => ({
+          name: id,
+          conclusion: id === "ci-result" ? "success" : "skipped",
+        })),
+      ],
+    ]);
+    const ciResult = (id: number, conclusion = "success") => ({
+      id,
+      name: "ci-result",
+      status: "completed",
+      conclusion,
+    });
+    const evaluate = (
+      ciResults: ReturnType<typeof ciResult>[],
+      overrides: Partial<Parameters<typeof checkGreenResultFreshness>[0]> = {},
+    ) => {
+      const coverageReads: number[] = [];
+      const snapshot = passingSnapshot();
+      const result = checkGreenResultFreshness({
+        ...readers({ status: "ahead", ahead_by: 1, files: [] }),
+        checkRuns: [
+          ...snapshot.checkRuns.filter(({ name }) => name !== "ci-result"),
+          ...ciResults,
+        ],
+        // Check-run ids stand in for their workflow runs here.
+        readWorkflowRun: (checkRunId: number) => ({ ...run, id: checkRunId }),
+        readBaseComparison: () => ({ status: "ahead", ahead_by: 1, files: [] }),
+        readBaseWorkflow: () => source,
+        runSelector: () => Result.ok(plan),
+        readRunCoverage: (runId: number) => {
+          coverageReads.push(runId);
+          return logs.get(runId) ?? panic(`unexpected run ${runId}`);
+        },
+        readRunJobs: (runId: number) =>
+          runJobs.get(runId) ?? panic(`unexpected run ${runId}`),
+        ...overrides,
+      });
+      return { result, coverageReads };
+    };
+
+    test("the real logs carry the evidence this relies on", () => {
+      const evidence = (runId: number) => {
+        const log = logs.get(runId);
+        return log?.match({
+          ok: (value): CiRunEvidence | string => value,
+          err: (error) => error.message,
+        });
+      };
+      expect(evidence(VALIDATION_RUN)).toEqual({ profile: "queue-validation" });
+      expect(evidence(COVERAGE_RUN)).toEqual({
+        profile: "pilot-fast-v1",
+        jobs: [
+          "ci-checks-docs",
+          "ci-checks-generated",
+          "ci-checks-policy",
+          "ci-checks-rest",
+          "ci-generated-sources",
+          "ci-plan",
+          "ci-result",
+          "ci-tests",
+          "code-quality-api",
+          "code-quality-rest",
+          "code-quality-web",
+          "typecheck-baseline",
+        ],
+      });
+    });
+
+    test("is judged by the coverage run it re-checked", () => {
+      const { result, coverageReads } = evaluate([
+        ciResult(COVERAGE_RUN),
+        ciResult(VALIDATION_RUN),
+      ]);
+      expect(result.isOk(), result.isErr() ? result.error.message : "").toBe(
+        true,
+      );
+      expect(coverageReads).toEqual([VALIDATION_RUN, COVERAGE_RUN]);
+    });
+
+    test("without a green run below it, refuses instead of trusting skipped jobs", () => {
+      const alone = evaluate([ciResult(VALIDATION_RUN)]).result;
+      expect(alone.isErr() && alone.error.message).toContain(
+        "no green ci-result run below the queue validation covers this head",
+      );
+      for (const conclusion of ["failure", "cancelled", "skipped"]) {
+        const { result, coverageReads } = evaluate([
+          ciResult(COVERAGE_RUN, conclusion),
+          ciResult(VALIDATION_RUN),
+        ]);
+        expect(result.isErr(), conclusion).toBe(true);
+        expect(coverageReads).toEqual([VALIDATION_RUN]);
+      }
+    });
+
+    test("the coverage run below it still faces main's new plan", () => {
+      const missing = new Map(runJobs);
+      missing.set(
+        COVERAGE_RUN,
+        (runJobs.get(COVERAGE_RUN) ?? []).filter(
+          ({ name }) => name !== "ci-tests",
+        ),
+      );
+      const { result } = evaluate(
+        [ciResult(COVERAGE_RUN), ciResult(VALIDATION_RUN)],
+        {
+          readRunJobs: (runId: number) =>
+            missing.get(runId) ?? panic(`unexpected run ${runId}`),
+        },
+      );
+      expect(result.isErr() && result.error.message).toContain(
+        "STALE_PLAN: main's CI plan now selects ci-tests",
+      );
+    });
+  });
+
+  test("CI result coverage evidence reads producer-shaped environment logs", () => {
+    const log = (
+      profile: string,
+      jobs: string,
+    ) => `2000-01-01T00:00:00.0000000Z ##[group]Run if [[ "$QUEUE_DEPTH" == thin ]]; then
+2000-01-01T00:00:00.0000000Z shell: /usr/bin/bash -e {0}
+2000-01-01T00:00:00.0000000Z env:
+2000-01-01T00:00:00.0000000Z   COVERAGE_PROFILE: ${profile}
+2000-01-01T00:00:00.0000000Z   PILOT_FAST_JOBS: ${jobs}
+2000-01-01T00:00:00.0000000Z ##[endgroup]
+`;
+    const pilot = parseCiCoverageLog(
+      readFileSync(
+        path.join(REPO_ROOT, "scripts/fixtures/merge-bar-pilot-coverage.log"),
+        "utf-8",
+      ),
+    );
+    expect(pilot.isOk(), pilot.isErr() ? pilot.error.message : "").toBe(true);
+    expect(pilot.isOk() && pilot.value).toEqual({
+      profile: "pilot-fast-v1",
+      jobs: [
+        "ci-checks-docs",
+        "ci-checks-generated",
+        "ci-checks-policy",
+        "ci-checks-rest",
+        "ci-generated-sources",
+        "ci-plan",
+        "ci-result",
+        "ci-tests",
+        "code-quality-api",
+        "code-quality-rest",
+        "code-quality-web",
+        "typecheck-baseline",
+      ],
+    });
+    expect(parseCiCoverageLog(log("normal-v1", "")).isOk()).toBe(true);
+    for (const malformed of [
+      "",
+      log("unknown", "[]"),
+      log("pilot-fast-v1", "[]"),
+      log("pilot-fast-v1", '["ci-tests","ci-tests"]'),
+      log("pilot-fast-v1", "invalid"),
+      log("pilot-fast-v1", '["ci-tests"]') + log("normal-v1", "[]"),
+    ]) {
+      expect(parseCiCoverageLog(malformed).isErr()).toBe(true);
+    }
+  });
+
   test("main's real gate maps fast-required jobs to how they are planned", () => {
     const jobs =
       readFastRequiredJobs(
         readFileSync(path.join(REPO_ROOT, ".github/workflows/ci.yml"), "utf-8"),
       ) ?? [];
     const byId = new Map(jobs.map((job) => [job.id, job]));
-    expect(byId.get("e2e-production-shard")?.scope).toEqual({
+    for (const job of ["ci-checks-generated", "parser-version-guard"]) {
+      expect(byId.get(job)?.scope).toEqual({
+        type: "selector",
+        variable: "package_checks_required",
+      });
+    }
+    expect(byId.get("ci-checks-docs")?.scope).toEqual({
       type: "selector",
-      variable: "e2e_production_required",
+      variable: "docs_checks_required",
     });
-    expect(byId.get("parser-version-guard")?.scope).toEqual({
-      type: "always",
-    });
-    expect(byId.get("marketing-screenshots")?.scope).toEqual({
-      type: "not-file-derived",
-      output: "marketing_screenshots_required",
-    });
-    const shardName = byId.get("e2e-production-shard")?.runName;
-    expect(shardName?.test("e2e-production-shard (network-baseline)")).toBe(
-      true,
-    );
-    expect(shardName?.test("e2e-production-shard-extra")).toBe(false);
-    expect(
-      byId
-        .get("api-image-smoke")
-        ?.runName.test("API release image (linux/arm64)"),
-    ).toBe(true);
+    for (const job of [
+      "e2e-production-shard",
+      "marketing-screenshots",
+      "api-image-smoke",
+    ]) {
+      expect(byId.has(job), job).toBe(false);
+    }
+    const shardName = byId.get("ci-tests")?.runName;
+    expect(shardName?.test("ci-tests (api-1)")).toBe(true);
+    expect(shardName?.test("ci-tests-extra")).toBe(false);
 
     // Every variable the bar asks for is one the selector run actually sets.
     const outputs = [
@@ -1835,11 +2535,52 @@ describe("green result freshness", () => {
       selector: extractPlanSelector(
         readFileSync(path.join(REPO_ROOT, ".github/workflows/ci.yml"), "utf-8"),
       ),
-      files: ["docs/example.md"],
+      // This census checks output completeness. Markdown behavior has its
+      // own scope tests and need not load the reader inventory here.
+      files: ["scripts/merge-bar.ts"],
       outputs,
       cwd: REPO_ROOT,
     });
+    expect(plan.isOk(), plan.isErr() ? plan.error.message : "").toBe(true);
     expect(plan.isOk() && [...plan.value.keys()]).toEqual(outputs);
+  });
+
+  // The ci-result gate shape of every repository merge-bar lands: its real
+  // workflow, a fixture of its gate step, or null when it has no CI workflow.
+  const FOLIO_GATE_WORKFLOW = `
+jobs:
+  ci-plan:
+    outputs:
+      code_required: \${{ steps.plan.outputs.code }}
+  typecheck: {}
+  ci-result:
+    steps:
+      - name: Evaluate CI outcome
+        env:
+          JOB_SCOPES: '{"typecheck": "code_required"}'
+`;
+  const GATE_WORKFLOWS = {
+    "stella/stella": readFileSync(
+      path.join(REPO_ROOT, ".github/workflows/ci.yml"),
+      "utf-8",
+    ),
+    "stella/folio": FOLIO_GATE_WORKFLOW,
+    "stella/stella-infra": null,
+  } as const satisfies Record<MergeBarRepository, string | null>;
+
+  test.each(Object.keys(MERGE_BAR_REPOSITORIES).map((repo) => [repo]))(
+    "%s's gate shape reads without panicking",
+    (repo) => {
+      const workflow = GATE_WORKFLOWS[readMergeBarRepository(repo)];
+      if (workflow === null) {
+        return;
+      }
+      expect(() => readFastRequiredJobs(workflow)).not.toThrow();
+    },
+  );
+
+  test("a gate without a fast-required list has no fast jobs to recheck", () => {
+    expect(readFastRequiredJobs(FOLIO_GATE_WORKFLOW)).toBeNull();
   });
 
   test("fast scopes override regular scopes, including null and absent scopes", () => {
@@ -1912,20 +2653,26 @@ describe("green result freshness", () => {
       });
       const passing = checkGreenResultFreshness({
         ...base,
-        recheckRatchet: (input) => {
-          rechecks.push(input);
-          return Result.ok();
-        },
+        ratchet: baseDefinitions({
+          recheck: (input) => {
+            rechecks.push(input);
+            return Result.ok();
+          },
+        }),
       });
       expect(passing.isOk(), filename).toBe(true);
       expect(rechecks).toEqual([{ headSha: HEAD_SHA, baseRefName: "main" }]);
 
       const failing = checkGreenResultFreshness({
         ...base,
-        recheckRatchet: () =>
-          Result.err(
-            new RatchetRecheckError({ message: "ratchet --check failed: +1" }),
-          ),
+        ratchet: baseDefinitions({
+          recheck: () =>
+            Result.err(
+              new RatchetRecheckError({
+                message: "ratchet --check failed: +1",
+              }),
+            ),
+        }),
       });
       expect(failing.isErr(), filename).toBe(true);
       if (failing.isErr()) {
@@ -1937,7 +2684,8 @@ describe("green result freshness", () => {
     }
   });
 
-  test("a PR that edits the ratchet itself refuses without a recheck", () => {
+  test("a PR that edits the ratchet itself queues without a recheck", () => {
+    const rechecks: unknown[] = [];
     const result = checkGreenResultFreshness({
       ...readers({
         status: "ahead",
@@ -1945,16 +2693,20 @@ describe("green result freshness", () => {
         files: [{ filename: "scripts/ownership.ts" }],
       }),
       readPullFiles: () => ["scripts/ratchet.ts"],
+      ratchet: baseDefinitions({
+        recheck: (input) => {
+          rechecks.push(input);
+          return Result.ok();
+        },
+      }),
     });
-    expect(result.isErr()).toBe(true);
-    if (result.isErr()) {
-      expect(result.error.message).toContain(
-        "main changed the ratchet since the green run (scripts/ownership.ts) and this PR changes it too",
-      );
-    }
+    // The base's checker cannot judge an edited checker; the merge group runs
+    // the merged one.
+    expect(result.isOk()).toBe(true);
+    expect(rechecks).toEqual([]);
   });
 
-  test("a passing ratchet recheck still applies the overlap gate", () => {
+  test("a passing ratchet recheck with overlapping edits stays queueable", () => {
     const result = checkGreenResultFreshness({
       ...readers({
         status: "ahead",
@@ -1964,14 +2716,9 @@ describe("green result freshness", () => {
           { filename: "scripts/shared.ts" },
         ],
       }),
-      recheckRatchet: () => Result.ok(),
+      ratchet: baseDefinitions({ recheck: () => Result.ok() }),
     });
-    expect(result.isErr()).toBe(true);
-    if (result.isErr()) {
-      expect(result.error.message).toContain(
-        "main changed files also touched by this PR: scripts/shared.ts",
-      );
-    }
+    expect(result.isOk()).toBe(true);
   });
 
   test("an unreadable ratchet definition list refuses green results", () => {
@@ -1982,10 +2729,57 @@ describe("green result freshness", () => {
           ahead_by: 1,
           files: [{ filename: "unrelated.ts" }],
         }),
-        readRatchetDefinitionPaths: () => definitions,
+        ratchet: baseDefinitions({ readDefinitionPaths: () => definitions }),
       });
       expect(result.isErr(), JSON.stringify(definitions)).toBe(true);
     }
+  });
+
+  describe("per-repository ratchet capability", () => {
+    // A ratchet change on main, so a declared check must read the definitions.
+    const ratchetChangedOnMain = readers({
+      status: "ahead",
+      ahead_by: 1,
+      files: [{ filename: "scripts/ratchet.ts" }],
+    });
+    const missingDefinitionsFile = () => {
+      throw new Error("gh api: Not Found (HTTP 404)");
+    };
+    const unexpectedRecheck = () => {
+      throw new Error("unexpected ratchet recheck");
+    };
+
+    test("folio declares no ratchet, so a missing definitions file is never read", () => {
+      const ratchet = ratchetFreshnessFor({
+        repo: "stella/folio",
+        readDefinitionPaths: missingDefinitionsFile,
+        recheck: unexpectedRecheck,
+      });
+      expect(ratchet).toEqual({ type: "none" });
+      expect(
+        checkGreenResultFreshness({ ...ratchetChangedOnMain, ratchet }).isOk(),
+      ).toBe(true);
+    });
+
+    test("stella declares the ratchet, so a missing definitions file still panics", () => {
+      const ratchet = ratchetFreshnessFor({
+        repo: "stella/stella",
+        readDefinitionPaths: missingDefinitionsFile,
+        recheck: unexpectedRecheck,
+      });
+      expect(ratchet.type).toBe("base-definitions");
+      expect(() =>
+        checkGreenResultFreshness({ ...ratchetChangedOnMain, ratchet }),
+      ).toThrow("Not Found (HTTP 404)");
+    });
+
+    test("--repo accepts only repositories with declared capabilities", () => {
+      expect(readMergeBarRepository("Stella/Folio")).toBe("stella/folio");
+      expect(readMergeBarRepository("stella/stella")).toBe("stella/stella");
+      expect(() => readMergeBarRepository("stella/tooling")).toThrow(
+        "merge-bar does not know stella/tooling",
+      );
+    });
   });
 
   test("the ratchet definition list is the ratchet's local import closure", () => {
@@ -1998,6 +2792,19 @@ describe("green result freshness", () => {
       }
       closure.add(file);
       const source = readFileSync(path.join(repositoryRoot, file), "utf-8");
+      for (const [, directory] of source.matchAll(
+        /loadOwnershipDeclarations\(\s*new URL\("([^"]+)"/gu,
+      )) {
+        if (directory === undefined) {
+          continue;
+        }
+        const relative = path.posix.join(path.posix.dirname(file), directory);
+        pending.push(
+          ...readdirSync(path.join(repositoryRoot, relative))
+            .filter((name) => name.endsWith(".ts"))
+            .map((name) => path.posix.join(relative, name)),
+        );
+      }
       for (const [, specifier] of source.matchAll(
         /^(?:import|export)\b[^;]*?\bfrom "(\.{1,2}\/[^"]+)"/gmu,
       )) {
@@ -2015,24 +2822,52 @@ describe("green result freshness", () => {
     }
     expect(
       [...closure].filter((file) => file.endsWith(".ts")).toSorted(),
-    ).toEqual(ratchetDefinitionPaths.toSorted());
+    ).toEqual(
+      ratchetDefinitionPaths
+        .flatMap((pattern) => [
+          ...new Bun.Glob(pattern).scanSync({
+            cwd: repositoryRoot,
+            onlyFiles: true,
+          }),
+        ])
+        .toSorted(),
+    );
   });
 
-  test("more than twenty commits, rewritten history and truncated files refuse stale green", () => {
+  test("rewritten history refuses a stale green result", () => {
+    for (const comparison of [{ status: "diverged" }, { status: "behind" }]) {
+      expect(checkGreenResultFreshness(readers(comparison)).isErr()).toBe(true);
+    }
+  });
+
+  test("a long or unreadable drift on main keeps a green result queueable", () => {
+    const rechecks: unknown[] = [];
     for (const comparison of [
       { status: "ahead", ahead_by: 21, files: [] },
-      { status: "diverged" },
-      { status: "behind" },
       {
         status: "ahead",
         ahead_by: 1,
         files: Array.from({ length: 300 }, () => ({
-          filename: "unrelated.ts",
+          filename: "scripts/ownership.ts",
         })),
       },
     ]) {
-      expect(checkGreenResultFreshness(readers(comparison)).isErr()).toBe(true);
+      const result = checkGreenResultFreshness({
+        ...readers(comparison),
+        ratchet: baseDefinitions({
+          recheck: (input) => {
+            rechecks.push(input);
+            return Result.err(
+              new RatchetRecheckError({ message: "would refuse" }),
+            );
+          },
+        }),
+      });
+      // The comparison is skipped rather than guessed from; the merge group
+      // re-runs the ratchet on the real merge commit.
+      expect(result.isOk()).toBe(true);
     }
+    expect(rechecks).toEqual([]);
   });
 
   test("missing or mismatched workflow snapshots cannot establish freshness", () => {
@@ -2078,8 +2913,10 @@ describe("green result freshness", () => {
       readWorkflowRun: noRead,
       readBaseComparison: noRead,
       readPullFiles: noRead,
-      readRatchetDefinitionPaths: noRead,
-      recheckRatchet: noRead,
+      ratchet: baseDefinitions({
+        readDefinitionPaths: noRead,
+        recheck: noRead,
+      }),
       readBaseWorkflow: noRead,
       runSelector: noRead,
       readRunJobs: noRead,
@@ -2184,6 +3021,7 @@ const foundGroup = {
   type: "found",
   baseSha: BASE_SHA,
   runUrl: RUN_URL,
+  cause: { type: "unknown" },
 } as const satisfies Ejection["group"];
 
 describe("merge queue ejections", () => {
@@ -2388,10 +3226,12 @@ case "$*" in
   *'pr merge'*|*enqueuePullRequest*) exit 98;;
   *REMOVED_FROM_MERGE_QUEUE_EVENT*) printf '%s\\n' "$FIXTURE_TIMELINE";;
   *'actions/runs?event=merge_group&head_sha=${GROUP_SHA}'*) printf '%s\\n' "$FIXTURE_GROUP_RUNS";;
+  *'actions/runs/42/jobs?'*) printf '%s\\n' '[{"jobs":[]}]';;
   *commits/main*) printf '%s\\n' "$FIXTURE_MAIN_TIP";;
   *reviewThreads*) printf '%s\\n' '{"nodes":[],"pageInfo":{"hasNextPage":false}}';;
   *rules/branches/main*) printf '%s\\n' '[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"ci-result"}]}},{"type":"merge_queue","parameters":{}}]';;
-  *check-runs/1*) printf '%s\\n' '{"details_url":"https://github.com/stella/private/actions/runs/1"}';;
+  *'actions/runs?head_sha='*) ;;
+  *check-runs/1*) printf '%s\\n' '{"details_url":"https://github.com/stella/stella-infra/actions/runs/1"}';;
   *actions/runs/1*) printf '%s\\n' '{"head_sha":"${HEAD_SHA}","pull_requests":[{"number":123,"head":{"sha":"${HEAD_SHA}"},"base":{"ref":"main","sha":"${OTHER_SHA}"}}]}';;
   *compare/*) printf '%s\\n' '{"status":"identical"}';;
   *check-runs*) printf '1\\tci-result\\tcompleted\\tsuccess\\n';;
@@ -2416,6 +3256,7 @@ esac
             ],
             env: {
               ...process.env,
+              ...CLI_TEST_ENV,
               PATH: `${directory}${path.delimiter}${process.env["PATH"] ?? ""}`,
               FIXTURE_PULL_REQUEST: JSON.stringify({
                 data: {
@@ -2443,6 +3284,8 @@ esac
               FIXTURE_GROUP_RUNS: JSON.stringify({
                 workflow_runs: [
                   {
+                    name: "CI Checks",
+                    id: 42,
                     conclusion: "failure",
                     head_branch: `gh-readonly-queue/main/pr-123-${BASE_SHA}`,
                     html_url: RUN_URL,
@@ -2612,6 +3455,7 @@ type LiveBarOptions = {
   comparison: unknown;
   workflow?: string;
   runJobs?: readonly { name: string; conclusion: string }[];
+  groupEvidence?: { jobs: unknown; annotations: unknown };
 };
 
 /**
@@ -2627,6 +3471,7 @@ const runLiveBar = ({
   comparison,
   workflow = "",
   runJobs = [],
+  groupEvidence = { jobs: { jobs: [] }, annotations: [] },
 }: LiveBarOptions) => {
   const directory = mkdtempSync(path.join(tmpdir(), "merge-bar-live-"));
   const executable = path.join(directory, "gh");
@@ -2651,13 +3496,18 @@ case "$*" in
   *REMOVED_FROM_MERGE_QUEUE_EVENT*) printf '%s\\n' "$FIXTURE_TIMELINE";;
   *'mergeQueue(branch'*) printf '%s\\n' '{"data":{"repository":{"mergeQueue":{"entries":{"totalCount":1,"nodes":[{"position":1,"jump":true,"state":"QUEUED","pullRequest":{"number":123}}]}}}}}';;
   *'actions/runs?event=merge_group&head_sha=${GROUP_SHA}'*) printf '%s\\n' "$FIXTURE_GROUP_RUNS";;
+  *'actions/runs/42/jobs?'*) printf '%s\\n' "$FIXTURE_GROUP_JOBS";;
+  *'check-runs/'*'/annotations?'*) printf '%s\\n' "$FIXTURE_GROUP_ANNOTATIONS";;
   *commits/main*) printf '%s\\n' "$FIXTURE_MAIN_TIP";;
   *contents/scripts/ratchet-definition-paths.json*) printf '%s\\n' "$FIXTURE_RATCHET_DEFINITIONS";;
   *contents/.github/workflows/ci.yml*) printf '%s\\n' "$FIXTURE_WORKFLOW";;
+  *'actions/runs/1/jobs'*'select(.name == "ci-result") | .id'*) printf '%s\\n' '2';;
   *actions/runs/1/jobs*) printf '%s\\n' "$FIXTURE_RUN_JOBS";;
+  *actions/jobs/2/logs*) printf '%s\\n' "$FIXTURE_COVERAGE_LOG";;
   *reviewThreads*) printf '%s\\n' '{"nodes":[],"pageInfo":{"hasNextPage":false}}';;
   *rules/branches/main*) printf '%s\\n' '[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"ci-result"}]}},{"type":"merge_queue","parameters":{}}]';;
-  *check-runs/1*) printf '%s\\n' '{"details_url":"https://github.com/stella/private/actions/runs/1"}';;
+  *'actions/runs?head_sha='*) ;;
+  *check-runs/1*) printf '%s\\n' '{"details_url":"https://github.com/stella/stella-infra/actions/runs/1"}';;
   *actions/runs/1*) printf '%s\\n' '{"id":1,"head_sha":"${HEAD_SHA}","pull_requests":[{"number":123,"head":{"sha":"${HEAD_SHA}"},"base":{"ref":"main","sha":"${OTHER_SHA}"}}]}';;
   *compare/*) printf '%s\\n' "$FIXTURE_COMPARISON";;
   *check-runs*) printf '1\\tci-result\\tcompleted\\tsuccess\\n';;
@@ -2697,6 +3547,7 @@ esac
       ],
       env: {
         ...process.env,
+        ...CLI_TEST_ENV,
         PATH: `${directory}${path.delimiter}${process.env["PATH"] ?? ""}`,
         FIXTURE_WRITES: writes,
         FIXTURE_PULL_REQUEST: JSON.stringify({
@@ -2719,10 +3570,14 @@ esac
             },
           },
         }),
+        FIXTURE_GROUP_JOBS: JSON.stringify([groupEvidence.jobs]),
+        FIXTURE_GROUP_ANNOTATIONS: JSON.stringify([groupEvidence.annotations]),
         FIXTURE_TIMELINE: JSON.stringify(timeline),
         FIXTURE_GROUP_RUNS: JSON.stringify({
           workflow_runs: [
             {
+              name: "CI Checks",
+              id: 42,
               conclusion: "failure",
               head_branch: `gh-readonly-queue/main/pr-123-${BASE_SHA}`,
               html_url: RUN_URL,
@@ -2739,6 +3594,13 @@ esac
         FIXTURE_RUN_JOBS: runJobs
           .map(({ name, conclusion }) => `${name}\t${conclusion}`)
           .join("\n"),
+        FIXTURE_COVERAGE_LOG: readFileSync(
+          path.join(
+            REPO_ROOT,
+            "scripts/fixtures/merge-bar-coverage-merge-group-37635202900.log",
+          ),
+          "utf-8",
+        ),
       },
       stdout: "pipe",
       stderr: "pipe",
@@ -3048,7 +3910,11 @@ type ArmFixtureOptions = {
   enabledAt?: string;
   afterHead?: string;
   afterEnabledAt?: string | null;
-  queued?: boolean;
+  // Which reads see a queue entry: every read, or only the verification read
+  // (auto-merge enqueued the PR in between).
+  queued?: "every-read" | "verification-read";
+  // The entry as GitHub reports it; defaults to an unbuilt entry.
+  queueEntry?: Record<string, unknown>;
   jump?: boolean;
   checksSucceeded?: boolean;
 };
@@ -3061,12 +3927,21 @@ const runArmFixture = (options: ArmFixtureOptions = {}) => {
     state: "QUEUED",
     headCommit: { oid: HEAD_SHA },
   };
-  const state = (timestamp: string | null, head = HEAD_SHA) => ({
+  const queueEntry = options.queueEntry ?? entry;
+  const state = (
+    timestamp: string | null,
+    head = HEAD_SHA,
+    read: "first" | "later" = "later",
+  ) => ({
     id: "PR_fixture",
     headRefOid: head,
     updatedAt: "2026-10-02T09:00:00Z",
     autoMergeRequest: timestamp === null ? null : { enabledAt: timestamp },
-    mergeQueueEntry: options.queued ? entry : null,
+    mergeQueueEntry:
+      options.queued === "every-read" ||
+      (options.queued === "verification-read" && read === "later")
+        ? queueEntry
+        : null,
   });
   const writes: { query: string; variables: { id: string; sha: string } }[] =
     [];
@@ -3079,7 +3954,7 @@ const runArmFixture = (options: ArmFixtureOptions = {}) => {
     readState: () => {
       reads += 1;
       return reads === 1
-        ? state(options.initialEnabledAt ?? null)
+        ? state(options.initialEnabledAt ?? null, HEAD_SHA, "first")
         : state(
             options.afterEnabledAt === undefined
               ? enabledAt
@@ -3117,6 +3992,51 @@ const runArmFixture = (options: ArmFixtureOptions = {}) => {
 };
 
 describe("verified merge handoff", () => {
+  test("GitHub refuses a head moved between verification and enable", () => {
+    const result = armAndVerify({
+      pullRequestId: "PR_fixture",
+      expectedHeadSha: HEAD_SHA,
+      jump: false,
+      checksSucceeded: false,
+      readState: () => ({
+        id: "PR_fixture",
+        headRefOid: HEAD_SHA,
+        updatedAt: "2026-10-02T09:00:00Z",
+        autoMergeRequest: null,
+        mergeQueueEntry: null,
+      }),
+      readRemovals: () => [],
+      mutate: (query, variables) => {
+        // The server head changed after the read. Omitting the pin would
+        // accept that unverified head, so this fake models both outcomes.
+        if (
+          query.includes("expectedHeadOid:$sha") &&
+          variables.sha !== OTHER_SHA
+        ) {
+          throw new Error("expectedHeadOid does not match current head");
+        }
+        return {
+          data: {
+            enablePullRequestAutoMerge: {
+              pullRequest: {
+                id: "PR_fixture",
+                headRefOid: HEAD_SHA,
+                updatedAt: "2026-10-02T09:00:00Z",
+                autoMergeRequest: { enabledAt: "2026-10-02T10:00:00Z" },
+                mergeQueueEntry: null,
+              },
+            },
+          },
+        };
+      },
+    });
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.message).toContain(
+        "expectedHeadOid does not match current head",
+      );
+    }
+  });
   test.each([
     { initialEnabledAt: "2026-10-02T08:41:00Z" },
     {
@@ -3189,14 +4109,62 @@ describe("verified merge handoff", () => {
   });
   test("an existing queue entry for this head needs no write", () => {
     const { result, writes } = runArmFixture({
-      queued: true,
+      queued: "every-read",
       initialEnabledAt: "2026-10-02T08:41:00Z",
+    });
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value.kind).toBe("already-queued");
+    }
+    expect(writes).toHaveLength(0);
+  });
+  // Recorded from the stella/stella queue (2026-10-03): once the merge group
+  // is built, `headCommit` is the group commit, never the pull request head.
+  const builtGroupEntry = {
+    id: "MQE_recorded",
+    position: 2,
+    jump: false,
+    state: "AWAITING_CHECKS",
+    headCommit: { oid: "307e6cc2807f4c12fec4622174c422ce3fb6101a" },
+  };
+  test("an entry whose merge group is built is already queued, not a head mismatch", () => {
+    const { result, writes } = runArmFixture({
+      queued: "every-read",
+      queueEntry: builtGroupEntry,
+      initialEnabledAt: "2026-10-02T08:41:00Z",
+    });
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value).toEqual({
+        kind: "already-queued",
+        entry: { position: 2, jump: false, state: "AWAITING_CHECKS" },
+      });
+    }
+    expect(writes).toHaveLength(0);
+  });
+  test("auto-merge enqueuing into a built group during verification is queued", () => {
+    const { result, writes } = runArmFixture({
+      initialEnabledAt: "2026-10-02T10:00:00Z",
+      queued: "verification-read",
+      queueEntry: builtGroupEntry,
     });
     expect(result.isOk()).toBe(true);
     if (result.isOk()) {
       expect(result.value.kind).toBe("queued");
     }
     expect(writes).toHaveLength(0);
+  });
+  test("a queue entry read with a moved head is still refused", () => {
+    const { result } = runArmFixture({
+      initialEnabledAt: "2026-10-02T10:00:00Z",
+      queued: "verification-read",
+      queueEntry: builtGroupEntry,
+      afterHead: OTHER_SHA,
+    });
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.message).toBe("NOT ARMED: HEAD_MOVED_DURING_ARMING");
+    }
   });
   test("a trustworthy existing request is verified without writes", () => {
     const { result, writes, reads } = runArmFixture({
@@ -3289,6 +4257,7 @@ case "$*" in
   *timelineItems*) printf '%s\\n' '[]';;
   *reviewThreads*) printf '%s\\n' '{"nodes":[],"pageInfo":{"hasNextPage":false}}';;
   *rules/branches/main*) printf '%s\\n' '[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"ci-result"}]}},{"type":"merge_queue","parameters":{}}]';;
+  *'actions/runs?head_sha='*) ;;
   *check-runs*) printf '1\\tci-result\\tin_progress\\t\\n';;
   *updatedAt*)
     printf '%s\\n' arm-read >> "$FIXTURE_CALLS"
@@ -3311,6 +4280,7 @@ esac
       ],
       env: {
         ...process.env,
+        ...CLI_TEST_ENV,
         PATH: `${directory}${path.delimiter}${process.env["PATH"] ?? ""}`,
         GH_READ_TOKEN: "read-fixture",
         GH_TOKEN: "write-fixture",
@@ -3346,5 +4316,330 @@ esac
     ]);
   } finally {
     rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("the real CLI reports ALREADY QUEUED when an earlier arm's entry has a built merge group", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "merge-bar-queued-"));
+  const executable = path.join(directory, "gh");
+  const pull = {
+    id: "PR_fixture",
+    number: 123,
+    title: "fix: verify merge handoff",
+    isCrossRepository: false,
+    state: "OPEN",
+    isDraft: false,
+    mergeable: "MERGEABLE",
+    headRefOid: HEAD_SHA,
+    baseRefName: "main",
+    updatedAt: "2026-10-02T09:00:00Z",
+    autoMergeRequest: null,
+    mergeQueueEntry: null,
+  };
+  // The gate read sees no entry; by the arm read the earlier auto-merge has
+  // enqueued the PR and GitHub has built its group (recorded entry shape).
+  const armed = {
+    ...pull,
+    autoMergeRequest: { enabledAt: "2026-10-02T08:41:00Z" },
+    mergeQueueEntry: {
+      id: "MQE_recorded",
+      position: 2,
+      jump: false,
+      state: "AWAITING_CHECKS",
+      headCommit: { oid: "307e6cc2807f4c12fec4622174c422ce3fb6101a" },
+    },
+  };
+  writeFileSync(
+    executable,
+    `#!/bin/sh
+case "$*" in
+  *PullRequestAutoMerge*|*enqueuePullRequest*) exit 94;;
+esac
+case "$*" in
+  'variable get STELLA_MERGE_HOLD --repo '*) printf '%s\\n' 'variable STELLA_MERGE_HOLD was not found' >&2; exit 1;;
+  *timelineItems*) printf '%s\\n' '[]';;
+  *reviewThreads*) printf '%s\\n' '{"nodes":[],"pageInfo":{"hasNextPage":false}}';;
+  *rules/branches/main*) printf '%s\\n' '[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"ci-result"}]}},{"type":"merge_queue","parameters":{}}]';;
+  *'actions/runs?head_sha='*) ;;
+  *check-runs*) printf '1\\tci-result\\tin_progress\\t\\n';;
+  *updatedAt*) printf '%s\\n' "$FIXTURE_ARM_RESPONSE";;
+  *'api graphql'*) printf '%s\\n' "$FIXTURE_PULL_RESPONSE";;
+  *headRefOid*) printf '%s\\n' "$FIXTURE_HEAD_RESPONSE";;
+  *) printf '%s\\n' "Unexpected fixture command: $*" >&2; exit 93;;
+esac
+`,
+  );
+  chmodSync(executable, 0o700);
+  try {
+    const result = Bun.spawnSync({
+      cmd: [
+        process.execPath,
+        fileURLToPath(new URL("merge-bar.ts", import.meta.url)),
+        "123",
+        "--repo",
+        PRIVATE_REPO,
+      ],
+      env: {
+        ...process.env,
+        ...CLI_TEST_ENV,
+        PATH: `${directory}${path.delimiter}${process.env["PATH"] ?? ""}`,
+        GH_READ_TOKEN: "read-fixture",
+        GH_TOKEN: "write-fixture",
+        STELLA_MERGE_HOLD_CHECKED_BY_WORKFLOW: "",
+        FIXTURE_PULL_RESPONSE: JSON.stringify({
+          data: { repository: { pullRequest: pull } },
+        }),
+        FIXTURE_ARM_RESPONSE: JSON.stringify({
+          data: { repository: { pullRequest: armed } },
+        }),
+        FIXTURE_HEAD_RESPONSE: JSON.stringify({ headRefOid: HEAD_SHA }),
+      },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    expect(result.stderr.toString()).not.toContain("QUEUE_HEAD_MISMATCH");
+    expect(result.stdout.toString()).toContain(
+      `verdict: ALREADY QUEUED at ${HEAD_SHA} (position 2, AWAITING_CHECKS)`,
+    );
+    expect(result.exitCode).toBe(0);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+const realEjections = [
+  {
+    run: realRun0,
+    jobs: realJobs0,
+    annotations: {
+      "https://example.invalid/repos/stella/stella/check-runs/113149115699":
+        annotations0_0,
+      "https://example.invalid/repos/stella/stella/check-runs/113149903942":
+        annotations0_1,
+    },
+    expected: "failed-steps",
+  },
+  {
+    run: realRun1,
+    jobs: realJobs1,
+    annotations: {
+      "https://example.invalid/repos/stella/stella/check-runs/113150755188":
+        annotations1_0,
+      "https://example.invalid/repos/stella/stella/check-runs/113152580573":
+        annotations1_1,
+    },
+    expected: "failed-steps",
+  },
+  {
+    run: realRun2,
+    jobs: realJobs2,
+    annotations: {
+      "https://example.invalid/repos/stella/stella/check-runs/113150751404":
+        annotations2_0,
+      "https://example.invalid/repos/stella/stella/check-runs/113151718553":
+        annotations2_1,
+    },
+    expected: "stale-cancel",
+  },
+] as const;
+
+describe("failed merge group evidence", () => {
+  for (const fixture of realEjections) {
+    test(`cancelled CI Checks run ${fixture.run.id} supplies the cause despite a green preview`, () => {
+      const pullNumber = Number(
+        /pr-(\d+)-/u.exec(fixture.run.head_branch)?.[1],
+      );
+      const annotations = new Map(Object.entries(fixture.annotations));
+      const group = readMergeGroupRecord({
+        runs: {
+          workflow_runs: [
+            { name: "Visual preview", conclusion: "success" },
+            fixture.run,
+          ],
+        },
+        pullNumber,
+        readJobs: (id) => {
+          expect(id).toBe(fixture.run.id);
+          return fixture.jobs;
+        },
+        readAnnotations: (url) => {
+          expect(annotations.has(url)).toBe(true);
+          return annotations.get(url);
+        },
+      });
+      expect(group.type).toBe("found");
+      if (group.type !== "found") {
+        return;
+      }
+      expect(group.runUrl).toBe(fixture.run.html_url);
+      expect(group.cause.type).toBe(fixture.expected);
+      if (group.cause.type === "failed-steps") {
+        expect(group.cause.steps.at(0)).toContain(
+          fixture.run.id === 37_727_028_977
+            ? "typecheck-baseline / 13:"
+            : "e2e-production-shard (1) / 9:",
+        );
+        expect(formatEjection({ removal: failedRemoval(), group })).toContain(
+          group.cause.steps.join("; "),
+        );
+      }
+      for (const headChanged of [false, true]) {
+        const verdict = evaluateEjectedHead({
+          headSha: headChanged ? OTHER_SHA : HEAD_SHA,
+          ejection: { removal: failedRemoval(), group },
+          mainTip: { sha: MAIN_SHA, committedAt: REMOVED_AT },
+        });
+        expect(verdict.type).toBe(
+          headChanged || fixture.expected === "stale-cancel"
+            ? "retry-allowed"
+            : "failed-step",
+        );
+      }
+    });
+  }
+
+  test("missing ci-result diagnostic falls back to the cancelling job", () => {
+    const group = readMergeGroupRecord({
+      runs: { workflow_runs: [realRun0] },
+      pullNumber: 5275,
+      readJobs: () => realJobs0,
+      readAnnotations: (url) =>
+        url.endsWith("113149903942") ? [] : annotations0_0,
+    });
+    expect(group.type === "found" && group.cause.type).toBe("failed-steps");
+  });
+
+  test("ordinary cancellations and absent diagnostics remain unknown", () => {
+    expect(
+      parseMergeGroupAnnotations([
+        { message: "The run was canceled by @github-actions[bot]." },
+      ]),
+    ).toEqual({ type: "unknown" });
+    expect(
+      parseMergeGroupAnnotations([
+        {
+          message:
+            "ci-result: cancelling failed merge group; failed steps: not yet available from the jobs API",
+        },
+      ]),
+    ).toEqual({ type: "unknown" });
+  });
+
+  test.each(["read failure", "malformed diagnostic"])(
+    "annotation %s refuses even with main moved and jump reset",
+    (failure) => {
+      const group = readMergeGroupRecord({
+        runs: { workflow_runs: [realRun0] },
+        pullNumber: 5275,
+        readJobs: () => realJobs0,
+        readAnnotations: () => {
+          if (failure === "read failure") {
+            throw new Error("annotations unavailable");
+          }
+          return [
+            {
+              message:
+                "ci-result: cancelling failed merge group; failed steps: malformed",
+            },
+          ];
+        },
+      });
+      const result = checkEjectedHead({
+        gateway: {
+          readMergeQueueRemovals: () => [failedRemoval()],
+          readMergeGroup: () => group,
+          readBranchTip: () => ({ sha: MAIN_SHA, committedAt: REMOVED_AT }),
+        },
+        pullRequest: { headSha: HEAD_SHA, baseRefName: "main" },
+        readReset: () => {
+          throw new Error("must not seek a reset override");
+        },
+      });
+      expect(result.isErr() && result.error.message).toContain(
+        "EJECTED_STEP_EVIDENCE_UNAVAILABLE",
+      );
+      expect(result.isErr() && result.error.message).toContain(
+        failure === "read failure"
+          ? "annotations unavailable"
+          : "Invalid failed merge group step diagnostic",
+      );
+      expect(
+        evaluateEjectedHead({
+          headSha: OTHER_SHA,
+          ejection: { removal: failedRemoval(), group },
+          mainTip: { sha: MAIN_SHA, committedAt: REMOVED_AT },
+        }),
+      ).toEqual({ type: "retry-allowed", changed: "head" });
+    },
+  );
+
+  test("named failure refuses main movement and never consults jump reset", () => {
+    const cause = parseMergeGroupAnnotations(annotations0_1);
+    expect(cause.type).toBe("failed-steps");
+    const result = checkEjectedHead({
+      gateway: {
+        readMergeQueueRemovals: () => [failedRemoval()],
+        readMergeGroup: () => ({ ...foundGroup, cause }),
+        readBranchTip: () => ({ sha: MAIN_SHA, committedAt: REMOVED_AT }),
+      },
+      pullRequest: { headSha: HEAD_SHA, baseRefName: "main" },
+      readReset: () => {
+        throw new Error("must not seek a reset override");
+      },
+    });
+    expect(result.isErr() && result.error.message).toContain(
+      "EJECTED_FAILED_STEP",
+    );
+    expect(result.isErr() && result.error.message).toContain(
+      "Push a fix, or merge main",
+    );
+  });
+});
+
+test.each([{ extraArguments: [] }, { extraArguments: ["--jump"] }])(
+  "named failed-step CLI evidence blocks every write with main moved: %j",
+  ({ extraArguments }) => {
+    const result = runLiveBar({
+      title: "fix: something",
+      extraArguments,
+      timeline: [
+        commitNode(HEAD_SHA),
+        removalNode({ reason: "failed_checks" }),
+      ],
+      mainTipSha: MAIN_SHA,
+      comparison: { status: "identical" },
+      groupEvidence: {
+        jobs: {
+          jobs: realJobs0.jobs.filter((job) => job.name === "ci-result"),
+        },
+        annotations: annotations0_1,
+      },
+    });
+    expect(result.exitCode, result.stderr).toBe(1);
+    expect(result.stderr).toContain("EJECTED_FAILED_STEP");
+    expect(result.stderr).toContain(
+      "typecheck-baseline / 13: Typecheck-cost baseline guard",
+    );
+    expect(result.writes).toEqual([]);
+  },
+);
+
+test("public merge-group fixtures contain only synthetic metadata", () => {
+  const directory = new URL("fixtures/merge-group-ejections/", import.meta.url);
+  const files = readdirSync(directory).filter((file) => file.endsWith(".json"));
+  expect(files.length).toBeGreaterThan(0);
+  for (const file of files) {
+    const text = readFileSync(new URL(file, directory), "utf-8");
+    for (const [timestamp] of text.matchAll(
+      /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z/gu,
+    )) {
+      expect(timestamp.startsWith("2000-01-01T"), file).toBe(true);
+    }
+    for (const [, host] of text.matchAll(/https?:\/\/([^/\s")]+)/gu)) {
+      expect(host, file).toBe("example.invalid");
+    }
+    for (const [email] of text.matchAll(/[\w.%+-]+@[\w.-]+\.[a-z]{2,}/giu)) {
+      expect(email.endsWith("@example.invalid"), file).toBe(true);
+    }
   }
 });

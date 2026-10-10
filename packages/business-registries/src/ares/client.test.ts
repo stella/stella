@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import { lookupByIco, searchByName } from "./client.js";
 import { AresRequestError, AresValidationError } from "./errors.js";
 
@@ -23,7 +25,7 @@ const captureSearchRequest = (): {
   ): Promise<Response> => {
     const rawBody = typeof init?.body === "string" ? init.body : "{}";
     const payload =
-      // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- request body built by client.ts's own JSON.stringify(payload); shape asserted by the expectations below
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- request body built by client.ts's own JSON.stringify(payload); shape asserted by the expectations below
       JSON.parse(rawBody) as Record<string, unknown>;
     captured.pocet = payload["pocet"];
     captured.signal = init?.signal;
@@ -46,14 +48,14 @@ const captureSearchRequest = (): {
 describe("lookupByIco validation", () => {
   test("throws AresValidationError for invalid IČO", async () => {
     expect(
-      lookupByIco("12345678", { observer: "unobserved" }),
-    ).rejects.toBeInstanceOf(AresValidationError);
+      await rejectionOf(lookupByIco("12345678", { observer: "unobserved" })),
+    ).toBeInstanceOf(AresValidationError);
   });
 
   test("rejects short IČO without leading zeros", async () => {
     expect(
-      lookupByIco("27383", { observer: "unobserved" }),
-    ).rejects.toBeInstanceOf(AresValidationError);
+      await rejectionOf(lookupByIco("27383", { observer: "unobserved" })),
+    ).toBeInstanceOf(AresValidationError);
   });
 });
 
@@ -122,8 +124,8 @@ describe("lookupByIco optional VR enrichment", () => {
     });
 
     expect(
-      lookupByIco("27082440", { observer: "unobserved" }),
-    ).rejects.toBeInstanceOf(AresRequestError);
+      await rejectionOf(lookupByIco("27082440", { observer: "unobserved" })),
+    ).toBeInstanceOf(AresRequestError);
   });
 
   test("fails the required RES lookup without waiting for stalled optional VR", async () => {
@@ -343,12 +345,12 @@ describe("lookupByIco optional VR enrichment", () => {
 
 describe("searchByName validation", () => {
   test("throws AresValidationError for empty name", async () => {
-    expect(searchByName("", { observer: "unobserved" })).rejects.toBeInstanceOf(
-      AresValidationError,
-    );
     expect(
-      searchByName("   ", { observer: "unobserved" }),
-    ).rejects.toBeInstanceOf(AresValidationError);
+      await rejectionOf(searchByName("", { observer: "unobserved" })),
+    ).toBeInstanceOf(AresValidationError);
+    expect(
+      await rejectionOf(searchByName("   ", { observer: "unobserved" })),
+    ).toBeInstanceOf(AresValidationError);
   });
 });
 

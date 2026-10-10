@@ -48,6 +48,8 @@ import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import * as v from "valibot";
 
+import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
+
 import type { AvailableChatSkill } from "@/api/lib/agent-skills/skills";
 import { resolveCaching } from "@/api/lib/ai-config";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -55,6 +57,7 @@ import {
   streamChatChunks,
   toolCallEndInputOf,
 } from "@/api/lib/chat/tanstack-chat-runtime";
+import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";
 import {
   mergeGenerationOptions,
   systemPromptsPatch,
@@ -591,6 +594,21 @@ const STATUTE_SECOND_ANCHOR = "par_2079";
 const SANCTIONS_COMPANY_ID = "26863154";
 
 const TASKS: readonly Task[] = [
+  {
+    id: "describe-invoice-pdf",
+    request:
+      "Describe invoices.pdf.export before attempting to download an invoice PDF. Check its file transport and permissions without invoking it.",
+    mcp: {
+      toolName: "describe_capability",
+      exampleArgs: { capability: "invoices.pdf.export" },
+      checkArgs: (args) => field(args, "capability", "invoices.pdf.export"),
+    },
+    cli: {
+      kind: "command",
+      path: ["capability", "describe"],
+      flags: { capability: "invoices.pdf.export" },
+    },
+  },
   {
     id: "list-matter-documents",
     request: `List every document and folder in matter ${ACME_MATTER_ID}, the top level.`,
@@ -1213,7 +1231,7 @@ const TASKS: readonly Task[] = [
     request:
       "Set my daily time target to 480 minutes in the active organization through time-entries.me.daily-target.update.",
     mcp: {
-      toolName: "invoke_capability",
+      toolName: MCP_CAPABILITY_EXECUTORS.write,
       exampleArgs: {
         capability: "time-entries.me.daily-target.update",
         input: { body: { minutes: 480 } },
@@ -1235,7 +1253,7 @@ const TASKS: readonly Task[] = [
       `Start a DeepL translation to German through the document-translations.runs.create capability: document ${TRANSLATION_ENTITY_ID}, ` +
       `file field ${TRANSLATION_FIELD_ID}, in matter ${ACME_MATTER_ID}.`,
     mcp: {
-      toolName: "invoke_capability",
+      toolName: MCP_CAPABILITY_EXECUTORS.write,
       exampleArgs: {
         capability: "document-translations.runs.create",
         input: {
@@ -1499,7 +1517,7 @@ const TASKS: readonly Task[] = [
     id: "start-workflow-extraction",
     request: `Start the extraction workflow in matter ${ACME_MATTER_ID} through the matters.workflow.start capability.`,
     mcp: {
-      toolName: "invoke_capability",
+      toolName: MCP_CAPABILITY_EXECUTORS.write,
       exampleArgs: {
         capability: "matters.workflow.start",
         input: { params: { matterId: ACME_MATTER_ID } },
@@ -2400,7 +2418,7 @@ const mcpPreflightContext = (task: Task): string => {
     );
   }
   return [
-    "Eval scope: post-discovery first-call authoring. A read-only describe_capability call has already returned this canonical capability. Do not call describe_capability; make the one invoke_capability call that would perform the requested action. This eval captures the call but never executes it.",
+    `Eval scope: post-discovery first-call authoring. A read-only describe_capability call has already returned this canonical capability. Do not call describe_capability; make the one ${MCP_CAPABILITY_EXECUTORS[capability.access]} call that would perform the requested action. This eval captures the call but never executes it.`,
     JSON.stringify({
       id: capability.id,
       description: capability.description,
@@ -2563,6 +2581,7 @@ const resolveModels = async (
         managedAIResidency: "eu",
         role: "chat",
         organizationId: null,
+        admission: NO_ORGANIZATION_MODEL_DISPATCH,
       }),
     })),
   );

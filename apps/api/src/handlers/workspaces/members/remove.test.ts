@@ -1,10 +1,13 @@
 import { Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
+import { getTableName } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 
 import {
   auditLogs,
   correspondence,
   desktopEditSessions,
+  desktopEditHandoffs,
   timeEntries,
   workspaceMembers,
   workspaces,
@@ -14,7 +17,10 @@ import { createAuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
+import {
+  createScopedDbMock,
+  createSelectQueryMock,
+} from "@/api/tests/scoped-db-mock";
 
 import {
   createRemoveWorkspaceMember,
@@ -125,14 +131,22 @@ describe("removeWorkspaceMember", () => {
 
   test("clears the workspace lead when removing that member", async () => {
     const deletedWorkspaceMemberId = toSafeId<"workspaceMember">("wm_lead");
-    const updates: { table: unknown; value: unknown }[] = [];
+    const updates: { table: string; value: unknown }[] = [];
     const insertedAuditLogs: unknown[] = [];
     const deletedWorkspaceMembers: unknown[] = [];
 
     const { safeDb, scopedDb } = createScopedDbMock({
+      $count: async () => 0,
       select: () => ({
         from: (table: unknown) => ({
+          innerJoin: () => ({
+            ...createSelectQueryMock([]).from(),
+            innerJoin: () => ({
+              where: () => ({ as: () => ({}) }),
+            }),
+          }),
           where: () => ({
+            orderBy: async () => await createSelectQueryMock([]).from().where(),
             limit: () => ({
               for: async () => [],
             }),
@@ -159,9 +173,9 @@ describe("removeWorkspaceMember", () => {
           },
         }),
       }),
-      update: (table: unknown) => ({
+      update: (table: PgTable) => ({
         set: (value: unknown) => {
-          updates.push({ table, value });
+          updates.push({ table: getTableName(table), value });
           return {
             where: () => ({
               returning: async () => {
@@ -189,40 +203,51 @@ describe("removeWorkspaceMember", () => {
 
     expect(result).toEqual({ id: deletedWorkspaceMemberId });
     expect(deletedWorkspaceMembers).toEqual([workspaceMembers]);
+    // Signing transitions require a held session; this fixture has none.
     expect(updates).toEqual([
       {
-        table: correspondence,
+        table: getTableName(desktopEditSessions),
+        value: { takeoverRequestedBy: null, takeoverRequestedAt: null },
+      },
+      {
+        table: getTableName(desktopEditHandoffs),
+        value: { expiresAt: expect.any(Date), updatedAt: expect.any(Date) },
+      },
+      {
+        table: getTableName(correspondence),
         value: { assigneeId: null, updatedAt: expect.any(Date) },
       },
-      { table: workspaces, value: { leadUserId: null } },
+      { table: getTableName(workspaces), value: { leadUserId: null } },
       {
-        table: desktopEditSessions,
+        table: getTableName(desktopEditSessions),
         value: { status: "cancelled", closedAt: expect.any(Date) },
       },
     ]);
-    expect(insertedAuditLogs).toHaveLength(2);
-    expect(insertedAuditLogs).toEqual([
+    expect(insertedAuditLogs.flat()).toHaveLength(2);
+    expect(insertedAuditLogs.flat()).toEqual(
       [
-        expect.objectContaining({
-          action: "delete",
-          resourceId: "wm_lead",
-          resourceType: "workspace_member",
-        }),
-      ],
-      [
-        expect.objectContaining({
-          action: "update",
-          changes: {
-            leadUserId: {
-              old: "user_lead",
-              new: null,
+        [
+          expect.objectContaining({
+            action: "delete",
+            resourceId: "wm_lead",
+            resourceType: "workspace_member",
+          }),
+        ],
+        [
+          expect.objectContaining({
+            action: "update",
+            changes: {
+              leadUserId: {
+                old: "user_lead",
+                new: null,
+              },
             },
-          },
-          resourceId: "ws_test123",
-          resourceType: "workspace",
-        }),
-      ],
-    ]);
+            resourceId: "ws_test123",
+            resourceType: "workspace",
+          }),
+        ],
+      ].flat(),
+    );
     expect(revokeWorkspaceSseAccessMock).toHaveBeenCalledWith(
       "ws_test123",
       "user_lead",

@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 
 import { flowDefinitions } from "@/api/db/schema";
 import { flowDefinitionParamsSchema } from "@/api/handlers/flows/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -16,6 +16,7 @@ const config = {
     "definition snapshot; an enabled flow with runs in flight is deleted " +
     "without warning.",
   permissions: { flow: ["delete"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "workflow_orchestration",

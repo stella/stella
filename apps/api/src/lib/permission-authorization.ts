@@ -58,6 +58,17 @@ export const credentialPermissionsForContext = (
 export const roleForDisplay = (authority: AuthorizedMemberRole): MemberRole =>
   authority[AUTHORITY]().role;
 
+/**
+ * The same credential applied to the member's role as it stands now: a check
+ * made after the request started (an approved tool call) re-reads the role
+ * and keeps whatever the credential attenuates.
+ */
+export const withCurrentMemberRole = (
+  authority: AuthorizedMemberRole,
+  role: MemberRole,
+): AuthorizedMemberRole =>
+  authorizedMemberRole({ role, credential: authority[AUTHORITY]().credential });
+
 /** The authority of a person's own session. */
 export const sessionMemberRole = (role: MemberRole): AuthorizedMemberRole =>
   authorizedMemberRole({ role, credential: SESSION_CREDENTIAL });

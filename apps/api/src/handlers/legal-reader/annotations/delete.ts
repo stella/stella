@@ -9,13 +9,14 @@ import {
 import { annotationAuditResourceType } from "@/api/handlers/legal-reader/annotations/target";
 import type { AnnotationAuthorScope } from "@/api/handlers/legal-reader/annotations/target";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
   permissions: { legalReaderAnnotation: ["delete"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   description: "Permanently delete one of the caller's highlights or comments.",
   mcp: { type: "tool", name: "delete_reader_annotation" },
   params: annotationParamsSchema,

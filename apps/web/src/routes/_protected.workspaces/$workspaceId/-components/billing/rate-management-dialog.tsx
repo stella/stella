@@ -5,6 +5,10 @@ import { useMutation, useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
+import {
+  CURRENCY_CODE_LENGTH,
+  currencyCodeSchema,
+} from "@stll/api-contract/currency-code";
 import { tryToMinorUnits } from "@stll/money";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
@@ -25,6 +29,7 @@ import {
 
 import { formatCurrencyAmount } from "@/components/billing/format-currency";
 import { DatePickerPopover } from "@/components/date-picker-popover";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { UserIdentity } from "@/components/user-avatar";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -41,6 +46,7 @@ import {
   requiredTrimmedStringSchema,
   toFormErrors,
 } from "@/lib/schema";
+import { useQueryView } from "@/lib/use-query-view";
 import {
   rateEntriesOptions,
   rateTablesOptions,
@@ -306,7 +312,14 @@ const CreateRateTableForm = ({
   const t = useTranslations();
   const schema = v.strictObject({
     name: requiredTrimmedStringSchema(t("common.required")),
-    currency: v.string(),
+    // One message per field: stop at the first failing currency check.
+    currency: v.config(
+      v.message(
+        currencyCodeSchema,
+        t("billing.sellerProfiles.invalidCurrency"),
+      ),
+      { abortPipeEarly: true },
+    ),
     isDefault: v.boolean(),
   });
 
@@ -324,12 +337,15 @@ const CreateRateTableForm = ({
       },
     }),
   );
-  const formErrors = useSelector(form.store, (state) =>
-    toFormErrors(state.fieldMeta),
-  );
+  const { formErrors, dirty } = useSelector(form.store, (state) => ({
+    formErrors: toFormErrors(state.fieldMeta),
+    dirty: !state.isDefaultValue,
+  }));
 
   return (
     <Form
+      dirty={dirty}
+      onDiscard={() => form.reset()}
       className="flex flex-col gap-3 rounded-md border p-3"
       errors={formErrors}
       onSubmit={(e) => {
@@ -356,21 +372,22 @@ const CreateRateTableForm = ({
             )}
           </form.Field>
         </div>
-        <div className="flex w-24 flex-col gap-1.5">
-          <Label>{t("common.currency")}</Label>
-          <form.Field name="currency">
-            {(field) => (
+        <form.Field name="currency">
+          {(field) => (
+            <Field className="w-24 gap-1.5" name={field.name}>
+              <FieldLabel>{t("common.currency")}</FieldLabel>
               <Input
                 dir="ltr"
-                maxLength={3}
+                maxLength={CURRENCY_CODE_LENGTH}
                 onChange={(e) =>
                   field.handleChange(e.currentTarget.value.toUpperCase())
                 }
                 value={field.state.value}
               />
-            )}
-          </form.Field>
-        </div>
+              <FieldError />
+            </Field>
+          )}
+        </form.Field>
       </div>
 
       <form.Field name="isDefault">
@@ -413,9 +430,9 @@ const RateEntriesView = ({
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
 
   const { data: tables } = useSuspenseQuery(rateTablesOptions(workspaceId));
-  const { data: entries } = useQuery(
-    rateEntriesOptions(workspaceId, rateTableId),
-  );
+  const entriesQuery = useQuery(rateEntriesOptions(workspaceId, rateTableId));
+  const entriesView = useQueryView(entriesQuery);
+  const entries = entriesView.type === "items" ? entriesView.items : undefined;
   const { data: org } = useSuspenseQuery(
     organizationOptions(activeOrganizationId),
   );
@@ -496,6 +513,7 @@ const RateEntriesView = ({
 
   return (
     <div className="flex flex-col gap-4">
+      <QueryViewFeedback view={entriesView} />
       <div className="flex items-center gap-2">
         <Button
           aria-label={t("common.back")}
@@ -604,7 +622,8 @@ const RateEntriesView = ({
           ))}
         </div>
       ) : (
-        !showForm && (
+        !showForm &&
+        (entriesView.type === "items" || entriesView.type === "empty") && (
           <div className="text-muted-foreground py-6 text-center text-sm">
             {t("billing.rates.noRateEntries")}
           </div>
@@ -684,12 +703,15 @@ const CreateRateEntryForm = ({
       },
     }),
   );
-  const formErrors = useSelector(form.store, (state) =>
-    toFormErrors(state.fieldMeta),
-  );
+  const { formErrors, dirty } = useSelector(form.store, (state) => ({
+    formErrors: toFormErrors(state.fieldMeta),
+    dirty: !state.isDefaultValue,
+  }));
 
   return (
     <Form
+      dirty={dirty}
+      onDiscard={() => form.reset()}
       className="flex flex-col gap-3 rounded-md border p-3"
       errors={formErrors}
       onSubmit={(e) => {

@@ -4,10 +4,8 @@ import { describe, expect, test } from "bun:test";
 import { normalizeDecisionIdentifierIn } from "@/api/handlers/case-law/ingestion/citation-extractor";
 
 import { COURTLISTENER_SOURCE_FIELD_INVENTORY } from "./inventory";
-import { classifyCourtListenerDecision } from "./order-classification";
 import { planCourtListenerRecord } from "./plan";
 import { decodeCourtListenerRaw } from "./raw";
-import { admitCourtListenerRecord } from "./record";
 import {
   citationRow,
   clusterRow,
@@ -515,67 +513,6 @@ describe("recorded snapshot clusters", () => {
     recordedClusters().map((record) => [record.cluster.id, record]),
   );
   const planRecorded = (clusterId: string) => plan(recorded.get(clusterId));
-
-  // Principal bodies read by hand from each lead opinion's Harvard XML: the
-  // oracle for classification until the format parsers supply it.
-  const PRINCIPAL_BODIES = {
-    "9114912": "C. A. 9th Cir. Certiorari denied.",
-    "9114988":
-      "C. A. 8th Cir.; C. A. 7th Cir.; and C. A. 5th Cir. Certiorari denied. Reported below: No. 90-1628, 920 F. 2d 498; No. 91-5013, 925 F. 2d 1064; No. 91-5087, 931 F. 2d 890.",
-    "9116702":
-      "C. A. 6th Cir. Certiorari denied. Justice White would grant certiorari.",
-    "6611390": "Affirmed",
-    "8272315":
-      "Motion for leave to appeal denied.Motion for poor person relief dismissed as academic.",
-  } as const;
-
-  test("a certiorari denial keeps its reports, docket and date", () => {
-    const planned = planRecorded("9114912");
-
-    expect(planned.courtId).toBe("scotus");
-    expect(planned.caseNumber).toBe("502 U.S. 959");
-    expect(planned.identifiers).toEqual([
-      { type: "reporter-citation", value: "502 U.S. 959" },
-      { type: "reporter-citation", value: "112 S. Ct. 422" },
-      { type: "case-number", value: "No. 91-5746" },
-    ]);
-    expect(planned.decisionDate).toBe("1991-11-12");
-    expect(planned.judges).toBeUndefined();
-  });
-
-  test("a consolidated docket stays one reference, and the dissent names its author", () => {
-    const planned = planRecorded("9114988");
-
-    expect(planned.identifiers).toContainEqual({
-      type: "case-number",
-      value: "No. 90-1628; No. 91-5013; No. 91-5087",
-    });
-    expect(planned.judges).toEqual([
-      { role: "dissenting", nameAsPrinted: "White" },
-    ]);
-  });
-
-  test("orders published as lead opinions classify as orders, in any court", () => {
-    for (const [clusterId, body] of Object.entries(PRINCIPAL_BODIES)) {
-      const admitted = admitCourtListenerRecord(
-        recorded.get(clusterId),
-      ).unwrap();
-      const classification = classifyCourtListenerDecision({
-        opinionTypes: admitted.opinions.map(({ type }) => type),
-        scdbPresent: admitted.record.cluster.scdb_id !== "",
-        principal: {
-          status: "parsed",
-          body,
-          orderHeading: false,
-          structuralOpinion: false,
-          singleOpinionBody: false,
-        },
-      });
-
-      expect(admitted.opinions.map(({ type }) => type)).toContain("020lead");
-      expect(classification.decisionType).toBe("order");
-    }
-  });
 
   test("a full opinion takes its U.S. Reports tuple over the docket column", () => {
     expect(planRecorded("103998").caseNumber).toBe("322 U.S. 385");

@@ -1,5 +1,6 @@
 import { panic, Result, TaggedError } from "better-result";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import { envBase } from "@/api/env-base";
@@ -18,14 +19,15 @@ import type {
 import { RAW_SOURCE_FAMILY } from "@/api/lib/legal-search/raw-source-family";
 import {
   createS3ObjectIfAbsent,
+  copyReplayS3Object,
   deleteS3ObjectWithSignal,
   listS3ObjectKeys,
   headS3ObjectWithSignal,
   readS3ObjectBoundedIfPresent,
   writeS3ObjectWithRetry,
 } from "@/api/lib/s3";
-import { copyObject } from "@/api/lib/s3-presign";
-import type { S3PresignError } from "@/api/lib/s3-presign";
+import { copyObject, S3PresignError } from "@/api/lib/s3-presign";
+import type { S3CredentialRefreshOptions } from "@/api/lib/s3/credential-guard";
 
 export { RAW_SOURCE_FAMILY } from "@/api/lib/legal-search/raw-source-family";
 
@@ -74,11 +76,13 @@ const PAYLOADS_SEGMENT = "payloads/";
  * is still addressed per source, since nothing erases one.
  */
 export type RawSourcePayloadOwner =
-  | { family: typeof RAW_SOURCE_FAMILY.LEGISLATION; sourceId: string }
+  | {
+      family:
+        | typeof RAW_SOURCE_FAMILY.LEGISLATION
+        | typeof RAW_SOURCE_FAMILY.SOFT_LAW;
+      sourceId: string;
+    }
   | (RawDocumentOwner & { family: typeof RAW_SOURCE_FAMILY.CASE_LAW });
-
-const sha256Of = (data: Uint8Array | string): string =>
-  new Bun.CryptoHasher("sha256").update(data).digest("hex");
 
 /** A document's payload key for a payload of this digest. */
 export const rawDocumentPayloadKey = (
@@ -96,9 +100,10 @@ export const rawSourcePayloadKey = ({
 }): string => {
   switch (owner.family) {
     case RAW_SOURCE_FAMILY.CASE_LAW:
-      return rawDocumentPayloadKey(owner, sha256Of(data));
+      return rawDocumentPayloadKey(owner, hashSha256Hex(data));
     case RAW_SOURCE_FAMILY.LEGISLATION:
-      return `${owner.family}/raw/${owner.sourceId}/${sha256Of(data)}`;
+    case RAW_SOURCE_FAMILY.SOFT_LAW:
+      return `${owner.family}/raw/${owner.sourceId}/${hashSha256Hex(data)}`;
     default:
       owner satisfies never;
       return panic(`Unhandled raw source owner ${String(owner)}`);
@@ -153,6 +158,8 @@ const checkWriteWindow = (
     : Result.ok(undefined);
 
 type RawSourcePayloadWrite = {
+  signal?: AbortSignal;
+  s3Policy?: S3CredentialRefreshOptions;
   data: Uint8Array | string;
   contentType: string;
   /** The raw-payload key the row already records, or null for none. */
@@ -164,7 +171,11 @@ type RawSourcePayloadWrite = {
 export type WriteRawSourcePayloadOptions = RawSourcePayloadWrite & {
   owner: Extract<
     RawSourcePayloadOwner,
-    { family: typeof RAW_SOURCE_FAMILY.LEGISLATION }
+    {
+      family:
+        | typeof RAW_SOURCE_FAMILY.LEGISLATION
+        | typeof RAW_SOURCE_FAMILY.SOFT_LAW;
+    }
   >;
 };
 
@@ -182,14 +193,32 @@ const putRawSourcePayload = async ({
   data,
   contentType,
   storedKey,
+  signal,
+  s3Policy,
 }: Omit<RawSourcePayloadWrite, "storedContentType"> & {
   key: string;
 }): Promise<void> => {
+  signal?.throwIfAborted();
   if (key !== storedKey) {
-    await createS3ObjectIfAbsent({ contentType, data, key });
+    await createS3ObjectIfAbsent({
+      contentType,
+      data,
+      key,
+      ...(signal === undefined ? {} : { signal }),
+      ...(s3Policy === undefined ? {} : { s3Policy }),
+    });
     return;
   }
-  await writeS3ObjectWithRetry({ contentType, data, key });
+  await writeS3ObjectWithRetry(
+    {
+      contentType,
+      data,
+      key,
+      ...(signal === undefined ? {} : { signal }),
+      ...(s3Policy === undefined ? {} : { s3Policy }),
+    },
+    { type: "public-corpus" },
+  );
 };
 
 /**
@@ -210,10 +239,19 @@ export const writeRawSourcePayload = async ({
   contentType,
   storedKey,
   storedContentType,
+  signal,
+  s3Policy,
 }: WriteRawSourcePayloadOptions): Promise<string> => {
   const key = rawSourcePayloadKey({ owner, data });
   if (key !== storedKey || contentType !== storedContentType) {
-    await putRawSourcePayload({ key, data, contentType, storedKey });
+    await putRawSourcePayload({
+      key,
+      data,
+      contentType,
+      storedKey,
+      ...(signal === undefined ? {} : { signal }),
+      ...(s3Policy === undefined ? {} : { s3Policy }),
+    });
   }
   return key;
 };
@@ -234,6 +272,8 @@ export const writeCaseLawRawPayload = async ({
   contentType,
   storedKey,
   storedContentType,
+  signal,
+  s3Policy,
 }: WriteCaseLawRawPayloadOptions): Promise<
   Result<string, RawSourceWriteWindowClosedError>
 > => {
@@ -245,7 +285,14 @@ export const writeCaseLawRawPayload = async ({
   if (Result.isError(open)) {
     return open;
   }
-  await putRawSourcePayload({ key, data, contentType, storedKey });
+  await putRawSourcePayload({
+    key,
+    data,
+    contentType,
+    storedKey,
+    ...(signal === undefined ? {} : { signal }),
+    ...(s3Policy === undefined ? {} : { s3Policy }),
+  });
   return Result.ok(key);
 };
 
@@ -274,7 +321,7 @@ export const sourceBinaryRef = ({
   contentType,
   ...owner
 }: SourceBinaryInput): SourceRawObjectRef => {
-  const sha256 = sha256Of(bytes);
+  const sha256 = hashSha256Hex(bytes);
   return {
     location: formatCorpusLocation({
       type: "object",
@@ -295,10 +342,15 @@ export const sourceBinaryRef = ({
  */
 export const writeSourceBinary = async ({
   window,
+  signal,
+  s3Policy,
   ...input
 }: SourceBinaryInput & {
   window: RawSourceWriteWindow;
+  signal?: AbortSignal;
+  s3Policy?: S3CredentialRefreshOptions;
 }): Promise<Result<SourceRawObjectRef, RawSourceWriteWindowClosedError>> => {
+  signal?.throwIfAborted();
   const ref = sourceBinaryRef(input);
   const location = parseCorpusLocation(ref.location);
   if (location.type !== "object") {
@@ -312,6 +364,8 @@ export const writeSourceBinary = async ({
     contentType: input.contentType,
     data: input.bytes,
     key: location.key,
+    ...(signal === undefined ? {} : { signal }),
+    ...(s3Policy === undefined ? {} : { s3Policy }),
   });
   return Result.ok(ref);
 };
@@ -481,17 +535,19 @@ export const copyRawObject = async ({
   copy: { fromKey, ref },
   window,
   signal,
+  s3Policy,
 }: {
   copy: RawObjectCopy;
   window: RawSourceWriteWindow;
   signal: AbortSignal;
+  s3Policy?: S3CredentialRefreshOptions;
 }): Promise<Result<void, RawObjectCopyFailure>> => {
   const uncopyable = (message: string) =>
     Result.err(new RawSourceObjectCopyError({ message, fromKey }));
   if (!fromKey.endsWith(`/${ref.sha256}`)) {
     return uncopyable(`A copy source is not named by its digest: ${fromKey}`);
   }
-  const source = await headS3ObjectWithSignal(fromKey, signal);
+  const source = await headS3ObjectWithSignal(fromKey, signal, s3Policy);
   if (source === null || source.contentLength !== ref.byteLength) {
     return uncopyable(
       `A copy source is not stored as its reference states: ${fromKey}`,
@@ -501,7 +557,7 @@ export const copyRawObject = async ({
   if (location.type !== "object") {
     return panic(`Unexpected raw object location ${ref.location}`);
   }
-  if ((await headS3ObjectWithSignal(location.key, signal)) !== null) {
+  if ((await headS3ObjectWithSignal(location.key, signal, s3Policy)) !== null) {
     return Result.ok(undefined);
   }
   if (ref.byteLength > RAW_COPY_VERIFY_MAX_BYTES) {
@@ -510,17 +566,31 @@ export const copyRawObject = async ({
     if (Result.isError(open)) {
       return open;
     }
-    return await copyObject(fromKey, location.key);
+    if (s3Policy === undefined) {
+      return await copyObject(fromKey, location.key);
+    }
+    return await Result.tryPromise({
+      try: async () =>
+        await copyReplayS3Object({
+          sourceKey: fromKey,
+          destinationKey: location.key,
+          s3Policy,
+          signal,
+        }),
+      catch: (cause) =>
+        new S3PresignError({ message: "Failed to copy object", cause }),
+    });
   }
   const bytes = await readS3ObjectBoundedIfPresent({
     key: fromKey,
     maxBytes: RAW_COPY_VERIFY_MAX_BYTES,
     signal,
+    ...(s3Policy === undefined ? {} : { s3Policy }),
   });
   if (
     bytes === null ||
     bytes.byteLength !== ref.byteLength ||
-    sha256Of(bytes) !== ref.sha256
+    hashSha256Hex(bytes) !== ref.sha256
   ) {
     return uncopyable(
       `A copy source does not hold the bytes its name states: ${fromKey}`,
@@ -534,6 +604,7 @@ export const copyRawObject = async ({
     contentType: ref.contentType,
     data: bytes,
     key: location.key,
+    ...(s3Policy === undefined ? {} : { signal, s3Policy }),
   });
   return Result.ok(undefined);
 };

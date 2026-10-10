@@ -1,8 +1,11 @@
 import { expect, spyOn, test } from "bun:test";
 
+import { US_COURTS } from "@stll/api-contract/us-courts";
+
 import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-seed";
 import {
   courtPresentation,
+  decisionCourtAbbreviation,
   readCourtRegistry,
 } from "@/api/lib/case-law/court-presentation";
 import { logger } from "@/api/lib/observability/logger";
@@ -19,6 +22,27 @@ const SUPREME_COURT = {
   courtId: null,
   ecli: "ECLI:CZ:NS:2019:25.CDO.1734.2018.1",
 };
+
+test("every directory court supplies its citation code independently of DB registry availability", () => {
+  const registry = courtWeightMapFromSeed();
+  for (const directoryCourt of US_COURTS) {
+    const subject = {
+      country: "USA",
+      court: directoryCourt.canonicalName,
+      courtId: directoryCourt.id,
+    };
+    expect(decisionCourtAbbreviation(subject), directoryCourt.id).toBe(
+      directoryCourt.shortCode,
+    );
+    expect(courtPresentation(null, subject), directoryCourt.id).toEqual(
+      courtPresentation(registry, subject),
+    );
+    expect(
+      courtPresentation(null, subject).courtAbbreviation,
+      directoryCourt.id,
+    ).toBe(directoryCourt.shortCode);
+  }
+});
 
 test("a court is chipped and ranked from the registry", () => {
   expect(courtPresentation(courtWeightMapFromSeed(), SUPREME_COURT)).toEqual({
@@ -65,6 +89,32 @@ test("a page with a corrupt directory court draws its peers and no chip for that
         effect: "unranked",
       },
     );
+  } finally {
+    warn.mockRestore();
+  }
+});
+
+test("code-only readers report an invalid directory identity", () => {
+  const warn = spyOn(logger, "warn").mockImplementation(() => undefined);
+  try {
+    for (const courtId of [null, "bad-id"]) {
+      expect(
+        decisionCourtAbbreviation({
+          country: "USA",
+          court: "Unknown",
+          courtId,
+        }),
+      ).toBeNull();
+      expect(warn).toHaveBeenCalledWith(
+        "case_law.court_rank.invalid_directory_identity",
+        {
+          country: "USA",
+          lookup: "court_id",
+          "court.identity": courtId ?? "none",
+          effect: "unranked",
+        },
+      );
+    }
   } finally {
     warn.mockRestore();
   }

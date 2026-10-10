@@ -4,6 +4,7 @@ import { describe, expect, test } from "bun:test";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 
+import { WRITE_TOOL_REF_FIELD_MAP } from "./ref-field-map";
 import { dehydrateInputRefs, dehydrateRefs } from "./ref-mediation";
 
 const WS_UUID = "0dc54d0c-10d7-501d-897e-e801dbd0998c";
@@ -98,5 +99,60 @@ describe("registry input ref dehydration", () => {
       toolName: "list_matters",
     });
     expect(Result.isError(result)).toBe(true);
+  });
+
+  test("refs in a nested array path dehydrate in place, each recorded for output reuse", () => {
+    const registry = createChatRefRegistry();
+    const entityRef = registry.toEntityRef({
+      entityId: toSafeId<"entity">(ENTITY_UUID),
+      workspaceId: toSafeId<"workspace">(WS_UUID),
+    });
+
+    const dehydrated = dehydrateRefs({
+      args: {
+        name: entityRef,
+        positions: [
+          { issue: entityRef },
+          { issue: "Term", sources: [entityRef] },
+        ],
+      },
+      inputRefs: WRITE_TOOL_REF_FIELD_MAP.save_playbook.inputRefs,
+      refRegistry: registry,
+    }).unwrap();
+
+    // Only the declared path is a ref position: the same token elsewhere in
+    // the input is text.
+    expect(dehydrated.args).toEqual({
+      name: entityRef,
+      positions: [
+        { issue: entityRef },
+        { issue: "Term", sources: [ENTITY_UUID] },
+      ],
+    });
+    expect(dehydrated.dehydratedEntityRefs.get(ENTITY_UUID)).toBe(entityRef);
+  });
+
+  test("an unknown ref inside a nested array fails the call like a top-level one", () => {
+    const registry = createChatRefRegistry();
+    const entityRef = registry.toEntityRef({
+      entityId: toSafeId<"entity">(ENTITY_UUID),
+      workspaceId: toSafeId<"workspace">(WS_UUID),
+    });
+    const topLevel = dehydrateInputRefs({
+      args: { task_id: "ent_999" },
+      refRegistry: registry,
+      toolName: "list_tasks",
+    });
+    const nested = dehydrateRefs({
+      args: { positions: [{ sources: [entityRef, "ent_999"] }] },
+      inputRefs: WRITE_TOOL_REF_FIELD_MAP.save_playbook.inputRefs,
+      refRegistry: registry,
+    });
+
+    if (!Result.isError(topLevel) || !Result.isError(nested)) {
+      throw new TypeError("expected both calls to fail");
+    }
+    expect(nested.error._tag).toBe(topLevel.error._tag);
+    expect(nested.error.message).toBe(topLevel.error.message);
   });
 });

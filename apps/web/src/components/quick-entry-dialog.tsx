@@ -7,6 +7,7 @@ import { useTranslations } from "use-intl";
 
 import {
   Dialog,
+  DialogFormState,
   DialogHeader,
   DialogPanel,
   DialogPopup,
@@ -48,13 +49,19 @@ const QuickEntryDialog = () => {
   const navigate = useNavigate();
   const client = useQueryClient();
   const { data: settings, error: settingsError } = useQuery(
-    organizationSettingsOptions(user.activeOrganizationId),
+    organizationSettingsOptions({
+      organizationId: user.activeOrganizationId,
+      userId: user.id,
+    }),
   );
   const createTime = useCreateTimeEntry();
   const createExpense = useCreateExpense();
   const submitting = useRef(false);
   const matterId = useId();
   const [matter, setMatter] = useState<MatterOption | null>(null);
+  const [matterBaseline, setMatterBaseline] = useState<MatterOption | null>(
+    null,
+  );
   const [step, setStep] = useState<EntryStep>({
     type: "time",
     defaults: emptyQuickEntryValues(localISODate()),
@@ -110,6 +117,7 @@ const QuickEntryDialog = () => {
         closeDialog();
         return;
       case "new":
+        setMatterBaseline(matter);
         setStep({
           type: "time",
           defaults: emptyQuickEntryValues(values.dateWorked),
@@ -117,6 +125,7 @@ const QuickEntryDialog = () => {
         });
         return;
       case "expense":
+        setMatterBaseline(matter);
         setStep({ type: "expense", matter, date: values.dateWorked });
         return;
     }
@@ -168,6 +177,10 @@ const QuickEntryDialog = () => {
       }}
     >
       <DialogPopup className="max-w-xl">
+        <DialogFormState
+          dirty={matter?.id !== matterBaseline?.id}
+          onDiscard={() => setMatter(matterBaseline)}
+        />
         <DialogHeader>
           <DialogTitle>
             {t(
@@ -188,6 +201,7 @@ const QuickEntryDialog = () => {
                 <Label htmlFor={matterId}>{t("common.matter")}</Label>
                 <MatterCombobox
                   activeOrganizationId={user.activeOrganizationId}
+                  userId={user.id}
                   id={matterId}
                   order="recent"
                   onChange={(value) => {

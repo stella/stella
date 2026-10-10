@@ -6,9 +6,21 @@
 
 import type { ESTree, Ranged, Scope, Variable } from "@oxlint/plugins";
 
-export type AstNode = Ranged & { type: string } & Record<string, unknown>;
+import { isDatabaseHandleName, MUTATION_METHODS } from "./database-access.ts";
+import { canonicalModuleId } from "./module-id.ts";
 
-type FilenameContext = {
+export { canonicalModuleId } from "./module-id.ts";
+
+type NodeFieldNames<Node> = Node extends unknown ? keyof Node : never;
+
+// Nodes are untrusted at this boundary: declared ESTree fields remain
+// unknown until each helper validates them, without an independent field list.
+export type AstNode = Ranged & { type: string } & Partial<
+    Record<NodeFieldNames<ESTree.Node>, unknown>
+  > &
+  Record<string, unknown>;
+
+export type FilenameContext = {
   filename?: string;
   getFilename?: () => string;
 };
@@ -511,7 +523,7 @@ export type ScopeContext = {
 // the identifier outwards. Null for an unresolved (global) name.
 export const resolveVariable = (
   context: ScopeContext,
-  identifier: ESTree.IdentifierReference,
+  identifier: ESTree.IdentifierReference | ESTree.JSXIdentifier,
 ): Variable | null => {
   let scope: Scope | null = context.sourceCode.getScope(identifier);
   while (scope !== null) {
@@ -737,37 +749,6 @@ export const resolveImportedExpression = (
   return null;
 };
 
-// Canonical module identity, so `./escape-like`, `../lib/escape-like.ts` and
-// `@/api/lib/escape-like` compare equal: relative specifiers resolve against
-// the importing file, the app path aliases expand to their source roots, and
-// extensions and a trailing `/index` drop. Bare package specifiers pass
-// through unchanged.
-export const canonicalModuleId = (
-  specifier: string,
-  importerRepoPath: string,
-): string => {
-  let resolved = specifier;
-  if (specifier.startsWith("./") || specifier.startsWith("../")) {
-    const segments = importerRepoPath.split("/").slice(0, -1);
-    for (const segment of specifier.split("/")) {
-      if (segment === "..") {
-        segments.pop();
-      } else if (segment !== ".") {
-        segments.push(segment);
-      }
-    }
-    resolved = segments.join("/");
-  } else if (specifier.startsWith("@/api/")) {
-    resolved = `apps/api/src/${specifier.slice("@/api/".length)}`;
-  } else if (specifier.startsWith("@/")) {
-    const app = /^apps\/(?<app>[^/]+)\//u.exec(importerRepoPath)?.groups?.app;
-    if (app !== undefined) {
-      resolved = `apps/${app}/src/${specifier.slice("@/".length)}`;
-    }
-  }
-  return resolved.replace(/\.[cm]?[jt]sx?$/u, "").replace(/\/index$/u, "");
-};
-
 // A module an import may come from: a bare package specifier or a repository
 // path without extension (`apps/api/src/lib/escape-like`), or a predicate over
 // the canonical id.
@@ -839,4 +820,230 @@ export const invokedCallee = (call: AstNode): AstNode | null => {
     }
   }
   return callee;
+};
+
+// --- Database writes --------------------------------------------------------
+//
+// A Drizzle row write: `<handle>.insert(...)`, `.update(...)` or `.delete(...)`
+// where the receiver is a database handle (`tx` / `db` / `trx`, a camel-cased
+// name ending in `Tx` / `Db`, a member with such a name, a `getDb()`-style
+// call, or a parameter of a `.transaction(...)` callback or typed as a
+// transaction), or `<receiver>.execute(sql`...`)` whose static SQL inserts,
+// updates or deletes rows.
+
+type DatabaseWriteContext = ImportedFromOptions["context"];
+
+// Guards the identifier-to-initializer walk against cycles.
+const MAX_SQL_RESOLVE_DEPTH = 4;
+
+const GET_DB_CALL = /^get[A-Za-z]*Db$/u;
+const TRANSACTION_TYPE = /(?:^|[a-z])(?:Transaction|Tx)$|^(?:Db|DbOrTx)$/u;
+
+// Static SQL that writes rows. Interpolations are joined as a placeholder
+// token so `UPDATE ${table} AS t SET` still reads as one statement.
+const WRITE_SQL = [
+  /\bINSERT\s+INTO\b/iu,
+  /\bDELETE\s+FROM\b/iu,
+  /\bUPDATE\s+(?:ONLY\s+)?\S+(?:\s+(?:AS\s+)?\w+)?\s+SET\b/iu,
+];
+const SQL_PLACEHOLDER = " __value__ ";
+
+const DRIZZLE_SQL: ReadonlySet<string> = new Set(["sql"]);
+
+const isDrizzleModule = (moduleId: string): boolean =>
+  moduleId === "drizzle-orm" || moduleId.startsWith("drizzle-orm/");
+
+const typeAnnotationName = (identifier: unknown): string | null => {
+  if (!isAstNode(identifier) || !isAstNode(identifier.typeAnnotation)) {
+    return null;
+  }
+  const annotation = identifier.typeAnnotation.typeAnnotation;
+  if (!isAstNode(annotation) || annotation.type !== "TSTypeReference") {
+    return null;
+  }
+  const typeName = annotation.typeName;
+  if (isIdentifier(typeName)) {
+    return typeName.name;
+  }
+  return isAstNode(typeName) && typeName.type === "TSQualifiedName"
+    ? getCalleeName(typeName.right)
+    : null;
+};
+
+// Whether a function is the callback of `<handle>.transaction(...)` or of a
+// handle-named runner such as `safeDb(...)`, which passes its callback a handle.
+const isTransactionCallback = (fn: unknown): boolean => {
+  const call = isAstNode(fn) ? fn.parent : null;
+  if (
+    !isAstNode(call) ||
+    call.type !== "CallExpression" ||
+    !Array.isArray(call.arguments) ||
+    !call.arguments.includes(fn)
+  ) {
+    return false;
+  }
+  const callee = unwrapExpression(call.callee);
+  if (isIdentifierReference(callee)) {
+    return isDatabaseHandleName(callee.name);
+  }
+  if (callee?.type !== "MemberExpression") {
+    return false;
+  }
+  const property = memberPropertyName(callee);
+  return (
+    property !== null &&
+    (property === "transaction" || isDatabaseHandleName(property))
+  );
+};
+
+const isTransactionParameter = (variable: Variable): boolean => {
+  const definition = variable.defs.at(0);
+  if (variable.defs.length !== 1 || definition?.type !== "Parameter") {
+    return false;
+  }
+  const typeName = typeAnnotationName(definition.name);
+  return (
+    (typeName !== null && TRANSACTION_TYPE.test(typeName)) ||
+    isTransactionCallback(definition.node)
+  );
+};
+
+const isDatabaseHandle = (
+  context: DatabaseWriteContext,
+  node: unknown,
+): boolean => {
+  const receiver = unwrapExpression(node);
+  if (receiver === null) {
+    return false;
+  }
+  if (isIdentifierReference(receiver)) {
+    if (isDatabaseHandleName(receiver.name)) {
+      return true;
+    }
+    const variable = resolveVariable(context, receiver);
+    return variable !== null && isTransactionParameter(variable);
+  }
+  if (receiver.type === "MemberExpression") {
+    const property = memberPropertyName(receiver);
+    return property !== null && isDatabaseHandleName(property);
+  }
+  if (receiver.type === "CallExpression") {
+    const name = getCalleeName(receiver.callee)?.split(".").at(-1);
+    return name !== undefined && GET_DB_CALL.test(name);
+  }
+  return false;
+};
+
+// The static text of a drizzle `sql` template, or of a const holding one.
+const writeSqlText = (
+  context: DatabaseWriteContext,
+  node: unknown,
+  depth = 0,
+): string | null => {
+  const expression = unwrapExpression(node);
+  if (expression === null || depth > MAX_SQL_RESOLVE_DEPTH) {
+    return null;
+  }
+  if (isIdentifierReference(expression)) {
+    const variable = resolveVariable(context, expression);
+    const init = variable === null ? null : stableInitializer(variable);
+    return init === null ? null : writeSqlText(context, init, depth + 1);
+  }
+  if (
+    expression.type !== "TaggedTemplateExpression" ||
+    !isImportedFrom({
+      context,
+      node: expression.tag,
+      modules: [isDrizzleModule],
+      names: DRIZZLE_SQL,
+    }) ||
+    !isAstNode(expression.quasi) ||
+    !Array.isArray(expression.quasi.quasis)
+  ) {
+    return null;
+  }
+  return expression.quasi.quasis
+    .map((quasi: unknown) => {
+      const value = isAstNode(quasi) ? quasi.value : null;
+      return typeof value === "object" &&
+        value !== null &&
+        "raw" in value &&
+        typeof value.raw === "string"
+        ? value.raw
+        : "";
+    })
+    .join(SQL_PLACEHOLDER);
+};
+
+export const isDatabaseWriteCall = (
+  context: DatabaseWriteContext,
+  node: unknown,
+): boolean => {
+  const call = unwrapExpression(node);
+  if (call?.type !== "CallExpression") {
+    return false;
+  }
+  const callee = unwrapExpression(call.callee);
+  if (callee?.type !== "MemberExpression") {
+    return false;
+  }
+  const method = memberPropertyName(callee);
+  if (method !== null && MUTATION_METHODS.has(method)) {
+    return isDatabaseHandle(context, callee.object);
+  }
+  if (method !== "execute" || !Array.isArray(call.arguments)) {
+    return false;
+  }
+  const text = writeSqlText(context, call.arguments.at(0));
+  return text !== null && WRITE_SQL.some((pattern) => pattern.test(text));
+};
+
+// `a`, `a.b`, `a.b.c`: the dotted name of a table reference, or null.
+const dottedName = (node: unknown, depth = 0): string | null => {
+  const expression = unwrapExpression(node);
+  if (expression === null || depth > MAX_SQL_RESOLVE_DEPTH) {
+    return null;
+  }
+  if (isIdentifier(expression)) {
+    return expression.name;
+  }
+  if (expression.type !== "MemberExpression") {
+    return null;
+  }
+  const object = dottedName(expression.object, depth + 1);
+  const property = memberPropertyName(expression);
+  return object === null || property === null ? null : `${object}.${property}`;
+};
+
+const SQL_WRITE_TARGET =
+  /\b(INSERT\s+INTO|DELETE\s+FROM|UPDATE(?:\s+ONLY)?)\s+([\w."]+)/iu;
+
+/**
+ * What a write `isDatabaseWriteCall` accepts touches, as `<verb>:<table>`
+ * (`insert:entities`, `update:schema.members`). Raw SQL reads the verb and
+ * table from its static text. `?` stands for a table the source does not
+ * name statically. Lets a per-owner budget tell one write from another
+ * instead of counting them.
+ */
+export const databaseWriteTarget = (
+  context: DatabaseWriteContext,
+  node: unknown,
+): string => {
+  const call = unwrapExpression(node);
+  const callee =
+    call?.type === "CallExpression" ? unwrapExpression(call.callee) : null;
+  const method =
+    callee?.type === "MemberExpression" ? memberPropertyName(callee) : null;
+  const args =
+    call !== null && Array.isArray(call.arguments) ? call.arguments : [];
+  if (method !== null && MUTATION_METHODS.has(method)) {
+    return `${method}:${dottedName(args.at(0)) ?? "?"}`;
+  }
+  const text = writeSqlText(context, args.at(0));
+  const match = text === null ? null : SQL_WRITE_TARGET.exec(text);
+  const verb = match?.at(1)?.split(/\s+/u).at(0)?.toLowerCase();
+  const table = match?.at(2)?.replaceAll('"', "");
+  const named =
+    table === undefined || table === SQL_PLACEHOLDER.trim() ? "?" : table;
+  return `${verb ?? "execute"}:${named}`;
 };

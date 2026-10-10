@@ -2,7 +2,8 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import { createBlankDocument } from "@/api/handlers/entities/create-blank-document-service";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { entityFileRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { createTemplateBuffer } from "@/api/lib/docx-authoring/create-template-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -14,6 +15,11 @@ const bodySchema = t.Object({
 
 export default createSafeHandler(
   {
+    contentDelivery: {
+      type: "none",
+      reason:
+        "Stores document content and returns operation metadata rather than stored-file bytes.",
+    },
     description:
       "Create a document in a matter whose file is a fresh empty DOCX built " +
       "from the stella template, optionally inside a parent folder. Returns " +
@@ -22,6 +28,8 @@ export default createSafeHandler(
       "file at all.",
     body: bodySchema,
     permissions: { entity: ["create"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
+    realtime: entityFileRealtimeUpdates,
     mcp: {
       type: "capability",
       reason: "document_processing",

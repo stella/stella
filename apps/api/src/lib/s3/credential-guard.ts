@@ -63,16 +63,22 @@ export const isExpiredCredentialsError = (error: unknown): boolean => {
   return message?.toLowerCase().includes(EXPIRED_CREDENTIAL_MESSAGE) === true;
 };
 
+/** Explicit deadline ownership is reserved for the scheduled replayer. */
+export type S3CredentialRefreshOptions = {
+  mode: "replay-strict";
+  signal: AbortSignal;
+};
+
 export type S3CredentialLifecycle = {
   /** Whether the built clients' credentials have passed their horizon. */
-  isStale: () => boolean;
+  isStale: (options?: S3CredentialRefreshOptions) => boolean;
   /** Rebuild the clients from a fresh credential resolution. */
-  refresh: () => Promise<void>;
+  refresh: (options?: S3CredentialRefreshOptions) => Promise<void>;
 };
 
 export type S3CredentialGuard = {
   /** Rebuild the clients when their credentials are past the horizon. */
-  refreshStale: () => Promise<void>;
+  refreshStale: (options?: S3CredentialRefreshOptions) => Promise<void>;
   /**
    * Run one object-store operation against credentials that are current.
    *
@@ -84,7 +90,10 @@ export type S3CredentialGuard = {
    * `operation` reads its client at call time and owns any state it
    * accumulates: the replay runs it from the start.
    */
-  run: <T>(operation: () => Promise<T>) => Promise<T>;
+  run: <T>(
+    operation: () => Promise<T>,
+    options?: S3CredentialRefreshOptions,
+  ) => Promise<T>;
 };
 
 export const createS3CredentialGuard = ({
@@ -105,27 +114,47 @@ export const createS3CredentialGuard = ({
   // that just failed.
   // The assignment runs before the first await, so callers arriving in the
   // same tick all observe the one promise.
-  const refreshOnce = async (): Promise<void> => {
+  const refreshOnce = async (
+    options?: S3CredentialRefreshOptions,
+  ): Promise<void> => {
+    const signal = options?.signal;
+    signal?.throwIfAborted();
+    // A caller-owned deadline cannot cancel another request's shared refresh.
+    if (signal !== undefined) {
+      await refresh(options);
+      signal.throwIfAborted();
+      return;
+    }
     inFlight ??= refresh().finally(() => {
       inFlight = null;
     });
     await inFlight;
   };
 
-  const refreshStale = async (): Promise<void> => {
-    if (!isStale()) {
+  const refreshStale = async (
+    options?: S3CredentialRefreshOptions,
+  ): Promise<void> => {
+    const signal = options?.signal;
+    signal?.throwIfAborted();
+    if (!isStale(options)) {
       return;
     }
-    await refreshOnce();
+    await refreshOnce(options);
   };
 
-  const run = async <T>(operation: () => Promise<T>): Promise<T> => {
-    await refreshStale();
+  const run = async <T>(
+    operation: () => Promise<T>,
+    options?: S3CredentialRefreshOptions,
+  ): Promise<T> => {
+    const signal = options?.signal;
+    await refreshStale(options);
+    signal?.throwIfAborted();
     const attempted = operation();
     const outcome = await Result.tryPromise({
       try: async () => await attempted,
       catch: (cause) => cause,
     });
+    signal?.throwIfAborted();
     if (Result.isOk(outcome)) {
       return outcome.value;
     }
@@ -133,8 +162,10 @@ export const createS3CredentialGuard = ({
       logger.warn("s3.credentials_expired_retry", {
         "error.type": errorTag(outcome.error),
       });
-      await refreshOnce();
-      return await operation();
+      await refreshOnce(options);
+      const retried = await operation();
+      signal?.throwIfAborted();
+      return retried;
     }
     // The failure is the store's, and this module has nothing to add to it:
     // callers match on the SDK's own error name. Awaiting the settled

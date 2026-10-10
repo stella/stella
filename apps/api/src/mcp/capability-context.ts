@@ -8,7 +8,9 @@ import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
+import { capabilityRoute } from "@/api/lib/capability-route";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
+import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { mcpMemberAuthority } from "@/api/mcp/effective-authority";
@@ -30,6 +32,7 @@ import { bindWorkspaceRecorder } from "@/api/mcp/tool-utils";
  * minimal, inert object so a stray read does not throw.
  */
 export type SynthesizedCapabilityContext = {
+  featureAccessSnapshot?: FeatureAccessSnapshot;
   body: unknown;
   params: unknown;
   query: unknown;
@@ -58,10 +61,6 @@ export type SynthesizedCapabilityContext = {
   workspaceId?: SafeId<"workspace">;
 };
 
-/** Synthetic `route` string used only for log/telemetry attribution. */
-export const capabilityRoute = (capabilityId: string): string =>
-  `mcp:invoke_capability/${capabilityId}`;
-
 /**
  * Build the safe-handler context an enumerated capability's `{ config, handler }`
  * export expects. Mirrors what the REST `validateAuth` resolve assembles per
@@ -87,6 +86,9 @@ export const synthesizeCapabilityContext = async ({
   request: Request;
   workspaceId: SafeId<"workspace"> | undefined;
 }): Promise<SynthesizedCapabilityContext> => {
+  const featureAccessSnapshot =
+    context.testDependencies?.featureAccessSnapshot ??
+    context.featureAccessSnapshot;
   const recordAuditEvent =
     workspaceId === undefined
       ? context.recordAuditEvent
@@ -123,6 +125,7 @@ export const synthesizeCapabilityContext = async ({
     ));
 
   return {
+    ...(featureAccessSnapshot === undefined ? {} : { featureAccessSnapshot }),
     body: input.body,
     params: input.params,
     query: input.query,

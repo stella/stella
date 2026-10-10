@@ -2,9 +2,15 @@ import { Result } from "better-result";
 import { and, eq, isNull, or } from "drizzle-orm";
 import { t } from "elysia";
 
-import { mcpConnectors, mcpUserConnections } from "@/api/db/schema";
+import {
+  mcpConnectors,
+  mcpUserConnections,
+  MCP_RESPONSE_DISPOSITION,
+} from "@/api/db/schema";
+import { mcpConnectorRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { refreshCachedMcpToolsForConnection } from "@/api/lib/mcp-upstream/connections";
 import { encryptMcpSecret } from "@/api/lib/mcp-upstream/crypto";
@@ -20,6 +26,8 @@ const requestBody = t.Object({
 
 const config = {
   permissions: { integration: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.accountControl,
+  realtime: mcpConnectorRealtimeUpdates,
   mcp: { type: "internal", reason: "mcp_transport" },
   body: requestBody,
 } satisfies HandlerConfig;
@@ -72,51 +80,55 @@ const createMcpConnection = createSafeRootHandler(
     });
 
     const saved = yield* Result.await(
-      // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
-      safeDb(async (tx) => {
-        // audit: skip — per-user MCP connection bearer-token registration; the connector itself is SOC 2-audited at create-connector / delete-connector.
-        return await tx
-          .insert(mcpUserConnections)
-          .values({
-            organizationId: session.activeOrganizationId,
-            connectorId: connector.id,
-            userId: user.id,
-            staticTokenEncrypted: encrypted.ciphertext,
-            staticTokenIv: encrypted.iv,
-            status: "connected",
-            enabled: true,
-            tokenType: "Bearer",
-          })
-          .onConflictDoUpdate({
-            target: [
-              mcpUserConnections.organizationId,
-              mcpUserConnections.connectorId,
-              mcpUserConnections.userId,
-            ],
-            set: {
-              accessTokenEncrypted: null,
-              accessTokenIv: null,
-              expiresAt: null,
-              refreshTokenEncrypted: null,
-              refreshTokenIv: null,
-              resourceUrl: null,
-              authorizationServerUrl: null,
-              scope: null,
+      safeDb(
+        async (tx) =>
+          // audit: skip — per-user MCP connection bearer-token registration; the connector itself is SOC 2-audited at create-connector / delete-connector.
+          await tx
+            .insert(mcpUserConnections)
+            .values({
+              organizationId: session.activeOrganizationId,
+              connectorId: connector.id,
+              userId: user.id,
               staticTokenEncrypted: encrypted.ciphertext,
               staticTokenIv: encrypted.iv,
-              cachedTools: null,
-              cachedToolsRefreshedAt: null,
               status: "connected",
+              responseDisposition: MCP_RESPONSE_DISPOSITION.normal,
+              responseTargetUrl: null,
               enabled: true,
               tokenType: "Bearer",
-              updatedAt: new Date(),
-            },
-          })
-          .returning({
-            id: mcpUserConnections.id,
-            status: mcpUserConnections.status,
-          });
-      }),
+            })
+            .onConflictDoUpdate({
+              target: [
+                mcpUserConnections.organizationId,
+                mcpUserConnections.connectorId,
+                mcpUserConnections.userId,
+              ],
+              set: {
+                accessTokenEncrypted: null,
+                accessTokenIv: null,
+                expiresAt: null,
+                refreshTokenEncrypted: null,
+                refreshTokenIv: null,
+                resourceUrl: null,
+                authorizationServerUrl: null,
+                scope: null,
+                staticTokenEncrypted: encrypted.ciphertext,
+                staticTokenIv: encrypted.iv,
+                cachedTools: null,
+                cachedToolsRefreshedAt: null,
+                status: "connected",
+                responseDisposition: MCP_RESPONSE_DISPOSITION.normal,
+                responseTargetUrl: null,
+                enabled: true,
+                tokenType: "Bearer",
+                updatedAt: new Date(),
+              },
+            })
+            .returning({
+              id: mcpUserConnections.id,
+              status: mcpUserConnections.status,
+            }),
+      ),
     );
 
     const connection = saved.at(0);
@@ -132,6 +144,7 @@ const createMcpConnection = createSafeRootHandler(
     await refreshCachedMcpToolsForConnection({
       connectionId: connection.id,
       organizationId: session.activeOrganizationId,
+      permit: grantThirdPartyOutboundPermit(),
       safeDb,
       userId: user.id,
     });
@@ -170,7 +183,10 @@ const assertStaticTokenAccepted = async ({
     return staticTokenRejected();
   }
 
-  const metadata = await discoverOAuthMetadata(url);
+  const metadata = await discoverOAuthMetadata({
+    rawMcpUrl: url,
+    permit: grantThirdPartyOutboundPermit(),
+  });
   if (Result.isError(metadata)) {
     return staticTokenRejected();
   }

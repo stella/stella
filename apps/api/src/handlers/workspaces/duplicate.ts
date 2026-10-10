@@ -2,11 +2,12 @@ import { panic, Result } from "better-result";
 import { and, count, eq, ilike, inArray, sql } from "drizzle-orm";
 import { t } from "elysia";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
+
 import { member } from "@/api/db/auth-schema";
 import { SETTING_WORKSPACE_IDS } from "@/api/db/rls";
 import { resultTx } from "@/api/db/safe-db";
 import {
-  type entities,
   type fields,
   properties,
   propertyDependencies,
@@ -16,20 +17,30 @@ import {
   workspaceViews,
 } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
-import { env } from "@/api/env";
+import { organizationWorkspaceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { captureError } from "@/api/lib/analytics/capture";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import {
+  AVT_LAYOUT_DISCOVERY_FEATURE_ACCESS,
+  avtViewAccessStatus,
+  isAvtLayoutVisible,
+} from "@/api/lib/auth/feature-access/view-eligibility";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   remapDependencyRefs,
   remapNodePropertyIds,
 } from "@/api/lib/conditions/ast-utils";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { allocateEntityStamps } from "@/api/lib/document-counter";
 import { enqueueDocumentProcessingRun } from "@/api/lib/document-processing-enqueue";
 import { handoffCommittedDocumentProcessingRuns } from "@/api/lib/document-processing-handoff";
+import {
+  createSiblingNamePlan,
+  type NamedEntityInsert,
+} from "@/api/lib/entities/sibling-name-insert";
 import {
   type CurrentVersionAssignment,
   insertEntityBatch,
@@ -40,6 +51,7 @@ import { escapeLike } from "@/api/lib/escape-like";
 import { copyOrganizationFiles } from "@/api/lib/files/copy-organization-files";
 import { deleteOrganizationFilesWithSignal } from "@/api/lib/files/delete-organization-file";
 import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
+import type { CheckedFileCopy } from "@/api/lib/files/organization-file-usage";
 import { createFileKey } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -69,12 +81,21 @@ import {
   enqueueEntitySearchRepairs,
   enqueueWorkspaceSearchRepairs,
 } from "@/api/lib/search/projection-repair-queue";
+import { findExtractionFileFieldRow } from "@/api/lib/search/types";
 import type { ViewLayout } from "@/api/lib/views-schema";
 import { parseStoredViewLayout } from "@/api/lib/views-schema";
 import { portableLayout } from "@/api/lib/views/utils";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const config = {
+  accountAccess: ACCOUNT_ACCESS.standard,
+  realtime: organizationWorkspaceRealtimeUpdates,
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Copies stored content and returns operation metadata rather than file bytes.",
+  },
+  featureAccess: AVT_LAYOUT_DISCOVERY_FEATURE_ACCESS,
   description:
     "Copy a matter into a new one: its columns with their dependencies, " +
     "views, members, party contacts, client, billing reference, colour, and " +
@@ -358,7 +379,7 @@ const copyWorkspaceFiles = async ({
       mimeType: copy.mimeType,
     });
     copiedS3Keys.push(targetKey);
-    const source = env.FEATURE_FILE_USAGE_LIMITS
+    const source = isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")
       ? await headObject(sourceKey)
       : Result.ok({ contentLength: 0 });
     if (Result.isError(source)) {
@@ -368,16 +389,14 @@ const copyWorkspaceFiles = async ({
       organizationId,
       objectKey: targetKey,
       sizeBytes: source.value.contentLength,
-      copy: async () => await copyObject(sourceKey, targetKey),
+      source: sourceKey,
+      copy: async (checked: CheckedFileCopy<string>) =>
+        await copyObject(checked.source, checked.objectKey),
     });
   };
   const prepared: Awaited<ReturnType<typeof prepareFile>>[] = [];
-  for (let start = 0; start < copies.length; start += FILE_COPY_CONCURRENCY) {
-    prepared.push(
-      ...(await Promise.all(
-        copies.slice(start, start + FILE_COPY_CONCURRENCY).map(prepareFile),
-      )),
-    );
+  for (const itemBatch of chunkItems(copies, FILE_COPY_CONCURRENCY)) {
+    prepared.push(...(await Promise.all(itemBatch.map(prepareFile))));
   }
   const inputs = Result.all(prepared);
   if (Result.isError(inputs)) {
@@ -435,8 +454,15 @@ export const createDuplicateWorkspace = (
       workspaceId: sourceWorkspaceId,
       body: { includeContent },
       recordAuditEvent,
+      featureAccessSnapshot,
     }) {
       const organizationId = session.activeOrganizationId;
+      const avtAvailable =
+        avtViewAccessStatus({
+          snapshot: featureAccessSnapshot,
+          organizationId,
+          userId: user.id,
+        }) === "available";
       const targetWorkspaceId = createSafeId<"workspace">();
 
       const snapshot = yield* Result.await(
@@ -527,7 +553,12 @@ export const createDuplicateWorkspace = (
             workspace,
             properties: workspaceProperties,
             dependencies: propertyDependencyRows,
-            views,
+            views: views.filter((view) =>
+              isAvtLayoutVisible(
+                view.layout,
+                avtAvailable ? "available" : "unavailable",
+              ),
+            ),
             members,
             contacts,
             entities: sourceEntities,
@@ -627,6 +658,10 @@ export const createDuplicateWorkspace = (
                       ),
                     ),
                   )
+                  // Same order as organization removal's membership locks.
+                  .orderBy(member.userId)
+                  .limit(snapshot.members.length)
+                  .for("key share")
               : Promise.resolve([]),
           ]);
 
@@ -806,7 +841,11 @@ export const createDuplicateWorkspace = (
           // Ids are minted here and parents resolve from `entityIdMap`, so the
           // loop only builds rows and `insertEntityBatch` writes them after it;
           // `orderEntitiesForDuplicate` puts parents first.
-          const entityRows: (typeof entities.$inferInsert)[] = [];
+          const entityRows: NamedEntityInsert[] = [];
+          const resolvePlannedName = await createSiblingNamePlan({
+            tx,
+            workspaceId: targetWorkspaceId,
+          });
           const versionRows: EntityVersionValues[] = [];
           const currentVersions: CurrentVersionAssignment[] = [];
           const fieldRows: (typeof fields.$inferInsert)[] = [];
@@ -832,12 +871,20 @@ export const createDuplicateWorkspace = (
               ? (entityIdMap.get(source.parentId) ?? null)
               : null;
 
+            const resolvedName = resolvePlannedName({
+              parentId: newParentId,
+              name: source.name,
+              kind: source.kind,
+            });
+            const primaryFile = findExtractionFileFieldRow(
+              source.currentVersion.fields,
+            );
             entityRows.push({
               id: newEntityId,
               workspaceId: targetWorkspaceId,
               kind: source.kind,
               parentId: newParentId,
-              name: source.name,
+              name: resolvedName.name,
               createdBy: user.id,
               lastEditedBy: user.id,
               docSequence: entityStamp?.docSequence ?? null,
@@ -893,7 +940,15 @@ export const createDuplicateWorkspace = (
                   workspaceId: targetWorkspaceId,
                   propertyId,
                   entityVersionId: newVersionId,
-                  content: remapFieldContent(field.content, fileIdMap),
+                  content: remapFieldContent(
+                    primaryFile !== null && field === primaryFile
+                      ? {
+                          ...primaryFile.content,
+                          fileName: resolvedName.fileName,
+                        }
+                      : field.content,
+                    fileIdMap,
+                  ),
                 },
               ];
             });

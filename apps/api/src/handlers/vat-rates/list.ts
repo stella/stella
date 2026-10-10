@@ -3,7 +3,7 @@ import { and, desc, eq, isNull } from "drizzle-orm";
 import { t } from "elysia";
 
 import { vatRates } from "@/api/db/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { vatRateOnDate } from "@/api/lib/billing/vat-rates";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
@@ -54,6 +54,8 @@ true satisfies UnexpectedVatRateListColumn extends never ? true : never;
 const config = {
   description: "List active VAT rates in the active organization.",
   permissions: { organizationSettings: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.standard,
+  featureAccess: { featureId: "time-billing", type: "required" },
   mcp: {
     type: "capability",
     readClass: "tenant",

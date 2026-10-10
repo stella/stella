@@ -1,4 +1,5 @@
 import { t } from "elysia";
+import type { Static } from "elysia";
 
 import {
   tPaginationCursor,
@@ -9,13 +10,13 @@ import {
   FLOW_DEFINITION_DESCRIPTION_MAX_CHARS,
   FLOW_DEFINITION_NAME_MAX_CHARS,
   FLOW_REVIEW_DECISIONS,
-  FLOW_RUN_STATUSES,
   FLOW_SCHEDULE_FREQUENCIES,
   FLOW_STEP_DOCUMENT_TITLE_MAX_CHARS,
   FLOW_STEP_INSTRUCTION_CHAR_CAP,
   FLOW_STEP_NAME_MAX_CHARS,
   MAX_FLOW_STEPS,
 } from "@/api/lib/flows/flow-types";
+import type { FLOW_RUN_STATUSES } from "@/api/lib/flows/flow-types";
 import { LIMITS } from "@/api/lib/limits";
 
 // The HTTP contract for a flow definition (Eden-typed shape + first-pass
@@ -121,8 +122,35 @@ export const listFlowRunsQuerySchema = t.Object({
     t.Integer({ minimum: 1, maximum: LIMITS.flowRunsPageSizeMax }),
   ),
   cursor: t.Optional(tPaginationCursor()),
-  status: t.Optional(t.Union(FLOW_RUN_STATUSES.map((s) => t.Literal(s)))),
+  status: t.Optional(
+    t.Union([
+      t.Literal("pending"),
+      t.Literal("running"),
+      t.Literal("awaiting_review"),
+      t.Literal("completed"),
+      t.Literal("failed"),
+      t.Literal("cancelled"),
+    ]),
+  ),
 });
+
+// The literal list mirrors FLOW_RUN_STATUSES: a member on one side only fails
+// to compile here.
+type FlowRunStatusValue = (typeof FLOW_RUN_STATUSES)[number];
+type FlowRunStatusQueryValue = NonNullable<
+  Static<typeof listFlowRunsQuerySchema>["status"]
+>;
+type MissingFlowRunStatusQueryValue = Exclude<
+  FlowRunStatusValue,
+  FlowRunStatusQueryValue
+>;
+type UnexpectedFlowRunStatusQueryValue = Exclude<
+  FlowRunStatusQueryValue,
+  FlowRunStatusValue
+>;
+
+true satisfies MissingFlowRunStatusQueryValue extends never ? true : never;
+true satisfies UnexpectedFlowRunStatusQueryValue extends never ? true : never;
 
 export const startFlowRunBodySchema = t.Object({
   definitionId: tSafeId("flowDefinition"),

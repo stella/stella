@@ -6,7 +6,8 @@ import type { ResourceRef } from "@stll/api-contract";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { entityLinks } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { taskRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -181,6 +182,8 @@ const createEntityLink = createSafeHandler(
       "cannot be linked to itself, and a read-only entity is refused. Remove " +
       "the link with tasks.entity-links.delete.",
     permissions: { entity: ["update"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
+    realtime: taskRealtimeUpdates,
     mcp: { type: "covered", by: "save_task" },
     body: createEntityLinkBodySchema,
   },

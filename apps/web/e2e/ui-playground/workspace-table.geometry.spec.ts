@@ -324,3 +324,112 @@ test("a row shown whole is as tall as what it holds", async ({ page }) => {
     )
     .toBe("row is as tall as what it holds");
 });
+
+/**
+ * How far each value cell's first text line sits below the row number, per
+ * rendered row. Text centres, not boxes: what must line up is what the reader
+ * sees, whatever padding each cell's content carries above its text.
+ */
+const readFirstLineOffsets = async (page: Page) =>
+  page.evaluate(
+    ([bodyRowSelector]) => {
+      const lineCentre = (node: Node) => {
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        const rect = range.getClientRects()[0];
+        if (!rect) {
+          throw new Error("text node has no line box");
+        }
+        return rect.top + rect.height / 2;
+      };
+      const firstText = (root: Element) => {
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+          acceptNode: (node) =>
+            node.textContent?.trim() &&
+            !node.parentElement?.closest('[aria-hidden="true"], .sr-only')
+              ? NodeFilter.FILTER_ACCEPT
+              : NodeFilter.FILTER_REJECT,
+        });
+        return walker.nextNode();
+      };
+      return [...document.querySelectorAll(bodyRowSelector)].map((row) => {
+        const number = row.querySelector('[data-slot="table-row-number"]');
+        const numberText = number?.firstChild;
+        if (!numberText) {
+          throw new Error("row has no number");
+        }
+        const numberCentre = lineCentre(numberText);
+        return [
+          ...row.querySelectorAll(
+            '[data-slot="workspace-grid-cell"][aria-colindex]',
+          ),
+        ]
+          .filter((cell) => !cell.contains(number))
+          .flatMap((cell) => {
+            const text = firstText(cell);
+            return text ? [lineCentre(text) - numberCentre] : [];
+          });
+      });
+    },
+    [BODY_ROW] as const,
+  );
+
+for (const contentMode of ["tight", "fit-content"] as const) {
+  test(`the row number sits on its row's first text line (${contentMode})`, async ({
+    page,
+  }) => {
+    await page
+      .locator(`[data-playground-content-mode="${contentMode}"]`)
+      .click();
+    await expect
+      .poll(async () => {
+        const rows = await readFirstLineOffsets(page);
+        const cellCount = rows.reduce((sum, row) => sum + row.length, 0);
+        const worst = Math.max(...rows.flat().map(Math.abs));
+        // The premise: rows and cells with text were measured at all.
+        if (rows.length === 0 || cellCount < rows.length) {
+          return `measured ${rows.length} rows, ${cellCount} cells`;
+        }
+        return worst <= BOX_TOLERANCE_PX
+          ? "every first line within tolerance"
+          : `a first line ${worst.toFixed(1)}px off the number`;
+      })
+      .toBe("every first line within tolerance");
+  });
+}
+
+test("the whole selection cell toggles without opening a result and supports Shift and Space", async ({
+  page,
+}) => {
+  const rows = page.locator(BODY_ROW);
+  const first = rows.filter({
+    has: page.locator('[data-slot="table-selection-cell"][aria-label="1"]'),
+  });
+  const firstSelection = first.locator('[data-slot="table-selection-cell"]');
+  await expect(firstSelection).toHaveAttribute("aria-checked", "false");
+
+  // The corner is outside the centred checkbox indicator.
+  await firstSelection.click({ position: { x: 3, y: 3 } });
+  await expect(first).toHaveAttribute("aria-selected", "true");
+  await expect(first).not.toHaveAttribute("data-active", "true");
+
+  const third = rows.filter({
+    has: page.locator('[data-slot="table-selection-cell"][aria-label="3"]'),
+  });
+  await third.locator('[data-slot="table-selection-cell"]').click({
+    position: { x: 3, y: 3 },
+    modifiers: ["Shift"],
+  });
+  await expect(page.locator(`${BODY_ROW}[aria-selected="true"]`)).toHaveCount(
+    3,
+  );
+  await expect(page.locator(`${BODY_ROW}[data-active="true"]`)).toHaveCount(0);
+
+  await firstSelection.focus();
+  await firstSelection.press("Space");
+  await expect(firstSelection).toHaveAttribute("aria-checked", "false");
+  await expect(page.locator(`${BODY_ROW}[data-active="true"]`)).toHaveCount(0);
+  await firstSelection.press("Space");
+  await expect(firstSelection).toHaveAttribute("aria-checked", "true");
+  await expect(firstSelection).toHaveCSS("cursor", "pointer");
+});

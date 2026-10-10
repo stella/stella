@@ -33,6 +33,10 @@ const LEGACY_OWNER_PATHS = [
   "apps/api/src/handlers/clauses/import.ts",
   "apps/api/src/handlers/clauses/versions/restore.ts",
 ] as const;
+const VARIANT_INSERT_OWNER = "apps/api/src/handlers/clauses/variant-insert.ts";
+const VARIANT_INSERT_NAMES = new Set(["insertClauseVariants"]);
+const isVariantInsertModule = (specifier: string): boolean =>
+  /(?:^|\/)variant-insert(?:\.ts)?$/u.test(specifier);
 const TABLE_NAMES = new Set(["clauses", "clauseVariants", "clauseVersions"]);
 const isSchemaModule = (specifier: string): boolean =>
   specifier === "@/api/db/schema" ||
@@ -174,7 +178,9 @@ export default eslintCompatPlugin({
             return (
               filename.endsWith(OWNED_FIXTURE) ||
               filename.endsWith(UNOWNED_FIXTURE) ||
-              (filename.includes("apps/api/src/") && !isTestFile(filename))
+              (filename.includes("apps/api/src/") &&
+                !filename.endsWith(VARIANT_INSERT_OWNER) &&
+                !isTestFile(filename))
             );
           },
           FunctionDeclaration: pushScope,
@@ -208,14 +214,30 @@ export default eslintCompatPlugin({
               }
               return;
             }
-            if (
-              callee?.type !== "MemberExpression" ||
-              !["insert", "update"].includes(
+            const isVariantInsert =
+              matchesImport({
+                identifier: callee,
+                specifierMatches: isVariantInsertModule,
+                names: VARIANT_INSERT_NAMES,
+              }) ||
+              (callee?.type === "MemberExpression" &&
+                VARIANT_INSERT_NAMES.has(
+                  getPropertyName(callee.property) ?? "",
+                ) &&
+                matchesImport({
+                  identifier: callee.object,
+                  specifierMatches: isVariantInsertModule,
+                  names: VARIANT_INSERT_NAMES,
+                  namespace: true,
+                }));
+            const isDirectWrite =
+              callee?.type === "MemberExpression" &&
+              ["insert", "update"].includes(
                 getPropertyName(callee.property) ?? "",
-              ) ||
-              !Array.isArray(node.arguments) ||
-              !isClauseTable(node.arguments.at(0))
-            ) {
+              ) &&
+              Array.isArray(node.arguments) &&
+              isClauseTable(node.arguments.at(0));
+            if (!isVariantInsert && !isDirectWrite) {
               return;
             }
             // Search index maintenance may only write its own static column.

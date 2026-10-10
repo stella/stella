@@ -1,6 +1,7 @@
 import { isCaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
 
 import type { Transaction } from "@/api/db/root";
+import type { CitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
 import { reopenCitationsForDecisionIdentifiers } from "@/api/handlers/case-law/citation-resolution";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import type { ObservationShape } from "@/api/handlers/case-law/ingestion/pipeline/decision-existing";
@@ -19,10 +20,13 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { synchronizeLockedCorpusProjectionDesiredStateTx } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import type { ActiveCorpusProjectionSourceLock } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { logger } from "@/api/lib/observability/logger";
+import type { S3CredentialRefreshOptions } from "@/api/lib/s3/credential-guard";
 
 /** Everything one decision's row write reads, decided before it runs. */
 export type DecisionRowWrite = Omit<DecisionIdentity, "decisionId"> &
   Pick<ObservedDecision, "persistedDecisionDate"> & {
+    signal?: AbortSignal;
+    s3Policy?: S3CredentialRefreshOptions;
     sourceId: SafeId<"caseLawSource">;
     decisionId: SafeId<"caseLawDecision">;
     /** The observation composed with the supplements its document takes in. */
@@ -56,7 +60,7 @@ type DecisionIdentifierLookup = Pick<
  * refresh under the same identities changes nothing about who can be cited.
  */
 export const announceDecisionIdentifiers = async (
-  tx: Transaction,
+  tx: CitationGraphTransaction<Transaction>,
   { result, persistedDecisionDate }: DecisionRowWrite,
   id: SafeId<"caseLawDecision">,
   identifiers: readonly DecisionIdentifierLookup[],
@@ -82,7 +86,7 @@ export const announceDecisionIdentifiers = async (
 };
 
 export const reconcileStableProjection = async (
-  tx: Transaction,
+  tx: CitationGraphTransaction<Transaction>,
   { plan: { corpusPlan } }: DecisionRowWrite,
   id: SafeId<"caseLawDecision">,
   projectionLock: ActiveCorpusProjectionSourceLock | null,
@@ -106,7 +110,7 @@ export const reconcileStableProjection = async (
  * source that named judges can say the decision has different ones.
  */
 export const writeDecisionJudges = async (
-  tx: Transaction,
+  tx: CitationGraphTransaction<Transaction>,
   { result, judges }: DecisionRowWrite,
   writtenDecisionId: SafeId<"caseLawDecision">,
 ): Promise<void> => {

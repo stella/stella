@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -44,6 +45,40 @@ const expiredTokenError = (): Error =>
   });
 
 describe("createS3CredentialGuard", () => {
+  test("canceling credential refresh stops the object operation before it starts", async () => {
+    const controller = new AbortController();
+    let started = false;
+    const guard = createS3CredentialGuard({
+      isStale: () => true,
+      refresh: async (options) => {
+        expect(options?.mode).toBe("replay-strict");
+        expect(options?.signal).toBe(controller.signal);
+        controller.abort(
+          new DOMException("fixture tick expired", "TimeoutError"),
+        );
+        options?.signal.throwIfAborted();
+      },
+    });
+    const rejected1 = await Result.tryPromise({
+      try: async () =>
+        await guard.run(
+          async () => {
+            started = true;
+          },
+          { mode: "replay-strict", signal: controller.signal },
+        ),
+      catch: (cause) => cause,
+    });
+    expect(rejected1.isErr()).toBe(true);
+    if (rejected1.isErr()) {
+      expect(rejected1.error).toBeInstanceOf(Error);
+      if (rejected1.error instanceof Error) {
+        expect(rejected1.error.message).toContain("fixture tick expired");
+      }
+    }
+    expect(started).toBe(false);
+  });
+
   test("rebuilds the client before the credentials expire", async () => {
     const source = createFakeCredentialSource();
     const guard = createS3CredentialGuard(source.lifecycle);

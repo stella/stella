@@ -1,35 +1,25 @@
 import { toolDefinition } from "@tanstack/ai";
-import { panic, Result } from "better-result";
+import { Result } from "better-result";
 import * as v from "valibot";
 
 import type { SafeDb } from "@/api/db/safe-db";
+import { AI_MEMORY_KINDS } from "@/api/db/schema";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ChatDurableRefText } from "@/api/lib/chat/ref-registry";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { sanitizeMemoryContent } from "@/api/lib/memory/memory-content-safety";
-import { createMemoryDedupIdentity } from "@/api/lib/memory/memory-dedup";
-import { persistExplicitMemory } from "@/api/lib/memory/persist-explicit-memory";
+import {
+  memoryWriteRefusalChatToolError,
+  persistExplicitMemory,
+  resolveMemoryWriteScope,
+} from "@/api/lib/memory/persist-explicit-memory";
+import type { MemoryWriteScopeRequest } from "@/api/lib/memory/persist-explicit-memory";
+import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 
 export const REMEMBER_TOOL_NAME = "remember";
-
-// Matter-specific kinds may only live at workspace scope (DB CHECK
-// `ai_memories_kind_scope_check`); cross-matter user memory is limited
-// to preferences and standing instructions, enforced at execute time.
-const MEMORY_KINDS = [
-  "preference",
-  "instruction",
-  "fact",
-  "decision",
-  "relationship",
-] as const;
-
-const MATTER_KINDS: ReadonlySet<string> = new Set([
-  "fact",
-  "decision",
-  "relationship",
-]);
 
 const rememberToolInputSchema = v.strictObject({
   content: v.pipe(
@@ -42,7 +32,7 @@ const rememberToolInputSchema = v.strictObject({
   ),
   kind: v.optional(
     v.pipe(
-      v.picklist(MEMORY_KINDS),
+      v.picklist(AI_MEMORY_KINDS),
       v.description(
         "What kind of memory this is. `fact`, `decision`, and `relationship` are only valid when the chat is scoped to a matter.",
       ),
@@ -62,8 +52,10 @@ const rememberToolOutputSchema = v.strictObject({
   status: v.literal("saved"),
 });
 
+type RememberToolInput = v.InferOutput<typeof rememberToolInputSchema>;
+
 type CreateRememberToolProps = {
-  canManageWorkspaceMemory: boolean;
+  authority: AuthorizedMemberRole;
   organizationId: SafeId<"organization">;
   // Memory writes must leave an audit trail like the REST memories
   // handlers; the audit row commits in the same transaction as the
@@ -82,10 +74,44 @@ type CreateRememberToolProps = {
   // The matter this chat is bound to, when any. Required for
   // workspace-scoped memory and for the matter-specific kinds.
   workspaceId: SafeId<"workspace"> | null;
+  /** The turn's statuses of the member's accessible matters. */
+  workspaceStatusById:
+    | ReadonlyMap<string, AccessibleWorkspace["status"]>
+    | undefined;
+};
+
+type MemoryWriteScopeRequestOptions = Pick<
+  RememberToolInput,
+  "kind" | "scope"
+> & {
+  workspaceId: SafeId<"workspace"> | null;
+};
+
+const memoryWriteScopeRequest = ({
+  kind = "preference",
+  scope = "user",
+  workspaceId,
+}: MemoryWriteScopeRequestOptions): Result<
+  MemoryWriteScopeRequest,
+  ChatToolError
+> => {
+  if (scope === "user") {
+    return Result.ok({ scope, kind });
+  }
+  if (workspaceId === null) {
+    return Result.err(
+      new ChatToolError({
+        kind: "invalid-input",
+        message:
+          "Workspace-scoped memory is only available when the chat is connected to a matter.",
+      }),
+    );
+  }
+  return Result.ok({ scope, kind, workspaceId });
 };
 
 export const createRememberTool = ({
-  canManageWorkspaceMemory,
+  authority,
   organizationId,
   recordAuditEvent,
   safeDb,
@@ -93,6 +119,7 @@ export const createRememberTool = ({
   toDurableRefText,
   userId,
   workspaceId,
+  workspaceStatusById,
 }: CreateRememberToolProps) =>
   toolDefinition({
     name: REMEMBER_TOOL_NAME,
@@ -106,35 +133,32 @@ export const createRememberTool = ({
     const saved = await (async (): Promise<
       Result<{ status: "saved" }, ChatToolError>
     > => {
-      const resolvedScope = scope ?? "user";
-
-      if (resolvedScope === "workspace" && workspaceId === null) {
-        return Result.err(
-          new ChatToolError({
-            kind: "invalid-input",
-            message:
-              "Workspace-scoped memory is only available when the chat is connected to a matter.",
-          }),
-        );
+      const scopeRequest = memoryWriteScopeRequest({
+        kind,
+        scope,
+        workspaceId,
+      });
+      if (Result.isError(scopeRequest)) {
+        return Result.err(scopeRequest.error);
       }
-
-      if (resolvedScope === "workspace" && !canManageWorkspaceMemory) {
+      // Authorized on every call, with the same checks as the REST route.
+      const workspaceStatus =
+        workspaceId === null
+          ? undefined
+          : workspaceStatusById?.get(workspaceId);
+      const authorizedScope = resolveMemoryWriteScope({
+        accessibleWorkspaces:
+          workspaceId === null || workspaceStatus === undefined
+            ? []
+            : [{ id: workspaceId, status: workspaceStatus }],
+        authority,
+        organizationId,
+        request: scopeRequest.value,
+        userId,
+      });
+      if (Result.isError(authorizedScope)) {
         return Result.err(
-          new ChatToolError({
-            kind: "invalid-input",
-            message:
-              "You do not have permission to manage shared matter memory.",
-          }),
-        );
-      }
-
-      const resolvedKind = kind ?? "preference";
-      if (resolvedScope === "user" && MATTER_KINDS.has(resolvedKind)) {
-        return Result.err(
-          new ChatToolError({
-            kind: "invalid-input",
-            message: `Kind "${resolvedKind}" is only allowed on matter-scoped memory.`,
-          }),
+          memoryWriteRefusalChatToolError(authorizedScope.error),
         );
       }
 
@@ -155,54 +179,20 @@ export const createRememberTool = ({
       if (Result.isError(sanitizedContentResult)) {
         return Result.err(sanitizedContentResult.error);
       }
-      const sanitizedContent = sanitizedContentResult.value;
 
       const sourceDataWorkspaceIds = resolveSourceDataWorkspaceIds();
-      const memoryWorkspaceId =
-        resolvedScope === "workspace" ? workspaceId : null;
-      const identity = (() => {
-        if (resolvedScope === "user") {
-          return createMemoryDedupIdentity({
-            scope: resolvedScope,
-            userId,
-            workspaceId: null,
-            kind: resolvedKind,
-            content: sanitizedContent,
-            sourceDataWorkspaceIds,
-          });
-        }
-        if (workspaceId === null) {
-          return panic("Validated workspace memory lost its workspace ID");
-        }
-        return createMemoryDedupIdentity({
-          scope: resolvedScope,
-          userId: null,
-          workspaceId,
-          kind: resolvedKind,
-          content: sanitizedContent,
-          sourceDataWorkspaceIds,
-        });
-      })();
-
       const insertResult = await safeDb(
         async (tx) =>
           await persistExplicitMemory({
             tx,
             recordAuditEvent,
-            values: {
-              organizationId,
-              scope: resolvedScope,
-              userId: resolvedScope === "user" ? userId : null,
-              workspaceId: memoryWorkspaceId,
-              kind: resolvedKind,
-              content: sanitizedContent,
-              dedupKey: identity.dedupKey,
+            scope: authorizedScope.value,
+            memory: {
+              content: sanitizedContentResult.value,
               language: null,
-              sourceDataWorkspaceIds: identity.sourceDataWorkspaceIds,
+              sourceDataWorkspaceIds,
               source: "tool",
-              status: "active",
               pinned: false,
-              createdBy: userId,
             },
           }),
       );

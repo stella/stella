@@ -7,6 +7,7 @@ import {
   currencyCents,
   MoneyTotals,
   prorateHourlyCents,
+  timeEntryAmount,
   unsafeCents,
 } from ".";
 import type { CentsAmount } from ".";
@@ -477,3 +478,26 @@ function at<T>(items: readonly T[], index: number): T {
   }
   return value;
 }
+
+describe("recorded time charges", () => {
+  test.each([0, 1, 10, 60, 90, 1440])(
+    "no-charge time is zero for %p minutes at every rate",
+    (billedMinutes) => {
+      for (const rateAtEntry of [
+        cents(0),
+        cents(1),
+        cents(10_000),
+        cents(2 ** 31),
+      ]) {
+        expect(
+          timeEntryAmount({ billedMinutes, rateAtEntry, noCharge: true }),
+        ).toBe(cents(0));
+        expect(
+          timeEntryAmount({ billedMinutes, rateAtEntry, noCharge: false }),
+        ).toBe(
+          prorateHourlyCents({ billedMinutes, hourlyRateCents: rateAtEntry }),
+        );
+      }
+    },
+  );
+});

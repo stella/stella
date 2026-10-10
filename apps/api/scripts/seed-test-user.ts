@@ -24,6 +24,7 @@ import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { member, organization, session, user } from "@/api/db/auth-schema";
+import { featureEnrolments } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { seedDefaultSkills } from "@/api/lib/agent-skills/default-skills";
 import { sessionCookieName } from "@/api/lib/auth/auth-cookie-name";
@@ -40,6 +41,7 @@ import {
   DEFAULT_TEST_USER_COLLEAGUE_COUNT,
   DEFAULT_USER_ID,
   getSeedColleagues,
+  seedMemberId,
 } from "./seed-utils";
 
 const db = openMaintenanceDb({ readOnly: false });
@@ -91,12 +93,8 @@ const getSeedOrganizationIdentity = (organizationId: string) => {
   };
 };
 
-const buildMemberId = (organizationId: string, userId: string): string => {
-  const hash = new Bun.CryptoHasher("sha256")
-    .update(`${organizationId}:${userId}`)
-    .digest("hex");
-  return `seed-member-${hash.slice(0, 24)}`;
-};
+const buildMemberId = (organizationId: string, userId: string): string =>
+  seedMemberId({ organizationId, userId });
 
 // Better Auth may create the local test email before this seed runs, using its
 // own generated user id. Resolve by either unique identity so the seed
@@ -327,6 +325,17 @@ export async function ensureTestUsers(organizationId: string = TEST_ORG.id) {
     organizationId,
     userId: testUserId,
     role: OWNER_MEMBER_ROLE,
+  });
+  // The owner fixture exercises billing pages; other principals retain opt-in access.
+  await db.transaction(async (tx) => {
+    await tx
+      .insert(featureEnrolments)
+      .values({
+        organizationId: toSafeId<"organization">(organizationId),
+        userId: toSafeId<"user">(testUserId),
+        featureId: "time-billing",
+      })
+      .onConflictDoNothing();
   });
   const colleagueUserIds = await ensureSeedColleagueUsers();
 

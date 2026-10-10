@@ -28,7 +28,7 @@
         "file": "src/handlers/chat/approval-settlement.integration.test.ts",
         "test": "is stored on its owning message when the model answers in text"
       },
-      "oracle": "chat.persisted.turn-settles"
+      "oracle": "chat.client.no-errors"
     },
     {
       "id": "failed-continuation-keeps-owning-parts",
@@ -66,8 +66,8 @@
       "behaviour": "The persistence processor never consumes a messages snapshot, which would reset what it accumulated.",
       "status": "active",
       "file": "src/handlers/chat/stream-chat.ts",
-      "search": "      if (chunk.type !== EventType.MESSAGES_SNAPSHOT) {\n        processor.processChunk(chunk);\n      }",
-      "replace": "      processor.processChunk(chunk);",
+      "search": "  if (chunk.type !== EventType.MESSAGES_SNAPSHOT) {\n    processor.processChunk(chunk);\n  }",
+      "replace": "  processor.processChunk(chunk);",
       "scenario": {
         "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
         "test": "keeps a run's server call and the approval it then asks for"
@@ -375,10 +375,10 @@
       "search": "if (serializedInput !== void 0) existingToolCall.arguments = serializedInput;",
       "replace": "void serializedInput;",
       "scenario": {
-        "file": "src/handlers/chat/provider-wire-replay.integration.test.ts",
-        "test": "openai: a tool call reaches its card, runs once approved, and the answer reloads"
+        "file": "src/handlers/chat/tool-call-end-arguments.test.ts",
+        "test": "an OpenAI strict-mode null on an optional field never reaches the persisted arguments"
       },
-      "oracle": "chat.live.equals-reload"
+      "oracle": "chat.provider-wire.tool-arguments"
     },
     {
       "id": "tool-input-null-optionals-omitted",
@@ -511,7 +511,7 @@
       "fix": "#4273",
       "behaviour": "The request options a chat attempt hands the engine put nothing on the provider wire that the provider refuses, such as a request metadata value that is not a string.",
       "status": "active",
-      "file": "src/handlers/chat/stream-chat.ts",
+      "file": "src/handlers/chat/chat-request.ts",
       "search": "  adapter: withRunToolCallIds(model.adapter, toolCallIds),\n",
       "replace": "  adapter: withRunToolCallIds(model.adapter, toolCallIds),\n  metadata: { stellaToolCallIdLedger: toolCallIds },\n",
       "scenario": {
@@ -666,8 +666,8 @@
       "behaviour": "A run binds the run id its request posted to its turn when it starts.",
       "status": "active",
       "file": "src/handlers/chat/chat-turn-persistence.ts",
-      "search": "...(runId === undefined ? {} : { runId }),",
-      "replace": "...(runId === undefined ? {} : {}),",
+      "search": "        mode === \"bind\"\n          ? { runId }\n          : {\n              leaseExpiresAt: nextChatTurnRunLeaseExpiry(),\n              ...(runId === undefined ? {} : { runId }),\n            },",
+      "replace": "        mode === \"bind\"\n          ? { runId: sql`${chatTurns.runId}` }\n          : {\n              leaseExpiresAt: nextChatTurnRunLeaseExpiry(),\n            },",
       "scenario": {
         "file": "src/handlers/chat/chat-turn-run.integration.test.ts",
         "test": "runs an approved call to completion after its request is torn down, with nobody reading"
@@ -903,9 +903,9 @@
       "fix": "#4007",
       "behaviour": "A request of a thread sends the system prompt the request before it sent, so an approval's continuation extends the cached prompt instead of rewriting it.",
       "status": "active",
-      "file": "src/handlers/chat/stream-chat.ts",
-      "search": "  ...systemPromptsPatch({ caching, model, system }),",
-      "replace": "  ...systemPromptsPatch({ caching, model, system: `${String(system)}\\nRequest time: ${String(performance.now())}` }),",
+      "file": "src/handlers/chat/chat-request.ts",
+      "search": "  ...systemPromptsFor({ caching, model, system, systemLayers }),",
+      "replace": "  ...systemPromptsFor({ caching, model, system: `${String(system)}\\nRequest time: ${String(performance.now())}`, systemLayers }),",
       "scenario": {
         "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
         "test": "keeps every card after an approval on a message that already holds a tool result"
@@ -917,7 +917,7 @@
       "fix": "#4007",
       "behaviour": "A provider's SDK writes a thread's tools in the same order on every request of the thread.",
       "status": "active",
-      "file": "src/handlers/chat/stream-chat.ts",
+      "file": "src/handlers/chat/chat-request.ts",
       "search": "  tools: projectChatToolSchemasForProvider({\n    modelTools,\n    provider: model.provider,\n  }),",
       "replace": "  tools: projectChatToolSchemasForProvider({\n    modelTools,\n    provider: model.provider,\n  }).toSorted(() => Math.random() - 0.5),",
       "scenario": {
@@ -1086,8 +1086,8 @@
       "behaviour": "A completed turn's follow-ups run after its settlement, so one that throws is reported and never marks the stored turn failed.",
       "status": "active",
       "file": "src/handlers/chat/send-message.ts",
-      "search": "                          await persistStreamedAssistantTurn(event),",
-      "replace": "                          await persistStreamedAssistantTurn(event).then(async (settled) => { if (Result.isOk(settled) && settled.value !== null) { await runCompletedTurnFollowUps(settled.value); } return settled; }),",
+      "search": "                      persist: async () =>\n                        await persistStreamedAssistantTurn(event),",
+      "replace": "                      persist: async () =>\n                        await persistStreamedAssistantTurn(event).then(async (settled) => { if (Result.isOk(settled) && settled.value.followUps !== null) { await runCompletedTurnFollowUps(run, settled.value.followUps); } return settled; }),",
       "scenario": {
         "file": "src/handlers/chat/send-message.test.ts",
         "test": "keeps a completed turn completed when a follow-up throws"

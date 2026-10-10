@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import { validateVat } from "./client.js";
 import { ViesValidationError } from "./errors.js";
 import type { ViesRawResponse } from "./types.js";
@@ -11,7 +13,7 @@ const readFixture = async (name: string): Promise<ViesRawResponse> => {
   // API and committed alongside the tests; runtime validation would
   // only catch drift between the upstream payload and the committed
   // JSON, which the assertions below cover.
-  // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   return value as ViesRawResponse;
 };
 
@@ -147,8 +149,8 @@ describe("validateVat (fixture)", () => {
     );
 
     expect(
-      validateVat("IE6388047V", { observer: "unobserved" }),
-    ).rejects.toMatchObject({
+      await rejectionOf(validateVat("IE6388047V", { observer: "unobserved" })),
+    ).toMatchObject({
       name: "ViesAPIError",
       httpStatus: 502,
     });
@@ -164,8 +166,8 @@ describe("validateVat (fixture)", () => {
     );
 
     expect(
-      validateVat("IE6388047V", { observer: "unobserved" }),
-    ).rejects.toMatchObject({
+      await rejectionOf(validateVat("IE6388047V", { observer: "unobserved" })),
+    ).toMatchObject({
       name: "ViesAPIError",
     });
   });
@@ -175,35 +177,35 @@ describe("validateVat (fixture)", () => {
 // Pre-flight validation
 // ---------------------------------------------------------------------------
 describe("validateVat pre-flight validation", () => {
-  test("throws ViesValidationError when no country prefix is present", () => {
+  test("throws ViesValidationError when no country prefix is present", async () => {
     expect(
-      validateVat("143593636", { observer: "unobserved" }),
-    ).rejects.toBeInstanceOf(ViesValidationError);
+      await rejectionOf(validateVat("143593636", { observer: "unobserved" })),
+    ).toBeInstanceOf(ViesValidationError);
   });
 
-  test("throws ViesValidationError for unknown country prefix", () => {
+  test("throws ViesValidationError for unknown country prefix", async () => {
     expect(
-      validateVat("ZZ123456789", { observer: "unobserved" }),
-    ).rejects.toBeInstanceOf(ViesValidationError);
+      await rejectionOf(validateVat("ZZ123456789", { observer: "unobserved" })),
+    ).toBeInstanceOf(ViesValidationError);
   });
 
-  test("throws ViesValidationError for GB (removed from VIES)", () => {
+  test("throws ViesValidationError for GB (removed from VIES)", async () => {
     expect(
-      validateVat("GB123456789", { observer: "unobserved" }),
-    ).rejects.toBeInstanceOf(ViesValidationError);
+      await rejectionOf(validateVat("GB123456789", { observer: "unobserved" })),
+    ).toBeInstanceOf(ViesValidationError);
   });
 
-  test("short-circuits malformed national part before fetching VIES", () => {
+  test("short-circuits malformed national part before fetching VIES", async () => {
     // The REST endpoint reports `userError: "INVALID"` for malformed
     // input, which would otherwise be mapped to `not-registered` —
     // a misleading "VAT exists but isn't registered" verdict for
     // what is actually a format violation. Pre-flight the per-
     // country rule and surface the format error directly.
     expect(
-      validateVat("DE123", { observer: "unobserved" }),
-    ).rejects.toBeInstanceOf(ViesValidationError);
+      await rejectionOf(validateVat("DE123", { observer: "unobserved" })),
+    ).toBeInstanceOf(ViesValidationError);
     expect(
-      validateVat("DEABCDEFGHI", { observer: "unobserved" }),
-    ).rejects.toBeInstanceOf(ViesValidationError);
+      await rejectionOf(validateVat("DEABCDEFGHI", { observer: "unobserved" })),
+    ).toBeInstanceOf(ViesValidationError);
   });
 });

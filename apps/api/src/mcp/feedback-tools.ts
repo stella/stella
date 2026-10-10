@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 /**
  * The two-step feedback contract: `prepare_feedback` sanitizes a draft and
  * hands it back for a human to read, `submit_feedback` files the same object
@@ -11,8 +12,6 @@
  * refuses any report the token does not cover, so the approved bytes and the
  * submitted bytes are the same bytes.
  */
-
-import { Result } from "better-result";
 import * as v from "valibot";
 
 import {
@@ -32,6 +31,7 @@ import { feedbackIntakeGuards } from "@/api/handlers/feedback/intake-guards";
 import { sanitizeFeedbackReport } from "@/api/handlers/feedback/sanitize-report";
 import type { SanitizableFeedbackField } from "@/api/handlers/feedback/sanitize-report";
 import { submitFeedbackReport } from "@/api/handlers/feedback/submit";
+import { projectionPayload } from "@/api/lib/projection-totality";
 import {
   checkFeedbackApproval,
   createFeedbackApproval,
@@ -367,6 +367,8 @@ export const FEEDBACK_TOOL_DEFINITIONS = [
       readOnlyHint: false,
     },
     access: "write",
+    accountAccess: "standard",
+    permissions: { type: "all", permissions: { workspace: ["read"] } },
     anonymized: { exposure: "excluded", reason: "write" },
     destructiveBehavior: {
       type: "outbound",
@@ -399,23 +401,25 @@ const handlePrepareFeedbackTool: McpToolHandler<
     toReportInput(parsed.output),
   );
 
-  return toolDataResult({
-    report: toWireReport(report),
-    approval_token: createFeedbackApproval({
-      now: Temporal.Now.instant().epochMilliseconds,
-      organizationId: context.organizationId,
-      report,
-      secret: env.BETTER_AUTH_SECRET,
-      userId: context.userId,
+  return toolDataResult(
+    projectionPayload(PREPARE_FEEDBACK_OUTPUT_SCHEMA, {
+      report: toWireReport(report),
+      approval_token: createFeedbackApproval({
+        now: Temporal.Now.instant().epochMilliseconds,
+        organizationId: context.organizationId,
+        report,
+        secret: env.BETTER_AUTH_SECRET,
+        userId: context.userId,
+      }),
+      redactions,
+      redacted_fields: redactedFields.map((field) => MCP_FIELD_NAME[field]),
+      next_step:
+        "Show this report to the human verbatim and ask whether to send it. " +
+        "Only once they approve, call submit_feedback with exactly this " +
+        "report, this approval_token, and confirm: true. Nothing has been " +
+        "sent or stored yet.",
     }),
-    redactions,
-    redacted_fields: redactedFields.map((field) => MCP_FIELD_NAME[field]),
-    next_step:
-      "Show this report to the human verbatim and ask whether to send it. " +
-      "Only once they approve, call submit_feedback with exactly this " +
-      "report, this approval_token, and confirm: true. Nothing has been " +
-      "sent or stored yet.",
-  });
+  );
 };
 
 const handleSubmitFeedbackTool: McpToolHandler<
@@ -479,17 +483,19 @@ const handleSubmitFeedbackTool: McpToolHandler<
 
   const { deduplicated, deliveries, receipt, redactions, warning } =
     submitted.value;
-  return toolDataResult({
-    receipt,
-    redactions,
-    deduplicated,
-    deliveries,
-    stored: true,
-    ...(warning === undefined ? {} : { warning }),
-    next_step: deduplicated
-      ? `Tell the human this report was already filed as ${receipt}; nothing was sent again.`
-      : `Tell the human the report is filed as ${receipt} and give them that receipt.`,
-  });
+  return toolDataResult(
+    projectionPayload(SUBMIT_FEEDBACK_OUTPUT_SCHEMA, {
+      receipt,
+      redactions,
+      deduplicated,
+      deliveries,
+      stored: true,
+      ...(warning === undefined ? {} : { warning }),
+      next_step: deduplicated
+        ? `Tell the human this report was already filed as ${receipt}; nothing was sent again.`
+        : `Tell the human the report is filed as ${receipt} and give them that receipt.`,
+    }),
+  );
 };
 
 export const FEEDBACK_TOOL_HANDLERS = {

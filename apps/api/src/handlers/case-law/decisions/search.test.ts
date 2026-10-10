@@ -44,11 +44,11 @@ describe("PostgreSQL metadata filter admission", () => {
     { hasLegalSentence: false },
     { category: "B", hasLegalSentence: false },
   ])("refuses unindexed filters before querying (%j)", async (filters) => {
-    const result = await searchDecisionsHandler(
-      { query: "náhrada škody", country: "CZE", ...filters },
-      unreadableDb,
-      "unobserved",
-    );
+    const result = await searchDecisionsHandler({
+      body: { query: "náhrada škody", country: "CZE", ...filters },
+      caseLawDb: unreadableDb,
+      observer: "unobserved",
+    });
     expect(result).toBeInstanceOf(ElysiaCustomStatusResponse);
     if (!(result instanceof ElysiaCustomStatusResponse)) {
       panic("Expected metadata-filter rejection");

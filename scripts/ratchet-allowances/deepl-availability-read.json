@@ -1,0 +1,5 @@
+{
+  "metric": "lint-suppression-directives",
+  "delta": 1,
+  "reason": "apps/web/src/lib/deepl/queries.ts uses the documented require-query-signal exception: the organization-keyed, deduplicated availability read must finish and populate its cache across dialog/toolbar teardown. TanStack discards cancelled results; mounted lifecycle and observer tests cover demand gating, in-flight sharing, and cached remounts. All other queries retain signal enforcement."
+}

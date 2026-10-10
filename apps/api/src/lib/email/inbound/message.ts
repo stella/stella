@@ -1,17 +1,28 @@
-import { Result, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { load } from "cheerio";
 import PostalMime, {
   addressParser,
   type Address,
+  type Attachment,
   type Email,
 } from "postal-mime";
 
+import type {
+  CorrespondenceProvenance,
+  ParsedCorrespondence,
+} from "@stll/api-contract/correspondence";
+import { createSha256, sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import {
   renderEmailBodyHtml,
   type ParsedEmail,
 } from "@/api/lib/files/email-to-html";
+import {
+  parseOutlookMsg,
+  type OutlookMsgEmail,
+  type OutlookMsgRecipient,
+} from "@/api/lib/files/outlook-msg";
 import {
   sanitizeFilename,
   type SanitizedFileName,
@@ -25,7 +36,21 @@ export type InboundAttachment = {
   bytes: Uint8Array;
 };
 
-type NormalizedInboundMessage = {
+/** The fields an email format states, before shared normalization. */
+type MessageFields = {
+  fromHeaders: string[];
+  to: Address[] | undefined;
+  cc: Address[] | undefined;
+  subject: string | undefined;
+  text: string | undefined;
+  html: string | undefined;
+  messageId: string | undefined;
+  inReplyTo: string | undefined;
+  references: string | undefined;
+  attachments: Pick<Attachment, "filename" | "mimeType" | "content">[];
+};
+
+export type NormalizedInboundMessage = {
   from: string | null;
   to: string[];
   cc: string[];
@@ -329,14 +354,13 @@ const normalizeText = (value: string | undefined): string =>
   (value ?? "").replace(/\r\n?/gu, "\n").trim();
 
 const sanitizeBodyHtml = (
-  email: Email,
+  html: string | undefined,
 ): Result<string | null, InboundMessageError> => {
-  if (!email.html) {
+  if (!html) {
     return Result.ok(null);
   }
   if (
-    new TextEncoder().encode(email.html).byteLength >
-    INBOUND_MAIL_LIMITS.bodyBytes
+    new TextEncoder().encode(html).byteLength > INBOUND_MAIL_LIMITS.bodyBytes
   ) {
     return fail("bodyTooLarge");
   }
@@ -347,28 +371,72 @@ const sanitizeBodyHtml = (
     cc: [],
     bcc: [],
     date: null,
-    body: { type: "html", html: email.html },
+    body: { type: "html", html },
     inlineImages: [],
     attachments: [],
   } satisfies ParsedEmail;
-  return Result.ok(load(renderEmailBodyHtml(parsed))("body").html());
+  // A MIME part's closing line break is transport framing, not content; the
+  // text body is trimmed the same way, so both formats hash alike.
+  return Result.ok(
+    load(renderEmailBodyHtml(parsed))("body").html()?.trim() ?? null,
+  );
+};
+
+const isExecutableContent = (bytes: Uint8Array) =>
+  (bytes[0] === 0x7f &&
+    bytes[1] === 0x45 &&
+    bytes[2] === 0x4c &&
+    bytes[3] === 0x46) ||
+  (bytes[0] === 0x4d && bytes[1] === 0x5a) ||
+  (bytes[0] === 0x23 && bytes[1] === 0x21);
+
+/**
+ * What filing does with a message's attachments. `store_each` stores every
+ * attachment as its own matter file, so an executable type rejects the whole
+ * message. `retain_in_file` leaves them inside an email file the upload path
+ * already stored and scanned; nothing is extracted, so they are only counted,
+ * bounded and fingerprinted.
+ */
+type AttachmentPolicy = "store_each" | "retain_in_file";
+
+const ATTACHMENT_POLICY_BY_SOURCE = {
+  delivery: "store_each",
+  upload: "retain_in_file",
+} as const satisfies Record<
+  CorrespondenceProvenance["source"],
+  AttachmentPolicy
+>;
+
+const rejectsUnsafeAttachments = (policy: AttachmentPolicy) => {
+  switch (policy) {
+    case "store_each":
+      return true;
+    case "retain_in_file":
+      return false;
+    default:
+      policy satisfies never;
+      return panic("Unhandled attachment policy");
+  }
 };
 
 const checkedAttachments = (
-  email: Email,
+  stated: MessageFields["attachments"],
+  policy: AttachmentPolicy,
 ): Result<InboundAttachment[], InboundMessageError> => {
-  if (email.attachments.length > INBOUND_MAIL_LIMITS.attachmentCount) {
+  if (stated.length > INBOUND_MAIL_LIMITS.attachmentCount) {
     return fail("tooManyAttachments");
   }
   const attachments: InboundAttachment[] = [];
-  for (const attachment of email.attachments) {
+  for (const attachment of stated) {
     const mimeType =
       attachment.mimeType.toLowerCase().split(";").at(0)?.trim() ?? "";
     const fileName = sanitizeFilename(attachment.filename ?? "attachment");
     const extension = fileName.split(".").at(-1)?.toLowerCase() ?? "";
+    const rejectsUnsafe = rejectsUnsafeAttachments(policy);
     if (
-      UNSAFE_ATTACHMENT_EXTENSIONS.has(extension) ||
-      UNSAFE_ATTACHMENT_MIME_TYPES.has(mimeType)
+      rejectsUnsafe &&
+      (UNSAFE_ATTACHMENT_EXTENSIONS.has(extension) ||
+        UNSAFE_ATTACHMENT_MIME_TYPES.has(mimeType))
     ) {
       return fail("unsafeAttachment");
     }
@@ -379,14 +447,7 @@ const checkedAttachments = (
     if (bytes.byteLength > INBOUND_MAIL_LIMITS.attachmentBytes) {
       return fail("attachmentTooLarge");
     }
-    if (
-      (bytes[0] === 0x7f &&
-        bytes[1] === 0x45 &&
-        bytes[2] === 0x4c &&
-        bytes[3] === 0x46) ||
-      (bytes[0] === 0x4d && bytes[1] === 0x5a) ||
-      (bytes[0] === 0x23 && bytes[1] === 0x21)
-    ) {
+    if (rejectsUnsafe && isExecutableContent(bytes)) {
       return fail("unsafeAttachment");
     }
     attachments.push({ fileName, mimeType, bytes });
@@ -399,7 +460,7 @@ const checkedAttachments = (
         attachment,
         key: JSON.stringify([
           attachment.mimeType,
-          new Bun.CryptoHasher("sha256").update(attachment.bytes).digest("hex"),
+          hashSha256Hex(attachment.bytes),
         ]),
       }))
       .toSorted((a, b) => (a.key < b.key ? -1 : Number(a.key > b.key)))
@@ -410,7 +471,7 @@ const checkedAttachments = (
 const contentHash = (
   message: Omit<NormalizedInboundMessage, "contentHash">,
 ): string => {
-  const hash = new Bun.CryptoHasher("sha256");
+  const hash = createSha256();
   hash.update(
     JSON.stringify({
       from: message.from,
@@ -423,10 +484,7 @@ const contentHash = (
     }),
   );
   const attachmentFingerprints = message.attachments.map(
-    ({ mimeType, bytes }) => [
-      mimeType,
-      new Bun.CryptoHasher("sha256").update(bytes).digest("hex"),
-    ],
+    ({ mimeType, bytes }) => [mimeType, hashSha256Hex(bytes)],
   );
   for (const fingerprint of attachmentFingerprints
     .map((parts) => JSON.stringify(parts))
@@ -436,27 +494,83 @@ const contentHash = (
   return hash.digest("hex");
 };
 
-const normalizeMessage = (
-  email: Email,
-  date: string | null,
-): Result<NormalizedInboundMessage, InboundMessageError> =>
+const mimeMessageFields = (email: Email): MessageFields => ({
+  fromHeaders: email.headers
+    .filter(({ key }) => key === "from")
+    .map(({ value }) => value),
+  to: email.to,
+  cc: email.cc,
+  subject: email.subject,
+  text: email.text,
+  html: email.html,
+  messageId: email.messageId,
+  inReplyTo: email.inReplyTo,
+  references: email.references,
+  attachments: email.attachments,
+});
+
+const outlookAddress = ({ name, email }: OutlookMsgRecipient): Address => ({
+  name: name ?? "",
+  address: email ?? "",
+});
+
+// Outlook stores the sender's SMTP address as a property, not a header; an
+// Exchange-only sender address fails mailbox parsing like a malformed From.
+const outlookMessageFields = (message: OutlookMsgEmail): MessageFields => ({
+  fromHeaders: message.fromEmail === null ? [] : [message.fromEmail],
+  to: message.to.map(outlookAddress),
+  cc: message.cc.map(outlookAddress),
+  subject: message.subject ?? undefined,
+  text: message.text ?? undefined,
+  html: message.html ?? undefined,
+  messageId: message.messageId ?? undefined,
+  inReplyTo: message.inReplyTo ?? undefined,
+  references: message.references ?? undefined,
+  // Embedded Outlook items carry no binary data; the file preview skips them
+  // the same way.
+  attachments: message.attachments.flatMap(({ fileName, mimeType, bytes }) =>
+    bytes === null
+      ? []
+      : [
+          {
+            filename: fileName,
+            mimeType: mimeType ?? "application/octet-stream",
+            content: bytes,
+          },
+        ],
+  ),
+});
+
+type NormalizeMessageOptions = {
+  fields: MessageFields;
+  date: string | null;
+  policy: AttachmentPolicy;
+};
+
+const normalizeMessage = ({
+  fields,
+  date,
+  policy,
+}: NormalizeMessageOptions): Result<
+  NormalizedInboundMessage,
+  InboundMessageError
+> =>
   Result.gen(function* () {
-    const fromHeaders = email.headers.filter(({ key }) => key === "from");
-    if (fromHeaders.length > 1) {
+    if (fields.fromHeaders.length > 1) {
       return fail("invalidFrom");
     }
-    const fromHeader = fromHeaders.at(0);
-    const from = fromHeader ? parseOneMailbox(fromHeader.value) : null;
-    if (fromHeader && !from) {
+    const fromHeader = fields.fromHeaders.at(0);
+    const from = fromHeader === undefined ? null : parseOneMailbox(fromHeader);
+    if (fromHeader !== undefined && !from) {
       return fail("invalidFrom");
     }
-    const to = normalizeAddresses(email.to);
-    const cc = normalizeAddresses(email.cc);
+    const to = normalizeAddresses(fields.to);
+    const cc = normalizeAddresses(fields.cc);
     if (to.length + cc.length > INBOUND_MAIL_LIMITS.recipients) {
       return fail("tooManyRecipients");
     }
-    const text = normalizeText(email.text);
-    const html = yield* sanitizeBodyHtml(email);
+    const text = normalizeText(fields.text);
+    const html = yield* sanitizeBodyHtml(fields.html);
     if (
       text.length > INBOUND_MAIL_LIMITS.bodyCharacters ||
       (html !== null && html.length > INBOUND_MAIL_LIMITS.bodyCharacters) ||
@@ -473,13 +587,13 @@ const normalizeMessage = (
       to,
       cc,
       date,
-      subject: email.subject?.trim() ?? null,
+      subject: fields.subject?.trim() ?? null,
       text,
       html,
-      messageId: normalizeHeaderId(email.messageId),
-      inReplyTo: normalizeHeaderId(email.inReplyTo),
-      references: normalizeReferences(email.references),
-      attachments: yield* checkedAttachments(email),
+      messageId: normalizeHeaderId(fields.messageId),
+      inReplyTo: normalizeHeaderId(fields.inReplyTo),
+      references: normalizeReferences(fields.references),
+      attachments: yield* checkedAttachments(fields.attachments, policy),
     };
     return Result.ok({ ...message, contentHash: contentHash(message) });
   });
@@ -647,7 +761,11 @@ export const parseInboundMessage = async (
   if (outerSender.isErr()) {
     return outerSender;
   }
-  const message = normalizeMessage(outerEmail, outerDate);
+  const message = normalizeMessage({
+    fields: mimeMessageFields(outerEmail),
+    date: outerDate,
+    policy: ATTACHMENT_POLICY_BY_SOURCE.delivery,
+  });
   if (message.isErr()) {
     return message;
   }
@@ -684,10 +802,11 @@ export const parseInboundMessage = async (
       fromHeader &&
       parseOneMailbox(fromHeader.value)
     ) {
-      const original = normalizeMessage(
-        attached.value.email,
-        attached.value.date,
-      );
+      const original = normalizeMessage({
+        fields: mimeMessageFields(attached.value.email),
+        date: attached.value.date,
+        policy: ATTACHMENT_POLICY_BY_SOURCE.delivery,
+      });
       if (original.isErr()) {
         return original;
       }
@@ -721,3 +840,107 @@ export const parseInboundMessage = async (
         } satisfies ParsedInboundMessage),
   );
 };
+
+export const EMAIL_FILE_FORMATS = ["eml", "msg"] as const;
+export type EmailFileFormat = (typeof EMAIL_FILE_FORMATS)[number];
+
+const parseOutlookFile = (
+  bytes: ArrayBuffer,
+): Result<NormalizedInboundMessage, InboundMessageError> => {
+  if (bytes.byteLength > INBOUND_MAIL_LIMITS.rawBytes) {
+    return fail("rawTooLarge");
+  }
+  const parsed = Result.try({
+    try: () => parseOutlookMsg(bytes),
+    catch: () =>
+      new InboundMessageError({
+        reason: "invalidMime",
+        message: "invalidMime",
+      }),
+  });
+  return parsed.andThen((message) =>
+    normalizeMessage({
+      fields: outlookMessageFields(message),
+      date: explicitZoneDate(message.submittedAt ?? ""),
+      policy: ATTACHMENT_POLICY_BY_SOURCE.upload,
+    }),
+  );
+};
+
+type ParseEmailFileOptions = {
+  bytes: ArrayBuffer;
+  format: EmailFileFormat;
+};
+
+/**
+ * Reads a stored email file as one message under the inbound limits. The file
+ * is the message itself, so a forward inside it is not extracted, and its
+ * attachments stay inside it under the upload attachment policy.
+ */
+export const parseEmailFile = async ({
+  bytes,
+  format,
+}: ParseEmailFileOptions): Promise<
+  Result<NormalizedInboundMessage, InboundMessageError>
+> => {
+  switch (format) {
+    case "eml": {
+      const parsed = await parseMime(new Uint8Array(bytes));
+      if (parsed.isErr()) {
+        return parsed;
+      }
+      return normalizeMessage({
+        fields: mimeMessageFields(parsed.value.email),
+        date: parsed.value.date,
+        policy: ATTACHMENT_POLICY_BY_SOURCE.upload,
+      });
+    }
+    case "msg":
+      return parseOutlookFile(bytes);
+    default:
+      format satisfies never;
+      return panic("Unhandled email file format");
+  }
+};
+
+type CorrespondenceContent = Omit<
+  ParsedCorrespondence,
+  keyof CorrespondenceProvenance
+>;
+
+type CorrespondenceFromMessageOptions<
+  TProvenance extends CorrespondenceProvenance,
+> = {
+  message: NormalizedInboundMessage & { from: string };
+  provenance: TProvenance;
+  /** The authenticated outer sender, or the uploader's address. */
+  sender: string;
+  receivedAt: string;
+};
+
+/** The one field mapping from a normalized message to a correspondence record. */
+export const correspondenceFromMessage = <
+  TProvenance extends CorrespondenceProvenance,
+>({
+  message,
+  provenance,
+  sender,
+  receivedAt,
+}: CorrespondenceFromMessageOptions<TProvenance>): TProvenance &
+  CorrespondenceContent => ({
+  ...provenance,
+  channel: "email",
+  direction: message.from === sender ? "out" : "in",
+  from: { address: message.from, name: null },
+  to: message.to.map((address) => ({ address, name: null })),
+  cc: message.cc.map((address) => ({ address, name: null })),
+  subject: message.subject ?? "",
+  sentAt: message.date,
+  receivedAt,
+  messageId: message.messageId,
+  contentHash: message.contentHash,
+  inReplyTo: message.inReplyTo,
+  references: message.references,
+  bodyText: message.text,
+  bodyHtml: message.html,
+});

@@ -1,15 +1,12 @@
 /**
- * Which consolidation of an act a citation was made against.
- *
- * A decision applies the wording in force when it was issued, and a citation
- * reference records that version's opening date. Following the reference to
- * today's wording would show the reader text the court never read — and an
- * anchor the current version may not even carry — so the version window is
- * matched here rather than assumed away.
+ * Match a provision link to its selected consolidation. Existing links infer
+ * the wording from the decision date; that date does not establish which
+ * wording the court applied.
  */
 
 import { isEligibleLegislationExpression } from "@stll/api-contract/legislation-expression";
 import type { LegislationExpressionEligibility } from "@stll/api-contract/legislation-expression";
+import { provisionVersionAsOf } from "@stll/api-contract/provision-version-basis";
 
 export type StatuteVersionWindow = LegislationExpressionEligibility & {
   /** Opens the window; null for a work kept as a single unversioned text. */
@@ -43,18 +40,22 @@ export const pickVersionAt = <TVersion extends StatuteVersionWindow>(
 ): TVersion | null =>
   versions.find((version) => versionCoversDate(version, date)) ?? null;
 
+type ReferencesOutsideVersionOptions = {
+  decisionAsOf: string | null;
+  references: readonly Parameters<typeof provisionVersionAsOf>[0][];
+};
+
 /**
  * Whether a work's other consolidations have to be read: some reference
- * states a version the resolved consolidation does not cover. A reference to
+ * selects a version the resolved consolidation does not cover. A reference to
  * wording that consolidation still carries is answered by it alone, which is
  * why the versions read is not started for it.
  */
 export const referencesOutsideVersion = (
   version: StatuteVersionWindow,
-  references: readonly { versionValidFrom: string | null }[],
+  { decisionAsOf, references }: ReferencesOutsideVersionOptions,
 ): boolean =>
-  references.some(
-    (reference) =>
-      reference.versionValidFrom !== null &&
-      !versionCoversDate(version, reference.versionValidFrom),
-  );
+  references.some((reference) => {
+    const asOf = provisionVersionAsOf(reference, decisionAsOf);
+    return asOf !== null && !versionCoversDate(version, asOf);
+  });

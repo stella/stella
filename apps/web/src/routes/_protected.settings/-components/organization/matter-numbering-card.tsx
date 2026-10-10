@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { unwrapEden } from "@/lib/errors/api";
@@ -23,6 +24,7 @@ import {
   organizationSettingsKeys,
   organizationSettingsOptions,
 } from "@/lib/organization/settings-queries";
+import { useQueryView } from "@/lib/use-query-view";
 import { useSettingsMutation } from "@/routes/_protected.settings/-hooks/use-settings-mutation";
 
 const PATTERN_PRESETS = [
@@ -37,20 +39,29 @@ const PATTERN_PRESETS = [
 const PADDING_OPTIONS = [2, 3, 4, 5, 6] as const;
 
 export const MatterNumberingCard = () => {
-  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
-  const { data: settings } = useQuery(
-    organizationSettingsOptions(activeOrganizationId),
+  const { activeOrganizationId, id: userId } = useAuthenticatedUser();
+  const settingsQuery = useQuery(
+    organizationSettingsOptions({
+      organizationId: activeOrganizationId,
+      userId,
+    }),
   );
+  const settingsView = useQueryView(settingsQuery);
+  const settings =
+    settingsView.type === "items" ? settingsView.items : undefined;
 
   if (!settings) {
-    return null;
+    return <QueryViewFeedback view={settingsView} />;
   }
 
   return (
-    <MatterNumberingCardBody
-      key={`${settings.matterNumberPattern}|${settings.matterNumberPadding}`}
-      settings={settings}
-    />
+    <>
+      <QueryViewFeedback view={settingsView} />
+      <MatterNumberingCardBody
+        key={`${settings.matterNumberPattern}|${settings.matterNumberPadding}`}
+        settings={settings}
+      />
+    </>
   );
 };
 
@@ -77,7 +88,7 @@ const MatterNumberingCardBody = ({
   );
   const [debouncedPattern] = useDebounce(pattern, 300);
   const [debouncedPadding] = useDebounce(padding, 300);
-  const { data: previewData } = useQuery({
+  const previewQuery = useQuery({
     queryKey: [
       ...organizationSettingsKeys.byOrganization(activeOrganizationId),
       "matter-number-preview",
@@ -95,6 +106,9 @@ const MatterNumberingCardBody = ({
         ),
       ),
   });
+  const previewView = useQueryView(previewQuery);
+  const previewData =
+    previewView.type === "items" ? previewView.items : undefined;
   const preview = previewData?.preview ?? null;
 
   const updateMutation = useSettingsMutation({
@@ -189,6 +203,7 @@ const MatterNumberingCardBody = ({
               {t("organization.matterNumber.paddingDescription")}
             </p>
           </Field>
+          <QueryViewFeedback view={previewView} />
           {preview && (
             <div className="flex items-center gap-2">
               <span className="text-muted-foreground text-xs">

@@ -28,6 +28,7 @@ import {
   ComboboxList,
   ComboboxPopup,
 } from "@stll/ui/combobox";
+import { DetailsGrid, DetailsItem } from "@stll/ui/details-grid";
 import {
   BotIcon,
   ChevronDownIcon,
@@ -646,9 +647,13 @@ const ActivityTimeline = ({
   workspaceId: string;
 }) => {
   const t = useTranslations();
-  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
+  const user = useAuthenticatedUser();
   const query = useSuspenseInfiniteQuery(
-    overviewActivityOptions({ activeOrganizationId, filters, workspaceId }),
+    overviewActivityOptions({
+      viewer: { userId: user.id, organizationId: user.activeOrganizationId },
+      filters,
+      workspaceId,
+    }),
   );
   const items = query.data.pages.flatMap((page) => page.items);
   const groups = groupActivityItems(items);
@@ -780,7 +785,7 @@ const observeActivityIntersection = ({
 }: ObserveActivityIntersectionOptions) => {
   const observer = new IntersectionObserver(
     (entries) => {
-      if (!entries.at(0)?.isIntersecting) {
+      if (!entries.at(-1)?.isIntersecting) {
         return;
       }
       observer.disconnect();
@@ -1521,16 +1526,13 @@ const ActivityDetailsSheet = ({
           </SheetDescription>
         </SheetHeader>
         <SheetPanel>
-          <dl className="divide-y">
+          <DetailsGrid>
             {rows.map((row) => (
-              <div className="grid gap-1 py-3" key={row.label}>
-                <dt className="text-muted-foreground text-xs font-medium">
-                  {row.label}
-                </dt>
-                <dd className="min-w-0 text-sm wrap-break-word">{row.value}</dd>
-              </div>
+              <DetailsItem key={row.label} label={row.label}>
+                {row.value}
+              </DetailsItem>
             ))}
-          </dl>
+          </DetailsGrid>
         </SheetPanel>
         <SheetFooter>
           <SheetClose render={<Button variant="ghost" />}>

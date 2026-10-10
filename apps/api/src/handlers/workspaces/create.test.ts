@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
+import { member } from "@/api/db/auth-schema";
 import { toSafeId } from "@/api/lib/branded-types";
+import { createFeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
@@ -26,6 +28,11 @@ const createContext = ({
     route: "/v1/workspaces",
     safeDb,
     scopedDb,
+    featureAccessSnapshot: createFeatureAccessSnapshot({
+      organizationId: "org_test123",
+      userId: "user_test123",
+      decisions: new Map(),
+    }),
     memberRole: sessionMemberRole("owner"),
     orgAIConfig: null,
     session: {
@@ -51,10 +58,18 @@ describe("createWorkspaces", () => {
         }),
       }),
     };
+    const lockedMemberOrder: unknown[] = [];
     const membersSelect = {
       from: () => ({
         where: () => ({
-          for: async () => [{ userId: validTeamMemberId }],
+          orderBy: (column: unknown) => {
+            lockedMemberOrder.push(column);
+            return {
+              limit: () => ({
+                for: async () => [{ userId: validTeamMemberId }],
+              }),
+            };
+          },
         }),
       }),
     };
@@ -98,6 +113,8 @@ describe("createWorkspaces", () => {
         message: "Some users are not members of this organization",
       },
     });
+    // Granted memberships lock in the order organization removal uses.
+    expect(lockedMemberOrder).toEqual([member.userId]);
     expect(getCallCount()).toBe(1);
   });
 
@@ -133,7 +150,11 @@ describe("createWorkspaces", () => {
         return {
           from: () => ({
             where: () => ({
-              for: async () => [],
+              orderBy: () => ({
+                limit: () => ({
+                  for: async () => [{ userId: "user_test123" }],
+                }),
+              }),
             }),
           }),
         };
@@ -165,5 +186,49 @@ describe("createWorkspaces", () => {
       response: { message: "Workspaces limit reached" },
     });
     expect(clientSelectCalls).toBe(0);
+  });
+  test("personal creation holds its creator's organization membership", async () => {
+    let strength: string | undefined;
+    const { safeDb, scopedDb } = createScopedDbMock({
+      select: (fields: Record<string, unknown>) => ({
+        from: () => ({
+          where: (): unknown => {
+            if ("total" in fields) {
+              return Promise.resolve([{ total: 0 }]);
+            }
+            if ("name" in fields) {
+              return Promise.resolve([]);
+            }
+            return {
+              orderBy: () => ({
+                limit: () => ({
+                  for: async (lock: string) => {
+                    strength = lock;
+                    return [];
+                  },
+                }),
+              }),
+            };
+          },
+        }),
+      }),
+      query: { organizationSettings: { findFirst: async () => null } },
+    });
+    const response = await createWorkspaces.handler(
+      createContext({
+        body: {
+          id: toSafeId<"workspace">(Bun.randomUUIDv7()),
+          name: "Personal fixture",
+          filePropertyName: "Files",
+        },
+        safeDb,
+        scopedDb,
+      }),
+    );
+    expect(strength).toBe("update");
+    expect(response).toMatchObject({
+      code: 400,
+      response: { message: "Some users are not members of this organization" },
+    });
   });
 });

@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
+import { compareCodeUnit } from "@stll/collation";
+
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
   correspondence,
@@ -317,7 +319,7 @@ if (!databaseUrl || !runPostgresTests) {
       expect(await drops()).toHaveLength(0);
       for (let replay = 0; replay < 2; replay += 1) {
         const result = await receiveSesInboundMail(options);
-        expect(result.isOk() && result.value).toEqual([
+        expect(result.isOk() && result.value.deliveries).toEqual([
           { status: "dropped", reason: "message_too_large" },
         ]);
       }
@@ -338,7 +340,7 @@ if (!databaseUrl || !runPostgresTests) {
           },
         },
       });
-      expect(unknown.isOk() && unknown.value).toEqual([
+      expect(unknown.isOk() && unknown.value.deliveries).toEqual([
         { status: "dropped", reason: "unknown_recipient" },
       ]);
       expect(await drops()).toHaveLength(1);
@@ -352,7 +354,7 @@ if (!databaseUrl || !runPostgresTests) {
           },
         },
       });
-      expect(other.isOk() && other.value).toEqual([
+      expect(other.isOk() && other.value.deliveries).toEqual([
         { status: "dropped", reason: "message_too_large" },
       ]);
       expect((await drops()).map((row) => row.workspaceId).toSorted()).toEqual(
@@ -672,10 +674,11 @@ if (!databaseUrl || !runPostgresTests) {
       for (const raw of [direct, forwarded, direct, forwarded]) {
         expect((await deliver(raw)).isOk()).toBe(true);
       }
-      expect((await records()).map(({ intake }) => intake).toSorted()).toEqual([
-        "direct",
-        "forwarded_attachment",
-      ]);
+      expect(
+        (await records())
+          .map(({ intake }) => intake)
+          .toSorted((left, right) => compareCodeUnit(left ?? "", right ?? "")),
+      ).toEqual(["direct", "forwarded_attachment"]);
       expect(await filers()).toHaveLength(2);
     });
 
@@ -745,6 +748,7 @@ if (!databaseUrl || !runPostgresTests) {
             entityVersionId: createSafeId<"entityVersion">(),
             fieldId: createSafeId<"field">(),
             fileName,
+            renamed: false,
           };
           await scopedDb(async (tx) => {
             await tx.insert(entities).values({

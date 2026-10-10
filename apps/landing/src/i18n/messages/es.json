@@ -58,6 +58,7 @@
     "resources": "Recursos",
     "sourceCode": "Código fuente",
     "status": "Estado",
+    "support": "Soporte",
     "tabularReview": "Revisión tabular",
     "tagline": "Espacio de trabajo jurídico abierto para el trabajo que importa.",
     "templates": "Plantillas",
@@ -831,8 +832,8 @@
           "title": "Chat y base de conocimiento"
         },
         "4": {
-          "body": "Una aplicación de escritorio actúa como puente local para editar documentos de Office desde stella.",
-          "title": "Puente de escritorio"
+          "body": "Abre documentos de Office de stella en las aplicaciones de tu ordenador y guarda los cambios de vuelta en stella. También mantiene un historial del portapapeles que permanece en tu dispositivo.",
+          "title": "Aplicación de escritorio"
         },
         "5": {
           "body": "Las ediciones guardadas y las subidas se convierten en revisiones del documento, así que el archivo actual y su historial siguen juntos.",

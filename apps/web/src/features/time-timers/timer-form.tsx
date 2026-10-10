@@ -38,7 +38,10 @@ export const TimerForm = ({ timer, initialMatter, onDone }: TimerFormProps) => {
     description: string;
   } | null>(null);
   const policy = useQuery(
-    organizationSettingsOptions(user.activeOrganizationId),
+    organizationSettingsOptions({
+      organizationId: user.activeOrganizationId,
+      userId: user.id,
+    }),
   );
   const requiresNarrative =
     timer !== null && policy.data?.timeNarrativeRequired === true;
@@ -111,6 +114,7 @@ export const TimerForm = ({ timer, initialMatter, onDone }: TimerFormProps) => {
             <Label htmlFor={`${id}-matter`}>{t("common.matter")}</Label>
             <MatterCombobox
               activeOrganizationId={user.activeOrganizationId}
+              userId={user.id}
               id={`${id}-matter`}
               value={matter}
               onChange={(value) => {

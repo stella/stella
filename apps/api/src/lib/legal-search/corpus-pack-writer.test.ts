@@ -243,6 +243,88 @@ describe("transferring a batch's packs", () => {
     }
     expect(denied.error.message).toContain("Corpus pack write failed");
   });
+
+  test("a canceled existence probe releases its waiter and starts no pack PUT", async () => {
+    const planned = await planCorpusPacks({
+      jurisdiction: JURISDICTION,
+      documents,
+    });
+    if (planned.isErr()) {
+      expect.unreachable();
+    }
+    const controller = new AbortController();
+    let canceled = false;
+    let puts = 0;
+    const outcome = await putCorpusPacks({
+      packs: planned.value.packs,
+      signal: controller.signal,
+      exists: async (_key, signal) =>
+        await new Promise<boolean>((_resolve, reject) => {
+          signal.addEventListener(
+            "abort",
+            () => {
+              canceled = true;
+              reject(
+                signal.reason instanceof Error
+                  ? signal.reason
+                  : new TypeError("Expected fixture abort error"),
+              );
+            },
+            { once: true },
+          );
+          controller.abort(
+            new DOMException("fixture tick expired", "TimeoutError"),
+          );
+        }),
+      put: async () => {
+        puts++;
+      },
+    });
+    expect(outcome.isErr()).toBe(true);
+    expect(canceled).toBe(true);
+    expect(puts).toBe(0);
+  });
+
+  test("a canceled pack PUT ends the batch without starting a second pack", async () => {
+    const planned = await planCorpusPacks({
+      jurisdiction: JURISDICTION,
+      documents,
+    });
+    if (planned.isErr()) {
+      expect.unreachable();
+    }
+    const pack = planned.value.packs.at(0) ?? expect.unreachable();
+    const controller = new AbortController();
+    let puts = 0;
+    let canceled = false;
+    const outcome = await putCorpusPacks({
+      packs: [pack, pack],
+      signal: controller.signal,
+      exists: async () => false,
+      put: async (_key, _bytes, signal) =>
+        await new Promise<void>((_resolve, reject) => {
+          puts++;
+          signal.addEventListener(
+            "abort",
+            () => {
+              canceled = true;
+              reject(
+                signal.reason instanceof Error
+                  ? signal.reason
+                  : new TypeError("Expected fixture abort error"),
+              );
+            },
+            { once: true },
+          );
+          controller.abort(
+            new DOMException("fixture tick expired", "TimeoutError"),
+          );
+        }),
+    });
+    expect(outcome.isErr()).toBe(true);
+    expect(canceled).toBe(true);
+    expect(puts).toBe(1);
+  });
 });
 
 describe("the ceiling counts what the writer will buffer", () => {

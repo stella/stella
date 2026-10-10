@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { member } from "@/api/db/auth-schema";
 import { auditLogs, workspaceMembers } from "@/api/db/schema";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { createAuditRecorder } from "@/api/lib/audit-log";
@@ -50,13 +51,18 @@ const createContext = ({
   });
 };
 
-const selectRowsInOrder = (rowsByCall: unknown[][]) => {
+const selectRowsInOrder = (rowsByCall: unknown[][], isMember = true) => {
   let callIndex = 0;
 
   return () => ({
-    from: () => ({
+    from: (table: unknown) => ({
       where: () => ({
-        for: async () => rowsByCall.at(callIndex++) ?? [],
+        for: async () => {
+          if (table === member) {
+            return isMember ? [{ id: "member_existing" }] : [];
+          }
+          return rowsByCall.at(callIndex++) ?? [];
+        },
       }),
     }),
   });
@@ -186,5 +192,19 @@ describe("addWorkspaceMember", () => {
       code: 404,
       response: { message: "Workspace not found" },
     });
+  });
+});
+
+test("matter membership cannot be added without current organization membership", async () => {
+  const { safeDb, scopedDb } = createScopedDbMock({
+    select: selectRowsInOrder([[{ id: "ws_test123" }]], false),
+  });
+  expect(
+    await addWorkspaceMember.handler(
+      createContext({ body: { userId: "user_invitee" }, safeDb, scopedDb }),
+    ),
+  ).toMatchObject({
+    code: 400,
+    response: { message: "User is not a member of this organization" },
   });
 });

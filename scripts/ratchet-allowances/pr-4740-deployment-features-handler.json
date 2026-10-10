@@ -1,0 +1,5 @@
+{
+  "metric": "lint-suppression-directives",
+  "delta": 1,
+  "reason": "apps/api/src/handlers/organization-settings/deployment-features/get.ts reads env flags without awaiting or yielding, but safe handlers must stay async generators for Result.gen error capture; same named require-yield and require-await suppression as chat/get-model-options.ts."
+}

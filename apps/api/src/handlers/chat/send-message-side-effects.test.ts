@@ -4,6 +4,7 @@ import { sql, type SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
 import { envBase } from "@/api/env-base";
+import { EMPTY_CHAT_HISTORY_SNAPSHOT } from "@/api/handlers/chat/history-window";
 import type { ChatThreadState } from "@/api/handlers/chat/send-message-thread";
 import type { UploadedChatFile } from "@/api/handlers/chat/upload-files";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -37,6 +38,7 @@ const threadData: ChatThreadState["data"] = {
   chatReasoningEffort: null,
   contextMatterIds: [],
   dataWorkspaceIds: [workspaceId],
+  historySnapshot: EMPTY_CHAT_HISTORY_SNAPSHOT,
   id: threadId,
   messages: [],
   webSearchEnabled: false,

@@ -1,0 +1,5 @@
+{
+  "metric": "duplicate-token-blocks",
+  "delta": 2,
+  "reason": "apps/web/src/i18n/i18n-store.ts: the folio editor catalog loaders mirror the app message loaders because each dynamic import needs a literal specifier for per-locale code splitting; merging the tables would load editor messages on every page."
+}

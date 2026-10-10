@@ -1,8 +1,9 @@
 import { Result } from "better-result";
 import { and } from "drizzle-orm";
 
-import { prorateHourlyCents } from "@stll/money";
+import { timeEntryAmount } from "@stll/money";
 
+import { entityContextId } from "@/api/db/entity-feature-policies";
 import { timeEntries } from "@/api/db/schema";
 import { exportAmountText } from "@/api/handlers/time-entries/export-amount";
 import {
@@ -11,7 +12,7 @@ import {
   timeEntryExportQuerySchema,
 } from "@/api/handlers/time-entries/export-query";
 import type { TimeEntryExportHandlerProps } from "@/api/handlers/time-entries/export-query";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { escapeCSV } from "@/api/lib/csv";
 import { LIMITS } from "@/api/lib/limits";
@@ -30,11 +31,12 @@ export const exportCsvHandler = async ({
         id: timeEntries.id,
         activityGroup: timeEntries.activityGroup,
         userId: timeEntries.userId,
-        workItemId: timeEntries.workItemId,
+        workItemId: entityContextId(timeEntries.workItemId),
         dateWorked: timeEntries.dateWorked,
         durationMinutes: timeEntries.durationMinutes,
         billedMinutes: timeEntries.billedMinutes,
         rateAtEntry: timeEntries.rateAtEntry,
+        noCharge: timeEntries.noCharge,
         currency: timeEntries.currency,
         narrative: timeEntries.narrative,
         invoiceNarrative: timeEntries.invoiceNarrative,
@@ -77,10 +79,7 @@ export const exportCsvHandler = async ({
   const csvRows = [headers.join(",")];
 
   for (const row of rows) {
-    const amount = prorateHourlyCents({
-      billedMinutes: row.billedMinutes,
-      hourlyRateCents: row.rateAtEntry,
-    });
+    const amount = timeEntryAmount(row);
     csvRows.push(
       [
         escapeCSV(row.dateWorked),
@@ -107,6 +106,8 @@ export const exportCsvHandler = async ({
 };
 
 const config = {
+  accountAccess: ACCOUNT_ACCESS.standard,
+  featureAccess: { featureId: "time-billing", type: "required" },
   description:
     "Export a matter's client time entries as CSV text, one row per entry with " +
     "date, timekeeper name, activity group, work item, minutes, rate, amount, billable flag, " +

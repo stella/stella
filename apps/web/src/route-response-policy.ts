@@ -52,7 +52,6 @@ export const ROUTE_CACHE_CLASSES = {
   "/chat/new": "private-no-store",
   "/contacts/$contactId": "private-no-store",
   "/contacts/import": "private-no-store",
-  "/dev/autocomplete": "private-no-store",
   "/verify/$code": "private-no-store",
   "/auth/accept-invitation/$invitationId": "private-no-store",
   "/knowledge/templates/catalogue": "public-indexable",
@@ -120,7 +119,7 @@ const isDeclaredRoute = (
 ): path is keyof typeof ROUTE_CACHE_CLASSES =>
   Object.hasOwn(ROUTE_CACHE_CLASSES, path);
 
-export const routeCacheClass = (path: string): CacheClass => {
+const routeCacheClass = (path: string): CacheClass => {
   if (!isDeclaredRoute(path)) {
     return panic("Route response policy is missing.");
   }

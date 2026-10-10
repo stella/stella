@@ -5,7 +5,11 @@ import * as v from "valibot";
 import { stripMarkdownFences } from "@/api/lib/agent-skills/markdown-fences";
 import { resolveCaching } from "@/api/lib/ai-config";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  configuredModelAdmission,
+  createSafeRootHandler,
+} from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -41,6 +45,7 @@ const generateDraftBodySchema = t.Object({
 });
 
 const config = {
+  actionAdmission: { type: "handler", actionKind: "skills.generate-draft" },
   description:
     "Draft a skill bundle with the model: returns SKILL.md markdown plus up " +
     "to eight companion files under references/, prompts/, or knowledge/. " +
@@ -49,6 +54,7 @@ const config = {
     "pass the result to skills.create and the resource endpoints to keep it. " +
     "Consumes AI usage.",
   permissions: { agentSkill: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "agent_tool_authoring",
@@ -98,6 +104,7 @@ type GeneratedResource = { content: string; path: string };
 const generateSkillDraft = createSafeRootHandler(
   config,
   async function* ({
+    modelAdmission,
     body,
     orgAIConfig,
     managedAIResidency,
@@ -136,6 +143,7 @@ const generateSkillDraft = createSafeRootHandler(
       try: async () =>
         await generateTanStackObjectForRole({
           dataClass: "customer",
+          admission: configuredModelAdmission({ modelAdmission }),
           abortSignal: AbortSignal.timeout(GENERATION_TIMEOUT_MS),
           maxOutputTokens: GENERATION_MAX_OUTPUT_TOKENS,
           role: "fast",

@@ -92,8 +92,8 @@ describe("account deletion task handoff rules", () => {
     >);
   });
 
-  test("rejects deletion when an active task has no handoff target", () => {
-    const error = getHandlerError(() =>
+  test("leaves tasks without a requested handoff unassigned by default", () => {
+    expect(
       buildAccountDeletionTaskReassignmentTargets({
         currentTaskAssignments: assignments,
         currentUserId,
@@ -101,13 +101,20 @@ describe("account deletion task handoff rules", () => {
           { entityId: taskOneId, reassignedUserId: replacementUserId },
         ],
       }),
-    );
-
-    expect(error.status).toBe(400);
-    expect(error.code).toBe("account_deletion_task_reassignment_invalid");
-    expect(error.message).toBe(
-      "All active task assignments must be reassigned before deleting your account.",
-    );
+    ).toEqual([
+      {
+        entityId: taskOneId,
+        workspaceId: workspaceOneId,
+        reassignedUserId: replacementUserId,
+      },
+    ]);
+    expect(
+      buildAccountDeletionTaskReassignmentTargets({
+        currentTaskAssignments: assignments,
+        currentUserId,
+        reassignments: [],
+      }),
+    ).toEqual([]);
   });
 
   test("rejects handoff back to the deleted user", () => {

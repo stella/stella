@@ -1,3 +1,4 @@
+import type { TSchema } from "@sinclair/typebox";
 import { Value } from "@sinclair/typebox/value";
 import { Result } from "better-result";
 import { expect, test } from "bun:test";
@@ -7,11 +8,15 @@ import fc from "fast-check";
 import { assertProperty } from "@stll/property-testing";
 
 import {
+  ACCOUNT_ACCESS,
   createSafeBoundedPublicHandler,
   createSafePublicHandler,
-  safePublicHandlerResponseSchemasWithStatusText,
+  isSafePublicHandler,
   safeHandlerResponseSchemasWithStatusText,
+  safePublicHandlerResponseSchemasWithStatusText,
 } from "@/api/lib/api-handlers";
+import { toSafeId } from "@/api/lib/branded-types";
+import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   projectPublicErrorBody,
@@ -75,6 +80,7 @@ test("public error projection bounds serialized Unicode and issue collections", 
 });
 
 const publicConfig = {
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "health_infra" },
   cache: { kind: "none" },
   response: safePublicHandlerResponseSchemasWithStatusText(
@@ -177,4 +183,69 @@ test("bounded public handlers bound both returned status errors and resolved han
   expect(Buffer.byteLength(await response.text())).toBeLessThanOrEqual(
     PUBLIC_ERROR_TEXT_BYTES.statusText,
   );
+});
+
+const configFor = <TSuccess extends TSchema>(success: TSuccess) => ({
+  ...publicConfig,
+  response: safePublicHandlerResponseSchemasWithStatusText(success),
+});
+const DECISION_ID = toSafeId<"caseLawDecision">(
+  "01900000-0000-7000-8000-000000000000",
+);
+const PAGE = { limit: 50 } as const;
+
+test("bounded public handlers bind the 200 schema to the payload both ways", () => {
+  const brandWidened = createSafeBoundedPublicHandler(
+    configFor(t.Object({ id: t.String() })),
+    // @ts-expect-error - a plain string schema misdescribes a branded id
+    async function* () {
+      return Result.ok({ id: DECISION_ID });
+    },
+  );
+  const nullableWidened = createSafeBoundedPublicHandler(
+    configFor(
+      t.Object({ id: t.Union([tSafeId("caseLawDecision"), t.Null()]) }),
+    ),
+    // @ts-expect-error - the data is never null
+    async function* () {
+      return Result.ok({ id: DECISION_ID });
+    },
+  );
+  const literalWidened = createSafeBoundedPublicHandler(
+    configFor(t.Object({ limit: t.Number() })),
+    // @ts-expect-error - the data is one fixed limit
+    async function* () {
+      return Result.ok({ limit: PAGE.limit });
+    },
+  );
+  const keyDropped = createSafeBoundedPublicHandler(
+    configFor(t.Object({ ok: t.Boolean() })),
+    // @ts-expect-error - Elysia would strip `extra` from the wire
+    async function* () {
+      return Result.ok({ ok: true, extra: 1 });
+    },
+  );
+  const readonlyOnly = createSafeBoundedPublicHandler(
+    configFor(
+      t.Object({
+        id: tSafeId("caseLawDecision"),
+        limit: t.Literal(PAGE.limit),
+        tags: t.Array(t.String()),
+      }),
+    ),
+    async function* () {
+      const tags: readonly string[] = ["a"];
+      return Result.ok({ id: DECISION_ID, limit: PAGE.limit, tags });
+    },
+  );
+  // The cases are compile-time; each definition still registers at runtime.
+  for (const definition of [
+    brandWidened,
+    nullableWidened,
+    literalWidened,
+    keyDropped,
+    readonlyOnly,
+  ]) {
+    expect(isSafePublicHandler(definition.handler)).toBe(true);
+  }
 });

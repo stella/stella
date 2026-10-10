@@ -1,14 +1,13 @@
 import {
   isRequiredViewLayout,
-  REQUIRED_VIEW_LAYOUTS,
   type RequiredViewLayoutType,
   type ViewLayoutType,
 } from "@stll/api-contract";
 import { conditionIncludesKind } from "@stll/conditions";
 
 import type { EntityKind } from "@/api/db/schema-validators";
-import { env } from "@/api/env";
 import type { SafeId } from "@/api/lib/branded-types";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import type { SupportedLang } from "@/api/lib/locale";
 import type { ViewLayout } from "@/api/lib/views-schema";
 
@@ -17,7 +16,7 @@ import type { ViewLayout } from "@/api/lib/views-schema";
  * These views are created automatically on workspace creation
  * and cannot be deleted.
  */
-export { isRequiredViewLayout, REQUIRED_VIEW_LAYOUTS };
+export { isRequiredViewLayout };
 
 type DefaultViewTemplate = {
   nameKey: keyof typeof VIEW_NAMES.en;
@@ -259,7 +258,8 @@ export const getDefaultViews = (
 ): DefaultView[] => {
   const names = VIEW_NAMES[lang];
   const templates = defaultViewTemplates(
-    options.legalListsEnabled ?? env.FEATURE_LEGAL_LISTS,
+    options.legalListsEnabled ??
+      isDeploymentFeatureEnabled("FEATURE_LEGAL_LISTS"),
   );
   return templates.map((tmpl) => ({
     name: names[tmpl.nameKey],
@@ -272,7 +272,7 @@ export const getDefaultViews = (
 // language. Their names are re-localized to the reader's language on every
 // read (see `localizeDefaultViewName`), so the persisted language is invisible
 // to users and a single fixed seed language keeps the write path request-free.
-export const DEFAULT_VIEW_SEED_LANG: SupportedLang = "en";
+const DEFAULT_VIEW_SEED_LANG: SupportedLang = "en";
 
 type DefaultViewRow = {
   workspaceId: SafeId<"workspace">;
@@ -404,7 +404,7 @@ export const normalizeDefaultViewLayout = ({
  * re-localized on read. Acceptable given the low collision likelihood.
  */
 export const localizeDefaultViewName = ({
-  legalListsEnabled = env.FEATURE_LEGAL_LISTS,
+  legalListsEnabled = isDeploymentFeatureEnabled("FEATURE_LEGAL_LISTS"),
   lang,
   layoutType,
   name,

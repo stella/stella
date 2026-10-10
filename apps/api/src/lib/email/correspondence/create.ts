@@ -1,6 +1,5 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { createHash } from "node:crypto";
 
 import type {
   ParsedCorrespondence,
@@ -10,6 +9,7 @@ import {
   CORRESPONDENCE_MAX_ATTACHMENTS,
   CORRESPONDENCE_MAX_BODY_CHARACTERS,
 } from "@stll/api-contract/correspondence";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -85,12 +85,28 @@ type ValidateContentOptions = Pick<
   "parsed" | "attachments"
 >;
 
+// An upload is not a delivery: its uploader's matter access, rechecked in the
+// filing transaction, admits it instead of transport authentication.
+const hasAdmissibleProvenance = (parsed: ParsedCorrespondence) => {
+  switch (parsed.source) {
+    case "delivery":
+      return (
+        parsed.authenticatedSender.dmarc === "pass" &&
+        (parsed.authenticatedSender.spf === "pass" ||
+          parsed.authenticatedSender.dkim === "pass")
+      );
+    case "upload":
+      return true;
+    default:
+      parsed satisfies never;
+      return panic("Unhandled correspondence source");
+  }
+};
+
 const validateContent = ({ parsed, attachments }: ValidateContentOptions) => {
   if (
     !/^[0-9a-f]{64}$/u.test(parsed.contentHash) ||
-    parsed.authenticatedSender.dmarc !== "pass" ||
-    (parsed.authenticatedSender.spf !== "pass" &&
-      parsed.authenticatedSender.dkim !== "pass")
+    !hasAdmissibleProvenance(parsed)
   ) {
     return { type: "invalid_authentication" as const };
   }
@@ -109,14 +125,60 @@ const validateContent = ({ parsed, attachments }: ValidateContentOptions) => {
   return null;
 };
 
-const correspondenceDedupKey = ({
-  intake,
-  messageId,
-  contentHash,
-}: Pick<ParsedCorrespondence, "intake" | "messageId" | "contentHash">) =>
-  createHash("sha256")
-    .update(JSON.stringify([intake, messageId?.trim() ?? null, contentHash]))
-    .digest("hex");
+// The source is part of the key: a delivered message and an uploaded file of
+// the same message stay separate records. Each email file is its own record,
+// so deleting one copy never removes another file's record.
+const correspondenceDedupKey = (parsed: ParsedCorrespondence) => {
+  switch (parsed.source) {
+    case "delivery":
+      return hashSha256Hex(
+        JSON.stringify([
+          parsed.intake,
+          parsed.messageId?.trim() ?? null,
+          parsed.contentHash,
+        ]),
+      );
+    case "upload":
+      return hashSha256Hex(
+        JSON.stringify([parsed.source, parsed.sourceEntityId]),
+      );
+    default:
+      parsed satisfies never;
+      return panic("Unhandled correspondence source");
+  }
+};
+
+const provenanceColumns = (parsed: ParsedCorrespondence) => {
+  switch (parsed.source) {
+    case "delivery":
+      return {
+        source: parsed.source,
+        sourceEntityId: null,
+        intake: parsed.intake,
+        authenticatedSenderAddress: parsed.authenticatedSender.address,
+        originalSignature: parsed.originalSignature,
+        spf: parsed.authenticatedSender.spf,
+        dkim: parsed.authenticatedSender.dkim,
+        dmarc: parsed.authenticatedSender.dmarc,
+        alignedIdentifier: parsed.authenticatedSender.alignedIdentifier,
+      };
+    case "upload":
+      return {
+        source: parsed.source,
+        sourceEntityId: parsed.sourceEntityId,
+        intake: null,
+        authenticatedSenderAddress: null,
+        originalSignature: parsed.originalSignature,
+        spf: null,
+        dkim: null,
+        dmarc: null,
+        alignedIdentifier: null,
+      };
+    default:
+      parsed satisfies never;
+      return panic("Unhandled correspondence source");
+  }
+};
 
 /** Converges concurrent deliveries on one record and one row per filer. */
 export const createCorrespondence = async ({
@@ -152,9 +214,7 @@ export const createCorrespondence = async ({
         workspaceId,
         direction: parsed.direction,
         channel: parsed.channel,
-        intake: parsed.intake,
-        authenticatedSenderAddress: parsed.authenticatedSender.address,
-        originalSignature: parsed.originalSignature,
+        ...provenanceColumns(parsed),
         messageId: parsed.messageId,
         contentHash: parsed.contentHash,
         dedupKey,
@@ -171,10 +231,6 @@ export const createCorrespondence = async ({
           parsed.bodyHtml === null
             ? null
             : sanitizeEmailBodyHtml(parsed.bodyHtml),
-        spf: parsed.authenticatedSender.spf,
-        dkim: parsed.authenticatedSender.dkim,
-        dmarc: parsed.authenticatedSender.dmarc,
-        alignedIdentifier: parsed.authenticatedSender.alignedIdentifier,
       })
       .onConflictDoNothing({
         target: [correspondence.workspaceId, correspondence.dedupKey],

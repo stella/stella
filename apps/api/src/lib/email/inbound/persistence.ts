@@ -2,6 +2,8 @@ import { Result, TaggedError, panic } from "better-result";
 import type { InferOk } from "better-result";
 import { and, eq } from "drizzle-orm";
 
+import { mapWithConcurrency } from "@stll/concurrency";
+
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { correspondence, correspondenceAttachments } from "@/api/db/schema";
@@ -20,6 +22,10 @@ import {
   FileScanRejectedError,
 } from "@/api/lib/file-scan/scan-upload";
 import { observeScanFailures } from "@/api/lib/file-scan/scan-upload-handler";
+import {
+  detectFileEncryption,
+  retainedFileEncryption,
+} from "@/api/lib/files/detect-file-encryption";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 
 class InboundAttachmentAlreadyLinked extends TaggedError(
@@ -142,6 +148,9 @@ const auditForFiler = ({
     },
   });
 
+/** PDF probes in flight per delivery; each may run to the extraction timeout. */
+const INBOUND_ENCRYPTION_PROBE_CONCURRENCY = 4;
+
 type InboundCompletion = {
   id: SafeId<"correspondence">;
   scope: InboundMatterScope;
@@ -176,8 +185,32 @@ const finishInboundAttachments = async ({
       .limit(scannedFiles.length + 1),
   );
   const completed = new Set(linked.map(({ ordinal }) => ordinal));
+  // Filing keeps every attachment, so an unreadable or unsure PDF is still
+  // stored (and reported); the detection only decides what its row records.
+  // The probes run a few at a time before the sequential writes, so stalled
+  // PDFs overlap instead of holding the delivery one timeout after another.
+  const encryptions = new Map(
+    await mapWithConcurrency({
+      items: [...scannedFiles.entries()].filter(
+        ([ordinal]) => !completed.has(ordinal),
+      ),
+      limit: INBOUND_ENCRYPTION_PROBE_CONCURRENCY,
+      operation: async ([ordinal, file]) =>
+        [
+          ordinal,
+          retainedFileEncryption(
+            await detectFileEncryption({
+              mimeType: file.mimeType,
+              scanned: file,
+            }),
+            { mimeType: file.mimeType, stage: "inbound-attachment" },
+          ),
+        ] as const,
+    }),
+  );
   for (const [ordinal, file] of scannedFiles.entries()) {
-    if (completed.has(ordinal)) {
+    const encryption = encryptions.get(ordinal);
+    if (completed.has(ordinal) || encryption === undefined) {
       continue;
     }
     const aborted: {
@@ -193,6 +226,7 @@ const finishInboundAttachments = async ({
           buffer: file.bytes,
           fileName: sanitizeFilename(file.fileName),
           mimeType: file.mimeType,
+          encryption,
           scanWarnings: file.scanWarnings ?? undefined,
           afterCreate: async (tx, document) => {
             const attachmentLink = await linkInboundAttachment({

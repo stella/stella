@@ -77,7 +77,7 @@ export const properties = p.pgTable(
       .uniqueIndex("properties_ws_document_type_classifier_unq")
       .on(table.workspaceId)
       .where(sql`${table.role} = 'document-type-classifier'`),
-    ...wsPolicies(),
+    ...wsPolicies({ columns: table }),
   ],
 );
 
@@ -119,7 +119,7 @@ export const propertyDependencies = p.pgTable(
       })
       .onDelete("restrict"),
     p.index("property_dependencies_workspace_id_idx").on(table.workspaceId),
-    ...wsPolicies(),
+    ...wsPolicies({ columns: table }),
   ],
 );
 
@@ -132,13 +132,16 @@ const VERSION_SOURCE_SQL_VALUES = sql.join(
   sql`, `,
 );
 
+export const PLAYBOOK_DOCUMENT_TYPE_CONSTRAINT =
+  "playbook_definitions_document_type_fk";
+
 /**
  * An org-scoped playbook definition: a saved, reusable set of graded
  * Positions. It joins clauses and templates under the org-level
  * knowledge area; runs (materialized columns, findings, redlines) are
  * workspace-scoped and resolved separately. `positions` is the
- * version-tagged JSONB container; `scope` is reserved for later
- * doc-type / counterparty / matter targeting.
+ * version-tagged JSONB container; `scope` targets document types,
+ * counterparties, and matters.
  */
 export const playbookDefinitions = p.pgTable(
   "playbook_definitions",
@@ -154,6 +157,10 @@ export const playbookDefinitions = p.pgTable(
     starterId: p.varchar("starter_id", { length: 64 }),
     description: p.text(),
     scope: jsonb().$type<PlaybookScope>(),
+    // Derived from `scope.documentTypeKey` by the
+    // `playbook_definitions_derive_document_type_key` trigger on every
+    // insert and update; a value a writer supplies is replaced.
+    documentTypeKey: p.text("document_type_key"),
     positions: jsonb().$type<PlaybookPositions>().notNull(),
     // Advisory approval status (v1): "draft" | "approved". Editing
     // (`update-by-id.ts`) always reverts this to "draft"; approving
@@ -177,6 +184,14 @@ export const playbookDefinitions = p.pgTable(
     p
       .index("playbook_definitions_organization_id_idx")
       .on(table.organizationId),
+    p
+      .index("playbook_definitions_org_document_type_idx")
+      .on(table.organizationId, table.documentTypeKey),
+    p.foreignKey({
+      name: PLAYBOOK_DOCUMENT_TYPE_CONSTRAINT,
+      columns: [table.organizationId, table.documentTypeKey],
+      foreignColumns: [documentTypes.organizationId, documentTypes.key],
+    }),
     p
       .index("playbook_definitions_org_created_at_idx")
       .on(table.organizationId, table.createdAt),

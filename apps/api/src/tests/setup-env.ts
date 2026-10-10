@@ -1,4 +1,34 @@
+import { envApiServerSchema } from "../env-schema";
 import { configureTestDatabaseEnvironment } from "./test-database-environment";
+
+// Preserve configured providers while preventing inherited credentials from
+// authenticating an unmocked model call. Derive coverage from the env owner.
+const nonModelServiceKeys = new Set([
+  "TAVILY_API_KEY",
+  "JINA_API_KEY",
+  "COMPANIES_HOUSE_API_KEY",
+  "HOSTED_USAGE_PROVIDER_API_KEY",
+  "AGENT_SANDBOX_HARNESS_API_KEY",
+]);
+// Also satisfies the WIF region schema, without naming a real AWS region.
+const providerCredentialPlaceholder = "stella-test-provider-credential-0";
+for (const name of Object.keys(envApiServerSchema)) {
+  const isModelCredential =
+    (name.endsWith("_API_KEY") && !nonModelServiceKeys.has(name)) ||
+    name.startsWith("GOOGLE_AI_API_KEY_") ||
+    name.startsWith("OPENROUTER_WIF_");
+  // An empty value means unconfigured (the env owner parses it as absent).
+  const value = process.env[name];
+  if (isModelCredential && value !== undefined && value !== "") {
+    process.env[name] = providerCredentialPlaceholder;
+  }
+}
+
+// Postgres fixtures are non-RDS: resolve telemetry before any env owner loads.
+if (process.env["STELLA_RUN_POSTGRES_TESTS"] === "true") {
+  process.env["DB_LOAD_GATE_EBS_SIGNAL"] = "disabled";
+  delete process.env["DB_LOAD_GATE_RDS_INSTANCE_IDENTIFIER"];
+}
 
 configureTestDatabaseEnvironment();
 // The API suites and the tooling that loads the API graph (catalog export,

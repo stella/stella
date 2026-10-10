@@ -1,5 +1,3 @@
-import { Temporal } from "@stll/time";
-
 import type { SchedulerDailySchedule } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -7,6 +5,7 @@ import {
   type FlowScheduleFrequency,
   type FlowTrigger,
 } from "@/api/lib/flows/flow-types";
+import type { DueSlot } from "@/api/lib/scheduler/due-slot";
 
 /**
  * Pure decision logic for the automation triggers (Phase 3a). Everything here
@@ -16,7 +15,7 @@ import {
  * the per-tick "is today the right day" gate for weekly / monthly frequencies.
  */
 
-/** UTC weekday constants (matches `Date.prototype.getUTCDay`). */
+/** Weekday numbers of a flow schedule: 0 is Sunday, 6 is Saturday. */
 const UTC_WEEKDAY_MIN = 0;
 const UTC_WEEKDAY_MAX = 6;
 
@@ -90,7 +89,7 @@ export const isAutomatedRunCapReached = (
  * The scheduler only understands `daily` (a wall-clock hour:minute in a
  * timezone) and `interval`; there is no native weekly / monthly. Every flow
  * schedule therefore registers as a daily UTC tick at `hourUtc:00`, and
- * `shouldRunScheduledFlowNow` gates weekly / monthly frequencies per tick.
+ * `isScheduledFlowDue` gates weekly / monthly frequencies per slot.
  */
 export const flowScheduleToSchedulerSchedule = (
   schedule: FlowSchedule,
@@ -102,40 +101,45 @@ export const flowScheduleToSchedulerSchedule = (
 });
 
 /**
- * Per-tick gate for the daily scheduler job. `daily` always runs; `weekly` runs
- * only when today's UTC weekday equals `dayOfWeek`; `monthly` only when today's
- * UTC day-of-month equals `dayOfMonth`. A weekly / monthly schedule missing its
- * day field cannot be gated to a specific day, so it fails closed (never fires)
- * rather than degrading to a daily run: the frontend always supplies the field,
- * so a missing one means a malformed schedule that must not silently multiply
- * automated runs (and their AI spend) across every daily tick.
+ * Per-slot gate for the daily scheduler job. `daily` always runs; `weekly` runs
+ * only when a covered slot's day (in the zone the tick is scheduled in) is
+ * `dayOfWeek`; `monthly` only when it is `dayOfMonth`. The gate reads the slots
+ * the claim covers, never the wall clock: a Monday 23:00 slot claimed after
+ * midnight is still Monday's run, a Sunday 23:00 slot claimed early on Monday
+ * is not, and a Sunday 09:00 slot claimed on Monday after 09:00 also covers
+ * Monday's slot, which the runner would otherwise skip when it schedules the
+ * next slot after the run.
+ * A weekly / monthly schedule missing its day field cannot be gated to a
+ * specific day, so it fails closed (never fires) rather than degrading to a
+ * daily run: the frontend always supplies the field, so a missing one means a
+ * malformed schedule that must not silently multiply automated runs (and their
+ * AI spend) across every daily tick.
  */
-export const shouldRunScheduledFlowNow = (
+export const isScheduledFlowDue = (
   schedule: FlowSchedule,
-  now: Date,
+  slot: DueSlot,
 ): boolean => {
   const frequency: FlowScheduleFrequency = schedule.frequency;
   if (frequency === "daily") {
     return true;
   }
-  const day = Temporal.Instant.fromEpochMilliseconds(
-    now.getTime(),
-  ).toZonedDateTimeISO("UTC");
+  const days = slot.elapsedDailySlotDaysIn(
+    flowScheduleToSchedulerSchedule(schedule).timeZone,
+  );
   if (frequency === "weekly") {
-    if (schedule.dayOfWeek === undefined) {
-      return false;
-    }
-    const weekday = day.dayOfWeek % 7;
+    const { dayOfWeek } = schedule;
     if (
-      schedule.dayOfWeek < UTC_WEEKDAY_MIN ||
-      schedule.dayOfWeek > UTC_WEEKDAY_MAX
+      dayOfWeek === undefined ||
+      dayOfWeek < UTC_WEEKDAY_MIN ||
+      dayOfWeek > UTC_WEEKDAY_MAX
     ) {
       return false;
     }
-    return weekday === schedule.dayOfWeek;
+    return days.some((day) => day.dayOfWeek % 7 === dayOfWeek);
   }
-  if (schedule.dayOfMonth === undefined) {
+  const { dayOfMonth } = schedule;
+  if (dayOfMonth === undefined) {
     return false;
   }
-  return day.day === schedule.dayOfMonth;
+  return days.some((day) => day.day === dayOfMonth);
 };

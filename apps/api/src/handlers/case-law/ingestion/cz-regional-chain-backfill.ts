@@ -288,13 +288,22 @@ export const runCzRegionalChainBackfill = async ({
       signal,
     );
     report.requestsSpent += 1;
-    if (chain === null) {
-      // The publisher was asked and did not answer. Nothing is written, so
-      // the row stays selectable and a later run asks again.
-      report.deferred += 1;
-      return;
+    switch (chain.type) {
+      case "present":
+        await writeRow(row, chain.value.raw);
+        return;
+      case "absent":
+      case "refused":
+      case "unavailable":
+        // The publisher was asked and did not answer with a chain, or refused
+        // it. Nothing is written, so the row stays selectable and a later run
+        // asks again; a refusal is never stored as an empty chain.
+        report.deferred += 1;
+        return;
+      default:
+        chain satisfies never;
+        return panic(`Unhandled chain read: ${String(chain)}`);
     }
-    await writeRow(row, chain.raw);
   };
 
   let after: SafeId<"caseLawDecision"> | null = null;

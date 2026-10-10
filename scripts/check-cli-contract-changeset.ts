@@ -239,7 +239,7 @@ const report = (verdict: CliContractChangeVerdict): number => {
       process.stderr.write(
         "::error::cli-contract-changeset: generated CLI contract files changed without a CLI changeset or version bump.\n" +
           `  changed: ${verdict.changedParts.join(", ")}\n` +
-          "  fix: add a changeset naming @stll/cli, or advance packages/cli/package.json.\n",
+          "  fix: run `bun run changeset` and name @stll/cli, or advance packages/cli/package.json.\n",
       );
       return 1;
     default:

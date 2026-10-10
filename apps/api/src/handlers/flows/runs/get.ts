@@ -1,12 +1,13 @@
 import { getFlowRunHandler } from "@/api/handlers/flows/run-read";
 import { flowRunParamsSchema } from "@/api/handlers/flows/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 
 const config = {
   description:
     "Read one flow run, including its current status, inputs, outputs, steps, and review state.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     readClass: "tenant",

@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
@@ -13,12 +13,24 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type { StoredRawReparseInput } from "@/api/handlers/case-law/ingestion/adapter";
 import {
+  readBodyText,
+  type readPublisherText,
+} from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
+import type { PublisherFetchInit } from "@/api/handlers/case-law/ingestion/adapters/retry";
+import {
   fetchSkUsListing,
   skUsAdapter,
 } from "@/api/handlers/case-law/ingestion/adapters/sk-us";
 import { INGESTION_USER_AGENT } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { readStoredRawFromS3 } from "@/api/handlers/case-law/ingestion/pipeline/stored-raw";
 import { createSafeId } from "@/api/lib/branded-types";
+import {
+  readAbsent,
+  readOutcomeOfStatus,
+  readPresent,
+  readUnavailable,
+  type ReadOutcome,
+} from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import {
   openRawSourceWriteWindow,
@@ -34,6 +46,54 @@ import {
   runSkUsRawBatch,
 } from "@/api/scripts/complete-sk-us-raw-plan";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
+
+/**
+ * A served response as the publisher read types it; a 429 rejects as the
+ * read's typed rate-limit stop.
+ */
+const readOf = async (
+  response: Response,
+  init: PublisherFetchInit,
+): Promise<ReadOutcome<Response>> => {
+  if (response.status === 429) {
+    return await Promise.reject(
+      new AdapterFetchError({
+        message: "Publisher request refused: 429",
+        adapterKey: init.adapterKey,
+        cursor: null,
+        httpStatus: response.status,
+      }),
+    );
+  }
+  const outcome = readOutcomeOfStatus(response.status, "document");
+  switch (outcome.type) {
+    case "present":
+      return readPresent(response);
+    case "absent":
+      return readAbsent(outcome.evidence);
+    case "refused":
+      return outcome;
+    case "unavailable":
+      return readUnavailable(outcome.cause);
+    default:
+      outcome satisfies never;
+      return panic(`Unhandled read outcome: ${String(outcome)}`);
+  }
+};
+
+/**
+ * A publisher text read that answers with the response `respond` serves; the
+ * body is read by the owner's bounded reader.
+ */
+const readWith =
+  (
+    respond: (url: string | URL, init: PublisherFetchInit) => Promise<Response>,
+  ): typeof readPublisherText =>
+  async (url, init) =>
+    await readBodyText(
+      await readOf(await respond(url, init), init),
+      init.signal ?? undefined,
+    );
 
 /** A fixture row that must exist; a missing one fails loudly, never as `undefined`. */
 const rowAt = <T>(items: readonly T[], index: number): T => {
@@ -111,7 +171,9 @@ test("listing fetching preserves stored replay results for complete and legacy f
     const before = await reparse(input);
     const fetched = await fetchSkUsListing({
       ...identity,
-      request: async () => Response.json({ documents: [listing], numFound: 1 }),
+      read: readWith(async () =>
+        Response.json({ documents: [listing], numFound: 1 }),
+      ),
     });
     expect(fetched.type).toBe("listing");
     const after = await reparse(input);
@@ -128,14 +190,14 @@ test("publisher rows must match the stored document identity and docket", async 
   ]) {
     const outcome = await fetchSkUsListing({
       ...identity,
-      request: async (_url, init) => {
+      read: readWith(async (_url, init) => {
         expect(new Headers(init.headers).get("User-Agent")).toBe(
           INGESTION_USER_AGENT,
         );
         expect(init.adapterKey).toBe("sk-us");
         expect(init.body).toContain(identity.documentId);
         return Response.json({ documents: [document], numFound: 1 });
-      },
+      }),
     });
     expect(outcome.type).toBe(
       document === listing ? "listing" : "listing_identity_mismatch",
@@ -151,7 +213,7 @@ test("documented 204 and valid empty search results are unavailable", async () =
     const pauses: number[] = [];
     const outcome = await fetchSkUsListing({
       ...identity,
-      request: async () => response,
+      read: readWith(async () => response),
       pause: async (delay) => {
         pauses.push(delay);
       },
@@ -168,12 +230,12 @@ test("5xx back off with jitter then succeed or remain retryable", async () => {
       const pauses: number[] = [];
       const outcome = await fetchSkUsListing({
         ...identity,
-        request: async () => {
+        read: readWith(async () => {
           requests += 1;
           return recovers && requests === 3
             ? Response.json({ documents: [listing], numFound: 1 })
             : new Response(null, { status });
-        },
+        }),
         pause: async (delay) => {
           pauses.push(delay);
         },
@@ -207,13 +269,13 @@ test("the first 429 halts the page with no further requests or checkpoint", asyn
           fetchListing: async () =>
             await fetchSkUsListing({
               ...identity,
-              request: async () => {
+              read: readWith(async () => {
                 const status = statuses.at(requests);
                 requests += 1;
                 return status === undefined
                   ? Response.json({ documents: [listing], numFound: 1 })
                   : new Response(null, { status });
-              },
+              }),
               pause: async (delay) => {
                 pauses.push(delay);
               },
@@ -260,10 +322,10 @@ test("a search 404 or undocumented empty body stops without checkpointing", asyn
           fetchListing: async () =>
             await fetchSkUsListing({
               ...identity,
-              request: async () => {
+              read: readWith(async () => {
                 requests += 1;
                 return response;
-              },
+              }),
               pause: async (delay) => {
                 pauses.push(delay);
               },

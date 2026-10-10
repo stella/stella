@@ -1,6 +1,9 @@
 import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
 import { eq, sql, TransactionRollbackError } from "drizzle-orm";
+import fc from "fast-check";
+
+import { assertProperty } from "@stll/property-testing";
 
 import { organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -13,11 +16,20 @@ import {
   properties,
   workspaces,
 } from "@/api/db/schema";
+import { env } from "@/api/env";
+import uploadEntity from "@/api/handlers/entities/upload";
+import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { FINALIZE_CLAIM_TIMEOUT_MS } from "@/api/lib/uploads/runtime";
+import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
+import {
+  NO_DB,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
@@ -234,6 +246,7 @@ const seedFileEntity = async ({
       pdfDerivative: { status: "not-required" },
     },
   });
+  return { entityId, entityVersionId, fieldId };
 };
 
 type SeedWorkspaceResult = {
@@ -308,7 +321,6 @@ const seedWorkspace = async (
 type ResolveFileNameInTestTxOptions = {
   tx: TestDatabaseTransaction;
   seededWorkspaceId: SafeId<"workspace">;
-  seededPropertyId: SafeId<"property">;
   seededParentId: SafeId<"entity"> | null;
   fileName: string;
 };
@@ -316,7 +328,6 @@ type ResolveFileNameInTestTxOptions = {
 const resolveFileNameInTestTx = async ({
   tx,
   seededWorkspaceId,
-  seededPropertyId,
   seededParentId,
   fileName,
 }: ResolveFileNameInTestTxOptions) =>
@@ -325,7 +336,6 @@ const resolveFileNameInTestTx = async ({
     // the production Bun SQL transaction and the PGlite test transaction.
     tx: asTestRaw<Transaction>(tx),
     workspaceId: seededWorkspaceId,
-    propertyId: seededPropertyId,
     parentId: seededParentId,
     name: sanitizeFilename(fileName),
   });
@@ -632,7 +642,6 @@ describe("entity-create filename conflicts", () => {
       return await resolveFileNameInTestTx({
         tx,
         seededWorkspaceId: seeded.workspaceId,
-        seededPropertyId: seeded.propertyId,
         seededParentId: seeded.folderBId,
         fileName: "brief.md",
       });
@@ -656,7 +665,6 @@ describe("entity-create filename conflicts", () => {
       return await resolveFileNameInTestTx({
         tx,
         seededWorkspaceId: seeded.workspaceId,
-        seededPropertyId: seeded.propertyId,
         seededParentId: seeded.folderAId,
         fileName: "brief.md",
       });
@@ -665,4 +673,220 @@ describe("entity-create filename conflicts", () => {
     expect(result.renamed).toBe(true);
     expect(String(result.value)).toBe("brief_1.md");
   });
+});
+
+test("upload names are free among exact current siblings", async () => {
+  await assertProperty(
+    "upload names are free among exact current siblings",
+    fc.asyncProperty(
+      fc.string({ minLength: 1, maxLength: 80 }),
+      fc.array(fc.string({ minLength: 1, maxLength: 80 }), { maxLength: 8 }),
+      fc.boolean(),
+      async (rawRequested, arbitraryNames, occupied) => {
+        for (const scope of ["root", "folder"] as const) {
+          await runRolledBack(async (tx) => {
+            const seeded = await seedWorkspace(tx);
+            const other = await seedWorkspace(tx);
+            const targetParentId = scope === "root" ? null : seeded.folderAId;
+            const otherMatterParentId =
+              scope === "root" ? null : other.folderAId;
+            const requested = sanitizeFilename(rawRequested);
+            const siblings = new Set<string>(
+              arbitraryNames.map(sanitizeFilename),
+            );
+            if (occupied) {
+              siblings.add(requested);
+            }
+            for (const name of siblings) {
+              await tx.insert(entities).values({
+                id: toSafeId<"entity">(Bun.randomUUIDv7()),
+                workspaceId: seeded.workspaceId,
+                parentId: targetParentId,
+                kind: "task",
+                name,
+              });
+            }
+            await seedFileEntity({
+              tx,
+              seededWorkspaceId: seeded.workspaceId,
+              seededPropertyId: seeded.propertyId,
+              seededParentId: seeded.folderBId,
+              fileName: requested,
+            });
+            await seedFileEntity({
+              tx,
+              seededWorkspaceId: other.workspaceId,
+              seededPropertyId: other.propertyId,
+              seededParentId: otherMatterParentId,
+              fileName: requested,
+            });
+            const resolved = await resolveFileNameInTestTx({
+              tx,
+              seededWorkspaceId: seeded.workspaceId,
+              seededParentId: targetParentId,
+              fileName: requested,
+            });
+            expect(siblings.has(resolved.value)).toBe(false);
+            expect(resolved.value.length).toBeLessThanOrEqual(255);
+            if (!siblings.has(requested)) {
+              expect(String(resolved.value)).toBe(String(requested));
+            }
+            return true;
+          });
+        }
+      },
+    ),
+    {
+      numRuns: 20,
+      examples: [
+        [" ", [], false],
+        [" ", [" "], true],
+      ],
+    },
+  );
+});
+
+test("entity names collide across properties and absent current fields", async () => {
+  await runRolledBack(async (tx) => {
+    const seeded = await seedWorkspace(tx);
+    const otherPropertyId = toSafeId<"property">(Bun.randomUUIDv7());
+    await tx.insert(properties).values({
+      id: otherPropertyId,
+      workspaceId: seeded.workspaceId,
+      name: "Other file",
+      content: { type: "file", version: 1 },
+      tool: { type: "manual-input", version: 1 },
+      status: "fresh",
+    });
+    const historic = await seedFileEntity({
+      tx,
+      seededWorkspaceId: seeded.workspaceId,
+      seededPropertyId: otherPropertyId,
+      seededParentId: seeded.folderAId,
+      fileName: "brief.md",
+    });
+    const currentId = toSafeId<"entityVersion">(Bun.randomUUIDv7());
+    await tx.insert(entityVersions).values({
+      id: currentId,
+      entityId: historic.entityId,
+      workspaceId: seeded.workspaceId,
+      versionNumber: 2,
+    });
+    await tx
+      .update(entities)
+      .set({ currentVersionId: currentId })
+      .where(eq(entities.id, historic.entityId));
+    await tx.insert(entities).values({
+      id: toSafeId<"entity">(Bun.randomUUIDv7()),
+      workspaceId: seeded.workspaceId,
+      parentId: seeded.folderAId,
+      kind: "folder",
+      name: "brief_1.md",
+    });
+    const resolved = await resolveFileNameInTestTx({
+      tx,
+      seededWorkspaceId: seeded.workspaceId,
+      seededParentId: seeded.folderAId,
+      fileName: "brief.md",
+    });
+    expect(String(resolved.value)).toBe("brief_2.md");
+    return true;
+  });
+});
+
+test("root names exclude entities from another matter", async () => {
+  await runRolledBack(async (tx) => {
+    const seeded = await seedWorkspace(tx);
+    const other = await seedWorkspace(tx);
+    await seedFileEntity({
+      tx,
+      seededWorkspaceId: other.workspaceId,
+      seededPropertyId: other.propertyId,
+      seededParentId: null,
+      fileName: "brief.md",
+    });
+    const resolved = await resolveFileNameInTestTx({
+      tx,
+      seededWorkspaceId: seeded.workspaceId,
+      seededParentId: null,
+      fileName: "brief.md",
+    });
+    expect(String(resolved.value)).toBe("brief.md");
+    return true;
+  });
+});
+
+test("multipart upload resolves names against current root siblings", async () => {
+  const fake = startFakeS3();
+  const priorFlag = env.FEATURE_FILE_USAGE_LIMITS;
+  env.FEATURE_FILE_USAGE_LIMITS = false;
+  try {
+    const seeded = await testDb.transaction(async (tx) => {
+      await tx.execute(sql.raw("RESET ROLE"));
+      const setup = await seedWorkspace(tx);
+      for (const fileName of [
+        "contract.md",
+        "contract_1.md",
+        "contract_3.md",
+        "contract_final.md",
+      ]) {
+        await seedFileEntity({
+          tx,
+          seededWorkspaceId: setup.workspaceId,
+          seededPropertyId: setup.propertyId,
+          seededParentId: null,
+          fileName,
+        });
+      }
+      return setup;
+    });
+    const safeDb: SafeDb = async (callback) =>
+      await Result.tryPromise(
+        async () =>
+          await testDb.transaction(async (tx) => {
+            await tx.execute(sql.raw("RESET ROLE"));
+            return await callback(asTestRaw<Transaction>(tx));
+          }),
+      );
+    const recorded = new Set<string>();
+    const refusePublication: AuditRecorder = async (tx) => {
+      const uploaded = await tx
+        .select({ content: fields.content })
+        .from(fields)
+        .where(eq(fields.workspaceId, seeded.workspaceId));
+      for (const field of uploaded) {
+        if (field.content.type === "file") {
+          recorded.add(field.content.fileName);
+        }
+      }
+      throw new HandlerError({
+        status: 500,
+        message: "Publication refused by test",
+      });
+    };
+    const result = await uploadEntity.handler(
+      createTestHandlerContext<Parameters<typeof uploadEntity.handler>[0]>({
+        audit: refusePublication,
+        scopedDb: NO_DB,
+        workspaceId: seeded.workspaceId,
+        session: { activeOrganizationId: seeded.organizationId },
+        user: { id: seeded.userId },
+        safeDb,
+        body: {
+          file: new File(["plain text"], "contract.md", {
+            type: MARKDOWN_MIME_TYPE,
+          }),
+          name: "contract.md",
+          propertyId: seeded.propertyId,
+        },
+        createAuditRecorder: () => refusePublication,
+      }),
+    );
+    expect(result).toMatchObject({ code: 500 });
+    expect(recorded.has("contract_2.md")).toBe(true);
+    expect(recorded.has("contract_4.md")).toBe(false);
+  } finally {
+    env.FEATURE_FILE_USAGE_LIMITS = priorFlag;
+    fake.stop();
+  }
 });

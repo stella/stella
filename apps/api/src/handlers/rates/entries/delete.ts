@@ -4,7 +4,8 @@ import { t } from "elysia";
 
 import { rateEntries } from "@/api/db/schema";
 import { loadRateEntry } from "@/api/handlers/rates/existing-rate-entry";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { rateRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 
@@ -23,6 +24,9 @@ const deleteRateEntry = createSafeHandler(
       "a rate table, leaving the table and its other lines in place. Use " +
       "rates.delete to remove the whole table instead.",
     permissions: { rate: ["delete"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: { featureId: "time-billing", type: "required" },
+    realtime: rateRealtimeUpdates,
     mcp: {
       type: "capability",
       reason: "billing_admin",

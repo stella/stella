@@ -38,7 +38,7 @@ type ReadableDecision = Extract<
 
 // Varchar bounds reserve four UTF-8 bytes per stored Unicode character.
 // Unbounded publisher prose receives a display budget; storage stays whole.
-export const DECISION_READER_TEXT_BYTES = {
+const DECISION_READER_TEXT_BYTES = {
   caseNumber: 256 * 4,
   slug: 256 * 4,
   ecli: 256 * 4,
@@ -350,8 +350,12 @@ export const projectDecisionReader = (decision: ReadableDecision) => {
     ...value,
     value: truncateTextBytes(value.value, DECISION_IDENTIFIER_MAX_LENGTH * 4),
   });
+  // The wire carries the AST opaque, as the schema declares: clients rebuild
+  // the derivable block text with `parseDocumentAst` on arrival.
+  const documentAst: unknown = decision.documentAst;
   return {
     ...decision,
+    documentAst,
     createdAt: decision.createdAt.toISOString(),
     updatedAt: decision.updatedAt.toISOString(),
     resolution:

@@ -74,6 +74,63 @@ Oversized provider objects stop streaming at the limit and become terminal
 because a complete content digest cannot be read within the limit. A failed drop
 write remains retryable; it never acknowledges an unrecorded rejection.
 
+## Queue transport
+
+An SES receipt rule stores each message in S3 and publishes its notification
+to SNS, which delivers to an SQS queue with a dead-letter redrive policy. The
+scheduler job `inboundMail.receive.minutely` drains that queue; operator
+pauses apply to it like any other job. It runs only when
+`INBOUND_MAIL_QUEUE_URL`, `INBOUND_MAIL_TOPIC_ARN`, `INBOUND_MAIL_BUCKET` and
+`INBOUND_MAIL_KEY_PREFIX` are all set with `INBOUND_MAIL_DOMAIN`; a partial
+set fails boot. The queue and bucket are reached in `S3_REGION`.
+
+The trust boundary is IAM: the queue policy must admit only the configured
+topic, and the topic only the receipt rule. SNS signatures are not fetched.
+Subscribe the queue without raw message delivery; the receiver reads the SNS
+envelope and requires its `TopicArn` to equal the configured topic.
+
+Each run leases bounded batches with a visibility timeout covering a batch and
+files messages one at a time. A message is deleted after a terminal result:
+filed, duplicate, dropped, or the provider's setup notification. A malformed
+envelope, another topic or an unsupported notification type is logged as
+poison and left; so is a retryable error. Both return when their visibility
+timeout ends and reach the dead-letter queue after the redrive limit, where
+they remain for operator repair. A failed or cancelled delete leaves a filed
+message on the queue; its redelivery converges as a duplicate. Logs carry the
+queue message id, receive count and outcome, never subjects, bodies, addresses
+or tokens.
+
+## Uploaded email files
+
+An `.eml` or `.msg` file stored in a matter also becomes correspondence linked
+to that file, so one item appears in both Files and Correspondence. The native
+extraction run every new file version reaches hands the file to the
+`uploaded-mail-correspondence` queue after its text projection, so every upload
+transport is covered and extraction never fails on this step. The job is keyed
+by the file and runs in the API's workers: the document-processing worker
+enqueues through `upload-enqueue.ts` alone, keeping the filing code and the API
+environment out of its import graph. The job rereads the stored object; a
+permanent refusal is a logged skip, an unavailable database retries with
+backoff, and only an exhausted job or a failed hand-off is captured.
+
+- `parseEmailFile` reads the file as one message under the inbound limits: the
+  same normalization as delivered mail, with an adapter for Outlook's MAPI
+  properties. A forward inside the file is not extracted.
+- Provenance is `source: "upload"` with the file's entity id. There is no
+  transport authentication. An `.eml` file's own DKIM signature is checked like
+  an attached original; an `.msg` file has none and stays unverified.
+- The file's creator is the filer and must hold matter access when the run
+  files it. A file without a creator, an inbound attachment of a delivered
+  record, or an unreadable or oversized message files nothing; the skip is
+  logged with its reason and the file is unaffected.
+- Attachments stay inside the file and are not stored again; the record links
+  the file. Deleting the file deletes its record. The attachment policy is per
+  source: a delivery stores each attachment, so a blocked type refuses it; an
+  upload retains them in the already scanned file, so only count and size
+  limits apply.
+- Each file has at most one record, keyed by the file. A delivered message and
+  an uploaded file of it remain separate records, as do two copies of a file.
+
 ## Local development
 
 With the development database, object storage and processing services configured:

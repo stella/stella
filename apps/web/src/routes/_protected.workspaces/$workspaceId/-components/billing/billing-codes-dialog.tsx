@@ -276,12 +276,15 @@ const CreateCodeForm = ({
       },
     }),
   );
-  const formErrors = useSelector(form.store, (state) =>
-    toFormErrors(state.fieldMeta),
-  );
+  const { formErrors, dirty } = useSelector(form.store, (state) => ({
+    formErrors: toFormErrors(state.fieldMeta),
+    dirty: !state.isDefaultValue,
+  }));
 
   return (
     <Form
+      dirty={dirty}
+      onDiscard={() => form.reset()}
       className="flex flex-col gap-3 rounded-md border p-3"
       errors={formErrors}
       onSubmit={(e) => {

@@ -4,7 +4,8 @@ import { t } from "elysia";
 
 import { resultTx } from "@/api/db/safe-db";
 import { BILLING_STATUS, expenses } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { expenseRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -21,6 +22,9 @@ const config = {
     "excluded from billing). A billed expense is refused until its invoice is " +
     "reverted; the return value says which of the two happened.",
   permissions: { expense: ["delete"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  featureAccess: { featureId: "time-billing", type: "required" },
+  realtime: expenseRealtimeUpdates,
   mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   body: deleteExpenseBodySchema,
 } satisfies WorkspaceHandlerConfig;

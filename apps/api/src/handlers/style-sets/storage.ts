@@ -5,17 +5,18 @@ import { Temporal } from "@stll/time";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { styleSets } from "@/api/db/schema";
-import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { writeScannedObject } from "@/api/lib/file-scan/stored-object";
 import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
 import { writeOrganizationFile } from "@/api/lib/files/organization-file-usage";
+import type { CheckedFileWrite } from "@/api/lib/files/organization-file-usage";
 import { LIMITS } from "@/api/lib/limits";
 import { assertUnchangedSince } from "@/api/lib/optimistic-concurrency";
 import { getS3 } from "@/api/lib/s3";
@@ -85,28 +86,23 @@ export const createStoredStyleSet = async ({
     const s3Key = buildStyleSetKey({ organizationId, styleSetId });
 
     yield* Result.await(claimPackageCleanup(s3Key, styleSetId, enqueueCleanup));
-    const writePackage = async () =>
-      await writeScannedObject({ file, key: s3Key });
-    const { object: stored } = env.FEATURE_FILE_USAGE_LIMITS
-      ? yield* Result.await(
-          writeOrganizationFile({
-            organizationId,
-            objectKey: s3Key,
-            sizeBytes: file.bytes.byteLength,
-            write: writePackage,
-          }),
-        )
-      : yield* Result.await(
-          Result.tryPromise({
-            try: writePackage,
-            catch: (cause) =>
-              new HandlerError({
-                status: 500,
-                message: "Could not store the style set.",
-                cause,
-              }),
-          }),
-        );
+    const writePackage = async ({
+      content,
+      objectKey,
+    }: CheckedFileWrite<ScannedFile>) =>
+      await writeScannedObject(
+        { file: content, key: objectKey },
+        { type: "style-set-cleanup", styleSetId },
+      );
+    const { object: stored } = yield* Result.await(
+      writeOrganizationFile({
+        organizationId,
+        objectKey: s3Key,
+        sizeBytes: file.bytes.byteLength,
+        content: file,
+        write: writePackage,
+      }),
+    );
 
     let persisted = false;
     try {
@@ -175,7 +171,7 @@ export const createStoredStyleSet = async ({
         const cleanup = Result.flatten(
           await Result.tryPromise({
             try: async () => {
-              if (env.FEATURE_FILE_USAGE_LIMITS) {
+              if (isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")) {
                 return await deleteOrganizationFileWithSignal(
                   s3Key,
                   AbortSignal.timeout(10_000),
@@ -292,28 +288,23 @@ export const replaceStoredStyleSet = async ({
 
     const s3Key = buildStyleSetKey({ organizationId, styleSetId });
     yield* Result.await(claimPackageCleanup(s3Key, styleSetId));
-    const writePackage = async () =>
-      await writeScannedObject({ file, key: s3Key });
-    const { object: stored } = env.FEATURE_FILE_USAGE_LIMITS
-      ? yield* Result.await(
-          writeOrganizationFile({
-            organizationId,
-            objectKey: s3Key,
-            sizeBytes: file.bytes.byteLength,
-            write: writePackage,
-          }),
-        )
-      : yield* Result.await(
-          Result.tryPromise({
-            try: writePackage,
-            catch: (cause) =>
-              new HandlerError({
-                status: 500,
-                message: "Could not store the replacement style set.",
-                cause,
-              }),
-          }),
-        );
+    const writePackage = async ({
+      content,
+      objectKey,
+    }: CheckedFileWrite<ScannedFile>) =>
+      await writeScannedObject(
+        { file: content, key: objectKey },
+        { type: "style-set-cleanup", styleSetId },
+      );
+    const { object: stored } = yield* Result.await(
+      writeOrganizationFile({
+        organizationId,
+        objectKey: s3Key,
+        sizeBytes: file.bytes.byteLength,
+        content: file,
+        write: writePackage,
+      }),
+    );
 
     let persisted = false;
     try {
@@ -461,7 +452,7 @@ export const replaceStoredStyleSet = async ({
         const cleanup = Result.flatten(
           await Result.tryPromise({
             try: async () => {
-              if (env.FEATURE_FILE_USAGE_LIMITS) {
+              if (isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")) {
                 return await deleteOrganizationFileWithSignal(
                   s3Key,
                   AbortSignal.timeout(10_000),

@@ -11,8 +11,8 @@
 import { Result } from "better-result";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
-import { env } from "@/api/env";
 import type { SafeId } from "@/api/lib/branded-types";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 export const assertSharepointConnectionEnabled = async ({
@@ -23,7 +23,7 @@ export const assertSharepointConnectionEnabled = async ({
   safeDb: SafeDb;
 }): Promise<Result<void, HandlerError<403 | 404> | SafeDbError>> =>
   await Result.gen(async function* () {
-    if (!env.FEATURE_SHAREPOINT) {
+    if (!isDeploymentFeatureEnabled("FEATURE_SHAREPOINT")) {
       return Result.err(
         new HandlerError({ status: 404, message: "Not found" }),
       );

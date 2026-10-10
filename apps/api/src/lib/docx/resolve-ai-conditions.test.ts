@@ -141,6 +141,75 @@ describe("resolveAiConditions", () => {
     expect(values["is_consumer"]).toBe(true);
   });
 
+  test.each(["decided", "failed", "no-backend"] as const)(
+    "array conditions preserve row values and report %s outcomes at indexed paths",
+    async (outcome) => {
+      const inputs: Record<string, unknown>[] = [];
+      const { values, conditions } = await resolveAiConditions({
+        values: {
+          rows: [
+            { name: "Ann", iban: "private", included: false },
+            null,
+            { name: "Bob", iban: "private" },
+          ],
+        },
+        fields: [
+          { path: "rows.iban", source: { kind: "contact", field: "iban" } },
+          { path: "rows.included", inputType: "boolean", aiPrompt: "Include?" },
+        ],
+        decide:
+          outcome === "no-backend"
+            ? undefined
+            : async ({ values: row }) => {
+                inputs.push(row);
+                return outcome === "failed"
+                  ? undefined
+                  : {
+                      decidedBy: "decision_model",
+                      value: true,
+                      probability: 0.9,
+                    };
+              },
+      });
+      expect(inputs).toEqual(outcome === "no-backend" ? [] : [{ name: "Bob" }]);
+      expect(values).toEqual({
+        rows: [
+          { name: "Ann", iban: "private", included: false },
+          null,
+          {
+            name: "Bob",
+            iban: "private",
+            ...(outcome === "decided" ? { included: true } : {}),
+          },
+        ],
+      });
+      expect(conditions).toEqual([
+        {
+          path: "rows.0.included",
+          label: "rows.included",
+          state: "decided",
+          value: false,
+          decidedBy: "user",
+        },
+        outcome === "decided"
+          ? {
+              path: "rows.2.included",
+              label: "rows.included",
+              state: "decided",
+              value: true,
+              decidedBy: "decision_model",
+              probability: 0.9,
+            }
+          : {
+              path: "rows.2.included",
+              label: "rows.included",
+              state: "undecided",
+              reason: outcome === "failed" ? "failed" : "no-backend",
+            },
+      ]);
+    },
+  );
+
   test("leaves the condition unset with no decider (block then excluded)", async () => {
     const { values, conditions } = await resolveAiConditions({
       values: {},

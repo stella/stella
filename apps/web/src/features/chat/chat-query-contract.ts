@@ -68,7 +68,7 @@ type ActiveExternalContext = {
   url: string;
 };
 
-export type ActiveSkillContext = {
+type ActiveSkillContext = {
   /** Absent for a built-in skill, which has no row: `skillName` names it. */
   skillId?: string | undefined;
   skillName: string;
@@ -165,6 +165,9 @@ export const getChatRuntimeContextKind = (
 
 const CHAT_TRANSPORT_VERSION = 2;
 
+/** Bump when `GET /chat/model-options` changes shape so cached rows refetch. */
+const MODEL_OPTIONS_RESPONSE_VERSION = 2;
+
 export const chatKeys = {
   all: ["chat"],
   fileThread: (activeOrganizationId: string, key: FileChatThreadKey) => [
@@ -202,6 +205,7 @@ export const chatKeys = {
     ...chatKeys.all,
     activeOrganizationId,
     "modelOptions",
+    MODEL_OPTIONS_RESPONSE_VERSION,
   ],
   threadTitle: (activeOrganizationId: string, key: ChatThreadTitleKey) => [
     ...chatKeys.all,

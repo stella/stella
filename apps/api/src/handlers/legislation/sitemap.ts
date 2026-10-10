@@ -4,13 +4,13 @@ import { status, t } from "elysia";
 import type { Static } from "elysia";
 
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
-import { publicCountryUnavailable } from "@stll/api-contract/public-country-capability";
 
 import { legislationDocuments, statuteSitemapShards } from "@/api/db/schema";
 import {
   projectStatuteSitemapShard,
   projectStatuteSitemapStatute,
 } from "@/api/handlers/legislation/catalog-response";
+import { publicLawCountryUnavailable } from "@/api/lib/legal-search/public-law-country";
 import {
   SITEMAP_ALL_BUCKET,
   statuteBucketSql,
@@ -135,9 +135,9 @@ export const listStatuteSitemapStatutesHandler = async (
   query: SitemapShardStatutesQuery,
   legislationDb: LegislationReadDb,
 ) => {
-  const unavailable = publicCountryUnavailable(query.country);
+  const unavailable = publicLawCountryUnavailable(query.country);
   if (unavailable !== null) {
-    return status(503, unavailable);
+    return unavailable;
   }
 
   const rows = await legislationDb(

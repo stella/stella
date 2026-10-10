@@ -114,6 +114,32 @@ export const paragraphText = (p: slimdom.Element): string => {
   return text;
 };
 
+/** Text owned by this paragraph; nested text-box paragraphs are separate units. */
+export const paragraphOwnText = (paragraph: slimdom.Element): string => {
+  let text = "";
+  const walk = (node: slimdom.Node) => {
+    if (!isElement(node)) {
+      return;
+    }
+    if (
+      node !== paragraph &&
+      node.localName === "p" &&
+      node.namespaceURI === W_NS
+    ) {
+      return;
+    }
+    if (node.localName === "t" && node.namespaceURI === W_NS) {
+      text += node.textContent ?? "";
+      return;
+    }
+    for (const child of node.childNodes) {
+      walk(child);
+    }
+  };
+  walk(paragraph);
+  return text;
+};
+
 // ── ID helpers ────────────────────────────────────────────
 
 export const createIdGenerator = (existingIds: Set<number>): (() => number) => {

@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 
 import { loadTimeSuggestions, serializeSuggestion } from "./load";
 import {
@@ -25,6 +25,8 @@ const listTimeSuggestions = createSafeHandler(
       "Accept one with time-entries.suggestions.accept or hide it with " +
       "time-entries.suggestions.dismiss.",
     permissions: { timeEntry: ["read"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: { featureId: "time-billing", type: "required" },
     mcp: {
       type: "capability",
       readClass: "tenant",
@@ -34,9 +36,17 @@ const listTimeSuggestions = createSafeHandler(
     access: "read",
     query: listTimeSuggestionsQuerySchema,
   },
-  async function* ({ query, safeDb, session, user, workspaceId }) {
+  async function* ({
+    query,
+    safeDb,
+    session,
+    user,
+    workspaceId,
+    featureAccessSnapshot,
+  }) {
     const loaded = yield* loadTimeSuggestions({
       safeDb,
+      featureAccessSnapshot,
       organizationId: session.activeOrganizationId,
       workspaceId,
       userId: user.id,

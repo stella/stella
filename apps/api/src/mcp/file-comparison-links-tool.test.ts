@@ -1,12 +1,17 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { sha256Hex } from "@stll/sha256/node";
+
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
+import { ENCRYPTED_CONTENT_MESSAGE } from "@/api/lib/files/detect-file-encryption";
 import { SafeOutboundFetchError } from "@/api/lib/safe-outbound-fetch";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { handlePrepareFileComparisonFromLinksTool } from "@/api/mcp/file-comparison-links-tool";
 import type { PrepareFileComparisonFromLinksDependencies } from "@/api/mcp/file-comparison-links-tool";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
+import { createEncryptedPdf } from "@/api/tests/helpers/signed-pdf";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -61,6 +66,7 @@ const createHarness = ({
   const inserted: InsertedRow[][] = [];
   const audited: AuditEvent[] = [];
   const puts: PutCall[] = [];
+  let downloadCount = 0;
 
   const { safeDb, scopedDb } = createScopedDbMock({
     insert: () => ({
@@ -83,6 +89,7 @@ const createHarness = ({
       audited.push(event);
       await Promise.resolve();
     },
+    thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
     safeDb,
     scopedDb,
     userId: toSafeId<"user">("user_1"),
@@ -90,11 +97,13 @@ const createHarness = ({
   });
 
   const dependencies: PrepareFileComparisonFromLinksDependencies = {
-    download: async ({ url }) =>
-      await Promise.resolve(
+    download: async ({ url }) => {
+      downloadCount += 1;
+      return await Promise.resolve(
         downloads[String(url)] ??
           okDownload(String(url) === BASE_URL ? BASE_BYTES : TARGET_BYTES),
-      ),
+      );
+    },
     presignUploadUrl: async ({ key, contentType, sha256Base64 }) =>
       await Promise.resolve(
         Result.ok({
@@ -123,6 +132,11 @@ const createHarness = ({
 
   return {
     audited,
+    context,
+    dependencies,
+    get downloadCount() {
+      return downloadCount;
+    },
     inserted,
     puts,
     run: async (args: Record<string, unknown>) =>
@@ -164,6 +178,23 @@ const errorOf = (result: LinksResult) => {
 };
 
 describe("prepare_file_comparison_from_links", () => {
+  test("does not fetch when the request context has no permit", async () => {
+    const harness = createHarness();
+    const result = await handlePrepareFileComparisonFromLinksTool(
+      {
+        args: validArgs(),
+        context: { ...harness.context, thirdPartyOutboundPermit: undefined },
+      },
+      harness.dependencies,
+    );
+
+    expect(result).toMatchObject({
+      status: "error",
+      error: { type: "structured", code: "permission_denied" },
+    });
+    expect(harness.downloadCount).toBe(0);
+  });
+
   test("stages both downloads and echoes the compare_documents call back", async () => {
     const harness = createHarness();
 
@@ -289,6 +320,45 @@ describe("prepare_file_comparison_from_links", () => {
     expect(harness.inserted).toHaveLength(0);
   });
 
+  for (const format of ["docx", "xlsx", "pptx"] as const) {
+    test(`refuses a password-protected ${format} as encrypted content`, async () => {
+      const locked = new Uint8Array(
+        await Bun.file(
+          new URL(
+            `../lib/files/__fixtures__/password-protected-${format}.cfb`,
+            import.meta.url,
+          ),
+        ).arrayBuffer(),
+      );
+      const harness = createHarness({
+        downloads: { [BASE_URL]: okDownload(locked) },
+      });
+
+      const error = errorOf(await harness.run(validArgs()));
+
+      expect(error).toMatchObject({
+        code: "validation_error",
+        message: ENCRYPTED_CONTENT_MESSAGE,
+        issues: [{ path: "base.url" }],
+      });
+      expect(harness.inserted).toHaveLength(0);
+    });
+  }
+
+  test("refuses an encrypted PDF as not a .docx", async () => {
+    const harness = createHarness({
+      downloads: {
+        [BASE_URL]: okDownload(new Uint8Array(await createEncryptedPdf())),
+      },
+    });
+
+    const error = errorOf(await harness.run(validArgs()));
+
+    expect(error.code).toBe("validation_error");
+    expect(error.message).toBe("The base file is not a .docx");
+    expect(harness.inserted).toHaveLength(0);
+  });
+
   test("refuses an empty body", async () => {
     const harness = createHarness({
       downloads: { [TARGET_URL]: okDownload(new Uint8Array(0)) },
@@ -340,3 +410,23 @@ describe("prepare_file_comparison_from_links", () => {
     expect(harness.inserted).toHaveLength(1);
   });
 });
+
+for (const text of ["", "abc", "Příliš žluťoučký kůň 📄 中文", "e\u0301"]) {
+  test(`linked comparison reservations preserve exact downloaded SHA-256 bytes: ${JSON.stringify(text)}`, async () => {
+    // A DOCX download must start with ZIP magic, even for an empty text payload.
+    const bytes = new Uint8Array([
+      ...BASE_BYTES,
+      ...new TextEncoder().encode(text),
+    ]);
+    const harness = createHarness({
+      downloads: {
+        [BASE_URL]: okDownload(bytes),
+        [TARGET_URL]: okDownload(bytes),
+      },
+    });
+    dataOf(await harness.run(validArgs()));
+    expect(
+      harness.inserted.at(0)?.map(({ declaredSha256 }) => declaredSha256),
+    ).toEqual([sha256Hex(bytes), sha256Hex(bytes)]);
+  });
+}

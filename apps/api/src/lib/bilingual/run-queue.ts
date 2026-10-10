@@ -11,9 +11,9 @@ import { Result } from "better-result";
  * One-shot semantics: `attempts: 1`. A retry would re-run metered model calls;
  * an abandoned run is flipped to `failed` by the reconciler instead.
  */
-import { Worker } from "bullmq";
 import { and, asc, eq, inArray, lt, or, sql } from "drizzle-orm";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { Temporal, DAY_IN_MS } from "@stll/time";
 
 import type { rootDb } from "@/api/db/root";
@@ -42,7 +42,7 @@ import type { StoredRow } from "@/api/lib/bilingual/operations";
 import { checkTranslationConsistency } from "@/api/lib/bilingual/rows";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
-import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
+import { BullMqWorker, createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
 import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import type { RequeueableQueue } from "@/api/lib/bullmq-requeue";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
@@ -53,6 +53,7 @@ import { validateDocxBuffer } from "@/api/lib/entity-versions/validate-docx-buff
 import { errorTag } from "@/api/lib/errors/utils";
 import { scanFile } from "@/api/lib/file-scan/scan";
 import { getScanWarnings } from "@/api/lib/file-scan/warnings";
+import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import { startNonOverlappingInterval } from "@/api/lib/non-overlapping-interval";
 import { logger } from "@/api/lib/observability/logger";
 import {
@@ -62,6 +63,8 @@ import {
 } from "@/api/lib/queue-reconcile-scan";
 import type { ReconcileScanResult } from "@/api/lib/queue-reconcile-scan";
 import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
+import { runBackgroundJob } from "@/api/lib/rate-limit/queued-action-admission";
 import { createBullMqConnection } from "@/api/lib/redis-client";
 import { createRootRunActor } from "@/api/lib/root-scoped-db";
 import type { RootRunActor } from "@/api/lib/root-scoped-db";
@@ -124,7 +127,7 @@ export const enqueueBilingualRun = async (
 
 /** Flip abandoned runs to `failed` so the read endpoint stops reporting them
  *  as in flight. */
-export const reconcileStuckBilingualRuns = async (
+const reconcileStuckBilingualRuns = async (
   db: Pick<typeof rootDb, "update">,
 ): Promise<number> => {
   const runningCutoff = new Date(
@@ -235,10 +238,21 @@ export const reconcileQueuedBilingualRuns = async ({
 };
 
 export const initBilingualRunWorker = ({ db }: BullMqWorkerContext) => {
-  const worker = new Worker<BilingualRunJobData>(
+  const worker = new BullMqWorker<BilingualRunJobData>(
     QUEUE_NAME,
     async (job) => {
-      await processBilingualRunJob(job.data);
+      const actor = brandActor(job.data);
+      // The run's period action was drawn when it was queued; the job takes
+      // a background slot. The run bounds its own time.
+      await runBackgroundJob({
+        actionKind: "bilingual.background",
+        organizationId: actor.organizationId,
+        userId: actor.userId,
+        job,
+        signal: new AbortController().signal,
+        run: async (_signal, admission) =>
+          await processBilingualRun(actor, admission),
+      });
     },
     {
       connection: createBullMqConnection({
@@ -306,7 +320,7 @@ export const initBilingualRunWorker = ({ db }: BullMqWorkerContext) => {
 // Execution
 // ----------------------------------------------------------------------------
 
-export type BilingualRunActor = RootRunActor<"bilingualTranslationRun">;
+type BilingualRunActor = RootRunActor<"bilingualTranslationRun">;
 type RunActor = BilingualRunActor;
 
 const brandActor = (data: BilingualRunJobData): RunActor =>
@@ -348,19 +362,16 @@ const claimRun = async (actor: RunActor): Promise<ClaimedRun | null> => {
   return claimed ?? null;
 };
 
-const processBilingualRunJob = async (
-  data: BilingualRunJobData,
+export const processBilingualRun = async (
+  actor: RunActor,
+  admission: ModelDispatchAdmission,
 ): Promise<void> => {
-  await processBilingualRun(brandActor(data));
-};
-
-export const processBilingualRun = async (actor: RunActor): Promise<void> => {
   const claimed = await claimRun(actor);
   if (claimed === null) {
     return;
   }
   const outcome = await Result.tryPromise({
-    try: async () => await executeRun(actor, claimed),
+    try: async () => await executeRun({ actor, admission, run: claimed }),
     catch: (cause) => cause,
   });
   if (Result.isError(outcome)) {
@@ -405,10 +416,15 @@ const loadRows = async (actor: RunActor): Promise<StoredRow[]> => {
 const needsTranslation = (row: StoredRow): boolean =>
   row.disposition !== BILINGUAL_ROW_DISPOSITION.KEEP;
 
-const executeRun = async (
-  actor: RunActor,
-  run: ClaimedRun,
-): Promise<BilingualRunErrorCode | null> => {
+const executeRun = async ({
+  actor,
+  admission,
+  run,
+}: {
+  actor: RunActor;
+  admission: ModelDispatchAdmission;
+  run: ClaimedRun;
+}): Promise<BilingualRunErrorCode | null> => {
   const loaded = await loadEntityVersionDocxBuffer({
     safeDb: actor.inputSafeDb,
     organizationId: actor.organizationId,
@@ -440,6 +456,7 @@ const executeRun = async (
 
   const rows = await loadRows(actor);
   const context: BilingualAIDocumentContext = {
+    admission,
     organizationId: actor.organizationId,
     workspaceId: actor.workspaceId,
     orgAIConfig: config.value.orgAIConfig,
@@ -475,10 +492,15 @@ const executeRun = async (
   // Batches run strictly one after another: each carries the previous rows'
   // translations as context, and one request in flight per run keeps the
   // metered spend predictable.
-  const translateFrom = async (
-    index: number,
-  ): Promise<BilingualRunErrorCode | null> => {
-    const batch = pending.slice(index, index + BILINGUAL_LIMITS.batchSize);
+  const itemBatches = chunkItems(pending, BILINGUAL_LIMITS.batchSize)[
+    Symbol.iterator
+  ]();
+  const translateFrom = async (): Promise<BilingualRunErrorCode | null> => {
+    const nextBatch = itemBatches.next();
+    if (nextBatch.done) {
+      return null;
+    }
+    const batch = nextBatch.value;
     const first = batch[0];
     if (!first) {
       return null;
@@ -558,9 +580,9 @@ const executeRun = async (
         })
         .where(eq(bilingualTranslationRuns.id, actor.runId));
     });
-    return await translateFrom(index + BILINGUAL_LIMITS.batchSize);
+    return await translateFrom();
   };
-  const translationOutcome = await translateFrom(0);
+  const translationOutcome = await translateFrom();
   if (translationOutcome !== null) {
     return translationOutcome;
   }
@@ -637,6 +659,7 @@ const executeRun = async (
     buffer: applied.value.buffer,
     fileName: loaded.value.fileName,
     mimeType: DOCX_MIME_TYPE,
+    encryption: serverBuiltFileEncryption(),
     source: null,
     writePolicy: {
       type: "automatic-docx-edit",

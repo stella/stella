@@ -25,16 +25,26 @@ export const Route = createFileRoute("/_protected/settings/organization")({
 
     // Start the time-policy query before its child route chunk and loader,
     // alongside shell data; the child loader still owns critical error handling.
-    if (
-      location.pathname === "/settings/organization/time-policy" &&
-      isTimeBillingRouteEnabled()
-    ) {
+    if (location.pathname === "/settings/organization/time-policy") {
       detached(
-        prefetchRouteQuery(
-          context.queryClient,
-          organizationSettingsOptions(context.user.activeOrganizationId),
-          (error) => getAnalytics().captureError(error),
-        ),
+        (async () => {
+          if (
+            !(await isTimeBillingRouteEnabled(context.queryClient, {
+              userId: context.user.id,
+              organizationId: context.user.activeOrganizationId,
+            }))
+          ) {
+            return;
+          }
+          await prefetchRouteQuery(
+            context.queryClient,
+            organizationSettingsOptions({
+              organizationId: context.user.activeOrganizationId,
+              userId: context.user.id,
+            }),
+            (error) => getAnalytics().captureError(error),
+          );
+        })(),
         "organization-settings.time-policy-prefetch",
       );
     }

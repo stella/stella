@@ -6,7 +6,7 @@ import { member, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { templates } from "@/api/db/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tPaginationCursor, tSafeId } from "@/api/lib/custom-schema";
@@ -233,6 +233,7 @@ const config = {
     "usage guidance (whenToUse / whenNotToUse); prefer a template whose " +
     "whenToUse matches the request and skip any whose whenNotToUse applies.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "tool", name: "list_templates" },
   access: "read",
   query: listTemplatesQuerySchema,

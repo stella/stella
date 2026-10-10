@@ -42,12 +42,13 @@ import { toAuthClientError } from "@/lib/errors/auth";
 import { notifyAuthClientError } from "@/lib/errors/user-toast";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
 import { suggestedCountryCodes as getSuggestedCountryCodes } from "@/lib/jurisdictions";
+import { invalidateAIConfigurationCaches } from "@/lib/organization/ai-config-cache";
 import {
   aiAvailabilityOptions,
-  aiConfigKeys,
   updateCachedAIAvailability,
 } from "@/lib/organization/ai-config-queries";
 import { afterOnboardingNavigation } from "@/lib/redirect";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { CatalogueDetailPreview } from "@/routes/onboarding/-components/catalogue-detail-preview";
 import { CatalogueStackPreview } from "@/routes/onboarding/-components/catalogue-stack-preview";
 import {
@@ -114,10 +115,16 @@ export const OnboardingWizard = () => {
   const browserRegion = useBrowserRegion();
   const queryClient = useQueryClient();
   const openGuideDrawer = useGuideDrawerStore((store) => store.open);
-  const { data: sessionData } = useQuery(sessionOptions);
-  const { data: nativeToolDeployAvailability } = useQuery(
-    nativeToolDeployAvailabilityOptions,
+  const sessionView = useQueryView(useQuery(sessionOptions));
+  useQueryViewError(sessionView);
+  const sessionData =
+    sessionView.type === "items" ? sessionView.items : undefined;
+  const nativeToolView = useQueryView(
+    useQuery(nativeToolDeployAvailabilityOptions),
   );
+  useQueryViewError(nativeToolView);
+  const nativeToolDeployAvailability =
+    nativeToolView.type === "items" ? nativeToolView.items : undefined;
   const userEmail = sessionData?.user.email ?? "";
   const [step, setStep] = useState<Step>("organization");
   const [catalogueFocusedSlug, setCatalogueFocusedSlug] = useState<
@@ -416,18 +423,7 @@ export const OnboardingWizard = () => {
                   orgConfigured: true,
                 }),
             );
-            await Promise.all([
-              queryClient.invalidateQueries({
-                queryKey: aiConfigKeys.byOrganization({
-                  organizationId: orgData.id,
-                }),
-              }),
-              queryClient.invalidateQueries({
-                queryKey: aiConfigKeys.availability({
-                  organizationId: orgData.id,
-                }),
-              }),
-            ]);
+            await invalidateAIConfigurationCaches(queryClient, orgData.id);
           }
         }
 

@@ -4,6 +4,7 @@ import { t } from "elysia";
 import type { Static } from "elysia";
 
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
@@ -16,10 +17,9 @@ import {
   folioCollabPublications,
   folioCollabRooms,
 } from "@/api/db/schema";
-import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -34,6 +34,7 @@ import {
   settleObjectCleanupIntentsAfterWriter,
 } from "@/api/lib/buffer-intent-reconciliation";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { COLLABORATION_DOCUMENT_SOURCE } from "@/api/lib/document-source";
 import { computeVersionDiffStats } from "@/api/lib/entity-versions/compute-version-diff";
 import { lockDocxEditTarget } from "@/api/lib/entity-versions/desktop-edit-session-utils";
@@ -44,6 +45,7 @@ import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { enqueuePdfDerivativeOrMarkFailed } from "@/api/lib/file-derivative-queue";
 import { scanFile } from "@/api/lib/file-scan/scan";
 import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
+import { officeFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import { allocateFileObject } from "@/api/lib/files/file-object-ids";
 import type { MintedFileId } from "@/api/lib/files/file-object-ids";
 import { writeOrganizationFile } from "@/api/lib/files/organization-file-usage";
@@ -68,9 +70,16 @@ import {
 } from "@/api/lib/search/process-extraction";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
+/** A collaboration room publishes the DOCX its editors produced. */
+const PUBLISHED_FILE_ENCRYPTION = officeFileEncryption(DOCX_MIME_TYPE);
+
 const CHECKPOINT_CLEANUP_GRACE_MS = 60_000;
 const FOLIO_COLLAB_PUBLICATION_IDEMPOTENCY_CONSTRAINT =
   "folio_collab_publications_idempotency_uidx";
+
+export const hashPublishedFolioCollabBytes = (
+  storedBytes: Uint8Array,
+): string => hashSha256Hex(storedBytes);
 
 type FolioCollabCheckpointCut = {
   checkpointFileId: SafeId<"userFile">;
@@ -291,7 +300,7 @@ type ReadPublishableCheckpointOptions = {
 };
 
 /** Reads the checkpoint and refuses bytes that fail the hash, format or scan. */
-const readPublishableCheckpoint = async ({
+export const readPublishableCheckpoint = async ({
   checkpointKey,
   expectedSha256Hex,
   fileName,
@@ -301,9 +310,7 @@ const readPublishableCheckpoint = async ({
 > => {
   const checkpoint = await readS3ArrayBuffer(checkpointKey, signal);
   const checkpointBytes = new Uint8Array(checkpoint);
-  const actualSha256Hex = new Bun.CryptoHasher("sha256")
-    .update(checkpointBytes)
-    .digest("hex");
+  const actualSha256Hex = hashSha256Hex(checkpointBytes);
   if (actualSha256Hex !== expectedSha256Hex) {
     return Result.err(
       new HandlerError({
@@ -400,14 +407,17 @@ const storePublicationSource = async ({
   safeDb,
   source,
 }: StorePublicationSourceOptions) => {
-  const written = !env.FEATURE_FILE_USAGE_LIMITS
+  const written = !isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")
     ? await Result.tryPromise({
         try: async () =>
-          await writeS3ObjectWithRetry({
-            contentType: DOCX_MIME_TYPE,
-            data: bytes,
-            key: source.key,
-          }),
+          await writeS3ObjectWithRetry(
+            {
+              contentType: DOCX_MIME_TYPE,
+              data: bytes,
+              key: source.key,
+            },
+            { type: "cleanup-intent", intent: source.cleanupIntentId },
+          ),
         catch: (cause) => cause,
       })
     : Result.mapError(
@@ -415,12 +425,16 @@ const storePublicationSource = async ({
           organizationId: source.organizationId,
           objectKey: source.key,
           sizeBytes: bytes.byteLength,
-          write: async () =>
-            await writeS3ObjectWithRetry({
-              contentType: DOCX_MIME_TYPE,
-              data: bytes,
-              key: source.key,
-            }),
+          content: bytes,
+          write: async ({ content, objectKey }) =>
+            await writeS3ObjectWithRetry(
+              {
+                contentType: DOCX_MIME_TYPE,
+                data: content,
+                key: objectKey,
+              },
+              { type: "cleanup-intent", intent: source.cleanupIntentId },
+            ),
         }),
         (cause): unknown => cause,
       );
@@ -765,6 +779,7 @@ const publishCheckpointInTransaction = async ({
     fileId: source.fileId,
     fileName: checkpointRoom.fileName,
     mimeType: DOCX_MIME_TYPE,
+    encryption: PUBLISHED_FILE_ENCRYPTION,
     organizationId,
     recordAuditEvent,
     scanWarnings: checkpointRoom.checkpointScanWarnings ?? undefined,
@@ -834,7 +849,7 @@ const startPublicationFollowUps = async ({
     captureError(error, { entityId: publication.entityId });
   });
   enqueuePdfDerivativeOrMarkFailed({
-    encrypted: false,
+    encrypted: PUBLISHED_FILE_ENCRYPTION.encrypted,
     entityId: publication.entityId,
     fieldId: publication.fieldId,
     mimeType: DOCX_MIME_TYPE,
@@ -910,8 +925,13 @@ const publicationRejection = (
 
 const publishFolioCollabVersion = createSafeHandler(
   {
+    contentDelivery: {
+      type: "none",
+      reason: "Processes collaboration content without returning stored files.",
+    },
     body: publishFolioCollabVersionBodySchema,
     permissions: { entity: ["update"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "session_token_exchange" },
   } satisfies WorkspaceHandlerConfig,
   async function* ({
@@ -961,7 +981,7 @@ const publishFolioCollabVersion = createSafeHandler(
     const storedSha256Hex =
       strippedArchive === null
         ? body.expectedSha256Hex
-        : new Bun.CryptoHasher("sha256").update(storedBytes).digest("hex");
+        : hashPublishedFolioCollabBytes(storedBytes);
 
     const sourceFileId = allocateFileObject();
     const sourceKey = createFileKey({

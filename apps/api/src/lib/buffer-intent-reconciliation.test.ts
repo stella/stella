@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { beforeEach, expect, mock, test } from "bun:test";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { BUFFER_OBJECT_CLEANUP_INTENT_STATUS } from "@/api/db/schema";
@@ -317,12 +319,14 @@ test("rejects a second settlement after writer ownership has transferred", async
   });
 
   expect(
-    settleObjectCleanupIntentsAfterWriterInTransaction({
-      intentIds: [pendingUploadId],
-      objectState: "object-deleted",
-      tx,
-    }),
-  ).rejects.toMatchObject({
+    await rejectionOf(
+      settleObjectCleanupIntentsAfterWriterInTransaction({
+        intentIds: [pendingUploadId],
+        objectState: "object-deleted",
+        tx,
+      }),
+    ),
+  ).toMatchObject({
     _tag: "BufferIntentOwnershipError",
     message: "Object cleanup settlement ownership was lost",
   });

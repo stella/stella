@@ -15,13 +15,18 @@ import {
 } from "@/api/handlers/search/facets";
 import searchPreviewEndpoint from "@/api/handlers/search/preview";
 import { searchBodySchema, searchHandler } from "@/api/handlers/search/search";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  configuredModelAdmission,
+  createSafeRootHandler,
+} from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
 
 const searchEndpoint = createSafeRootHandler(
   {
     permissions: { workspace: ["read"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "tool", name: "search" },
     body: searchBodySchema,
   } satisfies HandlerConfig,
@@ -49,6 +54,7 @@ const searchEndpoint = createSafeRootHandler(
 const searchFacetsEndpoint = createSafeRootHandler(
   {
     permissions: { workspace: ["read"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "search_ui" },
     body: searchFacetsBodySchema,
   } satisfies HandlerConfig,
@@ -75,12 +81,15 @@ const searchFacetsEndpoint = createSafeRootHandler(
 const refineSearchEndpoint = createSafeRootHandler(
   {
     permissions: { workspace: ["read"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
+    actionAdmission: { type: "handler", actionKind: "search.refine" },
     mcp: { type: "internal", reason: "search_ui" },
     body: refineSearchBodySchema,
     requiresUsage: { actionType: "chat", modelRole: "fast" },
   } satisfies HandlerConfig,
   async function* ({
     body,
+    modelAdmission,
     orgAIConfig,
     managedAIResidency,
     orgAIConfigStatus,
@@ -94,6 +103,7 @@ const refineSearchEndpoint = createSafeRootHandler(
       Result.tryPromise(
         async () =>
           await refineSearchQuery({
+            admission: configuredModelAdmission({ modelAdmission }),
             organizationId: session.activeOrganizationId,
             body,
             orgAIConfig,
@@ -114,6 +124,8 @@ const refineSearchEndpoint = createSafeRootHandler(
 const summarizeSearchEndpoint = createSafeRootHandler(
   {
     permissions: { chat: ["create"], workspace: ["read"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
+    actionAdmission: { type: "handler", actionKind: "search.summarize" },
     mcp: { type: "internal", reason: "search_ui" },
     body: summarizeSearchBodySchema,
     requiresUsage: { actionType: "chat", modelRole: "fast" },
@@ -121,6 +133,7 @@ const summarizeSearchEndpoint = createSafeRootHandler(
   async function* ({
     body,
     getActiveWorkspaceIds,
+    modelAdmission,
     orgAIConfig,
     managedAIResidency,
     orgAIConfigStatus,
@@ -137,6 +150,7 @@ const summarizeSearchEndpoint = createSafeRootHandler(
       Result.tryPromise(
         async () =>
           await summarizeSearchResults({
+            admission: configuredModelAdmission({ modelAdmission }),
             organizationId: session.activeOrganizationId,
             userId: user.id,
             accessibleWorkspaceIds: activeWorkspaceIds,
@@ -158,6 +172,7 @@ const summarizeSearchEndpoint = createSafeRootHandler(
 const searchSummaryChatEndpoint = createSafeRootHandler(
   {
     permissions: { chat: ["create"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "search_ui" },
     body: searchSummaryChatBodySchema,
   } satisfies HandlerConfig,

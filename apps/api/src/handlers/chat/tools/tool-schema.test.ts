@@ -100,6 +100,7 @@ import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions"
 import { TEMPLATE_FIELD_REFERENCE_URI } from "@/api/mcp/template-field-reference";
 import { TEMPLATE_MARKER_REFERENCE_URI } from "@/api/mcp/template-marker-reference";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 
 import { createOrgTools } from "./org-tools";
 import { toTanStackToolSchema } from "./tanstack-tool-schema";
@@ -107,6 +108,7 @@ import {
   buildCreatedDocumentToolOutput,
   createWorkspaceTools,
 } from "./workspace-tools";
+import type { ChatFieldWriter } from "./workspace-tools";
 
 const organizationId = toSafeId<"organization">(
   "11111111-1111-4111-8111-111111111111",
@@ -131,6 +133,13 @@ const unusedSafeDb: SafeDb = async () => {
 };
 
 const noopAuditRecorder: AuditRecorder = async () => undefined;
+
+const activeMatterFieldWriter: ChatFieldWriter = {
+  authority: sessionMemberRole("owner"),
+  recordAuditEvent: noopAuditRecorder,
+  userId,
+  workspaceStatusById: new Map([[workspaceId, "active"]]),
+};
 
 const getChatTools = (
   props: Omit<
@@ -283,6 +292,10 @@ const buildFullCoverageChatTools = (
   };
 
   return getChatTools({
+    featureAccessSnapshot: enrolledTimeBillingSnapshot({
+      organizationId,
+      userId,
+    }),
     orgAIConfig: null,
     managedAIResidency: "eu" as const,
     memberRole: sessionMemberRole("owner"),
@@ -639,6 +652,7 @@ describe("chat tool schemas", () => {
     expect(() =>
       createWorkspaceTools({
         allowedWorkspaceIds: [workspaceId],
+        fieldWriter: activeMatterFieldWriter,
         refRegistry: createChatRefRegistry(),
         scopedDb: unusedScopedDb,
       }),
@@ -657,17 +671,24 @@ describe("chat tool schemas", () => {
     const scopedDb = asTestRaw<ScopedDb>(
       async (run: (tx: unknown) => Promise<unknown>) =>
         await run({
+          select: () => {
+            entityLookups += 1;
+            return {
+              from: () => ({
+                where: () => ({
+                  for: async () => [
+                    {
+                      currentVersionId: "88888888-8888-4888-8888-888888888888",
+                      id: entityId,
+                      kind: "document",
+                      readOnly: true,
+                    },
+                  ],
+                }),
+              }),
+            };
+          },
           query: {
-            entities: {
-              findFirst: async () => {
-                entityLookups += 1;
-                return {
-                  currentVersionId: "88888888-8888-4888-8888-888888888888",
-                  id: entityId,
-                  readOnly: true,
-                };
-              },
-            },
             properties: {
               findFirst: async () => ({
                 content: { type: "date", version: 1 },
@@ -679,6 +700,7 @@ describe("chat tool schemas", () => {
     );
     const tool = createWorkspaceTools({
       allowedWorkspaceIds: [workspaceId],
+      fieldWriter: activeMatterFieldWriter,
       refRegistry,
       scopedDb,
     })["update-entity-fields"];
@@ -757,6 +779,7 @@ describe("chat tool schemas", () => {
     const registry = createChatRefRegistry();
     const tools = createWorkspaceTools({
       allowedWorkspaceIds: [workspaceId],
+      fieldWriter: activeMatterFieldWriter,
       refRegistry: registry,
       scopedDb: unusedScopedDb,
     });
@@ -2252,6 +2275,24 @@ describe("chat tool schemas", () => {
       expect(tools).not.toHaveProperty(CREATE_MATTER_DOCUMENT_TOOL_NAME);
     });
 
+    test("offers field updates only to a role that may edit documents", () => {
+      const statuses = new Map([[workspaceId, "active" as const]]);
+      expect(
+        getChatTools({
+          ...baseArgs,
+          memberRole: sessionMemberRole("owner"),
+          workspaceStatusById: statuses,
+        }),
+      ).toHaveProperty("update-entity-fields");
+      expect(
+        getChatTools({
+          ...baseArgs,
+          memberRole: sessionMemberRole("intern"),
+          workspaceStatusById: statuses,
+        }),
+      ).not.toHaveProperty("update-entity-fields");
+    });
+
     // `toolWorkspaceIds` includes archived matters (only "deleting" is
     // filtered out upstream), so the id-set check alone would let an
     // archived matter stay writable through this tool.
@@ -2451,6 +2492,10 @@ describe("registry write tool approval policy", () => {
 
   const buildToolsWithWorkspace = () =>
     getChatTools({
+      featureAccessSnapshot: enrolledTimeBillingSnapshot({
+        organizationId,
+        userId,
+      }),
       orgAIConfig: null,
       managedAIResidency: "eu" as const,
       memberRole: sessionMemberRole("owner"),
@@ -2540,6 +2585,10 @@ describe("registry write tool approval policy", () => {
 
   test("every write tool is registered behind approval before the first matter exists", () => {
     const tools = getChatTools({
+      featureAccessSnapshot: enrolledTimeBillingSnapshot({
+        organizationId,
+        userId,
+      }),
       orgAIConfig: null,
       managedAIResidency: "eu" as const,
       memberRole: sessionMemberRole("owner"),
@@ -2579,7 +2628,45 @@ describe("registry write tool approval policy", () => {
   });
 });
 
-describe("a subagent's code-mode script", () => {
+describe("a code-mode script", () => {
+  test("a feature-hidden tool has no subagent unavailability reason", async () => {
+    const request = {
+      ...autoApplyBaseArgs,
+      memberRole: sessionMemberRole("owner"),
+      editApplyMode: "manual",
+    } as const;
+    const full = getChatTools(request);
+    const tools = getChatTools({
+      ...request,
+      testDependencies: {
+        featureAccessBindings: {
+          tools: new Map([["create-document", "fixture-hidden-document"]]),
+          capabilities: new Map<string, string>(),
+          resources: new Map<string, string>(),
+        },
+      },
+    });
+    expect(Object.keys(full)).toContain("create-document");
+    expect(Object.keys(tools)).not.toContain("create-document");
+    const execute =
+      tools[CODE_MODE_EXECUTE_TOOL_NAME]?.execute ??
+      expect.unreachable("execute_typescript has no execute");
+
+    const output = await execute({
+      typescriptCode: `return await create_document({ name: "Memo" });`,
+    });
+    await awaitSandboxAdmissionIdle();
+
+    expect(output).toMatchObject({
+      success: false,
+      error: {
+        name: "not-a-script-function",
+        message:
+          "`create-document` is not available in this chat. Continue without it.",
+      },
+    });
+  });
+
   test("is told a tool its projection dropped is unavailable, not that it can call it directly", async () => {
     const full = getChatTools({
       ...autoApplyBaseArgs,

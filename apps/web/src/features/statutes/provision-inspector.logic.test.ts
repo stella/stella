@@ -2,11 +2,13 @@ import { describe, expect, test } from "bun:test";
 
 import { stripDiacritics } from "@stll/text-normalize";
 
+import { DECISION_CITATION_PRESENTATION } from "@/components/references/decision-citation-presentation.logic";
 import {
   clearProvisionQuestionDraft,
   createProvisionViewTab,
   filterCitingDecisions,
   isProvisionViewPayload,
+  presentedCitingDecisions,
   provisionQuestionDraftKey,
   provisionTabId,
   readProvisionQuestionDraft,
@@ -35,6 +37,34 @@ describe("isProvisionViewPayload", () => {
     // An undated consolidation is a real state, not a malformed payload.
     expect(isProvisionViewPayload({ ...payload, versionValidFrom: null })).toBe(
       true,
+    );
+  });
+
+  test("decision context survives cloning and rejects incomplete attribution", () => {
+    const decisionContext = {
+      court: "Nejvyšší soud",
+      caseNumber: "25 Cdo 627/2022",
+      appliedDocumentId: payload.documentId,
+    } satisfies NonNullable<ProvisionViewPayload["decisionContext"]>;
+    expect(
+      isProvisionViewPayload(structuredClone({ ...payload, decisionContext })),
+    ).toBe(true);
+    for (const field of Object.keys(decisionContext)) {
+      const incomplete = Object.fromEntries(
+        Object.entries(decisionContext).filter(([key]) => key !== field),
+      );
+      expect(
+        isProvisionViewPayload({ ...payload, decisionContext: incomplete }),
+      ).toBe(false);
+      expect(
+        isProvisionViewPayload({
+          ...payload,
+          decisionContext: { ...decisionContext, [field]: "" },
+        }),
+      ).toBe(false);
+    }
+    expect(isProvisionViewPayload({ ...payload, decisionContext: null })).toBe(
+      false,
     );
   });
 
@@ -204,6 +234,51 @@ describe("filterCitingDecisions", () => {
 
     expect(filterCitingDecisions(rows, "správní")).toEqual(rows);
     expect(filterCitingDecisions(rows, "null")).toEqual([]);
+  });
+});
+
+// Two synthetic decisions of one court share its registered code.
+const firstSameCourtDecision = {
+  caseNumber: "SYN 1/2026",
+  country: "CZE",
+  court: "Synthetic Supreme Court",
+  courtAbbreviation: "SYN",
+  decisionId: "00000000-0000-4000-8000-000000000001",
+  sentenceText: "The first synthetic holding.",
+};
+
+const secondSameCourtDecision = {
+  caseNumber: "SYN 2/2026",
+  country: "CZE",
+  court: "Synthetic Supreme Court",
+  courtAbbreviation: "SYN",
+  decisionId: "00000000-0000-4000-8000-000000000002",
+  sentenceText: "The second synthetic holding.",
+};
+
+describe("presentedCitingDecisions", () => {
+  const rows = [firstSameCourtDecision, secondSameCourtDecision];
+
+  test("visible decisions sharing a court code expand to stay distinguishable", () => {
+    expect(presentedCitingDecisions(rows, "")).toEqual([
+      {
+        decision: firstSameCourtDecision,
+        presentation: DECISION_CITATION_PRESENTATION.expanded,
+      },
+      {
+        decision: secondSameCourtDecision,
+        presentation: DECISION_CITATION_PRESENTATION.expanded,
+      },
+    ]);
+  });
+
+  test("a decision the filter leaves alone with its court code renders compact", () => {
+    expect(presentedCitingDecisions(rows, "SYN 2/2026")).toEqual([
+      {
+        decision: secondSameCourtDecision,
+        presentation: DECISION_CITATION_PRESENTATION.compact,
+      },
+    ]);
   });
 });
 

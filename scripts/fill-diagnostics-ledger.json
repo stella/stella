@@ -1,0 +1,12 @@
+[
+  {
+    "id": "fill-consumer-reads-decision::apps/api/src/lib/templates/fill-preview-logic.ts::<module>::entry:fillTemplateDocx",
+    "count": 1,
+    "reason": "Live preview while values are still being typed: returns the per-kind lists and records no status; move to returning the completion decision with the preview."
+  },
+  {
+    "id": "fill-consumer-reads-decision::apps/api/src/scripts/generate-spa-filled.ts::<module>::raw:fillTemplate",
+    "count": 1,
+    "reason": "Developer script that renders a sample document from mock values; it never reports a fill to anyone. Run it through the fill service or retire it."
+  }
+]

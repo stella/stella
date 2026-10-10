@@ -1,6 +1,12 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
 import {
+  factoriesWhere,
+  SAFE_HANDLER_FACTORIES,
+} from "../apps/api/src/lib/safe-handler-factories.ts";
+import {
+  canonicalModuleId,
+  resolveImport,
   filenameForContext,
   getImportedName,
   getImportLocalName,
@@ -18,6 +24,13 @@ const LIMITS_MODULE = "@/api/lib/limits";
 const NORMALIZER = "normalizeTenantPageLimit";
 const PAGE_VARIABLES = new Set(["limit", "pageSize", "windowSize"]);
 const REQUEST_ROOTS = new Set(["query", "body", "input", "parsed"]);
+// Only the callback passed to its owning anonymous factory is exempt.
+const ANONYMOUS_HANDLER_FACTORY_MODULES: ReadonlyMap<string, string> = new Map(
+  factoriesWhere(({ context }) => context === "anonymous").map((name) => [
+    name,
+    canonicalModuleId(SAFE_HANDLER_FACTORIES[name].module, ""),
+  ]),
+);
 
 // Public corpus readers have their own page budgets and do not own a tenant
 // action. Native MCP tools stay in scope even when they call those readers.
@@ -29,9 +42,9 @@ const PUBLIC_CORPUS_PATHS = [
   "/mcp/compat-corpus.ts",
 ];
 
-const insideFunction = (node: unknown): boolean => {
+const containingFunction = (node: unknown) => {
   if (!isAstNode(node)) {
-    return false;
+    return null;
   }
   let parent = node.parent;
   while (isAstNode(parent)) {
@@ -40,11 +53,11 @@ const insideFunction = (node: unknown): boolean => {
       parent.type === "FunctionExpression" ||
       parent.type === "FunctionDeclaration"
     ) {
-      return true;
+      return parent;
     }
     parent = parent.parent;
   }
-  return false;
+  return null;
 };
 
 const requestRoot = (node: unknown): string | null => {
@@ -111,6 +124,53 @@ const containsPageSource = (
   return false;
 };
 
+type ImportResolutionContext = Parameters<typeof resolveImport>[0];
+
+const isAnonymousFactoryCall = (
+  node: unknown,
+  context: ImportResolutionContext,
+): boolean => {
+  if (!isAstNode(node) || node.type !== "CallExpression") {
+    return false;
+  }
+  const binding = resolveImport(context, node.callee);
+  return (
+    binding !== null &&
+    ANONYMOUS_HANDLER_FACTORY_MODULES.get(binding.imported) === binding.moduleId
+  );
+};
+
+const isAnonymousCallback = (
+  callback: ReturnType<typeof containingFunction>,
+  context: ImportResolutionContext,
+): boolean => {
+  if (callback === null) {
+    return false;
+  }
+  if (isAnonymousFactoryCall(callback.parent, context)) {
+    return true;
+  }
+  const parent = callback.parent;
+  const identifier =
+    callback.type === "FunctionDeclaration"
+      ? callback.id
+      : isAstNode(parent) && parent.type === "VariableDeclarator"
+        ? parent.id
+        : null;
+  if (!isIdentifierReference(identifier)) {
+    return false;
+  }
+  const variable = resolveVariable(context, identifier);
+  const reads =
+    variable?.references.filter((reference) => reference.isRead()) ?? [];
+  return (
+    reads.length > 0 &&
+    reads.every(({ identifier: reference }) =>
+      isAnonymousFactoryCall(reference.parent, context),
+    )
+  );
+};
+
 export default eslintCompatPlugin({
   meta: { name: "require-tenant-page-limit" },
   rules: {
@@ -128,15 +188,13 @@ export default eslintCompatPlugin({
           limits: new Set<string>(),
           defaults: new Set<string>(),
         };
-        let anonymousPublic = false;
         return {
           before() {
             pageSources.limits.clear();
             pageSources.defaults.clear();
-            anonymousPublic = false;
             const filename = filenameForContext(context);
             if (
-              /\.oxlint-plugins\/__fixtures__\/require-tenant-page-limit\.fixture\.tsx?$/u.test(
+              /\.oxlint-plugins\/__fixtures__\/require-tenant-page-limit\.fixture(?:\.[a-z-]+)?\.tsx?$/u.test(
                 filename,
               )
             ) {
@@ -170,23 +228,18 @@ export default eslintCompatPlugin({
               ) {
                 pageSources.defaults.add(local);
               }
-              if (
-                node.source.value === "@/api/lib/api-handlers" &&
-                (imported === "createSafePublicHandler" ||
-                  imported === "createSafeBoundedPublicHandler")
-              ) {
-                anonymousPublic = true;
-              }
             }
           },
           VariableDeclarator(node) {
             if (
-              anonymousPublic ||
               !isIdentifier(node.id) ||
               !PAGE_VARIABLES.has(node.id.name) ||
-              !insideFunction(node) ||
+              containingFunction(node) === null ||
               !containsPageSource(node.init, pageSources)
             ) {
+              return;
+            }
+            if (isAnonymousCallback(containingFunction(node), context)) {
               return;
             }
             const expression = unwrapExpression(node.init);

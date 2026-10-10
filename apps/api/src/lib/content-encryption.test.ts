@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import { toSafeId } from "@/api/lib/branded-types";
 import { decryptContent, encryptContent } from "@/api/lib/content-encryption";
 
@@ -72,9 +74,9 @@ describe("encryptContent / decryptContent", () => {
   test("separates tenants: another organization cannot decrypt", async () => {
     const { ciphertext, iv } = await encryptContent(organizationId, plaintext);
 
-    expect(decryptContent(otherOrganizationId, ciphertext, iv)).rejects.toThrow(
-      DOMException,
-    );
+    expect(
+      await rejectionOf(decryptContent(otherOrganizationId, ciphertext, iv)),
+    ).toBeInstanceOf(DOMException);
   });
 
   test("encrypts the same plaintext to different ciphertext per organization", async () => {
@@ -88,37 +90,43 @@ describe("encryptContent / decryptContent", () => {
     const { ciphertext, iv } = await encryptContent(organizationId, plaintext);
 
     expect(
-      decryptContent(organizationId, flipByteAt(ciphertext, 0), iv),
-    ).rejects.toThrow(DOMException);
+      await rejectionOf(
+        decryptContent(organizationId, flipByteAt(ciphertext, 0), iv),
+      ),
+    ).toBeInstanceOf(DOMException);
   });
 
   test("rejects a tampered auth tag (the trailing 16 bytes)", async () => {
     const { ciphertext, iv } = await encryptContent(organizationId, plaintext);
 
     expect(
-      decryptContent(
-        organizationId,
-        flipByteAt(ciphertext, ciphertext.length - 1),
-        iv,
+      await rejectionOf(
+        decryptContent(
+          organizationId,
+          flipByteAt(ciphertext, ciphertext.length - 1),
+          iv,
+        ),
       ),
-    ).rejects.toThrow(DOMException);
+    ).toBeInstanceOf(DOMException);
   });
 
   test("rejects a truncated ciphertext (auth tag stripped)", async () => {
     const { ciphertext, iv } = await encryptContent(organizationId, plaintext);
 
     expect(
-      decryptContent(organizationId, ciphertext.subarray(0, 4), iv),
-    ).rejects.toThrow(DOMException);
+      await rejectionOf(
+        decryptContent(organizationId, ciphertext.subarray(0, 4), iv),
+      ),
+    ).toBeInstanceOf(DOMException);
   });
 
   test("rejects a mismatched IV", async () => {
     const { ciphertext } = await encryptContent(organizationId, plaintext);
     const { iv: otherIv } = await encryptContent(organizationId, plaintext);
 
-    expect(decryptContent(organizationId, ciphertext, otherIv)).rejects.toThrow(
-      DOMException,
-    );
+    expect(
+      await rejectionOf(decryptContent(organizationId, ciphertext, otherIv)),
+    ).toBeInstanceOf(DOMException);
   });
 
   test("reads a zero-IV envelope back as stored plaintext", async () => {

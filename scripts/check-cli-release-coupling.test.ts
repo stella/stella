@@ -32,6 +32,20 @@ import {
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const SCRIPT = "scripts/check-cli-release-coupling.ts";
+/** The script's import closure, copied into checkouts without an install. */
+const NO_INSTALL_FILES = [
+  SCRIPT,
+  "scripts/changeset-guard.ts",
+  "scripts/changeset-entry.ts",
+  "packages/collation/src/collation.ts",
+] as const;
+
+const copyNoInstallFiles = (root: string) => {
+  for (const file of NO_INSTALL_FILES) {
+    mkdirSync(path.join(root, path.dirname(file)), { recursive: true });
+    copyFileSync(path.join(REPO_ROOT, file), path.join(root, file));
+  }
+};
 
 const published: PublishedCli = {
   latest: "0.10.1",
@@ -466,18 +480,7 @@ describe("catalog storage layout preserves the release contract", () => {
 
   test("reads the head contract in a checkout without installed dependencies", () => {
     withPackageFixture((root) => {
-      const directory = path.join(root, "scripts");
-      mkdirSync(directory);
-      for (const file of [
-        "check-cli-release-coupling.ts",
-        "changeset-guard.ts",
-        "changeset-entry.ts",
-      ]) {
-        copyFileSync(
-          path.join(REPO_ROOT, "scripts", file),
-          path.join(directory, file),
-        );
-      }
+      copyNoInstallFiles(root);
       writeFileSync(
         path.join(root, "read-surface.ts"),
         'import { readHeadSurface } from "./scripts/check-cli-release-coupling";\n' +
@@ -512,18 +515,7 @@ test("release contract reads committed data without installed dependencies or de
     path.join(tmpdir(), "stella-cli-release-no-install-"),
   );
   try {
-    const directory = path.join(root, "scripts");
-    mkdirSync(directory);
-    for (const file of [
-      "check-cli-release-coupling.ts",
-      "changeset-guard.ts",
-      "changeset-entry.ts",
-    ]) {
-      copyFileSync(
-        path.join(REPO_ROOT, "scripts", file),
-        path.join(directory, file),
-      );
-    }
+    copyNoInstallFiles(root);
     for (const part of Object.keys(CLI_CONTRACT_SURFACE)) {
       // The catalog's committed data is the per-capability shard directory.
       if (part === "capability-catalog.json") {
@@ -579,6 +571,48 @@ test("release contract reads committed data without installed dependencies or de
     expect(result.stderr).toBe("");
     expect(result.status).toBe(0);
     expect(JSON.parse(result.stdout)).toEqual(readHeadSurface(root));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("an advancing base does not turn an unchanged PR into a release", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "stella-release-base-"));
+  try {
+    copyNoInstallFiles(root);
+    const git = (...args: string[]) => {
+      const result = spawnSync("git", args, { cwd: root, encoding: "utf-8" });
+      expect(result.status).toBe(0);
+      return result.stdout.trim();
+    };
+    git("init");
+    git("config", "user.name", "Release fixture");
+    git("config", "user.email", "fixture@example.test");
+    git("config", "commit.gpgsign", "false");
+    writeFileSync(path.join(root, "VERSION"), "0.9.47\n");
+    git("add", ".");
+    git("commit", "-m", "fixture base");
+    const base = git("rev-parse", "HEAD");
+    writeFileSync(path.join(root, "VERSION"), "0.9.48\n");
+    git("add", "VERSION");
+    git("commit", "-m", "fixture release");
+    git("branch", "advanced-base");
+    git("checkout", "--detach", base);
+    writeFileSync(path.join(root, "feature.txt"), "feature\n");
+    git("add", "feature.txt");
+    git("commit", "-m", "fixture feature");
+    const result = Bun.spawnSync(
+      [process.execPath, SCRIPT, "--base", "advanced-base"],
+      {
+        cwd: root,
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout.toString()).toContain(
+      "VERSION unchanged against advanced-base",
+    );
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

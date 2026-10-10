@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { type InferOk, Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import type { Paragraph } from "@stll/docx-core/model";
@@ -9,8 +9,13 @@ import {
 } from "@stll/folio-core";
 import { readBilingualDocx } from "@stll/folio-core/server";
 
+import { entities, fields } from "@/api/db/schema";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
+import type {
+  createEntityFromBuffer,
+  CreateEntityFromBufferResult,
+} from "@/api/lib/entities/create-from-buffer";
 import { validateDocxBuffer } from "@/api/lib/entity-versions/validate-docx-buffer";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
@@ -102,23 +107,23 @@ const scanFileMock = mock(async (_input: ScanFileInput) =>
   ),
 );
 
-type CreateEntityFromBufferInput = {
-  buffer: ArrayBuffer;
-  fileName: string;
-  mimeType: string;
-};
+type CreateEntityFromBufferInput = Parameters<typeof createEntityFromBuffer>[0];
 const createEntityFromBufferMock = mock(
   async ({ fileName }: CreateEntityFromBufferInput) =>
     Result.ok({
       entityId: toSafeId<"entity">("00000000-0000-0000-0000-000000000099"),
+      entityVersionId: toSafeId<"entityVersion">(
+        "00000000-0000-0000-0000-000000000097",
+      ),
       fieldId: toSafeId<"field">("00000000-0000-0000-0000-000000000098"),
       fileName,
-    }),
+      renamed: false,
+    } satisfies InferOk<CreateEntityFromBufferResult>),
 );
 
 const { createBilingualEntityHandler } = await import("./create");
 const createBilingualEntity = createBilingualEntityHandler({
-  createEntityFromBuffer: asTestRaw(createEntityFromBufferMock),
+  createEntityFromBuffer: createEntityFromBufferMock,
   getScanWarnings: () => null,
   loadEntityVersionDocxBuffer: loadEntityVersionDocxBufferMock,
   scanFile: asTestRaw(scanFileMock),
@@ -135,7 +140,23 @@ const createContext = (body: Partial<Ctx["body"]> = {}): Ctx =>
       targetLang: "en",
       ...body,
     },
-    ...createScopedDbMock({}),
+    ...createScopedDbMock({
+      select: () => ({
+        from: (table: unknown) => ({
+          where: () => ({
+            limit: async () => {
+              if (table === entities) {
+                return [{ id: entityId }];
+              }
+              if (table === fields) {
+                return [{ id: fieldId }];
+              }
+              return [];
+            },
+          }),
+        }),
+      }),
+    }),
     session: { activeOrganizationId: organizationId },
     workspaceId,
     user: { id: userId },

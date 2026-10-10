@@ -13,6 +13,8 @@ import {
   setSharedStatementTimeout,
 } from "@/api/db/shared-pool-timeouts";
 import { createSafeId } from "@/api/lib/branded-types";
+import { TREE_PARENT_CYCLE_ERROR_CODE } from "@/api/lib/db/tree-parent-guard";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
@@ -202,7 +204,7 @@ if (!databaseUrl || !runPostgresTests) {
       },
     ];
     for (const { order, firstMove, lockMode } of cases) {
-      test(`${lockMode === "take" ? "concurrent moves terminate" : "unserialized control persists a cycle"} for ids ${order.join(",")} with ${firstMove} first`, async () => {
+      test(`${lockMode === "take" ? "concurrent moves terminate" : "without the handler lock the trigger refuses the loop"} for ids ${order.join(",")} with ${firstMove} first`, async () => {
         await withGatedTestClients(databaseUrl, async ({ openClient }) => {
           const firstDb = openClient().db;
           const secondDb = openClient().db;
@@ -277,22 +279,24 @@ if (!databaseUrl || !runPostgresTests) {
                 await expectTerminatingChains(firstDb, hierarchy.workspaceId);
                 break;
               case "omit": {
-                expect(results.every((result) => result.isOk())).toBe(true);
-                const rows = await firstDb
-                  .select({ id: entities.id, parentId: entities.parentId })
-                  .from(entities)
-                  .where(eq(entities.workspaceId, hierarchy.workspaceId));
-                // A -> D -> C -> B -> A: assert the fault is actually reached.
+                // Both ancestor reads passed before either move wrote, so the
+                // handler alone would persist A -> D -> C -> B -> A. The
+                // `entities_parent_acyclic` trigger takes the matter lock at
+                // the write and refuses whichever move comes second, with the
+                // same 400 the pre-check gives.
+                const refused = results.filter((result) => result.isErr());
+                expect(refused).toHaveLength(1);
+                const [loser] = refused;
+                if (!loser) {
+                  panic("Expected one refused move");
+                }
+                expectDescendantRefusal(loser);
                 expect(
-                  new Map(rows.map(({ id, parentId }) => [id, parentId])),
-                ).toEqual(
-                  new Map([
-                    [hierarchy.a, hierarchy.d],
-                    [hierarchy.d, hierarchy.c],
-                    [hierarchy.c, hierarchy.b],
-                    [hierarchy.b, hierarchy.a],
-                  ]),
-                );
+                  loser.isErr() &&
+                    HandlerError.is(loser.error) &&
+                    loser.error.code,
+                ).toBe(TREE_PARENT_CYCLE_ERROR_CODE);
+                await expectTerminatingChains(firstDb, hierarchy.workspaceId);
                 break;
               }
               default:

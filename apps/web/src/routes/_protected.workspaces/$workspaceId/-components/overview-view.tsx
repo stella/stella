@@ -50,6 +50,7 @@ import { EmptyScreen } from "@/components/empty-screen";
 import { isTerminalFlowRunStatus } from "@/components/flows/flow-meta";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { PersonMentionLabel } from "@/components/person-mention-label";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { UserIdentity } from "@/components/user-avatar";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 import { getWeekStart, toISODate } from "@/components/workspaces/entity-utils";
@@ -62,7 +63,7 @@ import {
 } from "@/components/workspaces/tasks/task-detail-constants";
 import { useMountEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
-import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
+import { useTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
 import { useWorkflowsPreviewEnabled } from "@/hooks/use-workflows-preview";
 import { useLocale } from "@/i18n/formatting-context";
 import { getFormatter } from "@/i18n/i18n-store";
@@ -79,6 +80,7 @@ import {
   WEEKDAY_INITIAL_FORMAT,
 } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
+import { useQueryView } from "@/lib/use-query-view";
 import { useCreateFileEntities } from "@/lib/workspaces/mutations/use-create-file-entities";
 import { overviewOptions, workspacesKeys } from "@/lib/workspaces/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
@@ -90,6 +92,8 @@ import {
 } from "@/lib/workspaces/queries/time-entries";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
 import { ActivityPanel } from "@/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel";
+
+import { OverviewTimeRead, OverviewTimeTrend } from "./overview-time-read";
 
 type OverviewViewProps = {
   workspaceId: string;
@@ -159,7 +163,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   const workflowsEnabled = useWorkflowsPreviewEnabled();
   const canReadTimeEntries = usePermissions({ timeEntry: ["read"] });
   const canReviewTimeEntries = usePermissions({ timeEntry: ["approve"] });
-  const timeBillingEnabled = isTimeBillingRouteEnabled() && canReadTimeEntries;
+  const timeBillingEnabled = useTimeBillingRouteEnabled() && canReadTimeEntries;
   const tWorkspaces = useTranslations("workspaces");
   const locale = useLocale();
   const firstWeekday = getFirstWeekday(locale);
@@ -181,16 +185,21 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
       },
     });
   // Views — find view IDs by layout type for stat card navigation
-  const { data: views } = useQuery(viewsOptions(workspaceId));
+  const viewsQuery = useQuery(viewsOptions(workspaceId));
+  const viewsView = useQueryView(viewsQuery);
+  const views = viewsView.type === "items" ? viewsView.items : undefined;
   // The Workflows tab owns the runs fetch; this matter-overview entry point only
   // reads that cache (`enabled: false`) so the general matter shell never fires
   // GET /flows/runs for a feature most matters never open. The count reflects
   // active runs once the Workflows surface has populated the cache, and stays 0
   // (never a loading variant) until then.
-  const { data: flowRunsData } = useQuery({
+  const flowRunsDataQuery = useQuery({
     ...flowRunsOptions({ workspaceId }),
     enabled: false,
   });
+  const flowRunsDataView = useQueryView(flowRunsDataQuery);
+  const flowRunsData =
+    flowRunsDataView.type === "items" ? flowRunsDataView.items : undefined;
   const activeFlowRunCount =
     flowRunsData && "items" in flowRunsData
       ? flowRunsData.items.filter((run) => !isTerminalFlowRunStatus(run.status))
@@ -334,29 +343,33 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   );
   const weekEnd = useMemo(() => weekStart.add({ days: 6 }), [weekStart]);
 
-  const { data: timeSummary } = useQuery({
-    ...routeQueryOptions(
-      timeEntrySummaryOptions(
-        workspaceId,
-        userId,
-        toISODate(weekStart),
-        toISODate(weekEnd),
+  const timeSummaryView = useQueryView(
+    useQuery({
+      ...routeQueryOptions(
+        timeEntrySummaryOptions(
+          workspaceId,
+          userId,
+          toISODate(weekStart),
+          toISODate(weekEnd),
+        ),
       ),
-    ),
-    enabled: timeBillingEnabled && !canReviewTimeEntries,
-  });
+      enabled: timeBillingEnabled && !canReviewTimeEntries,
+    }),
+  );
 
-  const { data: teamTimeSummary } = useQuery({
-    ...routeQueryOptions(
-      timeEntryTeamSummaryOptions(
-        workspaceId,
-        userId,
-        toISODate(weekStart),
-        toISODate(weekEnd),
+  const teamTimeSummaryView = useQueryView(
+    useQuery({
+      ...routeQueryOptions(
+        timeEntryTeamSummaryOptions(
+          workspaceId,
+          userId,
+          toISODate(weekStart),
+          toISODate(weekEnd),
+        ),
       ),
-    ),
-    enabled: timeBillingEnabled && canReviewTimeEntries,
-  });
+      enabled: timeBillingEnabled && canReviewTimeEntries,
+    }),
+  );
 
   // Previous week for trend comparison
   const prevWeekStart = useMemo(
@@ -368,23 +381,33 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
     [weekStart],
   );
 
-  const { data: previousTimeSummary } = useQuery({
-    ...routeQueryOptions(
-      timeEntrySummaryOptions(
-        workspaceId,
-        userId,
-        toISODate(prevWeekStart),
-        toISODate(prevWeekEnd),
+  const previousTimeSummaryView = useQueryView(
+    useQuery({
+      ...routeQueryOptions(
+        timeEntrySummaryOptions(
+          workspaceId,
+          userId,
+          toISODate(prevWeekStart),
+          toISODate(prevWeekEnd),
+        ),
       ),
-    ),
-    enabled: timeBillingEnabled,
-  });
+      enabled: timeBillingEnabled,
+    }),
+  );
 
+  const currentTimeView = canReviewTimeEntries
+    ? teamTimeSummaryView
+    : timeSummaryView;
+  const teamTimeSummary =
+    teamTimeSummaryView.type === "items"
+      ? teamTimeSummaryView.items
+      : undefined;
   const totalHoursThisWeek =
-    (teamTimeSummary
-      ? teamTimeSummary.viewerTotalMinutes
-      : (timeSummary?.totalMinutes ?? 0)) / 60;
-  const prevWeekHours = (previousTimeSummary?.totalMinutes ?? 0) / 60;
+    currentTimeView.type === "items"
+      ? ("viewerTotalMinutes" in currentTimeView.items
+          ? currentTimeView.items.viewerTotalMinutes
+          : currentTimeView.items.totalMinutes) / 60
+      : null;
 
   const teamHeatmap = useMemo(() => {
     if (!teamTimeSummary) {
@@ -425,6 +448,10 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
 
   return (
     <div className="@container flex flex-1 flex-col gap-6 overflow-y-auto p-4 tabular-nums sm:p-6">
+      <OverviewQueryFeedback
+        flowRunsView={flowRunsDataView}
+        viewsView={viewsView}
+      />
       {/* Stats grid */}
       <div className="grid gap-3 @sm:grid-cols-2 @3xl:grid-cols-4">
         <StatCard
@@ -490,16 +517,31 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
           <StatCard
             icon={<ClockIcon className="size-4" />}
             label={t("workspaces.overview.timeThisWeek")}
-            onClick={() => {
-              detached(
-                navigate({
-                  to: "/workspaces/$workspaceId/timesheets",
-                  params: { workspaceId },
-                }),
-                "overview-view.navigate",
-              );
-            }}
-            value={formatHours(totalHoursThisWeek)}
+            {...(currentTimeView.type === "items" &&
+            currentTimeView.refetchError === undefined
+              ? {
+                  onClick: () => {
+                    detached(
+                      navigate({
+                        to: "/workspaces/$workspaceId/timesheets",
+                        params: { workspaceId },
+                      }),
+                      "overview-view.navigate",
+                    );
+                  },
+                }
+              : {})}
+            value={
+              canReviewTimeEntries ? (
+                <OverviewTimeRead view={teamTimeSummaryView}>
+                  {(summary) => formatHours(summary.viewerTotalMinutes / 60)}
+                </OverviewTimeRead>
+              ) : (
+                <OverviewTimeRead view={timeSummaryView}>
+                  {(summary) => formatHours(summary.totalMinutes / 60)}
+                </OverviewTimeRead>
+              )
+            }
           />
         )}
         {workflowsEnabled && (
@@ -749,149 +791,157 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
               }}
               title={t("workspaces.overview.timeAndTeam")}
             />
-            <div className={cn(OVERVIEW_PANEL_CLASS, "flex-1")}>
-              <div
-                className={cn(
-                  TEAM_HEATMAP_GRID_CLASS,
-                  "min-h-12 border-b py-2",
-                )}
-              >
-                <span />
-                {Array.from({ length: 7 }, (_, i) => (
-                  <span
-                    className="text-muted-foreground text-3xs text-center"
-                    key={i}
+            <OverviewTimeRead view={teamTimeSummaryView}>
+              {() => (
+                <div className={cn(OVERVIEW_PANEL_CLASS, "flex-1")}>
+                  <div
+                    className={cn(
+                      TEAM_HEATMAP_GRID_CLASS,
+                      "min-h-12 border-b py-2",
+                    )}
                   >
-                    {getLocaleDayLabel(i, firstWeekday)}
-                  </span>
-                ))}
-                <span className="hidden sm:block" />
-              </div>
-              <div className="divide-y">
-                {(() => {
-                  const maxDaily = Math.max(
-                    ...teamHeatmap.flatMap((member) => member.daily),
-                    0,
-                  );
-                  return teamHeatmap.map((member) => {
-                    const total = member.daily.reduce(
-                      (sum, hours) => sum + hours,
-                      0,
-                    );
-
-                    return (
-                      <div
-                        className={cn(
-                          TEAM_HEATMAP_GRID_CLASS,
-                          "min-h-14 py-2.5",
-                        )}
-                        key={member.userId}
+                    <span />
+                    {Array.from({ length: 7 }, (_, i) => (
+                      <span
+                        className="text-muted-foreground text-3xs text-center"
+                        key={i}
                       >
-                        <UserIdentity
-                          avatarClassName="size-5 shrink-0 text-[0.5rem]"
-                          image={member.image}
-                          name={member.name}
-                          nameClassName="text-sm font-normal"
-                        />
-                        {member.daily.map((hours, dayIdx) => {
-                          const dayLabel = getLocaleDayLabel(
-                            dayIdx,
-                            firstWeekday,
-                          );
-                          const opacity = maxDaily > 0 ? hours / maxDaily : 0;
-                          const cell = (
-                            <div
-                              className={cn(
-                                "bg-primary/10 size-5 rounded-sm transition-transform",
-                                hours > 0 && "hover:scale-110",
-                              )}
-                              style={
-                                hours > 0
-                                  ? {
-                                      backgroundColor: `color-mix(in srgb, var(--color-primary) ${Math.round(opacity * 80 + 10)}%, transparent)`,
-                                    }
-                                  : undefined
-                              }
+                        {getLocaleDayLabel(i, firstWeekday)}
+                      </span>
+                    ))}
+                    <span className="hidden sm:block" />
+                  </div>
+                  <div className="divide-y">
+                    {(() => {
+                      const maxDaily = Math.max(
+                        ...teamHeatmap.flatMap((member) => member.daily),
+                        0,
+                      );
+                      return teamHeatmap.map((member) => {
+                        const total = member.daily.reduce(
+                          (sum, hours) => sum + hours,
+                          0,
+                        );
+
+                        return (
+                          <div
+                            className={cn(
+                              TEAM_HEATMAP_GRID_CLASS,
+                              "min-h-14 py-2.5",
+                            )}
+                            key={member.userId}
+                          >
+                            <UserIdentity
+                              avatarClassName="size-5 shrink-0 text-[0.5rem]"
+                              image={member.image}
+                              name={member.name}
+                              nameClassName="text-sm font-normal"
                             />
-                          );
-
-                          if (hours === 0) {
-                            return (
-                              <div
-                                className="flex size-6 items-center justify-center sm:size-7"
-                                // oxlint-disable-next-line react/no-array-index-key -- daily is a fixed 7-slot week array.
-                                key={dayIdx}
-                              >
-                                {cell}
-                              </div>
-                            );
-                          }
-
-                          return (
-                            <div
-                              className="flex size-6 items-center justify-center sm:size-7"
-                              // oxlint-disable-next-line react/no-array-index-key -- daily is a fixed 7-slot week array.
-                              key={dayIdx}
-                            >
-                              <Popover>
-                                <TooltipRoot>
-                                  <PopoverTrigger
-                                    render={
-                                      <TooltipTrigger
-                                        render={
-                                          <button
-                                            aria-label={`${member.name}, ${dayLabel}: ${formatHours(hours)}`}
-                                            className="flex size-6 cursor-pointer items-center justify-center sm:size-7"
-                                            type="button"
-                                          />
+                            {member.daily.map((hours, dayIdx) => {
+                              const dayLabel = getLocaleDayLabel(
+                                dayIdx,
+                                firstWeekday,
+                              );
+                              const opacity =
+                                maxDaily > 0 ? hours / maxDaily : 0;
+                              const cell = (
+                                <div
+                                  className={cn(
+                                    "bg-primary/10 size-5 rounded-sm transition-transform",
+                                    hours > 0 && "hover:scale-110",
+                                  )}
+                                  style={
+                                    hours > 0
+                                      ? {
+                                          backgroundColor: `color-mix(in srgb, var(--color-primary) ${Math.round(opacity * 80 + 10)}%, transparent)`,
                                         }
-                                      />
-                                    }
+                                      : undefined
+                                  }
+                                />
+                              );
+
+                              if (hours === 0) {
+                                return (
+                                  <div
+                                    className="flex size-6 items-center justify-center sm:size-7"
+                                    // oxlint-disable-next-line react/no-array-index-key -- daily is a fixed 7-slot week array.
+                                    key={dayIdx}
                                   >
                                     {cell}
-                                  </PopoverTrigger>
-                                  <TooltipPopup>
-                                    {formatHours(hours)}
-                                  </TooltipPopup>
-                                </TooltipRoot>
-                                <PopoverPopup className="w-56" sideOffset={8}>
-                                  <p className="text-muted-foreground p-2 text-xs font-medium">
-                                    {member.name} · {dayLabel} ·{" "}
-                                    {formatHours(hours)}
-                                  </p>
-                                </PopoverPopup>
-                              </Popover>
-                            </div>
-                          );
+                                  </div>
+                                );
+                              }
+
+                              return (
+                                <div
+                                  className="flex size-6 items-center justify-center sm:size-7"
+                                  // oxlint-disable-next-line react/no-array-index-key -- daily is a fixed 7-slot week array.
+                                  key={dayIdx}
+                                >
+                                  <Popover>
+                                    <TooltipRoot>
+                                      <PopoverTrigger
+                                        render={
+                                          <TooltipTrigger
+                                            render={
+                                              <button
+                                                aria-label={`${member.name}, ${dayLabel}: ${formatHours(hours)}`}
+                                                className="flex size-6 cursor-pointer items-center justify-center sm:size-7"
+                                                type="button"
+                                              />
+                                            }
+                                          />
+                                        }
+                                      >
+                                        {cell}
+                                      </PopoverTrigger>
+                                      <TooltipPopup>
+                                        {formatHours(hours)}
+                                      </TooltipPopup>
+                                    </TooltipRoot>
+                                    <PopoverPopup
+                                      className="w-56"
+                                      sideOffset={8}
+                                    >
+                                      <p className="text-muted-foreground p-2 text-xs font-medium">
+                                        {member.name} · {dayLabel} ·{" "}
+                                        {formatHours(hours)}
+                                      </p>
+                                    </PopoverPopup>
+                                  </Popover>
+                                </div>
+                              );
+                            })}
+                            <span className="text-muted-foreground hidden text-end text-xs tabular-nums sm:block">
+                              {total > 0 ? formatHours(total) : ""}
+                            </span>
+                          </div>
+                        );
+                      });
+                    })()}
+                  </div>
+                  <div className="border-t px-4 py-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-muted-foreground text-xs">
+                        {t("workspaces.overview.totalThisWeek")}
+                      </span>
+                      <span className="text-sm font-medium tabular-nums">
+                        {totalTeamHoursThisWeek > 0
+                          ? formatHours(totalTeamHoursThisWeek)
+                          : ""}
+                      </span>
+                    </div>
+                    <div className="mt-1.5 flex items-center justify-between">
+                      <span className="text-muted-foreground text-xs">
+                        {t("workspaces.overview.membersCount", {
+                          count: teamHeatmap.length,
                         })}
-                        <span className="text-muted-foreground hidden text-end text-xs tabular-nums sm:block">
-                          {total > 0 ? formatHours(total) : ""}
-                        </span>
-                      </div>
-                    );
-                  });
-                })()}
-              </div>
-              <div className="border-t px-4 py-3">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-muted-foreground text-xs">
-                    {t("workspaces.overview.totalThisWeek")}
-                  </span>
-                  <span className="text-sm font-medium tabular-nums">
-                    {totalTeamHoursThisWeek > 0
-                      ? formatHours(totalTeamHoursThisWeek)
-                      : ""}
-                  </span>
+                      </span>
+                    </div>
+                  </div>
                 </div>
-                <div className="mt-1.5 flex items-center justify-between">
-                  <span className="text-muted-foreground text-xs">
-                    {t("workspaces.overview.membersCount", {
-                      count: teamHeatmap.length,
-                    })}
-                  </span>
-                </div>
-              </div>
-            </div>
+              )}
+            </OverviewTimeRead>
           </section>
         ) : (
           /* Personal time */
@@ -921,29 +971,16 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                   <p className="text-muted-foreground text-xs">
                     {t("workspaces.overview.totalThisWeek")}
                   </p>
-                  <p className="mt-1 text-2xl font-semibold tabular-nums">
-                    {formatHours(totalHoursThisWeek)}
-                  </p>
+                  <div className="mt-1 text-2xl font-semibold tabular-nums">
+                    <OverviewTimeRead view={timeSummaryView}>
+                      {(summary) => formatHours(summary.totalMinutes / 60)}
+                    </OverviewTimeRead>
+                  </div>
                 </div>
-                {prevWeekHours > 0 && totalHoursThisWeek !== prevWeekHours && (
-                  <span
-                    className={cn(
-                      "text-xs font-medium",
-                      totalHoursThisWeek > prevWeekHours
-                        ? "text-success"
-                        : "text-destructive",
-                    )}
-                  >
-                    {totalHoursThisWeek > prevWeekHours ? "▲" : "▼"}{" "}
-                    {Math.round(
-                      Math.abs(
-                        ((totalHoursThisWeek - prevWeekHours) / prevWeekHours) *
-                          100,
-                      ),
-                    )}
-                    %
-                  </span>
-                )}
+                <OverviewTimeTrend
+                  currentHours={totalHoursThisWeek}
+                  view={previousTimeSummaryView}
+                />
               </div>
             </section>
           )
@@ -968,6 +1005,25 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
     </div>
   );
 };
+
+type OverviewQueryView = React.ComponentProps<typeof QueryViewFeedback>["view"];
+
+type OverviewQueryFeedbackProps = {
+  flowRunsView: OverviewQueryView;
+  viewsView: OverviewQueryView;
+};
+
+const OverviewQueryFeedback = ({
+  flowRunsView,
+  viewsView,
+}: OverviewQueryFeedbackProps) => (
+  <>
+    <QueryViewFeedback view={viewsView} />
+    {flowRunsView.type !== "pending" && (
+      <QueryViewFeedback view={flowRunsView} />
+    )}
+  </>
+);
 
 type OverviewSectionHeaderProps = {
   icon: React.ReactNode;
@@ -1003,7 +1059,7 @@ const OverviewSectionHeader = ({
 type StatCardProps = {
   icon: React.ReactNode;
   label: string;
-  value: string;
+  value: React.ReactNode;
   sublabel?: string | undefined;
   onClick?: () => void;
 };
@@ -1015,7 +1071,7 @@ const StatCard = ({ icon, label, value, sublabel, onClick }: StatCardProps) => {
         {icon}
         {label}
       </div>
-      <span className="text-xl font-semibold tabular-nums">{value}</span>
+      <div className="text-xl font-semibold tabular-nums">{value}</div>
       {sublabel && (
         <span className="text-muted-foreground truncate text-xs">
           {sublabel}

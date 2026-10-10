@@ -1,23 +1,24 @@
 import { toolDefinition } from "@tanstack/ai";
 import { panic, Result } from "better-result";
-import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
 import { parsePlainDate } from "@stll/time";
 
+import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { ScopedDb } from "@/api/db/safe-db";
-import { entities, fields } from "@/api/db/schema";
 import type { FieldContent, PropertyContent } from "@/api/db/schema-validators";
 import { UPDATE_ENTITY_FIELDS_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
-import { captureError } from "@/api/lib/analytics/capture";
+import type { AuditRecorder } from "@/api/lib/audit-log";
+import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { CHAT_ENTITY_REF_PREFIX } from "@/api/lib/chat/ref-registry";
 import { formatIsoDateForDisplay } from "@/api/lib/date-format";
-import { ChatToolError } from "@/api/lib/errors/tagged-errors";
-import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
-import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
+import { ChatToolError, HandlerError } from "@/api/lib/errors/tagged-errors";
+import { writeFieldValue } from "@/api/lib/fields/write-field";
+import type { FieldWriteContent } from "@/api/lib/fields/write-field";
+import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { isRecord } from "@/api/lib/type-guards";
 
 const refSchema = (description: string) =>
@@ -65,8 +66,24 @@ const formatFieldValue = (content: FieldContent): string => {
   }
 };
 
+/**
+ * Who a field write is made for. The write goes through `writeFieldValue`,
+ * which checks this authority and records the audit event; without a
+ * recorder (schema-only construction) the tool refuses to write.
+ */
+export type ChatFieldWriter = {
+  authority: AuthorizedMemberRole;
+  recordAuditEvent: AuditRecorder | undefined;
+  userId: SafeId<"user">;
+  /** Writes are refused unless the matter's status here is "active". */
+  workspaceStatusById:
+    | ReadonlyMap<string, AccessibleWorkspace["status"]>
+    | undefined;
+};
+
 type WorkspaceToolsContext = {
   allowedWorkspaceIds: readonly SafeId<"workspace">[];
+  fieldWriter: ChatFieldWriter;
   refRegistry: ChatRefRegistry;
   scopedDb: ScopedDb;
 };
@@ -157,7 +174,10 @@ type FieldContentForValueArgs = {
 export const fieldContentForValue = ({
   content: propertyContent,
   value,
-}: FieldContentForValueArgs): Result<FieldContent | null, ChatToolError> => {
+}: FieldContentForValueArgs): Result<
+  FieldWriteContent | null,
+  ChatToolError
+> => {
   const invalid = (message: string) =>
     Result.err(new ChatToolError({ kind: "invalid-input", message }));
   const propType = propertyContent.type;
@@ -239,8 +259,66 @@ export const fieldContentForValue = ({
   }
 };
 
+/** The chat error for a field write the owner refused. */
+const toChatToolError = ({
+  error,
+  entityRef,
+}: {
+  error: unknown;
+  entityRef: string;
+}): ChatToolError => {
+  if (!HandlerError.is(error)) {
+    return new ChatToolError({
+      kind: "server-defect",
+      message: "The field could not be updated.",
+      cause: error,
+    });
+  }
+  switch (error.status) {
+    case 403:
+      return new ChatToolError({
+        kind: "unavailable",
+        message: "You do not have permission to change fields in this matter.",
+      });
+    case 404:
+      return new ChatToolError({
+        kind: "not-found",
+        message: `Entity "${entityRef}" not found.`,
+      });
+    case 409:
+      return new ChatToolError({
+        kind: "invalid-input",
+        message: `Entity "${entityRef}" is read-only.`,
+      });
+    case 400:
+      return new ChatToolError({
+        kind: "invalid-input",
+        message: error.message,
+      });
+    case 401:
+    case 402:
+    case 413:
+    case 422:
+    case 426:
+    case 428:
+    case 429:
+    case 500:
+    case 502:
+    case 503:
+      return new ChatToolError({
+        kind: "server-defect",
+        message: "The field could not be updated.",
+        cause: error,
+      });
+    default:
+      error.status satisfies never;
+      return panic(`Unhandled handler status: ${String(error.status)}`);
+  }
+};
+
 export const createWorkspaceTools = ({
   allowedWorkspaceIds,
+  fieldWriter,
   refRegistry,
   scopedDb,
 }: WorkspaceToolsContext) => {
@@ -325,6 +403,23 @@ export const createWorkspaceTools = ({
         throw target.error;
       }
       const { allowedWorkspaceId, entityId, propertyId } = target.value;
+      // An archived matter stays read-only here as it is over REST and MCP; a
+      // matter without a known status is not assumed to be active.
+      if (
+        fieldWriter.workspaceStatusById?.get(allowedWorkspaceId) !== "active"
+      ) {
+        throw new ChatToolError({
+          kind: "unavailable",
+          message: `Matter "${input.matterRef}" is not active; its fields cannot be changed.`,
+        });
+      }
+      const { recordAuditEvent } = fieldWriter;
+      if (recordAuditEvent === undefined) {
+        throw new ChatToolError({
+          kind: "unavailable",
+          message: "Fields cannot be changed from this conversation.",
+        });
+      }
       const updated = await (async (): Promise<
         Result<UpdateEntityFieldsOutput, ChatToolError>
       > => {
@@ -357,84 +452,32 @@ export const createWorkspaceTools = ({
         }
         const content = fieldContent.value;
 
-        const entity = await scopedDb((tx) =>
-          tx.query.entities.findFirst({
-            columns: { id: true, currentVersionId: true, readOnly: true },
-            where: {
-              id: { eq: entityId },
-              workspaceId: { eq: allowedWorkspaceId },
-            },
+        const written = await Result.gen(() =>
+          writeFieldValue({
+            safeDb: safeDbFromScoped(scopedDb),
+            authority: fieldWriter.authority,
+            workspaceId: allowedWorkspaceId,
+            userId: fieldWriter.userId,
+            recordAuditEvent,
+            entityId,
+            propertyId,
+            content,
           }),
         );
-
-        if (!entity) {
+        if (Result.isError(written)) {
           return Result.err(
-            new ChatToolError({
-              kind: "not-found",
-              message: `Entity "${input.entityRef}" not found.`,
+            toChatToolError({
+              error: written.error,
+              entityRef: input.entityRef,
             }),
           );
         }
-        if (entity.readOnly) {
-          return Result.err(
-            new ChatToolError({
-              kind: "invalid-input",
-              message: `Entity "${input.entityRef}" is read-only.`,
-            }),
-          );
-        }
-
-        if (!entity.currentVersionId) {
-          return Result.err(
-            new ChatToolError({
-              kind: "not-found",
-              message: `Entity "${input.entityRef}" has no current version and cannot be updated.`,
-            }),
-          );
-        }
-
-        const versionId = entity.currentVersionId;
-        const isEmpty =
-          value === null ||
-          value === "" ||
-          (Array.isArray(value) && value.length === 0);
-
-        await scopedDb(async (tx) => {
-          // audit: skip — MCP tool execution metadata; audit happens at the parent user action
-          await tx
-            .delete(fields)
-            .where(
-              and(
-                eq(fields.propertyId, propertyId),
-                eq(fields.entityVersionId, versionId),
-              ),
-            );
-
-          if (!isEmpty && content !== null) {
-            await tx.insert(fields).values({
-              workspaceId: allowedWorkspaceId,
-              propertyId,
-              entityVersionId: versionId,
-              content,
-            });
-          }
-
-          await tx
-            .update(entities)
-            .set({ updatedAt: new Date() })
-            .where(eq(entities.id, entityId));
-
-          await enqueueEntitySearchRepairs(tx, [entityId]);
-        });
-
-        flushEntitySearchRepairs([entityId]).catch(captureError);
 
         return Result.ok({
           success: true as const,
           entityRef: input.entityRef,
           propertyRef: input.propertyRef,
-          newValue:
-            isEmpty || content === null ? "" : formatFieldValue(content),
+          newValue: content === null ? "" : formatFieldValue(content),
         });
       })();
       // TanStack AI reports a tool failure by the error its server function

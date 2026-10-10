@@ -1,5 +1,8 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import nodePath from "node:path";
+
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
 
 import { ONLINE_VALIDATED_INDEX_NAMES } from "./online-migrations";
 
@@ -7,13 +10,24 @@ const MIGRATIONS_DIR = nodePath.resolve(import.meta.dir, "../../drizzle");
 const ZERO_DURATION = /^'?0\s*(?:us|ms|s|min|h|d)?'?$/iu;
 const CONCURRENT_INDEX_OPERATION =
   /^(?:(?:CREATE\s+(?:UNIQUE\s+)?|DROP\s+)INDEX\s+CONCURRENTLY|REINDEX\s+INDEX\s+CONCURRENTLY)\b/iu;
-const CONCURRENT_IF_NOT_EXISTS =
-  /\bCREATE\s+(?:UNIQUE\s+)?INDEX\s+CONCURRENTLY\s+IF\s+NOT\s+EXISTS\s+"([^"]+)"/giu;
-const CONCURRENT_UNIQUE_CREATE =
-  /\bCREATE\s+UNIQUE\s+INDEX\s+CONCURRENTLY(?<idempotent>\s+IF\s+NOT\s+EXISTS)?\s+"(?<name>[^"]+)"/giu;
-const CONCURRENT_DROP =
-  /\bDROP\s+INDEX\s+CONCURRENTLY\s+IF\s+EXISTS\s+"([^"]+)"/giu;
-const CONCURRENT_REINDEX = /\bREINDEX\s+INDEX\s+CONCURRENTLY\s+"([^"]+)"/giu;
+const IDENTIFIER = String.raw`(?:"(?:""|[^"])+"|[A-Za-z_][\w$]*)`;
+const RELATION = String.raw`(?:${IDENTIFIER}\s*\.\s*)?${IDENTIFIER}`;
+const CONCURRENT_IF_NOT_EXISTS = new RegExp(
+  String.raw`\bCREATE\s+(?:UNIQUE\s+)?INDEX\s+CONCURRENTLY\s+IF\s+NOT\s+EXISTS\s+(?<name>${RELATION})`,
+  "giu",
+);
+const CONCURRENT_UNIQUE_CREATE = new RegExp(
+  String.raw`\bCREATE\s+UNIQUE\s+INDEX\s+CONCURRENTLY(?<idempotent>\s+IF\s+NOT\s+EXISTS)?\s+(?<name>${RELATION})`,
+  "giu",
+);
+const CONCURRENT_DROP = new RegExp(
+  String.raw`\bDROP\s+INDEX\s+CONCURRENTLY\s+IF\s+EXISTS\s+(?<name>${RELATION})`,
+  "giu",
+);
+const CONCURRENT_REINDEX = new RegExp(
+  String.raw`\bREINDEX\s+INDEX\s+CONCURRENTLY\s+(?<name>${RELATION})`,
+  "giu",
+);
 const TYPE_CHANGE =
   /^ALTER\s+TABLE\b[^;]*?\bALTER\s+(?:COLUMN\s+)?(?:(?:U&)?"(?:""|[^"])+"(?:\s+UESCAPE\s+'(?:''|[^'])*')?|[A-Z_\u0080-\u{10FFFF}][A-Z0-9_$\u0080-\u{10FFFF}]*)\s+(?:SET\s+DATA\s+)?TYPE\b/iu;
 const TYPE_CHANGE_ANYWHERE =
@@ -32,10 +46,16 @@ const CUSTOM_BOUNDED_TYPE_CHANGE_MIGRATIONS = new Set([
   // a DO block, which the statement scanner deliberately does not interpret.
   "20260729150000_timestamptz_everywhere/migration.sql",
 ]);
-// Migrations may execute only these exact historical DO blocks.
+const ENTITY_FEATURE_GATE_MIGRATION =
+  "20261009112500_entity_feature_row_gates/migration.sql";
+// Migrations may execute only these exact reviewed DO blocks.
 // Fingerprinting the complete statement makes comments, quoting tricks, and
 // dynamically assembled commands unable to bypass migration safety checks.
 const APPROVED_PROCEDURAL_STATEMENTS = new Set([
+  "20261003122400_public_sanctions_reader/migration.sql:6cc0fbb1310629fc3b2e4e6ac47e0cdb64c91fed912aada50d7c9e4631dd3c05",
+  // Validates matter memberships with a bounded existence read and a typed
+  // constraint error. The static block changes no rows or timeout settings.
+  "20261004001100_validate_matter_membership_organization_membership/migration.sql:b63282f9fdb50853ecdb93950ebd13f424a8a3ea142755f27ab5e8fbe60df69c",
   "20260429220500_global-search-unaccent/migration.sql:6eab967f03d9401b8f0791d81603f9540ac19fb872df5404f9b66ffff431d589",
   "20260429220500_global-search-unaccent/migration.sql:fe14433fc2fcc398e1d4efcd301f325a8f6e76705c158cd829b17fb9bb7f8797",
   "20260429220500_global-search-unaccent/migration.sql:2d8e7507916a4d6160ec2edebc72136c1b814cd55e2d766021ed5bbc25b5fd10",
@@ -139,8 +159,114 @@ const APPROVED_PROCEDURAL_STATEMENTS = new Set([
   "20260924100000_case_law_decision_supplements/migration.sql:c164fa270ee521594466ebf9458f712658d300a1e83106f6c866698c9f407642",
   "20260924100000_case_law_decision_supplements/migration.sql:d6003f318eb66d4f93b252378c7e0e97a397a8827a7568ceb6036e9043784d0f",
   "20260924100000_case_law_decision_supplements/migration.sql:db38e6608b819f8b1bbc93274349ab1b5212a352dd36ce6b84294983dfac267d",
+  // Confirms that only the expected application-owned relations are present
+  // and that their owners can run the maintenance functions. This catalog
+  // read raises on mismatch and changes no data or schema.
+  `${ENTITY_FEATURE_GATE_MIGRATION}:b46a4954165ddc68ba7dbf4d5a1fb533356a5559be76dd75c90186d50e74ea58`,
+  // Creates the constrained non-login maintenance role only when absent, then
+  // verifies its attributes, memberships, and ownership boundaries.
+  `${ENTITY_FEATURE_GATE_MIGRATION}:c8f82c7c02b0c29a54777add6909f0c2f546b41f26f44c648d5e23a2330ceb3c`,
 ]);
 
+// These exact fingerprints cover the 94 generated catalog lookups plus their
+// NOT VALID check additions. Any SQL change needs a fresh review; adding these
+// checks avoids scanning existing rows.
+const APPROVED_ENTITY_FEATURE_GATE_CONSTRAINTS = new Set([
+  "5645745a8577560f4c428a6c2bd523c66d776759aea869bf261b86a1ac346751",
+  "6ce421af8d6beeeba56ef9f6cd87271696093904100a618a91b23c33b59bdfcc",
+  "a8d512bc38b7a1888c799e16b5cbbe3f0d04c4a1a7b3fe0c8d5d94ca8151e8bc",
+  "93053ee1fa468b14eb8e8e22c74aad4cb2d831f9d3a6ad2b676c547a65d485a0",
+  "24dea639df4702a9c0acdc7c024098634cc38bcf8e3f78453604d9b2b3efe563",
+  "e98dc82f92411654f247c7c92271071eccb194f391bd6e2ace5937c66ec62920",
+  "5a31e0c22d1d02130f329c75d2db52568683bcc50de99d73ad78e5e110d48092",
+  "053fb0fd0f22675bc30e6a57520962a0f981609d2ac7f41b71b35186b7da529e",
+  "823f19ad06e2623ce6c5c2a762c105adb009491536e0de6280832cb9e5e6acc6",
+  "ee4a9cdebc1f6a29a2aaac7e9f129ea58f0f1db317c5d583e1af0f6b8e1f0233",
+  "9e55c7239cbb0bc01e1608678d1fe7b7ff9dae05ba4f3a3bd28188cb58ddb607",
+  "9f7c642b388e366b3497a48349d5f1d7219aebaca510a782b4da6e7b468da3b2",
+  "29d9e40a806251659c72f513e093909c215d95f23f8f71f9d1ba8b40ed79841e",
+  "729655f2717e8cd184c368cd4f2143bb925d02804fd374a85d2efd15d4b046e8",
+  "02e63bdf829f78838f624a811fa962ac9448cc9305c18e4bed03ec44791b3500",
+  "758ee02d1b87ba0c226aa525a710b2796c88d9c393658e1df597ff59867fba83",
+  "afe023e604d3efc5ceddbb93d2b0d82bf9f406e47c87b4388a219a8d455824d1",
+  "27f020c82ddc837e2052448b69902138a9697cc2f6fd9c2dc9d6637d4c4c9cb1",
+  "6af897f78e2dacc81296dce02728c43b59aaff9e107f64fd5569c2ae57bf3d10",
+  "0330edb7a8b23c92ae4742210f1d75617fcc6b9ec0f3e4a870324d0a4cd99a7d",
+  "4137e78919f2f17a46d635cc7007ebf486597f0d397de0f07a3e7dbf4613d211",
+  "fa6ea88d7d9e78ed08510f433ae0d3a891d9f887193a905d0968dd22e1094c0f",
+  "55f3b32767ee07c4f63eab8a0599f6ab47f90e20c0ce1f5331bf697c16b3a1c2",
+  "6b2fdb088d52d4738a61807e976346ec7e99fc26c97241b38ed51425823c9abe",
+  "8e936bc0a4e749ec5573c41a744c12d0273f7dd5788527f8dd3365d7bfb9733c",
+  "26acc11e459396faa25348d20ea3af88750b8a55788c86a75a12b7a5d599aa1e",
+  "a89e580a9b04dad1960c166645288031913f07f9a0691e0892b39d83a5d733a4",
+  "f1ea10cbb7894675ca6e31c98842e855bd8291789b033df7ba6e97841f27f0f4",
+  "fa51cbbcf1abcdcfb6c6509337aa5868f8c045f0b238e6559e9d03c547599927",
+  "0f86824827ac4fa1acfeb2304f45f35297fb46f9d33ef502b271591d78f1e535",
+  "74e0e9387811e915cdf666a74418767381d9874b84d29e09fb77211af8912f5b",
+  "e94f9ddf497c113684555b51da8bb636fdd46da044419c9132eca067fac06244",
+  "eab9c812df00f77cf38aee7d22ca2283562607c6080fc8761c2f71a1e908ff2d",
+  "385f3d8685f9536a65d8f3e96b7960d48a0db0dc567e0968a01a4d31a5ca99af",
+  "3f20849879ccbe4a0b72fdc34b11ac853efdee476c57aef432187e9b42866f28",
+  "c943fc8e4434cc615153b4369d7bb6d06176b0938f27ae6232d4225cde320128",
+  "ab3c5dcfcaacfb758771c2c7cb26b121da66857292a0e6d3886a9385319fa457",
+  "a79e09d25d750f14c261f5b2124e9b6eb2a83521ec12ac060a4e293a703d7e55",
+  "12f6f2fce3d4702bf1326cddcc65691a986a0f36f12f148620927d4400ed5571",
+  "c414f6e240b30026fe976a7831faccb7ed580bca084787ecdc71d59429d450f5",
+  "a3dc1532250fd4a95434f50c150531b1b23e15de9aeac5c5e0b0371a11118b04",
+  "58fc31ce5c1f359ede3dbf41fa0fef7564dda4566ad3ec69b8cb8dfe6596710a",
+  "c02095b62ae94dbd379385fa5b2f00e6d0e1e3091b405c92929b14538fe1241d",
+  "0fe45738ebe57a0cabb4a304326de27101b50a6dc516519d325d2f616a709920",
+  "6ba06d6917ffcb4ade88aebe5a371a55bc4a6b873e548846f606fc59af5d82a5",
+  "d5170087f1fbc62ba2897d1245b8fa4a49e45911bb9c5536caed8a54eae8399e",
+  "4015525d6c879c62ce56455f76178933d8a322c16b17de049b9416efb81e16d7",
+  "e453db9219c6d2427cc2da5d14bf1aee71ed9e9fc058a573c96d4ab2cb632132",
+  "4ccc6fcc4b719fd83e9f4445bd584cdd3852a4cc1c799799a61a10a53945ee1e",
+  "2f4ba225c438bc97e3cd1a890a2708fb26226fb957ce5e803db7347fe3cd1aad",
+  "6e3d022167002441764778e68fa48e8ec26e742e2a2c9eaf1476a12753c106f6",
+  "c1b8f4a65916b58d2dad99c08c6596527c070efcb183febd68e618810611a684",
+  "9cd483d65a17f26d19ec09d60cffc1fe0815834a7d6e2917339d225cb14c7f1f",
+  "397901955b567c2d2f00d3770fd71d70043fca68277ad2d3714cb7a087cf13e2",
+  "cb0574ef509e8963d5d0b3e3ef34e4c971ca78e9907cebe1031a5285a644cb70",
+  "3a958e6ecf746aca652dc85bdf52ceb5426058de1e73b3d1ebecb1aef081c7fa",
+  "be228214928f3581f654ff187887ad9475662ddd247157b0495a9890851919c5",
+  "9101b13c60401a0b50e38548d764d9f0a7a0d65b4cc18f45172e8827e862bad9",
+  "fb139bfa5a35dbe4b1102ae276aeb4eb586f6dcab257ac2a100885e5c7fefce4",
+  "a2889a739bc3c9688b535f126182c645a6465ba05e0af8b47a8201afc6bd88d0",
+  "02d2370129f9105c563a938af68959e143d118dafde571b5caf3b379bb6f2e7f",
+  "c0ec23a70f4254eb2f7851a98291e4eb481d59edc1465b848f5041e69a6c8244",
+  "6c467770a1ca6f884660f92dea6cae5a513790162e97c127f7285406a99753d2",
+  "6742b9efff570f65ef5c2c0c1d6e750a8f06a3367d4f40ccaff596f5b25409df",
+  "81d9d5bec17a4ff9b7ad3734121072dd89c276b504bdc62ed91d63212124a418",
+  "558260aaa96b94117d3499a60eb2e31faefe33b7a98c20b2d16576fc189e88e6",
+  "1b7c50e28e5a6c2a85a94cf9ce186f1e59e962bd278577c4ec36199530f3165e",
+  "cb8041be4d675f11b254ea7896ef0f42369a2f2dd94dbcf773c9c316b42ed2b6",
+  "88237bad776ed0b40b7b9eb83ed5525f5d4794fd74804cc56713eca28eef1ebc",
+  "0b4545ba2b965ab25218501beacac9a298a3f4cf142156794598aec271df8a7d",
+  "ac6dfe27a1a315e30be6753d9bd377aadd985180f5fca4aa885506765e37cfa9",
+  "a382d770ba7a61e26fe7e610deb1f5d708bab9c4b4213fb71872ffeddcd4d0bf",
+  "567bae2b3eb8da0ddc5653f0f28ac78b4854257e780ba3dd2b9e732a1811f2a8",
+  "396b24679aabe260e32a7cc988b49273a70522f820562e04d05f3d572ee2b490",
+  "f8f594079170aafed819c0d596cf563a523d06a75f07506242652280dc121e51",
+  "b3d68b06a3453b2c681566bf4a29ee996c8a353583f42024672717fc00ba2805",
+  "de26038efbe4dbd86f1974b9790eab7543b75afb521b8ae11dd5b3ddb72c2626",
+  "6fc6cfb9a3a60e063fa1b01260b4a7f885474664cf8ade9d8a02c65bf020ad97",
+  "a3efb93c1bf72236ab0b0ed8b51e66397abc2c41ecee75f22083377adb901a58",
+  "602463a45173e5fbbdbc249a3e2559c52d2021c7e818b990724ab41daf3286ec",
+  "6c9b17af2cbf6566b1957601d5142866b8e14c2f5c5016917dd554dd426caeb8",
+  "a9fba5c4a179412bee74fc54aa61a2a343b879c4a293d0ebd297fbdcd98cde6a",
+  "d8b2791d29ee71ba30a2f86ef756856198f160f18973f562167f3a974ee4ca9f",
+  "735d6b253d0abbfa906645e6a516217cd37f08d34bd2530afc8e9192e268a377",
+  "607726d9f4b283fff200c2b5a319bde9ba7430b23d8331addfce617fba6ab2ca",
+  "e704ce78227747c42a0bc5804ddc1e66c1b1d081cfaea10578f24201c7056a25",
+  "81a0430d7771d0191da592e837c45a2a5e880d7045917e09863cb0c0d5afce84",
+  "92e7dca3a2cc3c80eea09a6ef0ba79853cdcfe6b1073ac4f04e8cf3b900627e9",
+  "491a6067dcb2b4419b6fa4d52e42ade2316550286a68be55c87c2cf206b6158b",
+  "26b11b91150de5c719642adc8292d389dd8529b80293d82d27433f3eb89e9463",
+  "be4ed040eb24cfe14832c3ebf929222d78ed074c0dee385d364f6d1c42da12a8",
+  "f3ec22509caf88f4056fb8f87634d17a2c63b0085becfd6e2c920f2a0a7ba059",
+  "57c4e63efedc8e739e26012d25ca15dbc3e5c118abf33b85e5db536d41293994",
+  "ff116687fff25989df2b68bdaf6fd962b122ec66e7d06c08fac222b70a8f0074",
+]);
 type TimeoutState = "bounded" | "unbounded" | "unset";
 type TypeChangePolicy = "boundedRewrite" | "metadataOnly";
 type SqlQuote = {
@@ -521,7 +647,13 @@ const isUnapprovedProceduralStatement = (
     return false;
   }
 
-  const hash = new Bun.CryptoHasher("sha256").update(statement).digest("hex");
+  const hash = hashSha256Hex(statement);
+  if (
+    relativePath === ENTITY_FEATURE_GATE_MIGRATION &&
+    APPROVED_ENTITY_FEATURE_GATE_CONSTRAINTS.has(hash)
+  ) {
+    return false;
+  }
   return !APPROVED_PROCEDURAL_STATEMENTS.has(`${relativePath}:${hash}`);
 };
 
@@ -726,95 +858,129 @@ const collectUnsafeConcurrentTimeouts = (
   return violations;
 };
 
+const canonicalIdentifier = (identifier: string): string =>
+  identifier.startsWith('"')
+    ? identifier.slice(1, -1).replaceAll('""', '"')
+    : identifier.toLowerCase();
+
+/** A relation without its schema: migrations here address `public` alone. */
+const canonicalRelation = (relation: string): string => {
+  const parts = relation.match(new RegExp(IDENTIFIER, "gu")) ?? [];
+  return canonicalIdentifier(parts.at(-1) ?? relation);
+};
+
+const matchedIndexName = (match: RegExpMatchArray): string | undefined => {
+  const name = match.groups?.["name"];
+  return name === undefined ? undefined : canonicalRelation(name);
+};
+type ConcurrentIndexMigrationOptions = {
+  relativePath: string;
+  source: string;
+  validatedIndexNames: ReadonlySet<string>;
+};
+
+const collectUnsafeConcurrentIndexesInMigration = ({
+  relativePath,
+  source,
+  validatedIndexNames,
+}: ConcurrentIndexMigrationOptions): string[] => {
+  const violations: string[] = [];
+  const sqlWithoutLineComments = stripSqlComments(source);
+  for (const match of sqlWithoutLineComments.matchAll(
+    CONCURRENT_IF_NOT_EXISTS,
+  )) {
+    const name = matchedIndexName(match);
+    if (!name || !validatedIndexNames.has(name)) {
+      violations.push(
+        `${relativePath}: ${name ?? "unknown index"} uses IF NOT EXISTS without an online validity postcondition`,
+      );
+    }
+  }
+
+  const droppedIndexes = new Set(
+    [...sqlWithoutLineComments.matchAll(CONCURRENT_DROP)].flatMap((match) => {
+      const name = matchedIndexName(match);
+      return name ? [name] : [];
+    }),
+  );
+  const concurrentUniqueCreates = [
+    ...sqlWithoutLineComments.matchAll(CONCURRENT_UNIQUE_CREATE),
+  ];
+  const concurrentReindexPositions = new Map<string, number[]>();
+  for (const match of sqlWithoutLineComments.matchAll(CONCURRENT_REINDEX)) {
+    const name = matchedIndexName(match);
+    if (name === undefined) {
+      continue;
+    }
+    const positions = concurrentReindexPositions.get(name) ?? [];
+    positions.push(match.index);
+    concurrentReindexPositions.set(name, positions);
+  }
+  const firstForeignKeyIndex =
+    sqlWithoutLineComments.search(/\bFOREIGN\s+KEY\b/iu);
+  const createdUniqueIndexes = new Set(
+    concurrentUniqueCreates.flatMap((match) => {
+      const name = matchedIndexName(match);
+      return name ? [name] : [];
+    }),
+  );
+  if (
+    concurrentUniqueCreates.some(({ groups }) => groups?.["idempotent"]) &&
+    [...droppedIndexes].some((name) => !createdUniqueIndexes.has(name))
+  ) {
+    violations.push(
+      `${relativePath}: unique replacement drop must follow online validity postconditions`,
+    );
+  }
+  for (const match of concurrentUniqueCreates) {
+    const { groups } = match;
+    const name = matchedIndexName(match);
+    if (!name) {
+      continue;
+    }
+    if (!groups?.["idempotent"]) {
+      violations.push(
+        `${relativePath}: unique index ${name} is not retry-idempotent`,
+      );
+    }
+    if (
+      groups?.["idempotent"] &&
+      firstForeignKeyIndex !== -1 &&
+      !(concurrentReindexPositions.get(name) ?? []).some(
+        (position) => position > match.index && position < firstForeignKeyIndex,
+      )
+    ) {
+      violations.push(
+        `${relativePath}: unique index ${name} is used before retry validity repair`,
+      );
+    }
+    if (droppedIndexes.has(name)) {
+      violations.push(
+        `${relativePath}: retry can remove valid unique index ${name}`,
+      );
+    }
+  }
+  violations.push(...collectUnsafeConcurrentTimeouts(relativePath, source));
+  return violations.toSorted();
+};
+
 const collectUnsafeConcurrentIndexes = async (): Promise<string[]> => {
   const violations: string[] = [];
   const migrationFiles = new Bun.Glob("20*/migration.sql");
-
   for await (const relativePath of migrationFiles.scan({
     cwd: MIGRATIONS_DIR,
   })) {
     const source = await Bun.file(
       nodePath.join(MIGRATIONS_DIR, relativePath),
     ).text();
-    const sqlWithoutLineComments = stripSqlComments(source);
-    for (const match of sqlWithoutLineComments.matchAll(
-      CONCURRENT_IF_NOT_EXISTS,
-    )) {
-      const name = match.at(1);
-      if (!name || !ONLINE_VALIDATED_INDEX_NAMES.has(name)) {
-        violations.push(
-          `${relativePath}: ${name ?? "unknown index"} uses IF NOT EXISTS without an online validity postcondition`,
-        );
-      }
-    }
-
-    const droppedIndexes = new Set(
-      [...sqlWithoutLineComments.matchAll(CONCURRENT_DROP)].flatMap((match) => {
-        const name = match.at(1);
-        return name ? [name] : [];
+    violations.push(
+      ...collectUnsafeConcurrentIndexesInMigration({
+        relativePath,
+        source,
+        validatedIndexNames: ONLINE_VALIDATED_INDEX_NAMES,
       }),
     );
-    const concurrentUniqueCreates = [
-      ...sqlWithoutLineComments.matchAll(CONCURRENT_UNIQUE_CREATE),
-    ];
-    const concurrentReindexPositions = new Map<string, number[]>();
-    for (const match of sqlWithoutLineComments.matchAll(CONCURRENT_REINDEX)) {
-      const name = match.at(1);
-      if (name === undefined) {
-        continue;
-      }
-      const positions = concurrentReindexPositions.get(name) ?? [];
-      positions.push(match.index);
-      concurrentReindexPositions.set(name, positions);
-    }
-    const firstForeignKeyIndex =
-      sqlWithoutLineComments.search(/\bFOREIGN\s+KEY\b/iu);
-    const createdUniqueIndexes = new Set(
-      concurrentUniqueCreates.flatMap(({ groups }) => {
-        const name = groups?.["name"];
-        return name ? [name] : [];
-      }),
-    );
-    if (
-      concurrentUniqueCreates.some(({ groups }) => groups?.["idempotent"]) &&
-      [...droppedIndexes].some((name) => !createdUniqueIndexes.has(name))
-    ) {
-      violations.push(
-        `${relativePath}: unique replacement drop must follow online validity postconditions`,
-      );
-    }
-    for (const match of concurrentUniqueCreates) {
-      const { groups } = match;
-      const name = groups?.["name"];
-      if (!name) {
-        continue;
-      }
-      if (!groups["idempotent"]) {
-        violations.push(
-          `${relativePath}: unique index ${name} is not retry-idempotent`,
-        );
-      }
-      if (
-        groups["idempotent"] &&
-        firstForeignKeyIndex !== -1 &&
-        !(concurrentReindexPositions.get(name) ?? []).some(
-          (position) =>
-            position > match.index && position < firstForeignKeyIndex,
-        )
-      ) {
-        violations.push(
-          `${relativePath}: unique index ${name} is used before retry validity repair`,
-        );
-      }
-      if (droppedIndexes.has(name)) {
-        violations.push(
-          `${relativePath}: retry can remove valid unique index ${name}`,
-        );
-      }
-    }
-    violations.push(...collectUnsafeConcurrentTimeouts(relativePath, source));
   }
-
   return violations.toSorted();
 };
 
@@ -1147,6 +1313,76 @@ const collectUnsafeTypeChanges = async () => {
 };
 
 describe("concurrent index migration safety", () => {
+  test.each([
+    { spelling: "index_name", name: "index_name" },
+    { spelling: "INDEX_NAME", name: "index_name" },
+    { spelling: '"MixedName"', name: "MixedName" },
+    { spelling: 'public."MixedName"', name: "MixedName" },
+    { spelling: '"escaped""name"', name: 'escaped"name' },
+  ])(
+    "recognizes concurrent index identifier $spelling",
+    ({ spelling, name }) => {
+      const operations = [
+        {
+          sql: `CREATE INDEX CONCURRENTLY IF NOT EXISTS ${spelling} ON contacts (id);`,
+          pattern: CONCURRENT_IF_NOT_EXISTS,
+        },
+        {
+          sql: `CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS ${spelling} ON contacts (id);`,
+          pattern: CONCURRENT_UNIQUE_CREATE,
+        },
+        {
+          sql: `DROP INDEX CONCURRENTLY IF EXISTS ${spelling};`,
+          pattern: CONCURRENT_DROP,
+        },
+        {
+          sql: `REINDEX INDEX CONCURRENTLY ${spelling};`,
+          pattern: CONCURRENT_REINDEX,
+        },
+      ];
+      for (const { sql, pattern } of operations) {
+        expect([...sql.matchAll(pattern)].map(matchedIndexName)).toEqual([
+          name,
+        ]);
+      }
+    },
+  );
+
+  test("removing either sanctions cursor index registration fails the migration guard", async () => {
+    const relativePath =
+      "20261003123000_sanctions_monitoring_review_index/migration.sql";
+    const source = await Bun.file(
+      nodePath.join(MIGRATIONS_DIR, relativePath),
+    ).text();
+    const names = [
+      ...stripSqlComments(source).matchAll(CONCURRENT_IF_NOT_EXISTS),
+    ].map(matchedIndexName);
+    expect(names).toHaveLength(2);
+    expect(
+      collectUnsafeConcurrentIndexesInMigration({
+        relativePath,
+        source,
+        validatedIndexNames: ONLINE_VALIDATED_INDEX_NAMES,
+      }),
+    ).toEqual([]);
+    for (const name of names) {
+      if (name === undefined) {
+        panic("Concurrent index identifier was not captured");
+      }
+      const validatedIndexNames = new Set(ONLINE_VALIDATED_INDEX_NAMES);
+      expect(validatedIndexNames.delete(name)).toBe(true);
+      expect(
+        collectUnsafeConcurrentIndexesInMigration({
+          relativePath,
+          source,
+          validatedIndexNames,
+        }),
+      ).toEqual([
+        `${relativePath}: ${name} uses IF NOT EXISTS without an online validity postcondition`,
+      ]);
+    }
+  });
+
   test("enforces bounded-lock, unbounded-build, and validity-aware retries", async () => {
     expect(await collectUnsafeConcurrentIndexes()).toEqual([]);
   });
@@ -1690,6 +1926,7 @@ SELECT 1;`;
  */
 const REPLAY_SAFE_BEFORE_SPLIT: readonly RegExp[] = [
   /^SET\b/iu,
+  /^RESET\s+ROLE$/iu,
   /^SELECT\s+set_config\s*\(/iu,
   // Procedural blocks are approved one by one above, by fingerprint.
   /^DO\b/iu,
@@ -1710,8 +1947,6 @@ const REPLAY_SAFE_TABLE_ACTIONS: readonly RegExp[] = [
   /^(?:ENABLE|FORCE)\s+ROW\s+LEVEL\s+SECURITY$/iu,
 ];
 
-const IDENTIFIER = String.raw`(?:"(?:""|[^"])+"|[A-Za-z_][\w$]*)`;
-const RELATION = String.raw`(?:${IDENTIFIER}\s*\.\s*)?${IDENTIFIER}`;
 const ALTER_TABLE = new RegExp(
   String.raw`^ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:ONLY\s+)?(?<table>${RELATION})\s+(?<actions>[\s\S]+)$`,
   "iu",
@@ -1734,16 +1969,6 @@ const DROP_NAMED_ON_TABLE = new RegExp(
 );
 
 /** An identifier as PostgreSQL resolves it: unquoted folds to lower case. */
-const canonicalIdentifier = (identifier: string): string =>
-  identifier.startsWith('"')
-    ? identifier.slice(1, -1).replaceAll('""', '"')
-    : identifier.toLowerCase();
-
-/** A relation without its schema: migrations here address `public` alone. */
-const canonicalRelation = (relation: string): string => {
-  const parts = relation.match(new RegExp(IDENTIFIER, "gu")) ?? [];
-  return canonicalIdentifier(parts.at(-1) ?? relation);
-};
 
 /** Split on the commas that separate actions, not the ones inside parentheses. */
 const splitTableActions = (actions: string): string[] => {
@@ -1853,6 +2078,22 @@ const isReplaySafeBeforeSplit = (
   return false;
 };
 
+const isRowScanningStatement = (relativePath: string, statement: string) => {
+  if (
+    /^CREATE(?:\s+OR\s+REPLACE)?\s+FUNCTION\b/iu.test(statement) ||
+    /^CREATE\s+POLICY\b/iu.test(statement) ||
+    (/^DO\b/iu.test(statement) &&
+      !isUnapprovedProceduralStatement(relativePath, statement))
+  ) {
+    return false;
+  }
+  return (
+    /^UPDATE\b/iu.test(statement) ||
+    /\bVALIDATE\s+CONSTRAINT\b/iu.test(statement) ||
+    (/\bCHECK\s*\(/iu.test(statement) && !/\bNOT\s+VALID\b/iu.test(statement))
+  );
+};
+
 /**
  * Earlier migrations are applied history and cannot be rewritten, so the rule
  * binds from the day it was written. A migration directory sorts by its
@@ -1909,12 +2150,7 @@ describe("split-transaction migrations", () => {
         continue;
       }
       for (const statement of statements.slice(0, split)) {
-        if (
-          /^UPDATE\b/iu.test(statement) ||
-          /\bVALIDATE\s+CONSTRAINT\b/iu.test(statement) ||
-          (/\bCHECK\s*\(/iu.test(statement) &&
-            !/\bNOT\s+VALID\b/iu.test(statement))
-        ) {
+        if (isRowScanningStatement(relativePath, statement)) {
           violations.push(`${relativePath}: row scan before transaction split`);
         }
       }
@@ -1928,6 +2164,8 @@ describe("split-transaction migrations", () => {
 
   test("tells a replayable statement from one a second run would fail on", () => {
     const cases: readonly (readonly [string, readonly string[], boolean])[] = [
+      ["RESET ROLE", [], true],
+      ["RESET ALL", [], false],
       [`ALTER TABLE "t" ADD COLUMN "c" integer`, [], false],
       [`ALTER TABLE "t" ADD COLUMN IF NOT EXISTS "c" integer`, [], true],
       [
@@ -2021,5 +2259,86 @@ describe("split-transaction migrations", () => {
         replaySafe: isReplaySafeBeforeSplit(statement, earlier),
       }).toEqual({ statement, replaySafe: expected });
     }
+  });
+});
+
+describe("entity feature gate migration semantics", () => {
+  test("approves only the idempotent NOT VALID gate constraint procedure", () => {
+    const relativePath = ENTITY_FEATURE_GATE_MIGRATION;
+    const valid =
+      "DO $check$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'public.entities'::regclass AND conname = 'entity_feature_gate_states_check') THEN ALTER TABLE public.\"entities\" ADD CONSTRAINT entity_feature_gate_states_check CHECK (entity_feature_gate IN ('pending', 'open', 'legal-lists', 'missing')) NOT VALID; END IF; END $check$";
+    const wrongRelation = valid.replaceAll("public.entities", "public.other");
+    const wrongCheck = valid.replaceAll(
+      "'pending', 'open', 'legal-lists', 'missing'",
+      "'pending', 'open'",
+    );
+    const injectedUpdate = valid.replace(
+      "END IF;",
+      "UPDATE public.entities SET entity_feature_gate = 'open'; END IF;",
+    );
+
+    expect(isUnapprovedProceduralStatement(relativePath, valid)).toBe(false);
+    expect(isUnapprovedProceduralStatement(relativePath, wrongRelation)).toBe(
+      true,
+    );
+    expect(isUnapprovedProceduralStatement(relativePath, wrongCheck)).toBe(
+      true,
+    );
+    expect(isUnapprovedProceduralStatement(relativePath, injectedUpdate)).toBe(
+      true,
+    );
+    expect(isUnapprovedProceduralStatement("other/migration.sql", valid)).toBe(
+      true,
+    );
+  });
+
+  test("does not treat stored function bodies or policy checks as row scans", () => {
+    expect(
+      isRowScanningStatement(
+        "fixture/migration.sql",
+        "CREATE OR REPLACE FUNCTION gate() RETURNS void LANGUAGE plpgsql " +
+          "AS $f$ BEGIN UPDATE public.items SET value = 1; END $f$",
+      ),
+    ).toBe(false);
+    expect(
+      isRowScanningStatement(
+        "fixture/migration.sql",
+        "CREATE POLICY gate_policy ON public.items AS RESTRICTIVE FOR ALL " +
+          "USING (true) WITH CHECK (value > 0)",
+      ),
+    ).toBe(false);
+    expect(
+      isRowScanningStatement(
+        "fixture/migration.sql",
+        "ALTER TABLE public.items ADD CONSTRAINT positive_check " +
+          "CHECK (value > 0) NOT VALID",
+      ),
+    ).toBe(false);
+    expect(
+      isRowScanningStatement(
+        "fixture/migration.sql",
+        "ALTER TABLE public.items ADD CONSTRAINT positive_check " +
+          "CHECK (value > 0)",
+      ),
+    ).toBe(true);
+    expect(
+      isRowScanningStatement(
+        "fixture/migration.sql",
+        "ALTER TABLE public.items VALIDATE CONSTRAINT c",
+      ),
+    ).toBe(true);
+    expect(
+      isRowScanningStatement(
+        "fixture/migration.sql",
+        "ALTER DOMAIN public.positive_value ADD CONSTRAINT positive_check " +
+          "CHECK (VALUE > 0)",
+      ),
+    ).toBe(true);
+    expect(
+      isRowScanningStatement(
+        "fixture/migration.sql",
+        "ALTER TABLE public.items ADD CHECK (value > 0)",
+      ),
+    ).toBe(true);
   });
 });

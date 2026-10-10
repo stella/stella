@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import { lookupByMbs } from "./client.js";
 import { SudregAPIError, SudregValidationError } from "./errors.js";
 
@@ -65,17 +67,17 @@ describe("SUDREG client", () => {
   test("returns null on an HTTP 404", async () => {
     restore = installFetchStub(async () => new Response("", { status: 404 }));
     expect(
-      lookupByMbs("080000014", { observer: "unobserved" }),
-    ).resolves.toBeNull();
+      await lookupByMbs("080000014", { observer: "unobserved" }),
+    ).toBeNull();
   });
 
-  test("rejects malformed MBS values before fetch", () => {
+  test("rejects malformed MBS values before fetch", async () => {
     expect(
-      lookupByMbs("80000014", { observer: "unobserved" }),
-    ).rejects.toBeInstanceOf(SudregValidationError);
+      await rejectionOf(lookupByMbs("80000014", { observer: "unobserved" })),
+    ).toBeInstanceOf(SudregValidationError);
     expect(
-      lookupByMbs("08000001A", { observer: "unobserved" }),
-    ).rejects.toBeInstanceOf(SudregValidationError);
+      await rejectionOf(lookupByMbs("08000001A", { observer: "unobserved" })),
+    ).toBeInstanceOf(SudregValidationError);
   });
 
   test("wraps upstream failures", async () => {
@@ -83,7 +85,7 @@ describe("SUDREG client", () => {
       async () => new Response("maintenance", { status: 503 }),
     );
     expect(
-      lookupByMbs("080000014", { observer: "unobserved" }),
-    ).rejects.toBeInstanceOf(SudregAPIError);
+      await rejectionOf(lookupByMbs("080000014", { observer: "unobserved" })),
+    ).toBeInstanceOf(SudregAPIError);
   });
 });

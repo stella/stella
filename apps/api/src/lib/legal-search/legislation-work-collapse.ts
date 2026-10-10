@@ -76,10 +76,8 @@ export const pinnedLegislationWorkScore = (
 ): number => floor + (count - index);
 
 type CollapseLegislationHitsByWorkOptions = {
-  /** Blended version hits, any order. */
-  ranked: readonly RankedHit[];
-  /** The Work key of each ranked version; a version with none is dropped. */
-  workOf: ReadonlyMap<string, string>;
+  /** Blended version hits carrying their hydrated Work key, any order. */
+  ranked: readonly (RankedHit & { work: string })[];
   /** Per Work key, the version its present-day reads show. */
   representatives: ReadonlyMap<string, LegislationWorkRepresentative>;
   /** Works placed first, best first (`pinnedLegislationWorks`). */
@@ -112,7 +110,6 @@ const byScoreThenIdDesc = (a: RankedHit, b: RankedHit): number => {
 
 export const collapseLegislationHitsByWork = ({
   ranked,
-  workOf,
   representatives,
   namedWorks,
   namedScoreFloor,
@@ -124,11 +121,7 @@ export const collapseLegislationHitsByWork = ({
     (excludedWorkTokens?.has(corpusSearchGroupToken(work)) ?? false);
 
   const bestByWork = new Map<string, RankedHit>();
-  for (const hit of ranked) {
-    const work = workOf.get(hit.id);
-    if (work === undefined) {
-      continue;
-    }
+  for (const { work, ...hit } of ranked) {
     const best = bestByWork.get(work);
     if (best === undefined || byScoreThenIdDesc(hit, best) < 0) {
       bestByWork.set(work, hit);

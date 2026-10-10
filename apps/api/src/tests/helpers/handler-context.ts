@@ -14,26 +14,19 @@ import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import type { TestDatabaseTransaction } from "@/api/tests/security/test-utils";
 
 /**
- * Shared safe-handler context factory for API handler tests.
- *
- * Roughly forty handler test files hand-roll the object a `createSafeHandler`
- * / `createSafeRootHandler` handler receives, repeating the same
- * `workspaceId` / `memberRole` / `session` / `user` / `recordAuditEvent`
- * boilerplate around whatever `body`, `query`, `params`, `safeDb`, and
- * `scopedDb` the handler under test actually reads. This factory centralises
- * that boilerplate so those files can migrate mechanically: replace the
- * `asTestRaw<Ctx>({ ...identity boilerplate..., body })` literal with
- * `createTestHandlerContext<Ctx>({ body, safeDb, scopedDb })`.
- *
- * The defaults mirror the most common hand-rolled shape (an owner acting in a
- * single workspace) and additionally supply the richer accessor fields
- * (`getActiveWorkspaceIds`, `getWorkspaceAccess`, `createAuditRecorder`, ...)
- * that the DB-backed integration contexts need, so one factory covers both the
- * pure-mock and the PGlite-backed styles. Every field is overridable, and the
- * session and user identity objects deep-merge; member authority is replaced
- * as one value.
+ * Assert that this path must not record audit events. The recorder panics, but
+ * inside `safeDb(tx => ...)` the panic surfaces as the transaction's database
+ * error, so a NO_AUDIT test must not treat a generic database error as success.
+ */
+export const NO_AUDIT = { type: "no_audit" } as const;
+/** Assert that this path must not access this database collaborator. */
+export const NO_DB = { type: "no_db" } as const;
+
+/** Shared safe-handler context factory. Identity defaults are overridable;
+ * audit and database collaborators must be supplied or explicitly forbidden.
  */
 
 /** The identity/capability fields the factory owns defaults for. */
@@ -68,35 +61,41 @@ export type BaseTestHandlerContext = {
  * `query`, `params`, ...) pass straight through onto the returned context.
  */
 export type TestHandlerContextOverrides = Partial<
-  Omit<BaseTestHandlerContext, "user">
-> & { user?: Partial<BaseTestHandlerContext["user"]> } & Record<
-    string,
-    unknown
-  >;
+  Omit<
+    BaseTestHandlerContext,
+    "user" | "safeDb" | "scopedDb" | "recordAuditEvent"
+  >
+> & {
+  audit: AuditRecorder | typeof NO_AUDIT;
+  recordAuditEvent?: never;
+  user?: Partial<BaseTestHandlerContext["user"]>;
+  safeDb: SafeDb | SafeDb<TestDatabaseTransaction> | typeof NO_DB;
+  scopedDb: ScopedDb | ScopedDb<TestDatabaseTransaction> | typeof NO_DB;
+} & Record<string, unknown>;
 
 const DEFAULT_WORKSPACE_ID = toSafeId<"workspace">("workspace_test");
 const DEFAULT_ORGANIZATION_ID = toSafeId<"organization">("org_test");
 const DEFAULT_USER_ID = toSafeId<"user">("user_test");
 
-const noopAuditRecorder: AuditRecorder = async () => await Promise.resolve();
+// Audited paths must choose a recorder explicitly, just as database paths
+// must supply their database collaborator.
+const unconfiguredAuditRecorder: AuditRecorder = () =>
+  panic("createTestHandlerContext: NO_AUDIT path recorded an audit event");
 
 // A handler that reaches for the database without the test providing one is a
 // test bug, not an empty result: fail loudly instead of silently returning
 // nothing.
 const unconfiguredDb = (): never =>
-  panic(
-    "createTestHandlerContext: no safeDb/scopedDb provided; pass one in overrides",
-  );
+  panic("createTestHandlerContext: NO_DB path accessed the database");
 
-const createBaseContext = (): BaseTestHandlerContext => ({
+const createBaseContext = (): Omit<
+  BaseTestHandlerContext,
+  "safeDb" | "scopedDb" | "recordAuditEvent" | "createAuditRecorder"
+> => ({
   workspaceId: DEFAULT_WORKSPACE_ID,
   memberRole: sessionMemberRole("owner"),
   session: { activeOrganizationId: DEFAULT_ORGANIZATION_ID },
   user: { id: DEFAULT_USER_ID, email: "standard@example.test" },
-  safeDb: unconfiguredDb,
-  scopedDb: unconfiguredDb,
-  recordAuditEvent: noopAuditRecorder,
-  createAuditRecorder: () => noopAuditRecorder,
   getActiveWorkspaceIds: async () =>
     await Promise.resolve([DEFAULT_WORKSPACE_ID]),
   getAccessibleWorkspaces: async () =>
@@ -129,12 +128,20 @@ const createBaseContext = (): BaseTestHandlerContext => ({
  */
 // oxlint-disable-next-line typescript/no-unnecessary-type-parameters -- the type parameter IS the API: callers pin the handler's own context type per call
 export const createTestHandlerContext = <TContext = BaseTestHandlerContext>(
-  overrides: TestHandlerContextOverrides = {},
+  overrides: TestHandlerContextOverrides,
 ): TContext => {
   const base = createBaseContext();
+  const { audit, safeDb, scopedDb, createAuditRecorder, ...fields } = overrides;
+  const recordAuditEvent =
+    typeof audit === "function" ? audit : unconfiguredAuditRecorder;
   return asTestRaw<TContext>({
     ...base,
-    ...overrides,
+    ...fields,
+    // Only the sentinel is replaced; any supplied double passes through as is.
+    safeDb: safeDb === NO_DB ? unconfiguredDb : safeDb,
+    scopedDb: scopedDb === NO_DB ? unconfiguredDb : scopedDb,
+    recordAuditEvent,
+    createAuditRecorder: createAuditRecorder ?? (() => recordAuditEvent),
     // Merge identity details and replace authority as one value.
     memberRole: overrides.memberRole ?? base.memberRole,
     session: { ...base.session, ...overrides.session },

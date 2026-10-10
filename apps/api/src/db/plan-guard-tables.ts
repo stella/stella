@@ -5,4 +5,6 @@ export const PLAN_GUARD_TABLES = [
   ...HIGH_VOLUME_TABLES,
   "legislation_documents",
   "legislation_search_documents",
+  // Not corpus-sized, but its retention purge reads it by age every day.
+  "system_audit_runs",
 ] as const;

@@ -9,6 +9,7 @@ import { useShallow } from "zustand/react/shallow";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
+  DialogFormState,
   DialogFooter,
   DialogHeader,
   DialogPanel,
@@ -30,6 +31,7 @@ import { useInspectorGroupTransfer } from "@/components/inspector/inspector-grou
 import { getInspectorTabGroupId } from "@/components/inspector/inspector-groups.logic";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { MatterIcon } from "@/components/matter-icon";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import {
@@ -37,6 +39,7 @@ import {
   getMatterSwatch,
   resolveMatterColor,
 } from "@/lib/matter-colors";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import {
   workspacesNavigationOptions,
   workspacesRouteOptions,
@@ -50,8 +53,16 @@ export type InspectorGroupPresentation = {
 
 export const useInspectorGroups = () => {
   const t = useTranslations();
-  const { activeOrganizationId } = useAuthenticatedUser();
-  const { data } = useQuery(workspacesNavigationOptions(activeOrganizationId));
+  const { activeOrganizationId, id: userId } = useAuthenticatedUser();
+  const dataQuery = useQuery(
+    workspacesNavigationOptions({
+      organizationId: activeOrganizationId,
+      userId,
+    }),
+  );
+  const dataView = useQueryView(dataQuery);
+  useQueryViewError(dataView);
+  const data = dataView.type === "items" ? dataView.items : undefined;
   const state = useInspectorTabsStore(
     useShallow((s) => ({
       tabs: s.tabs,
@@ -190,6 +201,19 @@ export const InspectorGroupEditor = ({
       }}
     >
       <DialogPopup finalFocus={returnFocus}>
+        <DialogFormState
+          dirty={
+            name !== (target.type === "edit" ? target.name : "") ||
+            color !==
+              (target.type === "edit" ? target.color : MATTER_SWATCHES[0])
+          }
+          onDiscard={() => {
+            setName(target.type === "edit" ? target.name : "");
+            setColor(
+              target.type === "edit" ? target.color : MATTER_SWATCHES[0],
+            );
+          }}
+        />
         <form
           onSubmit={(event) => {
             event.preventDefault();
@@ -315,7 +339,10 @@ const InspectorGroupDestinations = ({
   onMove: (groupId: string) => void;
 }) => {
   const { activeOrganizationId } = useAuthenticatedUser();
-  const { data } = useQuery(workspacesRouteOptions(activeOrganizationId));
+  const dataQuery = useQuery(workspacesRouteOptions(activeOrganizationId));
+  const dataView = useQueryView(dataQuery);
+  useQueryViewError(dataView);
+  const data = dataView.type === "items" ? dataView.items : undefined;
   const customGroups = useInspectorTabsStore((state) => state.groups);
   const destinations: InspectorGroupPresentation[] = [];
   if (data !== undefined) {
@@ -334,10 +361,15 @@ const InspectorGroupDestinations = ({
       destinations.push(group);
     }
   }
-  return destinations.map((group) => (
-    <MenuItem key={group.id} onClick={() => onMove(group.id)}>
-      <InspectorGroupIcon group={group} />
-      <bdi className="max-w-64 truncate">{group.name}</bdi>
-    </MenuItem>
-  ));
+  return (
+    <>
+      <QueryViewFeedback view={dataView} />
+      {destinations.map((group) => (
+        <MenuItem key={group.id} onClick={() => onMove(group.id)}>
+          <InspectorGroupIcon group={group} />
+          <bdi className="max-w-64 truncate">{group.name}</bdi>
+        </MenuItem>
+      ))}
+    </>
+  );
 };

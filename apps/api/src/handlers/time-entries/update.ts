@@ -7,7 +7,8 @@ import { BILLING_STATUS } from "@stll/api-contract";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { timeEntries } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { timeEntryRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
@@ -382,6 +383,9 @@ const updateTimeEntryById = createSafeHandler(
       "entry being unchanged since it was read, so a concurrent edit returns " +
       "a conflict instead of overwriting.",
     permissions: { timeEntry: ["update"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: { featureId: "time-billing", type: "required" },
+    realtime: timeEntryRealtimeUpdates,
     mcp: { type: "covered", by: "save_time_entry" },
     body: updateTimeEntryBodySchema,
   },

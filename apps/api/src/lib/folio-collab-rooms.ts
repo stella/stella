@@ -2,7 +2,8 @@ import { panic, Result, TaggedError } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
-import { roles } from "@stll/permissions";
+import { CLIENT_MATTER_ADMIN_ROLES, roles } from "@stll/permissions";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import { member, user } from "@/api/db/auth-schema";
@@ -20,7 +21,6 @@ import {
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
-import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -33,6 +33,7 @@ import {
   retirePublishedObjectCleanupIntentsInTransaction,
   settleObjectCleanupIntentsAfterWriterInTransaction,
 } from "@/api/lib/buffer-intent-reconciliation";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { liveDesktopEditSessionPredicates } from "@/api/lib/desktop-edit-session-predicates";
 import { lockDocxEditTarget } from "@/api/lib/entity-versions/desktop-edit-session-utils";
 import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
@@ -69,7 +70,7 @@ export {
   FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
 };
 
-export const createFolioCollabToken = () =>
+const createFolioCollabToken = () =>
   Bun.randomUUIDv7()
     .replaceAll("-", "")
     .slice(0, FOLIO_COLLAB_TOKEN_PART_LENGTH) +
@@ -77,13 +78,12 @@ export const createFolioCollabToken = () =>
     .replaceAll("-", "")
     .slice(0, FOLIO_COLLAB_TOKEN_PART_LENGTH);
 
-export const hashFolioCollabToken = (token: string) =>
-  new Bun.CryptoHasher("sha256").update(token).digest("hex");
+const hashFolioCollabToken = (token: string) => hashSha256Hex(token);
 
 export const computeFolioCollabTokenExpiresAt = (now = new Date()) =>
   new Date(now.getTime() + FOLIO_COLLAB_TOKEN_TTL_MS);
 
-export type FolioCollabStoredRoomFile = {
+type FolioCollabStoredRoomFile = {
   fileId: SafeId<"userFile">;
   mimeType: typeof DOCX_MIME_TYPE | typeof FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE;
 };
@@ -118,63 +118,6 @@ export const collectFolioCollabStoredRoomFiles = ({
   return storedFiles;
 };
 
-const deleteStoredRoomFile = async ({
-  file,
-  organizationId,
-  roomId,
-  workspaceId,
-}: {
-  file: FolioCollabStoredRoomFile;
-  organizationId: SafeId<"organization">;
-  roomId: SafeId<"folioCollabRoom">;
-  workspaceId: SafeId<"workspace">;
-}) => {
-  const key = createFileKey({
-    fileId: file.fileId,
-    mimeType: file.mimeType,
-    organizationId,
-    workspaceId,
-  });
-
-  const deleted = Result.flatten(
-    await Result.tryPromise({
-      try: async () =>
-        await deleteOrganizationFileWithSignal(
-          key,
-          AbortSignal.timeout(FOLIO_COLLAB_S3_DELETE_TIMEOUT_MS),
-        ),
-      catch: (cause) => cause,
-    }),
-  );
-  if (Result.isError(deleted)) {
-    captureError(deleted.error, { roomId, storageKey: key });
-  }
-};
-
-export const deleteFolioCollabStoredRoomFiles = async ({
-  files,
-  organizationId,
-  roomId,
-  workspaceId,
-}: {
-  files: FolioCollabStoredRoomFile[];
-  organizationId: SafeId<"organization">;
-  roomId: SafeId<"folioCollabRoom">;
-  workspaceId: SafeId<"workspace">;
-}) => {
-  await Promise.all(
-    files.map(
-      async (file) =>
-        await deleteStoredRoomFile({
-          file,
-          organizationId,
-          roomId,
-          workspaceId,
-        }),
-    ),
-  );
-};
-
 export type AuthorizedFolioCollabRoom = {
   canEdit: boolean;
   entityId: SafeId<"entity">;
@@ -200,11 +143,20 @@ type FolioCollabSnapshotStoreAuthority =
   | { type: "collab-service" }
   | { type: "participant"; userId: SafeId<"user"> };
 
+type FolioCollabTokenIssueDb = {
+  execute: (query: SQL) => Promise<unknown>;
+  insert: (table: typeof folioCollabRoomTokens) => {
+    values: (
+      row: typeof folioCollabRoomTokens.$inferInsert,
+    ) => PromiseLike<unknown>;
+  };
+};
+
 type IssueFolioCollabTokenOptions = {
   generation: number;
   permissions: FolioCollabTokenPermissions;
   roomId: SafeId<"folioCollabRoom">;
-  tx: Transaction;
+  tx: FolioCollabTokenIssueDb;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace">;
 };
@@ -386,7 +338,7 @@ export const canUseFolioCollabWorkspace = ({
   isMemberRole(organizationRole) &&
   (workspaceMemberId !== null ||
     (workspaceClientId !== null &&
-      (organizationRole === "owner" || organizationRole === "admin")));
+      CLIENT_MATTER_ADMIN_ROLES.some((role) => role === organizationRole)));
 
 export const decideFolioCollabRoomAuthorization = ({
   actualGeneration,
@@ -872,25 +824,32 @@ export const storeFolioCollabSnapshot = async ({
   const written = Result.flatten(
     await Result.tryPromise({
       try: async () => {
-        if (!env.FEATURE_FILE_USAGE_LIMITS) {
+        if (!isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")) {
           return Result.ok(
-            await writeS3ObjectWithRetry({
-              contentType: FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
-              data: snapshotBytes,
-              key: nextKey,
-            }),
+            await writeS3ObjectWithRetry(
+              {
+                contentType: FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
+                data: snapshotBytes,
+                key: nextKey,
+              },
+              { type: "cleanup-intent", intent: nextCleanupIntentId },
+            ),
           );
         }
         return await writeOrganizationFile({
           organizationId: value.organizationId,
           objectKey: nextKey,
           sizeBytes: snapshotBytes.byteLength,
-          write: async () =>
-            await writeS3ObjectWithRetry({
-              contentType: FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
-              data: snapshotBytes,
-              key: nextKey,
-            }),
+          content: snapshotBytes,
+          write: async ({ content, objectKey }) =>
+            await writeS3ObjectWithRetry(
+              {
+                contentType: FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
+                data: content,
+                key: objectKey,
+              },
+              { type: "cleanup-intent", intent: nextCleanupIntentId },
+            ),
         });
       },
       catch: snapshotStoreFailure,

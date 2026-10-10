@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/handlers/case-law/ingestion/background-replay-store.ts",
+  "delta": 2,
+  "reason": "The background replay source walk keeps two reads per candidate (the lag probe and the daily allowance check). The walk is bounded by the enrolled-source count and stops at the first eligible source; gate states and pending receipts are read once for every source before it."
+}

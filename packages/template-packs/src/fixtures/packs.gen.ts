@@ -28,7 +28,7 @@ export const GENERATED_TEMPLATE_PACKS: readonly GeneratedTemplatePack[] = [
         legalArea: "employment",
         license: "CC-BY-4.0",
         fields: ["department","effective_date","employee_address","employee_birth_date","employee_name","employer_address","employer_id","employer_name","governing_law","has_non_compete","has_probation","job_title","non_compete_months","non_compete_territory","probation_months","probation_notice_days","salary_amount","salary_currency","supervisor_name"],
-        sha256: "4e8127401372485dd168f74d9766d4b86e349cc1965b45e8ef0fcf0df7775861",
+        sha256: "dcb1b0863e1c52c52df1100946f57335b6a504aeca5197f3568d717975e8049d",
         readme: "# Employment agreement\n\nFixture template with `{{employee_name}}`, `{{employer_name}}` and related markers.\n",
       }
     ],

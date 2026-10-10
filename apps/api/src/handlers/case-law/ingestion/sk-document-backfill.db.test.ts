@@ -12,6 +12,8 @@ import { PDF } from "@libpdf/core";
 import { beforeAll, describe, expect, test } from "bun:test";
 import { and, eq, inArray } from "drizzle-orm";
 
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
+
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
@@ -19,7 +21,6 @@ import {
   caseLawSources,
 } from "@/api/db/schema";
 import { ADAPTER_KEYS, PARSER_VERSIONS } from "@/api/handlers/case-law/consts";
-import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import type { SafeId } from "@/api/lib/branded-types";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/lib/legal-search/corpus-storage";
@@ -33,12 +34,15 @@ import {
   loadRemainingDocuments,
   markDocumentUnavailable,
   MAX_DOCUMENT_FETCH_ATTEMPTS,
+  MAX_DOCUMENT_PDF_BYTES,
   MAX_PRIORITY_FETCH_ATTEMPTS,
   recordDocumentFetchRequest,
   storeBackfilledDocument,
 } from "@/api/lib/legal-search/sk-document-backfill";
 import type { PendingDocument } from "@/api/lib/legal-search/sk-document-backfill";
+import { SkDocumentNonPdfError } from "@/api/lib/legal-search/sk-document-fetch-diagnostics";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
+import { readOfResponse } from "@/api/tests/helpers/publisher-read";
 
 /**
  * Wide enough to hold the whole queue on the migrated-but-unseeded
@@ -826,7 +830,7 @@ if (!databaseUrl || !runPostgresTests) {
       ) =>
         await fetchDecisionDocument({
           decisionId: id,
-          fetchDocument: answer,
+          fetchDocument: async () => readOfResponse(await answer()),
           scopedDb,
           signal: new AbortController().signal,
         });
@@ -891,11 +895,13 @@ if (!databaseUrl || !runPostgresTests) {
             decisionId: buffered.id,
             fetchDocument: async (url) => {
               urls.push(url.href);
-              return url.href === currentUrl
-                ? new Response(bytes)
-                : new Response(oldStatus === 200 ? oldBytes : null, {
-                    status: oldStatus,
-                  });
+              return readOfResponse(
+                url.href === currentUrl
+                  ? new Response(bytes)
+                  : new Response(oldStatus === 200 ? oldBytes : null, {
+                      status: oldStatus,
+                    }),
+              );
             },
             scopedDb,
             signal: new AbortController().signal,
@@ -949,6 +955,57 @@ if (!databaseUrl || !runPostgresTests) {
           .from(caseLawDecisions)
           .where(eq(caseLawDecisions.id, id));
         expect(text?.fulltext).toBeNull();
+      });
+
+      /** A body one byte over the ceiling that starts with `head`. */
+      const oversizedBody = (head: string): Uint8Array => {
+        const bytes = new Uint8Array(MAX_DOCUMENT_PDF_BYTES + 1);
+        bytes.set(new TextEncoder().encode(head));
+        return bytes;
+      };
+
+      test("a PDF over the byte ceiling parks the decision with nothing stored", async () => {
+        const id = await insertPending("too-large");
+
+        const outcome = await fetchWith(
+          id,
+          async () =>
+            await Promise.resolve(new Response(oversizedBody("%PDF-1.7\n"))),
+        );
+
+        expect(outcome).toEqual({
+          status: "parked",
+          failure: DOCUMENT_FETCH_FAILURE.TOO_LARGE,
+          detail: `over-${MAX_DOCUMENT_PDF_BYTES}-bytes`,
+        });
+        const row = await readFetchState(id);
+        expect(row?.documentFetchAttempts).toBe(MAX_DOCUMENT_FETCH_ATTEMPTS);
+        const [stored] = await db
+          .select({ fulltext: caseLawDecisions.fulltext })
+          .from(caseLawDecisions)
+          .where(eq(caseLawDecisions.id, id));
+        expect(stored).toEqual({ fulltext: null });
+      });
+
+      test("a body over the byte ceiling that is not a PDF throws as any non-PDF body does", async () => {
+        const id = await insertPending("too-large-html");
+
+        const outcome = await fetchWith(
+          id,
+          async () =>
+            await Promise.resolve(
+              new Response(oversizedBody("<!doctype html><title>error")),
+            ),
+        ).then(
+          (value: unknown) => ({ resolved: value }),
+          (error: unknown) => error,
+        );
+
+        expect(outcome).toBeInstanceOf(SkDocumentNonPdfError);
+        const row = await readFetchState(id);
+        expect(row?.documentFetchAttempts).toBeLessThan(
+          MAX_DOCUMENT_FETCH_ATTEMPTS,
+        );
       });
 
       test("a refused download defers the decision behind its own cooldown", async () => {

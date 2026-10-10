@@ -1,11 +1,19 @@
+// parser-output-unchanged: request scheduling and scoped fixture dependencies only; parsed response output is unchanged.
 // parser-output-unchanged: checked coordination clients and bounded immediate gate checks; response parsing and stored output are unchanged.
-import { Result, TaggedError } from "better-result";
+// parser-output-unchanged: isolate default test gate state through a lightweight runner signal; production requests and parsed output are unchanged.
+import { panic, Result, TaggedError } from "better-result";
+import { AsyncLocalStorage } from "node:async_hooks";
 
 import { Temporal } from "@stll/time";
 
 import type * as RedisClientModule from "@/api/lib/admission-redis";
 import { withTimeout } from "@/api/lib/with-timeout";
 import { isLocalDevOpen, isLocalTestRun } from "@/api/runtime-mode";
+
+import {
+  advancePublisherGateFixtureGeneration,
+  publisherGateFixtureGeneration,
+} from "./publisher-gate-fixture-state";
 
 const PUBLISHER_GATE_COMMAND_TIMEOUT_MS = 5000;
 
@@ -77,6 +85,28 @@ export type PublisherRequestGateDependencies = {
   sleep: (durationMs: number, signal?: AbortSignal) => Promise<void>;
 };
 
+const fixtureDependencies =
+  new AsyncLocalStorage<PublisherRequestGateDependencies>();
+
+/** Invalidate default local gate state without replacing captured singleton slots. */
+export const resetPublisherGateFixtures = () => {
+  if (!isLocalTestRun()) {
+    panic("Publisher gate fixtures require a local test run");
+  }
+  advancePublisherGateFixtureGeneration();
+};
+
+/** Exercise the actual shared and run-scoped gates without opening Redis. */
+export const withPublisherGateFixture = async <T>(
+  dependencies: PublisherRequestGateDependencies,
+  operation: () => Promise<T>,
+): Promise<T> => {
+  if (!isLocalTestRun()) {
+    panic("Publisher gate fixtures require a local test run");
+  }
+  return await fixtureDependencies.run(dependencies, operation);
+};
+
 export const abortableSleep = async (
   durationMs: number,
   signal?: AbortSignal,
@@ -145,10 +175,16 @@ const defaultDependencies = (
   intervalMs: number,
   cooldown: PublisherRequestGateConfig["cooldown"],
 ): PublisherRequestGateDependencies => {
+  let generation = publisherGateFixtureGeneration();
   let localNextRequestAt = 0;
   let localCooldownUntil = 0;
   const localRedis: PublisherGateClient = {
     send: (_command, args) => {
+      if (generation !== publisherGateFixtureGeneration()) {
+        generation = publisherGateFixtureGeneration();
+        localNextRequestAt = 0;
+        localCooldownUntil = 0;
+      }
       const now = Temporal.Now.instant().epochMilliseconds;
       if (args[0] === READ_COOLDOWN_SCRIPT) {
         return localCooldownUntil > now ? localCooldownUntil : 0;
@@ -202,6 +238,7 @@ const defaultDependencies = (
  * Every strict process reserves, whatever its NODE_ENV.
  */
 export const publisherGateReserves = (): boolean =>
+  fixtureDependencies.getStore() !== undefined ||
   !(isLocalDevOpen() && isLocalTestRun());
 
 /** Redis answered a gate reservation with something other than a wait. */
@@ -235,7 +272,9 @@ export const createPublisherRequestSlot = (
       try: async () =>
         await withTimeout(
           async () => {
-            const redis = await dependencies.redis();
+            const redis = await (
+              fixtureDependencies.getStore() ?? dependencies
+            ).redis();
             return await redis.send("EVAL", args);
           },
           {
@@ -303,7 +342,10 @@ export const createPublisherRequestSlot = (
         [RESERVE_SLOT_SCRIPT, String(keys.length), ...keys, String(intervalMs)],
         { signal },
       );
-      await dependencies.sleep(waitMs, signal);
+      await (fixtureDependencies.getStore() ?? dependencies).sleep(
+        waitMs,
+        signal,
+      );
       if (cooldown !== "shared") {
         return;
       }
@@ -315,7 +357,10 @@ export const createPublisherRequestSlot = (
       if (remaining === 0) {
         return;
       }
-      await dependencies.sleep(remaining, signal);
+      await (fixtureDependencies.getStore() ?? dependencies).sleep(
+        remaining,
+        signal,
+      );
     }
   };
   const tryReserve = async ({

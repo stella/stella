@@ -5,6 +5,7 @@ import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { copyToClipboard } from "@stll/clipboard";
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { FetchBoundaryError } from "@stll/errors";
 import { fetchWithTimeout } from "@stll/fetch";
 import { Button } from "@stll/ui/button";
@@ -35,6 +36,7 @@ import {
 import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";
 import type { InspectorTab } from "@/components/inspector/inspector-tabs-store";
 import { MeasuredPdfProvider } from "@/components/inspector/measured-pdf-provider";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { apiUrl } from "@/lib/api-url";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -46,7 +48,7 @@ import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { PDFPage } from "@/lib/pdf/pdf-page";
 import type { PDFPageFallback } from "@/lib/pdf/pdf-page";
 import { PDFViewport } from "@/lib/pdf/pdf-viewport";
-import { sanitizeHref } from "@/lib/sanitize-href";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 import { externalReferencePreviewOptions } from "./external-reference-preview";
 
@@ -220,6 +222,7 @@ const ExternalPdfPreview = ({
   return (
     <MeasuredPdfProvider
       active
+      surface="external-reference-pdf"
       fallback={fallback}
       fieldId={fileId}
       initialScaleOffset={0}
@@ -296,13 +299,18 @@ const GenericExternalReferencePanel = ({
       storedSource?.connectorSlug !== undefined ||
       storedSource?.sourceToolName !== undefined);
   const previewErrorTitle = t("common.somethingWentWrong");
-  const { data: fetchedPreview, isLoading: previewLoading } = useQuery({
+  const fetchedPreviewQuery = useQuery({
     ...externalReferencePreviewOptions({
       url: tab.url,
       errorTitle: previewErrorTitle,
     }),
     enabled: shouldFetchPreview,
   });
+  const fetchedPreviewView = useQueryView(fetchedPreviewQuery);
+  useQueryViewError(fetchedPreviewView);
+  const { isLoading: previewLoading } = fetchedPreviewQuery;
+  const fetchedPreview =
+    fetchedPreviewView.type === "items" ? fetchedPreviewView.items : undefined;
 
   const previewTitle = fetchedPreview?.title ?? storedSource?.title;
   const previewText = tab.text ?? storedSource?.text ?? fetchedPreview?.text;
@@ -363,10 +371,16 @@ const GenericExternalReferencePanel = ({
     highlightKey: tab.id,
     panelRef,
   });
-  const { data: mcpConnectorsData } = useQuery({
+  const mcpConnectorsDataQuery = useQuery({
     ...mcpConnectorsOptions(activeOrganizationId),
     enabled: connectorSlug !== undefined,
   });
+  const mcpConnectorsDataView = useQueryView(mcpConnectorsDataQuery);
+  useQueryViewError(mcpConnectorsDataView);
+  const mcpConnectorsData =
+    mcpConnectorsDataView.type === "items"
+      ? mcpConnectorsDataView.items
+      : undefined;
   const availableConnectors = mcpConnectorsData
     ? mcpConnectorsData.connectors
     : [];
@@ -495,6 +509,9 @@ const GenericExternalReferencePanel = ({
             )}
           </div>
           <InspectorFindBar find={find} />
+          {shouldFetchPreview && (
+            <QueryViewFeedback view={fetchedPreviewView} />
+          )}
           {(() => {
             if (previewLoading) {
               return (

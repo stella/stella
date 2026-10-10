@@ -7,7 +7,8 @@
   "type": "module",
   "sideEffects": false,
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./test-fixtures/monitoring-corpus": "./src/test-fixtures/monitoring-corpus.ts"
   },
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",
@@ -22,6 +23,7 @@
   "dependencies": {
     "@stll/country-codes": "workspace:*",
     "@stll/fuzzy-search": "catalog:",
+    "@stll/sha256": "workspace:*",
     "@stll/time": "workspace:*",
     "better-result": "catalog:",
     "saxes": "catalog:"

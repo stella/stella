@@ -320,7 +320,6 @@ describe("buildChatSlashItems", () => {
     const rows = commandShortcutRowsFromSkillPages(
       [
         {
-          builtIn: [],
           installed: [
             skillRow({
               body: "Summarise this document.",
@@ -356,6 +355,7 @@ describe("buildChatSlashItems", () => {
         name: "Summarise",
         command: "summarize",
         prompt: "Summarise this document.",
+        lastEdit: null,
       },
     ]);
   });
@@ -577,6 +577,7 @@ const skillRow = ({
   description,
   enabled,
   id,
+  lastEdit: null,
   name: name ?? slug,
   scope,
   slug,

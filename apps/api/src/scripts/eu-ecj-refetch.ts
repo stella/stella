@@ -12,7 +12,7 @@ import {
 import { withPublisherRequestRateLimit } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import { PROCESS_DECISION_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
-import { createSourceMetadataUrlSchemaResolver } from "@/api/handlers/case-law/ingestion/pipeline/source-metadata-schema";
+import { createSourceContractResolver } from "@/api/handlers/case-law/ingestion/pipeline/source-contract";
 import { allocateSourceObservationOrder } from "@/api/handlers/case-law/ingestion/pipeline/source-observation";
 import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import {
@@ -358,8 +358,7 @@ const runCelexRefresh = async ({
     console.error("interrupt received; finishing the current decision…");
   });
 
-  const resolveMetadataUrlSchema =
-    createSourceMetadataUrlSchemaResolver(ingestionDb);
+  const resolveSourceContract = createSourceContractResolver(ingestionDb);
 
   const counts = {
     visited: 0,
@@ -428,7 +427,7 @@ const runCelexRefresh = async ({
               observationOrder,
               refresh: DECISION_REFRESH.ALWAYS,
             },
-            resolveMetadataUrlSchema,
+            resolveSourceContract,
           );
           if (processed.status === PROCESS_DECISION_STATUS.RETRYABLE) {
             counts.retryable += 1;

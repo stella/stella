@@ -38,6 +38,25 @@ describe.serial("no-unbounded-response-body", () => {
     ).toEqual([2, 3, 5, 7]);
   });
 
+  test("follows the response a publisher read outcome carries", async () => {
+    expect(
+      await lint([
+        "const read = await readPublisher(url, init);",
+        "const a = await read.value.json();",
+        "const response = read.value;",
+        "const b = await response.arrayBuffer();",
+        "const c = await (await readPublisher(url, init)).value.text();",
+        "const d = read.value.headers.get('content-type');",
+        "const e = await readCappedBytes(read.value.body, max);",
+        "const text = await readPublisherText(url, init);",
+        "const f = text.value.trim();",
+        "const result = await fetchSomething();",
+        "const g = await result.value.json();",
+        "",
+      ]),
+    ).toEqual([2, 4, 5]);
+  });
+
   test("drops a destructured response once the binding is reassigned", async () => {
     expect(
       await lint([

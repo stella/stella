@@ -18,6 +18,7 @@ import { Button } from "@stll/ui/button";
 import { DestructiveConfirmDialog } from "@stll/ui/destructive-confirm-dialog";
 import {
   Dialog,
+  DialogFormState,
   DialogClose,
   DialogDescription,
   DialogFooter,
@@ -334,7 +335,7 @@ export const useMatterActions = (
 
 // ── Rename state ─────────────────────────────────────────────
 
-export type RenameState =
+type RenameState =
   | { status: "idle" }
   | {
       status: "editing";
@@ -346,7 +347,7 @@ export type RenameState =
 
 // ── useMatterContextMenu (right-click menu primitive) ────────
 
-export type MatterContextMenuChildArgs = {
+type MatterContextMenuChildArgs = {
   rename: RenameState;
   /** True while the right-click menu is open, so the consumer can keep
    *  the source visually highlighted for the duration of the menu. */
@@ -491,7 +492,7 @@ type AddMemberDialogProps = {
   onOpenChange: (open: boolean) => void;
 };
 
-export const AddMemberDialog = ({
+const AddMemberDialog = ({
   workspaceId,
   open,
   onOpenChange,
@@ -499,17 +500,21 @@ export const AddMemberDialog = ({
   const t = useTranslations();
   const queryClient = useQueryClient();
   const addMember = useAddWorkspaceMember();
-  const { isOrganizationPending: orgPending, items: memberItems } =
-    useAddableMembers(workspaceId);
+  const memberQuery = useAddableMembers(workspaceId);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
 
+  const selectedMember =
+    memberQuery.view.type === "items"
+      ? memberQuery.view.items.find((item) => item.value === selectedUserId)
+      : undefined;
+
   const handleSubmit = () => {
-    if (!selectedUserId) {
+    if (!selectedMember) {
       return;
     }
 
     addMember.mutate(
-      { workspaceId, userId: selectedUserId },
+      { workspaceId, userId: selectedMember.value },
       {
         onSuccess: () => {
           stellaToast.add({
@@ -547,6 +552,12 @@ export const AddMemberDialog = ({
       open={open}
     >
       <DialogPopup>
+        <DialogFormState
+          dirty={selectedUserId !== null}
+          onDiscard={() => {
+            setSelectedUserId(null);
+          }}
+        />
         <DialogHeader>
           <DialogTitle>{t("workspaces.members.addMember")}</DialogTitle>
           <DialogDescription>
@@ -555,7 +566,7 @@ export const AddMemberDialog = ({
         </DialogHeader>
         <DialogPanel className="flex flex-col gap-4">
           <AddableMemberSelect
-            items={memberItems}
+            query={memberQuery}
             onValueChange={setSelectedUserId}
             value={selectedUserId}
           />
@@ -565,7 +576,7 @@ export const AddMemberDialog = ({
             {t("common.cancel")}
           </DialogClose>
           <Button
-            disabled={!selectedUserId || addMember.isPending || orgPending}
+            disabled={selectedMember === undefined || addMember.isPending}
             onClick={handleSubmit}
           >
             {t("workspaces.members.addMember")}

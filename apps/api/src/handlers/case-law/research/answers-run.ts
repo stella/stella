@@ -5,20 +5,23 @@ import {
   readOrganizationResearchColumns,
 } from "@/api/handlers/case-law/research/column-access";
 import { runResearchAnswersBodySchema } from "@/api/handlers/case-law/research/schema";
-import { detached } from "@/api/lib/analytics/capture";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { readPublicDecisionSummaries } from "@/api/lib/case-law/decision-summaries";
 import { queueResearchAnswerCells } from "@/api/lib/case-law/research-answer-queue";
 import { runResearchAnswers } from "@/api/lib/case-law/research-answer-runner";
-import type { ResearchRunColumn } from "@/api/lib/case-law/research-answer-runner";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  createDetachedModelActionStarter,
+  modelActionRefusal,
+} from "@/api/lib/rate-limit/model-action-admission";
 import { createRootSafeDb } from "@/api/lib/root-scoped-db";
 import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
 
 const config = {
+  access: "write",
   description:
     "Queue answers for the given decisions in the given question columns " +
     "(every column the organization keeps, when none is named). Cells that " +
@@ -26,6 +29,7 @@ const config = {
     "run is still working on are skipped. Answering continues after the " +
     "response; poll the answers.",
   permissions: { caseLawResearch: ["run"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "search_ui" },
   body: runResearchAnswersBodySchema,
   // The detached runner meters every model call under `case_law` at the
@@ -49,6 +53,7 @@ const runResearchAnswersHandler = createSafeRootHandler(
     promptCachingEnabled,
     recordAuditEvent,
     safeDb,
+    scopedDb,
     session,
     user,
   }) {
@@ -86,88 +91,102 @@ const runResearchAnswersHandler = createSafeRootHandler(
       );
     }
 
-    const queued = yield* Result.await(
-      safeDb(async (tx) => {
-        const requestedColumnIds = body.columnIds;
-        // Locked until the pending cells are written, so a question edited in
-        // between cannot have the old wording answered under the new heading.
-        const columns =
-          requestedColumnIds === undefined
-            ? await readOrganizationResearchColumns({
-                tx,
-                organizationId: session.activeOrganizationId,
-                lock: true,
-              })
-            : await readNamedResearchColumns({
-                tx,
-                columnIds: requestedColumnIds,
-                organizationId: session.activeOrganizationId,
-                lock: true,
-              });
-        if (columns === null) {
-          return null;
-        }
-        const claim = await queueResearchAnswerCells({
-          tx,
-          organizationId: session.activeOrganizationId,
-          columnIds: columns.map((column) => column.id),
-          decisionIds,
-          force: body.force === true,
-          now: new Date(),
-        });
-        if (claim.cells.length > 0) {
-          await recordAuditEvent(
+    // The answers run after the response: the action is admitted before any
+    // cell is claimed and held until the run settles.
+    const started = await createDetachedModelActionStarter({
+      organizationId: session.activeOrganizationId,
+      userId: user.id,
+      organizationStateDb: scopedDb,
+      actionKind: "case-law.research-answers",
+    })({
+      label: "case-law-research.run-answers",
+      start: async () =>
+        await safeDb(async (tx) => {
+          const requestedColumnIds = body.columnIds;
+          // Locked until the pending cells are written, so a question edited in
+          // between cannot have the old wording answered under the new heading.
+          const columns =
+            requestedColumnIds === undefined
+              ? await readOrganizationResearchColumns({
+                  tx,
+                  organizationId: session.activeOrganizationId,
+                  lock: true,
+                })
+              : await readNamedResearchColumns({
+                  tx,
+                  columnIds: requestedColumnIds,
+                  organizationId: session.activeOrganizationId,
+                  lock: true,
+                });
+          if (columns === null) {
+            return null;
+          }
+          const claim = await queueResearchAnswerCells({
             tx,
-            columns.map((column) => ({
-              action: AUDIT_ACTION.EXECUTE,
-              resourceType: AUDIT_RESOURCE_TYPE.CASE_LAW_RESEARCH_COLUMN,
-              resourceId: column.id,
-              metadata: { decisionCount: decisionIds.length },
-            })),
-          );
+            organizationId: session.activeOrganizationId,
+            columnIds: columns.map((column) => column.id),
+            decisionIds,
+            force: body.force === true,
+            now: new Date(),
+          });
+          if (claim.cells.length > 0) {
+            await recordAuditEvent(
+              tx,
+              columns.map((column) => ({
+                action: AUDIT_ACTION.EXECUTE,
+                resourceType: AUDIT_RESOURCE_TYPE.CASE_LAW_RESEARCH_COLUMN,
+                resourceId: column.id,
+                metadata: { decisionCount: decisionIds.length },
+              })),
+            );
+          }
+          return { columns, claim };
+        }),
+      background: async ({ admission }, queued) => {
+        if (
+          Result.isError(queued) ||
+          queued.value === null ||
+          queued.value.claim.cells.length === 0
+        ) {
+          return;
         }
-        return { columns, claim };
-      }),
-    );
+        await runResearchAnswers(
+          {
+            admission,
+            organizationId: session.activeOrganizationId,
+            userId: user.id,
+            columns: queued.value.columns.map((column) => ({
+              columnId: column.id,
+              question: column.question,
+              content: column.content,
+            })),
+            claim: queued.value.claim,
+            orgAIConfig,
+            managedAIResidency,
+            promptCachingEnabled,
+          },
+          {
+            // The run outlives the request; this scope carries the caller's
+            // organization and user, so RLS applies exactly as it did here.
+            safeDb: createRootSafeDb({
+              organizationId: session.activeOrganizationId,
+              userId: user.id,
+              workspaceIds: [],
+            }),
+            caseLawDb: caseLawPublicReadDb,
+          },
+        );
+      },
+    });
+    if (Result.isError(started)) {
+      return Result.err(modelActionRefusal(started.error));
+    }
+    const queued = yield* started.value;
     if (queued === null) {
       return Result.err(
         new HandlerError({ status: 404, message: "Question column not found" }),
       );
     }
-    if (queued.claim.cells.length === 0) {
-      return Result.ok({ queued: 0 });
-    }
-
-    const runColumns: ResearchRunColumn[] = queued.columns.map((column) => ({
-      columnId: column.id,
-      question: column.question,
-      content: column.content,
-    }));
-    detached(
-      runResearchAnswers(
-        {
-          organizationId: session.activeOrganizationId,
-          userId: user.id,
-          columns: runColumns,
-          claim: queued.claim,
-          orgAIConfig,
-          managedAIResidency,
-          promptCachingEnabled,
-        },
-        {
-          // The run outlives the request; this scope carries the caller's
-          // organization and user, so RLS applies exactly as it did here.
-          safeDb: createRootSafeDb({
-            organizationId: session.activeOrganizationId,
-            userId: user.id,
-            workspaceIds: [],
-          }),
-          caseLawDb: caseLawPublicReadDb,
-        },
-      ),
-      "case-law-research.run-answers",
-    );
-
     return Result.ok({ queued: queued.claim.cells.length });
   },
 );

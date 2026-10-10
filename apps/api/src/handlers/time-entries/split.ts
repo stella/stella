@@ -3,8 +3,9 @@ import { and, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
+import { timeEntryRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { apportionSplitDurations } from "@/api/handlers/time-entries/split-durations";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import {
@@ -42,6 +43,9 @@ const splitEntry = createSafeHandler(
       "apportioned and re-rounded to the billing increment. A billed or " +
       "written-off entry, and a duration too short to divide, are refused.",
     permissions: { timeEntry: ["approve"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: { featureId: "time-billing", type: "required" },
+    realtime: timeEntryRealtimeUpdates,
     mcp: {
       type: "capability",
       reason: "billing_admin",

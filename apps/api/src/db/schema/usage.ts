@@ -1,3 +1,5 @@
+import { PROVIDER_EVENT_REPLAY_AUDIT_TEXT_PATH } from "@/api/lib/hosted-usage-provider/replay-audit";
+import type { ProviderEventReplayAudit } from "@/api/lib/hosted-usage-provider/replay-audit";
 import { CONFIGURED_ACCESS_STATUSES } from "@/api/lib/usage/configured-access";
 
 import {
@@ -44,7 +46,13 @@ export const CLOSED_USAGE_ENTITLEMENT_STATUSES = [
 const CLOSED_USAGE_ENTITLEMENT_STATUS_SQL_VALUES =
   CLOSED_USAGE_ENTITLEMENT_STATUSES.map((status) => sql.raw(`'${status}'`));
 
-export const USAGE_POLICY_KINDS = ["subscription", "addon"] as const;
+/**
+ * `free` is the no-cost floor an organization falls back to once its
+ * evaluation or paid access lapses. At most one active `free` policy exists
+ * (partial unique index); its limits are read through the
+ * `organization_effective_policy` database function.
+ */
+export const USAGE_POLICY_KINDS = ["subscription", "addon", "free"] as const;
 export type UsagePolicyKind = (typeof USAGE_POLICY_KINDS)[number];
 
 export const USAGE_POLICY_BILLING_INTERVALS = [
@@ -205,6 +213,16 @@ export const usagePolicies = p.pgTable(
       .uniqueIndex("usage_policies_hosted_policy_ref_uidx")
       .on(table.hostedPolicyRef)
       .where(sql`hosted_policy_ref IS NOT NULL`),
+    p
+      .uniqueIndex("usage_policies_free_active_uidx")
+      .on(table.kind)
+      .where(sql`kind = 'free' AND active`),
+    // The free floor is never checkout-able, costs nothing, and bounds every
+    // limit it applies: members, organization storage and service actions.
+    p.check(
+      "usage_policies_free_shape",
+      sql`kind <> 'free' OR (hosted_policy_ref IS NULL AND COALESCE(price_amount_cents, 0) = 0 AND max_members IS NOT NULL AND storage_bytes_per_assignment IS NOT NULL AND service_actions_per_period IS NOT NULL)`,
+    ),
     p.check(
       "usage_policies_service_actions_positive",
       sql`service_actions_per_period IS NULL OR service_actions_per_period > 0`,
@@ -336,6 +354,73 @@ export const usageEntitlements = p.pgTable(
       for: "delete",
       to: stella,
       using: sql`false`,
+    }),
+  ],
+);
+
+const currentUserOwnsHostedCheckoutClaims = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.hosted_checkout_claims'::regclass)`;
+
+/**
+ * The organization's open hosted subscription checkout, at most one. A
+ * checkout start claims the row before it calls the provider; the claim
+ * holds until the provider session expires, the start fails, or the
+ * subscription event arrives. An expired claim is taken over in place.
+ */
+export const hostedCheckoutClaims = p.pgTable(
+  "hosted_checkout_claims",
+  {
+    organizationId: safeOrganizationId("organization_id")
+      .primaryKey()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    /** Identifies one start, so a stale request releases only its own claim. */
+    claimId: safeUuid<"hostedCheckoutClaim">("claim_id").notNull(),
+    hostedSessionId: p.text("hosted_session_id"),
+    /**
+     * The provider page for the created session. Anyone holding it can
+     * complete the checkout, so it is returned only to the organization and
+     * never logged or audited.
+     */
+    hostedCheckoutUrl: p.text("hosted_checkout_url"),
+    /** The requested policy and seat count; a matching start reuses the session. */
+    usagePolicyId: safeUuid<"usagePolicy">("usage_policy_id"),
+    seats: p.integer("seats"),
+    expiresAt: timestamptz("expires_at").notNull(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p.check(
+      "hosted_checkout_claims_url_has_session_check",
+      sql`${table.hostedCheckoutUrl} IS NULL OR ${table.hostedSessionId} IS NOT NULL`,
+    ),
+    // Members with organization settings access start checkouts through the
+    // scoped connection; the webhook dispatcher clears claims on the owner
+    // connection.
+    p.pgPolicy("hosted_checkout_claims_owner", {
+      for: "all",
+      to: "public",
+      using: currentUserOwnsHostedCheckoutClaims,
+      withCheck: currentUserOwnsHostedCheckoutClaims,
+    }),
+    p.pgPolicy("hosted_checkout_claims_organization_select", {
+      for: "select",
+      to: stella,
+      using: organizationCheck,
+    }),
+    p.pgPolicy("hosted_checkout_claims_organization_insert", {
+      for: "insert",
+      to: stella,
+      withCheck: organizationCheck,
+    }),
+    p.pgPolicy("hosted_checkout_claims_organization_update", {
+      for: "update",
+      to: stella,
+      using: organizationCheck,
+      withCheck: organizationCheck,
+    }),
+    p.pgPolicy("hosted_checkout_claims_organization_delete", {
+      for: "delete",
+      to: stella,
+      using: organizationCheck,
     }),
   ],
 );
@@ -999,6 +1084,8 @@ export const hostedUsageWebhookEvents = p.pgTable(
     processedAt: timestamptz("processed_at").notNull().defaultNow(),
     result: p.text({ enum: USAGE_PROVIDER_WEBHOOK_RESULTS }).notNull(),
     errorMessage: p.text("error_message"),
+    // Ordered replay attempts survive redaction; ignored attempts remain eligible.
+    replayAudit: jsonb("replay_audit").$type<ProviderEventReplayAudit>(),
   },
   (table) => [
     p
@@ -1008,8 +1095,16 @@ export const hostedUsageWebhookEvents = p.pgTable(
       .index("usage_provider_webhook_events_retention_idx")
       .on(table.processedAt)
       .where(
-        sql`result IN ('ok', 'ignored') AND (payload <> '{}'::jsonb OR error_message IS NOT NULL)`,
+        sql`result IN ('ok', 'ignored') AND (payload <> '{}'::jsonb OR error_message IS NOT NULL OR replay_audit @? ${PROVIDER_EVENT_REPLAY_AUDIT_TEXT_PATH})`,
       ),
+    p
+      .index("usage_provider_webhook_events_ignored_entity_idx")
+      .on(sql`(${table.payload}->'data'->>'id')`)
+      .where(sql`result = 'ignored'`),
+    p
+      .index("usage_provider_webhook_events_ignored_account_idx")
+      .on(sql`(${table.payload}->'data'->>'account_ref')`)
+      .where(sql`result = 'ignored'`),
     // System table: written and read only by the webhook handler via
     // the root connection. Stella sessions have no business touching it.
     p.pgPolicy("usage_provider_webhook_events_no_stella_access", {

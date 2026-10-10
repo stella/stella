@@ -45,6 +45,8 @@
 import { panic } from "better-result";
 import path from "node:path";
 
+import { compareCodeUnit } from "@stll/collation";
+
 import type { ParsedExposure } from "./lib/enumerate-safe-handlers";
 import {
   discoverSafeHandlers,
@@ -80,14 +82,13 @@ type ExposureType = (typeof EXPOSURE_TYPES)[number];
  * globs). The `mcp` disposition on each inline endpoint stays typecheck-enforced;
  * only enumeration into the ratchet is waived.
  */
-const INLINE_ENDPOINT_ALLOWLIST: Record<string, number> = {
+export const INLINE_ENDPOINT_ALLOWLIST: Record<string, number> = {
   // The subject-gate wrapper: its one `createSafePublicHandler` call builds
   // the gated definition returned to callers, so it is a factory, not an
   // endpoint. Endpoints made with it count under `createSafePublicSubjectHandler`
   // in their own files.
   "apps/api/src/handlers/case-law/decisions/public-subject.ts": 1,
   "apps/api/src/handlers/case-law/public-routes.ts": 11,
-  "apps/api/src/handlers/files/routes.ts": 4,
   "apps/api/src/handlers/legislation/public-routes.ts": 11,
   // Built by a factory so tests can inject the bundled catalogue; all six are
   // internal-only public reads with no MCP tool.
@@ -110,12 +111,20 @@ const TOOLS_WITHOUT_ENUMERABLE_ENDPOINT: Record<string, string> = {
     "inline endpoint: apps/api/src/handlers/search/routes.ts POST /search (same backing as `search`)",
   search_case_law:
     "inline endpoint: apps/api/src/handlers/case-law/public-routes.ts POST /case/decisions/search",
+  case_law_coverage:
+    "inline endpoint: apps/api/src/handlers/case-law/public-routes.ts GET /coverage",
   lookup_case_law:
     "no dedicated endpoint: MCP handler resolves references through the same identity branch the search endpoint takes (findDecisionIdsByIdentity in apps/api/src/handlers/case-law/decisions/search.ts); the browser reaches it by typing the docket into the public search box",
   read_case_law_decision:
     "inline endpoint: apps/api/src/handlers/case-law/public-routes.ts GET /case/decisions/:decisionId",
   read_case_law_citations:
     "no dedicated endpoint: MCP handler reads the citation graph with its citing passages directly (apps/api/src/handlers/case-law/decisions/citation-passages.ts)",
+  open_case_law_decision:
+    "no dedicated endpoint: MCP reader entry over the public decision read the inline GET /case/decisions/:decisionId uses (apps/api/src/handlers/case-law/decisions/reader.ts)",
+  read_case_law_decision_blocks:
+    "no dedicated endpoint: app-only MCP reader page stream over the same public decision read, citations and provision previews (apps/api/src/handlers/case-law/decisions/reader.ts)",
+  preview_cited_provision:
+    "no dedicated endpoint: app-only MCP preview over the existing consolidated provision preview service (apps/api/src/mcp/decision-reader-tools.ts)",
   read_provision_history:
     "inline endpoint: apps/api/src/handlers/legislation/public-routes.ts GET /law/statutes/:documentId/provisions/:anchor/history",
   read_statute_provisions:
@@ -138,8 +147,10 @@ const TOOLS_WITHOUT_ENUMERABLE_ENDPOINT: Record<string, string> = {
     "no dedicated endpoint: curated meta-tool over the capability catalog (apps/api/src/mcp/capability-tools.ts)",
   describe_capability:
     "no dedicated endpoint: curated meta-tool over the capability catalog (apps/api/src/mcp/capability-tools.ts)",
-  invoke_capability:
-    "no dedicated endpoint: curated meta-tool dispatching the whole capability catalog via generated dispatch (apps/api/src/mcp/capability-tools.ts)",
+  read_capability:
+    "no dedicated endpoint: curated read executor dispatching read catalog capabilities (apps/api/src/mcp/capability-tools.ts)",
+  write_capability:
+    "no dedicated endpoint: curated write executor dispatching mutation catalog capabilities (apps/api/src/mcp/capability-tools.ts)",
   upload_document_version:
     "no dedicated endpoint: MCP host adapter bridges attached files through the canonical upload lifecycle (apps/api/src/mcp/document-file-upload.ts)",
   open_document_version_upload:
@@ -230,7 +241,7 @@ export const classifyCoverage = ({
     missingMcp: missingMcp.toSorted(),
     invalidExposure: invalidExposure.toSorted(),
     unknownToolNames: unknownToolNames.toSorted((a, b) =>
-      a.id.localeCompare(b.id),
+      compareCodeUnit(a.id, b.id),
     ),
     orphanTools: orphanTools.toSorted(),
     staleWaivers,
@@ -296,7 +307,7 @@ export const findHiddenEndpointMismatches = ({
       mismatches.push({ id, callCount, enumerableCount, allowed });
     }
   }
-  return mismatches.toSorted((a, b) => a.id.localeCompare(b.id));
+  return mismatches.toSorted((a, b) => compareCodeUnit(a.id, b.id));
 };
 
 /**
@@ -316,7 +327,7 @@ export const findStaleAllowlistEntries = ({
   const discovered = new Set(files.map(({ id }) => id));
   return Object.keys(allowlist)
     .filter((id) => !discovered.has(id))
-    .toSorted((a, b) => a.localeCompare(b));
+    .toSorted(compareCodeUnit);
 };
 
 const readBaseline = async (): Promise<string[]> => {

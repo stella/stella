@@ -10,12 +10,21 @@
  * every disposition, which no single real decision does.
  */
 
-import { panic } from "better-result";
-import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
+import { panic, Result } from "better-result";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 
 import {
   decodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  SOURCE_TOTAL_PROBE_FAILURE,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import {
@@ -24,6 +33,7 @@ import {
   czRegionalAdapter,
   czRegionalEnvelopeWithChain,
   czRegionalListingIdentity,
+  fetchCzRegionalAffectingDocs,
   isCzRegionalApiItem,
   listCzRegionalDayPage,
   readCzRegionalChain,
@@ -33,18 +43,27 @@ import type {
   CzRegionalApiItem,
   CzRegionalBuildResult,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
-import { parseRegionalDecision } from "@/api/handlers/case-law/ingestion/parsers/cz-regional";
 import { errorTag } from "@/api/lib/errors/error-tag";
 import {
+  isReadRefusal,
+  isStoredReadUnavailable,
+  READ_OUTCOME_METADATA_KEY,
+} from "@/api/lib/errors/read-outcome";
+import {
+  AdapterFetchError,
   UNPERSISTABLE_DECISION_FIELDS,
   UnpersistableDecisionFieldError,
 } from "@/api/lib/errors/tagged-errors";
 import type { UnpersistableDecisionField } from "@/api/lib/errors/tagged-errors";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import {
-  installRecordingAnalytics,
-  installRecordingLogger,
-} from "@/api/tests/helpers/recording-telemetry";
+  faultedResponse,
+  READ_FAULTS,
+  READ_REFUSALS,
+  type ReadFault,
+  type ReadRefusalFault,
+} from "@/api/tests/helpers/read-fault-drivers";
+import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 import { PublisherPageError } from "./publisher-page";
@@ -338,49 +357,27 @@ describe("what the publisher states reaches the row", () => {
   });
 });
 
-describe("a document the parser cannot read", () => {
-  // A text run carrying markup nested deeper than the validator's recursive
-  // text walk reaches: the structured parse fails while the publisher's own
-  // plain-text rendering is still there.
+describe("a text run with deeply nested markup", () => {
+  // Deeper than any recursive tree walk reaches: the validator reads the
+  // reference text iteratively, so the structured parse holds.
   const NESTING = 20_000;
-  const unreadableText = `${"<span>".repeat(NESTING)}Soud rozhodl${"</span>".repeat(NESTING)}`;
+  const nestedText = `${"<span>".repeat(NESTING)}Soud rozhodl${"</span>".repeat(NESTING)}`;
 
-  test("keeps the publisher's plain text and reports the parse", async () => {
+  test("keeps the structured document and reports no parse failure", async () => {
     const verdict = [
       {
-        texts: [{ text: unreadableText, anonStyle: "NONE" }],
+        texts: [{ text: nestedText, anonStyle: "NONE" }],
         styleLocalId: 1,
         tableCellInfo: null,
       },
     ];
-    expect(() =>
-      parseRegionalDecision({
-        caseNumber: "18 C 130/2024",
-        ecli: undefined,
-        court: "Okresní soud",
-        decisionDate: undefined,
-        decisionType: "rozsudek",
-        sourceUrl: undefined,
-        header: [],
-        verdict,
-        justification: [],
-        information: [],
-        styles: [],
-        verdictText: "Soud rozhodl",
-        justificationText: "",
-      }),
-    ).toThrow(RangeError);
-
     const payload: unknown = JSON.parse(await readFixture(DISTRICT_DOCUMENT));
     const document = readCzRegionalDocument(
       JSON.stringify({ ...(isRecord(payload) ? payload : {}), verdict }),
     );
     expect(document.parsed).not.toBeNull();
-    const verdictText = document.parsed?.verdictText ?? "";
-    expect(verdictText.length).toBeGreaterThan(0);
 
     const logs = installRecordingLogger();
-    const analytics = installRecordingAnalytics();
     try {
       const built = assembleCzRegionalDecision({
         item: await itemByDocket(LISTING, DISTRICT_DOCKET),
@@ -389,27 +386,22 @@ describe("a document the parser cannot read", () => {
       });
 
       expect(built.type).toBe("built");
-      expect(built.type === "built" ? built.decision.fulltext : "").toContain(
-        verdictText.trim(),
-      );
+      // The verdict heading is synthesized by the structured parse only; the
+      // plain-text fallback carries no headings.
+      expect(
+        JSON.stringify(
+          built.type === "built" ? built.decision.documentAst : null,
+        ),
+      ).toContain("takto:");
       expect(
         logs
           .at("ERROR")
           .filter(
             (record) =>
               record.message === "case_law.ingestion.document_parse_failed",
-          )
-          .map((record) => record.attributes),
-      ).toEqual([
-        expect.objectContaining({
-          adapterKey: "cz-regional",
-          documentId: "18 C 130/2024",
-          "error.type": "RangeError",
-        }),
-      ]);
-      expect(analytics.exceptions()).toHaveLength(1);
+          ),
+      ).toEqual([]);
     } finally {
-      analytics.restore();
       logs.restore();
     }
   });
@@ -465,6 +457,38 @@ describe("the decision type is the publisher's enum in the local language", () =
         built.type === "built" ? built.decision.documentAst : null,
       ),
     ).toContain("TRESTNÍ PŘÍKAZ");
+  });
+
+  const storedType = async (type: string) => {
+    const built = assembleCzRegionalDecision({
+      item: await itemByDocket(LISTING, APPELLATE_DOCKET),
+      document: readCzRegionalDocument(
+        await documentWithMetadata(APPELLATE_DOCUMENT, { type }),
+      ),
+      chain: null,
+    });
+    return built.type === "built" ? built.decision.decisionType : "unbuilt";
+  };
+
+  // The API spells the ministry's members both ways; production holds
+  // `ministery_of_justice_order` and `ministry_of_justice_resolution` alike.
+  test("every Ministry of Justice member, in either spelling, is stored in Czech", async () => {
+    for (const [instrument, czech] of [
+      ["DECISION", "rozhodnutí ministerstva spravedlnosti"],
+      ["ORDER", "příkaz ministerstva spravedlnosti"],
+      ["RESOLUTION", "usnesení ministerstva spravedlnosti"],
+    ] as const) {
+      for (const spelling of ["MINISTRY", "MINISTERY"]) {
+        expect(await storedType(`${spelling}_OF_JUSTICE_${instrument}`)).toBe(
+          czech,
+        );
+      }
+    }
+  });
+
+  test("the API's not-stated member stores no type rather than the word none", async () => {
+    expect(await storedType("NONE")).toBeUndefined();
+    expect(await storedType("JUDGEMENT")).toBe("rozsudek");
   });
 });
 
@@ -1274,4 +1298,302 @@ describe("the crawl keeps a refused row as its listing", () => {
     expect(failed).toBe(true);
     expect(page.isErr()).toBe(true);
   });
+});
+
+describe("a failed publisher read is never built", () => {
+  const originalFetch = globalThis.fetch;
+
+  beforeEach(() => {
+    // The document read's one retry backs off; the wait proves nothing here.
+    spyOn(Bun, "sleep").mockResolvedValue();
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    mock.restore();
+  });
+
+  /** Serve `body` everywhere, failing every request `faulted` names. */
+  const serveWithFault = ({
+    fault,
+    faulted,
+    body,
+  }: {
+    fault: ReadFault | ReadRefusalFault;
+    faulted: (url: string) => boolean;
+    body: string;
+  }): void => {
+    globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
+      const url = input instanceof Request ? input.url : String(input);
+      const served = async () =>
+        await Promise.resolve(
+          new Response(body, {
+            headers: { "Content-Type": "application/json" },
+          }),
+        );
+      return faulted(url)
+        ? await faultedResponse(fault, served)
+        : await served();
+    });
+  };
+
+  const detailReadReports = (logs: ReturnType<typeof installRecordingLogger>) =>
+    logs
+      .at("WARN")
+      .filter(
+        (record) => record.message === "case_law.ingestion.detail_fetch_failed",
+      )
+      .map((record) => record.attributes?.["documentId"]);
+
+  /**
+   * What a failed document read does to its row. An error status fails the
+   * page so the cursor holds; a request that did not answer or an empty 204
+   * holds the row listing-only and reports the read; an empty 200 body is a
+   * typed page error. None of them builds the decision.
+   */
+  const DOCUMENT_FAULT_DISPOSITION = {
+    "status-500": "page-fails",
+    timeout: "held-unread",
+    "no-content-204": "held-unread",
+    "empty-body-200": "page-error",
+  } as const satisfies Record<ReadFault, string>;
+
+  test.each(READ_FAULTS)(
+    "a document read answered with %s builds no decision",
+    async (fault) => {
+      const item = await itemByDocket(LISTING, DISTRICT_DOCKET);
+      serveWithFault({
+        fault,
+        faulted: (url) => url === item.odkaz,
+        body: await readFixture(DISTRICT_DOCUMENT),
+      });
+      const logs = installRecordingLogger();
+      try {
+        const outcome = await Result.tryPromise(
+          async () => await buildCzRegionalDecision(item),
+        );
+        const disposition = DOCUMENT_FAULT_DISPOSITION[fault];
+        switch (disposition) {
+          case "page-fails":
+            expect(Result.isError(outcome)).toBe(true);
+            if (Result.isError(outcome)) {
+              expect(outcome.error.cause).toBeInstanceOf(AdapterFetchError);
+              expect(outcome.error.cause).not.toBeInstanceOf(
+                PublisherPageError,
+              );
+              expect(outcome.error.cause).toMatchObject({ httpStatus: 500 });
+            }
+            break;
+          case "page-error":
+            expect(Result.isError(outcome)).toBe(true);
+            if (Result.isError(outcome)) {
+              expect(outcome.error.cause).toBeInstanceOf(PublisherPageError);
+            }
+            break;
+          case "held-unread": {
+            const held = outcome.unwrap();
+            expect(held.type).toBe("detail-unavailable");
+            if (held.type === "detail-unavailable") {
+              expect(held.decision.isListingOnly).toBe(true);
+              expect(
+                isStoredReadUnavailable(
+                  held.decision.metadata[READ_OUTCOME_METADATA_KEY],
+                ),
+              ).toBe(true);
+              expect(held.decision.fulltext).toBeUndefined();
+              expect(
+                Object.keys(
+                  decodeSourceRawEnvelope(held.decision.sourceRaw ?? "") ?? {},
+                ),
+              ).toEqual(["listing"]);
+            }
+            expect(detailReadReports(logs)).toEqual(["18 C 130/2024"]);
+            break;
+          }
+          default:
+            disposition satisfies never;
+        }
+      } finally {
+        logs.restore();
+      }
+    },
+  );
+
+  test("a document the publisher answers 404 for is held listing-only, not reported", async () => {
+    const item = await itemByDocket(LISTING, DISTRICT_DOCKET);
+    globalThis.fetch = asFetchMock(
+      async () => await Promise.resolve(new Response("", { status: 404 })),
+    );
+    const logs = installRecordingLogger();
+    try {
+      const built = await buildCzRegionalDecision(item);
+      expect(built.type).toBe("detail-unavailable");
+      if (built.type === "detail-unavailable") {
+        expect(built.decision.isListingOnly).toBe(true);
+      }
+      expect(detailReadReports(logs)).toEqual([]);
+    } finally {
+      logs.restore();
+    }
+  });
+
+  test.each(READ_REFUSALS)(
+    "a document read answered with %s holds the row listing-only with the typed refusal",
+    async (fault) => {
+      const item = await itemByDocket(LISTING, DISTRICT_DOCKET);
+      serveWithFault({
+        fault,
+        faulted: (url) => url === item.odkaz,
+        body: await readFixture(DISTRICT_DOCUMENT),
+      });
+      const logs = installRecordingLogger();
+      try {
+        const built = await buildCzRegionalDecision(item);
+        expect(built.type).toBe("detail-unavailable");
+        if (built.type === "detail-unavailable") {
+          const outcome = built.decision.metadata[READ_OUTCOME_METADATA_KEY];
+          expect(isReadRefusal(outcome)).toBe(true);
+          expect(outcome).toMatchObject({ scope: "document" });
+          expect(built.decision.isListingOnly).toBe(true);
+          expect(built.decision.fulltext).toBeUndefined();
+        }
+        expect(detailReadReports(logs)).toEqual(["18 C 130/2024"]);
+      } finally {
+        logs.restore();
+      }
+    },
+  );
+
+  test.each(READ_REFUSALS)(
+    "a day listing answered with %s stops the source as a publisher refusal",
+    async (fault) => {
+      serveWithFault({
+        fault,
+        faulted: () => true,
+        body: await readFixture(LISTING),
+      });
+      const page = await czRegionalAdapter.fetchPage("2025-06-11:0", {});
+      expect(
+        page.isErr() &&
+          page.error instanceof AdapterFetchError &&
+          page.error.stopKind,
+      ).toBe("publisher_refusal");
+    },
+  );
+
+  const CHAIN_DOCUMENT_ID = "e21716f9-8855-4a85-a7e6-9af23622661b";
+
+  test.each(READ_FAULTS)(
+    "a chain read answered with %s is no chain",
+    async (fault) => {
+      serveWithFault({
+        fault,
+        faulted: () => true,
+        body: await readFixture(CHAIN),
+      });
+      expect(
+        await Result.tryPromise(
+          async () => await fetchCzRegionalAffectingDocs(CHAIN_DOCUMENT_ID),
+        ),
+      ).toMatchObject({ value: { type: "unavailable" } });
+    },
+  );
+
+  test.each(READ_REFUSALS)(
+    "a chain read answered with %s is a refused part, never an empty chain",
+    async (fault) => {
+      serveWithFault({
+        fault,
+        faulted: () => true,
+        body: await readFixture(CHAIN),
+      });
+      expect(
+        await fetchCzRegionalAffectingDocs(CHAIN_DOCUMENT_ID),
+      ).toMatchObject({ type: "refused", scope: "part" });
+    },
+  );
+
+  test("a chain the publisher answers 404 for is absent, and a non-list or non-JSON body is unread", async () => {
+    globalThis.fetch = asFetchMock(
+      async () => await Promise.resolve(new Response("", { status: 404 })),
+    );
+    expect(await fetchCzRegionalAffectingDocs(CHAIN_DOCUMENT_ID)).toEqual({
+      type: "absent",
+      evidence: "http-404",
+    });
+
+    globalThis.fetch = asFetchMock(
+      async () => await Promise.resolve(new Response('{"items":[]}')),
+    );
+    expect(await fetchCzRegionalAffectingDocs(CHAIN_DOCUMENT_ID)).toMatchObject(
+      { type: "unavailable" },
+    );
+
+    globalThis.fetch = asFetchMock(
+      async () => await Promise.resolve(new Response("<html>busy</html>")),
+    );
+    expect(await fetchCzRegionalAffectingDocs(CHAIN_DOCUMENT_ID)).toMatchObject(
+      { type: "unavailable" },
+    );
+  });
+
+  // A 5xx or a timeout is retried on the listing's own backoff (seconds of
+  // real timer) and then fails the page through the same rejection.
+  test.each(["no-content-204", "empty-body-200"] as const)(
+    "a listing read answered with %s fails the page and the slice",
+    async (fault) => {
+      serveWithFault({
+        fault,
+        faulted: () => true,
+        body: await readFixture(LISTING),
+      });
+      const page = await czRegionalAdapter.fetchPage("2025-06-11:0", {});
+      expect(page.isErr()).toBe(true);
+      const rejection: unknown = await czRegionalAdapter.reconciliation
+        .listSlicePage({ slice: "2025-06-11", page: 0 })
+        .then(
+          () => null,
+          (error: unknown) => error,
+        );
+      expect(rejection).toBeInstanceOf(AdapterFetchError);
+    },
+  );
+
+  test("a day the publisher answers 410 for is an empty day, as a 404 is", async () => {
+    globalThis.fetch = asFetchMock(
+      async () => await Promise.resolve(new Response("", { status: 410 })),
+    );
+    const page = (
+      await czRegionalAdapter.fetchPage("2025-06-11:0", {})
+    ).unwrap();
+    expect(page.decisions).toEqual([]);
+    // The empty-day count advances, as it does for a day answered with 404.
+    expect(page.nextCursor).toBe("2025-06-12:0:1");
+  });
+
+  /** What each failed year-count read reports instead of a total. */
+  const COUNT_FAULT_TAG = {
+    "status-500": SOURCE_TOTAL_PROBE_FAILURE.HTTP_STATUS,
+    timeout: "DOMException",
+    "no-content-204": SOURCE_TOTAL_PROBE_FAILURE.HTTP_STATUS,
+    // The bounded body read reports an empty body before anything parses it.
+    "empty-body-200": SOURCE_TOTAL_PROBE_FAILURE.UNREADABLE_PAYLOAD,
+  } as const satisfies Record<ReadFault, string>;
+
+  test.each(READ_FAULTS)(
+    "a year count answered with %s is no total",
+    async (fault) => {
+      serveWithFault({
+        fault,
+        faulted: (url) => url.endsWith("/opendata/2021"),
+        body: '[{"pocet":10}]',
+      });
+      expect(
+        await czRegionalAdapter.getTotalCount(new AbortController().signal),
+      ).toEqual({
+        type: "probe-failed",
+        errorTag: COUNT_FAULT_TAG[fault],
+      });
+    },
+  );
 });

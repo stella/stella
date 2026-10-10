@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 
 import { chatMessages, chatTurns } from "@/api/db/schema";
 import {
@@ -47,16 +47,16 @@ export type ToolCallViolation = {
   toolCallId: string;
 };
 
-const readThread = async ({
-  db,
-  ownerStatuses,
-  threadId,
-}: {
+type ReadThreadInvariantSnapshotOptions = {
   db: TestDatabase;
-  ownerStatuses: readonly ChatTurnStatus[];
   threadId: SafeId<"chatThread">;
-}) => {
-  const [rows, owners] = await Promise.all([
+};
+
+export const readThreadInvariantSnapshot = async ({
+  db,
+  threadId,
+}: ReadThreadInvariantSnapshotOptions) => {
+  const [rows, turns] = await Promise.all([
     db
       .select({
         content: chatMessages.content,
@@ -64,24 +64,36 @@ const readThread = async ({
         role: chatMessages.role,
       })
       .from(chatMessages)
-      .where(eq(chatMessages.threadId, threadId)),
+      .where(eq(chatMessages.threadId, threadId))
+      .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id)),
     db
-      .select({ assistantMessageId: chatTurns.assistantMessageId })
+      .select({
+        assistantMessageId: chatTurns.assistantMessageId,
+        cancellationReason: chatTurns.cancellationReason,
+        failureCode: chatTurns.failureCode,
+        failureRetryable: chatTurns.failureRetryable,
+        id: chatTurns.id,
+        interruptionReason: chatTurns.interruptionReason,
+        runId: chatTurns.runId,
+        status: chatTurns.status,
+        userMessageId: chatTurns.userMessageId,
+      })
       .from(chatTurns)
-      .where(
-        and(
-          eq(chatTurns.threadId, threadId),
-          inArray(chatTurns.status, [...ownerStatuses]),
-        ),
-      ),
+      .where(eq(chatTurns.threadId, threadId))
+      .orderBy(asc(chatTurns.createdAt), asc(chatTurns.id)),
   ]);
-  const ownedMessageIds = new Set(
-    owners.map(({ assistantMessageId }) => assistantMessageId),
-  );
-  return rows
-    .filter(({ id }) => !ownedMessageIds.has(id))
-    .map((row) => ({ id: row.id, parts: chatMessageFromPersisted(row).parts }));
+  return {
+    messages: rows.map((row) => ({
+      ...chatMessageFromPersisted(row),
+      id: row.id,
+    })),
+    turns,
+  };
 };
+
+export type ThreadInvariantSnapshot = Awaited<
+  ReturnType<typeof readThreadInvariantSnapshot>
+>;
 
 /**
  * Persisted-thread invariant: every tool call a client can still answer sits
@@ -89,22 +101,31 @@ const readThread = async ({
  * part without that owner renders as actionable while no turn can accept its
  * answer as a resumption. Returns the violations; a sound thread returns [].
  */
-export const findUnownedPendingInteractions = async ({
-  db,
-  threadId,
-}: {
-  db: TestDatabase;
-  threadId: SafeId<"chatThread">;
-}): Promise<ToolCallViolation[]> =>
-  (
-    await readThread({ db, ownerStatuses: ["awaiting-user"], threadId })
-  ).flatMap(({ id, parts }) =>
-    parts.flatMap((part) =>
-      part.type === "tool-call" && CLIENT_ANSWERABLE_TOOL_CALL_STATE[part.state]
-        ? [{ messageId: id, state: part.state, toolCallId: part.id }]
-        : [],
-    ),
+const unownedPendingInteractionsOf = ({
+  messages,
+  turns,
+}: ThreadInvariantSnapshot): ToolCallViolation[] => {
+  const ownedMessageIds = new Set(
+    turns
+      .filter(({ status }) => status === "awaiting-user")
+      .map(({ assistantMessageId }) => assistantMessageId),
   );
+  return messages
+    .filter(({ id }) => !ownedMessageIds.has(id))
+    .flatMap(({ id, parts }) =>
+      parts.flatMap((part) =>
+        part.type === "tool-call" &&
+        CLIENT_ANSWERABLE_TOOL_CALL_STATE[part.state]
+          ? [{ messageId: id, state: part.state, toolCallId: part.id }]
+          : [],
+      ),
+    );
+};
+
+export const findUnownedPendingInteractions = async (
+  options: ReadThreadInvariantSnapshotOptions,
+): Promise<ToolCallViolation[]> =>
+  unownedPendingInteractionsOf(await readThreadInvariantSnapshot(options));
 
 /**
  * Persisted-thread invariant: each assistant message outside a live turn keeps
@@ -114,31 +135,10 @@ export const findUnownedPendingInteractions = async ({
  * (whose row names no message) meets too. Returns the violations; a sound
  * thread returns [].
  */
-const findUnsettledToolCalls = async ({
-  db,
-  threadId,
-}: {
-  db: TestDatabase;
-  threadId: SafeId<"chatThread">;
-}): Promise<ToolCallViolation[]> => {
-  const [rows, turns] = await Promise.all([
-    db
-      .select({
-        content: chatMessages.content,
-        id: chatMessages.id,
-        role: chatMessages.role,
-      })
-      .from(chatMessages)
-      .where(eq(chatMessages.threadId, threadId)),
-    db
-      .select({
-        assistantMessageId: chatTurns.assistantMessageId,
-        status: chatTurns.status,
-      })
-      .from(chatTurns)
-      .where(eq(chatTurns.threadId, threadId))
-      .orderBy(asc(chatTurns.createdAt)),
-  ]);
+const unsettledToolCallsOf = ({
+  messages: rows,
+  turns,
+}: ThreadInvariantSnapshot): ToolCallViolation[] => {
   // The latest turn that wrote a message decides how it may end.
   const statusByMessageId = new Map(
     turns.map(({ assistantMessageId, status }) => [assistantMessageId, status]),
@@ -150,7 +150,7 @@ const findUnsettledToolCalls = async ({
     }
     return findUnsettledStoredToolCalls({
       outcome: SETTLED_TURN_OUTCOME[status],
-      parts: chatMessageFromPersisted(row).parts,
+      parts: row.parts,
     }).map(({ state, toolCallId }) => ({
       messageId: row.id,
       state,
@@ -210,36 +210,10 @@ const storedReason = (outcome: ChatTurnOutcome): string | null =>
  * that stored no answer has nothing to disagree with. Returns the
  * violations; a sound thread returns [].
  */
-export const findTurnOutcomeMismatches = async ({
-  db,
-  threadId,
-}: {
-  db: TestDatabase;
-  threadId: SafeId<"chatThread">;
-}): Promise<TurnOutcomeMismatch[]> => {
-  const [rows, turns] = await Promise.all([
-    db
-      .select({
-        content: chatMessages.content,
-        id: chatMessages.id,
-        role: chatMessages.role,
-      })
-      .from(chatMessages)
-      .where(eq(chatMessages.threadId, threadId))
-      .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id)),
-    db
-      .select({
-        assistantMessageId: chatTurns.assistantMessageId,
-        cancellationReason: chatTurns.cancellationReason,
-        id: chatTurns.id,
-        interruptionReason: chatTurns.interruptionReason,
-        status: chatTurns.status,
-        userMessageId: chatTurns.userMessageId,
-      })
-      .from(chatTurns)
-      .where(eq(chatTurns.threadId, threadId))
-      .orderBy(asc(chatTurns.createdAt), asc(chatTurns.id)),
-  ]);
+const turnOutcomeMismatchesOf = ({
+  messages: rows,
+  turns,
+}: ThreadInvariantSnapshot): TurnOutcomeMismatch[] => {
   const latestTurnByUserMessage = new Map(
     turns.map((turn) => [turn.userMessageId, turn]),
   );
@@ -265,7 +239,7 @@ export const findTurnOutcomeMismatches = async ({
     if (expected === null || answer === undefined) {
       return [];
     }
-    const stored = chatMessageFromPersisted(answer).metadata?.turnOutcome;
+    const stored = answer.metadata?.turnOutcome;
     if (
       stored !== undefined &&
       stored.type === expected.type &&
@@ -283,6 +257,11 @@ export const findTurnOutcomeMismatches = async ({
   });
 };
 
+export const findTurnOutcomeMismatches = async (
+  options: ReadThreadInvariantSnapshotOptions,
+): Promise<TurnOutcomeMismatch[]> =>
+  turnOutcomeMismatchesOf(await readThreadInvariantSnapshot(options));
+
 /** An interaction the stored thread offers: a tool call the client answers,
  *  on a message an `awaiting-user` turn owns. */
 export type OfferedInteraction = {
@@ -296,77 +275,41 @@ export type OfferedInteraction = {
  * The interactions the stored thread offers the user: what each message an
  * `awaiting-user` turn owns awaits.
  */
-export const findOfferedInteractions = async ({
-  db,
-  threadId,
-}: {
-  db: TestDatabase;
-  threadId: SafeId<"chatThread">;
-}): Promise<OfferedInteraction[]> => {
-  const [rows, owners] = await Promise.all([
-    db
-      .select({
-        content: chatMessages.content,
-        id: chatMessages.id,
-        role: chatMessages.role,
-      })
-      .from(chatMessages)
-      .where(eq(chatMessages.threadId, threadId))
-      .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id)),
-    db
-      .select({ assistantMessageId: chatTurns.assistantMessageId })
-      .from(chatTurns)
-      .where(
-        and(
-          eq(chatTurns.threadId, threadId),
-          eq(chatTurns.status, "awaiting-user"),
-        ),
-      ),
-  ]);
+export const offeredInteractionsOf = ({
+  messages: rows,
+  turns,
+}: ThreadInvariantSnapshot): OfferedInteraction[] => {
+  const owners = turns.filter(({ status }) => status === "awaiting-user");
   const ownedMessageIds = new Set(
     owners.map(({ assistantMessageId }) => assistantMessageId),
   );
   return rows
     .filter(({ id }) => ownedMessageIds.has(id))
-    .flatMap((row) => {
-      const message = chatMessageFromPersisted(row);
+    .flatMap((row) =>
       // The production reader of what a turn awaits, so this lists exactly
       // what a continuation is validated against.
-      return getAwaitingUserInteractions(message).flatMap(
-        ({ toolCallId, type }) => {
-          const part = message.parts.find(
-            (candidate) =>
-              candidate.type === "tool-call" && candidate.id === toolCallId,
-          );
-          return part?.type === "tool-call"
-            ? [{ kind: type, messageId: row.id, state: part.state, toolCallId }]
-            : [];
-        },
-      );
-    });
+      getAwaitingUserInteractions(row).flatMap(({ toolCallId, type }) => {
+        const part = row.parts.find(
+          (candidate) =>
+            candidate.type === "tool-call" && candidate.id === toolCallId,
+        );
+        return part?.type === "tool-call"
+          ? [{ kind: type, messageId: row.id, state: part.state, toolCallId }]
+          : [];
+      }),
+    );
 };
 
-/** Every persisted-thread invariant, keyed by name; all empty for a sound
- *  thread. */
-export const findThreadInvariantViolations = async ({
-  db,
-  threadId,
-}: {
-  db: TestDatabase;
-  threadId: SafeId<"chatThread">;
-}) => {
-  const [
-    unownedPendingInteractions,
-    unsettledToolCalls,
-    turnOutcomeMismatches,
-  ] = await Promise.all([
-    findUnownedPendingInteractions({ db, threadId }),
-    findUnsettledToolCalls({ db, threadId }),
-    findTurnOutcomeMismatches({ db, threadId }),
-  ]);
-  return {
-    turnOutcomeMismatches,
-    unownedPendingInteractions,
-    unsettledToolCalls,
-  };
-};
+export const findOfferedInteractions = async (
+  options: ReadThreadInvariantSnapshotOptions,
+): Promise<OfferedInteraction[]> =>
+  offeredInteractionsOf(await readThreadInvariantSnapshot(options));
+
+/** Every persisted-thread invariant at one checkpoint. */
+export const threadInvariantViolationsOf = (
+  snapshot: ThreadInvariantSnapshot,
+) => ({
+  turnOutcomeMismatches: turnOutcomeMismatchesOf(snapshot),
+  unownedPendingInteractions: unownedPendingInteractionsOf(snapshot),
+  unsettledToolCalls: unsettledToolCallsOf(snapshot),
+});

@@ -1,5 +1,4 @@
 import { Result } from "better-result";
-import { Worker } from "bullmq";
 
 import {
   claimNextAccountDeletionEffectChunk,
@@ -15,7 +14,7 @@ import type {
 import { captureError, detached } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
-import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
+import { BullMqWorker, createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
 import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import { requeueDeterministicJob } from "@/api/lib/bullmq-requeue";
 import type { RequeueableQueue } from "@/api/lib/bullmq-requeue";
@@ -143,7 +142,7 @@ export const processAccountDeletionCleanupRequest = async (
   });
 };
 
-export const enqueuePendingAccountDeletionCleanupRequests = async (
+const enqueuePendingAccountDeletionCleanupRequests = async (
   db: AccountDeletionEffectDb,
 ): Promise<number> => {
   const requestIds = await listRecoverableAccountDeletionEffectRequestIds(db);
@@ -162,7 +161,7 @@ export const initAccountDeletionCleanupWorker = ({
   });
   const cleanupRequestDeps = createAccountDeletionCleanupRequestDeps(db);
 
-  const worker = new Worker<AccountDeletionCleanupJobData>(
+  const worker = new BullMqWorker<AccountDeletionCleanupJobData>(
     QUEUE_NAME,
     async (job) => {
       await processAccountDeletionCleanupRequest(

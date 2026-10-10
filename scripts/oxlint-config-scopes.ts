@@ -78,6 +78,81 @@ export const readScopes = (root: unknown): ScopeConfig[] => {
   return scopes;
 };
 
+const BASE_RULES_START = "  rules: {";
+const BASE_RULES_END = "  },";
+const BASE_OFF_ENTRY =
+  /^ {4}(?:"(?<quoted>[^"]+)"|(?<bare>[\w-]+)): "off",(?<trailing>\s*\/\/.*)?$/u;
+
+/**
+ * A base rule a config source turns off, and whether a comment on its line or
+ * the line above gives the reason.
+ */
+export type BaseOffEntry = { rule: string; line: number; reasoned: boolean };
+
+/** The literal `"rule": "off"` entries of a config source's base `rules`. */
+export const readBaseOffEntries = (source: string): BaseOffEntry[] => {
+  const lines = source.split("\n");
+  const start = lines.indexOf(BASE_RULES_START);
+  const end = lines.indexOf(BASE_RULES_END, start);
+  if (start === -1 || end === -1) {
+    return panic("config source has no top-level `rules` block");
+  }
+  const entries: BaseOffEntry[] = [];
+  for (let index = start + 1; index < end; index += 1) {
+    const groups = BASE_OFF_ENTRY.exec(lines[index] ?? "")?.groups;
+    if (groups === undefined) {
+      continue;
+    }
+    entries.push({
+      rule: groups["quoted"] ?? groups["bare"] ?? panic("unnamed off entry"),
+      line: index + 1,
+      reasoned:
+        groups["trailing"] !== undefined ||
+        (lines[index - 1] ?? "").trimStart().startsWith("//"),
+    });
+  }
+  return entries;
+};
+
+type BaseOffNoOpsOptions = {
+  baseRules: Record<string, unknown>;
+  /** Per canonical rule id, whether the presets leave it enabled. */
+  presetState: ReadonlyMap<string, boolean>;
+  canonical: (key: string) => string;
+  offEntries: readonly BaseOffEntry[];
+  builtinIds: ReadonlySet<string>;
+};
+
+/**
+ * Base entries whose `off` switches nothing off. Restating a preset's `off`
+ * is a decision only when its reason sits beside it. A new built-in rule may
+ * default to off without appearing in a preset; its reasoned decision is live.
+ * Unknown rules and unexplained restatements remain dead configuration.
+ */
+export const baseOffNoOps = ({
+  baseRules,
+  presetState,
+  canonical,
+  offEntries,
+  builtinIds,
+}: BaseOffNoOpsOptions): string[] => {
+  const reasoned = new Set(
+    offEntries.filter((entry) => entry.reasoned).map((entry) => entry.rule),
+  );
+  return Object.entries(baseRules)
+    .filter(([key, value]) => {
+      if (!ruleIsOff(value)) {
+        return false;
+      }
+      const id = canonical(key);
+      const enabled = presetState.get(id);
+      const decidedOff =
+        reasoned.has(key) && (enabled === false || builtinIds.has(id));
+      return enabled !== true && !decidedOff;
+    })
+    .map(([key]) => key);
+};
+
 const globCache = new Map<string, Bun.Glob>();
 export const matches = (pattern: string, file: string) => {
   const cached = globCache.get(pattern) ?? new Bun.Glob(pattern);

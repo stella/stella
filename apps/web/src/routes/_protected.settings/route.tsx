@@ -38,6 +38,7 @@ import {
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { cn } from "@stll/ui/utils";
 
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { env } from "@/env";
 import { useTimeBillingPreviewEnabled } from "@/hooks/use-time-billing-preview";
 import type { TranslationKey } from "@/i18n/types";
@@ -47,6 +48,7 @@ import { betaFeaturesAvailable } from "@/lib/beta-features";
 import { useKeyboardShortcutsDialogStore } from "@/lib/keyboard-shortcuts-dialog-store";
 import { hasOrganizationManagementAccess } from "@/lib/organization/role-assignment.logic";
 import { pageTitle } from "@/lib/page-title";
+import { useQueryView } from "@/lib/use-query-view";
 import { isBillingSettingsAccessible } from "@/routes/_protected.settings/-components/organization/billing-settings.logic";
 
 export const Route = createFileRoute("/_protected/settings")({
@@ -193,7 +195,12 @@ const NAV_ITEM_CLASS = cn(
 
 function SettingsLayout() {
   const t = useTranslations();
-  const { data: role } = useQuery({ ...roleOptions, throwOnError: true });
+  const roleQuery = useQuery(roleOptions);
+  const roleView = useQueryView(roleQuery);
+  const role =
+    roleView.type === "items" && roleView.refetchError === undefined
+      ? roleView.items
+      : undefined;
   const showOrganization = hasOrganizationManagementAccess(role);
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
@@ -270,7 +277,6 @@ function SettingsLayout() {
                   return (
                     <MenuItem
                       key={item.to}
-                      className="min-h-11 sm:min-h-11"
                       render={
                         <Link
                           from={Route.fullPath}
@@ -287,10 +293,7 @@ function SettingsLayout() {
                   );
                 })}
                 {section.id === "account" && (
-                  <MenuItem
-                    className="min-h-11 sm:min-h-11"
-                    onClick={openShortcuts}
-                  >
+                  <MenuItem onClick={openShortcuts}>
                     <KeyboardIcon className="size-4" />
                     {t("navigation.shortcutsDialog.title")}
                   </MenuItem>
@@ -347,6 +350,7 @@ function SettingsLayout() {
       <ScrollArea className="min-h-0 min-w-0 flex-1">
         <main className="flex min-w-0 flex-col">
           <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 p-6">
+            <QueryViewFeedback view={roleView} />
             <Outlet />
           </div>
         </main>

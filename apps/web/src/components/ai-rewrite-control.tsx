@@ -3,9 +3,12 @@ import { useId, useState } from "react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import { ChevronDownIcon, Loader2Icon, AiActionIcon } from "@stll/ui/icons";
+import { DialogFormState } from "@stll/ui/dialog";
+import { AiActionIcon } from "@stll/ui/icons";
 import { Label } from "@stll/ui/label";
-import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
+import { Loader } from "@stll/ui/loader";
+import { PopoverPopup } from "@stll/ui/popover";
+import { SplitButton } from "@stll/ui/split-button";
 import { Textarea } from "@stll/ui/textarea";
 import { cn } from "@stll/ui/utils";
 
@@ -60,6 +63,7 @@ export const AiRewriteControl = ({
   onRewrite,
 }: AiRewriteControlProps) => {
   const t = useTranslations("ai");
+  const tCommon = useTranslations("common");
   const [open, setOpen] = useState(false);
   const [customInstruction, setCustomInstruction] = useState("");
   const customInstructionId = useId();
@@ -71,6 +75,7 @@ export const AiRewriteControl = ({
       return;
     }
     setOpen(false);
+    setCustomInstruction("");
     onRewrite(instruction);
   };
 
@@ -79,100 +84,87 @@ export const AiRewriteControl = ({
       className={cn("inline-flex shrink-0 items-center", className)}
       data-slot="ai-rewrite-control"
     >
-      <Button
-        aria-label={actionLabel}
-        className="size-11 max-w-11 flex-none rounded-e-none"
-        disabled={unavailable}
-        onClick={() => runRewrite(AI_REWRITE_PRESETS[0].instruction)}
-        size="icon-sm"
-        tooltip={actionLabel}
-        type="button"
-        variant="ghost"
+      <DialogFormState
+        dirty={customInstruction !== ""}
+        onDiscard={() => setCustomInstruction("")}
+      />
+      <SplitButton
+        surface="popover"
+        menuLabel={t("chooseRewriteInstruction")}
+        menuDisabled={unavailable}
+        onPrimaryClick={() => runRewrite(AI_REWRITE_PRESETS[0].instruction)}
+        onOpenChange={setOpen}
+        open={open}
+        primaryDisabled={unavailable}
+        primaryLabel={actionLabel}
+        size="sm"
+        menu={
+          <PopoverPopup
+            aria-label={t("chooseRewriteInstruction")}
+            align="end"
+            className="w-80"
+            side="bottom"
+          >
+            <div className="flex flex-col gap-1">
+              {AI_REWRITE_PRESETS.map((preset) => (
+                <Button
+                  className="w-full justify-start font-normal"
+                  size="sm"
+                  variant="ghost"
+                  key={preset.id}
+                  onClick={() => runRewrite(preset.instruction)}
+                >
+                  {t(preset.labelKey)}
+                </Button>
+              ))}
+              <div className="bg-border my-1 h-px" />
+              <div className="flex flex-col gap-1">
+                <Label
+                  className="text-muted-foreground px-1 text-xs font-medium"
+                  htmlFor={customInstructionId}
+                >
+                  {t("refinePlaceholder")}
+                </Label>
+                <Textarea
+                  id={customInstructionId}
+                  maxLength={MAX_CUSTOM_INSTRUCTION_LENGTH}
+                  onChange={(event) =>
+                    setCustomInstruction(event.currentTarget.value)
+                  }
+                  onKeyDown={(event) => {
+                    if (
+                      (event.metaKey || event.ctrlKey) &&
+                      event.key === "Enter" &&
+                      customInstruction.trim().length > 0
+                    ) {
+                      event.preventDefault();
+                      runRewrite(customInstruction.trim());
+                    }
+                  }}
+                  rows={3}
+                  value={customInstruction}
+                />
+                <Button
+                  className="mt-1 self-end"
+                  disabled={customInstruction.trim().length === 0}
+                  onClick={() => runRewrite(customInstruction.trim())}
+                  size="sm"
+                  type="button"
+                >
+                  <AiActionIcon aria-hidden className="size-3.5" />
+                  {t("editWithAI")}
+                </Button>
+              </div>
+            </div>
+          </PopoverPopup>
+        }
       >
         {isPending ? (
-          <Loader2Icon
-            aria-hidden
-            className="size-3.5 animate-spin ltr:translate-x-1 rtl:-translate-x-1"
-          />
+          <Loader className="size-3.5" label={tCommon("loading")} size="sm" />
         ) : (
-          <AiActionIcon
-            aria-hidden
-            className="size-3.5 ltr:translate-x-1 rtl:-translate-x-1"
-          />
+          <AiActionIcon aria-hidden className="size-3.5" />
         )}
-      </Button>
-      <Popover onOpenChange={setOpen} open={open}>
-        <PopoverTrigger
-          render={
-            <Button
-              aria-label={t("chooseRewriteInstruction")}
-              className="size-11 max-w-11 flex-none rounded-s-none border-s px-1"
-              disabled={unavailable}
-              size="icon-sm"
-              tooltip={t("chooseRewriteInstruction")}
-              type="button"
-              variant="ghost"
-            />
-          }
-        >
-          <ChevronDownIcon
-            aria-hidden
-            className="size-3 ltr:-translate-x-1 rtl:translate-x-1"
-          />
-        </PopoverTrigger>
-        <PopoverPopup align="end" className="w-80" side="bottom">
-          <div className="flex flex-col gap-1">
-            {AI_REWRITE_PRESETS.map((preset) => (
-              <Button
-                className="w-full justify-start font-normal"
-                key={preset.id}
-                onClick={() => runRewrite(preset.instruction)}
-                size="sm"
-                type="button"
-                variant="ghost"
-              >
-                {t(preset.labelKey)}
-              </Button>
-            ))}
-            <div className="bg-border my-1 h-px" />
-            <Label
-              className="text-muted-foreground px-1 text-xs font-medium"
-              htmlFor={customInstructionId}
-            >
-              {t("refinePlaceholder")}
-            </Label>
-            <Textarea
-              id={customInstructionId}
-              maxLength={MAX_CUSTOM_INSTRUCTION_LENGTH}
-              onChange={(event) =>
-                setCustomInstruction(event.currentTarget.value)
-              }
-              onKeyDown={(event) => {
-                if (
-                  (event.metaKey || event.ctrlKey) &&
-                  event.key === "Enter" &&
-                  customInstruction.trim().length > 0
-                ) {
-                  event.preventDefault();
-                  runRewrite(customInstruction.trim());
-                }
-              }}
-              rows={3}
-              value={customInstruction}
-            />
-            <Button
-              className="mt-1 self-end"
-              disabled={customInstruction.trim().length === 0}
-              onClick={() => runRewrite(customInstruction.trim())}
-              size="sm"
-              type="button"
-            >
-              <AiActionIcon aria-hidden className="size-3.5" />
-              {t("editWithAI")}
-            </Button>
-          </div>
-        </PopoverPopup>
-      </Popover>
+      </SplitButton>
     </div>
   );
 };

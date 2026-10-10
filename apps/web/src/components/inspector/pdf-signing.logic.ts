@@ -1,12 +1,62 @@
 /**
- * Pure decisions behind signing a PDF in the desktop app: what a polled
- * signing session means for the waiting toast, and when the browser stops
- * polling it.
+ * Pure decisions behind signing a PDF in the desktop app: which file can be
+ * signed, what a polled signing session means for the waiting toast, and when
+ * the browser stops polling it.
  */
 
 import { panic } from "better-result";
 
+import type { DesktopHandoffFailureReason } from "@stll/api-contract/desktop-handoff";
+
+import { PDF_MIME } from "@/lib/consts";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities.logic";
+
+type ResolvePdfSignTargetOptions = {
+  canUpdateEntity: boolean;
+  entityId: string;
+  file:
+    | {
+        fieldId: string;
+        mimeType: string | null | undefined;
+        propertyId: string | null | undefined;
+      }
+    | null
+    | undefined;
+  /** Signing writes a new version of the property's current file. */
+  isCurrentVersion: boolean;
+  workspaceId: string;
+};
+
+/**
+ * The file a sign action targets, or `null` where signing does not apply.
+ * Every surface that offers signing (row menu, reader toolbar, inspector)
+ * asks this one question, so they cannot disagree about a file.
+ */
+export const resolvePdfSignTarget = ({
+  canUpdateEntity,
+  entityId,
+  file,
+  isCurrentVersion,
+  workspaceId,
+}: ResolvePdfSignTargetOptions) => {
+  if (
+    !canUpdateEntity ||
+    !isCurrentVersion ||
+    file === null ||
+    file === undefined ||
+    file.mimeType !== PDF_MIME ||
+    file.propertyId === null ||
+    file.propertyId === undefined
+  ) {
+    return null;
+  }
+  return {
+    entityId,
+    fieldId: file.fieldId,
+    propertyId: file.propertyId,
+    workspaceId,
+  };
+};
 
 /** Poll cadence while the desktop app holds the signing dialog open. */
 export const PDF_SIGNING_POLL_INTERVAL_MS = 2000;
@@ -19,6 +69,7 @@ export const PDF_SIGNING_POLL_INTERVAL_MS = 2000;
 const PDF_SIGNING_FALLBACK_WATCH_MS = 2 * 60 * 1000;
 
 export type PdfSigningCloseReason =
+  | DesktopHandoffFailureReason
   | "base_version_diverged"
   | "certificate_rejected"
   | "certificate_revoked"
@@ -45,9 +96,17 @@ export type PdfSigningSessionSnapshot = {
   status: "cancelled" | "expired" | "finalized" | "open";
 };
 
+/**
+ * Where an exchange ran out of time: `handoff` means stella desktop never
+ * redeemed the deep link (not running, not registered for the scheme, or not
+ * connected to this account); `session` means it redeemed it and then did
+ * not finish.
+ */
+export type PdfSigningExpiryStage = "handoff" | "session";
+
 export type PdfSigningOutcome =
   | { type: "cancelled"; closeReason: PdfSigningCloseReason | null }
-  | { type: "expired" }
+  | { type: "expired"; stage: PdfSigningExpiryStage }
   | { type: "finalized"; versionNumber: number | null };
 
 export type PdfSigningPollDecision =
@@ -65,15 +124,35 @@ export const parsePdfSigningDeadline = ({
   return Number.isFinite(parsed) ? parsed : now + PDF_SIGNING_FALLBACK_WATCH_MS;
 };
 
-export const decidePdfSigningPoll = ({
-  deadline,
-  now,
-  session,
-}: {
+type DecidePdfSigningPollOptions = {
+  /** The latest expiry observed so far; it only ever moves outward. */
   deadline: number;
+  /** The unredeemed handoff's expiry, as the create response reported it. */
+  handoffDeadline: number;
   now: number;
   session: PdfSigningSessionSnapshot;
-}): PdfSigningPollDecision => {
+};
+
+export const decidePdfSigningPoll = ({
+  deadline,
+  handoffDeadline,
+  now,
+  session,
+}: DecidePdfSigningPollOptions): PdfSigningPollDecision => {
+  // Redeeming the handoff replaces its two-minute window with the signing
+  // session's own TTL, so the deadline only ever moves outward, and an expiry
+  // past the handoff's own proves the desktop app picked the handoff up.
+  const extended = Math.max(
+    deadline,
+    parsePdfSigningDeadline({ expiresAt: session.expiresAt, now }),
+  );
+  const expired = {
+    type: "settled",
+    outcome: {
+      type: "expired",
+      stage: extended > handoffDeadline ? "session" : "handoff",
+    },
+  } as const satisfies PdfSigningPollDecision;
   switch (session.status) {
     case "cancelled": {
       return {
@@ -82,7 +161,7 @@ export const decidePdfSigningPoll = ({
       };
     }
     case "expired": {
-      return { type: "settled", outcome: { type: "expired" } };
+      return expired;
     }
     case "finalized": {
       return {
@@ -94,14 +173,8 @@ export const decidePdfSigningPoll = ({
       };
     }
     case "open": {
-      // Redeeming the handoff replaces its two-minute window with the signing
-      // session's own TTL, so the deadline only ever moves outward.
-      const extended = Math.max(
-        deadline,
-        parsePdfSigningDeadline({ expiresAt: session.expiresAt, now }),
-      );
       if (now >= extended) {
-        return { type: "settled", outcome: { type: "expired" } };
+        return expired;
       }
       return {
         type: "waiting",

@@ -11,6 +11,8 @@ import { Result } from "better-result";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
+import { sha256HexToBase64 } from "@stll/sha256";
+
 import {
   AGENT_SKILL_SCOPES,
   pendingUploads,
@@ -22,7 +24,7 @@ import {
   authorizeUploadPurpose,
   uploadRoutePermission,
 } from "@/api/handlers/uploads/permissions";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
@@ -40,7 +42,6 @@ import {
 } from "@/api/lib/uploads/entity-create";
 import {
   PRESIGN_URL_EXPIRY_SECONDS,
-  sha256HexToBase64,
   tmpUploadKey,
 } from "@/api/lib/uploads/runtime";
 
@@ -145,6 +146,7 @@ const config = {
   // resource-appropriate grant depends on the request's purpose, which
   // authorizeUploadPurpose (uploads/permissions.ts) checks in-handler.
   permissions: uploadRoutePermission,
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "write",
   mcp: {
     type: "capability",

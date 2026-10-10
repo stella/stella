@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import { lookupByIco, lookupFullRecordByIco, searchByName } from "./client.js";
 import { OrsrValidationError } from "./errors.js";
 import type { OrsrRawRelatedResponse } from "./types.js";
@@ -10,7 +12,7 @@ const FIXTURE_DIR = new URL("__fixtures__/", import.meta.url);
 // catch drift between an upstream payload and the committed JSON,
 // which is precisely what the assertions below check anyway.
 const readFixture = async <T>(name: string): Promise<T> =>
-  // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- committed test fixture JSON; shape asserted by the tests below
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- committed test fixture JSON; shape asserted by the tests below
   (await Bun.file(new URL(name, FIXTURE_DIR)).json()) as T;
 
 type FetchHandler = (input: URL | Request | string) => Promise<Response>;
@@ -280,8 +282,8 @@ describe("lookupByIco (fixture)", () => {
       return jsonResponse({});
     });
     expect(
-      lookupByIco("12345678", { observer: "unobserved" }),
-    ).rejects.toBeInstanceOf(OrsrValidationError);
+      await rejectionOf(lookupByIco("12345678", { observer: "unobserved" })),
+    ).toBeInstanceOf(OrsrValidationError);
     expect(called).toBe(false);
   });
 
@@ -290,8 +292,8 @@ describe("lookupByIco (fixture)", () => {
       jsonResponse({ title: "Bad request" }, 400),
     );
     expect(
-      lookupByIco("31333532", { observer: "unobserved" }),
-    ).rejects.toMatchObject({
+      await rejectionOf(lookupByIco("31333532", { observer: "unobserved" })),
+    ).toMatchObject({
       name: "OrsrAPIError",
       httpStatus: 400,
       upstreamMessage: "Bad request",
@@ -307,8 +309,8 @@ describe("lookupByIco (fixture)", () => {
         }),
     );
     expect(
-      lookupByIco("31333532", { observer: "unobserved" }),
-    ).rejects.toMatchObject({
+      await rejectionOf(lookupByIco("31333532", { observer: "unobserved" })),
+    ).toMatchObject({
       name: "OrsrAPIError",
       httpStatus: 200,
       upstreamMessage: null,
@@ -435,13 +437,13 @@ describe("searchByName (fixture)", () => {
 });
 
 describe("searchByName validation", () => {
-  test("rejects empty input", () => {
-    expect(searchByName("", { observer: "unobserved" })).rejects.toBeInstanceOf(
-      OrsrValidationError,
-    );
+  test("rejects empty input", async () => {
     expect(
-      searchByName("   ", { observer: "unobserved" }),
-    ).rejects.toBeInstanceOf(OrsrValidationError);
+      await rejectionOf(searchByName("", { observer: "unobserved" })),
+    ).toBeInstanceOf(OrsrValidationError);
+    expect(
+      await rejectionOf(searchByName("   ", { observer: "unobserved" })),
+    ).toBeInstanceOf(OrsrValidationError);
   });
 });
 
@@ -459,12 +461,6 @@ const installPathStub = (
     globalThis.fetch = original;
   };
 };
-
-const rejectionOf = async (pending: Promise<unknown>): Promise<unknown> =>
-  await pending.then(
-    () => null,
-    (error: unknown) => error,
-  );
 
 describe("lookupFullRecordByIco", () => {
   let restore: () => void = () => {

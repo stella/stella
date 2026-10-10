@@ -43,6 +43,10 @@
       "types": "./src/provision-citation-profile.ts",
       "import": "./src/provision-citation-profile.ts"
     },
+    "./provision-key": {
+      "types": "./src/provision-key.ts",
+      "import": "./src/provision-key.ts"
+    },
     "./provision-citation-profiles": {
       "types": "./src/provision-citation-profiles.ts",
       "import": "./src/provision-citation-profiles.ts"
@@ -74,6 +78,10 @@
     "./ingestion-cycle": {
       "types": "./src/ingestion-cycle.ts",
       "import": "./src/ingestion-cycle.ts"
+    },
+    "./provision-version-grammar": {
+      "types": "./src/provision-version-grammar.ts",
+      "import": "./src/provision-version-grammar.ts"
     }
   },
   "scripts": {
@@ -89,10 +97,12 @@
     "@stll/api-contract": "workspace:*",
     "@stll/concurrency": "workspace:*",
     "@stll/legal-ast": "workspace:*",
-    "better-result": "catalog:"
+    "better-result": "catalog:",
+    "valibot": "catalog:"
   },
   "devDependencies": {
     "@stll/property-testing": "workspace:*",
+    "@stll/sha256": "workspace:^",
     "@stll/typescript-config": "workspace:*",
     "bun-types": "catalog:",
     "fast-check": "catalog:"

@@ -6,7 +6,8 @@ import {
   type BusinessRegistryLookupDetail,
 } from "@stll/api-contract";
 
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import {
   BUSINESS_REGISTRY_SLUGS,
   LOOKUP_DETAIL_DESCRIPTION,
@@ -49,6 +50,7 @@ const businessRegistriesLookup = createSafeRootHandler(
       "identifier (company/registration number, VAT number) for an exact " +
       "match, or a company name to search where the register supports it.",
     permissions: { workspace: ["read"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "tool", name: "lookup_business_registry" },
     access: "read",
     query: querySchema,
@@ -60,6 +62,7 @@ const businessRegistriesLookup = createSafeRootHandler(
     );
     const result = await lookupBusinessRegistryShared({
       observer,
+      permit: grantThirdPartyOutboundPermit(),
       scopedDb,
       organizationId: session.activeOrganizationId,
       registry: query.registry,

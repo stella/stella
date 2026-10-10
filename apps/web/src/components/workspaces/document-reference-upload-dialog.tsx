@@ -9,6 +9,7 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
+  DialogFormState,
   DialogDescription,
   DialogFooter,
   DialogHeader,
@@ -153,6 +154,20 @@ const DocumentReferenceUploadDialogBody = ({
       open
     >
       <DialogPopup className="max-w-lg">
+        <DialogFormState
+          dirty={rows.some(
+            (row) =>
+              row.choice !== defaultReferenceUploadAction(row.entry.evidence),
+          )}
+          onDiscard={() => {
+            setRows(
+              rows.map((row) => ({
+                ...row,
+                choice: defaultReferenceUploadAction(row.entry.evidence),
+              })),
+            );
+          }}
+        />
         <DialogHeader>
           <DialogTitle>
             {t("workspaces.files.referencedUpload.title")}

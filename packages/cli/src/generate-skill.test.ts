@@ -170,7 +170,7 @@ describe("generateCliSkill (TanStack Intent)", () => {
     );
     expect(skill).not.toContain("  - metadata:");
     expect(skill).toContain(
-      'positions[]: mode="extract": issue:string, ask:{question}',
+      'positions[]: mode="extract": issue:string, sources?:string[], ask:{question}',
     );
     expect(skill).toContain('type="multi-select": value:string[]');
   });
@@ -348,7 +348,9 @@ describe("generateCliSkill (TanStack Intent)", () => {
       `generates ${CAPABILITY.commandCount}\ncapability commands`,
     );
     expect(skill).toContain("stella capability list");
-    expect(skill).toContain("stella capability describe");
+    expect(skill).toContain("stella capability describe --capability <id>");
+    expect(skill).toContain("stella capability read --capability <id>");
+    expect(skill).toContain("stella capability write --capability <id>");
     expect(skill).toContain(`stella ${CAPABILITY_NAMESPACE} <domain> <action>`);
     expect(skill).not.toContain("a colliding capability drops under");
     expect(skill).toContain("--dry-run");

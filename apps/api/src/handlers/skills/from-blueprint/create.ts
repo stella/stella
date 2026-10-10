@@ -1,11 +1,12 @@
 import { panic, Result } from "better-result";
 import { t } from "elysia";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { BLUEPRINT_IDS, getBlueprint, parseSkillFile } from "@stll/skills";
 
 import { AGENT_SKILL_SCOPES } from "@/api/db/schema";
-import { skillTextSha256 } from "@/api/lib/agent-skills/content-hash";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { skillRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -31,6 +32,8 @@ const config = {
     "used more than once, and stays fully editable afterwards. Team scope " +
     "requires admin or owner.",
   permissions: { agentSkill: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: skillRealtimeUpdates,
   mcp: {
     type: "capability",
     reason: "agent_tool_authoring",
@@ -60,7 +63,7 @@ const buildParsedBlueprint = (
     body,
     compatibility: metadata.compatibility ?? null,
     description: metadata.description,
-    entrypointHash: skillTextSha256(blueprint.source),
+    entrypointHash: hashSha256Hex(blueprint.source),
     license: metadata.license ?? null,
     metadata: { blueprintId: blueprint.id },
     name: metadata.name,

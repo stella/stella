@@ -11,6 +11,7 @@ import type {
   InspectorRailIconProps,
   InspectorViewRenderProps,
 } from "@/components/inspector/view-registry";
+import { RecoverableViewerBoundary } from "@/components/viewer/recoverable-viewer-boundary";
 import { DOCX_MIME } from "@/lib/consts";
 
 const LazyCreateDocumentDraftEditor = lazy(async () => {
@@ -27,15 +28,17 @@ export const CreateDocumentDraftInspector = ({
   return (
     <div className="bg-background flex min-h-0 flex-1 flex-col overflow-hidden">
       <InspectorTabHeader label={tab.label} onClose={onClose} />
-      <Suspense
-        fallback={
-          <div className="text-muted-foreground flex min-h-0 flex-1 items-center justify-center p-6 text-sm">
-            {t("common.loading")}
-          </div>
-        }
-      >
-        <LazyCreateDocumentDraftEditor key={tab.id} payload={tab.payload} />
-      </Suspense>
+      <RecoverableViewerBoundary key={tab.id} surface="chat-draft-docx">
+        <Suspense
+          fallback={
+            <div className="text-muted-foreground flex min-h-0 flex-1 items-center justify-center p-6 text-sm">
+              {t("common.loading")}
+            </div>
+          }
+        >
+          <LazyCreateDocumentDraftEditor payload={tab.payload} />
+        </Suspense>
+      </RecoverableViewerBoundary>
     </div>
   );
 };

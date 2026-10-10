@@ -1,10 +1,10 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { getBormeSummary } from "@stll/boe";
-
 import { mapBoeError } from "@/api/handlers/legislation/boe-error";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
+import { boeClient } from "@/api/lib/legal-search/boe-client";
 
 const paramsSchema = t.Object({
   date: t.String({ pattern: "^\\d{8}$" }),
@@ -16,6 +16,7 @@ const bormeSummary = createSafeRootHandler(
       "Read the BORME summary the Spanish commercial registry gazette " +
       "published on one date, given as YYYYMMDD.",
     permissions: { workspace: ["read"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: {
       type: "capability",
       readClass: "public",
@@ -28,7 +29,10 @@ const bormeSummary = createSafeRootHandler(
   async function* ({ params: { date } }) {
     const result = yield* Result.await(
       Result.tryPromise({
-        try: async () => await getBormeSummary(date),
+        try: async () =>
+          await boeClient(grantThirdPartyOutboundPermit()).getBormeSummary(
+            date,
+          ),
         catch: mapBoeError,
       }),
     );

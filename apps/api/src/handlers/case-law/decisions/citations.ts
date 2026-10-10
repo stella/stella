@@ -9,8 +9,10 @@ import {
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
+import { readPublicDecisionLanguageAlternatesInTx } from "@/api/lib/case-law/language-alternates";
 import { publishedCaseLawDecisionFor } from "@/api/lib/case-law/published-decisions";
 import { redistributableCaseLawSourceFor } from "@/api/lib/case-law/redistribution";
+import { buildCaseLawDecisionAppUrl } from "@/api/lib/legal-search/public-law-app-urls";
 import { LIMITS } from "@/api/lib/limits";
 import {
   decodePaginationCursor,
@@ -79,7 +81,7 @@ const createScannedCitationPage = <T>(
   };
 };
 
-export const listOutgoingDecisionCitations = async ({
+const readOutgoingDecisionCitationRows = async ({
   tx,
   cursor,
   decisionId,
@@ -114,6 +116,15 @@ export const listOutgoingDecisionCitations = async ({
         citedDecisionId: candidates.citedDecisionId,
         sectionIndex: candidates.sectionIndex,
       },
+      target: {
+        decisionId: citedDecision.id,
+        caseNumber: citedDecision.caseNumber,
+        country: citedDecision.country,
+        court: citedDecision.court,
+        language: citedDecision.language,
+        languageGroupKey: citedDecision.languageGroupKey,
+        slug: citedDecision.slug,
+      },
       scanId: candidates.id,
       visible: sql<boolean>`(
           ${candidates.citedDecisionId} IS NULL
@@ -132,7 +143,50 @@ export const listOutgoingDecisionCitations = async ({
       normalizeTenantPageLimit(LIMITS.caseLawDecisionCitationPageSize) + 1,
     );
 
-  return createScannedCitationPage(rows);
+  return { rows };
+};
+
+export const listOutgoingDecisionCitationRoutes = async (
+  options: CitationPageOptions,
+) => {
+  const read = await readOutgoingDecisionCitationRows(options);
+  if (!("rows" in read)) {
+    return read;
+  }
+  const alternates = await readPublicDecisionLanguageAlternatesInTx(
+    options.tx,
+    read.rows
+      .filter((row) => row.visible)
+      .map((row) => row.target?.languageGroupKey ?? null),
+  );
+  return createScannedCitationPage(
+    read.rows.map(({ target, item, scanId, visible }) => ({
+      item: {
+        ...item,
+        appUrl:
+          visible && target !== null
+            ? buildCaseLawDecisionAppUrl({
+                ...target,
+                languageAlternates: alternates.alternatesFor(
+                  target.languageGroupKey,
+                ),
+              })
+            : null,
+      },
+      scanId,
+      visible,
+    })),
+  );
+};
+
+export const listOutgoingDecisionCitations = async (
+  options: CitationPageOptions,
+) => {
+  const read = await readOutgoingDecisionCitationRows(options);
+  if (!("rows" in read)) {
+    return read;
+  }
+  return createScannedCitationPage(read.rows);
 };
 
 export const listIncomingDecisionCitations = async ({

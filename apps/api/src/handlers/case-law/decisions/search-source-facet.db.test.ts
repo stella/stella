@@ -2,13 +2,16 @@ import type { PGlite } from "@electric-sql/pglite";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
+import * as v from "valibot";
 
 import {
+  SEARCH_TOTAL_NOT_COUNTED,
   FACET_COUNT_TYPE,
   DEFAULT_SEARCH_EXCERPT,
   DEFAULT_SEARCH_SORT,
 } from "@stll/api-contract/search";
 import { compareCodeUnit } from "@stll/collation";
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
 import {
   caseLawDecisions,
@@ -19,6 +22,7 @@ import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-see
 import { caseLawSearchPlan } from "@/api/handlers/case-law/decisions/search";
 import { createSafeId } from "@/api/lib/branded-types";
 import { cappedSourceFacetBuckets } from "@/api/lib/case-law/decision-search-facets";
+import { SEARCH_CASE_LAW_PROJECTION } from "@/api/lib/chat/projections";
 import { LIMITS } from "@/api/lib/limits";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import {
@@ -110,8 +114,7 @@ beforeAll(
     // Insert in bounded batches; the fixture has several thousand rows.
     const decisions = [...rows, ...singletons];
     const batchSize = 500;
-    for (let offset = 0; offset < decisions.length; offset += batchSize) {
-      const batch = decisions.slice(offset, offset + batchSize);
+    for (const batch of chunkItems(decisions, batchSize)) {
       await db.insert(caseLawDecisions).values(batch);
       await db.insert(caseLawSearchDocuments).values(
         batch.map(({ id, language }) => ({
@@ -198,6 +201,33 @@ test.each([undefined, "cs", "en"])(
     const projected = cappedSourceFacetBuckets(
       capped.map(({ value, count }) => ({ value, count, label: null })),
     );
+    const payload = {
+      headnotes: "included" as const,
+      facets: {
+        courtYear: null,
+        court: [],
+        year: [],
+        decisionType: [],
+        source: projected,
+        language: [],
+      },
+      searches: [],
+      nextCursor: null,
+      results: [],
+      total: SEARCH_TOTAL_NOT_COUNTED,
+    };
+    // Parse the real query's buckets after the production count builder, not
+    // a hand-maintained source-facet fixture. Cover exact and capped counts.
+    expect(v.parse(SEARCH_CASE_LAW_PROJECTION, payload)).toEqual(payload);
+    expect(
+      v.safeParse(SEARCH_CASE_LAW_PROJECTION, {
+        ...payload,
+        facets: {
+          ...payload.facets,
+          source: projected.map((bucket) => ({ ...bucket, undeclared: true })),
+        },
+      }).success,
+    ).toBe(false);
     for (const bucket of projected) {
       const expected = exact.get(bucket.value);
       expect(expected).toBeDefined();

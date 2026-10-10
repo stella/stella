@@ -12,6 +12,8 @@
 import { beforeAll, describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
+import { DOCKET_IDENTITY_FIXTURE_NUMBER_MAX } from "@stll/api-contract/decision-docket-identity.fixtures";
+
 import { stellaPublicLawReader } from "@/api/db/rls";
 import {
   caseLawDecisionIdentifiers,
@@ -27,10 +29,13 @@ import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import {
   describeDocketFamilyIdentity,
+  describeDocketGrammarFamilyIdentity,
   docketFamilyDecisionRows,
   docketFamilyIdentifierRows,
   docketFamilyKeyGrantSql,
   docketFamilyScenario,
+  docketGrammarFamilyDecisionRows,
+  docketGrammarFamilyScenario,
 } from "@/api/tests/helpers/docket-family-identity-scenario";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -49,6 +54,10 @@ if (!databaseUrl || !runPostgresTests) {
     // A docket number no other suite on the shared server writes.
     const scenario = docketFamilyScenario(
       70_000 + Math.floor(Math.random() * 20_000),
+    );
+    // The fixtures' own numbering, with years no other suite writes.
+    const grammarScenario = docketGrammarFamilyScenario(
+      1 + (scenario.number % DOCKET_IDENTITY_FIXTURE_NUMBER_MAX),
     );
 
     const setFamilyKeyGrant = async (mode: "grant" | "revoke") => {
@@ -82,6 +91,9 @@ if (!databaseUrl || !runPostgresTests) {
         .insert(caseLawDecisions)
         .values(docketFamilyDecisionRows(scenario, sourceId));
       await db
+        .insert(caseLawDecisions)
+        .values(docketGrammarFamilyDecisionRows(grammarScenario, sourceId));
+      await db
         .insert(caseLawDecisionIdentifiers)
         .values(docketFamilyIdentifierRows(scenario));
     });
@@ -96,6 +108,11 @@ if (!databaseUrl || !runPostgresTests) {
       caseLawDb,
       scenario,
       setFamilyKeyGrant,
+    }));
+
+    describeDocketGrammarFamilyIdentity(() => ({
+      caseLawDb,
+      scenario: grammarScenario,
     }));
   });
 }

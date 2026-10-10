@@ -22,12 +22,25 @@ import {
   getModelDefaultReasoningEffort,
   getModelDisplayMetadata,
   getModelReasoningEfforts,
+  TANSTACK_AI_PROVIDERS,
 } from "@stll/ai-catalog";
 import type {
   BYOKProvider,
   ModelRole,
   ReasoningEffort,
 } from "@stll/ai-catalog";
+import { classifyBenchmarkModelOptions } from "@stll/ai-catalog/benchmark-frontier";
+import type {
+  ClassifiedBenchmarkModelOption,
+  ModelBenchmarkAvailability,
+  ModelBenchmarkMeasurement,
+} from "@stll/ai-catalog/benchmark-frontier";
+import {
+  getModelBenchmarkMeasurements,
+  getModelUnratedReason,
+  getTypicalCallCostUsd,
+} from "@stll/ai-catalog/benchmarks";
+import type { ModelUnratedReason } from "@stll/ai-catalog/benchmarks";
 
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -109,27 +122,34 @@ export const isChatModelSelectionAvailable = ({
   return hasTanStackInstanceProvider() && getActiveProvider() === provider;
 };
 
+const chatModelOption = (
+  provider: BYOKProvider,
+  modelId: string,
+): BYOKChatModelOption => {
+  const metadata = getModelDisplayMetadata(modelId);
+  if (metadata === null) {
+    return panic(`Missing display metadata for offered model "${modelId}"`);
+  }
+  return {
+    defaultReasoningEffort:
+      provider === "openrouter"
+        ? getModelDefaultReasoningEffort(modelId)
+        : null,
+    provider,
+    modelId,
+    displayName: metadata.displayName,
+    iconProvider: metadata.iconProvider,
+    reasoningEfforts: getChatModelReasoningEfforts({ provider, modelId }),
+    value: encodeChatModelSelection({ provider, modelId }),
+  };
+};
+
 const chatModelOptionsForProvider = (
   provider: BYOKProvider,
 ): BYOKChatModelOption[] =>
-  BYOK_MODEL_OPTIONS[provider].map((modelId) => {
-    const metadata = getModelDisplayMetadata(modelId);
-    if (metadata === null) {
-      return panic(`Missing display metadata for offered model "${modelId}"`);
-    }
-    return {
-      defaultReasoningEffort:
-        provider === "openrouter"
-          ? getModelDefaultReasoningEffort(modelId)
-          : null,
-      provider,
-      modelId,
-      displayName: metadata.displayName,
-      iconProvider: metadata.iconProvider,
-      reasoningEfforts: getChatModelReasoningEfforts({ provider, modelId }),
-      value: encodeChatModelSelection({ provider, modelId }),
-    };
-  });
+  BYOK_MODEL_OPTIONS[provider].map((modelId) =>
+    chatModelOption(provider, modelId),
+  );
 
 const CHAT_REASONING_EFFORT_EXPOSURE = {
   google: "exposed",
@@ -211,6 +231,52 @@ export const getConfiguredChatModelOptions = (
   orgAIConfig: OrgAIConfig | null,
 ): BYOKChatModelOption[] =>
   configuredChatProviders(orgAIConfig).flatMap(chatModelOptionsForProvider);
+
+type BenchmarkRouteOption = BYOKChatModelOption & {
+  availability: ModelBenchmarkAvailability;
+  costPerTypicalCallUsd: number | null;
+  measurements: ModelBenchmarkMeasurement[];
+  /** Why the catalog has no exact Arena row for this model; `null` if it has one. */
+  unratedReason: ModelUnratedReason | null;
+};
+
+export type ChatModelBenchmarkOption =
+  ClassifiedBenchmarkModelOption<BenchmarkRouteOption>;
+
+/**
+ * Every offered chat route with its cost and quality trade-off, classified
+ * once over the whole catalog so clients receive only the verdicts. Routes
+ * whose provider is not configured stay listed with `provider_unconfigured`
+ * so the comparison shows what configuring a provider would unlock; the
+ * picker re-derives its own frontier over the available routes. Only efforts
+ * the route can actually be sent with are kept.
+ */
+export const getChatModelBenchmarkOptions = (
+  orgAIConfig: OrgAIConfig | null,
+): ChatModelBenchmarkOption[] => {
+  const configuredProviders = new Set(configuredChatProviders(orgAIConfig));
+  const routes: BenchmarkRouteOption[] = [];
+  for (const provider of TANSTACK_AI_PROVIDERS) {
+    const availability = configuredProviders.has(provider)
+      ? "available"
+      : "provider_unconfigured";
+    for (const modelId of BYOK_MODEL_OPTIONS[provider]) {
+      const option = chatModelOption(provider, modelId);
+      const benchmark = {
+        availability,
+        costPerTypicalCallUsd: getTypicalCallCostUsd(modelId),
+        measurements: getModelBenchmarkMeasurements(modelId).filter(
+          ({ reasoningEffort }) =>
+            reasoningEffort === null ||
+            (option.reasoningEfforts?.includes(reasoningEffort) ?? false),
+        ),
+        unratedReason: getModelUnratedReason(modelId),
+      } satisfies Omit<BenchmarkRouteOption, keyof BYOKChatModelOption>;
+      routes.push({ ...option, ...benchmark });
+    }
+  }
+  return classifyBenchmarkModelOptions(routes);
+};
 
 /**
  * The encoded selection a send would use absent a thread override, or

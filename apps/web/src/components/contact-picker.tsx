@@ -2,6 +2,7 @@ import { useState } from "react";
 import type * as React from "react";
 
 import { useQuery } from "@tanstack/react-query";
+import { panic } from "better-result";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
@@ -18,7 +19,10 @@ import {
 import { BuildingIcon, PlusIcon, SearchIcon, UserIcon } from "@stll/ui/icons";
 
 import { contactPickerSearchOptions } from "@/components/contact-picker-queries";
+import { ContactReadError } from "@/components/contact-read-error";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { detached } from "@/lib/detached";
+import { useQueryView } from "@/lib/use-query-view";
 
 type ContactResult = {
   id: string;
@@ -72,14 +76,29 @@ export const ContactPicker = ({
     200,
   );
 
-  const { data: results = [] } = useQuery({
-    ...contactPickerSearchOptions({
-      organizationId: activeOrganizationId,
-      q: debouncedQuery,
-      type,
+  const view = useQueryView(
+    useQuery({
+      ...contactPickerSearchOptions({
+        organizationId: activeOrganizationId,
+        q: debouncedQuery,
+        type,
+      }),
+      enabled: debouncedQuery.length > 0,
     }),
-    enabled: debouncedQuery.length > 0,
-  });
+  );
+  const results = (() => {
+    switch (view.type) {
+      case "items":
+        return view.items;
+      case "pending":
+      case "error":
+      case "empty":
+        return [];
+      default:
+        view satisfies never;
+        return panic("Unhandled contact picker query state");
+    }
+  })();
 
   const handleValueChange = (value: ContactResult | null) => {
     if (!value) {
@@ -104,7 +123,12 @@ export const ContactPicker = ({
     setDebouncedQuery("");
   };
 
-  const showCreate = onCreate && query.trim().length > 0;
+  const showCreate =
+    onCreate &&
+    query.trim().length > 0 &&
+    query === debouncedQuery &&
+    (view.type === "empty" ||
+      (view.type === "items" && view.refetchError === undefined));
   const createOptions: ContactResult[] = [];
   if (showCreate && (!type || type === "organization")) {
     createOptions.push({ ...CREATE_ORG_SENTINEL, displayName: query.trim() });
@@ -171,11 +195,41 @@ export const ContactPicker = ({
             </ComboboxItem>
           ))}
         </ComboboxList>
-        <ComboboxEmpty>
-          {query.length > 0
-            ? t("contacts.noContactsFound")
-            : t("workspaces.parties.searchContacts")}
-        </ComboboxEmpty>
+        {(() => {
+          switch (view.type) {
+            case "pending":
+              return (
+                <p className="text-muted-foreground p-3 text-sm" role="status">
+                  {t(
+                    query.length > 0
+                      ? "common.loading"
+                      : "workspaces.parties.searchContacts",
+                  )}
+                </p>
+              );
+            case "error":
+              return (
+                <ContactReadError
+                  error={view.error}
+                  onRetry={() => detached(view.retry(), "contact-picker.retry")}
+                />
+              );
+            case "empty":
+              return (
+                <ComboboxEmpty>{t("contacts.noContactsFound")}</ComboboxEmpty>
+              );
+            case "items":
+              return view.refetchError !== undefined ? (
+                <ContactReadError
+                  error={view.refetchError}
+                  onRetry={() => detached(view.retry(), "contact-picker.retry")}
+                />
+              ) : null;
+            default:
+              view satisfies never;
+              return panic("Unhandled contact picker query state");
+          }
+        })()}
       </ComboboxPopup>
     </Combobox>
   );

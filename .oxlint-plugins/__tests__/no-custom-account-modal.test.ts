@@ -67,6 +67,22 @@ describe.serial(RULE, () => {
     expect(await lint(REMOVED_ACCOUNT_GATE_DIALOG)).toEqual([4]);
   });
 
+  test.each([
+    "DialogFormState",
+    "DialogProvider",
+    "DialogTitle",
+    "DialogTrigger",
+    "DialogClose",
+  ])("%s does not create a custom account modal", async (exportName) => {
+    expect(
+      await lint([
+        `import { ${exportName} as Part } from "@stll/ui/dialog";`,
+        "const submit = () => authClient.signIn.email(input);",
+        "export const Panel = () => <Part onSubmit={submit}>Sign in</Part>;",
+      ]),
+    ).toEqual([]);
+  });
+
   /** A module whose one component renders a dialog around `inside`, after
    *  `before` in the same component body. */
   const dialogAround = (inside: string, before = "") => [

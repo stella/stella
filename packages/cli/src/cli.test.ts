@@ -36,33 +36,21 @@ const spawnIsolated = (args: readonly string[]) => {
 
 describe("stella CLI shell", () => {
   test("--version prints the package version", () => {
-    const result = Bun.spawnSync({
-      cmd: ["bun", CLI_ENTRYPOINT, "--version"],
-      stderr: "pipe",
-      stdout: "pipe",
-    });
+    const result = spawnIsolated(["--version"]);
 
     expect(result.exitCode).toBe(0);
     expect(result.stdout.toString().trim()).toBe(packageJson.version);
   });
 
   test("--help exits 0", () => {
-    const result = Bun.spawnSync({
-      cmd: ["bun", CLI_ENTRYPOINT, "--help"],
-      stderr: "pipe",
-      stdout: "pipe",
-    });
+    const result = spawnIsolated(["--help"]);
 
     expect(result.exitCode).toBe(0);
     expect(result.stdout.toString()).toContain("Stella command-line client");
   });
 
   test("--help documents the exit-code contract", () => {
-    const result = Bun.spawnSync({
-      cmd: ["bun", CLI_ENTRYPOINT, "--help"],
-      stderr: "pipe",
-      stdout: "pipe",
-    });
+    const result = spawnIsolated(["--help"]);
 
     const stdout = result.stdout.toString();
     expect(stdout).toContain("Exit codes:");
@@ -72,28 +60,20 @@ describe("stella CLI shell", () => {
   });
 
   test("tools list enumerates the generated command tree", () => {
-    const result = Bun.spawnSync({
-      cmd: ["bun", CLI_ENTRYPOINT, "tools", "list"],
-      stderr: "pipe",
-      stdout: "pipe",
-    });
+    const result = spawnIsolated(["tools", "list"]);
 
     expect(result.exitCode).toBe(0);
     const stdout = result.stdout.toString();
     expect(stdout).toContain("matter list");
     expect(stdout).toContain("(list_matters)");
-    expect(stdout).toContain("usage get");
+    expect(stdout).not.toContain("usage get");
     // Excluded compat shims never surface.
     expect(stdout).not.toContain("(search)");
     expect(stdout).not.toContain("(fetch)");
   });
 
   test("generated domain commands are wired into the root", () => {
-    const result = Bun.spawnSync({
-      cmd: ["bun", CLI_ENTRYPOINT, "matter", "--help"],
-      stderr: "pipe",
-      stdout: "pipe",
-    });
+    const result = spawnIsolated(["matter", "--help"]);
 
     expect(result.exitCode).toBe(0);
     expect(result.stdout.toString()).toContain("list");
@@ -122,34 +102,44 @@ describe("stella CLI shell", () => {
   });
 });
 
-// A cached delta for the configured origin, so startup resolves a diverged
-// tree. No token is stored, so nothing reaches the network.
-describe("stella CLI: registry drift reporting", () => {
+// Legacy caller listings cannot project commands in an offline invocation.
+// No token is stored, so nothing reaches the network.
+describe("stella CLI: offline registry projection", () => {
   const SERVER = "https://drift.example";
   const home = mkdtempSync(path.join(os.tmpdir(), "stella-cli-drift-"));
   const cacheHome = path.join(home, ".cache");
   const REMOVED = ["save_task", "delete_task"];
 
   beforeAll(async () => {
-    await writeCacheFile(cachePathFor(SERVER, { XDG_CACHE_HOME: cacheHome }), {
+    const filePath = cachePathFor(SERVER, { XDG_CACHE_HOME: cacheHome });
+    await writeCacheFile(filePath, {
       version: CACHE_SCHEMA_VERSION,
       serverOrigin: SERVER,
       fetchedAt: new Date().toISOString(),
       ttlSeconds: 86_400,
-      toolsListHash: "h",
-      listings: [
-        {
-          name: "list_matters",
-          description: "d",
-          inputSchema: { type: "object", properties: {} },
-        },
-      ],
-      delta: {
-        added: [],
-        removed: REMOVED,
-        changed: ["lookup_business_registry"],
-      },
     });
+    await Bun.write(
+      filePath,
+      JSON.stringify({
+        version: 4,
+        serverOrigin: SERVER,
+        fetchedAt: new Date().toISOString(),
+        ttlSeconds: 86_400,
+        toolsListHash: "h",
+        listings: [
+          {
+            name: "list_matters",
+            description: "d",
+            inputSchema: { type: "object", properties: {} },
+          },
+        ],
+        delta: {
+          added: [],
+          removed: REMOVED,
+          changed: ["lookup_business_registry"],
+        },
+      }),
+    );
   });
 
   const spawnDrifted = (args: readonly string[]) => {
@@ -175,11 +165,10 @@ describe("stella CLI: registry drift reporting", () => {
   const driftLines = (stderr: string): string[] =>
     stderr.split("\n").filter((line) => line.includes("server registry"));
 
-  test("a domain command gets one counted line on stderr, not the tool lists", () => {
+  test("an offline domain command ignores cached caller drift", () => {
     const result = spawnDrifted(["matter", "list", "--schema"]);
-    expect(driftLines(result.stderr.toString())).toEqual([
-      "server registry differs from this CLI build: 2 removed, 1 changed; re-run with --verbose to list the tools",
-    ]);
+    expect(result.exitCode).toBe(0);
+    expect(driftLines(result.stderr.toString())).toEqual([]);
     for (const tool of REMOVED) {
       expect(result.stderr.toString()).not.toContain(tool);
     }
@@ -197,16 +186,16 @@ describe("stella CLI: registry drift reporting", () => {
     });
   }
 
-  test("--verbose lists every diverged tool", () => {
+  test("--verbose does not expose legacy caller drift", () => {
     const stderr = spawnDrifted([
       "matter",
       "list",
       "--schema",
       "--verbose",
     ]).stderr.toString();
-    expect(stderr).toContain("2 removed, 1 changed\n");
-    expect(stderr).toContain(`  removed: ${REMOVED.join(", ")}`);
-    expect(stderr).toContain("  changed: lookup_business_registry");
+    expect(driftLines(stderr)).toEqual([]);
+    expect(stderr).not.toContain(REMOVED.join(", "));
+    expect(stderr).not.toContain("lookup_business_registry");
   });
 
   test("stdout stays machine-readable under --json", () => {
@@ -215,23 +204,19 @@ describe("stella CLI: registry drift reporting", () => {
     expect(() => JSON.parse(result.stdout.toString())).not.toThrow();
   });
 
-  test("a command whose tool the server dropped fails with a clear error", () => {
-    // `save_task` is removed above; its command is still in this CLI build.
-    const result = spawnDrifted(["task", "save", "--title", "x"]);
-    expect(result.exitCode).toBe(4);
+  test("legacy caller omissions do not disable baked commands offline", () => {
+    const result = spawnDrifted(["task", "save", "--name", "x"]);
+    expect(result.exitCode).toBe(3);
     const stderr = result.stderr.toString();
-    expect(stderr).toContain(
-      "stella task save is not available on this server",
-    );
-    expect(stderr).toContain("save_task");
-    expect(stderr).toContain("stella tools list");
+    expect(stderr).toContain("Not signed in");
+    expect(stderr).not.toContain("not available on this server");
   });
 });
 
 // The server's feature-omission evidence, once cached for the configured
-// origin, marks the same commands in every listing. No token is stored, so
+// origin, projects the same commands from every listing. No token is stored, so
 // nothing reaches the network.
-describe("stella CLI: server-attested disabled commands", () => {
+describe("stella CLI: deployment command discovery", () => {
   const SERVER = "https://stella.example";
   const home = mkdtempSync(path.join(os.tmpdir(), "stella-cli-disabled-"));
   const cacheHome = path.join(home, ".cache");
@@ -241,9 +226,6 @@ describe("stella CLI: server-attested disabled commands", () => {
       serverOrigin: SERVER,
       fetchedAt: new Date().toISOString(),
       ttlSeconds: 86_400,
-      toolsListHash: "h",
-      listings: [],
-      delta: { added: [], removed: [], changed: [] },
       featureOmittedTools: ["get_usage"],
       featureOmittedCapabilities: ["usage.entitlement.get"],
     });
@@ -271,30 +253,24 @@ describe("stella CLI: server-attested disabled commands", () => {
     return result.stdout.toString();
   };
 
-  test("root --help marks the gated-off group and names it under capability", () => {
+  test("root help omits empty deployment-disabled groups", () => {
     const stdout = spawnAgainstServer(["--help"]);
-    expect(stdout).toMatch(
-      /^ {2}usage +usage commands: get \[disabled on this server\]$/mu,
-    );
-    expect(stdout).toMatch(
-      /^ {2}capability +capability commands: .*\[disabled on this server: usage\]$/mu,
-    );
+    expect(stdout).not.toMatch(/^ {2}usage +/mu);
+    expect(stdout).not.toContain("disabled on this server");
+    expect(stdout).toMatch(/^ {2}matter +/mu);
   });
 
-  test("capability --help marks the gated-off capability", () => {
-    const stdout = spawnAgainstServer(["capability", "usage", "--help"]);
-    expect(stdout).toMatch(
-      /^ {2}entitlement-get .*\[disabled on this server\]$/mu,
-    );
+  test("capability help omits the disabled domain", () => {
+    const stdout = spawnAgainstServer(["capability", "--help"]);
+    expect(stdout).not.toMatch(/^ {2}usage +/mu);
+    expect(stdout).not.toContain("disabled on this server");
   });
 
-  test("tools list marks the gated-off tool and capability, and nothing else", () => {
-    const marked = spawnAgainstServer(["tools", "list"])
-      .split("\n")
-      .filter((line) => line.endsWith("[disabled on this server]"));
-    expect(marked).toEqual([
-      "capability usage entitlement-get\t(invoke_capability: usage.entitlement.get) [disabled on this server]",
-      "usage get\t(get_usage) [disabled on this server]",
-    ]);
+  test("tools list omits disabled identities and keeps eligible commands", () => {
+    const stdout = spawnAgainstServer(["tools", "list"]);
+    expect(stdout).not.toContain("usage.entitlement.get");
+    expect(stdout).not.toContain("(get_usage)");
+    expect(stdout).not.toContain("disabled on this server");
+    expect(stdout).toContain("(list_matters)");
   });
 });

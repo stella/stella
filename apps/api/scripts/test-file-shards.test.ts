@@ -1,16 +1,21 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
+import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   parseApiTestShard,
   partitionTestFiles,
+  restrictApiTestFiles,
   selectApiTestFiles,
 } from "./test-file-shards";
 
 test("partitions are complete, deterministic and bounded for every measured workload", () => {
-  fc.assert(
+  assertProperty(
+    "partitions are complete, deterministic and bounded for every measured workload",
     fc.property(
       fc.array(fc.nat({ max: 10_000 }), { maxLength: 100 }),
       fc.integer({ min: 1, max: 12 }),
@@ -38,11 +43,10 @@ test("partitions are complete, deterministic and bounded for every measured work
           ).toBeLessThanOrEqual(total / count + longest);
         }
         expect(partitionTestFiles({ files, durations, count: 1 })).toEqual([
-          files,
+          files.toSorted(),
         ]);
       },
     ),
-    propertyConfig(),
   );
 });
 
@@ -104,13 +108,66 @@ test("an API sub-shard must select files before the runner can start", () => {
     selectApiTestFiles({ files: [], durations: {}, shardValue: "1/4" }),
   ).toThrow("selected zero test files");
   expect(() =>
-    selectApiTestFiles({ files: ["one"], durations: {}, shardValue: "4/4" }),
+    selectApiTestFiles({
+      files: ["one"],
+      durations: { one: 1 },
+      shardValue: "4/4",
+    }),
   ).toThrow("selected zero test files");
   expect(
-    selectApiTestFiles({ files: ["one"], durations: {}, shardValue: "1/4" })
-      .testPaths,
+    selectApiTestFiles({
+      files: ["one"],
+      durations: { one: 1 },
+      shardValue: "1/4",
+    }).testPaths,
   ).toEqual(["one"]);
   expect(
     selectApiTestFiles({ files: [], durations: {}, shardValue: undefined }),
   ).toEqual({ testPaths: [], shard: null });
+});
+
+test("explicit test selection validates inline lists and files before duration sharding", () => {
+  const files: [string, string, string] = [
+    "src/a.test.ts",
+    "src/b.test.ts",
+    "src/c.test.ts",
+  ];
+  expect(restrictApiTestFiles(files, undefined)).toEqual(files);
+  expect(restrictApiTestFiles(files, "")).toEqual(files);
+  expect(
+    restrictApiTestFiles(files, "src/c.test.ts\r\nsrc/a.test.ts\r\n"),
+  ).toEqual([files[0], files[2]]);
+  expect(restrictApiTestFiles(files, "src/b.test.ts")).toEqual([files[1]]);
+  expect(() => restrictApiTestFiles(files, "src/unknown.test.ts")).toThrow(
+    "Unknown API_TEST_FILES path",
+  );
+  expect(() =>
+    restrictApiTestFiles(files, "src/a.test.ts\nsrc/a.test.ts"),
+  ).toThrow("paths must be unique");
+  const directory = mkdtempSync(path.join(tmpdir(), "api-test-selection-"));
+  try {
+    const filename = path.join(directory, "files.txt");
+    writeFileSync(filename, "src/a.test.ts\nsrc/c.test.ts\n");
+    const selected = restrictApiTestFiles(files, filename);
+    expect(selected).toEqual([files[0], files[2]]);
+    const bins = [1, 2].map(
+      (index) =>
+        selectApiTestFiles({
+          files: selected,
+          durations: {
+            "src/a.test.ts": 1,
+            "src/b.test.ts": 1000,
+            "src/c.test.ts": 2,
+          },
+          shardValue: `${index}/2`,
+        }).testPaths,
+    );
+    expect(bins.flat().toSorted()).toEqual([...selected]);
+    writeFileSync(filename, "");
+    expect(() => restrictApiTestFiles(files, filename)).toThrow(
+      "selected zero test files",
+    );
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });

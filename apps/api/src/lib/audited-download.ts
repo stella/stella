@@ -6,6 +6,7 @@ import type {
 } from "@/api/lib/audit-log";
 import { AUDIT_ACTION } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { recordContentDeliveryReceipt } from "@/api/lib/files/content-delivery";
 import { presignDownloadUrl } from "@/api/lib/s3-presign";
 import type { S3SigningKeyspace } from "@/api/lib/s3-presign";
 
@@ -39,6 +40,7 @@ type AuditedPresignDownloadOptions = {
   organizationId?: SafeId<"organization"> | null;
   s3Keyspace?: S3SigningKeyspace;
   workspaceId?: SafeId<"workspace"> | null;
+  signDownload?: typeof presignDownloadUrl;
 };
 
 /**
@@ -64,6 +66,7 @@ export const auditedPresignDownload = async ({
   organizationId,
   s3Keyspace,
   workspaceId,
+  signDownload = presignDownloadUrl,
 }: AuditedPresignDownloadOptions): Promise<string> => {
   const disposition: ContentDisposition = fileName ? "attachment" : "inline";
   await recordAuditEvent(tx, {
@@ -80,7 +83,9 @@ export const auditedPresignDownload = async ({
     },
   });
 
-  return await presignDownloadUrl(s3Key, {
+  recordContentDeliveryReceipt();
+
+  return await signDownload(s3Key, {
     expiresIn: expiresInSeconds,
     ...(fileName ? { fileName } : {}),
     ...(organizationId

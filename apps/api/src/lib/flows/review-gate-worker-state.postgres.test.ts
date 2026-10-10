@@ -18,6 +18,7 @@ import {
   flowReviewGateFixture,
   waitForBlockedPid,
 } from "@/api/tests/helpers/flow-review-gate";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -49,14 +50,6 @@ type PausedWorkerOptions = {
 };
 
 const pausedWorker = async ({ db, f, phase }: PausedWorkerOptions) => {
-  await db
-    .update(flowRuns)
-    .set({ status: "pending" })
-    .where(eq(flowRuns.id, f.runId));
-  await db
-    .update(flowRunSteps)
-    .set({ status: "pending" })
-    .where(eq(flowRunSteps.runId, f.runId));
   if (phase === "complete") {
     await db
       .update(flowRuns)
@@ -94,6 +87,7 @@ const pausedWorker = async ({ db, f, phase }: PausedWorkerOptions) => {
   );
   let transactions = 0;
   const dependencies = {
+    admission: testModelAdmission(f.organizationId),
     database: db,
     makeScopedDb:
       () =>
@@ -150,6 +144,7 @@ if (!databaseUrl || !enabled) {
             const f = await flowReviewGateFixture(db, {
               intermediate: phase === "complete",
               governed: true,
+              initialRunStatus: "pending",
             });
             const workerPid = await backendPid(workerClient.db);
             const cancelPid = await backendPid(cancelClient.db);
@@ -206,6 +201,7 @@ if (!databaseUrl || !enabled) {
                 return await scoped(work);
               };
             const dependencies = {
+              admission: testModelAdmission(f.organizationId),
               database: workerDb,
               makeScopedDb,
               makeSafeDb: () => f.safeDb(workerDb),
@@ -234,14 +230,6 @@ if (!databaseUrl || !enabled) {
                 return value;
               }, retry);
             try {
-              await db
-                .update(flowRuns)
-                .set({ status: "pending" })
-                .where(eq(flowRuns.id, f.runId));
-              await db
-                .update(flowRunSteps)
-                .set({ status: "pending" })
-                .where(eq(flowRunSteps.runId, f.runId));
               if (phase === "complete") {
                 await db
                   .update(flowRuns)
@@ -378,6 +366,7 @@ if (!databaseUrl || !enabled) {
             const f = await flowReviewGateFixture(db, {
               intermediate: phase === "complete",
               governed: true,
+              initialRunStatus: "pending",
             });
             const workerPid = await backendPid(workerClient.db);
             const approvePid = await backendPid(approveClient.db);
@@ -407,6 +396,14 @@ if (!databaseUrl || !enabled) {
                 return value;
               }, retry);
             try {
+              await db
+                .update(flowRuns)
+                .set({ status: "running" })
+                .where(eq(flowRuns.id, f.runId));
+              await db
+                .update(flowRunSteps)
+                .set({ status: "running" })
+                .where(eq(flowRunSteps.reviewTaskEntityId, f.taskEntityId));
               // Another delivery reached a gate while this worker held its
               // earlier snapshot. AI completion is now behind the next gate;
               // the other writers are duplicate work on the same gate.
@@ -419,6 +416,10 @@ if (!databaseUrl || !enabled) {
                 if (!next) {
                   throw new Error("Expected the subsequent review gate");
                 }
+                await db
+                  .update(flowRunSteps)
+                  .set({ status: "running" })
+                  .where(eq(flowRunSteps.id, next.id));
                 await db
                   .update(flowRunSteps)
                   .set({
@@ -516,6 +517,7 @@ if (!databaseUrl || !enabled) {
           const f = await flowReviewGateFixture(db, {
             intermediate: phase === "complete",
             governed: true,
+            initialRunStatus: "pending",
           });
           const worker = await pausedWorker({ db, f, phase });
           try {

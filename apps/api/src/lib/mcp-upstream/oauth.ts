@@ -3,11 +3,13 @@ import { getDomain } from "tldts";
 import * as v from "valibot";
 
 import { withTimeout, TimeoutError } from "@stll/concurrency/with-timeout";
+import { sha256Base64Url as hashSha256Base64Url } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import type { McpOAuthRegistrationResponse } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { arrayOrEmpty } from "@/api/lib/array";
+import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import {
   FetchBoundaryError,
   HandlerError,
@@ -94,6 +96,32 @@ export type BoundOAuthMetadata = DiscoveredOAuthMetadata & {
   readonly [boundOAuthMetadata]: true;
 };
 
+/**
+ * The authorization server a connector may use in an organization. An
+ * `unconfigured` connector has no issuer an administrator or the curated
+ * catalogue approved, so its observed issuer awaits administrator review.
+ */
+export type McpIssuerBinding =
+  | {
+      type: "approved";
+      issuer: string;
+      endpointOrigins: readonly string[];
+    }
+  | { type: "unconfigured" };
+
+export type ApprovedMcpIssuerBinding = Extract<
+  McpIssuerBinding,
+  { type: "approved" }
+>;
+
+export const mcpAuthorizationApprovalRequiredError = () =>
+  new HandlerError({
+    status: 409,
+    code: "mcp_authorization_approval_required",
+    message:
+      "An administrator must approve this connector before you can connect.",
+  });
+
 export const oauthDomainsMatch = (
   firstUrl: string,
   secondUrl: string,
@@ -171,14 +199,7 @@ export const bindDiscoveredMetadata = ({
       protectedResource,
     }).some((origin) => !confirmedEndpointOrigins.includes(origin))
   ) {
-    return Result.err(
-      new HandlerError({
-        status: 409,
-        code: "mcp_authorization_approval_required",
-        message:
-          "An administrator must approve this connector before you can connect.",
-      }),
-    );
+    return Result.err(mcpAuthorizationApprovalRequiredError());
   }
   return Result.ok({
     [boundOAuthMetadata]: true,
@@ -208,32 +229,23 @@ const validateResourceBinding = (
 
 export const validateApprovedOAuthIssuer = (
   metadata: DiscoveredOAuthMetadata,
-  approvedIssuer: string | null,
-): Result<void, HandlerError<409>> => {
-  if (
-    approvedIssuer !== null &&
-    metadata.authorizationServer.issuer !== approvedIssuer
-  ) {
-    return Result.err(
-      new HandlerError({
-        status: 409,
-        code: "mcp_authorization_approval_required",
-        message:
-          "An administrator must approve this connector before you can connect.",
-      }),
-    );
-  }
-  return Result.ok(undefined);
-};
+  binding: ApprovedMcpIssuerBinding,
+): Result<void, HandlerError<409>> =>
+  metadata.authorizationServer.issuer === binding.issuer
+    ? Result.ok(undefined)
+    : Result.err(mcpAuthorizationApprovalRequiredError());
 
 type OAuthDiscoveryDependencies = {
+  permit: ThirdPartyOutboundPermit;
   signal?: AbortSignal;
   timeoutMs?: number;
   safeOutboundFetchBytes: typeof safeOutboundFetchBytes;
   validateOutboundFetchTarget: typeof validateOutboundFetchTarget;
 };
 
-const DEFAULT_OAUTH_DISCOVERY_DEPENDENCIES: OAuthDiscoveryDependencies = {
+type OAuthDependencyOverrides = Omit<OAuthDiscoveryDependencies, "permit">;
+
+const DEFAULT_OAUTH_DISCOVERY_DEPENDENCIES: OAuthDependencyOverrides = {
   safeOutboundFetchBytes,
   validateOutboundFetchTarget,
 };
@@ -256,9 +268,9 @@ const fetchJson = async <T>({
   init,
   schema,
   url,
-  dependencies = DEFAULT_OAUTH_DISCOVERY_DEPENDENCIES,
+  dependencies,
 }: {
-  dependencies?: OAuthDiscoveryDependencies;
+  dependencies: OAuthDiscoveryDependencies;
   init?: McpFetchJsonInit | undefined;
   schema: v.GenericSchema<unknown, T>;
   url: URL;
@@ -276,6 +288,7 @@ const fetchJson = async <T>({
         headers,
         maxBytes: OAUTH_FETCH_MAX_BYTES,
         method: init?.method,
+        permit: dependencies.permit,
         timeoutMs: dependencies.timeoutMs ?? OAUTH_FETCH_TIMEOUT_MS,
         signal: dependencies.signal,
         url,
@@ -309,15 +322,26 @@ const fetchJson = async <T>({
       }),
   });
 
-export const discoverOAuthMetadata = async (
-  rawMcpUrl: string,
+type DiscoverOAuthMetadataOptions = {
+  rawMcpUrl: string;
+  permit: ThirdPartyOutboundPermit;
+  dependencies?: OAuthDependencyOverrides;
+  confirmedEndpointOrigins?: readonly string[];
+};
+
+export const discoverOAuthMetadata = async ({
+  rawMcpUrl,
+  permit,
   dependencies = DEFAULT_OAUTH_DISCOVERY_DEPENDENCIES,
-  confirmedEndpointOrigins: readonly string[] = [],
-): Promise<Result<BoundOAuthMetadata, HandlerError<400 | 409 | 502>>> => {
-  const discovered = await discoverOAuthMetadataForApproval(
+  confirmedEndpointOrigins = [],
+}: DiscoverOAuthMetadataOptions): Promise<
+  Result<BoundOAuthMetadata, HandlerError<400 | 409 | 502>>
+> => {
+  const discovered = await discoverOAuthMetadataForApproval({
     rawMcpUrl,
+    permit,
     dependencies,
-  );
+  });
   if (Result.isError(discovered)) {
     return Result.err(discovered.error);
   }
@@ -328,21 +352,31 @@ export const discoverOAuthMetadata = async (
   });
 };
 
-export const discoverOAuthMetadataForApproval = async (
-  rawMcpUrl: string,
+type DiscoverOAuthMetadataForApprovalOptions = {
+  rawMcpUrl: string;
+  permit: ThirdPartyOutboundPermit;
+  dependencies?: OAuthDependencyOverrides;
+};
+
+export const discoverOAuthMetadataForApproval = async ({
+  rawMcpUrl,
+  permit,
   dependencies = DEFAULT_OAUTH_DISCOVERY_DEPENDENCIES,
-): Promise<Result<DiscoveredOAuthMetadata, HandlerError<400 | 502>>> => {
+}: DiscoverOAuthMetadataForApprovalOptions): Promise<
+  Result<DiscoveredOAuthMetadata, HandlerError<400 | 502>>
+> => {
+  const requestDependencies = { ...dependencies, permit };
   const result = await Result.tryPromise({
     try: async () =>
       await withTimeout(
         async (signal) =>
           await discoverOAuthMetadataWithinDeadline(rawMcpUrl, {
-            ...dependencies,
+            ...requestDependencies,
             signal,
           }),
         {
           label: "MCP OAuth discovery",
-          timeoutMs: dependencies.timeoutMs ?? OAUTH_FETCH_TIMEOUT_MS,
+          timeoutMs: requestDependencies.timeoutMs ?? OAUTH_FETCH_TIMEOUT_MS,
         },
       ),
     catch: (cause) =>
@@ -360,7 +394,7 @@ export const discoverOAuthMetadataForApproval = async (
 
 const discoverOAuthMetadataWithinDeadline = async (
   rawMcpUrl: string,
-  dependencies = DEFAULT_OAUTH_DISCOVERY_DEPENDENCIES,
+  dependencies: OAuthDiscoveryDependencies,
 ): Promise<Result<DiscoveredOAuthMetadata, HandlerError<400 | 502>>> => {
   const target = await dependencies.validateOutboundFetchTarget(rawMcpUrl);
   if (Result.isError(target)) {
@@ -433,9 +467,7 @@ const randomBase64Url = (byteLength: number): string => {
 
 export const createPkce = () => {
   const codeVerifier = randomBase64Url(PKCE_VERIFIER_BYTES);
-  const codeChallenge = new Bun.CryptoHasher("sha256")
-    .update(codeVerifier)
-    .digest("base64url");
+  const codeChallenge = hashSha256Base64Url(codeVerifier);
 
   return { codeChallenge, codeVerifier };
 };
@@ -575,13 +607,15 @@ export const buildOAuthClientRegistrationRequest = ({
 
 export const registerOAuthClient = async ({
   metadata,
+  permit,
   dependencies = DEFAULT_OAUTH_DISCOVERY_DEPENDENCIES,
   connectorSlug,
   redirectUri,
   requestedScopes,
 }: {
   metadata: BoundOAuthMetadata;
-  dependencies?: OAuthDiscoveryDependencies;
+  permit: ThirdPartyOutboundPermit;
+  dependencies?: OAuthDependencyOverrides;
   connectorSlug: string;
   redirectUri: string;
   requestedScopes: string[];
@@ -605,7 +639,7 @@ export const registerOAuthClient = async ({
   });
 
   const response = await fetchJson({
-    dependencies,
+    dependencies: { ...dependencies, permit },
     init: {
       body: JSON.stringify(registrationBody),
       headers: { "Content-Type": "application/json" },
@@ -634,6 +668,7 @@ export const registerOAuthClient = async ({
 
 export const exchangeAuthorizationCode = async ({
   metadata,
+  permit,
   dependencies = DEFAULT_OAUTH_DISCOVERY_DEPENDENCIES,
   clientId,
   clientSecret,
@@ -643,7 +678,8 @@ export const exchangeAuthorizationCode = async ({
   redirectUri,
 }: {
   metadata: BoundOAuthMetadata;
-  dependencies?: OAuthDiscoveryDependencies;
+  permit: ThirdPartyOutboundPermit;
+  dependencies?: OAuthDependencyOverrides;
   clientId: string;
   clientSecret: ClientSecret | null;
   code: string;
@@ -679,7 +715,7 @@ export const exchangeAuthorizationCode = async ({
   }
 
   const token = await fetchJson({
-    dependencies,
+    dependencies: { ...dependencies, permit },
     init: {
       body,
       headers: {
@@ -706,13 +742,15 @@ export const exchangeAuthorizationCode = async ({
 
 export const refreshOAuthToken = async ({
   metadata,
+  permit,
   dependencies = DEFAULT_OAUTH_DISCOVERY_DEPENDENCIES,
   clientId,
   clientSecret,
   refreshToken,
 }: {
   metadata: BoundOAuthMetadata;
-  dependencies?: OAuthDiscoveryDependencies;
+  permit: ThirdPartyOutboundPermit;
+  dependencies?: OAuthDependencyOverrides;
   clientId: string;
   clientSecret: ClientSecret | null;
   refreshToken: RefreshToken;
@@ -729,7 +767,7 @@ export const refreshOAuthToken = async ({
   }
 
   const token = await fetchJson({
-    dependencies,
+    dependencies: { ...dependencies, permit },
     init: {
       body,
       headers: {

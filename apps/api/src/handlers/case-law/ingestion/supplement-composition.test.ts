@@ -2,12 +2,10 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { DECISION_DOCUMENT_ROLE } from "@stll/api-contract/decision-document-role";
+import type { DocumentAst, ParagraphBlock } from "@stll/legal-ast/document-ast";
 import { propertyConfig } from "@stll/property-testing";
+import { sha256Hex as legacyHex } from "@stll/sha256/node";
 
-import type {
-  DocumentAst,
-  ParagraphBlock,
-} from "@/api/handlers/case-law/document-ast";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { PL_COURTS_RULING_DECISION_TYPES } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
 import { metadataUrlSchemaForAdapter } from "@/api/handlers/case-law/ingestion/metadata-url-schemas";
@@ -440,3 +438,25 @@ describe("a judgment composed with its reasons", () => {
     ).toEqual(["UZASADNIENIE", "Pierwszy akapit.", "Drugi akapit."]);
   });
 });
+
+for (const text of ["", "Článek\u0000📄", "e\u0301"]) {
+  test(`composed source identities preserve the legacy supplement stream: ${JSON.stringify(text)}`, () => {
+    const source = { ...judgment, rawHash: text };
+    const supplements = [{ ...reasons, sourceHash: text }];
+    const composed = composeDecisionWithSupplements({
+      judgment: source,
+      supplements,
+    });
+    expect(composed.rawHash).toBe(
+      legacyHex(
+        JSON.stringify({
+          judgment: text,
+          supplements: supplements.map(({ sourceDocumentId, sourceHash }) => [
+            sourceDocumentId,
+            sourceHash,
+          ]),
+        }),
+      ),
+    );
+  });
+}

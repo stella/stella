@@ -5,6 +5,8 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type { CaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
+import { DetailsGrid, DetailsItem } from "@stll/ui/details-grid";
 import { ReviewStatusDot } from "@stll/ui/review-severity-dot";
 import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
 import { ScrollArea } from "@stll/ui/scroll-area";
@@ -38,7 +40,6 @@ import {
   CALENDAR_DATE_FORMAT,
   MEDIUM_DATE_SHORT_TIME_FORMAT,
 } from "@/lib/relative-time";
-import { sanitizeHref } from "@/lib/sanitize-href";
 import {
   CASE_LAW_COVERAGE_AVAILABILITY_LABEL_KEYS,
   CASE_LAW_COVERAGE_AVAILABILITY_TONES,
@@ -435,9 +436,9 @@ const CoverageGlobe = ({
  * overlap it.
  */
 const Headline = ({ children }: PropsWithChildren) => (
-  <p className="text-7xl font-semibold tracking-tight tabular-nums">
+  <div className="text-7xl font-semibold tracking-tight tabular-nums">
     {children}
-  </p>
+  </div>
 );
 
 /**
@@ -534,24 +535,26 @@ const CountrySection = ({ country }: { country: CaseLawCoverageCountry }) => {
             {t(CASE_LAW_COVERAGE_AVAILABILITY_LABEL_KEYS[country.availability])}
           </ReviewStatusBadge>
           <HealthSignal health={country.health} />
-          <dl className="ms-auto flex flex-wrap items-baseline gap-x-6 gap-y-1 text-sm">
-            {country.availability === "searchable" && (
-              <Figure label={t("caseLaw.coverage.searchable")}>
-                <span className="font-medium tabular-nums">
-                  {format.number(country.searchable)}
-                </span>
-              </Figure>
-            )}
-            {country.availability === "searchable" && (
-              <DecisionYearsFigure
-                from={country.decisionYearFrom}
-                to={country.decisionYearTo}
-              />
-            )}
-            <Figure label={t("caseLaw.corpusStatus.newLast7Days")}>
-              <Delta value={country.addedLastWeek} />
-            </Figure>
-          </dl>
+          <div className="w-full">
+            <DetailsGrid>
+              {country.availability === "searchable" && (
+                <DetailsItem label={t("caseLaw.coverage.searchable")}>
+                  <span className="font-medium tabular-nums">
+                    {format.number(country.searchable)}
+                  </span>
+                </DetailsItem>
+              )}
+              {country.availability === "searchable" && (
+                <DecisionYearsFigure
+                  from={country.decisionYearFrom}
+                  to={country.decisionYearTo}
+                />
+              )}
+              <DetailsItem label={t("caseLaw.corpusStatus.newLast7Days")}>
+                <Delta value={country.addedLastWeek} />
+              </DetailsItem>
+            </DetailsGrid>
+          </div>
         </>
       }
       headingId={headingId}
@@ -563,13 +566,6 @@ const CountrySection = ({ country }: { country: CaseLawCoverageCountry }) => {
     </CountryCard>
   );
 };
-
-const Figure = ({ children, label }: PropsWithChildren<{ label: string }>) => (
-  <div className="flex items-baseline gap-1.5">
-    <dt className="text-muted-foreground text-xs">{label}</dt>
-    <dd>{children}</dd>
-  </div>
-);
 
 /** The span the index covers, omitted where the index states no year at all. */
 const DecisionYearsFigure = ({
@@ -589,11 +585,11 @@ const DecisionYearsFigure = ({
   const toYear = format.number(to, YEAR_FORMAT);
 
   return (
-    <Figure label={t("caseLaw.coverage.decisionYears")}>
+    <DetailsItem label={t("caseLaw.coverage.decisionYears")}>
       <bdi className="font-medium tabular-nums">
         {from === to ? fromYear : `${fromYear}–${toYear}`}
       </bdi>
-    </Figure>
+    </DetailsItem>
   );
 };
 

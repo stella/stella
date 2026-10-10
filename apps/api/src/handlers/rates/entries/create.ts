@@ -1,13 +1,18 @@
 import { Result } from "better-result";
 import { and, eq, gte, isNull, lte, or, sql } from "drizzle-orm";
 import { t } from "elysia";
+import type { Static } from "elysia";
 
 import type { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
 
 import { abortableTx } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db";
 import { rateEntries } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { rateRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import type { AuditRecorder } from "@/api/lib/audit-log";
+import type { SafeId } from "@/api/lib/branded-types";
 import {
   tMinorUnitAmount,
   tSafeId,
@@ -46,6 +51,189 @@ const rateEntryParamsSchema = workspaceParams({
   rateTableId: tSafeId("rateTable"),
 });
 
+export type CreateRateEntryHandlerProps = {
+  safeDb: SafeDb;
+  workspaceId: SafeId<"workspace">;
+  session: { activeOrganizationId: SafeId<"organization"> };
+  params: { rateTableId: SafeId<"rateTable"> };
+  body: Static<typeof createRateEntryBodySchema>;
+  recordAuditEvent: AuditRecorder;
+};
+
+// Shared rate-line creation reused by the HTTP handler and the review
+// organization seed, so both validate, cap and audit the same way.
+export const createRateEntryHandler = async function* ({
+  safeDb,
+  workspaceId,
+  session,
+  params,
+  body,
+  recordAuditEvent,
+}: CreateRateEntryHandlerProps) {
+  const selectedUserId = body.userId ?? null;
+  const selectedRole = body.role ?? null;
+  if (selectedUserId !== null && selectedRole !== null) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Choose a person or a role, not both",
+      }),
+    );
+  }
+  if (body.userId) {
+    const userId = body.userId;
+    const validatedUserId = yield* Result.await(
+      safeDb(
+        async (tx) =>
+          await validateOrgUserId(
+            tx,
+            brandPersistedUserId(userId),
+            session.activeOrganizationId,
+          ),
+      ),
+    );
+
+    if (!validatedUserId) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "User is not a member of this organization",
+        }),
+      );
+    }
+  }
+
+  const table = yield* Result.await(
+    safeDb((tx) =>
+      tx.query.rateTables.findFirst({
+        where: {
+          id: { eq: params.rateTableId },
+          workspaceId: { eq: workspaceId },
+        },
+        columns: { id: true },
+      }),
+    ),
+  );
+
+  if (!table) {
+    return Result.err(
+      new HandlerError({ status: 404, message: "Rate table not found" }),
+    );
+  }
+
+  if (body.effectiveTo && body.effectiveTo < body.effectiveFrom) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "effectiveTo must be >= effectiveFrom",
+      }),
+    );
+  }
+
+  const userCondition = body.userId
+    ? eq(rateEntries.userId, body.userId)
+    : isNull(rateEntries.userId);
+
+  const overlapFromCondition = body.effectiveTo
+    ? lte(rateEntries.effectiveFrom, body.effectiveTo)
+    : undefined;
+
+  const overlapToCondition = or(
+    isNull(rateEntries.effectiveTo),
+    gte(rateEntries.effectiveTo, body.effectiveFrom),
+  );
+
+  const overlapConditions = [
+    eq(rateEntries.rateTableId, params.rateTableId),
+    userCondition,
+    selectedRole === null
+      ? isNull(rateEntries.role)
+      : eq(rateEntries.role, selectedRole),
+    overlapToCondition,
+  ];
+  if (overlapFromCondition) {
+    overlapConditions.push(overlapFromCondition);
+  }
+
+  const txResult = yield* Result.await(
+    abortableTx(safeDb, async (tx) => {
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtext(${params.rateTableId}))`,
+      );
+
+      const totalEntries = await tx.$count(
+        rateEntries,
+        eq(rateEntries.rateTableId, params.rateTableId),
+      );
+
+      if (totalEntries >= LIMITS.rateEntriesPerTable) {
+        throw new HandlerError({
+          status: 400,
+          message: "Rate entries limit reached for this table",
+        });
+      }
+
+      const overlapRows = await tx
+        .select({ id: rateEntries.id })
+        .from(rateEntries)
+        .where(and(...overlapConditions))
+        .limit(1);
+      const overlap = overlapRows.at(0);
+
+      if (overlap) {
+        throw new HandlerError({
+          status: 400,
+          message:
+            "Date range overlaps with an existing entry for this person, role, or table default",
+        });
+      }
+
+      const [entry] = await tx
+        .insert(rateEntries)
+        .values({
+          workspaceId,
+          rateTableId: params.rateTableId,
+          userId: body.userId ?? null,
+          role: body.role ?? null,
+          hourlyRate: cents(body.hourlyRate),
+          effectiveFrom: body.effectiveFrom,
+          effectiveTo: body.effectiveTo ?? null,
+        })
+        .returning({ id: rateEntries.id });
+
+      if (!entry) {
+        throw new HandlerError({
+          status: 500,
+          message: "Failed to create rate entry",
+        });
+      }
+
+      await recordAuditEvent(tx, {
+        action: AUDIT_ACTION.CREATE,
+        resourceType: AUDIT_RESOURCE_TYPE.RATE_ENTRY,
+        resourceId: entry.id,
+        changes: {
+          created: {
+            old: null,
+            new: {
+              rateTableId: params.rateTableId,
+              userId: body.userId ?? null,
+              role: body.role ?? null,
+              hourlyRate: cents(body.hourlyRate),
+              effectiveFrom: body.effectiveFrom,
+              effectiveTo: body.effectiveTo ?? null,
+            },
+          },
+        },
+      });
+
+      return { id: entry.id };
+    }),
+  );
+
+  return Result.ok({ id: txResult.id });
+};
+
 const createRateEntry = createSafeHandler(
   {
     description:
@@ -56,6 +244,9 @@ const createRateEntry = createSafeHandler(
       "Refused when dates overlap a line for the same selector or userId is not an organization member, " +
       "or when the table is at its line limit.",
     permissions: { rate: ["create"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: { featureId: "time-billing", type: "required" },
+    realtime: rateRealtimeUpdates,
     mcp: {
       type: "capability",
       reason: "billing_admin",
@@ -64,176 +255,8 @@ const createRateEntry = createSafeHandler(
     params: rateEntryParamsSchema,
     body: createRateEntryBodySchema,
   },
-  async function* ({
-    safeDb,
-    workspaceId,
-    session,
-    params,
-    body,
-    recordAuditEvent,
-  }) {
-    const selectedUserId = body.userId ?? null;
-    const selectedRole = body.role ?? null;
-    if (selectedUserId !== null && selectedRole !== null) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "Choose a person or a role, not both",
-        }),
-      );
-    }
-    if (body.userId) {
-      const userId = body.userId;
-      const validatedUserId = yield* Result.await(
-        safeDb(
-          async (tx) =>
-            await validateOrgUserId(
-              tx,
-              brandPersistedUserId(userId),
-              session.activeOrganizationId,
-            ),
-        ),
-      );
-
-      if (!validatedUserId) {
-        return Result.err(
-          new HandlerError({
-            status: 400,
-            message: "User is not a member of this organization",
-          }),
-        );
-      }
-    }
-
-    const table = yield* Result.await(
-      safeDb((tx) =>
-        tx.query.rateTables.findFirst({
-          where: {
-            id: { eq: params.rateTableId },
-            workspaceId: { eq: workspaceId },
-          },
-          columns: { id: true },
-        }),
-      ),
-    );
-
-    if (!table) {
-      return Result.err(
-        new HandlerError({ status: 404, message: "Rate table not found" }),
-      );
-    }
-
-    if (body.effectiveTo && body.effectiveTo < body.effectiveFrom) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "effectiveTo must be >= effectiveFrom",
-        }),
-      );
-    }
-
-    const userCondition = body.userId
-      ? eq(rateEntries.userId, body.userId)
-      : isNull(rateEntries.userId);
-
-    const overlapFromCondition = body.effectiveTo
-      ? lte(rateEntries.effectiveFrom, body.effectiveTo)
-      : undefined;
-
-    const overlapToCondition = or(
-      isNull(rateEntries.effectiveTo),
-      gte(rateEntries.effectiveTo, body.effectiveFrom),
-    );
-
-    const overlapConditions = [
-      eq(rateEntries.rateTableId, params.rateTableId),
-      userCondition,
-      selectedRole === null
-        ? isNull(rateEntries.role)
-        : eq(rateEntries.role, selectedRole),
-      overlapToCondition,
-    ];
-    if (overlapFromCondition) {
-      overlapConditions.push(overlapFromCondition);
-    }
-
-    const txResult = yield* Result.await(
-      abortableTx(safeDb, async (tx) => {
-        await tx.execute(
-          sql`SELECT pg_advisory_xact_lock(hashtext(${params.rateTableId}))`,
-        );
-
-        const totalEntries = await tx.$count(
-          rateEntries,
-          eq(rateEntries.rateTableId, params.rateTableId),
-        );
-
-        if (totalEntries >= LIMITS.rateEntriesPerTable) {
-          throw new HandlerError({
-            status: 400,
-            message: "Rate entries limit reached for this table",
-          });
-        }
-
-        const overlapRows = await tx
-          .select({ id: rateEntries.id })
-          .from(rateEntries)
-          .where(and(...overlapConditions))
-          .limit(1);
-        const overlap = overlapRows.at(0);
-
-        if (overlap) {
-          throw new HandlerError({
-            status: 400,
-            message:
-              "Date range overlaps with an existing entry for this person, role, or table default",
-          });
-        }
-
-        const [entry] = await tx
-          .insert(rateEntries)
-          .values({
-            workspaceId,
-            rateTableId: params.rateTableId,
-            userId: body.userId ?? null,
-            role: body.role ?? null,
-            hourlyRate: cents(body.hourlyRate),
-            effectiveFrom: body.effectiveFrom,
-            effectiveTo: body.effectiveTo ?? null,
-          })
-          .returning({ id: rateEntries.id });
-
-        if (!entry) {
-          throw new HandlerError({
-            status: 500,
-            message: "Failed to create rate entry",
-          });
-        }
-
-        await recordAuditEvent(tx, {
-          action: AUDIT_ACTION.CREATE,
-          resourceType: AUDIT_RESOURCE_TYPE.RATE_ENTRY,
-          resourceId: entry.id,
-          changes: {
-            created: {
-              old: null,
-              new: {
-                rateTableId: params.rateTableId,
-                userId: body.userId ?? null,
-                role: body.role ?? null,
-                hourlyRate: cents(body.hourlyRate),
-                effectiveFrom: body.effectiveFrom,
-                effectiveTo: body.effectiveTo ?? null,
-              },
-            },
-          },
-        });
-
-        return { id: entry.id };
-      }),
-    );
-
-    return Result.ok({ id: txResult.id });
+  async function* (context) {
+    return yield* createRateEntryHandler(context);
   },
 );
 

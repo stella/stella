@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 9,
+  "reason": "Guidance ingestion maintains public corpus documents, observation versions, classified attempts and lease/checkpoint state. Eight slice-owned exemptions and one shared checkpoint exemption replace unaudited ledger entries with the same explicit public-ingestion rationale as case-law ingestion; these are not authenticated user actions."
+}

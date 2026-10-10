@@ -30,7 +30,8 @@ const runWithPipelineContext = async <T>(
   return await run;
 };
 
-const anonymizeTextFieldsDependencies = {
+/** Exported so the wiring test can observe the request path's pipeline config. */
+export const anonymizeTextFieldsDependencies = {
   getBinding: loadNativeAnonymizeBinding,
   createNativePipelineFromConfig,
   createPipelineContext,

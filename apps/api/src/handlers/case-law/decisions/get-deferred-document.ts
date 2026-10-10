@@ -23,7 +23,7 @@ import {
 import { onDemandDocumentDeps } from "@/api/handlers/case-law/decisions/document-on-demand-deps";
 import { readDecisionHandler } from "@/api/handlers/case-law/decisions/get";
 import { transientDecisionAstProjection } from "@/api/handlers/case-law/decisions/served-ast";
-import { omitDerivablePlainText } from "@/api/handlers/case-law/document-ast";
+import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import type { DecisionSubjectLocator } from "@/api/lib/case-law/public-subject";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
@@ -40,19 +40,31 @@ export type DecisionReadCaller = "anonymous" | "attributed";
 
 /**
  * Whether this read may fetch a document the ingestion queue has not stored
- * yet. A fetch is a publisher crawl, so a caller reading many decisions at
- * once reads the stored state first and spends its own fetch budget
- * deliberately, rather than crawling once per id.
+ * yet. A fetch is a publisher crawl, a third-party request, so only a caller
+ * holding a permit may ask for one. A caller reading many decisions at once
+ * reads the stored state first and spends its own fetch budget deliberately,
+ * rather than crawling once per id.
  */
-export const DECISION_DOCUMENT_HYDRATION = {
-  /** Fetch the document when the read finds one pending. */
-  onDemand: "on-demand",
-  /** Answer from what is stored; a pending document stays pending. */
-  storedOnly: "stored-only",
-} as const;
-
 export type DecisionDocumentHydration =
-  (typeof DECISION_DOCUMENT_HYDRATION)[keyof typeof DECISION_DOCUMENT_HYDRATION];
+  /** Fetch the document when the read finds one pending. */
+  | { type: "on-demand"; permit: ThirdPartyOutboundPermit }
+  /** Answer from what is stored; a pending document stays pending. */
+  | { type: "stored-only" };
+
+export const STORED_ONLY_DOCUMENT_HYDRATION = {
+  type: "stored-only",
+} as const satisfies DecisionDocumentHydration;
+
+/**
+ * On demand for a caller holding a permit. A caller without one (a chat
+ * script) answers from what is stored, so its read never crawls a publisher.
+ */
+export const documentHydrationFor = (
+  permit: ThirdPartyOutboundPermit | undefined,
+): DecisionDocumentHydration =>
+  permit === undefined
+    ? STORED_ONLY_DOCUMENT_HYDRATION
+    : { type: "on-demand", permit };
 
 /**
  * A development process reading a shared corpus shows the parser in this
@@ -81,7 +93,7 @@ const reparsedForDev = async (
         ...decision,
         ...(await transientDecisionAstProjection({
           resolvedAst: documentAst,
-          wireAst: documentAst,
+          plainText: "include",
         })),
         documentPending: false,
         hasDocument: true,
@@ -103,17 +115,17 @@ const hydrate = async (
   recordDemand: boolean,
   documentHydration: DecisionDocumentHydration,
 ): Promise<ReadableDecision> => {
+  // The development reparse fetches the document from the publisher, so a
+  // caller without a permit answers from what is stored before that branch.
+  if (documentHydration.type === "stored-only") {
+    return decision;
+  }
   // The local shared-corpus mode is strictly read-side. An incomplete remote
   // decision stays metadata-only instead of starting the ingestion path,
   // which would otherwise crawl the publisher and write through the local
-  // ingestion database. Checked before the caller's fetch budget, because a
-  // caller that declines a publisher fetch is still owed the parser in this
-  // tree: the reparse is not the fetch it declined.
+  // ingestion database.
   if (readsSharedPublicLawCorpus()) {
     return await reparsedForDev(decision);
-  }
-  if (documentHydration === DECISION_DOCUMENT_HYDRATION.storedOnly) {
-    return decision;
   }
 
   if (
@@ -156,7 +168,7 @@ const hydrate = async (
     // on demand must not answer with a fatter payload than a cached one.
     ...(await transientDecisionAstProjection({
       resolvedAst: document.documentAst,
-      wireAst: omitDerivablePlainText(document.documentAst),
+      plainText: "omit",
     })),
     documentPending: false,
     hasDocument: true,

@@ -25,6 +25,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { expandThreadDataScopeOnTx } from "@/api/lib/chat/data-scope";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -47,7 +48,7 @@ let matterId: SafeId<"workspace">;
 const seededThreadIds: SafeId<"chatThread">[] = [];
 const seededResourceIds: string[] = [];
 
-const noopAuditRecorder: AuditRecorder = async () => undefined;
+const unwrittenAuditRecorder: AuditRecorder = auditRecorderDouble();
 
 beforeAll(async () => {
   const fixture = await getRlsFixture();
@@ -155,7 +156,9 @@ const readEntries = async (
     queryAuditLogPage({
       safeDb: reader,
       organizationId: ids.orgA,
-      recordAuditEvent: noopAuditRecorder,
+      userId: ids.userA1,
+      featureAccessSnapshot: undefined,
+      recordAuditEvent: unwrittenAuditRecorder,
       query: {
         limit: 50,
         resourceType,
@@ -178,7 +181,7 @@ const exportEntries = async (
     asTestRaw<ExportContext>({
       memberRole: sessionMemberRole("owner"),
       query: { resourceType, resourceId },
-      recordAuditEvent: noopAuditRecorder,
+      recordAuditEvent: unwrittenAuditRecorder,
       request: new Request("http://localhost/v1/audit-logs/export"),
       route: "/v1/audit-logs/export",
       safeDb: reader,

@@ -5,7 +5,7 @@ import { normalizeIban } from "@stll/invoicing";
 
 import { sellerProfiles } from "@/api/db/schema";
 import { createSellerProfileBody } from "@/api/handlers/seller-profiles/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -15,6 +15,8 @@ const config = {
     "Create an issuer profile for the active organization. The first active " +
     "profile becomes the default; later profiles can be made default explicitly.",
   permissions: { organizationSettings: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.standard,
+  featureAccess: { featureId: "time-billing", type: "required" },
   mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   body: createSellerProfileBody,
 } satisfies HandlerConfig;

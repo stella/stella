@@ -40,10 +40,19 @@ const originalMember = (
     .where(eq(member.id, ids.memberA1org))
     .limit(1)
 ).at(0);
-const originalWorkspaceMember = await testDb.query.workspaceMembers.findFirst({
-  where: { id: { eq: ids.memberA1wsA2 } },
+// Leaving the organization also ends every matter membership in it, so the
+// restore covers all of them, not only the one a test removes directly.
+const originalWorkspaceMembers = await testDb.query.workspaceMembers.findMany({
+  where: {
+    userId: { eq: ids.userA1 },
+    workspaceId: { in: [ids.wsA1, ids.wsA2] },
+  },
 });
-if (!originalField || !originalMember || !originalWorkspaceMember) {
+if (
+  !originalField ||
+  !originalMember ||
+  originalWorkspaceMembers.length === 0
+) {
   panic("Review input fixture is incomplete");
 }
 
@@ -103,7 +112,7 @@ afterEach(async () => {
   await testDb.insert(member).values(originalMember).onConflictDoNothing();
   await testDb
     .insert(workspaceMembers)
-    .values(originalWorkspaceMember)
+    .values(originalWorkspaceMembers)
     .onConflictDoNothing();
   await testDb
     .update(fields)

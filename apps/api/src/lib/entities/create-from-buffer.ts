@@ -2,13 +2,13 @@ import { Result, TaggedError, panic } from "better-result";
 import { and, eq } from "drizzle-orm";
 
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import type { Transaction } from "@/api/db/root";
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { entities, fields, pendingUploads, workspaces } from "@/api/db/schema";
 import type { PendingUploadFinalizedResult } from "@/api/db/schema";
-import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -26,15 +26,25 @@ import {
   objectWriterSettlementAfterCleanup,
   startBufferIntentHeartbeat,
 } from "@/api/lib/buffer-intent-reconciliation";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
+import {
+  documentWriteRefusal,
+  DocumentWriteRefusedError,
+} from "@/api/lib/entities/authorize-document-write";
+import {
+  insertNamedEntity,
+  resolveSiblingNameForInsert,
+} from "@/api/lib/entities/sibling-name-insert";
 import { validateParentIdForInsert } from "@/api/lib/entities/validate-parent-id";
-import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
+import { lockWorkspaceForEntityCreate } from "@/api/lib/entity-cap-lock";
 import { insertEntityVersion } from "@/api/lib/entity-versions/insert-entity-version";
 import {
   enqueueImageThumbnailOrMarkFailed,
   enqueuePdfDerivativeOrMarkFailed,
 } from "@/api/lib/file-derivative-queue";
 import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
+import type { FileEncryption } from "@/api/lib/files/detect-file-encryption";
 import {
   allocateFileObject,
   fileContentWithMintedObject,
@@ -77,7 +87,8 @@ type CreateEntityFromBufferInput = {
   buffer: Uint8Array | ArrayBuffer;
   fileName: string;
   mimeType: string;
-  encrypted?: boolean | undefined;
+  /** From `detect-file-encryption.ts`, for these bytes. */
+  encryption: FileEncryption;
   parentId?: SafeId<"entity"> | null | undefined;
   scanWarnings?: string[] | undefined;
   provenance?:
@@ -133,11 +144,13 @@ type CreateEntityFromBufferValue = {
   entityVersionId: SafeId<"entityVersion">;
   fieldId: SafeId<"field">;
   fileName: string;
+  renamed: boolean;
 };
 
 export type CreateEntityFromBufferResult = Result<
   CreateEntityFromBufferValue,
   | DocumentTooLargeError
+  | DocumentWriteRefusedError
   | EntityLimitError
   | InvalidParentError
   | MissingFilePropertyError
@@ -160,7 +173,7 @@ export const createEntityFromBuffer = async ({
   buffer,
   fileName: rawFileName,
   mimeType,
-  encrypted = false,
+  encryption,
   parentId,
   scanWarnings,
   provenance,
@@ -182,7 +195,8 @@ export const createEntityFromBuffer = async ({
   // hash below are taken from the bytes this returns, never the submitted ones.
   const { bytes } = await storedDocumentBytes(submittedBytes);
 
-  const fileName = sanitizeFilenamePreservingExtension(rawFileName);
+  const requestedFileName = sanitizeFilenamePreservingExtension(rawFileName);
+  let fileName = requestedFileName;
   const fileId = allocateFileObject();
   const s3Key = createFileKey({
     organizationId,
@@ -191,7 +205,7 @@ export const createEntityFromBuffer = async ({
     mimeType,
   });
 
-  const sha256Hex = new Bun.CryptoHasher("sha256").update(bytes).digest("hex");
+  const sha256Hex = hashSha256Hex(bytes);
 
   // Check for file property before uploading to avoid
   // orphaned S3 files if the property doesn't exist.
@@ -308,7 +322,7 @@ export const createEntityFromBuffer = async ({
     };
 
     try {
-      if (!env.FEATURE_FILE_USAGE_LIMITS) {
+      if (!isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")) {
         await withTimeout(
           async (signal) =>
             await putS3ObjectWithSignal(s3Key, bytes, mimeType, signal),
@@ -322,10 +336,16 @@ export const createEntityFromBuffer = async ({
           organizationId,
           objectKey: s3Key,
           sizeBytes: bytes.byteLength,
-          write: async () =>
+          content: bytes,
+          write: async ({ content, objectKey }) =>
             await withTimeout(
               async (signal) =>
-                await putS3ObjectWithSignal(s3Key, bytes, mimeType, signal),
+                await putS3ObjectWithSignal(
+                  objectKey,
+                  content,
+                  mimeType,
+                  signal,
+                ),
               {
                 label: "buffer-entity-writer-put",
                 timeoutMs: BUFFER_INTENT_WRITE_TIMEOUT_MS,
@@ -354,7 +374,20 @@ export const createEntityFromBuffer = async ({
       await scopedDb(async (tx) => {
         // See `lockWorkspacesForEntityCap` for the canonical lock
         // order every entity-creating path follows (issue #1139).
-        await lockWorkspacesForEntityCap(tx, [workspaceId]);
+        const workspaceStatus = await lockWorkspaceForEntityCreate(
+          tx,
+          workspaceId,
+        );
+        // Callers authorize the matter before producing the bytes; the status
+        // is read again under the lock so a matter archived or scheduled for
+        // deletion in between receives nothing.
+        if (workspaceStatus !== "active") {
+          throw documentWriteRefusal(
+            workspaceStatus === undefined
+              ? "workspace-not-found"
+              : "workspace-not-active",
+          );
+        }
         if (publication.type === "service") {
           await lockObjectCleanupIntentsForWriter(tx, [publication.id]);
         }
@@ -387,10 +420,19 @@ export const createEntityFromBuffer = async ({
 
         const entityStamp = await allocateEntityStamp(tx, workspaceId);
 
-        await tx.insert(entities).values({
+        const resolvedName = await resolveSiblingNameForInsert({
+          tx,
+          workspaceId,
+          parentId: parentId ?? null,
+          name: requestedFileName,
+          kind: "document",
+        });
+        fileName = resolvedName.fileName;
+
+        await insertNamedEntity(tx, {
           id: entityId,
           workspaceId,
-          name: fileName,
+          name: resolvedName.name,
           parentId: parentId ?? null,
           createdBy: userId,
           docSequence: entityStamp.docSequence,
@@ -421,16 +463,16 @@ export const createEntityFromBuffer = async ({
             fileName,
             mimeType,
             sizeBytes: bytes.byteLength,
-            encrypted,
+            encryption,
             sha256Hex,
             pdfFileId: null,
             pdfDerivative: pdfDerivativeStateForFile({
-              encrypted,
+              encrypted: encryption.encrypted,
               mimeType,
             }),
             thumbnailFileId: null,
             thumbnailDerivative: thumbnailDerivativeStateForFile({
-              encrypted,
+              encrypted: encryption.encrypted,
               mimeType,
             }),
             ...(scanWarnings !== undefined && { scanWarnings }),
@@ -471,6 +513,7 @@ export const createEntityFromBuffer = async ({
           entityVersionId,
           fieldId,
           fileName,
+          renamed: fileName !== requestedFileName,
         });
 
         if (publication.type === "service") {
@@ -487,7 +530,7 @@ export const createEntityFromBuffer = async ({
             entityId,
             fileId,
             fileName,
-            renamed: false,
+            renamed: fileName !== requestedFileName,
           };
           // audit: skip — intent bookkeeping is atomic with the audited entity.
           const finalizedRows = await tx
@@ -542,7 +585,11 @@ export const createEntityFromBuffer = async ({
         }
       }
 
-      if (EntityLimitError.is(error) || InvalidParentError.is(error)) {
+      if (
+        EntityLimitError.is(error) ||
+        InvalidParentError.is(error) ||
+        DocumentWriteRefusedError.is(error)
+      ) {
         return Result.err(error);
       }
 
@@ -563,7 +610,7 @@ export const createEntityFromBuffer = async ({
 
   dependencies
     .enqueuePdfDerivativeOrMarkFailed({
-      encrypted,
+      encrypted: encryption.encrypted,
       entityId,
       fieldId,
       mimeType,
@@ -575,7 +622,7 @@ export const createEntityFromBuffer = async ({
 
   dependencies
     .enqueueImageThumbnailOrMarkFailed({
-      encrypted,
+      encrypted: encryption.encrypted,
       entityId,
       fieldId,
       mimeType,
@@ -590,5 +637,11 @@ export const createEntityFromBuffer = async ({
     resourceRef({ type: RESOURCE_TYPE.ENTITY, id: entityId }),
   );
 
-  return Result.ok({ entityId, entityVersionId, fieldId, fileName });
+  return Result.ok({
+    entityId,
+    entityVersionId,
+    fieldId,
+    fileName,
+    renamed: fileName !== requestedFileName,
+  });
 };

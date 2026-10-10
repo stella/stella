@@ -6,6 +6,8 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import { envApiServerSchema } from "@/api/env-schema";
 import {
   admitOpenClient,
@@ -105,11 +107,13 @@ describe("auth persistence retention", () => {
       }
       const { adapter } = await auth.$context;
       expect(
-        adapter.create({
-          model: "oauthClient",
-          data: { clientId: "unclassified-client" },
-        }),
-      ).rejects.toMatchObject({
+        await rejectionOf(
+          adapter.create({
+            model: "oauthClient",
+            data: { clientId: "unclassified-client" },
+          }),
+        ),
+      ).toMatchObject({
         statusCode: 500,
         body: { message: "Client registration requires a declared origin." },
       });
@@ -190,7 +194,7 @@ describe("auth persistence retention", () => {
         mode === "direct"
           ? adapter.create(data)
           : adapter.transaction(async (tx) => await tx.create(data));
-      expect(created).rejects.toMatchObject({
+      expect(await rejectionOf(created)).toMatchObject({
         statusCode: 500,
         body: { message: "Database model requires a retention declaration." },
       });

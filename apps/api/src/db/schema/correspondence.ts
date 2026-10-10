@@ -8,11 +8,16 @@ import {
   CORRESPONDENCE_SCAN_VERDICTS,
   CORRESPONDENCE_SENDER_KINDS,
   CORRESPONDENCE_SENDER_SCOPES,
+  CORRESPONDENCE_SOURCES,
   type CorrespondenceAddress,
   type CorrespondenceActorDisplay,
   type CorrespondenceOriginalSignature,
 } from "@stll/api-contract/correspondence";
 
+import {
+  entityFeatureGateChecks,
+  entityFeatureGateColumns,
+} from "../entity-feature-gate-columns";
 import {
   jsonb,
   organization,
@@ -65,6 +70,7 @@ const offboardingAssigneeCheck = sql`assignee_id = nullif(current_setting(${sql.
 export const correspondence = p.pgTable.withRLS(
   "correspondence",
   {
+    ...entityFeatureGateColumns(),
     id: pUuid<"correspondence">().primaryKey(),
     organizationId: safeOrganizationId("organization_id")
       .notNull()
@@ -76,10 +82,17 @@ export const correspondence = p.pgTable.withRLS(
       .text("direction", { enum: CORRESPONDENCE_DIRECTIONS })
       .notNull(),
     channel: p.text("channel", { enum: CORRESPONDENCE_CHANNELS }).notNull(),
-    intake: p.text("intake", { enum: CORRESPONDENCE_INTAKES }).notNull(),
-    authenticatedSenderAddress: p
-      .text("authenticated_sender_address")
-      .notNull(),
+    source: p
+      .text("source", { enum: CORRESPONDENCE_SOURCES })
+      .notNull()
+      .default("delivery"),
+    // An upload reads its message from this matter file; deleting the file
+    // deletes the record.
+    sourceEntityId: safeUuid<"entity">("source_entity_id"),
+    // Delivery provenance; correspondence_provenance_check binds these
+    // columns to the source.
+    intake: p.text("intake", { enum: CORRESPONDENCE_INTAKES }),
+    authenticatedSenderAddress: p.text("authenticated_sender_address"),
     originalSignature:
       jsonb("original_signature").$type<CorrespondenceOriginalSignature>(),
     messageId: p.text("message_id"),
@@ -95,9 +108,9 @@ export const correspondence = p.pgTable.withRLS(
     references: jsonb("references").$type<string[]>().notNull(),
     bodyText: p.text("body_text").notNull(),
     bodyHtml: p.text("body_html"),
-    spf: p.text("spf", { enum: CORRESPONDENCE_AUTH_RESULTS }).notNull(),
-    dkim: p.text("dkim", { enum: CORRESPONDENCE_AUTH_RESULTS }).notNull(),
-    dmarc: p.text("dmarc", { enum: CORRESPONDENCE_AUTH_RESULTS }).notNull(),
+    spf: p.text("spf", { enum: CORRESPONDENCE_AUTH_RESULTS }),
+    dkim: p.text("dkim", { enum: CORRESPONDENCE_AUTH_RESULTS }),
+    dmarc: p.text("dmarc", { enum: CORRESPONDENCE_AUTH_RESULTS }),
     alignedIdentifier: p.text("aligned_identifier"),
     handlingState: p
       .text("handling_state", { enum: CORRESPONDENCE_HANDLING_STATES })
@@ -110,6 +123,7 @@ export const correspondence = p.pgTable.withRLS(
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     p
       .foreignKey({
         name: "correspondence_workspace_organization_fk",
@@ -117,10 +131,20 @@ export const correspondence = p.pgTable.withRLS(
         foreignColumns: [workspaces.id, workspaces.organizationId],
       })
       .onDelete("cascade"),
+    p
+      .foreignKey({
+        name: "correspondence_source_entity_workspace_fk",
+        columns: [table.sourceEntityId, table.workspaceId],
+        foreignColumns: [entities.id, entities.workspaceId],
+      })
+      .onDelete("cascade"),
     p.unique("correspondence_id_ws_unq").on(table.id, table.workspaceId),
     p
       .uniqueIndex("correspondence_ws_dedup_uidx")
       .on(table.workspaceId, table.dedupKey),
+    p
+      .uniqueIndex("correspondence_ws_source_entity_uidx")
+      .on(table.workspaceId, table.sourceEntityId),
     p
       .index("correspondence_ws_received_idx")
       .on(table.workspaceId, table.receivedAt.desc(), table.id.desc()),
@@ -136,8 +160,16 @@ export const correspondence = p.pgTable.withRLS(
       sql`${table.intake} in (${valuesSql(CORRESPONDENCE_INTAKES)})`,
     ),
     p.check(
+      "correspondence_source_check",
+      sql`${table.source} in (${valuesSql(CORRESPONDENCE_SOURCES)})`,
+    ),
+    p.check(
+      "correspondence_provenance_check",
+      sql`((${table.source} = 'delivery' and ${table.intake} is not null and ${table.authenticatedSenderAddress} is not null and ${table.spf} is not null and ${table.dkim} is not null and ${table.dmarc} is not null and ${table.sourceEntityId} is null) or (${table.source} = 'upload' and ${table.intake} is null and ${table.authenticatedSenderAddress} is null and ${table.spf} is null and ${table.dkim} is null and ${table.dmarc} is null and ${table.alignedIdentifier} is null and ${table.sourceEntityId} is not null)) is true`,
+    ),
+    p.check(
       "correspondence_original_signature_check",
-      sql`((${table.intake} = 'direct' and ${table.originalSignature} is null) or (${table.intake} in (${valuesSql(FORWARDED_INTAKES)}) and ${table.originalSignature} = '{"status":"unverified"}'::jsonb) or (${table.intake} = 'forwarded_attachment' and ${table.originalSignature}->>'status' = 'verified' and jsonb_typeof(${table.originalSignature}->'domain') = 'string' and length(${table.originalSignature}->>'domain') > 0)) is true`,
+      sql`((${table.intake} = 'direct' and ${table.originalSignature} is null) or (${table.intake} in (${valuesSql(FORWARDED_INTAKES)}) and ${table.originalSignature} = '{"status":"unverified"}'::jsonb) or (${table.source} = 'upload' and ${table.originalSignature} = '{"status":"unverified"}'::jsonb) or ((${table.intake} = 'forwarded_attachment' or ${table.source} = 'upload') and ${table.originalSignature}->>'status' = 'verified' and jsonb_typeof(${table.originalSignature}->'domain') = 'string' and length(${table.originalSignature}->>'domain') > 0)) is true`,
     ),
     p.check(
       "correspondence_direction_check",
@@ -172,13 +204,19 @@ export const correspondence = p.pgTable.withRLS(
       using: sql`${currentUserOwnsCorrespondence} and ${offboardingAssigneeCheck} and ${offboardingScopeCheck}`,
       withCheck: sql`${currentUserOwnsCorrespondence} and ${table.assigneeId} is null and ${offboardingScopeCheck}`,
     }),
-    ...wsOrganizationPolicies("correspondence"),
+    ...wsOrganizationPolicies("correspondence", {
+      columns: table,
+      references: new Map([
+        [table.sourceEntityId, { target: "entities", kind: "owned-content" }],
+      ]),
+    }),
   ],
 );
 
 export const correspondenceFilers = p.pgTable.withRLS(
   "correspondence_filers",
   {
+    ...entityFeatureGateColumns(),
     id: pUuid<"correspondenceFiler">().primaryKey(),
     organizationId: safeOrganizationId("organization_id").notNull(),
     workspaceId: safeWorkspaceId("workspace_id").notNull(),
@@ -194,6 +232,7 @@ export const correspondenceFilers = p.pgTable.withRLS(
     filedAt: timestamptz("filed_at").notNull().defaultNow(),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     p
       .foreignKey({
         name: "correspondence_filers_workspace_organization_fk",
@@ -256,13 +295,22 @@ export const correspondenceFilers = p.pgTable.withRLS(
       using: sql`(current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.correspondence_filers'::regclass) AND filed_by_user_id = nullif(current_setting('app.correspondence_erasure_user_id', true), ''))`,
       withCheck: sql`(current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.correspondence_filers'::regclass) AND filed_by_user_id = nullif(current_setting('app.correspondence_erasure_user_id', true), '') AND id = ANY(COALESCE(NULLIF(current_setting('app.correspondence_erasure_record_ids', true), '')::uuid[], ARRAY[]::uuid[])) AND filed_by_display = '{"status":"deleted"}'::jsonb)`,
     }),
-    ...wsOrganizationPolicies("correspondence_filers"),
+    ...wsOrganizationPolicies("correspondence_filers", {
+      columns: table,
+      references: new Map([
+        [
+          table.correspondenceId,
+          { kind: "owned-by-parent", parent: correspondence },
+        ],
+      ]),
+    }),
   ],
 );
 
 export const correspondenceAttachments = p.pgTable.withRLS(
   "correspondence_attachments",
   {
+    ...entityFeatureGateColumns(),
     id: pUuid<"correspondenceAttachment">().primaryKey(),
     organizationId: safeOrganizationId("organization_id").notNull(),
     workspaceId: safeWorkspaceId("workspace_id").notNull(),
@@ -278,6 +326,7 @@ export const correspondenceAttachments = p.pgTable.withRLS(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     p
       .foreignKey({
         name: "correspondence_attachments_workspace_organization_fk",
@@ -305,6 +354,9 @@ export const correspondenceAttachments = p.pgTable.withRLS(
     p
       .index("correspondence_attachments_ws_record_idx")
       .on(table.workspaceId, table.correspondenceId),
+    p
+      .index("correspondence_attachments_ws_entity_idx")
+      .on(table.workspaceId, table.entityId),
     p.check(
       "correspondence_attachments_size_check",
       sql`${table.byteSize} >= 0 and ${table.ordinal} >= 0`,
@@ -313,7 +365,16 @@ export const correspondenceAttachments = p.pgTable.withRLS(
       "correspondence_attachments_scan_check",
       sql`${table.scanVerdict} in (${valuesSql(CORRESPONDENCE_SCAN_VERDICTS)})`,
     ),
-    ...wsOrganizationPolicies("correspondence_attachments"),
+    ...wsOrganizationPolicies("correspondence_attachments", {
+      columns: table,
+      references: new Map([
+        [table.entityId, { target: "entities", kind: "owned-content" }],
+        [
+          table.correspondenceId,
+          { kind: "owned-by-parent", parent: correspondence },
+        ],
+      ]),
+    }),
   ],
 );
 
@@ -354,7 +415,7 @@ export const matterInboundAddresses = p.pgTable.withRLS(
     p
       .index("matter_inbound_addresses_ws_created_idx")
       .on(table.workspaceId, table.createdAt.desc()),
-    ...wsOrganizationPolicies("matter_inbound_addresses"),
+    ...wsOrganizationPolicies("matter_inbound_addresses", { columns: table }),
   ],
 );
 
@@ -468,7 +529,9 @@ export const correspondenceAllowedSenderMatters = p.pgTable.withRLS(
     p
       .index("correspondence_allowed_sender_matters_ws_sender_idx")
       .on(table.workspaceId, table.allowedSenderId),
-    ...wsOrganizationPolicies("correspondence_allowed_sender_matters"),
+    ...wsOrganizationPolicies("correspondence_allowed_sender_matters", {
+      columns: table,
+    }),
   ],
 );
 
@@ -497,6 +560,6 @@ export const correspondenceDropLogs = p.pgTable.withRLS(
       "correspondence_drop_logs_reason_check",
       sql`${table.reason} in (${valuesSql(CORRESPONDENCE_DROP_REASONS)})`,
     ),
-    ...wsOrganizationPolicies("correspondence_drop_logs"),
+    ...wsOrganizationPolicies("correspondence_drop_logs", { columns: table }),
   ],
 );

@@ -1,6 +1,8 @@
 import { panic, Result } from "better-result";
 import ts from "typescript";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
+
 import { RECORDED_CONVERSATION_SUITES } from "../src/tests/helpers/recorded-conversation-suites";
 import rssData from "./test-peak-rss.json";
 
@@ -25,16 +27,18 @@ export const dbTestBatchSize = (propertyOnly: boolean) =>
  */
 export const SOLO_TEST_PATHS: ReadonlySet<string> = new Set([
   ...Object.values(RECORDED_CONVERSATION_SUITES),
+  // The 20,000-entry corpus plus PGlite leaves no room for another DB suite.
+  "src/handlers/sanctions/public-routes.db.test.ts",
   // Its 25,000-row plan fixture grows PGlite's retained WASM memory; closing
   // the client cannot reclaim it, and a three-file Linux batch peaked at 2816 MB.
   "src/lib/scheduler/tasks/legislation-expression-id-backfill-plan.db.test.ts",
   // Seeds 32,000 legislation versions; a three-file batch with it peaked at
   // 2909 MB on Linux.
   "src/handlers/legislation/work-names-plan.db.test.ts",
-  // Keep this suite's retained database graph in its own process.
-  "src/handlers/chat/thread-durable-refs.integration.test.ts",
   // Sets the deployment's public address before the environment is read.
   "src/lib/oauth-cli-client-document.db.test.ts",
+  // Owns the CIMD transport module and the AS JWKS fetch for the whole process.
+  "src/lib/oauth-cimd-private-key-jwt.db.test.ts",
 ]);
 
 /**
@@ -71,14 +75,13 @@ export type TestRssFile = {
   baselineMb: number;
   source: TestRssSource;
 };
-export type TestRssTable =
-  | { type: "uncalibrated"; files: Readonly<Record<string, number>> }
-  | {
-      type: "measured";
-      environment: TestRssEnvironment;
-      baselineMb: number;
-      files: Readonly<Record<string, TestRssFile>>;
-    };
+export type TestRssTable = {
+  environment: TestRssEnvironment;
+  /** When the run's last shard finished measuring, as an ISO 8601 instant. */
+  measuredAt: string;
+  baselineMb: number;
+  files: Readonly<Record<string, TestRssFile>>;
+};
 
 const rssRecord = (value: unknown, label: string): Record<string, unknown> => {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
@@ -94,6 +97,16 @@ const rssPositive = (value: unknown, label: string) => {
 };
 const rssString = (value: unknown, label: string) => {
   if (typeof value !== "string" || value.trim().length === 0) {
+    return panic(`Invalid ${label}`);
+  }
+  return value;
+};
+export const readTestRssInstant = (value: unknown, label: string) => {
+  if (
+    typeof value !== "string" ||
+    Number.isNaN(Date.parse(value)) ||
+    new Date(value).toISOString() !== value
+  ) {
     return panic(`Invalid ${label}`);
   }
   return value;
@@ -115,22 +128,9 @@ export const readTestRssEnvironment = (value: unknown): TestRssEnvironment => {
   };
 };
 
-/** Preserve uncalibrated observations without inventing an empty-process measurement. */
 export const readTestRssTable = (value: unknown): TestRssTable => {
   const raw = rssRecord(value, "RSS table");
   const files = rssRecord(raw["files"], "RSS files");
-  if (raw["type"] === "uncalibrated") {
-    const peaks = Object.fromEntries(
-      Object.entries(files).map(([file, peak]) => [
-        file,
-        rssPositive(peak, `peak RSS for ${file}`),
-      ]),
-    );
-    return { type: "uncalibrated", files: peaks };
-  }
-  if (raw["type"] !== "measured") {
-    return panic("Invalid RSS table type");
-  }
   const baselineMb = rssPositive(raw["baselineMb"], "RSS baseline");
   const measured = Object.fromEntries(
     Object.entries(files).map(([file, observation]): [string, TestRssFile] => {
@@ -153,8 +153,8 @@ export const readTestRssTable = (value: unknown): TestRssTable => {
     }),
   );
   return {
-    type: "measured",
     environment: readTestRssEnvironment(raw["environment"]),
+    measuredAt: readTestRssInstant(raw["measuredAt"], "RSS measurement time"),
     baselineMb,
     files: measured,
   };
@@ -162,28 +162,42 @@ export const readTestRssTable = (value: unknown): TestRssTable => {
 
 /** The committed table is consumed only through this planner boundary. */
 export const measuredTestRssTable = () => readTestRssTable(rssData);
+export const TEST_RSS_TABLE_MAX_AGE_DAYS = 14;
+const DAY_MS = 86_400_000;
+
+/**
+ * The weekly measurement opens a refresh pull request; an annotation in every
+ * API test run keeps an unmerged or failed refresh from going unnoticed. It
+ * never fails the run: stale weights only cost batch packing, and the runtime
+ * memory caps stay authoritative.
+ */
+export const staleTestRssTableAnnotation = (measuredAt: string, now: Date) => {
+  const ageDays = Math.floor((now.getTime() - Date.parse(measuredAt)) / DAY_MS);
+  if (ageDays <= TEST_RSS_TABLE_MAX_AGE_DAYS) {
+    return undefined;
+  }
+  return (
+    "::warning title=API test memory profile is stale::" +
+    `apps/api/scripts/test-peak-rss.json was measured ${ageDays} days ago ` +
+    `(${measuredAt}), more than ${TEST_RSS_TABLE_MAX_AGE_DAYS}; merge the open ` +
+    "refresh pull request or rerun the API test memory workflow " +
+    "(docs/test-memory.md)"
+  );
+};
+
 export const unmeasuredTestPeakRss = (budgetMb: number) =>
   Math.ceil(
     budgetMb * TEST_BATCH_RSS_HEADROOM_RATIO * UNMEASURED_TEST_RSS_RATIO,
   );
 
-const rssBaseline = (table: TestRssTable) =>
-  table.type === "measured" ? table.baselineMb : 0;
 const rssFileWeight = (file: string, table: TestRssTable, budgetMb: number) => {
   const observation = table.files[file];
   if (observation === undefined) {
     const incrementalMb = unmeasuredTestPeakRss(budgetMb);
     return {
       type: "unmeasured",
-      peakMb: rssBaseline(table) + incrementalMb,
+      peakMb: table.baselineMb + incrementalMb,
       incrementalMb,
-    } as const;
-  }
-  if (typeof observation === "number") {
-    return {
-      type: "measured",
-      peakMb: observation,
-      incrementalMb: observation,
     } as const;
   }
   return {
@@ -203,7 +217,7 @@ export const batchPeakRss = ({
   rssTable,
   budgetMb,
 }: BatchPeakRssOptions) => {
-  let peakMb = rssBaseline(rssTable);
+  let peakMb = rssTable.baselineMb;
   for (const file of files) {
     peakMb += rssFileWeight(file, rssTable, budgetMb).incrementalMb;
   }
@@ -230,7 +244,7 @@ export const splitMemoryBoundedBatches = ({
   const result: string[][] = [];
   for (const batch of batches) {
     let current: string[] = [];
-    let totalMb = rssBaseline(rssTable);
+    let totalMb = rssTable.baselineMb;
     for (const file of batch) {
       const weight = rssFileWeight(file, rssTable, budgetMb);
       if (
@@ -241,7 +255,7 @@ export const splitMemoryBoundedBatches = ({
       ) {
         panic(`Invalid peak RSS for ${file}`);
       }
-      const singletonPeak = rssBaseline(rssTable) + weight.incrementalMb;
+      const singletonPeak = rssTable.baselineMb + weight.incrementalMb;
       if (singletonPeak > budgetMb) {
         panic(
           `Cannot plan API test batch [${batch.join(", ")}]: ${file} requires ${singletonPeak} MB, class budget ${budgetMb} MB`,
@@ -254,7 +268,7 @@ export const splitMemoryBoundedBatches = ({
         if (current.length > 0) {
           result.push(current);
           current = [];
-          totalMb = rssBaseline(rssTable);
+          totalMb = rssTable.baselineMb;
         }
         result.push([file]);
         continue;
@@ -265,7 +279,7 @@ export const splitMemoryBoundedBatches = ({
       ) {
         result.push(current);
         current = [];
-        totalMb = rssBaseline(rssTable);
+        totalMb = rssTable.baselineMb;
       }
       current.push(file);
       totalMb += weight.incrementalMb;
@@ -290,19 +304,29 @@ export type TestRssMeasurement = {
   peakMb: number;
   exitCode: number;
 };
+export type TestRssShard = { index: number; count: number };
+export const TEST_RSS_RECEIPT_VERSION = 3;
 type TestRssArtifactOptions = {
   measurements: readonly TestRssMeasurement[];
+  /** When the shard finished measuring; the refreshed table keeps the latest. */
+  measuredAt: string;
   baselineMb: number;
   environment: TestRssEnvironment;
   source: TestRssSource;
+  /** Shard and file count let a refresh prove the run measured every file it owned. */
+  shard: TestRssShard;
+  plannedFiles: number;
 };
 export const testRssArtifact = ({
   measurements,
+  measuredAt,
   baselineMb,
   environment,
   source,
+  shard,
+  plannedFiles,
 }: TestRssArtifactOptions) =>
-  `${JSON.stringify({ version: 1, environment, source, baselineMb, measurements }, null, 2)}\n`;
+  `${JSON.stringify({ version: TEST_RSS_RECEIPT_VERSION, environment, source, measuredAt, shard, plannedFiles, baselineMb, measurements }, null, 2)}\n`;
 
 export const parseRssMeasurementArguments = (arguments_: readonly string[]) => {
   const index = arguments_.indexOf("--measure-rss");
@@ -418,11 +442,9 @@ export const composeTestBatches = (
     panic("test batch size must be a positive integer");
   }
 
-  const batches: string[][] = [];
-  for (let index = 0; index < testFiles.length; index += batchSize) {
-    batches.push(testFiles.slice(index, index + batchSize));
-  }
-  return batches;
+  // Oversized integer widths still produce one batch, as before; array lengths
+  // fit within the owner's safe-integer cursor contract.
+  return chunkItems(testFiles, Math.min(batchSize, Number.MAX_SAFE_INTEGER));
 };
 
 const DB_TEST_MARKERS = [

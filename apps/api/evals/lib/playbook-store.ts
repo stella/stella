@@ -8,10 +8,12 @@
 
 import { panic } from "better-result";
 
-import { agentSkills, playbookDefinitions } from "@/api/db/schema";
+import { agentSkills, entities, playbookDefinitions } from "@/api/db/schema";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
+import type { ReadablePositionSource } from "@/api/lib/workflow/playbook-position-sources";
 import type {
   PlaybookPositions,
   PlaybookScope,
@@ -44,7 +46,6 @@ export type PlaybookStore = {
 };
 
 const STORE_EPOCH = new Date("2026-09-01T00:00:00.000Z");
-const MATTER_ID = "00000000-0000-4000-8000-0000000000e1";
 
 const playbookIdOf = (where: unknown): string | undefined => {
   if (typeof where !== "object" || where === null || !("id" in where)) {
@@ -57,9 +58,31 @@ const playbookIdOf = (where: unknown): string | undefined => {
   return typeof id.eq === "string" ? id.eq : undefined;
 };
 
-export const createPlaybookStore = (
-  seed: readonly StoredPlaybook[],
-): PlaybookStore => {
+type CreatePlaybookStoreOptions = {
+  seed: readonly StoredPlaybook[];
+  /**
+   * The organization's documents, as the user's scoped connection would
+   * return them before the matter filter.
+   */
+  documents: readonly ReadablePositionSource[];
+  /**
+   * The matters the user can access: the request context's scope, and the
+   * matter filter the source lookup applies to `documents`.
+   */
+  accessibleMatterIds: readonly SafeId<"workspace">[];
+};
+
+export const createPlaybookStore = ({
+  seed,
+  documents,
+  accessibleMatterIds,
+}: CreatePlaybookStoreOptions): PlaybookStore => {
+  const accessible = new Set<string>(accessibleMatterIds);
+  // What production's `readablePositionSources` returns: a document is
+  // readable only in a matter the caller can access.
+  const readableDocuments = documents.filter(({ workspaceId }) =>
+    accessible.has(workspaceId),
+  );
   const rows = new Map(seed.map((row) => [row.id, structuredClone(row)]));
   // Strictly increasing, so two writes in one millisecond still differ.
   let clock = Math.max(
@@ -96,9 +119,20 @@ export const createPlaybookStore = (
           // none, so the shipped playbook-builder skill is the one a run loads.
           return { where: () => ({ limit: () => [] }) };
         }
+        if (table === entities) {
+          // The scoped source lookup (`readablePositionSources`). This fake
+          // cannot read the drizzle id filter, so it answers every document
+          // in an accessible matter; each caller matches the rows to the
+          // `workspaceId:entityId` keys it asked for.
+          return {
+            innerJoin: () => ({
+              where: () => ({ limit: () => [...readableDocuments] }),
+            }),
+          };
+        }
         if (table !== playbookDefinitions) {
           return panic(
-            "the eval store answers selects on playbook definitions and agent skills only",
+            "the eval store answers selects on playbook definitions, agent skills, and entities only",
           );
         }
         return {
@@ -158,9 +192,11 @@ export const createPlaybookStore = (
 
   return {
     context: {
-      accessibleWorkspaceIds: [toSafeId<"workspace">(MATTER_ID)],
-      accessibleWorkspaceIdSet: new Set([MATTER_ID]),
-      accessibleWorkspaceStatusById: new Map([[MATTER_ID, "active"]]),
+      accessibleWorkspaceIds: [...accessibleMatterIds],
+      accessibleWorkspaceIdSet: accessible,
+      accessibleWorkspaceStatusById: new Map(
+        accessibleMatterIds.map((id) => [id, "active"]),
+      ),
       accessibleWorkspaces: [],
       grantedScopes: [],
       memberRole: "owner",

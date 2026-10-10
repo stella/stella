@@ -1,4 +1,14 @@
-import { describe, expect, mock, test } from "bun:test";
+import {
+  afterEach,
+  describe,
+  expect,
+  mock,
+  setSystemTime,
+  test,
+} from "bun:test";
+
+import { rejectionOf } from "@stll/property-testing/rejection";
+import { DAY_IN_MS, Temporal } from "@stll/time";
 
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
@@ -12,6 +22,8 @@ import {
 import {
   createPublisherRequestSlot,
   publisherGateKeys,
+  resetPublisherGateFixtures,
+  withPublisherGateFixture,
 } from "./publisher-request-gate";
 import { fetchPublisher } from "./retry";
 
@@ -115,6 +127,66 @@ const CONFIG = {
   publisher: "EU Cellar",
   cooldown: "shared",
 } as const;
+
+describe("default publisher gate fixture isolation", () => {
+  afterEach(() => setSystemTime());
+
+  const captured = createPublisherRequestSlot(CONFIG);
+
+  test("a fixture may leave its captured gate paused at a future clock", async () => {
+    setSystemTime(Temporal.Now.instant().epochMilliseconds + DAY_IN_MS);
+    const deadline = await captured.defer(DAY_IN_MS);
+    expect(await captured.readCooldown()).toBe(deadline);
+  });
+
+  test("the next fixture starts with the same captured gate unpaused", async () => {
+    expect(await captured.readCooldown()).toBeNull();
+    expect(await captured.tryReserve()).toBe(true);
+  });
+
+  test.each(Object.keys(PUBLISHER_GATES))(
+    "%s: captured slots reset across clock changes and repeated scopes",
+    async (key) => {
+      const slot = createPublisherRequestSlot({
+        intervalMs: 500,
+        key,
+        publisher: key,
+      });
+      const startedAt = Temporal.Now.instant().epochMilliseconds;
+      for (const offset of [0, DAY_IN_MS, -DAY_IN_MS]) {
+        setSystemTime(startedAt + offset);
+        const deadline = await slot.defer(DAY_IN_MS);
+        expect(await slot.readCooldown()).toBe(deadline);
+        // Moving the clock backwards cannot itself clear a publisher refusal.
+        setSystemTime(startedAt + offset - DAY_IN_MS);
+        expect(await slot.readCooldown()).toBe(deadline);
+        resetPublisherGateFixtures();
+        expect(await slot.readCooldown()).toBeNull();
+        expect(await slot.tryReserve()).toBe(true);
+        expect(await slot.tryReserve()).toBe(false);
+        resetPublisherGateFixtures();
+        expect(await slot.tryReserve()).toBe(true);
+        resetPublisherGateFixtures();
+        expect(await slot.readCooldown()).toBeNull();
+      }
+    },
+  );
+
+  test("resets preserve explicitly injected and scoped publisher state", async () => {
+    const clock = createGateClock();
+    const injected = createPublisherRequestSlot(CONFIG, clock.dependencies);
+    const defaultSlot = createPublisherRequestSlot(CONFIG);
+    const deadline = await injected.defer(2000);
+    await withPublisherGateFixture(clock.dependencies, async () => {
+      expect(await defaultSlot.readCooldown()).toBe(deadline);
+      resetPublisherGateFixtures();
+      expect(await defaultSlot.readCooldown()).toBe(deadline);
+      expect(await injected.readCooldown()).toBe(deadline);
+    });
+    expect(await defaultSlot.readCooldown()).toBeNull();
+    expect(await injected.readCooldown()).toBe(deadline);
+  });
+});
 
 describe("a publisher cooldown shared across workers", () => {
   test.each(Object.keys(PUBLISHER_GATES))(
@@ -264,8 +336,9 @@ for (const reply of [-1, 2, "invalid"]) {
       redis: () => ({ send: () => reply }),
       sleep: async () => {},
     });
-    expect(slot.tryReserve()).rejects.toThrow(
-      "publisher gate returned an invalid wait",
+    expect(await rejectionOf(slot.tryReserve())).toHaveProperty(
+      "message",
+      expect.stringContaining("publisher gate returned an invalid wait"),
     );
   });
 }

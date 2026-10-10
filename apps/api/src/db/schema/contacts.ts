@@ -2,12 +2,14 @@ import type { SQLWrapper } from "drizzle-orm";
 
 import { CONTACT_TYPES, WORKSPACE_CONTACT_ROLES } from "@stll/api-contract";
 
+import { workspaceInsertCheck } from "@/api/db/rls";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
 } from "@/api/lib/audit-log.constants";
 import type { AuditAction } from "@/api/lib/audit-log.constants";
 import type { SafeId } from "@/api/lib/branded-types";
+import { SANCTIONS_CONTACT_MODES } from "@/api/lib/lists/sanctions/monitoring-vocabulary";
 
 import {
   centsColumn,
@@ -65,6 +67,11 @@ export const contacts = p.pgTable(
       length: 512,
     }),
 
+    sanctionsMonitoringMode: p
+      .text("sanctions_monitoring_mode", { enum: SANCTIONS_CONTACT_MODES })
+      .notNull()
+      .default("included"),
+
     // Shared fields
     displayName: p.varchar("display_name", { length: 512 }).notNull(),
     notes: p.text(),
@@ -104,6 +111,7 @@ export const contacts = p.pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
+    p.unique("contacts_org_id_unique").on(table.organizationId, table.id),
     p.index("contacts_organization_id_idx").on(table.organizationId),
     p.index("contacts_org_type_idx").on(table.organizationId, table.type),
     p
@@ -144,6 +152,13 @@ export const contacts = p.pgTable(
     p.check(
       "contacts_nationality_codes_check",
       sql`array_position(${table.nationalityCodes}, NULL) IS NULL AND (cardinality(${table.nationalityCodes}) = 0 OR (array_to_string(${table.nationalityCodes}, ',') ~ '^([A-Z]{2})(,[A-Z]{2})*$' AND char_length(array_to_string(${table.nationalityCodes}, '')) = 2 * cardinality(${table.nationalityCodes})))`,
+    ),
+    p.check(
+      "contacts_sanctions_monitoring_mode_check",
+      sql`${table.sanctionsMonitoringMode} IN (${sql.join(
+        SANCTIONS_CONTACT_MODES.map((mode) => sql`${mode}`),
+        sql`, `,
+      )})`,
     ),
     ...orgPolicies(),
   ],
@@ -345,7 +360,7 @@ export const workspaces = p.pgTable(
     p.pgPolicy("workspace_insert", {
       for: "insert",
       to: stella,
-      withCheck: organizationCheck,
+      withCheck: workspaceInsertCheck,
     }),
     p.pgPolicy("workspace_update", {
       for: "update",
@@ -378,7 +393,7 @@ export const workspaceMembers = p.pgTable(
       .uniqueIndex("workspace_members_workspace_user_uidx")
       .on(table.workspaceId, table.userId),
     p.index("workspace_members_user_id_idx").on(table.userId),
-    ...wsPolicies(),
+    ...wsPolicies({ columns: table }),
   ],
 );
 
@@ -420,7 +435,7 @@ export const workspaceContacts = p.pgTable(
     p
       .uniqueIndex("workspace_contacts_ws_contact_role_uidx")
       .on(table.workspaceId, table.contactId, table.role),
-    ...wsOrganizationPolicies("workspace_contacts"),
+    ...wsOrganizationPolicies("workspace_contacts", { columns: table }),
   ],
 );
 
@@ -579,6 +594,7 @@ export const auditLogs = p.pgTable(
     p
       .index("audit_logs_org_created_id_idx")
       .on(table.organizationId, table.createdAt, table.id),
+    p.index("audit_logs_created_at_brin_idx").using("brin", table.createdAt),
     p
       .index("audit_logs_org_workspace_created_id_idx")
       .on(table.organizationId, table.workspaceId, table.createdAt, table.id),
@@ -777,7 +793,7 @@ export const infoSoudTrackedCases = p.pgTable(
     p
       .uniqueIndex("infosoud_tracked_cases_workspace_case_uidx")
       .on(table.workspaceId, table.courtCode, table.spisZn),
-    ...wsPolicies(),
+    ...wsPolicies({ columns: table }),
   ],
 );
 

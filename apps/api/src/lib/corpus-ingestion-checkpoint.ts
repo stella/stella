@@ -2,12 +2,17 @@ import { panic } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
-import { caseLawSources, legislationSources } from "@/api/db/schema";
+import {
+  caseLawSources,
+  legislationSources,
+  softLawSources,
+} from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 
 export const CORPUS_SOURCE_TYPE = {
   CASE_LAW: "case-law",
   LEGISLATION: "legislation",
+  SOFT_LAW: "soft-law",
 } as const;
 
 export const INGESTION_CHECKPOINT_STATUS = {
@@ -18,6 +23,11 @@ export const INGESTION_CHECKPOINT_STATUS = {
 } as const;
 
 type CorpusSource =
+  | {
+      id: SafeId<"softLawSource">;
+      leaseToken: SafeId<"softLawIngestionLease">;
+      type: typeof CORPUS_SOURCE_TYPE.SOFT_LAW;
+    }
   | {
       id: SafeId<"caseLawSource">;
       leaseToken: SafeId<"caseLawSourceIngestionLease">;
@@ -81,6 +91,7 @@ export const advanceCorpusIngestionCheckpoint = async ({
   source,
 }: AdvanceCorpusIngestionCheckpointOptions): Promise<IngestionCheckpointResult> =>
   await scopedDb(async (tx) => {
+    // audit: skip - public corpus checkpoint maintenance has no tenant actor
     switch (source.type) {
       case CORPUS_SOURCE_TYPE.CASE_LAW: {
         const advanced = await tx
@@ -146,6 +157,41 @@ export const advanceCorpusIngestionCheckpoint = async ({
             .select({ syncCursor: legislationSources.syncCursor })
             .from(legislationSources)
             .where(eq(legislationSources.id, source.id))
+            .limit(1)
+        ).at(0);
+        return current
+          ? classifyPersistedCheckpoint({
+              currentCursor: current.syncCursor,
+              nextCursor,
+            })
+          : { status: INGESTION_CHECKPOINT_STATUS.MISSING };
+      }
+      case CORPUS_SOURCE_TYPE.SOFT_LAW: {
+        const advanced = await tx
+          .update(softLawSources)
+          .set({ syncCursor: nextCursor, lastSyncAt: new Date() })
+          .where(
+            and(
+              eq(softLawSources.id, source.id),
+              eq(softLawSources.leaseToken, source.leaseToken),
+              sql`${softLawSources.leaseExpiresAt} > now()`,
+              sql`${softLawSources.syncCursor} IS NOT DISTINCT FROM ${expectedCursor}`,
+            ),
+          )
+          .returning({ cursor: softLawSources.syncCursor });
+        const winner = advanced.at(0);
+        if (winner) {
+          return {
+            cursor: winner.cursor,
+            status: INGESTION_CHECKPOINT_STATUS.ADVANCED,
+          };
+        }
+
+        const current = (
+          await tx
+            .select({ syncCursor: softLawSources.syncCursor })
+            .from(softLawSources)
+            .where(eq(softLawSources.id, source.id))
             .limit(1)
         ).at(0);
         return current

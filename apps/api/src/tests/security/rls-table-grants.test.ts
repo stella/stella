@@ -15,6 +15,7 @@ const AUDITED_DYNAMIC_GRANT_SITES = new Set([
   "20260516000000_case_law_ingestion_role: EXECUTE format( 'GRANT USAGE, SELECT ON SEQUENCE %s TO stella_ingestion', target_sequence )",
   "20260516000000_case_law_ingestion_role: EXECUTE format('GRANT stella_ingestion TO %I', CURRENT_USER)",
   "20260808014000_legal_lists: EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE %I TO stella', table_name)",
+  "20261003122400_public_sanctions_reader: EXECUTE format('GRANT stella_public_sanctions_reader TO %I WITH SET TRUE, INHERIT FALSE', CURRENT_USER)",
   "20261003122400_ingestion_role_set_grant: EXECUTE format('GRANT stella_ingestion TO %I WITH SET TRUE', CURRENT_USER)",
 ]);
 
@@ -137,6 +138,7 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   "corpus_index_projection_states",
   "corpus_index_projection_intents",
   // Global reference editions are read by request code and written by ingestion.
+  "sanctions_edition_fanouts",
   "sanctions_sources",
   "sanctions_editions",
   "sanctions_entry_payloads",
@@ -145,7 +147,14 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
 
 // Request transactions append names alongside chat messages and read them on
 // later requests. The role needs SELECT and INSERT, never UPDATE or DELETE.
-const POST_BOOTSTRAP_APPEND_ONLY_TABLES = new Set(["chat_thread_names"]);
+const POST_BOOTSTRAP_APPEND_ONLY_TABLES = new Set([
+  "chat_thread_names",
+  "chat_message_revisions",
+]);
+
+// Audit trails the request role may only append to: INSERT, nothing else.
+// The table owner reads them and purges rows past retention.
+const POST_BOOTSTRAP_INSERT_ONLY_TABLES = new Set(["system_audit_runs"]);
 
 // Invoker-maintained projections may track state changes; deletion is owned
 // by the source row's cascading foreign key, never the request role.
@@ -169,8 +178,23 @@ const POST_BOOTSTRAP_SCOPED_HANDOFF_TABLES = new Set([
 // deliberately grant stella nothing, so the grant requirement does not
 // apply. Their migration must REVOKE ALL from stella instead.
 const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
+  // Guidance ingestion is owner-only until a read capability is introduced.
+  "soft_law_sources",
+  "soft_law_ingestion_attempts",
+  "soft_law_documents",
+  "soft_law_document_versions",
+  "soft_law_document_locators",
   // Maintenance checkpoints belong to the database owner, never request roles.
   "database_backfill_states",
+  "case_law_replay_batches",
+  "case_law_replay_blocked",
+  "case_law_replay_daily_rows",
+  "case_law_replay_source_progress",
+  "case_law_replay_audit_events",
+  "eu_completion_receipts",
+  "eu_completion_request_hours",
+  "eu_completion_approvals",
+  "eu_completion_controls",
   "action_cost_records",
   "action_cost_calls",
   // Search backfill retries are ingestion control state, not request data.
@@ -180,6 +204,7 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   "agent_trusted_issuer",
   "agent_delegation",
   "agent_assertion_replay",
+  "desktop_device_proof_replays",
   // Better Auth OAuth control-plane state. Request-role access would expose
   // resource policy or let tenant traffic change token authorization rules.
   "oauth_resource",
@@ -226,6 +251,9 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   // and read only by the public-law reader, never through the request role.
   "case_law_sitemap_shards",
   "case_law_browse_facet_counts",
+  "case_law_source_arrivals",
+  "legislation_facet_counts",
+  "legislation_facet_refreshes",
   "statute_sitemap_shards",
   // Filed feedback reports: no tenant read surface, and the request role must
   // be able neither to read one nor to file one under another reporter's
@@ -331,6 +359,9 @@ const grantsRequiredPrivileges = ({
       privileges.has("insert") &&
       privileges.isDisjointFrom(APPEND_ONLY_FORBIDDEN_PRIVILEGES)
     );
+  }
+  if (POST_BOOTSTRAP_INSERT_ONLY_TABLES.has(table)) {
+    return privileges.size === 1 && privileges.has("insert");
   }
   if (POST_BOOTSTRAP_MUTABLE_PROJECTION_TABLES.has(table)) {
     return (
@@ -667,6 +698,22 @@ const collectRlsGrantState = () => {
 };
 
 describe("RLS table grants", () => {
+  test("the public sanctions reader can be assumed by the application connection", () => {
+    const migration = readFileSync(
+      nodePath.join(
+        DRIZZLE_DIR,
+        "20261003122400_public_sanctions_reader/migration.sql",
+      ),
+      "utf-8",
+    );
+    expect(migration).toContain(
+      "NOT pg_has_role(CURRENT_USER, 'stella_public_sanctions_reader', 'SET')",
+    );
+    expect(migration).toContain(
+      "EXECUTE format('GRANT stella_public_sanctions_reader TO %I WITH SET TRUE, INHERIT FALSE', CURRENT_USER)",
+    );
+  });
+
   test("rejects dynamic grants outside the exact deployed allowlist", () => {
     expect(
       dynamicGrantSites({
@@ -793,6 +840,7 @@ describe("RLS table grants", () => {
       [
         ...POST_BOOTSTRAP_SELECT_ONLY_TABLES,
         ...POST_BOOTSTRAP_APPEND_ONLY_TABLES,
+        ...POST_BOOTSTRAP_INSERT_ONLY_TABLES,
         ...POST_BOOTSTRAP_SCOPED_HANDOFF_TABLES,
         ...POST_BOOTSTRAP_MUTABLE_PROJECTION_TABLES,
         ...POST_BOOTSTRAP_DENY_STELLA_TABLES,

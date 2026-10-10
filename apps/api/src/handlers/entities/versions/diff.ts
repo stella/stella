@@ -1,12 +1,17 @@
 import { Result } from "better-result";
 
 import { loadEntityVersionDiffSources } from "@/api/handlers/entities/version-diff-sources";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { buildLineDiffSegments } from "@/api/lib/text-diff";
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Returns a parsed version comparison rather than stored-file bytes.",
+  },
   description:
     "Return a plain-text, line-level diff of one document version's DOCX " +
     "against its immediate predecessor; the first version is diffed against " +
@@ -15,6 +20,7 @@ const config = {
     "documents.compare for a DOCX redline between versions you " +
     "choose.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "covered", by: "read_document" },
   access: "read",
   params: workspaceParams({

@@ -17,7 +17,7 @@ import {
   CZ_JUDGE_NAME_RE as SIGNATURE_RE,
   CZ_JUDGE_TITLE_RE as PREDSEDA_RE,
 } from "@stll/legal-ast/czech-document-roles";
-
+// parser-output-unchanged: imports the document AST from its package owner
 import type {
   Block,
   DocumentAst,
@@ -25,7 +25,8 @@ import type {
   Inline,
   ParagraphBlock,
   TableCell,
-} from "@/api/handlers/case-law/document-ast";
+} from "@stll/legal-ast/document-ast";
+
 import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";
 import { sanitizeUrl } from "@/api/lib/sanitize-url";
 
@@ -710,6 +711,44 @@ const shouldMerge = (prev: Block, next: Block): prev is ParagraphBlock => {
   return false;
 };
 
+const EMBEDDED_CASE_NUMBER_RE =
+  /(?<!\w)(?<caseNumber>\d+\s+\w+\s+\d+\/\d{4}\S*)/u;
+/** Capitals and spaces only, the way a caption prints its title lines. */
+const CAPTION_TITLE_RE = /^[\p{Lu}\s]+$/u;
+const MIN_CAPTION_TITLE_LETTERS = 5;
+
+type EmbeddedCaption = {
+  /** What precedes the case number: the court's name, or nothing. */
+  preamble: string;
+  caseNumber: string;
+  /** Everything after the case number. */
+  title: string;
+};
+
+/**
+ * A caption stored as one paragraph, cut at its case number. The parts
+ * together are the paragraph's text: nothing before, between or after them
+ * is dropped. A paragraph whose text after the case number is not all
+ * capitals is prose that cites a case, not a caption.
+ */
+const embeddedCaption = (text: string): EmbeddedCaption | null => {
+  const match = EMBEDDED_CASE_NUMBER_RE.exec(text);
+  const caseNumber = match?.groups?.["caseNumber"];
+  if (match === null || caseNumber === undefined) {
+    return null;
+  }
+  const title = text.slice(match.index + caseNumber.length).trim();
+  const letters = title.match(/\p{L}/gu)?.length ?? 0;
+  if (!CAPTION_TITLE_RE.test(title) || letters < MIN_CAPTION_TITLE_LETTERS) {
+    return null;
+  }
+  return {
+    preamble: text.slice(0, match.index).trim(),
+    caseNumber,
+    title,
+  };
+};
+
 const mergeBlocks = (
   rawBlocks: Block[],
   makeBlockId: () => string,
@@ -757,9 +796,11 @@ const mergeBlocks = (
   }
 
   // Split the first paragraph if it contains an embedded
-  // decision title (older HTML: "NEJVYŠŠÍ SOUD ... 29 Odo
-  // 975/2006 U S N E S E N Í"). Extract the case number
-  // and title; drop the court preamble.
+  // caption (older HTML: "NEJVYŠŠÍ SOUD ČESKÉ REPUBLIKY 29 Odo
+  // 975/2006 U S N E S E N Í", "21 Cdo 4994/2007 ČESKÁ
+  // REPUBLIKA ROZSUDEK JMÉNEM REPUBLIKY"): the court preamble
+  // before the case number, the case number, and the capitals
+  // after it as the title. Every character stays in a block.
   const firstParaIdx = merged.findIndex((b) => b.type === "paragraph");
   if (firstParaIdx !== -1) {
     const firstPara = merged.at(firstParaIdx);
@@ -767,29 +808,31 @@ const mergeBlocks = (
       return merged;
     }
     if (firstPara.type === "paragraph") {
-      const text = firstPara.plainText;
-      // Check for embedded title
-      const titleMatch =
-        /(?<title>[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ]\s[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ\s]{5,})$/u.exec(
-          text,
-        );
-      const caseMatch = /(?<!\w)(?<caseNumber>\d+\s+\w+\s+\d+\/\d{4}\S*)/u.exec(
-        text,
-      );
+      const caption = embeddedCaption(firstPara.plainText);
 
-      if (titleMatch && caseMatch) {
-        // Replace the merged block with case-number + title
-        const caseNum = (caseMatch.groups?.["caseNumber"] ?? "").trim();
-        const title = (titleMatch.groups?.["title"] ?? "").trim();
-
+      if (caption !== null) {
+        // The court's name keeps the block it was stored in.
+        const preamble: Block[] =
+          caption.preamble === ""
+            ? []
+            : [
+                {
+                  id: firstPara.id,
+                  anchorId: firstPara.anchorId,
+                  type: "paragraph",
+                  inlines: [{ type: "text", text: caption.preamble }],
+                  plainText: caption.preamble,
+                },
+              ];
         const replacements: Block[] = [
+          ...preamble,
           {
             id: makeBlockId(),
             anchorId: `p-cn`,
             type: "paragraph",
             role: "case-number",
-            inlines: [{ type: "text", text: caseNum }],
-            plainText: caseNum,
+            inlines: [{ type: "text", text: caption.caseNumber }],
+            plainText: caption.caseNumber,
           },
           {
             id: makeBlockId(),
@@ -797,8 +840,8 @@ const mergeBlocks = (
             type: "heading",
             level: 1,
             role: "decision-title",
-            inlines: [{ type: "text", text: title }],
-            plainText: title,
+            inlines: [{ type: "text", text: caption.title }],
+            plainText: caption.title,
           },
         ];
         merged.splice(firstParaIdx, 1, ...replacements);

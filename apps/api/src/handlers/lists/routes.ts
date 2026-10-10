@@ -1,7 +1,5 @@
 import Elysia from "elysia";
 
-import { RESOURCE_TYPE } from "@stll/api-contract";
-
 import createColumn from "@/api/handlers/lists/columns/create";
 import createList from "@/api/handlers/lists/create";
 import acceptGenerationCandidate from "@/api/handlers/lists/generation-candidates/acceptance/create";
@@ -13,138 +11,80 @@ import readGenerations from "@/api/handlers/lists/generations/list";
 import readListById from "@/api/handlers/lists/get";
 import readItemActivity from "@/api/handlers/lists/items/activity/list";
 import createItemComment from "@/api/handlers/lists/items/comments/create";
-import updateFactDetails from "@/api/handlers/lists/items/fact-details/update";
 import readListItems from "@/api/handlers/lists/items/list";
 import reviewItem from "@/api/handlers/lists/items/reviews/update";
 import createItemSource from "@/api/handlers/lists/items/sources/create";
 import readItemSources from "@/api/handlers/lists/items/sources/list";
-import verifyItemSource from "@/api/handlers/lists/items/sources/verification/update";
 import updateItem from "@/api/handlers/lists/items/update";
 import readLists from "@/api/handlers/lists/list";
 import createSection from "@/api/handlers/lists/sections/create";
 import updateList from "@/api/handlers/lists/update";
-import createBulkClaimReviews from "@/api/handlers/lists/verifications/claim-reviews/bulk/create";
-import createClaimReview from "@/api/handlers/lists/verifications/claim-reviews/create";
-import createVerification from "@/api/handlers/lists/verifications/create";
-import readVerification from "@/api/handlers/lists/verifications/get";
-import readLatestVerifications from "@/api/handlers/lists/verifications/latest/list";
-import readVerifications from "@/api/handlers/lists/verifications/list";
+import { createListVerificationRoutes } from "@/api/handlers/lists/verification-routes";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
-import { legalListsDeployed } from "@/api/lib/lists/deployment";
-import {
-  resourceRealtime,
-  workspaceResourceSetUpdates,
-} from "@/api/lib/resource-realtime-macro";
-
-const legalListRealtimeUpdates = workspaceResourceSetUpdates(
-  RESOURCE_TYPE.LEGAL_LIST,
-);
 
 export const listsRoute = new Elysia({ prefix: "/lists/:workspaceId" })
-  .use(deploymentFeatureGate(legalListsDeployed))
+  .use(
+    deploymentFeatureGate(() =>
+      isDeploymentFeatureEnabled("FEATURE_LEGAL_LISTS"),
+    ),
+  )
   .use(workspaceAccessMacro)
-  .use(resourceRealtime)
   .use(permissionMacro)
   .guard({ validateWorkspaceAccess: true })
+  .use(createListVerificationRoutes())
   .get("/", readLists.handler, {
     permissions: readLists.config.permissions,
     query: readLists.config.query,
   })
   .put("/", createList.handler, {
     body: createList.config.body,
-    resourceSetUpdated: legalListRealtimeUpdates,
     permissions: createList.config.permissions,
   })
   .patch("/", updateList.handler, {
     body: updateList.config.body,
-    resourceSetUpdated: legalListRealtimeUpdates,
     permissions: updateList.config.permissions,
   })
   .post("/sections", createSection.handler, {
     body: createSection.config.body,
-    resourceSetUpdated: legalListRealtimeUpdates,
     permissions: createSection.config.permissions,
   })
   .post("/columns", createColumn.handler, {
     body: createColumn.config.body,
-    resourceSetUpdated: legalListRealtimeUpdates,
     permissions: createColumn.config.permissions,
   })
   .post("/generations", createGeneration.handler, {
     body: createGeneration.config.body,
-    resourceSetUpdated: legalListRealtimeUpdates,
     permissions: createGeneration.config.permissions,
   })
   .post("/generation-candidates", submitGenerationCandidates.handler, {
     body: submitGenerationCandidates.config.body,
-    resourceSetUpdated: legalListRealtimeUpdates,
     permissions: submitGenerationCandidates.config.permissions,
   })
   .post("/generation-candidates/accept", acceptGenerationCandidate.handler, {
     body: acceptGenerationCandidate.config.body,
-    resourceSetUpdated: legalListRealtimeUpdates,
     permissions: acceptGenerationCandidate.config.permissions,
   })
   .post("/generation-candidates/reject", rejectGenerationCandidate.handler, {
     body: rejectGenerationCandidate.config.body,
-    resourceSetUpdated: legalListRealtimeUpdates,
     permissions: rejectGenerationCandidate.config.permissions,
   })
   .post("/item-sources", createItemSource.handler, {
     body: createItemSource.config.body,
-    resourceSetUpdated: legalListRealtimeUpdates,
     permissions: createItemSource.config.permissions,
   })
   .post("/item-comments", createItemComment.handler, {
     body: createItemComment.config.body,
-    resourceSetUpdated: legalListRealtimeUpdates,
     permissions: createItemComment.config.permissions,
   })
   .post("/item-reviews", reviewItem.handler, {
     body: reviewItem.config.body,
-    resourceSetUpdated: legalListRealtimeUpdates,
     permissions: reviewItem.config.permissions,
-  })
-  .patch("/item-sources", verifyItemSource.handler, {
-    body: verifyItemSource.config.body,
-    resourceSetUpdated: legalListRealtimeUpdates,
-    permissions: verifyItemSource.config.permissions,
   })
   .patch("/items", updateItem.handler, {
     body: updateItem.config.body,
-    resourceSetUpdated: legalListRealtimeUpdates,
     permissions: updateItem.config.permissions,
-  })
-  .put("/item-fact-details", updateFactDetails.handler, {
-    body: updateFactDetails.config.body,
-    resourceSetUpdated: legalListRealtimeUpdates,
-    permissions: updateFactDetails.config.permissions,
-  })
-  .post("/claim-reviews", createClaimReview.handler, {
-    body: createClaimReview.config.body,
-    permissions: createClaimReview.config.permissions,
-  })
-  .post("/claim-reviews/bulk", createBulkClaimReviews.handler, {
-    body: createBulkClaimReviews.config.body,
-    permissions: createBulkClaimReviews.config.permissions,
-  })
-  .post("/verifications", createVerification.handler, {
-    body: createVerification.config.body,
-    permissions: createVerification.config.permissions,
-  })
-  .post("/verifications/latest", readLatestVerifications.handler, {
-    body: readLatestVerifications.config.body,
-    permissions: readLatestVerifications.config.permissions,
-  })
-  .get("/verifications", readVerifications.handler, {
-    params: readVerifications.config.params,
-    permissions: readVerifications.config.permissions,
-    query: readVerifications.config.query,
-  })
-  .get("/verifications/:runId", readVerification.handler, {
-    params: readVerification.config.params,
-    permissions: readVerification.config.permissions,
   })
   .get(
     "/:listId/generations/:runId/candidates",

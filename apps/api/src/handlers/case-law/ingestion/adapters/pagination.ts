@@ -1,4 +1,6 @@
-// parser-output-unchanged: listing-stage labels preserve the fetched response and parsed page.
+// parser-output-unchanged: completion batches use the shared owner with identical items and cursor boundaries; parsed content is unchanged.
+import { panic, Result } from "better-result";
+// parser-output-unchanged: Retry exhaustion holds the cursor; successful pages produce unchanged parsed decisions.
 /**
  * Shared pagination helpers for case-law adapters.
  *
@@ -7,9 +9,9 @@
  * pagination (CZ-constitutional enumeration, EU-ECJ
  * multi-language) should implement fetchPage directly.
  */
-
-import { panic, Result } from "better-result";
 import * as v from "valibot";
+
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
 import { ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
 import type {
@@ -17,12 +19,10 @@ import type {
   IngestionItem,
   IngestionResult,
   SyncPage,
+  UnreadListedItem,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
-import {
-  adapterCatch,
-  isTimeoutError,
-} from "@/api/handlers/case-law/ingestion/adapters/utils";
+import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
 import { logger } from "@/api/lib/observability/logger";
@@ -199,7 +199,8 @@ type PagePaginationOptions<TResponse> = PageWalkDeclaration & {
   /**
    * Transform a single raw item into a decision, or a supplement to one.
    * May perform secondary fetches (detail pages, fulltext).
-   * Return null to skip the item.
+   * Return null to skip the item, and `unread` for a listed item whose read
+   * did not produce it: the pipeline decides what that costs the page.
    */
   parseItem: (
     item: unknown,
@@ -207,6 +208,7 @@ type PagePaginationOptions<TResponse> = PageWalkDeclaration & {
   ) => Promise<
     | IngestionItem
     | { type: "item_build_failed"; decision: IngestionResult | null }
+    | { type: "unread"; item: UnreadListedItem }
     | null
   >;
   /**
@@ -610,6 +612,7 @@ const materialiseConfiguredWalks = ({
 type ParsedPageItems = {
   decisions: IngestionResult[];
   supplements: DecisionSupplement[];
+  unreadItems: UnreadListedItem[];
   itemsSkipped: number;
   processedThroughIndex: number;
 };
@@ -633,17 +636,19 @@ const parsePageItems = async ({
 }: ParsePageItemsOptions): Promise<ParsedPageItems> => {
   const decisions: IngestionResult[] = [];
   const supplements: DecisionSupplement[] = [];
+  const unreadItems: UnreadListedItem[] = [];
   let itemsSkipped = 0;
   let processedThroughIndex = 0;
   const chunkSize = Math.max(1, itemConcurrency ?? 1);
   // Complete chunks sequentially so an abort can rewind to the last durable
   // chunk boundary. Replaying that chunk is safe because inserts are
   // idempotent; advancing past an in-flight chunk would lose decisions.
-  for (let i = 0; i < items.length; i += chunkSize) {
+  for (const [batchIndex, chunk] of chunkItems(items, chunkSize).entries()) {
+    const i = batchIndex * chunkSize;
     if (signal?.aborted) {
       break;
     }
-    const chunk = items.slice(i, i + chunkSize);
+
     const results = await Promise.allSettled(
       chunk.map(async (item) => await parseItem(item, signal)),
     );
@@ -661,6 +666,9 @@ const parsePageItems = async ({
             break;
           case "supplement":
             supplements.push(item.supplement);
+            break;
+          case "unread":
+            unreadItems.push(item.item);
             break;
           case "item_build_failed":
             itemsSkipped++;
@@ -688,7 +696,13 @@ const parsePageItems = async ({
       total: items.length,
     });
   }
-  return { decisions, supplements, itemsSkipped, processedThroughIndex };
+  return {
+    decisions,
+    supplements,
+    unreadItems,
+    itemsSkipped,
+    processedThroughIndex,
+  };
 };
 
 const resolveNextCursor = ({
@@ -811,25 +825,6 @@ export const createPagePaginatedFetch = <TResponse>(
           if (signal?.aborted) {
             throw error;
           }
-          // Timeout after all retries: skip this page so the
-          // adapter doesn't stall on a single slow page.
-          // Network errors (DNS, connection refused) propagate
-          // so a transient outage doesn't permanently skip pages.
-          // A slow publisher is an expected operational failure, so no
-          // per-page exception capture (see the pipeline's halt path):
-          // the skip is logged, and the coverage ledger records the
-          // shortfall the skipped page leaves behind.
-          if (isTimeoutError(error)) {
-            logger.warn("case_law.ingestion.page_skipped_timeout", {
-              adapterKey: opts.adapterKey,
-              page: String(page),
-              retries: String(SERVER_ERROR_RETRIES),
-            });
-            return Result.ok({
-              decisions: [],
-              nextCursor: encode(pageStartOffset + opts.pageSize),
-            });
-          }
           throw error;
         }
 
@@ -950,8 +945,13 @@ export const createPagePaginatedFetch = <TResponse>(
           parseItem: opts.parseItem,
           signal,
         });
-        const { decisions, supplements, itemsSkipped, processedThroughIndex } =
-          parsedItems;
+        const {
+          decisions,
+          supplements,
+          unreadItems,
+          itemsSkipped,
+          processedThroughIndex,
+        } = parsedItems;
 
         const totalMs = Math.round(performance.now() - fetchT0);
         logger.info("case_law.ingestion.page_completed", {
@@ -1039,6 +1039,7 @@ export const createPagePaginatedFetch = <TResponse>(
                 },
               }),
           ...(supplements.length === 0 ? {} : { supplements }),
+          ...(unreadItems.length === 0 ? {} : { unreadItems }),
           nextCursor,
           sourceUrl: url,
         });

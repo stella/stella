@@ -1,27 +1,3 @@
-/**
- * Build the morphological expansion dictionary for one language.
- *
- * Query-time expansion is a Map lookup, never a stem: query text arrives
- * folded and decomposed in whatever combination a keyboard produced, and the
- * suffix tables are written over accented, precomposed characters. So the
- * stemming happens here, once, over the accented corpus vocabulary, and the
- * request path only reads what this produced.
- *
- * The vocabulary comes from `ts_stat` over `to_tsvector('simple', ...)` of the
- * decisions' searchable text — deliberately not the stored `tsv` column,
- * which is unaccent-folded and would hand the stemmer exactly the input it
- * mis-stems. Documents are read in keyset chunks with their own statement
- * timeout, sequentially, so this stays safe to run against a live instance.
- *
- * Buckets are formed by stem, singletons dropped (a bucket of one expands to
- * nothing), and each bucket capped at its most frequent surface forms. The
- * payload is content-addressed; a small pointer object names the current hash
- * so a rebuild is one small write and a rollback is the previous hash.
- *
- *   bun run src/scripts/build-expansion-dictionary.ts --language cs
- *   bun run src/scripts/build-expansion-dictionary.ts --language pl \
- *     --out expansion-pl.tsv
- */
 import { sql } from "drizzle-orm";
 
 import { setSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
@@ -46,6 +22,32 @@ import {
 } from "@/api/lib/legal-search/morphology/stem";
 import { putCorpusS3ObjectWithSignal, refreshCorpusS3 } from "@/api/lib/s3";
 import { isRecord } from "@/api/lib/type-guards";
+
+/**
+ * Build the morphological expansion dictionary for one language.
+ *
+ * Query-time expansion is a Map lookup, never a stem: query text arrives
+ * folded and decomposed in whatever combination a keyboard produced, and the
+ * suffix tables are written over accented, precomposed characters. So the
+ * stemming happens here, once, over the accented corpus vocabulary, and the
+ * request path only reads what this produced.
+ *
+ * The vocabulary comes from `ts_stat` over `to_tsvector('simple', ...)` of the
+ * decisions' searchable text — deliberately not the stored `tsv` column,
+ * which is unaccent-folded and would hand the stemmer exactly the input it
+ * mis-stems. Documents are read in keyset chunks with their own statement
+ * timeout, sequentially, so this stays safe to run against a live instance.
+ *
+ * Buckets are formed by stem, singletons dropped (a bucket of one expands to
+ * nothing), and each bucket capped at its most frequent surface forms. The
+ * payload is content-addressed; a small pointer object names the current hash
+ * so a rebuild is one small write and a rollback is the previous hash.
+ *
+ *   bun run src/scripts/build-expansion-dictionary.ts --language cs
+ *   bun run src/scripts/build-expansion-dictionary.ts --language pl \
+ *     --out expansion-pl.tsv
+ */
+import { hashArtifactBytes } from "./artifact-content-hash";
 
 const DEFAULT_CHUNK_SIZE = 1000;
 /** Per-chunk ceiling. A measured chunk costs ~2s; this is the stall bound. */
@@ -415,24 +417,22 @@ if (outPath !== undefined) {
 
 // Addressed by the dictionary's own bytes, not by the compressed frame, so
 // the same corpus republishes to the same key whatever the encoder does.
-const hasher = new Bun.CryptoHasher("sha256");
-hasher.update(payload);
-const contentHash = hasher.digest("hex");
+const contentHash = hashArtifactBytes(payload);
 const compressed = zstdCompress(payload);
 
 await refreshCorpusS3();
-await putCorpusS3ObjectWithSignal(
-  morphologyDictionaryKey(language, contentHash),
-  compressed,
-  "application/zstd",
-  AbortSignal.timeout(UPLOAD_TIMEOUT_MS),
-);
-await putCorpusS3ObjectWithSignal(
-  morphologyDictionaryPointerKey(language),
-  new TextEncoder().encode(contentHash),
-  "text/plain",
-  AbortSignal.timeout(UPLOAD_TIMEOUT_MS),
-);
+await putCorpusS3ObjectWithSignal({
+  key: morphologyDictionaryKey(language, contentHash),
+  bytes: compressed,
+  mimeType: "application/zstd",
+  signal: AbortSignal.timeout(UPLOAD_TIMEOUT_MS),
+});
+await putCorpusS3ObjectWithSignal({
+  key: morphologyDictionaryPointerKey(language),
+  bytes: new TextEncoder().encode(contentHash),
+  mimeType: "text/plain",
+  signal: AbortSignal.timeout(UPLOAD_TIMEOUT_MS),
+});
 
 console.log(
   `Published ${buckets.length} buckets (${compressed.length} compressed bytes) at ${contentHash}.`,

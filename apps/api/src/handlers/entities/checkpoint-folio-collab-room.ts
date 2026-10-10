@@ -1,8 +1,8 @@
 import { Result, UnhandledException } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
-import type { Static } from "elysia";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import {
@@ -10,10 +10,9 @@ import {
   bufferObjectCleanupIntents,
   folioCollabRooms,
 } from "@/api/db/schema";
-import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -26,6 +25,7 @@ import {
   settleObjectCleanupIntentsAfterWriter,
 } from "@/api/lib/buffer-intent-reconciliation";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import {
   presignDocxDownloadFromFileId,
   readVersionDocxTarget,
@@ -51,8 +51,15 @@ import {
   S3_OBJECT_WRITE_CERTAINTY,
   writeS3ObjectWithRetry,
 } from "@/api/lib/s3";
-import type { S3ObjectWriteCertainty } from "@/api/lib/s3";
+import type {
+  S3ObjectWriteOwnership,
+  S3ObjectWriteCertainty,
+} from "@/api/lib/s3";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
+
+export const hashFolioCollabCheckpoint = (
+  checkpointBytes: Uint8Array,
+): string => hashSha256Hex(checkpointBytes);
 
 const CHECKPOINT_CLEANUP_GRACE_MS = 60_000;
 
@@ -61,10 +68,6 @@ const checkpointFolioCollabRoomBodySchema = t.Object({
   expectedSnapshotRevision: t.Integer({ minimum: 0 }),
   roomId: tSafeId("folioCollabRoom"),
 });
-
-type CheckpointFolioCollabRoomBody = Static<
-  typeof checkpointFolioCollabRoomBodySchema
->;
 
 type FolioCollabSnapshotCut = {
   baseVersionId: SafeId<"entityVersion">;
@@ -97,7 +100,9 @@ export const writeFolioCollabCheckpointObject = async ({
   checkpointKey,
   fileUsageDb,
   organizationId,
+  ownership,
 }: {
+  ownership: S3ObjectWriteOwnership;
   checkpointBytes: Uint8Array;
   checkpointKey: string;
   fileUsageDb?: Parameters<typeof writeOrganizationFile>[0]["db"];
@@ -108,14 +113,17 @@ export const writeFolioCollabCheckpointObject = async ({
     HandlerError<409 | 413 | 503> | UnhandledException
   >
 > =>
-  !env.FEATURE_FILE_USAGE_LIMITS
+  !isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")
     ? await Result.tryPromise({
         try: async () =>
-          await writeS3ObjectWithRetry({
-            contentType: DOCX_MIME_TYPE,
-            data: checkpointBytes,
-            key: checkpointKey,
-          }),
+          await writeS3ObjectWithRetry(
+            {
+              contentType: DOCX_MIME_TYPE,
+              data: checkpointBytes,
+              key: checkpointKey,
+            },
+            ownership,
+          ),
         catch: (cause) => new UnhandledException({ cause }),
       })
     : Result.mapError(
@@ -123,12 +131,16 @@ export const writeFolioCollabCheckpointObject = async ({
           organizationId,
           objectKey: checkpointKey,
           sizeBytes: checkpointBytes.byteLength,
-          write: async () =>
-            await writeS3ObjectWithRetry({
-              contentType: DOCX_MIME_TYPE,
-              data: checkpointBytes,
-              key: checkpointKey,
-            }),
+          content: checkpointBytes,
+          write: async ({ content, objectKey }) =>
+            await writeS3ObjectWithRetry(
+              {
+                contentType: DOCX_MIME_TYPE,
+                data: content,
+                key: objectKey,
+              },
+              ownership,
+            ),
           ...(fileUsageDb ? { db: fileUsageDb } : {}),
         }),
         organizationFileUsageHandlerError,
@@ -136,8 +148,13 @@ export const writeFolioCollabCheckpointObject = async ({
 
 const checkpointFolioCollabRoom = createSafeHandler(
   {
+    contentDelivery: {
+      type: "none",
+      reason: "Processes collaboration content without returning stored files.",
+    },
     body: checkpointFolioCollabRoomBodySchema,
     permissions: { entity: ["update"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "session_token_exchange" },
   } satisfies WorkspaceHandlerConfig,
   async function* ({
@@ -314,9 +331,7 @@ const checkpointFolioCollabRoom = createSafeHandler(
             .map(({ message }) => message)
         : null;
     const checkpointBytes = new Uint8Array(materialized);
-    const sha256Hex = new Bun.CryptoHasher("sha256")
-      .update(checkpointBytes)
-      .digest("hex");
+    const sha256Hex = hashFolioCollabCheckpoint(checkpointBytes);
     const nextFileId = createSafeId<"userFile">();
     const checkpointKey = createFileKey({
       fileId: nextFileId,
@@ -364,6 +379,7 @@ const checkpointFolioCollabRoom = createSafeHandler(
       }
     };
     const written = await writeFolioCollabCheckpointObject({
+      ownership: { type: "cleanup-intent", intent: cleanupIntentId },
       checkpointBytes,
       checkpointKey,
       organizationId: session.activeOrganizationId,
@@ -495,4 +511,3 @@ const checkpointFolioCollabRoom = createSafeHandler(
 );
 
 export default checkpointFolioCollabRoom;
-export type { CheckpointFolioCollabRoomBody };

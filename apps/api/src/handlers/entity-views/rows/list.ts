@@ -10,7 +10,7 @@ import {
   inboxEntityCondition,
   inboxSignalCondition,
 } from "@/api/handlers/entity-views/rows/inbox-view";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -48,6 +48,7 @@ const config = {
     "by the same sorts under one cursor, and limits tasks to the view's " +
     "lifecycle slice. Task rows carry their governed-work risk as of `asOf`.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "covered", by: "read_content_across_matters" },
   access: "read",
   body: t.Object({
@@ -61,7 +62,7 @@ const config = {
       t.String({
         format: "date",
         description:
-          "The caller's calendar day (YYYY-MM-DD) for work risk; defaults to the server's UTC day",
+          "The caller's calendar day (YYYY-MM-DD) for work risk; defaults to the organization's day in its time zone",
       }),
     ),
     group: t.Optional(
@@ -132,6 +133,9 @@ const listRows = createSafeRootHandler(
       body.limit ?? LIMITS.entitiesWindowSizeDefault,
     );
     const organizationId = session.activeOrganizationId;
+    const asOf = yield* Result.await(
+      resolveWorkAsOf({ asOf: body.asOf, safeDb, organizationId }),
+    );
     // One instant for the window and the signal hydration, so a snooze that
     // lapses between the two reads cannot drop a row from the page.
     const now = new Date();
@@ -201,7 +205,7 @@ const listRows = createSafeRootHandler(
             safeDb,
             scope,
             entityIds: pageTaskIds,
-            asOf: resolveWorkAsOf(body.asOf),
+            asOf,
           }),
     ]);
     const signalRows = yield* signalRowsResult;

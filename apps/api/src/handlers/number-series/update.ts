@@ -1,12 +1,12 @@
 import { panic, Result } from "better-result";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, ne, sql } from "drizzle-orm";
 
 import { numberSeries, numberSeriesCounters } from "@/api/db/schema";
 import {
   numberSeriesParams,
   updateNumberSeriesBody,
 } from "@/api/handlers/number-series/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import {
@@ -27,6 +27,8 @@ const config = {
   description:
     "Update an active number series. Pattern and padding lock after first allocation.",
   permissions: { organizationSettings: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.standard,
+  featureAccess: { featureId: "time-billing", type: "required" },
   mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   params: numberSeriesParams,
   body: updateNumberSeriesBody,
@@ -38,11 +40,27 @@ export default createSafeRootHandler(
     const updates = pickDefined(body, EDITABLE_FIELDS);
     const result = yield* Result.await(
       safeDb(async (tx) => {
+        const target = await tx.query.numberSeries.findFirst({
+          columns: { documentType: true },
+          where: {
+            id: { eq: params.numberSeriesId },
+            organizationId: { eq: session.activeOrganizationId },
+            archivedAt: { isNull: true },
+          },
+        });
+        if (!target) {
+          return { status: "not_found" } as const;
+        }
+        await tx.execute(
+          sql`SELECT pg_advisory_xact_lock(hashtextextended(${`${session.activeOrganizationId}:number-series:${target.documentType}`}, 0))`,
+        );
         const rows = await tx
           .select({
             id: numberSeries.id,
             pattern: numberSeries.pattern,
             padding: numberSeries.padding,
+            sellerProfileId: numberSeries.sellerProfileId,
+            isDefault: numberSeries.isDefault,
           })
           .from(numberSeries)
           .where(
@@ -68,6 +86,31 @@ export default createSafeRootHandler(
           });
           if (!profile) {
             return { status: "profile_not_found" } as const;
+          }
+        }
+        if (
+          current.isDefault &&
+          body.sellerProfileId !== undefined &&
+          body.sellerProfileId !== current.sellerProfileId
+        ) {
+          const conflicting = await tx
+            .select({ id: numberSeries.id })
+            .from(numberSeries)
+            .where(
+              and(
+                eq(numberSeries.organizationId, session.activeOrganizationId),
+                eq(numberSeries.documentType, target.documentType),
+                eq(numberSeries.isDefault, true),
+                isNull(numberSeries.archivedAt),
+                ne(numberSeries.id, current.id),
+                body.sellerProfileId === null
+                  ? isNull(numberSeries.sellerProfileId)
+                  : eq(numberSeries.sellerProfileId, body.sellerProfileId),
+              ),
+            )
+            .limit(1);
+          if (conflicting.length > 0) {
+            return { status: "scope_conflict" } as const;
           }
         }
         const pattern = body.pattern ?? current.pattern;
@@ -146,6 +189,14 @@ export default createSafeRootHandler(
       case "invalid":
         return Result.err(
           new HandlerError({ status: 400, message: result.message }),
+        );
+      case "scope_conflict":
+        return Result.err(
+          new HandlerError({
+            status: 409,
+            message:
+              "A default number series already exists for this seller scope",
+          }),
         );
       case "allocated":
         return Result.err(

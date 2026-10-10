@@ -8,8 +8,17 @@ import listNumberSeries from "@/api/handlers/number-series/list";
 import previewNumberSeries from "@/api/handlers/number-series/preview";
 import updateNumberSeries from "@/api/handlers/number-series/update";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
+import { featureAccessGate } from "@/api/lib/auth/feature-access/route";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 
 export const numberSeriesRoute = new Elysia({ prefix: "/number-series" })
+  .use(
+    deploymentFeatureGate(() =>
+      isDeploymentFeatureEnabled("FEATURE_TIME_BILLING"),
+    ),
+  )
+  .use(featureAccessGate("time-billing"))
   .use(authMacro)
   .use(permissionMacro)
   .guard({ validateAuth: true })

@@ -24,6 +24,7 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import { errorSystemFields, errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
+import { DueSlot } from "@/api/lib/scheduler/due-slot";
 import { computeNextRunAt } from "@/api/lib/scheduler/schedule";
 import type {
   SchedulerDb,
@@ -643,6 +644,7 @@ export const runJob = async ({
       Promise.resolve(
         task({
           db,
+          dueAt: DueSlot.of(job),
           job,
           logger,
           payload: job.payload,

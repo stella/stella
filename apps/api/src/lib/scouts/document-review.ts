@@ -12,8 +12,8 @@ import {
   documentReviewRuns,
   entities,
 } from "@/api/db/schema";
-import { env } from "@/api/env";
 import type { SafeId } from "@/api/lib/branded-types";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { DOCUMENT_REVIEW_FINDINGS_PER_RUN_MAX } from "@/api/lib/document-review/run-contract";
 import {
   REVIEW_FINDINGS_SHOWN_MAX,
@@ -23,7 +23,6 @@ import {
   reviewVerdict,
   toReviewSignalFindings,
 } from "@/api/lib/scouts/document-review.logic";
-import { documentScoutsEnabled } from "@/api/lib/scouts/document-scout-config";
 import { emitSignals } from "@/api/lib/signals/emit";
 
 export type EmitDocumentReviewSignalArgs = {
@@ -37,7 +36,7 @@ export type EmitDocumentReviewSignalArgs = {
  * playbook findings are not all compliant. Runs inside the finalize
  * transaction: the run and its inbox card commit together.
  */
-export const emitDocumentReviewSignal = async ({
+const emitDocumentReviewSignal = async ({
   tx,
   workspaceId,
   runId,
@@ -137,7 +136,7 @@ export const emitDocumentReviewSignal = async ({
 export const maybeEmitDocumentReviewSignal = async (
   args: EmitDocumentReviewSignalArgs,
 ): Promise<void> => {
-  if (!documentScoutsEnabled(env.FEATURE_INBOX_DOCUMENT_SCOUTS)) {
+  if (!isDeploymentFeatureEnabled("FEATURE_INBOX_DOCUMENT_SCOUTS")) {
     return;
   }
   await emitDocumentReviewSignal(args);

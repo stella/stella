@@ -1,5 +1,6 @@
 import { useOptimistic, useRef, useState, useTransition } from "react";
 
+import { useSelector } from "@tanstack/react-form";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
@@ -10,6 +11,7 @@ import {
   EyeOffIcon,
   LockIcon,
   PencilLineIcon,
+  PlayIcon,
   RefreshCwIcon,
 } from "@stll/ui/icons";
 import { Popover, PopoverPopup } from "@stll/ui/popover";
@@ -17,6 +19,12 @@ import { Separator } from "@stll/ui/separator";
 import { stellaToast } from "@stll/ui/toast";
 import { useLatest } from "@stll/ui/use-latest";
 
+import { propertyAiCellState } from "@/components/workspaces/ai-cell-state.logic";
+import { AiColumnRunButton } from "@/components/workspaces/ai-column-run-controls";
+import {
+  aiColumnRunMenu,
+  aiColumnRunScope,
+} from "@/components/workspaces/ai-column-run.logic";
 import { CreateProperty } from "@/components/workspaces/create-property";
 import { useStartWorkflow } from "@/components/workspaces/hooks/use-start-workflow";
 import { DeleteProperty } from "@/components/workspaces/properties/delete-property";
@@ -32,6 +40,7 @@ import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 import { type SafeId, toSafeId } from "@/lib/safe-id";
 import type {
   ConditionNode,
@@ -42,6 +51,11 @@ import { useUpdateProperty } from "@/lib/workspaces/mutations/properties";
 import { isPlaybookVerdictProperty } from "@/lib/workspaces/playbook-verdicts";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import { useGroupScope } from "@/routes/_protected.workspaces/$workspaceId/-components/table/group-scope";
+
+import {
+  canEditPropertyViaComposer,
+  getPropertyRunTargetIds,
+} from "./property-popover.logic";
 
 type PropertyPopoverProps = {
   property: WorkspaceProperty;
@@ -79,6 +93,53 @@ export const PropertyPopover = ({
   const updateProperty = useUpdateProperty();
   const startWorkflow = useStartWorkflow(workspaceId);
   const queryClient = useQueryClient();
+  const table = header.getContext().table;
+  const rowSelection = useSelector(table.store, (state) => state.rowSelection);
+  const tableRows = table.getRowModel().flatRows;
+  const pageRowIds = tableRows
+    .filter((row) => row.original.kind !== "folder")
+    .map((row) => row.original.entityId);
+  const availablePageRowIds = getPropertyRunTargetIds({
+    action: "available",
+    propertyId: id,
+    rows: tableRows,
+  });
+  const availablePageRowIdSet = new Set(availablePageRowIds);
+  const pageRows = tableRows.filter((row) =>
+    availablePageRowIdSet.has(row.original.entityId),
+  );
+  const pageStates = pageRows.map((row) =>
+    propertyAiCellState(row.original.fields[id]?.content),
+  );
+  const runMenuItems = aiColumnRunMenu(pageStates);
+  const selectedRowIds = Object.keys(rowSelection);
+  const runScope = aiColumnRunScope({ pageRowIds, selectedRowIds });
+  const availableScopeRowIds = new Set(
+    getPropertyRunTargetIds({
+      action: "available",
+      propertyId: id,
+      rowIds: runScope.rowIds,
+      rows: tableRows,
+    }),
+  );
+  const hasNotRunScopeRows = tableRows.some(
+    (row) =>
+      availableScopeRowIds.has(row.original.entityId) &&
+      propertyAiCellState(row.original.fields[id]?.content).type === "not_run",
+  );
+  const scopedStates = tableRows
+    .filter((row) => availableScopeRowIds.has(row.original.entityId))
+    .map((row) => propertyAiCellState(row.original.fields[id]?.content));
+  const headerRunAction = aiColumnRunMenu(scopedStates).at(0);
+  const headerRunTargetIds =
+    headerRunAction === undefined
+      ? []
+      : getPropertyRunTargetIds({
+          action: headerRunAction.type,
+          propertyId: id,
+          rowIds: runScope.rowIds,
+          rows: tableRows,
+        });
 
   // `scoped` narrows the batch to the current grouped-view subtable (only
   // meaningful when a group scope is present); `set: false` removes the flag,
@@ -169,14 +230,12 @@ export const PropertyPopover = ({
     },
   });
 
-  // The composer's CreatableContentType union excludes "file" by
-  // design — file columns are created by upload, not by user choice,
-  // and the composer has no UI for them. Hiding the entry here keeps
-  // a save from silently rewriting the file column as text/manual.
-  // Verdict columns are system-computed (read-only), so they are not
-  // editable via the composer either.
-  const canEditViaComposer =
-    property.content.type !== "file" && !isPlaybookVerdictProperty(property);
+  // The composer supports custom content types; file and computed verdict
+  // columns retain their dedicated editing controls.
+  const canEditViaComposer = canEditPropertyViaComposer(
+    property.content,
+    isPlaybookVerdictProperty(property),
+  );
 
   // `useOptimistic` mirrors the server `dependencies` while a save is
   // in flight so rapid successive edits compose against the latest
@@ -239,9 +298,15 @@ export const PropertyPopover = ({
     });
   };
 
-  const rerunProperty = async () => {
+  const runPropertyRows = async (entityIds: readonly string[]) => {
+    if (entityIds.length === 0) {
+      return;
+    }
     setIsOpen(false);
-    const result = await startWorkflow({ propertyIds: [id] });
+    const result = await startWorkflow({
+      entityIds: [...entityIds],
+      propertyIds: [id],
+    });
     if (!result) {
       return;
     }
@@ -266,7 +331,7 @@ export const PropertyPopover = ({
         });
         return;
       case "ai-unavailable":
-        // Re-running a column is an explicit request, so say why nothing
+        // Running a column is an explicit request, so say why nothing
         // happened; the side-effect call sites stay quiet on this one.
         notifyUserError(undefined, t("errors.failedToStartWorkflow"));
         return;
@@ -283,11 +348,28 @@ export const PropertyPopover = ({
   return (
     <>
       <Popover modal onOpenChange={setIsOpen} open={isOpen}>
-        <PropertyPopoverTrigger
-          disabled={updateProperty.isPending}
-          name={name}
-          property={property}
-        />
+        <div className="flex min-w-0 items-center">
+          <span className="min-w-0 flex-1">
+            <PropertyPopoverTrigger
+              disabled={updateProperty.isPending}
+              name={name}
+              property={property}
+            />
+          </span>
+          {property.tool.type === "ai-model" && (
+            <AiColumnRunButton
+              scope={runScope}
+              hasNotRun={hasNotRunScopeRows}
+              disabled={headerRunTargetIds.length === 0}
+              onRun={() => {
+                detached(
+                  runPropertyRows(headerRunTargetIds),
+                  "property-popover.run-column-scope",
+                );
+              }}
+            />
+          )}
+        </div>
         <PopoverPopup
           align="start"
           className="min-w-64 overflow-clip"
@@ -340,22 +422,44 @@ export const PropertyPopover = ({
             </div>
             <Separator />
             <div className="flex flex-col p-1">
-              {property.tool.type === "ai-model" && (
-                <Button
-                  className="justify-start gap-1.5 font-normal"
-                  onClick={() => {
-                    detached(
-                      rerunProperty(),
-                      "property-popover.rerun-property",
-                    );
-                  }}
-                  size="sm"
-                  variant="ghost"
-                >
-                  <RefreshCwIcon />
-                  {t("workspaces.properties.rerunColumn")}
-                </Button>
-              )}
+              {property.tool.type === "ai-model" &&
+                runMenuItems.map(({ type: action, label }) => {
+                  const targetIds = getPropertyRunTargetIds({
+                    action,
+                    propertyId: id,
+                    rows: tableRows,
+                  });
+                  return (
+                    <CapabilityAction
+                      action={{ capability: "ai" }}
+                      surface="control"
+                      key={action}
+                    >
+                      {(capabilityProps) => (
+                        <Button
+                          className="justify-start gap-1.5 font-normal"
+                          disabled={targetIds.length === 0}
+                          onClick={() => {
+                            detached(
+                              runPropertyRows(targetIds),
+                              "property-popover.run-property-page",
+                            );
+                          }}
+                          size="sm"
+                          variant="ghost"
+                          {...capabilityProps}
+                        >
+                          {action === "remaining" ? (
+                            <PlayIcon />
+                          ) : (
+                            <RefreshCwIcon />
+                          )}
+                          {t(label)}
+                        </Button>
+                      )}
+                    </CapabilityAction>
+                  );
+                })}
               {groupScope && (
                 <Button
                   className="justify-start gap-1.5 font-normal"

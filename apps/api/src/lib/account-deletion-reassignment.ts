@@ -53,12 +53,7 @@ export const buildAccountDeletionTaskReassignmentTargets = ({
   for (const assignment of currentTaskAssignments) {
     const reassignedUserId = targetByEntityId.get(assignment.entityId);
     if (!reassignedUserId) {
-      throw new HandlerError({
-        code: "account_deletion_task_reassignment_invalid",
-        status: 400,
-        message:
-          "All active task assignments must be reassigned before deleting your account.",
-      });
+      continue;
     }
 
     if (reassignedUserId === currentUserId) {

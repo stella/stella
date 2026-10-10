@@ -1,7 +1,11 @@
 import { Result, TaggedError } from "better-result";
 
-import type { Block, DocumentAst } from "@/api/lib/case-law/document-ast";
-import { isDocumentAst } from "@/api/lib/case-law/document-ast";
+// parser-output-unchanged: imports the document AST from its package owner
+import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
+import { isDocumentAst } from "@stll/legal-ast/document-ast";
+// parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
+import { createSha256 } from "@stll/sha256/bun";
+
 import type { CitationOpinionScope } from "@/api/lib/legal-search/ingestion-types";
 import { sortDeep } from "@/api/lib/sort-deep";
 import { isRecord } from "@/api/lib/type-guards";
@@ -56,7 +60,7 @@ export type CitationScopeEnvelope = {
 
 /** Hash the JSON shape that both jsonb and the corpus payload actually keep. */
 export const citationScopeAstHash = (ast: DocumentAst): string =>
-  new Bun.CryptoHasher("sha256")
+  createSha256()
     .update(JSON.stringify(sortDeep(ast)))
     .digest("hex");
 

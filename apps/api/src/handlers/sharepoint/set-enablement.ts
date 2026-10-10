@@ -2,11 +2,12 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import { organizationSettings } from "@/api/db/schema";
-import { env } from "@/api/env";
+import { sharepointRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { disableAndPurgeSharepointForOrg } from "@/api/lib/sharepoint-disable-purge";
 
@@ -16,6 +17,8 @@ const requestBody = t.Object({
 
 const config = {
   permissions: { organizationSettings: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.accountControl,
+  realtime: sharepointRealtimeUpdates,
   mcp: { type: "internal", reason: "provider_secret" },
   body: requestBody,
 } satisfies HandlerConfig;
@@ -53,7 +56,7 @@ const setSharepointEnablement = createSafeRootHandler(
       return Result.ok({ enabled: false });
     }
 
-    if (!env.FEATURE_SHAREPOINT) {
+    if (!isDeploymentFeatureEnabled("FEATURE_SHAREPOINT")) {
       return Result.err(
         new HandlerError({ status: 404, message: "Not found" }),
       );

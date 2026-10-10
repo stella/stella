@@ -6,16 +6,18 @@ import { useTranslations } from "use-intl";
 
 import { isThirdPartyBoundaryRefusalError } from "@stll/anonymize-chat";
 import type { AIErrorKind } from "@stll/api-contract";
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { Button } from "@stll/ui/button";
 import {
+  ArrowUpIcon,
   ChevronRightIcon,
   ClockIcon,
   FileTextIcon,
-  Loader2Icon,
   PaperclipIcon,
   RotateCcwIcon,
   XIcon,
 } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 import { cn } from "@stll/ui/utils";
 
 import { ActionAdmissionOutcome } from "@/components/action-admission-outcome";
@@ -32,6 +34,7 @@ import {
   resolveChatActivityIndicatorState,
 } from "@/components/chat/chat-activity.logic";
 import { useChatApproval } from "@/components/chat/chat-approval-context";
+import { ChatAnswerDecisionProvider } from "@/components/chat/chat-decision-citation";
 import { ChatImageAttachment } from "@/components/chat/chat-image-attachment";
 import { ChatMessageActionsMenu } from "@/components/chat/chat-message-actions-menu";
 import {
@@ -50,8 +53,10 @@ import {
   EMPTY_RESTORATION_PAIRS,
   getFollowingAssistantRestorations,
   getMentionTagAttr,
+  sentinelIsAboveRoot,
   userMessageFallbackText,
 } from "@/components/chat/chat-thread-messages.logic";
+import { ChatTranscriptCopy } from "@/components/chat/chat-transcript-copy";
 import type {
   AskUserOutput,
   ChatAnonRestoration,
@@ -61,6 +66,7 @@ import type {
   ChatUIPart,
   ChatUITools,
   PersistedChatMessage,
+  RegisteredChatUIToolCallPart,
 } from "@/components/chat/chat-ui-tools";
 import {
   getAwaitedAssistantMessageId,
@@ -68,6 +74,7 @@ import {
   hasRunningToolCallInLatestAssistantMessage,
   isApprovalPart,
   isOpaquePersistedChatToolCallPart,
+  savedPlaybookId,
 } from "@/components/chat/chat-ui-tools";
 import {
   canForkAssistantMessage,
@@ -78,11 +85,13 @@ import { findCreateDocumentArtifactForMessage } from "@/components/chat/message-
 import { NeedsMatterCard } from "@/components/chat/needs-matter-card";
 import type { CreateDocumentDestination } from "@/components/chat/needs-matter-card";
 import { rehypeAnonSpans } from "@/components/chat/rehype-anon-spans";
+import { RequestSecretCard } from "@/components/chat/request-secret-card";
 import { SourceChips } from "@/components/chat/source-chips";
 import { SpawnSubagentsCard } from "@/components/chat/spawn-subagents-card";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { ToolApprovalCard } from "@/components/chat/tool-approval-card";
 import { ToolCallCard } from "@/components/chat/tool-call-card";
+import { uiResourceRenderer } from "@/components/chat/ui-resource-renderer";
 import { WebSearchSources } from "@/components/chat/web-search-sources";
 import { CopyActionButton } from "@/components/copy-action-button";
 import { ReferenceRenderScope } from "@/components/references/reference-chip";
@@ -100,8 +109,8 @@ import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { dedupeById } from "@/lib/dedupe-by-id";
 import { detached } from "@/lib/detached";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
+import { chatRefusal } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { sanitizeHref } from "@/lib/sanitize-href";
 import {
   getUserFileContentUrl,
   getUserFileThumbnailUrl,
@@ -129,12 +138,13 @@ export const ChatThreadMessages = ({
   onCreateDocumentResolve,
   onOpenCreateDocumentDraft,
   onOpenCreatedDocument,
+  onOpenPlaybook,
   showThinkingIndicator = false,
   showToolCallDetails,
   showToolCalls,
   stickyUserMessages = false,
   queuedMessages,
-  onRemoveQueuedMessage,
+  queuedMessageActions,
   streamdownComponents,
   threadRef,
   workspaceId,
@@ -209,7 +219,7 @@ export const ChatThreadMessages = ({
 
     const observer = new IntersectionObserver(
       (entries) => {
-        const entry = entries.at(0);
+        const entry = entries.at(-1);
         if (!entry?.isIntersecting) {
           return;
         }
@@ -271,9 +281,20 @@ export const ChatThreadMessages = ({
       key={message.id}
       data-chat-message-id={message.id}
     >
-      <MessageContent>
+      <MessageContent
+        className={cn(
+          message.parts.some(
+            (part) =>
+              part.type === "ui-resource" &&
+              uiResourceRenderer(part.resource.mimeType) === "generated-visual",
+          ) && "w-full",
+        )}
+      >
         {message.role === "assistant" ? (
-          <>
+          <ChatAnswerDecisionProvider
+            message={message}
+            isAwaitingUser={awaitedAssistantMessageId === message.id}
+          >
             <AssistantMessageParts
               activeFileName={activeFileName}
               activeOrganizationId={activeOrganizationId}
@@ -290,38 +311,46 @@ export const ChatThreadMessages = ({
               onCreateDocumentResolve={onCreateDocumentResolve}
               onOpenCreateDocumentDraft={onOpenCreateDocumentDraft}
               onOpenCreatedDocument={onOpenCreatedDocument}
+              onOpenPlaybook={onOpenPlaybook}
               shouldShowToolCalls={shouldShowToolCalls}
               streamdownComponents={streamdownComponents}
               workspaceId={workspaceId}
-            />
-            <SourceChips
-              activeOrganizationId={activeOrganizationId}
-              messageId={message.id}
-              parts={message.parts}
-              sourceDocuments={message.metadata?.sourceDocuments}
-              workspaceId={workspaceId}
-            />
-            <AssistantMessageActions
-              exportArtifact={findCreateDocumentArtifactForMessage(
-                messages,
-                index,
-              )}
-              canFork={canForkAssistantMessage({
-                isGenerating: generationActive,
-                messageId: message.id,
-                messages,
-              })}
-              canRetry={canRetryAssistantMessage({
-                isGenerating: generationActive,
-                messageId: message.id,
-                messages,
-              })}
-              contextMatterIds={branchSource?.contextMatterIds}
-              message={message}
-              onResend={onResend}
               threadRef={threadRef}
             />
-          </>
+            <div
+              className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1"
+              data-chat-answer-footer
+              data-chat-copy-exclude
+            >
+              <AssistantMessageActions
+                exportArtifact={findCreateDocumentArtifactForMessage(
+                  messages,
+                  index,
+                )}
+                canFork={canForkAssistantMessage({
+                  isGenerating: generationActive,
+                  messageId: message.id,
+                  messages,
+                })}
+                canRetry={canRetryAssistantMessage({
+                  isGenerating: generationActive,
+                  messageId: message.id,
+                  messages,
+                })}
+                contextMatterIds={branchSource?.contextMatterIds}
+                message={message}
+                onResend={onResend}
+                threadRef={threadRef}
+              />
+              <SourceChips
+                activeOrganizationId={activeOrganizationId}
+                messageId={message.id}
+                parts={message.parts}
+                sourceDocuments={message.metadata?.sourceDocuments}
+                workspaceId={workspaceId}
+              />
+            </div>
+          </ChatAnswerDecisionProvider>
         ) : (
           <>
             {(() => {
@@ -357,6 +386,7 @@ export const ChatThreadMessages = ({
     // Sent messages persist a same-matter mention without its matter; the
     // scope gives every reference chip below the thread's matter.
     <ReferenceRenderScope workspaceId={workspaceId}>
+      {scrollRef !== null && <ChatTranscriptCopy rootRef={scrollRef} />}
       {branchSource !== undefined && scrollRef !== null && (
         <ChatSelectionToolbar rootRef={scrollRef} source={branchSource} />
       )}
@@ -406,12 +436,12 @@ export const ChatThreadMessages = ({
       {showThinkingIndicator && generationActive && activityIndicatorState && (
         <ThinkingIndicator state={activityIndicatorState} />
       )}
-      {onRemoveQueuedMessage &&
+      {queuedMessageActions &&
         queuedMessages !== undefined &&
         queuedMessages.length > 0 && (
           <QueuedUserMessages
+            actions={queuedMessageActions}
             messages={queuedMessages}
-            onRemove={onRemoveQueuedMessage}
           />
         )}
     </ReferenceRenderScope>
@@ -514,14 +544,10 @@ const StickyUserTurn = ({
     }
     const observer = new IntersectionObserver(
       (entries) => {
-        const entry = entries.at(0);
-        if (!entry) {
-          return;
+        const stuck = sentinelIsAboveRoot(entries);
+        if (stuck !== undefined) {
+          setIsStuck(stuck);
         }
-        const rootTop = entry.rootBounds?.top ?? 0;
-        setIsStuck(
-          !entry.isIntersecting && entry.boundingClientRect.top <= rootTop,
-        );
       },
       { root, rootMargin: "0px", threshold: [0] },
     );
@@ -659,7 +685,7 @@ type LoadOlderSentinelProps = {
  * Top-of-list paging affordance. The `div` is the IntersectionObserver
  * target that auto-loads when scrolled near; the button is the manual,
  * keyboard-accessible fallback. While a page is in flight it shows a
- * spinner instead so the observer (re-armed only when idle) cannot
+ * loader instead so the observer (re-armed only when idle) cannot
  * stack requests.
  */
 const LoadOlderSentinel = ({
@@ -672,8 +698,12 @@ const LoadOlderSentinel = ({
   return (
     <div className="flex justify-center py-1" ref={ref}>
       {isLoadingOlder ? (
-        <span className="text-muted-foreground flex items-center gap-2 text-xs">
-          <Loader2Icon aria-hidden="true" className="size-3.5 animate-spin" />
+        <span
+          aria-busy="true"
+          className="text-muted-foreground flex items-center gap-2 text-xs"
+          role="status"
+        >
+          <Loader className="size-3.5" size="sm" variant="decorative" />
           {t("chat.loadingEarlierMessages")}
         </span>
       ) : (
@@ -954,6 +984,7 @@ export const ChatErrorMessage = ({
   const canSendWithoutAnonymization =
     onSendWithoutAnonymization !== undefined &&
     isThirdPartyBoundaryRefusalError(error);
+  const refusal = chatRefusal(error);
 
   if (actionAdmissionOutcome(error)) {
     return (
@@ -978,7 +1009,9 @@ export const ChatErrorMessage = ({
   return (
     <Message from="assistant">
       <MessageContent className="bg-destructive/10 border-destructive/20 text-destructive max-w-md rounded-lg border px-3 py-2">
-        <p className="text-sm">{t(chatErrorTranslationKey(error))}</p>
+        <p className="text-sm">
+          {refusal ? refusal.message : t(chatErrorTranslationKey(error))}
+        </p>
         <div className="flex flex-wrap gap-2">
           {canSendWithoutAnonymization && (
             <Button
@@ -1108,7 +1141,7 @@ const AssistantMessageActions = ({
   }
 
   return (
-    <div className="flex items-center gap-1">
+    <div className="flex shrink-0 items-center gap-1" data-chat-answer-actions>
       {text && (
         <CopyActionButton
           className="text-muted-foreground h-6 px-1.5"
@@ -1222,6 +1255,8 @@ type ChatThreadMessagesProps = {
     input: ChatUITools["create-document"]["input"],
   ) => Promise<void> | void;
   onOpenCreateDocumentDraft?: ((toolCallId: string) => void) | undefined;
+  /** Opens the thread's playbook pane on the playbook a save wrote. */
+  onOpenPlaybook?: ((playbookId: string) => void) | undefined;
   onOpenCreatedDocument: (
     output: Extract<
       ChatUITools["create-document"]["output"],
@@ -1244,7 +1279,9 @@ type ChatThreadMessagesProps = {
    * `useChatSession` dispatches them once the turn finishes.
    */
   queuedMessages?: readonly QueuedChatMessage[] | undefined;
-  onRemoveQueuedMessage?: ((id: string) => void) | undefined;
+  /** What the user can do with a queued message: cancel it, or send it now
+   *  (stops the running turn and sends it next). */
+  queuedMessageActions?: QueuedMessageActions | undefined;
   streamdownComponents: {
     a: (props: ComponentProps<"a">) => React.ReactNode;
     "stll-anon"?: (
@@ -1261,9 +1298,14 @@ type ChatResendOptions = {
   messageId?: string | undefined;
 };
 
+export type QueuedMessageActions = {
+  remove: (id: string) => void;
+  sendNow: (id: string) => void;
+};
+
 type QueuedUserMessagesProps = {
+  actions: QueuedMessageActions;
   messages: readonly QueuedChatMessage[];
-  onRemove: (id: string) => void;
 };
 
 /**
@@ -1271,10 +1313,7 @@ type QueuedUserMessagesProps = {
  * turn. Rendered below the live transcript as dimmed bubbles so the
  * user can see what is queued and cancel any of it before it sends.
  */
-const QueuedUserMessages = ({
-  messages,
-  onRemove,
-}: QueuedUserMessagesProps) => {
+const QueuedUserMessages = ({ actions, messages }: QueuedUserMessagesProps) => {
   const t = useTranslations();
   return (
     <div className="flex flex-col gap-2">
@@ -1306,9 +1345,19 @@ const QueuedUserMessages = ({
                 )}
               </MessageContent>
               <Button
+                aria-label={t("chat.sendQueuedMessageNow")}
+                className="mt-0.5 shrink-0"
+                onClick={() => actions.sendNow(queued.id)}
+                size="icon-xs"
+                title={t("chat.sendQueuedMessageNow")}
+                variant="ghost"
+              >
+                <ArrowUpIcon className="size-3.5" />
+              </Button>
+              <Button
                 aria-label={t("chat.cancelQueuedMessage")}
                 className="mt-0.5 shrink-0"
-                onClick={() => onRemove(queued.id)}
+                onClick={() => actions.remove(queued.id)}
                 size="icon-xs"
                 variant="ghost"
               >
@@ -1331,7 +1380,9 @@ type AssistantMessagePartsProps = Pick<
   | "onCreateDocumentResolve"
   | "onOpenCreateDocumentDraft"
   | "onOpenCreatedDocument"
+  | "onOpenPlaybook"
   | "streamdownComponents"
+  | "threadRef"
   | "workspaceId"
 > & {
   activeOrganizationId: string;
@@ -1351,6 +1402,16 @@ type AssistantPartRenderEntry =
       type: "standard";
       part: Exclude<ChatUIPart, RichChatPart>;
     };
+
+type RequestSecretToolCallPart = Extract<
+  RegisteredChatUIToolCallPart,
+  { name: "request_secret" }
+>;
+
+const isRequestSecretToolCallPart = (
+  part: ChatPart,
+): part is RequestSecretToolCallPart =>
+  part.type === "tool-call" && part.name === "request_secret";
 
 const richPartRenderIdentity = (part: RichChatPart): string => {
   if (part.type === "ui-resource") {
@@ -1507,7 +1568,27 @@ const toAssistantPartRenderGroups = (
  * and the resulting array identity churns, forcing Streamdown to
  * remount on every streaming text delta.
  */
+type OpenPlaybookActionArgs = {
+  part: Parameters<typeof savedPlaybookId>[0];
+  onOpenPlaybook: ((playbookId: string) => void) | undefined;
+  label: string;
+};
+
+/** The "Open playbook" action of a `save_playbook` card, when a pane can take it. */
+const openPlaybookAction = ({
+  part,
+  onOpenPlaybook,
+  label,
+}: OpenPlaybookActionArgs) => {
+  const playbookId = savedPlaybookId(part);
+  if (playbookId === null || onOpenPlaybook === undefined) {
+    return undefined;
+  }
+  return { label, onClick: () => onOpenPlaybook(playbookId) };
+};
+
 const AssistantMessageParts = ({
+  threadRef,
   activeFileName,
   activeOrganizationId,
   assistantTextDensity,
@@ -1521,10 +1602,12 @@ const AssistantMessageParts = ({
   onCreateDocumentResolve,
   onOpenCreateDocumentDraft,
   onOpenCreatedDocument,
+  onOpenPlaybook,
   shouldShowToolCalls,
   streamdownComponents,
   workspaceId,
 }: AssistantMessagePartsProps) => {
+  const label = useTranslations()("knowledge.playbooks.openInPane");
   const restorationPairs = collectAnonRestorations(message);
   const firstThinkingPartIndex = getFirstThinkingPartIndex(message.parts);
   const reasoningTokenCount = getReasoningTokenCount(message);
@@ -1538,6 +1621,8 @@ const AssistantMessageParts = ({
         <ChatRichMessagePart
           key={`${message.id}-${entry.key}`}
           part={entry.part}
+          organizationId={activeOrganizationId}
+          threadRef={threadRef}
         />
       );
     }
@@ -1623,6 +1708,16 @@ const AssistantMessageParts = ({
       );
     }
 
+    if (isRequestSecretToolCallPart(part)) {
+      return (
+        <RequestSecretCard
+          isAwaitingUser={isAwaitingUser}
+          key={part.id}
+          part={part}
+        />
+      );
+    }
+
     if (part.type === "tool-call" && part.name === "create-document") {
       return (
         <NeedsMatterCard
@@ -1659,27 +1754,22 @@ const AssistantMessageParts = ({
     }
 
     if (part.type === "tool-call" && part.name === "spawn_subagents") {
-      if (
-        isApprovalPart(part) &&
-        (part.state === "approval-requested" ||
-          part.state === "approval-responded")
-      ) {
-        return (
-          <ToolApprovalCard
-            isAwaitingUser={isAwaitingUser}
-            isTurnActive={isTurnActive}
-            key={part.id}
-            part={part}
-          />
-        );
-      }
-      return <SpawnSubagentsCard key={part.id} part={part} />;
+      return (
+        <SpawnSubagentsCard
+          key={part.id}
+          part={part}
+          streamdownComponents={streamdownComponents}
+        />
+      );
     }
 
     if (part.type === "tool-call") {
+      const action = openPlaybookAction({ part, onOpenPlaybook, label });
+
       if (isApprovalPart(part)) {
         return (
           <ToolApprovalCard
+            action={action}
             activeFileName={activeFileName}
             isAwaitingUser={isAwaitingUser}
             isTurnActive={isTurnActive}
@@ -1691,6 +1781,7 @@ const AssistantMessageParts = ({
 
       return (
         <ToolCallCard
+          action={action}
           activeOrganizationId={activeOrganizationId}
           key={part.id}
           part={part}

@@ -16,6 +16,11 @@ import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
  * listing half alone makes the identity held and the text unreachable at once.
  */
 
+import {
+  DECISION_TEXT_ABSENCE_METADATA_KEY,
+  parseDecisionTextAbsence,
+} from "@stll/api-contract/case-law-text-field";
+
 import type { SkApiItem } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
 import {
   buildSkCourtsDecision,
@@ -26,6 +31,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
 import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
+import { storeDecisionTextFields } from "@/api/lib/case-law/decision-text";
 import { toUtcDateString } from "@/api/lib/dates";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -499,6 +505,26 @@ describe("sk-courts buildDecision", () => {
     expect(built.decision.documentUrl).toBeUndefined();
   });
 
+  test("the crawl reports a record it cannot read as an unread item, which the reconciliation refuses", async () => {
+    mockJustice({ detail: { body: JSON.stringify({ ecli: 42 }) } });
+
+    const built = await buildSkCourtsDecision(BARDEJOV_ITEM);
+
+    expect(built.type).toBe("unread");
+    if (built.type !== "unread") {
+      return;
+    }
+    expect(built.item.outcome.type).toBe("unavailable");
+    expect(built.item.listing).toMatchObject({
+      sourceDocumentId: BARDEJOV_ITEM.guid,
+      isListingOnly: true,
+    });
+    expect(built.item.listing.documentUrl).toBeUndefined();
+    expect(await reconciliation.buildDecision(BARDEJOV_ITEM)).toEqual({
+      type: "detail-unavailable",
+    });
+  });
+
   test("a payload no current shape recognises is unkeyable", async () => {
     mockJustice({});
 
@@ -522,4 +548,56 @@ describe("sk-courts buildDecision", () => {
     // Nothing was asked of the publisher for any of these.
     expect(requestedUrls).toEqual([]);
   });
+});
+
+test("failed detail fetches remain retryable and never assert publisher URL absence", async () => {
+  // A stated absence keeps the listing-only decision; a failed read reports the
+  // item unread. Neither states that the publisher omitted the source URL.
+  for (const { detail, expected } of [
+    {
+      detail: { body: "Not found", status: 404 },
+      expected: "detail-unavailable",
+    },
+    { detail: { body: "Unavailable", status: 503 }, expected: "unread" },
+    { detail: { body: "{malformed-json" }, expected: "unread" },
+    { detail: { body: JSON.stringify({ ecli: 42 }) }, expected: "unread" },
+  ] as const) {
+    mockJustice({ detail });
+    const built = await buildSkCourtsDecision(GALANTA_ITEM);
+    expect(built.type).toBe(expected);
+    const decision = (() => {
+      switch (built.type) {
+        case "detail-unavailable":
+          return built.decision;
+        case "unread":
+          return built.item.listing;
+        case "built":
+        case "read-failed":
+        case "unkeyable":
+          throw new TypeError("Expected a retryable detail observation");
+        default:
+          built satisfies never;
+          throw new TypeError("Unhandled build result");
+      }
+    })();
+    expect(decision.metadata["sourceUrlStatus"] === "detail-unavailable").toBe(
+      true,
+    );
+    const stored = storeDecisionTextFields({
+      metadata: decision.metadata,
+      textFields: decision.textFields,
+    });
+    const absence = parseDecisionTextAbsence(
+      stored[DECISION_TEXT_ABSENCE_METADATA_KEY],
+    );
+    if (absence.type !== "valid") {
+      throw new TypeError("Expected valid sidecar");
+    }
+    expect(
+      absence.entries.find(({ field }) => field === "sourceUrl"),
+    ).toBeUndefined();
+    expect(await reconciliation.buildDecision(GALANTA_ITEM)).toEqual({
+      type: "detail-unavailable",
+    });
+  }
 });

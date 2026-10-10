@@ -5,22 +5,23 @@
  */
 
 import { Result, panic } from "better-result";
-import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
-import { legalListClaimReviewEvents, legalListClaims } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { legalListClaimReviewEvents } from "@/api/db/schema";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import {
   CLAIM_OVERRIDE_STATES,
   CLAIM_REVIEW_STATUSES,
   VERIFICATION_LIMITS,
 } from "@/api/lib/lists/verification/contract";
 import {
+  readClaimForReview,
   readClaimReviews,
   serializeClaimReview,
 } from "@/api/lib/lists/verification/read-run";
@@ -84,6 +85,7 @@ const bodySchema = t.Object({
 });
 
 const config = {
+  featureAccess: { featureId: LIST_VERIFICATION_FEATURE_ID, type: "required" },
   description:
     "Record one reviewer action on a claim of a list verification and return " +
     "the claim's review after it. `status` marks the claim reviewed or " +
@@ -94,6 +96,7 @@ const config = {
     "naming the governing fact or escalating it. Reopening and resolving a " +
     "conflict withdraw an earlier status and override.",
   permissions: { entity: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "document_processing",
@@ -128,25 +131,12 @@ const createClaimReview = createSafeHandler(
 
     const result = yield* Result.await(
       safeDb(async (tx) => {
-        // Locking the claim serializes reviewers on it, so the fold the event
-        // is validated against is the one it will be appended to.
-        const claim = (
-          await tx
-            .select({
-              state: legalListClaims.state,
-              recordConflict: legalListClaims.recordConflict,
-            })
-            .from(legalListClaims)
-            .where(
-              and(
-                eq(legalListClaims.id, claimId),
-                eq(legalListClaims.runId, runId),
-                eq(legalListClaims.workspaceId, workspaceId),
-              ),
-            )
-            .limit(1)
-            .for("update")
-        ).at(0);
+        const claim = await readClaimForReview({
+          tx,
+          workspaceId,
+          runId,
+          claimId,
+        });
         if (claim === undefined) {
           return { type: "not-found" } as const;
         }

@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 import * as v from "valibot";
 
-import { parsePlainDate, Temporal } from "@stll/time";
+import { parsePlainDate, Temporal, todayFor } from "@stll/time";
 
 import type { TranslationKey } from "@/i18n/types";
 import type { WebApiRoutes } from "@/lib/eden-client";
@@ -14,10 +14,20 @@ const TIME_POLICY_FIELDS = [
   "timeNarrativeRequired",
 ] as const satisfies readonly (keyof WebApiRoutes["organization-settings"]["post"]["body"])[];
 
+type OrganizationSettings =
+  WebApiRoutes["organization-settings"]["get"]["response"][200];
+
 export type TimePolicy = Pick<
-  WebApiRoutes["organization-settings"]["get"]["response"][200],
+  OrganizationSettings,
   (typeof TIME_POLICY_FIELDS)[number]
 >;
+
+/**
+ * The policy plus the organization's zone: a month is closable once it has
+ * ended on the organization's day, the day the server's lock check reads.
+ */
+export type TimePolicySettings = TimePolicy &
+  Pick<OrganizationSettings, "timeZone">;
 
 export const TIME_UNIT_OPTIONS = [1, 5, 6, 10, 15, 30, 60] as const;
 
@@ -103,11 +113,19 @@ type TimePolicyValidationMessages = {
   editWindow: string;
   lockedMonth: string;
 };
-export const timePolicyFormSchema = (
-  today: Temporal.PlainDate,
-  messages: TimePolicyValidationMessages,
-) =>
-  v.object({
+type TimePolicyFormSchemaOptions = {
+  /** The organization's zone: the server judges lock months on its day. */
+  timeZone: string;
+  messages: TimePolicyValidationMessages;
+  at?: Temporal.Instant;
+};
+export const timePolicyFormSchema = ({
+  timeZone,
+  messages,
+  at = Temporal.Now.instant(),
+}: TimePolicyFormSchemaOptions) => {
+  const today = todayFor(timeZone, at);
+  return v.object({
     timeMinimumUnitMinutes: v.pipe(
       v.number(),
       v.integer(messages.minimumUnit),
@@ -133,3 +151,4 @@ export const timePolicyFormSchema = (
     ),
     timeNarrativeRequired: v.boolean(),
   });
+};

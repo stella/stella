@@ -27,6 +27,7 @@ import {
   SCHEDULER_BACKFILL_CONFIG,
   SCHEDULER_BACKFILL_IDS,
 } from "@/api/lib/scheduler/backfill-config";
+import { DueSlot } from "@/api/lib/scheduler/due-slot";
 import { runJob } from "@/api/lib/scheduler/runner";
 import {
   BACKFILL_LEGISLATION_EXPRESSION_IDS_TASK,
@@ -86,6 +87,8 @@ export const registerExpressionBackfillCases = ({
       db: asTestRaw<SchedulerDb>(db),
       job,
       payload: job.payload,
+      dueAt: DueSlot.of(job),
+
       runId: createSafeId<"schedulerJobRun">(),
       scheduleContinuation: (at) => {
         continuationAt = at;

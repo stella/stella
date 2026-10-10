@@ -1,7 +1,12 @@
 import { panic } from "better-result";
 
+import {
+  type CaseLawJurisdiction,
+  isCaseLawJurisdiction,
+} from "@stll/api-contract/case-law-jurisdictions";
+
 import { arrayOrEmpty } from "@/api/lib/array";
-import { RANK } from "@/api/lib/case-law/court-ranks";
+import { type CourtRank, RANK } from "@/api/lib/case-law/court-ranks";
 import {
   compareCourtWeightPrecedence,
   flattenCourtWeightEntries,
@@ -21,79 +26,82 @@ import type {
  */
 
 export type CourtWeightSeedRow = {
-  country: string;
+  country: CaseLawJurisdiction;
   courtPattern: string;
-  tier: number;
-  tierLabel: string;
-  weight: number;
-};
+} & CourtRank;
+
+/** A seeded row inside its jurisdiction's entry, which supplies the country. */
+type CourtWeightSeedPattern = Omit<CourtWeightSeedRow, "country">;
 
 /**
- * The one United States row: the name rank the registry held before USA
- * decisions carried a court id, kept so the table keeps the key its seed
- * migration wrote. A USA decision ranks by its court id's directory tier
- * (`court-ranks.ts`), never through this row, and nothing reads a court id
- * from it; it is a fixed literal, not rendered from the directory.
+ * What a jurisdiction declares about ranking by court name. `ranked-by-name`
+ * seeds the rows its decisions rank by; `ranked-by-court-id` ranks by the
+ * court directory and keeps only rows an earlier seed migration wrote.
  */
-const US_LEGACY_NAME_ROW: CourtWeightSeedRow = {
-  country: "USA",
-  courtPattern: "^supreme court of the united states$",
-  ...RANK.supreme,
-};
+type CourtWeightSeedDisposition =
+  | { type: "ranked-by-name"; rows: readonly CourtWeightSeedPattern[] }
+  | {
+      type: "ranked-by-court-id";
+      legacyRows: readonly CourtWeightSeedPattern[];
+    };
 
-export const COURT_WEIGHT_SEED: readonly CourtWeightSeedRow[] = [
-  // Czech Republic
-  {
-    country: "CZE",
-    courtPattern: "ústavní soud",
-    ...RANK.constitutional,
-  },
-  {
-    country: "CZE",
-    courtPattern: "nejvyšší",
-    ...RANK.supreme,
-  },
-  {
-    country: "CZE",
-    courtPattern: "vrchní soud|krajský soud|městský soud",
-    ...RANK.regional,
+/**
+ * Every jurisdiction's court-name ranking decision. Total over
+ * `CaseLawJurisdiction`, so a jurisdiction cannot be registered without one.
+ * Entry order is the flat seed's order, which the seed migrations render.
+ */
+const COURT_WEIGHT_SEED_BY_JURISDICTION = {
+  CZE: {
+    type: "ranked-by-name",
+    rows: [
+      {
+        courtPattern: "ústavní soud",
+        ...RANK.constitutional,
+      },
+      {
+        courtPattern: "nejvyšší",
+        ...RANK.supreme,
+      },
+      {
+        courtPattern: "vrchní soud|krajský soud|městský soud",
+        ...RANK.regional,
+      },
+    ],
   },
   // Slovakia. PostgreSQL \s excludes NBSP; include it explicitly for parity
   // with JavaScript whitespace matching on publisher-stated court names.
-  {
-    country: "SVK",
-    courtPattern: "ústavný súd",
-    ...RANK.constitutional,
-  },
-  {
-    country: "SVK",
-    courtPattern: "najvyšší[\\s\u00a0]+súd",
-    ...RANK.supreme,
-  },
-  {
-    country: "SVK",
-    courtPattern: "najvyšší[\\s\u00a0]+správny[\\s\u00a0]+súd",
-    ...RANK.supreme,
-  },
-  {
-    country: "SVK",
-    courtPattern: "krajský súd",
-    ...RANK.regional,
-  },
-  {
-    country: "SVK",
-    courtPattern: "okresný súd|mestský súd",
-    ...RANK.district,
-  },
-  {
-    country: "SVK",
-    courtPattern: "špecializovaný trestný súd|špeciálny súd",
-    ...RANK.special,
-  },
-  {
-    country: "SVK",
-    courtPattern: "^správny súd",
-    ...RANK.administrative,
+  SVK: {
+    type: "ranked-by-name",
+    rows: [
+      {
+        courtPattern: "ústavný súd",
+        ...RANK.constitutional,
+      },
+      {
+        courtPattern: "najvyšší[\\s\u00a0]+súd",
+        ...RANK.supreme,
+      },
+      {
+        courtPattern: "najvyšší[\\s\u00a0]+správny[\\s\u00a0]+súd",
+        ...RANK.supreme,
+      },
+      {
+        courtPattern: "krajský súd",
+        ...RANK.regional,
+      },
+      {
+        courtPattern: "okresný súd|mestský súd",
+        ...RANK.district,
+      },
+      {
+        courtPattern: "špecializovaný trestný súd|špeciálny súd",
+        ...RANK.special,
+      },
+      {
+        courtPattern: "^správny súd",
+        ...RANK.administrative,
+      },
+    ],
   },
   // Poland. The feeds store the full court name with its seat appended
   // ("Sąd Okręgowy w Warszawie", "Sąd Rejonowy dla Warszawy-Śródmieścia"),
@@ -104,55 +112,57 @@ export const COURT_WEIGHT_SEED: readonly CourtWeightSeedRow[] = [
   // appeal rather than with district: they are the administrative branch's
   // first instance, but what they review is an authority's decision, and the
   // only court above them is the supreme one already ranked above.
-  {
-    country: "POL",
-    courtPattern: "trybunał konstytucyjny",
-    ...RANK.constitutional,
-  },
-  {
-    country: "POL",
-    courtPattern: "sąd najwyższy|naczelny sąd administracyjny",
-    ...RANK.supreme,
-  },
-  {
-    country: "POL",
-    courtPattern: "sąd apelacyjny|wojewódzki sąd administracyjny",
-    ...RANK.appeal,
-  },
-  {
-    country: "POL",
-    courtPattern: "sąd okręgowy",
-    ...RANK.regional,
-  },
-  {
-    country: "POL",
-    courtPattern: "krajowa izba odwoławcza",
-    ...RANK["procurement-review"],
-  },
-  {
-    country: "POL",
-    courtPattern: "sąd rejonowy",
-    ...RANK.district,
+  POL: {
+    type: "ranked-by-name",
+    rows: [
+      {
+        courtPattern: "trybunał konstytucyjny",
+        ...RANK.constitutional,
+      },
+      {
+        courtPattern: "sąd najwyższy|naczelny sąd administracyjny",
+        ...RANK.supreme,
+      },
+      {
+        courtPattern: "sąd apelacyjny|wojewódzki sąd administracyjny",
+        ...RANK.appeal,
+      },
+      {
+        courtPattern: "sąd okręgowy",
+        ...RANK.regional,
+      },
+      {
+        courtPattern: "krajowa izba odwoławcza",
+        ...RANK["procurement-review"],
+      },
+      {
+        courtPattern: "sąd rejonowy",
+        ...RANK.district,
+      },
+    ],
   },
   // Austria. The RIS feeds store the court as the publisher's abbreviation
   // (`OGH`, `VwGH`, `VfGH`) or as the full name with the abbreviation in
   // brackets, so both spellings are ranked. Anchors rather than `\b`: the
   // same pattern runs as a JavaScript RegExp and as a PostgreSQL `~*` ARE,
   // and the two do not agree on word-boundary escapes.
-  {
-    country: "AUT",
-    courtPattern: "verfassungsgerichtshof|^vfgh$",
-    ...RANK.constitutional,
-  },
-  {
-    country: "AUT",
-    courtPattern: "oberster gerichtshof|verwaltungsgerichtshof|^ogh$|^vwgh$",
-    ...RANK.supreme,
-  },
-  {
-    country: "AUT",
-    courtPattern: "oberlandesgericht|landesgericht",
-    ...RANK.regional,
+  AUT: {
+    type: "ranked-by-name",
+    rows: [
+      {
+        courtPattern: "verfassungsgerichtshof|^vfgh$",
+        ...RANK.constitutional,
+      },
+      {
+        courtPattern:
+          "oberster gerichtshof|verwaltungsgerichtshof|^ogh$|^vwgh$",
+        ...RANK.supreme,
+      },
+      {
+        courtPattern: "oberlandesgericht|landesgericht",
+        ...RANK.regional,
+      },
+    ],
   },
   // Hungary. Court names are a seat plus the kind of court ("Fővárosi
   // Törvényszék", "Debreceni Járásbíróság"), so each rank is the kind alone.
@@ -162,50 +172,95 @@ export const COURT_WEIGHT_SEED: readonly CourtWeightSeedRow[] = [
   // 2013. The közigazgatási és munkaügyi bíróságok sat from 2013 to 2020 and
   // rank between the törvényszék that absorbed them and the járásbíróság, in
   // the same tier as the district courts but above them by weight.
-  {
-    country: "HUN",
-    courtPattern: "alkotmánybíróság",
-    ...RANK.constitutional,
+  HUN: {
+    type: "ranked-by-name",
+    rows: [
+      {
+        courtPattern: "alkotmánybíróság",
+        ...RANK.constitutional,
+      },
+      {
+        courtPattern: "kúria|legfelsőbb bíróság",
+        ...RANK.supreme,
+      },
+      {
+        courtPattern: "ítélőtábla",
+        ...RANK.appeal,
+      },
+      {
+        courtPattern: "törvényszék|megyei bíróság|fővárosi bíróság",
+        ...RANK.regional,
+      },
+      {
+        courtPattern: "közigazgatási és munkaügyi bíróság",
+        ...RANK["administrative-labour"],
+      },
+      {
+        courtPattern: "járásbíróság|kerületi bíróság|városi bíróság",
+        ...RANK.district,
+      },
+    ],
   },
-  {
-    country: "HUN",
-    courtPattern: "kúria|legfelsőbb bíróság",
-    ...RANK.supreme,
+  EU: {
+    type: "ranked-by-name",
+    rows: [
+      {
+        courtPattern: "court of justice",
+        ...RANK.constitutional,
+      },
+      {
+        courtPattern: "general court",
+        ...RANK.supreme,
+      },
+    ],
   },
-  {
-    country: "HUN",
-    courtPattern: "ítélőtábla",
-    ...RANK.appeal,
+  // A USA decision ranks by its court id's directory tier (`court-ranks.ts`),
+  // never through a name row. The one row is the name rank the registry held
+  // before USA decisions carried a court id, kept so the table keeps the key
+  // its seed migration wrote; nothing reads a court id from it.
+  USA: {
+    type: "ranked-by-court-id",
+    legacyRows: [
+      {
+        courtPattern: "^supreme court of the united states$",
+        ...RANK.supreme,
+      },
+    ],
   },
-  {
-    country: "HUN",
-    courtPattern: "törvényszék|megyei bíróság|fővárosi bíróság",
-    ...RANK.regional,
-  },
-  {
-    country: "HUN",
-    courtPattern: "közigazgatási és munkaügyi bíróság",
-    ...RANK["administrative-labour"],
-  },
-  {
-    country: "HUN",
-    courtPattern: "járásbíróság|kerületi bíróság|városi bíróság",
-    ...RANK.district,
-  },
-  // European Union
-  {
-    country: "EU",
-    courtPattern: "court of justice",
-    ...RANK.constitutional,
-  },
-  {
-    country: "EU",
-    courtPattern: "general court",
-    ...RANK.supreme,
-  },
-  // United States: ranked by court id, not by this table.
-  US_LEGACY_NAME_ROW,
-];
+} as const satisfies Record<CaseLawJurisdiction, CourtWeightSeedDisposition>;
+
+const seededPatterns = (
+  disposition: CourtWeightSeedDisposition,
+): readonly CourtWeightSeedPattern[] => {
+  switch (disposition.type) {
+    case "ranked-by-name":
+      return disposition.rows;
+    case "ranked-by-court-id":
+      return disposition.legacyRows;
+    default:
+      disposition satisfies never;
+      return panic(
+        `Unhandled court weight seed disposition: ${JSON.stringify(disposition)}`,
+      );
+  }
+};
+
+/** The table's rows, in the declaration's jurisdiction order. */
+export const COURT_WEIGHT_SEED: readonly CourtWeightSeedRow[] = Object.keys(
+  COURT_WEIGHT_SEED_BY_JURISDICTION,
+)
+  .filter(isCaseLawJurisdiction)
+  .flatMap((country) =>
+    seededPatterns(COURT_WEIGHT_SEED_BY_JURISDICTION[country]).map(
+      ({ courtPattern, tier, tierLabel, weight }) => ({
+        country,
+        courtPattern,
+        tier,
+        tierLabel,
+        weight,
+      }),
+    ),
+  );
 
 const compile = (row: CourtWeightSeedRow): CourtWeightEntry => ({
   country: row.country,
@@ -239,7 +294,7 @@ export const courtWeightMapFromSeed = (): CourtWeightMap => {
  * caller handed no entries would exercise the unseeded path by accident.
  */
 export const seededCourtWeightEntries = (
-  country: string,
+  country: CaseLawJurisdiction,
 ): readonly CourtWeightEntry[] =>
   courtWeightMapFromSeed().get(country) ??
   panic(`court weight seed declares no jurisdiction ${country}`);

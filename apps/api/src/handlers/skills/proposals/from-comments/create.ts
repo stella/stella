@@ -5,6 +5,7 @@ import * as v from "valibot";
 
 import { abortableTx } from "@/api/db/safe-db";
 import { agentSkillComments, agentSkillProposals } from "@/api/db/schema";
+import { skillRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { loadVisibleSkill } from "@/api/lib/agent-skills/access";
 import { stripMarkdownFences } from "@/api/lib/agent-skills/markdown-fences";
 import { requireEditableSkillOrigin } from "@/api/lib/agent-skills/origin";
@@ -14,7 +15,11 @@ import {
 } from "@/api/lib/agent-skills/revisions";
 import { resolveCaching } from "@/api/lib/ai-config";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  configuredModelAdmission,
+  createSafeRootHandler,
+} from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -55,6 +60,10 @@ const fromCommentsBodySchema = t.Object({
 });
 
 const config = {
+  actionAdmission: {
+    type: "handler",
+    actionKind: "skills.propose-from-comments",
+  },
   description:
     "Turn reviewer comments on an agent skill into a draft change proposal: " +
     "the model rewrites SKILL.md so each comment is addressed, and the result " +
@@ -64,6 +73,8 @@ const config = {
     "someone with edit rights accepts the proposal, the comments stay " +
     "unresolved, and bundled skills are refused. Consumes AI usage.",
   permissions: { agentSkill: ["propose"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: skillRealtimeUpdates,
   access: "write",
   mcp: {
     type: "capability",
@@ -108,6 +119,7 @@ type AppliedComment = {
 const createProposalFromComments = createSafeRootHandler(
   config,
   async function* ({
+    modelAdmission,
     body,
     orgAIConfig,
     managedAIResidency,
@@ -221,6 +233,7 @@ const createProposalFromComments = createSafeRootHandler(
       try: async () =>
         await generateTanStackObjectForRole({
           dataClass: "customer",
+          admission: configuredModelAdmission({ modelAdmission }),
           abortSignal: AbortSignal.timeout(GENERATION_TIMEOUT_MS),
           maxOutputTokens: GENERATION_MAX_OUTPUT_TOKENS,
           role: "fast",

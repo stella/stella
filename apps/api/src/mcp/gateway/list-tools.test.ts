@@ -9,6 +9,7 @@ import {
 import { DOCUMENTS_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 import type { McpToolDefinition } from "@/api/mcp/tool-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 
 // Only `enabledRegistrySlugs` and `memberRole` drive static visibility here.
 // `scopes: ["stella:read"]` grants the read-scoped lookup tool while
@@ -22,6 +23,14 @@ const contextWith = (
     enabledRegistrySlugs,
     grantedScopes: [],
     memberRole,
+    // Billing tools are gated by enrolment; this caller is enrolled so role
+    // visibility is what the tests observe.
+    organizationId: "org_test",
+    userId: "user_test",
+    featureAccessSnapshot: enrolledTimeBillingSnapshot({
+      organizationId: "org_test",
+      userId: "user_test",
+    }),
   });
 
 // Snapshot the advertised registry enum into a fresh array. The unresolved and
@@ -301,5 +310,17 @@ describe("toMcpTools input schema conversion", () => {
         toMcpTools([definitionWithSchema(inputSchema)]).at(0)?.inputSchema,
       ),
     ).toBe(JSON.stringify(inputSchema));
+  });
+});
+
+describe("MCP app-only discovery", () => {
+  test("host discovery preserves app-only metadata", () => {
+    const definition = {
+      ...definitionWithSchema({ type: "object" }),
+      _meta: { ui: { visibility: ["app"] } },
+    };
+    const wire = toMcpTools([definition]);
+    expect(wire.map(({ name }) => name)).toEqual([definition.name]);
+    expect(wire.at(0)?._meta).toEqual(definition._meta);
   });
 });

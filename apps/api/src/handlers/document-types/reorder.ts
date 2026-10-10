@@ -3,7 +3,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { documentTypes } from "@/api/db/schema";
 import { reorderDocumentTypesBodySchema } from "@/api/handlers/document-types/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 
@@ -15,6 +15,7 @@ const config = {
     "keeps the sort order it already had. Ordering is cosmetic, so no audit " +
     "event is recorded.",
   permissions: { organizationSettings: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.standard,
   mcp: {
     type: "capability",
     reason: "workspace_schema",

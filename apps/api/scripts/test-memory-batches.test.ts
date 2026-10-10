@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import fc from "fast-check";
 import path from "node:path";
 
+import { compareCodeUnit } from "@stll/collation";
 import { assertProperty } from "@stll/property-testing";
 
 import { listApiTestPaths, planApiTestBatches } from "./api-test-plan";
@@ -13,7 +14,9 @@ import {
   readTestRssTable,
   SOLO_TEST_RSS_RATIO,
   splitMemoryBoundedBatches,
+  staleTestRssTableAnnotation,
   TEST_BATCH_RSS_HEADROOM_RATIO,
+  TEST_RSS_TABLE_MAX_AGE_DAYS,
   testRssArtifact,
   unmeasuredTestPeakRss,
   type TestRssTable,
@@ -28,15 +31,13 @@ const ENVIRONMENT = {
   runnerImage: "fixture",
 };
 const SOURCE = { runId: "1", job: "measure-1" };
-const uncalibrated = (
-  files: Readonly<Record<string, number>>,
-): TestRssTable => ({ type: "uncalibrated", files });
+const MEASURED_AT = "2026-10-04T03:10:00.000Z";
 const calibrated = (
   baselineMb: number,
   files: Readonly<Record<string, number>>,
 ): TestRssTable => ({
-  type: "measured",
   environment: ENVIRONMENT,
+  measuredAt: MEASURED_AT,
   baselineMb,
   files: Object.fromEntries(
     Object.entries(files).map(([file, peakMb]) => [
@@ -50,10 +51,10 @@ test("measured files at sixty percent of their class cap always run alone", () =
   expect(
     splitMemoryBoundedBatches({
       batches: [["small", "threshold", "last"]],
-      rssTable: uncalibrated({
-        small: 10,
-        threshold: BUDGET_MB * SOLO_TEST_RSS_RATIO,
-        last: 10,
+      rssTable: calibrated(10, {
+        small: 20,
+        threshold: 10 + BUDGET_MB * SOLO_TEST_RSS_RATIO,
+        last: 20,
       }),
       budgetMb: BUDGET_MB,
     }),
@@ -66,7 +67,7 @@ test("unmeasured files reserve forty percent of shared composition memory", () =
   expect(
     splitMemoryBoundedBatches({
       batches: [["a", "b", "c"]],
-      rssTable: uncalibrated({}),
+      rssTable: calibrated(10, {}),
       budgetMb: BUDGET_MB,
     }),
   ).toEqual([["a", "b"], ["c"]]);
@@ -86,9 +87,9 @@ test("shared composition counts the preload baseline exactly once", () => {
 });
 test("per-file increments retain their own shard baseline", () => {
   const rssTable = {
-    type: "measured",
     baselineMb: 1000,
     environment: ENVIRONMENT,
+    measuredAt: MEASURED_AT,
     files: {
       a: { peakMb: 1100, baselineMb: 1000, source: SOURCE },
       b: { peakMb: 1100, baselineMb: 500, source: SOURCE },
@@ -102,9 +103,9 @@ test("solo isolation uses the planned singleton peak, not the shard's raw peak",
   // Raw peak 1100 MB is below the 60% threshold, but on the table baseline
   // the file needs 1000 + 700 = 1700 MB, which is above it.
   const rssTable = {
-    type: "measured",
     baselineMb: 1000,
     environment: ENVIRONMENT,
+    measuredAt: MEASURED_AT,
     files: {
       a: { peakMb: 1100, baselineMb: 400, source: SOURCE },
       b: { peakMb: 1050, baselineMb: 1000, source: SOURCE },
@@ -128,7 +129,7 @@ test("impossible plans fail before running and name their files and class cap", 
   expect(() =>
     splitMemoryBoundedBatches({
       batches: [["small", "too-big"]],
-      rssTable: uncalibrated({ small: 10, "too-big": BUDGET_MB + 1 }),
+      rssTable: calibrated(10, { small: 20, "too-big": BUDGET_MB + 1 }),
       budgetMb: BUDGET_MB,
     }),
   ).toThrow(
@@ -182,6 +183,14 @@ test("calibrated splitting preserves every file and never exceeds its compositio
             budgetMb,
           });
           expect(batches.flat()).toEqual(shard);
+          // Stable plans keep shard and batch neighbours from churning between runs.
+          expect(
+            splitMemoryBoundedBatches({
+              batches: original,
+              rssTable,
+              budgetMb,
+            }),
+          ).toEqual(batches);
           for (const batch of batches) {
             expect(
               original.some((source) =>
@@ -221,7 +230,7 @@ test("invalid observations and budgets fail before composition", () => {
     expect(() =>
       splitMemoryBoundedBatches({
         batches: [],
-        rssTable: uncalibrated({}),
+        rssTable: calibrated(10, {}),
         budgetMb,
       }),
     ).toThrow("memory budget must be positive and finite");
@@ -230,19 +239,29 @@ test("invalid observations and budgets fail before composition", () => {
     expect(() =>
       splitMemoryBoundedBatches({
         batches: [["bad"]],
-        rssTable: uncalibrated({ bad: weight }),
+        rssTable: calibrated(10, { bad: weight }),
         budgetMb: BUDGET_MB,
       }),
     ).toThrow("Invalid peak RSS for bad");
   }
   expect(() =>
     readTestRssTable({
-      type: "measured",
       baselineMb: 100,
       environment: ENVIRONMENT,
+      measuredAt: MEASURED_AT,
       files: { bad: { peakMb: 100, baselineMb: 200, source: SOURCE } },
     }),
   ).toThrow("Table baseline is below the measured baseline for bad");
+  for (const measuredAt of [undefined, "2026-10-04", "not a date"]) {
+    expect(() =>
+      readTestRssTable({
+        baselineMb: 100,
+        environment: ENVIRONMENT,
+        measuredAt,
+        files: {},
+      }),
+    ).toThrow("Invalid RSS measurement time");
+  }
 });
 test("measurement mode composes fresh children without consulting normal estimates", async () => {
   const testPaths = [
@@ -259,7 +278,7 @@ test("measurement mode composes fresh children without consulting normal estimat
     groups
       .flatMap(({ testBatches }) => testBatches)
       .toSorted((left, right) =>
-        left.join("\0").localeCompare(right.join("\0")),
+        compareCodeUnit(left.join("\0"), right.join("\0")),
       ),
   ).toEqual(testPaths.toSorted().map((file) => [file]));
 });
@@ -300,58 +319,62 @@ test("receipts preserve singleton peaks and baseline metadata", () => {
     testRssArtifact({
       environment: ENVIRONMENT,
       source: SOURCE,
+      measuredAt: MEASURED_AT,
       baselineMb: 100,
       measurements: [{ file: "scripts/one.test.ts", peakMb: 700, exitCode: 0 }],
+      shard: { index: 2, count: 4 },
+      plannedFiles: 1,
     }),
   );
   expect(receipt).toEqual({
-    version: 1,
+    version: 3,
     environment: ENVIRONMENT,
     source: SOURCE,
+    measuredAt: MEASURED_AT,
+    shard: { index: 2, count: 4 },
+    plannedFiles: 1,
     baselineMb: 100,
     measurements: [{ file: "scripts/one.test.ts", peakMb: 700, exitCode: 0 }],
   });
 });
-test("the live census rejects stale measurements and reports unmeasured suites", () => {
-  const files = listApiTestPaths(path.resolve(import.meta.dir, ".."));
-  const current = new Set(files);
-  const table = measuredTestRssTable();
-  expect(Object.keys(table.files).filter((file) => !current.has(file))).toEqual(
-    [],
-  );
-  const unmeasured = files.filter((file) => table.files[file] === undefined);
-  console.info(
-    `Unmeasured API files reserve 40% of shared composition memory (DB increment ${unmeasuredTestPeakRss(BUDGET_MB)} MB):\n${unmeasured.join("\n")}`,
+test("the memory profile warns only once it is more than the maximum age old", () => {
+  const DAY_MS = 86_400_000;
+  const measured = Date.parse(MEASURED_AT);
+  const at = (offsetMs: number) => new Date(measured + offsetMs);
+  const limitMs = TEST_RSS_TABLE_MAX_AGE_DAYS * DAY_MS;
+  for (const offsetMs of [-DAY_MS, 0, DAY_MS, limitMs, limitMs + DAY_MS - 1]) {
+    expect(staleTestRssTableAnnotation(MEASURED_AT, at(offsetMs))).toBe(
+      undefined,
+    );
+  }
+  expect(staleTestRssTableAnnotation(MEASURED_AT, at(limitMs + DAY_MS))).toBe(
+    "::warning title=API test memory profile is stale::" +
+      "apps/api/scripts/test-peak-rss.json was measured 15 days ago " +
+      `(${MEASURED_AT}), more than 14; merge the open refresh pull request ` +
+      "or rerun the API test memory workflow (docs/test-memory.md)",
   );
 });
-test("the production plan covers the three memory-heavy suites within their class caps", async () => {
+test("every production batch fits its cap, and every shared batch its measured headroom", async () => {
   const apiRoot = path.resolve(import.meta.dir, "..");
+  const files = listApiTestPaths(apiRoot);
   const groups = await planApiTestBatches({
     apiRoot,
     propertyOnly: false,
-    testPaths: listApiTestPaths(apiRoot),
+    testPaths: files,
   });
   const table = measuredTestRssTable();
-  for (const file of [
-    "src/handlers/chat/thread-durable-refs.integration.test.ts",
-    "src/lib/scheduler/tasks/legislation-expression-id-backfill-plan.db.test.ts",
-    "src/handlers/legislation/work-names-plan.db.test.ts",
-  ]) {
-    const containing = groups.flatMap(({ testBatches, maxPeakRssMb }) =>
-      testBatches
-        .filter((batch) => batch.includes(file))
-        .map((files) => ({ files, budgetMb: maxPeakRssMb })),
-    );
-    expect(containing).toHaveLength(1);
-    for (const { files, budgetMb } of containing) {
-      expect(
-        batchPeakRss({ files, rssTable: table, budgetMb }),
-      ).toBeLessThanOrEqual(budgetMb);
-      if (files.length > 1) {
-        expect(
-          batchPeakRss({ files, rssTable: table, budgetMb }),
-        ).toBeLessThanOrEqual(budgetMb * TEST_BATCH_RSS_HEADROOM_RATIO);
-      }
-    }
+  const planned = groups.flatMap(({ testBatches, maxPeakRssMb }) =>
+    testBatches.map((batch) => ({ batch, budgetMb: maxPeakRssMb })),
+  );
+  expect(planned.flatMap(({ batch }) => batch).toSorted()).toEqual(files);
+  for (const { batch, budgetMb } of planned) {
+    const estimate = batchPeakRss({ files: batch, rssTable: table, budgetMb });
+    expect({ batch, estimate }).toEqual({
+      batch,
+      estimate: Math.min(
+        estimate,
+        batch.length > 1 ? budgetMb * TEST_BATCH_RSS_HEADROOM_RATIO : budgetMb,
+      ),
+    });
   }
 });

@@ -14,7 +14,7 @@ import { t } from "elysia";
 
 import { documentReviewRuns, entities } from "@/api/db/schema";
 import { createPlaybookDefinitionHandler } from "@/api/handlers/playbooks/create-shared";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import type { ReviewPerspective } from "@/api/lib/document-review/contract";
@@ -23,6 +23,7 @@ import {
   referenceWorkspacesByPosition,
 } from "@/api/lib/document-review/reference-visibility";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { createModelActionAdmitter } from "@/api/lib/rate-limit/model-action-admission";
 import type { PlaybookScope } from "@/api/lib/workflow/playbook-positions";
 
 const fromRunBodySchema = t.Object({
@@ -39,6 +40,7 @@ const config = {
     "the draft status). Position ids are preserved, so decisions already " +
     "taken on those positions stay attached to them.",
   permissions: { playbook: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "knowledge_library_admin",
@@ -90,6 +92,7 @@ const createPlaybookFromRun = createSafeRootHandler(
   config,
   async function* ({
     body: { name, runId, workspaceId },
+    getActiveWorkspaceIds,
     getWorkspaceAccess,
     orgAIConfig,
     managedAIResidency,
@@ -97,7 +100,9 @@ const createPlaybookFromRun = createSafeRootHandler(
     promptCachingEnabled,
     recordAuditEvent,
     safeDb,
+    scopedDb,
     session,
+    user,
   }) {
     const organizationId = session.activeOrganizationId;
 
@@ -194,9 +199,19 @@ const createPlaybookFromRun = createSafeRootHandler(
       perspective === undefined ? undefined : { perspective };
     const derivedName = `${run.targetName ?? definitionSnapshot.name} review`;
 
+    const accessibleWorkspaceIds = yield* Result.await(
+      Result.tryPromise(async () => await getActiveWorkspaceIds()),
+    );
     const createdResult = yield* createPlaybookDefinitionHandler({
+      admitModelAction: createModelActionAdmitter({
+        organizationId,
+        userId: user.id,
+        organizationStateDb: scopedDb,
+        actionKind: "playbooks.derive-ask",
+      }),
       safeDb,
       organizationId,
+      accessibleWorkspaceIds,
       orgAIConfig,
       managedAIResidency,
       orgAIConfigStatus,

@@ -828,6 +828,21 @@ describe("deriveHandlerImportPath", () => {
 });
 
 describe("serializeDispatchModule", () => {
+  test("feature entry metadata is projected beside the loader", () => {
+    const output = serializeDispatchModule([
+      {
+        id: "widgets.list",
+        importPath: "@/api/handlers/widgets/list",
+        exportName: undefined,
+        featureAccess: { featureId: "fixture", type: "conditional" },
+      },
+    ]);
+    expect(output).toContain(
+      'featureId: "fixture", featureAccess: "conditional"',
+    );
+    expect(output).toContain('import("@/api/handlers/widgets/list")');
+  });
+
   test("emits an async lazy import thunk per record, named export threaded", () => {
     const out = serializeDispatchModule([
       {
@@ -1536,9 +1551,9 @@ const r = new Elysia()
 `;
     const modules: Record<string, string> = {
       "@/api/lib/lists/deployment":
-        "export const legalListsDeployed = (): boolean =>\n  isLocalDevOpen() || env.FEATURE_LEGAL_LISTS;\n",
+        'export const legalListsDeployed = (): boolean =>\n  isDeploymentFeatureEnabled("FEATURE_LEGAL_LISTS");\n',
       "@/api/lib/lists/compound":
-        "export const listsAndDraftsDeployed = (): boolean =>\n  env.FEATURE_LEGAL_LISTS && env.FEATURE_DRAFTS;\n",
+        'export const listsAndDraftsDeployed = (): boolean =>\n  isDeploymentFeatureEnabled("FEATURE_LEGAL_LISTS") && isDeploymentFeatureEnabled("FEATURE_DRAFTS");\n',
     };
     const violations = (hooks: string, feature: string | undefined) =>
       scanRouteHookGuards({
@@ -1549,11 +1564,11 @@ const r = new Elysia()
         waivedIds: new Set(),
       }).violations.length;
     const reproduced = [
-      ".use(deploymentFeatureGate(() => env.FEATURE_LEGAL_LISTS))",
-      ".use(deploymentFeatureGate(() => isLocalDevOpen() || env.FEATURE_LEGAL_LISTS))",
+      '.use(deploymentFeatureGate(() => isDeploymentFeatureEnabled("FEATURE_LEGAL_LISTS")))',
       ".use(deploymentFeatureGate(legalListsDeployed))",
-      // The formatter's wrapped form.
-      ".use(\n    deploymentFeatureGate(\n      () => isLocalDevOpen() || env.FEATURE_LEGAL_LISTS,\n    ),\n  )",
+      // The formatter's wrapped forms.
+      '.use(\n    deploymentFeatureGate(() =>\n      isDeploymentFeatureEnabled("FEATURE_LEGAL_LISTS"),\n    ),\n  )',
+      '.use(\n    deploymentFeatureGate(() =>\n      isDeploymentFeatureEnabled(\n        "FEATURE_LEGAL_LISTS",\n      ),\n    ),\n  )',
     ];
     for (const gate of reproduced) {
       expect(violations(gate, "FEATURE_LEGAL_LISTS"), gate).toBe(0);
@@ -1563,15 +1578,18 @@ const r = new Elysia()
     }
     const notReproduced = [
       // A custom hook is never inferred from the flags it mentions.
-      ".onBeforeHandle(({ set }) => { if (env.FEATURE_LEGAL_LISTS) return undefined; set.status = 404; })",
+      '.onBeforeHandle(({ set }) => { if (isDeploymentFeatureEnabled("FEATURE_LEGAL_LISTS")) return undefined; set.status = 404; })',
       // Compound and inverted conditions, directly or through a helper.
-      ".use(deploymentFeatureGate(() => env.FEATURE_LEGAL_LISTS && isOwner()))",
-      ".use(deploymentFeatureGate(() => !env.FEATURE_LEGAL_LISTS))",
+      '.use(deploymentFeatureGate(() => isDeploymentFeatureEnabled("FEATURE_LEGAL_LISTS") && isOwner()))',
+      '.use(deploymentFeatureGate(() => !isDeploymentFeatureEnabled("FEATURE_LEGAL_LISTS")))',
       ".use(deploymentFeatureGate(listsAndDraftsDeployed))",
+      // A raw flag read bypasses the owner's local-development policy.
+      ".use(deploymentFeatureGate(() => env.FEATURE_LEGAL_LISTS))",
+      ".use(deploymentFeatureGate(() => isLocalDevOpen() || env.FEATURE_LEGAL_LISTS))",
       // A flag read once, not per request, is not the gate's contract.
-      ".use(deploymentFeatureGate(env.FEATURE_LEGAL_LISTS))",
+      '.use(deploymentFeatureGate(isDeploymentFeatureEnabled("FEATURE_LEGAL_LISTS")))',
       // A second hook beside the gate.
-      ".use(deploymentFeatureGate(() => env.FEATURE_LEGAL_LISTS))\n  .onBeforeHandle(() => undefined)",
+      '.use(deploymentFeatureGate(() => isDeploymentFeatureEnabled("FEATURE_LEGAL_LISTS")))\n  .onBeforeHandle(() => undefined)',
     ];
     for (const hooks of notReproduced) {
       expect(violations(hooks, "FEATURE_LEGAL_LISTS"), hooks).toBe(1);
@@ -1585,7 +1603,7 @@ const custom = new Elysia()
   .onBeforeHandle(() => undefined)
   .get("/a", getStatus.handler, {});
 const gated = new Elysia()
-  .use(deploymentFeatureGate(() => env.FEATURE_LEGAL_LISTS))
+  .use(deploymentFeatureGate(() => isDeploymentFeatureEnabled("FEATURE_LEGAL_LISTS")))
   .get("/b", getStatus.handler, {});
 `;
     const scan = scanRouteHookGuards({

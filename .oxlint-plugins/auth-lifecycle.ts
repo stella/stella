@@ -27,6 +27,12 @@ const REMOVAL_HELPERS: ReadonlySet<string> = new Set([
   "revokeOrganizationMemberAuthArtifacts",
 ]);
 const HELPER_MODULE = "apps/api/src/lib/auth-artifacts";
+// The organization offboarding operation ends with the helper above, in the
+// same transaction, so it satisfies the hook on its behalf.
+const OFFBOARDING_HELPER: ReadonlySet<string> = new Set([
+  "removeOrganizationMemberInTransaction",
+]);
+const OFFBOARDING_MODULE = "apps/api/src/lib/member-assignment-offboarding";
 const HELPER_FILE = "apps/api/src/lib/auth-artifacts.ts";
 const AUTH_SCHEMA_MODULE = "apps/api/src/db/auth-schema";
 const AUTH_ARTIFACT_TABLES: ReadonlySet<string> = new Set([
@@ -235,12 +241,20 @@ const containsTransactionalRemoval = (
         ) {
           return false;
         }
-        return isImportedFrom({
-          context,
-          node: invokedCallee(operation),
-          modules: [HELPER_MODULE],
-          names: HELPER,
-        });
+        return (
+          isImportedFrom({
+            context,
+            node: invokedCallee(operation),
+            modules: [HELPER_MODULE],
+            names: HELPER,
+          }) ||
+          isImportedFrom({
+            context,
+            node: invokedCallee(operation),
+            modules: [OFFBOARDING_MODULE],
+            names: OFFBOARDING_HELPER,
+          })
+        );
       });
     });
 };

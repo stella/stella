@@ -10,6 +10,8 @@ import { SQL, SQL as PgClient } from "bun";
 import * as bt from "bun:test";
 import {
   describe,
+  expect,
+  expect as assertThat,
   it,
   test as check,
   test,
@@ -175,3 +177,35 @@ const _driverError = new SQL.PostgresError("terminating connection", {
   hint: "",
   severity: "FATAL",
 });
+
+// --- no-promise-matchers ---
+
+declare const pending: Promise<number>;
+declare const playwrightExpect: (value: unknown) => {
+  rejects: { toThrow: () => Promise<void> };
+};
+
+// oxlint-disable-next-line bun-test-hygiene/no-promise-matchers
+const _rejects = expect(pending).rejects.toThrow("boom");
+// oxlint-disable-next-line bun-test-hygiene/no-promise-matchers
+const _resolves = expect(pending).resolves.toBe(1);
+// aliased import
+// oxlint-disable-next-line bun-test-hygiene/no-promise-matchers
+const _aliased = assertThat(pending).resolves.toBe(1);
+// namespace member
+// oxlint-disable-next-line bun-test-hygiene/no-promise-matchers
+const _namespace = bt.expect(pending).rejects.toBeInstanceOf(Error);
+// computed member
+// oxlint-disable-next-line bun-test-hygiene/no-promise-matchers, typescript/dot-notation -- the computed form is the case under test
+const _computed = expect(pending)["rejects"].toBeInstanceOf(Error);
+// a negation before the promise matcher
+// oxlint-disable-next-line bun-test-hygiene/no-promise-matchers
+const _negatedRejects = expect(pending).not.rejects.toThrow("boom");
+// oxlint-disable-next-line bun-test-hygiene/no-promise-matchers
+const _negatedResolves = expect(pending).not.resolves.toBe(2);
+// an awaited value
+// expect-clean: bun-test-hygiene/no-promise-matchers
+const _awaited = async () => expect(await pending).toBe(1);
+// a framework whose `expect` is not from `bun:test`
+// expect-clean: bun-test-hygiene/no-promise-matchers
+const _playwright = playwrightExpect(pending).rejects.toThrow();

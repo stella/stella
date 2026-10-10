@@ -1,0 +1,6 @@
+{
+  "metric": "direct-failure-sinks",
+  "file": "apps/api/src/handlers/visual-sandbox/store.ts",
+  "delta": 1,
+  "reason": "Bounded generated view storage failures require structured telemetry before returning a typed tool error."
+}

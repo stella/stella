@@ -28,6 +28,8 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { childExitStatus } from "../packages/scripts/src/child-exit-status";
+
 export const RECEIVER_TYPED_AUTOFIX_RULES = [
   // `x.match(y)` -> `y.test(x)`: assumes `x` is a string (wrong for `Bun.Glob#match`).
   "unicorn/prefer-regexp-test",
@@ -123,7 +125,7 @@ export const runPrecommitLint = (
   if (changed.length > 0 && !apply) {
     return { exitCode: 1, changed, diff };
   }
-  return { exitCode: lint.exitCode, changed, diff };
+  return { exitCode: childExitStatus(lint), changed, diff };
 };
 
 const main = () => {

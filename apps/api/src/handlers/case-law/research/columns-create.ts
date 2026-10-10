@@ -5,7 +5,7 @@ import { caseLawResearchColumns } from "@/api/db/schema";
 import { toResearchColumnResponse } from "@/api/handlers/case-law/research/column-access";
 import { buildResearchColumnContent } from "@/api/handlers/case-law/research/column-content";
 import { createResearchColumnBodySchema } from "@/api/handlers/case-law/research/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -20,6 +20,7 @@ const config = {
     "empty. Refused once the organization holds its maximum number of " +
     "columns.",
   permissions: { caseLawResearch: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "search_ui" },
   body: createResearchColumnBodySchema,
 } satisfies HandlerConfig;

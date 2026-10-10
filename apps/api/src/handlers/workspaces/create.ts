@@ -14,11 +14,14 @@ import {
   workspaces,
   workspaceViews,
 } from "@/api/db/schema";
+import { organizationWorkspaceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { captureError } from "@/api/lib/analytics/capture";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
+import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
+import { AVT_LAYOUT_DISCOVERY_FEATURE_ACCESS } from "@/api/lib/auth/feature-access/view-eligibility";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   tDefaultVarchar,
@@ -59,15 +62,19 @@ const createWorkspaceBodySchema = t.Object({
 });
 
 const config = {
+  featureAccess: AVT_LAYOUT_DISCOVERY_FEATURE_ACCESS,
   description:
     "Create a new matter (name required; pass clientId to attach a client " +
     "contact). Returns the matter ID.",
   permissions: { workspace: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: organizationWorkspaceRealtimeUpdates,
   mcp: { type: "tool", name: "save_matter" },
   body: createWorkspaceBodySchema,
 } satisfies HandlerConfig;
 
 export type CreateWorkspaceHandlerProps = {
+  userEmail: string;
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
@@ -79,12 +86,16 @@ export type CreateWorkspaceHandlerProps = {
 // `save_matter` MCP tool, so both emit identical audit events and
 // search-index writes.
 export const createWorkspaceHandler = async function* ({
+  userEmail,
   safeDb,
   organizationId,
   userId,
   recordAuditEvent,
   body,
 }: CreateWorkspaceHandlerProps) {
+  if (body.clientId !== undefined && (body.memberUserIds?.length ?? 0) > 0) {
+    yield* checkDemoAccountOperation(userEmail);
+  }
   const txResult = yield* Result.await(
     resultTx(safeDb, async (tx) => {
       // New personal matters (no clientId) start with exactly one
@@ -95,6 +106,7 @@ export const createWorkspaceHandler = async function* ({
           ? Array.from(new Set(body.memberUserIds))
           : [];
 
+      const grantedUserIds = [...new Set([userId, ...requestedMemberUserIds])];
       const orgFilter = eq(workspaces.organizationId, organizationId);
 
       const [countResult, duplicatedNames, settings, client, orgMembers] =
@@ -130,18 +142,19 @@ export const createWorkspaceHandler = async function* ({
                 .limit(1)
                 .then((rows) => rows.at(0) ?? null)
             : Promise.resolve(null),
-          requestedMemberUserIds.length > 0
-            ? tx
-                .select({ userId: member.userId })
-                .from(member)
-                .where(
-                  and(
-                    eq(member.organizationId, organizationId),
-                    inArray(member.userId, requestedMemberUserIds),
-                  ),
-                )
-                .for("update")
-            : Promise.resolve([]),
+          tx
+            .select({ userId: member.userId })
+            .from(member)
+            .where(
+              and(
+                eq(member.organizationId, organizationId),
+                inArray(member.userId, grantedUserIds),
+              ),
+            )
+            // Same order as organization removal's membership locks.
+            .orderBy(member.userId)
+            .limit(grantedUserIds.length)
+            .for("update"),
         ]);
 
       const activeCount = countResult.at(0)?.total ?? 0;
@@ -155,7 +168,7 @@ export const createWorkspaceHandler = async function* ({
         );
       }
 
-      if (orgMembers.length !== requestedMemberUserIds.length) {
+      if (orgMembers.length !== grantedUserIds.length) {
         return Result.err(
           new HandlerError({
             status: 400,
@@ -328,6 +341,7 @@ const createWorkspaces = createSafeRootHandler(
   config,
   async function* ({ safeDb, session, user, body, recordAuditEvent }) {
     return yield* createWorkspaceHandler({
+      userEmail: user.email,
       safeDb,
       organizationId: session.activeOrganizationId,
       userId: user.id,

@@ -1,15 +1,16 @@
 import { Result, panic } from "better-result";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
+import { member } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
 import { workspaceMembers, workspaces } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { workspaceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
-import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tUserId } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -27,6 +28,8 @@ const config = {
     "once the matter holds its maximum number of members. Revoke access with " +
     "matters.members.remove.",
   permissions: { workspace: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.standard,
+  realtime: workspaceRealtimeUpdates,
   mcp: { type: "tool", name: "manage_organization" },
   body: addWorkspaceMemberBodySchema,
 } satisfies WorkspaceHandlerConfig;
@@ -49,101 +52,95 @@ export const addWorkspaceMemberHandler = async function* ({
   recordAuditEvent,
   body,
 }: AddWorkspaceMemberProps) {
-  // Verify user is a member of the organization.
-  // `member` is an org-level auth table (no RLS policy);
-  // safeDb works for querying it.
-  const orgMember = yield* Result.await(
-    safeDb((tx) =>
-      tx.query.member.findFirst({
-        where: {
-          userId: { eq: body.userId },
-          organizationId: { eq: organizationId },
+  const txResult = yield* Result.await(
+    safeDb(async (tx) => {
+      // Lock the workspace row first so concurrent workspace
+      // deletion or promotion cannot race this membership insert.
+      const workspaceRows = await tx
+        .select({ id: workspaces.id })
+        .from(workspaces)
+        .where(eq(workspaces.id, workspaceId))
+        .for("update");
+      const workspace = workspaceRows.at(0);
+
+      if (!workspace) {
+        return { ok: false as const, reason: "not_found" as const };
+      }
+
+      // Workspace -> organization membership -> matter memberships, matching promotion.
+      const orgMembers = await tx
+        .select({ id: member.id })
+        .from(member)
+        .where(
+          and(
+            eq(member.organizationId, organizationId),
+            eq(member.userId, body.userId),
+          ),
+        )
+        .for("key share");
+      if (orgMembers.length === 0) {
+        return { ok: false as const, reason: "not_member" as const };
+      }
+      // Lock workspace_members rows then count to serialize concurrent adds.
+      // PG rejects FOR UPDATE with aggregate functions, so
+      // we select rows first and count in application code.
+      const lockedRows = await tx
+        .select({ id: workspaceMembers.id })
+        .from(workspaceMembers)
+        .where(eq(workspaceMembers.workspaceId, workspaceId))
+        .for("update");
+
+      if (lockedRows.length >= LIMITS.workspaceMembersCount) {
+        return { ok: false as const, reason: "limit" as const };
+      }
+
+      const rows = await tx
+        .insert(workspaceMembers)
+        .values({
+          workspaceId,
+          userId: body.userId,
+        })
+        .returning({
+          id: workspaceMembers.id,
+          userId: workspaceMembers.userId,
+          createdAt: workspaceMembers.createdAt,
+        });
+
+      await recordAuditEvent(tx, {
+        action: AUDIT_ACTION.UPDATE,
+        resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE,
+        resourceId: workspaceId,
+        changes: {
+          membersAdded: {
+            old: null,
+            new: [body.userId],
+          },
         },
-        columns: { id: true },
-      }),
+      });
+
+      return { ok: true as const, rows };
+    }).then((result) =>
+      result.mapError((error) =>
+        DatabaseError.is(error) && error.code === PG_ERROR.UNIQUE_VIOLATION
+          ? new HandlerError({
+              status: 409,
+              message: "User is already a member of this workspace",
+            })
+          : error,
+      ),
     ),
   );
 
-  if (!orgMember) {
-    return Result.err(
-      new HandlerError({
-        status: 400,
-        message: "User is not a member of this organization",
-      }),
-    );
-  }
-
-  const txResult = await safeDb(async (tx) => {
-    // Lock the workspace row first so concurrent workspace
-    // deletion or promotion cannot race this membership insert.
-    const workspaceRows = await tx
-      .select({ id: workspaces.id })
-      .from(workspaces)
-      .where(eq(workspaces.id, workspaceId))
-      .for("update");
-    const workspace = workspaceRows.at(0);
-
-    if (!workspace) {
-      return { ok: false as const, reason: "not_found" as const };
-    }
-
-    // Lock workspace_members rows then count to serialize concurrent adds.
-    // PG rejects FOR UPDATE with aggregate functions, so
-    // we select rows first and count in application code.
-    const lockedRows = await tx
-      .select({ id: workspaceMembers.id })
-      .from(workspaceMembers)
-      .where(eq(workspaceMembers.workspaceId, workspaceId))
-      .for("update");
-
-    if (lockedRows.length >= LIMITS.workspaceMembersCount) {
-      return { ok: false as const, reason: "limit" as const };
-    }
-
-    const rows = await tx
-      .insert(workspaceMembers)
-      .values({
-        workspaceId,
-        userId: body.userId,
-      })
-      .returning({
-        id: workspaceMembers.id,
-        userId: workspaceMembers.userId,
-        createdAt: workspaceMembers.createdAt,
-      });
-
-    await recordAuditEvent(tx, {
-      action: AUDIT_ACTION.UPDATE,
-      resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE,
-      resourceId: workspaceId,
-      changes: {
-        membersAdded: {
-          old: null,
-          new: [body.userId],
-        },
-      },
-    });
-
-    return { ok: true as const, rows };
-  });
-
-  if (Result.isError(txResult)) {
-    if (
-      DatabaseError.is(txResult.error) &&
-      txResult.error.code === PG_ERROR.UNIQUE_VIOLATION
-    ) {
+  if (!txResult.ok) {
+    if (txResult.reason === "not_member") {
       return Result.err(
         new HandlerError({
-          status: 409,
-          message: "User is already a member of this workspace",
+          status: 400,
+          message: "User is not a member of this organization",
         }),
       );
     }
-    return Result.err(txResult.error);
-  }
-
-  if (!txResult.value.ok) {
-    if (txResult.value.reason === "not_found") {
+    if (txResult.reason === "not_found") {
       return Result.err(
         new HandlerError({ status: 404, message: "Workspace not found" }),
       );
@@ -156,7 +153,7 @@ export const addWorkspaceMemberHandler = async function* ({
     );
   }
 
-  const created = txResult.value.rows.at(0);
+  const created = txResult.rows.at(0);
   if (!created) {
     panic("Failed to add workspace member");
   }
@@ -166,15 +163,7 @@ export const addWorkspaceMemberHandler = async function* ({
 
 const addWorkspaceMember = createSafeHandler(
   config,
-  async function* ({
-    safeDb,
-    session,
-    workspaceId,
-    body,
-    recordAuditEvent,
-    user,
-  }) {
-    yield* checkDemoAccountOperation(user.email);
+  async function* ({ safeDb, session, workspaceId, body, recordAuditEvent }) {
     return yield* addWorkspaceMemberHandler({
       safeDb,
       organizationId: session.activeOrganizationId,

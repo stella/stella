@@ -2,6 +2,9 @@
 export * from "./registration-budget-schema";
 export * from "./schema/contacts";
 export * from "./schema/backfill-state";
+export * from "./schema/case-law-replay";
+export * from "./schema/eu-completion";
+export * from "./schema/system-audit";
 export * from "./schema/properties";
 export * from "./schema/entities";
 export * from "./schema/templates";
@@ -15,10 +18,12 @@ export * from "./schema/case-law-provision-extraction";
 export * from "./schema/legal-reader";
 export * from "./schema/legislation";
 export * from "./schema/sanctions";
+export * from "./schema/sanctions-monitoring";
 export * from "./schema/corpus-index-generations";
 export * from "./schema/corpus-index-projections";
 export * from "./schema/lists";
 export * from "./schema/chat";
+export * from "./schema/chat-secrets";
 export * from "./schema/docx-suggestions";
 export * from "./schema/extraction-runs";
 export * from "./schema/file-comparisons";
@@ -45,6 +50,7 @@ export * from "./schema/signals";
 export * from "./schema/notifications";
 export * from "./schema/correspondence";
 export * from "./schema/feedback";
+export * from "./schema/feature-enrolments";
 export * from "./schema/relations";
 export {
   ACCOUNT_DELETION_REQUEST_STATUSES,
@@ -139,3 +145,8 @@ export type {
   ViewLayout,
   ViewTemplateProperty,
 } from "./schema/common";
+
+export * from "./schema/soft-law";
+
+export * from "./schema/desktop-presence";
+export * from "./schema/desktop-device-proof-replay";

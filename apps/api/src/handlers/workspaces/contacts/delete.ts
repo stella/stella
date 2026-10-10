@@ -3,8 +3,9 @@ import { and, eq } from "drizzle-orm";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { workspaceContacts } from "@/api/db/schema";
+import { workspaceContactRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { captureError } from "@/api/lib/analytics/capture";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -20,6 +21,8 @@ const config = {
     "party role and notes recorded on it. The contact stays in the " +
     "organization address book; use contacts.delete to remove it from there.",
   permissions: { workspace: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: workspaceContactRealtimeUpdates,
   mcp: { type: "covered", by: "link_matter_contact" },
   params: workspaceParams({ workspaceContactId: tSafeId("workspaceContact") }),
 } satisfies WorkspaceHandlerConfig;

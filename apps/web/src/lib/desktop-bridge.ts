@@ -1,10 +1,12 @@
 import { panic, Result, TaggedError } from "better-result";
 
+import { DESKTOP_ACCOUNT_POLICY } from "@stll/api-contract/desktop-registry";
 import type {
   DesktopAccountIdentity,
   LinkAccountRequest,
   LinkedAccountSnapshot,
 } from "@stll/api-contract/desktop-rpc";
+import { sleep } from "@stll/concurrency/sleep";
 import { FetchBoundaryError } from "@stll/errors";
 import { fetchWithTimeout } from "@stll/fetch";
 import type { FetchWithTimeoutInit } from "@stll/fetch";
@@ -12,14 +14,18 @@ import { Temporal } from "@stll/time";
 
 import { env } from "@/env";
 import type { DesktopLinkOutcome } from "@/features/desktop/desktop-connection-store.logic";
+import {
+  DESKTOP_HANDOFF_POLL_INTERVAL_MS,
+  watchDesktopEditHandoff,
+} from "@/features/desktop/desktop-edit-handoff";
 import { api } from "@/lib/api";
 import { getFreshLinkedAccount } from "@/lib/auth-session";
 import { unwrapEden } from "@/lib/errors/api";
+import { readQueryResult } from "@/lib/errors/query-result";
 import { toSafeId } from "@/lib/safe-id";
 
 const DESKTOP_BRIDGE_PORT = env.VITE_DESKTOP_BRIDGE_PORT;
 const DESKTOP_BRIDGE_URL = `http://127.0.0.1:${String(DESKTOP_BRIDGE_PORT)}`;
-const DESKTOP_HANDOFF_POLL_INTERVAL_MS = 750;
 const DESKTOP_ACCOUNT_LINK_HASH = "#desktop-account";
 
 export class DesktopBridgeUnavailableError extends Error {
@@ -46,11 +52,6 @@ type DesktopEditHandoff = {
   handoffId: string;
 };
 
-type DesktopEditHandoffStatus =
-  | { status: "expired"; expiresAt: string }
-  | { status: "opened"; sessionId: string }
-  | { status: "pending"; expiresAt: string };
-
 export type OpenFileInDesktopResult =
   | { type: "opened" }
   | { type: "handoff-pending"; waitUntilOpened: Promise<void> };
@@ -72,11 +73,18 @@ const DESKTOP_ACCOUNT_CHALLENGE_TTL_MS = 60_000;
 type DesktopAccountChallenge = {
   correlationId: string;
   verifierHash: string;
+  deviceJkt: string;
   portSecret: string;
+  protocol: string;
 };
 
-let accountChallenge: (DesktopAccountChallenge & { expiresAt: number }) | null =
-  null;
+type DesktopAccountAttempt =
+  | {
+      type: "challenge";
+      challenge: DesktopAccountChallenge & { expiresAt: number };
+    }
+  | { type: "update-required" };
+let accountAttempt: DesktopAccountAttempt | null = null;
 
 export const parseDesktopAccountChallenge = (hash: string) => {
   if (!hash.startsWith(`${DESKTOP_ACCOUNT_LINK_HASH}?`)) {
@@ -88,33 +96,46 @@ export const parseDesktopAccountChallenge = (hash: string) => {
   const correlationId = params.get("correlationId");
   const verifierHash = params.get("verifierHash");
   const portSecret = params.get("portSecret");
+  const deviceJkt = params.get("deviceJkt");
+  const protocol = params.get("protocol");
   if (
-    [...params].length !== 3 ||
+    [...params].length !== 5 ||
+    protocol !== String(DESKTOP_ACCOUNT_POLICY.linkProtocol) ||
     !correlationId ||
     !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u.test(
       correlationId,
     ) ||
     !verifierHash ||
     !/^[0-9a-f]{64}$/u.test(verifierHash) ||
+    !deviceJkt ||
+    !/^[A-Za-z0-9_-]{43}$/u.test(deviceJkt) ||
     !portSecret ||
     !/^[0-9a-f]{64}$/u.test(portSecret)
   ) {
     return null;
   }
-  return { correlationId, verifierHash, portSecret };
+  return { correlationId, verifierHash, deviceJkt, portSecret, protocol };
 };
 
 export const captureDesktopAccountLink = () => {
-  const challenge = parseDesktopAccountChallenge(window.location.hash);
-  if (!challenge) {
+  const hash = window.location.hash;
+  if (!hash.startsWith(`${DESKTOP_ACCOUNT_LINK_HASH}?`)) {
     return false;
   }
-  accountChallenge = {
-    ...challenge,
-    expiresAt:
-      Temporal.Now.instant().epochMilliseconds +
-      DESKTOP_ACCOUNT_CHALLENGE_TTL_MS,
-  };
+  const challenge = parseDesktopAccountChallenge(hash);
+  if (!challenge) {
+    accountAttempt = { type: "update-required" };
+  } else {
+    accountAttempt = {
+      type: "challenge",
+      challenge: {
+        ...challenge,
+        expiresAt:
+          Temporal.Now.instant().epochMilliseconds +
+          DESKTOP_ACCOUNT_CHALLENGE_TTL_MS,
+      },
+    };
+  }
   window.history.replaceState(
     null,
     "",
@@ -288,17 +309,11 @@ const readDesktopEditHandoffStatus = async ({
     })
     .status.get();
 
-  return unwrapEden(response) satisfies DesktopEditHandoffStatus;
+  return unwrapEden(response);
 };
 
 const launchDesktopEditHandoff = (deepLinkUrl: string) => {
   window.location.href = deepLinkUrl;
-};
-
-const wait = async (milliseconds: number) => {
-  await new Promise<void>((resolve) => {
-    setTimeout(resolve, milliseconds);
-  });
 };
 
 const waitForDesktopEditHandoffOpened = async ({
@@ -310,39 +325,15 @@ const waitForDesktopEditHandoffOpened = async ({
   handoffId: string;
   workspaceId: string;
 }) => {
-  const parsedDeadline = new Date(expiresAt).getTime();
-  let deadline = Number.isFinite(parsedDeadline)
-    ? parsedDeadline
-    : Temporal.Now.instant().epochMilliseconds + 30_000;
-
-  while (Temporal.Now.instant().epochMilliseconds < deadline) {
-    const handoffStatus = await readDesktopEditHandoffStatus({
-      handoffId,
-      workspaceId,
-    });
-
-    if (handoffStatus.status === "opened") {
-      return;
-    }
-
-    if (handoffStatus.status === "expired") {
-      break;
-    }
-
-    const nextDeadline = new Date(handoffStatus.expiresAt).getTime();
-    if (Number.isFinite(nextDeadline) && nextDeadline > deadline) {
-      deadline = nextDeadline;
-    }
-
-    await wait(
-      Math.max(
-        0,
-        Math.min(
-          DESKTOP_HANDOFF_POLL_INTERVAL_MS,
-          deadline - Temporal.Now.instant().epochMilliseconds,
-        ),
-      ),
-    );
+  const outcome = readQueryResult(
+    await watchDesktopEditHandoff({
+      expiresAt,
+      readStatus: async () =>
+        await readDesktopEditHandoffStatus({ handoffId, workspaceId }),
+    }),
+  );
+  if (outcome === "opened") {
+    return;
   }
 
   throw new DesktopBridgeUnavailableError();
@@ -444,8 +435,14 @@ export const linkDesktopAccount = async ({
   apiBaseUrl,
 }: Pick<LinkAccountRequest, "apiBaseUrl">) => {
   captureDesktopAccountLink();
-  const challenge = accountChallenge;
-  accountChallenge = null;
+  const attempt = accountAttempt;
+  accountAttempt = null;
+  if (attempt?.type === "update-required") {
+    return Result.ok({
+      status: "update-required",
+    } as const satisfies DesktopLinkOutcome);
+  }
+  const challenge = attempt?.challenge;
   if (
     !challenge ||
     challenge.expiresAt <= Temporal.Now.instant().epochMilliseconds
@@ -471,6 +468,7 @@ export const linkDesktopAccount = async ({
         await api["desktop-registry"].grant.post({
           correlationId: challenge.correlationId,
           verifierHash: challenge.verifierHash,
+          deviceJkt: challenge.deviceJkt,
         }),
       );
       const matched = resolveDesktopAccountLink({
@@ -518,7 +516,7 @@ export const linkDesktopAccount = async ({
         ) {
           throw connection.error;
         }
-        await wait(DESKTOP_HANDOFF_POLL_INTERVAL_MS);
+        await sleep(DESKTOP_HANDOFF_POLL_INTERVAL_MS);
       }
       throw new DesktopBridgeUnavailableError();
     },

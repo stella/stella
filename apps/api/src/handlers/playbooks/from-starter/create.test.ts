@@ -25,6 +25,7 @@ import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { PlaybookPositions } from "@/api/lib/workflow/playbook-positions";
 import { assertPositionsValid } from "@/api/lib/workflow/playbook-positions-validation";
 import { STARTER_PLAYBOOKS } from "@/api/lib/workflow/starter-playbooks";
+import { testModelActionAdmitter } from "@/api/tests/helpers/model-dispatch-admission";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -69,6 +70,7 @@ const createOrgContext = (
 
   return {
     createAuditRecorder: () => noopAuditRecorder,
+    getActiveWorkspaceIds: async () => [],
     memberRole: sessionMemberRole("owner"),
     orgAIConfig: null,
     promptCachingEnabled: false,
@@ -201,7 +203,9 @@ describe("starter playbook content", () => {
       const result = await assertPositionsValid({
         safeDb: createScopedDbMock(noDbTx).safeDb,
         organizationId: ids.orgA,
+        accessibleWorkspaceIds: [],
         positions: starter.positions,
+        storedPositions: null,
       });
       expect(Result.isError(result)).toBe(false);
     }
@@ -229,6 +233,7 @@ describe("starter playbook content", () => {
 
     for (const starter of STARTER_PLAYBOOKS) {
       await deriveAutoAsks(instantiateStarterPositions(starter.positions), {
+        admitModelAction: testModelActionAdmitter(ids.orgA),
         organizationId: ids.orgA,
         orgAIConfig: null,
         orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,

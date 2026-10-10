@@ -3,7 +3,7 @@ import { Fragment, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type { PlaybookRunProjection } from "@stll/api-contract";
@@ -15,7 +15,6 @@ import {
   ClockIcon,
   DownloadIcon,
   HashIcon,
-  Loader2Icon,
   PlayIcon,
   Rows3Icon,
   SparklesIcon,
@@ -23,6 +22,7 @@ import {
   AiActionIcon,
   WrapTextIcon,
 } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 import {
   Menu,
   MenuGroup,
@@ -47,8 +47,11 @@ import { ViewToolbarChrome } from "@stll/ui/view-toolbar";
 
 import { CsvIcon, DocxIcon, XlsxIcon } from "@/components/document-icon";
 import { FolderExpandToggle } from "@/components/file-tree/folder-expand-toggle";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
+import { AiColumnSelectionAction } from "@/components/workspaces/ai-column-run-controls";
 import { BulkAddColumns } from "@/components/workspaces/bulk-add-columns";
 import { getInternalPropertyId } from "@/components/workspaces/entity-utils";
+import { useStartWorkflow } from "@/components/workspaces/hooks/use-start-workflow";
 import { PropertyIcon } from "@/components/workspaces/property-helpers";
 import { RowActions } from "@/components/workspaces/row-actions";
 import { ColumnToggle } from "@/components/workspaces/table/column-toggle";
@@ -75,6 +78,7 @@ import {
   PLAYBOOK_PICKER_LIMIT,
   playbooksOptions,
 } from "@/lib/knowledge/queries";
+import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 import { toSafeId } from "@/lib/safe-id";
 import type {
   ViewLayout,
@@ -82,6 +86,7 @@ import type {
   WorkspaceProperty,
   WorkspaceView,
 } from "@/lib/types";
+import { useQueryView } from "@/lib/use-query-view";
 import { downloadFile } from "@/lib/utils";
 import { useUpdateView } from "@/lib/workspaces/mutations/views";
 import {
@@ -117,7 +122,10 @@ export const ViewToolbar = ({
   view,
   workspaceId,
 }: ViewToolbarProps) => {
-  const { data: properties = [] } = useQuery(propertiesOptions(workspaceId));
+  const propertiesQuery = useQuery(propertiesOptions(workspaceId));
+  const propertiesView = useQueryView(propertiesQuery);
+  const properties =
+    propertiesView.type === "items" ? propertiesView.items : [];
   const updateView = useUpdateView(workspaceId);
   const { filters, sorts, hiddenProperties } = view.layout;
   const folderState = useWorkspaceStore((s) => s.folderState);
@@ -137,12 +145,21 @@ export const ViewToolbar = ({
     });
   };
   const columnToggleGroups = useMatterColumnToggleGroups(properties);
+  const aiProperties =
+    view.layout.type === "table"
+      ? properties.filter(
+          (property) =>
+            property.tool.type === "ai-model" &&
+            !hiddenProperties.includes(property.id),
+        )
+      : [];
 
   return (
     <ViewToolbarChrome
       className="md:ms-auto md:justify-end"
       data-slot="workspace-view-toolbar"
     >
+      <QueryViewFeedback view={propertiesView} />
       <ExtractionRunProgress workspaceId={workspaceId} />
 
       {view.layout.type === "filesystem" && folderState.hasFolders && (
@@ -288,6 +305,7 @@ export const ViewToolbar = ({
 
       {view.layout.type === "table" && (
         <SelectionActions
+          aiProperties={aiProperties}
           selectedEntities={selectedEntities}
           workspaceId={workspaceId}
         />
@@ -297,6 +315,7 @@ export const ViewToolbar = ({
 };
 
 type SelectionActionsProps = {
+  aiProperties: readonly WorkspaceProperty[];
   selectedEntities: WorkspaceEntity[] | undefined;
   workspaceId: string;
 };
@@ -307,14 +326,62 @@ type SelectionActionsProps = {
  * toolbar and the row context menu cannot drift apart.
  */
 const SelectionActions = ({
+  aiProperties,
   selectedEntities,
   workspaceId,
 }: SelectionActionsProps) => {
   const t = useTranslations();
+  const startWorkflow = useStartWorkflow(workspaceId);
+  const [isRunningAIColumns, setIsRunningAIColumns] = useState(false);
   const firstSelected = selectedEntities?.at(0);
   if (!firstSelected || selectedEntities === undefined) {
     return null;
   }
+  const selectedRunRows = selectedEntities.filter(
+    (entity) => entity.kind !== "folder" && !entity.readOnly,
+  );
+  const aiPropertyIds = aiProperties.map((property) => property.id);
+  const runSelectedAIColumns = async () => {
+    if (aiPropertyIds.length === 0 || selectedRunRows.length === 0) {
+      return;
+    }
+    setIsRunningAIColumns(true);
+    try {
+      const result = await startWorkflow({
+        entityIds: selectedRunRows.map((entity) => entity.entityId),
+        propertyIds: aiPropertyIds,
+      });
+      if (!result) {
+        return;
+      }
+      switch (result.status) {
+        case "started":
+          stellaToast.add({
+            title: t("workspaces.workflow.startedSuccessfully"),
+            type: "success",
+          });
+          return;
+        case "already-running":
+          stellaToast.add({ title: t("common.running"), type: "info" });
+          return;
+        case "skipped":
+          stellaToast.add({
+            title: t("workspaces.workflow.noFieldsToProcess"),
+            type: "info",
+          });
+          return;
+        case "ai-unavailable":
+        case "failed":
+          return;
+        default: {
+          result satisfies never;
+          panic("Unhandled workflow start status");
+        }
+      }
+    } finally {
+      setIsRunningAIColumns(false);
+    }
+  };
 
   return (
     <div className="relative ms-auto flex items-center gap-1.5">
@@ -333,6 +400,21 @@ const SelectionActions = ({
           count: selectedEntities.length,
         })}
       </span>
+      {aiPropertyIds.length > 0 && (
+        <div className="flex flex-col items-start gap-0.5">
+          <AiColumnSelectionAction
+            columns={aiPropertyIds.length}
+            rows={selectedRunRows.length}
+            disabled={isRunningAIColumns || selectedRunRows.length === 0}
+            onRun={() =>
+              detached(
+                runSelectedAIColumns(),
+                "view-toolbar.run-selected-ai-columns",
+              )
+            }
+          />
+        </div>
+      )}
       <RowActions
         entity={firstSelected}
         selectedEntities={
@@ -436,11 +518,10 @@ const ExportFormatIcon = ({ Icon, pending }: ExportFormatIconProps) => {
 
   if (pending) {
     return (
-      <Loader2Icon
-        aria-hidden={false}
-        aria-label={t("common.loading")}
-        className="text-muted-foreground size-4.5 animate-spin sm:size-4"
-        role="img"
+      <Loader
+        className="size-4.5 sm:size-4"
+        label={t("common.loading")}
+        size="sm"
       />
     );
   }
@@ -520,7 +601,7 @@ const TableExportMenu = ({ view, workspaceId }: TableExportMenuProps) => {
           {exportingFormat === null ? (
             <DownloadIcon className="size-3.5" />
           ) : (
-            <Loader2Icon className="size-3.5 animate-spin" />
+            <Loader className="size-3.5" size="sm" variant="decorative" />
           )}
         </MenuTrigger>
         <MenuPopup className="min-w-56">
@@ -701,35 +782,45 @@ const RunPlaybookControl = ({ workspaceId }: RunPlaybookControlProps) => {
 
   return (
     <Menu onOpenChange={setOpen} open={open}>
-      <MenuTrigger
-        render={
-          <Button
-            aria-label={t("workspaces.playbooks.run")}
-            disabled={isRunning}
-            size="icon-xs"
-            title={t("workspaces.playbooks.run")}
-            variant="ghost"
-          />
-        }
-      >
-        <PlayIcon className="size-3.5" />
-      </MenuTrigger>
+      <CapabilityAction action={{ capability: "ai" }} surface="control">
+        {(capabilityProps) => (
+          <MenuTrigger
+            render={
+              <Button
+                aria-label={t("workspaces.playbooks.run")}
+                disabled={isRunning}
+                size="icon-xs"
+                title={t("workspaces.playbooks.run")}
+                variant="ghost"
+              />
+            }
+            {...capabilityProps}
+          >
+            <PlayIcon className="size-3.5" />
+          </MenuTrigger>
+        )}
+      </CapabilityAction>
       <MenuPopup>
-        <MenuItem
-          closeOnClick={false}
-          disabled={isRunning}
-          onClick={() => {
-            detached(handleAutoRun(), "view-toolbar.auto-run");
-          }}
-        >
-          <AiActionIcon className="size-3.5" />
-          <span className="flex flex-col">
-            <span>{t("workspaces.playbooks.autoRun")}</span>
-            <span className="text-muted-foreground text-xs">
-              {t("workspaces.playbooks.autoRunHint")}
-            </span>
-          </span>
-        </MenuItem>
+        <CapabilityAction action={{ capability: "ai" }} surface="menu">
+          {(capabilityProps) => (
+            <MenuItem
+              closeOnClick={false}
+              disabled={isRunning}
+              onClick={() => {
+                detached(handleAutoRun(), "view-toolbar.auto-run");
+              }}
+              {...capabilityProps}
+            >
+              <AiActionIcon className="size-3.5" />
+              <span className="flex flex-col">
+                <span>{t("workspaces.playbooks.autoRun")}</span>
+                <span className="text-muted-foreground text-xs">
+                  {t("workspaces.playbooks.autoRunHint")}
+                </span>
+              </span>
+            </MenuItem>
+          )}
+        </CapabilityAction>
         <MenuSeparator />
         {/* Applies to the individual playbooks below; auto-run always
             materializes columns. */}
@@ -762,16 +853,24 @@ const RunPlaybookControl = ({ workspaceId }: RunPlaybookControlProps) => {
           <MenuItem disabled>{t("knowledge.playbooks.empty")}</MenuItem>
         )}
         {playbooks.map((playbook) => (
-          <MenuItem
-            closeOnClick={false}
-            disabled={isRunning}
+          <CapabilityAction
+            action={{ capability: "ai" }}
+            surface="menu"
             key={playbook.id}
-            onClick={() => {
-              detached(handleRun(playbook.id), "view-toolbar.run");
-            }}
           >
-            {playbook.name}
-          </MenuItem>
+            {(capabilityProps) => (
+              <MenuItem
+                closeOnClick={false}
+                disabled={isRunning}
+                onClick={() => {
+                  detached(handleRun(playbook.id), "view-toolbar.run");
+                }}
+                {...capabilityProps}
+              >
+                {playbook.name}
+              </MenuItem>
+            )}
+          </CapabilityAction>
         ))}
       </MenuPopup>
     </Menu>
@@ -793,9 +892,15 @@ const FilesystemOrganizerAction = ({
   // independent of the FilesystemView's current page. useQuery (not
   // useSuspenseQuery) keeps a cache miss from suspending the toolbar
   // chrome — the action button just stays disabled until the data resolves.
-  const { data: foldersData } = useQuery(workspaceFoldersOptions(workspaceId));
+  const foldersDataQuery = useQuery(workspaceFoldersOptions(workspaceId));
+  const foldersDataView = useQueryView(foldersDataQuery);
+  const foldersData =
+    foldersDataView.type === "items" ? foldersDataView.items : undefined;
   const allFolders = normalizeOptionalArray(foldersData);
-  const { data: filesData } = useQuery(workspaceFilesOptions(workspaceId));
+  const filesDataQuery = useQuery(workspaceFilesOptions(workspaceId));
+  const filesDataView = useQueryView(filesDataQuery);
+  const filesData =
+    filesDataView.type === "items" ? filesDataView.items : undefined;
   const allFiles = normalizeOptionalArray(filesData);
 
   const existingFolders = (() => {
@@ -847,6 +952,8 @@ const FilesystemOrganizerAction = ({
 
   return (
     <>
+      <QueryViewFeedback view={foldersDataView} />
+      <QueryViewFeedback view={filesDataView} />
       <Button
         aria-label={
           selectedFiles.length > 0
@@ -855,7 +962,13 @@ const FilesystemOrganizerAction = ({
               })
             : t("workspaces.importOrganizer.action")
         }
-        disabled={organizerFiles.length === 0}
+        disabled={
+          organizerFiles.length === 0 ||
+          foldersDataView.type === "pending" ||
+          foldersDataView.type === "error" ||
+          filesDataView.type === "pending" ||
+          filesDataView.type === "error"
+        }
         onClick={() => setOpen(true)}
         size="xs"
         title={

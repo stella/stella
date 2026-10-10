@@ -3,11 +3,13 @@ import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import { LEGAL_LIST_STATUSES, legalLists } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { legalListRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { pickDefined } from "@/api/lib/pick-defined";
 import { includes } from "@/api/lib/type-guards";
 
@@ -19,12 +21,15 @@ const bodySchema = t.Object({
 });
 
 const config = {
+  featureAccess: { type: "required", featureId: LEGAL_LISTS_FEATURE_ID },
   description:
     "Rename a list, change its description, or move it between active and " +
     "archived. Only the fields you pass are written, an unrecognized status " +
     "is refused, and a call that changes nothing is a no-op rather than an " +
     "error.",
   permissions: { view: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: legalListRealtimeUpdates,
   mcp: {
     type: "capability",
     reason: "workspace_schema",

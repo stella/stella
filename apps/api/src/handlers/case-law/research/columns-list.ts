@@ -4,7 +4,7 @@ import {
   readOrganizationResearchColumns,
   toResearchColumnResponse,
 } from "@/api/handlers/case-law/research/column-access";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 
 const config = {
@@ -13,6 +13,7 @@ const config = {
     "shown. Every member sees the same set, and the whole set fits one " +
     "response: the columns an organization may hold are bounded.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
   mcp: { type: "internal", reason: "search_ui" },
 } satisfies HandlerConfig;

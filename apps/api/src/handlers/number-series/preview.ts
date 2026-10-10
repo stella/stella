@@ -6,7 +6,7 @@ import { renderMatterReference } from "@stll/api-contract";
 
 import { numberSeriesAllocations, numberSeriesCounters } from "@/api/db/schema";
 import { numberSeriesParams } from "@/api/handlers/number-series/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { toNumberPatternScopeKey } from "@/api/lib/billing/number-pattern";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -15,6 +15,8 @@ const config = {
   description:
     "Preview the next number for a date without reserving it. A concurrent issue can change the result.",
   permissions: { organizationSettings: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.standard,
+  featureAccess: { featureId: "time-billing", type: "required" },
   mcp: {
     type: "capability",
     readClass: "tenant",

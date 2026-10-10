@@ -1,3 +1,4 @@
+import { getCurrentAuthEndpointContext } from "@better-auth/core/context";
 import {
   oauthProvider,
   type ClientDiscovery,
@@ -13,7 +14,10 @@ import { panic } from "better-result";
 import type { McpOAuthScope } from "@stll/api-contract";
 
 import { isVerifiedClientMetadataDocument } from "@/api/lib/auth/oauth-consent-info";
-import { OAUTH_CLIENT_REGISTRATION_PATH } from "@/api/lib/oauth-loopback-registration";
+import {
+  isLoopbackRedirectUri,
+  OAUTH_CLIENT_REGISTRATION_PATH,
+} from "@/api/lib/oauth-loopback-registration";
 import { isRecord } from "@/api/lib/type-guards";
 
 export const OAUTH_REGISTRATION_SCOPE_POLICY = {
@@ -52,6 +56,63 @@ const ELEVATED_REGISTRATION_SCOPES = new Set(
 );
 
 const OAUTH_AUTHORIZATION_PATH = "/oauth2/authorize";
+
+const isNativeRedirectUri = (redirectUri: string): boolean => {
+  const url = URL.parse(redirectUri);
+  return (
+    isLoopbackRedirectUri(redirectUri) ||
+    (url !== null && url.protocol !== "https:" && url.protocol !== "http:")
+  );
+};
+
+/** RFC 8252 §8.6: a native redirect requires a fresh public-client grant. */
+export const requiresNativeClientConsent = (
+  client: Pick<SchemaClient<readonly Scope[]>, "tokenEndpointAuthMethod">,
+  redirectUri: string,
+): boolean => {
+  if (client.tokenEndpointAuthMethod !== "none") {
+    return false;
+  }
+  return isNativeRedirectUri(redirectUri);
+};
+
+const nativeConsentPrompt = (
+  client: Pick<
+    SchemaClient<readonly Scope[]>,
+    "tokenEndpointAuthMethod"
+  > | null,
+  parameters: Record<string, unknown>,
+): string | undefined => {
+  const redirectUri = parameters["redirect_uri"];
+  const prompt = parameters["prompt"];
+  if (
+    client === null ||
+    typeof redirectUri !== "string" ||
+    !requiresNativeClientConsent(client, redirectUri)
+  ) {
+    return undefined;
+  }
+  if (
+    prompt !== undefined &&
+    (typeof prompt !== "string" || prompt.trim().length === 0)
+  ) {
+    return undefined;
+  }
+  // The consent endpoint consumes this signed prompt before issuing a code.
+  // Login and account-selection prompts survive. Non-interactive requests use
+  // the provider's interaction-required response through the post-login gate.
+  const prompts =
+    prompt === undefined
+      ? []
+      : prompt
+          .split(" ")
+          .map((value) => value.trim())
+          .filter(Boolean);
+  if (prompts.length > 0 && prompts.every((value) => value === "none")) {
+    return "none";
+  }
+  return [...new Set([...prompts, "consent"])].join(" ");
+};
 
 /**
  * How Stella treats every OAuth provider endpoint. Every endpoint the
@@ -144,13 +205,8 @@ export const grantableScopes = (
   );
 };
 
-/** Mirrors the provider's choice of parameter source for `/oauth2/authorize`. */
-const readsAuthorizationBody = (ctx: {
-  readonly method?: string | undefined;
-}): boolean => {
-  if (ctx.method !== "POST") {
-    return false;
-  }
+/** Consent and login continuations dispatch authorize with explicit settings. */
+const isInitialAuthorization = (ctx: object): boolean => {
   const settings: unknown = Reflect.get(ctx, "authorizeSettings");
   return (
     settings === undefined ||
@@ -159,13 +215,65 @@ const readsAuthorizationBody = (ctx: {
   );
 };
 
+/** Mirrors the provider's choice of parameter source for `/oauth2/authorize`. */
+const readsAuthorizationBody = (ctx: {
+  readonly method?: string | undefined;
+}): boolean => ctx.method === "POST" && isInitialAuthorization(ctx);
+
 /** A hook result that leaves the request as it is. */
 const UNCHANGED = { context: {} };
 
-const createScopePolicyMiddleware = (
-  policy: OAuthScopePolicyContext,
-  discoveries: readonly ClientDiscovery[],
-) =>
+type NativeAuthorizationClientOptions = {
+  clientId: string;
+  stored: SchemaClient<Scope[]> | null;
+  redirectUri: unknown;
+  discoveries: readonly ClientDiscovery[];
+};
+
+const resolveNativeAuthorizationClient = async (
+  ctx: Parameters<ClientDiscovery["resolve"]>[0],
+  {
+    clientId,
+    stored,
+    redirectUri,
+    discoveries,
+  }: NativeAuthorizationClientOptions,
+): Promise<SchemaClient<Scope[]> | null> => {
+  if (typeof redirectUri !== "string" || !isNativeRedirectUri(redirectUri)) {
+    return stored;
+  }
+  // Resolve metadata before deciding consent: the discovery may change the
+  // client's authentication method. Its request cache also serves the provider.
+  const discoveryId = stored?.clientDiscoveryId;
+  if (stored && !discoveryId) {
+    return stored;
+  }
+  for (const discovery of discoveries) {
+    if (discoveryId && discovery.id !== discoveryId) {
+      continue;
+    }
+    if (!discovery.matches(clientId)) {
+      continue;
+    }
+    const resolved = await discovery.resolve(ctx, clientId, stored);
+    if (resolved || discoveryId) {
+      return resolved;
+    }
+  }
+  return null;
+};
+
+type OAuthPolicyMiddlewareOptions = {
+  policy: OAuthScopePolicyContext;
+  discoveries: readonly ClientDiscovery[];
+  noInteractionRequests: WeakSet<Request>;
+};
+
+const createOAuthPolicyMiddleware = ({
+  policy,
+  discoveries,
+  noInteractionRequests,
+}: OAuthPolicyMiddlewareOptions) =>
   createAuthMiddleware(async (ctx) => {
     if (ctx.path === OAUTH_CLIENT_REGISTRATION_PATH) {
       const body: unknown = ctx.body;
@@ -196,18 +304,22 @@ const createScopePolicyMiddleware = (
       scope === undefined
         ? undefined
         : scope.split(" ").filter((value) => value.length > 0);
-    const stored = await ctx.context.adapter.findOne<
-      SchemaClient<readonly Scope[]>
-    >({
+    const stored = await ctx.context.adapter.findOne<SchemaClient<Scope[]>>({
       model: "oauthClient",
       where: [{ field: "clientId", value: clientId }],
     });
-    if (!stored && requested === undefined) {
+    const resolved = await resolveNativeAuthorizationClient(ctx, {
+      stored,
+      clientId,
+      redirectUri: parameters["redirect_uri"],
+      discoveries,
+    });
+    if (!resolved && requested === undefined) {
       // A client not stored yet is resolved by a discovery, which applies
       // the same policy to the scope list the provider falls back to.
       return UNCHANGED;
     }
-    const client: OAuthScopeClient = stored ?? {
+    const client: OAuthScopeClient = resolved ?? {
       clientId,
       clientDiscoveryId:
         discoveries.find((discovery) => discovery.matches(clientId))?.id ??
@@ -215,26 +327,58 @@ const createScopePolicyMiddleware = (
       scopes: undefined,
     };
     const grantable = grantableScopes(client, requested, policy).join(" ");
-    if (grantable === scope) {
+    const consentPrompt = isInitialAuthorization(ctx)
+      ? nativeConsentPrompt(resolved, parameters)
+      : undefined;
+    if (consentPrompt === "none" && ctx.request) {
+      noInteractionRequests.add(ctx.request);
+    }
+    if (grantable === scope && consentPrompt === undefined) {
       return UNCHANGED;
     }
+    const authorizationPolicy = {
+      scope: grantable,
+      ...(consentPrompt === undefined ? {} : { prompt: consentPrompt }),
+    };
     return fromBody
-      ? { context: { body: { scope: grantable } } }
-      : { context: { query: { scope: grantable } } };
+      ? { context: { body: authorizationPolicy } }
+      : { context: { query: authorizationPolicy } };
   });
 
 const withScopePolicy = (
   discovery: ClientDiscovery,
   policy: OAuthScopePolicyContext,
-): ClientDiscovery => ({
-  ...discovery,
-  resolve: async (ctx, clientId, existing) => {
-    const client = await discovery.resolve(ctx, clientId, existing);
-    return client
-      ? { ...client, scopes: grantableScopes(client, undefined, policy) }
-      : null;
-  },
-});
+): ClientDiscovery => {
+  const requests = new WeakMap<
+    Request,
+    Map<string, ReturnType<ClientDiscovery["resolve"]>>
+  >();
+  return {
+    ...discovery,
+    resolve: async (ctx, clientId, existing) => {
+      const cached = ctx.request
+        ? requests.get(ctx.request)?.get(clientId)
+        : undefined;
+      if (cached !== undefined) {
+        return await cached;
+      }
+      const resolution = (async () => {
+        const client = await discovery.resolve(ctx, clientId, existing);
+        return client
+          ? { ...client, scopes: grantableScopes(client, undefined, policy) }
+          : null;
+      })();
+      if (ctx.request) {
+        const clients =
+          requests.get(ctx.request) ??
+          new Map<string, ReturnType<ClientDiscovery["resolve"]>>();
+        clients.set(clientId, resolution);
+        requests.set(ctx.request, clients);
+      }
+      return await resolution;
+    },
+  };
+};
 
 const extensionsWithScopePolicy = (
   extensions: readonly OAuthProviderExtension[],
@@ -254,7 +398,7 @@ const extensionsWithScopePolicy = (
   });
 
 type StellaOAuthProviderOptions = OAuthOptions<Scope[]> &
-  Required<Pick<OAuthOptions<Scope[]>, "scopes" | "extensions">>;
+  Required<Pick<OAuthOptions<Scope[]>, "scopes" | "extensions" | "postLogin">>;
 
 export const createStellaOAuthProvider = (
   options: StellaOAuthProviderOptions,
@@ -270,7 +414,23 @@ export const createStellaOAuthProvider = (
     providerScopes: options.scopes,
   };
   const extensions = extensionsWithScopePolicy(options.extensions, policy);
-  const policyOptions = { ...options, extensions };
+  const noInteractionRequests = new WeakSet<Request>();
+  const policyOptions = {
+    ...options,
+    extensions,
+    postLogin: {
+      ...options.postLogin,
+      shouldRedirect: async (context) => {
+        const { request } = getCurrentAuthEndpointContext();
+        // The provider validates the client, redirect, PKCE and session before
+        // this gate, then answers prompt=none with interaction_required.
+        if (request && noInteractionRequests.has(request)) {
+          return true;
+        }
+        return await options.postLogin.shouldRedirect(context);
+      },
+    } satisfies typeof options.postLogin,
+  };
   const provider = oauthProvider(policyOptions);
   // Registration has its own capability policy; discovery retains the
   // provider's policy. Both endpoints use the provider's persistence path.
@@ -295,7 +455,11 @@ export const createStellaOAuthProvider = (
         {
           matcher: (ctx: HookEndpointContext) =>
             OAUTH_SCOPE_POLICY_PATHS.has(ctx.path ?? ""),
-          handler: createScopePolicyMiddleware(policy, discoveries),
+          handler: createOAuthPolicyMiddleware({
+            policy,
+            discoveries,
+            noInteractionRequests,
+          }),
         },
       ],
     },

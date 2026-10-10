@@ -19,42 +19,32 @@ import {
 } from "@/api/db/schema";
 import { env } from "@/api/env";
 import type { SafeId } from "@/api/lib/branded-types";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import {
-  CONFIGURED_ACCESS_STATE,
-  configuredAccessDeadline,
-} from "@/api/lib/usage/configured-access";
-import {
-  readOrganizationAccessSnapshot,
-  type OrganizationAccessSnapshot,
-} from "@/api/lib/usage/organization-access-snapshot";
+  readFreeTier,
+  resolveOrganizationAccess,
+  type OrganizationAccess,
+} from "@/api/lib/usage/organization-access";
+import { readOrganizationAccessSnapshot } from "@/api/lib/usage/organization-access-snapshot";
 
 /**
  * Whether an organization without its own AI config may run on the instance
- * provider. A missing row fails closed: every organization gets its row at
- * creation or from the migration snapshot, so absence is a fault, not a
- * default.
+ * provider. An unresolvable standing (a missing state row or free policy)
+ * fails closed: absence is a fault, not a default.
  */
-export const allowsInstanceModels = (
-  row: OrganizationAccessSnapshot | undefined,
-  now: Date,
-): boolean => {
-  if (!row) {
-    return false;
-  }
-  switch (row.state) {
-    case ORGANIZATION_ACCESS_STATE.selfManagedKeys:
-    case ORGANIZATION_ACCESS_STATE.evaluationEnded:
+export const allowsInstanceModels = (access: OrganizationAccess): boolean => {
+  switch (access.type) {
+    case "paid":
+    case "evaluation":
+    case "free":
+      return true;
+    case "self_managed_keys":
+    case "ended":
+    case "unavailable":
       return false;
-    case CONFIGURED_ACCESS_STATE: {
-      const deadline = configuredAccessDeadline(row.configuredAccess);
-      return deadline !== null && deadline > now;
-    }
-    case ORGANIZATION_ACCESS_STATE.evaluationPeriod:
-      return row.evaluationEndsAt !== null && row.evaluationEndsAt > now;
-    default: {
-      row satisfies never;
-      return panic("Unhandled organization access state");
-    }
+    default:
+      access satisfies never;
+      return panic("Unhandled organization access");
   }
 };
 
@@ -66,11 +56,14 @@ export const mayUseInstanceModels = async (
   db: Pick<Transaction, "select">,
   organizationId: SafeId<"organization">,
 ): Promise<boolean> => {
-  if (!env.FEATURE_ORG_ACCESS_STATE) {
+  if (!isDeploymentFeatureEnabled("FEATURE_ORG_ACCESS_STATE")) {
     return true;
   }
-  const row = await readOrganizationAccessSnapshot(db, organizationId);
-  return allowsInstanceModels(row, new Date());
+  const snapshot = await readOrganizationAccessSnapshot(db, organizationId);
+  const freeTier = await readFreeTier(db);
+  return allowsInstanceModels(
+    resolveOrganizationAccess({ snapshot, now: new Date(), freeTier }),
+  );
 };
 
 type OrganizationAccessStateChange = {
@@ -88,7 +81,7 @@ export const recordNewOrganizationAccessState = async (
   db: Pick<Transaction, "insert">,
   { organizationId, now }: OrganizationAccessStateChange,
 ): Promise<void> => {
-  const values = env.FEATURE_ORG_ACCESS_STATE
+  const values = isDeploymentFeatureEnabled("FEATURE_ORG_ACCESS_STATE")
     ? {
         organizationId,
         state: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
@@ -167,7 +160,7 @@ export const recordMissingOrganizationAccessStates = async (
 export const recordMissingOrganizationAccessStatesWhileUnenforced = async (
   db: Pick<Transaction, "execute">,
 ): Promise<void> => {
-  if (env.FEATURE_ORG_ACCESS_STATE) {
+  if (isDeploymentFeatureEnabled("FEATURE_ORG_ACCESS_STATE")) {
     return;
   }
   await recordMissingOrganizationAccessStates(db);

@@ -7,7 +7,7 @@ import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 
 import { desktopEditHandoffs } from "@/api/db/schema";
 import { env } from "@/api/env";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import {
   AUDIT_ACTION,
@@ -16,6 +16,8 @@ import {
 } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
+import { authorizeDesktopHandoff } from "@/api/lib/business-registries/desktop/handoff-auth";
+import type { DesktopHandoffAuthorizationDependencies } from "@/api/lib/business-registries/desktop/handoff-auth";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import {
   consumeDesktopEditHandoff,
@@ -60,14 +62,14 @@ const linkedAccountSchema = t.Nullable(
   }),
 );
 
-export const createDesktopEditHandoffBodySchema = t.Object({
+const createDesktopEditHandoffBodySchema = t.Object({
   entityId: tSafeId("entity"),
   force: t.Optional(t.Boolean()),
   linkedAccount: linkedAccountSchema,
   propertyId: tSafeId("property"),
 });
 
-export const desktopEditHandoffStatusParamsSchema = workspaceParams({
+const desktopEditHandoffStatusParamsSchema = workspaceParams({
   handoffId: tSafeId("desktopEditHandoff"),
 });
 
@@ -117,6 +119,7 @@ const buildDesktopEditHandoffDeepLink = ({
 const createConfig = {
   body: createDesktopEditHandoffBodySchema,
   permissions: { entity: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "session_token_exchange" },
 } satisfies WorkspaceHandlerConfig;
 
@@ -183,6 +186,7 @@ export const createDesktopEditHandoff = createSafeHandler(
 const statusConfig = {
   params: desktopEditHandoffStatusParamsSchema,
   permissions: { entity: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "session_token_exchange" },
 } satisfies WorkspaceHandlerConfig;
 
@@ -200,6 +204,8 @@ export const readDesktopEditHandoffStatus = createSafeHandler<
               consumedAt: desktopEditHandoffs.consumedAt,
               desktopSessionId: desktopEditHandoffs.desktopSessionId,
               expiresAt: desktopEditHandoffs.expiresAt,
+              failedAt: desktopEditHandoffs.failedAt,
+              failureReason: desktopEditHandoffs.failureReason,
               openedAt: desktopEditHandoffs.openedAt,
             })
             .from(desktopEditHandoffs)
@@ -229,6 +235,8 @@ export const readDesktopEditHandoffStatus = createSafeHandler<
         consumedAt: handoff.consumedAt,
         desktopSessionId: handoff.desktopSessionId,
         expiresAt: handoff.expiresAt,
+        failedAt: handoff.failedAt,
+        failureReason: handoff.failureReason,
         now: new Date(),
         openedAt: handoff.openedAt,
       }),
@@ -236,19 +244,31 @@ export const readDesktopEditHandoffStatus = createSafeHandler<
   },
 );
 
-export const redeemDesktopEditHandoffHandler = async ({
-  body: { handoffToken },
-  request,
-  server,
-}: {
-  body: { handoffToken: string };
-  request: Request;
-  server: Parameters<typeof createAuditRecorder>[0]["server"];
-}) => {
-  const authorization = await authorizeDesktopAccount(request);
+export const redeemDesktopEditHandoffHandler = async (
+  {
+    body: { handoffToken },
+    request,
+    server,
+  }: {
+    body: { handoffToken: string };
+    request: Request;
+    server: Parameters<typeof createAuditRecorder>[0]["server"];
+  },
+  dependencies?: DesktopHandoffAuthorizationDependencies,
+) => {
+  const authorization = await authorizeDesktopHandoff(
+    {
+      request,
+      handoffToken,
+      kind: "desktop_edit",
+    },
+    dependencies,
+  );
   if (authorization.isErr()) {
     return status(authorization.error.status, {
+      code: authorization.error.code,
       message: authorization.error.message,
+      retryable: authorization.error.retryable,
     });
   }
   const consumed = await consumeDesktopEditHandoff({

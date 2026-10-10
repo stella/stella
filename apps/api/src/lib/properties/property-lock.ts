@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
+import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 
-import type { Transaction } from "@/api/db/root";
 import type { SafeId } from "@/api/lib/branded-types";
 
 // This advisory-lock domain (bare `hashtext(workspaceId)`, shared
@@ -12,7 +12,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 // resource in one transaction — there is no shared state to order
 // against, and therefore no deadlock to reconcile.
 export const lockWorkspacePropertyWrites = async (
-  tx: Transaction,
+  tx: Pick<PgAsyncDatabase<PgQueryResultHKT>, "execute">,
   workspaceId: SafeId<"workspace">,
 ): Promise<void> => {
   await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}))`);

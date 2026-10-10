@@ -31,8 +31,8 @@ import {
   wrappedErrorDetail,
 } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import type { ProcessResult } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
-import { createSourceMetadataUrlSchemaResolver } from "@/api/handlers/case-law/ingestion/pipeline/source-metadata-schema";
-import type { SourceMetadataUrlSchemaResolver } from "@/api/handlers/case-law/ingestion/pipeline/source-metadata-schema";
+import { createSourceContractResolver } from "@/api/handlers/case-law/ingestion/pipeline/source-contract";
+import type { SourceContractResolver } from "@/api/handlers/case-law/ingestion/pipeline/source-contract";
 import { allocateSourceObservationOrder } from "@/api/handlers/case-law/ingestion/pipeline/source-observation";
 import type { DecisionRefresh } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
@@ -555,7 +555,7 @@ export const applyDecisionBatch = async (
     insertLimit,
     signal,
   }: ApplyDecisionBatchOptions,
-  resolveMetadataUrlSchema: SourceMetadataUrlSchemaResolver = createSourceMetadataUrlSchemaResolver(
+  resolveSourceContract: SourceContractResolver = createSourceContractResolver(
     scopedDb,
   ),
 ): Promise<DecisionBatchApplication> => {
@@ -626,7 +626,7 @@ export const applyDecisionBatch = async (
               corpusBatch,
               polarityRules,
             },
-            resolveMetadataUrlSchema,
+            resolveSourceContract,
           ),
         catch: (cause) => cause,
       });

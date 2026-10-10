@@ -4,8 +4,9 @@ import { t } from "elysia";
 import { readCaseLawCoverageHandler } from "@/api/handlers/case-law/decisions/coverage";
 import { coverageResponseSchema } from "@/api/handlers/case-law/public-response-schemas";
 import {
-  safePublicHandlerResponseSchemasWithStatusText,
+  ACCOUNT_ACCESS,
   createSafeBoundedPublicHandler,
+  safePublicHandlerResponseSchemasWithStatusText,
 } from "@/api/lib/api-handlers";
 import type { PublicHandlerConfig } from "@/api/lib/api-handlers";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
@@ -26,6 +27,7 @@ const config = {
   // Not a capability: it takes no input, opts into shared response caching,
   // and is gated by the public-law route hook, none of which the generic
   // invoke path can honor.
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "public_indexing" },
 } satisfies PublicHandlerConfig;
 

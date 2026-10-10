@@ -9,6 +9,7 @@ import {
 } from "@stll/api-contract";
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
+import { sha256Hex as legacyHex } from "@stll/sha256/node";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import type { ActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
@@ -637,6 +638,9 @@ describe("chat prompt builders", () => {
     expect(first.cacheStablePrefix).not.toContain("First User");
     expect(first.cacheStablePrefix).not.toContain("Current date");
     expect(first.fullPrompt).not.toBe(second.fullPrompt);
+    expect(buildChatPromptCacheKey(first.cacheStablePrefix)).toBe(
+      `stella-chat:v1:${legacyHex(first.cacheStablePrefix).slice(0, 24)}`,
+    );
     expect(buildChatPromptCacheKey(first.cacheStablePrefix)).toBe(
       buildChatPromptCacheKey(second.cacheStablePrefix),
     );
@@ -1500,15 +1504,16 @@ describe("system prompt tool-reference guard", () => {
     }
   });
 
-  // The case-law tools hand the model a page URL beside the decisionId. A
-  // URL renders as an external page to preview; only the decisionId link
-  // opens the decision beside the chat, so every prompt has to say which.
-  test("every assembled prompt cites corpus decisions by decisionId, never by URL", () => {
+  test("every assembled prompt prefers corpus links and keeps publisher links secondary", () => {
     for (const prompt of buildAssembledPrompts(FULL_TOOL_AVAILABILITY)) {
       expect(prompt).toContain("DECISION CITATIONS");
       expect(prompt).toContain(`(${CHAT_DECISION_HREF_TEMPLATE})`);
+      expect(prompt).toContain("use the returned url as the primary citation");
       expect(prompt).toContain(
-        "Never link a stella decision by its appUrl or sourceUrl",
+        "Use source_url only as a secondary publisher source link",
+      );
+      expect(prompt).toContain(
+        "when the corpus does not hold the item, use the returned external url",
       );
       expect(prompt).toContain("say that the corpus returned none");
     }

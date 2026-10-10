@@ -10,10 +10,16 @@
 // below, exactly as the spec pins them.
 
 import { Result } from "better-result";
-import { createHash } from "node:crypto";
+import * as v from "valibot";
 
+import type { CallerFeatureAccess } from "./feature-command-projection.js";
+import {
+  MCP_TOOL_NAME_PATTERN_FLAGS,
+  MCP_TOOL_NAME_PATTERN_SOURCE,
+} from "./generated/mcp-contract.js";
 import type { RegistryToolListing } from "./route-types.js";
 import { compileSchemaPattern } from "./schema-pattern.js";
+import { sha256Hex as hashSha256Hex } from "./sha256.js";
 
 // --- Size / depth caps (spec S5.5 rule 3), named constants, not literals. ---
 /** Reject a whole fetched body larger than this (bytes). */
@@ -35,8 +41,10 @@ export const MAX_ENUM = 300;
 /** Reject a `properties` object with more keys than this. */
 export const MAX_PROPS = 100;
 
-/** Tool names must match this (spec S5.5 rule 2). */
-const TOOL_NAME_PATTERN: RegExp = /^[a-z][a-z0-9_]{0,63}$/u;
+const MCP_TOOL_NAME_PATTERN = new RegExp(
+  MCP_TOOL_NAME_PATTERN_SOURCE,
+  MCP_TOOL_NAME_PATTERN_FLAGS,
+);
 
 /**
  * Longest display title a fetched listing may carry, in UTF-16 code units
@@ -58,7 +66,12 @@ const ALLOWED_ANNOTATION_KEYS: ReadonlySet<string> = new Set([
 
 /** The success/failure result of validating a fetched tools/list body. */
 export type TrustResult =
-  | { ok: true; listings: RegistryToolListing[]; toolsListHash: string }
+  | {
+      ok: true;
+      listings: RegistryToolListing[];
+      toolsListHash: string;
+      featureAccess?: CallerFeatureAccess;
+    }
   | { ok: false; violation: string };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -124,6 +137,27 @@ const UNSUPPORTED_SCHEMA_KEYWORDS = [
 ] as const;
 
 /** Pull the `tools` array from a tools/list body (bare, `{tools}`, or envelope). */
+const featureAccessSnapshotSchema = v.object({
+  capabilities: v.pipe(
+    v.array(v.pipe(v.string(), v.minLength(1), v.maxLength(256))),
+    v.maxLength(10_000),
+  ),
+  tools: v.pipe(
+    v.array(v.pipe(v.string(), v.regex(MCP_TOOL_NAME_PATTERN))),
+    v.maxLength(MAX_TOOLS),
+  ),
+});
+
+const extractFeatureAccess = (parsed: unknown) => {
+  if (!isRecord(parsed)) {
+    return undefined;
+  }
+  const result = parsed["result"];
+  const response = isRecord(result) ? result : parsed;
+  const meta = response["_meta"];
+  return isRecord(meta) ? meta["featureAccess"] : undefined;
+};
+
 const extractTools = (parsed: unknown): readonly unknown[] | undefined => {
   if (isUnknownArray(parsed)) {
     return parsed;
@@ -357,7 +391,7 @@ const validateEntry = (
   }
 
   const name = entry["name"];
-  if (typeof name !== "string" || !TOOL_NAME_PATTERN.test(name)) {
+  if (typeof name !== "string" || !MCP_TOOL_NAME_PATTERN.test(name)) {
     return { ok: false, violation: `tool name is invalid: ${String(name)}` };
   }
 
@@ -407,9 +441,22 @@ const validateEntry = (
     return { ok: false, violation: `tool ${name}: ${schemaViolation}` };
   }
 
+  const meta = entry["_meta"];
+  const featureId = isRecord(meta) ? meta["featureId"] : undefined;
+  if (
+    featureId !== undefined &&
+    (typeof featureId !== "string" ||
+      featureId.length === 0 ||
+      featureId.length > 128)
+  ) {
+    return { ok: false, violation: "tool feature identity is invalid" };
+  }
   return {
     ok: true,
-    listing: projectListing(entry, name, description, inputSchema),
+    listing: {
+      ...projectListing(entry, name, description, inputSchema),
+      ...(typeof featureId === "string" ? { featureId } : {}),
+    },
   };
 };
 
@@ -449,7 +496,23 @@ export const validateFetchedToolsList = (rawBody: string): TrustResult => {
     listings.push(validated.listing);
   }
 
-  const toolsListHash = createHash("sha256").update(rawBody).digest("hex");
+  const toolsListHash = hashSha256Hex(rawBody);
 
-  return { ok: true, listings, toolsListHash };
+  const featureAccessRaw = extractFeatureAccess(parsed.value);
+  if (featureAccessRaw === undefined) {
+    return { ok: true, listings, toolsListHash };
+  }
+  const featureAccess = v.safeParse(
+    featureAccessSnapshotSchema,
+    featureAccessRaw,
+  );
+  if (!featureAccess.success) {
+    return { ok: false, violation: "feature access snapshot is invalid" };
+  }
+  return {
+    ok: true,
+    listings,
+    toolsListHash,
+    featureAccess: featureAccess.output,
+  };
 };

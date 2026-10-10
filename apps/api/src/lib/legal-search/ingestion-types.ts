@@ -1,9 +1,11 @@
+// parser-output-unchanged: classifies thrown page-fetch failures at the shared adapter boundary.
 // parser-output-unchanged: document scheduling is checked against the source manifest; parsed output is unchanged.
 // parser-output-unchanged: Adds an optional observation-quality discriminator; publisher fields and document parsing are unchanged.
 // parser-output-unchanged: observer wiring returns the adapter’s same normalized SyncPage.
 // parser-output-unchanged: replay outcome type gains an optional legacy docket; no parser output changes.
 // parser-output-unchanged: The required reconciliation revision projection changes retry bookkeeping, not parsed decision output.
 // parser-output-unchanged: preserves explicit URL declarations; ordinary metadata strings are projected as before
+// parser-output-unchanged: a page may also report listed items whose read did not produce them; built decisions are unchanged.
 import { panic, Result, TaggedError } from "better-result";
 
 import type { DecisionJudgeRole } from "@stll/api-contract/case-law-judges";
@@ -22,12 +24,13 @@ import type {
   DecisionIdentifiers,
   DecisionPrimaryReferenceType,
 } from "@stll/legal-ast/decision-identifier";
+// parser-output-unchanged: imports the document AST from its package owner
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import type {
   DocumentStage,
   DocumentStageObserver,
 } from "@stll/legal-atlas/document-fetch-diagnostics";
 
-import type { DocumentAst } from "@/api/lib/case-law/document-ast";
 import {
   toPlainText,
   PlainTextError,
@@ -35,7 +38,8 @@ import {
   type PlainText,
   type PlainTextMetadataValue,
 } from "@/api/lib/case-law/plain-text";
-import type { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import type { ReadOutcome } from "@/api/lib/errors/read-outcome";
+import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import type { DecisionSupplementKind } from "@/api/lib/legal-search/decision-supplement-kind";
 import {
@@ -581,6 +585,11 @@ export type SyncPage = {
    * both stored before the reasons look for their judgment.
    */
   supplements?: readonly DecisionSupplement[] | undefined;
+  /**
+   * Listed items whose read did not produce them. The pipeline, not the
+   * adapter, decides what each costs the page: see {@link UnreadListedItem}.
+   */
+  unreadItems?: readonly UnreadListedItem[] | undefined;
   nextCursor: string | null;
   /**
    * The listing request whose response these decisions were read from.
@@ -594,6 +603,30 @@ export type SyncPage = {
    * adapter that names nothing.
    */
   sourceUrl?: string | undefined;
+};
+
+/** A read that did not produce a listed item, in the read-outcome vocabulary. */
+export type UnreadOutcome = Extract<
+  ReadOutcome<never>,
+  { type: "unavailable" | "refused" }
+>;
+
+/**
+ * A listed item whose detail read was `unavailable` or `refused`.
+ *
+ * `listing` is the row the listing alone describes, keyed by the publisher's
+ * id. An unavailable item holds the page's cursor for a bounded number of
+ * consecutive cycles, then the pipeline stores `listing` (or, for a row that
+ * already holds its detail, only the typed outcome) and the page advances. A
+ * refusal is terminal at once: it is stored typed and re-checked on the
+ * normal cadence.
+ */
+export type UnreadListedItem = {
+  listing: IngestionResult & {
+    sourceDocumentId: string;
+    isListingOnly: true;
+  };
+  outcome: UnreadOutcome;
 };
 
 /**
@@ -1743,7 +1776,19 @@ export const defineSourceAdapter = <const TKey extends AdapterKey>(
     name: ADAPTER_MANIFESTS[adapter.key].name,
     fetchPage: async (cursor, config, signal, onDocumentObservation) =>
       await observeDocumentStage({
-        fetchPage: async () => await adapter.fetchPage(cursor, config, signal),
+        fetchPage: async () => {
+          const fetched = await Result.tryPromise({
+            try: async () => await adapter.fetchPage(cursor, config, signal),
+            catch: (cause) =>
+              new AdapterFetchError({
+                message: "Adapter page fetch failed",
+                adapterKey: adapter.key,
+                cursor,
+                cause,
+              }),
+          });
+          return fetched.andThen((page) => page);
+        },
         observe: onDocumentObservation,
       }),
   };

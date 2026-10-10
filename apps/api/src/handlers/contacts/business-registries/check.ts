@@ -4,8 +4,8 @@ import type { Static } from "elysia";
 
 import { isCountryCode } from "@stll/country-codes";
 
-import { nationalityCodesSchema } from "@/api/handlers/contacts/person-details";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { dateOfBirthSchema } from "@/api/lib/business-registries/date-of-birth";
 import {
   COUNTERPARTY_CHECK_KINDS,
@@ -14,6 +14,7 @@ import {
   runEntityCheckShared,
 } from "@/api/lib/business-registries/entity-checks";
 import type { CounterpartyCheckSubject } from "@/api/lib/business-registries/entity-checks";
+import { nationalityCodesSchema } from "@/api/lib/business-registries/nationality-codes";
 import { SANCTIONS_COMPANY_ID_COUNTRIES } from "@/api/lib/business-registries/sanctions-check-vocabulary";
 import type { SanctionsCompanyIdCountry } from "@/api/lib/business-registries/sanctions-check-vocabulary";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -170,6 +171,7 @@ const businessRegistriesCheck = createSafeRootHandler(
       "or unavailable) with the edition screened, and is clear only when " +
       "every list is.",
     permissions: { workspace: ["read"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "tool", name: "check_counterparty" },
     access: "read",
     body: bodySchema,
@@ -183,6 +185,7 @@ const businessRegistriesCheck = createSafeRootHandler(
     const result = yield* Result.await(
       runEntityCheckShared({
         observer,
+        permit: grantThirdPartyOutboundPermit(),
         check: body.check,
         subject,
         signal: request.signal,

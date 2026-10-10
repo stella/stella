@@ -190,6 +190,7 @@ test("only exempts explicit owners, online migration modules, tests, and scripts
     "apps/api/src/db/long-running-connection.ts",
     "apps/api/src/db/migration-runner.ts",
     "apps/api/src/db/online-migrations.ts",
+    "apps/api/src/db/online-index-gate.ts",
     "apps/api/src/db/corpus-schema-lane.ts",
     "apps/api/src/db/corpus-projection-delete-receipt-repair.ts",
     "apps/api/src/db/corpus-projection-cleanup-stall-repair.ts",

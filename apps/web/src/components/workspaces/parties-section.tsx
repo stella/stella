@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type { ContactType } from "@stll/api-contract";
@@ -9,6 +10,7 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
+  DialogFormState,
   DialogClose,
   DialogDescription,
   DialogFooter,
@@ -33,6 +35,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
+import { Skeleton } from "@stll/ui/skeleton";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
@@ -45,8 +48,10 @@ import { useCreateContact } from "@/lib/contacts/mutations";
 import { contactsKeys } from "@/lib/contacts/queries";
 import { detached } from "@/lib/detached";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
+import { useQueryView } from "@/lib/use-query-view";
 import { useUpdateWorkspace } from "@/lib/workspaces/mutations";
 import {
   PARTY_ROLES,
@@ -66,9 +71,6 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
   const queryClient = useQueryClient();
   const workspaceQuery = useQuery(workspaceOptions(workspaceId));
   const workspace = workspaceQuery.data;
-  const { data: parties = [] } = useQuery(
-    workspaceContactsOptions(workspaceId),
-  );
   const updateWorkspace = useUpdateWorkspace();
   const createContact = useCreateContact();
 
@@ -124,62 +126,65 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
   }
 
   const { client } = workspace;
-  if (!client) {
-    return (
-      <div className="flex flex-col p-3">
-        <section className="bg-muted/30 flex flex-col gap-2 rounded-md border p-3">
-          <div className="flex items-center gap-2">
-            <LockIcon className="text-muted-foreground size-4" />
-            <h3 className="text-sm font-medium">
-              {t("workspaces.parties.personalLabel")}
-            </h3>
-          </div>
-          <p className="text-muted-foreground text-sm">
-            {t("workspaces.parties.personalDescription")}
-          </p>
-          <PromoteDialog workspaceId={workspaceId} />
-        </section>
-      </div>
-    );
-  }
+  const personalSection = !client ? (
+    <div className="flex flex-col p-3">
+      <section className="bg-muted/30 flex flex-col gap-2 rounded-md border p-3">
+        <div className="flex items-center gap-2">
+          <LockIcon className="text-muted-foreground size-4" />
+          <h3 className="text-sm font-medium">
+            {t("workspaces.parties.personalLabel")}
+          </h3>
+        </div>
+        <p className="text-muted-foreground text-sm">
+          {t("workspaces.parties.personalDescription")}
+        </p>
+        <PromoteDialog workspaceId={workspaceId} />
+      </section>
+    </div>
+  ) : null;
 
   return (
     <div className="flex flex-col">
+      {personalSection}
       {/* Client sub-section */}
-      <section>
-        <div
-          className={cn(
-            "flex items-center justify-between gap-2 px-3",
-            TOOLBAR_ROW_HEIGHT,
-          )}
-        >
-          <h3 className="text-muted-foreground text-sm font-medium">
-            {t("workspaces.parties.client")}
-          </h3>
-          <ChangeClientDialog
-            onCreate={handleCreateAndSetClient}
-            onSelect={handleSetClient}
-          />
-        </div>
-        <div className={cn("flex items-center gap-2 px-3", TOOLBAR_ROW_HEIGHT)}>
-          {client.type === "person" ? (
-            <span className={MATTER_INFO_ICON_SLOT_CLASS}>
-              <UserIcon className="text-muted-foreground size-4" />
-            </span>
-          ) : (
-            <span className={MATTER_INFO_ICON_SLOT_CLASS}>
-              <BuildingIcon className="text-muted-foreground size-4" />
-            </span>
-          )}
-          <Link
-            className="min-w-0 truncate text-sm font-medium hover:underline"
-            params={{ contactId: client.id }}
-            to="/contacts/$contactId"
+      {client && (
+        <section>
+          <div
+            className={cn(
+              "flex items-center justify-between gap-2 px-3",
+              TOOLBAR_ROW_HEIGHT,
+            )}
           >
-            <BidiText>{client.displayName}</BidiText>
-          </Link>
-        </div>
-      </section>
+            <h3 className="text-muted-foreground text-sm font-medium">
+              {t("workspaces.parties.client")}
+            </h3>
+            <ChangeClientDialog
+              onCreate={handleCreateAndSetClient}
+              onSelect={handleSetClient}
+            />
+          </div>
+          <div
+            className={cn("flex items-center gap-2 px-3", TOOLBAR_ROW_HEIGHT)}
+          >
+            {client.type === "person" ? (
+              <span className={MATTER_INFO_ICON_SLOT_CLASS}>
+                <UserIcon className="text-muted-foreground size-4" />
+              </span>
+            ) : (
+              <span className={MATTER_INFO_ICON_SLOT_CLASS}>
+                <BuildingIcon className="text-muted-foreground size-4" />
+              </span>
+            )}
+            <Link
+              className="min-w-0 truncate text-sm font-medium hover:underline"
+              params={{ contactId: client.id }}
+              to="/contacts/$contactId"
+            >
+              <BidiText>{client.displayName}</BidiText>
+            </Link>
+          </div>
+        </section>
+      )}
 
       {/* Parties sub-section */}
       <section>
@@ -194,9 +199,65 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
           </h3>
           <AddPartyDialog showTriggerLabel={false} workspaceId={workspaceId} />
         </div>
-        {parties.length > 0 ? (
+        <PartiesList workspaceId={workspaceId} />
+      </section>
+    </div>
+  );
+};
+
+const PartiesList = ({ workspaceId }: PartiesSectionProps) => {
+  const t = useTranslations();
+  const view = useQueryView(useQuery(workspaceContactsOptions(workspaceId)), {
+    isEmpty: ({ contacts, overflow }) => contacts.length === 0 && !overflow,
+  });
+  switch (view.type) {
+    case "pending":
+      return (
+        <div
+          aria-label={t("common.loading")}
+          className="px-3 py-2"
+          role="status"
+        >
+          <Skeleton className="h-4 w-full" />
+        </div>
+      );
+    case "error":
+      return (
+        <PartiesReadError
+          error={view.error}
+          onRetry={() => detached(view.retry(), "parties-section.retry")}
+        />
+      );
+    case "empty":
+      return (
+        <p
+          className={cn(
+            "text-muted-foreground flex items-center px-3 text-sm italic",
+            TOOLBAR_ROW_HEIGHT,
+          )}
+        >
+          {t("workspaces.parties.noParties")}
+        </p>
+      );
+    case "items":
+      return (
+        <>
+          {view.refetchError !== undefined && (
+            <PartiesReadError
+              error={view.refetchError}
+              onRetry={() => detached(view.retry(), "parties-section.retry")}
+            />
+          )}
+          {view.items.overflow && (
+            <p
+              className="text-muted-foreground px-3 py-2 text-sm"
+              role="status"
+            >
+              {t("errors.apiCodes.matterContactCapacityExceeded")}
+            </p>
+          )}
           <ul>
-            {parties.map((party) => (
+            {view.items.contacts.map((party) => (
               <PartyRow
                 key={party.id}
                 party={party}
@@ -204,17 +265,29 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
               />
             ))}
           </ul>
-        ) : (
-          <p
-            className={cn(
-              "text-muted-foreground flex items-center px-3 text-sm italic",
-              TOOLBAR_ROW_HEIGHT,
-            )}
-          >
-            {t("workspaces.parties.noParties")}
-          </p>
-        )}
-      </section>
+        </>
+      );
+    default:
+      view satisfies never;
+      return panic("Unhandled parties query state");
+  }
+};
+
+type PartiesReadErrorProps = {
+  error: unknown;
+  onRetry: () => void;
+};
+
+const PartiesReadError = ({ error, onRetry }: PartiesReadErrorProps) => {
+  const t = useTranslations();
+  return (
+    <div className="flex items-center gap-2 px-3 py-2" role="alert">
+      <p className="text-destructive text-sm">
+        {userErrorFromThrown(error, t("errors.actionFailed"))}
+      </p>
+      <Button onClick={onRetry} size="xs" variant="ghost">
+        {t("common.retry")}
+      </Button>
     </div>
   );
 };
@@ -365,6 +438,12 @@ const PromoteDialog = ({ workspaceId }: PromoteDialogProps) => {
         {t("workspaces.parties.promoteCta")}
       </DialogTrigger>
       <DialogPopup>
+        <DialogFormState
+          dirty={selectedContact !== null}
+          onDiscard={() => {
+            setSelectedContact(null);
+          }}
+        />
         <DialogHeader>
           <DialogTitle>{t("workspaces.parties.promoteCta")}</DialogTitle>
           <DialogDescription>
@@ -426,7 +505,7 @@ type PartyData = NonNullable<
       NonNullable<ReturnType<typeof workspaceContactsOptions>["queryFn"]>
     >
   >
->[number];
+>["contacts"][number];
 
 type PartyRowProps = {
   party: PartyData;
@@ -643,6 +722,13 @@ const AddPartyDialog = ({
         {showTriggerLabel ? t("workspaces.parties.addParty") : null}
       </DialogTrigger>
       <DialogPopup>
+        <DialogFormState
+          dirty={selectedContact !== null || selectedRole !== null}
+          onDiscard={() => {
+            setSelectedContact(null);
+            setSelectedRole(null);
+          }}
+        />
         <DialogHeader>
           <DialogTitle>{t("workspaces.parties.addParty")}</DialogTitle>
           <DialogDescription />

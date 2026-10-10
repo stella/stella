@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import {
   afterAll,
   beforeAll,
@@ -10,11 +10,20 @@ import {
 import * as v from "valibot";
 
 import { envBase } from "@/api/env-base";
-import { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-client";
+import {
+  CorpusIndexError,
+  getCorpusIndexClient,
+} from "@/api/lib/legal-search/corpus-index-client";
+import { DECISION_TIMESTAMP_FIELD } from "@/api/lib/legal-search/corpus-index-config";
+import {
+  courtYearAggregation,
+  parseCourtYearAggregation,
+} from "@/api/lib/legal-search/corpus-index-court-year";
 import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexConfigFromManifest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
+import { corpusYearRanges } from "@/api/lib/legal-search/corpus-index-search-facets";
 import { foldCorpusTerm } from "@/api/lib/legal-search/corpus-passage-highlight";
 import { corpusTokens } from "@/api/lib/legal-search/corpus-tokens";
 import { stemCorpusText } from "@/api/lib/legal-search/morphology/stem-text";
@@ -437,9 +446,15 @@ describe.skipIf(!RUN_ENGINE)("query features on stock 0.9.0", () => {
     );
     const canonicalFields = config.doc_mapping.field_mappings.filter(
       ({ name }) =>
-        name === "text" || name === "text_stem" || name === "document_id",
+        name === "text" ||
+        name === "text_stem" ||
+        name === "document_id" ||
+        name === "court" ||
+        name === DECISION_TIMESTAMP_FIELD,
     );
     expect(canonicalFields.map(({ name }) => name).toSorted()).toEqual([
+      "court",
+      "decision_date_ts",
       "document_id",
       "text",
       "text_stem",
@@ -489,7 +504,7 @@ describe.skipIf(!RUN_ENGINE)("query features on stock 0.9.0", () => {
     await request(`${mutationBase()}/api/v1/${INDEX_ID}/ingest?commit=force`, {
       method: "POST",
       headers: { "content-type": "application/x-ndjson" },
-      body: `${documents.map((row) => JSON.stringify({ ...row, document_id: documentId(row.decision_key), text_stem: stemCorpusText(row.text, "sk") })).join("\n")}\n`,
+      body: `${documents.map((row) => JSON.stringify({ ...row, document_id: documentId(row.decision_key), court: `court-${row.decision_key % 3}`, decision_date_ts: `${2020 + (row.decision_key % 2)}-06-01T00:00:00Z`, text_stem: stemCorpusText(row.text, "sk") })).join("\n")}\n`,
     });
     const census = await search({ query: { match_all: {} }, size: 0 });
     expect(census.hits.total.value).toBe(documents.length);
@@ -513,6 +528,65 @@ describe.skipIf(!RUN_ENGINE)("query features on stock 0.9.0", () => {
       method: "DELETE",
     });
   }, TIMEOUT_MS);
+
+  test(
+    "court/year aggregations count whole-query decisions within the facet latency budget",
+    async () => {
+      const yearRanges = corpusYearRanges(2026);
+      const started = performance.now();
+      const result = await getCorpusIndexClient("q09").aggregate({
+        observer: "unobserved",
+        indexId: INDEX_ID,
+        // All ten passages match: passage volume must never become the count.
+        query: `decision_key:[1000 TO 1119]`,
+        aggs: {
+          courtYear: courtYearAggregation({
+            decisionCountField: "document_id",
+            yearRanges,
+          }),
+        },
+      });
+      expect(performance.now() - started).toBeLessThan(2000);
+      if (Result.isError(result)) {
+        throw result.error;
+      }
+      const matrix = parseCourtYearAggregation({
+        aggregation: result.value["courtYear"],
+        yearRanges,
+      });
+      expect(matrix).not.toBeNull();
+      expect(matrix?.truncated).toBe(false);
+      expect(matrix?.buckets).toHaveLength(6);
+      expect(matrix?.buckets.reduce((sum, { count }) => sum + count, 0)).toBe(
+        DECISIONS,
+      );
+      for (const bucket of matrix?.buckets ?? []) {
+        expect(bucket.count).toBe(20);
+      }
+      // A matching non-opening passage still includes its decision in the year.
+      const onePassage = await getCorpusIndexClient("q09").aggregate({
+        observer: "unobserved",
+        indexId: INDEX_ID,
+        query: "passage_key:10001",
+        aggs: {
+          courtYear: courtYearAggregation({
+            decisionCountField: "document_id",
+            yearRanges,
+          }),
+        },
+      });
+      if (Result.isError(onePassage)) {
+        throw onePassage.error;
+      }
+      expect(
+        parseCourtYearAggregation({
+          aggregation: onePassage.value["courtYear"],
+          yearRanges,
+        })?.buckets,
+      ).toEqual([{ court: "court-1", year: 2020, count: 1 }]);
+    },
+    TIMEOUT_MS,
+  );
 
   test("multi-search preserves request order and standalone hits, including numeric term filters", async () => {
     const requests = [
@@ -613,6 +687,9 @@ describe.skipIf(!RUN_ENGINE)("query features on stock 0.9.0", () => {
         method: "POST",
         headers: { "content-type": "application/x-ndjson" },
         body: " ".repeat(1024 * 1024 + 1),
+        // The engine answers 413 before reading the body; a pooled socket
+        // would hand the next request a connection the engine resets.
+        keepalive: false,
       },
     ).then(() => panic("multi-search accepted an oversized payload"), rejected);
     expect(rejection).toMatchObject({ status: 413 });

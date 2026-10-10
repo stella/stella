@@ -1,12 +1,19 @@
 import { panic } from "better-result";
 import { and, eq, notInArray } from "drizzle-orm";
 
+import { DAY_IN_MS } from "@stll/time";
+
 import { rootDb } from "@/api/db/root";
 import type { SchedulerPayload, SchedulerSchedule } from "@/api/db/schema";
 import { schedulerJobs } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
+import { SOURCE_ARRIVALS_REFRESH_INTERVAL_MS } from "@/api/lib/case-law/source-arrivals-window";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import { resolveInboundMailReceiving } from "@/api/lib/email/inbound/receiving-config";
+import { LEGISLATION_FACET_REFRESH_INTERVAL_MS } from "@/api/lib/legal-search/legislation-facet-refresh-interval";
 import { logger } from "@/api/lib/observability/logger";
+import { readReviewOrganizationConfig } from "@/api/lib/review-organization/config";
 import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
 import {
   REGISTERED_SCHEDULER_TASK_NAMES,
@@ -28,7 +35,9 @@ import {
 } from "@/api/lib/scheduler/tasks/case-law-raw-storage";
 import { BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK } from "@/api/lib/scheduler/tasks/case-law-redaction-tombstone-backfill";
 import { REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK } from "@/api/lib/scheduler/tasks/case-law-sitemap-shard-refresh";
+import { REFRESH_CASE_LAW_SOURCE_ARRIVALS_TASK } from "@/api/lib/scheduler/tasks/case-law-source-arrivals-refresh";
 import { SWEEP_CHAT_RUN_LOGS_TASK } from "@/api/lib/scheduler/tasks/chat-run-log-retention";
+import { PURGE_CHAT_SECRETS_TASK } from "@/api/lib/scheduler/tasks/chat-secret-retention";
 import { CHAT_THREAD_COMPACTOR_TASK } from "@/api/lib/scheduler/tasks/chat-thread-compactor";
 import { REAP_OWNERLESS_CHAT_TURNS_TASK } from "@/api/lib/scheduler/tasks/chat-turn-reaper";
 import { BACKFILL_CORPUS_INDEX_JOB_DETAIL_TASK } from "@/api/lib/scheduler/tasks/corpus-index-job-detail-backfill";
@@ -40,8 +49,10 @@ import { SWEEP_FILE_COMPARISON_UPLOADS_TASK } from "@/api/lib/scheduler/tasks/fi
 import { REPAIR_FILE_DERIVATIVES_TASK } from "@/api/lib/scheduler/tasks/file-derivative-repair";
 import { RECONCILE_FLOW_RUN_ORPHANS_TASK } from "@/api/lib/scheduler/tasks/flow-run-orphan-reconcile";
 import { REDACT_HOSTED_USAGE_WEBHOOK_EVENTS_TASK } from "@/api/lib/scheduler/tasks/hosted-usage-webhook-retention";
+import { RECEIVE_INBOUND_MAIL_TASK } from "@/api/lib/scheduler/tasks/inbound-mail-receive";
 import { INFO_SOUD_SYNC_TRACKED_CASES_TASK } from "@/api/lib/scheduler/tasks/infosoud";
 import { BACKFILL_LEGISLATION_EXPRESSION_IDS_TASK } from "@/api/lib/scheduler/tasks/legislation-expression-id-backfill";
+import { REFRESH_LEGISLATION_FACETS_TASK } from "@/api/lib/scheduler/tasks/legislation-facet-refresh";
 import { RECONCILE_LIST_VERIFICATION_RUNS_TASK } from "@/api/lib/scheduler/tasks/list-verification-run-reconcile";
 import { MEMORY_CURATOR_TASK } from "@/api/lib/scheduler/tasks/memory-curator";
 import { MEMORY_EXTRACTOR_TASK } from "@/api/lib/scheduler/tasks/memory-extractor";
@@ -49,12 +60,16 @@ import { RECORD_MISSING_ORGANIZATION_ACCESS_STATES_TASK } from "@/api/lib/schedu
 import { RECONCILE_ORGANIZATION_FILE_RESERVATIONS_TASK } from "@/api/lib/scheduler/tasks/organization-file-reservation-reconcile";
 import { SWEEP_REGISTRATIONS_TASK } from "@/api/lib/scheduler/tasks/registration-retention";
 import { RECONCILE_REPORT_EXPORTS_TASK } from "@/api/lib/scheduler/tasks/report-export-reconcile";
+import { RESET_REVIEW_ORGANIZATION_TASK } from "@/api/lib/scheduler/tasks/review-organization-reset";
+import { DRAIN_SANCTIONS_MONITORING_TASK } from "@/api/lib/scheduler/tasks/sanctions-monitoring";
+import { BACKFILL_SANCTIONS_MONITORING_TASK } from "@/api/lib/scheduler/tasks/sanctions-monitoring-backfill";
 import { REFRESH_SANCTIONS_SOURCES_TASK } from "@/api/lib/scheduler/tasks/sanctions-refresh";
 import { REPAIR_CHAT_SEARCH_INDEX_TASK } from "@/api/lib/scheduler/tasks/search-chat-index";
 import { REPAIR_SEARCH_PROJECTIONS_TASK } from "@/api/lib/scheduler/tasks/search-projection-repair";
 import { REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK } from "@/api/lib/scheduler/tasks/search-semantic-timestamps";
 import { REFRESH_STATUTE_SITEMAP_SHARDS_TASK } from "@/api/lib/scheduler/tasks/statute-sitemap-shard-refresh";
 import { RECONCILE_STYLE_SET_PACKAGE_CLEANUPS_TASK } from "@/api/lib/scheduler/tasks/style-set-package-cleanup-reconcile";
+import { PURGE_SYSTEM_AUDIT_RUNS_TASK } from "@/api/lib/scheduler/tasks/system-audit-retention";
 import { CLEAN_TEMPLATE_DELETION_OBJECTS_TASK } from "@/api/lib/scheduler/tasks/template-deletion-cleanup";
 import { WORK_ATTENTION_SCOUT_TASK } from "@/api/lib/scheduler/tasks/work-attention-scout";
 import { BACKFILL_WORK_OBLIGATIONS_TASK } from "@/api/lib/scheduler/tasks/work-obligation-backfill";
@@ -68,7 +83,22 @@ type SchedulerJobDefinition = {
   payload?: SchedulerPayload | null;
   payloadUpdate?: "preserve" | "replace";
   enabled?: boolean;
+  /**
+   * When a job's row is first created. `after-interval` (the default) waits
+   * one full interval; `on-registration` is due at once, for a job whose
+   * output readers depend on (a snapshot) and which must not leave a fresh
+   * deployment without it for a whole interval. Either way the runner's claim
+   * decides which replica runs it, so only one does.
+   */
+  firstRun?: "after-interval" | "on-registration";
 };
+
+/** The `nextRunAt` a job row is created with. */
+export const initialNextRunAt = (
+  { firstRun = "after-interval", schedule }: SchedulerJobDefinition,
+  now: Date,
+): Date =>
+  firstRun === "on-registration" ? now : computeNextRunAt(schedule, now);
 
 export const ensureSchedulerJob = async (
   definition: SchedulerJobDefinition,
@@ -77,7 +107,10 @@ export const ensureSchedulerJob = async (
 };
 
 export const upsertSchedulerJob = async (
-  {
+  definition: SchedulerJobDefinition,
+  db: SchedulerDb,
+): Promise<void> => {
+  const {
     description,
     enabled = true,
     id,
@@ -85,10 +118,9 @@ export const upsertSchedulerJob = async (
     payloadUpdate = "replace",
     schedule,
     task,
-  }: SchedulerJobDefinition,
-  db: SchedulerDb,
-): Promise<void> => {
-  const nextRunAt = computeNextRunAt(schedule);
+  } = definition;
+  const now = new Date();
+  const nextRunAt = computeNextRunAt(schedule, now);
   const [existingJob] = await db
     .select({
       schedule: schedulerJobs.schedule,
@@ -108,7 +140,7 @@ export const upsertSchedulerJob = async (
       description,
       enabled,
       id,
-      nextRunAt,
+      nextRunAt: initialNextRunAt(definition, now),
       payload,
       schedule,
       task,
@@ -227,6 +259,17 @@ export const DECLARED_SCHEDULER_JOBS = [
     task: RECONCILE_ORGANIZATION_FILE_RESERVATIONS_TASK,
   },
   {
+    description: "File inbound mail deliveries from the provider queue",
+    enabled:
+      resolveInboundMailReceiving(env).unwrap(
+        "Boot validates the inbound mail receiving configuration",
+      ).type === "enabled",
+    id: "inboundMail.receive.minutely",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 60 * 1000 },
+    task: RECEIVE_INBOUND_MAIL_TASK,
+  },
+  {
     description: "Delete expired comparison staging objects and their rows",
     id: "fileComparisons.sweepExpired.fiveMinute",
     mode: "recurring",
@@ -256,6 +299,20 @@ export const DECLARED_SCHEDULER_JOBS = [
     task: RECORD_MISSING_ORGANIZATION_ACCESS_STATES_TASK,
   },
   {
+    description:
+      "Reset the restricted review organization and seed its sample data again",
+    enabled: readReviewOrganizationConfig() !== null,
+    id: "reviewOrganization.reset.nightly",
+    mode: "recurring",
+    schedule: {
+      type: "daily",
+      hour: 3,
+      minute: 30,
+      timeZone: "Europe/Prague",
+    },
+    task: RESET_REVIEW_ORGANIZATION_TASK,
+  },
+  {
     description: "Refresh the Postgres case-law browse facet counts",
     enabled: envBase.LEGAL_SEARCH_PROVIDER === "pg-fts",
     id: "caseLaw.refreshBrowseFacets.hourly",
@@ -269,6 +326,28 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 60 * 1000 },
     task: REFRESH_STATUTE_SITEMAP_SHARDS_TASK,
+  },
+  {
+    description: "Recount the statute facets the public listing offers",
+    id: "legislation.refreshFacetCounts.hourly",
+    mode: "recurring",
+    firstRun: "on-registration",
+    schedule: {
+      type: "interval",
+      everyMs: LEGISLATION_FACET_REFRESH_INTERVAL_MS,
+    },
+    task: REFRESH_LEGISLATION_FACETS_TASK,
+  },
+  {
+    description: "Recount each case-law source's arrivals of the last week",
+    id: "caseLaw.refreshSourceArrivals.threeHourly",
+    firstRun: "on-registration",
+    mode: "recurring",
+    schedule: {
+      type: "interval",
+      everyMs: SOURCE_ARRIVALS_REFRESH_INTERVAL_MS,
+    },
+    task: REFRESH_CASE_LAW_SOURCE_ARRIVALS_TASK,
   },
   {
     description: "Delete raw objects of erased or never-written decisions",
@@ -408,6 +487,13 @@ export const DECLARED_SCHEDULER_JOBS = [
     task: SWEEP_REGISTRATIONS_TASK,
   },
   {
+    description: "Delete system audit runs past retention",
+    id: "audit.purgeSystemRuns.day",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: DAY_IN_MS },
+    task: PURGE_SYSTEM_AUDIT_RUNS_TASK,
+  },
+  {
     description: "Redact expired completed provider event details",
     id: "usage.redactWebhookEvents.minute",
     mode: "recurring",
@@ -422,7 +508,7 @@ export const DECLARED_SCHEDULER_JOBS = [
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: SWEEP_ACTION_COSTS_TASK,
     enabled:
-      env.FEATURE_ACTION_COST_RECORDS &&
+      isDeploymentFeatureEnabled("FEATURE_ACTION_COST_RECORDS") &&
       env.ACTION_COST_RETENTION_DAYS !== undefined,
   },
   {
@@ -431,6 +517,13 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: SWEEP_CHAT_RUN_LOGS_TASK,
+  },
+  {
+    description: "Clear expired chat secret payloads",
+    id: "chat.purgeSecrets.minute",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 60 * 1000 },
+    task: PURGE_CHAT_SECRETS_TASK,
   },
   {
     description: "Re-drive document review runs no queued job owns anymore",
@@ -497,6 +590,20 @@ export const DECLARED_SCHEDULER_JOBS = [
     task: INFO_SOUD_SYNC_TRACKED_CASES_TASK,
   },
   {
+    description: "Advance contact screening backfills",
+    id: "sanctions.backfillMonitoring.minute",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 60_000 },
+    task: BACKFILL_SANCTIONS_MONITORING_TASK,
+  },
+  {
+    description: "Drain contact screening work",
+    id: "sanctions.drainMonitoring.minute",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 60_000 },
+    task: DRAIN_SANCTIONS_MONITORING_TASK,
+  },
+  {
     description: "Refresh global reference lists",
     id: "sanctions.refreshSources.twoHourly",
     mode: "recurring",
@@ -513,7 +620,7 @@ export const DECLARED_SCHEDULER_JOBS = [
   {
     description:
       "Age AI memories through the active -> stale -> archived lifecycle",
-    enabled: env.FEATURE_AI_MEMORY,
+    enabled: isDeploymentFeatureEnabled("FEATURE_AI_MEMORY"),
     id: "memory.curator.nightly",
     mode: "recurring",
     schedule: {
@@ -527,7 +634,7 @@ export const DECLARED_SCHEDULER_JOBS = [
   {
     description:
       "Extract suggested AI memories from new chat-thread compactions",
-    enabled: env.FEATURE_AI_MEMORY,
+    enabled: isDeploymentFeatureEnabled("FEATURE_AI_MEMORY"),
     id: "memory.extractor.hourly",
     mode: "recurring",
     schedule: {

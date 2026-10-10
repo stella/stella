@@ -1,14 +1,26 @@
 import { panic, Result } from "better-result";
 
 import { uploadVersionBodySchema } from "@/api/handlers/entities/upload-version-schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { entityVersionRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { UPLOAD_DOCUMENT_SOURCE } from "@/api/lib/document-source";
+import {
+  authorizeDocumentWrite,
+  authorizeDocumentWriteAccess,
+  documentWriteRefusalHandlerError,
+  DocumentWriteRefusedError,
+} from "@/api/lib/entities/authorize-document-write";
 import { createEntityVersionFromBuffer } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { fileSecurityRejection } from "@/api/lib/file-scan/rejection";
-import { scanFile } from "@/api/lib/file-scan/scan";
-import { getScanWarnings } from "@/api/lib/file-scan/warnings";
+import {
+  FileScanRejectedError,
+  scanUpload,
+} from "@/api/lib/file-scan/scan-upload";
+import {
+  detectFileEncryption,
+  uploadFileEncryption,
+} from "@/api/lib/files/detect-file-encryption";
 import {
   OrganizationFileUsageError,
   organizationFileUsageHandlerError,
@@ -16,6 +28,11 @@ import {
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Stores document content and returns operation metadata rather than stored-file bytes.",
+  },
   description:
     "Add a new version to an existing document by uploading a file over a " +
     "multipart request, replacing that document's current file. The bytes " +
@@ -24,6 +41,8 @@ const config = {
     "you are all conflicts. An agent surface cannot send multipart: use " +
     "uploads.create with purpose entity_version and then uploads.update.",
   permissions: { entity: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: entityVersionRealtimeUpdates,
   mcp: {
     type: "capability",
     reason: "document_processing",
@@ -57,6 +76,8 @@ export default createSafeHandler(
     body,
     session,
     user,
+    memberRole,
+    getWorkspaceAccess,
     recordAuditEvent,
   }) {
     const organizationId = session.activeOrganizationId;
@@ -65,49 +86,54 @@ export default createSafeHandler(
     const sanitizedName = sanitizeFilename(file.name);
 
     // Reject an invalid target before spending scan/storage work. The shared
-    // transaction repeats these checks under FOR UPDATE to close the race.
-    const entity = yield* Result.await(
-      safeDb((tx) =>
-        tx.query.entities.findFirst({
-          where: {
-            id: { eq: entityId },
-            workspaceId: { eq: workspaceId },
-          },
-          columns: { currentVersionId: true, readOnly: true },
-        }),
-      ),
-    );
-    if (!entity?.currentVersionId) {
-      return Result.err(
-        new HandlerError({ status: 404, message: "Entity not found" }),
-      );
+    // transaction repeats the entity checks under FOR UPDATE to close the race.
+    const access = authorizeDocumentWriteAccess({
+      authority: memberRole,
+      workspace: await getWorkspaceAccess(workspaceId),
+      operation: { type: "new_version", workspaceId, entityId },
+    });
+    if (Result.isError(access)) {
+      return Result.err(documentWriteRefusalHandlerError(access.error));
     }
-    if (entity.readOnly) {
-      return Result.err(
-        new HandlerError({ status: 409, message: "Entity is read-only" }),
-      );
+    const authorized = await authorizeDocumentWrite({
+      access: access.value,
+      safeDb,
+    });
+    if (Result.isError(authorized)) {
+      if (DocumentWriteRefusedError.is(authorized.error)) {
+        return Result.err(documentWriteRefusalHandlerError(authorized.error));
+      }
+      return Result.err(authorized.error);
     }
+    const target = authorized.value.operation;
 
-    const fileBuffer = await file.arrayBuffer();
-    const scanResult = await scanFile({
-      buffer: new Uint8Array(fileBuffer),
+    const scanned = await scanUpload({
+      bytes: await file.arrayBuffer(),
       declaredMimeType: file.type,
       fileName: sanitizedName,
     });
-    if (Result.isError(scanResult)) {
+    if (Result.isError(scanned)) {
       return Result.err(
-        new HandlerError({ status: 422, message: "File scan failed" }),
+        scanned.error instanceof FileScanRejectedError
+          ? new HandlerError({ ...scanned.error.rejection, status: 422 })
+          : new HandlerError({ status: 422, message: "File scan failed" }),
       );
     }
-    if (scanResult.value.verdict === "reject") {
-      const rejection = fileSecurityRejection(scanResult.value);
-      if (rejection === null) {
-        panic("Rejecting scan had no rejecting findings");
-      }
+    const encryption = uploadFileEncryption(
+      await detectFileEncryption({
+        mimeType: file.type,
+        scanned: scanned.value,
+      }),
+      {
+        mimeType: file.type,
+        sizeBytes: String(scanned.value.bytes.byteLength),
+      },
+    );
+    if (encryption === null) {
       return Result.err(
         new HandlerError({
-          ...rejection,
           status: 422,
+          message: "Failed to open PDF: file appears corrupted",
         }),
       );
     }
@@ -118,16 +144,17 @@ export default createSafeHandler(
           await createEntityVersionFromBuffer({
             safeDb,
             organizationId,
-            workspaceId,
-            entityId,
+            workspaceId: target.workspaceId,
+            entityId: target.entityId,
             userId,
             recordAuditEvent,
-            buffer: fileBuffer,
+            buffer: scanned.value.bytes,
             fileName: sanitizedName,
             mimeType: file.type,
+            encryption,
             source: UPLOAD_DOCUMENT_SOURCE,
             writePolicy: { type: "replace-current-file" },
-            scanWarnings: getScanWarnings(scanResult.value) ?? undefined,
+            scanWarnings: scanned.value.scanWarnings ?? undefined,
           }),
         catch: (cause) =>
           new HandlerError({

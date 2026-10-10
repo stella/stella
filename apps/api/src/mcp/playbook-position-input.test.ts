@@ -6,12 +6,15 @@ import * as v from "valibot";
 import { propertyConfig } from "@stll/property-testing";
 
 import type { PropertyContent } from "@/api/db/schema-validators";
+import { WRITE_TOOL_REF_FIELD_MAP } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import { dehydrateRefs } from "@/api/handlers/chat/tools/registry-adapter/ref-mediation";
 import { projectForChat } from "@/api/lib/chat/projection-schema";
 import { LIST_PLAYBOOKS_DETAIL_PROJECTION } from "@/api/lib/chat/projections";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import {
+  POSITION_LIMITS,
   POSITION_SEVERITIES,
   positionSchema,
 } from "@/api/lib/workflow/playbook-positions";
@@ -40,17 +43,43 @@ const counterMintId = () => {
   };
 };
 
+type MergeArgs = Parameters<typeof mergePlaybookPositions>[0];
+
 const merge = (
-  args: Omit<
-    Parameters<typeof mergePlaybookPositions>[0],
-    "mintId" | "removeSourceIds"
-  > & { removeSourceIds?: readonly string[] },
+  args: Pick<MergeArgs, "stored" | "positions"> &
+    Partial<Pick<MergeArgs, "removeSourceIds" | "readableSources">>,
 ) =>
   mergePlaybookPositions({
     removeSourceIds: [],
+    readableSources: new Map(),
     ...args,
     mintId: counterMintId(),
   });
+
+/** The documents a fixture position may cite, across two matters. */
+const SOURCE_POOL = [
+  {
+    workspaceId: "3a1f0a2e-8c5d-4e57-9a3b-0d2f6c1e7a01",
+    entityId: "4b1f0a2e-8c5d-4e57-9a3b-0d2f6c1e7a01",
+  },
+  {
+    workspaceId: "3a1f0a2e-8c5d-4e57-9a3b-0d2f6c1e7a01",
+    entityId: "4b1f0a2e-8c5d-4e57-9a3b-0d2f6c1e7a02",
+  },
+  {
+    workspaceId: "3a1f0a2e-8c5d-4e57-9a3b-0d2f6c1e7a02",
+    entityId: "4b1f0a2e-8c5d-4e57-9a3b-0d2f6c1e7a03",
+  },
+] as const;
+const ALL_SOURCES_READABLE = new Map(
+  SOURCE_POOL.map((source) => [source.entityId, source]),
+);
+
+const sourcesArbitrary = fc.uniqueArray(fc.constantFrom(...SOURCE_POOL), {
+  minLength: 1,
+  maxLength: SOURCE_POOL.length,
+  selector: (source) => source.entityId,
+});
 
 const text = (maxLength: number) =>
   fc
@@ -128,6 +157,7 @@ const gradedArbitrary = fc.record(
       },
       { requiredKeys: [] },
     ),
+    sources: sourcesArbitrary,
     enabled: fc.boolean(),
   },
   {
@@ -168,6 +198,7 @@ const extractArbitrary = fc.record(
       ),
     }),
     guidance: text(60),
+    sources: sourcesArbitrary,
     enabled: fc.boolean(),
   },
   { requiredKeys: ["mode", "sourceId", "issue", "ask", "enabled"] },
@@ -215,27 +246,61 @@ const toSnakeCase = (value: unknown): unknown => {
  * flatten the ladder (each tier a plain list, the ideal wording a string,
  * `tiers` lifted out of `standard`), and drop what `save_playbook` does not take
  * (the server-owned `ask` of a graded position and `check`, an extract
- * position's `content`, a clause-linked `ideal`). Anything else it left behind would fail the strict input parse, so
- * the parse below is what proves the read shape is a save shape.
+ * position's `content`, a clause-linked `ideal`), and name each source by the
+ * document ref the read showed. The call then crosses the chat boundary as a
+ * real one does: its declared refs are dehydrated to ids before the input is
+ * parsed. Anything else it left behind would fail the strict input parse, so
+ * the parse is what proves the read shape is a save shape.
  */
-const readBackToInput = (projected: unknown): PlaybookPositionInput => {
+const parseDehydrated = (
+  position: Record<string, unknown>,
+  refRegistry: ChatRefRegistry,
+): PlaybookPositionInput => {
+  const { args } = dehydrateRefs({
+    args: { positions: [position] },
+    inputRefs: WRITE_TOOL_REF_FIELD_MAP.save_playbook.inputRefs,
+    refRegistry,
+  }).unwrap();
+  return v.parse(
+    v.object({ positions: v.tuple([playbookPositionInputSchema]) }),
+    args,
+  ).positions[0];
+};
+
+const readBackToInput = (
+  projected: unknown,
+  refRegistry: ChatRefRegistry,
+): PlaybookPositionInput => {
   const snake = toSnakeCase(projected);
   if (!isRecord(snake)) {
     throw new TypeError("A projected position is an object");
   }
-  const { ask, check: _check, ...rest } = snake;
+  const { ask, check: _check, sources: readSources, ...withoutSources } = snake;
+  const rest: Record<string, unknown> = {
+    ...withoutSources,
+    ...(readSources === undefined
+      ? {}
+      : {
+          sources: v
+            .parse(v.array(v.object({ entity_id: v.string() })), readSources)
+            .map((source) => source.entity_id),
+        }),
+  };
   if (snake["mode"] === "extract" && isRecord(ask)) {
     const content = ask["content"];
     const type = isRecord(content) ? content["type"] : undefined;
-    return v.parse(playbookPositionInputSchema, {
-      ...rest,
-      ask: {
-        question: ask["question"],
-        ...(typeof type === "string" && isExpressibleAnswerType(type)
-          ? { answer_type: type }
-          : {}),
+    return parseDehydrated(
+      {
+        ...rest,
+        ask: {
+          question: ask["question"],
+          ...(typeof type === "string" && isExpressibleAnswerType(type)
+            ? { answer_type: type }
+            : {}),
+        },
       },
-    });
+      refRegistry,
+    );
   }
   const { standard, ...graded } = rest;
   const read = v.parse(
@@ -260,19 +325,24 @@ const readBackToInput = (projected: unknown): PlaybookPositionInput => {
     standard,
   ).tiers;
   const { ideal } = read.acceptable;
-  return v.parse(playbookPositionInputSchema, {
-    ...graded,
-    tiers: {
-      acceptable: read.acceptable.rules,
-      ...(ideal?.source === "inline" ? { ideal: ideal.text } : {}),
-      fallback: read.fallback.entries,
-      not_acceptable: read.not_acceptable.rules,
+  return parseDehydrated(
+    {
+      ...graded,
+      tiers: {
+        acceptable: read.acceptable.rules,
+        ...(ideal?.source === "inline" ? { ideal: ideal.text } : {}),
+        fallback: read.fallback.entries,
+        not_acceptable: read.not_acceptable.rules,
+      },
     },
-  });
+    refRegistry,
+  );
 };
 
-const readThroughChatProjection = (positions: readonly Position[]) => {
-  const refRegistry = createChatRefRegistry();
+const readThroughChatProjection = (
+  positions: readonly Position[],
+  refRegistry: ChatRefRegistry,
+) => {
   const projected = projectForChat({
     dehydration: dehydrateRefs({
       args: {},
@@ -595,6 +665,175 @@ describe("save_playbook position merge", () => {
   });
 });
 
+describe("save_playbook position sources", () => {
+  const WORKSPACE_ID = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+  const source = (suffix: number) => ({
+    workspaceId: WORKSPACE_ID,
+    entityId: `dddddddd-dddd-4ddd-8ddd-${String(suffix).padStart(12, "0")}`,
+  });
+  const READABLE = source(1);
+  const ALSO_READABLE = source(2);
+  const HIDDEN = source(3);
+  const readableSources = new Map(
+    [READABLE, ALSO_READABLE].map((entry) => [entry.entityId, entry]),
+  );
+  const replace = (sources: string[] | undefined) =>
+    gradedInput({
+      source_id: storedGraded().sourceId,
+      ...(sources === undefined ? {} : { sources }),
+    });
+
+  test("a new position stores each named document with the matter the lookup resolved", () => {
+    const { items, issues } = merge({
+      stored: [],
+      positions: [
+        gradedInput({ sources: [READABLE.entityId, ALSO_READABLE.entityId] }),
+      ],
+      readableSources,
+    });
+    expect(issues).toEqual([]);
+    expect(items.at(0)?.sources).toEqual([READABLE, ALSO_READABLE]);
+  });
+
+  test("a document named twice is stored once", () => {
+    const { items } = merge({
+      stored: [],
+      positions: [
+        gradedInput({ sources: [READABLE.entityId, READABLE.entityId] }),
+      ],
+      readableSources,
+    });
+    expect(items.at(0)?.sources).toEqual([READABLE]);
+  });
+
+  test("a position without sources stores no sources key", () => {
+    const { items } = merge({
+      stored: [],
+      positions: [gradedInput(), gradedInput({ issue: "Other", sources: [] })],
+      readableSources,
+    });
+    expect(items.map((item) => "sources" in item)).toEqual([false, false]);
+  });
+
+  test("a replace that omits sources keeps the stored list, hidden sources included", () => {
+    const stored = [storedGraded({ sources: [HIDDEN, READABLE] })];
+    const { items, issues } = merge({
+      stored,
+      positions: [replace(undefined)],
+      readableSources,
+    });
+    expect(issues).toEqual([]);
+    expect(items).toEqual(stored);
+  });
+
+  test("a replace with sources replaces the readable ones and carries the hidden ones", () => {
+    const { items, issues } = merge({
+      stored: [storedGraded({ sources: [HIDDEN, READABLE] })],
+      positions: [replace([ALSO_READABLE.entityId])],
+      readableSources,
+    });
+    expect(issues).toEqual([]);
+    expect(items.at(0)?.sources).toEqual([ALSO_READABLE, HIDDEN]);
+  });
+
+  test("an empty list removes the readable sources only", () => {
+    const hiddenKept = merge({
+      stored: [storedGraded({ sources: [HIDDEN, READABLE] })],
+      positions: [replace([])],
+      readableSources,
+    });
+    expect(hiddenKept.items.at(0)?.sources).toEqual([HIDDEN]);
+
+    const noneLeft = merge({
+      stored: [storedGraded({ sources: [READABLE] })],
+      positions: [replace([])],
+      readableSources,
+    });
+    expect(noneLeft.items.at(0)).not.toHaveProperty("sources");
+  });
+
+  test("resending the sources a read showed leaves the position equal to the stored one", () => {
+    // Stored order interleaves a hidden source; the caller saw only READABLE.
+    const stored = [storedGraded({ sources: [HIDDEN, READABLE] })];
+    const { items } = merge({
+      stored,
+      positions: [replace([READABLE.entityId])],
+      readableSources,
+    });
+    expect(items).toEqual(stored);
+  });
+
+  test("a document the caller cannot read refuses that entry by path and not the one beside it", () => {
+    const { items, written, issues } = merge({
+      stored: [],
+      positions: [
+        gradedInput({ sources: [READABLE.entityId, HIDDEN.entityId] }),
+        gradedInput({ issue: "Governing law", sources: [READABLE.entityId] }),
+      ],
+      readableSources,
+    });
+    expect(issues).toEqual([
+      expect.objectContaining({
+        code: "unreadable_source",
+        path: "positions.0.sources.1",
+      }),
+    ]);
+    expect(written.map(({ issue }) => issue)).toEqual(["Governing law"]);
+    expect(items).toHaveLength(1);
+  });
+
+  test("a stored hidden source cannot be re-added by naming it", () => {
+    const { issues, items } = merge({
+      stored: [storedGraded({ sources: [HIDDEN] })],
+      positions: [
+        gradedInput({ issue: "Governing law", sources: [HIDDEN.entityId] }),
+      ],
+      readableSources,
+    });
+    expect(issues.map(({ code }) => code)).toEqual(["unreadable_source"]);
+    expect(items).toHaveLength(1);
+  });
+
+  test("a refusal names no document", () => {
+    const { issues } = merge({
+      stored: [],
+      positions: [gradedInput({ sources: [HIDDEN.entityId] })],
+      readableSources,
+    });
+    expect(JSON.stringify(issues)).not.toContain(HIDDEN.entityId);
+  });
+
+  test("readable and carried sources together cannot exceed the limit", () => {
+    const hidden = Array.from(
+      { length: POSITION_LIMITS.sourcesMaxItems },
+      (_, index) => source(100 + index),
+    );
+    const { issues, items } = merge({
+      stored: [storedGraded({ sources: hidden })],
+      positions: [replace([READABLE.entityId])],
+      readableSources,
+    });
+    expect(issues).toEqual([
+      expect.objectContaining({
+        code: "too_many_sources",
+        path: "positions.0.sources",
+      }),
+    ]);
+    expect(items.at(0)?.sources).toEqual(hidden);
+  });
+
+  test("the input refuses more sources than the limit", () => {
+    const sources = Array.from(
+      { length: POSITION_LIMITS.sourcesMaxItems + 1 },
+      (_, index) => source(index).entityId,
+    );
+    expect(
+      v.safeParse(playbookPositionInputSchema, gradedInput({ sources }))
+        .success,
+    ).toBe(false);
+  });
+});
+
 /**
  * The conversion returns `Position`, so a renamed or newly required stored
  * field already breaks compilation. A new OPTIONAL field compiles and would
@@ -730,10 +969,12 @@ describe("save_playbook position merge, over the input class", () => {
     fc.assert(
       fc.property(storedArbitrary, fc.nat(), (stored, pick) => {
         const index = pick % stored.length;
-        const projected = readThroughChatProjection(stored)[index];
+        const refRegistry = createChatRefRegistry();
+        const projected = readThroughChatProjection(stored, refRegistry)[index];
         const result = merge({
           stored,
-          positions: [readBackToInput(projected)],
+          positions: [readBackToInput(projected, refRegistry)],
+          readableSources: ALL_SOURCES_READABLE,
         });
 
         expect(result.issues).toEqual([]);
@@ -802,9 +1043,17 @@ describe("save_playbook position merge, over the input class", () => {
     fc.assert(
       fc.property(storedArbitrary, fc.nat(), (stored, pick) => {
         const index = pick % stored.length;
-        const projected = readThroughChatProjection(stored)[index];
-        const { enabled: _enabled, ...input } = readBackToInput(projected);
-        const result = merge({ stored, positions: [input] });
+        const refRegistry = createChatRefRegistry();
+        const projected = readThroughChatProjection(stored, refRegistry)[index];
+        const { enabled: _enabled, ...input } = readBackToInput(
+          projected,
+          refRegistry,
+        );
+        const result = merge({
+          stored,
+          positions: [input],
+          readableSources: ALL_SOURCES_READABLE,
+        });
 
         expect(result.issues).toEqual([]);
         expect(result.items).toEqual(stored);

@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
@@ -15,11 +15,16 @@ import { readStyleSetPackage } from "@/api/lib/style-sets";
 import { OCTET_STREAM_MIME_TYPE } from "@/api/mime-types";
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason: "Renders a style configuration against sample content.",
+  },
   description:
     "Render a content-free style set configuration against bounded sample " +
     "contract text and return a DOCX for the visual style editor preview. " +
     "Saved style sets are read within the caller's organization.",
   permissions: { styleSet: ["use"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
   mcp: { type: "internal", reason: "native_tool_ui" },
   transport: {

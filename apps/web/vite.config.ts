@@ -4,7 +4,7 @@ import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import react from "@vitejs/plugin-react";
 import { panic } from "better-result";
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 import { visualizer } from "rollup-plugin-visualizer";
@@ -17,8 +17,9 @@ import {
 
 import stllAnonymizeWasm from "@stll/anonymize-wasm/vite";
 
+import { devRouteBuildGuard } from "./dev-route-build-guard.ts";
 import { REACT_COMPILER_OPTIONS } from "./react-compiler-options.ts";
-import { ROUTE_TREE_OPTIONS } from "./route-tree.config.ts";
+import { routeTreeOptions } from "./route-tree.config.ts";
 
 const APP_ROOT = import.meta.dirname;
 const BUN_GLOBAL_STORE_ROOT = path.resolve(
@@ -26,6 +27,13 @@ const BUN_GLOBAL_STORE_ROOT = path.resolve(
     path.join(homedir(), ".bun/install/cache"),
   "links",
 );
+// Folio editor catalogs load one module per app language (see
+// folioMessageLoaders in src/i18n/i18n-store.ts); one entry per locale file.
+const FOLIO_LOCALE_MESSAGE_ENTRYPOINTS = readdirSync(
+  path.resolve(APP_ROOT, "src/i18n/langs"),
+)
+  .filter((file) => file.endsWith(".json"))
+  .map((file) => `@stll/folio-react/messages/${path.basename(file, ".json")}`);
 const ANALYZE_MODE = "analyze";
 export const REACT_PLUGIN_EXCLUDE = [
   /[/\\]node_modules[/\\]/u,
@@ -303,7 +311,8 @@ const isPromiseLikePluginOption = (
   return typeof value.then === "function";
 };
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ mode, command }) => {
+  const routeOptions = routeTreeOptions(command);
   const shouldAnalyze = mode === ANALYZE_MODE || process.env["ANALYZE"] === "1";
   const devApiProxyTarget = process.env["DEV_API_PROXY_TARGET"];
   const plugins: PluginOption[] = [
@@ -313,6 +322,7 @@ export default defineConfig(({ mode }) => {
       "@tanstack/devtools-vite",
     ),
     versionManifestPlugin(),
+    devRouteBuildGuard(),
     // Emits @stll/anonymize-wasm's binding + glue as build assets and
     // rewrites its runtime asset URLs so `vite build` can resolve them
     // (the package computes them at runtime, which Rollup can't follow
@@ -325,10 +335,11 @@ export default defineConfig(({ mode }) => {
     ensurePluginOption(tailwindcss(), "@tailwindcss/vite"),
     ensurePluginOption(
       tanstackStart({
-        srcDirectory: ROUTE_TREE_OPTIONS.srcDirectory,
+        srcDirectory: routeOptions.srcDirectory,
         router: {
-          routesDirectory: ROUTE_TREE_OPTIONS.routesDirectory,
-          generatedRouteTree: ROUTE_TREE_OPTIONS.generatedRouteTree,
+          routesDirectory: routeOptions.routesDirectory,
+          generatedRouteTree: routeOptions.generatedRouteTree,
+          routeFileIgnorePattern: routeOptions.routeFileIgnorePattern,
           codeSplittingOptions: {
             defaultBehavior: [
               ["component"],
@@ -538,7 +549,7 @@ export default defineConfig(({ mode }) => {
         "defu",
         "nanostores",
         "@stll/folio-react",
-        "@stll/folio-react/messages",
+        ...FOLIO_LOCALE_MESSAGE_ENTRYPOINTS,
         "prosemirror-commands",
         "prosemirror-dropcursor",
         "prosemirror-gapcursor",
@@ -561,16 +572,16 @@ export default defineConfig(({ mode }) => {
         //    cold pass.
         "@atlaskit/pragmatic-drag-and-drop-auto-scroll/element",
         "@atlaskit/pragmatic-drag-and-drop-auto-scroll/external",
-        "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge",
+        "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge/attach-closest-edge",
+        "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge/extract-closest-edge",
+        "@atlaskit/pragmatic-drag-and-drop-live-region",
         "@atlaskit/pragmatic-drag-and-drop/adapter/drop-target-for-external",
         "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter",
-        "@atlaskit/pragmatic-drag-and-drop/combine",
-        "@atlaskit/pragmatic-drag-and-drop/element/adapter",
-        "@atlaskit/pragmatic-drag-and-drop/element/center-under-pointer",
-        "@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview",
         "@atlaskit/pragmatic-drag-and-drop/utils/center-under-pointer",
+        "@atlaskit/pragmatic-drag-and-drop/utils/combine",
         "@atlaskit/pragmatic-drag-and-drop/utils/contains-files",
         "@atlaskit/pragmatic-drag-and-drop/utils/get-files",
+        "@atlaskit/pragmatic-drag-and-drop/utils/preserve-offset-on-source",
         "@atlaskit/pragmatic-drag-and-drop/utils/set-custom-native-drag-preview",
         "@base-ui/react/context-menu",
         "@base-ui/react/preview-card",

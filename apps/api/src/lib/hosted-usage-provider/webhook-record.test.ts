@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
+
 import {
   HOSTED_USAGE_HANDLED_EVENT_TYPES,
   type HostedUsageEntitlementPayload,
@@ -27,6 +29,7 @@ const entitlement = {
 } satisfies Required<HostedUsageEntitlementPayload>;
 
 const allocation = {
+  occurred_at: "2026-10-02T00:00:00Z",
   id: "order-1",
   account_ref: "account-1",
   policy_ref: "product-1",
@@ -71,9 +74,7 @@ for (const type of HOSTED_USAGE_HANDLED_EVENT_TYPES) {
       type,
       data,
       signatureVerified: true,
-      payloadDigest: new Bun.CryptoHasher("sha256")
-        .update(rawBody)
-        .digest("hex"),
+      payloadDigest: hashSha256Hex(rawBody),
     });
   });
 }
@@ -97,7 +98,7 @@ test("unhandled receipts retain only review identifiers and timestamps", () => {
     timestamp: payload.timestamp,
     data: { id: "record-1", customer_id: "account-1", status: "pending" },
     signatureVerified: true,
-    payloadDigest: new Bun.CryptoHasher("sha256").update(rawBody).digest("hex"),
+    payloadDigest: hashSha256Hex(rawBody),
   });
 });
 

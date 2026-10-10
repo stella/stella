@@ -26,6 +26,7 @@ import {
 import type { ContextMenuAction } from "@stll/ui/context-menu";
 import {
   Dialog,
+  DialogFormState,
   DialogClose,
   DialogFooter,
   DialogHeader,
@@ -583,6 +584,16 @@ const TemplateTagsDialogBody = ({
 
   return (
     <DialogPopup className="sm:max-w-sm">
+      <DialogFormState
+        dirty={
+          JSON.stringify(tags) !==
+            JSON.stringify(optionalArray(template.tags)) || input !== ""
+        }
+        onDiscard={() => {
+          setTags(optionalArray(template.tags));
+          setInput("");
+        }}
+      />
       <DialogHeader>
         <DialogTitle>{t("templates.addTag")}</DialogTitle>
       </DialogHeader>
@@ -722,6 +733,18 @@ const TemplateGuidanceDialogBody = ({
 
   return (
     <DialogPopup className="sm:max-w-lg">
+      <DialogFormState
+        dirty={
+          whenToUse !== (template.whenToUse ?? "") ||
+          whenNotToUse !== (template.whenNotToUse ?? "") ||
+          JSON.stringify(languages) !== JSON.stringify(template.languages)
+        }
+        onDiscard={() => {
+          setWhenToUse(template.whenToUse ?? "");
+          setWhenNotToUse(template.whenNotToUse ?? "");
+          setLanguages(template.languages);
+        }}
+      />
       <DialogHeader>
         <DialogTitle>{t("templates.usageGuidance")}</DialogTitle>
       </DialogHeader>

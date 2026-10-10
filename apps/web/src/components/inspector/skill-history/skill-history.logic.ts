@@ -32,7 +32,7 @@ export type SkillCommentRow = Awaited<
  */
 const NO_MEMBERS: readonly never[] = [];
 
-export const SKILL_PROPOSAL_STATUSES = [
+const SKILL_PROPOSAL_STATUSES = [
   "draft",
   "proposed",
   "accepted",
@@ -57,6 +57,7 @@ export const isOpenProposalStatus = (status: SkillProposalStatus): boolean =>
 const PROPOSABLE_BY_ORIGIN = {
   authored: true,
   bundled: false,
+  default: true,
   upload: true,
   url: true,
 } as const satisfies Record<SkillResourceOrigin, boolean>;

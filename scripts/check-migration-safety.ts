@@ -15,7 +15,6 @@
 // reason shorter than MIN_ACKNOWLEDGEMENT_REASON_LENGTH is itself an error.
 
 import { panic } from "better-result";
-import { createHash } from "node:crypto";
 import {
   existsSync,
   readdirSync,
@@ -25,10 +24,14 @@ import {
 } from "node:fs";
 import path from "node:path";
 
+import { createSha256 } from "@stll/sha256/node";
+
+import { CODE_OWNED_TABLES } from "../apps/api/src/db/code-owned-tables";
 import { HIGH_VOLUME_TABLES } from "../apps/api/src/db/high-volume-tables";
 // Statement hashes pin historical index work without exempting a whole file.
 // The corpus test requires exact findings and forbids additions to this snapshot.
-import indexFindingsSnapshot from "./migration-index-findings.json";
+import indexFindingsSnapshot from "./migration-index-findings.json" with { type: "json" };
+import type { MigrationSafetyRuleId } from "./migration-safety-rule-ids";
 
 type Statement = {
   line: number;
@@ -54,7 +57,7 @@ type Statement = {
 type GuardedCategory = (typeof GUARDED_CATEGORIES)[number];
 
 type GuardedRule = {
-  id: string;
+  id: MigrationSafetyRuleId;
   description: string;
   category: GuardedCategory;
   pattern?: RegExp;
@@ -63,14 +66,14 @@ type GuardedRule = {
 
 // Never acknowledgeable: the statement has to be rewritten.
 type StatementInvariantRule = {
-  id: string;
+  id: MigrationSafetyRuleId;
   description: string;
   matches: (statement: Statement) => boolean;
   guidance: string;
 };
 
 type FileInvariantRule = {
-  id: string;
+  id: MigrationSafetyRuleId;
   description: string;
   matches: (statements: Statement[]) => boolean;
   guidance: string;
@@ -135,7 +138,8 @@ const MIN_ACKNOWLEDGEMENT_REASON_LENGTH = 12;
 const DEFAULT_MIGRATIONS_DIR = "apps/api/drizzle";
 // Migrations applied before the current rule set. Shared with squawk via
 // scripts/check-migrations.sh. Entries are immutable migrations, so the list
-// may only shrink; a listed file that no longer exists is an error.
+// only shrinks (scripts/check-migration-baseline.ts); a listed file that no
+// longer exists is an error.
 const BASELINE_FILE = "scripts/migration-baseline.txt";
 
 const ALTER_TABLE_PATTERN = /\bALTER\s+TABLE\b/iu;
@@ -405,7 +409,7 @@ const isCreateTableAsQuery = (statement: string): boolean => {
   return firstParenthesis === -1 || asQuery.index < firstParenthesis;
 };
 
-const GUARDED_RULES: GuardedRule[] = [
+const GUARDED_RULES = [
   {
     id: "drop-object",
     description: "drops a database object",
@@ -573,69 +577,118 @@ const GUARDED_RULES: GuardedRule[] = [
     category: "access-control",
     pattern: /\bSET\s+SCHEMA\b/iu,
   },
-];
+] satisfies GuardedRule[];
 
 const HIGH_VOLUME_TABLE_NAMES = new Set<string>(HIGH_VOLUME_TABLES);
-const HIGH_VOLUME_INDEX_BUILD_RULE_ID = "high-volume-index-build";
+const HIGH_VOLUME_INDEX_BUILD_RULE_ID =
+  "high-volume-index-build" satisfies MigrationSafetyRuleId;
 
-// A DML verb and the relation it targets, read from unmasked text so a quoted
-// or schema-qualified name is still a name; the qualifier may carry whitespace
-// around its dot, as PostgreSQL allows. An INSERT is judged below by whether
-// it copies rows out of another relation.
-const DML_TARGET_PATTERN =
-  /\b(?<verb>UPDATE|DELETE\s+FROM|INSERT\s+INTO|MERGE\s+INTO)\s+(?:ONLY\s+)?(?:"?public"?\s*\.\s*)?"?(?<table>[A-Za-z_][A-Za-z0-9_]*)"?/giu;
+const DML_VERBS = ["INSERT", "UPDATE", "DELETE", "MERGE"] as const;
+type DmlVerb = (typeof DML_VERBS)[number];
 
-// True when the statement rewrites rows of a registered high-volume table.
-// `raw` still carries quoted identifiers, which `text` masks, so the target is
-// read from `raw`; the verb is then checked at the same offset of `text`, where
-// a keyword inside a comment or a string literal has been masked away. Both
-// views index the same characters, `text` additionally carrying the masked
-// comment block that precedes the statement.
-const isHighVolumeTableDml = ({ deferred, raw, text }: Statement): boolean => {
-  // A stored-routine body executes nothing at migration time.
-  if (deferred) {
-    return false;
+// The keyword between a DML verb and its target relation; UPDATE takes none.
+const DML_TARGET_KEYWORDS = {
+  INSERT: "into",
+  UPDATE: undefined,
+  DELETE: "from",
+  MERGE: "into",
+} as const satisfies Record<DmlVerb, string | undefined>;
+
+const DML_VERB_BY_TOKEN = new Map<string, DmlVerb>(
+  DML_VERBS.map((verb) => [verb.toLowerCase(), verb]),
+);
+
+type DmlTarget = { verb: DmlVerb; table: string };
+
+// The relations a statement writes rows of when the migration runs, read from
+// the token stream: comments and string literals are masked there and quoted
+// identifiers are tokens of their own, so no keyword or name inside a comment
+// or literal counts, and a comment between tokens (`INSERT /* x */ INTO`) is
+// plain whitespace. A relation outside the public schema is none of the
+// registered tables. A stored-routine body executes nothing at migration
+// time, and an UPDATE after a clause keyword (`FOR UPDATE`, `DO UPDATE`) is
+// not a statement of its own.
+const executedDmlTargets = (statement: Statement): DmlTarget[] => {
+  if (statement.deferred) {
+    return [];
   }
 
-  const textOffset = text.length - raw.length;
-  const words = wordsWithDepth(text);
+  const tokens = indexTokens(statement);
+  const targets: DmlTarget[] = [];
 
-  for (const match of raw.matchAll(DML_TARGET_PATTERN)) {
-    const verb = match.groups?.["verb"];
-    const table = match.groups?.["table"]?.toLowerCase();
+  for (const [position, token] of tokens.entries()) {
+    const verb =
+      token.kind === "word" ? DML_VERB_BY_TOKEN.get(token.value) : undefined;
+    if (verb === undefined) {
+      continue;
+    }
+
+    const previous = tokens[position - 1];
     if (
-      verb === undefined ||
-      table === undefined ||
-      !HIGH_VOLUME_TABLE_NAMES.has(table)
+      verb === UPDATE_KEYWORD &&
+      previous?.kind === "word" &&
+      UPDATE_CLAUSE_PREFIXES.has(previous.value.toUpperCase())
     ) {
       continue;
     }
 
-    const verbIndex = match.index + textOffset;
-    if (text.slice(verbIndex, verbIndex + verb.length) !== verb) {
+    let next = position + 1;
+    const keyword = DML_TARGET_KEYWORDS[verb];
+    if (keyword !== undefined) {
+      if (!isIndexKeyword(tokens[next], keyword)) {
+        continue;
+      }
+      next++;
+    }
+    if (isIndexKeyword(tokens[next], "only")) {
+      next++;
+    }
+
+    const relation = readIndexRelation(tokens, next)?.relation;
+    if (relation?.schema.toLowerCase() !== "public") {
       continue;
     }
 
-    const verbWord = verb.split(/\s+/u)[0]?.toUpperCase();
-    const position = words.findIndex(({ index }) => index === verbIndex);
-    const previousWord = words[position - 1]?.word ?? "";
-    if (
-      verbWord === UPDATE_KEYWORD &&
-      UPDATE_CLAUSE_PREFIXES.has(previousWord)
-    ) {
-      continue;
-    }
-    if (verbWord === "INSERT" && !isInsertFromQuery(text)) {
-      continue;
-    }
-
-    return true;
+    targets.push({ verb, table: relation.name.toLowerCase() });
   }
 
-  return false;
+  return targets;
 };
 
-const STATEMENT_INVARIANT_RULES: StatementInvariantRule[] = [
+// True when the statement rewrites rows of a registered high-volume table. An
+// INSERT counts only when it copies rows out of another relation.
+const isHighVolumeTableDml = (statement: Statement): boolean =>
+  executedDmlTargets(statement).some(
+    ({ verb, table }) =>
+      HIGH_VOLUME_TABLE_NAMES.has(table) &&
+      (verb !== "INSERT" || isInsertFromQuery(statement.text)),
+  );
+
+const CODE_OWNED_TABLE_NAMES = new Set<string>(CODE_OWNED_TABLES);
+
+// DELETE stays allowed: removing a row the code no longer declares, or one an
+// older migration seeded, converges every database on the code's state.
+const isCodeOwnedTableWrite = (statement: Statement): boolean =>
+  executedDmlTargets(statement).some(
+    ({ verb, table }) => verb !== "DELETE" && CODE_OWNED_TABLE_NAMES.has(table),
+  );
+
+// Calls whose result depends on when, or by which draw, the statement runs.
+// Matched against masked text, so a quoted identifier, string literal or
+// comment never matches; the SQL-standard datetime keywords take no
+// parentheses.
+const VOLATILE_VALUE_PATTERN =
+  /\b(?:(?:now|clock_timestamp|statement_timestamp|transaction_timestamp|timeofday|random|gen_random_uuid|uuid_generate_v1|uuid_generate_v1mc|uuid_generate_v4|uuidv4|uuidv7)\s*\(|(?:current_timestamp|current_time|current_date|localtimestamp|localtime)\b)/iu;
+
+// A row written from the clock or a random draw differs between a database
+// that ran the migration at deploy time and one migrated from scratch later,
+// so the clean and upgraded catalogs never converge. Column DEFAULTs in DDL
+// are not writes and stay allowed; DELETE writes no value.
+const isVolatileDataWrite = (statement: Statement): boolean =>
+  VOLATILE_VALUE_PATTERN.test(statement.text) &&
+  executedDmlTargets(statement).some(({ verb }) => verb !== "DELETE");
+
+const STATEMENT_INVARIANT_RULES = [
   {
     id: "on-conflict-column-target",
     description: "uses a column-target ON CONFLICT clause",
@@ -644,15 +697,29 @@ const STATEMENT_INVARIANT_RULES: StatementInvariantRule[] = [
       "Use ON CONFLICT ON CONSTRAINT for a named table constraint, or use WHERE NOT EXISTS when the arbiter is a partial unique index.",
   },
   {
+    id: "code-owned-table-write",
+    description: "inserts or updates rows of a table the application code owns",
+    matches: isCodeOwnedTableWrite,
+    guidance: `The application writes these rows from its own declarations at boot, so a migration copy drifts from what the code declares and from a database migrated at another time. Declare the row in code (scheduler jobs: DECLARED_SCHEDULER_JOBS in apps/api/src/lib/scheduler/jobs.ts); a migration may only DELETE rows the code no longer owns. Registered tables: ${CODE_OWNED_TABLES.join(", ")}.`,
+  },
+  {
+    id: "volatile-data-write",
+    description:
+      "writes rows from the clock or a random draw (now(), current_timestamp, random(), gen_random_uuid(), ...)",
+    matches: isVolatileDataWrite,
+    guidance:
+      'A database migrated at deploy time and one migrated from scratch later then hold different rows. Seed literal values; for a column whose own DEFAULT is volatile (an id, a created_at), omit it or write DEFAULT (INSERT ... DEFAULT, UPDATE ... SET "updated_at" = DEFAULT), which the migration catalog comparison already excludes; or write the row from application code.',
+  },
+  {
     id: "high-volume-table-dml",
     description:
       "rewrites rows of a high-volume table inside the migration transaction",
     matches: isHighVolumeTableDml,
     guidance: `The table holds millions of rows in production and the statement runs under the migration's statement budget whatever its WHERE clause matches. Keep the migration to DDL and register the data repair as an online repair in apps/api/src/db/online-migrations.ts (bounded batches over an indexed access path, resumable, validated on completion). Registered tables: ${HIGH_VOLUME_TABLES.join(", ")}.`,
   },
-];
+] satisfies StatementInvariantRule[];
 
-const STATEMENT_INVARIANT_RULE_IDS = new Set([
+const STATEMENT_INVARIANT_RULE_IDS = new Set<string>([
   ...STATEMENT_INVARIANT_RULES.map((rule) => rule.id),
   HIGH_VOLUME_INDEX_BUILD_RULE_ID,
 ]);
@@ -678,7 +745,7 @@ const isTimeoutSetBeforeFirstOperation = (
   return false;
 };
 
-const FILE_INVARIANT_RULES: FileInvariantRule[] = [
+const FILE_INVARIANT_RULES = [
   {
     id: "missing-lock-timeout",
     description:
@@ -697,9 +764,19 @@ const FILE_INVARIANT_RULES: FileInvariantRule[] = [
     guidance:
       "Start the migration with SET LOCAL statement_timeout = '<bound>'; so a slow statement cannot hold locks indefinitely.",
   },
-];
+] satisfies FileInvariantRule[];
 
-const KNOWN_RULE_IDS = new Set(GUARDED_RULES.map((rule) => rule.id));
+// Every id in MIGRATION_SAFETY_RULE_IDS names a rule defined above.
+type DefinedRuleId =
+  | (typeof GUARDED_RULES)[number]["id"]
+  | (typeof STATEMENT_INVARIANT_RULES)[number]["id"]
+  | (typeof FILE_INVARIANT_RULES)[number]["id"]
+  | typeof HIGH_VOLUME_INDEX_BUILD_RULE_ID;
+true satisfies [Exclude<MigrationSafetyRuleId, DefinedRuleId>] extends [never]
+  ? true
+  : never;
+
+const KNOWN_RULE_IDS = new Set<string>(GUARDED_RULES.map((rule) => rule.id));
 
 const usage = () => {
   console.error(
@@ -1802,9 +1879,7 @@ export const checkMigrationIndexBuilds = (
             file,
             line: statement.line,
             ruleId: HIGH_VOLUME_INDEX_BUILD_RULE_ID,
-            statementHash: createHash("sha256")
-              .update(statement.raw)
-              .digest("hex"),
+            statementHash: createSha256().update(statement.raw).digest("hex"),
             description:
               "builds indexes on a high-volume table or an unresolved REINDEX target during a schema migration",
             guidance:

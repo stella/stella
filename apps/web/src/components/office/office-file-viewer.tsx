@@ -31,6 +31,10 @@ import type {
 } from "@/components/office/silurus-office-viewer";
 import { SilurusOfficeFileViewer } from "@/components/office/silurus-office-viewer";
 import { useTheme } from "@/components/theme-provider";
+import {
+  DesktopRequiredDialog,
+  useDesktopActionGate,
+} from "@/features/desktop/desktop-action-gate";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { TOOLBAR_ROW_HEIGHT_PX } from "@/lib/consts";
@@ -38,6 +42,7 @@ import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { registerOfficeCitationNavigation } from "@/lib/files/office-citations";
 import { fileOptions } from "@/lib/files/queries";
+import { useActionCapabilities } from "@/lib/organization/feature-access/capability-actions";
 import "@/components/office/office-file-viewer.css";
 
 const OFFICE_AI_DOCK_CLEARANCE_PX = 96;
@@ -64,6 +69,9 @@ export const OfficeFileViewer = ({
   const t = useTranslations();
   const analytics = useAnalytics();
   const { resolvedTheme } = useTheme();
+  const desktopGate = useDesktopActionGate("edit-file");
+  const desktopCapability =
+    useActionCapabilities("desktop").capabilities.desktop;
   const editIntentStateRef = useRef(INITIAL_OFFICE_EDIT_INTENT_STATE);
   const navigationSequenceRef = useRef(0);
   const [attempt, setAttempt] = useState(0);
@@ -109,6 +117,7 @@ export const OfficeFileViewer = ({
   const handleEditIntentKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLDivElement>) => {
       if (
+        desktopCapability.type !== "available" ||
         desktopEditTarget === null ||
         viewerStatus.type !== "ready" ||
         !isOfficeEditIntentKey(event.nativeEvent)
@@ -128,9 +137,11 @@ export const OfficeFileViewer = ({
       requestDesktopOpenAttention(fieldId);
       stellaToast.add({
         action: {
-          label: t("workspaces.files.desktopEdit.action"),
+          label: desktopGate.label,
           onClick: () => {
-            detached(openInDesktop(), "office-file-viewer.open-in-desktop");
+            desktopGate.run(() => {
+              detached(openInDesktop(), "office-file-viewer.open-in-desktop");
+            });
           },
         },
         description: t("workspaces.files.desktopEdit.editLocallyPrompt"),
@@ -141,6 +152,8 @@ export const OfficeFileViewer = ({
     },
     [
       desktopEditTarget,
+      desktopCapability.type,
+      desktopGate,
       fieldId,
       openInDesktop,
       requestDesktopOpenAttention,
@@ -190,6 +203,7 @@ export const OfficeFileViewer = ({
       activeFile={{ entityId, fileFieldId: fieldId, fileName }}
       workspaceId={workspaceId}
     >
+      <DesktopRequiredDialog {...desktopGate.requiredDialog} />
       <div
         aria-label={fileName}
         className="bg-muted flex h-full min-h-0 w-full flex-col overflow-hidden outline-none"

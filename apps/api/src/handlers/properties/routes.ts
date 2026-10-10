@@ -1,7 +1,5 @@
 import Elysia from "elysia";
 
-import { RESOURCE_TYPE } from "@stll/api-contract";
-
 import createPropertiesBatch from "@/api/handlers/properties/batch/create";
 import createProperty from "@/api/handlers/properties/create";
 import deleteProperty from "@/api/handlers/properties/delete";
@@ -10,32 +8,21 @@ import previewProperty from "@/api/handlers/properties/preview";
 import suggestPromptProperty from "@/api/handlers/properties/prompt/suggest";
 import updateProperty from "@/api/handlers/properties/update";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
-import {
-  resourceRealtime,
-  workspaceResourceSetUpdates,
-} from "@/api/lib/resource-realtime-macro";
-
-const propertyRealtimeUpdates = workspaceResourceSetUpdates(
-  RESOURCE_TYPE.PROPERTY,
-);
 
 export const propertiesRoute = new Elysia({
   prefix: "/properties/:workspaceId",
 })
   .use(workspaceAccessMacro)
-  .use(resourceRealtime)
   .use(permissionMacro)
   .guard({
     validateWorkspaceAccess: true,
   })
   .put("/", createProperty.handler, {
     body: createProperty.config.body,
-    resourceSetUpdated: propertyRealtimeUpdates,
     permissions: createProperty.config.permissions,
   })
   .put("/batch", createPropertiesBatch.handler, {
     body: createPropertiesBatch.config.body,
-    resourceSetUpdated: propertyRealtimeUpdates,
     permissions: createPropertiesBatch.config.permissions,
   })
   .post("/preview", previewProperty.handler, {
@@ -53,12 +40,10 @@ export const propertiesRoute = new Elysia({
     app
       .post("/", updateProperty.handler, {
         body: updateProperty.config.body,
-        resourceSetUpdated: propertyRealtimeUpdates,
         params: updateProperty.config.params,
         permissions: updateProperty.config.permissions,
       })
       .delete("/", deleteProperty.handler, {
-        resourceSetUpdated: propertyRealtimeUpdates,
         params: deleteProperty.config.params,
         permissions: deleteProperty.config.permissions,
       }),

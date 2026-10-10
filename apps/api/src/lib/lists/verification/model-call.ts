@@ -9,6 +9,7 @@ import type { ModelMessage, TextPart } from "@tanstack/ai";
  * from the prompt cache.
  */
 import type { AnthropicTextMetadata } from "@tanstack/ai-anthropic";
+import { Result, TaggedError } from "better-result";
 import type * as v from "valibot";
 
 import type { AIRequestServiceTier, OrgAIConfig } from "@/api/lib/ai-config";
@@ -19,7 +20,12 @@ import {
 } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
+import type { ListVerificationAccessProof } from "@/api/lib/lists/verification/access";
 import type { VerificationBlock } from "@/api/lib/lists/verification/document-text";
+import type { ListVerificationRunCapError } from "@/api/lib/lists/verification/run-caps";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { markTanStackCacheBreakpoint } from "@/api/lib/tanstack-ai-caching";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 
@@ -27,7 +33,15 @@ import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 export const VERIFICATION_MODEL_ROLE = "pdf" as const;
 const CALL_TIMEOUT_MS = 120_000;
 
+export class ListVerificationAccessRevokedError extends TaggedError(
+  "ListVerificationAccessRevokedError",
+)<{ message: string }> {}
+
 export type VerificationModelDeps = {
+  accessProof: ListVerificationAccessProof;
+  refreshAccessProof: () => Promise<ListVerificationAccessProof | null>;
+  admission: ModelDispatchAdmission;
+  checkRunBudget: () => Promise<Result<void, ListVerificationRunCapError>>;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
   entityVersionId: SafeId<"entityVersion">;
@@ -40,6 +54,14 @@ export type VerificationModelDeps = {
   /** External model-dispatch boundary; supplied by focused tests. */
   generateObjectForRole?: typeof generateTanStackObjectForRole | undefined;
 };
+
+const proofMatchesRequest = (
+  proof: ListVerificationAccessProof,
+  deps: VerificationModelDeps,
+) =>
+  proof.featureId === LIST_VERIFICATION_FEATURE_ID &&
+  proof.organizationId === deps.organizationId &&
+  proof.userId === deps.usageMetering.userId;
 
 /** Blocks as `[id] text` lines: the ids are what the model cites. */
 export const blocksText = (blocks: readonly VerificationBlock[]): string =>
@@ -57,7 +79,14 @@ type VerificationCallArgs<TSchema extends v.GenericSchema> = {
 export type VerificationCall<TSchema extends v.GenericSchema> = {
   /** The first request of a call: the shared text, then `task`. */
   request: (task: string) => ModelMessage;
-  generate: (messages: ModelMessage[]) => Promise<v.InferOutput<TSchema>>;
+  generate: (
+    messages: ModelMessage[],
+  ) => Promise<
+    Result<
+      v.InferOutput<TSchema>,
+      ListVerificationAccessRevokedError | ListVerificationRunCapError
+    >
+  >;
   captureError: (cause: unknown) => void;
 };
 
@@ -101,25 +130,46 @@ export const createVerificationCall = <TSchema extends v.GenericSchema>({
       role: "user",
       content: [...sharedParts, { type: "text", content: task }],
     }),
-    generate: async (messages) =>
-      await generate({
-        dataClass: "customer",
-        role: VERIFICATION_MODEL_ROLE,
-        orgAIConfig: deps.orgAIConfig,
-        managedAIResidency: deps.managedAIResidency,
-        organizationId: deps.organizationId,
-        analytics,
-        caching,
-        serviceTier: deps.serviceTier,
-        tenantWorkspaceIds: [deps.workspaceId],
-        system,
-        messages,
-        abortSignal: AbortSignal.any([
-          deps.abortSignal,
-          AbortSignal.timeout(CALL_TIMEOUT_MS),
-        ]),
-        outputSchema,
-      }),
+    generate: async (messages) => {
+      const proof = await deps.refreshAccessProof();
+      if (
+        !isDeploymentFeatureEnabled("FEATURE_LEGAL_LISTS") ||
+        proof === null ||
+        !proofMatchesRequest(proof, deps) ||
+        !proofMatchesRequest(deps.accessProof, deps)
+      ) {
+        return Result.err(
+          new ListVerificationAccessRevokedError({
+            message: "List verification access is unavailable",
+          }),
+        );
+      }
+      const budget = await deps.checkRunBudget();
+      if (Result.isError(budget)) {
+        return budget;
+      }
+      return Result.ok(
+        await generate({
+          dataClass: "customer",
+          role: VERIFICATION_MODEL_ROLE,
+          orgAIConfig: deps.orgAIConfig,
+          managedAIResidency: deps.managedAIResidency,
+          organizationId: deps.organizationId,
+          admission: deps.admission,
+          analytics,
+          caching,
+          serviceTier: deps.serviceTier,
+          tenantWorkspaceIds: [deps.workspaceId],
+          system,
+          messages,
+          abortSignal: AbortSignal.any([
+            deps.abortSignal,
+            AbortSignal.timeout(CALL_TIMEOUT_MS),
+          ]),
+          outputSchema,
+        }),
+      );
+    },
     captureError: (cause) => {
       analytics.captureError(cause);
     },

@@ -1,3 +1,4 @@
+import { panic, Result } from "better-result";
 /**
  * The continuous walk over one deferred-stage source's decisions waiting
  * on their document.
@@ -21,8 +22,7 @@
  * and the priority handling can be exercised on their own.
  */
 
-import { panic, Result } from "better-result";
-
+import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import {
   DOCUMENT_FETCH_EVENT,
   type DocumentFetchErrorDiagnostic,
@@ -80,11 +80,14 @@ export type DeferredDocumentDrainSummary = OutcomeCounts & {
 const emptySummary = (): DeferredDocumentDrainSummary => ({
   attempted: 0,
   claimed: 0,
+  busy: 0,
+  lost: 0,
   deferred: 0,
   failed: 0,
   failures: {
     "publisher-status": 0,
     network: 0,
+    "too-large": 0,
     unparseable: 0,
   } satisfies Record<DocumentFetchFailure, number>,
   filled: 0,
@@ -252,7 +255,10 @@ export const runDeferredDocumentDrain = async ({
       switch (queued.type) {
         case "exhausted":
           delayMs = idleMs;
-          idleMs = Math.min(idleMs * 2, timing.idleSleepMaxMs);
+          idleMs = backoffDelay(1, {
+            baseMs: idleMs,
+            maxMs: timing.idleSleepMaxMs,
+          });
           break;
         case "budget-spent":
           break;
@@ -282,10 +288,10 @@ export const runDeferredDocumentDrain = async ({
       summary.failed += 1;
       summary.lastError = error;
       summary.lastErrorDiagnostic = documentErrorDiagnostics(error);
-      delayMs = Math.min(
-        timing.fetchDelayMs * 2 ** consecutiveFailures,
-        timing.failureBackoffMaxMs,
-      );
+      delayMs = backoffDelay(consecutiveFailures, {
+        baseMs: timing.fetchDelayMs,
+        maxMs: timing.failureBackoffMaxMs,
+      });
     }
 
     if (now() >= summaryDueAt) {

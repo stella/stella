@@ -5,8 +5,8 @@
 
 Every safe handler the API exposes, grouped by domain: how it is classified
 (read/write, destructive) and how it is reachable — as a curated MCP tool,
-covered by one, or only through the generic `invoke_capability` path (shown
-here as its CLI form). Projected from the same handler enumeration that builds
+covered by one, or through `read_capability` or
+`write_capability` (shown here as its CLI form). Projected from the same handler enumeration that builds
 `packages/cli/capabilities/*.json`; see
 `apps/api/scripts/export-capability-catalog.ts`.
 
@@ -59,6 +59,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `chat.export.create` | write | stella:chat | — | generic invoke → `stella capability chat export-create` |
 | `chat.fork.create` | write | stella:chat | — | generic invoke → `stella capability chat fork-create` |
 | `chat.messages.list` | read | stella:chat | — | generic invoke → `stella capability chat messages-list` |
+| `chat.messages.revisions.list` | read | stella:chat | — | generic invoke → `stella capability chat messages-revisions-list` |
 | `chat.older-messages.list` | read | stella:chat | — | generic invoke → `stella capability chat older-messages-list` |
 | `chat.threads.delete` | write, destructive | stella:chat | — | generic invoke → `stella capability chat threads-delete` |
 | `chat.threads.list` | read | stella:chat | — | generic invoke → `stella capability chat threads-list` |
@@ -103,6 +104,11 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `contacts.get` | read | stella:read | — | curated tool `read_contact` |
 | `contacts.import` | write | stella:contacts_write | — | covered by `save_contact` |
 | `contacts.list` | read | stella:read | — | curated tool `list_contacts` |
+| `contacts.sanctions.events.list` | read | stella:read | — | generic invoke → `stella capability contacts sanctions-events-list` |
+| `contacts.sanctions.get` | read | stella:read | — | generic invoke → `stella capability contacts sanctions-get` |
+| `contacts.sanctions.matches.list` | read | stella:read | — | generic invoke → `stella capability contacts sanctions-matches-list` |
+| `contacts.sanctions.monitoring.update` | write | stella:contacts_write | — | generic invoke → `stella capability contacts sanctions-monitoring-update` |
+| `contacts.sanctions.reviews.update` | write | stella:contacts_write | — | generic invoke → `stella capability contacts sanctions-reviews-update` |
 | `contacts.search` | read | stella:read | — | generic invoke → `stella capability contacts search` |
 | `contacts.update` | write | stella:contacts_write | — | covered by `save_contact` |
 
@@ -224,6 +230,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `invoices.lines.delete` | write, destructive | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices lines-delete` |
 | `invoices.lines.update` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices lines-update` |
 | `invoices.list` | read | stella:read | FEATURE_TIME_BILLING | curated tool `list_invoices` |
+| `invoices.pdf.export` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices pdf-export` |
 | `invoices.transition` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices transition` |
 | `invoices.update` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices update` |
 
@@ -316,13 +323,13 @@ A compound action is a nested resource: `clauses.categories.create`, not
 
 | Capability | Access | Scope | Feature | Reachable via |
 | --- | --- | --- | --- | --- |
-| `number-series.archive` | write | stella:billing_write | — | generic invoke → `stella capability number-series archive` |
-| `number-series.create` | write | stella:billing_write | — | generic invoke → `stella capability number-series create` |
-| `number-series.default.update` | write | stella:billing_write | — | generic invoke → `stella capability number-series default-update` |
-| `number-series.get` | read | stella:read | — | generic invoke → `stella capability number-series get` |
-| `number-series.list` | read | stella:read | — | generic invoke → `stella capability number-series list` |
-| `number-series.preview` | read | stella:read | — | generic invoke → `stella capability number-series preview` |
-| `number-series.update` | write | stella:billing_write | — | generic invoke → `stella capability number-series update` |
+| `number-series.archive` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability number-series archive` |
+| `number-series.create` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability number-series create` |
+| `number-series.default.update` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability number-series default-update` |
+| `number-series.get` | read | stella:read | FEATURE_TIME_BILLING | generic invoke → `stella capability number-series get` |
+| `number-series.list` | read | stella:read | FEATURE_TIME_BILLING | generic invoke → `stella capability number-series list` |
+| `number-series.preview` | read | stella:read | FEATURE_TIME_BILLING | generic invoke → `stella capability number-series preview` |
+| `number-series.update` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability number-series update` |
 
 ## organization-settings
 
@@ -341,6 +348,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `organization-settings.get` | read | stella:admin_read | — | generic invoke → `stella capability organization-settings get` |
 | `organization-settings.practice-jurisdictions.update` | write | stella:admin_write | — | curated tool `set_practice_jurisdictions` |
 | `organization-settings.preview` | read | stella:admin_read | — | generic invoke → `stella capability organization-settings preview` |
+| `organization-settings.sanctions-monitoring.update` | write | stella:admin_write | — | generic invoke → `stella capability organization-settings sanctions-monitoring-update` |
 | `organization-settings.update` | write | stella:admin_write | — | covered by `manage_organization` |
 
 ## playbooks
@@ -414,12 +422,12 @@ A compound action is a nested resource: `clauses.categories.create`, not
 
 | Capability | Access | Scope | Feature | Reachable via |
 | --- | --- | --- | --- | --- |
-| `seller-profiles.archive` | write | stella:billing_write | — | generic invoke → `stella capability seller-profiles archive` |
-| `seller-profiles.create` | write | stella:billing_write | — | generic invoke → `stella capability seller-profiles create` |
-| `seller-profiles.default.update` | write | stella:billing_write | — | generic invoke → `stella capability seller-profiles default-update` |
-| `seller-profiles.get` | read | stella:read | — | generic invoke → `stella capability seller-profiles get` |
-| `seller-profiles.list` | read | stella:read | — | generic invoke → `stella capability seller-profiles list` |
-| `seller-profiles.update` | write | stella:billing_write | — | generic invoke → `stella capability seller-profiles update` |
+| `seller-profiles.archive` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability seller-profiles archive` |
+| `seller-profiles.create` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability seller-profiles create` |
+| `seller-profiles.default.update` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability seller-profiles default-update` |
+| `seller-profiles.get` | read | stella:read | FEATURE_TIME_BILLING | generic invoke → `stella capability seller-profiles get` |
+| `seller-profiles.list` | read | stella:read | FEATURE_TIME_BILLING | generic invoke → `stella capability seller-profiles list` |
+| `seller-profiles.update` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability seller-profiles update` |
 
 ## signals
 
@@ -621,10 +629,10 @@ A compound action is a nested resource: `clauses.categories.create`, not
 
 | Capability | Access | Scope | Feature | Reachable via |
 | --- | --- | --- | --- | --- |
-| `vat-rates.archive` | write | stella:billing_write | — | generic invoke → `stella capability vat-rates archive` |
-| `vat-rates.create` | write | stella:billing_write | — | generic invoke → `stella capability vat-rates create` |
-| `vat-rates.list` | read | stella:read | — | generic invoke → `stella capability vat-rates list` |
-| `vat-rates.update` | write | stella:billing_write | — | generic invoke → `stella capability vat-rates update` |
+| `vat-rates.archive` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability vat-rates archive` |
+| `vat-rates.create` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability vat-rates create` |
+| `vat-rates.list` | read | stella:read | FEATURE_TIME_BILLING | generic invoke → `stella capability vat-rates list` |
+| `vat-rates.update` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability vat-rates update` |
 
 ## view-templates
 
@@ -665,20 +673,21 @@ mechanics, and similar), not gaps in coverage.
 | --- | --- |
 | account_lifecycle | 4 |
 | assistant_chat | 16 |
-| auth_plumbing | 18 |
+| auth_plumbing | 22 |
 | billing_ui | 1 |
-| chat_thread_ui | 2 |
+| chat_thread_ui | 6 |
 | compound_consent | 1 |
 | deploy_mechanics | 1 |
 | document_processing | 25 |
+| health_infra | 2 |
 | hosted_billing | 7 |
 | mcp_transport | 12 |
-| native_tool_ui | 9 |
-| provider_secret | 27 |
-| public_indexing | 8 |
+| native_tool_ui | 10 |
+| provider_secret | 33 |
+| public_indexing | 9 |
 | realtime_stream | 4 |
 | search_ui | 15 |
 | session_token_exchange | 20 |
-| ui_navigation_state | 10 |
-| upload_mechanics | 15 |
+| ui_navigation_state | 14 |
+| upload_mechanics | 20 |
 | url_preview | 2 |

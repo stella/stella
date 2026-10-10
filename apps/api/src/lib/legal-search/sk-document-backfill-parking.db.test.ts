@@ -40,6 +40,7 @@ import {
   parkDocumentFetch,
   requeueParkedDocuments,
 } from "@/api/lib/legal-search/sk-document-backfill";
+import { readOfResponse } from "@/api/tests/helpers/publisher-read";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -301,10 +302,12 @@ const fetchSeeded = async ({ answer, label, observe }: FetchSeededOptions) =>
     onDocumentObservation: observe,
     decisionId: idFor(label),
     fetchDocument: async () =>
-      await observePublisherDocumentFetch({
-        source: ADAPTER_KEYS.SK_COURTS,
-        fetch: answer,
-      }),
+      readOfResponse(
+        await observePublisherDocumentFetch({
+          source: ADAPTER_KEYS.SK_COURTS,
+          fetch: answer,
+        }),
+      ),
     scopedDb,
     signal: new AbortController().signal,
   });
@@ -493,19 +496,21 @@ describe("a stale claim", () => {
         decisionId: buffered.id,
         fetchDocument: async (url) => {
           urls.push(url.href);
-          return url.href === currentUrl
-            ? new Response(
-                new ReadableStream({
-                  start(controller) {
-                    controller.error(
-                      new DOMException("body timeout", "TimeoutError"),
-                    );
-                  },
+          return readOfResponse(
+            url.href === currentUrl
+              ? new Response(
+                  new ReadableStream({
+                    start(controller) {
+                      controller.error(
+                        new DOMException("body timeout", "TimeoutError"),
+                      );
+                    },
+                  }),
+                )
+              : new Response(oldStatus === 200 ? UNREADABLE_PDF : null, {
+                  status: oldStatus,
                 }),
-              )
-            : new Response(oldStatus === 200 ? UNREADABLE_PDF : null, {
-                status: oldStatus,
-              });
+          );
         },
         scopedDb,
         signal: new AbortController().signal,

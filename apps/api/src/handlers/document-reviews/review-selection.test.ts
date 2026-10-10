@@ -173,4 +173,32 @@ describe("document review selection", () => {
     }
     expect(result.error.status).toBe(422);
   });
+
+  test("rejects a password-protected DOCX reference", () => {
+    const rows = entityRows();
+    const referenceRow = rows.at(1);
+    const referenceField = referenceRow?.currentVersion.fields.at(0);
+    if (!referenceField) {
+      throw new TypeError("fixture must include the reference field");
+    }
+    referenceField.content = {
+      ...referenceField.content,
+      encrypted: true,
+    };
+
+    const result = resolveReviewSelection({
+      target,
+      references: [reference],
+      entities: rows,
+    });
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isOk(result)) {
+      return;
+    }
+    expect(result.error).toMatchObject({
+      status: 422,
+      message: "Encrypted document content cannot be extracted.",
+    });
+  });
 });

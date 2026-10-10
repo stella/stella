@@ -8,6 +8,7 @@ import {
   RESERVED_AGENT_SKILL_COMMANDS,
   agentSkills,
 } from "@/api/db/schema";
+import { skillRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { requireSkillManager } from "@/api/handlers/skills/managed-skill";
 import { uniqueSlug } from "@/api/handlers/skills/slug";
 import type { SkillSlug } from "@/api/handlers/skills/slug";
@@ -15,7 +16,7 @@ import { auditedSkillBody } from "@/api/lib/agent-skills/audited-body";
 import type { AuditedSkillBody } from "@/api/lib/agent-skills/audited-body";
 import { skillContentHashAfter } from "@/api/lib/agent-skills/content-hash";
 import { requireEditableSkillOrigin } from "@/api/lib/agent-skills/origin";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -60,6 +61,8 @@ const config = {
     "a bundled skill is refused. A rename derives a new unique slug from the " +
     "name; a command already taken in the organization is a 409.",
   permissions: { agentSkill: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: skillRealtimeUpdates,
   mcp: {
     type: "capability",
     reason: "agent_tool_authoring",

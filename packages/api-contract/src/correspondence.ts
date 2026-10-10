@@ -84,8 +84,11 @@ export type CorrespondenceOriginalSignature =
   | { status: "unverified" }
   | { status: "verified"; domain: string };
 
+export const CORRESPONDENCE_SOURCES = ["delivery", "upload"] as const;
+
 /** Extracted headers are assertions; only the outer delivery is authenticated. */
-export type CorrespondenceProvenance = {
+export type CorrespondenceDeliveryProvenance = {
+  source: "delivery";
   authenticatedSender: CorrespondenceAuthenticatedSender;
 } & (
   | { intake: "direct"; originalSignature: null }
@@ -95,6 +98,21 @@ export type CorrespondenceProvenance = {
       originalSignature: CorrespondenceOriginalSignature;
     }
 );
+
+/**
+ * A message read from an email file in the matter. Its headers are the file's
+ * assertions; only a DKIM signature over the file's own bytes is verified.
+ * The uploader is the record's filer.
+ */
+type CorrespondenceUploadProvenance = {
+  source: "upload";
+  sourceEntityId: SafeId<"entity">;
+  originalSignature: CorrespondenceOriginalSignature;
+};
+
+export type CorrespondenceProvenance =
+  | CorrespondenceDeliveryProvenance
+  | CorrespondenceUploadProvenance;
 
 export const CORRESPONDENCE_SENDER_KINDS = [
   "verified_alias",

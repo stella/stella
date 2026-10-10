@@ -5,12 +5,21 @@ import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 
 import { abortableTx } from "@/api/db/safe-db";
 import { workspaceViews } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import {
+  AVT_LAYOUT_FEATURE_ACCESS,
+  avtViewAccessStatus,
+  isAvtLayoutVisible,
+} from "@/api/lib/auth/feature-access/view-eligibility";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { legalListsDeployed } from "@/api/lib/lists/deployment";
+import {
+  rejectAvtLayout,
+  avtLayoutErrorDetail,
+} from "@/api/lib/lists/verification/view-layout";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import type { ViewLayout } from "@/api/lib/views-schema";
@@ -19,10 +28,6 @@ import {
   parseViewLayout,
   tUpdateViewBodySchema,
 } from "@/api/lib/views-schema";
-import {
-  avtLayoutErrorDetail,
-  rejectAvtLayout,
-} from "@/api/lib/views/avt-layout";
 import { resolveTemplateProperties } from "@/api/lib/views/template-properties";
 import {
   cleanStalePropertyIds,
@@ -37,7 +42,9 @@ const config = {
     "multiple kind filters are refused, columns the new layout needs are " +
     "created when your role may create columns, and references to deleted " +
     "columns are dropped.",
+  featureAccess: AVT_LAYOUT_FEATURE_ACCESS,
   permissions: { view: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "workspace_schema",
@@ -56,7 +63,21 @@ const updateView = createSafeHandler(
     params: { viewId },
     body,
     recordAuditEvent,
+    featureAccessSnapshot,
+    session,
+    user,
   }) {
+    const avtAccessStatus = avtViewAccessStatus({
+      snapshot: featureAccessSnapshot,
+      organizationId: session.activeOrganizationId,
+      userId: user.id,
+    });
+    if (body.layout?.type === "avt" && avtAccessStatus !== "available") {
+      return Result.err(
+        new HandlerError({ status: 404, message: "Not found" }),
+      );
+    }
+
     const existing = yield* Result.await(
       safeDb((tx) =>
         tx.query.workspaceViews.findFirst({
@@ -71,6 +92,12 @@ const updateView = createSafeHandler(
     if (!existing) {
       return Result.err(
         new HandlerError({ status: 404, message: "View not found" }),
+      );
+    }
+
+    if (!isAvtLayoutVisible(existing.layout, avtAccessStatus)) {
+      return Result.err(
+        new HandlerError({ status: 404, message: "Not found" }),
       );
     }
 
@@ -124,7 +151,10 @@ const updateView = createSafeHandler(
             tx,
             workspaceId,
             layout: parsedLayout,
-            legalListsEnabled: legalListsDeployed(),
+            legalListsEnabled: isDeploymentFeatureEnabled(
+              "FEATURE_LEGAL_LISTS",
+            ),
+            accessStatus: avtAccessStatus,
           });
           if (rejection !== null) {
             return rejection;

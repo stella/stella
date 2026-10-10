@@ -20,9 +20,9 @@ export type CalendarWeekRow = {
   days: CalendarDay[];
 };
 
-export const MONTH_WINDOW_SIZE = 9;
+const MONTH_WINDOW_SIZE = 9;
 export const MONTH_WINDOW_SHIFT = 3;
-export const MONTH_WINDOW_CENTER = Math.floor(MONTH_WINDOW_SIZE / 2);
+const MONTH_WINDOW_CENTER = Math.floor(MONTH_WINDOW_SIZE / 2);
 
 export const startOfUTCMonth = (date: Temporal.PlainDate): Temporal.PlainDate =>
   date.with({ day: 1 });
@@ -39,7 +39,7 @@ export const getCenteredMonthWindowStart = (
   date: Temporal.PlainDate,
 ): Temporal.PlainDate => addUTCMonths(date, -MONTH_WINDOW_CENTER);
 
-export const getMonthDistance = (
+const getMonthDistance = (
   from: Temporal.PlainDate,
   to: Temporal.PlainDate,
 ): number => (to.year - from.year) * 12 + (to.month - from.month);
@@ -77,13 +77,9 @@ const addUTCDays = (
 const getContinuousWeekDays = (
   weekStart: Temporal.PlainDate,
   weekend: ReadonlySet<number>,
-): CalendarDay[] => {
-  const today = Temporal.Now.instant()
-    .toZonedDateTimeISO("UTC")
-    .toPlainDate()
-    .toString();
-
-  return Array.from({ length: 7 }, (_, index) => {
+  today: Temporal.PlainDate,
+): CalendarDay[] =>
+  Array.from({ length: 7 }, (_, index) => {
     const date = addUTCDays(weekStart, index);
     const key = toUTCDateKey(date);
     const month = date.month - 1;
@@ -93,13 +89,12 @@ const getContinuousWeekDays = (
     return {
       date: key,
       isCurrentMonth: true,
-      isToday: key === today,
+      isToday: date.equals(today),
       ...(startsMonth && { startsMonth }),
       ...(monthTone && { monthTone }),
       isWeekend: weekend.has(date.dayOfWeek % 7),
     };
   });
-};
 
 export const getMonthAnchors = (
   locale: string,
@@ -122,9 +117,14 @@ export const getMonthAnchors = (
   });
 };
 
+/**
+ * The continuous month view's week rows. `today` is the viewer's calendar day
+ * (`appToday()`), never the UTC day.
+ */
 export const getMonthWeekRows = (
   locale: string,
   windowStart: Temporal.PlainDate,
+  today: Temporal.PlainDate,
 ): CalendarWeekRow[] => {
   const firstWeekday = getFirstWeekday(locale);
   const weekend = getWeekendDays(locale);
@@ -165,7 +165,7 @@ export const getMonthWeekRows = (
     rows.push({
       key,
       anchors: normalizeOptionalArray(storedAnchors),
-      days: getContinuousWeekDays(weekStart, weekend),
+      days: getContinuousWeekDays(weekStart, weekend, today),
     });
   }
 

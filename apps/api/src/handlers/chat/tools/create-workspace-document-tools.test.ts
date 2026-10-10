@@ -22,6 +22,7 @@ import type { CreateEntityFromBufferDependencies } from "@/api/lib/entities/crea
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { OrganizationFileUsageError } from "@/api/lib/files/organization-file-usage";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
+import { memberDocumentWriteAccess } from "@/api/tests/helpers/document-write-access";
 import { entityVersionInsertResult } from "@/api/tests/helpers/entity-version-insert-mock";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -53,6 +54,7 @@ const workspaceId = toSafeId<"workspace">(
   "00000000-0000-0000-0000-000000000002",
 );
 const userId = toSafeId<"user">("00000000-0000-0000-0000-000000000003");
+const access = memberDocumentWriteAccess({ type: "create", workspaceId });
 const propertyId = toSafeId<"property">("00000000-0000-0000-0000-000000000004");
 
 const bucket = envBase.S3_BUCKET;
@@ -139,12 +141,12 @@ describe("createCreateWorkspaceDocumentTools", () => {
 
   test("registers a single server-executed create_matter_document tool", () => {
     const { tx } = buildTx();
-    const { scopedDb } = createScopedDbMock(tx);
+    const { scopedDb } = createScopedDbMock(tx, { siblingRows: [] });
     const tools = createCreateWorkspaceDocumentTools({
       scopedDb,
       organizationId,
       userId,
-      workspaceId,
+      access,
       recordAuditEvent: async () => undefined,
       refRegistry: createChatRefRegistry(),
       createEntityFromBuffer: createEntityForTest,
@@ -158,13 +160,13 @@ describe("createCreateWorkspaceDocumentTools", () => {
 
   test("creates the entity from the rendered DOCX and returns a ref-mediated mention", async () => {
     const { tx, getInsertedFileName } = buildTx();
-    const { scopedDb } = createScopedDbMock(tx);
+    const { scopedDb } = createScopedDbMock(tx, { siblingRows: [] });
     const recordedAuditEvents: unknown[] = [];
     const tools = createCreateWorkspaceDocumentTools({
       scopedDb,
       organizationId,
       userId,
-      workspaceId,
+      access,
       recordAuditEvent: async (_tx, event) => {
         recordedAuditEvents.push(event);
       },
@@ -210,12 +212,12 @@ describe("createCreateWorkspaceDocumentTools", () => {
       query: { properties: { findMany: async () => [] } },
       $count: async () => 0,
     };
-    const { scopedDb } = createScopedDbMock(tx);
+    const { scopedDb } = createScopedDbMock(tx, { siblingRows: [] });
     const tools = createCreateWorkspaceDocumentTools({
       scopedDb,
       organizationId,
       userId,
-      workspaceId,
+      access,
       recordAuditEvent: async () => undefined,
       refRegistry: createChatRefRegistry(),
       createEntityFromBuffer: createEntityForTest,
@@ -258,7 +260,7 @@ describe("createCreateWorkspaceDocumentTools", () => {
         scopedDb,
         organizationId,
         userId,
-        workspaceId,
+        access,
         recordAuditEvent: async () => undefined,
         refRegistry: createChatRefRegistry(),
         createEntityFromBuffer: async () => Result.err(failure),

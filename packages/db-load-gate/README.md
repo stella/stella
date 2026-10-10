@@ -53,7 +53,9 @@ EBS configuration has three explicit states:
 - `DB_LOAD_GATE_EBS_SIGNAL=disabled` with no identifier: for non-RDS, self-hosted
   and local databases, report the nonblocking `not_configured` signal in every
   decision. Transaction, autovacuum, busy-window and priority gates still apply.
-- Neither supplied: report unknown, hold maintenance and emit one
+- Neither supplied: the migrator fails with `EbsConfigurationMissingError`
+  before it connects, since a held index build would block the deploy. Background
+  maintenance reports unknown, holds and emits one
   `database_load_gate_ebs_configuration_missing` error event per reader lifetime
   naming both configuration keys. There is no implicit opt-out.
 

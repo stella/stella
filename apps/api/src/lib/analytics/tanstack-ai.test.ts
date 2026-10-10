@@ -7,6 +7,8 @@ import type {
 import { EventType } from "@tanstack/ai";
 import { describe, expect, spyOn, test } from "bun:test";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
@@ -14,6 +16,7 @@ import {
   streamChatChunks,
 } from "@/api/lib/chat/tanstack-chat-runtime";
 import { tokenUsageFromTerminalChunk } from "@/api/lib/tanstack-ai-usage";
+import { createTestState } from "@/api/tests/helpers/test-state";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { SERVER_ANALYTICS_EVENTS } from "./server-analytics";
@@ -28,6 +31,10 @@ process.env["OPENAI_API_KEY"] ??= "test-openai-instance-key";
 process.env["REDIS_URL"] ??= "redis://localhost:6379";
 process.env["SMTP_HOST"] ??= "localhost";
 process.env["SMTP_PORT"] ??= "1025";
+
+// The environment must be set before the validated configuration loads.
+const { env } = await import("@/api/env");
+const state = createTestState({ file: import.meta.path, config: env });
 
 const loadTanStackAIAnalytics = async () => await import("./tanstack-ai");
 
@@ -718,10 +725,8 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
   });
 
   test("keeps model metadata lookup best-effort", async () => {
-    const { env } = await import("@/api/env");
     const { createTanStackAIAnalyticsCallbacks } =
       await loadTanStackAIAnalytics();
-    const originalRequirePersonalAIKey = env.REQUIRE_PERSONAL_AI_KEY;
     const events: Parameters<ServerAnalytics["capture"]>[0][] = [];
     const analytics: ServerAnalytics = {
       capture: (event) => {
@@ -731,47 +736,43 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       identifyOrganizationGroup: () => undefined,
     };
 
-    try {
-      env.REQUIRE_PERSONAL_AI_KEY = true;
+    state.setConfig("REQUIRE_PERSONAL_AI_KEY", true);
 
-      const callbacks = createTanStackAIAnalyticsCallbacks({
-        dataClass: "public_corpus",
-        analytics,
+    const callbacks = createTanStackAIAnalyticsCallbacks({
+      dataClass: "public_corpus",
+      analytics,
+      feature: "chat.suggested-prompts",
+      traceId: "trace_missing_model",
+    });
+    const deferred: Promise<unknown>[] = [];
+    const error = new Error("provider unavailable");
+
+    callbacks.captureError(error);
+    await callbacks.middleware.onUsage?.(
+      createMiddlewareContext({ deferred }),
+      usage,
+    );
+
+    expect(deferred).toHaveLength(0);
+    expect(events).toHaveLength(2);
+    const failedEvent = events.find(
+      (event) => event.event === SERVER_ANALYTICS_EVENTS.aiGenerationFailed,
+    );
+    expect(failedEvent).toMatchObject({
+      event: SERVER_ANALYTICS_EVENTS.aiGenerationFailed,
+      properties: {
+        failure_reason: "provider",
         feature: "chat.suggested-prompts",
-        traceId: "trace_missing_model",
-      });
-      const deferred: Promise<unknown>[] = [];
-      const error = new Error("provider unavailable");
-
-      callbacks.captureError(error);
-      await callbacks.middleware.onUsage?.(
-        createMiddlewareContext({ deferred }),
-        usage,
-      );
-
-      expect(deferred).toHaveLength(0);
-      expect(events).toHaveLength(2);
-      const failedEvent = events.find(
-        (event) => event.event === SERVER_ANALYTICS_EVENTS.aiGenerationFailed,
-      );
-      expect(failedEvent).toMatchObject({
-        event: SERVER_ANALYTICS_EVENTS.aiGenerationFailed,
-        properties: {
-          failure_reason: "provider",
-          feature: "chat.suggested-prompts",
-        },
-      });
-      expect(failedEvent?.properties).not.toHaveProperty("model");
-      expect(failedEvent?.properties).not.toHaveProperty("provider");
-      // Without resolved model info the standard record still ships, just
-      // without model attribution.
-      const generation = events.find(
-        (event) => event.event === SERVER_ANALYTICS_EVENTS.aiGeneration,
-      );
-      expect(generation?.properties).not.toHaveProperty("$ai_model");
-    } finally {
-      env.REQUIRE_PERSONAL_AI_KEY = originalRequirePersonalAIKey;
-    }
+      },
+    });
+    expect(failedEvent?.properties).not.toHaveProperty("model");
+    expect(failedEvent?.properties).not.toHaveProperty("provider");
+    // Without resolved model info the standard record still ships, just
+    // without model attribution.
+    const generation = events.find(
+      (event) => event.event === SERVER_ANALYTICS_EVENTS.aiGeneration,
+    );
+    expect(generation?.properties).not.toHaveProperty("$ai_model");
   });
 
   test.each(["iteration", "structured_output"] as const)(
@@ -945,20 +946,25 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
 
     try {
       expect(
-        generateChatObject({
-          adapter,
-          messages: [{ role: "user", content: "Return JSON" }],
-          outputSchema: {
-            type: "object",
-            properties: { value: { type: "string" } },
-            required: ["value"],
-          },
-          middleware: [callbacks.middleware],
-        }).catch((error: unknown) => {
-          callbacks.captureError(error);
-          throw error;
-        }),
-      ).rejects.toThrow("the maximum token limit was reached");
+        await rejectionOf(
+          generateChatObject({
+            adapter,
+            messages: [{ role: "user", content: "Return JSON" }],
+            outputSchema: {
+              type: "object",
+              properties: { value: { type: "string" } },
+              required: ["value"],
+            },
+            middleware: [callbacks.middleware],
+          }).catch((error: unknown) => {
+            callbacks.captureError(error);
+            throw error;
+          }),
+        ),
+      ).toHaveProperty(
+        "message",
+        expect.stringContaining("the maximum token limit was reached"),
+      );
       expect(
         errorSpy.mock.calls.filter(
           ([event]) => event === "tanstack_ai.generation.failed",
@@ -1017,6 +1023,87 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       expect(errorSpy).toHaveBeenCalledWith(
         "tanstack_ai.generation.failed",
         expect.objectContaining({ "ai.error_kind": "unknown" }),
+      );
+    } finally {
+      errorSpy.mockRestore();
+      warnSpy.mockRestore();
+    }
+  });
+
+  test.each([
+    {
+      name: "the run error's raw event",
+      chunk: {
+        message: "Provider returned error",
+        rawEvent: { error: { code: 503, message: "Upstream unavailable" } },
+      },
+    },
+    {
+      name: "a provider body in the run error's message",
+      chunk: {
+        message: JSON.stringify({
+          error: { code: 503, message: "Upstream unavailable" },
+        }),
+      },
+    },
+  ])("classifies a run error from $name", async ({ chunk }) => {
+    const { createTanStackAIAnalyticsCallbacks } =
+      await loadTanStackAIAnalytics();
+    const { logger } = await import("@/api/lib/observability/logger");
+    const errorSpy = spyOn(logger, "error");
+    const warnSpy = spyOn(logger, "warn");
+    const callbacks = createTanStackAIAnalyticsCallbacks({
+      dataClass: "public_corpus",
+      analytics: {
+        capture: () => undefined,
+        flush: async () => undefined,
+        identifyOrganizationGroup: () => undefined,
+      },
+      feature: "subagent",
+      orgAIConfig: createOpenAIOrgAIConfig(),
+      traceId: "trace_run_error_detail",
+    });
+    const adapter = {
+      kind: "text",
+      name: "run-error",
+      model: "run-error",
+      "~types": {
+        providerOptions: {},
+        inputModalities: ["text"],
+        messageMetadataByModality: {},
+        toolCapabilities: [],
+        toolCallMetadata: {},
+        systemPromptMetadata: undefined,
+      },
+      async *chatStream({ runId, threadId }) {
+        yield {
+          type: EventType.RUN_STARTED,
+          runId: runId ?? "run-error-run",
+          threadId: threadId ?? "run-error-thread",
+        } satisfies StreamChunk;
+        yield { type: EventType.RUN_ERROR, ...chunk } satisfies StreamChunk;
+      },
+      structuredOutput: () => {
+        throw new Error("This run streams");
+      },
+    } satisfies AnyTextAdapter;
+
+    try {
+      for await (const _ of streamChatChunks({
+        adapter,
+        messages: [{ role: "user", content: "Reply." }],
+        middleware: [callbacks.middleware],
+      })) {
+        // Drain the stream so the terminal hook runs.
+      }
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        "tanstack_ai.generation.failed",
+        expect.objectContaining({ "ai.error_kind": "provider_unavailable" }),
+      );
+      expect(errorSpy).not.toHaveBeenCalledWith(
+        "tanstack_ai.generation.failed",
+        expect.anything(),
       );
     } finally {
       errorSpy.mockRestore();

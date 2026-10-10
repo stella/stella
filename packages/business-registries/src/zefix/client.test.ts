@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import { lookupByUid, searchByName } from "./client.js";
 import { ZefixAPIError, ZefixValidationError } from "./errors.js";
 import type { ZefixRawFirm, ZefixSearchResponse } from "./types.js";
@@ -9,7 +11,7 @@ const FIXTURE = new URL("__fixtures__/search-swiss-re.json", import.meta.url);
 const readFixture = async (): Promise<ZefixSearchResponse> => {
   const value: unknown = await Bun.file(FIXTURE).json();
   // SAFETY: the captured response is checked by the client shape guard.
-  // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   return value as ZefixSearchResponse;
 };
 
@@ -88,8 +90,8 @@ describe("Zefix client", () => {
         ),
     );
     expect(
-      lookupByUid("191546434", { observer: "unobserved" }),
-    ).resolves.toBeNull();
+      await lookupByUid("191546434", { observer: "unobserved" }),
+    ).toBeNull();
   });
 
   test("does not accept a fuzzy nonmatching hit for ID lookup", async () => {
@@ -113,8 +115,8 @@ describe("Zefix client", () => {
         ),
     );
     expect(
-      lookupByUid("191546434", { observer: "unobserved" }),
-    ).resolves.toBeNull();
+      await lookupByUid("191546434", { observer: "unobserved" }),
+    ).toBeNull();
   });
 
   test("searches by name and forwards a bounded result count", async () => {
@@ -139,13 +141,15 @@ describe("Zefix client", () => {
     });
   });
 
-  test("rejects invalid UIDs and empty names before fetch", () => {
+  test("rejects invalid UIDs and empty names before fetch", async () => {
     expect(
-      lookupByUid("CHE-191.546.435", { observer: "unobserved" }),
-    ).rejects.toBeInstanceOf(ZefixValidationError);
+      await rejectionOf(
+        lookupByUid("CHE-191.546.435", { observer: "unobserved" }),
+      ),
+    ).toBeInstanceOf(ZefixValidationError);
     expect(
-      searchByName("  ", { observer: "unobserved" }),
-    ).rejects.toBeInstanceOf(ZefixValidationError);
+      await rejectionOf(searchByName("  ", { observer: "unobserved" })),
+    ).toBeInstanceOf(ZefixValidationError);
   });
 
   test("wraps malformed successful payloads", async () => {
@@ -157,8 +161,8 @@ describe("Zefix client", () => {
         }),
     );
     expect(
-      lookupByUid("191546434", { observer: "unobserved" }),
-    ).rejects.toBeInstanceOf(ZefixAPIError);
+      await rejectionOf(lookupByUid("191546434", { observer: "unobserved" })),
+    ).toBeInstanceOf(ZefixAPIError);
   });
 
   test("rejects a successful response without a result list", async () => {
@@ -170,7 +174,7 @@ describe("Zefix client", () => {
         }),
     );
     expect(
-      lookupByUid("191546434", { observer: "unobserved" }),
-    ).rejects.toBeInstanceOf(ZefixAPIError);
+      await rejectionOf(lookupByUid("191546434", { observer: "unobserved" })),
+    ).toBeInstanceOf(ZefixAPIError);
   });
 });

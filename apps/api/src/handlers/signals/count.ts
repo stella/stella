@@ -5,7 +5,7 @@ import { t } from "elysia";
 import { SIGNAL_VIEW } from "@stll/api-contract/signals";
 
 import { entities, signals } from "@/api/db/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { canTriageSignals, signalListConditions } from "@/api/lib/signals/read";
 import { dueAssignedTaskCondition } from "@/api/lib/tasks/assigned";
@@ -17,6 +17,7 @@ const config = {
     "plus their unfinished tasks due on or before `asOf`; feeds the " +
     "navigation badge.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "ui_navigation_state" },
   access: "read",
   query: t.Object({
@@ -24,7 +25,7 @@ const config = {
       t.String({
         format: "date",
         description:
-          "The caller's calendar day (YYYY-MM-DD); defaults to the server's UTC day",
+          "The caller's calendar day (YYYY-MM-DD); defaults to the organization's day in its time zone",
       }),
     ),
   }),
@@ -34,6 +35,9 @@ const countInbox = createSafeRootHandler(
   config,
   async function* ({ safeDb, session, user, memberRole, query }) {
     const organizationId = session.activeOrganizationId;
+    const asOf = yield* Result.await(
+      resolveWorkAsOf({ asOf: query.asOf, safeDb, organizationId }),
+    );
     // One statement for both halves: the badge polls on every page.
     const rows = yield* Result.await(
       safeDb((tx) =>
@@ -53,7 +57,7 @@ const countInbox = createSafeRootHandler(
               dueAssignedTaskCondition({
                 organizationId,
                 userId: user.id,
-                asOf: resolveWorkAsOf(query.asOf),
+                asOf,
               }),
             ),
           })

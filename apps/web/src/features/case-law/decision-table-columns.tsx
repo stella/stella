@@ -276,7 +276,9 @@ const toDecisionColumnDef = (
               questions === null ? [] : allowedColumnActions(questions.grants)
             }
             column={header.column}
+            isNew={questions?.addedIds.has(questionColumn.id) ?? false}
             question={questionColumn}
+            questions={questions}
             {...(questions === null
               ? {}
               : { onAction: questions.onColumnAction })}
@@ -286,6 +288,8 @@ const toDecisionColumnDef = (
           questions === null ? null : (
             <QuestionCell
               answersByKey={questions.answersByKey}
+              queuedAnswerKeys={questions.queuedAnswerKeys}
+              refusedAnswerKeys={questions.refusedAnswerKeys}
               column={questionColumn}
               decision={row.original.decision}
               onShowPassage={questions.onShowPassage}

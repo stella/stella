@@ -7,8 +7,7 @@
 /**
  * Narrow `unknown` to something a path segment can be read from.
  *
- * Unlike the same-named predicates that screen JSON payload shapes, this one
- * accepts arrays on purpose: a dotted path segment may be an array index
+ * Accepts arrays and class instances. A dotted path segment may be an array index
  * (`parties.1.name`), and rejecting arrays would silently resolve those to
  * `undefined`.
  */

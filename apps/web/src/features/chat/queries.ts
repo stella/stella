@@ -94,9 +94,25 @@ export type ForkProvenance =
       workspaceId: string | null;
     };
 
+/**
+ * The files a thread attached, beside the number the server found. Derived
+ * from the history list's context, which the thread read returns by the same
+ * server type, so both surfaces stay one shape.
+ */
+export type ChatThreadAttachedFiles = Pick<
+  ChatHistoryItem["context"],
+  "fileCount" | "files"
+>;
+
+const EMPTY_ATTACHED_FILES: ChatThreadAttachedFiles = {
+  fileCount: 0,
+  files: [],
+};
+
 type ThreadFetch = {
   /** The thread's turn not yet settled; null when every turn has settled. */
   activeTurnId: SafeId<"chatTurn"> | null;
+  attachedFiles: ChatThreadAttachedFiles;
   /** Where this thread's opening history came from. */
   forkProvenance: ForkProvenance;
   messages: PersistedChatMessage[];
@@ -145,6 +161,7 @@ const fetchThreadMessages = async (
   if (response.error && allowMissingThread && response.error.status === 404) {
     return {
       activeTurnId: null,
+      attachedFiles: EMPTY_ATTACHED_FILES,
       forkProvenance: { type: "none" },
       messages: [],
       olderCursor: null,
@@ -164,6 +181,7 @@ const fetchThreadMessages = async (
   const data = unwrapEden(response);
   return {
     activeTurnId: data.activeTurnId,
+    attachedFiles: data.attachedFiles,
     forkProvenance: data.forkProvenance,
     messages: deserializeChatMessages(data.messages),
     olderCursor: data.olderCursor,
@@ -265,6 +283,7 @@ type FileChatThreadFetchResult = {
    *  `resolve-file-thread.ts`) can seed `chatThreadOptions`' cache
    *  directly, collapsing the lookup -> GET /messages waterfall into one
    *  round trip. */
+  attachedFiles: ChatThreadAttachedFiles;
   messages: PersistedChatMessage[];
   olderCursor: string | null;
   contextMatterIds: string[];
@@ -301,6 +320,7 @@ const fetchFileChatThread = async ({
   return {
     threadId: data.threadId === null ? null : toChatThreadId(data.threadId),
     activeTurnId: data.activeTurnId,
+    attachedFiles: data.attachedFiles,
     messages: deserializeChatMessages(data.messages),
     olderCursor: data.olderCursor,
     contextMatterIds: data.contextMatterIds,
@@ -432,6 +452,12 @@ export type ChatThreadFetched = {
    * composer's Stop cancels. Null when every turn has settled.
    */
   activeTurnId: SafeId<"chatTurn"> | null;
+  /**
+   * The files the thread attached, for the header's file stack. Read with
+   * the page because older messages page in on demand, so the transcript
+   * alone cannot list them; refreshed with the page after every turn.
+   */
+  attachedFiles: ChatThreadAttachedFiles;
   /**
    * Where this thread's opening history came from, driving the "forked from"
    * banner above the transcript.
@@ -571,6 +597,7 @@ const seedFileThreadMessageCache = ({
       // action is only offered on the main chat surface.
       forkProvenance: { type: "none" } as const,
       activeTurnId: fetched.activeTurnId,
+      attachedFiles: fetched.attachedFiles,
       messages: sanitizeRunningToolCalls(fetched.messages),
       olderCursor: fetched.olderCursor,
       contextMatterIds: fetched.contextMatterIds,
@@ -680,6 +707,7 @@ export const materializeFileChatThread = async ({
       client,
       fetched: {
         activeTurnId: data.activeTurnId,
+        attachedFiles: data.attachedFiles,
         messages: deserializeChatMessages(data.messages),
         olderCursor: data.olderCursor,
         contextMatterIds: data.contextMatterIds,
@@ -1549,6 +1577,10 @@ const fetchChatModelOptions = async () => {
 
   return unwrapEden(response);
 };
+
+export type ChatModelBenchmarkOption = Awaited<
+  ReturnType<typeof fetchChatModelOptions>
+>["benchmarkOptions"][number];
 
 // The composer (+) menu's Models submenu fetches this lazily (only once the
 // menu opens) rather than eagerly on composer mount, so opening the chat

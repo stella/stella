@@ -9,7 +9,7 @@ import {
 
 import { contacts } from "@/api/db/schema";
 import { contactToPortableImport } from "@/api/handlers/contacts/contact-import-export";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import {
   AUDIT_ACTION,
@@ -31,6 +31,8 @@ const CONTACT_EXPORT_CSV_MEDIA_TYPE = "text/csv; charset=utf-8";
 const CONTACT_EXPORT_JSON_MEDIA_TYPE = "application/json";
 
 const config = {
+  accountAccess: ACCOUNT_ACCESS.standard,
+  contentDelivery: { type: "audited" },
   description:
     "Export the contact directory as a bounded CSV or versioned JSON download.",
   permissions: { workspace: ["read"] },

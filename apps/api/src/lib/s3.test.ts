@@ -1,8 +1,10 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { envBase } from "@/api/env-base";
 import {
+  createS3ObjectIfAbsent,
+  corpusS3ObjectExists,
   getS3,
   isMissingCorpusObjectError,
   isMissingS3ObjectError,
@@ -90,6 +92,108 @@ const createTrackedEcsCredentialsFetch =
   };
 
 describe("resolveS3Credentials", () => {
+  test("deadline-bound refresh rejects absent or incomplete credentials before constructing a client", async () => {
+    const script = `
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = Object.assign(async () => new Response(JSON.stringify({
+        AccessKeyId: "", SecretAccessKey: "fixture-secret", Token: "fixture-token"
+      }), {status: 200}), {preconnect: originalFetch.preconnect});
+      const { refreshS3, refreshCorpusS3, S3DeadlineCredentialsError } = await import("./src/lib/s3.ts");
+      const results = [];
+      if (process.argv.at(1) === "none") {
+        for (const refresh of [refreshS3, refreshCorpusS3]) {
+          await refresh();
+          results.push(true);
+        }
+      }
+      for (const refresh of [refreshS3, refreshCorpusS3]) {
+        try {
+          const signal = new AbortController().signal;
+          await refresh({mode: "replay-strict", signal});
+          results.push(false);
+        } catch (error) {
+          results.push(error instanceof S3DeadlineCredentialsError);
+        }
+      }
+      console.log(JSON.stringify(results));
+    `;
+    for (const provider of ["none", "aws-runtime"]) {
+      const child = Bun.spawn({
+        cmd: [process.execPath, "--no-env-file", "-e", script, provider],
+        cwd: new URL("../..", import.meta.url).pathname,
+        env: {
+          PATH: process.env["PATH"],
+          NODE_ENV: "test",
+          STELLA_LOCAL_DEV: "1",
+          DATABASE_URL: "postgres://fixture:fixture@localhost:5432/fixture",
+          S3_ENDPOINT: "http://localhost:9000",
+          S3_BUCKET: "fixture",
+          S3_REGION: "us-east-1",
+          S3_CREDENTIALS_PROVIDER: provider,
+          AWS_CONTAINER_CREDENTIALS_RELATIVE_URI: "/fixture",
+          REDIS_URL: "redis://localhost:6379",
+          CONTENT_ENCRYPTION_KEY: "a".repeat(64),
+        },
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      const [stdout, stderr, exit] = await Promise.all([
+        new Response(child.stdout).text(),
+        new Response(child.stderr).text(),
+        child.exited,
+      ]);
+      expect(exit).toBe(0);
+      expect(stderr).toBe("");
+      expect(stdout.trim()).toBe(
+        provider === "none" ? "[true,true,true,true]" : "[true,true]",
+      );
+    }
+  });
+
+  test("a caller deadline cancels the credential request without falling through", async () => {
+    const controller = new AbortController();
+    let requests = 0;
+    const failure = new DOMException("fixture tick expired", "TimeoutError");
+    const resolved = resolveS3Credentials({
+      provider: "aws-runtime",
+      signal: controller.signal,
+      runtimeEnv: { AWS_CONTAINER_CREDENTIALS_RELATIVE_URI: "/fixture" },
+      fetchImpl: async (_url, init) => {
+        requests++;
+        const signal = init?.signal;
+        if (signal === undefined || signal === null) {
+          expect.unreachable();
+        }
+        return await new Promise<Response>((_resolve, reject) => {
+          signal.addEventListener(
+            "abort",
+            () =>
+              reject(
+                signal.reason instanceof Error
+                  ? signal.reason
+                  : new TypeError("Expected fixture abort error"),
+              ),
+            {
+              once: true,
+            },
+          );
+          controller.abort(failure);
+        });
+      },
+    });
+    const rejected1 = await Result.tryPromise({
+      try: async () => await resolved,
+      catch: (cause) => cause,
+    });
+    expect(rejected1.isErr()).toBe(true);
+    if (rejected1.isErr()) {
+      expect(rejected1.error).toBeInstanceOf(Error);
+      if (rejected1.error instanceof Error) {
+        expect(rejected1.error.message).toContain("fixture tick expired");
+      }
+    }
+    expect(requests).toBe(1);
+  });
   test("treats a lazily built fallback client as stale", () => {
     getS3();
 
@@ -291,6 +395,167 @@ describe("writeS3ObjectWithRetry", () => {
     key: "case-law/raw/source/hash",
   };
 
+  test("the existing corpus exists caller retains Bun behavior even with an aborted signal", async () => {
+    const store = startFakeS3();
+    try {
+      const bucket = envBase.LEGAL_CORPUS_S3_BUCKET ?? envBase.S3_BUCKET;
+      store.put(bucket, "fixture-existing-pack", new Uint8Array([1]));
+      const controller = new AbortController();
+      controller.abort(new DOMException("fixture canceled", "AbortError"));
+      expect(
+        await corpusS3ObjectExists("fixture-existing-pack", controller.signal),
+      ).toBe(true);
+      const rejected2 = await Result.tryPromise({
+        try: async () =>
+          await corpusS3ObjectExists(
+            "fixture-existing-pack",
+            controller.signal,
+            {
+              mode: "replay-strict",
+              signal: controller.signal,
+            },
+          ),
+        catch: (cause) => cause,
+      });
+      expect(rejected2.isErr()).toBe(true);
+      if (rejected2.isErr()) {
+        expect(rejected2.error).toBeInstanceOf(Error);
+        if (rejected2.error instanceof Error) {
+          expect(rejected2.error.message).toContain("fixture canceled");
+        }
+      }
+      expect(
+        store.requests.filter(({ method }) => method === "HEAD"),
+      ).toHaveLength(1);
+    } finally {
+      store.stop();
+    }
+  });
+
+  test("an in-flight PUT receives cancellation and never starts another attempt", async () => {
+    const controller = new AbortController();
+    let attempts = 0;
+    let canceled = false;
+    const rejected3 = await Result.tryPromise({
+      try: async () =>
+        await writeS3ObjectWithRetry(
+          { ...object, signal: controller.signal },
+          { type: "fixture" },
+          async ({ signal }) => {
+            attempts++;
+            if (signal === undefined) {
+              expect.unreachable();
+            }
+            await new Promise<void>((_resolve, reject) => {
+              signal.addEventListener(
+                "abort",
+                () => {
+                  canceled = true;
+                  reject(
+                    signal.reason instanceof Error
+                      ? signal.reason
+                      : new TypeError("Expected fixture abort error"),
+                  );
+                },
+                { once: true },
+              );
+              controller.abort(
+                new DOMException("fixture tick expired", "TimeoutError"),
+              );
+            });
+          },
+        ),
+      catch: (cause) => cause,
+    });
+    expect(rejected3.isErr()).toBe(true);
+    if (rejected3.isErr()) {
+      expect(rejected3.error).toBeInstanceOf(Error);
+      if (rejected3.error instanceof Error) {
+        expect(rejected3.error.message).toContain("fixture tick expired");
+      }
+    }
+    expect(canceled).toBe(true);
+    expect(attempts).toBe(1);
+  });
+
+  test("an already expired deadline starts no object write", async () => {
+    const controller = new AbortController();
+    controller.abort(new DOMException("fixture tick expired", "TimeoutError"));
+    let attempts = 0;
+    const rejected4 = await Result.tryPromise({
+      try: async () =>
+        await writeS3ObjectWithRetry(
+          { ...object, signal: controller.signal },
+          { type: "fixture" },
+          async () => {
+            attempts++;
+          },
+        ),
+      catch: (cause) => cause,
+    });
+    expect(rejected4.isErr()).toBe(true);
+    if (rejected4.isErr()) {
+      expect(rejected4.error).toBeInstanceOf(Error);
+      if (rejected4.error instanceof Error) {
+        expect(rejected4.error.message).toContain("fixture tick expired");
+      }
+    }
+    expect(attempts).toBe(0);
+  });
+
+  test("the real SDK's unconditional and conditional PUT paths stop on the caller deadline", async () => {
+    const store = startFakeS3();
+    try {
+      for (const conditional of [false, true]) {
+        const key = `fixture-deadline-${conditional}`;
+        const controller = new AbortController();
+        const held = store.holdNext({ method: "PUT", keyIncludes: key });
+        const pending = conditional
+          ? createS3ObjectIfAbsent({
+              ...object,
+              key,
+              signal: controller.signal,
+              s3Policy: { mode: "replay-strict", signal: controller.signal },
+            })
+          : writeS3ObjectWithRetry(
+              {
+                ...object,
+                key,
+                signal: controller.signal,
+                s3Policy: { mode: "replay-strict", signal: controller.signal },
+              },
+              { type: "fixture" },
+            );
+        try {
+          await held.reached;
+          controller.abort(
+            new DOMException("fixture tick expired", "TimeoutError"),
+          );
+          const rejected5 = await Result.tryPromise({
+            try: async () => await pending,
+            catch: (cause) => cause,
+          });
+          expect(rejected5.isErr()).toBe(true);
+          if (rejected5.isErr()) {
+            expect(rejected5.error).toBeInstanceOf(Error);
+            if (rejected5.error instanceof Error) {
+              expect(rejected5.error.message).toContain("fixture tick expired");
+            }
+          }
+          expect(
+            store.requests.filter(
+              (request) => request.key === key && request.method === "PUT",
+            ),
+          ).toHaveLength(1);
+        } finally {
+          held.release();
+        }
+      }
+    } finally {
+      store.stop();
+    }
+  });
+
   const failingWriter =
     (
       attempts: { code?: string; count: number },
@@ -315,6 +580,7 @@ describe("writeS3ObjectWithRetry", () => {
 
     const certainty = await writeS3ObjectWithRetry(
       object,
+      { type: "fixture" },
       failingWriter(attempts, 1),
     );
 
@@ -327,6 +593,7 @@ describe("writeS3ObjectWithRetry", () => {
 
     const certainty = await writeS3ObjectWithRetry(
       object,
+      { type: "fixture" },
       failingWriter(attempts, 0),
     );
 
@@ -342,6 +609,7 @@ describe("writeS3ObjectWithRetry", () => {
 
     const certainty = await writeS3ObjectWithRetry(
       object,
+      { type: "fixture" },
       failingWriter(attempts, 1),
     );
 
@@ -358,6 +626,7 @@ describe("writeS3ObjectWithRetry", () => {
     // type-aware lint; capture the rejection explicitly instead.
     const rejection = await writeS3ObjectWithRetry(
       object,
+      { type: "fixture" },
       failingWriter(attempts, Number.POSITIVE_INFINITY),
     ).then(
       () => null,
@@ -383,7 +652,11 @@ describe("writeS3ObjectWithRetry", () => {
       throw failure;
     };
 
-    const rejection = await writeS3ObjectWithRetry(object, write).then(
+    const rejection = await writeS3ObjectWithRetry(
+      object,
+      { type: "fixture" },
+      write,
+    ).then(
       () => null,
       (error: unknown) => error,
     );

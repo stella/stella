@@ -27,7 +27,6 @@ use crate::http_client::{DesktopHttpClient, HttpClientOptions};
 use crate::session_manager::SessionManager;
 use crate::types::{ErrorResponse, is_safe_session_id};
 
-const REDEEM_TIMEOUT: Duration = Duration::from_secs(20);
 /// The certificate and signature phases each run a PDF signing pass on the
 /// server, which is slower than a plain request.
 const SIGNING_REQUEST_TIMEOUT: Duration = Duration::from_secs(120);
@@ -54,8 +53,7 @@ const MAX_FINALIZE_ATTEMPTS: u32 = 3;
 
 const DIALOG_LABEL: &str = "pdf-sign-dialog";
 const DIALOG_WIDTH: f64 = 420.0;
-/// Fits the ready dialog, with its status line, in every shipped language
-/// and with two-line document and matter names; longer content scrolls.
+/// Initial viewport; the page requests its measured content size after rendering.
 const DIALOG_HEIGHT: f64 = 640.0;
 
 /// What the platform keeps signing keys in, as the log names it.
@@ -291,12 +289,6 @@ fn reserve_dialog(bridge: DialogBridge) -> Result<(), ()> {
 
 // --- Wire types ---
 
-#[derive(serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-struct RedeemRequest<'a> {
-  handoff_token: &'a str,
-}
-
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct RedeemResponse {
@@ -523,15 +515,15 @@ pub async fn redeem_and_sign(
   })
   .map_err(|e| format!("stella desktop could not start the signing client: {e}"))?;
 
-  let account =
-    crate::deep_link::linked_handoff_account(&app_handle, &api_base_url).await?;
-  let redeemed = redeem(
-    &client,
-    &api_base_url,
-    &handoff_token,
-    &account.credential.key,
-  )
-  .await?;
+  let (redeemed, account) =
+    crate::handoff::redeem::<RedeemResponse>(crate::handoff::RedeemOptions {
+      manager: &manager,
+      app: &app_handle,
+      target: crate::handoff::Target::PdfSigning,
+      api_base_url: &api_base_url,
+      token: &handoff_token,
+    })
+    .await?;
   crate::deep_link::ensure_handoff_identity(&redeemed.identity, &account.identity)?;
   if !is_safe_session_id(&redeemed.session_id) {
     return Err("Invalid PDF signing session payload.".to_string());
@@ -900,33 +892,6 @@ fn decode_digest(digest_hex: &str) -> Result<[u8; DIGEST_BYTES], StepError> {
     })
 }
 
-async fn redeem(
-  client: &DesktopHttpClient,
-  api_base_url: &str,
-  handoff_token: &str,
-  credential_key: &str,
-) -> Result<RedeemResponse, String> {
-  let response = client
-    .post(format!("{api_base_url}/v1/pdf-signing-handoffs/redeem"))
-    .bearer_auth(credential_key)
-    .json(&RedeemRequest { handoff_token })
-    .timeout(REDEEM_TIMEOUT)
-    .send()
-    .await
-    .map_err(|e| format!("stella desktop could not redeem the signing handoff: {e}"))?;
-
-  if !response.status().is_success() {
-    let status = response.status();
-    let rejection = api_rejection(response, status).await;
-    return Err(format!("{}: {}", rejection.code, rejection.detail));
-  }
-
-  response
-    .json::<RedeemResponse>()
-    .await
-    .map_err(|e| format!("stella desktop could not read the signing handoff: {e}"))
-}
-
 async fn post<Request: serde::Serialize, Response: serde::de::DeserializeOwned>(
   client: &DesktopHttpClient,
   url: String,
@@ -1118,10 +1083,10 @@ fn open_dialog(
     percent_encode(crate::i18n::text_direction()),
   );
 
-  let builder = tauri::WebviewWindowBuilder::new(
+  let builder = crate::app_window::builder(
     app_handle,
     DIALOG_LABEL,
-    tauri::WebviewUrl::App(format!("pdf-sign-dialog.html#{hash}").into()),
+    format!("pdf-sign-dialog.html#{hash}"),
   )
   .title(crate::i18n::t("dialog.pdfSignWindowTitle"))
   .inner_size(DIALOG_WIDTH, DIALOG_HEIGHT)

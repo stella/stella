@@ -24,10 +24,15 @@ export const parseEntityKind = (value: unknown): EntityKind => {
   return value;
 };
 
+type PrimaryFileField<TField extends { content: FieldContent }> = TField & {
+  content: Extract<FieldContent, { type: "file" }>;
+};
+
 /**
  * The file the extraction pipeline reads text from for an entity's current
  * version. By default this is the first field (in field order) whose content
- * is a file. A caller that just replaced a known file property may pin that
+ * is a file: that is the primary file; later file fields are secondary attachments.
+ * A caller that just replaced a known file property may pin that
  * property so extraction cannot silently select a sibling file instead.
  * Shared by `processExtraction` (which writes `extractedContent`) and any
  * reader that must resolve to the SAME default source file `extractedContent`
@@ -49,17 +54,12 @@ export const findExtractionFileFieldRow = <
 >(
   fields: readonly T[],
   filePropertyId?: SafeId<"property">,
-): T | null => {
-  for (const field of fields) {
-    if (
+): PrimaryFileField<T> | null =>
+  fields.find(
+    (field): field is PrimaryFileField<T> =>
       field.content.type === "file" &&
-      (filePropertyId === undefined || field.propertyId === filePropertyId)
-    ) {
-      return field;
-    }
-  }
-  return null;
-};
+      (filePropertyId === undefined || field.propertyId === filePropertyId),
+  ) ?? null;
 
 export const findExtractionFileField = (
   fields: readonly {
@@ -69,7 +69,7 @@ export const findExtractionFileField = (
   filePropertyId?: SafeId<"property">,
 ): Extract<FieldContent, { type: "file" }> | null => {
   const field = findExtractionFileFieldRow(fields, filePropertyId);
-  return field?.content.type === "file" ? field.content : null;
+  return field?.content ?? null;
 };
 
 type SearchQueryBase = {
@@ -128,7 +128,7 @@ export type FacetBucket = {
   count: number;
 };
 
-export type SearchFacets = {
+type SearchFacets = {
   kind: FacetBucket[];
   workspace: FacetBucket[];
 };
@@ -180,17 +180,6 @@ export type SearchMaintenance = {
 export { GLOBAL_SEARCH_RESULT_TYPES };
 export type { GlobalSearchResultType };
 
-export const parseGlobalSearchResultType = (
-  value: unknown,
-): GlobalSearchResultType => {
-  const s = String(value);
-  const match = GLOBAL_SEARCH_RESULT_TYPES.find((v) => v === s);
-  if (!match) {
-    panic(`Invalid global search result type: ${s}`);
-  }
-  return match;
-};
-
 type GlobalSearchHitBase = {
   /** Stable compatibility key for existing v1 search consumers. */
   id: string;
@@ -234,7 +223,7 @@ export type ContactGlobalSearchHit = GlobalSearchHitBase & {
   contactType: ContactType;
 };
 
-export type CaseLawGlobalSearchHit = GlobalSearchHitBase & {
+type CaseLawGlobalSearchHit = GlobalSearchHitBase & {
   type: "case-law";
   resource: ResourceRef<"case_law_decision">;
   decisionId: string;
@@ -267,7 +256,7 @@ export type GlobalSearchHit =
   | CaseLawGlobalSearchHit
   | ChatGlobalSearchHit;
 
-export type GlobalSearchFacets = {
+type GlobalSearchFacets = {
   type: FacetBucket[];
   workspace: FacetBucket[];
   editor: FacetBucket[];

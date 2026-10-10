@@ -11,6 +11,7 @@ import { CalendarIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useLocale } from "@/i18n/formatting-context";
@@ -21,9 +22,11 @@ import { normalizeOptionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { appToday } from "@/lib/local-iso-date";
 import { toSafeId } from "@/lib/safe-id";
 import { captureInvalidTaskOption } from "@/lib/task-option-telemetry";
 import type { EntityKind, WorkspaceView } from "@/lib/types";
+import { useQueryView } from "@/lib/use-query-view";
 import { useUpsertField } from "@/lib/workspaces/mutations/entities";
 import {
   calendarTasksKeys,
@@ -72,9 +75,6 @@ type HandleDropParams = {
   entityId: string;
   kind: string;
 };
-
-const getTodayUTCDate = (): Temporal.PlainDate =>
-  Temporal.Now.instant().toZonedDateTimeISO("UTC").toPlainDate();
 
 export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
   const t = useTranslations();
@@ -158,9 +158,9 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
   };
 
   // Current viewport date (month/week navigation state)
-  const [viewDate, setViewDate] = useState(getTodayUTCDate);
+  const [viewDate, setViewDate] = useState(appToday);
   const [monthWindowStart, setMonthWindowStart] = useState(() =>
-    getCenteredMonthWindowStart(getTodayUTCDate()),
+    getCenteredMonthWindowStart(appToday()),
   );
   const monthScrollRef = useRef<HTMLDivElement>(null);
   const monthAnchorRefs = useRef<Map<string, HTMLElement> | null>(null);
@@ -175,7 +175,7 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
 
   const year = viewDate.year;
   const month = viewDate.month - 1;
-  const monthWeeks = getMonthWeekRows(locale, monthWindowStart);
+  const monthWeeks = getMonthWeekRows(locale, monthWindowStart, appToday());
   const monthAnchors = getMonthAnchors(locale, monthWindowStart);
 
   const days = (() => {
@@ -183,7 +183,7 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
       return monthWeeks.flatMap((week) => week.days);
     }
     if (mode === "week") {
-      return getWeekDays(viewDate, firstWeekday, weekend);
+      return getWeekDays(viewDate, firstWeekday, weekend, appToday());
     }
     return [];
   })();
@@ -221,7 +221,7 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
     });
   })();
 
-  const { data: calendarTasks = [] } = useQuery({
+  const calendarTasksQuery = useQuery({
     ...calendarTasksOptions({
       workspaceId,
       filters,
@@ -231,8 +231,10 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
       datePropertyIds: visibleDatePropertyIds,
       endDatePropertyId,
     }),
-    throwOnError: true,
   });
+  const calendarTasksView = useQueryView(calendarTasksQuery);
+  const calendarTasks =
+    calendarTasksView.type === "items" ? calendarTasksView.items : [];
 
   const hasInvalidYearTaskStatus =
     mode === "year" && calendarTasks.some((task) => !isTaskStatus(task.status));
@@ -284,7 +286,7 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
   };
 
   const navigateToday = () => {
-    const today = getTodayUTCDate();
+    const today = appToday();
     if (mode === "month") {
       scrollToMonth(today);
       return;
@@ -547,6 +549,13 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
     );
   }
 
+  if (
+    calendarTasksView.type === "pending" ||
+    calendarTasksView.type === "error"
+  ) {
+    return <QueryViewFeedback view={calendarTasksView} />;
+  }
+
   const monthLabel = formatMonthYearLabel(locale, year, month);
 
   const headerLabel = (() => {
@@ -566,6 +575,7 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
 
   return (
     <div className="flex h-full min-w-0 flex-col">
+      <QueryViewFeedback view={calendarTasksView} />
       <CalendarHeader
         headerLabel={headerLabel}
         month={month}

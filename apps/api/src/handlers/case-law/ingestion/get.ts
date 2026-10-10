@@ -15,7 +15,7 @@ import {
 } from "@/api/db/schema";
 import type { SourceTotalOrigin } from "@/api/db/schema";
 import { setSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { boundedAll } from "@/api/lib/db/bounded-all";
@@ -514,9 +514,10 @@ const config = {
   // by owner/admin (see `packages/permissions`), matching the admin/owner gate
   // this route used to carry as a route-level `onBeforeHandle`. Declaring it in
   // the handler config means the safe-handler wrapper enforces it for BOTH the
-  // REST route and the generic `invoke_capability` path, so neither bypasses the
+  // REST route and the generic capability executors path, so neither bypasses the
   // gate. Keep this as the single source of the role check for this endpoint.
   permissions: { auditLog: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     readClass: "public",

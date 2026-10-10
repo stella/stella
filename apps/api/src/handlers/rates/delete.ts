@@ -3,7 +3,8 @@ import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import { rateTables } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { rateRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -20,6 +21,9 @@ const deleteRateTable = createSafeHandler(
       "until another table is made the default; time entries already recorded " +
       "keep the rate they were billed at.",
     permissions: { rate: ["delete"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: { featureId: "time-billing", type: "required" },
+    realtime: rateRealtimeUpdates,
     mcp: {
       type: "capability",
       reason: "billing_admin",

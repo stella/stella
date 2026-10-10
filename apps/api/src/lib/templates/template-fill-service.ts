@@ -16,6 +16,8 @@ import { replaceOutputMarkers } from "@stll/template-conditions";
 
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { ScopedDb } from "@/api/db/safe-db";
+import { arrayOrEmpty } from "@/api/lib/array";
+import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   getOrganizationRegistryAvailability,
@@ -24,27 +26,39 @@ import {
 import {
   validateClauseBodyDirectives,
   inspectLegacyClauseDirectives,
+  unrenderedOverrideWarning,
 } from "@/api/lib/clauses/clause-directives";
 import type { ClauseDirectiveWarning } from "@/api/lib/clauses/clause-directives";
 import {
   discoverTemplateWithClauses,
   clauseBodyToRichPatch,
+  renderedClauseFieldMarkers,
 } from "@/api/lib/clauses/clause-to-patch";
 import type { ClauseBody } from "@/api/lib/clauses/types";
 import {
   adaptAiFields,
   type AiOccurrenceAdapter,
 } from "@/api/lib/docx/adapt-ai-fields";
+import { loopContext } from "@/api/lib/docx/block-directives";
 import { deriveManifest } from "@/api/lib/docx/derived-manifest";
 import { discoverClauseSlots } from "@/api/lib/docx/discover-clause-slots";
 import {
   documentTextForAiFields,
   extractDocxDocument,
 } from "@/api/lib/docx/extract-text";
-import { createDispatchLookupResolver } from "@/api/lib/docx/lookup-fields";
+import {
+  createDispatchLookupResolver,
+  type LookupOutcome,
+  type LookupResolver,
+} from "@/api/lib/docx/lookup-fields";
 import { manifestNamedConditions } from "@/api/lib/docx/manifest-conditions";
 import { applyManifestFillSteps } from "@/api/lib/docx/manifest-fill-steps";
-import { fillTemplate } from "@/api/lib/docx/patch-template";
+import {
+  fillTemplate,
+  renderedTemplateMarkers,
+  renderedClauseSlotOccurrences,
+} from "@/api/lib/docx/patch-template";
+import type { ClauseSlotVisitor } from "@/api/lib/docx/patch-template";
 import {
   type AiConditionDecider,
   isAiConditionField,
@@ -78,12 +92,18 @@ import type {
 import { isTemplateData } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+import {
+  cloneOperationInput,
+  snapshotOperationInput,
+} from "@/api/lib/proofs/checked-transaction";
+import type { BindingContext } from "@/api/lib/template-binding/apply-source-fields";
 import { buildBindingContext } from "@/api/lib/template-binding/build-binding-context";
 import { recordTemplateUse } from "@/api/lib/templates/record-use";
 import {
   readStoredTemplateFile,
   STORED_TEMPLATE_FILE_COLUMNS,
 } from "@/api/lib/templates/stored-template-file";
+import { isRecord } from "@/api/lib/type-guards";
 import {
   ACTION_COST_CALL_KIND,
   actionRequestObserver,
@@ -102,6 +122,7 @@ import {
 } from "./template-optional-defaults";
 import type {
   MissingRequiredField,
+  RenderedRequiredFields,
   RequiredFieldsPolicy,
 } from "./template-optional-defaults";
 
@@ -226,6 +247,8 @@ const storedTemplateLoadError = (
 
 type DescribedField = {
   path: string;
+  /** Branch expression evaluated for this document or loop item. */
+  visibleWhen: string | null;
   label: string | null;
   inputType: InputType;
   required: boolean;
@@ -276,6 +299,7 @@ type DescribedField = {
  */
 type DescribedArrayGroup = {
   path: string;
+  itemAliases: string[];
   itemFieldPaths: string[];
 };
 
@@ -284,13 +308,13 @@ type DescribedArrayGroup = {
  *  also carries a manifest — manifest fields never declare the array root
  *  itself, only its dotted item paths, so this is the only source for the
  *  array shape. */
-const collectDescribedArrayGroups = (
-  fields: readonly DiscoveredField[],
-): DescribedArrayGroup[] => {
+const collectDescribedScopes = (fields: readonly DiscoveredField[]) => {
   const groups: DescribedArrayGroup[] = [];
+  const fieldScopes = new Map<string, string | undefined>();
 
   const visit = (field: DiscoveredField, parentPath: string): void => {
     const path = parentPath === "" ? field.path : `${parentPath}.${field.path}`;
+    fieldScopes.set(path, field.visibleWhen);
     const itemFields = field.itemFields;
     // A leaf field has no children to group or descend into.
     if (itemFields === undefined) {
@@ -314,6 +338,7 @@ const collectDescribedArrayGroups = (
     if (field.kind === "array" && itemFields.length > 0) {
       groups.push({
         path,
+        itemAliases: arrayOrEmpty(field.itemAliases),
         itemFieldPaths: itemFields.map((itemField) => itemField.path),
       });
     }
@@ -325,7 +350,7 @@ const collectDescribedArrayGroups = (
   for (const field of fields) {
     visit(field, "");
   }
-  return groups;
+  return { arrays: groups, fieldScopes };
 };
 
 /**
@@ -448,7 +473,7 @@ export const describeStoredTemplate = async ({
     scopedDb,
     organizationId,
   });
-  const arrays = collectDescribedArrayGroups(discovered.fields);
+  const { arrays, fieldScopes } = collectDescribedScopes(discovered.fields);
   // Formula fields are derived at fill time, never user-submitted, so they
   // are reported as computed values rather than fillable fields. A boolean
   // condition-field is likewise derived (a rule, not a question), so it is
@@ -466,6 +491,7 @@ export const describeStoredTemplate = async ({
       .filter(isFillableTemplateInputField)
       .map((field) => ({
         path: field.path,
+        visibleWhen: fieldScopes.get(field.path) ?? null,
         label: field.label ?? null,
         inputType: field.inputType ?? "text",
         required: isTemplateFieldRequired(field),
@@ -501,15 +527,6 @@ export const describeStoredTemplate = async ({
   };
 };
 
-/**
- * Usage preflight hook invoked once the manifest is read and the template is
- * known to declare AI fields, before any model call runs. Returns a rejection
- * marker (an over-quota / no-entitlement signal the caller maps to its HTTP
- * response) or `null` to proceed. Lets a caller gate AI quota on a model call
- * actually running without re-reading the template manifest itself.
- */
-type FillUsagePreflight<TRejection> = () => Promise<TRejection | null>;
-
 /** The model-backed collaborators a manifest's AI fields need: a generator for
  *  AI-fillable fields (`aiPrompt`), a decider for AI-decided boolean fields (a
  *  boolean field with an `aiPrompt`), and a per-occurrence adapter for
@@ -522,20 +539,29 @@ export type AiFillCollaborators = {
 };
 
 /**
- * Builds {@link AiFillCollaborators}, invoked once and only when the manifest
- * declares an AI-drafted or AI-adapted field. Deferred because building them
- * costs the caller an org AI config read and a metered analytics trace: a
- * deterministic fill must pay neither.
+ * Runs the fill's model work inside its admitted action: refuses before any
+ * model call (an over-quota / no-entitlement marker the caller maps to its
+ * response), or runs `fill` with the collaborators and holds the action until
+ * `fill` settles. Invoked once, only when the manifest declares an AI-drafted
+ * or AI-adapted field, so a deterministic fill pays no config read, metered
+ * trace or admission. Scoping the work in a callback keeps the admission's
+ * lifetime covering every model call the fill makes.
  */
-type AiFillCollaboratorProvider = () =>
-  | AiFillCollaborators
-  | Promise<AiFillCollaborators>;
+export type AiFillAdmission<TRejection> = <T>(
+  fill: (collaborators: AiFillCollaborators) => Promise<T>,
+) => Promise<
+  { type: "refused"; rejection: TRejection } | { type: "admitted"; value: T }
+>;
 
 type FillServiceOptions<TRejection = never> = {
   templateId: SafeId<"template">;
   values: FillValues;
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
+  /** Lookup fields ask a business register, a third-party service. Without a
+   *  permit, a lookup field fails the fill naming the field. Mandatory so each
+   *  boundary names its stance. */
+  thirdPartyOutboundPermit: ThirdPartyOutboundPermit | undefined;
   /** Whether a required, user-entered field left absent or empty rejects the
    *  fill. `"enforce"` is the contract for every real fill; `"allow-partial"`
    *  is the live preview's deliberate exception (see
@@ -546,15 +572,16 @@ type FillServiceOptions<TRejection = never> = {
    *  key matches a discovered slot, the override body is inserted for that slot
    *  instead of the linked clause's resolved body (mirrors fill-by-id). */
   clauseOverrides?: Record<string, ClauseBody> | undefined;
-  /** Deferred builder for the AI collaborators; omitted by a caller that never
-   *  drafts (the fill then leaves AI fields unresolved). */
-  aiCollaborators?: AiFillCollaboratorProvider | undefined;
-  /** Optional usage preflight run only when the manifest declares AI fields,
-   *  before any model call. A non-null return aborts the fill with a
-   *  `{ usageRejection }` result the caller surfaces as its own response. */
-  assertUsageAvailable?: FillUsagePreflight<TRejection> | undefined;
-  /** The persistence owner may defer use-count recording into its own atomic
-   *  transaction. All ordinary fill callers retain the after-fill default. */
+  /** Admits and supplies the AI collaborators; omitted by a caller that never
+   *  drafts (the fill then leaves AI fields unresolved). A refusal aborts the
+   *  fill with a `{ usageRejection }` result the caller surfaces as its own
+   *  response, before lookups or any model call. */
+  aiFill?: AiFillAdmission<TRejection> | undefined;
+  /** Registry transport seam; ordinary callers use the organization's dispatch. */
+  lookupResolver?: LookupResolver | undefined;
+  /** A caller that records the fill itself (document persistence, or an agent
+   *  tool returning the text) defers use-count recording into its own atomic
+   *  transaction. Other fill callers retain the after-fill default. */
   useRecording?: TemplateUseRecording | undefined;
   /** The matter being filled into. When set and the manifest declares any
    *  data-bound field ({@link FieldMeta.source}), the matter's client, parties,
@@ -624,7 +651,13 @@ export const discoverTemplateSource = async ({
   };
 };
 
-type FilledDocx = {
+/** The members of a {@link FilledDocx} that are the document itself. Every
+ *  other member is a diagnostic: the completion decision reads them all
+ *  (`FillDiagnosticSources` is the rest of this type), so a new member must
+ *  either be listed here or be graded there. */
+export type FilledDocumentMember = "templateName" | "fileName" | "file";
+
+export type FilledDocx = {
   templateName: string;
   fileName: string;
   /** The filled document, derived from the scanned template. */
@@ -642,6 +675,48 @@ type FilledDocx = {
    *  never carried. */
   conditionDecisions: ResolvedAiCondition[];
   clauseWarnings: ClauseDirectiveWarning[];
+};
+
+/** A fill without a permit cannot ask a register for a lookup field. */
+const LOOKUP_WITHOUT_PERMIT: LookupOutcome = {
+  type: "error",
+  message: "Registry lookups are not available for this fill",
+};
+
+const lookupsWithoutPermit: LookupResolver = async () =>
+  await Promise.resolve(LOOKUP_WITHOUT_PERMIT);
+
+type FillLookupResolverOptions = {
+  permit: ThirdPartyOutboundPermit | undefined;
+  lookupResolver: LookupResolver | undefined;
+  scopedDb: ScopedDb;
+  organizationId: SafeId<"organization">;
+};
+
+/** Without a permit no resolver reaches a register, injected or dispatched. */
+const fillLookupResolver = async ({
+  permit,
+  lookupResolver,
+  scopedDb,
+  organizationId,
+}: FillLookupResolverOptions) => {
+  if (permit === undefined) {
+    return lookupsWithoutPermit;
+  }
+  return (
+    lookupResolver ??
+    createDispatchLookupResolver({
+      observer: actionRequestObserver(
+        organizationId,
+        ACTION_COST_CALL_KIND.registryRequest,
+      ),
+      permit,
+      dispatch: await getOrganizationRegistryDispatch({
+        scopedDb,
+        organizationId,
+      }),
+    })
+  );
 };
 
 type FillDocxOptions<TRejection = never> = Omit<
@@ -662,6 +737,8 @@ type ApplyClausePatchesOptions = Pick<
 > & {
   record: TemplateData;
   namedConditions: ReturnType<typeof manifestNamedConditions>;
+  /** The slots the fill keeps a marker of; the others are never rendered. */
+  renderedSlots: ReadonlySet<string>;
 };
 
 export const clauseDirectiveRecoveryHint = (
@@ -709,33 +786,608 @@ const clauseDirectiveError = ({
   });
 };
 
-const validateAuthoredClauseOverrides = ({
+/** A per-fill override whose directives do not validate, with the refusal it
+ *  earns wherever its slot renders. */
+type InvalidOverride = {
+  slot: ApplyClausePatchesOptions["slots"][number];
+  error: HandlerError<422>;
+};
+
+const invalidAuthoredClauseOverrides = ({
   slots,
   bodies,
   clauses,
-}: Pick<ApplyClausePatchesOptions, "slots" | "bodies" | "clauses">): Result<
-  void,
-  HandlerError<422>
-> => {
-  for (const slot of slots) {
+}: Pick<
+  ApplyClausePatchesOptions,
+  "slots" | "bodies" | "clauses"
+>): InvalidOverride[] =>
+  slots.flatMap((slot) => {
     const clause = clauses[slot.patchKey];
     if (clause?.resolution !== "override") {
-      continue;
+      return [];
     }
     const body =
       bodies[slot.patchKey] ??
       panic(`Missing override body for ${slot.patchKey}`);
     const validation = validateClauseBodyDirectives(body);
-    if (Result.isError(validation)) {
-      const error = clauseDirectiveError({
-        error: validation.error,
-        clause,
-        slot,
-      });
-      return Result.err(error);
+    return Result.isError(validation)
+      ? [
+          {
+            slot,
+            error: clauseDirectiveError({
+              error: validation.error,
+              clause,
+              slot,
+            }),
+          },
+        ]
+      : [];
+  });
+
+/**
+ * An invalid override refuses the fill where its slot renders. One whose slot
+ * the fill prunes never reaches the document, so it is reported as a warning.
+ */
+const settleInvalidOverrides = (
+  invalid: readonly InvalidOverride[],
+  renderedSlots: ReadonlySet<string>,
+): Result<ClauseDirectiveWarning[], HandlerError<422>> => {
+  const refused = invalid.find(({ slot }) => renderedSlots.has(slot.patchKey));
+  if (refused !== undefined) {
+    return Result.err(refused.error);
+  }
+  return Result.ok(
+    invalid.map(({ slot, error }) =>
+      unrenderedOverrideWarning({
+        clauseName: slot.name,
+        slotKey: slot.patchKey,
+        issues: arrayOrEmpty(error.issues),
+      }),
+    ),
+  );
+};
+
+type RenderClauseSlotOptions = {
+  slot: ApplyClausePatchesOptions["slots"][number];
+  body: ClauseBody;
+  clause: ClauseProvenance;
+  values: TemplateData;
+  namedConditions: ApplyClausePatchesOptions["namedConditions"];
+  enclosingLoop?: ReturnType<typeof loopContext> | undefined;
+};
+
+/** One clause slot rendered against the values in scope where it renders. */
+const renderClauseSlot = ({
+  slot,
+  body,
+  clause,
+  values,
+  namedConditions,
+  enclosingLoop,
+}: RenderClauseSlotOptions) => {
+  const patch = clauseBodyToRichPatch(body, {
+    source: clause.resolution === "override" ? "authored" : "stored",
+    values,
+    slotKey: slot.patchKey,
+    namedConditions,
+    enclosingLoop,
+  });
+  return Result.isError(patch)
+    ? Result.err(clauseDirectiveError({ error: patch.error, clause, slot }))
+    : patch;
+};
+
+/** What a fill renders for one set of values. */
+type RenderedFill = {
+  /** Clause slots with at least one marker the fill keeps. */
+  slots: ReadonlySet<string>;
+  required: RenderedRequiredFields;
+};
+
+type RenderedFillOptions = {
+  file: ScannedFile;
+  discovered: DiscoveredTemplate;
+  values: TemplateData;
+  bodies: ApplyClausePatchesOptions["bodies"];
+  namedConditions: ApplyClausePatchesOptions["namedConditions"];
+  occurrenceValues?: readonly PreparedClauseOccurrence[];
+};
+
+/**
+ * Every clause slot and value marker the fill renders for `values`, read from
+ * the directive pass the fill renders with: the template's own markers, and
+ * each clause body's where its slot renders it (once per loop iteration,
+ * under that iteration's bindings).
+ */
+const renderedFill = async ({
+  file,
+  discovered,
+  values,
+  bodies,
+  namedConditions,
+  occurrenceValues,
+}: RenderedFillOptions): Promise<Result<RenderedFill, HandlerError<422>>> => {
+  const rendered = await renderedTemplateMarkers(file, values, namedConditions);
+  if (Result.isError(rendered)) {
+    return rendered;
+  }
+  const occurrences = rendered.value.fields.map(({ path, expr, scope }) => ({
+    path,
+    expr,
+    values: scope ?? values,
+  }));
+  for (const [
+    index,
+    { patchKey, loopScope },
+  ] of rendered.value.clauseSlots.entries()) {
+    const body = bodies[patchKey];
+    if (body === undefined) {
+      continue;
+    }
+    const slotValues =
+      occurrenceValues?.at(index)?.values ?? loopScope ?? values;
+    if (!isTemplateData(slotValues)) {
+      return panic("Loop scope holds values outside the template data model");
+    }
+    const clauseFields = renderedClauseFieldMarkers(body, {
+      values: slotValues,
+      namedConditions,
+      slotScope: discovered.clauseSlotScopes?.[patchKey],
+    });
+    if (Result.isError(clauseFields)) {
+      return clauseFields;
+    }
+    for (const { path, expr, scope } of clauseFields.value) {
+      occurrences.push({ path, expr, values: scope ?? slotValues });
     }
   }
-  return Result.ok(undefined);
+  return Result.ok({
+    slots: new Set(rendered.value.clauseSlots.map(({ patchKey }) => patchKey)),
+    required: {
+      paths: new Set(discovered.renderedFieldPaths?.scoped),
+      occurrences,
+    },
+  });
+};
+
+const overlapsPath = (left: string, right: string) =>
+  left === right ||
+  left.startsWith(`${right}.`) ||
+  right.startsWith(`${left}.`);
+
+/**
+ * Whether the submitted values already decide what the fill renders: no
+ * condition or loop the template evaluates reads a value a later fill step
+ * derives or rewrites (formula, binding, lookup, AI draft or decision, date
+ * normalization).
+ */
+const renderingSettledBeforeFillSteps = (
+  manifest: TemplateManifest,
+  discovered: DiscoveredTemplate,
+): boolean => {
+  const derived = manifest.fields
+    .filter(
+      (field) =>
+        field.formula !== undefined ||
+        field.condition !== undefined ||
+        field.conditionAst !== undefined ||
+        field.source !== undefined ||
+        field.lookup !== undefined ||
+        Boolean(field.aiPrompt) ||
+        (field.inputType === "date" && field.dateFormat !== undefined),
+    )
+    .map((field) => field.path);
+  const evaluated = [
+    ...discovered.conditionPaths,
+    ...discovered.fields
+      .filter((field) => field.kind === "array")
+      .map((field) => field.path),
+  ];
+  return !evaluated.some((path) =>
+    derived.some((derivedPath) => overlapsPath(path, derivedPath)),
+  );
+};
+
+type RequiredFieldsGateOptions = {
+  manifest: TemplateManifest;
+  discovered: DiscoveredTemplate;
+  requiredFields: RequiredFieldsPolicy;
+};
+
+/**
+ * A required field is required where the fill renders it. With what renders
+ * read from the submitted values (`early` given a rendering), every field is
+ * gated before any AI or lookup work. Without one (later fill steps decide
+ * what renders), `early` gates the fields that render whatever the values and
+ * the ones no rendering places, and `late` gates the rest once every fill
+ * step ran.
+ */
+const requiredFieldsGate = ({
+  manifest,
+  discovered,
+  requiredFields,
+}: RequiredFieldsGateOptions) => {
+  const unconditional = new Set(discovered.renderedFieldPaths?.unconditional);
+  const deferred = new Set(
+    discovered.renderedFieldPaths?.scoped.filter(
+      (path) => !unconditional.has(path),
+    ),
+  );
+  return {
+    /** Whether a gate needs to know what renders at all. */
+    readsRendering:
+      requiredFields === "enforce" &&
+      (discovered.renderedFieldPaths?.scoped.length ?? 0) > 0,
+    early: (
+      values: FillValues,
+      rendered: RenderedFill | null,
+    ): MissingRequiredField[] =>
+      collectMissingRequiredFields({
+        fields: manifest.fields,
+        policy: requiredFields,
+        values,
+        rendered: rendered?.required ?? { paths: deferred, occurrences: [] },
+      }),
+    late: (values: TemplateData, rendered: RenderedFill) =>
+      collectMissingRequiredFields({
+        fields: manifest.fields.filter((field) => deferred.has(field.path)),
+        policy: requiredFields,
+        values,
+        rendered: rendered.required,
+      }),
+  };
+};
+
+const clauseScopedPaths = (discovered: DiscoveredTemplate) =>
+  new Set(Object.values(discovered.clauseScopedFieldPaths ?? {}).flat());
+
+type PreparedClauseOccurrence = {
+  patchKey: string;
+  values: TemplateData;
+  scope: "document" | "loop";
+};
+
+/** Linked clauses are discovered independently: their own loops use array
+ * paths, while references to a template loop retain its authored alias. */
+const isClauseLoopField = (path: string, discovered: DiscoveredTemplate) =>
+  discovered.loopAliases.some(
+    ({ alias, path: arrayPath }) =>
+      path.startsWith(`${alias}.`) || path.startsWith(`${arrayPath}.`),
+  );
+
+type DraftDocumentValuesOptions = DocumentGroundingOptions & {
+  discovered: DiscoveredTemplate;
+  resolveLookup: LookupResolver;
+  scopedDb: ScopedDb;
+  organizationId: SafeId<"organization">;
+  workspaceId: SafeId<"workspace"> | undefined;
+  generateAiValue: AiFieldGenerator | undefined;
+  decideAiCondition: AiConditionDecider | undefined;
+};
+
+const draftDocumentValues = async ({
+  file,
+  manifest,
+  bodies,
+  record,
+  discovered,
+  resolveLookup,
+  scopedDb,
+  organizationId,
+  workspaceId,
+  generateAiValue,
+  decideAiCondition,
+}: DraftDocumentValuesOptions) => {
+  // Resolve the data-binding context only when this fill targets a matter and
+  // the manifest actually declares a bound field, so a transient fill or a
+  // template with no bindings fires no extra queries.
+  const bindingContext =
+    workspaceId !== undefined &&
+    manifest.fields.some((field) => field.source !== undefined)
+      ? await buildBindingContext({
+          scopedDb,
+          organizationId,
+          workspaceId,
+          manifest,
+        })
+      : null;
+
+  const scopedPaths = clauseScopedPaths(discovered);
+  const fields = manifest.fields.filter(
+    ({ path }) =>
+      !scopedPaths.has(path) || !isClauseLoopField(path, discovered),
+  );
+  // Resolve registry lookups, evaluate formula (derived) fields, and check
+  // dependent (optionsFrom) selects before any AI step or substitution sees
+  // them; a failing step rejects naming the field.
+  const stepError = await applyManifestFillSteps({
+    values: record,
+    manifest: { fields },
+    resolveLookup,
+    bindingContext,
+  });
+  if (stepError !== null) {
+    return { type: "fields-refused" as const, error: stepError };
+  }
+
+  const grounding = await documentGrounding({ file, manifest, bodies, record });
+  if (Result.isError(grounding)) {
+    return { type: "refused" as const, error: grounding.error };
+  }
+  const drafted = await resolveAiFields({
+    values: record,
+    fields,
+    documentText: grounding.value,
+    generate: generateAiValue,
+  });
+  const decided = await resolveAiConditions({
+    values: drafted.values,
+    fields,
+    decide: decideAiCondition,
+  });
+  return {
+    type: "prepared" as const,
+    values: decided.values,
+    grounding: grounding.value,
+    bindingContext,
+    aiFieldErrors: drafted.errors,
+    conditionDecisions: decided.conditions,
+  };
+};
+
+type PrepareClauseOccurrencesOptions = {
+  file: ScannedFile;
+  record: TemplateData;
+  discovered: DiscoveredTemplate;
+  manifest: TemplateManifest;
+  namedConditions: ApplyClausePatchesOptions["namedConditions"];
+  resolveLookup: LookupResolver;
+  bindingContext: BindingContext | null;
+  generateAiValue: AiFieldGenerator | undefined;
+  decideAiCondition: AiConditionDecider | undefined;
+  documentText: string | undefined;
+};
+
+/** Prepare each surviving occurrence with the same value pipeline as the
+ * document, keeping item derivations local to that occurrence. */
+const prepareClauseOccurrences = async ({
+  file,
+  record,
+  discovered,
+  manifest,
+  namedConditions,
+  resolveLookup,
+  bindingContext,
+  generateAiValue,
+  decideAiCondition,
+  documentText,
+}: PrepareClauseOccurrencesOptions) => {
+  const occurrences = await renderedClauseSlotOccurrences(
+    file,
+    record,
+    namedConditions,
+  );
+  if (Result.isError(occurrences)) {
+    return {
+      type: "refused" as const,
+      rejection: {
+        error: occurrences.error.message,
+        storedTemplateError: occurrences.error,
+      },
+    };
+  }
+  const aiFieldErrors: AiFieldError[] = [];
+  const conditionDecisions: ResolvedAiCondition[] = [];
+  const occurrenceValues: PreparedClauseOccurrence[] = [];
+  const preparedDocumentPaths = new Set<string>();
+  for (const { patchKey, loopScope } of occurrences.value) {
+    const paths = new Set(
+      arrayOrEmpty(discovered.clauseScopedFieldPaths?.[patchKey]),
+    );
+    const fields = manifest.fields.filter(
+      (field) =>
+        paths.has(field.path) &&
+        isClauseLoopField(field.path, discovered) &&
+        (loopScope !== undefined || !preparedDocumentPaths.has(field.path)),
+    );
+    if (loopScope !== undefined) {
+      for (const [index, field] of fields.entries()) {
+        const scope = discovered.clauseSlotScopes?.[
+          patchKey
+        ]?.rowScopes.findLast(({ scopedPath }) =>
+          field.path.startsWith(`${scopedPath}.`),
+        );
+        if (scope !== undefined) {
+          // The manifest uses array paths; this occurrence prepares one alias-bound item.
+          fields[index] = {
+            ...field,
+            path: `${scope.alias}${field.path.slice(scope.scopedPath.length)}`,
+          };
+        }
+      }
+    }
+    // Fill steps mutate declared values; copy only those roots rather than
+    // cloning every document-level array once for every item.
+    const roots = new Set(
+      fields.map(
+        ({ path }) => path.split(".").at(0) ?? panic("Field path has no root"),
+      ),
+    );
+    const values =
+      loopScope === undefined
+        ? record
+        : {
+            ...loopScope,
+            ...Object.fromEntries(
+              [...roots]
+                .filter((root) => Object.hasOwn(loopScope, root))
+                .map((root) => [root, structuredClone(loopScope[root])]),
+            ),
+          };
+    const scopeError = await applyManifestFillSteps({
+      values,
+      manifest: { fields },
+      resolveLookup,
+      bindingContext,
+    });
+    if (scopeError !== null) {
+      return { type: "refused" as const, rejection: { error: scopeError } };
+    }
+    const scopedDrafted = await resolveAiFields({
+      values,
+      fields,
+      documentText,
+      generate: generateAiValue,
+    });
+    aiFieldErrors.push(...scopedDrafted.errors);
+    const scopedDecided = await resolveAiConditions({
+      values: scopedDrafted.values,
+      fields,
+      decide: decideAiCondition,
+    });
+    conditionDecisions.push(...scopedDecided.conditions);
+    if (!isTemplateData(scopedDecided.values)) {
+      return panic(
+        "Prepared clause scope holds values outside the template data model",
+      );
+    }
+    if (loopScope === undefined) {
+      // Preserve the shared occurrence record with own-property copies.
+      Object.defineProperties(
+        record,
+        Object.getOwnPropertyDescriptors(scopedDecided.values),
+      );
+      for (const { path } of fields) {
+        preparedDocumentPaths.add(path);
+      }
+      occurrenceValues.push({ patchKey, values: record, scope: "document" });
+      continue;
+    }
+    occurrenceValues.push({
+      patchKey,
+      values: scopedDecided.values,
+      scope: "loop",
+    });
+  }
+  return {
+    type: "prepared" as const,
+    occurrenceValues,
+    aiFieldErrors,
+    conditionDecisions,
+  };
+};
+
+/**
+ * Renders a slot inside a loop once per iteration under that iteration's
+ * bindings, exactly as the loop's own markers render. The first refusal is
+ * kept for the caller, which fails the fill with it.
+ */
+const loopClauseSlotRenderer = ({
+  slots,
+  bodies,
+  clauses,
+  namedConditions,
+  occurrenceValues,
+}: Omit<ApplyClausePatchesOptions, "record"> & {
+  occurrenceValues: PreparedClauseOccurrence[];
+}) => {
+  let occurrenceIndex = 0;
+  let renderedLoopOccurrences = 0;
+  let refusal: HandlerError<422> | undefined;
+  const render: ClauseSlotVisitor = ({ patchKey, loopScope }) => {
+    const occurrence =
+      occurrenceValues.at(occurrenceIndex) ??
+      panic("Clause occurrence has no prepared scope");
+    if (occurrence.patchKey !== patchKey) {
+      return panic("Clause occurrence order differs from its prepared scopes");
+    }
+    const { values } = occurrence;
+    occurrenceIndex += 1;
+    if (loopScope !== undefined) {
+      renderedLoopOccurrences += 1;
+    }
+    const body = bodies[patchKey];
+    const slot = slots.find((candidate) => candidate.patchKey === patchKey);
+    if (
+      loopScope === undefined ||
+      body === undefined ||
+      slot === undefined ||
+      refusal !== undefined
+    ) {
+      return undefined;
+    }
+    const loop = loopScope["loop"];
+    if (
+      !isRecord(loop) ||
+      typeof loop["index0"] !== "number" ||
+      typeof loop["length"] !== "number"
+    ) {
+      return panic("Clause loop scope has no iteration counters");
+    }
+    const patch = renderClauseSlot({
+      slot,
+      body,
+      clause:
+        clauses[patchKey] ?? panic(`Missing clause provenance for ${patchKey}`),
+      values,
+      namedConditions,
+      enclosingLoop: loopContext(loop["index0"], loop["length"]),
+    });
+    if (Result.isError(patch)) {
+      refusal = patch.error;
+      return undefined;
+    }
+    return patch.value;
+  };
+  return {
+    render,
+    error: () => {
+      if (
+        renderedLoopOccurrences !==
+        occurrenceValues.filter(({ scope }) => scope === "loop").length
+      ) {
+        return panic(
+          "Clause rendering did not visit every prepared occurrence",
+        );
+      }
+      return refusal;
+    },
+  };
+};
+
+/**
+ * Patch every clause slot at document scope, then fill the template, letting
+ * the directive pass render each slot it keeps inside a loop per iteration.
+ */
+const fillWithClauseSlots = async ({
+  file,
+  occurrenceValues,
+  ...options
+}: ApplyClausePatchesOptions & {
+  file: ScannedFile;
+  occurrenceValues: PreparedClauseOccurrence[];
+}): Promise<
+  Result<
+    {
+      result: Awaited<ReturnType<typeof fillTemplate>>;
+      clauseWarnings: ClauseDirectiveWarning[];
+    },
+    HandlerError<422>
+  >
+> => {
+  const clauseWarnings = applyClausePatches(options);
+  if (Result.isError(clauseWarnings)) {
+    return clauseWarnings;
+  }
+  const loopClauses = loopClauseSlotRenderer({ ...options, occurrenceValues });
+  const result = await fillTemplate(file, options.record, {
+    namedConditions: options.namedConditions,
+    clauseSlots: loopClauses.render,
+  });
+  const refusal = loopClauses.error();
+  return refusal === undefined
+    ? Result.ok({ result, clauseWarnings: clauseWarnings.value })
+    : Result.err(refusal);
 };
 
 const applyClausePatches = ({
@@ -744,6 +1396,7 @@ const applyClausePatches = ({
   clauses,
   record,
   namedConditions,
+  renderedSlots,
 }: ApplyClausePatchesOptions): Result<
   ClauseDirectiveWarning[],
   HandlerError<422>
@@ -751,7 +1404,9 @@ const applyClausePatches = ({
   const clauseWarnings: ClauseDirectiveWarning[] = [];
   for (const slot of slots) {
     const body = bodies[slot.patchKey];
-    if (body === undefined) {
+    // A slot the fill prunes never reaches the document: nothing to render
+    // and nothing about its clause to report.
+    if (body === undefined || !renderedSlots.has(slot.patchKey)) {
       continue;
     }
     const clause =
@@ -770,16 +1425,15 @@ const applyClausePatches = ({
         clauseWarnings.push(warning);
       }
     }
-    const patch = clauseBodyToRichPatch(body, {
-      source: clause.resolution === "override" ? "authored" : "stored",
+    const patch = renderClauseSlot({
+      slot,
+      body,
+      clause,
       values: record,
-      slotKey: slot.patchKey,
       namedConditions,
     });
     if (Result.isError(patch)) {
-      return Result.err(
-        clauseDirectiveError({ error: patch.error, clause, slot }),
-      );
+      return Result.err(patch.error);
     }
     record[slot.patchKey] = patch.value;
   }
@@ -926,52 +1580,73 @@ const templateFillInputContract = ({
   });
 };
 
-/**
- * Shared fill recipe over an already-loaded DOCX: discover linked content,
- * gate required fields, run manifest fill steps (lookups, composites, formulas,
- * dependent selects), draft/adapt AI fields, resolve clause directives, then
- * substitute. Records the template use when a `templateId` is present.
- * Backs every fill boundary, so a template fills identically at each of them.
- */
-const fillTemplateDocxWithPolicy = async <TRejection = never>({
-  source,
+type PrepareFillAdmissionOptions = Pick<
+  FillDocxWithPolicyOptions,
+  "values" | "requiredFields" | "unusedValuePolicy"
+> &
+  Awaited<ReturnType<typeof discoverTemplateSource>> & { file: ScannedFile };
+
+const prepareFillAdmission = async ({
   values,
-  scopedDb,
-  organizationId,
   requiredFields,
-  clauseOverrides,
-  aiCollaborators,
-  assertUsageAvailable,
-  useRecording = "after-fill",
-  workspaceId,
   unusedValuePolicy,
-}: FillDocxWithPolicyOptions<TRejection>): Promise<
-  FilledDocx | FillRejection<TRejection>
-> => {
-  const observer = actionRequestObserver(
-    organizationId,
-    ACTION_COST_CALL_KIND.registryRequest,
-  );
-  const loaded = source;
-  const { templateId } = source;
-  const { manifest, discovered, slots, bodies, clauses } =
-    await discoverTemplateSource({
-      source: loaded,
-      scopedDb,
-      organizationId,
-      clauseOverrides,
-    });
-  // Authored overrides must be valid before quota checks, lookups or AI work.
-  const overrideValidation = validateAuthoredClauseOverrides({
+  manifest,
+  discovered,
+  slots,
+  bodies,
+  clauses,
+  file,
+}: PrepareFillAdmissionOptions) => {
+  const namedConditions = manifestNamedConditions(manifest);
+  const requiredGate = requiredFieldsGate({
+    manifest,
+    discovered,
+    requiredFields,
+  });
+  const invalidOverrides = invalidAuthoredClauseOverrides({
     slots,
     bodies,
     clauses,
   });
-  if (Result.isError(overrideValidation)) {
+  // When the submitted values already decide what renders, read it once, so
+  // required fields and authored overrides are judged before quota checks,
+  // lookups or AI work; otherwise both wait for the values the fill renders.
+  const earlyResult =
+    renderingSettledBeforeFillSteps(manifest, discovered) &&
+    isTemplateData(values) &&
+    (requiredGate.readsRendering || invalidOverrides.length > 0)
+      ? await renderedFill({
+          file,
+          discovered,
+          values,
+          bodies,
+          namedConditions,
+        })
+      : null;
+  if (earlyResult !== null && Result.isError(earlyResult)) {
     return {
-      error: overrideValidation.error.message,
-      storedTemplateError: overrideValidation.error,
+      type: "refused" as const,
+      rejection: {
+        error: earlyResult.error.message,
+        storedTemplateError: earlyResult.error,
+      },
     };
+  }
+  const earlyRendering = earlyResult?.value ?? null;
+  if (earlyRendering !== null) {
+    const overrides = settleInvalidOverrides(
+      invalidOverrides,
+      earlyRendering.slots,
+    );
+    if (Result.isError(overrides)) {
+      return {
+        type: "refused" as const,
+        rejection: {
+          error: overrides.error.message,
+          storedTemplateError: overrides.error,
+        },
+      };
+    }
   }
   let strictInputPlaceholders: string[] | null = null;
 
@@ -986,175 +1661,338 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
     });
     if (unusedKeys.length > 0) {
       return {
-        inputRejection: { type: "unused-values", keys: unusedKeys },
+        type: "refused" as const,
+        rejection: {
+          inputRejection: { type: "unused-values" as const, keys: unusedKeys },
+        },
       };
     }
   }
 
-  let record: FillValues = { ...values };
-
-  // Reject missing user-entered fields before AI/lookup work. Every real fill
-  // enforces this gate; the live preview explicitly permits partial inputs.
-  const missingRequiredFields = collectMissingRequiredFields({
-    fields: manifest.fields,
-    policy: requiredFields,
-    values: record,
-  });
+  const missingRequiredFields = requiredGate.early(values, earlyRendering);
   if (missingRequiredFields.length > 0) {
-    return { requiredFieldsRejection: missingRequiredFields };
+    return {
+      type: "refused" as const,
+      rejection: { requiredFieldsRejection: missingRequiredFields },
+    };
   }
 
-  // Draft AI-fillable fields (manifest fields with an aiPrompt) before fill.
-  // Gate the AI usage preflight and the collaborator build on a model call
-  // actually running: both cost the caller quota or an org AI config read,
-  // and a deterministic fill must spend neither. Runs before the manifest
-  // fill steps so an over-quota fill rejects without first calling out to a
-  // registry for its lookup fields.
+  // Gate AI admission on declared model work: deterministic fills spend
+  // neither quota nor config reads.
   const hasAiFields = manifest.fields.some(
     (field) => Boolean(field.aiPrompt) || field.aiAdapt === true,
   );
-  if (assertUsageAvailable && hasAiFields) {
-    const usageRejection = await assertUsageAvailable();
-    if (usageRejection !== null) {
-      return { usageRejection };
+
+  return {
+    type: "prepared" as const,
+    hasAiFields,
+    namedConditions,
+    requiredGate,
+    invalidOverrides,
+    earlyRendering,
+    strictInputPlaceholders,
+  };
+};
+
+type SettleRenderedFillOptions = RenderedFillOptions & {
+  earlyRendering: RenderedFill | null;
+  requiredGate: ReturnType<typeof requiredFieldsGate>;
+  invalidOverrides: readonly InvalidOverride[];
+};
+
+const settleRenderedFill = async ({
+  earlyRendering,
+  requiredGate,
+  invalidOverrides,
+  ...options
+}: SettleRenderedFillOptions) => {
+  const finalResult = await renderedFill(options);
+  if (Result.isError(finalResult)) {
+    return {
+      type: "refused" as const,
+      rejection: {
+        error: finalResult.error.message,
+        storedTemplateError: finalResult.error,
+      },
+    };
+  }
+  const finalRendering = finalResult.value;
+  if (earlyRendering === null && requiredGate.readsRendering) {
+    const missing = requiredGate.late(options.values, finalRendering);
+    if (missing.length > 0) {
+      return {
+        type: "refused" as const,
+        rejection: { requiredFieldsRejection: missing },
+      };
     }
   }
-  const { generateAiValue, decideAiCondition, adaptAiValue } =
-    aiCollaborators && hasAiFields ? await aiCollaborators() : {};
-
-  // Resolve the data-binding context only when this fill targets a matter and
-  // the manifest actually declares a bound field, so a transient fill or a
-  // template with no bindings fires no extra queries.
-  const bindingContext =
-    workspaceId !== undefined &&
-    manifest.fields.some((field) => field.source !== undefined)
-      ? await buildBindingContext({
-          scopedDb,
-          organizationId,
-          workspaceId,
-          manifest,
-        })
-      : null;
-
-  // Resolve registry lookups, evaluate formula (derived) fields, and check
-  // dependent (optionsFrom) selects before any AI step or substitution sees
-  // them; a failing step rejects naming the field.
-  const stepError = await applyManifestFillSteps({
-    values: record,
-    manifest,
-    resolveLookup: createDispatchLookupResolver({
-      observer,
-      dispatch: await getOrganizationRegistryDispatch({
-        scopedDb,
-        organizationId,
-      }),
-    }),
-    bindingContext,
-  });
-  if (stepError !== null) {
-    return { error: stepError };
-  }
-
-  const grounding = await documentGrounding({
-    file: loaded.file,
-    manifest,
-    bodies,
-    record,
-  });
-  if (Result.isError(grounding)) {
+  const overrides = settleInvalidOverrides(
+    invalidOverrides,
+    finalRendering.slots,
+  );
+  if (Result.isError(overrides)) {
     return {
-      error: grounding.error.message,
-      storedTemplateError: grounding.error,
+      type: "refused" as const,
+      rejection: {
+        error: overrides.error.message,
+        storedTemplateError: overrides.error,
+      },
     };
   }
-  const drafted = await resolveAiFields({
-    values: record,
-    fields: manifest.fields,
-    documentText: grounding.value,
-    generate: generateAiValue,
-  });
-  record = drafted.values;
-  const aiFieldErrors = drafted.errors;
-  // Decide AI-decided boolean conditions (a boolean field with an aiPrompt)
-  // before substitution so its {% if field_path %} block resolves correctly.
-  const decidedConditions = await resolveAiConditions({
-    values: record,
-    fields: manifest.fields,
-    decide: decideAiCondition,
-  });
-  record = decidedConditions.values;
-  // Rewrite each aiAdapt marker occurrence to fit its surrounding text;
-  // the stub stays in `record` so uncovered occurrences still get the
-  // plain global substitution below.
-  const adapted = await adaptAiFields({
-    file: loaded.file,
-    fields: manifest.fields,
-    values: record,
-    adapt: adaptAiValue,
-  });
-  const fillSource = adapted.file;
-  const adaptedPaths = adapted.adaptedPaths;
+  return {
+    type: "rendered" as const,
+    renderedSlots: finalRendering.slots,
+    clauseWarnings: overrides.value,
+  };
+};
 
-  const optionalDefaults =
-    strictInputPlaceholders === null
-      ? { defaultedPaths: [], values: record }
-      : applyOmittedOptionalPlaceholderDefaults({
-          fields: manifest.fields,
-          placeholderPaths: strictInputPlaceholders,
-          values: record,
-        });
-  record = optionalDefaults.values;
+type FillWithinAiAdmissionOptions<TRejection> = {
+  hasAiFields: boolean;
+  aiFill: AiFillAdmission<TRejection> | undefined;
+  completeFill: (
+    collaborators: AiFillCollaborators,
+  ) => Promise<FilledDocx | FillRejection<TRejection>>;
+};
 
-  if (!isTemplateData(record)) {
-    return {
-      error:
-        "Values must be strings, numbers, booleans, arrays, or nested objects.",
-    };
+/** Runs the fill inside its AI admission only when it declares model work. */
+const fillWithinAiAdmission = async <TRejection>({
+  hasAiFields,
+  aiFill,
+  completeFill,
+}: FillWithinAiAdmissionOptions<TRejection>): Promise<
+  FilledDocx | FillRejection<TRejection>
+> => {
+  if (!hasAiFields || aiFill === undefined) {
+    return await completeFill({});
   }
+  const admitted = await aiFill(completeFill);
+  switch (admitted.type) {
+    case "refused":
+      return { usageRejection: admitted.rejection };
+    case "admitted":
+      return admitted.value;
+    default:
+      admitted satisfies never;
+      return panic("Unhandled AI fill admission");
+  }
+};
 
-  const namedConditions = manifestNamedConditions(manifest);
-  const patchedClauses = applyClausePatches({
+/**
+ * Shared fill recipe over an already-loaded DOCX: discover linked content,
+ * gate required fields, run manifest fill steps (lookups, composites, formulas,
+ * dependent selects), draft/adapt AI fields, resolve clause directives, then
+ * substitute. Records the template use when a `templateId` is present.
+ * Backs every fill boundary, so a template fills identically at each of them.
+ */
+const fillTemplateDocxWithPolicy = async <TRejection = never>(
+  options: FillDocxWithPolicyOptions<TRejection>,
+): Promise<FilledDocx | FillRejection<TRejection>> => {
+  const {
+    source,
+    values,
+    scopedDb,
+    organizationId,
+    thirdPartyOutboundPermit,
+    requiredFields,
+    clauseOverrides,
+    aiFill,
+    lookupResolver,
+    useRecording = "after-fill",
+    workspaceId,
+    unusedValuePolicy,
+  } = snapshotOperationInput(options);
+  const { templateId } = source;
+  const { manifest, discovered, slots, bodies, clauses } =
+    await discoverTemplateSource({
+      source,
+      scopedDb,
+      organizationId,
+      clauseOverrides,
+    });
+  const input = await prepareFillAdmission({
+    values,
+    requiredFields,
+    unusedValuePolicy,
+    manifest,
+    discovered,
     slots,
     bodies,
     clauses,
-    record,
-    namedConditions,
+    file: source.file,
   });
-  if (Result.isError(patchedClauses)) {
-    return {
-      error: patchedClauses.error.message,
-      storedTemplateError: patchedClauses.error,
-    };
+  switch (input.type) {
+    case "refused":
+      return input.rejection;
+    case "prepared":
+      break;
+    default:
+      input satisfies never;
+      return panic("Unhandled prepared template input");
   }
+  const {
+    hasAiFields,
+    namedConditions,
+    requiredGate,
+    invalidOverrides,
+    earlyRendering,
+    strictInputPlaceholders,
+  } = input;
 
-  const result = await fillTemplate(fillSource, record, { namedConditions });
-
-  if (templateId !== undefined && useRecording === "after-fill") {
-    await scopedDb(async (tx) => {
-      await recordTemplateUse({ tx, templateId });
+  // Everything that may call a model runs inside `aiFill`, so the admitted
+  // action is held until the last model call settles. A refusal still
+  // precedes lookups.
+  const completeFill = async ({
+    generateAiValue,
+    decideAiCondition,
+    adaptAiValue,
+  }: AiFillCollaborators): Promise<FilledDocx | FillRejection<TRejection>> => {
+    let record = cloneOperationInput(values);
+    const resolveLookup = await fillLookupResolver({
+      permit: thirdPartyOutboundPermit,
+      lookupResolver,
+      scopedDb,
+      organizationId,
     });
-  }
 
-  return {
-    templateName: loaded.name,
-    fileName: loaded.fileName,
-    file: result.file,
-    unmatchedPlaceholders: result.unmatchedPlaceholders,
-    // Adapted stubs no longer match a marker (each occurrence was already
-    // substituted), so they are not "unused" in any user-meaningful sense.
-    unusedValues: unusedFilledValues({
-      unusedValues: result.unusedValues,
+    const drafting = await draftDocumentValues({
+      file: source.file,
+      manifest,
+      bodies,
+      record,
+      discovered,
+      resolveLookup,
+      scopedDb,
+      organizationId,
+      workspaceId,
+      generateAiValue,
+      decideAiCondition,
+    });
+    if (drafting.type === "fields-refused") {
+      return { error: drafting.error };
+    }
+    if (drafting.type === "refused") {
+      return {
+        error: drafting.error.message,
+        storedTemplateError: drafting.error,
+      };
+    }
+    record = drafting.values;
+    const { conditionDecisions } = drafting;
+    // Rewrite each aiAdapt marker occurrence to fit its surrounding text;
+    // the stub stays in `record` so uncovered occurrences still get the
+    // plain global substitution below.
+    const adapted = await adaptAiFields({
+      file: source.file,
+      fields: manifest.fields,
+      values: record,
+      adapt: adaptAiValue,
+    });
+    const { file: fillSource, adaptedPaths } = adapted;
+    const aiFieldErrors = [...drafting.aiFieldErrors, ...adapted.failures];
+
+    const optionalDefaults = applyOmittedOptionalPlaceholderDefaults({
+      fields: manifest.fields,
+      placeholderPaths: arrayOrEmpty(strictInputPlaceholders),
+      values: record,
+    });
+    record = optionalDefaults.values;
+
+    if (!isTemplateData(record)) {
+      return {
+        error:
+          "Values must be strings, numbers, booleans, arrays, or nested objects.",
+      };
+    }
+
+    const prepared = await prepareClauseOccurrences({
+      file: fillSource,
+      record,
+      discovered,
+      manifest,
+      namedConditions,
+      resolveLookup,
+      bindingContext: drafting.bindingContext,
+      generateAiValue,
+      decideAiCondition,
+      documentText: drafting.grounding,
+    });
+    if (prepared.type === "refused") {
+      return prepared.rejection;
+    }
+    aiFieldErrors.push(...prepared.aiFieldErrors);
+    conditionDecisions.push(...prepared.conditionDecisions);
+
+    const settled = await settleRenderedFill({
+      file: fillSource,
+      discovered,
+      values: record,
+      bodies,
+      namedConditions,
+      occurrenceValues: prepared.occurrenceValues,
+      earlyRendering,
+      requiredGate,
+      invalidOverrides,
+    });
+    switch (settled.type) {
+      case "refused":
+        return settled.rejection;
+      case "rendered":
+        break;
+      default:
+        settled satisfies never;
+        return panic("Unhandled rendered fill settlement");
+    }
+    const { renderedSlots } = settled;
+
+    const rendered = await fillWithClauseSlots({
+      file: fillSource,
+      occurrenceValues: prepared.occurrenceValues,
       slots,
       bodies,
-      adaptedPaths,
-      defaultedPaths: optionalDefaults.defaultedPaths,
-      clauseFieldPaths: discovered.clauseFieldPaths,
-    }),
-    structureErrors: result.structureErrors,
-    aiFieldErrors,
-    conditionDecisions: decidedConditions.conditions,
-    clauseWarnings: patchedClauses.value,
+      clauses,
+      record,
+      namedConditions,
+      renderedSlots,
+    });
+    if (Result.isError(rendered)) {
+      return {
+        error: rendered.error.message,
+        storedTemplateError: rendered.error,
+      };
+    }
+    const { result } = rendered.value;
+    const clauseWarnings = [
+      ...settled.clauseWarnings,
+      ...rendered.value.clauseWarnings,
+    ];
+
+    if (templateId !== undefined && useRecording === "after-fill") {
+      await scopedDb(async (tx) => {
+        await recordTemplateUse({ tx, templateId });
+      });
+    }
+
+    return {
+      templateName: source.name,
+      fileName: source.fileName,
+      file: result.file,
+      unmatchedPlaceholders: result.unmatchedPlaceholders,
+      unusedValues: unusedFilledValues({
+        unusedValues: result.unusedValues,
+        slots,
+        bodies,
+        adaptedPaths,
+        defaultedPaths: optionalDefaults.defaultedPaths,
+        clauseFieldPaths: discovered.clauseFieldPaths,
+      }),
+      structureErrors: result.structureErrors,
+      aiFieldErrors,
+      conditionDecisions,
+      clauseWarnings,
+    };
   };
+
+  return await fillWithinAiAdmission({ hasAiFields, aiFill, completeFill });
 };
 
 export const fillTemplateDocx = async <TRejection = never>(
@@ -1188,15 +2026,15 @@ export const fillTemplateDocxStrict = async <TRejection = never>(
  * Backs the fill-by-id and fill-to-workspace routes, the chat tools, and the
  * report exporter.
  */
-export const fillStoredTemplateDocx = async <TRejection = never>({
-  templateId,
-  ...options
-}: FillServiceOptions<TRejection>): Promise<
+export const fillStoredTemplateDocx = async <TRejection = never>(
+  input: FillServiceOptions<TRejection>,
+): Promise<
   | FilledDocx
   | TemplateServiceError
   | { requiredFieldsRejection: MissingRequiredField[] }
   | { usageRejection: TRejection }
 > => {
+  const { templateId, ...options } = snapshotOperationInput(input);
   const loaded = await loadStoredTemplateSource({
     templateId,
     organizationId: options.organizationId,
@@ -1214,6 +2052,7 @@ export type FillTemplateResult =
       text: string;
       unmatchedPlaceholders: string[];
       unusedValues: string[];
+      structureErrors: FilledDocx["structureErrors"];
       /** AI-drafted fields the model could not complete; unfilled above. */
       aiFieldErrors: AiFieldError[];
       /** What each AI-decided condition was settled on, and by whom. */
@@ -1288,15 +2127,15 @@ export const fillStoredTemplateWithText = async <TRejection = never>(
   return await withExtractedText(filled);
 };
 
-export const fillStoredTemplateWithTextStrict = async <TRejection = never>({
-  templateId,
-  ...options
-}: FillServiceOptions<TRejection>): Promise<
+export const fillStoredTemplateWithTextStrict = async <TRejection = never>(
+  input: FillServiceOptions<TRejection>,
+): Promise<
   | FillTemplateWithDocxResult
   | { inputRejection: TemplateInputRejection }
   | { requiredFieldsRejection: MissingRequiredField[] }
   | { usageRejection: TRejection }
 > => {
+  const { templateId, ...options } = snapshotOperationInput(input);
   const loaded = await loadStoredTemplateSource({
     templateId,
     organizationId: options.organizationId,
@@ -1323,14 +2162,12 @@ export const fillStoredTemplateWithTextStrict = async <TRejection = never>({
   return await withExtractedText(filled);
 };
 
-export const fillStoredTemplate = async (
-  options: FillServiceOptions,
-): Promise<FillTemplateResult> => {
+export const fillStoredTemplate = async <TRejection = never>(
+  options: FillServiceOptions<TRejection>,
+): Promise<FillTemplateResult | { usageRejection: TRejection }> => {
   const filled = await fillStoredTemplateDocx(options);
   if ("usageRejection" in filled) {
-    // Unreachable: this caller does not pass `assertUsageAvailable`, so the
-    // service never returns a usage rejection (TRejection is `never`).
-    panic("fillStoredTemplate received an unexpected usage rejection");
+    return filled;
   }
   if ("requiredFieldsRejection" in filled) {
     return filled;
@@ -1348,6 +2185,7 @@ export const fillStoredTemplate = async (
       .trim(),
     unmatchedPlaceholders: filled.unmatchedPlaceholders,
     unusedValues: filled.unusedValues,
+    structureErrors: filled.structureErrors,
     aiFieldErrors: filled.aiFieldErrors,
     conditionDecisions: filled.conditionDecisions,
     clauseWarnings: filled.clauseWarnings,

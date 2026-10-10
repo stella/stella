@@ -1,7 +1,5 @@
 import Elysia from "elysia";
 
-import { RESOURCE_TYPE } from "@stll/api-contract";
-
 import approveMcpAuthorization from "@/api/handlers/mcp-connectors/approve-authorization";
 import connectMcpConnector from "@/api/handlers/mcp-connectors/connect";
 import createMcpConnection from "@/api/handlers/mcp-connectors/create-connection";
@@ -16,19 +14,10 @@ import probeMcpConnector from "@/api/handlers/mcp-connectors/probe-connector";
 import updateMcpConnection from "@/api/handlers/mcp-connectors/update-connection";
 import updateNativeTool from "@/api/handlers/mcp-connectors/update-native-tool";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
-import {
-  organizationResourceSetUpdates,
-  resourceRealtime,
-} from "@/api/lib/resource-realtime-macro";
-
-const mcpConnectorRealtimeUpdates = organizationResourceSetUpdates(
-  RESOURCE_TYPE.MCP_CONNECTOR,
-);
 
 const authenticatedMcpConnectorsRoute = new Elysia({ prefix: "/mcp" })
   .use(authMacro)
   .use(permissionMacro)
-  .use(resourceRealtime)
   .guard({ validateAuth: true })
   .get("/oauth/callback", mcpOAuthCallback.handler, {
     permissions: mcpOAuthCallback.config.permissions,
@@ -39,7 +28,6 @@ const authenticatedMcpConnectorsRoute = new Elysia({ prefix: "/mcp" })
   })
   .post("/connectors", createMcpConnector.handler, {
     body: createMcpConnector.config.body,
-    resourceSetUpdated: mcpConnectorRealtimeUpdates,
     permissions: createMcpConnector.config.permissions,
   })
   .post("/connectors/probe", probeMcpConnector.handler, {
@@ -47,7 +35,6 @@ const authenticatedMcpConnectorsRoute = new Elysia({ prefix: "/mcp" })
     permissions: probeMcpConnector.config.permissions,
   })
   .post("/connectors/:slug/connect", connectMcpConnector.handler, {
-    resourceSetUpdated: mcpConnectorRealtimeUpdates,
     params: connectMcpConnector.config.params,
     permissions: connectMcpConnector.config.permissions,
   })
@@ -55,14 +42,12 @@ const authenticatedMcpConnectorsRoute = new Elysia({ prefix: "/mcp" })
     "/connectors/:slug/approve-authorization",
     approveMcpAuthorization.handler,
     {
-      resourceSetUpdated: mcpConnectorRealtimeUpdates,
       params: approveMcpAuthorization.config.params,
       body: approveMcpAuthorization.config.body,
       permissions: approveMcpAuthorization.config.permissions,
     },
   )
   .delete("/connectors/:slug", deleteMcpConnector.handler, {
-    resourceSetUpdated: mcpConnectorRealtimeUpdates,
     params: deleteMcpConnector.config.params,
     permissions: deleteMcpConnector.config.permissions,
   })
@@ -71,23 +56,19 @@ const authenticatedMcpConnectorsRoute = new Elysia({ prefix: "/mcp" })
   })
   .post("/connections", createMcpConnection.handler, {
     body: createMcpConnection.config.body,
-    resourceSetUpdated: mcpConnectorRealtimeUpdates,
     permissions: createMcpConnection.config.permissions,
   })
   .patch("/connections/:connectionId", updateMcpConnection.handler, {
     body: updateMcpConnection.config.body,
-    resourceSetUpdated: mcpConnectorRealtimeUpdates,
     params: updateMcpConnection.config.params,
     permissions: updateMcpConnection.config.permissions,
   })
   .delete("/connections/:connectionId", deleteMcpConnection.handler, {
-    resourceSetUpdated: mcpConnectorRealtimeUpdates,
     params: deleteMcpConnection.config.params,
     permissions: deleteMcpConnection.config.permissions,
   })
   .patch("/native-tools/:slug", updateNativeTool.handler, {
     body: updateNativeTool.config.body,
-    resourceSetUpdated: mcpConnectorRealtimeUpdates,
     params: updateNativeTool.config.params,
     permissions: updateNativeTool.config.permissions,
   });

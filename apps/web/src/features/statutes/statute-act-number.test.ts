@@ -66,7 +66,7 @@ describe("an act's name", () => {
   test("is left out where the title is only the number", () => {
     expect(
       statuteActLabel({
-        eli: "https://www.e-sbirka.cz/eli/cz/sbms/2012/89",
+        eli: "https://www.e-sbirka.cz/eli/cz/sm/2012/89",
         title: "89/2012 Sb. m. s.",
       }),
     ).toEqual({ number: "89/2012 Sb. m. s.", name: null });

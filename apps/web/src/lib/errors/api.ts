@@ -1,9 +1,12 @@
-import { TaggedError } from "better-result";
+import { isTaggedError, TaggedError } from "better-result";
 
 import {
+  API_FILE_SECURITY_REJECTED_ERROR_CODE,
   API_VERSION_CONFLICT_ERROR_CODE,
   CLAUSE_DIRECTIVES_INVALID_CODE,
   CLAUSE_VERSION_LIMIT_ERROR_CODE,
+  ENCRYPTED_CONTENT_ERROR_CODE,
+  MEMBER_REMOVAL_BUSY_CODE,
   normalizeApiError,
   parseApiErrorValue,
 } from "@stll/api-contract";
@@ -11,7 +14,12 @@ import {
   ACTION_ADMISSION_REFUSALS,
   isActionAdmissionCode,
 } from "@stll/api-contract/action-admission";
+import { HOSTED_CHECKOUT_REFUSAL_CODE } from "@stll/api-contract/hosted-checkout";
+import { FILE_PROPERTY_TYPE_IMMUTABLE_CODE } from "@stll/api-contract/property-policy";
 import { PUBLIC_COUNTRY_UNAVAILABLE_CODE } from "@stll/api-contract/public-country-capability";
+import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-caps";
+import type { VerificationRunCapCode } from "@stll/api-contract/verification-run-caps";
+import { MATTER_CONTACT_CAPACITY_CODE } from "@stll/api-contract/workspace-contacts";
 
 import { getTranslator } from "@/i18n/translator";
 import type { TranslationKey } from "@/i18n/types";
@@ -46,6 +54,11 @@ export const shouldRetryAPIRequest = (
       failureCount < MAX_API_RETRY_COUNT &&
       ACTION_ADMISSION_REFUSALS[error.code].retryable
     );
+  }
+  // Any other typed error is a deliberate outcome (a disabled surface, a
+  // refused operation), never a transient one: asking again cannot change it.
+  if (!APIError.is(error) && isTaggedError(error)) {
+    return false;
   }
   return (
     failureCount < MAX_API_RETRY_COUNT &&
@@ -99,10 +112,25 @@ const RAW_INTERNAL_TOOL_ERROR_CODE = {
     "legal_source_structural_repair_required",
 } as const;
 
+const VERIFICATION_RUN_CAP_ERROR_KEYS = {
+  [VERIFICATION_RUN_CAP_CODES.active]:
+    "errors.apiCodes.verificationActiveLimitReached",
+  [VERIFICATION_RUN_CAP_CODES.daily]:
+    "errors.apiCodes.verificationDailyLimitReached",
+} as const satisfies Record<VerificationRunCapCode, TranslationKey>;
+
 const CODE_ERROR_KEYS = {
+  ...VERIFICATION_RUN_CAP_ERROR_KEYS,
+  [FILE_PROPERTY_TYPE_IMMUTABLE_CODE]:
+    "errors.apiCodes.filePropertyTypeImmutable",
+  [MATTER_CONTACT_CAPACITY_CODE.reached]:
+    "errors.apiCodes.matterContactCapacityReached",
+  [MATTER_CONTACT_CAPACITY_CODE.exceeded]:
+    "errors.apiCodes.matterContactCapacityExceeded",
   [CLAUSE_DIRECTIVES_INVALID_CODE]: "errors.apiCodes.clauseDirectivesInvalid",
   [CLAUSE_VERSION_LIMIT_ERROR_CODE]: "clauses.versionLimitReached",
   [PUBLIC_COUNTRY_UNAVAILABLE_CODE]: "errors.api.publicCountryUnavailable",
+  [MEMBER_REMOVAL_BUSY_CODE]: "errors.actionAdmission.concurrencyBusy",
   access_denied: "errors.apiCodes.accessDenied",
   account_deletion_otp_expired: "errors.apiCodes.accountDeletionOtpExpired",
   account_deletion_otp_invalid: "errors.apiCodes.accountDeletionOtpInvalid",
@@ -120,7 +148,14 @@ const CODE_ERROR_KEYS = {
     "errors.apiCodes.aiConfigProviderValidationFailed",
   deepl_key_rejected: "errors.apiCodes.deeplKeyRejected",
   deepl_quota_exceeded: "errors.apiCodes.deeplQuotaExceeded",
+  [ENCRYPTED_CONTENT_ERROR_CODE]: "errors.apiCodes.encryptedContent",
+  [API_FILE_SECURITY_REJECTED_ERROR_CODE]:
+    "errors.apiCodes.fileSecurityRejected",
   forbidden: "errors.apiCodes.forbidden",
+  [HOSTED_CHECKOUT_REFUSAL_CODE.checkoutOpen]:
+    "errors.apiCodes.hostedCheckoutOpen",
+  [HOSTED_CHECKOUT_REFUSAL_CODE.subscriptionLive]:
+    "errors.apiCodes.hostedSubscriptionLive",
   internal_server_error: "errors.apiCodes.internalServerError",
   legal_source_entity_limit_reached:
     "errors.apiCodes.legalSourceEntityLimitReached",
@@ -210,4 +245,33 @@ const localizeAPIError = ({ code, details, status }: LocalizeAPIErrorInput) => {
     return translateError(USAGE_REJECTION_REASON_KEYS[details["reason"]]);
   }
   return translateError(STATUS_TO_KEY[status] ?? STATUS_ERROR_KEYS.unknown);
+};
+
+/**
+ * API refusals of a chat request whose localized message says what the user
+ * must change, so the chat shows it instead of the generic send failure.
+ */
+const CHAT_REFUSAL_CODES: ReadonlySet<string> = new Set([
+  ENCRYPTED_CONTENT_ERROR_CODE,
+]);
+
+/**
+ * The chat refusal an error carries, directly or as a cause: the API error
+ * whose (already localized) message the chat should show, or `null`.
+ */
+export const chatRefusal = (error: unknown): APIError | null => {
+  const seen = new Set<unknown>();
+  let current = error;
+  while (current instanceof Error && !seen.has(current)) {
+    seen.add(current);
+    if (
+      APIError.is(current) &&
+      current.code !== undefined &&
+      CHAT_REFUSAL_CODES.has(current.code)
+    ) {
+      return current;
+    }
+    current = current.cause;
+  }
+  return null;
 };

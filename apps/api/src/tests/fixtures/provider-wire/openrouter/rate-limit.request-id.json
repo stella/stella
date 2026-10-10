@@ -1,0 +1,77 @@
+{
+  "format": 1,
+  "provider": "openrouter",
+  "scenario": "rate-limit",
+  "source": "synthetic",
+  "basis": "OpenRouter API errors reference: JSON { error: { code, message, metadata? } } bodies",
+  "model": "openai/gpt-6-sol",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/api/v1/chat/completions",
+        "shape": {
+          "headers": {
+            "accept": "text/event-stream",
+            "content-type": "application/json"
+          },
+          "body": {
+            "max_completion_tokens": 128000,
+            "messages": [
+              {
+                "content": "[prompt]",
+                "role": "user"
+              }
+            ],
+            "model": "openai/gpt-6-sol",
+            "service_tier": "default",
+            "stream": true,
+            "stream_options": {
+              "include_usage": true
+            },
+            "tools": [
+              {
+                "function": {
+                  "description": "Delete a draft by name.",
+                  "name": "mcp__external__delete",
+                  "parameters": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "note": {
+                        "type": ["string", "null"],
+                        "minLength": 1
+                      }
+                    },
+                    "required": ["name"],
+                    "additionalProperties": false
+                  }
+                },
+                "type": "function"
+              }
+            ]
+          }
+        }
+      },
+      "response": {
+        "status": 429,
+        "headers": {
+          "content-type": "application/json",
+          "x-request-id": "wire-request-429"
+        },
+        "body": {
+          "encoding": "text",
+          "text": "{\"error\": {\"message\": \"Rate limit exceeded. SENTINEL_OPENROUTER_429_REQUEST_ID\", \"code\": 429}}"
+        }
+      },
+      "repeat": true
+    }
+  ],
+  "expect": {
+    "outcome": "error",
+    "errorKind": "quota_exhausted"
+  },
+  "variant": "request-id"
+}

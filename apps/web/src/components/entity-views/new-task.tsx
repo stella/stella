@@ -10,13 +10,16 @@ import { KanbanCellAction } from "@stll/ui/kanban";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 
@@ -41,7 +44,13 @@ export const NewEntityViewTask = ({
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
   const canCreate = usePermissions({ entity: ["create"] });
-  const { data } = useQuery(workspacesNavigationOptions(organizationId));
+  const { id: userId } = useAuthenticatedUser();
+  const dataQuery = useQuery(
+    workspacesNavigationOptions({ organizationId, userId }),
+  );
+  const dataView = useQueryView(dataQuery);
+  useQueryViewError(dataView);
+  const data = dataView.type === "items" ? dataView.items : undefined;
   const pendingRef = useRef(false);
   const [pending, setPending] = useState(false);
   const create = async (selectedWorkspaceId: string) => {
@@ -107,15 +116,7 @@ export const NewEntityViewTask = ({
   }
   return (
     <Menu>
-      <MenuTrigger
-        render={
-          <KanbanCellAction
-            disabled={
-              pending || data === undefined || data.workspaces.length === 0
-            }
-          />
-        }
-      >
+      <MenuTrigger render={<KanbanCellAction disabled={pending} />}>
         {t(
           agendaKind === "deadline"
             ? "inbox.suggestion.createDeadline"
@@ -123,6 +124,12 @@ export const NewEntityViewTask = ({
         )}
       </MenuTrigger>
       <MenuPopup>
+        <QueryViewFeedback view={dataView} />
+        {data?.workspaces.length === 0 && (
+          <p className="text-muted-foreground px-2 py-1 text-sm">
+            {t("common.noResults")}
+          </p>
+        )}
         {data?.workspaces.map((workspace) => (
           <MenuItem
             key={workspace.id}

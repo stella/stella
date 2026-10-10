@@ -16,6 +16,7 @@ import {
   usageSeatAssignments,
 } from "@/api/db/schema";
 import {
+  dispatchEvent,
   handleHostedAllocation,
   handleUsageEntitlementStatusChange,
   handleHostedEntitlementUpsert,
@@ -24,7 +25,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
   HostedUsageAllocationPayload,
-  HostedUsageEntitlementPayload,
+  HostedUsageWebhookEvent,
 } from "@/api/lib/hosted-usage-provider/event-schemas";
 import {
   assertUsageAvailable,
@@ -143,10 +144,15 @@ const withRolledBackTx = async (
   }
 };
 
+type EntitlementFixturePayload = Extract<
+  HostedUsageWebhookEvent,
+  { type: "entitlement.created" }
+>["data"];
+
 const buildEntitlementPayload = (
   fx: Fixture,
-  overrides: Partial<HostedUsageEntitlementPayload> = {},
-): HostedUsageEntitlementPayload => ({
+  overrides: Partial<EntitlementFixturePayload> = {},
+): EntitlementFixturePayload => ({
   id: fx.hostedEntitlementExternalId,
   status: "active",
   account_ref: fx.hostedAccountRef,
@@ -2006,6 +2012,79 @@ test("terminal snapshots cannot replace an unversioned current mapping", async (
           status: "active",
         });
       } finally {
+        logs.restore();
+      }
+    });
+  }
+});
+
+test("dispatch previews preserve outcomes without sending operator telemetry", async () => {
+  for (const mode of ["live", "replay_apply", "replay_dry_run"] as const) {
+    await withRolledBackTx(async (tx) => {
+      const fx = await setupFixture(tx);
+      await handleHostedEntitlementUpsert({
+        tx,
+        eventId: `evt_${Bun.randomUUIDv7()}`,
+        payload: buildEntitlementPayload(fx, {
+          created_at: PERIOD_START.toISOString(),
+          occurred_at: "2026-07-01T10:00:00.000Z",
+        }),
+      });
+      const analytics = installRecordingAnalytics();
+      const logs = installRecordingLogger();
+      try {
+        const unknown = await dispatchEvent({
+          tx,
+          mode,
+          eventId: `evt_${Bun.randomUUIDv7()}`,
+          event: {
+            type: "entitlement.updated",
+            data: buildEntitlementPayload(fx, { status: "unknown" }),
+          },
+        });
+        expect(unknown.kind).toBe("ignored");
+        const ambiguous = await dispatchEvent({
+          tx,
+          mode,
+          eventId: `evt_${Bun.randomUUIDv7()}`,
+          event: {
+            type: "entitlement.updated",
+            data: buildEntitlementPayload(fx, {
+              id: `provider_ent_${Bun.randomUUIDv7()}`,
+              occurred_at: "2026-07-03T10:00:00.000Z",
+            }),
+          },
+        });
+        expect(ambiguous.kind).toBe("ignored");
+        const terminalPayload = buildEntitlementPayload(fx, {
+          id: `provider_ent_${Bun.randomUUIDv7()}`,
+          status: "canceled",
+          occurred_at: "2026-07-03T10:00:00.000Z",
+        });
+        const supersededUpsert = await dispatchEvent({
+          tx,
+          mode,
+          eventId: `evt_${Bun.randomUUIDv7()}`,
+          event: { type: "entitlement.updated", data: terminalPayload },
+        });
+        expect(supersededUpsert.kind).toBe("ignored");
+        const supersededCancellation = await dispatchEvent({
+          tx,
+          mode,
+          eventId: `evt_${Bun.randomUUIDv7()}`,
+          event: { type: "entitlement.canceled", data: terminalPayload },
+        });
+        expect(supersededCancellation.kind).toBe("ignored");
+        if (mode === "replay_dry_run") {
+          expect(analytics.events).toHaveLength(0);
+          expect(logs.records).toHaveLength(0);
+        } else {
+          expect(analytics.exceptions()).toHaveLength(2);
+          expect(logs.at("WARN")).toHaveLength(2);
+          expect(logs.at("INFO")).toHaveLength(2);
+        }
+      } finally {
+        analytics.restore();
         logs.restore();
       }
     });

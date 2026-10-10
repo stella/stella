@@ -1,16 +1,10 @@
 import { t } from "elysia";
-import type { Static } from "elysia";
 
+import { AI_MEMORY_KINDS } from "@/api/db/schema";
 import { tSafeId } from "@/api/lib/custom-schema";
 
 const createMemoryFields = {
-  kind: t.UnionEnum([
-    "preference",
-    "instruction",
-    "fact",
-    "decision",
-    "relationship",
-  ]),
+  kind: t.UnionEnum(AI_MEMORY_KINDS),
   content: t.String({ minLength: 1, maxLength: 4000 }),
   pinned: t.Optional(t.Boolean()),
   language: t.Optional(t.String({ maxLength: 10 })),
@@ -33,5 +27,3 @@ export const createMemoryBodySchema = t.Union([
     { additionalProperties: false },
   ),
 ]);
-
-export type CreateMemoryBody = Static<typeof createMemoryBodySchema>;

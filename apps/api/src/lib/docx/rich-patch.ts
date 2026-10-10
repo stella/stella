@@ -15,12 +15,8 @@ import {
   substitutionKey,
 } from "@stll/template-conditions";
 
-import { isElement, paragraphText, removeBlockUnit, W_NS } from "./ooxml";
+import { isElement, removeBlockUnit, W_NS } from "./ooxml";
 import type { RichPatchValue } from "./types";
-
-// Canonical pattern from @stll/template-conditions (markers.ts) — the single
-// source of truth shared with discover-placeholders, folio, and the web preview.
-export const PLACEHOLDER_RE = placeholderPattern();
 
 /** One substitutable marker in a paragraph's text: where it sits and which
  *  values-map key it fills from. Reading substitution targets through the
@@ -142,6 +138,14 @@ const collectTextSpans = (paragraph: slimdom.Element): TextSpan[] => {
 
   const walk = (node: slimdom.Node) => {
     if (!isElement(node)) {
+      return;
+    }
+
+    if (
+      node !== paragraph &&
+      node.localName === "p" &&
+      node.namespaceURI === W_NS
+    ) {
       return;
     }
 
@@ -760,9 +764,10 @@ export const patchParagraphPlaceholders = (
   paragraph: slimdom.Element,
   values: Record<string, RichPatchValue>,
 ): boolean => {
-  const text = paragraphText(paragraph);
+  const text = paragraphSpanText(paragraph);
   const standalone = isStandalonePlaceholder(text, values);
-  if (standalone) {
+  // Replacing the whole paragraph would also remove its embedded text boxes.
+  if (standalone && paragraph.getElementsByTagNameNS(W_NS, "p").length === 0) {
     setStandaloneValue(paragraph, standalone.value);
     return true;
   }

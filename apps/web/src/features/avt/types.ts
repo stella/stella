@@ -41,6 +41,8 @@ export type ListItem =
   ListsRoutes[":listId"]["items"]["get"]["response"][200]["items"][number];
 export type FactDetails = NonNullable<ListItem["factDetails"]>;
 export type FactDetailsBody = ListsRoutes["item-fact-details"]["put"]["body"];
+export type EditableFactDetails = FactDetails &
+  Pick<FactDetailsBody, "scoring">;
 export type FactConfidence = FactDetails["confidence"];
 export type FactDatePrecision = NonNullable<FactDetails["occurredOnPrecision"]>;
 
@@ -168,5 +170,7 @@ export const RUN_ERROR_KEYS = {
   extraction_failed: "avt.runs.errors.extractionFailed",
   grading_failed: "avt.runs.errors.gradingFailed",
   enqueue_failed: "avt.runs.errors.enqueueFailed",
+  run_limit_reached: "errors.apiCodes.usageLimitExceeded",
   internal: "avt.runs.errors.internal",
+  access_revoked: "avt.runs.errors.accessRevoked",
 } as const satisfies Record<VerificationErrorCode, TranslationKey>;

@@ -3,6 +3,7 @@ import type * as React from "react";
 
 import { useTranslations } from "use-intl";
 
+import { sleep } from "@stll/concurrency/sleep";
 import {
   Accordion,
   AccordionItem,
@@ -174,6 +175,7 @@ import {
   SheetTrigger,
 } from "@stll/ui/sheet";
 import { Skeleton } from "@stll/ui/skeleton";
+import { SplitButton } from "@stll/ui/split-button";
 import {
   Table,
   TableBody,
@@ -198,6 +200,7 @@ import type {
   ChatToolCallPart,
   PersistedChatMessage,
 } from "@/components/chat/chat-ui-tools";
+import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { ToolCallCard } from "@/components/chat/tool-call-card";
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { AIKeyRequiredDialog } from "@/components/require-ai-key";
@@ -209,7 +212,9 @@ const renderPlaygroundAnchor = ({
   children,
   ...props
 }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
-  <a {...props}>{children}</a>
+  <StreamdownMentionLink {...props} interactive={false}>
+    {children}
+  </StreamdownMentionLink>
 );
 
 type ComboboxOption = {
@@ -272,9 +277,7 @@ const TABLE_ROWS = [
 const showPromiseToast = () => {
   const toastId = stellaToast.loading("Saving draft");
   detached(
-    new Promise<string>((resolve) => {
-      setTimeout(() => resolve("complete"), 900);
-    })
+    sleep(900)
       .then(() => {
         stellaToast.update(toastId, { title: "Draft saved", type: "success" });
         return undefined;
@@ -323,7 +326,7 @@ export function UiPlayground() {
   );
 
   return (
-    <main className="bg-background min-h-0 flex-1 overflow-y-auto">
+    <div className="min-h-0 flex-1">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 py-6 sm:px-6 lg:px-8">
         <header className="flex flex-col gap-2 border-b pb-6">
           <h1 className="text-2xl font-semibold tracking-normal">
@@ -352,6 +355,44 @@ export function UiPlayground() {
                 description="Variants, sizes, icon-only buttons, loading, and disabled states."
                 title="Button"
               >
+                <div className="flex flex-wrap items-center gap-2">
+                  <SplitButton
+                    size="sm"
+                    primaryLabel={t("common.download")}
+                    menuLabel={t("workspaces.files.downloadAs")}
+                    onPrimaryClick={() => {
+                      stellaToast.add({
+                        title: t("common.download"),
+                        type: "info",
+                      });
+                    }}
+                    menu={
+                      <MenuPopup>
+                        <MenuItem>{t("workspaces.files.downloadPdf")}</MenuItem>
+                      </MenuPopup>
+                    }
+                  >
+                    <FileTextIcon />
+                  </SplitButton>
+                  <SplitButton
+                    size="md"
+                    primaryLabel={t("common.download")}
+                    menuLabel={t("workspaces.files.downloadAs")}
+                    onPrimaryClick={() => {
+                      stellaToast.add({
+                        title: t("common.download"),
+                        type: "info",
+                      });
+                    }}
+                    menu={
+                      <MenuPopup>
+                        <MenuItem>{t("workspaces.files.downloadPdf")}</MenuItem>
+                      </MenuPopup>
+                    }
+                  >
+                    <FileTextIcon />
+                  </SplitButton>
+                </div>
                 <div className="flex flex-wrap items-center gap-2">
                   {BUTTON_VARIANTS.map((variant) => (
                     <Button key={variant} variant={variant}>
@@ -1343,7 +1384,7 @@ export function UiPlayground() {
           </TabsPanel>
         </Tabs>
       </div>
-    </main>
+    </div>
   );
 }
 
@@ -1364,9 +1405,7 @@ function DestructiveConfirmDialogPlayground() {
 
   const handleContactConfirm = async () => {
     setContactLoading(true);
-    await new Promise<void>((resolve) => {
-      setTimeout(resolve, 900);
-    });
+    await sleep(900);
     setContactLoading(false);
     stellaToast.success(
       t("workspaces.deletedItem", { name: CONTACT_CONFIRMATION }),
@@ -1630,8 +1669,7 @@ function SharedChatRendererSample() {
     <div className="bg-popover/40 flex flex-col gap-4 rounded-2xl border p-4">
       <ChatMattersContext
         value={{
-          createDocumentMatters: [],
-          isLoadingCreateDocumentMatters: false,
+          createDocumentMattersView: { type: "empty" },
         }}
       >
         <ChatApprovalContext
@@ -1651,6 +1689,28 @@ function SharedChatRendererSample() {
             handleDeny: () => {
               /* no-op in playground */
             },
+            continueRequestSecret: async () => {
+              /* no-op in playground */
+            },
+            handleRequestSecret: async () =>
+              await Promise.resolve({
+                status: "declined" as const,
+                target: {
+                  type: "mcp-connector" as const,
+                  connectorSlug: "playground",
+                },
+              }),
+            secretAvailabilityKey: "playground-thread",
+            resolveSecretTarget: async () =>
+              await Promise.resolve({
+                available: false,
+                connector: {
+                  connectionId: "sample-connection",
+                  displayName: "Sample connector",
+                  host: "sample.test",
+                  responseDisposition: "normal" as const,
+                },
+              }),
           }}
         >
           <ChatThreadMessages
@@ -1691,6 +1751,8 @@ const COMPLETED_TOOL_STEP = {
       {
         messageId: "playground-message-indemnity",
         role: "assistant",
+        revision: 0,
+        edited: false,
         excerpt: "The playbook uses a 36-month survival period.",
         createdAt: "2026-07-21T10:30:00.000Z",
       },

@@ -44,6 +44,64 @@ const createContext = ({
   });
 
 describe("updateProperty", () => {
+  test("file policy reads the stored type under the write lock before refusing", async () => {
+    const order: string[] = [];
+    const storedContent = {
+      version: 1 as const,
+      get type() {
+        order.push("check");
+        return "file" as const;
+      },
+    };
+    const { safeDb, scopedDb } = createScopedDbMock({
+      execute: async () => {
+        order.push("lock");
+      },
+      select: () => {
+        order.push("select");
+        return {
+          from: () => ({
+            where: () => ({
+              for: async (mode: string) => {
+                order.push(`for:${mode}`);
+                return [
+                  {
+                    id: toSafeId<"property">("property_test"),
+                    name: "Documents",
+                    content: storedContent,
+                    tool: { version: 1, type: "manual-input" },
+                    status: "fresh",
+                    playbookSourceId: null,
+                  },
+                ];
+              },
+            }),
+          }),
+        };
+      },
+      update: () => {
+        order.push("write");
+        return { set: () => ({ where: async () => undefined }) };
+      },
+    });
+    const result = await updateProperty.handler(
+      createContext({
+        safeDb,
+        scopedDb,
+        body: {
+          name: "Changed",
+          content: { version: 1, type: "text" },
+          tool: { version: 1, type: "manual-input" },
+        },
+      }),
+    );
+    expect(result).toMatchObject({
+      code: 422,
+      response: { code: "file_property_type_immutable", retryable: false },
+    });
+    expect(order).toEqual(["lock", "select", "for:update", "check"]);
+  });
+
   test("rejects a select fallback outside the supplied options", async () => {
     const { getCallCount, safeDb, scopedDb } = createScopedDbMock({});
 
@@ -88,6 +146,7 @@ describe("updateProperty", () => {
 
     let deleteCalled = false;
     let auditedDependencies: unknown;
+    const updatePatches: unknown[] = [];
 
     let lockCallCount = 0;
     const { safeDb, scopedDb } = createScopedDbMock({
@@ -115,7 +174,10 @@ describe("updateProperty", () => {
         propertyDependencies: { findMany: async () => oldDependencies },
       },
       update: () => ({
-        set: () => ({ where: async () => undefined }),
+        set: (patch: unknown) => {
+          updatePatches.push(patch);
+          return { where: async () => undefined };
+        },
       }),
       delete: () => {
         deleteCalled = true;
@@ -144,6 +206,12 @@ describe("updateProperty", () => {
     expect(result).toEqual({});
     expect(lockCallCount).toBe(1);
     expect(deleteCalled).toBe(false);
+    expect(updatePatches).toEqual([
+      expect.objectContaining({
+        name: "New name",
+        content: { version: 1, type: "text" },
+      }),
+    ]);
     expect(auditedDependencies).toEqual({
       old: oldDependencies,
       new: oldDependencies,

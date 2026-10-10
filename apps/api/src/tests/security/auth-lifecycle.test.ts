@@ -42,9 +42,16 @@ describe("organization member auth lifecycle", () => {
       "handoffCommittedEntityDeletionCleanupBatch",
       hookIndex,
     );
+    // A renewing provider subscription refuses the deletion inside the same
+    // transaction, before any row is touched.
+    const renewalCheckIndex = authSource.indexOf(
+      "hasRenewingHostedSubscription(tx",
+      hookIndex,
+    );
 
     expect(hookIndex).toBeGreaterThanOrEqual(0);
-    expect(teardownIndex).toBeGreaterThan(hookIndex);
+    expect(renewalCheckIndex).toBeGreaterThan(hookIndex);
+    expect(teardownIndex).toBeGreaterThan(renewalCheckIndex);
     expect(handoffIndex).toBeGreaterThan(teardownIndex);
   });
 

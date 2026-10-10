@@ -10,7 +10,9 @@
  * This runs as a pre-pass on the template buffer before `fillTemplate`: each
  * occurrence is patched with its own rendering, and the stub stays in the
  * fill values so any occurrence the model could not cover (or any failure)
- * degrades to the plain global substitution instead of leaving a marker.
+ * degrades to the plain global substitution instead of leaving a marker. A
+ * field the model could not adapt is reported in `failures`: its occurrences
+ * carry the stub as written, which nobody asked for, so the fill is partial.
  *
  * Like `resolveAiFields`, this module stays free of any model dependency:
  * the fill boundary injects the adapter (see `buildAiOccurrenceAdapter`).
@@ -24,13 +26,17 @@ import { derivedScannedFile } from "@/api/lib/file-scan/document-parsers";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 
 import { templateContentPartPaths } from "./ooxml";
+import type { AiFieldError } from "./resolve-ai-fields";
 import { partParagraphTexts, patchXmlPartPerOccurrence } from "./rich-patch";
 import type { FieldMeta } from "./types";
+
+export const AI_FIELD_ADAPTATION_FAILURE_MESSAGE =
+  "AI could not adapt this value to the wording around it, so it was inserted as written. Retry or provide the adapted wording yourself.";
 
 /** Characters of surrounding document text captured around each occurrence. */
 const CONTEXT_RADIUS = 400;
 
-export type MarkerOccurrence = {
+type MarkerOccurrence = {
   /** Surrounding document text, with the `{{path}}` marker left in place so
    *  the model sees exactly where the rendering will sit. */
   context: string;
@@ -53,6 +59,9 @@ export type AdaptAiFieldsResult = {
    *  stub values no longer match a placeholder, so callers should drop them
    *  from "unused value" diagnostics. */
   adaptedPaths: string[];
+  /** Fields the adapter was asked to rewrite and did not (no rendering, or
+   *  not one per occurrence): each occurrence carries the stub as written. */
+  failures: AiFieldError[];
 };
 
 type AdaptAiFieldsOptions = {
@@ -69,7 +78,11 @@ export const adaptAiFields = async ({
   values,
   adapt,
 }: AdaptAiFieldsOptions): Promise<AdaptAiFieldsResult> => {
-  const unchanged: AdaptAiFieldsResult = { file, adaptedPaths: [] };
+  const unchanged: AdaptAiFieldsResult = {
+    file,
+    adaptedPaths: [],
+    failures: [],
+  };
   if (adapt === undefined) {
     return unchanged;
   }
@@ -113,6 +126,7 @@ export const adaptAiFields = async ({
   const occurrencesByPath = collectOccurrences(parts, targetPaths);
 
   const renderingsByPath = new Map<string, readonly string[]>();
+  const failures: AiFieldError[] = [];
   for (const { field, stub } of targets) {
     const storedOccurrences = occurrencesByPath.get(field.path);
     const occurrences = arrayOrEmpty(storedOccurrences);
@@ -127,14 +141,21 @@ export const adaptAiFields = async ({
       occurrences,
     });
     // A count mismatch would mis-align every later occurrence; fall back to
-    // the global stub fill for the whole field instead.
+    // the global stub fill for the whole field instead, and report it.
     if (renderings === undefined || renderings.length !== occurrences.length) {
+      failures.push({
+        fieldPath: field.path,
+        valuePath: field.path,
+        itemIndex: null,
+        reason: "generation-failed",
+        message: AI_FIELD_ADAPTATION_FAILURE_MESSAGE,
+      });
       continue;
     }
     renderingsByPath.set(field.path, renderings);
   }
   if (renderingsByPath.size === 0) {
-    return unchanged;
+    return { ...unchanged, failures };
   }
 
   const counters = new Map<string, number>();
@@ -151,7 +172,7 @@ export const adaptAiFields = async ({
     }
   }
   if (!anyChanged) {
-    return unchanged;
+    return { ...unchanged, failures };
   }
 
   return {
@@ -160,6 +181,7 @@ export const adaptAiFields = async ({
       await zip.generateAsync({ type: "uint8array" }),
     ),
     adaptedPaths: [...renderingsByPath.keys()],
+    failures,
   };
 };
 

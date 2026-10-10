@@ -1,7 +1,14 @@
-import { GetObjectCommand, type S3Client } from "@aws-sdk/client-s3";
+import {
+  DeleteObjectCommand,
+  GetObjectCommand,
+  NoSuchKey,
+  type S3Client,
+} from "@aws-sdk/client-s3";
 import { Result, TaggedError, panic } from "better-result";
 import { Readable } from "node:stream";
 import * as v from "valibot";
+
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import type { AttachmentScanVerdict } from "@/api/lib/email/inbound/acceptance";
 import {
@@ -76,7 +83,9 @@ export class SesInboundError extends TaggedError("SesInboundError")<{
     | "invalid-event"
     | "untrusted-object"
     | "message-too-large"
-    | "object-unavailable";
+    | "object-unavailable"
+    | "object-missing"
+    | "object-delete-failed";
 }> {}
 
 type ReadSesObjectOptions = { key: string; signal: AbortSignal };
@@ -85,6 +94,15 @@ type SesObjectReader = (
 ) => Promise<Result<Uint8Array, SesInboundError>>;
 
 type CreateSesReaderOptions = { client: S3Client; bucket: string };
+export const createSesS3ObjectDeleter =
+  ({ client, bucket }: CreateSesReaderOptions) =>
+  async ({ key, signal }: ReadSesObjectOptions) => {
+    // DeleteObject succeeds for an absent key, including a lost acknowledgement.
+    await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }), {
+      abortSignal: signal,
+    });
+  };
+
 export const createSesS3ObjectReader =
   ({ client, bucket }: CreateSesReaderOptions): SesObjectReader =>
   async ({ key, signal }) => {
@@ -206,6 +224,7 @@ export const readSesInboundDelivery = async ({
     );
   }
   const metadata = {
+    objectKey: receipt.action.objectKey,
     receivedAt: mail.timestamp,
     envelope: {
       mailFrom: mail.source,
@@ -220,9 +239,9 @@ export const readSesInboundDelivery = async ({
       ...metadata,
       // The bounded reader cannot hash the complete object. Provider identity
       // stays stable across retries without retaining object keys in drop logs.
-      deliveryKey: new Bun.CryptoHasher("sha256")
-        .update(JSON.stringify(["ses", bucket, receipt.action.objectKey]))
-        .digest("hex"),
+      deliveryKey: hashSha256Hex(
+        JSON.stringify(["ses", bucket, receipt.action.objectKey]),
+      ),
     });
   const read = await Result.tryPromise({
     try: async () =>
@@ -239,7 +258,10 @@ export const readSesInboundDelivery = async ({
         ? error
         : new SesInboundError({
             message: "Inbound object could not be read",
-            reason: "object-unavailable",
+            reason:
+              error instanceof NoSuchKey
+                ? "object-missing"
+                : "object-unavailable",
           }),
   });
   if (read.isErr()) {
@@ -320,16 +342,24 @@ export const receiveSesInboundMail = async ({
   }
   const delivery = result.value;
   switch (delivery.status) {
-    case "oversized":
-      return await recordOversizedInboundMail({
+    case "oversized": {
+      const ingested = await recordOversizedInboundMail({
         envelope: delivery.envelope,
         receivedAt: delivery.receivedAt,
         deliveryKey: delivery.deliveryKey,
         inboundDomain,
         persist,
       });
-    case "received":
-      return await ingestInboundMail({
+      if (ingested.isErr()) {
+        return ingested;
+      }
+      return Result.ok({
+        deliveries: ingested.value,
+        objectKey: delivery.objectKey,
+      });
+    }
+    case "received": {
+      const ingested = await ingestInboundMail({
         raw: delivery.raw,
         envelope: delivery.envelope,
         receivedAt: delivery.receivedAt,
@@ -338,8 +368,52 @@ export const receiveSesInboundMail = async ({
         inboundDomain,
         persist,
       });
+      if (ingested.isErr()) {
+        return ingested;
+      }
+      return Result.ok({
+        deliveries: ingested.value,
+        objectKey: delivery.objectKey,
+      });
+    }
     default:
       delivery satisfies never;
       return panic("Unhandled inbound source disposition");
   }
+};
+
+type ReceiveAndDeleteSesInboundMailOptions = ReceiveSesInboundMailOptions & {
+  deleteObject: (options: ReadSesObjectOptions) => Promise<void>;
+};
+
+// SES stores the object before notification. Lifecycle retention is at least
+// the queue/DLQ retention, so an absent object records a prior terminal delete.
+// Every recipient's filing and attachment writes finish before deletion.
+export const receiveAndDeleteSesInboundMail = async ({
+  deleteObject,
+  ...source
+}: ReceiveAndDeleteSesInboundMailOptions) => {
+  const outcome = await receiveSesInboundMail(source);
+  if (outcome.isErr()) {
+    return outcome.error.reason === "object-missing"
+      ? Result.ok([{ status: "already_completed" as const }])
+      : outcome;
+  }
+  const { deliveries, objectKey } = outcome.value;
+  const removed = await Result.tryPromise({
+    try: async () =>
+      await withTimeout(
+        async (signal) => await deleteObject({ key: objectKey, signal }),
+        {
+          label: "inbound-object-delete",
+          timeoutMs: INBOUND_MAIL_LIMITS.providerTimeoutMs,
+        },
+      ),
+    catch: () =>
+      new SesInboundError({
+        message: "Inbound raw object could not be deleted",
+        reason: "object-delete-failed",
+      }),
+  });
+  return removed.isErr() ? removed : Result.ok(deliveries);
 };

@@ -6,6 +6,7 @@ import {
   isOpcRelationshipPartPath,
   sanitizeAttachedTemplateRelationships,
 } from "@stll/docx-utils";
+import { OFFICE_ARCHIVE_FORMATS } from "@stll/docx-utils/office-formats";
 
 import type { Match, Scanner, ScanContext } from "@/api/lib/file-scan/scanner";
 import { hasZipMagic } from "@/api/lib/file-scan/zip";
@@ -13,13 +14,15 @@ import { hasZipMagic } from "@/api/lib/file-scan/zip";
 const MAX_ARCHIVE_ENTRIES = 1000;
 const MAX_RELATIONSHIPS_ENTRY_BYTES = 1024 * 1024;
 const MAX_RELATIONSHIPS_TOTAL_BYTES = 8 * 1024 * 1024;
-const WORD_OPENXML_MIME_TYPES: ReadonlySet<string> = new Set([
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "application/vnd.ms-word.document.macroenabled.12",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.template",
-  "application/vnd.ms-word.template.macroenabled.12",
-]);
-const WORD_OPENXML_EXTENSIONS = [".docx", ".docm", ".dotx", ".dotm"] as const;
+const WORD_OPENXML_FORMATS = Object.entries(OFFICE_ARCHIVE_FORMATS).filter(
+  ([, format]) => format.family === "word",
+);
+const WORD_OPENXML_MIME_TYPES = new Set(
+  WORD_OPENXML_FORMATS.map(([, format]) => format.mimeType.toLowerCase()),
+);
+const WORD_OPENXML_EXTENSIONS = WORD_OPENXML_FORMATS.map(
+  ([extension]) => `.${extension}`,
+);
 
 const ATTACHED_TEMPLATE_FINDING: Match = {
   rule: ATTACHED_TEMPLATE_SECURITY_RULE,

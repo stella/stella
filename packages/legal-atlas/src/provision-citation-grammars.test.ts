@@ -44,14 +44,22 @@ const testGrammar = (
       canonicalAbbreviation: "test.",
       ...entry,
     })),
-    anchor: (reference) => `par_${String(reference.section)}`,
+    anchorSeparator: "-",
     connectors: [","],
     gazette: {
       eli: ({ number, year }) => `https://example.test/${year}/${number}`,
+      identifier: ({ number, year }) => `${number}/${year} Gz.`,
       source: String.raw`(?<number>\d+)\/(?<year>\d{4}) Gz\.`,
     },
     jurisdiction: "EU",
-    levels: [{ key: "section", marker: "§", value: String.raw`\d+` }],
+    levels: [
+      {
+        key: "section",
+        marker: "§",
+        value: String.raw`\d+`,
+        anchorMarker: "par_",
+      },
+    ],
     unit: "section",
   });
 
@@ -64,22 +72,33 @@ const articleGrammar = createProvisionCitationGrammar({
       patternSource: String.raw`k\.p\.c\.`,
     },
   ],
-  anchor: (reference) =>
-    [
-      `art_${String(reference.section)}${reference.sectionSuffix ?? ""}`,
-      ...(reference.subsection === null ? [] : [`ust_${reference.subsection}`]),
-      ...(reference.point === null ? [] : [`pkt_${reference.point}`]),
-    ].join("-"),
+  anchorSeparator: "-",
   connectors: [",", String.raw`i(?=\s)`, String.raw`oraz(?=\s)`],
   gazette: {
     eli: ({ number, year }) => `https://example.test/${year}/${number}`,
+    identifier: ({ number, year }) => `${year} poz. ${number}`,
     source: String.raw`Dz\. U\. (?<year>\d{4}) poz\. (?<number>\d+)`,
   },
   jurisdiction: "POL",
   levels: [
-    { key: "section", marker: String.raw`art\.`, value: String.raw`\d+[a-z]?` },
-    { key: "subsection", marker: String.raw`ust\.`, value: String.raw`\d+` },
-    { key: "point", marker: "pkt", value: String.raw`\d+` },
+    {
+      key: "section",
+      marker: String.raw`art\.`,
+      value: String.raw`\d+[a-z]?`,
+      anchorMarker: "art_",
+    },
+    {
+      key: "subsection",
+      marker: String.raw`ust\.`,
+      value: String.raw`\d+`,
+      anchorMarker: "ust_",
+    },
+    {
+      key: "point",
+      marker: "pkt",
+      value: String.raw`\d+`,
+      anchorMarker: "pkt_",
+    },
   ],
   unit: "article",
 });
@@ -311,5 +330,18 @@ describe("provision citation grammars", () => {
         .locateGazetteCitations("see 12/2020 Gz.")
         .map(({ eli }) => eli),
     ).toEqual(["https://example.test/2020/12"]);
+  });
+});
+
+test("work normalization uses the selected grammar's gazette", () => {
+  const gazette = testGrammar([]).gazette;
+  expect(gazette.parse("42/2026 Gz.")).toEqual({
+    identifier: "42/2026 Gz.",
+    eli: "https://example.test/2026/42",
+  });
+  expect(gazette.parse("42/2026 Sb.")).toBeNull();
+  expect(articleGrammar.gazette.parse("Dz. U. 2026 poz. 42")).toEqual({
+    identifier: "2026 poz. 42",
+    eli: "https://example.test/2026/42",
   });
 });

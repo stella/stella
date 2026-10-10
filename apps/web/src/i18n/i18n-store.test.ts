@@ -5,6 +5,7 @@ import { stellaToast } from "@stll/ui/toast";
 
 import {
   buildFormattingLocale,
+  folioMessageLoaders,
   getFormatter,
   getFormattingLocale,
   getMessageLocale,
@@ -290,11 +291,9 @@ test("loadedLang and messages advance together", async () => {
   expect(afterEn.hasLoadedOnce).toBe(true);
 });
 
-test("reports a language bundle that fails to load and keeps the previous language", async () => {
-  const bundleError = new TypeError(
-    "Failed to fetch dynamically imported module",
-  );
-  const loaderSpy = spyOn(messageLoaders, "cs").mockRejectedValue(bundleError);
+const expectFailedCsSwitchIsReported = async (
+  bundleError: Error,
+): Promise<void> => {
   const toastSpy = spyOn(stellaToast, "add").mockReturnValue("toast-1");
   const captureSpy = spyOn(getAnalytics(), "captureError").mockImplementation(
     () => undefined,
@@ -313,8 +312,33 @@ test("reports a language bundle that fails to load and keeps the previous langua
       title: en.common.languageLoadFailed,
     });
   } finally {
-    loaderSpy.mockRestore();
     toastSpy.mockRestore();
     captureSpy.mockRestore();
+  }
+};
+
+test("reports a language bundle that fails to load and keeps the previous language", async () => {
+  const bundleError = new TypeError(
+    "Failed to fetch dynamically imported module",
+  );
+  const loaderSpy = spyOn(messageLoaders, "cs").mockRejectedValue(bundleError);
+  try {
+    await expectFailedCsSwitchIsReported(bundleError);
+  } finally {
+    loaderSpy.mockRestore();
+  }
+});
+
+test("reports a folio catalog that fails to load and keeps the previous language", async () => {
+  const bundleError = new TypeError(
+    "Failed to fetch dynamically imported module",
+  );
+  const loaderSpy = spyOn(folioMessageLoaders, "cs").mockRejectedValue(
+    bundleError,
+  );
+  try {
+    await expectFailedCsSwitchIsReported(bundleError);
+  } finally {
+    loaderSpy.mockRestore();
   }
 });

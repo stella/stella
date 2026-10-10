@@ -37,22 +37,24 @@ const connector = (oauthIssuer: string | null) => ({
   oauthRequestedScopes: [],
 });
 
+type CuratedApproval = { issuer: string; endpointOrigins: string[] };
+
 const setup = (
   oauthIssuer: string | null,
   review?: {
     approvedIssuer: string | null;
     status: "approved" | "needs_reapproval";
   },
+  curatedApproval: CuratedApproval | null = null,
 ) => {
   const states: unknown[] = [];
   const reviews: { table: unknown; value: unknown }[] = [];
   let clientReads = 0;
   const audits: unknown[] = [];
-  let pinnedReview = review;
-  let currentIssuer = issuer;
-  const handler = createConnectMcpConnectorHandler(async () =>
-    metadata(currentIssuer),
-  );
+  const handler = createConnectMcpConnectorHandler({
+    discoverMetadata: async () => metadata(),
+    curatedOAuthApproval: () => curatedApproval,
+  });
   type Context = Parameters<typeof handler.handler>[0];
   const chain = {
     select: () => chain,
@@ -62,8 +64,10 @@ const setup = (
     limit: async () => [
       {
         ...connector(oauthIssuer),
-        orgApprovedIssuer: pinnedReview?.approvedIssuer ?? null,
-        authorizationReviewStatus: pinnedReview?.status ?? null,
+        orgApprovedIssuer: review?.approvedIssuer ?? null,
+        orgApprovedEndpointOrigins: null,
+        oauthConfirmedEndpointOrigins: null,
+        authorizationReviewStatus: review?.status ?? null,
       },
     ],
     insert: (table: unknown) =>
@@ -75,20 +79,12 @@ const setup = (
           }
         : {
             values: (value: unknown) => ({
-              onConflictDoNothing: () => ({
-                returning: async () => {
-                  pinnedReview = { approvedIssuer: issuer, status: "approved" };
-                  reviews.push({ table, value });
-                  return [{ connectorId: "connector_1" }];
-                },
-              }),
               onConflictDoUpdate: async () => {
                 reviews.push({ table, value });
               },
             }),
           },
     query: {
-      mcpConnectorAuthorizationReviews: { findFirst: async () => pinnedReview },
       mcpOAuthClients: {
         findFirst: async () => {
           clientReads += 1;
@@ -122,9 +118,6 @@ const setup = (
     states,
     reviews,
     audits,
-    setDiscoveredIssuer: (value: string) => {
-      currentIssuer = value;
-    },
     clientReads: () => clientReads,
   };
 };
@@ -158,8 +151,10 @@ test("requires current connector approval before connecting", async () => {
 });
 
 test("connects using configured connector metadata", async () => {
-  for (const approvedIssuer of [null, issuer]) {
-    const setupResult = setup(approvedIssuer);
+  for (const setupResult of [
+    setup(issuer),
+    setup(null, undefined, { issuer, endpointOrigins: [] }),
+  ]) {
     const result = await setupResult.handler.handler(setupResult.context);
     expect(result).toMatchObject({ type: "oauth2" });
     expect(setupResult.states).toHaveLength(1);
@@ -172,7 +167,21 @@ test("connects using configured connector metadata", async () => {
       expect(url.origin).toBe(issuer);
       expect(url.searchParams.get("resource")).toBe(connectorUrl);
     }
+    expect(setupResult.reviews).toEqual([]);
+    expect(setupResult.audits).toEqual([]);
   }
+});
+
+test("curated approval for another issuer requires administrator approval", async () => {
+  const fixture = setup(null, undefined, {
+    issuer: "https://as.example.net",
+    endpointOrigins: [],
+  });
+  expect(await fixture.handler.handler(fixture.context)).toMatchObject({
+    code: 409,
+    response: { code: "mcp_authorization_approval_required" },
+  });
+  expect(fixture.states).toEqual([]);
 });
 
 test("members connect with organization-approved authorization", async () => {
@@ -198,34 +207,34 @@ test("pending authorization requires administrator approval", async () => {
   expect(fixture.states).toEqual([]);
 });
 
-test("first connection retains its observed authorization configuration", async () => {
+test("a connector without an approved issuer awaits administrator review", async () => {
   const fixture = setup(null);
-  expect(await fixture.handler.handler(fixture.context)).toMatchObject({
-    type: "oauth2",
-  });
-  expect(
-    fixture.reviews.find(
-      ({ table }) => table === mcpConnectorAuthorizationReviews,
-    )?.value,
-  ).toMatchObject({
-    approvedIssuer: issuer,
-    observedIssuer: issuer,
-    status: "approved",
-  });
-  expect(fixture.audits).toHaveLength(1);
-});
-
-test("first connection approval persists for subsequent connections", async () => {
-  const fixture = setup(null);
-  expect(await fixture.handler.handler(fixture.context)).toMatchObject({
-    type: "oauth2",
-  });
-  fixture.setDiscoveredIssuer("https://as.example.net");
+  fixture.context.memberRole = sessionMemberRole("member");
   expect(await fixture.handler.handler(fixture.context)).toMatchObject({
     code: 409,
+    response: { code: "mcp_authorization_approval_required" },
   });
-  expect(fixture.states).toHaveLength(1);
-  expect(fixture.reviews.at(-1)?.value).toMatchObject({
-    observedIssuer: "https://as.example.net",
+  expect(fixture.clientReads()).toBe(0);
+  expect(fixture.states).toEqual([]);
+  expect(
+    fixture.reviews.find(({ table }) => table === mcpUserConnections)?.value,
+  ).toMatchObject({ status: "needs_approval" });
+  const review = fixture.reviews.find(
+    ({ table }) => table === mcpConnectorAuthorizationReviews,
+  )?.value;
+  expect(review).toEqual({
+    organizationId: "org_1",
+    connectorId: "connector_1",
+    observedIssuer: issuer,
+    observedEndpointOrigins: [issuer],
   });
+  expect(fixture.audits).toEqual([
+    expect.objectContaining({
+      metadata: expect.objectContaining({
+        field: "mcpConnectorAuthorization",
+        status: "needs_reapproval",
+        observedIssuer: issuer,
+      }),
+    }),
+  ]);
 });

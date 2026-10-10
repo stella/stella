@@ -1,4 +1,9 @@
 import {
+  REQUEST_SECRET_TOOL_NAME,
+  USE_CONNECTOR_SECRET_TOOL_NAME,
+} from "@stll/api-contract/chat-secret";
+
+import {
   createSubagentProposalBuffer,
   SPAWN_SUBAGENTS_TOOL_NAME,
   type SubagentProposalSink,
@@ -104,12 +109,16 @@ export const projectToolMapForSubagent = (
   tools: ChatToolMap,
   proposalSink: SubagentProposalSink,
 ): ChatToolMap => {
-  const projected: ChatToolMap = {};
+  const projected: [string, ChatTool][] = [];
   for (const [name, tool] of Object.entries(tools)) {
     if (!tool) {
       continue;
     }
-    if (name === SPAWN_SUBAGENTS_TOOL_NAME) {
+    if (
+      name === SPAWN_SUBAGENTS_TOOL_NAME ||
+      name === REQUEST_SECRET_TOOL_NAME ||
+      name === USE_CONNECTOR_SECRET_TOOL_NAME
+    ) {
       continue;
     }
     // Defense-in-depth: external MCP tools are also excluded by the
@@ -129,10 +138,10 @@ export const projectToolMapForSubagent = (
     // `needsApproval` field: an approval-requiring tool never gets a live
     // server `execute` inside a subagent, only a non-executing proposal.
     if (getChatToolPolicy(tool).needsApproval) {
-      projected[name] = buildProposalWrapper(tool, proposalSink);
+      projected.push([name, buildProposalWrapper(tool, proposalSink)]);
       continue;
     }
-    projected[name] = cloneWithoutApprovalGate(tool);
+    projected.push([name, cloneWithoutApprovalGate(tool)]);
   }
-  return projected;
+  return Object.fromEntries(projected);
 };

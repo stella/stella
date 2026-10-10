@@ -759,7 +759,7 @@ describe("organization INSERT — wrong scope", () => {
           templateId: ids.templateB,
           userId: ids.userB1,
           format: "docx",
-          status: "completed",
+          status: "success",
         }),
     },
     {
@@ -1069,7 +1069,7 @@ describe("organization UPDATE — wrong scope", () => {
       query: (tx: TestDatabaseTransaction) =>
         tx
           .update(templateFills)
-          .set({ status: "pending" })
+          .set({ status: "partial" })
           .where(eq(templateFills.id, ids.templateFillB))
           .returning({ id: templateFills.id }),
     },

@@ -6,7 +6,7 @@ import {
   normalizePracticeJurisdictions,
   upsertPracticeJurisdictions,
 } from "@/api/handlers/organization-settings/practice-jurisdictions";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -30,6 +30,7 @@ const config = {
     "user signed up via an OAuth client and skipped onboarding). Pass an " +
     "array of {countryCode, isPrimary}; exactly one entry should be primary.",
   permissions: { organizationSettings: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.standard,
   mcp: { type: "tool", name: "set_practice_jurisdictions" },
   body: t.Object({
     practiceJurisdictions: t.Array(practiceJurisdictionSchema, {

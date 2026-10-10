@@ -49,7 +49,7 @@ export type ValidateDocxBufferResult =
  * it in its own sentence.
  */
 export const validateDocxBuffer = async (
-  buffer: ArrayBuffer,
+  buffer: ArrayBuffer | Uint8Array,
 ): Promise<ValidateDocxBufferResult> => {
   try {
     const archive = await loadDocxArchive(buffer);

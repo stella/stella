@@ -17,6 +17,7 @@ import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
 import { useChatSession } from "@/features/chat/hooks/use-chat-session";
 import { useChatThreadRuntime } from "@/features/chat/hooks/use-chat-thread-runtime";
 import { chatThreadOptions } from "@/features/chat/queries";
+import { FormattingProvider } from "@/i18n/formatting-context";
 import messages from "@/i18n/langs/en.json";
 import { AuthenticatedUserProvider } from "@/lib/authenticated-user-context";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
@@ -82,14 +83,14 @@ const ChatThreadDomPage = ({
     chat,
     conversationId: threadId,
     initialOlderCursor: data.olderCursor,
+    playbookPane: "on-request",
     threadRef,
   });
   onSession(session);
   return (
     <ChatMattersContext
       value={{
-        createDocumentMatters: session.createDocumentMatters,
-        isLoadingCreateDocumentMatters: session.isLoadingCreateDocumentMatters,
+        createDocumentMattersView: session.createDocumentMattersView,
       }}
     >
       <ChatApprovalContext
@@ -101,6 +102,10 @@ const ChatThreadDomPage = ({
           handleAlwaysAllow: session.handleAlwaysAllow,
           handleApprove: session.handleApprove,
           handleDeny: session.handleDeny,
+          handleRequestSecret: session.handleRequestSecret,
+          continueRequestSecret: session.continueRequestSecret,
+          resolveSecretTarget: session.resolveSecretTarget,
+          secretAvailabilityKey: session.secretAvailabilityKey,
         }}
       >
         {/* The selection bar quotes into the composer through the editor
@@ -120,8 +125,12 @@ const ChatThreadDomPage = ({
             onLoadOlder={session.loadOlder}
             onOpenCreateDocumentDraft={session.handleOpenCreateDocumentDraft}
             onOpenCreatedDocument={session.handleOpenCreatedDocument}
-            onRemoveQueuedMessage={session.removeQueuedMessage}
+            onOpenPlaybook={session.handleOpenPlaybook}
             onResend={session.resendLatestMessage}
+            queuedMessageActions={{
+              remove: session.removeQueuedMessage,
+              sendNow: session.sendQueuedMessageNow,
+            }}
             queuedMessages={session.queuedMessages}
             showThinkingIndicator
             streamdownComponents={session.streamdownComponents}
@@ -149,6 +158,7 @@ export const openChatThreadDomPage = async ({
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
+  const userId = "00000000-0000-7000-8000-00000000fffe";
   // Lists the chat reads beside the thread, answered as empty.
   queryClient.setQueryData(mcpConnectorsOptions(organizationId).queryKey, {
     canManageCustomConnectors: false,
@@ -156,8 +166,8 @@ export const openChatThreadDomPage = async ({
     nativeTools: [],
   });
   queryClient.setQueryData(
-    workspacesNavigationOptions(organizationId).queryKey,
-    { workspaces: [] },
+    workspacesNavigationOptions({ organizationId, userId }).queryKey,
+    { workspaces: [], features: { timeBilling: false } },
   );
   // The thread route's loader fills a cold thread query before the page
   // mounts, so the page renders its messages on first paint instead of
@@ -175,28 +185,30 @@ export const openChatThreadDomPage = async ({
       <ChatThreadTestRouter>
         <QueryClientProvider client={queryClient}>
           <IntlProvider locale="en" messages={messages} timeZone="UTC">
-            <AuthenticatedUserProvider
-              user={{
-                activeOrganizationId: organizationId,
-                email: "user@example.com",
-                id: "00000000-0000-7000-8000-00000000fffe",
-                image: null,
-                name: "User",
-                preferredName: null,
-                timezoneId: "UTC",
-                wordEditShortcut: null,
-              }}
-            >
-              <Suspense fallback={<p>{SUSPENDED}</p>}>
-                <ChatThreadDomPage
-                  onSession={(next) => {
-                    session = next;
-                  }}
-                  organizationId={organizationId}
-                  threadId={threadId}
-                />
-              </Suspense>
-            </AuthenticatedUserProvider>
+            <FormattingProvider locale="en" timeZone="UTC">
+              <AuthenticatedUserProvider
+                user={{
+                  activeOrganizationId: organizationId,
+                  email: "user@example.com",
+                  id: userId,
+                  image: null,
+                  name: "User",
+                  preferredName: null,
+                  timezoneId: "UTC",
+                  wordEditShortcut: null,
+                }}
+              >
+                <Suspense fallback={<p>{SUSPENDED}</p>}>
+                  <ChatThreadDomPage
+                    onSession={(next) => {
+                      session = next;
+                    }}
+                    organizationId={organizationId}
+                    threadId={threadId}
+                  />
+                </Suspense>
+              </AuthenticatedUserProvider>
+            </FormattingProvider>
           </IntlProvider>
         </QueryClientProvider>
       </ChatThreadTestRouter>

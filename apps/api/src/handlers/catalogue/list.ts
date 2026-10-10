@@ -16,17 +16,17 @@ import {
   mcpUserConnections,
 } from "@/api/db/schema";
 import type { McpConnectorAuthType } from "@/api/db/schema";
-import { env } from "@/api/env";
 import {
   computeCatalogueInstallState,
   type CatalogueInstallState,
 } from "@/api/handlers/catalogue/install-state";
 import { EDITABLE_AGENT_SKILL_ORIGINS } from "@/api/lib/agent-skills/origin";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isBusinessRegistryNativeToolDeployAvailable } from "@/api/lib/business-registries/dispatch";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { LIMITS } from "@/api/lib/limits";
 import { NATIVE_TOOL_SLUGS } from "@/api/lib/mcp-connectors/catalog-metadata";
 import { hasManagementPermission } from "@/api/lib/permission-authorization";
@@ -54,6 +54,7 @@ const config = {
     "handles the uninstall paths need. The practice jurisdictions behind " +
     "those recommendations are returned alongside.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     readClass: "tenant",
@@ -124,7 +125,7 @@ const listCatalogue = createSafeRootHandler(
   async function* ({ memberRole, safeDb, session, user }) {
     const entries = loadCatalogue().filter(
       (entry) =>
-        env.FEATURE_PUBLIC_TOOLS ||
+        isDeploymentFeatureEnabled("FEATURE_PUBLIC_TOOLS") ||
         entry.kind !== "skill" ||
         entry.source !== "github",
     );

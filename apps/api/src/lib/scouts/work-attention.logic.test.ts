@@ -1,7 +1,9 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { SIGNAL_KIND, SUGGESTION_KIND } from "@stll/api-contract/signals";
 import { WORK_OBLIGATION_STATUS } from "@stll/api-contract/workflow-status";
+import { parseTimeZoneId } from "@stll/time";
 
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import {
@@ -17,6 +19,8 @@ import {
 import type { WorkAttentionObligation } from "@/api/lib/scouts/work-attention.logic";
 
 const NOW = new Date("2026-03-01T09:00:00.000Z");
+const UTC = parseTimeZoneId("UTC") ?? panic("UTC is unknown");
+const PRAGUE = parseTimeZoneId("Europe/Prague") ?? panic("Prague is unknown");
 const ENTITY_ID = createSafeId<"entity">();
 const WORKSPACE_ID = createSafeId<"workspace">();
 // Auth-provider ids are never minted here; the fixture pins one instead.
@@ -56,15 +60,28 @@ describe("daysUntilDate", () => {
     // Late in the UTC day: an instant subtraction would report 0.02 days and
     // round the next morning's deadline into today.
     const lateInTheDay = new Date("2026-03-01T23:30:00.000Z");
-    expect(daysUntilDate("2026-03-02", lateInTheDay)).toBe(1);
-    expect(daysUntilDate("2026-03-01", lateInTheDay)).toBe(0);
-    expect(daysUntilDate("2026-02-28", lateInTheDay)).toBe(-1);
+    const days = (date: string) =>
+      daysUntilDate({ date, now: lateInTheDay, zone: UTC });
+    expect(days("2026-03-02")).toBe(1);
+    expect(days("2026-03-01")).toBe(0);
+    expect(days("2026-02-28")).toBe(-1);
   });
 
   test("crosses a month boundary", () => {
     expect(
-      daysUntilDate("2026-03-03", new Date("2026-02-28T09:00:00.000Z")),
+      daysUntilDate({
+        date: "2026-03-03",
+        now: new Date("2026-02-28T09:00:00.000Z"),
+        zone: UTC,
+      }),
     ).toBe(3);
+  });
+
+  test("counts from the organization's day, not the UTC day", () => {
+    // 23:30 UTC is already 00:30 the next day in Prague.
+    const now = new Date("2026-03-01T23:30:00.000Z");
+    expect(daysUntilDate({ date: "2026-03-02", now, zone: PRAGUE })).toBe(0);
+    expect(daysUntilDate({ date: "2026-03-02", now, zone: UTC })).toBe(1);
   });
 });
 
@@ -86,6 +103,7 @@ describe("workAttentionSignals", () => {
           assignedAt: daysBefore(WORK_ATTENTION_ACKNOWLEDGEMENT_DAYS - 1),
         }),
         NOW,
+        UTC,
       ),
     ).toEqual([]);
   });
@@ -96,6 +114,7 @@ describe("workAttentionSignals", () => {
         assignedAt: daysBefore(WORK_ATTENTION_ACKNOWLEDGEMENT_DAYS),
       }),
       NOW,
+      UTC,
     );
 
     expect(kinds(signals)).toEqual([SIGNAL_KIND.WORK_UNACKNOWLEDGED]);
@@ -128,6 +147,7 @@ describe("workAttentionSignals", () => {
           assignedAt: daysBefore(90),
         }),
         NOW,
+        UTC,
       ),
     ).toEqual([]);
   });
@@ -140,6 +160,7 @@ describe("workAttentionSignals", () => {
           hardDeadlineDate: "2026-03-05",
         }),
         NOW,
+        UTC,
       ),
     ).toEqual([]);
 
@@ -150,6 +171,7 @@ describe("workAttentionSignals", () => {
         workingTargetDate: "2026-03-02",
       }),
       NOW,
+      UTC,
     );
     expect(kinds(signals)).toEqual([SIGNAL_KIND.WORK_DEADLINE_AT_RISK]);
     expect(signals.at(0)?.severity).toBe("warning");
@@ -171,6 +193,7 @@ describe("workAttentionSignals", () => {
         hardDeadlineDate: "2026-02-25",
       }),
       NOW,
+      UTC,
     );
 
     expect(signals.at(0)?.severity).toBe("critical");
@@ -184,6 +207,7 @@ describe("workAttentionSignals", () => {
         hardDeadlineDate: "2026-03-01",
       }),
       NOW,
+      UTC,
     );
 
     expect(kinds(signals)).toEqual([
@@ -197,8 +221,8 @@ describe("dedupe keys", () => {
   test("the same waiting state repeats, a reassignment does not", () => {
     const assignedAt = daysBefore(5);
     const later = new Date(NOW.getTime() + 60 * 60 * 1000);
-    const first = workAttentionSignals(obligation({ assignedAt }), NOW);
-    const second = workAttentionSignals(obligation({ assignedAt }), later);
+    const first = workAttentionSignals(obligation({ assignedAt }), NOW, UTC);
+    const second = workAttentionSignals(obligation({ assignedAt }), later, UTC);
 
     expect(first.at(0)?.dedupeKey).toBe(second.at(0)?.dedupeKey ?? "");
     expect(first.at(0)?.dedupeKey).toBe(
@@ -217,6 +241,7 @@ describe("dedupe keys", () => {
           hardDeadlineDate,
         }),
         NOW,
+        UTC,
       ).at(0)?.dedupeKey;
 
     expect(atRisk("2026-03-02")).toBe(
@@ -229,6 +254,7 @@ describe("dedupe keys", () => {
     const signals = workAttentionSignals(
       obligation({ assignedAt: daysBefore(5), hardDeadlineDate: "2026-03-02" }),
       NOW,
+      UTC,
     );
 
     expect(new Set(signals.map(({ dedupeKey }) => dedupeKey)).size).toBe(2);

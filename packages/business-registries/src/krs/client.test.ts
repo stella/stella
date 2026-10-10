@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import { lookupByKrsNumber } from "./client.js";
 import { KrsValidationError } from "./errors.js";
 import type { KrsLookupResponse } from "./types.js";
@@ -11,7 +13,7 @@ const readFixture = async (name: string): Promise<KrsLookupResponse> => {
   // and committed alongside the tests; runtime validation here would
   // only catch drift between an upstream payload and the committed
   // JSON, which is precisely what the assertions below check anyway.
-  // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   return value as KrsLookupResponse;
 };
 
@@ -180,8 +182,10 @@ describe("lookupByKrsNumber (fixture)", () => {
     );
 
     expect(
-      lookupByKrsNumber("0000006865", { observer: "unobserved" }),
-    ).rejects.toMatchObject({
+      await rejectionOf(
+        lookupByKrsNumber("0000006865", { observer: "unobserved" }),
+      ),
+    ).toMatchObject({
       name: "KrsAPIError",
       httpStatus: 500,
       upstreamTitle: "Internal Server Error",
@@ -194,21 +198,27 @@ describe("lookupByKrsNumber (fixture)", () => {
 // Validation
 // ---------------------------------------------------------------------------
 describe("lookupByKrsNumber validation", () => {
-  test("rejects shorter inputs (no implicit padding)", () => {
+  test("rejects shorter inputs (no implicit padding)", async () => {
     expect(
-      lookupByKrsNumber("6865", { observer: "unobserved" }),
-    ).rejects.toBeInstanceOf(KrsValidationError);
+      await rejectionOf(lookupByKrsNumber("6865", { observer: "unobserved" })),
+    ).toBeInstanceOf(KrsValidationError);
     expect(
-      lookupByKrsNumber("000006865", { observer: "unobserved" }),
-    ).rejects.toBeInstanceOf(KrsValidationError);
+      await rejectionOf(
+        lookupByKrsNumber("000006865", { observer: "unobserved" }),
+      ),
+    ).toBeInstanceOf(KrsValidationError);
   });
 
-  test("rejects non-digit inputs", () => {
+  test("rejects non-digit inputs", async () => {
     expect(
-      lookupByKrsNumber("000000abcd", { observer: "unobserved" }),
-    ).rejects.toBeInstanceOf(KrsValidationError);
+      await rejectionOf(
+        lookupByKrsNumber("000000abcd", { observer: "unobserved" }),
+      ),
+    ).toBeInstanceOf(KrsValidationError);
     expect(
-      lookupByKrsNumber("0000-006865", { observer: "unobserved" }),
-    ).rejects.toBeInstanceOf(KrsValidationError);
+      await rejectionOf(
+        lookupByKrsNumber("0000-006865", { observer: "unobserved" }),
+      ),
+    ).toBeInstanceOf(KrsValidationError);
   });
 });

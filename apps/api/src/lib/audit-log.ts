@@ -1,16 +1,13 @@
 import { panic } from "better-result";
+import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 
 import type { Transaction } from "@/api/db/root";
-import type {
-  AUDIT_ACTIVITY_CATEGORIES,
-  AUDIT_APPROVAL_STATUSES,
-  AUDIT_PERFORMER_TYPES,
-  AUDIT_TRIGGER_TYPES,
-} from "@/api/db/schema";
+import type { AUDIT_ACTIVITY_CATEGORIES } from "@/api/db/schema";
 import { auditLogs } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resolveClientIp } from "@/api/lib/client-ip";
 import { insertInChunks } from "@/api/lib/db/bulk-write";
+import { recordContentDeliveryReceipt } from "@/api/lib/files/content-delivery";
 
 import {
   auditChangesForResource,
@@ -26,10 +23,7 @@ import type { AuditAction, AuditResourceType } from "./audit-log.constants";
 
 export { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "./audit-log.constants";
 export type { AuditAction, AuditResourceType } from "./audit-log.constants";
-export type {
-  ChatAuditChanges,
-  NonChatAuditResourceType,
-} from "./audit-log-details";
+export type { NonChatAuditResourceType } from "./audit-log-details";
 
 type ServerLike = {
   requestIP: (request: Request) => { address: string } | null;
@@ -47,9 +41,6 @@ export type FieldDiffs = Record<string, { old: unknown; new: unknown }>;
 
 type AuditMetadata = Record<string, unknown>;
 
-export type AuditPerformerType = (typeof AUDIT_PERFORMER_TYPES)[number];
-export type AuditTriggerType = (typeof AUDIT_TRIGGER_TYPES)[number];
-export type AuditApprovalStatus = (typeof AUDIT_APPROVAL_STATUSES)[number];
 export type AuditActivityCategory = (typeof AUDIT_ACTIVITY_CATEGORIES)[number];
 
 export type AuditExecutionContext = {
@@ -103,6 +94,13 @@ type AuditEventFields = {
   workspaceId?: SafeId<"workspace"> | null;
 };
 
+// Requiring rollback keeps a database handle from standing in for a transaction.
+type AuditTransaction = Pick<
+  PgAsyncDatabase<PgQueryResultHKT>,
+  "insert" | "select"
+> &
+  Pick<Transaction, "rollback">;
+
 /** Chat entries carry only the change fields their resource type lists. */
 type ChatAuditEvent = {
   [T in ChatAuditResourceType]: AuditEventFields & {
@@ -125,7 +123,7 @@ export type AuditEvent =
     });
 
 export type AuditRecorder = (
-  tx: Transaction,
+  tx: AuditTransaction,
   event: AuditEvent | AuditEvent[],
 ) => Promise<void>;
 
@@ -293,6 +291,7 @@ const AUDIT_ACTIVITY_CATEGORY_BY_RESOURCE_TYPE = {
   usage_allocation: "other",
   usage_entitlement: "other",
   usage_event: "other",
+  usage_provider_event: "other",
   desktop_edit_session: "other",
   pdf_signing_session: "other",
   expense: "other",
@@ -301,6 +300,7 @@ const AUDIT_ACTIVITY_CATEGORY_BY_RESOURCE_TYPE = {
   folio_collab_room: "other",
   signal: "other",
   invoice: "other",
+  personal_api_key: "other",
   machine_api_key: "other",
   legal_list: "other",
   legal_list_generation: "other",
@@ -367,10 +367,77 @@ const baseRequestMetadata = (
  * creations in one transaction).
  */
 const insertAuditRows = async (
-  tx: Transaction,
+  tx: AuditTransaction,
   rows: readonly (typeof auditLogs.$inferInsert)[],
 ): Promise<void> => {
   await insertInChunks(rows, (batch) => tx.insert(auditLogs).values(batch));
+  if (
+    rows.some(
+      ({ action }) =>
+        action === AUDIT_ACTION.ACCESS || action === AUDIT_ACTION.DOWNLOAD,
+    )
+  ) {
+    recordContentDeliveryReceipt();
+  }
+};
+
+type BackgroundAuditRecorderBindings = {
+  organizationId: SafeId<"organization">;
+  workspaceId: SafeId<"workspace"> | null;
+  userId: string;
+  execution: AuditExecutionContext;
+};
+
+type BackgroundAuditGroup = {
+  bindings: BackgroundAuditRecorderBindings;
+  events: AuditEvent[];
+};
+
+type RecordAuditGroupsOptions = {
+  tx: AuditTransaction;
+  groups: readonly BackgroundAuditGroup[];
+  recordAuditEvent?: AuditRecorder | undefined;
+};
+
+/** Retain request metadata when supplied; otherwise keep each tenant group's provenance. */
+export const recordAuditGroups = async ({
+  tx,
+  groups,
+  recordAuditEvent,
+}: RecordAuditGroupsOptions): Promise<void> => {
+  if (recordAuditEvent) {
+    await recordAuditEvent(
+      tx,
+      groups.flatMap(({ events }) => events),
+    );
+    return;
+  }
+  const rows = groups.flatMap(({ bindings, events }) => {
+    const groupId = Bun.randomUUIDv7();
+    const execution = executionColumns(bindings.execution, bindings.userId);
+    return events.map((event) => ({
+      action: event.action,
+      changes: auditChangesForResource(event.resourceType, event.changes),
+      metadata:
+        auditMetadataForResource(event.resourceType, event.metadata) ?? null,
+      organizationId: bindings.organizationId,
+      resourceId: event.resourceId,
+      resourceType: event.resourceType,
+      userId: bindings.userId,
+      workspaceId:
+        event.workspaceId === undefined
+          ? bindings.workspaceId
+          : event.workspaceId,
+      ...execution,
+      activityCategory: activityCategoryForEvent(event),
+      groupId,
+      runId: runIdForEvent(event, execution),
+    }));
+  });
+  if (rows.length === 0) {
+    return;
+  }
+  await insertAuditRows(tx, rows);
 };
 
 /**
@@ -379,36 +446,12 @@ const insertAuditRows = async (
  * request-derived metadata (IP, UA, forwarded-for) since there is no request.
  */
 export const createBackgroundAuditRecorder =
-  (bindings: {
-    organizationId: SafeId<"organization">;
-    workspaceId: SafeId<"workspace"> | null;
-    userId: string;
-    execution: AuditExecutionContext;
-  }): AuditRecorder =>
+  (bindings: BackgroundAuditRecorderBindings): AuditRecorder =>
   async (tx, event) => {
-    const events = Array.isArray(event) ? event : [event];
-    if (events.length === 0) {
-      return;
-    }
-
-    const groupId = Bun.randomUUIDv7();
-    const execution = executionColumns(bindings.execution, bindings.userId);
-    const toRow = (e: AuditEvent) => ({
-      action: e.action,
-      changes: auditChangesForResource(e.resourceType, e.changes),
-      metadata: auditMetadataForResource(e.resourceType, e.metadata) ?? null,
-      organizationId: bindings.organizationId,
-      resourceId: e.resourceId,
-      resourceType: e.resourceType,
-      userId: bindings.userId,
-      workspaceId:
-        e.workspaceId === undefined ? bindings.workspaceId : e.workspaceId,
-      ...execution,
-      activityCategory: activityCategoryForEvent(e),
-      groupId,
-      runId: runIdForEvent(e, execution),
+    await recordAuditGroups({
+      tx,
+      groups: [{ bindings, events: Array.isArray(event) ? event : [event] }],
     });
-    await insertAuditRows(tx, events.map(toRow));
   };
 
 export const createAuditRecorder = (

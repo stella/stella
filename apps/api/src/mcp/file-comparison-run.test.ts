@@ -2,19 +2,25 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import type { CompareResult } from "@stll/folio-core";
+import { createSha256 } from "@stll/sha256/node";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import { fileSecurityRejection } from "@/api/lib/file-scan/rejection";
-import { FileScanRejectedError } from "@/api/lib/file-scan/scan-upload";
+import {
+  FileScanRejectedError,
+  scanUpload,
+} from "@/api/lib/file-scan/scan-upload";
 import type {
   ScanFinding,
   ScanResult,
   ScanVerdict,
 } from "@/api/lib/file-scan/types";
+import { ENCRYPTED_CONTENT_MESSAGE } from "@/api/lib/files/detect-file-encryption";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { runFileComparison } from "@/api/mcp/file-comparison-run";
 import type { FileComparisonRunDependencies } from "@/api/mcp/file-comparison-run";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
+import { createEncryptedPdf } from "@/api/tests/helpers/signed-pdf";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -26,7 +32,7 @@ const BASE_BYTES = new Uint8Array([1, 2, 3, 4]);
 const TARGET_BYTES = new Uint8Array([5, 6, 7, 8, 9]);
 
 const sha256Of = (bytes: Uint8Array): string =>
-  new Bun.CryptoHasher("sha256").update(bytes).digest("hex");
+  createSha256().update(bytes).digest("hex");
 
 const hexToBase64 = (hex: string): string =>
   Buffer.from(hex, "hex").toString("base64");
@@ -80,6 +86,8 @@ type HarnessOptions = {
   headSizes?: Record<string, number>;
   rows?: Row[];
   scanVerdict?: ScanVerdict;
+  /** Run the real upload scan instead of the scripted verdict. */
+  realScan?: boolean;
 };
 
 const createHarness = ({
@@ -93,6 +101,7 @@ const createHarness = ({
     inputRow(TARGET_UPLOAD_ID, TARGET_BYTES, "Revised.docx"),
   ],
   scanVerdict = "pass",
+  realScan = false,
 }: HarnessOptions = {}) => {
   const deletedKeys: string[] = [];
   const putKeys: string[] = [];
@@ -202,7 +211,14 @@ const createHarness = ({
       return await Promise.resolve(new Uint8Array(stored).buffer);
     },
     resolveDocxEditAuthorName: async () => await Promise.resolve("Jane Doe"),
-    scanUpload: async ({ bytes: scannedBytes, declaredMimeType }) => {
+    scanUpload: async ({ bytes: scannedBytes, declaredMimeType, fileName }) => {
+      if (realScan) {
+        return await scanUpload({
+          bytes: scannedBytes,
+          declaredMimeType,
+          fileName,
+        });
+      }
       const scan = scanResult(scanVerdict);
       const rejection = fileSecurityRejection(scan);
       return await Promise.resolve(
@@ -426,5 +442,66 @@ describe("compare_documents uploads source", () => {
     expect(error.issues?.map(({ path }) => path)).toContain(
       "source.target_upload_id",
     );
+  });
+
+  for (const format of ["docx", "xlsx", "pptx"] as const) {
+    test(`refuses a password-protected ${format} as encrypted content`, async () => {
+      const locked = new Uint8Array(
+        await Bun.file(
+          new URL(
+            `../lib/files/__fixtures__/password-protected-${format}.cfb`,
+            import.meta.url,
+          ),
+        ).arrayBuffer(),
+      );
+      const harness = createHarness({
+        realScan: true,
+        rows: [
+          inputRow(BASE_UPLOAD_ID, locked, `Locked.${format}`),
+          inputRow(TARGET_UPLOAD_ID, TARGET_BYTES, "Revised.docx"),
+        ],
+        bytesByKey: {
+          [`${ORGANIZATION_ID}/tmp/comparisons/${BASE_UPLOAD_ID}`]: locked,
+          [`${ORGANIZATION_ID}/tmp/comparisons/${TARGET_UPLOAD_ID}`]:
+            TARGET_BYTES,
+        },
+      });
+
+      const error = errorOf(await harness.run());
+
+      expect(error).toMatchObject({
+        code: "validation_error",
+        message: ENCRYPTED_CONTENT_MESSAGE,
+        issues: [
+          { path: "source.base_upload_id", message: ENCRYPTED_CONTENT_MESSAGE },
+        ],
+      });
+      expect(harness.updates.at(0)).toMatchObject({ status: "failed" });
+      expect(harness.putKeys).toHaveLength(0);
+    });
+  }
+
+  test("refuses an encrypted PDF staged as a DOCX as a non-DOCX upload", async () => {
+    const locked = new Uint8Array(await createEncryptedPdf());
+    const harness = createHarness({
+      realScan: true,
+      rows: [
+        inputRow(BASE_UPLOAD_ID, locked, "Locked.pdf"),
+        inputRow(TARGET_UPLOAD_ID, TARGET_BYTES, "Revised.docx"),
+      ],
+      bytesByKey: {
+        [`${ORGANIZATION_ID}/tmp/comparisons/${BASE_UPLOAD_ID}`]: locked,
+        [`${ORGANIZATION_ID}/tmp/comparisons/${TARGET_UPLOAD_ID}`]:
+          TARGET_BYTES,
+      },
+    });
+
+    const error = errorOf(await harness.run());
+
+    expect(error.code).toBe("validation_error");
+    expect(error.issues?.at(0)).toMatchObject({
+      path: "source.base_upload_id",
+      message: expect.stringContaining("corrupt-zip"),
+    });
   });
 });

@@ -1,29 +1,48 @@
-import { env } from "@/env";
-import { betaFeaturesAvailable } from "@/lib/beta-features";
-import { useDevStore } from "@/lib/dev-store";
+import { useQuery } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
+import { panic } from "better-result";
 
-const isTimeBillingPreviewEnabledForDevState = (
-  devPreviewEnabled: boolean,
-): boolean =>
-  env.VITE_FEATURE_TIME_BILLING ||
-  (betaFeaturesAvailable() && devPreviewEnabled);
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { ensureRouteQueryData } from "@/lib/react-query";
+import { useQueryView } from "@/lib/use-query-view";
+import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
+import type { WorkspaceNavigationCaller } from "@/lib/workspaces/queries.logic";
 
-export const isTimeBillingPreviewEnabled = (): boolean =>
-  isTimeBillingPreviewEnabledForDevState(
-    useDevStore.getState().timeBillingPreview,
+/** Admission and navigation use the caller's server-owned enrolment decision. */
+export const isTimeBillingPreviewEnabled = async (
+  queryClient: QueryClient,
+  caller: WorkspaceNavigationCaller,
+): Promise<boolean> => {
+  const navigation = await ensureRouteQueryData(
+    queryClient,
+    workspacesNavigationOptions(caller),
   );
-
-export const useTimeBillingPreviewEnabled = (): boolean => {
-  const devPreviewEnabled = useDevStore((s) => s.timeBillingPreview);
-  return isTimeBillingPreviewEnabledForDevState(devPreviewEnabled);
+  return navigation.features.timeBilling;
 };
 
-// Route-level gate: dev + env/host availability plus the per-browser preview
-// toggle, so a direct load of a time-billing route (invoices, timesheets,
-// expenses) resolves the same on server and client. Mirrors the playbooks and
-// public-law route gates; the per-browser toggle is layered in because these
-// routes are protected client-only surfaces with no server render to diverge.
-export const isTimeBillingRouteEnabled = (): boolean =>
-  import.meta.env.DEV ||
-  env.VITE_FEATURE_TIME_BILLING ||
-  isTimeBillingPreviewEnabled();
+export const isTimeBillingRouteEnabled = isTimeBillingPreviewEnabled;
+
+export const useTimeBillingPreviewEnabled = (): boolean => {
+  const user = useAuthenticatedUser();
+  const view = useQueryView(
+    useQuery(
+      workspacesNavigationOptions({
+        userId: user.id,
+        organizationId: user.activeOrganizationId,
+      }),
+    ),
+  );
+  switch (view.type) {
+    case "pending":
+    case "error":
+    case "empty":
+      return false;
+    case "items":
+      return view.items.features.timeBilling;
+    default:
+      view satisfies never;
+      return panic(`Unknown query view: ${String(view)}`);
+  }
+};
+
+export const useTimeBillingRouteEnabled = useTimeBillingPreviewEnabled;

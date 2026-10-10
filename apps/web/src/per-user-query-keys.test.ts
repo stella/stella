@@ -1,4 +1,4 @@
-import type { QueryKey } from "@tanstack/react-query";
+import { QueryClient, skipToken, type QueryKey } from "@tanstack/react-query";
 import { describe, expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
@@ -8,6 +8,7 @@ import { companyFormatKeys } from "@/components/company-format-library";
 import { readerAnnotationKeys } from "@/components/legal-reader/annotations/reader-annotations-query";
 import { savedSearchKeys } from "@/components/saved-searches.logic";
 import { chatKeys } from "@/features/chat/chat-query-contract";
+import { desktopPresenceOptions } from "@/features/desktop/desktop-presence";
 import { timeTimersOptions } from "@/features/time-timers/queries";
 import {
   linkedAccountsOptions,
@@ -27,18 +28,36 @@ import { notificationsOptions } from "@/lib/notification-queries";
 import { organizationListOptions } from "@/lib/organization/queries";
 import { searchPreviewOptions } from "@/lib/search";
 import { usageLaneOptions } from "@/lib/usage-queries";
+import {
+  DEFAULT_MATTER_ACTIVITY_FILTERS,
+  overviewActivityOptions,
+  workspacesNavigationOptions,
+} from "@/lib/workspaces/queries";
 import { workspacesKeys } from "@/lib/workspaces/queries.logic";
 import {
   entityViewKeys,
   entityViewsOptions,
 } from "@/lib/workspaces/queries/entity-views";
+import {
+  legalListActivityOptions,
+  legalListItemsOptions,
+  legalListKeys,
+  legalListSourcesOptions,
+} from "@/lib/workspaces/queries/legal-lists";
 import { myTimeEntriesInfiniteOptions } from "@/lib/workspaces/queries/my-time-entries";
 import { reportExportsKeys } from "@/lib/workspaces/queries/report-exports";
 import { timeEntriesKeys } from "@/lib/workspaces/queries/time-entries";
 import { viewTemplateKeys } from "@/lib/workspaces/queries/view-templates";
 import { workspaceMemberPreviewsOptions } from "@/lib/workspaces/queries/workspace-member-previews";
+import { featureEnrolmentsOptions } from "@/queries/feature-enrolments";
+import {
+  organizationSettingsOptions,
+  optionalOrganizationSettingsOptions,
+} from "@/queries/organization-settings";
+import { auditLogOptions } from "@/routes/_protected.settings/-queries/audit-logs";
 import { connectedAppsOptions } from "@/routes/_protected.settings/-queries/connections";
 import { memoriesKeys } from "@/routes/_protected.settings/-queries/memories";
+import { memoryMattersOptions } from "@/routes/_protected.settings/-queries/memory-matters";
 
 // API reads that answer for the signed-in user are cached under a key that
 // names that user. The manifests below list every such read:
@@ -93,7 +112,93 @@ const KEY_TYPE_HAS_USER = "the key argument's type requires userId";
 
 // Keyed by handler path under apps/api/src/handlers.
 const PER_USER_READS: Record<string, PerUserRead> = {
+  "organization-settings/feature-access/get.ts": {
+    kind: "no-web-caller",
+    calls: ['api["organization-settings"]["feature-access"].get'],
+  },
+  "desktop-presence/read.ts": {
+    kind: "keyed",
+    calls: ["api.desktop.presence.get"],
+    files: ["features/desktop/desktop-presence.ts"],
+    keys: () => [
+      desktopPresenceOptions({ userId: USER, organizationId: ORG }).queryKey,
+    ],
+    opaqueKeys: { "desktopPresenceKeys.all(key)": KEY_TYPE_HAS_USER },
+  },
+  "views/list.ts": {
+    kind: "caller-marker",
+    reason:
+      "Shared view identities carry caller eligibility; session-cache-guard clears them on member changes.",
+  },
+
+  "workspaces/read-navigation.ts": {
+    kind: "keyed",
+    calls: ["api.workspaces.navigation.get", "fetchWorkspaceNavigationPage"],
+    files: [
+      "lib/memory-api.ts",
+      "lib/workspaces/queries.ts",
+      "routes/_protected.settings/-queries/memory-matters.ts",
+    ],
+    keys: () => [
+      workspacesNavigationOptions({ organizationId: ORG, userId: USER })
+        .queryKey,
+      memoryMattersOptions({ organizationId: ORG, userId: USER }).queryKey,
+    ],
+    opaqueKeys: {
+      "workspacesKeys.navigation(caller)": KEY_TYPE_HAS_USER,
+      "memoryMatterKeys.all(caller)": KEY_TYPE_HAS_USER,
+    },
+  },
+  "api-keys/personal/list.ts": {
+    kind: "no-web-caller",
+    calls: ['api["api-keys"].personal.get'],
+  },
+  "chat/messages/revisions/list.ts": {
+    kind: "no-web-caller",
+    calls: [],
+  },
+  "organization-settings/get.ts": {
+    kind: "keyed",
+    calls: ['api["organization-settings"].get'],
+    files: ["queries/organization-settings.ts"],
+    keys: () => [
+      organizationSettingsOptions({ organizationId: ORG, userId: USER })
+        .queryKey,
+      optionalOrganizationSettingsOptions({ organizationId: ORG, userId: USER })
+        .queryKey,
+      optionalOrganizationSettingsOptions({
+        organizationId: null,
+        userId: USER,
+      }).queryKey,
+    ],
+  },
+  "organization-settings/feature-enrolments/get.ts": {
+    kind: "keyed",
+    calls: ['api["organization-settings"]["feature-enrolments"].get'],
+    files: ["queries/feature-enrolments.ts"],
+    keys: () => [
+      featureEnrolmentsOptions({ organizationId: ORG, userId: USER }).queryKey,
+    ],
+  },
   "audit-logs/export.ts": { kind: "not-per-user", reason: DOWNLOAD },
+  "audit-logs/list.ts": {
+    kind: "keyed",
+    calls: ['api["audit-logs"].get'],
+    files: ["routes/_protected.settings/-queries/audit-logs.ts"],
+    keys: () => [
+      auditLogOptions({
+        viewer: { userId: USER, organizationId: ORG },
+        key: {},
+      }).queryKey,
+    ],
+    opaqueKeys: { "auditLogKeys.filtered(viewer, key)": KEY_TYPE_HAS_USER },
+  },
+  "lists/verifications/get.ts": {
+    kind: "not-per-user",
+    reason:
+      "The actor determines the read-audit receipt; returned run content is shared within the matter.",
+  },
+  "case-law/analysis/generate.ts": { kind: "not-per-user", reason: USAGE_ONLY },
   "catalogue/list.ts": {
     kind: "keyed",
     calls: ["api.catalogue.get"],
@@ -148,6 +253,7 @@ const PER_USER_READS: Record<string, PerUserRead> = {
       "chatKeys.templateThread(activeOrganizationId, key)": KEY_TYPE_HAS_USER,
     },
   },
+  "chat/saved-secret.ts": { kind: "owned-id", reason: OWNED_THREAD },
   "chat/skill-availability/list.ts": {
     kind: "keyed",
     calls: ['api.chat["skill-availability"].get'],
@@ -212,9 +318,43 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     ],
     opaqueKeys: { "readerAnnotationKeys.forTarget(key)": KEY_TYPE_HAS_USER },
   },
+  "lists/items/list.ts": {
+    kind: "keyed",
+    calls: ["api.lists()().items.get"],
+    files: ["lib/workspaces/queries/legal-lists.ts"],
+    keys: () => [
+      legalListItemsOptions({
+        workspaceId: WORKSPACE,
+        listId: "list-probe",
+        viewer: { userId: USER, organizationId: ORG },
+      }).queryKey,
+    ],
+  },
   "lists/items/activity/list.ts": {
-    kind: "not-per-user",
-    reason: JOINS_NAMES,
+    kind: "keyed",
+    calls: ["api.lists()().items().activity.get"],
+    files: ["lib/workspaces/queries/legal-lists.ts"],
+    keys: () => [
+      legalListActivityOptions({
+        workspaceId: WORKSPACE,
+        listId: "list-probe",
+        itemEntityId: "item-probe",
+        viewer: { userId: USER, organizationId: ORG },
+      }).queryKey,
+    ],
+  },
+  "lists/items/sources/list.ts": {
+    kind: "keyed",
+    calls: ["api.lists()().items().sources.get"],
+    files: ["lib/workspaces/queries/legal-lists.ts"],
+    keys: () => [
+      legalListSourcesOptions({
+        workspaceId: WORKSPACE,
+        listId: "list-probe",
+        itemEntityId: "item-probe",
+        viewer: { userId: USER, organizationId: ORG },
+      }).queryKey,
+    ],
   },
   "mcp-connectors/list-connections.ts": {
     kind: "keyed",
@@ -431,6 +571,11 @@ const PER_USER_READS: Record<string, PerUserRead> = {
       usageLaneOptions({ organizationId: ORG, userId: USER }).queryKey,
     ],
   },
+  "user-files/read-visual.ts": {
+    kind: "owned-id",
+    reason:
+      "Cached by attachment id; generated views are private and owner-filtered.",
+  },
   "user-files/read-content.ts": { kind: "owned-id", reason: OWNED_FILE },
   "user-files/read-thumbnail.ts": { kind: "owned-id", reason: OWNED_FILE },
   "view-templates/list.ts": {
@@ -472,6 +617,22 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     opaqueKeys: {
       "workspacesKeys.activity(activeOrganizationId, key)": KEY_TYPE_HAS_USER,
     },
+  },
+  "workspaces/export-overview-activity.ts": {
+    kind: "not-per-user",
+    reason: DOWNLOAD,
+  },
+  "workspaces/read-overview-activity.ts": {
+    kind: "keyed",
+    calls: ["api.workspaces().overview.activity.get"],
+    files: ["lib/workspaces/queries.ts"],
+    keys: () => [
+      overviewActivityOptions({
+        viewer: { userId: USER, organizationId: ORG },
+        workspaceId: WORKSPACE,
+        filters: DEFAULT_MATTER_ACTIVITY_FILTERS,
+      }).queryKey,
+    ],
   },
   "workspaces/read-overview-activity-actors.query.ts": {
     kind: "not-per-user",
@@ -899,6 +1060,127 @@ describe("per-user reads", () => {
 
     expect(unkeyed).toEqual([]);
   });
+});
+
+test("list detail keys carry caller identity and retain broad invalidation", async () => {
+  const scope = {
+    workspaceId: WORKSPACE,
+    listId: "list-probe",
+    itemEntityId: "item-probe",
+  };
+  const caller = { organizationId: ORG, userId: USER };
+  const reads = [
+    {
+      options: legalListItemsOptions,
+      root: legalListKeys.items(scope.workspaceId, scope.listId),
+    },
+    {
+      options: legalListSourcesOptions,
+      root: legalListKeys.sources(
+        scope.workspaceId,
+        scope.listId,
+        scope.itemEntityId,
+      ),
+    },
+    {
+      options: legalListActivityOptions,
+      root: legalListKeys.activity(
+        scope.workspaceId,
+        scope.listId,
+        scope.itemEntityId,
+      ),
+    },
+  ];
+  const queryClient = new QueryClient();
+  for (const { options, root } of reads) {
+    const callerKey = Array.from(
+      options({ ...scope, viewer: caller }).queryKey,
+    );
+    expect(callerKey).toContain(caller.userId);
+    expect(callerKey).toContain(caller.organizationId);
+    queryClient.setQueryData(callerKey, { details: "visible" });
+    await queryClient.invalidateQueries({
+      queryKey: root,
+      refetchType: "none",
+    });
+    expect(queryClient.getQueryState(callerKey)?.isInvalidated).toBe(true);
+  }
+});
+
+test("matter overview activity keys carry caller identity and retain workspace invalidation", async () => {
+  const scope = {
+    workspaceId: WORKSPACE,
+    filters: DEFAULT_MATTER_ACTIVITY_FILTERS,
+  };
+  const caller = { organizationId: ORG, userId: USER };
+  const queryClient = new QueryClient();
+  const callerKey = Array.from(
+    overviewActivityOptions({ ...scope, viewer: caller }).queryKey,
+  );
+  expect(callerKey).toContain(caller.userId);
+  expect(callerKey).toContain(caller.organizationId);
+  queryClient.setQueryData(callerKey, { target: "caller" });
+  await queryClient.invalidateQueries({
+    queryKey: workspacesKeys.overviewActivityAll(WORKSPACE),
+    refetchType: "none",
+  });
+  expect(queryClient.getQueryState(callerKey)?.isInvalidated).toBe(true);
+});
+
+test("organization settings isolate caller capabilities by user and organization", () => {
+  const caller = { organizationId: ORG, userId: USER };
+  const colleague = { organizationId: ORG, userId: "colleague-probe" };
+  const otherOrganization = { organizationId: "other-org-probe", userId: USER };
+  const queryClient = new QueryClient();
+  const callerKey = Array.from(organizationSettingsOptions(caller).queryKey);
+  const colleagueKey = Array.from(
+    organizationSettingsOptions(colleague).queryKey,
+  );
+  const otherOrganizationKey = Array.from(
+    organizationSettingsOptions(otherOrganization).queryKey,
+  );
+  const enabled = { capabilities: { fixture: { status: "enabled" } } };
+  const hidden = { capabilities: { fixture: { status: "hidden" } } };
+  queryClient.setQueryData(callerKey, enabled);
+  expect(
+    queryClient.getQueryCache().find({ queryKey: callerKey })?.state.data,
+  ).toEqual(enabled);
+  expect(
+    queryClient.getQueryCache().find({ queryKey: colleagueKey })?.state.data,
+  ).toBeUndefined();
+  expect(
+    queryClient.getQueryCache().find({ queryKey: otherOrganizationKey })?.state
+      .data,
+  ).toBeUndefined();
+  queryClient.setQueryData(colleagueKey, hidden);
+  expect(
+    queryClient.getQueryCache().find({ queryKey: colleagueKey })?.state.data,
+  ).toEqual(hidden);
+  expect(
+    queryClient.getQueryCache().find({ queryKey: callerKey })?.state.data,
+  ).toEqual(enabled);
+});
+
+test("organization settings skip authenticated reads until an organization is selected", () => {
+  const unselected = optionalOrganizationSettingsOptions({
+    organizationId: null,
+    userId: USER,
+  });
+  expect(unselected.queryFn).toBe(skipToken);
+  expect(unselected.queryKey).toContain(USER);
+  expect(unselected.queryKey).toContain(null);
+  const selected = organizationSettingsOptions({
+    organizationId: ORG,
+    userId: USER,
+  });
+  expect(typeof selected.queryFn).toBe("function");
+  expect(selected.queryKey).not.toEqual(unselected.queryKey);
+  const selectedOptional = optionalOrganizationSettingsOptions({
+    organizationId: ORG,
+    userId: USER,
+  });
+  expect(selectedOptional.queryKey).toEqual(selected.queryKey);
+  expect(selectedOptional.queryFn).toBe(selected.queryFn);
 });
 
 describe("the per-user read scan", () => {

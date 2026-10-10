@@ -1,14 +1,23 @@
 import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { inArray, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
-import { chatMessages, chatThreads } from "@/api/db/schema";
+import {
+  chatMessages,
+  chatThreadCompactions,
+  chatThreads,
+} from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { shouldCompactChatMessages } from "@/api/handlers/chat/compaction";
-import type { WindowedThreadMessage } from "@/api/handlers/chat/history-window";
+import type {
+  ChatHistorySnapshot,
+  WindowedThreadMessage,
+} from "@/api/handlers/chat/history-window";
 import {
   chatMessageExistsForThread,
+  isChatHistorySnapshotCurrentOnTx,
+  loadWindowedThreadHistory,
   loadWindowedThreadMessages,
   resolveTruncationTarget,
 } from "@/api/handlers/chat/history-window";
@@ -471,6 +480,211 @@ describe("chatMessageExistsForThread", () => {
     );
     expect(existsUnknown).toBe(false);
   });
+});
+
+/** How a send read the history its decision rests on. */
+const SNAPSHOT_READS = [
+  "capped-window",
+  "checkpoint-window",
+  "replay-target",
+  "thread-window",
+] as const;
+type SnapshotRead = (typeof SNAPSHOT_READS)[number];
+
+/** What lands on the thread after that read and before the turn's claim. */
+const THREAD_WRITES = [
+  "advance-checkpoint",
+  "append",
+  "delete-newest",
+  "none",
+  "rewrite-newest",
+  "rewrite-oldest",
+] as const;
+type ThreadWrite = (typeof THREAD_WRITES)[number];
+
+const SCOPE_OF_READ = {
+  "capped-window": "from-message",
+  "checkpoint-window": "after-cursor",
+  "replay-target": "thread",
+  "thread-window": "thread",
+} as const satisfies Record<SnapshotRead, ChatHistorySnapshot["scope"]["type"]>;
+
+/**
+ * Whether the snapshot is still current. Only a change to a row the read
+ * covered moves it; the oldest row lies outside a window that starts after a
+ * checkpoint or at a row cap, and advancing a checkpoint writes no message.
+ */
+const STILL_CURRENT = {
+  "advance-checkpoint": {
+    "capped-window": true,
+    "checkpoint-window": true,
+    "replay-target": true,
+    "thread-window": true,
+  },
+  append: {
+    "capped-window": false,
+    "checkpoint-window": false,
+    "replay-target": false,
+    "thread-window": false,
+  },
+  "delete-newest": {
+    "capped-window": false,
+    "checkpoint-window": false,
+    "replay-target": false,
+    "thread-window": false,
+  },
+  none: {
+    "capped-window": true,
+    "checkpoint-window": true,
+    "replay-target": true,
+    "thread-window": true,
+  },
+  "rewrite-newest": {
+    "capped-window": false,
+    "checkpoint-window": false,
+    "replay-target": false,
+    "thread-window": false,
+  },
+  "rewrite-oldest": {
+    "capped-window": true,
+    "checkpoint-window": true,
+    "replay-target": false,
+    "thread-window": false,
+  },
+} as const satisfies Record<ThreadWrite, Record<SnapshotRead, boolean>>;
+
+const SNAPSHOT_CASES = THREAD_WRITES.flatMap((write) =>
+  SNAPSHOT_READS.map((read) => [write, read] as const),
+);
+
+describe("a history snapshot held until the turn's claim", () => {
+  test.each(SNAPSHOT_CASES)(
+    "after %s, a %s snapshot reports whether it still holds",
+    async (write, read) => {
+      const base = Date.parse("2026-06-01T00:00:00.000Z");
+      const { threadId, messages } = await seedThread(
+        Array.from({ length: 4 }, (_, i) => ({
+          createdAt: new Date(base + i),
+          text: `m${i}`,
+        })),
+      );
+      const [m0, m1, m2, m3] = messages;
+      if (!m0 || !m1 || !m2 || !m3) {
+        throw new Error("seed precondition failed");
+      }
+      if (read === "checkpoint-window") {
+        await seedActiveCheckpoint({
+          threadId,
+          firstSummarizedMessageId: m0.id,
+          lastSummarizedMessageId: m1.id,
+          firstKeptMessageId: m2.id,
+          summarizedMessageCount: 2,
+        });
+      }
+
+      const readSnapshot = async (): Promise<ChatHistorySnapshot> => {
+        switch (read) {
+          case "capped-window":
+          case "checkpoint-window":
+          case "thread-window":
+            return unwrap(
+              await loadWindowedThreadHistory({
+                safeDb,
+                threadId,
+                limit: read === "capped-window" ? 2 : undefined,
+              }),
+            ).snapshot;
+          case "replay-target": {
+            const target = unwrap(
+              await resolveTruncationTarget({
+                safeDb,
+                threadId,
+                targetMessageId: m2.id,
+              }),
+            );
+            if (target === null) {
+              throw new Error("seed precondition failed: target resolves");
+            }
+            return target.snapshot;
+          }
+          default:
+            read satisfies never;
+            throw new Error(`Unhandled read: ${String(read)}`);
+        }
+      };
+      const snapshot = await readSnapshot();
+      // The fixture must reach the scope it names, with the rows it covers.
+      expect(snapshot.scope.type).toBe(SCOPE_OF_READ[read]);
+      expect(snapshot.rows.map(({ id }) => id)).toEqual(
+        read === "thread-window" || read === "replay-target"
+          ? [m0.id, m1.id, m2.id, m3.id]
+          : [m2.id, m3.id],
+      );
+
+      const rewrite = async (id: SafeId<"chatMessage">) => {
+        await testDb
+          .update(chatMessages)
+          .set({
+            content: {
+              version: 1 as const,
+              data: [{ type: "text" as const, text: "rewritten" }],
+            },
+          })
+          .where(eq(chatMessages.id, id));
+      };
+      switch (write) {
+        case "none":
+          break;
+        case "append":
+          await testDb.insert(chatMessages).values({
+            content: {
+              version: 1 as const,
+              data: [{ type: "text" as const, text: "m4" }],
+            },
+            createdAt: new Date(base + 4),
+            id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
+            role: "user",
+            threadId,
+            userId: ids.userA1,
+            workspaceId: ids.wsA1,
+          });
+          break;
+        case "rewrite-newest":
+          await rewrite(m3.id);
+          break;
+        case "rewrite-oldest":
+          await rewrite(m0.id);
+          break;
+        case "delete-newest":
+          await testDb.delete(chatMessages).where(eq(chatMessages.id, m3.id));
+          break;
+        case "advance-checkpoint":
+          await testDb
+            .update(chatThreadCompactions)
+            .set({ status: "stale" })
+            .where(eq(chatThreadCompactions.threadId, threadId));
+          await seedActiveCheckpoint({
+            threadId,
+            firstSummarizedMessageId: m0.id,
+            lastSummarizedMessageId: m2.id,
+            firstKeptMessageId: m3.id,
+            summarizedMessageCount: 3,
+          });
+          break;
+        default:
+          write satisfies never;
+          throw new Error(`Unhandled write: ${String(write)}`);
+      }
+
+      const current = unwrap(
+        await safeDb(
+          async (tx) =>
+            await isChatHistorySnapshotCurrentOnTx({ snapshot, threadId, tx }),
+        ),
+      );
+      expect(current).toBe(STILL_CURRENT[write][read]);
+    },
+  );
 });
 
 describe("shouldCompactChatMessages", () => {

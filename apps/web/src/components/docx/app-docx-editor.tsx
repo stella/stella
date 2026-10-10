@@ -5,6 +5,8 @@ import type { DocxEditorProps, DocxEditorRef } from "@stll/folio-react";
 
 import { folioUIComponents } from "@/lib/folio-ui-components";
 
+import { useDocxOutlineDepth } from "./use-docx-outline-depth";
+
 export type { DocxEditorProps, DocxEditorRef } from "@stll/folio-react";
 
 /**
@@ -25,9 +27,14 @@ export type DocxComments = NonNullable<DocxEditorProps["comments"]>;
  */
 export const DocxEditor = (
   props: DocxEditorProps & { ref?: Ref<DocxEditorRef> },
-) => (
-  <FolioDocxEditor
-    {...props}
-    components={{ ...folioUIComponents, ...props.components }}
-  />
-);
+) => {
+  const { depth, setDepth } = useDocxOutlineDepth();
+  return (
+    <FolioDocxEditor
+      {...props}
+      outlineDepth={props.outlineDepth ?? depth}
+      onOutlineDepthChange={props.onOutlineDepthChange ?? setDepth}
+      components={{ ...folioUIComponents, ...props.components }}
+    />
+  );
+};

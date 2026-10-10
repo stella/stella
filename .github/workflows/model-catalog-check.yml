@@ -4,14 +4,22 @@ name: Model Catalog Upstream Check
 # nightly job compares stella's picker (@stll/ai-catalog) bidirectionally
 # with live, public, keyless listings (OpenRouter + models.dev). It fails
 # when an eligible new model has no reviewed disposition, an offered model is
-# deprecated or gone upstream, or committed rates and request capabilities
-# drift from live model metadata.
+# deprecated or gone upstream, or the committed Text Arena quality ratings
+# (Hugging Face lmarena-ai/leaderboard-dataset) drift or lose a mapped row.
+# Rates and request capabilities refresh together in one maintained pull request.
+# Benchmark availability remains inconclusive for 7 days, then alerts once the
+# outage lasts longer. A successful fetch clears the persisted outage start.
 
 on:
   schedule:
     # 04:37 UTC daily (off-minute to avoid the :00 stampede)
     - cron: "37 4 * * *"
   workflow_dispatch:
+
+# Serialize scheduled state updates; a manual check cannot reset the streak.
+concurrency:
+  group: model-catalog-check
+  cancel-in-progress: false
 
 permissions: {}
 
@@ -21,16 +29,39 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: read
+      actions: read
+    env:
+      REFRESH_BRANCH: bot/model-catalog-refresh
+      REFRESH_CHANGESET: .changeset/model-catalog-refresh.md
 
     steps:
+      - name: Checkout GitHub API tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .gh-retry
+          persist-credentials: false
+          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Preserve GitHub API tooling across source checkouts
+        run: |
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
+          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
+
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # Rebuild the managed proposal from current main; a branch dispatch
+          # still validates its selected source without publishing a proposal.
+          ref: ${{ github.ref == 'refs/heads/main' && github.event.repository.default_branch || github.sha }}
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
+          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       - name: Install dependencies
@@ -40,5 +71,134 @@ jobs:
           # the real npm token to dependency lifecycle scripts.
           NPM_TOKEN: ""
 
+      - name: Restore scheduled benchmark state
+        id: benchmark-state
+        if: github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          mkdir -p .benchmark-state
+          bash "$GH_RETRY_SCRIPT" api "repos/$GH_REPO/actions/artifacts?name=model-catalog-benchmark-state-v2&per_page=1" > .benchmark-state/artifacts.json
+          jq -e '(.artifacts | type) == "array"' .benchmark-state/artifacts.json > /dev/null
+          if [ "$(jq '.artifacts | length' .benchmark-state/artifacts.json)" = 0 ]; then
+            echo 'Starting scheduled benchmark state.'
+            exit 0
+          fi
+          artifact_id=$(jq -er '.artifacts[0].id | select(type == "number")' .benchmark-state/artifacts.json)
+          if [ "$(jq -r '.artifacts[0].expired' .benchmark-state/artifacts.json)" != false ]; then
+            echo 'Scheduled benchmark state expired; restore it before continuing.' >&2
+            exit 1
+          fi
+          bash "$GH_RETRY_SCRIPT" api "repos/$GH_REPO/actions/artifacts/$artifact_id/zip" > .benchmark-state/state.zip
+          unzip -p .benchmark-state/state.zip state.json > .benchmark-state/state.json
+          test -s .benchmark-state/state.json
+
+      - name: Refresh upstream catalog snapshots
+        id: refresh
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Rates owns acquisition of both shared inputs; capabilities stays offline.
+          bun --filter @stll/ai-catalog gen:rates --refresh
+          bun --filter @stll/ai-catalog gen:capabilities --from-snapshot
+
+          unexpected="$(git status --porcelain --untracked-files=all -- . ":(exclude,literal)packages/ai-catalog/upstream/models.dev.gen.json" ":(exclude,literal)packages/ai-catalog/upstream/openrouter.gen.json" ":(exclude,literal)packages/ai-catalog/src/model-rates.gen.ts" ":(exclude,literal)packages/ai-catalog/src/capabilities.gen.ts" ":(exclude).benchmark-state")"
+          if [[ -n "$unexpected" ]]; then
+            echo '::error::The refresh changed files outside the catalog snapshots.'
+            echo "$unexpected"
+            exit 1
+          fi
+
+          changed="$(git status --porcelain --untracked-files=all -- packages/ai-catalog/upstream packages/ai-catalog/src/model-rates.gen.ts packages/ai-catalog/src/capabilities.gen.ts)"
+          if [[ -z "$changed" ]]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # The refresh owns this path and replaces only the two changesets it
+          # writes itself; a hand-written note must move to its own file first.
+          refresh_summary='Refresh upstream model rates and request capabilities.'
+          empty_changeset_text=$'---\n---'
+          patch_changeset_text=$'---\n"@stll/ai-catalog": patch\n---\n\n'"$refresh_summary"
+          if [[ -e "$REFRESH_CHANGESET" ]]; then
+            existing="$(tr -d '\r' < "$REFRESH_CHANGESET")"
+            if [[ "$existing" != "$empty_changeset_text" && "$existing" != "$patch_changeset_text" ]]; then
+              echo "::error file=$REFRESH_CHANGESET::$REFRESH_CHANGESET holds a changeset the refresh did not write; move it to its own changeset file."
+              exit 1
+            fi
+          fi
+          runtime_changed="$(git status --porcelain --untracked-files=all -- packages/ai-catalog/src/model-rates.gen.ts packages/ai-catalog/src/capabilities.gen.ts)"
+          if [[ -z "$runtime_changed" ]]; then
+            bun run changeset --empty
+            empty_changeset="$(git ls-files --others --exclude-standard -- '.changeset/*.md')"
+            test -f "$empty_changeset"
+            mv "$empty_changeset" "$REFRESH_CHANGESET"
+          else
+            cat > "$REFRESH_CHANGESET" <<CHANGESET
+          ---
+          "@stll/ai-catalog": patch
+          ---
+
+          $refresh_summary
+          CHANGESET
+          fi
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
       - name: Discover models and validate IDs, rates, and capabilities
-        run: bun run check:model-catalog
+        run: |
+          bun packages/scripts/src/model-catalog-upstream.ts
+          bun packages/scripts/src/model-catalog-capabilities-gen.ts --check
+
+      - name: Validate benchmarks
+        id: benchmarks
+        if: ${{ !cancelled() && (github.event_name != 'schedule' || steps.benchmark-state.outcome == 'success') }}
+        env:
+          CHECK_EVENT: ${{ github.event_name }}
+        run: |
+          if [ "$CHECK_EVENT" = schedule ]; then
+            bun packages/scripts/src/model-catalog-benchmarks-gen.ts --check --state-file .benchmark-state/state.json
+          else
+            bun packages/scripts/src/model-catalog-benchmarks-gen.ts --check
+          fi
+
+      - name: Save scheduled benchmark state
+        if: ${{ !cancelled() && github.event_name == 'schedule' && steps.benchmarks.outcome != 'skipped' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: model-catalog-benchmark-state-v2
+          path: .benchmark-state/state.json
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Mint app token
+        if: ${{ !cancelled() && github.repository == 'stella/stella' && github.ref == 'refs/heads/main' && steps.refresh.outcome == 'success' }}
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.PROVENANCE_APP_ID }}
+          private-key: ${{ secrets.PROVENANCE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      # A reserved branch replaces the current proposal; the app token lets
+      # the signed refresh commit trigger the pull request checks. A refresh
+      # with no changes closes a proposal that no longer differs from main.
+      - name: Open or update the refresh PR
+        if: ${{ !cancelled() && steps.app-token.outcome == 'success' }}
+        uses: stella/.github/.github/actions/signed-commit@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          mode: refresh-pr
+          branch: ${{ env.REFRESH_BRANCH }}
+          base: main
+          paths: |
+            packages/ai-catalog/upstream/models.dev.gen.json
+            packages/ai-catalog/upstream/openrouter.gen.json
+            packages/ai-catalog/src/model-rates.gen.ts
+            packages/ai-catalog/src/capabilities.gen.ts
+            .changeset/model-catalog-refresh.md
+          commit-message: "chore: refresh model catalog snapshots"
+          pr-title: "chore: refresh model catalog snapshots"
+          pr-body: "Refreshes committed upstream inputs, generated model rates, and request capabilities together. Includes a patch changeset when published catalog outputs change."

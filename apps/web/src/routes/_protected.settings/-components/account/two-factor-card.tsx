@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { ReactNode } from "react";
 
 import {
   useMutation,
@@ -14,6 +15,7 @@ import { copyToClipboard } from "@stll/clipboard";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
+  DialogFormState,
   DialogClose,
   DialogDescription,
   DialogFooter,
@@ -32,6 +34,7 @@ import { InputOTP, InputOTPGroup, InputOTPSlot } from "@stll/ui/input-otp";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { SecretInput } from "@/components/secret-input";
 import { linkedAccountsOptions } from "@/lib/account/queries";
 import { getAnalytics, useAnalytics } from "@/lib/analytics/provider";
@@ -48,6 +51,7 @@ import { detached } from "@/lib/detached";
 import { APIError, toAPIError } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useQueryView } from "@/lib/use-query-view";
 import { downloadFile } from "@/lib/utils";
 
 const TOTP_LENGTH = 6;
@@ -82,9 +86,13 @@ export const TwoFactorCard = () => {
   // as distinct from "no password needed": starting a password-gated action
   // before the account type is known could otherwise fire the plugin call
   // without a password for a credential account.
-  const requiresPassword = accountsQuery.data
-    ? accountsQuery.data.some((account) => account.providerId === "credential")
-    : undefined;
+  const accountsView = useQueryView(accountsQuery, { isEmpty: () => false });
+  const requiresPassword =
+    accountsView.type === "items" && accountsView.refetchError === undefined
+      ? accountsView.items.some(
+          (account) => account.providerId === "credential",
+        )
+      : undefined;
 
   // Transactional email is optional, and a deployment without it cannot send
   // the emailed confirmation step. Enrollment there rests on the account
@@ -95,7 +103,12 @@ export const TwoFactorCard = () => {
     ...authCapabilitiesOptions,
     enabled: isAnyDialogOpen,
   });
-  const canEmailConfirmationCode = capabilitiesQuery.data?.transactionalEmail;
+  const capabilitiesView = useQueryView(capabilitiesQuery);
+  const canEmailConfirmationCode =
+    capabilitiesView.type === "items" &&
+    capabilitiesView.refetchError === undefined
+      ? capabilitiesView.items.transactionalEmail
+      : undefined;
 
   return (
     <Frame>
@@ -148,17 +161,26 @@ export const TwoFactorCard = () => {
       </FramePanel>
 
       <EnableTwoFactorDialog
+        queryFeedback={
+          <>
+            {" "}
+            <QueryViewFeedback view={accountsView} />{" "}
+            <QueryViewFeedback view={capabilitiesView} />{" "}
+          </>
+        }
         canEmailConfirmationCode={canEmailConfirmationCode}
         onOpenChange={setIsEnableOpen}
         open={isEnableOpen}
         requiresPassword={requiresPassword}
       />
       <DisableTwoFactorDialog
+        queryFeedback={<QueryViewFeedback view={accountsView} />}
         onOpenChange={setIsDisableOpen}
         open={isDisableOpen}
         requiresPassword={requiresPassword}
       />
       <RegenerateBackupCodesDialog
+        queryFeedback={<QueryViewFeedback view={accountsView} />}
         onOpenChange={setIsRegenerateOpen}
         open={isRegenerateOpen}
         requiresPassword={requiresPassword}
@@ -303,7 +325,9 @@ const EnableTwoFactorDialog = ({
   onOpenChange,
   open,
   requiresPassword,
+  queryFeedback,
 }: {
+  queryFeedback: ReactNode;
   // `undefined` until the capability lookup resolves; see the parent's comment
   // on `canEmailConfirmationCode`.
   canEmailConfirmationCode: boolean | undefined;
@@ -442,6 +466,8 @@ const EnableTwoFactorDialog = ({
   return (
     <Dialog onOpenChange={handleOpenChange} open={open}>
       <DialogPopup>
+        {queryFeedback}
+        <DialogFormState dirty={code !== "" || password !== ""} />
         <DialogHeader>
           <DialogTitle>
             {t("settings.account.twoFactor.setupTitle")}
@@ -633,7 +659,9 @@ const DisableTwoFactorDialog = ({
   onOpenChange,
   open,
   requiresPassword,
+  queryFeedback,
 }: {
+  queryFeedback: ReactNode;
   onOpenChange: (open: boolean) => void;
   open: boolean;
   // `undefined` until the account-type lookup resolves; see the parent's
@@ -729,6 +757,14 @@ const DisableTwoFactorDialog = ({
   return (
     <Dialog onOpenChange={handleOpenChange} open={open}>
       <DialogPopup>
+        {queryFeedback}
+        <DialogFormState
+          dirty={code !== "" || password !== ""}
+          onDiscard={() => {
+            setCode("");
+            setPassword("");
+          }}
+        />
         <DialogHeader>
           <DialogTitle>
             {t("settings.account.twoFactor.disableConfirmTitle")}
@@ -814,7 +850,9 @@ const RegenerateBackupCodesDialog = ({
   onOpenChange,
   open,
   requiresPassword,
+  queryFeedback,
 }: {
+  queryFeedback: ReactNode;
   onOpenChange: (open: boolean) => void;
   open: boolean;
   // `undefined` until the account-type lookup resolves; see the parent's
@@ -916,6 +954,14 @@ const RegenerateBackupCodesDialog = ({
   return (
     <Dialog onOpenChange={handleOpenChange} open={open}>
       <DialogPopup>
+        {queryFeedback}
+        <DialogFormState
+          dirty={code !== "" || password !== ""}
+          onDiscard={() => {
+            setCode("");
+            setPassword("");
+          }}
+        />
         <DialogHeader>
           <DialogTitle>
             {t("settings.account.twoFactor.regenerateConfirmTitle")}

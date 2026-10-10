@@ -4,6 +4,10 @@ import { existsSync, statSync } from "node:fs";
 
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
 import {
+  bindDeploymentFlagReader,
+  envFeatureAccess,
+} from "@/api/env-feature-access";
+import {
   envApiInvariantViolation,
   envApiServerSchema,
   resolveEmailProvider,
@@ -60,7 +64,16 @@ const validatedEnv = {
   ...envDocumentProcessingWorker,
   ...envApi,
   EMAIL_PROVIDER: emailProvider,
+  get API_FEATURE_ACCESS_GRANTS() {
+    return envFeatureAccess.API_FEATURE_ACCESS_GRANTS;
+  },
+  set API_FEATURE_ACCESS_GRANTS(grants) {
+    envFeatureAccess.API_FEATURE_ACCESS_GRANTS = grants;
+  },
 };
+
+// Read per call: local tests switch flags on the open-mode object.
+bindDeploymentFlagReader((flag) => validatedEnv[flag]);
 
 // Bun owns process.env and may expose it through a runtime proxy. Freeze the
 // validated application boundary instead of mutating the runtime object.

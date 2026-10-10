@@ -4,7 +4,7 @@ import { t } from "elysia";
 import { confirmServiceAuthRegistration } from "@/api/lib/agent-auth";
 import { confirmIdJagDelegation } from "@/api/lib/agent-auth-idjag";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 /**
@@ -21,6 +21,7 @@ const config = {
   // the agent inherits the confirming user's least-privilege scopes, not
   // the organization's. External collaborators hold no integration grant.
   permissions: { integration: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: { type: "internal", reason: "auth_plumbing" },
 } satisfies HandlerConfig;
 

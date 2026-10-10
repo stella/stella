@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { inArray } from "drizzle-orm";
 
@@ -35,6 +35,7 @@ import getThreads from "./list";
 import {
   CHAT_THREAD_CONTEXT_MATTER_SCAN_LIMIT,
   CHAT_THREAD_CONTEXT_PREVIEW_LIMIT,
+  readChatThreadAttachedFiles,
 } from "./list-context";
 
 // The history list's context preview: which matters and files each thread
@@ -380,6 +381,108 @@ describe("chat thread list context", () => {
     expect(thread?.context.fileCount).toBe(1);
   });
 
+  test("files carry how they open: uploads by id, documents with their matter", async () => {
+    const threadId = await seedThread({
+      attachmentNames: ["exhibit-b.pdf"],
+      mentions: [entityMention(ids.entityA1, ids.wsA1)],
+      title: "Context: file types",
+    });
+
+    const thread = findThread(await listThreads(), threadId);
+
+    expect(thread?.context.files).toEqual(
+      expect.arrayContaining([
+        {
+          id: ids.entityA1,
+          kind: "document",
+          matterId: ids.wsA1,
+          mimeType: null,
+          name: "entityA1",
+          type: "entity",
+        },
+        expect.objectContaining({
+          kind: "document",
+          mimeType: PDF_MIME_TYPE,
+          name: "exhibit-b.pdf",
+          type: "upload",
+        }),
+      ]),
+    );
+  });
+
+  test("reads mentions the composer stores only as links in the text", async () => {
+    const threadId = await seedThread({ title: "Context: linked mentions" });
+    await testDb.insert(chatMessages).values({
+      content: toPersistedChatMessageContentV3({
+        data: [
+          {
+            content:
+              `Compare [entityA2](#stella-entity=${ids.wsA2}:${ids.entityA2}) ` +
+              `in [WS A2](#stella-workspace=${ids.wsA2}) with ` +
+              `[foreign](#stella-entity=${ids.wsB1}:${ids.entityB1}).`,
+            type: "text",
+          },
+        ],
+      }),
+      createdAt: new Date(MESSAGE_TIME_BASE + 10),
+      id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
+      role: "user",
+      threadId,
+      userId: ids.userA1,
+      workspaceId: null,
+    });
+
+    const thread = findThread(await listThreads(), threadId);
+
+    expect(thread?.context.files.map((file) => file.id)).toEqual([
+      ids.entityA2,
+    ]);
+    expect(thread?.context.fileCount).toBe(1);
+    expect(thread?.context.matters.map((matter) => matter.id)).toEqual([
+      ids.wsA2,
+    ]);
+  });
+
+  test("does not count an upload another thread owns", async () => {
+    const ownerId = await seedThread({
+      attachmentNames: ["owner.pdf"],
+      title: "Context: upload owner",
+    });
+    const borrowerId = await seedThread({ title: "Context: upload borrower" });
+    const foreignFileId = await insertUpload({
+      fileName: "foreign.pdf",
+      threadId: ownerId,
+    });
+    // A message in one thread pointing at another thread's upload.
+    await testDb.insert(chatMessages).values({
+      content: toPersistedChatMessageContentV3({
+        data: [
+          { content: "See this.", type: "text" },
+          createChatAttachmentPart({
+            filename: "foreign.pdf",
+            mimeType: PDF_MIME_TYPE,
+            url: toUserFileUrl(foreignFileId),
+          }),
+        ],
+      }),
+      createdAt: new Date(MESSAGE_TIME_BASE + 10),
+      id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
+      role: "user",
+      threadId: borrowerId,
+      userId: ids.userA1,
+      workspaceId: null,
+    });
+
+    const listed = await listThreads();
+
+    expect(findThread(listed, borrowerId)?.context.fileCount).toBe(0);
+    expect(findThread(listed, borrowerId)?.context.files).toEqual([]);
+    // The owner's own messages never attached it either.
+    expect(
+      findThread(listed, ownerId)?.context.files.map((file) => file.name),
+    ).toEqual(["owner.pdf"]);
+  });
+
   test("search matches a matter whose data a thread embedded", async () => {
     const threadId = await seedThread({
       dataWorkspaceIds: [ids.wsA1],
@@ -417,5 +520,64 @@ describe("chat thread list context", () => {
     ]);
 
     expect(findThread(listed, threadId)).toBeDefined();
+  });
+});
+
+// The open thread's header lists every file the thread attached, by the same
+// definition as the history row, past the list's preview cap.
+describe("open chat thread attached files", () => {
+  const readAttached = async (threadId: SafeId<"chatThread">) => {
+    const result = await scopedTo([ids.wsA1, ids.wsA2])(
+      async (tx) => await readChatThreadAttachedFiles({ threadId, tx }),
+    );
+    if (Result.isError(result)) {
+      throw result.error;
+    }
+    return result.value;
+  };
+
+  test("a thread without attachments reads as none", async () => {
+    const threadId = await seedThread({
+      mentions: [matterMention(ids.wsA1)],
+      title: "Attached: none",
+    });
+
+    expect(await readAttached(threadId)).toEqual({ fileCount: 0, files: [] });
+  });
+
+  test("names every attached file past the list preview, newest first", async () => {
+    const fileTotal = CHAT_THREAD_CONTEXT_PREVIEW_LIMIT + 3;
+    const threadId = await seedThread({
+      attachmentNames: Array.from(
+        { length: fileTotal },
+        (_, index) => `exhibit-${index}.pdf`,
+      ),
+      title: "Attached: many files",
+    });
+
+    const attached = await readAttached(threadId);
+
+    expect(attached.fileCount).toBe(fileTotal);
+    expect(attached.files.map((file) => file.name)).toEqual(
+      Array.from(
+        { length: fileTotal },
+        (_, index) => `exhibit-${fileTotal - 1 - index}.pdf`,
+      ),
+    );
+  });
+
+  test("leaves out documents in another organization", async () => {
+    const threadId = await seedThread({
+      mentions: [
+        entityMention(ids.entityA1, ids.wsA1),
+        entityMention(ids.entityB1, ids.wsB1),
+      ],
+      title: "Attached: cross-organization mention",
+    });
+
+    const attached = await readAttached(threadId);
+
+    expect(attached.files.map((file) => file.id)).toEqual([ids.entityA1]);
+    expect(attached.fileCount).toBe(1);
   });
 });

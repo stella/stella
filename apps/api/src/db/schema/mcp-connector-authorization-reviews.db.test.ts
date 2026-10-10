@@ -14,7 +14,10 @@ import {
 } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import { createApproveMcpAuthorizationHandler } from "@/api/handlers/mcp-connectors/approve-authorization";
+import { createConnectMcpConnectorHandler } from "@/api/handlers/mcp-connectors/connect";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { createSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
 import { recordMcpAuthorizationReview } from "@/api/lib/mcp-upstream/authorization-review";
 import {
   claimMcpRefreshLease,
@@ -40,6 +43,9 @@ const ownerId = mintAuthProviderId<"user">();
 const memberId = mintAuthProviderId<"user">();
 const connectorId = createSafeId<"mcpConnector">();
 const connectionId = createSafeId<"mcpUserConnection">();
+const otherOrganizationId = mintAuthProviderId<"organization">();
+const catalogueConnectorId = createSafeId<"mcpConnector">();
+const outboundPermit = grantThirdPartyOutboundPermit();
 
 let testDb: TestDatabase;
 
@@ -127,11 +133,122 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  await testDb
+    .delete(mcpConnectors)
+    .where(eq(mcpConnectors.id, catalogueConnectorId));
+  await testDb
+    .delete(organization)
+    .where(eq(organization.id, otherOrganizationId));
   await testDb.delete(organization).where(eq(organization.id, organizationId));
   await testDb.delete(user).where(eq(user.id, ownerId));
   await testDb.delete(user).where(eq(user.id, memberId));
   await releaseTestDb();
 });
+
+type DiscoveredIssuerMetadataOptions = {
+  connectorUrl: string;
+  issuer: string;
+};
+
+const discoveredIssuerMetadata = ({
+  connectorUrl,
+  issuer,
+}: DiscoveredIssuerMetadataOptions) =>
+  Result.ok({
+    protectedResource: {
+      resource: connectorUrl,
+      authorization_servers: [issuer],
+    },
+    authorizationServer: {
+      issuer,
+      authorization_endpoint: `${issuer}/authorize`,
+      token_endpoint: `${issuer}/token`,
+      client_id_metadata_document_supported: true,
+    },
+  });
+
+type ApprovalRequestOptions = {
+  slug: string;
+  discoveredIssuer: string;
+  confirmedIssuer: string;
+  activeOrganizationId: SafeId<"organization">;
+};
+
+const approveAuthorization = async ({
+  slug,
+  discoveredIssuer,
+  confirmedIssuer,
+  activeOrganizationId,
+}: ApprovalRequestOptions) => {
+  const approval = createApproveMcpAuthorizationHandler(
+    async ({ rawMcpUrl: connectorUrl }) =>
+      discoveredIssuerMetadata({ connectorUrl, issuer: discoveredIssuer }),
+  );
+  return await approval.handler(
+    asTestRaw<Parameters<typeof approval.handler>[0]>({
+      params: { slug },
+      body: {
+        confirmedIssuer,
+        confirmedEndpointOrigins: [new URL(confirmedIssuer).origin],
+      },
+      safeDb: createSafeDb(testDb, [], activeOrganizationId, ownerId),
+      session: { activeOrganizationId },
+      user: { id: ownerId },
+      memberRole: sessionMemberRole("owner"),
+      recordAuditEvent: async () => {},
+      request: new Request(
+        `https://api.example.test/v1/mcp/connectors/${slug}/approve-authorization`,
+        { method: "POST" },
+      ),
+      route: "/v1/mcp/connectors/:slug/approve-authorization",
+    }),
+  );
+};
+
+type MemberConnectOptions = {
+  slug: string;
+  issuer: string;
+  curatedApproval?: { issuer: string; endpointOrigins: string[] };
+  audits?: unknown[];
+};
+
+const connectAsMember = async ({
+  slug,
+  issuer,
+  curatedApproval,
+  audits = [],
+}: MemberConnectOptions) => {
+  const connect = createConnectMcpConnectorHandler({
+    discoverMetadata: async ({ rawMcpUrl: connectorUrl }) =>
+      discoveredIssuerMetadata({ connectorUrl, issuer }),
+    curatedOAuthApproval: () => curatedApproval ?? null,
+  });
+  return await connect.handler(
+    asTestRaw<Parameters<typeof connect.handler>[0]>({
+      params: { slug },
+      safeDb: createSafeDb(testDb, [], organizationId, memberId),
+      session: { activeOrganizationId: organizationId },
+      user: { id: memberId },
+      memberRole: sessionMemberRole("member"),
+      recordAuditEvent: async (_tx: unknown, event: unknown) => {
+        audits.push(event);
+      },
+      request: new Request(
+        `https://api.example.test/v1/mcp/connectors/${slug}/connect`,
+      ),
+      route: "/v1/mcp/connectors/:slug/connect",
+    }),
+  );
+};
+
+const reviewRows = async (reviewedConnectorId: SafeId<"mcpConnector">) =>
+  await testDb
+    .select()
+    .from(mcpConnectorAuthorizationReviews)
+    .where(
+      eq(mcpConnectorAuthorizationReviews.connectorId, reviewedConnectorId),
+    )
+    .orderBy(mcpConnectorAuthorizationReviews.organizationId);
 
 describe("MCP connector authorization reviews", () => {
   test("the migrated table matches its declared row policy settings", async () => {
@@ -309,7 +426,7 @@ describe("MCP connector authorization reviews", () => {
       );
     const audits: unknown[] = [];
     const approval = createApproveMcpAuthorizationHandler(
-      async (connectorUrl) =>
+      async ({ rawMcpUrl: connectorUrl }) =>
         Result.ok({
           protectedResource: {
             resource: connectorUrl,
@@ -396,6 +513,7 @@ describe("MCP connector authorization reviews", () => {
     expect(
       await createMcpClientForConnection({
         organizationId,
+        permit: outboundPermit,
         row: previousConnection,
         safeDb,
         userId: memberId,
@@ -535,7 +653,11 @@ describe("MCP connector authorization reviews", () => {
       resourceUrl: legacyUrl,
       authorizationServerUrl: legacyIssuer,
     });
-    const discoverLegacyMetadata = async (url: string) =>
+    const discoverLegacyMetadata = async ({
+      rawMcpUrl: url,
+    }: {
+      rawMcpUrl: string;
+    }) =>
       Result.ok({
         protectedResource: {
           resource: url,
@@ -586,6 +708,7 @@ describe("MCP connector authorization reviews", () => {
         ? null
         : await createMcpClientForConnection({
             organizationId,
+            permit: outboundPermit,
             row,
             safeDb: ownerDb,
             userId: ownerId,
@@ -648,6 +771,187 @@ describe("MCP connector authorization reviews", () => {
 
     expect(await connect()).not.toBeNull();
     expect(authorizationHeaders).toEqual(["Bearer stored-access-token"]);
+  });
+
+  test("a member's first connection to a connector without an issuer awaits administrator approval", async () => {
+    const unconfiguredConnectorId = createSafeId<"mcpConnector">();
+    const slug = `unconfigured-${unconfiguredConnectorId}`;
+    const issuer = "https://auth.example.test/unconfigured";
+    await testDb.insert(mcpConnectors).values({
+      id: unconfiguredConnectorId,
+      organizationId,
+      slug,
+      displayName: "Unconfigured connector",
+      description: "",
+      url: "https://mcp.example.test/unconfigured",
+      authType: "oauth2",
+    });
+    const audits: unknown[] = [];
+
+    expect(await connectAsMember({ slug, issuer, audits })).toMatchObject({
+      code: 409,
+      response: { code: "mcp_authorization_approval_required" },
+    });
+    expect(await reviewRows(unconfiguredConnectorId)).toEqual([
+      expect.objectContaining({
+        organizationId,
+        status: "needs_reapproval",
+        observedIssuer: issuer,
+        observedEndpointOrigins: ["https://auth.example.test"],
+        approvedIssuer: null,
+        approvedEndpointOrigins: null,
+      }),
+    ]);
+    expect(audits).toEqual([
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          field: "mcpConnectorAuthorization",
+          status: "needs_reapproval",
+          observedIssuer: issuer,
+        }),
+      }),
+    ]);
+    expect(
+      await testDb
+        .select({ id: mcpOAuthClients.id })
+        .from(mcpOAuthClients)
+        .where(eq(mcpOAuthClients.connectorId, unconfiguredConnectorId)),
+    ).toEqual([]);
+
+    // A repeated attempt stays pending and records no approval.
+    expect(await connectAsMember({ slug, issuer })).toMatchObject({
+      code: 409,
+    });
+    expect(await reviewRows(unconfiguredConnectorId)).toEqual([
+      expect.objectContaining({
+        status: "needs_reapproval",
+        approvedIssuer: null,
+      }),
+    ]);
+
+    expect(
+      await approveAuthorization({
+        slug,
+        discoveredIssuer: issuer,
+        confirmedIssuer: issuer,
+        activeOrganizationId: organizationId,
+      }),
+    ).toEqual({ approved: true });
+    expect(await connectAsMember({ slug, issuer })).toMatchObject({
+      type: "oauth2",
+    });
+  });
+
+  test("a curated connector connects with its catalogue issuer without a review", async () => {
+    const curatedConnectorId = createSafeId<"mcpConnector">();
+    const slug = `curated-${curatedConnectorId}`;
+    const issuer = "https://auth.example.test/curated";
+    await testDb.insert(mcpConnectors).values({
+      id: curatedConnectorId,
+      organizationId,
+      slug,
+      displayName: "Curated connector",
+      description: "",
+      url: "https://mcp.example.test/curated",
+      authType: "oauth2",
+      isCurated: true,
+    });
+    const audits: unknown[] = [];
+
+    expect(
+      await connectAsMember({
+        slug,
+        issuer,
+        curatedApproval: { issuer, endpointOrigins: [] },
+        audits,
+      }),
+    ).toMatchObject({ type: "oauth2" });
+    expect(await reviewRows(curatedConnectorId)).toEqual([]);
+    expect(audits).toEqual([]);
+  });
+
+  test("approval refuses an issuer other than the observed and confirmed one", async () => {
+    const changedConnectorId = createSafeId<"mcpConnector">();
+    const slug = `changed-${changedConnectorId}`;
+    const observedIssuer = "https://auth.example.test/observed";
+    await testDb.insert(mcpConnectors).values({
+      id: changedConnectorId,
+      organizationId,
+      slug,
+      displayName: "Changed connector",
+      description: "",
+      url: "https://mcp.example.test/changed",
+      authType: "oauth2",
+    });
+    await testDb.insert(mcpConnectorAuthorizationReviews).values({
+      organizationId,
+      connectorId: changedConnectorId,
+      observedIssuer,
+      observedEndpointOrigins: ["https://auth.example.test"],
+    });
+    const before = await reviewRows(changedConnectorId);
+    expect(before).toHaveLength(1);
+
+    expect(
+      await approveAuthorization({
+        slug,
+        discoveredIssuer: "https://auth.example.test/discovered",
+        confirmedIssuer: observedIssuer,
+        activeOrganizationId: organizationId,
+      }),
+    ).toMatchObject({ code: 409 });
+    expect(await reviewRows(changedConnectorId)).toEqual(before);
+  });
+
+  test("approval applies only to the approving organization's review", async () => {
+    const slug = `catalogue-${catalogueConnectorId}`;
+    const issuer = "https://auth.example.test/catalogue";
+    await testDb.insert(organization).values({
+      id: otherOrganizationId,
+      name: "Other connector organization",
+      slug: `connector-${otherOrganizationId}`,
+      createdAt: new Date(),
+    });
+    await testDb.insert(mcpConnectors).values({
+      id: catalogueConnectorId,
+      organizationId: null,
+      slug,
+      displayName: "Catalogue connector",
+      description: "",
+      url: "https://mcp.example.test/catalogue",
+      authType: "oauth2",
+      isCurated: true,
+    });
+    await testDb.insert(mcpConnectorAuthorizationReviews).values(
+      [organizationId, otherOrganizationId].map((reviewOrganizationId) => ({
+        organizationId: reviewOrganizationId,
+        connectorId: catalogueConnectorId,
+        observedIssuer: issuer,
+        observedEndpointOrigins: ["https://auth.example.test"],
+      })),
+    );
+    const otherBefore = (await reviewRows(catalogueConnectorId)).filter(
+      (row) => row.organizationId === otherOrganizationId,
+    );
+    expect(otherBefore).toHaveLength(1);
+
+    expect(
+      await approveAuthorization({
+        slug,
+        discoveredIssuer: issuer,
+        confirmedIssuer: issuer,
+        activeOrganizationId: organizationId,
+      }),
+    ).toEqual({ approved: true });
+    const after = await reviewRows(catalogueConnectorId);
+    expect(
+      after.filter((row) => row.organizationId === organizationId),
+    ).toEqual([
+      expect.objectContaining({ status: "approved", approvedIssuer: issuer }),
+    ]);
+    expect(
+      after.filter((row) => row.organizationId === otherOrganizationId),
+    ).toEqual(otherBefore);
   });
 
   test("coordinates token refresh with a fenced lease and due retry", async () => {

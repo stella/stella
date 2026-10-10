@@ -1,11 +1,91 @@
 {
   "$schema-note": "Keys are <repo-relative test file>::<explicit assertProperty id>. Pin a neutral note and ISO date after the fix merges.",
+  "apps/api/src/handlers/case-law/ingestion/parsers/cz-ns-retention.property.test.ts::Czech supreme body markers retain their source order": [
+    {
+      "seed": 20260901,
+      "path": "1:0:0:30:30:30",
+      "note": "Regression coverage",
+      "date": "2026-10-03"
+    }
+  ],
+  "apps/api/src/handlers/case-law/ingestion/parsers/cz-us-retention.property.test.ts::Czech constitutional HTML body markers retain their source order": [
+    {
+      "seed": 20260901,
+      "path": "0:0:0:0:0:0:0:0:0:0",
+      "note": "Regression coverage",
+      "date": "2026-10-03"
+    }
+  ],
+  "apps/api/src/handlers/case-law/ingestion/parsers/cz-us-retention.property.test.ts::Czech constitutional RTF body markers retain their source order": [
+    {
+      "seed": 20260901,
+      "path": "0:0:0:0:0:0:0:0:0",
+      "note": "Regression coverage",
+      "date": "2026-10-03"
+    }
+  ],
+  "apps/api/src/handlers/chat/tools/subagent-tools.property.test.ts::subagent tool projection retains every eligible own entry and its input": [
+    {
+      "seed": 20260901,
+      "path": "0:0:0",
+      "note": "Regression coverage",
+      "date": "2026-10-04"
+    }
+  ],
+  "apps/api/src/handlers/legislation/catalog-response.test.ts::statute sitemap index bounds serialized Unicode shard metadata": [
+    {
+      "seed": 20260901,
+      "path": "0:0",
+      "note": "Regression coverage",
+      "date": "2026-10-03"
+    }
+  ],
+  "apps/api/src/handlers/legislation/catalog-response.test.ts::statute sitemap shard bounds serialized Unicode URL segments": [
+    {
+      "seed": 20260901,
+      "path": "0:0",
+      "note": "Regression coverage",
+      "date": "2026-10-03"
+    }
+  ],
+  "apps/api/src/handlers/tasks/calendar/list.db.test.ts::calendar-range-offset-invariance": [
+    {
+      "seed": 20260901,
+      "path": "7:0:0:0:1",
+      "note": "Regression coverage",
+      "date": "2026-10-05"
+    }
+  ],
   "apps/api/src/lib/legal-search/corpus-index-scored-scan.contract.test.ts::all-tied scores past the cutoff fall back and visit every document once": [
     {
       "seed": 20260901,
       "path": "0:0",
       "note": "Regression coverage",
       "date": "2026-10-03"
+    }
+  ],
+  "apps/api/src/lib/uploads/entity-create.test.ts::upload names are free among exact current siblings": [
+    {
+      "seed": 20260901,
+      "path": "0:0:0",
+      "note": "Regression coverage",
+      "date": "2026-10-05"
+    }
+  ],
+  "apps/web/src/components/inspector/inspector-file-metadata.test.ts::renamed file metadata keeps only supported attachment facets": [
+    {
+      "seed": 20260901,
+      "path": "1:1",
+      "note": "Regression coverage",
+      "date": "2026-10-05"
+    }
+  ],
+  "scripts/ci-checks-partition.test.ts::continued guard conditions preserve every previously runnable plan outcome": [
+    {
+      "seed": 20260901,
+      "path": "0:0:0:0:0:0",
+      "note": "Regression coverage",
+      "date": "2026-10-07"
     }
   ]
 }

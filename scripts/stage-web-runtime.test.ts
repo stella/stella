@@ -13,6 +13,39 @@ const runtimeWorkspacePaths = findExternalRuntimeWorkspacePaths(
   Bun.JSONC.parse(await Bun.file(lockfilePath).text()),
 );
 
+test.each(runtimeWorkspacePaths)(
+  "stages every exported entry of runtime workspace %s",
+  async (workspacePath) => {
+    const cacheRoot = path.join(repoRoot, "node_modules", ".cache");
+    await mkdir(cacheRoot, { recursive: true });
+    const stagedDir = await mkdtemp(path.join(cacheRoot, "runtime-exports-"));
+    try {
+      const staged = await stageWorkspacePackage({
+        pkgDir: path.join(repoRoot, workspacePath),
+        stagedDir,
+      });
+      for (const entry of Object.values(staged.exports)) {
+        const target = isDistModuleEntry(entry) ? entry.import : entry;
+        const probe = Bun.spawn({
+          cmd: [
+            process.execPath,
+            "-e",
+            "await import(process.argv[1]);",
+            path.join(stagedDir, target),
+          ],
+          cwd: stagedDir,
+          stderr: "inherit",
+          stdout: "ignore",
+        });
+        expect(await probe.exited).toBe(0);
+      }
+    } finally {
+      await rm(stagedDir, { force: true, recursive: true });
+    }
+  },
+  60_000,
+);
+
 describe("external runtime workspace closure", () => {
   // Bun stores a dependency under a consumer-scoped key ("parent/name") when
   // its resolution differs from the hoisted copy, and platform bindings ride

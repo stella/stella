@@ -24,6 +24,8 @@
 
 import path from "node:path";
 
+import { compareCodeUnit } from "@stll/collation";
+
 import {
   isResultConventionExcludedFile,
   RESULT_CONVENTION_ENABLED_GLOBS,
@@ -142,7 +144,7 @@ export const checkResultBoundaryEnrolment = ({
 
   let enabledUnits = 0;
   const byUnit = [...coverage.entries()].toSorted(([left], [right]) =>
-    left.localeCompare(right),
+    compareCodeUnit(left, right),
   );
   for (const [unit, { covered, total }] of byUnit) {
     if (covered === total) {

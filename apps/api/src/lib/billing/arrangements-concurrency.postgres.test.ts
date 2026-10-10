@@ -1,6 +1,6 @@
-import { panic, Result } from "better-result";
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -21,24 +21,10 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { withInterleaving } from "@/api/tests/helpers/transaction-interleaving";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgres = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
-
-const observeBlocking = async (tx: Transaction, pid: number) => {
-  for (let attempt = 0; attempt < 200; attempt += 1) {
-    const rows = await tx
-      .select({
-        blocked: sql<boolean>`pg_backend_pid() = ANY(pg_blocking_pids(${pid}))`,
-      })
-      .from(sql`(SELECT 1) AS lock_observation`);
-    if (rows.at(0)?.blocked) {
-      return;
-    }
-    await Bun.sleep(10);
-  }
-  panic("Concurrent cap refresh did not reach the matter lock");
-};
 
 if (!databaseUrl || !runPostgres) {
   describe.skip("billing cap crossing serialization (postgres)", () => {
@@ -53,11 +39,6 @@ if (!databaseUrl || !runPostgres) {
       const organizationId = mintAuthProviderId<"organization">();
       const userId = mintAuthProviderId<"user">();
       const workspaceId = createSafeId<"workspace">();
-      const gateReached = Promise.withResolvers<undefined>();
-      const secondStarted = Promise.withResolvers<undefined>();
-      const release = Promise.withResolvers<undefined>();
-      const blocked = Promise.withResolvers<undefined>();
-      const tasks: Promise<unknown>[] = [];
       const record = createBackgroundAuditRecorder({
         organizationId,
         workspaceId,
@@ -116,11 +97,6 @@ if (!databaseUrl || !runPostgres) {
           status: "approved",
           billable: true,
         });
-        const pidRows = await secondDb
-          .select({ pid: sql<number>`pg_backend_pid()` })
-          .from(sql`(SELECT 1) AS backend_identity`);
-        const pid =
-          pidRows.at(0)?.pid ?? panic("Second backend identity missing");
         const firstSafe = createSafeDb(
           markRlsDatabase(firstDb),
           [workspaceId],
@@ -133,92 +109,86 @@ if (!databaseUrl || !runPostgres) {
           organizationId,
           userId,
         );
-        const firstTask = Result.tryPromise(
-          async () =>
-            await firstSafe(
-              async (tx) =>
-                await recordBillingCapCrossings(tx, {
-                  workspaceId,
-                  recordAuditEvent: async (auditTx, events) => {
-                    await record(auditTx, events);
-                    gateReached.resolve(undefined);
-                    await secondStarted.promise;
-                    await observeBlocking(auditTx, pid);
-                    blocked.resolve(undefined);
-                    await release.promise;
-                  },
-                }),
-            ),
-        );
-        tasks.push(firstTask);
-        await Promise.race([
-          gateReached.promise,
-          firstTask.then(() =>
-            panic("First refresh finished before reaching its audit gate"),
-          ),
-        ]);
-        const secondTask = Result.tryPromise(
-          async () =>
-            await secondSafe(
-              async (tx) =>
+        const participant = (safeDb: typeof firstSafe) => ({
+          transaction: async <T>(run: (tx: Transaction) => Promise<T>) =>
+            (
+              await safeDb(run, {
+                retry: { times: 0, delayMs: 0, backoff: "constant" },
+              })
+            ).unwrap(),
+          steps: [
+            {
+              name: "refresh",
+              run: async (tx: Transaction) => {
                 await recordBillingCapCrossings(tx, {
                   workspaceId,
                   recordAuditEvent: record,
-                }),
-            ),
-        );
-        tasks.push(secondTask);
-        secondStarted.resolve(undefined);
-        await Promise.race([
-          blocked.promise,
-          firstTask.then(() =>
-            panic("First refresh finished before observing its competitor"),
-          ),
-        ]);
-        release.resolve(undefined);
-        const results = await Promise.all([firstTask, secondTask]);
-        for (const result of results) {
-          expect(result.isOk()).toBe(true);
-          if (result.isOk()) {
-            expect(result.value.isOk()).toBe(true);
-          }
-        }
-        const events = await firstDb
-          .select({ metadata: auditLogs.metadata })
-          .from(auditLogs)
-          .where(eq(auditLogs.workspaceId, workspaceId));
-        expect(events).toHaveLength(2);
-        expect(
-          events
-            .map((event) => {
-              const boundary = event.metadata?.["boundary"];
-              if (typeof boundary !== "string") {
-                panic("Crossing audit boundary missing");
-              }
-              return boundary;
-            })
-            .toSorted((left, right) => {
-              if (left === right) {
-                return 0;
-              }
-              return left < right ? -1 : 1;
-            }),
-        ).toEqual(["cap", "threshold"]);
-        const rows = await firstDb
-          .select()
-          .from(billingArrangements)
-          .where(eq(billingArrangements.workspaceId, workspaceId));
-        expect(rows.at(0)).toMatchObject({
-          thresholdState: "above",
-          capState: "above",
-          crossingSequence: 2,
+                });
+              },
+            },
+          ],
         });
+        let invariantCalls = 0;
+        const results = await withInterleaving({
+          databaseUrl,
+          a: participant(firstSafe),
+          b: participant(secondSafe),
+          reset: async () => {
+            await firstDb
+              .delete(auditLogs)
+              .where(eq(auditLogs.workspaceId, workspaceId));
+            await firstDb
+              .update(billingArrangements)
+              .set({
+                thresholdState: "below",
+                capState: "below",
+                crossingSequence: 0,
+              })
+              .where(eq(billingArrangements.workspaceId, workspaceId));
+          },
+          readState: async () =>
+            await firstDb
+              .select()
+              .from(billingArrangements)
+              .where(eq(billingArrangements.workspaceId, workspaceId)),
+          invariant: async ({ outcomes, state }) => {
+            invariantCalls += 1;
+            expect(outcomes).toEqual({
+              a: { status: "committed" },
+              b: { status: "committed" },
+            });
+            expect(state.at(0)).toMatchObject({
+              thresholdState: "above",
+              capState: "above",
+              crossingSequence: 2,
+            });
+            const events = await firstDb
+              .select({ metadata: auditLogs.metadata })
+              .from(auditLogs)
+              .where(eq(auditLogs.workspaceId, workspaceId));
+            expect(events).toHaveLength(2);
+            expect(
+              events
+                .map((event) => {
+                  const boundary = event.metadata?.["boundary"];
+                  if (typeof boundary !== "string") {
+                    panic("Crossing audit boundary missing");
+                  }
+                  return boundary;
+                })
+                .toSorted((left, right) => {
+                  if (left === right) {
+                    return 0;
+                  }
+                  return left < right ? -1 : 1;
+                }),
+            ).toEqual(["cap", "threshold"]);
+          },
+        });
+        expect(results).toHaveLength(6);
+        expect(invariantCalls).toBe(results.length);
+        expect(results.some(({ blocked }) => blocked.length > 0)).toBe(true);
       } finally {
-        gateReached.resolve(undefined);
-        secondStarted.resolve(undefined);
-        release.resolve(undefined);
-        blocked.resolve(undefined);
-        await Promise.allSettled(tasks);
         await firstDb
           .delete(organization)
           .where(eq(organization.id, organizationId));

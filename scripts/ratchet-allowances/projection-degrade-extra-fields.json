@@ -1,0 +1,6 @@
+{
+  "metric": "direct-failure-sinks",
+  "file": "apps/api/src/lib/chat/tool-output-degrade.ts",
+  "delta": 1,
+  "reason": "reportToolOutputDegrade is the one place chat and MCP report a tool result served after stripping undeclared fields or dropping an unmapped id; it captures the defect with paths only, so the call can succeed while the contract drift still pages."
+}

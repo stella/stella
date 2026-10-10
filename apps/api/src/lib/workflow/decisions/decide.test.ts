@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
 import type { Fetcher } from "@stll/fetch";
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { decide, decideMany } from "@/api/lib/workflow/decisions/decide";
 import type { DecisionModel } from "@/api/lib/workflow/decisions/decision-model";
@@ -299,16 +300,18 @@ describe("a failed call", () => {
     };
 
     expect(
-      decideMany({
-        id: "test.aborted",
-        dataClass: "customer",
-        orgAIConfig: null,
-        state,
-        questions: { signed: signedQuestion },
-        abortSignal: controller.signal,
-        client: decisionModel(fetcher),
-      }),
-    ).rejects.toThrow("Request cancelled");
+      await rejectionOf(
+        decideMany({
+          id: "test.aborted",
+          dataClass: "customer",
+          orgAIConfig: null,
+          state,
+          questions: { signed: signedQuestion },
+          abortSignal: controller.signal,
+          client: decisionModel(fetcher),
+        }),
+      ),
+    ).toHaveProperty("message", expect.stringContaining("Request cancelled"));
     expect(analytics.exceptions()).toEqual([]);
   });
 

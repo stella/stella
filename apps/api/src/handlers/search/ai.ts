@@ -19,7 +19,6 @@ import {
   searchDocuments,
   workspaceSearchDocuments,
 } from "@/api/db/schema";
-import { env } from "@/api/env";
 import { resolveSelectedWorkspaceIds } from "@/api/handlers/search/search";
 import { resolveCaching } from "@/api/lib/ai-config";
 import type { CachingDecision, OrgAIConfig } from "@/api/lib/ai-config";
@@ -37,8 +36,10 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { proveTextOnlyPersistedChatMessageContent } from "@/api/lib/chat/persisted-message-content";
 import { tSafeId, tUserId } from "@/api/lib/custom-schema";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { LIMITS } from "@/api/lib/limits";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import {
   brandPersistedCaseLawDecisionId,
   brandPersistedContactId,
@@ -201,6 +202,7 @@ type SearchSummaryChatBody = Static<typeof searchSummaryChatBodySchema>;
 
 type SearchAIContext = {
   organizationId: SafeId<"organization">;
+  admission: ModelDispatchAdmission;
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
   orgAIConfigStatus: OrgAIConfigStatus;
@@ -301,6 +303,7 @@ type GenerateRefinedSearchQueryOptions = {
   caching: CachingDecision;
   lastValidationError: string | null;
   organizationId: SafeId<"organization">;
+  admission: ModelDispatchAdmission;
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
 };
@@ -328,6 +331,7 @@ const generateRefinedSearchQuery = async ({
   caching,
   lastValidationError,
   organizationId,
+  admission,
   orgAIConfig,
   managedAIResidency,
 }: GenerateRefinedSearchQueryOptions) =>
@@ -340,6 +344,7 @@ const generateRefinedSearchQuery = async ({
         orgAIConfig,
         managedAIResidency,
         organizationId,
+        admission,
         // No workspace id is threaded through SearchAIContext at this call site.
         tenantWorkspaceIds: [],
         analytics,
@@ -361,6 +366,7 @@ const generateRefinedSearchQuery = async ({
 export const refineSearchQuery = async ({
   body,
   organizationId,
+  admission,
   orgAIConfig,
   managedAIResidency,
   orgAIConfigStatus,
@@ -406,6 +412,7 @@ export const refineSearchQuery = async ({
       body,
       lastValidationError,
       organizationId,
+      admission,
       orgAIConfig,
       managedAIResidency,
       analytics: aiAnalytics,
@@ -456,6 +463,7 @@ export const refineSearchQuery = async ({
 export const summarizeSearchResults = async ({
   body,
   organizationId,
+  admission,
   userId,
   accessibleWorkspaceIds,
   orgAIConfig,
@@ -533,6 +541,7 @@ export const summarizeSearchResults = async ({
         orgAIConfig,
         managedAIResidency,
         organizationId,
+        admission,
         tenantWorkspaceIds: resolved.ids,
         analytics: aiAnalytics,
         caching: resolveCaching({
@@ -733,7 +742,8 @@ export const createSearchSummaryChatThread = async ({
           version: 1,
           data: [{ type: "text", text: userText }],
         },
-        memoryExtractionEligible: env.FEATURE_AI_MEMORY,
+        memoryExtractionEligible:
+          isDeploymentFeatureEnabled("FEATURE_AI_MEMORY"),
         createdAt: now,
       },
       {
@@ -750,7 +760,8 @@ export const createSearchSummaryChatThread = async ({
             sourceDocuments: citedContexts.flatMap(toChatSourceDocuments),
           },
         }),
-        memoryExtractionEligible: env.FEATURE_AI_MEMORY,
+        memoryExtractionEligible:
+          isDeploymentFeatureEnabled("FEATURE_AI_MEMORY"),
         createdAt: new Date(now.getTime() + 1),
       },
     ]);

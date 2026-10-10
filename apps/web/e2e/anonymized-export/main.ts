@@ -1,10 +1,8 @@
 import { PDF, rgb } from "@libpdf/core";
 
+import { extractPdfAnonymizationText } from "../../src/lib/anonymize/pdf-anonymization-geometry";
 import { rasterizeAnonymizedPdf } from "../../src/lib/pdf/anonymized-export";
-import {
-  buildAnonymizedExportMasks,
-  extractAnonymizedExportText,
-} from "../../src/lib/pdf/anonymized-export.logic";
+import { buildAnonymizedExportMasks } from "../../src/lib/pdf/anonymized-export.logic";
 import type { PDFSearchBox } from "../../src/lib/pdf/pdf-search";
 import { toPDFSearchViewportBox } from "../../src/lib/pdf/pdf-search";
 import { loadPdfjs } from "../../src/lib/pdf/pdfjs-loader";
@@ -45,7 +43,7 @@ type AnonymizedExportCheck = {
 };
 
 declare global {
-  // oxlint-disable-next-line consistent-type-definitions -- global Window augmentation requires interface declaration merging
+  // oxlint-disable-next-line typescript/consistent-type-definitions -- global Window augmentation requires interface declaration merging
   interface Window {
     runAnonymizedExportCheck: () => Promise<AnonymizedExportCheck>;
     runUnsupportedExportCheck: () => Promise<boolean[]>;
@@ -116,7 +114,7 @@ window.runAnonymizedExportCheck = async () => {
 
   const input = await source.save();
   const parsedSource = await PDF.load(input);
-  const extraction = extractAnonymizedExportText(parsedSource.getPages());
+  const extraction = extractPdfAnonymizationText(parsedSource.getPages());
   const masks = buildAnonymizedExportMasks({
     extraction,
     terms: PRIVATE_TERMS,

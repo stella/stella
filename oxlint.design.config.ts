@@ -1,7 +1,9 @@
+import { panic } from "better-result";
 import { defineConfig } from "oxlint";
 
 import repository from "./oxlint.config.ts";
 import {
+  BUILTIN_LINT_BACKLOG_RULES,
   DESIGN_LINT_MEASURED_RULES,
   SHADCN_LINT_JS_PLUGINS,
   SHADCN_LINT_POLICY_OVERRIDES,
@@ -11,7 +13,30 @@ import {
   isDesignLintLocalRuleScope,
   sizeLintPolicyOverrides,
 } from "./scripts/design-lint-policy.ts";
+import { flattenLayers } from "./scripts/oxlint-effective-config.ts";
 import shadcn from "./scripts/oxlint-presets/shadcn.mjs";
+
+// The built-in backlog rules carry the value the repository lint resolves:
+// its own entry, else the last preset that names the rule. Both spellings of
+// an ESLint core rule count.
+const repositoryRuleLayers = flattenLayers(repository, "oxlint.config.ts").map(
+  ({ rules }) => rules,
+);
+const repositoryRule = (rule: string) => {
+  const spellings = [rule, rule.replace(/^eslint\//u, "")];
+  const values = repositoryRuleLayers.flatMap((layer) =>
+    spellings.flatMap((spelling) =>
+      layer[spelling] === undefined ? [] : [layer[spelling]],
+    ),
+  );
+  return (
+    values.at(-1) ??
+    panic(`oxlint.config.ts and its presets do not configure ${rule}`)
+  );
+};
+const builtinBacklogRules = Object.fromEntries(
+  BUILTIN_LINT_BACKLOG_RULES.map((rule) => [rule, repositoryRule(rule)]),
+);
 
 // Design-system pass for scripts/design-lint-baseline.ts: the tracked rules
 // under the repository policy, without the backlog overrides, so the guard can
@@ -25,13 +50,14 @@ import shadcn from "./scripts/oxlint-presets/shadcn.mjs";
 export default defineConfig({
   extends: [shadcn],
   categories: { correctness: "off" },
+  plugins: ["eslint", "typescript", "unicorn", "oxc", "react", "promise"],
   ignorePatterns: repository.ignorePatterns,
   jsPlugins: [
     ...SHADCN_LINT_JS_PLUGINS,
     ...repository.jsPlugins.filter(isDesignLintLocalPlugin),
   ],
   settings: { shadcn: SHADCN_LINT_SETTINGS },
-  rules: DESIGN_LINT_MEASURED_RULES,
+  rules: { ...DESIGN_LINT_MEASURED_RULES, ...builtinBacklogRules },
   overrides: [
     ...SHADCN_LINT_POLICY_OVERRIDES,
     ...sizeLintPolicyOverrides(SIZE_LINT_UNMEASURED),

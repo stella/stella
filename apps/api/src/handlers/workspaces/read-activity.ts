@@ -14,7 +14,7 @@ import {
   WORKSPACE_ACTIVITY_PERMISSIONS,
   WORKSPACE_ACTIVITY_SCOPE,
 } from "@/api/handlers/workspaces/activity-scope";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
 import {
@@ -28,6 +28,7 @@ import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limit
 
 const config = {
   permissions: WORKSPACE_ACTIVITY_PERMISSIONS,
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "ui_navigation_state" },
   access: "read",
   query: t.Object({
@@ -53,6 +54,7 @@ type InternalActivity =
       activityAt: Date;
       cursorActivityAt: string;
       entityKind: (typeof entities.$inferSelect)["kind"];
+      listItemType: (typeof entities.$inferSelect)["listItemType"];
       fieldId: string | null;
       fileName: string | null;
       hasThumbnail: boolean;
@@ -74,6 +76,7 @@ type WorkspaceActivity =
   | {
       activityAt: string;
       entityKind: (typeof entities.$inferSelect)["kind"];
+      listItemType: (typeof entities.$inferSelect)["listItemType"];
       /** The file field the matter file thumbnail route serves. */
       fieldId: string | null;
       fileName: string | null;
@@ -147,6 +150,7 @@ const readWorkspaceActivity = createSafeHandler(
             activityAt: entityActivityAt,
             cursorActivityAt: entityCursorActivityAt,
             entityKind: entities.kind,
+            listItemType: entities.listItemType,
             file: entityFile,
             id: entities.id,
             status: entities.status,
@@ -205,6 +209,7 @@ const readWorkspaceActivity = createSafeHandler(
         activityAt: row.activityAt,
         cursorActivityAt: row.cursorActivityAt,
         entityKind: row.entityKind,
+        listItemType: row.listItemType,
         fieldId: row.file?.fieldId ?? null,
         fileName: row.file?.fileName ?? null,
         hasThumbnail: row.file?.hasThumbnail ?? false,
@@ -233,6 +238,7 @@ const readWorkspaceActivity = createSafeHandler(
         items.push({
           activityAt: item.activityAt.toISOString(),
           entityKind: item.entityKind,
+          listItemType: item.listItemType,
           fieldId: item.fieldId,
           fileName: item.fileName,
           hasThumbnail: item.hasThumbnail,

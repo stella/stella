@@ -9,7 +9,8 @@ import type {
   SignalSeverity,
 } from "@stll/api-contract/signals";
 import { WORK_OBLIGATION_STATUS } from "@stll/api-contract/workflow-status";
-import { Temporal, DAY_IN_MS } from "@stll/time";
+import { Temporal, DAY_IN_MS, todayFor } from "@stll/time";
+import type { TimeZoneId } from "@stll/time";
 
 import type { SafeId } from "@/api/lib/branded-types";
 import type { NewSignal } from "@/api/lib/signals/emit";
@@ -44,16 +45,26 @@ export type WorkAttentionObligation = {
 };
 
 /**
- * Civil date of an instant on the server's UTC day. `hard_deadline_date` is a
- * date with no time zone, and the My Work queues default their `asOf` to the
- * same UTC day, so the scout and the queue agree about what is due.
+ * Civil date of an instant for the scout. `hard_deadline_date` is a date with
+ * no time zone, so it is judged on the organization's day in its time zone:
+ * the day the My Work queues default their `asOf` to when the client sends
+ * none, so the scout and the queue agree about what is due.
  */
-export const workAttentionToday = (now: Date): string =>
-  now.toISOString().slice(0, 10);
+export const workAttentionToday = (now: Date, zone: TimeZoneId): string =>
+  todayFor(
+    zone,
+    Temporal.Instant.fromEpochMilliseconds(now.getTime()),
+  ).toString();
+
+type DaysUntilDateOptions = { date: string; now: Date; zone: TimeZoneId };
 
 /** Whole days between two civil dates; negative once `date` is in the past. */
-export const daysUntilDate = (date: string, now: Date): number =>
-  Temporal.PlainDate.from(workAttentionToday(now)).until(
+export const daysUntilDate = ({
+  date,
+  now,
+  zone,
+}: DaysUntilDateOptions): number =>
+  Temporal.PlainDate.from(workAttentionToday(now, zone)).until(
     Temporal.PlainDate.from(date),
   ).days;
 
@@ -172,6 +183,7 @@ const deadlineAtRiskSignal = (
 export const workAttentionSignals = (
   obligation: WorkAttentionObligation,
   now: Date,
+  zone: TimeZoneId,
 ): NewSignal[] => {
   const signals: NewSignal[] = [];
   const daysWaiting = daysWaitingSince(obligation.assignedAt, now);
@@ -184,7 +196,11 @@ export const workAttentionSignals = (
 
   const { hardDeadlineDate } = obligation;
   if (hardDeadlineDate !== null) {
-    const daysUntilDeadline = daysUntilDate(hardDeadlineDate, now);
+    const daysUntilDeadline = daysUntilDate({
+      date: hardDeadlineDate,
+      now,
+      zone,
+    });
     if (daysUntilDeadline <= WORK_ATTENTION_DEADLINE_DAYS) {
       signals.push(
         deadlineAtRiskSignal(obligation, hardDeadlineDate, daysUntilDeadline),

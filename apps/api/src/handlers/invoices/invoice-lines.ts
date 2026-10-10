@@ -16,7 +16,7 @@ import type {
   InvoiceTotals,
   VatTreatment,
 } from "@stll/invoicing";
-import { applyMarkupCents, prorateHourlyCents } from "@stll/money";
+import { applyMarkupCents, timeEntryAmount } from "@stll/money";
 
 import type { Transaction } from "@/api/db/root";
 import {
@@ -146,6 +146,7 @@ type TimeEntryForLine = {
   rateAtEntry: CentsAmount;
   narrative: string;
   invoiceNarrative: string | null;
+  noCharge: boolean;
 };
 
 /**
@@ -165,11 +166,8 @@ export const timeEntryLineDraft = (
   ),
   quantity: hoursQuantity(entry.billedMinutes),
   unit: "h",
-  unitPrice: entry.rateAtEntry,
-  netAmount: prorateHourlyCents({
-    billedMinutes: entry.billedMinutes,
-    hourlyRateCents: entry.rateAtEntry,
-  }),
+  unitPrice: entry.noCharge ? cents(0) : entry.rateAtEntry,
+  netAmount: timeEntryAmount(entry),
   ...vat,
   source: INVOICE_LINE_SOURCE.TIME_ENTRY,
   billingPurpose: INVOICE_BILLING_PURPOSE.ORDINARY,
@@ -439,6 +437,7 @@ const materialiseAttachedEntryLines = async (
         rateAtEntry: timeEntries.rateAtEntry,
         narrative: timeEntries.narrative,
         invoiceNarrative: timeEntries.invoiceNarrative,
+        noCharge: timeEntries.noCharge,
       })
       .from(timeEntries)
       .where(
@@ -583,22 +582,23 @@ export const requireDraftInvoiceForEntryChanges = async (
   return Result.ok(result.value);
 };
 
-/** Invoice totals and VAT breakdown over the given lines. */
-export const invoiceTotals = (
+const calculateInvoiceAmounts = (
   lines: readonly LineAmountInput[],
-  documentType: InvoiceDocumentType = "invoice",
-): Result<InvoiceTotals, HandlerError> => {
-  const calculated = calculateDocumentTotals({
+  documentType: InvoiceDocumentType,
+) =>
+  calculateDocumentTotals({
     documentType,
     lines: lines.map(toLineInput),
-  });
-  if (calculated.isErr()) {
-    return Result.err(
-      new HandlerError({ status: 500, message: calculated.error.message }),
-    );
-  }
-  return Result.ok(calculated.value.totals);
-};
+  }).mapError(
+    (error) => new HandlerError({ status: 500, message: error.message }),
+  );
+
+/** Invoice totals and VAT breakdown over the given lines. */
+const invoiceTotals = (
+  lines: readonly LineAmountInput[],
+  documentType: InvoiceDocumentType = "invoice",
+): Result<InvoiceTotals, HandlerError> =>
+  calculateInvoiceAmounts(lines, documentType).map(({ totals }) => totals);
 
 type InvoiceForReadTotals = {
   documentType: InvoiceDocumentType;
@@ -615,20 +615,28 @@ type InvoiceForReadTotals = {
   expenses: readonly ExpenseForLine[];
 };
 
+type LineQuantity = {
+  quantity: string;
+  unit: string | null;
+  unitPrice: CentsAmount;
+};
+
+type InvoiceSourceLine = LineAmountInput & Partial<LineQuantity>;
+
 /**
- * Totals for an invoice read, which never writes. An invoice with stored
- * totals (`netAmount` set) sums its stored lines. One from before invoice
- * lines (`netAmount` NULL) also counts, in memory, the line each attached
- * entry without one would get (the drafts `materialiseAttachedEntryLines`
- * writes on the next line edit); a voided one of those has released its
- * entries, so its stored total stands as a net at 0 % VAT, which is how
- * totals were written before lines.
+ * The lines an invoice read counts. An invoice with stored totals (`netAmount`
+ * set) has exactly its stored lines. One from before invoice lines
+ * (`netAmount` NULL) also has, in memory, the line each attached entry without
+ * one would get (the drafts `materialiseAttachedEntryLines` writes on the next
+ * line edit); a voided one of those has released its entries, so its stored
+ * total stands as one net line at 0 % VAT, which is how totals were written
+ * before lines. That line alone carries no quantity or unit price.
  */
-export const readInvoiceTotals = (
+const readInvoiceSourceLines = (
   invoice: InvoiceForReadTotals,
-): Result<InvoiceTotals, HandlerError> => {
+): InvoiceSourceLine[] => {
   if (invoice.netAmount !== null) {
-    return invoiceTotals(invoice.lines, invoice.documentType);
+    return [...invoice.lines];
   }
   const linedTimeEntries = new Set<string>();
   const linedExpenses = new Set<string>();
@@ -643,7 +651,7 @@ export const readInvoiceTotals = (
       linedExpenses.add(line.expenseId);
     }
   }
-  const lines: LineAmountInput[] = [
+  const lines: InvoiceSourceLine[] = [
     ...invoice.lines,
     ...invoice.timeEntries
       .filter(
@@ -663,8 +671,51 @@ export const readInvoiceTotals = (
       ...ATTACHED_ENTRY_LINE_VAT,
     });
   }
-  return invoiceTotals(lines, invoice.documentType);
+  return lines;
 };
+
+/** Totals for an invoice read, which never writes. */
+const readInvoiceAmounts = (invoice: InvoiceForReadTotals) =>
+  calculateInvoiceAmounts(
+    readInvoiceSourceLines(invoice),
+    invoice.documentType,
+  );
+
+type InvoiceForDocumentLines = Omit<InvoiceForReadTotals, "lines"> & {
+  lines: readonly (InvoiceForReadTotals["lines"][number] & LineQuantity)[];
+};
+
+/**
+ * The lines an invoice document prints, each with its calculated amounts and
+ * the quantity, unit and unit price it was billed at, plus the totals over
+ * them. The unit price carries the document's sign, so quantity times unit
+ * price has the sign of the line's net amount on a credit note too.
+ */
+export const readInvoiceDocumentLines = (invoice: InvoiceForDocumentLines) => {
+  const source = readInvoiceSourceLines(invoice);
+  const sign = invoice.documentType === "credit_note" ? -1 : 1;
+  return calculateInvoiceAmounts(source, invoice.documentType).map(
+    ({ lines, totals }) => ({
+      lines: lines.map((line, index) => {
+        const billed =
+          source[index] ?? panic("A calculated line has no source line");
+        return {
+          ...line,
+          quantity: billed.quantity ?? null,
+          unit: billed.unit ?? null,
+          unitPrice:
+            billed.unitPrice === undefined
+              ? null
+              : cents(sign * Math.abs(billed.unitPrice) || 0),
+        };
+      }),
+      totals,
+    }),
+  );
+};
+
+export const readInvoiceTotals = (invoice: InvoiceForReadTotals) =>
+  readInvoiceAmounts(invoice).map(({ totals }) => totals);
 
 /**
  * Recomputes the invoice's stored totals from all of its lines (a voided

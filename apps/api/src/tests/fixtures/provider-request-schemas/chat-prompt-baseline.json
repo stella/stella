@@ -12,6 +12,30 @@
       {
         "reason": "Linked clause directive guidance and published-source discovery",
         "tokens": 33513
+      },
+      {
+        "reason": "Position sources on save_playbook",
+        "tokens": 33744
+      },
+      {
+        "reason": "Organization time-zone setting",
+        "tokens": 33953
+      },
+      {
+        "reason": "Citation tools state the Stella reader link (url) and the publisher source (source_url) once, merged with main's prompt changes",
+        "tokens": 34134
+      },
+      {
+        "reason": "time-billing tools are enrolment-gated and leave the shared prefix",
+        "tokens": 32647
+      },
+      {
+        "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
+        "tokens": 32475
+      },
+      {
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 33250
       }
     ],
     "anthropic/extended": [
@@ -26,6 +50,30 @@
       {
         "reason": "Linked clause directive guidance and published-source discovery",
         "tokens": 34002
+      },
+      {
+        "reason": "Position sources on save_playbook",
+        "tokens": 34235
+      },
+      {
+        "reason": "Organization time-zone setting",
+        "tokens": 34442
+      },
+      {
+        "reason": "Citation tools state the Stella reader link (url) and the publisher source (source_url) once, merged with main's prompt changes",
+        "tokens": 34624
+      },
+      {
+        "reason": "time-billing tools are enrolment-gated and leave the shared prefix",
+        "tokens": 33138
+      },
+      {
+        "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
+        "tokens": 32966
+      },
+      {
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 33740
       }
     ],
     "bedrock/default": [
@@ -40,6 +88,30 @@
       {
         "reason": "Linked clause directive guidance and published-source discovery",
         "tokens": 33746
+      },
+      {
+        "reason": "Position sources on save_playbook",
+        "tokens": 33977
+      },
+      {
+        "reason": "Organization time-zone setting",
+        "tokens": 34186
+      },
+      {
+        "reason": "Citation tools state the Stella reader link (url) and the publisher source (source_url) once, merged with main's prompt changes",
+        "tokens": 34367
+      },
+      {
+        "reason": "time-billing tools are enrolment-gated and leave the shared prefix",
+        "tokens": 32869
+      },
+      {
+        "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
+        "tokens": 32697
+      },
+      {
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 33483
       }
     ],
     "bedrock/extended": [
@@ -54,6 +126,30 @@
       {
         "reason": "Linked clause directive guidance and published-source discovery",
         "tokens": 34234
+      },
+      {
+        "reason": "Position sources on save_playbook",
+        "tokens": 34467
+      },
+      {
+        "reason": "Organization time-zone setting",
+        "tokens": 34674
+      },
+      {
+        "reason": "Citation tools state the Stella reader link (url) and the publisher source (source_url) once, merged with main's prompt changes",
+        "tokens": 34855
+      },
+      {
+        "reason": "time-billing tools are enrolment-gated and leave the shared prefix",
+        "tokens": 33359
+      },
+      {
+        "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
+        "tokens": 33187
+      },
+      {
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 33971
       }
     ],
     "google/default": [
@@ -68,6 +164,26 @@
       {
         "reason": "Linked clause directive guidance and published-source discovery",
         "tokens": 32682
+      },
+      {
+        "reason": "Position sources on save_playbook",
+        "tokens": 32913
+      },
+      {
+        "reason": "Organization time-zone setting",
+        "tokens": 33097
+      },
+      {
+        "reason": "Citation tools state the Stella reader link (url) and the publisher source (source_url) once, merged with main's prompt changes",
+        "tokens": 33264
+      },
+      {
+        "reason": "time-billing tools are enrolment-gated and leave the shared prefix",
+        "tokens": 31964
+      },
+      {
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 32592
       }
     ],
     "google/extended": [
@@ -82,6 +198,22 @@
       {
         "reason": "Linked clause directive guidance and published-source discovery",
         "tokens": 33159
+      },
+      {
+        "reason": "Position sources on save_playbook",
+        "tokens": 33392
+      },
+      {
+        "reason": "Organization time-zone setting",
+        "tokens": 33575
+      },
+      {
+        "reason": "time-billing tools are enrolment-gated and leave the shared prefix",
+        "tokens": 32443
+      },
+      {
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 33071
       }
     ],
     "mistral/default": [
@@ -96,6 +228,30 @@
       {
         "reason": "Linked clause directive guidance and published-source discovery",
         "tokens": 35118
+      },
+      {
+        "reason": "Position sources on save_playbook",
+        "tokens": 35349
+      },
+      {
+        "reason": "Organization time-zone setting",
+        "tokens": 35563
+      },
+      {
+        "reason": "Citation tools state the Stella reader link (url) and the publisher source (source_url) once, merged with main's prompt changes",
+        "tokens": 35754
+      },
+      {
+        "reason": "time-billing tools are enrolment-gated and leave the shared prefix",
+        "tokens": 34121
+      },
+      {
+        "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
+        "tokens": 33922
+      },
+      {
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 34735
       }
     ],
     "mistral/extended": [
@@ -110,6 +266,30 @@
       {
         "reason": "Linked clause directive guidance and published-source discovery",
         "tokens": 35644
+      },
+      {
+        "reason": "Position sources on save_playbook",
+        "tokens": 35877
+      },
+      {
+        "reason": "Organization time-zone setting",
+        "tokens": 36089
+      },
+      {
+        "reason": "Citation tools state the Stella reader link (url) and the publisher source (source_url) once, merged with main's prompt changes",
+        "tokens": 36280
+      },
+      {
+        "reason": "time-billing tools are enrolment-gated and leave the shared prefix",
+        "tokens": 34648
+      },
+      {
+        "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
+        "tokens": 34449
+      },
+      {
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 35261
       }
     ],
     "openai/default": [
@@ -124,6 +304,30 @@
       {
         "reason": "Linked clause directive guidance and published-source discovery",
         "tokens": 34721
+      },
+      {
+        "reason": "Position sources on save_playbook",
+        "tokens": 34952
+      },
+      {
+        "reason": "Organization time-zone setting",
+        "tokens": 35166
+      },
+      {
+        "reason": "Citation tools state the Stella reader link (url) and the publisher source (source_url) once, merged with main's prompt changes",
+        "tokens": 35357
+      },
+      {
+        "reason": "time-billing tools are enrolment-gated and leave the shared prefix",
+        "tokens": 33734
+      },
+      {
+        "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
+        "tokens": 33535
+      },
+      {
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 34338
       }
     ],
     "openai/extended": [
@@ -138,6 +342,30 @@
       {
         "reason": "Linked clause directive guidance and published-source discovery",
         "tokens": 35236
+      },
+      {
+        "reason": "Position sources on save_playbook",
+        "tokens": 35468
+      },
+      {
+        "reason": "Organization time-zone setting",
+        "tokens": 35681
+      },
+      {
+        "reason": "Citation tools state the Stella reader link (url) and the publisher source (source_url) once, merged with main's prompt changes",
+        "tokens": 35871
+      },
+      {
+        "reason": "time-billing tools are enrolment-gated and leave the shared prefix",
+        "tokens": 34250
+      },
+      {
+        "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
+        "tokens": 34051
+      },
+      {
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 34853
       }
     ],
     "openrouter-anthropic/default": [
@@ -152,6 +380,30 @@
       {
         "reason": "Linked clause directive guidance and published-source discovery",
         "tokens": 34587
+      },
+      {
+        "reason": "Position sources on save_playbook",
+        "tokens": 34826
+      },
+      {
+        "reason": "Organization time-zone setting",
+        "tokens": 35035
+      },
+      {
+        "reason": "Citation tools state the Stella reader link (url) and the publisher source (source_url) once, merged with main's prompt changes",
+        "tokens": 35220
+      },
+      {
+        "reason": "time-billing tools are enrolment-gated and leave the shared prefix",
+        "tokens": 33682
+      },
+      {
+        "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
+        "tokens": 33502
+      },
+      {
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 34298
       }
     ],
     "openrouter-anthropic/extended": [
@@ -166,6 +418,30 @@
       {
         "reason": "Linked clause directive guidance and published-source discovery",
         "tokens": 35086
+      },
+      {
+        "reason": "Position sources on save_playbook",
+        "tokens": 35326
+      },
+      {
+        "reason": "Organization time-zone setting",
+        "tokens": 35534
+      },
+      {
+        "reason": "Citation tools state the Stella reader link (url) and the publisher source (source_url) once, merged with main's prompt changes",
+        "tokens": 35719
+      },
+      {
+        "reason": "time-billing tools are enrolment-gated and leave the shared prefix",
+        "tokens": 34182
+      },
+      {
+        "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
+        "tokens": 34002
+      },
+      {
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 34797
       }
     ],
     "openrouter/default": [
@@ -180,6 +456,30 @@
       {
         "reason": "Linked clause directive guidance and published-source discovery",
         "tokens": 34587
+      },
+      {
+        "reason": "Position sources on save_playbook",
+        "tokens": 34826
+      },
+      {
+        "reason": "Organization time-zone setting",
+        "tokens": 35035
+      },
+      {
+        "reason": "Citation tools state the Stella reader link (url) and the publisher source (source_url) once, merged with main's prompt changes",
+        "tokens": 35220
+      },
+      {
+        "reason": "time-billing tools are enrolment-gated and leave the shared prefix",
+        "tokens": 33682
+      },
+      {
+        "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
+        "tokens": 33502
+      },
+      {
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 34298
       }
     ],
     "openrouter/extended": [
@@ -194,6 +494,30 @@
       {
         "reason": "Linked clause directive guidance and published-source discovery",
         "tokens": 35086
+      },
+      {
+        "reason": "Position sources on save_playbook",
+        "tokens": 35326
+      },
+      {
+        "reason": "Organization time-zone setting",
+        "tokens": 35534
+      },
+      {
+        "reason": "Citation tools state the Stella reader link (url) and the publisher source (source_url) once, merged with main's prompt changes",
+        "tokens": 35719
+      },
+      {
+        "reason": "time-billing tools are enrolment-gated and leave the shared prefix",
+        "tokens": 34182
+      },
+      {
+        "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
+        "tokens": 34002
+      },
+      {
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 34797
       }
     ]
   },

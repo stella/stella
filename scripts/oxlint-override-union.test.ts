@@ -16,6 +16,8 @@
 
 import { expect, test } from "bun:test";
 
+import { compareCodeUnit } from "@stll/collation";
+
 import config, { API_PROVIDER_ADAPTER_MODULES } from "../oxlint.config.ts";
 import {
   isRecord,
@@ -81,7 +83,6 @@ const DELIBERATE_NARROWINGS = [
       "path:@/api/db#createScopedDb",
       "path:@/api/db#db",
       "path:@/api/db/root#rlsDb,rootDb",
-      "path:@/api/lib/api-handlers#createHandler,createRootHandler",
       "path:@/api/lib/branded-types#toSafeId",
       "path:@stll/api-contract/safe-id#toSafeId",
       ...PROVIDER_ADAPTER_IMPORT_KEYS,
@@ -99,19 +100,18 @@ const DELIBERATE_NARROWINGS = [
   },
   {
     rule: "no-restricted-imports",
-    scope:
-      "apps/web/src/components/workspaces/kanban/use-kanban-drop-targets.ts",
+    scope: "apps/web/src/lib/drag-and-drop/element-registration.ts",
     drops: [
-      "path:@atlaskit/pragmatic-drag-and-drop/element/adapter#draggable,dropTargetForElements",
+      "path:@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter#draggable,dropTargetForElements",
     ],
     reason:
-      "This is the web kanban drag-and-drop owner: the one module that may call the adapter's draggable/dropTargetForElements directly, behind its conflict-guarded attachElementDropTarget.",
+      "This is the web element-registration owner: all element registrations share its conflict registry.",
   },
   {
     rule: "no-restricted-imports",
     scope: "packages/ui/src/kanban/drag-interactions.ts",
     drops: [
-      "path:@atlaskit/pragmatic-drag-and-drop/element/adapter#draggable,dropTargetForElements",
+      "path:@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter#draggable,dropTargetForElements",
     ],
     reason:
       "This is the @stll/ui kanban drag-and-drop owner: the one module that may call the adapter's draggable/dropTargetForElements directly.",
@@ -131,7 +131,7 @@ const pathKey = (
   const scope =
     importNames.length === 0
       ? `path:${name}`
-      : `path:${name}#${[...importNames].toSorted((a, b) => a.localeCompare(b)).join(",")}`;
+      : `path:${name}#${[...importNames].toSorted(compareCodeUnit).join(",")}`;
   // A ban that lets type-only imports through forbids less than one that does
   // not, so the two must never compare equal.
   return allowTypeImports ? `${scope}+types` : scope;
@@ -422,7 +422,7 @@ test("every restriction-shaped rule with options is tracked", () => {
     }
   }
   const sorted = (names: Iterable<string>) =>
-    [...names].toSorted((a, b) => a.localeCompare(b));
+    [...names].toSorted(compareCodeUnit);
   expect(sorted(configured)).toEqual(sorted(TRACKED_RULES));
 });
 
@@ -469,8 +469,38 @@ test("no override silently drops an inherited restriction", () => {
   );
 
   const sorted = (values: Iterable<string>) =>
-    [...values].toSorted((a, b) => a.localeCompare(b));
+    [...values].toSorted(compareCodeUnit);
   // Both directions: an undeclared drop is the bug this guard exists for, and
   // a declared drop that no longer happens means the table is stale.
   expect(sorted(observed)).toEqual(sorted(declared));
+});
+
+test("new web and UI surfaces cannot import element registration outside an owner", () => {
+  const scopes = readScopes(config).filter(
+    (scope) => "no-restricted-imports" in scope.rules,
+  );
+  for (const file of [
+    "apps/web/src/components/matter-target-picker.tsx",
+    "apps/web/src/components/app-sidebar.tsx",
+    "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog.tsx",
+    "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-day-cell.tsx",
+    "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-entity-chip.tsx",
+    "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx",
+    "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/entity-row-cells.tsx",
+    "apps/web/src/routes/knowledge/-components/position-editor.tsx",
+    "apps/web/src/routes/_protected.settings/-components/organization/document-types-card.tsx",
+    "apps/web/src/components/pdf/page-organizer.tsx",
+    "apps/web/src/components/workspaces/table/workspace-table/header-cells.tsx",
+    "apps/web/src/components/workspaces/kanban/use-kanban-drop-targets.ts",
+    "apps/web/src/lib/drag-and-drop/another-registration.ts",
+    "apps/web/src/components/new-drag-surface.tsx",
+    "packages/ui/src/new-drag-surface.tsx",
+  ]) {
+    const winner = scopes.findLast((scope) => scopeMatches(scope, file));
+    expect(
+      restrictedImportKeys(winner?.rules["no-restricted-imports"]),
+    ).toContain(
+      "path:@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter#draggable,dropTargetForElements",
+    );
+  }
 });

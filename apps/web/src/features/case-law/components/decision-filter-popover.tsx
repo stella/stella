@@ -30,12 +30,17 @@ import {
 import {
   COLLAPSED_COURT_TIERS,
   COURT_TIER_LABEL_KEYS,
+  decisionTypeSectionBuckets,
   YEAR_SECTION_LIMIT,
 } from "@/features/case-law/decision-filter-facets.logic";
-import type { DecisionFilterFacets } from "@/features/case-law/decision-filter-facets.logic";
+import type {
+  DecisionFilterFacets,
+  DecisionTypeFacetBucket,
+} from "@/features/case-law/decision-filter-facets.logic";
 
 /** What the URL selects, one value per facet. */
 type DecisionFacetSelection = Record<CaseLawFilterKey, string | undefined>;
+type CourtTierBucketsTier = DecisionFilterFacets["courtTiers"][number]["tier"];
 
 type DecisionFilterPopoverProps = {
   /** How many filters are on; drawn on the button, so a short list is explained. */
@@ -46,6 +51,38 @@ type DecisionFilterPopoverProps = {
   onDateRangeChange: (range: DecisionDateRange) => void;
   onSelect: (key: CaseLawFilterKey, value: string | undefined) => void;
   selection: DecisionFacetSelection;
+};
+
+/**
+ * The decision type, each canonical kind in the reader's language. Every entry
+ * carries its own label, so the shared section never falls back to drawing a
+ * bucket's value.
+ */
+export const DecisionTypeFacetSection = ({
+  buckets,
+  onSelect,
+  selectedValue,
+}: {
+  buckets: readonly DecisionTypeFacetBucket[];
+  onSelect: (value: string | undefined) => void;
+  selectedValue: string | undefined;
+}) => {
+  const t = useTranslations();
+  return (
+    <FacetSection
+      buckets={decisionTypeSectionBuckets(buckets, selectedValue).map(
+        ({ count, labelKey, value }) => ({
+          value,
+          label: labelKey === null ? value : t(labelKey),
+          count,
+        }),
+      )}
+      heading={t("common.type")}
+      name="type"
+      onSelect={onSelect}
+      selectedValue={selectedValue}
+    />
+  );
 };
 
 /**
@@ -82,22 +119,16 @@ export const DecisionFilterPopover = ({
           </div>
         </section>
       )}
-      <FacetSection
-        buckets={facets.source}
-        heading={t("common.source")}
-        name="source"
-        onSelect={(value) => onSelect("sourceId", value)}
-        selectedValue={selection.sourceId}
-      />
+      {/* No source (publisher) section: the court filter already says where
+          a decision comes from, and the publisher is internal. A link that
+          still carries a source keeps working as a removable chip. */}
       <DateSection
         buckets={facets.year}
         dateRange={dateRange}
         onDateRangeChange={onDateRangeChange}
       />
-      <FacetSection
+      <DecisionTypeFacetSection
         buckets={facets.decisionType}
-        heading={t("common.type")}
-        name="type"
         onSelect={(value) => onSelect("type", value)}
         selectedValue={selection.type}
       />
@@ -290,5 +321,3 @@ const CourtTierSection = ({
     </div>
   );
 };
-
-type CourtTierBucketsTier = DecisionFilterFacets["courtTiers"][number]["tier"];

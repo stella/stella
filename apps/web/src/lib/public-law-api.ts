@@ -18,15 +18,22 @@ const PUBLIC_LAW_AREA = "public-law";
 export const SEARCH_UNAVAILABLE_STATUS = 503;
 
 /**
+ * What the API answers when the public corpus is at its concurrency limit:
+ * the request was admitted nowhere, so asking again shortly is the fix, the
+ * same as an unreachable index.
+ */
+const CORPUS_BUSY_STATUS = 429;
+
+/**
  * Whether a failed public-law read is the search backend being unreachable
- * rather than a real answer. Read from the typed error's status, never from
- * its message, so the surface that degrades cannot drift from what the API
- * grades as retryable.
+ * or busy rather than a real answer. Read from the typed error's status,
+ * never from its message, so the surface that degrades cannot drift from
+ * what the API grades as retryable.
  */
 export const isSearchUnavailableError = (error: unknown): boolean =>
   APIError.is(error) &&
-  error.status === SEARCH_UNAVAILABLE_STATUS &&
-  error.code !== PUBLIC_COUNTRY_UNAVAILABLE_CODE;
+  (error.status === SEARCH_UNAVAILABLE_STATUS ||
+    error.status === CORPUS_BUSY_STATUS);
 
 /**
  * The deployment answers the public-law routes but keeps the surface off.
@@ -123,6 +130,16 @@ export const toPublicLawError = (
 const NOT_FOUND_STATUS = 404;
 
 /**
+ * Whether a classified public-law failure is a plain miss. A country the API
+ * advertises but does not serve answers 404 as well; its typed code keeps it
+ * a failure the reader is told about, not a link that leads nowhere.
+ */
+export const isPublicLawMissError = (error: unknown): boolean =>
+  APIError.is(error) &&
+  error.status === NOT_FOUND_STATUS &&
+  error.code !== PUBLIC_COUNTRY_UNAVAILABLE_CODE;
+
+/**
  * Whether a failed public-law response is a plain miss rather than a
  * transport, gate, or server failure. Classifying first is what lets a caller
  * treat the miss as an answer while `unwrapPublicLawEden` still raises
@@ -131,11 +148,7 @@ const NOT_FOUND_STATUS = 404;
 export const isPublicLawMiss = (
   error: PublicLawErrorInput,
   action: string,
-): boolean => {
-  const classified = toPublicLawError(error, action);
-
-  return APIError.is(classified) && classified.status === NOT_FOUND_STATUS;
-};
+): boolean => isPublicLawMissError(toPublicLawError(error, action));
 
 /**
  * Unwraps a public-law Eden response, throwing the classified failure.

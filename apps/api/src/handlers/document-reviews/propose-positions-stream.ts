@@ -19,15 +19,21 @@ import { DOCUMENT_REVIEW_LIMITS } from "@stll/api-contract";
 import { prepareReferenceProposal } from "@/api/handlers/document-reviews/prepare-proposal";
 import { streamReferenceProposal } from "@/api/handlers/document-reviews/reference-positions";
 import { proposeReviewPositionsBodySchema } from "@/api/handlers/document-reviews/schemas";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { pinProposedPositions } from "@/api/lib/document-review/reference-passages";
+import { startExecutionAdmission } from "@/api/lib/rate-limit/execution-admission";
 import { sseResponse } from "@/api/lib/sse";
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason: "Processes document inputs and streams proposed review positions.",
+  },
   description:
     "Stream proposed review positions from one or more reference documents as they are produced: the target's parties first, then each verified position (its kind, severity, what the term is for and what to compare, and the reference passages that state the standard), then what was read and deliberately not compared.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
   mcp: { type: "internal", reason: "realtime_stream" },
   body: proposeReviewPositionsBodySchema,
@@ -46,6 +52,8 @@ export const REVIEW_PROPOSAL_STREAM_ERROR = {
   FAILED: "proposal_failed",
 } as const;
 
+const PROPOSE_POSITIONS_ACTION_KIND = "document-reviews.propose-positions";
+
 const proposePositionsStream = createSafeHandler(
   config,
   async function* ({
@@ -56,6 +64,7 @@ const proposePositionsStream = createSafeHandler(
     promptCachingEnabled,
     request,
     safeDb,
+    scopedDb,
     session,
     user,
     workspaceId,
@@ -71,8 +80,31 @@ const proposePositionsStream = createSafeHandler(
       workspaceId,
     });
 
+    // The proposal streams after the handler returns, so its admission is
+    // held by the stream and released when the stream ends.
+    const admission = yield* Result.await(
+      startExecutionAdmission({
+        organizationId,
+        userId: user.id,
+        mode: "concurrency-only",
+        actionKind: PROPOSE_POSITIONS_ACTION_KIND,
+      }),
+    );
+    const reserved = await admission.reservePeriod(
+      {
+        actionKind: PROPOSE_POSITIONS_ACTION_KIND,
+        logicalPhaseId: Bun.randomUUIDv7(),
+      },
+      scopedDb,
+    );
+    if (Result.isError(reserved)) {
+      await admission.release();
+      return Result.err(reserved.error);
+    }
+
     const serviceTier = "standard" as const;
     const events = streamReferenceProposal({
+      admission: admission.modelAdmission,
       target: prepared.target,
       references: prepared.references,
       seededPositions: body.seededPositions,
@@ -95,7 +127,7 @@ const proposePositionsStream = createSafeHandler(
       },
       // The client hanging up cancels the model call: nobody is left to read
       // the rest of the checklist, and the tokens are still being paid for.
-      abortSignal: request.signal,
+      abortSignal: AbortSignal.any([request.signal, admission.signal]),
     });
 
     const sse = new ReadableStream<Uint8Array>({
@@ -164,6 +196,7 @@ const proposePositionsStream = createSafeHandler(
           // the wire carries a code, never a provider message.
           writeEvent("error", { code: REVIEW_PROPOSAL_STREAM_ERROR.FAILED });
         } finally {
+          await admission.release();
           if (!request.signal.aborted) {
             controller.close();
           }

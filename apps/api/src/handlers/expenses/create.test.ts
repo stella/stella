@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { withTimeBillingEnrolment } from "@/api/tests/helpers/time-billing-enrolment";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import createExpense from "./create";
@@ -14,33 +15,40 @@ const createContext = ({
 }: {
   safeDb: CreateExpenseCtx["safeDb"];
 }): CreateExpenseCtx =>
-  asTestRaw<CreateExpenseCtx>({
-    body: {
-      matterId: toSafeId<"entity">("matter_test"),
-      dateIncurred: "2026-07-01",
-      timezoneId: "Not/A_Real_Zone",
-      amount: 10_000,
-      currency: "USD",
-      category: "filing_fee",
-      description: "test",
-    },
-    request: new Request("https://example.test/v1/expenses/workspace_test", {
-      method: "PUT",
+  withTimeBillingEnrolment(
+    asTestRaw<CreateExpenseCtx>({
+      body: {
+        matterId: toSafeId<"entity">("matter_test"),
+        dateIncurred: "2026-07-01",
+        timezoneId: "Not/A_Real_Zone",
+        amount: 10_000,
+        currency: "USD",
+        category: "filing_fee",
+        description: "test",
+      },
+      request: new Request("https://example.test/v1/expenses/workspace_test", {
+        method: "PUT",
+      }),
+      route: "/v1/expenses/:workspaceId",
+      safeDb,
+      workspaceId: toSafeId<"workspace">("workspace_test"),
+      memberRole: sessionMemberRole("owner"),
+      session: {
+        activeOrganizationId: toSafeId<"organization">("org_test"),
+      },
+      user: { id: toSafeId<"user">("user_test") },
+      recordAuditEvent: async () => {},
     }),
-    route: "/v1/expenses/:workspaceId",
-    safeDb,
-    workspaceId: toSafeId<"workspace">("workspace_test"),
-    memberRole: sessionMemberRole("owner"),
-    session: {
-      activeOrganizationId: toSafeId<"organization">("org_test"),
-    },
-    user: { id: toSafeId<"user">("user_test") },
-    recordAuditEvent: async () => {},
-  });
+  );
 
 describe("createExpense (timezone validation)", () => {
   test("rejects an invalid IANA timezone id with a 400 instead of throwing", async () => {
     const { getCallCount, safeDb } = createScopedDbMock({
+      select: () => ({
+        from: () => ({
+          where: () => ({ limit: async () => [{ id: "matter_test" }] }),
+        }),
+      }),
       query: {
         entities: {
           findFirst: () => {
@@ -60,6 +68,6 @@ describe("createExpense (timezone validation)", () => {
         message: "Invalid timezone identifier",
       },
     });
-    expect(getCallCount()).toBe(0);
+    expect(getCallCount()).toBe(1);
   });
 });

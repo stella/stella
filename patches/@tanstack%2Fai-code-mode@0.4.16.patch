@@ -1,0 +1,26 @@
+create-code-mode-tool.js: a failed execute_typescript run no longer logs its
+error to the console or includes its message and stack in the completion
+event. The tool result still returns the error details to the model.
+apps/api/src/handlers/chat/tools/execute/chat-code-mode.test.ts guards both
+paths. Remove when upstream stops emitting failure details there.
+
+diff --git a/dist/esm/create-code-mode-tool.js b/dist/esm/create-code-mode-tool.js
+index b0436892977411b253f86c4c8252ab9443ddd975..138a6f639b97fc81372af4a4c610015051caf814 100644
+--- a/dist/esm/create-code-mode-tool.js
++++ b/dist/esm/create-code-mode-tool.js
+@@ -74,14 +74,11 @@ function createCodeModeTool(config) {
+ 				logCount: result.logs?.length ?? 0,
+ 				error: result.error ? {
+ 					name: result.error.name,
+-					message: result.error.message,
+-					...result.error.stack !== void 0 && { stack: result.error.stack },
+ 					...result.error.line !== void 0 && { line: result.error.line }
+ 				} : void 0
+ 			};
+ 			emitCustomEvent("code_mode:execution_finished", payload);
+-			if (!result.success) console.error("[code-mode] execute_typescript failed", payload);
+-			else if (typeof process !== "undefined" && process.env?.CODE_MODE_DEBUG === "1") console.info("[code-mode] execute_typescript ok", {
++			if (result.success && typeof process !== "undefined" && process.env?.CODE_MODE_DEBUG === "1") console.info("[code-mode] execute_typescript ok", {
+ 				durationMs,
+ 				phase,
+ 				logCount: payload.logCount

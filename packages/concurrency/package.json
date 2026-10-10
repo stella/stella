@@ -8,7 +8,11 @@
   "sideEffects": false,
   "exports": {
     ".": "./src/index.ts",
-    "./with-timeout": "./src/with-timeout.ts"
+    "./with-timeout": "./src/with-timeout.ts",
+    "./sleep": "./src/sleep.ts",
+    "./event-loop": "./src/event-loop.ts",
+    "./backoff-delay": "./src/backoff-delay.ts",
+    "./chunk": "./src/chunk.ts"
   },
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",
@@ -16,13 +20,16 @@
     "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/concurrency",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/concurrency",
-    "format": "bun ../../scripts/run-oxfmt.ts ."
+    "format": "bun ../../scripts/run-oxfmt.ts .",
+    "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src --include='*.test.ts')"
   },
   "dependencies": {
     "better-result": "catalog:"
   },
   "devDependencies": {
+    "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",
-    "bun-types": "catalog:"
+    "bun-types": "catalog:",
+    "fast-check": "catalog:"
   }
 }

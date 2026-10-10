@@ -9,6 +9,7 @@ import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import {
   Dialog,
+  DialogFormState,
   DialogClose,
   DialogDescription,
   DialogFooter,
@@ -28,6 +29,10 @@ import {
 import { stellaToast } from "@stll/ui/toast";
 
 import type { TranslationKey } from "@/i18n/types";
+import {
+  isCurrentStorageOwner,
+  storageOwner,
+} from "@/lib/account/user-scoped-storage";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
@@ -246,6 +251,7 @@ const ExportReportDialogBody = ({
   })();
 
   const submitRequest = async (request: ReportExportRequest) => {
+    const owner = storageOwner();
     setSubmission({ type: "submitting" });
     const result = await Result.tryPromise(async () => {
       const response = await api
@@ -256,6 +262,9 @@ const ExportReportDialogBody = ({
       }
       return { status: "success" as const, data: unwrapEden(response) };
     });
+    if (!isCurrentStorageOwner(owner)) {
+      return;
+    }
     setSubmission({ type: "ready" });
 
     if (Result.isError(result)) {
@@ -385,6 +394,20 @@ const ExportReportDialogBody = ({
 
   return (
     <DialogPopup className="sm:max-w-md">
+      <DialogFormState
+        dirty={
+          templateValue !== null ||
+          mode !== initialMode ||
+          format !== "docx" ||
+          !aiNarrative
+        }
+        onDiscard={() => {
+          setTemplateValue(null);
+          setMode(initialMode);
+          setFormat("docx");
+          setAiNarrative(true);
+        }}
+      />
       <DialogHeader>
         <DialogTitle>{t("workspaces.views.reportExport.title")}</DialogTitle>
         <DialogDescription>

@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 1,
+  "reason": "apps/api/src/lib/scheduler/tasks/memory-extractor.ts settleCompaction: the scheduler settles a compaction whose owner can no longer read it, writing only the processed markers; nothing member-visible changes and the skip is logged as scheduler.memory_extractor_owner_access_lost. The system audit recorder stacked on #4721 replaces this skip with a recorded scheduler entry."
+}

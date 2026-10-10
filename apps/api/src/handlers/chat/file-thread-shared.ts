@@ -10,7 +10,11 @@ import {
   chatThreads,
   fileChatThreads,
 } from "@/api/db/schema";
-import { estimateChatContextPromptTokens } from "@/api/handlers/chat/chat-prompt";
+import {
+  estimateChatContextPromptTokens,
+  estimateChatRevisionNoteTokens,
+} from "@/api/handlers/chat/chat-prompt";
+import { readChatRevisionContextChanges } from "@/api/handlers/chat/chat-revision-context";
 import { computeThreadContextUsage } from "@/api/handlers/chat/compaction";
 import type { ThreadContextUsage } from "@/api/handlers/chat/compaction";
 import type {
@@ -21,6 +25,11 @@ import { loadWindowedThreadMessages } from "@/api/handlers/chat/history-window";
 import type { ClientMessage } from "@/api/handlers/chat/message-page";
 import { loadChatMessagePage } from "@/api/handlers/chat/message-page";
 import { readLatestChatCompactionOnTx } from "@/api/handlers/chat/persistent-compaction";
+import {
+  EMPTY_CHAT_THREAD_ATTACHED_FILES,
+  readChatThreadAttachedFiles,
+} from "@/api/handlers/chat/threads/list-context";
+import type { ChatThreadAttachedFiles } from "@/api/handlers/chat/threads/list-context";
 import {
   areSubagentToolsRegistered,
   isWebSearchAvailable,
@@ -81,6 +90,7 @@ type ThreadMetadata = {
 export type FileThreadMessagePage = {
   /** See `ChatMessagePage.activeTurnId`. */
   activeTurnId: SafeId<"chatTurn"> | null;
+  attachedFiles: ChatThreadAttachedFiles;
   messages: ClientMessage[];
   olderCursor: string | null;
   contextMatterIds: SafeId<"workspace">[];
@@ -99,6 +109,7 @@ export const emptyMessagePage = (
   webSearchAvailable: boolean,
 ): FileThreadMessagePage => ({
   activeTurnId: null,
+  attachedFiles: EMPTY_CHAT_THREAD_ATTACHED_FILES,
   messages: [],
   olderCursor: null,
   contextMatterIds: [],
@@ -186,6 +197,7 @@ export const loadResolvedThreadMessagePage = async ({
   const page = unwrapTxRead(
     await loadChatMessagePage({ tx, threadId, userId }),
   );
+  const attachedFiles = await readChatThreadAttachedFiles({ threadId, tx });
 
   const checkpoint = await readLatestChatCompactionOnTx({ threadId, tx });
   const windowedMessages = unwrapTxRead(
@@ -197,6 +209,13 @@ export const loadResolvedThreadMessagePage = async ({
   );
 
   const hasContext = windowedMessages.length > 0 || checkpoint !== null;
+  const revisionChanges = unwrapTxRead(
+    await readChatRevisionContextChanges({
+      messages: windowedMessages,
+      threadId,
+      tx,
+    }),
+  );
   const { promptTokens, toolTokens } = estimateChatContextPromptTokens({
     toolAvailability: {
       docxEditMode: null,
@@ -227,6 +246,8 @@ export const loadResolvedThreadMessagePage = async ({
           role: message.role,
           parts: message.content.data,
         })),
+        conversationContextTokens:
+          estimateChatRevisionNoteTokens(revisionChanges),
         promptTokens,
         toolTokens,
         triggerTokens,
@@ -241,6 +262,7 @@ export const loadResolvedThreadMessagePage = async ({
 
   return {
     activeTurnId: page.activeTurnId,
+    attachedFiles,
     messages: page.messages,
     olderCursor: page.olderCursor,
     contextMatterIds,

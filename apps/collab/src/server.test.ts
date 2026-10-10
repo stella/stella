@@ -8,6 +8,7 @@ import {
   FOLIO_COLLAB_FLUSH_RESPONSE_TYPE,
   FOLIO_COLLAB_REDIS_RETRY_CLOSE_CODE,
 } from "@stll/api-contract/folio-collab";
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { createCollabServer } from "./server";
 
@@ -475,7 +476,10 @@ describe("Docker test operations", () => {
     await stderrReadStarted.promise;
     stderrRelease.resolve(undefined);
 
-    expect(operation).rejects.toThrow("docker kill failed: daemon unavailable");
+    expect(await rejectionOf(operation)).toHaveProperty(
+      "message",
+      expect.stringContaining("docker kill failed: daemon unavailable"),
+    );
   });
 });
 

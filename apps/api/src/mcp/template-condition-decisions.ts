@@ -51,19 +51,27 @@ const TEMPLATE_CONDITION_NON_MODEL_OUTPUT_SCHEMA = v.strictObject({
   decided_by: v.picklist(["generative_model", "user"]),
 });
 
+/** A condition no tier settled. The fill renders it as if false, so it is
+ *  reported, and graded as a shortfall, rather than shown as `false`. */
+export const TEMPLATE_UNDECIDED_CONDITION_OUTPUT_SCHEMA = v.strictObject({
+  path: v.string(),
+  label: v.string(),
+  state: v.literal("undecided"),
+  reason: v.picklist(TEMPLATE_CONDITION_UNDECIDED_REASONS),
+});
+
 export const TEMPLATE_CONDITION_DECISION_OUTPUT_SCHEMA = v.union([
   TEMPLATE_CONDITION_DECISION_MODEL_OUTPUT_SCHEMA,
   TEMPLATE_CONDITION_NON_MODEL_OUTPUT_SCHEMA,
-  v.strictObject({
-    path: v.string(),
-    label: v.string(),
-    state: v.literal("undecided"),
-    reason: v.picklist(TEMPLATE_CONDITION_UNDECIDED_REASONS),
-  }),
+  TEMPLATE_UNDECIDED_CONDITION_OUTPUT_SCHEMA,
 ]);
 
 export type TemplateConditionDecisionOutput = v.InferInput<
   typeof TEMPLATE_CONDITION_DECISION_OUTPUT_SCHEMA
+>;
+
+type TemplateUndecidedConditionOutput = v.InferInput<
+  typeof TEMPLATE_UNDECIDED_CONDITION_OUTPUT_SCHEMA
 >;
 
 /** The decision layer's reasons under the names the wire uses. Total, so a new
@@ -107,17 +115,22 @@ export const toFillConditionDecision = (
           return panic("Unhandled resolved condition decision source");
       }
     case "undecided":
-      return {
-        path: condition.path,
-        label: condition.label,
-        state: "undecided",
-        reason: UNDECIDED_REASON_CODE[condition.reason],
-      };
+      return toUndecidedConditionOutput(condition);
     default:
       condition satisfies never;
       return panic("Unhandled resolved condition state");
   }
 };
+
+/** An undecided condition as the tools report it. */
+export const toUndecidedConditionOutput = (
+  condition: Extract<ResolvedAiCondition, { state: "undecided" }>,
+): TemplateUndecidedConditionOutput => ({
+  path: condition.path,
+  label: condition.label,
+  state: "undecided",
+  reason: UNDECIDED_REASON_CODE[condition.reason],
+});
 
 /** A condition previewed without filling anything. The generative fallback
  *  never runs here; a decided answer comes from the supplied values or the

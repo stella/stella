@@ -2,6 +2,11 @@ import { Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
 import { t } from "elysia";
 
+import {
+  FILE_PROPERTY_TYPE_IMMUTABLE_CODE,
+  isFileProperty,
+} from "@stll/api-contract/property-policy";
+
 import { properties, propertyDependencies } from "@/api/db/schema";
 import type { PropertyRole } from "@/api/db/schema";
 import {
@@ -11,7 +16,8 @@ import {
 } from "@/api/db/schema-validators";
 import type { PropertyContent, PropertyTool } from "@/api/db/schema-validators";
 import { comparePropertiesForStale } from "@/api/handlers/properties/utils";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { propertyRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -239,8 +245,12 @@ const config = {
     "dependency, on a second document-type classifier, on a file property " +
     "without a manual-input tool, and on a select fallback that is not one " +
     "of the supplied options. The dependency rows of a playbook-materialized " +
-    "manual column are preserved rather than rewritten.",
+    "manual column are preserved rather than rewritten. File types cannot be " +
+    "changed to or from another type. Keep the existing type when renaming; " +
+    "use properties.create for a custom column with another value type.",
   permissions: { property: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: propertyRealtimeUpdates,
   mcp: {
     type: "capability",
     reason: "workspace_schema",
@@ -276,15 +286,6 @@ const updateProperty = createSafeHandler(
 
     const tool =
       body.tool.type === "ai-model" ? serializeAITool(body.tool) : body.tool;
-
-    if (content.type === "file" && tool.type !== "manual-input") {
-      return Result.err(
-        new HandlerError({
-          status: 422,
-          message: "File properties must have a manual input tool",
-        }),
-      );
-    }
 
     const dependencies =
       body.tool.type === "ai-model" ? body.tool.dependencies : [];
@@ -328,6 +329,26 @@ const updateProperty = createSafeHandler(
             ok: false as const,
             status: 404 as const,
             message: "Property not found",
+          };
+        }
+
+        if (isFileProperty(oldProperty.content) !== isFileProperty(content)) {
+          return {
+            ok: false as const,
+            status: 422 as const,
+            code: FILE_PROPERTY_TYPE_IMMUTABLE_CODE,
+            retryable: false,
+            message:
+              "File property types cannot be changed. Keep the existing type; create a custom property for other values.",
+            hint: "Keep the existing content.type in properties.update, or use properties.create to add a custom property with another type.",
+          };
+        }
+
+        if (isFileProperty(content) && tool.type !== "manual-input") {
+          return {
+            ok: false as const,
+            status: 422 as const,
+            message: "File properties must have a manual input tool",
           };
         }
 
@@ -552,6 +573,13 @@ const updateProperty = createSafeHandler(
         new HandlerError({
           status: txResult.status,
           message: txResult.message,
+          ...("code" in txResult
+            ? {
+                code: txResult.code,
+                retryable: txResult.retryable,
+                hint: txResult.hint,
+              }
+            : {}),
         }),
       );
     }

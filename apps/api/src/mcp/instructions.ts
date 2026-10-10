@@ -1,10 +1,14 @@
 import { panic } from "better-result";
 
 import type { McpMode } from "@/api/mcp/constants";
+import type { McpFeatureAccessContext } from "@/api/mcp/feature-access";
 import { FEEDBACK_WORKFLOW_REFERENCE_URI } from "@/api/mcp/feedback-workflow-reference";
 import { LEGISLATION_WORKFLOW_REFERENCE_URI } from "@/api/mcp/legislation-workflow-reference";
+import { scopeMcpResourceReferences } from "@/api/mcp/resources";
+import { surfaceToolVocabulary } from "@/api/mcp/surface-tool-mentions";
 import { TEMPLATE_WORKFLOW_REFERENCE_URI } from "@/api/mcp/template-workflow-reference";
 import { isMcpToolFeatureEnabled } from "@/api/mcp/tool-feature";
+import { scopeProseToSurface } from "@/api/mcp/tool-mentions";
 
 /**
  * Server-level `instructions` handed to MCP clients at connect time (the MCP
@@ -90,7 +94,7 @@ Destructive tools refuse to run unless you pass \`confirm: true\`, and you must 
  */
 const lawTools = (publicLawEnabled: boolean): string =>
   publicLawEnabled
-    ? `Whole corpus: search, then fetch its result ids (\`decision:<uuid>\`, \`statute:<eli>\`) for the text. Case law: search_case_law, lookup_case_law, read_case_law_decision, read_case_law_citations. Legislation: search_legislation, read_statute, read_statute_provisions, read_provision_history. Read ${LEGISLATION_WORKFLOW_REFERENCE_URI} before the first search_legislation call.`
+    ? `Whole corpus: search, then fetch its result ids (\`decision:<uuid>\`, \`statute:<eli>\`) for the text. Case law: search_case_law, lookup_case_law, read_case_law_decision, read_case_law_citations, open_case_law_decision (to open one for the user); case_law_coverage before concluding a decision is not held. Legislation: search_legislation, read_statute, read_statute_provisions, read_provision_history. Read ${LEGISLATION_WORKFLOW_REFERENCE_URI} before the first search_legislation call.`
     : "The public legal corpus is not enabled on this deployment, so this surface lists no tools.";
 
 const lawInstructions = (
@@ -117,7 +121,7 @@ export const MCP_INSTRUCTIONS = {
   law: lawInstructions(true),
 } as const satisfies Record<McpMode, string>;
 
-export const getMcpInstructions = (mode: McpMode): string => {
+const renderMcpInstructions = (mode: McpMode): string => {
   switch (mode) {
     case "default":
       return defaultInstructions(isMcpToolFeatureEnabled("FEATURE_PUBLIC_LAW"));
@@ -131,4 +135,15 @@ export const getMcpInstructions = (mode: McpMode): string => {
       mode satisfies never;
       return panic(`Unhandled MCP mode: ${String(mode)}`);
   }
+};
+
+export const getMcpInstructions = (
+  mode: McpMode,
+  context?: McpFeatureAccessContext,
+): string => {
+  const text = scopeMcpResourceReferences(renderMcpInstructions(mode), {
+    mode,
+    context,
+  });
+  return scopeProseToSurface(text, surfaceToolVocabulary(mode, context)) ?? "";
 };

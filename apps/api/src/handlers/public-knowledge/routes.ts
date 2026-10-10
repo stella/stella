@@ -9,6 +9,7 @@ import {
 import { env } from "@/api/env";
 import { createPublicKnowledgeEndpoints } from "@/api/handlers/public-knowledge/endpoints";
 import type { PublicKnowledgeDependencies } from "@/api/handlers/public-knowledge/endpoints";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { setSecurityHeaders } from "@/api/lib/security-headers";
 
 let bundledCatalogue: TemplatePackCatalogue | null = null;
@@ -38,7 +39,10 @@ export const createPublicKnowledgeRoute = (
       setSecurityHeaders(set);
     })
     .onBeforeHandle(({ path, set }) => {
-      if (isPublicKnowledgePath(path) && !env.FEATURE_PUBLIC_KNOWLEDGE) {
+      if (
+        isPublicKnowledgePath(path) &&
+        !isDeploymentFeatureEnabled("FEATURE_PUBLIC_KNOWLEDGE")
+      ) {
         set.status = 404;
         return { error: "Not Found" } as const;
       }

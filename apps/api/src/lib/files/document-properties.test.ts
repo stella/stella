@@ -255,10 +255,19 @@ describe("scrubDocumentProperties", () => {
    * The only assertion that means anything for a scrub: the identifying
    * strings are gone from the bytes, not merely hidden from our own reader.
    */
-  const assertNoTrace = (bytes: Uint8Array, needles: string[]) => {
+  const assertNoTrace = async (bytes: Uint8Array, needles: string[]) => {
     // latin1, not utf-8: a PDF's compressed and binary sections are not valid
     // utf-8, and a lossy decode could drop the very bytes under test.
-    const raw = Buffer.from(bytes).toString("latin1");
+    let raw = Buffer.from(bytes).toString("latin1");
+    if (bytes.at(0) === 0x50 && bytes.at(1) === 0x4b) {
+      const archive = await JSZip.loadAsync(bytes);
+      const entries = await Promise.all(
+        Object.values(archive.files).map(
+          async (entry) => await entry.async("string"),
+        ),
+      );
+      raw = entries.join("\n");
+    }
     for (const needle of needles) {
       expect(raw).not.toContain(needle);
     }
@@ -272,7 +281,7 @@ describe("scrubDocumentProperties", () => {
 
     const result = await scrubbed(source, DOCX_MIME_TYPE);
 
-    assertNoTrace(result, ["Jane Novak", "tomas", "Novák Legal"]);
+    await assertNoTrace(result, ["Jane Novak", "tomas", "Novák Legal"]);
     const buffer = toArrayBuffer(result);
     const after = await availableProperties(buffer, DOCX_MIME_TYPE);
     expect(valueOf(after, "author")).toBeUndefined();
@@ -313,7 +322,7 @@ describe("scrubDocumentProperties", () => {
 
     const result = await scrubbed(source, DOCX_MIME_TYPE);
 
-    assertNoTrace(result, ["Jane Novak"]);
+    await assertNoTrace(result, ["Jane Novak"]);
     const archive = await new JSZip().loadAsync(result);
     const preserved = await archive
       .file("docProps/custom.xml")
@@ -343,7 +352,7 @@ describe("scrubDocumentProperties", () => {
       DOCX_MIME_TYPE,
     );
 
-    assertNoTrace(result, ["Jane Novak", "Nov&#225;k Legal"]);
+    await assertNoTrace(result, ["Jane Novak", "Nov&#225;k Legal"]);
   });
 
   it("keeps typed OOXML collaboration metadata schema-valid and anonymous", async () => {
@@ -365,7 +374,7 @@ describe("scrubDocumentProperties", () => {
       DOCX_MIME_TYPE,
     );
 
-    assertNoTrace(result, ["Jane Novak", "JN", "2024-01-01T00:00:00Z"]);
+    await assertNoTrace(result, ["Jane Novak", "JN", "2024-01-01T00:00:00Z"]);
     const archive = await new JSZip().loadAsync(result);
     const core = await archive.file("docProps/core.xml")?.async("string");
     const scrubbedComments = await archive
@@ -383,6 +392,77 @@ describe("scrubDocumentProperties", () => {
     expect(scrubbedComments).not.toMatch(/x:date=/u);
     expect(scrubbedDocument?.match(/w:author="Author"/gu)).toHaveLength(2);
     expect(scrubbedDocument).not.toMatch(/w:date=/u);
+  });
+
+  it.each([
+    "<broken>",
+    '<!DOCTYPE root [<!ENTITY identity "Generated Person">]><root/>',
+  ])("refuses unreadable collaboration XML", async (xml) => {
+    const result = await scrubDocumentProperties({
+      bytes: await zipOf({
+        "docProps/core.xml": CORE_XML,
+        "docProps/app.xml": APP_XML,
+        "word/comments.xml": xml,
+      }),
+      mimeType: DOCX_MIME_TYPE,
+    });
+    expect(result.status).toBe("unreadable");
+  });
+
+  it("scrubs collaboration identities across office XML parts and keeps body text and references", async () => {
+    const parts = {
+      "word/people.xml":
+        '<w15:people xmlns:w15="http://schemas.microsoft.com/office/word/2012/wordml"><w15:person w15:author="Generated Person"><w15:presenceInfo w15:userId="generated@example.test" w15:providerId="Generated Provider"/></w15:person></w15:people>',
+      "xl/comments1.xml":
+        '<comments><authors><author>Generated Person</author></authors><comment authorId="0"><text>Comment body</text></comment></comments>',
+      "xl/persons/person.xml":
+        '<personList><person id="reference-id" displayName="Generated Person" userId="generated@example.test" providerId="Generated Provider"/></personList>',
+      "ppt/commentAuthors.xml":
+        '<authors><cmAuthor id="0" name="Generated Person" initials="GP"/></authors>',
+      "ppt/authors.xml":
+        '<authors><author id="reference-id" name="Generated Person" userId="generated@example.test" providerId="Generated Provider"/></authors>',
+    };
+    const output = await scrubbed(
+      await zipOf({
+        "docProps/core.xml": CORE_XML,
+        "docProps/app.xml": APP_XML,
+        ...parts,
+      }),
+      DOCX_MIME_TYPE,
+    );
+    await assertNoTrace(output, [
+      "Generated Person",
+      "generated@example.test",
+      "Generated Provider",
+      'initials="GP"',
+    ]);
+    const archive = await JSZip.loadAsync(output);
+    expect(await archive.file("xl/comments1.xml")?.async("string")).toContain(
+      "Comment body",
+    );
+    expect(
+      await archive.file("xl/persons/person.xml")?.async("string"),
+    ).toContain('id="reference-id"');
+    expect(await archive.file("ppt/authors.xml")?.async("string")).toContain(
+      'id="reference-id"',
+    );
+  });
+
+  it("scrubs ODF annotation creators without changing annotation body text", async () => {
+    const output = await scrubbed(
+      await odfZipOf({
+        "meta.xml":
+          '<office:document-meta xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"/>',
+        "content.xml":
+          '<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:dc="http://purl.org/dc/elements/1.1/"><office:annotation><dc:creator>Generated Person</dc:creator><body>Comment body</body></office:annotation></office:document-content>',
+      }),
+      ODT_MIME_TYPE,
+    );
+    await assertNoTrace(output, ["Generated Person"]);
+    const archive = await JSZip.loadAsync(output);
+    expect(await archive.file("content.xml")?.async("string")).toContain(
+      "Comment body",
+    );
   });
 
   it("clears the OpenDocument meta part, statistics included", async () => {
@@ -403,7 +483,7 @@ describe("scrubDocumentProperties", () => {
       ODT_MIME_TYPE,
     );
 
-    assertNoTrace(result, ["Jana Dvorak", "Petr Sova", "PT1H23M30S"]);
+    await assertNoTrace(result, ["Jana Dvorak", "Petr Sova", "PT1H23M30S"]);
     expect(
       await availableProperties(toArrayBuffer(result), ODT_MIME_TYPE),
     ).toEqual([]);
@@ -420,7 +500,7 @@ describe("scrubDocumentProperties", () => {
       ODT_MIME_TYPE,
     );
 
-    assertNoTrace(result, ["Secret Matter"]);
+    await assertNoTrace(result, ["Secret Matter"]);
     const view = new DataView(
       result.buffer,
       result.byteOffset,
@@ -490,7 +570,7 @@ describe("scrubDocumentProperties", () => {
 
     const result = await scrubbed(source, PDF_MIME_TYPE);
 
-    assertNoTrace(result, [
+    await assertNoTrace(result, [
       "Project Falcon",
       "Jana Novakova",
       "Internal only",

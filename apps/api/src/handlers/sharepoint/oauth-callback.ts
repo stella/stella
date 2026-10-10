@@ -19,7 +19,7 @@ import {
   tokenExpiresAt,
 } from "@/api/handlers/sharepoint/graph-oauth";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { oauthCallbackFailureReason } from "@/api/lib/errors/oauth-callback-failure";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
@@ -34,6 +34,7 @@ const requestQuery = t.Object({
 
 const config = {
   permissions: { integration: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: { type: "internal", reason: "provider_secret" },
   query: requestQuery,
 } satisfies HandlerConfig;
@@ -42,7 +43,7 @@ type CallbackRedirectInput =
   | { status: "connected" }
   | { status: "error"; reason: string };
 
-export const buildCallbackRedirectUrl = (
+const buildCallbackRedirectUrl = (
   frontendUrl: string,
   input: CallbackRedirectInput,
 ): string => {

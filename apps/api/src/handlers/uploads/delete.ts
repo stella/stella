@@ -19,7 +19,7 @@ import {
   uploadRoutePermission,
 } from "@/api/handlers/uploads/permissions";
 import { captureError } from "@/api/lib/analytics/capture";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -42,6 +42,7 @@ const config = {
   // resource-appropriate grant depends on the upload's purpose, which
   // authorizeUploadPurpose (uploads/permissions.ts) checks in-handler.
   permissions: uploadRoutePermission,
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "write",
   mcp: {
     type: "capability",
@@ -92,12 +93,9 @@ const abortUpload = createSafeHandler(
     }
 
     const abortedRows = yield* Result.await(
-      // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
-      safeDb((tx) => {
-        // audit: skip — pending_uploads bookkeeping; the row never
-        // became a durable entity, so there's nothing for the audit
-        // log to attribute it to.
-        return tx
+      safeDb((tx) =>
+        // audit: skip — pending_uploads bookkeeping; the row never became a durable entity, so there's nothing for the audit log to attribute it to.
+        tx
           .update(pendingUploads)
           .set({
             status: "rejected",
@@ -112,8 +110,8 @@ const abortUpload = createSafeHandler(
               inArray(pendingUploads.status, ["pending", "failed"]),
             ),
           )
-          .returning({ id: pendingUploads.id });
-      }),
+          .returning({ id: pendingUploads.id }),
+      ),
     );
     if (!abortedRows.at(0)) {
       const latest = yield* Result.await(

@@ -11,17 +11,29 @@ import { ConcurrentModificationError } from "@/api/lib/errors/tagged-errors";
 
 const SOURCE_INGESTION_LEASE_MS = 60 * 60 * 1000;
 
+export type CaseLawSourceLeasePurpose =
+  (typeof caseLawSources.$inferSelect)["ingestionLeasePurpose"];
+
 export type CaseLawSourceIngestionLease = {
   beforeDatabaseMark: () => Promise<void>;
   beforeRemoteEffect: <T>(effect: () => Promise<T>) => Promise<T>;
   leaseToken: SafeId<"caseLawSourceIngestionLease">;
+  purpose: CaseLawSourceLeasePurpose;
   release: () => Promise<void>;
   source: typeof caseLawSources.$inferSelect;
 };
 
+const DECISION_MERGE_EPOCH_ADVANCE = {
+  ingestion: 0,
+  "decision-merge": 1,
+} as const satisfies Record<CaseLawSourceLeasePurpose, number>;
+
 type AcquireCaseLawSourceIngestionLeaseOptions = {
   scopedDb: ScopedDb;
   sourceId: SafeId<"caseLawSource">;
+  purpose?: CaseLawSourceLeasePurpose;
+  /** Cleanup may need a fresh bounded schema-lane retry after work stopped. */
+  releaseDb?: ScopedDb;
 };
 
 const nextLeaseExpiry = (): Date =>
@@ -37,6 +49,8 @@ const nextLeaseExpiry = (): Date =>
 export const acquireCaseLawSourceIngestionLease = async ({
   scopedDb,
   sourceId,
+  purpose = "ingestion",
+  releaseDb = scopedDb,
 }: AcquireCaseLawSourceIngestionLeaseOptions): Promise<CaseLawSourceIngestionLease | null> => {
   const leaseToken = createSafeId<"caseLawSourceIngestionLease">();
   const source = await scopedDb(async (tx) => {
@@ -47,6 +61,8 @@ export const acquireCaseLawSourceIngestionLease = async ({
         .set({
           ingestionLeaseExpiresAt: nextLeaseExpiry(),
           ingestionLeaseToken: leaseToken,
+          ingestionLeasePurpose: purpose,
+          decisionMergeEpoch: sql`${caseLawSources.decisionMergeEpoch} + ${DECISION_MERGE_EPOCH_ADVANCE[purpose]}`,
           updatedAt: sql`${caseLawSources.updatedAt}`,
         })
         .where(
@@ -75,24 +91,25 @@ export const acquireCaseLawSourceIngestionLease = async ({
     return null;
   }
 
-  const renewLeaseTx = async (tx: Transaction) =>
+  const renewLeaseTx = async (tx: Transaction) => {
     // audit: skip — renews ephemeral ownership without domain mutation
-    (
-      await tx
-        .update(caseLawSources)
-        .set({
-          ingestionLeaseExpiresAt: nextLeaseExpiry(),
-          updatedAt: sql`${caseLawSources.updatedAt}`,
-        })
-        .where(
-          and(
-            eq(caseLawSources.id, sourceId),
-            eq(caseLawSources.ingestionLeaseToken, leaseToken),
-            sql`${caseLawSources.ingestionLeaseExpiresAt} > now()`,
-          ),
-        )
-        .returning({ id: caseLawSources.id })
-    ).at(0);
+    const renewed = await tx
+      .update(caseLawSources)
+      .set({
+        ingestionLeaseExpiresAt: nextLeaseExpiry(),
+        updatedAt: sql`${caseLawSources.updatedAt}`,
+      })
+      .where(
+        and(
+          eq(caseLawSources.id, sourceId),
+          eq(caseLawSources.ingestionLeaseToken, leaseToken),
+          eq(caseLawSources.ingestionLeasePurpose, purpose),
+          sql`${caseLawSources.ingestionLeaseExpiresAt} > now()`,
+        ),
+      )
+      .returning({ id: caseLawSources.id });
+    return renewed.at(0);
+  };
 
   const beforeDatabaseMark = async (): Promise<void> => {
     const renewed = await scopedDb(renewLeaseTx);
@@ -112,20 +129,23 @@ export const acquireCaseLawSourceIngestionLease = async ({
       return result;
     },
     leaseToken,
+    purpose,
     release: async () => {
-      await scopedDb(async (tx) => {
+      await releaseDb(async (tx) => {
         // audit: skip — releases only this caller's ephemeral lease
         await tx
           .update(caseLawSources)
           .set({
             ingestionLeaseExpiresAt: null,
             ingestionLeaseToken: null,
+            ingestionLeasePurpose: "ingestion",
             updatedAt: sql`${caseLawSources.updatedAt}`,
           })
           .where(
             and(
               eq(caseLawSources.id, sourceId),
               eq(caseLawSources.ingestionLeaseToken, leaseToken),
+              eq(caseLawSources.ingestionLeasePurpose, purpose),
             ),
           );
       });

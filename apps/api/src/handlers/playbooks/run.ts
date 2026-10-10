@@ -3,12 +3,15 @@ import { t } from "elysia";
 
 import { PLAYBOOK_RUN_PROJECTIONS } from "@stll/api-contract";
 
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { playbookRunRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { loadLatestApprovedVersion } from "@/api/lib/document-review/approved-playbook-versions";
 import { openPlaybookRun } from "@/api/lib/document-review/open-playbook-run";
+import type { OpenPlaybookRunResult } from "@/api/lib/document-review/open-playbook-run";
+import { playbookRunFailureDetails } from "@/api/lib/document-review/playbook-run-refusal";
 import {
   PLAYBOOK_RUN_START_OUTCOME,
   playbookRunStartOutcome,
@@ -18,6 +21,10 @@ import { PLAYBOOK_RUN_DOCUMENTS_MAX } from "@/api/lib/document-review/table-run-
 import type { CreatePlaybookTableRunsResult } from "@/api/lib/document-review/table-run-create";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { requestExtractionRunStore } from "@/api/lib/extraction-runs/request-run-store";
+import {
+  createModelActionAdmitter,
+  modelActionRefusal,
+} from "@/api/lib/rate-limit/model-action-admission";
 import { startWorkflow } from "@/api/lib/workflow-queue";
 import { PLAYBOOK_RUN_PROJECTION } from "@/api/lib/workflow/playbook-run-projection";
 
@@ -41,6 +48,8 @@ const config = {
     "materializes the playbook's extraction and verdict columns onto the " +
     'table, "none" materializes none. Findings populate asynchronously.',
   permissions: { playbook: ["apply"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: playbookRunRealtimeUpdates,
   access: "write",
   mcp: { type: "tool", name: "run_playbook" },
   params: workspaceParams({
@@ -51,7 +60,9 @@ const config = {
   body: runPlaybookBodySchema,
 } satisfies WorkspaceHandlerConfig;
 
-type RunFailure = { ok: false; status: 400 | 404; message: string };
+type RunFailure =
+  | Extract<OpenPlaybookRunResult, { ok: false }>
+  | { ok: false; status: 404; message: string };
 
 type RunSuccess = {
   ok: true;
@@ -88,6 +99,21 @@ export const createRunPlaybook = (
     }) {
       const organizationId = session.activeOrganizationId;
       const { projection } = body;
+
+      // A review-only run queues one document review per document and draws
+      // one action for all of them, before any run exists. A projected run
+      // draws its action when its workflow starts.
+      if (projection === PLAYBOOK_RUN_PROJECTION.NONE) {
+        const admitted = await createModelActionAdmitter({
+          organizationId,
+          userId: user.id,
+          organizationStateDb: scopedDb,
+          actionKind: "document-reviews.start",
+        })(async ({ admission }) => await Promise.resolve(admission));
+        if (Result.isError(admitted)) {
+          return Result.err(modelActionRefusal(admitted.error));
+        }
+      }
 
       const txResult = yield* Result.await(
         safeDb(async (tx): Promise<RunFailure | RunSuccess> => {
@@ -132,10 +158,7 @@ export const createRunPlaybook = (
 
       if (!txResult.ok) {
         return Result.err(
-          new HandlerError({
-            status: txResult.status,
-            message: txResult.message,
-          }),
+          new HandlerError(playbookRunFailureDetails(txResult)),
         );
       }
 

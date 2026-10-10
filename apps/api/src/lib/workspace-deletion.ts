@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 
+import { CLIENT_MATTER_ADMIN_ROLES } from "@stll/permissions";
+
 import { member } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
@@ -21,7 +23,6 @@ import { completeWorkspaceDeletion } from "@/api/lib/organization-storage-teardo
 import { hasCurrentMemberPermission } from "@/api/lib/permission-authorization";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 
-const ORGANIZATION_WIDE_WORKSPACE_ROLES = new Set(["owner", "admin"]);
 const WORKSPACE_DELETION_DEADLOCK_RETRIES = 2;
 
 export type WorkspaceDeletionDatabase = {
@@ -105,7 +106,7 @@ const actorCanAccessWorkspace = async ({
 }): Promise<boolean> => {
   if (
     workspace.clientId !== null &&
-    ORGANIZATION_WIDE_WORKSPACE_ROLES.has(actorRole)
+    CLIENT_MATTER_ADMIN_ROLES.some((role) => role === actorRole)
   ) {
     return true;
   }

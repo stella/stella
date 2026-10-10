@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import { lookupByTaxId, searchByName } from "./client.js";
 import { GcisValidationError } from "./errors.js";
 import type { GcisResponse } from "./types.js";
@@ -11,7 +13,7 @@ const readFixture = async (name: string): Promise<GcisResponse> => {
   // and committed alongside the tests; runtime validation here would
   // only catch drift between an upstream payload and the committed
   // JSON, which is precisely what the assertions below check.
-  // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   return value as GcisResponse;
 };
 
@@ -116,8 +118,8 @@ describe("lookupByTaxId (fixture)", () => {
     );
 
     expect(
-      lookupByTaxId("22099131", { observer: "unobserved" }),
-    ).rejects.toMatchObject({
+      await rejectionOf(lookupByTaxId("22099131", { observer: "unobserved" })),
+    ).toMatchObject({
       name: "GcisAPIError",
       httpStatus: 500,
     });
@@ -137,8 +139,8 @@ describe("lookupByTaxId (fixture)", () => {
     );
 
     expect(
-      lookupByTaxId("22099131", { observer: "unobserved" }),
-    ).rejects.toMatchObject({
+      await rejectionOf(lookupByTaxId("22099131", { observer: "unobserved" })),
+    ).toMatchObject({
       name: "GcisAPIError",
     });
   });
@@ -273,8 +275,8 @@ describe("searchByName (fixture)", () => {
     );
 
     expect(
-      lookupByTaxId("22099131", { observer: "unobserved" }),
-    ).rejects.toMatchObject({
+      await rejectionOf(lookupByTaxId("22099131", { observer: "unobserved" })),
+    ).toMatchObject({
       name: "GcisAPIError",
       message: "GCIS returned no rows with the fields required by stella",
     });
@@ -321,30 +323,30 @@ describe("searchByName (fixture)", () => {
 // Validation
 // ---------------------------------------------------------------------------
 describe("lookupByTaxId validation", () => {
-  test("rejects format violations", () => {
+  test("rejects format violations", async () => {
     expect(
-      lookupByTaxId("1234567", { observer: "unobserved" }),
-    ).rejects.toBeInstanceOf(GcisValidationError);
+      await rejectionOf(lookupByTaxId("1234567", { observer: "unobserved" })),
+    ).toBeInstanceOf(GcisValidationError);
     expect(
-      lookupByTaxId("abcdefgh", { observer: "unobserved" }),
-    ).rejects.toBeInstanceOf(GcisValidationError);
+      await rejectionOf(lookupByTaxId("abcdefgh", { observer: "unobserved" })),
+    ).toBeInstanceOf(GcisValidationError);
   });
 
-  test("rejects bad checksum", () => {
+  test("rejects bad checksum", async () => {
     // 22099131 is valid; bump the check digit.
     expect(
-      lookupByTaxId("22099130", { observer: "unobserved" }),
-    ).rejects.toBeInstanceOf(GcisValidationError);
+      await rejectionOf(lookupByTaxId("22099130", { observer: "unobserved" })),
+    ).toBeInstanceOf(GcisValidationError);
   });
 });
 
 describe("searchByName validation", () => {
-  test("rejects empty input", () => {
-    expect(searchByName("", { observer: "unobserved" })).rejects.toBeInstanceOf(
-      GcisValidationError,
-    );
+  test("rejects empty input", async () => {
     expect(
-      searchByName("  ", { observer: "unobserved" }),
-    ).rejects.toBeInstanceOf(GcisValidationError);
+      await rejectionOf(searchByName("", { observer: "unobserved" })),
+    ).toBeInstanceOf(GcisValidationError);
+    expect(
+      await rejectionOf(searchByName("  ", { observer: "unobserved" })),
+    ).toBeInstanceOf(GcisValidationError);
   });
 });

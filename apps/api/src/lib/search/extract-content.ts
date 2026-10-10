@@ -12,6 +12,7 @@
 import { Result } from "better-result";
 
 import { resolveEmailMimeType } from "@stll/api-contract/email-mime-types";
+import { OFFICE_ARCHIVE_FORMATS } from "@stll/docx-utils/office-formats";
 
 import { captureError } from "@/api/lib/analytics/capture";
 import {
@@ -37,20 +38,11 @@ import {
 import { spawnWorker } from "@/api/lib/subprocess";
 import {
   DOC_MIME_TYPE,
-  DOCM_MIME_TYPE,
-  DOCX_MIME_TYPE,
   EPUB_MIME_TYPE,
-  ODP_MIME_TYPE,
-  ODS_MIME_TYPE,
-  ODT_MIME_TYPE,
   PDF_MIME_TYPE,
-  PPSX_MIME_TYPE,
   PPT_MIME_TYPE,
-  PPTX_MIME_TYPE,
   RTF_MIME_TYPE,
   XLS_MIME_TYPE,
-  XLSB_MIME_TYPE,
-  XLSX_MIME_TYPE,
 } from "@/api/mime-types";
 
 const WORKER_PATH = resolveRuntimeWorkerPath({
@@ -66,10 +58,13 @@ const WORKER_PATH = resolveRuntimeWorkerPath({
  * stored MIME type has been rejected.
  */
 const EXTENSION_MIME_TYPES: Record<string, string> = {
+  ...Object.fromEntries(
+    Object.entries(OFFICE_ARCHIVE_FORMATS)
+      .filter(([, format]) => canExtractMimeType(format.mimeType))
+      .map(([extension, format]) => [extension, format.mimeType]),
+  ),
   csv: "text/csv",
   doc: DOC_MIME_TYPE,
-  docm: DOCM_MIME_TYPE,
-  docx: DOCX_MIME_TYPE,
   epub: EPUB_MIME_TYPE,
   htm: "text/html",
   html: "text/html",
@@ -77,21 +72,14 @@ const EXTENSION_MIME_TYPES: Record<string, string> = {
   json: "application/json",
   md: "text/markdown",
   markdown: "text/markdown",
-  odp: ODP_MIME_TYPE,
-  ods: ODS_MIME_TYPE,
-  odt: ODT_MIME_TYPE,
   pdf: PDF_MIME_TYPE,
-  ppsx: PPSX_MIME_TYPE,
   ppt: PPT_MIME_TYPE,
-  pptx: PPTX_MIME_TYPE,
   rtf: RTF_MIME_TYPE,
   text: "text/plain",
   ts: "text/plain",
   tsx: "text/plain",
   txt: "text/plain",
   xls: XLS_MIME_TYPE,
-  xlsb: XLSB_MIME_TYPE,
-  xlsx: XLSX_MIME_TYPE,
 };
 
 export const resolveExtractionMimeType = ({

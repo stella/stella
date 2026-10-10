@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
@@ -8,8 +9,8 @@ import {
 } from "@stll/property-testing";
 
 import type { AliasQuality, SanctionsEntry } from "./entry";
-import { buildNameIndex, matchNames } from "./name-match";
-import { nameTokens } from "./normalise";
+import { buildNameIndex, matchNames, MAX_SCREENING_WORK } from "./name-match";
+import { nameReading, nameTokens } from "./normalise";
 
 const config = () => propertyConfig({ seed: propertySeed() });
 const word = fc.oneof(
@@ -59,20 +60,57 @@ const entry = (
   sourceUrl: "https://example.com/list",
 });
 
+const matchesFor = (
+  index: ReturnType<typeof buildNameIndex>,
+  query: string,
+) => {
+  const result = matchNames({
+    index,
+    reading: nameReading(query, "person"),
+    ceiling: Math.sqrt,
+    rankEntry: (_entry, nameScore) => nameScore,
+    cutoff: 0,
+    work: {
+      remaining: MAX_SCREENING_WORK,
+      exhausted: false,
+      selection: "complete",
+    },
+  });
+  if (result === undefined) {
+    panic("Small generated names exceeded the screening work budget");
+  }
+  expect(result.truncated).toBe(false);
+  return result.matches;
+};
+
 const scores = (index: ReturnType<typeof buildNameIndex>, query: string) =>
-  [...matchNames(index, nameTokens(query, "person"), Math.sqrt, 0)]
+  [...matchesFor(index, query)]
     .map(([entryIndex, match]) => ({ entry: entryIndex, score: match.score }))
     .toSorted((left, right) => left.entry - right.entry);
 
 const score = (listed: string, query: string) =>
-  matchNames(
-    buildNameIndex([entry(listed)]),
-    nameTokens(query, "person"),
-    Math.sqrt,
-    0,
-  ).get(0)?.score ?? 0;
+  matchesFor(buildNameIndex([entry(listed)]), query).get(0)?.score ?? 0;
 
 describe("name matching (properties)", () => {
+  test("shares raw and folded vocabularies only when every token is unchanged", () => {
+    const plainIndex = buildNameIndex([entry("Robert Martin")]);
+    expect(plainIndex.raw).toBe(plainIndex.folded);
+
+    const accentedIndex = buildNameIndex([entry("José Alvarez")]);
+    expect(accentedIndex.raw).not.toBe(accentedIndex.folded);
+    expect(accentedIndex.raw.ids).not.toBe(accentedIndex.folded.ids);
+    expect(matchesFor(accentedIndex, "José Alvarez").get(0)?.score).toBe(1);
+    expect(
+      matchesFor(accentedIndex, "Jose Alvarez").get(0)?.score,
+    ).toBeGreaterThan(0);
+  });
+
+  test("keeps supplementary-plane letters in compact character histograms", () => {
+    const index = buildNameIndex([entry("𐐨obert Smith")]);
+    expect(matchesFor(index, "𐐨obert Smith").get(0)?.score).toBe(1);
+    expect(matchesFor(index, "𐐨obertt Smith").get(0)?.score).toBeGreaterThan(0);
+  });
+
   test(
     "matches every generated strong name with full coverage",
     () => {
@@ -82,12 +120,7 @@ describe("name matching (properties)", () => {
           (names) => {
             const index = buildNameIndex(names.map((value) => entry(value)));
             for (const [position, value] of names.entries()) {
-              const matches = matchNames(
-                index,
-                nameTokens(value, "person"),
-                Math.sqrt,
-                0,
-              );
+              const matches = matchesFor(index, value);
               expect(matches.get(position)?.score).toBe(1);
               for (const match of matches.values()) {
                 expect(Number.isFinite(match.score)).toBe(true);
@@ -241,14 +274,14 @@ describe("name matching (properties)", () => {
           const listed = parts.join(" ");
           const index = buildNameIndex([entry(listed)]);
           const tokens = nameTokens(listed, "person");
-          const initials = nameTokens(
-            tokens.map(({ raw }) => raw.charAt(0)).join("."),
-            "person",
-          );
+          const initialsQuery = tokens
+            .map(({ raw }) => raw.charAt(0))
+            .join(".");
+          const initials = nameTokens(initialsQuery, "person");
           expect(initials.length).toBeGreaterThan(0);
           expect(initials.every(({ raw }) => raw.length === 1)).toBe(true);
-          expect(matchNames(index, tokens, Math.sqrt, 0).get(0)?.score).toBe(1);
-          expect(matchNames(index, initials, Math.sqrt, 0).size).toBe(0);
+          expect(matchesFor(index, listed).get(0)?.score).toBe(1);
+          expect(matchesFor(index, initialsQuery).size).toBe(0);
         }),
         config(),
       );

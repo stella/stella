@@ -1,6 +1,6 @@
 import { getFlowDefinitionHandler } from "@/api/handlers/flows/read";
 import { flowDefinitionParamsSchema } from "@/api/handlers/flows/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 
 const config = {
@@ -9,6 +9,7 @@ const config = {
     "enabled flag. Use flows.list to browse the organization's flows and " +
     "flows.runs.get to read a run of one.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     readClass: "tenant",

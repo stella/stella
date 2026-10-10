@@ -3,6 +3,7 @@ import { and, eq, inArray } from "drizzle-orm";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { clauses } from "@/api/db/schema";
+import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   readableReferencePassageIds,
@@ -10,7 +11,16 @@ import {
 } from "@/api/lib/document-review/reference-passages";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { brandPersistedClauseId } from "@/api/lib/safe-id-boundaries";
-import type { PlaybookPositions } from "@/api/lib/workflow/playbook-positions";
+import {
+  positionSourceEntityIds,
+  positionSourceKey,
+  positionSources,
+  readablePositionSources,
+} from "@/api/lib/workflow/playbook-position-sources";
+import type {
+  PlaybookPositions,
+  Position,
+} from "@/api/lib/workflow/playbook-positions";
 import { isTierStandard } from "@/api/lib/workflow/position-runtime";
 import type {
   GradedPosition,
@@ -89,10 +99,23 @@ const collectClauseRefIds = (
   return [...ids].map((id) => brandPersistedClauseId(id));
 };
 
+// A position may list each source document only once. The list records where
+// the position came from, and readers look sources up by document id.
+const hasDuplicatePositionSource = (position: Position): boolean => {
+  const entityIds = arrayOrEmpty(position.sources).map(
+    ({ entityId }) => entityId,
+  );
+  return new Set(entityIds).size !== entityIds.length;
+};
+
 type AssertPositionsValidArgs = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
+  /** Matters the caller can access; a newly added source must be in one. */
+  accessibleWorkspaceIds: readonly SafeId<"workspace">[];
   positions: PlaybookPositions;
+  /** The playbook's positions as stored before this save; null on create. */
+  storedPositions: PlaybookPositions | null;
 };
 
 /**
@@ -100,11 +123,15 @@ type AssertPositionsValidArgs = {
  * distinct `sourceId` (re-runs map a position back to its materialized
  * column/finding by that id), and every clause-backed standard must reference a
  * clause that exists in the same organization (no cross-org clause leakage).
+ * The caller must be able to read every reference passage and every source
+ * they add. A source the playbook already stores is kept without that check.
  */
 export const assertPositionsValid = async ({
   safeDb,
   organizationId,
+  accessibleWorkspaceIds,
   positions,
+  storedPositions,
 }: AssertPositionsValidArgs): Promise<
   Result<void, SafeDbError | HandlerError>
 > => {
@@ -119,6 +146,14 @@ export const assertPositionsValid = async ({
   }
 
   for (const position of positions.items) {
+    if (hasDuplicatePositionSource(position)) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "A position must list each source document once",
+        }),
+      );
+    }
     if (position.mode !== "graded") {
       continue;
     }
@@ -193,6 +228,44 @@ export const assertPositionsValid = async ({
       new HandlerError({
         status: 403,
         message: "A position quotes a reference passage you cannot read.",
+      }),
+    );
+  }
+
+  // A save can add a source only if the caller's own query finds that
+  // document in that matter. This stops anyone attaching a document they
+  // cannot open, and means the matter id sent by the client is never trusted.
+  // A source the playbook already stores was checked when it was first added
+  // and is not checked again; otherwise a colleague without access to the
+  // source's matter could not edit the playbook at all. "Already stores"
+  // means anywhere in the playbook, not only in the same position, so
+  // duplicating a position or converting its mode keeps its sources.
+  const storedKeys = new Set(
+    positionSources(arrayOrEmpty(storedPositions?.items)).map(
+      positionSourceKey,
+    ),
+  );
+  const introduced = positionSources(positions.items).filter(
+    (source) => !storedKeys.has(positionSourceKey(source)),
+  );
+  const readableSourcesResult = await readablePositionSources({
+    safeDb,
+    entityIds: positionSourceEntityIds(introduced),
+    accessibleWorkspaceIds,
+  });
+  if (Result.isError(readableSourcesResult)) {
+    return Result.err(readableSourcesResult.error);
+  }
+  const readableKeys = new Set(
+    readableSourcesResult.value.map(positionSourceKey),
+  );
+  if (
+    introduced.some((source) => !readableKeys.has(positionSourceKey(source)))
+  ) {
+    return Result.err(
+      new HandlerError({
+        status: 403,
+        message: "A position cites a source document you cannot read.",
       }),
     );
   }

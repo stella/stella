@@ -1,9 +1,11 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { Transaction } from "@/api/db/root";
+import { safeDbFromScoped } from "@/api/db/safe-db";
+import type { SafeDbError, ScopedDb } from "@/api/db/safe-db";
 import { templateCategories } from "@/api/db/schema";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -11,6 +13,11 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import { executedRows } from "@/api/lib/db/executed-rows";
+import {
+  isTreeParentGuardError,
+  lockTree,
+  TREE_PARENT_CYCLE_ERROR_CODE,
+} from "@/api/lib/db/tree-parent-guard";
 import { LIMITS } from "@/api/lib/limits";
 import { pickDefined } from "@/api/lib/pick-defined";
 import { isRecord } from "@/api/lib/type-guards";
@@ -35,15 +42,14 @@ const parentChainWouldCycle = async ({
   categoryId,
   organizationId,
   parentId,
-  scopedDb,
+  tx,
 }: {
   categoryId: SafeId<"templateCategory">;
   organizationId: SafeId<"organization">;
   parentId: SafeId<"templateCategory">;
-  scopedDb: ScopedDb;
+  tx: Transaction;
 }): Promise<boolean> => {
-  const rows = await scopedDb((tx) =>
-    tx.execute(sql`
+  const rows = await tx.execute(sql`
       WITH RECURSIVE ancestor AS (
         SELECT seed.id, seed.parent_id, ARRAY[seed.id] AS path, false AS looped
           FROM ${templateCategories} AS seed
@@ -64,8 +70,7 @@ const parentChainWouldCycle = async ({
                false
              ) AS cycle
         FROM ancestor
-    `),
-  );
+    `);
 
   // An aggregate over a `WITH RECURSIVE` is exactly one row carrying exactly
   // one boolean, whatever the tree looks like — `bool_or` over an empty set is
@@ -164,12 +169,13 @@ export const createTemplateCategoryHandler = async ({
     }
   }
 
-  // Advisory lock + count + insert in one transaction to
+  // Tree lock + count + insert in one transaction to
   // prevent TOCTOU on the category limit.
   return scopedDb(async (tx) => {
-    await tx.execute(
-      sql`SELECT pg_advisory_xact_lock(hashtext(${organizationId}))`,
-    );
+    await lockTree(tx, {
+      tree: "templateCategories",
+      scopeId: organizationId,
+    });
 
     const existingCount = await tx.$count(
       templateCategories,
@@ -221,6 +227,40 @@ export const createTemplateCategoryHandler = async ({
 
 // ── Update ──────────────────────────────────────────
 
+const CIRCULAR_CATEGORY_MESSAGE = "Cannot create circular category hierarchy";
+
+const circularCategory = () =>
+  status(400, {
+    code: TREE_PARENT_CYCLE_ERROR_CODE,
+    message: CIRCULAR_CATEGORY_MESSAGE,
+  });
+
+/**
+ * Run a parent change under the tree lock, answering the database guard's
+ * refusal with the same 400 the pre-check gives. Any other failure is returned
+ * unchanged as the transaction's error.
+ */
+const withCategoryTree = async <T>(
+  scopedDb: ScopedDb,
+  organizationId: SafeId<"organization">,
+  run: (tx: Transaction) => Promise<T>,
+): Promise<Result<T | ReturnType<typeof circularCategory>, SafeDbError>> => {
+  const attempt = await safeDbFromScoped(scopedDb)(async (tx) => {
+    await lockTree(tx, {
+      tree: "templateCategories",
+      scopeId: organizationId,
+    });
+    return await run(tx);
+  });
+  if (
+    attempt.isErr() &&
+    isTreeParentGuardError(attempt.error, "templateCategories")
+  ) {
+    return Result.ok(circularCategory());
+  }
+  return attempt;
+};
+
 type UpdateProps = {
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
@@ -235,59 +275,58 @@ export const updateTemplateCategoryHandler = async ({
   categoryId,
   body,
   recordAuditEvent,
-}: UpdateProps) => {
-  const existing = await scopedDb((tx) =>
-    tx.query.templateCategories.findFirst({
+}: UpdateProps) =>
+  // The tree lock comes first, so the parent check, the cycle check and the
+  // write see one tree: a concurrent reparent waits and then reads this one's
+  // result. The `template_categories_parent_acyclic` trigger holds the same
+  // rule for any writer that skips the lock.
+  await withCategoryTree(scopedDb, organizationId, async (tx) => {
+    const existing = await tx.query.templateCategories.findFirst({
       where: { id: { eq: categoryId }, organizationId: { eq: organizationId } },
       columns: { id: true },
-    }),
-  );
+    });
 
-  if (!existing) {
-    return status(404, { message: "Category not found" });
-  }
-
-  const parentId = body.parentId;
-  if (parentId) {
-    if (parentId === categoryId) {
-      return status(400, {
-        message: "Category cannot be its own parent",
-      });
+    if (!existing) {
+      return status(404, { message: "Category not found" });
     }
 
-    const parent = await scopedDb((tx) =>
-      tx.query.templateCategories.findFirst({
+    const parentId = body.parentId;
+    if (parentId) {
+      if (parentId === categoryId) {
+        return status(400, {
+          code: TREE_PARENT_CYCLE_ERROR_CODE,
+          message: "Category cannot be its own parent",
+        });
+      }
+
+      const parent = await tx.query.templateCategories.findFirst({
         where: { id: { eq: parentId }, organizationId: { eq: organizationId } },
         columns: { id: true, parentId: true },
-      }),
-    );
-
-    if (!parent) {
-      return status(404, {
-        message: "Parent category not found",
       });
+
+      if (!parent) {
+        return status(404, {
+          message: "Parent category not found",
+        });
+      }
+
+      if (
+        await parentChainWouldCycle({
+          categoryId,
+          organizationId,
+          parentId,
+          tx,
+        })
+      ) {
+        return circularCategory();
+      }
     }
 
-    if (
-      await parentChainWouldCycle({
-        categoryId,
-        organizationId,
-        parentId,
-        scopedDb,
-      })
-    ) {
-      return status(400, {
-        message: "Cannot create circular category hierarchy",
-      });
-    }
-  }
+    const updates = {
+      ...pickDefined(body, ["name", "description", "parentId", "sortOrder"]),
+      updatedAt: new Date(),
+    };
 
-  const updates = {
-    ...pickDefined(body, ["name", "description", "parentId", "sortOrder"]),
-    updatedAt: new Date(),
-  };
-
-  const updatedRows = await scopedDb(async (tx) => {
     const rows = await tx
       .update(templateCategories)
       .set(updates)
@@ -306,28 +345,23 @@ export const updateTemplateCategoryHandler = async ({
         updatedAt: templateCategories.updatedAt,
       });
 
-    if (rows.length > 0) {
-      await recordAuditEvent(tx, {
-        action: AUDIT_ACTION.UPDATE,
-        resourceType: AUDIT_RESOURCE_TYPE.TEMPLATE,
-        resourceId: categoryId,
-        metadata: {
-          kind: "template-category",
-          fields: Object.keys(updates),
-        },
-      });
+    const updated = rows.at(0);
+    if (!updated) {
+      return panic("Failed to update template category");
     }
 
-    return rows;
+    await recordAuditEvent(tx, {
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.TEMPLATE,
+      resourceId: categoryId,
+      metadata: {
+        kind: "template-category",
+        fields: Object.keys(updates),
+      },
+    });
+
+    return updated;
   });
-
-  const updated = updatedRows.at(0);
-  if (!updated) {
-    panic("Failed to update template category");
-  }
-
-  return updated;
-};
 
 // ── Delete ──────────────────────────────────────────
 
@@ -343,24 +377,24 @@ export const deleteTemplateCategoryHandler = async ({
   organizationId,
   categoryId,
   recordAuditEvent,
-}: DeleteProps) => {
-  const existing = await scopedDb((tx) =>
-    tx.query.templateCategories.findFirst({
+}: DeleteProps) =>
+  // Under the tree lock the parent read here is the one the children move to:
+  // a concurrent reparent of this category either committed before (and is
+  // read) or waits until the delete commits.
+  await withCategoryTree(scopedDb, organizationId, async (tx) => {
+    const existing = await tx.query.templateCategories.findFirst({
       where: { id: { eq: categoryId }, organizationId: { eq: organizationId } },
       columns: { id: true, parentId: true },
-    }),
-  );
+    });
 
-  if (!existing) {
-    return status(404, { message: "Category not found" });
-  }
+    if (!existing) {
+      return status(404, { message: "Category not found" });
+    }
 
-  await scopedDb(async (tx) => {
     // Reassign children to this category's parent (or
     // null). Must happen before the delete; otherwise the
     // FK onDelete: "set null" would null children's
     // parentId instead of promoting to grandparent.
-
     await tx
       .update(templateCategories)
       .set({ parentId: existing.parentId ?? null })
@@ -391,7 +425,6 @@ export const deleteTemplateCategoryHandler = async ({
         reparentedTo: existing.parentId ?? null,
       },
     });
-  });
 
-  return {};
-};
+    return {};
+  });

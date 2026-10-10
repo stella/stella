@@ -1,5 +1,65 @@
 # @stll/ui
 
+## 0.44.1
+
+### Patch Changes
+
+- [#5244](https://github.com/stella/stella/pull/5244) [`b225fd8`](https://github.com/stella/stella/commit/b225fd8575d7896a11ae2c644201f7920e03cd9b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add shared chart palette tokens for theme-aware generated views.
+
+## 0.44.0
+
+### Minor Changes
+
+- [#5201](https://github.com/stella/stella/pull/5201) [`2718337`](https://github.com/stella/stella/commit/2718337304469b3c4e0d0304a15b9864c70a2aa9) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add a decorative Loader variant for labelled controls and use the shared Loader in Button and Toast loading states.
+
+- [#5318](https://github.com/stella/stella/pull/5318) [`f5e1e2b`](https://github.com/stella/stella/commit/f5e1e2bf6a143f0556647d5ac6f5a5f71c1f931a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `@stll/ui/inline-reorder` and `@stll/ui/inline-drop-indicator` for reordering a horizontal row of items by closest edge. `@stll/workspace-ui` now uses them for view tabs and no longer exports `reorderWorkspaceViewIds`, `toWorkspaceViewDropPosition` or the `./view-switcher-logic` entry point.
+
+- [#5175](https://github.com/stella/stella/pull/5175) [`84d35ae`](https://github.com/stella/stella/commit/84d35ae3c652403524ea11ebba22e40d8949c929) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Use updated Pragmatic drag and drop dependencies and public entry points.
+
+## 0.43.0
+
+### Minor Changes
+
+- [#4940](https://github.com/stella/stella/pull/4940) [`83b4487`](https://github.com/stella/stella/commit/83b44876fe05b865329a622176ee8fd8fc51a4d8) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add form dirtiness signals and a shared dialog Escape policy: unchanged dialogs close immediately; changed dialogs show a localized discard hint before a second Escape closes them.
+
+- [#4905](https://github.com/stella/stella/pull/4905) [`bf6a6a3`](https://github.com/stella/stella/commit/bf6a6a3e2f27df61169ddaabf85d3392dde5d222) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add semantic DetailsGrid and DetailsItem primitives with container-responsive columns, aligned labels, and full-width facts.
+
+- [#5038](https://github.com/stella/stella/pull/5038) [`598f3c4`](https://github.com/stella/stella/commit/598f3c44be0666ebca901a214e4fbf5bed547d3d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add a shared split button with independent actions, accessible menu navigation, and quiet hover chrome.
+
+- [#4907](https://github.com/stella/stella/pull/4907) [`b982f7f`](https://github.com/stella/stella/commit/b982f7fbbc86741e6d9df68a7da46bfaa5be669e) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `ToolbarIconAction`, an icon-only toolbar button whose label is its tooltip and accessible name.
+
+### Patch Changes
+
+- [#5066](https://github.com/stella/stella/pull/5066) [`e571295`](https://github.com/stella/stella/commit/e57129541729f01b92c5c64fbb2e3451507a4e7a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add an inline rename field that keeps the surrounding title typography and sizes to its text.
+
+- [#5123](https://github.com/stella/stella/pull/5123) [`684f296`](https://github.com/stella/stella/commit/684f2963fdfab360198780bfcc0b188c5692b913) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Let an inline rename field fill its row instead of sizing to its text.
+
+- [#5006](https://github.com/stella/stella/pull/5006) [`7bb8e47`](https://github.com/stella/stella/commit/7bb8e47bc85fad689ff939399eb5f553e65b1f54) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Focus the selected or current day when opening a date picker and keep field trigger text on one line.
+
+## 0.42.1
+
+### Patch Changes
+
+- [#4853](https://github.com/stella/stella/pull/4853) [`e3c7e1c`](https://github.com/stella/stella/commit/e3c7e1c53cd393918a75af4c8a0a9e559908814e) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Menu rows (item, checkbox, radio, submenu trigger) take a 44px minimum height under a coarse pointer.
+
+## 0.42.0
+
+### Minor Changes
+
+- [#4763](https://github.com/stella/stella/pull/4763) [`019d735`](https://github.com/stella/stella/commit/019d735308d3baec6d4143c61b3b5a5e38fe8ce9) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `DatePickerPopover` gains localizable accessible labels (`dialogLabel`, `previousMonthLabel`, `nextMonthLabel`, `previousYearLabel`, `nextYearLabel`, `previousDecadeLabel`, `nextDecadeLabel`, `timeLabel`), `disabled`, `className`, `hideClear`, a bordered `variant="field"` trigger, `size="touch"` for 44px cells under a coarse pointer, and `mode="date-time"`, which reads and writes a zone-less `YYYY-MM-DDTHH:mm` value. Defaults keep the existing behaviour.
+
+## 0.41.1
+
+### Patch Changes
+
+- [#4528](https://github.com/stella/stella/pull/4528) [`8e5a77d`](https://github.com/stella/stella/commit/8e5a77d0c78131dd1551b8be3480901e14488aa1) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Landing column headings use sentence case, and row text lines up with the heading label.
+
+## 0.41.0
+
+### Minor Changes
+
+- [#4504](https://github.com/stella/stella/pull/4504) [`9669e8a`](https://github.com/stella/stella/commit/9669e8acbb6460e3fbf32478eb0dd2c0a0c1c185) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `DatePickerPopover` gains localizable accessible labels (`dialogLabel`, `previousMonthLabel`, `nextMonthLabel`, `previousYearLabel`, `nextYearLabel`, `previousDecadeLabel`, `nextDecadeLabel`, `timeLabel`), `disabled`, `className`, `hideClear`, a bordered `variant="field"` trigger, `size="touch"` for 44px cells under a coarse pointer, and `mode="date-time"`, which reads and writes a zone-less `YYYY-MM-DDTHH:mm` value. Defaults keep the existing behaviour.
+
 ## 0.40.2
 
 ### Patch Changes

@@ -1,7 +1,10 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { ActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
+import { toChatMessageContent } from "@/api/handlers/chat/chat-message-parts";
+import { validateMessage } from "@/api/handlers/chat/chat-schema";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import { createBoeTools } from "@/api/handlers/chat/tools/boe-tools";
@@ -27,11 +30,17 @@ import {
   FETCH_URL_TOOL_NAME,
   WEB_SEARCH_TOOL_NAME,
 } from "@/api/handlers/chat/tools/web-search-tools";
+import type { ChatPart } from "@/api/handlers/chat/types";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { BUSINESS_REGISTRY_DISPATCH } from "@/api/lib/business-registries/dispatch";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  createFeatureAccessSnapshot,
+  decideFeatureAccess,
+} from "@/api/lib/feature-access/policy";
 import {
   authorizedMemberRole,
   roleForDisplay,
@@ -224,7 +233,11 @@ const validationToolsFor = ({
   skillMetadata: _skillMetadata,
   thirdPartyBoundary: _thirdPartyBoundary,
   ...requestInputs
-}: RunToolsProps) => getChatValidationTools(requestInputs);
+}: RunToolsProps) =>
+  getChatValidationTools({
+    ...requestInputs,
+    featureAccessSnapshot: requestInputs.featureAccessSnapshot,
+  });
 
 const registeredToolNames = (tools: ReturnType<typeof getChatTools>) =>
   Object.entries(tools).flatMap(([name, tool]) =>
@@ -332,4 +345,125 @@ describe("chat validation tool set", () => {
       ].toSorted(),
     );
   });
+});
+
+test("pending feature-bound write approvals use current caller access for validation and execution tools", async () => {
+  const featureId = "fixture-approval-feature";
+  const toolName = "save_matter";
+  const grantedEmail = "standard@example.test";
+  const run = buildRunScenarios().find(
+    (scenario) => roleForDisplay(scenario.memberRole) === "owner",
+  );
+  if (run === undefined) {
+    throw new Error("Expected owner tool scenario");
+  }
+  const canonicalInput = { name: "Approval matter" };
+  const canonicalCall = {
+    type: "tool-call",
+    id: "feature-write-call",
+    name: toolName,
+    input: canonicalInput,
+    arguments: JSON.stringify(canonicalInput),
+    state: "approval-requested",
+    approval: { id: "feature-write-approval", needsApproval: true },
+  } satisfies ChatPart;
+  const messageId = toSafeId<"chatMessage">(
+    "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+  );
+  const bindings = {
+    tools: new Map([[toolName, featureId]]),
+    capabilities: new Map<string, string>(),
+    resources: new Map<string, string>(),
+  };
+  const states = [
+    "granted",
+    "missing",
+    "grant-removed",
+    "membership-removed",
+    "colleague",
+  ] as const;
+  for (const state of states) {
+    const callerId =
+      state === "colleague"
+        ? toSafeId<"user">("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
+        : userId;
+    const decision = decideFeatureAccess({
+      registry: { [featureId]: { enrolment: "invitation" } },
+      grants:
+        state === "grant-removed"
+          ? {}
+          : {
+              [featureId]: [
+                { type: "member", organizationId, email: grantedEmail },
+              ],
+            },
+      featureId,
+      organizationId,
+      userId: callerId,
+      user: {
+        email: state === "colleague" ? "colleague@example.test" : grantedEmail,
+        emailVerified: true,
+      },
+      membership: state !== "membership-removed",
+    });
+    const featureAccessSnapshot = createFeatureAccessSnapshot({
+      organizationId,
+      userId: callerId,
+      decisions: new Map([[featureId, decision]]),
+    });
+    const currentRequest = {
+      ...run,
+      userId: callerId,
+      ...(state === "missing" ? {} : { featureAccessSnapshot }),
+      testDependencies: { featureAccessBindings: bindings },
+    };
+    const validationTools = validationToolsFor(currentRequest);
+    const executionTools = getChatTools(currentRequest);
+    expect(registeredToolNames(validationTools).includes(toolName)).toBe(
+      state === "granted",
+    );
+    expect(registeredToolNames(executionTools).includes(toolName)).toBe(
+      state === "granted",
+    );
+    const resumedCall = {
+      ...canonicalCall,
+      state: "approval-responded",
+      approval: { ...canonicalCall.approval, approved: true },
+    } satisfies ChatPart;
+    const result = await validateMessage({
+      message: { id: messageId, role: "assistant", parts: [resumedCall] },
+      persistedMessage: {
+        role: "assistant",
+        content: toChatMessageContent({ version: 2, data: [canonicalCall] }),
+      },
+      resume: [
+        {
+          interruptId: canonicalCall.approval.id,
+          payload: { approved: true },
+          status: "resolved",
+        },
+      ],
+      safeDb: unusedSafeDb,
+      threadId,
+      tools: validationTools,
+      userId: callerId,
+    });
+    expect(Result.isOk(result), state).toBe(state === "granted");
+    if (Result.isOk(result)) {
+      expect(result.value.message.parts).toEqual([resumedCall]);
+    } else {
+      expect(result.error).toBeInstanceOf(HandlerError);
+      if (!HandlerError.is(result.error)) {
+        throw new Error("Expected chat validation boundary error");
+      }
+      expect(result.error.status).toBe(400);
+      expect(result.error.message).toBe("Invalid chat message");
+      expect(result.error.cause).toBeInstanceOf(HandlerError);
+      if (!HandlerError.is(result.error.cause)) {
+        throw new Error("Expected tool availability validation error");
+      }
+      expect(result.error.cause.status).toBe(400);
+      expect(result.error.cause.message).toBe(`Unknown chat tool: ${toolName}`);
+    }
+  }
 });

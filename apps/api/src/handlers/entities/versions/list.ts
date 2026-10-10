@@ -8,7 +8,7 @@ import {
   decodeVersionCursor,
   encodeVersionCursor,
 } from "@/api/handlers/entities/version-cursor";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
@@ -331,6 +331,7 @@ const config = {
     "author, and the file attached to it; tombstoned versions are left out. " +
     "The response also names the entity's current version.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "covered", by: "read_document" },
   access: "read",
   params: readVersionsParamsSchema,

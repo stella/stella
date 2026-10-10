@@ -16,7 +16,7 @@
 
 import { panic, Result } from "better-result";
 import { spawn } from "node:child_process";
-import { createHash } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import {
   closeSync,
   existsSync,
@@ -30,9 +30,11 @@ import {
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
+import * as v from "valibot";
 
 import { MCP_DEFAULT_RESOURCE_SCOPES } from "@stll/api-contract";
 import { roles } from "@stll/permissions";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import {
@@ -43,19 +45,30 @@ import {
   parseSealStatus,
   verifyAttachment,
 } from "./agent-evidence";
+import { childExitStatus } from "./child-exit-status";
+import {
+  DEV_SESSION_ID_ENV,
+  type DevProcessGroupError,
+  DevProcessRegistrationError,
+  devProcessStartedAt,
+  readDevProcessGroups,
+  stopDevProcessGroups,
+} from "./dev-process-groups";
 import { buildStackScriptStep } from "./dev-runner";
 import {
   DEV_STATE_DIR,
   devStatePath,
+  isPidAlive,
   readDevRuntime,
   SEAL_FILE,
+  stackShutdownReason,
   type DevRuntime,
 } from "./dev-runtime";
 
 const RUNNER_SCRIPT = "packages/scripts/src/dev-runner.ts";
 const DRIVE_SCRIPT = "apps/web/e2e/agent/drive.ts";
 const RUNNER_LOG_FILE = "runner.log";
-const STARTING_FILE = "starting.pid";
+const STARTING_FILE = "starting.json";
 const AGENT_KEY_FILE = "agent-key.json";
 const AGENT_ENV_FILE = "agent.env";
 // Written by apps/api/scripts/seed-test-user.ts; the e2e suites read it too.
@@ -64,6 +77,7 @@ const AGENT_KEY_NAME = "local-agent";
 // A cold stack pulls images, installs dependencies, migrates and seeds.
 const UP_TIMEOUT_MS = 20 * 60_000;
 const DOWN_TIMEOUT_MS = 60_000;
+const DOWN_FORCE_TIMEOUT_MS = 2000;
 const POLL_INTERVAL_MS = 1000;
 const HEARTBEAT_MS = 30_000;
 const LOG_TAIL_LINES = 40;
@@ -90,6 +104,9 @@ const fail = (message: string): never => {
   process.exit(1);
 };
 
+const processGroupValue = <T>(result: Result<T, DevProcessGroupError>) =>
+  result.match({ ok: (value) => value, err: (error) => fail(error.message) });
+
 const resolveRoot = () => {
   const result = Bun.spawnSync(["git", "rev-parse", "--show-toplevel"], {
     stderr: "pipe",
@@ -107,7 +124,7 @@ const isProcessAlive = (pid: number) =>
 // A recorded pid can belong to an unrelated process after a crash or reboot,
 // so a runner is recognised by its command line before it is reused or
 // signalled.
-const isRunnerProcess = (pid: number) => {
+const isRunnerProcess = (pid: number, root: string) => {
   if (!isProcessAlive(pid)) {
     return false;
   }
@@ -115,7 +132,10 @@ const isRunnerProcess = (pid: number) => {
     stderr: "pipe",
     stdout: "pipe",
   });
-  return result.success && result.stdout.toString().includes(RUNNER_SCRIPT);
+  return (
+    result.success &&
+    result.stdout.toString().includes(path.join(root, RUNNER_SCRIPT))
+  );
 };
 
 const isApiHealthy = async (apiUrl: string) => {
@@ -128,7 +148,7 @@ const isApiHealthy = async (apiUrl: string) => {
 
 const liveRuntime = async (root: string): Promise<DevRuntime | null> => {
   const runtime = readDevRuntime(root);
-  if (runtime === null || !isRunnerProcess(runtime.pid)) {
+  if (runtime === null || !isRunnerProcess(runtime.pid, root)) {
     return null;
   }
   if (runtime.apiUrl !== null && !(await isApiHealthy(runtime.apiUrl))) {
@@ -146,20 +166,25 @@ const tailLog = (root: string) =>
 
 // Written the moment a runner is spawned, so a retry after an interrupted
 // `up` joins that runner instead of racing a second one for the same ports.
-const readStartingPid = (root: string) => {
+const startingSchema = v.object({
+  pid: v.pipe(v.number(), v.integer(), v.minValue(2)),
+  sessionId: v.pipe(v.string(), v.minLength(1)),
+  startedAt: v.string(),
+});
+const readStartingRunner = (root: string) => {
   const filePath = devStatePath(root, STARTING_FILE);
   if (!existsSync(filePath)) {
     return null;
   }
-  const pid = Number(readFileSync(filePath, "utf-8").trim());
-  return Number.isInteger(pid) && isRunnerProcess(pid) ? pid : null;
+  return v.parse(startingSchema, JSON.parse(readFileSync(filePath, "utf-8")));
 };
 
 type StartRunnerOptions = { root: string; skipInstall: boolean };
 
-const spawnRunner = ({ root, skipInstall }: StartRunnerOptions) => {
+const spawnRunner = async ({ root, skipInstall }: StartRunnerOptions) => {
   mkdirSync(path.join(root, DEV_STATE_DIR), { recursive: true });
   const log = openSync(devStatePath(root, RUNNER_LOG_FILE), "w");
+  const sessionId = randomUUID();
   const child = spawn(
     process.execPath,
     [
@@ -169,12 +194,79 @@ const spawnRunner = ({ root, skipInstall }: StartRunnerOptions) => {
       "--seed",
       ...(skipInstall ? ["--skip-install"] : []),
     ],
-    { cwd: root, detached: true, stdio: ["ignore", log, log] },
+    {
+      cwd: root,
+      detached: true,
+      stdio: ["ignore", log, log],
+      env: { ...process.env, [DEV_SESSION_ID_ENV]: sessionId },
+    },
   );
   closeSync(log);
-  child.unref();
   const pid = child.pid ?? fail("The dev runner did not start");
-  writeFileSync(devStatePath(root, STARTING_FILE), `${String(pid)}\n`);
+  const hasExited = () => child.exitCode !== null || child.signalCode !== null;
+  const exit = new Promise<void>((resolve) => {
+    child.once("exit", () => {
+      resolve();
+    });
+  });
+  const registered = Result.gen(function* () {
+    const startedAt = yield* devProcessStartedAt(pid);
+    if (startedAt === null) {
+      return Result.err(
+        new DevProcessRegistrationError({
+          message: "The dev runner exited during startup",
+        }),
+      );
+    }
+    yield* Result.try({
+      try: () => {
+        const startingFile = devStatePath(root, STARTING_FILE);
+        const temporary = `${startingFile}.${sessionId}.tmp`;
+        try {
+          writeFileSync(
+            temporary,
+            `${JSON.stringify({ pid, sessionId, startedAt })}\n`,
+          );
+          renameSync(temporary, startingFile);
+        } finally {
+          rmSync(temporary, { force: true });
+        }
+      },
+      catch: (cause) =>
+        new DevProcessRegistrationError({
+          message: "Cannot record the starting dev runner",
+          cause,
+        }),
+    });
+    return Result.ok(undefined);
+  });
+  if (registered.isErr()) {
+    const errors = [registered.error.message];
+    for (const signal of ["SIGTERM", "SIGKILL"] as const) {
+      if (hasExited()) {
+        break;
+      }
+      const sent = Result.try(() => child.kill(signal));
+      if (sent.isErr()) {
+        errors.push(`Cannot stop the starting runner: ${sent.error.message}`);
+      }
+      await Promise.race([exit, Bun.sleep(DOWN_FORCE_TIMEOUT_MS)]);
+    }
+    if (!hasExited()) {
+      fail(`${errors.join("; ")}; runner ${pid} did not exit`);
+    }
+    await exit;
+    const recovered = await stopDevProcessGroups({
+      rootDir: root,
+      runnerPid: pid,
+      sessionId,
+    });
+    if (recovered.isErr()) {
+      errors.push(recovered.error.message);
+    }
+    fail(errors.join("; "));
+  }
+  child.unref();
   return pid;
 };
 
@@ -182,10 +274,15 @@ type WaitForRunnerOptions = { pid: number; root: string };
 
 const waitForRunner = async ({ pid, root }: WaitForRunnerOptions) => {
   const logPath = devStatePath(root, RUNNER_LOG_FILE);
+  const starting = readStartingRunner(root);
   // Interrupting `up` stops the runner it is waiting on: a detached runner
   // nobody waits for would hold the ports with no runtime file to find it.
   const stopRunner = () => {
-    if (isRunnerProcess(pid)) {
+    if (
+      starting?.pid === pid &&
+      processGroupValue(devProcessStartedAt(pid)) === starting.startedAt &&
+      isRunnerProcess(pid, root)
+    ) {
       process.kill(pid, "SIGTERM");
     }
   };
@@ -230,10 +327,15 @@ const waitForRunner = async ({ pid, root }: WaitForRunnerOptions) => {
     if (runtime?.pid === pid) {
       process.off("SIGINT", onSignal);
       process.off("SIGTERM", onSignal);
-      rmSync(devStatePath(root, STARTING_FILE), { force: true });
+      if (
+        starting &&
+        readStartingRunner(root)?.sessionId === starting.sessionId
+      ) {
+        rmSync(devStatePath(root, STARTING_FILE), { force: true });
+      }
       return runtime;
     }
-    if (!isRunnerProcess(pid)) {
+    if (!isRunnerProcess(pid, root)) {
       console.error(tailLog(root));
       return fail("The dev runner exited before it was ready");
     }
@@ -416,13 +518,35 @@ const up = async (root: string, args: readonly string[]) => {
       "Web source generation failed; fix the generator before starting the stack",
     );
   }
+  // The runner stops itself when its owner exits; this covers a runner that
+  // could not (killed, or a runtime file left by a previous boot).
+  const previous = readDevRuntime(root);
+  if (
+    previous !== null &&
+    stackShutdownReason({
+      checkoutExists: true,
+      ownerAlive:
+        previous.ownerPid === null ? null : isPidAlive(previous.ownerPid),
+    }) === "owner-exited"
+  ) {
+    await down(root);
+  }
   const reused = await liveRuntime(root);
+  const starting = readStartingRunner(root);
   const runtime =
     reused ??
     (await waitForRunner({
       pid:
-        readStartingPid(root) ??
-        spawnRunner({ root, skipInstall: args.includes("--skip-install") }),
+        (starting &&
+        isRunnerProcess(starting.pid, root) &&
+        processGroupValue(devProcessStartedAt(starting.pid)) ===
+          starting.startedAt
+          ? starting.pid
+          : null) ??
+        (await spawnRunner({
+          root,
+          skipInstall: args.includes("--skip-install"),
+        })),
       root,
     }));
   const apiUrl =
@@ -443,28 +567,64 @@ const up = async (root: string, args: readonly string[]) => {
   printStatus(root, runtime);
 };
 
-const down = async (root: string) => {
+export const down = async (root: string) => {
   const runtime = readDevRuntime(root);
+  const starting = readStartingRunner(root);
   // A runner still starting has no runtime file yet, only its starting pid.
+  const startingPid =
+    starting && isRunnerProcess(starting.pid, root) ? starting.pid : null;
   const pid =
-    runtime !== null && isRunnerProcess(runtime.pid)
+    runtime !== null && isRunnerProcess(runtime.pid, root)
       ? runtime.pid
-      : readStartingPid(root);
-  if (pid === null) {
+      : startingPid;
+  const groups = processGroupValue(readDevProcessGroups(root));
+  if (pid === null && groups === null) {
     console.log("No stack is running for this checkout.");
     return;
   }
+  const runnerPid =
+    groups?.runnerPid ?? pid ?? panic("Missing runner ownership");
+  const sessionId = groups?.sessionId ?? starting?.sessionId ?? null;
+  const runnerStartedAt =
+    groups?.runnerStartedAt ?? starting?.startedAt ?? null;
+  const isSameRunner = () =>
+    pid !== null &&
+    runnerStartedAt !== null &&
+    isRunnerProcess(pid, root) &&
+    processGroupValue(devProcessStartedAt(pid)) === runnerStartedAt &&
+    (processGroupValue(readDevProcessGroups(root))?.sessionId ?? sessionId) ===
+      sessionId;
   // The runner stops its children and its Docker project on SIGTERM; volumes
   // (and so the seeded database) survive for the next `up`.
-  process.kill(pid, "SIGTERM");
-  const deadline = Temporal.Now.instant().epochMilliseconds + DOWN_TIMEOUT_MS;
-  while (isProcessAlive(pid)) {
-    if (Temporal.Now.instant().epochMilliseconds > deadline) {
-      fail(`Runner ${String(pid)} is still running after SIGTERM`);
-    }
-    await Bun.sleep(POLL_INTERVAL_MS);
+  if (pid !== null && isSameRunner()) {
+    process.kill(pid, "SIGTERM");
   }
-  rmSync(devStatePath(root, STARTING_FILE), { force: true });
+  const deadline = Temporal.Now.instant().epochMilliseconds + DOWN_TIMEOUT_MS;
+  if (pid !== null) {
+    while (isSameRunner()) {
+      if (Temporal.Now.instant().epochMilliseconds > deadline) {
+        // Stop registration before recovering the separately owned groups.
+        if (isSameRunner()) {
+          process.kill(pid, "SIGKILL");
+        }
+        const forceDeadline = performance.now() + DOWN_FORCE_TIMEOUT_MS;
+        while (isSameRunner() && performance.now() < forceDeadline) {
+          await Bun.sleep(POLL_INTERVAL_MS);
+        }
+        if (isSameRunner()) {
+          fail(`Runner ${pid} survived SIGKILL`);
+        }
+        break;
+      }
+      await Bun.sleep(POLL_INTERVAL_MS);
+    }
+  }
+  processGroupValue(
+    await stopDevProcessGroups({ rootDir: root, runnerPid, sessionId }),
+  );
+  if (starting && readStartingRunner(root)?.sessionId === starting.sessionId) {
+    rmSync(devStatePath(root, STARTING_FILE), { force: true });
+  }
   console.log("Stopped.");
 };
 
@@ -486,7 +646,7 @@ const runStackScript = (
   });
   const result = Bun.spawnSync(step.cmd, {
     cwd: step.cwd,
-    env: step.env ?? process.env,
+    env: step.env,
     stderr: "pipe",
     stdout: "pipe",
   });
@@ -497,13 +657,17 @@ const runStackScript = (
   return result.stdout.toString();
 };
 
-const checkSeal = (root: string, runtime: DevRuntime) =>
-  parseSealStatus(
-    runStackScript(root, runtime, {
-      args: ["scripts/seed-seal.ts", "check", devStatePath(root, SEAL_FILE)],
-      label: "Checking the seal",
-    }),
-  ) ?? fail("The seal check printed no status");
+const checkSeal = (root: string, runtime: DevRuntime) => {
+  const output = runStackScript(root, runtime, {
+    args: ["scripts/seed-seal.ts", "check", devStatePath(root, SEAL_FILE)],
+    label: "Checking the seal",
+  });
+  const status =
+    parseSealStatus(output) ?? fail("The seal check printed no status");
+  // Preserve the classified write report on both sides of each capture.
+  console.log(output.trim());
+  return status;
+};
 
 const EVIDENCE_DIR = "evidence";
 const MANIFEST_PATTERN = /^manifest-\d{20}-\d+\.json$/u;
@@ -556,7 +720,8 @@ const drive = async (root: string, args: readonly string[]) => {
     stdin: "inherit",
     stdout: "inherit",
   });
-  const exitCode = await child.exited;
+  await child.exited;
+  const exitCode = childExitStatus(child);
   const after = checkSeal(root, runtime);
 
   const records = parseCaptureLog(readFileSync(captureLog, "utf-8"));
@@ -579,8 +744,8 @@ const drive = async (root: string, args: readonly string[]) => {
   process.exit(exitCode);
 };
 
-const sha256File = (filePath: string) =>
-  createHash("sha256").update(readFileSync(filePath)).digest("hex");
+export const agentCaptureFileSha256 = (filePath: string) =>
+  hashSha256Hex(readFileSync(filePath));
 
 // The only way screenshots reach a pull request: each must be an unaltered
 // agent:drive capture of a stack that held only seeded content.
@@ -609,7 +774,7 @@ const attach = (root: string, args: readonly string[]) => {
     const verdict = verifyAttachment({
       evidenceDir,
       filePath,
-      fileSha256: sha256File(filePath),
+      fileSha256: agentCaptureFileSha256(filePath),
       manifest,
     });
     switch (verdict.type) {
@@ -637,7 +802,7 @@ const attach = (root: string, args: readonly string[]) => {
     ],
     { stderr: "inherit", stdout: "inherit" },
   );
-  return process.exit(result.exitCode);
+  return process.exit(childExitStatus(result));
 };
 
 // Worktree stacks only: the root checkout's database may hold the person's
@@ -680,7 +845,8 @@ const passThrough = async ({ args, env, script }: PassThroughOptions) => {
     stdin: "inherit",
     stdout: "inherit",
   });
-  return child.exited;
+  await child.exited;
+  return childExitStatus(child);
 };
 
 const main = async () => {

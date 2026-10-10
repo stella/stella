@@ -1,10 +1,13 @@
+import { Result } from "better-result";
+
 import {
   playbookDefinitionParamsSchema,
   updatePlaybookDefinitionBodySchema,
 } from "@/api/handlers/playbooks/schema";
 import { updatePlaybookDefinitionHandler } from "@/api/handlers/playbooks/update-shared";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { createModelActionAdmitter } from "@/api/lib/rate-limit/model-action-admission";
 
 const config = {
   description:
@@ -17,6 +20,7 @@ const config = {
     "you read it is a conflict, and the new updatedAt comes back for the " +
     "next save.",
   permissions: { playbook: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "covered", by: "save_playbook" },
   params: playbookDefinitionParamsSchema,
   body: updatePlaybookDefinitionBodySchema,
@@ -26,7 +30,9 @@ const updatePlaybookDefinition = createSafeRootHandler(
   config,
   async function* ({
     safeDb,
+    scopedDb,
     session,
+    user,
     params,
     body,
     recordAuditEvent,
@@ -34,10 +40,21 @@ const updatePlaybookDefinition = createSafeRootHandler(
     managedAIResidency,
     orgAIConfigStatus,
     promptCachingEnabled,
+    getActiveWorkspaceIds,
   }) {
+    const accessibleWorkspaceIds = yield* Result.await(
+      Result.tryPromise(async () => await getActiveWorkspaceIds()),
+    );
     return yield* updatePlaybookDefinitionHandler({
+      admitModelAction: createModelActionAdmitter({
+        organizationId: session.activeOrganizationId,
+        userId: user.id,
+        organizationStateDb: scopedDb,
+        actionKind: "playbooks.derive-ask",
+      }),
       safeDb,
       organizationId: session.activeOrganizationId,
+      accessibleWorkspaceIds,
       playbookId: params.playbookId,
       orgAIConfig,
       managedAIResidency,

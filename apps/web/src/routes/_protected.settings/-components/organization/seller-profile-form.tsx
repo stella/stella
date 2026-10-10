@@ -90,14 +90,17 @@ export const SellerProfileForm = ({
       },
     }),
   );
-  const errors = useSelector(form.store, (state) =>
-    toFormErrors(state.fieldMeta),
-  );
+  const { errors, dirty } = useSelector(form.store, (state) => ({
+    errors: toFormErrors(state.fieldMeta),
+    dirty: !state.isDefaultValue,
+  }));
   const isSubmitting = useSelector(form.store, (state) => state.isSubmitting);
   const disabled = pending || isSubmitting;
 
   return (
     <Form
+      dirty={dirty}
+      onDiscard={() => form.reset()}
       className="flex flex-col gap-4"
       errors={errors}
       onSubmit={(event) => {

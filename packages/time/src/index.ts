@@ -1,3 +1,4 @@
+// parser-output-unchanged: [pl-uokik] adds the todayFor and parseTimeZoneId exports; no parser calls them and existing exports are unchanged.
 // Time the apps agree on: named duration constants for elapsed-time math
 // (TTLs, staleness thresholds, rolling windows, polling intervals), and the
 // calendar-date helpers in `./dates`.
@@ -25,3 +26,6 @@ export {
   parseIsoDateLocal,
   parsePlainDate,
 } from "./dates.js";
+export { parseTimeZoneId } from "./time-zone.js";
+export type { TimeZoneId } from "./time-zone.js";
+export { todayFor } from "./today.js";

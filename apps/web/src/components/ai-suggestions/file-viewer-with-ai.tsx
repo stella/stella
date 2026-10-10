@@ -1,14 +1,12 @@
 import { lazy, useCallback, useState } from "react";
 
-import { useTranslations } from "use-intl";
-
-import { Button } from "@stll/ui/button";
 import { cn } from "@stll/ui/utils";
 
 import { activeLegalDocumentRef } from "@/components/ai-suggestions/active-legal-document";
-import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
+import { DockedChatStackProvider } from "@/components/chat/docked-chat-stack";
 import type { ChatThreadId } from "@/lib/chat-thread-ref";
 
+import { FileChatOverlayBoundary } from "./file-chat-overlay-boundary";
 import { FILE_CHAT_OVERLAY_ACTIVATION } from "./file-viewer-with-ai-config";
 import type { FileChatOverlayActivation } from "./file-viewer-with-ai-config";
 import type { FileViewerWithAIProps } from "./file-viewer-with-ai.impl";
@@ -94,107 +92,80 @@ export const FileViewerWithAI = ({
     overlayThread.overlayKey === overlayKey
       ? overlayThread.threadId
       : chatThreadId;
-
   return (
-    <div
-      className={cn("@container/file-viewer relative h-full w-full", className)}
-      data-file-viewer-ai={
-        ACTIVATION_FLOATS_COMPOSER[overlayActivation] ? "true" : undefined
-      }
-      data-file-viewer-root="true"
-    >
-      {children}
-      {overlayActivation === FILE_CHAT_OVERLAY_ACTIVATION.gated && (
-        // Its own boundary, not the active overlay's: a rejected chunk here
-        // would otherwise climb to whichever ancestor catches first and take
-        // the document down with it, and the reader is the whole page for an
-        // anonymous visitor.
-        <QuerySuspenseBoundary
-          area="gated-chat-composer"
-          errorFallback={({ reset }) => (
-            <FileChatOverlayErrorFallback
-              onRetry={() => {
-                // React.lazy caches a rejected thenable. Recreate the lazy type
-                // before resetting the boundary so a transient chunk failure
-                // gets a genuinely fresh import attempt.
-                setLazyGatedChatComposer(() => createLazyGatedChatComposer());
-                reset();
-              }}
-            />
-          )}
-          resetKeys={[overlayKey]}
-          suspenseFallback={null}
-        >
-          <LazyGatedChatComposer
-            activeDraft={activeDraft}
-            activeExternal={activeExternal}
-            activeFile={activeFile}
-            activeLegal={activeLegal}
-            docxEditSafety={docxEditSafety}
-          />
-        </QuerySuspenseBoundary>
-      )}
-      {overlayIsActive && (
-        <QuerySuspenseBoundary
-          area="file-chat-overlay"
-          errorFallback={({ reset }) => (
-            <FileChatOverlayErrorFallback
-              onRetry={() => {
-                // React.lazy caches a rejected thenable. Recreate the lazy type
-                // before resetting the boundary so a transient chunk failure
-                // gets a genuinely fresh import attempt.
-                setLazyFileChatOverlayHost(() =>
-                  createLazyFileChatOverlayHost(),
-                );
-                reset();
-              }}
-            />
-          )}
-          resetKeys={[overlayKey]}
-          suspenseFallback={null}
-        >
-          <LazyFileChatOverlayHost
-            activeExternal={activeExternal}
-            activeDraft={activeDraft}
-            activeFile={activeFile}
-            activeLegal={activeLegal}
-            chatThreadId={activeChatThreadId}
-            docxComments={docxComments}
-            docxEditable={docxEditable}
-            docxEditSafety={docxEditSafety}
-            docxEditorRef={docxEditorRef}
-            key={overlayKey}
-            onChatThreadIdChange={(threadId) => {
-              setOverlayThread({ overlayKey, threadId });
-              onChatThreadIdChange?.(threadId);
+    <DockedChatStackProvider>
+      <div
+        className={cn(
+          "@container/file-viewer relative h-full w-full",
+          className,
+        )}
+        data-file-viewer-ai={
+          ACTIVATION_FLOATS_COMPOSER[overlayActivation] ? "true" : undefined
+        }
+        data-file-viewer-root="true"
+      >
+        {children}
+        {overlayActivation === FILE_CHAT_OVERLAY_ACTIVATION.gated && (
+          // Its own boundary, not the active overlay's: a rejected chunk here
+          // would otherwise climb to whichever ancestor catches first and take
+          // the document down with it, and the reader is the whole page for an
+          // anonymous visitor.
+          <FileChatOverlayBoundary
+            area="gated-chat-composer"
+            onRetry={() => {
+              // React.lazy caches a rejected thenable. Recreate the lazy type
+              // before the boundary resets so a transient chunk failure gets a
+              // genuinely fresh import attempt.
+              setLazyGatedChatComposer(() => createLazyGatedChatComposer());
             }}
-            onActiveDraftChatBound={onActiveDraftChatBound}
-            onDocxCommentsChange={onDocxCommentsChange}
-            requestDocxEditMode={requestDocxEditMode}
-            threadPresentation={threadPresentation}
-            workspaceId={workspaceId}
-          />
-        </QuerySuspenseBoundary>
-      )}
-      {docxEditorRef !== undefined && <DocxHorizontalScrollbar />}
-    </div>
-  );
-};
-
-const FileChatOverlayErrorFallback = ({ onRetry }: { onRetry: () => void }) => {
-  const t = useTranslations();
-
-  return (
-    <div className="pointer-events-none absolute inset-x-0 bottom-4 z-10 flex justify-center px-4">
-      <div className="bg-background/95 pointer-events-auto flex items-center gap-3 rounded-md border px-3 py-2 shadow-sm">
-        <span className="text-muted-foreground text-sm">
-          {t("common.somethingWentWrong")}
-        </span>
-        <Button onClick={onRetry} size="sm" variant="outline">
-          {t("common.tryAgain")}
-        </Button>
+            overlayKey={overlayKey}
+          >
+            <LazyGatedChatComposer
+              activeDraft={activeDraft}
+              activeExternal={activeExternal}
+              activeFile={activeFile}
+              activeLegal={activeLegal}
+              docxEditSafety={docxEditSafety}
+            />
+          </FileChatOverlayBoundary>
+        )}
+        {overlayIsActive && (
+          <FileChatOverlayBoundary
+            area="file-chat-overlay"
+            onRetry={() => {
+              // React.lazy caches a rejected thenable. Recreate the lazy type
+              // before the boundary resets so a transient chunk failure gets a
+              // genuinely fresh import attempt.
+              setLazyFileChatOverlayHost(() => createLazyFileChatOverlayHost());
+            }}
+            overlayKey={overlayKey}
+          >
+            <LazyFileChatOverlayHost
+              activeExternal={activeExternal}
+              activeDraft={activeDraft}
+              activeFile={activeFile}
+              activeLegal={activeLegal}
+              chatThreadId={activeChatThreadId}
+              docxComments={docxComments}
+              docxEditable={docxEditable}
+              docxEditSafety={docxEditSafety}
+              docxEditorRef={docxEditorRef}
+              key={overlayKey}
+              onChatThreadIdChange={(threadId) => {
+                setOverlayThread({ overlayKey, threadId });
+                onChatThreadIdChange?.(threadId);
+              }}
+              onActiveDraftChatBound={onActiveDraftChatBound}
+              onDocxCommentsChange={onDocxCommentsChange}
+              requestDocxEditMode={requestDocxEditMode}
+              threadPresentation={threadPresentation}
+              workspaceId={workspaceId}
+            />
+          </FileChatOverlayBoundary>
+        )}
+        {docxEditorRef !== undefined && <DocxHorizontalScrollbar />}
       </div>
-    </div>
+    </DockedChatStackProvider>
   );
 };
 

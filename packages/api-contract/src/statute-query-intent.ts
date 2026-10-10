@@ -6,9 +6,15 @@ import {
   STATUTE_ALIASES,
   resolveStatuteAlias,
   type StatuteAliasTarget,
-  type StatuteQueryCountry,
 } from "./statute-aliases";
-import { CZE_CASE_LAW_REPORTER_TAIL_RE } from "./statute-gazette";
+import {
+  CZE_CASE_LAW_REPORTER_TAIL_RE,
+  STATUTE_GAZETTES,
+} from "./statute-gazette";
+import {
+  STATUTE_QUERY_CAPABILITIES,
+  type StatuteQueryCountry,
+} from "./statute-query-capability";
 
 /**
  * What a statute box entry asks for. An act is addressed by number (with the
@@ -41,19 +47,33 @@ export type StatuteQueryIntent =
 export const foldStatuteQuery = (raw: string): string =>
   foldToAscii(raw.normalize("NFKC")).toLowerCase().replace(/\s+/gu, " ").trim();
 
+/** `Sb.`, `Z. z.`, `Ú.l. I` → `sb`, `zz`, `ul`: dots, spaces and series dropped. */
+const canonicalCollectionAbbreviation = (suffix: string): string =>
+  suffix.replace(/ i{1,2}$/u, "").replaceAll(/[.\s]/gu, "");
+
+const collectionsByAbbreviation = (
+  gazettes: Readonly<
+    Record<string, readonly { readonly abbreviation: string }[]>
+  >,
+): Readonly<Record<string, string>> =>
+  Object.fromEntries(
+    Object.entries(gazettes).flatMap(([eliCollection, spellings]) =>
+      spellings.map(({ abbreviation }) => [
+        canonicalCollectionAbbreviation(foldStatuteQuery(abbreviation)),
+        eliCollection,
+      ]),
+    ),
+  );
+
 /**
  * Publisher collections as lawyers abbreviate them, mapped to the collection
  * segment of the publisher's ELI. The ambiguous historical Czech official
  * gazette (`Ú. l.`) is unsupported rather than widened across collections.
  */
 const COLLECTION_BY_ABBREVIATION = {
-  cze: { sb: "sb", sbms: "sm" },
-  svk: { zb: "zz", zz: "zz" },
-} as const satisfies Record<StatuteQueryCountry, Record<string, string | null>>;
-
-/** `Sb.`, `Z. z.`, `Ú.l. I` → `sb`, `zz`, `ul`: dots, spaces and series dropped. */
-const canonicalCollectionAbbreviation = (suffix: string): string =>
-  suffix.replace(/ i{1,2}$/u, "").replaceAll(/[.\s]/gu, "");
+  cze: collectionsByAbbreviation(STATUTE_GAZETTES.cze),
+  svk: collectionsByAbbreviation(STATUTE_GAZETTES.svk),
+} satisfies Record<StatuteQueryCountry, Readonly<Record<string, string>>>;
 
 // The patterns below run on folded text, where every whitespace run is one
 // space, so they spell spaces literally instead of with `\s*` runs: two
@@ -99,9 +119,9 @@ const actFromNumber = (
     return null;
   }
   const suffix = match?.[3];
-  const collections: Record<string, string | null> =
-    COLLECTION_BY_ABBREVIATION[country];
-  let collection: string | null = country === "cze" ? "sb" : "zz";
+  const collections = COLLECTION_BY_ABBREVIATION[country];
+  let collection: string | null =
+    STATUTE_QUERY_CAPABILITIES[country].defaultCollection;
   if (suffix !== undefined) {
     const abbreviation = canonicalCollectionAbbreviation(suffix);
     // A collection this jurisdiction does not publish (`Z. z.` while reading

@@ -24,6 +24,7 @@ import { stellaToast } from "@stll/ui/toast";
 
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { useEntitiesCountLimit } from "@/components/workspaces/hooks/use-limits";
+import { WorkflowQueryFeedback } from "@/components/workspaces/workflow-query-feedback";
 import { StyleSetPickerDialog } from "@/features/style-sets/style-set-picker-dialog";
 import type { StyleSelection } from "@/features/style-sets/style-set-picker-dialog";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -38,6 +39,7 @@ import { useCreateFileEntities } from "@/lib/workspaces/mutations/use-create-fil
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 import { useIsWorkflowRunning } from "@/lib/workspaces/queries/workspace";
+import { workflowActionsDisabled } from "@/lib/workspaces/queries/workspace.logic";
 import { NewDocumentFromTemplateDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/new-document-from-template-dialog";
 
 type VirtualAnchor = {
@@ -84,7 +86,8 @@ export const AddEntityMenu = ({
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
   const [styleDialogOpen, setStyleDialogOpen] = useState(false);
   const queryClient = useQueryClient();
-  const isWorkflowRunning = useIsWorkflowRunning(workspaceId);
+  const workflowView = useIsWorkflowRunning(workspaceId);
+  const workflowDisabled = workflowActionsDisabled(workflowView);
   const isEntitiesLimitReached = useEntitiesCountLimit(workspaceId);
   const [isUploadPending, createFileEntities] =
     useCreateFileEntities(workspaceId);
@@ -105,9 +108,9 @@ export const AddEntityMenu = ({
     return null;
   }
 
-  const isUploadDisabled = isWorkflowRunning || isUploadPending;
+  const isUploadDisabled = workflowDisabled || isUploadPending;
   const isCreationDisabled =
-    isWorkflowRunning || createEntities.isPending || createTask.isPending;
+    workflowDisabled || createEntities.isPending || createTask.isPending;
 
   const handleCreateFolder = () => {
     createEntities.mutate(
@@ -191,8 +194,11 @@ export const AddEntityMenu = ({
       </Button>
     );
     return (
-      // oxlint-disable-next-line react/no-clone-element -- cloneElement attaches the click handler onto the caller-supplied `render` trigger element without knowing its concrete type.
-      React.cloneElement(trigger, { onClick: handleUploadClick })
+      <>
+        <WorkflowQueryFeedback view={workflowView} />
+        {/* oxlint-disable-next-line react/no-clone-element -- cloneElement attaches the click handler onto the caller-supplied render trigger element. */}
+        {React.cloneElement(trigger, { onClick: handleUploadClick })}
+      </>
     );
   }
 
@@ -212,6 +218,7 @@ export const AddEntityMenu = ({
         />
 
         <MenuPopup anchor={anchor ?? undefined}>
+          <WorkflowQueryFeedback display="menu" view={workflowView} />
           {hasFileProperties && (
             <>
               <MenuItem disabled={isUploadDisabled} onClick={handleUploadClick}>
@@ -220,7 +227,7 @@ export const AddEntityMenu = ({
               </MenuItem>
               {canCreateStyledDocument && (
                 <MenuItem
-                  disabled={isWorkflowRunning}
+                  disabled={workflowDisabled}
                   onClick={() => setStyleDialogOpen(true)}
                 >
                   <FilePlus2Icon />
@@ -229,7 +236,7 @@ export const AddEntityMenu = ({
               )}
               {canUseTemplate && (
                 <MenuItem
-                  disabled={isWorkflowRunning}
+                  disabled={workflowDisabled}
                   onClick={() => setTemplateDialogOpen(true)}
                 >
                   <LayoutTemplateIcon />

@@ -4,7 +4,7 @@ import fc from "fast-check";
 import { assertProperty } from "@stll/property-testing";
 
 import { STATUTE_ALIASES } from "./statute-aliases";
-import type { StatuteQueryCountry } from "./statute-aliases";
+import type { StatuteQueryCountry } from "./statute-query-capability";
 import {
   foldStatuteQuery,
   parseStatuteQuery,

@@ -8,10 +8,16 @@ import {
   spyOn,
   test,
 } from "bun:test";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
+import { member } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
-import { documentReviewRuns, fields, workspaceMembers } from "@/api/db/schema";
+import {
+  documentReviewFindings,
+  documentReviewRuns,
+  fields,
+  workspaceMembers,
+} from "@/api/db/schema";
 import { markRlsDatabase } from "@/api/db/scoped";
 import type { RlsDatabase } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -33,6 +39,7 @@ import {
 import { brandPersistedDocumentReviewRunId } from "@/api/lib/safe-id-boundaries";
 import * as modelTransport from "@/api/lib/tanstack-ai-generate";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -48,10 +55,18 @@ const runId = createSafeId<"documentReviewRun">();
 const originalField = await testDb.query.fields.findFirst({
   where: { id: { eq: ids.fieldA2 } },
 });
-const originalMembership = await testDb.query.workspaceMembers.findFirst({
-  where: { id: { eq: ids.memberA1wsA2 } },
-});
-if (!originalField || !originalMembership) {
+const originalMemberships = await testDb
+  .select()
+  .from(workspaceMembers)
+  .where(inArray(workspaceMembers.id, [ids.memberA1wsA1, ids.memberA1wsA2]));
+const originalOrganizationMember = (
+  await testDb.select().from(member).where(eq(member.id, ids.memberA1org))
+).at(0);
+if (
+  !originalField ||
+  originalMemberships.length !== 2 ||
+  !originalOrganizationMember
+) {
   panic("Review worker fixture is incomplete");
 }
 
@@ -116,6 +131,9 @@ const analytics = installRecordingAnalytics();
 
 beforeEach(async () => {
   preparationSpy.mockClear();
+  preparationSpy.mockImplementation(async () =>
+    panic("Unexpected review file preparation"),
+  );
   modelSpy.mockClear();
   fetchSpy.mockClear();
   fetchSpy.mockImplementation(
@@ -167,8 +185,12 @@ afterEach(async () => {
     .delete(documentReviewRuns)
     .where(eq(documentReviewRuns.id, runId));
   await testDb
+    .insert(member)
+    .values(originalOrganizationMember)
+    .onConflictDoNothing();
+  await testDb
     .insert(workspaceMembers)
-    .values(originalMembership)
+    .values(originalMemberships)
     .onConflictDoNothing();
   await testDb
     .update(fields)
@@ -184,12 +206,84 @@ afterAll(async () => {
   await releaseRlsFixture();
 });
 
+const readRun = async () =>
+  (
+    await testDb
+      .select()
+      .from(documentReviewRuns)
+      .where(eq(documentReviewRuns.id, runId))
+      .limit(1)
+  ).at(0);
+
+const expectStoppedBeforeReading = async () => {
+  await processDocumentReviewRun(
+    actor,
+    testModelAdmission(actor.organizationId),
+  );
+  const run = await readRun();
+  expect(run).toMatchObject({
+    status: "failed",
+    errorCode: "pin_unresolved",
+  });
+  expect(run?.finishedAt).not.toBeNull();
+  expect(
+    await testDb
+      .select({ id: documentReviewFindings.id })
+      .from(documentReviewFindings)
+      .where(eq(documentReviewFindings.runId, runId)),
+  ).toHaveLength(0);
+  expect(preparationSpy).not.toHaveBeenCalled();
+  expect(modelSpy).not.toHaveBeenCalled();
+  expect(fetchSpy).not.toHaveBeenCalled();
+};
+
+describe("document review run revocation", () => {
+  // Control for the revocation cases below: with every membership intact the
+  // worker resolves both pins and hands them to preparation, so a stopped run
+  // there is caused by the removed membership, not by inputs that never
+  // resolve. Preparation returns nothing, which ends the run before any model
+  // or storage call.
+  test("a run resolves its inputs while its requester keeps access", async () => {
+    preparationSpy.mockImplementation(async () => []);
+    await processDocumentReviewRun(
+      actor,
+      testModelAdmission(actor.organizationId),
+    );
+    expect(
+      preparationSpy.mock.calls.map(([files]) =>
+        files.map(({ workspaceId }) => workspaceId),
+      ),
+    ).toEqual([[targetPin.workspaceId, referencePin.workspaceId]]);
+    expect(await readRun()).toMatchObject({
+      status: "failed",
+      errorCode: "unsupported_format",
+    });
+    expect(modelSpy).not.toHaveBeenCalled();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  test("a run stops when its requester no longer has access to the matter", async () => {
+    await testDb
+      .delete(workspaceMembers)
+      .where(eq(workspaceMembers.id, ids.memberA1wsA1));
+    await expectStoppedBeforeReading();
+  });
+
+  test("a run stops when its requester has left the organization", async () => {
+    await testDb.delete(member).where(eq(member.id, ids.memberA1org));
+    await expectStoppedBeforeReading();
+  });
+});
+
 describe("document review input readiness", () => {
   test("records unavailable inputs before preparing documents", async () => {
     await testDb
       .delete(workspaceMembers)
       .where(eq(workspaceMembers.id, ids.memberA1wsA2));
-    await processDocumentReviewRun(actor);
+    await processDocumentReviewRun(
+      actor,
+      testModelAdmission(actor.organizationId),
+    );
     const run = (
       await testDb
         .select()
@@ -216,13 +310,16 @@ describe("document review input readiness", () => {
         throw failure;
       },
     });
-    await processDocumentReviewRun({
-      ...actor,
-      inputDb: createRootMembershipScopedDb(
-        scope,
-        asTestRaw<RlsDatabase<Transaction>>(failingDatabase),
-      ),
-    });
+    await processDocumentReviewRun(
+      {
+        ...actor,
+        inputDb: createRootMembershipScopedDb(
+          scope,
+          asTestRaw<RlsDatabase<Transaction>>(failingDatabase),
+        ),
+      },
+      testModelAdmission(actor.organizationId),
+    );
     const run = (
       await testDb
         .select()

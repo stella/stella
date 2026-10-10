@@ -2,12 +2,15 @@ import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
 import { sharepointConnections } from "@/api/db/schema";
+import { sharepointRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 
 const config = {
   permissions: { integration: ["delete"] },
+  accountAccess: ACCOUNT_ACCESS.accountControl,
+  realtime: sharepointRealtimeUpdates,
   mcp: { type: "internal", reason: "provider_secret" },
 } satisfies HandlerConfig;
 

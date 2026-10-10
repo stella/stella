@@ -7,13 +7,15 @@ import {
   InspectorDock,
   InspectorRailIconButton,
   resolveInspectorDockWidth,
-  useInspectorPaneWidth,
 } from "@stll/ui/inspector";
+import { Sheet, SheetHeader, SheetPopup, SheetTitle } from "@stll/ui/sheet";
 import { TOAST_RIGHT_OFFSET_VAR } from "@stll/ui/toast";
+import { useIsMobile } from "@stll/ui/use-mobile";
 import { useViewportWidth } from "@stll/ui/use-viewport-width";
 import { WorkspaceEndRail } from "@stll/ui/workspace-shell";
 
-import { inspectorPaneWidthStorageKey } from "@/components/inspector/pane-width-storage";
+import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import { useSharedInspectorPaneWidth } from "@/components/inspector/pane-width-storage";
 import { useSidebarInlineSize } from "@/components/sidebar";
 import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -68,19 +70,20 @@ type PublicInspectorDockProps = {
 /**
  * The column a public surface docks its inspector into: the same
  * `InspectorDock` a matter uses, so the pane drags, resizes from the keyboard
- * and is remembered here exactly as it is there. Only the storage key
- * differs — the public surface is read at its own width.
+ * and keeps the one width the reader dragged it to in every section.
  */
 export const PublicInspectorDock = ({
   children,
   expanded = false,
 }: PublicInspectorDockProps) => {
+  const isMobile = useIsMobile();
+  const setMinimized = useInspectorTabsStore((state) => state.setMinimized);
   const t = useTranslations();
   const sidebarWidth = useSidebarInlineSize();
   const viewportWidth = useViewportWidth();
-  const { resetWidth, resizeHandleProps, width } = useInspectorPaneWidth({
+  const { resetWidth, resizeHandleProps, width } = useSharedInspectorPaneWidth({
+    openedFrom: "public-law",
     sidebarWidth,
-    storageKey: inspectorPaneWidthStorageKey("public-law"),
     viewportWidth,
   });
 
@@ -88,7 +91,7 @@ export const PublicInspectorDock = ({
     paneWidth: width,
     showPaneContent: expanded,
   });
-  const widthPx = `${dockWidth}px`;
+  const widthPx = isMobile ? "0px" : `${dockWidth}px`;
 
   // Toasts and a document's find bar sit beside the dock, not beneath it.
   useExternalSyncEffect(() => {
@@ -105,6 +108,23 @@ export const PublicInspectorDock = ({
       );
     };
   }, [widthPx]);
+
+  if (isMobile) {
+    return (
+      <Sheet open={expanded} onOpenChange={(open) => setMinimized(!open)}>
+        <SheetPopup
+          className="h-dvh w-full max-w-none md:hidden"
+          showCloseButton={false}
+          side="inline-end"
+        >
+          <SheetHeader className="sr-only">
+            <SheetTitle>{t("inspector.title")}</SheetTitle>
+          </SheetHeader>
+          {children}
+        </SheetPopup>
+      </Sheet>
+    );
+  }
 
   return (
     <InspectorDock

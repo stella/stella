@@ -83,6 +83,7 @@ describe("folio collaboration checkpoint storage", () => {
       envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = true;
       try {
         const written = await writeFolioCollabCheckpointObject({
+          ownership: { type: "fixture" },
           checkpointBytes: new Uint8Array([1, 2, 3]),
           checkpointKey: "organization/workspace/files/checkpoint.docx",
           fileUsageDb,

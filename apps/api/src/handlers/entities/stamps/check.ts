@@ -5,7 +5,7 @@ import type { Static } from "elysia";
 import type { DocumentReferenceMatch } from "@stll/api-contract";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { extractStamp, isStampableDocx } from "@/api/lib/docx-stamp";
@@ -33,7 +33,7 @@ type CheckStampResult = { match: DocumentReferenceMatch | null };
  *
  * @yields {Err} on database lookup failure
  */
-const checkStampHandler = async function* ({
+export const checkStampHandler = async function* ({
   safeDb,
   organizationId,
   body: { file },
@@ -86,6 +86,7 @@ const config = {
     "what distinguishes adding a new version of an existing document from " +
     "uploading a new one.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     readClass: "tenant",

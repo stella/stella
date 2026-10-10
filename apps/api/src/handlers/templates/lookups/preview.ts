@@ -1,8 +1,9 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { getOrganizationRegistryHandler } from "@/api/lib/business-registries/credentials";
 import { BUSINESS_REGISTRY_DISPATCH } from "@/api/lib/business-registries/dispatch";
 import {
@@ -37,6 +38,7 @@ const config = {
     "a 404 when the company is not found. Outcomes are cached per register " +
     "and number, and no model is involved.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     readClass: "tenant",
@@ -101,6 +103,7 @@ const lookupPreview = createSafeRootHandler(
     }
     const resolveLookup = createDispatchLookupResolver({
       observer,
+      permit: grantThirdPartyOutboundPermit(),
       dispatch: { ...BUSINESS_REGISTRY_DISPATCH, [registry]: handler },
     });
     const cacheKey = `${session.activeOrganizationId}:${registry}:${handler.cacheVersion ?? "deployment"}:${number.replaceAll(/\s/gu, "")}`;

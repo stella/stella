@@ -6,6 +6,8 @@ import type { correspondence } from "@/api/db/schema";
 
 type StoredCorrespondenceProvenance = Pick<
   typeof correspondence.$inferSelect,
+  | "source"
+  | "sourceEntityId"
   | "intake"
   | "authenticatedSenderAddress"
   | "originalSignature"
@@ -15,7 +17,7 @@ type StoredCorrespondenceProvenance = Pick<
   | "alignedIdentifier"
 >;
 
-export const readCorrespondenceProvenance = ({
+const readDeliveryProvenance = ({
   intake,
   authenticatedSenderAddress,
   originalSignature,
@@ -24,6 +26,14 @@ export const readCorrespondenceProvenance = ({
   dmarc,
   alignedIdentifier,
 }: StoredCorrespondenceProvenance): CorrespondenceProvenance => {
+  if (
+    authenticatedSenderAddress === null ||
+    spf === null ||
+    dkim === null ||
+    dmarc === null
+  ) {
+    return panic("Delivered correspondence has no delivery authentication");
+  }
   const authenticatedSender = {
     address: authenticatedSenderAddress,
     spf,
@@ -36,19 +46,57 @@ export const readCorrespondenceProvenance = ({
       if (originalSignature !== null) {
         return panic("Direct correspondence has an original signature");
       }
-      return { intake, authenticatedSender, originalSignature: null };
+      return {
+        source: "delivery",
+        intake,
+        authenticatedSender,
+        originalSignature: null,
+      };
     case "forwarded_inline":
       if (originalSignature?.status !== "unverified") {
         return panic("Inline correspondence has invalid signature provenance");
       }
-      return { intake, authenticatedSender, originalSignature };
+      return {
+        source: "delivery",
+        intake,
+        authenticatedSender,
+        originalSignature,
+      };
     case "forwarded_attachment":
       if (originalSignature === null) {
         return panic("Attached correspondence has no signature provenance");
       }
-      return { intake, authenticatedSender, originalSignature };
+      return {
+        source: "delivery",
+        intake,
+        authenticatedSender,
+        originalSignature,
+      };
+    case null:
+      return panic("Delivered correspondence has no intake");
     default:
       intake satisfies never;
       return panic("Unhandled correspondence intake");
+  }
+};
+
+export const readCorrespondenceProvenance = (
+  stored: StoredCorrespondenceProvenance,
+): CorrespondenceProvenance => {
+  switch (stored.source) {
+    case "delivery":
+      return readDeliveryProvenance(stored);
+    case "upload":
+      if (stored.sourceEntityId === null || stored.originalSignature === null) {
+        return panic("Uploaded correspondence has no source file provenance");
+      }
+      return {
+        source: "upload",
+        sourceEntityId: stored.sourceEntityId,
+        originalSignature: stored.originalSignature,
+      };
+    default:
+      stored.source satisfies never;
+      return panic("Unhandled correspondence source");
   }
 };

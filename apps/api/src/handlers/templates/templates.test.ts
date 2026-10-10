@@ -786,6 +786,55 @@ describe("fill handler diagnostic headers", () => {
     expect(resp.headers.get("X-Unused-Values")).toBeNull();
     expect(resp.headers.get("X-Structure-Errors")).toBeNull();
   });
+
+  test("a directive the renderer could not apply records the fill as partial and travels URI-encoded", async () => {
+    const rows: Record<string, unknown>[] = [];
+    const { scopedDb, safeDb } = createScopedDbMock({
+      query: { businessRegistryCredentials: { findMany: async () => [] } },
+      insert: () => ({
+        values: async (row: Record<string, unknown>) => {
+          rows.push(row);
+          await Promise.resolve();
+        },
+      }),
+    });
+    const file = await makeDocxFile(
+      await makeDocx(WRAP(P("Broken{% if oops %} span without closer."))),
+    );
+
+    const result = await fillHandler({
+      safeDb,
+      scopedDb,
+      organizationId: fakeOrgId,
+      userId: fakeUserId,
+      query: {},
+      body: { file, values: JSON.stringify({ oops: true }) },
+    });
+
+    expect(result.status).toBe(200);
+    // An uploaded template is not stored: the analytics row has no template.
+    expect(rows).toEqual([
+      {
+        organizationId: fakeOrgId,
+        userId: fakeUserId,
+        format: "docx",
+        status: "partial",
+        unmatchedCount: 0,
+        unusedCount: 0,
+        structureErrors: [
+          expect.objectContaining({
+            paragraphIndex: 0,
+            directive: "{% if oops %}",
+          }),
+        ],
+      },
+    ]);
+    expect(
+      JSON.parse(
+        decodeURIComponent(result.headers.get("X-Structure-Errors") ?? "[]"),
+      ),
+    ).toMatchObject([{ paragraphIndex: 0, directive: "{% if oops %}" }]);
+  });
 });
 
 // ── Handler: fill download stays binary-safe ─────────────

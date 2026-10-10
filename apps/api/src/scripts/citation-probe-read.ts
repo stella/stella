@@ -1,7 +1,7 @@
 import { Result, TaggedError } from "better-result";
 
-import { parseUsableDocumentAst } from "@/api/lib/case-law/document-ast";
-import type { DocumentAst } from "@/api/lib/case-law/document-ast";
+import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 export class CitationProbeS3ReadError extends TaggedError(
   "CitationProbeS3ReadError",
@@ -33,7 +33,7 @@ export const readAst = async (
     }
     throw raw.error;
   }
-  const ast = parseUsableDocumentAst(raw.value);
+  const ast = parseCaseLawDecisionAst(raw.value);
   return ast === null ? { status: "unusable" } : { status: "usable", ast };
 };
 

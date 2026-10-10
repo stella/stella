@@ -1,11 +1,11 @@
 import Elysia from "elysia";
 
-import { env } from "@/api/env";
 import createMemory from "@/api/handlers/memories/create";
 import createFirmMemory from "@/api/handlers/memories/create-firm";
 import listMemories from "@/api/handlers/memories/list";
 import updateMemory from "@/api/handlers/memories/update";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 import { rateLimit } from "@/api/lib/rate-limit/rate-limit";
 import { createStandardApiRateLimitOptions } from "@/api/lib/rate-limit/standard-api";
@@ -17,7 +17,11 @@ import { createStandardApiRateLimitOptions } from "@/api/lib/rate-limit/standard
 export const memoriesRoute = new Elysia({
   prefix: "/v1/memories",
 })
-  .use(deploymentFeatureGate(() => env.FEATURE_AI_MEMORY))
+  .use(
+    deploymentFeatureGate(() =>
+      isDeploymentFeatureEnabled("FEATURE_AI_MEMORY"),
+    ),
+  )
   .use(rateLimit(createStandardApiRateLimitOptions()))
   .use(authMacro)
   .use(permissionMacro)

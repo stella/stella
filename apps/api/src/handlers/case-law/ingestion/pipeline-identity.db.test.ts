@@ -2,6 +2,9 @@ import { panic, Result } from "better-result";
 import { beforeAll, describe, expect, spyOn, test } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+import { sha256Hex as hashContent } from "@stll/sha256/node";
+
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
@@ -14,7 +17,6 @@ import { createCaseLawDecisionSlugCandidate } from "@/api/handlers/case-law/deci
 import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { czUsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
-import { hashContent } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { bareCitationKey } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -2231,32 +2233,38 @@ if (!databaseUrl || !runPostgresTests) {
       ).toEqual(initial);
 
       expect(
-        db
-          .insert(caseLawDecisionAliases)
-          .values({ retiredDecisionId: middle, canonicalDecisionId: first })
-          .execute(),
-      ).rejects.toMatchObject({
+        await rejectionOf(
+          db
+            .insert(caseLawDecisionAliases)
+            .values({ retiredDecisionId: middle, canonicalDecisionId: first })
+            .execute(),
+        ),
+      ).toMatchObject({
         cause: { message: expect.stringContaining("Decision alias cycle") },
       });
       expect(
-        db
-          .insert(caseLawDecisionAliases)
-          .values({ retiredDecisionId: later, canonicalDecisionId: missing })
-          .execute(),
-      ).rejects.toMatchObject({
+        await rejectionOf(
+          db
+            .insert(caseLawDecisionAliases)
+            .values({ retiredDecisionId: later, canonicalDecisionId: missing })
+            .execute(),
+        ),
+      ).toMatchObject({
         cause: {
           message: expect.stringContaining("Decision alias target is not live"),
         },
       });
       expect(
-        db
-          .insert(caseLawDecisionAliases)
-          .values({
-            retiredDecisionId: missing,
-            canonicalDecisionId: terminal,
-          })
-          .execute(),
-      ).rejects.toMatchObject({
+        await rejectionOf(
+          db
+            .insert(caseLawDecisionAliases)
+            .values({
+              retiredDecisionId: missing,
+              canonicalDecisionId: terminal,
+            })
+            .execute(),
+        ),
+      ).toMatchObject({
         cause: {
           message: expect.stringContaining(
             "Register decision alias before retirement",
@@ -2269,12 +2277,14 @@ if (!databaseUrl || !runPostgresTests) {
         { createdAt: new Date("2000-01-01T00:00:00Z") },
       ]) {
         expect(
-          db
-            .update(caseLawDecisionAliases)
-            .set(patch)
-            .where(eq(caseLawDecisionAliases.retiredDecisionId, first))
-            .execute(),
-        ).rejects.toMatchObject({
+          await rejectionOf(
+            db
+              .update(caseLawDecisionAliases)
+              .set(patch)
+              .where(eq(caseLawDecisionAliases.retiredDecisionId, first))
+              .execute(),
+          ),
+        ).toMatchObject({
           cause: {
             message: expect.stringContaining(
               "canonicalDecisionId" in patch
@@ -2285,11 +2295,13 @@ if (!databaseUrl || !runPostgresTests) {
         });
       }
       expect(
-        db
-          .delete(caseLawDecisions)
-          .where(eq(caseLawDecisions.id, middle))
-          .execute(),
-      ).rejects.toMatchObject({
+        await rejectionOf(
+          db
+            .delete(caseLawDecisions)
+            .where(eq(caseLawDecisions.id, middle))
+            .execute(),
+        ),
+      ).toMatchObject({
         cause: {
           code: "ERR_POSTGRES_SERVER_ERROR",
           errno: "23001",
@@ -2334,11 +2346,13 @@ if (!databaseUrl || !runPostgresTests) {
         expect(rows).toContainEqual({ retired, target: terminal });
       }
       expect(
-        db
-          .delete(caseLawDecisions)
-          .where(eq(caseLawDecisions.id, terminal))
-          .execute(),
-      ).rejects.toMatchObject({
+        await rejectionOf(
+          db
+            .delete(caseLawDecisions)
+            .where(eq(caseLawDecisions.id, terminal))
+            .execute(),
+        ),
+      ).toMatchObject({
         cause: {
           code: "ERR_POSTGRES_SERVER_ERROR",
           errno: "23001",
@@ -2348,27 +2362,31 @@ if (!databaseUrl || !runPostgresTests) {
         },
       });
       expect(
-        db
-          .insert(caseLawDecisions)
-          .values({
-            id: first,
-            sourceId,
-            country: "SVK",
-            court: "Alias lifecycle court",
-            language: "sk",
-            caseNumber: first,
-          })
-          .execute(),
-      ).rejects.toMatchObject({
+        await rejectionOf(
+          db
+            .insert(caseLawDecisions)
+            .values({
+              id: first,
+              sourceId,
+              country: "SVK",
+              court: "Alias lifecycle court",
+              language: "sk",
+              caseNumber: first,
+            })
+            .execute(),
+        ),
+      ).toMatchObject({
         cause: { message: expect.stringContaining("Decision UUID is retired") },
       });
       expect(
-        db
-          .update(caseLawDecisions)
-          .set({ id: first })
-          .where(eq(caseLawDecisions.id, later))
-          .execute(),
-      ).rejects.toMatchObject({
+        await rejectionOf(
+          db
+            .update(caseLawDecisions)
+            .set({ id: first })
+            .where(eq(caseLawDecisions.id, later))
+            .execute(),
+        ),
+      ).toMatchObject({
         cause: { message: expect.stringContaining("Decision UUID is retired") },
       });
     });

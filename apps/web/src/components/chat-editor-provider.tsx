@@ -34,6 +34,7 @@ import {
 } from "@stll/api-contract/chat-file-types";
 import { CHAT_CONTEXT_FILE_MAX_BYTES } from "@stll/chat-limits";
 import { openFilePicker as openBrowserFilePicker } from "@stll/ui/file-picker";
+import { stellaToast } from "@stll/ui/toast";
 
 import {
   decisionPassageContent,
@@ -44,17 +45,21 @@ import {
   updateCarriesDraftEcho,
 } from "@/components/chat-editor-echo";
 import { createChatComposerDocument } from "@/components/chat-editor-markdown.logic";
+import {
+  insertCredentialPasteRequest,
+  readChatPaste,
+} from "@/components/chat-editor-paste.logic";
 import type { ComposerSource } from "@/components/chat-editor-source";
 import { ChatMention } from "@/components/chat-mention-extension";
 import type { ChatMentionOption } from "@/components/chat-mention-extension";
 import { insertChatMention } from "@/components/chat-mention-helpers";
-import { shouldChipPaste } from "@/components/chat-pasted-text";
 import {
   insertPastedTextChip,
   PastedText,
   pastedTextChipContent,
 } from "@/components/chat-pasted-text-extension";
 import type { PastedTextAttrs } from "@/components/chat-pasted-text-extension";
+import { containsCredentialCandidate } from "@/components/chat-secret-candidate.logic";
 import { ChatAnonDecorations } from "@/components/chat/chat-anon-decorations-extension";
 import {
   mountedEditorFor,
@@ -66,6 +71,7 @@ import { seedReferenceHints } from "@/components/references/reference-hints";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useUnsavedWork } from "@/hooks/use-unsaved-work";
+import type { TranslationKey } from "@/i18n/types";
 import { getAnalytics } from "@/lib/analytics/provider";
 import {
   areDraftDocsEqual,
@@ -89,8 +95,6 @@ const CHAT_MAX_FILE_BYTES = CHAT_CONTEXT_FILE_MAX_BYTES;
 // load-bearing.
 const CHAT_DRAFT_PERSIST_DEBOUNCE_MS = 250;
 const CHAT_DRAFT_PERSIST_MAX_WAIT_MS = 1500;
-
-export { CHAT_FILE_INPUT_ACCEPT };
 const EMPTY_ATTACHMENTS: ChatDraftAttachment[] = [];
 const EMPTY_SENT_MESSAGE_HISTORY: readonly string[] = [];
 const EMPTY_CHAT_DRAFT_DOC = createEmptyChatDraftDoc();
@@ -129,15 +133,84 @@ export class ChatSubmitPreservedError extends TaggedError(
   restoreThreadKey?: string;
 }> {}
 
+export const CHAT_MENTION_SOURCE_LABELS = {
+  context: "chat.composerMenu.context",
+  files: "common.files",
+  caseLaw: "common.caseLaw",
+} as const satisfies Record<string, TranslationKey>;
+
+type ChatMentionSourceLabelKey =
+  (typeof CHAT_MENTION_SOURCE_LABELS)[keyof typeof CHAT_MENTION_SOURCE_LABELS];
+
 export type ChatInputMentionSource = {
   id: string;
+  labelKey: ChatMentionSourceLabelKey;
   getItems: () => ChatMentionOption[] | Promise<ChatMentionOption[]>;
   searchItems?: ((query: string) => Promise<ChatMentionOption[]>) | undefined;
 };
 
+class ChatMentionSourceError extends TaggedError("ChatMentionSourceError")<{
+  message: string;
+  sourceId: string;
+  labelKey: ChatMentionSourceLabelKey;
+  operation: "getItems" | "searchItems";
+  cause: unknown;
+  retryable: true;
+}> {}
+
+type ChatMentionSourceResult = {
+  items: ChatMentionOption[];
+  failures: ChatMentionSourceError[];
+};
+
+const readMentionSources = async (
+  sources: readonly ChatInputMentionSource[],
+  read: { operation: "getItems" } | { operation: "searchItems"; query: string },
+): Promise<ChatMentionSourceResult> => {
+  const results = await Promise.all(
+    sources.map(async (source) => ({
+      sourceId: source.id,
+      labelKey: source.labelKey,
+      result: await Result.tryPromise(async () => {
+        switch (read.operation) {
+          case "getItems":
+            return await source.getItems();
+          case "searchItems":
+            if (source.searchItems === undefined) {
+              return [];
+            }
+            return await source.searchItems(read.query);
+          default:
+            read satisfies never;
+            return panic("Unhandled mention read");
+        }
+      }),
+    })),
+  );
+  const items: ChatMentionOption[] = [];
+  const failures: ChatMentionSourceError[] = [];
+  for (const { sourceId, labelKey, result } of results) {
+    if (Result.isError(result)) {
+      const error = new ChatMentionSourceError({
+        message: "Mention source unavailable",
+        sourceId,
+        labelKey,
+        operation: read.operation,
+        cause: result.error,
+        retryable: true,
+      });
+      getAnalytics().captureError(error);
+      failures.push(error);
+      continue;
+    }
+    items.push(...result.value);
+  }
+  return { items, failures };
+};
+
 const EMPTY_MENTION_SOURCES: readonly ChatInputMentionSource[] = [];
 
-export type ChatInputPluginRegistration = {
+type ChatInputPluginRegistration = {
   key: string | PluginKey;
   plugin: Plugin;
 };
@@ -209,9 +282,9 @@ export type ChatEditorController = {
 // update loop that trips React's max-update-depth guard under load).
 type ChatEditorManagerContextValue = {
   focusThread: (threadRef: ChatThreadRef) => void;
-  getMentionItems: () => Promise<ChatMentionOption[]>;
+  getMentionItems: () => Promise<ChatMentionSourceResult>;
   getPluginRegistrations: () => ChatInputPluginRegistration[];
-  searchMentionItems: (query: string) => Promise<ChatMentionOption[]>;
+  searchMentionItems: (query: string) => Promise<ChatMentionSourceResult>;
   insertMentionIntoThread: (
     threadRef: ChatThreadRef,
     mention: ChatMentionOption,
@@ -296,29 +369,13 @@ export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
   const [extensionVersion, setExtensionVersion] = useState(0);
 
   const getMentionItems = useCallback(async () => {
-    const items: ChatMentionOption[] = [];
     const sources = Array.from(
       getOrCreateMap(registrationsRef).values(),
     ).flatMap(
       ({ registration }) =>
         registration.mentionSources ?? EMPTY_MENTION_SOURCES,
     );
-    const results = await Promise.all(
-      sources.map(
-        async (source) =>
-          await Result.tryPromise(async () => await source.getItems()),
-      ),
-    );
-
-    for (const result of results) {
-      if (Result.isError(result)) {
-        getAnalytics().captureError(result.error);
-        continue;
-      }
-      items.push(...result.value);
-    }
-
-    return items;
+    return await readMentionSources(sources, { operation: "getItems" });
   }, []);
 
   const getPluginRegistrations = useCallback(() => {
@@ -336,36 +393,16 @@ export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
   }, []);
 
   const searchMentionItems = useCallback(async (query: string) => {
-    const items: ChatMentionOption[] = [];
-
-    // Mention sources are independent; query them in parallel and append
-    // results in registration/source order (preserved by Promise.all).
     const sources = Array.from(
       getOrCreateMap(registrationsRef).values(),
     ).flatMap(
       ({ registration }) =>
         registration.mentionSources ?? EMPTY_MENTION_SOURCES,
     );
-    const results = await Promise.all(
-      sources.map(
-        async (source) =>
-          await Result.tryPromise(
-            async () => await source.searchItems?.(query),
-          ),
-      ),
-    );
-
-    for (const result of results) {
-      if (Result.isError(result)) {
-        getAnalytics().captureError(result.error);
-        continue;
-      }
-      if (result.value !== undefined) {
-        items.push(...result.value);
-      }
-    }
-
-    return items;
+    return await readMentionSources(sources, {
+      operation: "searchItems",
+      query,
+    });
   }, []);
 
   const registerExtension = useCallback(
@@ -605,6 +642,7 @@ export const useChatEditor = ({
   // oxlint-disable-next-line react/refs -- latest-ref mirror: consumed by out-of-render editor handlers, must reflect this render's prop
   suggestedFollowupPromptRef.current = suggestedFollowupPrompt;
   const submitHandlerRef = useRef<(() => Promise<void>) | null>(null);
+  const confirmedCredentialSendRef = useRef(false);
   const fileIdCounterRef = useRef(0);
   const activePluginKeysRef = useRef<(string | PluginKey)[]>([]);
   const editorRef = useRef<Editor | null>(null);
@@ -662,6 +700,22 @@ export const useChatEditor = ({
     isEmptyRef.current = nextIsEmpty;
     setIsEmpty(nextIsEmpty);
   });
+  const showCredentialPasteNotice = useLatestCallback(
+    (targetEditor: Editor) => {
+      stellaToast.warning(t("chat.credentialPasteTitle"), {
+        description: t("chat.credentialPasteDescription"),
+        action: {
+          label: t("chat.credentialPasteAction"),
+          onClick: () => {
+            insertCredentialPasteRequest(
+              targetEditor,
+              t("chat.credentialPasteRequest"),
+            );
+          },
+        },
+      });
+    },
+  );
   const attachmentsRef = useRef(attachments);
   // oxlint-disable-next-line react/refs -- latest-ref mirror: read at submit time out-of-render, must hold this render's attachments
   attachmentsRef.current = attachments;
@@ -931,39 +985,44 @@ export const useChatEditor = ({
         "field-sizing-content max-h-48 min-h-10 overflow-y-auto text-sm focus-visible:outline-none",
     }),
     handlePaste: (_view, event) => {
-      // ProseMirror processes paste before any React `onPaste`
-      // handler, so the chip-on-large-paste logic has to live
-      // here — by the time the React handler fires, the text is
-      // already in the editor.
-      const clipboardData = event.clipboardData;
-      if (clipboardData === null) {
-        return false;
-      }
-
-      const hasFiles = Array.from(clipboardData.items).some(
-        (item) => item.kind === "file",
-      );
-      if (hasFiles) {
-        return false;
-      }
-
-      const pastedText = clipboardData.getData("text/plain");
-      if (!pastedText || !shouldChipPaste(pastedText)) {
-        return false;
-      }
-
+      // Consume every paste before ProseMirror can parse clipboard HTML.
+      // File uploads still bubble to the React handler on the input surface.
+      event.preventDefault();
+      const paste = readChatPaste(event.clipboardData);
       const targetEditor = editorRef.current;
       if (targetEditor === null) {
-        return false;
+        return true;
       }
-
-      event.preventDefault();
-      insertPastedTextChip(targetEditor, {
-        label: "",
-        source: "paste",
-        text: pastedText,
-      });
-      return true;
+      switch (paste.type) {
+        case "ignore":
+        case "files":
+          return true;
+        case "decision":
+          targetEditor.commands.insertContent(
+            decisionPassageContent(paste.passage),
+          );
+          return true;
+        case "chip":
+          insertPastedTextChip(targetEditor, {
+            label: "",
+            source: "paste",
+            text: paste.text,
+          });
+          return true;
+        case "credential":
+          showCredentialPasteNotice(targetEditor);
+          return true;
+        case "text":
+          targetEditor.commands.insertContent(paste.content, {
+            applyInputRules: false,
+            applyPasteRules: false,
+          });
+          return true;
+        default: {
+          paste satisfies never;
+          return panic("Unhandled chat paste");
+        }
+      }
     },
     handleKeyDown: (view, event) => {
       if (handleMessageHistoryKeyDown(view.state, event)) {
@@ -1282,7 +1341,7 @@ export const useChatEditor = ({
       }
 
       if (files.length === 0) {
-        // Plain-text paste collapsing happens earlier inside
+        // Text and typed paste handling happens earlier inside
         // ProseMirror via `editorProps.handlePaste`; nothing to do
         // at the React layer here.
         return;
@@ -1310,6 +1369,27 @@ export const useChatEditor = ({
       const html = editor.isEmpty ? "" : editor.getHTML().trim();
       const doc = editor.getJSON();
       const files = attachmentsRef.current;
+
+      if (
+        !confirmedCredentialSendRef.current &&
+        containsCredentialCandidate(editor.getText())
+      ) {
+        stellaToast.warning(t("chat.credentialSendTitle"), {
+          description: t("chat.credentialSendDescription"),
+          action: {
+            label: t("chat.credentialSendAction"),
+            onClick: () => {
+              confirmedCredentialSendRef.current = true;
+              detached(
+                submitHandlerRef.current?.(),
+                "chat-editor-provider.credential-send-anyway",
+              );
+            },
+          },
+        });
+        return;
+      }
+      confirmedCredentialSendRef.current = false;
 
       if (!html && files.length === 0) {
         return;
@@ -1360,6 +1440,7 @@ export const useChatEditor = ({
       editor,
       queryClient,
       setDraft,
+      t,
       threadKey,
     ],
   );

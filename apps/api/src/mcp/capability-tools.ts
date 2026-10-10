@@ -9,9 +9,15 @@ import {
   ACTION_ADMISSION_REFUSALS,
   isActionAdmissionCode,
 } from "@stll/api-contract/action-admission";
+import {
+  MCP_CAPABILITY_EXECUTORS,
+  type McpCapabilityExecutor,
+} from "@stll/api-contract/mcp-capability-executors";
 import type { PermissionInput } from "@stll/permissions";
 
 import { captureError } from "@/api/lib/analytics/capture";
+import type { AccountAccess } from "@/api/lib/api-handlers";
+import type { FeatureAccessRequirement } from "@/api/lib/auth/feature-access/requirements";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CapabilityTransport } from "@/api/lib/capability-transport";
 import {
@@ -22,16 +28,23 @@ import {
   transportFileInput,
   transportFileResponse,
 } from "@/api/lib/capability-transport";
+import { resourcesAreVisible } from "@/api/lib/entities/resource-access";
+import { SEARCH_INDEX_UNAVAILABLE_CODE } from "@/api/lib/legal-search/search-index-unavailable";
 import { getCurrentRequestId } from "@/api/lib/observability/request-context";
 import {
   decodePaginationCursor,
   encodePaginationCursor,
 } from "@/api/lib/pagination";
+import { projectionPayload } from "@/api/lib/projection-totality";
 import {
   VALIDATED_INPUT_SERVICE_CLASSIFICATION,
   isServiceClassification,
   type CatalogServiceClassification,
 } from "@/api/lib/rate-limit/service-classification";
+import {
+  HANDLER_KINDS,
+  type HandlerKind,
+} from "@/api/lib/safe-handler-factories";
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import { advertisedSchemas } from "@/api/mcp/advertised-schema";
@@ -45,7 +58,20 @@ import {
   type McpRequestContext,
 } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
-import type { McpErrorCode, McpValidationIssue } from "@/api/mcp/error-codes";
+import {
+  projectMcpRefusal,
+  statusCodeToErrorCode,
+} from "@/api/mcp/error-codes";
+import type { McpValidationIssue } from "@/api/mcp/error-codes";
+import {
+  isMcpDescriptorFeatureEnabled,
+  resolveMcpDescriptorFeatureId,
+} from "@/api/mcp/feature-access";
+import {
+  hiddenMcpDescriptorIds,
+  scopeMcpDescriptorProse,
+  scopeSchemaAnnotations,
+} from "@/api/mcp/feature-access-prose";
 import type { CapabilityDispatchEntry } from "@/api/mcp/generated/capability-dispatch";
 import {
   findRemovedInputIssues,
@@ -68,7 +94,6 @@ import type {
   McpToolResponse,
 } from "@/api/mcp/tool-types";
 import {
-  invalidCursorResult,
   closestToolNames,
   confirmationUnavailableResult,
   cursorInput,
@@ -77,13 +102,17 @@ import {
   FEATURE_DISABLED_MESSAGE,
   featureDisabledHint,
   getWorkspaceStatus,
+  invalidCursorResult,
   MAX_LIST_LIMIT,
   MCP_INTERNAL_ERROR_HINT,
   notFoundResult,
   nullAsAbsent,
   oauthScopeRecoveryHint,
   quoteToolName,
+  searchIndexUnavailableResult,
   structuredErrorResult,
+  structuredEgressPlan,
+  untypedStructuredEgressPlan,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
 import { resolveUploadPurposeRequirement } from "@/api/mcp/upload-purpose-gate";
@@ -99,16 +128,6 @@ type CapabilityMcpDisposition =
   | { type: "tool"; name: string }
   | { type: "covered"; by: string }
   | { type: "capability"; reason: string };
-
-const HANDLER_KINDS = [
-  "workspace",
-  "root",
-  "session",
-  "token",
-  "public",
-] as const;
-
-type HandlerKind = (typeof HANDLER_KINDS)[number];
 
 type CatalogEntry = {
   id: string;
@@ -150,6 +169,8 @@ type CatalogEntry = {
    * and describe/invoke refuse it with `feature_disabled` (see
    * `isCapabilityFeatureEnabled`).
    */
+  featureId?: string;
+  featureAccess?: "required" | "conditional";
   feature?: string;
   permissions?: unknown;
   inputSchema?: { body?: unknown; params?: unknown; query?: unknown };
@@ -261,6 +282,11 @@ const isCatalogEntry = (value: unknown): value is CatalogEntry =>
       value["additionalScopes"].every(
         (scope): scope is string => typeof scope === "string",
       ))) &&
+  (value["featureId"] === undefined ||
+    typeof value["featureId"] === "string") &&
+  (value["featureAccess"] === undefined ||
+    value["featureAccess"] === "required" ||
+    value["featureAccess"] === "conditional") &&
   (value["feature"] === undefined || typeof value["feature"] === "string") &&
   isCapabilityTransport(value["transport"]) &&
   isMcpDisposition(value["mcp"]);
@@ -294,6 +320,10 @@ const getCatalog = async () => {
   catalog = parseCatalog(generated.default);
   return catalog;
 };
+/** The parsed capability catalog, for checks over every capability. */
+export const loadCapabilityCatalog = async (): Promise<
+  readonly CatalogEntry[]
+> => await getCatalog();
 const getCatalogById = async () =>
   (catalogById ??= new Map(
     (await getCatalog()).map((entry) => [entry.id, entry]),
@@ -323,7 +353,7 @@ const requiredScopesOf = (entry: CatalogEntry): readonly string[] => [
 
 type RenderedTransport = {
   type: CapabilityTransport["type"];
-  /** Whether invoke_capability can run this at all. */
+  /** Whether capability executors can run this at all. */
   invocable: boolean;
   /** Body field carrying bytes, and whether it is required. */
   fileField: string | null;
@@ -368,11 +398,13 @@ const renderTransport = (transport: CapabilityTransport): RenderedTransport => {
  * The guard below narrows to this shape at the module boundary.
  */
 type EndpointConfig = {
+  featureAccess?: FeatureAccessRequirement;
   mcp?: unknown;
   body?: TSchema;
   params?: TSchema;
   query?: TSchema;
   permissions?: PermissionInput;
+  accountAccess?: AccountAccess;
 };
 
 type EndpointDefinition = {
@@ -391,7 +423,9 @@ const isEndpointDefinition = (value: unknown): value is EndpointDefinition =>
  * expose the expected endpoint shape (a generated-artifact drift the registry
  * test would also catch); the caller maps that to `internal_error`.
  */
-const loadEndpoint = async (id: string): Promise<EndpointDefinition | null> => {
+export const loadCapabilityEndpoint = async (
+  id: string,
+): Promise<EndpointDefinition | null> => {
   const dispatch = (await getDispatchById()).get(id);
   if (!dispatch) {
     return null;
@@ -664,49 +698,6 @@ const validatePart = ({
 
 // --- Result mapping ----------------------------------------------------------
 
-/**
- * Deliberate map from every 4xx a safe handler actually returns (sweep of
- * `HandlerError`/`status(...)` statuses in apps/api/src/handlers) onto the
- * error envelope, preserving the handler's message:
- *  - 400 validation, 422 semantic validation, 413 payload too large ->
- *    `validation_error`;
- *  - 401 (unauthenticated) and 403 (role/permission) -> `permission_denied`
- *    (the generic path is always authenticated, so a 401 here is an
- *    authorization gap, not a login prompt);
- *  - 404 -> `not_found`; 402 -> `usage_limited`; 429 -> `rate_limited`;
- *  - 409 -> `conflict` (duplicate link/name, concurrent edit; the message
- *    names the conflicting resource).
- * Unlisted statuses fall through to `internal_error` deliberately: 5xx are
- * genuine server failures (500/502 in handlers), 2xx/3xx status responses do
- * not occur on catalog handlers (302 lives in oauth-callback/verify, which are
- * `internal`-disposition; `redirect()` also trips the context-fidelity scan),
- * and 410 is unused across the handler tree.
- */
-const STATUS_CODE_TO_ENVELOPE: {
-  min: number;
-  max: number;
-  code: McpErrorCode;
-}[] = [
-  { min: 400, max: 400, code: "validation_error" },
-  { min: 401, max: 401, code: "permission_denied" },
-  { min: 402, max: 402, code: "usage_limited" },
-  { min: 403, max: 403, code: "permission_denied" },
-  { min: 404, max: 404, code: "not_found" },
-  { min: 409, max: 409, code: "conflict" },
-  { min: 413, max: 413, code: "validation_error" },
-  { min: 422, max: 422, code: "validation_error" },
-  { min: 429, max: 429, code: "rate_limited" },
-];
-
-const statusCodeToErrorCode = (code: number): McpErrorCode => {
-  for (const range of STATUS_CODE_TO_ENVELOPE) {
-    if (code >= range.min && code <= range.max) {
-      return range.code;
-    }
-  }
-  return "internal_error";
-};
-
 const statusResponseMessage = (response: unknown): string => {
   if (isRecord(response) && typeof response["message"] === "string") {
     return response["message"];
@@ -740,6 +731,15 @@ const mapStatusResponse = (
           : undefined,
     });
   }
+  // A search capability whose index could not be reached answers a 503 with
+  // the typed body; it reads as the tools' retryable envelope, not a failure
+  // of the capability.
+  if (
+    isRecord(responseBody) &&
+    responseBody["code"] === SEARCH_INDEX_UNAVAILABLE_CODE
+  ) {
+    return searchIndexUnavailableResult(responseBody);
+  }
   const code = statusCodeToErrorCode(statusCode);
   const message = statusResponseMessage(responseBody);
   if (code === "internal_error") {
@@ -749,7 +749,25 @@ const mapStatusResponse = (
       hint: MCP_INTERNAL_ERROR_HINT,
     });
   }
-  return structuredErrorResult({ code, message });
+  return structuredErrorResult(
+    projectMcpRefusal({
+      status: statusCode,
+      code:
+        isRecord(responseBody) && typeof responseBody["code"] === "string"
+          ? responseBody["code"]
+          : undefined,
+      message,
+      issues: isRecord(responseBody) ? responseBody["issues"] : undefined,
+      hint:
+        isRecord(responseBody) && typeof responseBody["hint"] === "string"
+          ? responseBody["hint"]
+          : undefined,
+      retryable:
+        isRecord(responseBody) && typeof responseBody["retryable"] === "boolean"
+          ? responseBody["retryable"]
+          : undefined,
+    }),
+  );
 };
 
 /**
@@ -783,11 +801,11 @@ const withRequestReceipt = (
 const successEgress = (
   payload: unknown,
   access: "read" | "write",
-): McpEgressPlan => ({
-  egress: "structured",
-  payload: withRequestReceipt(payload, access),
-  textFields: [],
-});
+): McpEgressPlan =>
+  untypedStructuredEgressPlan({
+    payload: withRequestReceipt(payload, access),
+    textFields: [],
+  });
 
 const CAPABILITY_TRANSPORT_OUTPUT_SCHEMA = v.strictObject({
   type: v.picklist(["json", "file-input", "file-response", "file-both"]),
@@ -889,6 +907,40 @@ const contextFeatureEnabled = (
     isCapabilityFeatureEnabled
   )(feature);
 
+const capabilityFeatureEnabled = (
+  entry: CatalogEntry,
+  context: McpRequestContext,
+) =>
+  entry.featureAccess === "conditional" ||
+  isMcpDescriptorFeatureEnabled({
+    context,
+    kind: "capabilities",
+    id: entry.id,
+    featureId: entry.featureId,
+  });
+
+export const accessibleFeatureCapabilityIds = async (
+  context: McpRequestContext,
+): Promise<string[]> =>
+  (await getCatalog())
+    .filter(
+      (entry) =>
+        resolveMcpDescriptorFeatureId({
+          context,
+          kind: "capabilities",
+          id: entry.id,
+          featureId: entry.featureId,
+        }) !== undefined &&
+        isMcpDescriptorFeatureEnabled({
+          context,
+          kind: "capabilities",
+          id: entry.id,
+          featureId: entry.featureId,
+        }) &&
+        contextFeatureEnabled(entry.feature, context),
+    )
+    .map((entry) => entry.id);
+
 /**
  * Catalog capability ids gated off in this deployment, sorted: the ids
  * `list_capabilities` hides and describe/invoke refuse with `feature_disabled`.
@@ -899,9 +951,19 @@ export const featureOmittedCapabilityIds = async (
   isFeatureEnabled: (
     feature: string | undefined,
   ) => boolean = isCapabilityFeatureEnabled,
+  context?: McpRequestContext,
 ): Promise<readonly string[]> =>
   (await getCatalog())
-    .filter((entry) => !isFeatureEnabled(entry.feature))
+    .filter(
+      (entry) =>
+        !isFeatureEnabled(entry.feature) &&
+        isMcpDescriptorFeatureEnabled({
+          context,
+          kind: "capabilities",
+          id: entry.id,
+          featureId: entry.featureId,
+        }),
+    )
     .map((entry) => entry.id)
     .toSorted();
 
@@ -939,10 +1001,17 @@ const listCapabilitiesHandler: McpToolHandler<
   const filtered = (await getCatalog()).filter(
     (entry) =>
       contextFeatureEnabled(entry.feature, context) &&
+      capabilityFeatureEnabled(entry, context) &&
       (confirmable || !entry.destructive) &&
       (domain === undefined || capabilityDomain(entry.id) === domain) &&
       (access === "all" || entry.access === access) &&
       (afterId === undefined || entry.id > afterId),
+  );
+  const { DEFAULT_MCP_TOOL_DEFINITIONS } =
+    await import("@/api/mcp/static-tool-definitions");
+  const hiddenIds = hiddenMcpDescriptorIds(
+    context,
+    DEFAULT_MCP_TOOL_DEFINITIONS,
   );
   const page = filtered.slice(0, limit);
   const last = page.at(-1);
@@ -951,13 +1020,15 @@ const listCapabilitiesHandler: McpToolHandler<
       ? encodePaginationCursor([last.id])
       : null;
 
-  return {
-    egress: "structured",
-    payload: {
+  return structuredEgressPlan({
+    payload: projectionPayload(LIST_CAPABILITIES_OUTPUT_SCHEMA, {
       items: page.map((entry) => ({
         id: entry.id,
-        summary: summarizeEntry(entry),
-        description: entry.description ?? null,
+        summary: scopeMcpDescriptorProse(summarizeEntry(entry), hiddenIds),
+        description:
+          entry.description === undefined
+            ? null
+            : scopeMcpDescriptorProse(entry.description, hiddenIds),
         access: entry.access,
         destructive: entry.destructive,
         handlerKind: entry.handlerKind,
@@ -967,9 +1038,9 @@ const listCapabilitiesHandler: McpToolHandler<
       })),
       nextCursor,
       limit,
-    },
+    }),
     textFields: [],
-  };
+  });
 };
 
 const accessLabel = (entry: CatalogEntry): string =>
@@ -988,8 +1059,14 @@ const decodeCapabilityCursor = (cursor: string): string | undefined | null => {
 
 // --- describe_capability -----------------------------------------------------
 
-const notFoundWithHint = async (id: string): Promise<InternalToolErrorResult> =>
-  notFoundResult(`No capability with id "${id}"`, await hintForUnknownId(id));
+const notFoundWithHint = async (
+  id: string,
+  context: McpRequestContext,
+): Promise<InternalToolErrorResult> =>
+  notFoundResult(
+    `No capability with id "${id}"`,
+    await hintForUnknownId(id, context),
+  );
 
 /**
  * Refusal for a capability whose deployment feature flag is off. Same message
@@ -1005,10 +1082,19 @@ const featureDisabledResult = (
     hint: featureDisabledHint(feature),
   });
 
-const hintForUnknownId = async (id: string): Promise<string> => {
+const hintForUnknownId = async (
+  id: string,
+  context: McpRequestContext,
+): Promise<string> => {
   const suggestions = closestToolNames(
     id,
-    (await getCatalog()).map((entry) => entry.id),
+    (await getCatalog())
+      .filter(
+        (entry) =>
+          capabilityFeatureEnabled(entry, context) &&
+          contextFeatureEnabled(entry.feature, context),
+      )
+      .map((entry) => entry.id),
   );
   return suggestions.length > 0
     ? `${didYouMean(suggestions.map(quoteToolName))} Call list_capabilities to browse the full set.`
@@ -1035,15 +1121,15 @@ type GuardedEndpoint =
  * Load a capability's endpoint with failures contained: a rejecting dynamic
  * import (or a module without the `{ config, handler }` shape) is captured and
  * mapped to a structured `internal_error` envelope instead of escaping as an
- * unhandled rejection. Shared by `describe_capability` and `invoke_capability`.
+ * unhandled rejection. Shared by `describe_capability` and the capability executors.
  */
 const loadEndpointGuarded = async (
   id: string,
-  toolName: "describe_capability" | "invoke_capability",
+  toolName: "describe_capability" | McpCapabilityExecutor,
 ): Promise<GuardedEndpoint> => {
   let endpoint: EndpointDefinition | null;
   try {
-    endpoint = await loadEndpoint(id);
+    endpoint = await loadCapabilityEndpoint(id);
   } catch (error) {
     captureError(error, { source: "mcp", toolName });
     endpoint = null;
@@ -1081,12 +1167,13 @@ const describeCapabilityHandler: McpToolHandler<
   const id = parsed.output.capability;
   const entry = (await getCatalogById()).get(id);
   if (!entry) {
-    return notFoundWithHint(id);
+    return notFoundWithHint(id, context);
   }
 
-  // Match the static-tool surface: a gated-off tool is hidden from the list
-  // AND rejected on direct dispatch, so describing a gated-off capability is
-  // refused too (never leak a disabled feature's schema by direct id).
+  // Caller-hidden entries share the unknown-id contract, including hints.
+  if (!capabilityFeatureEnabled(entry, context)) {
+    return notFoundWithHint(id, context);
+  }
   if (!contextFeatureEnabled(entry.feature, context)) {
     return featureDisabledResult(entry.feature);
   }
@@ -1101,15 +1188,34 @@ const describeCapabilityHandler: McpToolHandler<
   // JSON serialization (toolDataResult in the egress pipeline) drops the symbols, so
   // they can go on the payload as-is. Uses the live config, never the snapshot,
   // so a snapshot-truncated capability still describes fully, and the same
-  // `advertisedSchemas` projection invoke_capability validates against, so an
+  // `advertisedSchemas` projection the capability executors validate against, so an
   // advertised bound is always an enforced bound.
-  const inputSchema = advertisedSchemas(endpoint.config);
+  const { DEFAULT_MCP_TOOL_DEFINITIONS } =
+    await import("@/api/mcp/static-tool-definitions");
+  const hiddenIds = hiddenMcpDescriptorIds(
+    context,
+    DEFAULT_MCP_TOOL_DEFINITIONS,
+  );
+  const schema = advertisedSchemas(endpoint.config);
+  const requirement = endpoint.config.featureAccess;
+  const inputSchema =
+    requirement?.type === "conditional" &&
+    !isMcpDescriptorFeatureEnabled({
+      context,
+      kind: "capabilities",
+      id,
+      featureId: requirement.featureId,
+    })
+      ? requirement.projectInputSchema(schema)
+      : schema;
 
-  return {
-    egress: "structured",
-    payload: {
+  return structuredEgressPlan({
+    payload: projectionPayload(DESCRIBE_CAPABILITY_OUTPUT_SCHEMA, {
       id: entry.id,
-      description: entry.description ?? null,
+      description:
+        entry.description === undefined
+          ? null
+          : scopeMcpDescriptorProse(entry.description, hiddenIds),
       domain: capabilityDomain(entry.id),
       access: entry.access,
       destructive: entry.destructive,
@@ -1125,13 +1231,16 @@ const describeCapabilityHandler: McpToolHandler<
       feature: entry.feature ?? null,
       permissions: entry.permissions ?? null,
       disposition: entry.mcp,
-      inputSchema,
-    },
+      inputSchema:
+        hiddenIds.size === 0
+          ? inputSchema
+          : scopeSchemaAnnotations(inputSchema, hiddenIds),
+    }),
     textFields: [],
-  };
+  });
 };
 
-// --- invoke_capability -------------------------------------------------------
+// --- capability executors -------------------------------------------------------
 
 type InvokeInput = { body: unknown; params: unknown; query: unknown };
 
@@ -1143,7 +1252,7 @@ const transportBlockReason = (transport: CapabilityTransport): string => {
     case "file-input":
       return `requires a file in \`${transport.input.field}\`, which JSON cannot carry`;
     case "file-response":
-      return "returns a file or stream, which invoke_capability cannot serialize";
+      return "returns a file or stream, which capability executors cannot serialize";
     case "file-both":
       return `requires a file in \`${transport.input.field}\` and returns a file or stream`;
     default: {
@@ -1168,7 +1277,7 @@ const transportRefusal = (
   const alternative = transportAlternative(transport);
   return structuredErrorResult({
     code: "feature_disabled",
-    message: `Capability "${id}" ${transportBlockReason(transport)}, so it is not available through invoke_capability`,
+    message: `Capability "${id}" ${transportBlockReason(transport)}, so it is not available through capability executors`,
     hint:
       alternative === undefined
         ? "Use its REST route or the stella app."
@@ -1193,7 +1302,7 @@ const filelessFieldRefusal = (
   }
   return structuredErrorResult({
     code: "validation_error",
-    message: `Capability "${id}" cannot take \`${field}\` through invoke_capability: that field carries file bytes, which JSON cannot express`,
+    message: `Capability "${id}" cannot take \`${field}\` through capability executors: that field carries file bytes, which JSON cannot express`,
     hint: `Omit \`${field}\` and call again using this capability's other input modes; the file mode is only available through its REST route or the stella app.`,
   });
 };
@@ -1224,7 +1333,7 @@ const invokeFlagSchema = (description: string) =>
   );
 
 /**
- * invoke_capability's OWN arguments, read strictly. A mistyped flag or a
+ * The executors' own arguments, read strictly. A mistyped flag or a
  * misplaced input, read leniently, fails open: `validate_only: "true"`
  * silently read as `false` would EXECUTE a capability the caller intended as
  * a dry run, and a misspelt input part neither rejected nor read would run the
@@ -1232,36 +1341,48 @@ const invokeFlagSchema = (description: string) =>
  * booleans, and `input` and its body/params/query parts must be objects.
  * Never coerce, never ignore.
  */
-const invokeCapabilityArgsSchema = nullAsAbsent(
-  v.strictObject({
-    capability: v.pipe(
-      v.string(),
-      v.minLength(1),
+const CAPABILITY_ARGUMENTS = {
+  capability: v.pipe(
+    v.string(),
+    v.nonEmpty(),
+    v.description(
+      "Capability id to invoke. Use an id list_capabilities returned.",
+    ),
+  ),
+  input: v.optional(
+    v.pipe(
+      v.strictObject(INVOKE_INPUT_PARTS, (issue) =>
+        // valibot reports a key outside the entries as expecting `never`.
+        issue.expected === "never"
+          ? `Unknown input part. Expected one of: ${Object.keys(INVOKE_INPUT_PARTS).join(", ")}`
+          : "Expected an object",
+      ),
       v.description(
-        "Capability id to invoke. Use an id list_capabilities returned.",
+        "The capability's input, split into the parts its schema declares.",
       ),
     ),
-    input: v.optional(
-      v.pipe(
-        v.strictObject(INVOKE_INPUT_PARTS, (issue) =>
-          // valibot reports a key outside the entries as expecting `never`.
-          issue.expected === "never"
-            ? `Unknown input part. Expected one of: ${Object.keys(INVOKE_INPUT_PARTS).join(", ")}`
-            : "Expected an object",
-        ),
-        v.description(
-          "The capability's input, split into the parts its schema declares.",
-        ),
-      ),
-    ),
-    validate_only: invokeFlagSchema(
-      "When true, validate the input against the capability schema and return without executing.",
-    ),
+  ),
+  validate_only: invokeFlagSchema(
+    "When true, validate the input against the capability schema and return without executing.",
+  ),
+};
+
+const readCapabilityArgsSchema = nullAsAbsent(
+  v.strictObject(CAPABILITY_ARGUMENTS),
+);
+const writeCapabilityArgsSchema = nullAsAbsent(
+  v.strictObject({
+    ...CAPABILITY_ARGUMENTS,
     confirm: invokeFlagSchema(
       "Must be true to run a destructive capability. Set it only after a human user approved the irreversible action.",
     ),
   }),
 );
+
+const CAPABILITY_ARGUMENT_SCHEMAS = {
+  read: readCapabilityArgsSchema,
+  write: writeCapabilityArgsSchema,
+} as const satisfies Record<keyof typeof MCP_CAPABILITY_EXECUTORS, unknown>;
 
 /**
  * Rename the public input field names back to the internal ones a handler
@@ -1478,20 +1599,37 @@ const resolveCapabilityWorkspace = ({
   return { ok: true, workspaceId: branded };
 };
 
-export const invokedCapabilityConsumesServices = async (args: unknown) => {
-  const parsed = v.safeParse(invokeCapabilityArgsSchema, args);
+type CapabilityServiceClassificationOptions = {
+  args: unknown;
+  context: McpRequestContext;
+  access: keyof typeof MCP_CAPABILITY_EXECUTORS;
+};
+
+export const invokedCapabilityConsumesServices = async ({
+  args,
+  context,
+  access,
+}: CapabilityServiceClassificationOptions) => {
+  const parsed = v.safeParse(CAPABILITY_ARGUMENT_SCHEMAS[access], args);
   if (!parsed.success || parsed.output.validate_only === true) {
     // Invalid calls reach canonical validation without executing work.
     return Result.ok(false);
   }
   const entry = (await getCatalogById()).get(parsed.output.capability);
-  if (entry === undefined) {
+  if (
+    entry === undefined ||
+    entry.access !== access ||
+    !capabilityFeatureEnabled(entry, context)
+  ) {
     return Result.ok(false);
   }
   if (typeof entry.consumesServices === "boolean") {
     return Result.ok(entry.consumesServices);
   }
-  const loaded = await loadEndpointGuarded(entry.id, "invoke_capability");
+  const loaded = await loadEndpointGuarded(
+    entry.id,
+    MCP_CAPABILITY_EXECUTORS[entry.access],
+  );
   if (!loaded.ok) {
     return Result.err(loaded.result);
   }
@@ -1506,19 +1644,23 @@ export const invokedCapabilityConsumesServices = async (args: unknown) => {
   });
 };
 
+type InvokeCapabilityOptions = {
+  args: Record<string, unknown>;
+  context: McpRequestContext;
+  access: keyof typeof MCP_CAPABILITY_EXECUTORS;
+};
+
 const invokeCapabilityHandler = async ({
   args,
   context,
-}: {
-  args: Record<string, unknown>;
-  context: McpRequestContext;
-}): Promise<McpToolResponse> => {
+  access,
+}: InvokeCapabilityOptions): Promise<McpToolResponse> => {
   // 0. The meta-tool's own argument shapes, before ANY gate: neither a
   // mistyped flag nor a misplaced input may be read leniently
   // (`validate_only: "true"` would fail open into executing a request that
   // intended a dry run; a top-level `query` would run the capability with no
   // input at all).
-  const parsed = v.safeParse(invokeCapabilityArgsSchema, args);
+  const parsed = v.safeParse(CAPABILITY_ARGUMENT_SCHEMAS[access], args);
   if (!parsed.success) {
     return validationErrorResult(
       parsed.issues,
@@ -1529,22 +1671,30 @@ const invokeCapabilityHandler = async ({
     capability: id,
     input: rawInput,
     validate_only: validateOnlyFlag,
-    confirm,
   } = parsed.output;
+  const confirm = "confirm" in parsed.output && parsed.output.confirm === true;
 
   const entry = (await getCatalogById()).get(id);
 
   // 1. Unknown id -> not_found with a closest-id hint.
   if (!entry) {
-    return notFoundWithHint(id);
+    return notFoundWithHint(id, context);
   }
 
-  // 2. Deployment feature gate. Mirrors the static-tool dispatch guard
-  // (tools.ts): the list surface hides a gated-off entry, and this closes the
-  // guess-the-id bypass. Runs before every other gate (validateOnly included)
-  // so a disabled feature leaks nothing about its capabilities.
+  // 2. Caller admission precedes deployment availability for discovery parity.
+  if (!capabilityFeatureEnabled(entry, context)) {
+    return notFoundWithHint(id, context);
+  }
   if (!contextFeatureEnabled(entry.feature, context)) {
     return featureDisabledResult(entry.feature);
+  }
+
+  if (entry.access !== access) {
+    return structuredErrorResult({
+      code: "validation_error",
+      message: `Capability "${id}" requires the ${entry.access} executor`,
+      hint: `Call ${MCP_CAPABILITY_EXECUTORS[entry.access]} with the same capability and input.`,
+    });
   }
 
   // 3. Disposition / fidelity. token/public capabilities self-authorize from a
@@ -1552,7 +1702,7 @@ const invokeCapabilityHandler = async ({
   // capability's handler needs response plumbing the synthesized context drops.
   if (entry.handlerKind === "token" || entry.handlerKind === "public") {
     return notFoundResult(
-      `Capability "${id}" is not invokable through invoke_capability`,
+      `Capability "${id}" is not invokable through capability executors`,
       "This operation authorizes itself differently; use its dedicated surface.",
     );
   }
@@ -1562,7 +1712,7 @@ const invokeCapabilityHandler = async ({
   if (waiver !== undefined) {
     return structuredErrorResult({
       code: "feature_disabled",
-      message: `Capability "${id}" cannot run through invoke_capability: ${waiver}`,
+      message: `Capability "${id}" cannot run through capability executors: ${waiver}`,
       hint: "Perform this operation in the stella app, which has the required request context.",
     });
   }
@@ -1597,7 +1747,6 @@ const invokeCapabilityHandler = async ({
     });
   }
 
-  // 5. Destructive confirm gate.
   const unconfirmable = entry.destructive
     ? confirmationUnavailableResult({
         toolConfirmation: context.toolConfirmation,
@@ -1607,14 +1756,6 @@ const invokeCapabilityHandler = async ({
   if (unconfirmable !== null) {
     return unconfirmable;
   }
-  if (entry.destructive && confirm !== true) {
-    return structuredErrorResult({
-      code: "confirmation_required",
-      message: `Capability "${id}" is an irreversible operation and was called without confirmation`,
-      hint: "This operation is irreversible. Confirm with the human user, then retry with confirm: true.",
-    });
-  }
-
   const input: InvokeInput = {
     body: rawInput?.body,
     params: rawInput?.params,
@@ -1640,9 +1781,13 @@ const invokeCapabilityHandler = async ({
       id,
       input,
       validateOnly,
+      confirm,
     });
   } catch (error) {
-    captureError(error, { source: "mcp", toolName: "invoke_capability" });
+    captureError(error, {
+      source: "mcp",
+      toolName: MCP_CAPABILITY_EXECUTORS[access],
+    });
     return structuredErrorResult({
       code: "internal_error",
       message: "Capability execution failed",
@@ -1669,7 +1814,7 @@ const invokeCapabilityHandler = async ({
  * - Feature gate (tools.ts dispatch guard): gate 2, same feature_disabled
  *   envelope, also applied to describe and the list filter.
  * - Scope recheck (server-core missing_scope): the transport already gates the
- *   invoke_capability tool itself; gate 4 rechecks the per-capability catalog
+ *   executor tool itself; gate 4 rechecks the per-capability catalog
  *   scope against the session's grants.
  * - Destructive confirm (tools.ts destructiveHint): gate 5, from the catalog's
  *   per-capability `destructive` flag.
@@ -1822,20 +1967,67 @@ export const classifyValidatedCapabilityServiceInput = ({
   return Result.ok(consumesServices);
 };
 
+const capabilityReferenceRefusal = async ({
+  context,
+  config,
+  body,
+  params,
+  query,
+  entry,
+  confirm,
+}: {
+  context: McpRequestContext;
+  config: EndpointConfig;
+  body: unknown;
+  params: unknown;
+  query: unknown;
+  entry: Pick<CatalogEntry, "id" | "destructive">;
+  confirm: boolean | undefined;
+}) => {
+  if (
+    !(await resourcesAreVisible({
+      inputs: [
+        { schema: config.body, value: body },
+        { schema: config.params, value: params },
+        { schema: config.query, value: query },
+      ],
+      scopedDb: context.scopedDb,
+    }))
+  ) {
+    return notFoundResult("Not found");
+  }
+
+  // 5. Destructive confirm gate.
+  if (entry.destructive && confirm !== true) {
+    return structuredErrorResult({
+      code: "confirmation_required",
+      message: `Capability "${entry.id}" is an irreversible operation and was called without confirmation`,
+      hint: "This operation is irreversible. Confirm with the human user, then retry with confirm: true.",
+    });
+  }
+
+  return null;
+};
+
 const executeInvoke = async ({
   context,
   entry,
   id,
   input: publicInput,
   validateOnly,
+  confirm,
 }: {
   context: McpRequestContext;
   entry: CatalogEntry;
   id: string;
   input: InvokeInput;
   validateOnly: boolean;
+  confirm: boolean | undefined;
 }): Promise<McpToolResponse> => {
-  const loaded = await loadEndpointGuarded(id, "invoke_capability");
+  const loaded = await loadEndpointGuarded(
+    id,
+    MCP_CAPABILITY_EXECUTORS[entry.access],
+  );
   if (!loaded.ok) {
     return loaded.result;
   }
@@ -1856,6 +2048,19 @@ const executeInvoke = async ({
     params: validatedParams,
     query: validatedQuery,
   } = validated;
+
+  const referenceRefusal = await capabilityReferenceRefusal({
+    context,
+    config: endpoint.config,
+    body: validatedBody,
+    params: validatedParams,
+    query: validatedQuery,
+    entry,
+    confirm,
+  });
+  if (referenceRefusal !== null) {
+    return referenceRefusal;
+  }
 
   // 7. Workspace resolution (workspace kind only), from the RAW input params
   // (route-macro parity: REST validates the path param independently of the
@@ -1885,6 +2090,39 @@ const executeInvoke = async ({
         : {}),
       workspaceId: resolved.workspaceId,
     };
+  }
+
+  const requirement = endpoint.config.featureAccess;
+  if (
+    requirement?.type === "conditional" &&
+    !isMcpDescriptorFeatureEnabled({
+      context,
+      kind: "capabilities",
+      id,
+      featureId: requirement.featureId,
+    })
+  ) {
+    const scope = context.createOperationDatabaseScope?.();
+    if (
+      !scope ||
+      (workspaceId !== undefined &&
+        !scope.pinServerValidatedWorkspaceId(workspaceId))
+    ) {
+      return notFoundResult("Not found");
+    }
+    const usesFeature = await requirement.usesFeature({
+      body: validatedBody,
+      params: handlerParams,
+      query: validatedQuery,
+      organizationId: context.organizationId,
+      userId: context.userId,
+      safeDb: scope.safeDb,
+      scopedDb: scope.scopedDb,
+      ...(workspaceId === undefined ? {} : { workspaceId }),
+    });
+    if (usesFeature) {
+      return notFoundResult("Not found");
+    }
   }
 
   // 8. Purpose-dependent requirements. One `uploads.*` domain scope and one
@@ -1941,11 +2179,10 @@ const executeInvoke = async ({
   }
 
   if (validateOnly) {
-    return {
-      egress: "structured",
+    return untypedStructuredEgressPlan({
       payload: { valid: true, capability: id },
       textFields: [],
-    };
+    });
   }
 
   const request = context.request;
@@ -2035,8 +2272,8 @@ export const mapHandlerResult = ({
   if (isBinaryPayload(result)) {
     return structuredErrorResult({
       code: "feature_disabled",
-      message: `Capability "${id}" returned a file or stream, which invoke_capability cannot deliver`,
-      hint: "Fetch the file through its REST route or the stella app; invoke_capability only returns structured JSON.",
+      message: `Capability "${id}" returned a file or stream, which capability executors cannot deliver`,
+      hint: "Fetch the file through its REST route or the stella app; capability executors only return structured JSON.",
     });
   }
   return successEgress(result, access);
@@ -2075,7 +2312,7 @@ const CAPABILITY_TOOL_DEFINITIONS = [
     description:
       "List the automatable capabilities beyond the curated tools: every safe " +
       "backend operation (CRUD, exports, processing triggers) reachable through " +
-      "invoke_capability. Paginated; filter by domain (the id prefix, e.g. " +
+      "read_capability or write_capability. Paginated; filter by domain (the id prefix, e.g. " +
       '"time-entries") or access (read/write). Each item gives the capability ' +
       "id, description, access/destructive, its transport (whether this path " +
       "can run it, which field takes a file, and what to use instead), " +
@@ -2101,54 +2338,73 @@ const CAPABILITY_TOOL_DEFINITIONS = [
       "(body/params/query), required OAuth scopes, member permissions, whether it " +
       "is destructive, its handler kind (workspace/root), its disposition, and " +
       "its transport (whether this path can run it, which field takes a file, " +
-      "and what to use instead). Call this before invoke_capability to learn " +
+      "and what to use instead). Call this before read_capability or write_capability to learn " +
       "exactly what input to pass.",
     inputSchema: describeCapabilityArgsSchema,
   }),
   defineValibotMcpTool({
     consumesServices: false,
-    // openWorldHint: true because the target capability is selected at
-    // runtime by id, and the catalog includes contacts.business-registries-
-    // lookup, which reaches the shared business-registry dispatch (ARES,
-    // KRS, ORSR, ...) the same external interaction matter-tools.ts's company
-    // lookup and template-tools.ts's fill_template declare open-world for;
-    // the hint is static per tool, so it must cover that reachable case even
-    // though most capabilities never leave the closed Stella domain.
     annotations: {
-      title: "Invoke capability",
+      title: "Read capability",
+      destructiveHint: false,
+      openWorldHint: true,
+      readOnlyHint: true,
+    },
+    name: MCP_CAPABILITY_EXECUTORS.read,
+    access: "read",
+    readClass: resolveCapabilityReadClass,
+    anonymized: { exposure: "excluded", reason: "dynamic_tenant_payload" },
+    scope: "stella:read",
+    description:
+      "Read one capability by id. Take a read id from list_capabilities or " +
+      "describe_capability. Pass input under input: { body, params, query }; " +
+      "matter-scoped capabilities take input.params.matterId. " +
+      "Required scopes and member permissions are checked per capability. " +
+      "Set validate_only: true to check input without running it. " +
+      "Write capabilities must use write_capability.",
+    inputSchema: readCapabilityArgsSchema,
+  }),
+  defineValibotMcpTool({
+    consumesServices: false,
+    annotations: {
+      title: "Write capability",
       destructiveHint: true,
       idempotentHint: false,
       openWorldHint: true,
       readOnlyHint: false,
     },
-    name: "invoke_capability",
+    name: MCP_CAPABILITY_EXECUTORS.write,
     access: "write",
-    readClass: resolveCapabilityReadClass,
+    accountAccess: "sandbox",
+    permissions: {
+      type: "delegated",
+      reason:
+        "The selected capability's endpoint permissions and purpose requirements are checked before its dispatch.",
+    },
     anonymized: { exposure: "excluded", reason: "write" },
     destructiveBehavior: { type: "capability-catalog" },
     scope: "stella:read",
-    // Confirmation is per capability (from the catalog), so the handler applies
-    // the gate from the target capability's `destructive` flag.
     description:
-      "Invoke one capability by id. " +
-      "Take the id from list_capabilities or describe_capability. " +
-      "Pass its input under input: { body, params, query } (no other top-level " +
-      "argument is accepted); matter-scoped capabilities take the target " +
-      "matter as input.params.matterId. Real authority is enforced per " +
-      "capability: the session must hold the capability's scope and your member " +
-      "role its permissions. Set validate_only: true to check input without " +
-      "running it; destructive capabilities require confirm: true after human " +
-      "approval.",
-    inputSchema: invokeCapabilityArgsSchema,
+      "Write one capability by id. Take a write id from list_capabilities or " +
+      "describe_capability. Pass input under input: { body, params, query }; " +
+      "matter-scoped capabilities take input.params.matterId. " +
+      "Required scopes and member permissions are checked per capability. " +
+      "Set validate_only: true to check input without running it; " +
+      "destructive capabilities require confirm: true after human approval. " +
+      "Read capabilities must use read_capability.",
+    inputSchema: writeCapabilityArgsSchema,
   }),
 ] as const satisfies readonly McpToolDefinition[];
 
 export const CAPABILITY_TOOL_HANDLERS = {
   list_capabilities: listCapabilitiesHandler,
   describe_capability: describeCapabilityHandler,
-  invoke_capability: invokeCapabilityHandler,
+  [MCP_CAPABILITY_EXECUTORS.read]: async ({ args, context }) =>
+    await invokeCapabilityHandler({ args, context, access: "read" }),
+  [MCP_CAPABILITY_EXECUTORS.write]: async ({ args, context }) =>
+    await invokeCapabilityHandler({ args, context, access: "write" }),
 } satisfies Record<
-  "list_capabilities" | "describe_capability" | "invoke_capability",
+  "list_capabilities" | "describe_capability" | McpCapabilityExecutor,
   McpToolHandler
 >;
 
@@ -2157,7 +2413,11 @@ export const CAPABILITY_TOOL_SET = defineMcpToolSet(
   CAPABILITY_TOOL_HANDLERS,
   {
     describe_capability: defineMcpToolOutput(DESCRIBE_CAPABILITY_OUTPUT_SCHEMA),
-    invoke_capability: defineProjectedMcpToolOutput(
+    [MCP_CAPABILITY_EXECUTORS.read]: defineProjectedMcpToolOutput(
+      INVOKE_CAPABILITY_OUTPUT_SCHEMA,
+      (result) => ({ result }),
+    ),
+    [MCP_CAPABILITY_EXECUTORS.write]: defineProjectedMcpToolOutput(
       INVOKE_CAPABILITY_OUTPUT_SCHEMA,
       (result) => ({ result }),
     ),

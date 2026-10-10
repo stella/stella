@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { RedisClient } from "bun";
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
 import { StoreUnavailableError } from "@stll/redis-config/store-policy";
 
 import type { rootDb } from "@/api/db/root";
@@ -230,14 +231,20 @@ describe("OCR derivative durability", () => {
       writePdf: async () => {
         calls.push("storage");
       },
-      writeMetered: async ({ objectKey, organizationId, sizeBytes, write }) => {
+      writeMetered: async ({
+        content,
+        objectKey,
+        organizationId,
+        sizeBytes,
+        write,
+      }) => {
         expect(objectKey).toBe("org/workspace/ocr/run.pdf");
         expect(String(organizationId)).toBe(
           "019864b8-48d0-7f37-94d5-948e3bcf3f40",
         );
         expect(sizeBytes).toBe(pdfBytes.byteLength);
         calls.push("metered");
-        await write();
+        await write({ content, objectKey, sizeBytes });
         return Result.ok();
       },
     });
@@ -842,10 +849,12 @@ describe("bounded search-index replay", () => {
     const providerFailure = new Error("search provider unavailable");
 
     expect(
-      indexDocumentProjectionAtJobBoundary({
-        indexEntity: async () => await Promise.reject(providerFailure),
-      }),
-    ).rejects.toMatchObject({
+      await rejectionOf(
+        indexDocumentProjectionAtJobBoundary({
+          indexEntity: async () => await Promise.reject(providerFailure),
+        }),
+      ),
+    ).toMatchObject({
       code: "search_index_failed",
       cause: providerFailure,
     });
@@ -1062,7 +1071,7 @@ describe("unconfigured worker lifecycle", () => {
       "const ocrConfigured = isLocalDocumentOcrConfigured()",
     );
     const consumerStart = queueSource.indexOf(
-      "const worker = new Worker<DocumentProcessingJobData>",
+      "const worker = new BullMqWorker<DocumentProcessingJobData>",
     );
     const readinessGuard = queueSource.indexOf(
       "if (ocrConfigured)",

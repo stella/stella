@@ -3,6 +3,7 @@ import { and, asc, desc, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { DOCUMENT_VERSION_UPLOAD_TRANSPORT } from "@stll/api-contract";
+import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
 
 import {
   DEFAULT_DOCUMENT_PROCESSING_MODE,
@@ -23,21 +24,19 @@ import { loadEntityVersionDocxText } from "@/api/handlers/entities/version-diff-
 import { deleteEntityVersionHandler } from "@/api/handlers/entities/versions/delete";
 import { updateVersionDescriptionHandler } from "@/api/handlers/entities/versions/description/update";
 import { updateVersionLabelHandler } from "@/api/handlers/entities/versions/label/update";
-import type { UpsertFieldContent } from "@/api/handlers/fields/upsert";
-import { upsertFieldHandler } from "@/api/handlers/fields/upsert";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   DELETED_TRUE_PROJECTION,
   LIST_DOCUMENTS_PROJECTION,
   LIST_PROPERTIES_PROJECTION,
-  type READ_DOCUMENT_DEFAULT_PROJECTION,
-  type READ_DOCUMENT_DIFF_PROJECTION,
+  READ_DOCUMENT_DEFAULT_PROJECTION,
+  READ_DOCUMENT_DIFF_PROJECTION,
   READ_DOCUMENT_PROJECTION,
-  type READ_DOCUMENT_VERSION_PROJECTION,
-  type SAVE_DOCUMENT_CREATE_PROJECTION,
+  READ_DOCUMENT_VERSION_PROJECTION,
+  SAVE_DOCUMENT_CREATE_PROJECTION,
   SAVE_DOCUMENT_PROJECTION,
-  type SAVE_DOCUMENT_UPDATE_PROJECTION,
+  SAVE_DOCUMENT_UPDATE_PROJECTION,
   SET_FIELD_VALUE_PROJECTION,
 } from "@/api/lib/chat/projections";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
@@ -51,6 +50,12 @@ import {
   entityListCursorCondition,
   entityListTimestampCursorExpr,
 } from "@/api/lib/entities/list-cursor";
+import {
+  FIELD_VALUE_WRITE_PERMISSIONS,
+  writeFieldValue,
+} from "@/api/lib/fields/write-field";
+import type { FieldWriteContent } from "@/api/lib/fields/write-field";
+import { ENCRYPTED_CONTENT_MESSAGE } from "@/api/lib/files/detect-file-encryption";
 import { shouldGeneratePdfDerivative } from "@/api/lib/files/pdf-derivative-policy";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -58,6 +63,7 @@ import {
   decodePaginationCursor,
   encodePaginationCursor,
 } from "@/api/lib/pagination";
+import { projectionPayload } from "@/api/lib/projection-totality";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import {
   brandPersistedEntityId,
@@ -87,7 +93,10 @@ import {
   UPLOAD_DOCUMENT_VERSION_OUTPUT_SCHEMA,
   uploadRemoteDocumentVersion,
 } from "@/api/mcp/document-file-upload";
-import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
+import {
+  hasEffectiveAuthority,
+  mcpMemberAuthority,
+} from "@/api/mcp/effective-authority";
 import {
   handlePrepareFileComparisonFromLinksTool,
   PREPARE_FILE_COMPARISON_FROM_LINKS_OUTPUT_CONTRACT,
@@ -117,7 +126,6 @@ import type {
 } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
-  invalidCursorResult,
   bindWorkspaceRecorder,
   cursorInput,
   DEFAULT_LIST_LIMIT,
@@ -125,10 +133,12 @@ import {
   ensureWorkspaceAccess,
   errorResult,
   internalFailureResult,
+  invalidCursorResult,
   isToolErrorResult,
   MAX_LIST_LIMIT,
   notFoundResult,
   nullAsAbsent,
+  structuredEgressPlan,
   structuredErrorResult,
   toolDataResult,
   uuidInputSchema,
@@ -139,6 +149,7 @@ import {
   defineMcpToolOutput,
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
+import { selectOperationByPresence } from "@/api/mcp/write-tool-authority";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
 type DocumentToolName =
@@ -516,7 +527,7 @@ const UPLOAD_DOCUMENT_VERSION_TOOL_DEFINITION = defineValibotMcpTool({
   },
   annotations: {
     title: "Upload document version",
-    destructiveHint: false,
+    destructiveHint: true,
     idempotentHint: false,
     openWorldHint: false,
     readOnlyHint: false,
@@ -528,6 +539,8 @@ const UPLOAD_DOCUMENT_VERSION_TOOL_DEFINITION = defineValibotMcpTool({
     "presigned, checksum-verified, scanned, and audited file-version pipeline.",
   inputSchema: UPLOAD_DOCUMENT_VERSION_INPUT_SCHEMA,
   access: "write",
+  accountAccess: "sandbox",
+  permissions: { type: "all", permissions: { entity: ["update"] } },
   anonymized: { exposure: "excluded", reason: "write" },
   name: DOCUMENT_VERSION_UPLOAD_TRANSPORT.toolName,
   scope: "stella:documents_write",
@@ -553,7 +566,11 @@ const OPEN_DOCUMENT_VERSION_UPLOAD_TOOL_DEFINITION = defineValibotMcpTool({
     "document. Use only when upload_document_version cannot receive a host file " +
     "reference; do not use when the host already supplied an attached file.",
   inputSchema: OPEN_DOCUMENT_VERSION_UPLOAD_INPUT_SCHEMA,
+  nonDestructiveReason:
+    "Validates document access and returns upload panel metadata without modifying any document or version.",
   access: "write",
+  accountAccess: "sandbox",
+  permissions: { type: "all", permissions: { entity: ["update"] } },
   anonymized: { exposure: "excluded", reason: "write" },
   name: DOCUMENT_VERSION_UPLOAD_TRANSPORT.pickerToolName,
   scope: "stella:documents_write",
@@ -728,16 +745,16 @@ const handleListDocumentsTool: TypedMcpToolHandler<
 
   const documents = page.items.map(({ createdAt: _createdAt, ...doc }) => doc);
 
-  const payload = {
+  const payload = projectionPayload(LIST_DOCUMENTS_PROJECTION, {
     documents,
     nextCursor: page.nextCursor,
-  } satisfies v.InferInput<typeof LIST_DOCUMENTS_PROJECTION>;
+  });
   const textFields = runTextFieldSpecs(
     documentListTextFieldSpecs(workspaceId),
     payload,
   );
 
-  return { egress: "structured", payload, textFields };
+  return structuredEgressPlan({ payload, textFields });
 };
 
 // Version-history cursor is [versionNumber, versionId]; keyset paginates
@@ -924,7 +941,7 @@ type DocumentContentState =
       remediation:
         | {
             type: "action";
-            tool: "invoke_capability";
+            tool: typeof MCP_CAPABILITY_EXECUTORS.write;
             arguments: {
               capability: "entities.ocr.create";
               input: {
@@ -1245,7 +1262,7 @@ const loadDocumentProcessingStates = async ({
         remediation: canQueueManualOcr
           ? {
               type: "action",
-              tool: "invoke_capability",
+              tool: MCP_CAPABILITY_EXECUTORS.write,
               arguments: {
                 capability: "entities.ocr.create",
                 input: {
@@ -1291,7 +1308,7 @@ const loadDocumentProcessingStates = async ({
       return {
         status: "unsupported",
         sourceVersionId: current.currentVersionId,
-        reason: "Encrypted document content cannot be extracted.",
+        reason: ENCRYPTED_CONTENT_MESSAGE,
       };
     }
     if (!extractionCanBecomeAvailable) {
@@ -1409,18 +1426,18 @@ const handleReadDocumentTool: TypedMcpToolHandler<
       baseResult.value,
       targetResult.value,
     );
-    const payload = {
+    const payload = projectionPayload(READ_DOCUMENT_DIFF_PROJECTION, {
       entityId,
       name: owner.name,
       diff: { baseVersionId, targetVersionId, segments },
-    } satisfies v.InferInput<typeof READ_DOCUMENT_DIFF_PROJECTION>;
+    });
 
     const textFields = runTextFieldSpecs(
       readDocumentDiffTextFieldSpecs(workspaceId),
       payload,
     );
 
-    return { egress: "structured", payload, textFields };
+    return structuredEgressPlan({ payload, textFields });
   }
 
   // Specific version metadata + field values.
@@ -1459,7 +1476,7 @@ const handleReadDocumentTool: TypedMcpToolHandler<
     }
     const { fields: versionFields, ...versionMeta } = versionRow;
 
-    const payload = {
+    const payload = projectionPayload(READ_DOCUMENT_VERSION_PROJECTION, {
       entityId,
       name: owner.name,
       version: {
@@ -1467,12 +1484,12 @@ const handleReadDocumentTool: TypedMcpToolHandler<
         createdAt: versionRow.createdAt.toISOString(),
         fields: versionFields,
       },
-    } satisfies v.InferInput<typeof READ_DOCUMENT_VERSION_PROJECTION>;
+    });
     const textFields = runTextFieldSpecs(
       readDocumentVersionDetailTextFieldSpecs(workspaceId),
       payload,
     );
-    return { egress: "structured", payload, textFields };
+    return structuredEgressPlan({ payload, textFields });
   }
 
   // Default: current version metadata + field values.
@@ -1504,7 +1521,7 @@ const handleReadDocumentTool: TypedMcpToolHandler<
     versionHistory = history;
   }
 
-  const payload = {
+  const payload = projectionPayload(READ_DOCUMENT_DEFAULT_PROJECTION, {
     entityId: current.entityId,
     kind: current.kind,
     name: current.name,
@@ -1517,7 +1534,7 @@ const handleReadDocumentTool: TypedMcpToolHandler<
           versionsNextCursor: versionHistory.nextCursor,
         }
       : {}),
-  } satisfies v.InferInput<typeof READ_DOCUMENT_DEFAULT_PROJECTION>;
+  });
 
   // Version history carries tenant-authored label/description; payload.versions
   // holds the same entry references runTextFieldSpecs reads from, so the
@@ -1528,7 +1545,7 @@ const handleReadDocumentTool: TypedMcpToolHandler<
     payload,
   );
 
-  return { egress: "structured", payload, textFields };
+  return structuredEgressPlan({ payload, textFields });
 };
 
 const saveDocumentArgsSchema = nullAsAbsent(
@@ -1746,9 +1763,11 @@ const createDocumentEntity = async ({
     return internalFailureResult(created.error);
   }
 
-  return toolDataResult({
-    entityId: created.value.entityId,
-  } satisfies v.InferInput<typeof SAVE_DOCUMENT_CREATE_PROJECTION>);
+  return toolDataResult(
+    projectionPayload(SAVE_DOCUMENT_CREATE_PROJECTION, {
+      entityId: created.value.entityId,
+    }),
+  );
 };
 
 /**
@@ -1959,9 +1978,11 @@ const updateDocumentEntity = async ({
     }
   }
 
-  return toolDataResult({
-    updated: true,
-  } satisfies v.InferInput<typeof SAVE_DOCUMENT_UPDATE_PROJECTION>);
+  return toolDataResult(
+    projectionPayload(SAVE_DOCUMENT_UPDATE_PROJECTION, {
+      updated: true,
+    }),
+  );
 };
 
 const handleSaveDocumentTool: TypedMcpToolHandler<
@@ -2095,9 +2116,11 @@ const handleDeleteDocumentTool: TypedMcpToolHandler<
     if (Result.isError(deleted)) {
       return internalFailureResult(deleted.error);
     }
-    return toolDataResult({
-      deleted: true,
-    } satisfies v.InferInput<typeof DELETED_TRUE_PROJECTION>);
+    return toolDataResult(
+      projectionPayload(DELETED_TRUE_PROJECTION, {
+        deleted: true,
+      }),
+    );
   }
 
   if (!hasEffectiveAuthority(context, { entity: ["delete"] })) {
@@ -2115,9 +2138,11 @@ const handleDeleteDocumentTool: TypedMcpToolHandler<
   if (Result.isError(deleted)) {
     return internalFailureResult(deleted.error);
   }
-  return toolDataResult({
-    deleted: true,
-  } satisfies v.InferInput<typeof DELETED_TRUE_PROJECTION>);
+  return toolDataResult(
+    projectionPayload(DELETED_TRUE_PROJECTION, {
+      deleted: true,
+    }),
+  );
 };
 
 const listPropertiesArgsSchema = nullAsAbsent(
@@ -2216,16 +2241,16 @@ const handleListPropertiesTool: TypedMcpToolHandler<
     writeMethod: PROPERTY_WRITE_METHODS[property.content.type],
   }));
 
-  const payload = {
+  const payload = projectionPayload(LIST_PROPERTIES_PROJECTION, {
     properties: propertyList,
     nextCursor: page.nextCursor,
-  } satisfies v.InferInput<typeof LIST_PROPERTIES_PROJECTION>;
+  });
   const textFields = runTextFieldSpecs(
     propertyListTextFieldSpecs(workspaceId),
     payload,
   );
 
-  return { egress: "structured", payload, textFields };
+  return structuredEgressPlan({ payload, textFields });
 };
 
 const SET_FIELD_VALUE_TYPE_DESCRIPTION =
@@ -2307,7 +2332,7 @@ const setFieldValueArgsSchema = nullAsAbsent(
 
 type SetFieldValueContent = v.InferOutput<typeof setFieldValueContentSchema>;
 
-const toFieldContent = (content: SetFieldValueContent): UpsertFieldContent => {
+const toFieldContent = (content: SetFieldValueContent): FieldWriteContent => {
   if (content.type === "int") {
     return {
       version: 1,
@@ -2331,9 +2356,10 @@ const toFieldContent = (content: SetFieldValueContent): UpsertFieldContent => {
 const handleSetFieldValueTool: TypedMcpToolHandler<
   v.InferInput<typeof SET_FIELD_VALUE_PROJECTION>
 > = async ({ args, context }) => {
-  const hasPermission = hasEffectiveAuthority(context, {
-    entity: ["create", "update"],
-  });
+  const hasPermission = hasEffectiveAuthority(
+    context,
+    FIELD_VALUE_WRITE_PERMISSIONS,
+  );
   if (!hasPermission) {
     return errorResult("Forbidden");
   }
@@ -2377,25 +2403,22 @@ const handleSetFieldValueTool: TypedMcpToolHandler<
   }
 
   const result = await Result.gen(() =>
-    upsertFieldHandler({
+    writeFieldValue({
       safeDb: context.safeDb,
+      authority: mcpMemberAuthority(context),
       workspaceId,
       userId: context.userId,
       recordAuditEvent: bindWorkspaceRecorder(context, workspaceId),
-      body: {
-        entityId,
-        propertyId: brandPersistedPropertyId(parsed.output.property_id),
-        content: toFieldContent(parsed.output.content),
-      },
+      entityId,
+      propertyId: brandPersistedPropertyId(parsed.output.property_id),
+      content: toFieldContent(parsed.output.content),
     }),
   );
   if (Result.isError(result)) {
     return internalFailureResult(result.error);
   }
 
-  return toolDataResult(
-    {} satisfies v.InferInput<typeof SET_FIELD_VALUE_PROJECTION>,
-  );
+  return toolDataResult(projectionPayload(SET_FIELD_VALUE_PROJECTION, {}));
 };
 
 export const DOCUMENT_TOOL_DEFINITIONS = [
@@ -2482,12 +2505,19 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
     },
     annotations: {
       title: "Save document",
-      destructiveHint: false,
+      destructiveHint: true,
       idempotentHint: false,
       openWorldHint: false,
       readOnlyHint: false,
     },
     access: "write",
+    accountAccess: "sandbox",
+    permissions: {
+      type: "any",
+      alternatives: [{ entity: ["create"] }, { entity: ["update"] }],
+      reason:
+        "entity_id selects rename, move or version metadata; without it the call creates.",
+    },
     anonymized: { exposure: "excluded", reason: "write" },
     name: "save_document",
     scope: "stella:documents_write",
@@ -2514,6 +2544,14 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
       "irreversible.",
     inputSchema: deleteDocumentArgsSchema,
     access: "write",
+    accountAccess: "sandbox",
+    permissions: selectOperationByPresence("version_id", {
+      present: {
+        operation: "delete_version",
+        permissions: { entity: ["update"] },
+      },
+      absent: { operation: "delete", permissions: { entity: ["delete"] } },
+    }),
     anonymized: { exposure: "excluded", reason: "write" },
     destructiveBehavior: { type: "always" },
     name: "delete_document",
@@ -2554,18 +2592,20 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
       "(value: integer, optional currency: 3-letter ISO code). An empty value " +
       "clears the cell.",
     inputSchema: setFieldValueArgsSchema,
-    // Not idempotent: upsertFieldHandler unconditionally deletes/reinserts and
+    // Not idempotent: writeFieldValue unconditionally deletes/reinserts and
     // reindexes the cell and records a fresh audit event + updatedAt bump on
     // every call, so a repeat with identical args has an observable additional
     // effect (a duplicate audit entry) in this compliance context.
     annotations: {
       title: "Set field value",
-      destructiveHint: false,
+      destructiveHint: true,
       idempotentHint: false,
       openWorldHint: false,
       readOnlyHint: false,
     },
     access: "write",
+    accountAccess: "sandbox",
+    permissions: { type: "all", permissions: FIELD_VALUE_WRITE_PERMISSIONS },
     anonymized: { exposure: "excluded", reason: "write" },
     name: "set_field_value",
     scope: "stella:documents_write",

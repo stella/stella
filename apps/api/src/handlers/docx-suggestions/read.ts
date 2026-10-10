@@ -5,7 +5,7 @@ import { t } from "elysia";
 import { DOCX_SUGGESTIONS_PAGE_SIZE_MAX } from "@stll/api-contract";
 
 import { docxSuggestions } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import {
   tPaginationCursor,
   tSafeId,
@@ -56,6 +56,7 @@ const suggestionOrigin = (
 const listDocxSuggestions = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "document_processing" },
     access: "read",
     params: workspaceParams({ entityId: tSafeId("entity") }),

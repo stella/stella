@@ -23,6 +23,36 @@ export const majorUnitInput = (amountCents: number, currency: string): string =>
     currencyMinorUnitDigits(currency),
   );
 
+/** Canonical decimal text, without grouping or a floating-point conversion. */
+type NormalizeMajorUnitInputOptions = {
+  input: string;
+  locale: string;
+};
+
+export const normalizeMajorUnitInput = ({
+  input,
+  locale,
+}: NormalizeMajorUnitInputOptions): string | null => {
+  const formatter = new Intl.NumberFormat(locale, { useGrouping: false });
+  const decimal = formatter
+    .formatToParts(1.1)
+    .find((part) => part.type === "decimal")?.value;
+  const digits = new Map<string, string>();
+  for (let digit = 0; digit <= 9; digit += 1) {
+    digits.set(formatter.format(digit), String(digit));
+  }
+  let canonical = "";
+  for (const character of input) {
+    canonical +=
+      character === decimal ? "." : (digits.get(character) ?? character);
+  }
+  // Dot always means a decimal, including where the locale uses it for grouping.
+  // Grouping and mixed decimal separators are deliberately not accepted.
+  return /^[+]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)$/u.test(canonical)
+    ? canonical
+    : null;
+};
+
 export type SubmittedRateParams = {
   /** The major-unit text the rate input holds, or null when it is not overridden. */
   draft: string | null;

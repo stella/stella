@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 /**
  * Erasure of a decision whose text a judgment also holds as a supplement.
  *
@@ -19,8 +20,6 @@
  * Which judgments hold the erased row is read from their own record of what
  * they composed, so a run that stopped part way finds them again.
  */
-
-import { Result } from "better-result";
 import { and, eq, isNotNull, isNull, ne, sql } from "drizzle-orm";
 
 import { mapWithConcurrency } from "@stll/concurrency";
@@ -31,7 +30,7 @@ import {
   caseLawDecisions,
   caseLawSources,
 } from "@/api/db/schema";
-import { lockCitationGraph } from "@/api/handlers/case-law/citation-resolution";
+import { runCitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
 import { redactCaseLawDecision } from "@/api/handlers/case-law/erasure";
 import type { RedactCaseLawDecisionOutcome } from "@/api/handlers/case-law/erasure";
 import type {
@@ -57,7 +56,7 @@ import { metadataMarkedListingOnly } from "@/api/lib/legal-search/partial-observ
 const HOLDER_LEASE_WAIT_MS = 2 * 60 * 1000;
 
 /** What became of one judgment that held the erased text. */
-export type ErasedSupplementHolderOutcome =
+type ErasedSupplementHolderOutcome =
   /** Rebuilt from its own payload without the erased supplement. */
   | { type: "recomposed"; judgmentId: SafeId<"caseLawDecision"> }
   /**
@@ -145,9 +144,7 @@ const withholdHolder = async (
   if (withdrawn.value.type === "corpus-objects-remain") {
     return Result.ok("incomplete");
   }
-  await scopedDb(async (tx) => {
-    // The resolver takes the graph lock before citation rows; so does this.
-    await lockCitationGraph(tx);
+  await runCitationGraphTransaction(scopedDb, async (tx) => {
     // audit: skip — GDPR redaction; recorded in case_law_index_jobs by the erasure
     await tx
       .delete(caseLawCitations)

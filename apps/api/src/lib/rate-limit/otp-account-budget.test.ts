@@ -8,6 +8,7 @@ import { describe, expect, test } from "bun:test";
 import {
   createOtpAccountBudget,
   createOtpAccountLimitPlugin,
+  DEMO_OTP_ACCOUNT_BUDGET,
   OTP_ACCOUNT_BUDGET,
 } from "@/api/lib/rate-limit/otp-account-budget";
 import { RedisRateLimitContext } from "@/api/lib/rate-limit/redis-context";
@@ -48,6 +49,7 @@ const createCounter = () => {
       now += milliseconds;
     },
     context: {
+      complete: async () => undefined,
       increment: async (
         key: string,
         duration = OTP_ACCOUNT_BUDGET.durationMs,
@@ -86,6 +88,14 @@ const reserveAllowed = async (
 };
 
 describe("account verification budget", () => {
+  test("gives the demo account a smaller budget over the same window", () => {
+    expect(DEMO_OTP_ACCOUNT_BUDGET).toEqual({
+      max: 5,
+      durationMs: OTP_ACCOUNT_BUDGET.durationMs,
+    });
+    expect(DEMO_OTP_ACCOUNT_BUDGET.max).toBeLessThan(OTP_ACCOUNT_BUDGET.max);
+  });
+
   const nativeVerificationCases = [
     { path: "/sign-in/email-otp", type: "sign-in", extra: {} },
     {
@@ -120,6 +130,7 @@ describe("account verification budget", () => {
           createOtpAccountLimitPlugin({
             enabled,
             context: createCounter().context,
+            demoAccountEmail: undefined,
           }),
           emailOTP({
             generateOTP: () => "123456",
@@ -166,7 +177,7 @@ describe("account verification budget", () => {
     context.init({
       duration: OTP_ACCOUNT_BUDGET.durationMs,
     });
-    const budget = createOtpAccountBudget(context);
+    const budget = createOtpAccountBudget(context, undefined);
     try {
       for (
         let attempt = 0;
@@ -213,6 +224,7 @@ describe("account verification budget", () => {
           createOtpAccountLimitPlugin({
             enabled: true,
             context: counter.context,
+            demoAccountEmail: undefined,
           }),
           emailOTP({
             allowedAttempts: OTP_ACCOUNT_BUDGET.max + 1,
@@ -291,6 +303,7 @@ describe("account verification budget", () => {
         createOtpAccountLimitPlugin({
           enabled: true,
           context: counter.context,
+          demoAccountEmail: undefined,
         }),
         emailOTP({
           allowedAttempts: OTP_ACCOUNT_BUDGET.max + 1,
@@ -328,7 +341,7 @@ describe("account verification budget", () => {
   });
   test("counts unsuccessful verifications until the account window ends", async () => {
     const counter = createCounter();
-    const budget = createOtpAccountBudget(counter.context);
+    const budget = createOtpAccountBudget(counter.context, undefined);
     for (let attempt = 0; attempt < OTP_ACCOUNT_BUDGET.max; attempt += 1) {
       const key = await reserveAllowed(
         budget,
@@ -349,8 +362,32 @@ describe("account verification budget", () => {
     );
   });
 
+  test("applies the configured account window", async () => {
+    const budget = createOtpAccountBudget(
+      createCounter().context,
+      " Demo@Example.Test ",
+    );
+    for (let attempt = 0; attempt < DEMO_OTP_ACCOUNT_BUDGET.max; attempt += 1) {
+      await reserveAllowed(
+        budget,
+        attempt % 2 === 0 ? "demo@example.test" : " DEMO@EXAMPLE.TEST ",
+      );
+    }
+    expect(await budget.reserve("demo@example.test")).toMatchObject({
+      status: "error",
+      error: { statusCode: 429 },
+    });
+    for (let attempt = 0; attempt < OTP_ACCOUNT_BUDGET.max; attempt += 1) {
+      await reserveAllowed(budget, "other@example.test");
+    }
+    expect(await budget.reserve("other@example.test")).toMatchObject({
+      status: "error",
+      error: { statusCode: 429 },
+    });
+  });
+
   test("successful verifications return their reservation", async () => {
-    const budget = createOtpAccountBudget(createCounter().context);
+    const budget = createOtpAccountBudget(createCounter().context, undefined);
     for (let attempt = 0; attempt < OTP_ACCOUNT_BUDGET.max * 2; attempt += 1) {
       await budget.complete(
         await reserveAllowed(budget, "account@example.test"),
@@ -360,7 +397,7 @@ describe("account verification budget", () => {
   });
 
   test("bounds simultaneous account reservations", async () => {
-    const budget = createOtpAccountBudget(createCounter().context);
+    const budget = createOtpAccountBudget(createCounter().context, undefined);
     const outcomes = await Promise.all(
       Array.from(
         { length: OTP_ACCOUNT_BUDGET.max * 2 },
@@ -395,6 +432,7 @@ describe("account verification budget", () => {
           createOtpAccountLimitPlugin({
             enabled: true,
             context: counter.context,
+            demoAccountEmail: undefined,
           }),
           emailOTP({
             allowedAttempts: OTP_ACCOUNT_BUDGET.max + 1,
@@ -421,6 +459,49 @@ describe("account verification budget", () => {
     },
   );
 
+  test("applies the configured window to OTP requests", async () => {
+    const counter = createCounter();
+    const auth = betterAuth({
+      baseURL: "http://localhost:3001",
+      secret: "test-secret-that-is-long-enough-for-better-auth",
+      database: memoryAdapter({
+        user: [],
+        session: [],
+        account: [],
+        verification: [],
+      }),
+      plugins: [
+        createOtpAccountLimitPlugin({
+          enabled: true,
+          context: counter.context,
+          demoAccountEmail: " ACCOUNT@EXAMPLE.TEST ",
+        }),
+        emailOTP({
+          allowedAttempts: DEMO_OTP_ACCOUNT_BUDGET.max + 1,
+          generateOTP: () => "123456",
+          sendVerificationOTP: async () => undefined,
+        }),
+      ],
+    });
+    for (
+      let attempt = 0;
+      attempt <= DEMO_OTP_ACCOUNT_BUDGET.max;
+      attempt += 1
+    ) {
+      await postAuth(auth, {
+        path: "/email-otp/send-verification-otp",
+        body: { email: "account@example.test", type: "sign-in" },
+      });
+      const response = await postAuth(auth, {
+        path: "/sign-in/email-otp",
+        body: { email: "account@example.test", otp: "654321" },
+      });
+      expect(response.status).toBe(
+        attempt < DEMO_OTP_ACCOUNT_BUDGET.max ? 400 : 429,
+      );
+    }
+  });
+
   test("uses the authenticated account for email-change verification", async () => {
     const auth = betterAuth({
       baseURL: "http://localhost:3001",
@@ -435,6 +516,7 @@ describe("account verification budget", () => {
         createOtpAccountLimitPlugin({
           enabled: true,
           context: createCounter().context,
+          demoAccountEmail: undefined,
         }),
         emailOTP({
           allowedAttempts: OTP_ACCOUNT_BUDGET.max + 1,
@@ -510,6 +592,7 @@ describe("account verification budget", () => {
         createOtpAccountLimitPlugin({
           enabled: true,
           context: createCounter().context,
+          demoAccountEmail: undefined,
         }),
         emailOTP({
           allowedAttempts: OTP_ACCOUNT_BUDGET.max + 1,

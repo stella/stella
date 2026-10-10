@@ -16,6 +16,7 @@ import {
   readShelfCourts,
   type ShelfCourt,
 } from "@/api/handlers/case-law/decisions/shelf-courts";
+import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { readDecisionHeadnote } from "@/api/lib/case-law/decision-text";
 import {
@@ -39,6 +40,7 @@ import {
 } from "@/api/lib/legal-search/public-law-country";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
+import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 
 /**
  * The entry shelf when nothing has been typed: the newest decisions of the
@@ -54,7 +56,7 @@ export const listLatestDecisionsQuerySchema = t.Object({
 type ListLatestDecisionsQuery = Static<typeof listLatestDecisionsQuerySchema>;
 
 export type LatestDecision = {
-  id: string;
+  id: SafeId<"caseLawDecision">;
   caseNumber: string;
   slug: string | null;
   ecli: string | null;
@@ -75,7 +77,7 @@ export type LatestDecisionsByCourt = {
   decisions: LatestDecision[];
 };
 
-export type LatestDecisions = {
+type LatestDecisions = {
   country: string;
   courts: LatestDecisionsByCourt[];
 };
@@ -214,7 +216,7 @@ export const readLatestDecisionsByCourt = async ({
       });
     }
     decisions.push({
-      id: requiredString(row, "id"),
+      id: brandPersistedCaseLawDecisionId(requiredString(row, "id")),
       caseNumber: requiredString(row, "case_number"),
       slug: toNullableString(row["slug"]),
       ecli: toNullableString(row["ecli"]),
@@ -296,7 +298,7 @@ export const listLatestDecisionsHandler = async (
     admitted: PUBLIC_CASE_LAW_COUNTRIES,
   });
   if (countryRead.kind === "unavailable") {
-    return status(503, countryRead.response);
+    return countryRead.answer;
   }
   if (countryRead.kind === "unreadable") {
     return status(400, { message: countryRead.message });

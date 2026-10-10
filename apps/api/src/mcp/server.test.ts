@@ -17,6 +17,10 @@ import type {
 import { panic, Result } from "better-result";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+import {
+  MCP_APP_EXTENSION_ID,
+  MCP_APP_RESOURCE_MIME_TYPE,
+} from "@stll/api-contract";
 import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
 
 import { env } from "@/api/env";
@@ -26,9 +30,14 @@ import {
 } from "@/api/lib/analytics/client";
 import type { ServerAnalyticsCaptureParams } from "@/api/lib/analytics/server-analytics";
 import { checkDemoAccountAccess } from "@/api/lib/auth/demo-account-policy";
+import { toSafeId } from "@/api/lib/branded-types";
 import { runWithRequestId } from "@/api/lib/observability/request-context";
-import { ActionAdmissionError } from "@/api/lib/rate-limit/action-admission";
+import {
+  ActionAdmissionError,
+  withActionAdmission,
+} from "@/api/lib/rate-limit/action-admission";
 import type { getActionSizePolicy } from "@/api/lib/rate-limit/action-size-limits";
+import { DEMO_ACCOUNT_DAILY_ACTION_BUDGET } from "@/api/lib/rate-limit/demo-action-budget";
 import { recordMcpSessionInitialized } from "@/api/mcp/client-identity";
 import {
   MCP_ALL_RESOURCE_SCOPES,
@@ -46,6 +55,7 @@ import {
 } from "@/api/mcp/errors";
 import { toMcpTools } from "@/api/mcp/gateway/list-tools";
 import { MCP_INSTRUCTIONS } from "@/api/mcp/instructions";
+import { getMcpWwwAuthenticateHeader } from "@/api/mcp/metadata";
 import {
   createMcpHttpRequestHandler,
   mcpOmittedToolNamesByReason,
@@ -56,6 +66,7 @@ import {
   listStaticMcpToolDefinitions,
 } from "@/api/mcp/static-tool-definitions";
 import type { ToolScope } from "@/api/mcp/tool-types";
+import { createTestDemoActionBudget } from "@/api/tests/helpers/demo-action-budget";
 import { readTestJson } from "@/api/tests/helpers/test-tool-set";
 
 const actionSizePolicyMock = mock((): ReturnType<typeof getActionSizePolicy> =>
@@ -297,6 +308,89 @@ describe("handleMcpHttpRequest", () => {
     }
   });
 
+  test("flags off still count the demo account's tool calls", async () => {
+    const previous = {
+      FEATURE_ACTION_ADMISSION: env.FEATURE_ACTION_ADMISSION,
+      FEATURE_ACTION_COST_RECORDS: env.FEATURE_ACTION_COST_RECORDS,
+    };
+    Object.assign(env, {
+      FEATURE_ACTION_ADMISSION: false,
+      FEATURE_ACTION_COST_RECORDS: false,
+    });
+    try {
+      const demo = createTestDemoActionBudget({
+        demoUserId: toSafeId<"user">("user_1"),
+        nowMs: Date.UTC(2026, 0, 15),
+      });
+      authenticateMcpRequestMock.mockResolvedValue(
+        Result.ok({
+          organizationId: "org_1",
+          scopes: ["stella:read"],
+          userId: "user_1",
+        }),
+      );
+      resolveMcpSessionContextMock.mockResolvedValue({
+        organizationId: "org_1",
+        userId: "user_1",
+      });
+      getMcpToolDefinitionMock.mockResolvedValue({
+        name: "get_document",
+        scope: "stella:read",
+        access: "read",
+        description: "Read a document",
+        inputSchema: { type: "object", properties: {} },
+      });
+      handleMcpToolCallMock.mockResolvedValue({
+        content: [{ type: "text", text: "served" }],
+      });
+      const handler = createMcpHttpRequestHandler({
+        ...mcpHandlerDependencies,
+        admitAction: async (options) =>
+          await withActionAdmission({
+            ...options,
+            demoActionBudget: demo.budget,
+          }),
+      });
+      const callTool = async () =>
+        await readTestJson<McpJsonResponse<CallToolResult>>(
+          await handler(
+            createMcpRequest({
+              id: 1,
+              jsonrpc: "2.0",
+              method: "tools/call",
+              params: { name: "get_document", arguments: {} },
+            }),
+          ),
+        );
+
+      expect((await callTool()).result.isError).toBeFalsy();
+      expect(demo.count()).toBe(1);
+      expect(handleMcpToolCallMock).toHaveBeenCalledTimes(1);
+
+      for (
+        let index = 1;
+        index < DEMO_ACCOUNT_DAILY_ACTION_BUDGET.max;
+        index++
+      ) {
+        await withActionAdmission({
+          organizationId: toSafeId<"organization">("org_1"),
+          userId: toSafeId<"user">("user_1"),
+          demoActionBudget: demo.budget,
+          run: async () => await Promise.resolve(undefined),
+        });
+      }
+      const refused = await callTool();
+      const item = refused.result.content.at(0);
+      const payload = item?.type === "text" ? JSON.parse(item.text) : undefined;
+      expect(refused.result.isError).toBe(true);
+      expect(payload?.error).toMatchObject({ code: "action_period_exhausted" });
+      expect(handleMcpToolCallMock).toHaveBeenCalledTimes(1);
+      expect(demo.count()).toBe(DEMO_ACCOUNT_DAILY_ACTION_BUDGET.max);
+    } finally {
+      Object.assign(env, previous);
+    }
+  });
+
   test("returns a generic 401 for token validation failures", async () => {
     authenticateMcpRequestMock.mockResolvedValue(
       Result.err(
@@ -407,6 +501,68 @@ describe("handleMcpHttpRequest", () => {
     expect(await readTestJson<McpJsonRpcError>(response)).toMatchObject({
       error: { code: -32_001, message: "Forbidden" },
     });
+    expect(captureErrorMock).not.toHaveBeenCalled();
+  });
+
+  test("refuses the demo account every MCP request, read-only discovery and read calls included", async () => {
+    authenticateMcpRequestMock.mockResolvedValue(
+      Result.ok({
+        userId: "user_one",
+        organizationId: "org_one",
+        scopes: ["stella:read"],
+      }),
+    );
+    resolveMcpSessionContextMock.mockImplementation(
+      async (session, options) =>
+        await resolveMcpSessionContext(session, {
+          ...options,
+          resolveAuthorization: async () => ({
+            memberId: "member_one",
+            email: "limited@example.test",
+            role: "owner",
+            workspace: null,
+          }),
+          checkAccountOperation: (email) =>
+            checkDemoAccountAccess({
+              email,
+              config: {
+                email: "limited@example.test",
+                organizationId: "org_one",
+              },
+              operation: "growth",
+            }),
+        }),
+    );
+    // A read-only tool: the refusal is session-wide, not per write tool.
+    const readTool = listStaticMcpToolDefinitions("default").find(
+      (definition) => definition.access === "read",
+    );
+    if (readTool === undefined) {
+      throw new Error("The default surface must serve a read tool");
+    }
+    const requests = [
+      { jsonrpc: "2.0", id: 1, method: "tools/list", params: {} },
+      {
+        jsonrpc: "2.0",
+        id: 2,
+        method: "tools/call",
+        params: { name: readTool.name, arguments: {} },
+      },
+    ];
+    for (const body of requests) {
+      const response = await handleMcpHttpRequest(createMcpRequest(body));
+      expect({ method: body.method, status: response.status }).toEqual({
+        method: body.method,
+        status: 403,
+      });
+      expect(await readTestJson<McpJsonRpcError>(response)).toEqual({
+        error: { code: -32_001, message: "Forbidden" },
+        id: null,
+        jsonrpc: "2.0",
+      });
+    }
+    expect(listMcpToolsMock).not.toHaveBeenCalled();
+    expect(handleMcpToolCallMock).not.toHaveBeenCalled();
     expect(captureErrorMock).not.toHaveBeenCalled();
   });
 
@@ -530,7 +686,9 @@ describe("handleMcpHttpRequest", () => {
   });
 
   test("the official v2 client separates host-file upload from the picker app", async () => {
-    const context = { type: "documents-mcp-context" };
+    // The transport checks write authority before dispatch, so the session
+    // carries a role that holds both upload tools.
+    const context = { type: "documents-mcp-context", memberRole: "owner" };
     const definitions = DOCUMENTS_MCP_TOOL_DEFINITIONS.filter(({ name }) =>
       ["upload_document_version", "open_document_version_upload"].includes(
         name,
@@ -728,9 +886,13 @@ describe("handleMcpHttpRequest", () => {
         "search",
         "fetch",
         "search_case_law",
+        "case_law_coverage",
         "lookup_case_law",
         "read_case_law_decision",
         "read_case_law_citations",
+        "open_case_law_decision",
+        "read_case_law_decision_blocks",
+        "preview_cited_provision",
         "search_legislation",
         "read_statute",
         "read_statute_provisions",
@@ -873,7 +1035,13 @@ describe("handleMcpHttpRequest", () => {
         jsonrpc: "2.0",
         method: "initialize",
         params: {
-          capabilities: {},
+          capabilities: {
+            extensions: {
+              [MCP_APP_EXTENSION_ID]: {
+                mimeTypes: [MCP_APP_RESOURCE_MIME_TYPE, "application/private"],
+              },
+            },
+          },
           clientInfo: { name: `  ${"n".repeat(200)}  `, version: "1.2.3" },
           protocolVersion: "2025-06-18",
         },
@@ -889,6 +1057,8 @@ describe("handleMcpHttpRequest", () => {
         properties: {
           client_name: "n".repeat(128),
           client_version: "1.2.3",
+          ui_apps_supported: true,
+          ui_apps_mime_types: [MCP_APP_RESOURCE_MIME_TYPE],
           credential_type: "oauth_client",
           mode: "default",
         },
@@ -1116,6 +1286,11 @@ describe("handleMcpHttpRequest", () => {
         },
       ],
       isError: true,
+      _meta: {
+        "mcp/www_authenticate": [
+          getMcpWwwAuthenticateHeader({ error: "insufficient_scope" }),
+        ],
+      },
     });
   });
 
@@ -1211,6 +1386,13 @@ describe("handleMcpHttpRequest", () => {
           "Insufficient permissions. Required scope: stella:documents_write",
       }),
     );
+    // Hosts that read tool-level challenges offer to reconnect in place.
+    expect(body.result.isError).toBe(true);
+    expect(body.result._meta).toEqual({
+      "mcp/www_authenticate": [
+        getMcpWwwAuthenticateHeader({ error: "insufficient_scope" }),
+      ],
+    });
     expect(getMcpToolDefinitionMock).not.toHaveBeenCalled();
     expect(handleMcpToolCallMock).not.toHaveBeenCalled();
   });
@@ -1371,7 +1553,9 @@ describe("handleMcpHttpRequest", () => {
       await readTestJson<McpJsonResponse<{ resources: Resource[] }>>(response);
 
     expect(response.status).toBe(200);
-    expect(listMcpResourcesMock).toHaveBeenCalledWith("default");
+    expect(listMcpResourcesMock).toHaveBeenCalledWith("default", {
+      type: "mcp-context",
+    });
     expect(body.result.resources.map((resource) => resource.uri)).toEqual([
       "stella://reference/template-markers",
     ]);
@@ -1412,6 +1596,7 @@ describe("handleMcpHttpRequest", () => {
     expect(readMcpResourceMock).toHaveBeenCalledWith(
       "stella://reference/template-markers",
       "default",
+      { type: "mcp-context" },
     );
     expect(body.result.contents).toEqual([
       {
@@ -1815,7 +2000,7 @@ describe("mcpOmittedToolNamesByReason", () => {
   test("attests each omitted tool under exactly one reason", () => {
     const omitted = mcpOmittedToolNamesByReason({
       grantedScopes: ["stella:read"],
-      isFeatureEnabled: (feature) => feature !== "FEATURE_TIME_BILLING",
+      isFeatureEnabled: (feature) => feature !== "FEATURE_PUBLIC_LAW",
       mode: "default",
     });
 

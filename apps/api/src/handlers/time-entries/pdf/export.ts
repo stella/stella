@@ -1,8 +1,9 @@
 import { Result } from "better-result";
 import { and } from "drizzle-orm";
 
-import { MoneyTotals, prorateHourlyCents } from "@stll/money";
-import { Temporal } from "@stll/time";
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
+import { timeEntryAmount, MoneyTotals } from "@stll/money";
+import { Temporal, todayFor } from "@stll/time";
 
 import { timeEntries } from "@/api/db/schema";
 import { exportAmountText } from "@/api/handlers/time-entries/export-amount";
@@ -12,9 +13,10 @@ import {
   timeEntryExportQuerySchema,
 } from "@/api/handlers/time-entries/export-query";
 import type { TimeEntryExportHandlerProps } from "@/api/handlers/time-entries/export-query";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { LIMITS } from "@/api/lib/limits";
+import { readOrganizationTimeZone } from "@/api/lib/organization-time-zone";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 /**
@@ -26,11 +28,13 @@ export const exportPdfHandler = async ({
   workspaceId,
   organizationId,
   query,
+  at = Temporal.Now.instant(),
 }: TimeEntryExportHandlerProps) => {
   const conditions = timeEntryExportConditions({ workspaceId, query });
 
-  const rows = await scopedDb((tx) =>
-    tx
+  const { rows, timeZone } = await scopedDb(async (tx) => ({
+    timeZone: await readOrganizationTimeZone(tx, organizationId),
+    rows: await tx
       .select({
         id: timeEntries.id,
         activityGroup: timeEntries.activityGroup,
@@ -39,6 +43,7 @@ export const exportPdfHandler = async ({
         durationMinutes: timeEntries.durationMinutes,
         billedMinutes: timeEntries.billedMinutes,
         rateAtEntry: timeEntries.rateAtEntry,
+        noCharge: timeEntries.noCharge,
         currency: timeEntries.currency,
         narrative: timeEntries.narrative,
         billable: timeEntries.billable,
@@ -48,7 +53,7 @@ export const exportPdfHandler = async ({
       .where(and(...conditions))
       .orderBy(timeEntries.dateWorked)
       .limit(LIMITS.exportPdfRowLimit),
-  );
+  }));
 
   const userMap = await loadTimekeeperNames({
     scopedDb,
@@ -66,7 +71,7 @@ export const exportPdfHandler = async ({
     "TIMESHEET REPORT",
     "",
     `Period: ${dateRange}`,
-    `Generated: ${Temporal.Now.plainDateISO("UTC").toString()}`,
+    `Generated: ${todayFor(timeZone, at).toString()}`,
     `Entries: ${rows.length}`,
     "",
     "-".repeat(80),
@@ -82,10 +87,7 @@ export const exportPdfHandler = async ({
       : "Unknown";
     const hours = (row.billedMinutes / 60).toFixed(2);
     const rate = exportAmountText(row.rateAtEntry, row.currency);
-    const amount = prorateHourlyCents({
-      billedMinutes: row.billedMinutes,
-      hourlyRateCents: row.rateAtEntry,
-    });
+    const amount = timeEntryAmount(row);
 
     // Total Hours must reconcile with the per-row billed hours and the
     // amount, which are both derived from billedMinutes; summing raw
@@ -145,10 +147,7 @@ const buildMinimalPdf = (lines: readonly string[]): Uint8Array => {
 
   // ~50 lines per page at 10pt with 14pt leading
   const linesPerPage = 50;
-  const pages: string[][] = [];
-  for (let i = 0; i < lines.length; i += linesPerPage) {
-    pages.push(lines.slice(i, i + linesPerPage));
-  }
+  const pages = chunkItems(lines, linesPerPage);
   if (pages.length === 0) {
     pages.push(["No data"]);
   }
@@ -232,6 +231,8 @@ const buildMinimalPdf = (lines: readonly string[]): Uint8Array => {
 };
 
 const config = {
+  accountAccess: ACCOUNT_ACCESS.standard,
+  featureAccess: { featureId: "time-billing", type: "required" },
   description:
     "Render a matter's client time entries as a PDF timesheet report: one block per " +
     "entry plus total hours and totals per currency. Filter by date-worked " +

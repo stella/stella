@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * The resolver's doctrine stated twice, once as SQL over batches and once as
  * a function of one reference's holders, must give one answer.
@@ -13,12 +14,11 @@
  * time, self, language grouping, the cap and every rule are left to the
  * function.
  */
-
-import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { docketFamilyKeyOf } from "@stll/api-contract/decision-docket-reference";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifierType } from "@stll/legal-ast/decision-identifier";
 
@@ -33,6 +33,7 @@ import {
   CITATION_DECISION_TYPE_HINT_FAMILIES,
   CITATION_DECISION_TYPE_HINTS,
 } from "@/api/handlers/case-law/citation-decision-type-hint";
+import { runCitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
 import {
   classifyCitationsBeforeWrite,
   resolveCitationsForDecision,
@@ -47,6 +48,7 @@ import type { CitationResolutionStatus } from "@/api/handlers/case-law/citation-
 import type { DecisionReference } from "@/api/handlers/case-law/citations/decision-references";
 import { resolveDecisionReference } from "@/api/handlers/case-law/citations/reference-resolution";
 import type { ReferenceResolution } from "@/api/handlers/case-law/citations/reference-resolution";
+import { bareCitationKey } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isRecord } from "@/api/lib/type-guards";
@@ -81,6 +83,14 @@ type HolderSpec = {
   identifiers?: { type: DecisionIdentifierType; normalizedValue: string }[];
   /** Overrides the case key on the holder's own `citation_key`. */
   citationKey?: string | null;
+  /** Overrides the case's docket (or key) as the holder's stored docket. */
+  caseNumber?: string;
+  /**
+   * A sheet in the `sheet_number` column, which a lookup cannot read; the
+   * adapter's recorded sheet is `metadata.sheetNumber`.
+   */
+  sheetNumber?: string;
+  metadata?: Record<string, unknown>;
 };
 
 type ReferenceSpec = {
@@ -105,6 +115,11 @@ type Expected =
 
 type Case = {
   name: string;
+  /**
+   * The file the reference cites, keyed into the case key, where a sheet is
+   * read against its file. Distinct per case, like the synthetic key.
+   */
+  docket?: string;
   citing?: {
     country?: string;
     decisionDate?: string | null;
@@ -238,6 +253,7 @@ const cases: Case[] = [
   },
   {
     name: "the printed sheet on one holder's ECLI",
+    docket: "8 As 287/2020",
     reference: { hints: { sheetNumber: "33" } },
     holders: [
       { name: "sheet", ecli: "ECLI:CZ:NSS:2021:8.As.287.2020.33" },
@@ -246,21 +262,114 @@ const cases: Case[] = [
     expect: { status: "resolved", rule: "sheet-number", target: "sheet" },
   },
   {
-    name: "the printed sheet on one holder's case-number identifier",
+    // A sheet known only from a docket spelling is read by a lookup through
+    // the jurisdiction's grammar; the resolver's SQL leaves it unread, so the
+    // printed sheet singles nothing out.
+    name: "the printed sheet only on one holder's case-number identifier",
+    docket: "8 As 1/2020",
     reference: { hints: { sheetNumber: "12" } },
     holders: [
       {
         name: "sheet",
         identifiers: [
-          { type: "case-number", normalizedValue: "8as/1/2020-12" },
+          { type: "case-number", normalizedValue: "8 As 1/2020-12" },
         ],
       },
       {},
     ],
+    expect: { status: "ambiguous" },
+  },
+  {
+    name: "the printed sheet on another file's case-number identifier",
+    docket: "8 As 2/2020",
+    reference: { hints: { sheetNumber: "12" } },
+    holders: [
+      {
+        identifiers: [
+          { type: "case-number", normalizedValue: "$key" },
+          { type: "case-number", normalizedValue: "9 As 2/2020-12" },
+        ],
+      },
+      {},
+    ],
+    expect: { status: "ambiguous" },
+  },
+  {
+    name: "the printed sheet recorded on one holder",
+    docket: "8 As 3/2020",
+    reference: { hints: { sheetNumber: "014" } },
+    holders: [
+      { name: "sheet", metadata: { sheetNumber: "14" } },
+      { metadata: { sheetNumber: "15" } },
+    ],
     expect: { status: "resolved", rule: "sheet-number", target: "sheet" },
   },
   {
+    // The adapter split the recorded sheet off the holder's own docket, of
+    // another file than the one cited, which it is a candidate of only by
+    // a parallel case-number identifier.
+    name: "the printed sheet recorded off another file's docket",
+    docket: "8 As 7/2020",
+    reference: { hints: { sheetNumber: "14" } },
+    holders: [
+      {
+        caseNumber: "9 As 7/2020",
+        citationKey: bareCitationKey("9 As 7/2020"),
+        identifiers: [{ type: "case-number", normalizedValue: "$key" }],
+        metadata: { sheetNumber: "14", publishedCaseNumber: "9 As 7/2020-14" },
+      },
+      { metadata: { sheetNumber: "15" } },
+    ],
+    expect: { status: "ambiguous" },
+  },
+  {
+    // A lookup reads the recorded sheet from the metadata only, so a
+    // citation must not resolve on a sheet a lookup cannot see.
+    name: "the printed sheet only in one holder's sheet column",
+    docket: "8 As 6/2020",
+    reference: { hints: { sheetNumber: "14" } },
+    holders: [{ sheetNumber: "14" }, { sheetNumber: "15" }],
+    expect: { status: "ambiguous" },
+  },
+  {
+    name: "the printed sheet only on one holder's published reference",
+    docket: "8 As 4/2020",
+    reference: { hints: { sheetNumber: "21" } },
+    holders: [
+      { name: "sheet", metadata: { publishedCaseNumber: "8 As 4/2020 - 21" } },
+      { metadata: { publishedCaseNumber: "8 As 4/2020 - 22" } },
+    ],
+    expect: { status: "ambiguous" },
+  },
+  {
+    name: "the printed sheet only on one holder's stored docket",
+    docket: "8 As 5/2020",
+    reference: { hints: { sheetNumber: "7" } },
+    holders: [
+      {
+        name: "sheet",
+        caseNumber: "8 As 5/2020-7",
+        identifiers: [{ type: "case-number", normalizedValue: "$key" }],
+      },
+      {},
+    ],
+    expect: { status: "ambiguous" },
+  },
+  {
+    // A general court's ECLI ends on the decision's sequence number in its
+    // file, which no printed sheet answers to.
+    name: "a sequence number on an ECLI outside the sheet schemes",
+    docket: "1 Cdo 1/2019",
+    reference: { hints: { sheetNumber: "7" } },
+    holders: [
+      { ecli: "ECLI:CZ:NS:2019:1.CDO.1.2019.7" },
+      { ecli: "ECLI:CZ:NS:2019:1.CDO.1.2019.9" },
+    ],
+    expect: { status: "ambiguous" },
+  },
+  {
     name: "the printed sheet on two holders",
+    docket: "1 As 1/2021",
     reference: {
       hints: {
         sheetNumber: "33",
@@ -268,9 +377,13 @@ const cases: Case[] = [
       },
     },
     holders: [
-      { ecli: "ECLI:CZ:US:2021:1.US.1.21.33", decisionType: nalez, court: US },
       {
-        ecli: "ECLI:CZ:US:2020:1.US.1.21.33",
+        ecli: "ECLI:CZ:NSS:2021:1.As.1.2021.33",
+        decisionType: nalez,
+        court: US,
+      },
+      {
+        ecli: "ECLI:CZ:NSS:2022:1.As.1.2021.33",
         decisionType: usneseni,
         court: US,
       },
@@ -288,14 +401,15 @@ const cases: Case[] = [
   },
   {
     name: "the sheet outranks the date",
+    docket: "1 As 1/2019",
     reference: { hints: { sheetNumber: "7", decisionDate: "2019-05-05" } },
     holders: [
       {
         name: "sheet",
         decisionDate: "2019-03-03",
-        ecli: "ECLI:CZ:NS:2019:1.CDO.1.2019.7",
+        ecli: "ECLI:CZ:NSS:2019:1.As.1.2019.7",
       },
-      { decisionDate: "2019-05-05", ecli: "ECLI:CZ:NS:2019:1.CDO.1.2019.9" },
+      { decisionDate: "2019-05-05", ecli: "ECLI:CZ:NSS:2019:1.As.1.2019.9" },
     ],
     expect: { status: "resolved", rule: "sheet-number", target: "sheet" },
   },
@@ -470,10 +584,11 @@ type Written = {
 
 const writeCase = async (
   db: Db,
-  { citing = {}, reference = {}, holders }: Case,
+  { citing = {}, docket, reference = {}, holders }: Case,
   index: number,
 ): Promise<Written> => {
-  const key = `k${String(index)}/2020`;
+  const key =
+    docket === undefined ? `k${String(index)}/2020` : bareCitationKey(docket);
   const citingId = createSafeId<"caseLawDecision">();
   const names = new Map<string, string>();
   await db.insert(caseLawDecisions).values({
@@ -496,15 +611,22 @@ const writeCase = async (
     if (holder.name !== undefined) {
       names.set(id, holder.name);
     }
+    // Stored as the docket the case cites, keyed as ingestion keys it, so a
+    // grammar reads its file as it reads a written row's.
+    const caseNumber = holder.caseNumber ?? docket ?? key;
+    const country = holder.country ?? "CZE";
     await db.insert(caseLawDecisions).values({
       id,
       sourceId,
       sourceDocumentId: id,
       slug: id,
-      caseNumber: key,
+      caseNumber,
       citationKey: holder.citationKey === undefined ? key : holder.citationKey,
+      docketFamilyKey: docketFamilyKeyOf(caseNumber, country),
+      sheetNumber: holder.sheetNumber ?? null,
+      metadata: holder.metadata ?? {},
       court: holder.court ?? NS,
-      country: holder.country ?? "CZE",
+      country,
       language: holder.language ?? "cs",
       decisionDate:
         holder.decisionDate === undefined ? "2019-01-01" : holder.decisionDate,
@@ -651,10 +773,12 @@ const expectOneOutcome = async (
   };
 
   const classified = (
-    await classifyCitationsBeforeWrite(db, {
-      citingDecisionId: citingId,
-      citations: [unwritten],
-    })
+    await runCitationGraphTransaction(db.transaction.bind(db), async (tx) =>
+      classifyCitationsBeforeWrite(tx, {
+        citingDecisionId: citingId,
+        citations: [unwritten],
+      }),
+    )
   ).get(unwritten.id);
 
   await db.insert(caseLawCitations).values({
@@ -662,7 +786,10 @@ const expectOneOutcome = async (
     citingDecisionId: citingId,
     citationText: reference.citationKey ?? "unkeyed",
   });
-  const counts = await resolveCitationsForDecision(db, citingId);
+  const counts = await runCitationGraphTransaction(
+    db.transaction.bind(db),
+    async (tx) => resolveCitationsForDecision(tx, citingId),
+  );
   const [walked] = await db
     .select({
       status: caseLawCitations.resolutionStatus,

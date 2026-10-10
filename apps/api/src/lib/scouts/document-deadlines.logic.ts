@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import * as v from "valibot";
 
 import { SIGNAL_SEVERITY } from "@stll/api-contract/signals";
@@ -9,8 +10,30 @@ import {
   AI_ERROR_KIND_FAILURE_REASON,
   classifyAIError,
 } from "@/api/lib/ai-error";
+import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 
 export const DEADLINE_SCOUT_MAX_ATTEMPTS = 5;
+
+/** Whether admission refused a scan for an exhausted period, and until when. */
+export type DeadlineScanAdmission =
+  | { type: "admitted" }
+  | { type: "period_exhausted"; skippedUntil: Date };
+
+/**
+ * A scan refused for an exhausted period skips until that period resets. The
+ * refusal names the reset of the budget it exhausted: the organization's
+ * service period and the generic action period are configured apart.
+ */
+export const deadlineScanAdmission = (error: unknown): DeadlineScanAdmission =>
+  ActionAdmissionError.is(error) && error.reason === "period_exhausted"
+    ? {
+        type: "period_exhausted",
+        skippedUntil: new Date(
+          error.retryAtMs ??
+            panic("An action period refusal names its period's reset"),
+        ),
+      }
+    : { type: "admitted" };
 
 export const deadlineScoutFailureStatus = (
   attemptCount: number,

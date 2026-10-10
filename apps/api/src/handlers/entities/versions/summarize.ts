@@ -3,19 +3,29 @@ import { Result } from "better-result";
 import { loadEntityVersionDiffSources } from "@/api/handlers/entities/version-diff-sources";
 import { summarizeVersionDiff } from "@/api/lib/ai-change-summary";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  configuredModelAdmission,
+  createSafeHandler,
+} from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { buildLineDiffSegments, diffSegmentsToText } from "@/api/lib/text-diff";
 
 const config = {
+  actionAdmission: { type: "handler", actionKind: "versions.summarize" },
+  contentDelivery: {
+    type: "none",
+    reason: "Returns a version summary rather than stored-file bytes.",
+  },
   description:
     "Summarize in prose what changed between one document version and its " +
     "predecessor, over the same server-resolved text diff " +
     "entities.versions.diff returns. Returns summary null for identical " +
     "versions, skipping the model call entirely. Consumes AI usage.",
   permissions: { workspace: ["read"], chat: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "document_processing",
@@ -38,6 +48,7 @@ const config = {
 const versionSummarize = createSafeHandler(
   config,
   async function* ({
+    modelAdmission,
     safeDb,
     workspaceId,
     params,
@@ -85,6 +96,7 @@ const versionSummarize = createSafeHandler(
         Result.tryPromise({
           try: async () =>
             await summarizeVersionDiff({
+              admission: configuredModelAdmission({ modelAdmission }),
               diffText: diffSegmentsToText(segments),
               orgAIConfig,
               managedAIResidency,

@@ -9,22 +9,43 @@ import {
   useSyncExternalStore,
 } from "react";
 
+import { panic } from "better-result";
 import { Temporal } from "temporal-polyfill/full";
 
 import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon } from "../icons";
+import { FIELD_TRIGGER_CLASS_NAME } from "../lib/field-trigger";
 import type { OverlayLayer } from "../lib/overlay-layer";
 import { cn } from "../lib/utils";
 import { getLocaleWeekInfo, getWeekendDays } from "../lib/week";
 import { Button } from "./button";
 import {
+  DATE_PICKER_MODE,
+  DEFAULT_PICKER_TIME,
+  type DatePickerMode,
+  formatDateTimeValue,
+  getHourOptions,
+  getMinuteOptions,
+  getTimeFieldNames,
+  joinPickerTime,
   localDateFromTimestamp,
   millisecondsUntilNextLocalDate,
+  parseDateTimeValue,
   resolveCalendarViewMonth,
   shiftCalendarDate,
+  splitPickerTime,
   type CalendarMonth,
+  type PickerClock,
+  type PickerTimeOption,
 } from "./date-picker-popover.logic";
 import { DirectionalIcon } from "./directional-icon";
 import { Popover, PopoverPopup, PopoverTrigger } from "./popover";
+import {
+  Select,
+  SelectItem,
+  SelectPopup,
+  SelectTrigger,
+  SelectValue,
+} from "./select";
 
 // ---------------------------------------------------------------------------
 // Calendar utilities
@@ -267,6 +288,12 @@ const deriveTodayLabel = (locale: string): string => {
   return raw.charAt(0).toUpperCase() + raw.slice(1);
 };
 
+const utcDateTimeFromDate = (date: Date): string =>
+  Temporal.Instant.fromEpochMilliseconds(date.getTime())
+    .toZonedDateTimeISO("UTC")
+    .toPlainDateTime()
+    .toString({ smallestUnit: "minute" });
+
 const normalizeDate = (v: string | Date | null | undefined): string => {
   if (v === null || v === undefined) {
     return "";
@@ -297,16 +324,179 @@ const DECADE_SIZE = 12; // 10 years + 1 before + 1 after for context
 
 type PickerView = "days" | "months" | "years";
 
+const DISPLAY_DATE_FORMAT = {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+  calendar: "gregory",
+  timeZone: "UTC",
+} as const satisfies Intl.DateTimeFormatOptions;
+
+const DISPLAY_DATE_TIME_FORMAT = {
+  ...DISPLAY_DATE_FORMAT,
+  hour: "numeric",
+  minute: "2-digit",
+} as const satisfies Intl.DateTimeFormatOptions;
+
+/** What the picker holds, per mode. `date` is `""` while nothing is set. */
+type PickerSelection =
+  | { mode: typeof DATE_PICKER_MODE.date; date: string }
+  | {
+      mode: typeof DATE_PICKER_MODE.dateTime;
+      date: string;
+      time: string | null;
+    };
+
+const resolveSelection = (
+  mode: DatePickerMode,
+  value: string | Date | null,
+): PickerSelection => {
+  switch (mode) {
+    case DATE_PICKER_MODE.date: {
+      return { mode, date: normalizeDate(value) };
+    }
+    case DATE_PICKER_MODE.dateTime: {
+      const parsed = parseDateTimeValue(
+        value instanceof Date ? utcDateTimeFromDate(value) : value,
+      );
+      return {
+        mode: DATE_PICKER_MODE.dateTime,
+        date: parsed?.date ?? "",
+        time: parsed?.time ?? null,
+      };
+    }
+    default: {
+      mode satisfies never;
+      return panic(`Unhandled date picker mode: ${String(mode)}`);
+    }
+  }
+};
+
+/** Locale-formatted trigger text, or null while nothing is set. */
+const formatSelection = (
+  locale: string,
+  selection: PickerSelection,
+): string | null => {
+  if (selection.date === "") {
+    return null;
+  }
+  const date = Temporal.PlainDate.from(selection.date);
+  switch (selection.mode) {
+    case DATE_PICKER_MODE.date: {
+      return getDateFormatter(locale, DISPLAY_DATE_FORMAT).format(
+        toUTCDateTime(date),
+      );
+    }
+    case DATE_PICKER_MODE.dateTime: {
+      const instant = date.toZonedDateTime({
+        plainTime: Temporal.PlainTime.from(
+          selection.time ?? DEFAULT_PICKER_TIME,
+        ),
+        timeZone: "UTC",
+      }).epochMilliseconds;
+      return getDateFormatter(locale, DISPLAY_DATE_TIME_FORMAT).format(instant);
+    }
+    default: {
+      selection satisfies never;
+      return panic(`Unhandled date picker mode: ${String(selection)}`);
+    }
+  }
+};
+
+const TRIGGER_VARIANT_CLASS_NAMES = {
+  inline: cn(
+    "flex h-auto min-h-7 w-full min-w-0 items-center gap-1.5",
+    "rounded-md px-1.5 text-sm",
+    "hover:bg-muted",
+    "data-disabled:pointer-events-none data-disabled:opacity-64",
+  ),
+  field: cn(FIELD_TRIGGER_CLASS_NAME, "min-w-0 justify-start gap-1.5"),
+} as const satisfies Record<DatePickerPopoverVariant, string>;
+
+type NavigationLabels = { next: string; previous: string };
+
+type PopupLabels = {
+  dialog: string;
+  navigation: Record<PickerView, NavigationLabels>;
+  time: string;
+};
+
+/** The package carries no catalogs: English defaults the host replaces. */
+const resolvePopupLabels = (props: DatePickerPopoverProps): PopupLabels => ({
+  dialog: props.dialogLabel ?? "Date picker",
+  navigation: {
+    days: {
+      next: props.nextMonthLabel ?? "Next month",
+      previous: props.previousMonthLabel ?? "Previous month",
+    },
+    months: {
+      next: props.nextYearLabel ?? "Next year",
+      previous: props.previousYearLabel ?? "Previous year",
+    },
+    years: {
+      next: props.nextDecadeLabel ?? "Next decade",
+      previous: props.previousDecadeLabel ?? "Previous decade",
+    },
+  },
+  time: props.timeLabel ?? "Time",
+});
+
+type PickerSizeClassNames = {
+  popup: string;
+  heading: string;
+  day: string;
+  /** Month and year cells. */
+  cell: string;
+};
+
+const PICKER_SIZE_CLASS_NAMES = {
+  compact: { popup: "w-60", heading: "", day: "", cell: "" },
+  touch: {
+    // Seven 44px day columns.
+    popup: "w-60 pointer-coarse:w-77",
+    heading: "pointer-coarse:min-h-11 pointer-coarse:text-sm",
+    day: "pointer-coarse:size-11 pointer-coarse:text-sm",
+    cell: "pointer-coarse:min-h-11 pointer-coarse:text-sm",
+  },
+} as const satisfies Record<DatePickerPopoverSize, PickerSizeClassNames>;
+
 // ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
 
+/**
+ * `compact` keeps the dense 32px day cells everywhere. `touch` grows day,
+ * month, and year cells to 44px targets under a coarse pointer and leaves a
+ * fine pointer on the compact metric.
+ */
+type DatePickerPopoverSize = "compact" | "touch";
+
+/**
+ * `inline` is the borderless trigger for property rows and table cells;
+ * `field` is the bordered box form controls share with `SelectTrigger`.
+ */
+type DatePickerPopoverVariant = "inline" | "field";
+
 type DatePickerPopoverProps = {
+  /**
+   * `date` (default) reads and writes `YYYY-MM-DD`. `date-time` reads and
+   * writes `YYYY-MM-DDTHH:mm`, a zone-less wall-clock time the host converts
+   * to and from an instant in the time zone it owns. A `Date` is read in UTC
+   * in both modes, so a string is the way to keep a local wall-clock time.
+   */
+  mode?: DatePickerMode;
+  value: string | Date | null;
+  onChange: (value: string | null) => void;
   id?: string;
   /** ID of the visible field label, when the picker is part of a form field. */
   labelledBy?: string;
-  value: string | Date | null;
-  onChange: (value: string | null) => void;
+  /** Merged into the trigger's classes. */
+  className?: string;
+  disabled?: boolean;
+  /** Hide the clear button, for fields that must keep a value. */
+  hideClear?: boolean;
+  size?: DatePickerPopoverSize;
+  variant?: DatePickerPopoverVariant;
   locale?: string;
   isOverdue?: boolean;
   showIcon?: boolean;
@@ -320,38 +510,60 @@ type DatePickerPopoverProps = {
   /** Label for the "go to today" button. Auto-localized from the locale when omitted. */
   todayLabel?: string;
   overdueLabel?: string;
+  /** Accessible name of the popup. The package carries no catalogs, so the
+   *  English defaults below are meant to be replaced by the host. */
+  dialogLabel?: string;
+  previousMonthLabel?: string;
+  nextMonthLabel?: string;
+  previousYearLabel?: string;
+  nextYearLabel?: string;
+  previousDecadeLabel?: string;
+  nextDecadeLabel?: string;
+  /** Label of the time input in `date-time` mode. */
+  timeLabel?: string;
+  /** Inclusive `YYYY-MM-DD` bounds; in `date-time` mode they bound the day. */
   minDate?: string;
   maxDate?: string;
   isDateDisabled?: (date: string) => boolean;
   layer?: OverlayLayer;
 };
 
-type DatePickerPopoverContentProps = Omit<DatePickerPopoverProps, "locale"> & {
+type DatePickerPopoverContentProps = DatePickerPopoverProps & {
   locale: string;
   today: string;
 };
 
-const DatePickerPopoverContent = ({
-  id,
-  labelledBy,
-  value: rawValue,
-  onChange,
-  locale,
-  isOverdue = false,
-  showIcon = true,
-  placeholderLabel,
-  clearLabel = "Clear date",
-  defaultOpen = false,
-  onOpenChange,
-  todayLabel: todayLabelProp,
-  overdueLabel,
-  minDate,
-  maxDate,
-  isDateDisabled,
-  layer = "default",
-  today,
-}: DatePickerPopoverContentProps) => {
-  const value = normalizeDate(rawValue);
+const DatePickerPopoverContent = (props: DatePickerPopoverContentProps) => {
+  const {
+    id,
+    labelledBy,
+    className,
+    disabled,
+    hideClear,
+    size = "compact",
+    variant = "inline",
+    mode = DATE_PICKER_MODE.date,
+    value: rawValue,
+    onChange,
+    locale,
+    isOverdue = false,
+    showIcon = true,
+    placeholderLabel,
+    clearLabel = "Clear date",
+    defaultOpen = false,
+    onOpenChange,
+    todayLabel: todayLabelProp,
+    overdueLabel,
+    minDate,
+    maxDate,
+    isDateDisabled,
+    layer = "default",
+    today,
+  } = props;
+  const selection = resolveSelection(mode, rawValue);
+  const value = selection.date;
+  const labels = resolvePopupLabels(props);
+  const sizeClassNames = PICKER_SIZE_CLASS_NAMES[size];
   const displayValueId = useId();
   const todayLabel = todayLabelProp ?? deriveTodayLabel(locale);
   const firstDow = useMemo(() => getFirstDayOfWeek(locale), [locale]);
@@ -398,15 +610,37 @@ const DatePickerPopoverContent = ({
     [minDate, maxDate, isDateDisabled],
   );
 
-  const displayLabel = value
-    ? getDateFormatter(locale, {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-        calendar: "gregory",
-        timeZone: "UTC",
-      }).format(toUTCDateTime(Temporal.PlainDate.from(value)))
-    : (placeholderLabel ?? "\u2014");
+  const displayLabel =
+    formatSelection(locale, selection) ?? placeholderLabel ?? "\u2014";
+
+  const selectDay = (date: string) => {
+    switch (selection.mode) {
+      case DATE_PICKER_MODE.date: {
+        onChange(date);
+        return;
+      }
+      case DATE_PICKER_MODE.dateTime: {
+        onChange(
+          formatDateTimeValue({
+            date,
+            time: selection.time ?? DEFAULT_PICKER_TIME,
+          }),
+        );
+        return;
+      }
+      default: {
+        selection satisfies never;
+        panic(`Unhandled date picker mode: ${String(selection)}`);
+      }
+    }
+  };
+
+  const handleTimeChange = (clock: PickerClock) => {
+    if (value === "") {
+      return;
+    }
+    onChange(formatDateTimeValue({ date: value, time: joinPickerTime(clock) }));
+  };
 
   const formatDayLabel = useCallback(
     (iso: string): string =>
@@ -471,7 +705,7 @@ const DatePickerPopoverContent = ({
       if (e.key === "Enter" || e.key === " ") {
         e.preventDefault();
         if (!isDayDisabled(current)) {
-          onChange(current);
+          selectDay(current);
         }
       }
       return;
@@ -564,15 +798,30 @@ const DatePickerPopoverContent = ({
   // Reset view state when the popover closes so reopening always shows the day grid
   const handleOpenChange = (open: boolean) => {
     onOpenChange?.(open);
+    if (open) {
+      setViewMonthOverride(null);
+      setFocusedDate(value || today);
+    }
     if (!open) {
       setView("days");
       setDecadeBaseOverride(decadeStart(viewYear));
     }
   };
 
+  const triggerToneClassName = (() => {
+    if (isOverdue) {
+      return "text-destructive";
+    }
+    if (value) {
+      return "text-foreground";
+    }
+    return "text-muted-foreground";
+  })();
+
   return (
     <Popover defaultOpen={defaultOpen} onOpenChange={handleOpenChange}>
       <PopoverTrigger
+        disabled={disabled}
         render={
           <button
             aria-label={!labelledBy && value ? displayLabel : undefined}
@@ -580,18 +829,9 @@ const DatePickerPopoverContent = ({
               labelledBy ? `${labelledBy} ${displayValueId}` : undefined
             }
             className={cn(
-              "flex h-auto min-h-7 w-full min-w-0 items-center gap-1.5",
-              "rounded-md px-1.5 text-sm",
-              "hover:bg-muted",
-              (() => {
-                if (isOverdue) {
-                  return "text-destructive";
-                }
-                if (value) {
-                  return "text-foreground";
-                }
-                return "text-muted-foreground";
-              })(),
+              TRIGGER_VARIANT_CLASS_NAMES[variant],
+              triggerToneClassName,
+              className,
             )}
             id={id}
             type="button"
@@ -600,7 +840,7 @@ const DatePickerPopoverContent = ({
       >
         {showIcon && <CalendarIcon className="size-3.5 shrink-0" />}
         <span
-          className="min-w-0 flex-1 overflow-hidden text-start wrap-break-word text-ellipsis"
+          className="min-w-0 flex-1 truncate text-start"
           id={labelledBy ? displayValueId : undefined}
         >
           {displayLabel}
@@ -609,56 +849,35 @@ const DatePickerPopoverContent = ({
           <span className="text-destructive text-xs">{overdueLabel}</span>
         )}
       </PopoverTrigger>
-      <PopoverPopup layer={layer} padding="sm" side="bottom" sideOffset={4}>
-        <div className="w-60" role="dialog" aria-label="Date picker">
-          {/* Shared header: [<] label [>] */}
-          <div className="flex items-center justify-between gap-1 pb-1">
-            <Button
-              aria-label={(() => {
-                if (view === "days") {
-                  return "Previous month";
-                }
-                if (view === "months") {
-                  return "Previous year";
-                }
-                return "Previous decade";
-              })()}
-              onClick={handlePrev}
-              size="icon-xs"
-              variant="ghost"
-            >
-              <DirectionalIcon icon={ChevronLeftIcon} />
-            </Button>
-            <button
-              className={cn(
-                "text-xs font-medium",
-                view !== "years" &&
-                  "hover:bg-muted cursor-pointer rounded-md px-2 py-0.5",
-                view === "years" && "cursor-default",
-              )}
-              onClick={handleHeaderClick}
-              tabIndex={view === "years" ? -1 : 0}
-              type="button"
-            >
-              {headerLabel}
-            </button>
-            <Button
-              aria-label={(() => {
-                if (view === "days") {
-                  return "Next month";
-                }
-                if (view === "months") {
-                  return "Next year";
-                }
-                return "Next decade";
-              })()}
-              onClick={handleNext}
-              size="icon-xs"
-              variant="ghost"
-            >
-              <DirectionalIcon icon={ChevronRightIcon} />
-            </Button>
-          </div>
+      <PopoverPopup
+        initialFocus={() =>
+          gridRef.current?.querySelector<HTMLButtonElement>(
+            `[data-date="${value || today}"]`,
+          ) ?? gridRef.current
+        }
+        // The entry scale would shrink the day cells below their touch and
+        // compact sizes while the popup opens.
+        className="data-starting-style:scale-100"
+        layer={layer}
+        padding="sm"
+        side="bottom"
+        sideOffset={4}
+      >
+        <div
+          aria-label={labels.dialog}
+          className={sizeClassNames.popup}
+          data-slot="date-picker-popup"
+          role="dialog"
+        >
+          <PickerHeader
+            headingClassName={sizeClassNames.heading}
+            label={headerLabel}
+            labels={labels.navigation[view]}
+            onHeadingClick={handleHeaderClick}
+            onNext={handleNext}
+            onPrevious={handlePrev}
+            view={view}
+          />
 
           {/* View: days */}
           {view === "days" && (
@@ -697,32 +916,33 @@ const DatePickerPopoverContent = ({
                     day.date === focusedDate ||
                     (!focusedDate && isSelected) ||
                     (!focusedDate && !value && day.isToday);
-                  const disabled = isDayDisabled(day.date);
+                  const isUnavailable = isDayDisabled(day.date);
 
                   return (
                     <button
                       aria-current={day.isToday ? "date" : undefined}
-                      aria-disabled={disabled || undefined}
+                      aria-disabled={isUnavailable || undefined}
                       aria-label={formatDayLabel(day.date)}
                       aria-selected={isSelected || undefined}
                       className={cn(
                         "flex size-8 items-center justify-center",
                         "rounded-full text-xs",
+                        sizeClassNames.day,
                         "focus-visible:ring-ring focus-visible:ring-1 focus-visible:outline-none",
-                        disabled
+                        isUnavailable
                           ? "text-foreground-disabled cursor-not-allowed"
                           : "hover:bg-muted cursor-pointer",
                         !day.isCurrentMonth &&
-                          !disabled &&
+                          !isUnavailable &&
                           "text-foreground-disabled",
                         day.isWeekend &&
                           day.isCurrentMonth &&
-                          !disabled &&
+                          !isUnavailable &&
                           !isSelected &&
                           "text-foreground-label",
                         day.isToday &&
                           !isSelected &&
-                          !disabled &&
+                          !isUnavailable &&
                           "ring-foreground font-medium ring-1",
                         isSelected &&
                           "bg-primary text-primary-foreground hover:bg-primary/90",
@@ -730,8 +950,8 @@ const DatePickerPopoverContent = ({
                       data-date={day.date}
                       key={day.date}
                       onClick={() => {
-                        if (!disabled) {
-                          onChange(day.date);
+                        if (!isUnavailable) {
+                          selectDay(day.date);
                         }
                       }}
                       role="gridcell"
@@ -751,6 +971,7 @@ const DatePickerPopoverContent = ({
             <MonthGrid
               currentMonth={selectedMonth}
               currentYear={selectedYear}
+              cellClassName={sizeClassNames.cell}
               locale={locale}
               onSelect={handleMonthSelect}
               today={today}
@@ -763,8 +984,19 @@ const DatePickerPopoverContent = ({
             <YearGrid
               currentYear={selectedYear}
               decadeBase={decadeBase}
+              cellClassName={sizeClassNames.cell}
               onSelect={handleYearSelect}
               today={today}
+            />
+          )}
+
+          {selection.mode === DATE_PICKER_MODE.dateTime && (
+            <TimeField
+              disabled={value === ""}
+              label={labels.time}
+              locale={locale}
+              onChange={handleTimeChange}
+              time={selection.time}
             />
           )}
 
@@ -785,7 +1017,7 @@ const DatePickerPopoverContent = ({
             >
               {todayLabel}
             </Button>
-            {value && (
+            {value && !hideClear && (
               <Button
                 className="flex-1"
                 onClick={() => onChange(null)}
@@ -817,6 +1049,154 @@ export type { DatePickerPopoverProps };
 // Helper sub-view components (placed after the exported component per convention)
 // ---------------------------------------------------------------------------
 
+// -- Header: [<] heading [>] --
+
+const PickerHeader = ({
+  headingClassName,
+  label,
+  labels,
+  onHeadingClick,
+  onNext,
+  onPrevious,
+  view,
+}: {
+  headingClassName: string;
+  label: string;
+  labels: NavigationLabels;
+  onHeadingClick: () => void;
+  onNext: () => void;
+  onPrevious: () => void;
+  view: PickerView;
+}) => {
+  // The decade is the top level: its heading has nowhere further to go.
+  const isTopLevel = view === "years";
+  return (
+    <div className="flex items-center justify-between gap-1 pb-1">
+      <Button
+        aria-label={labels.previous}
+        onClick={onPrevious}
+        size="icon-xs"
+        variant="ghost"
+      >
+        <DirectionalIcon icon={ChevronLeftIcon} />
+      </Button>
+      <button
+        className={cn(
+          "text-xs font-medium",
+          isTopLevel
+            ? "cursor-default"
+            : "hover:bg-muted cursor-pointer rounded-md px-2 py-0.5",
+          headingClassName,
+        )}
+        data-slot="date-picker-heading"
+        onClick={onHeadingClick}
+        tabIndex={isTopLevel ? -1 : 0}
+        type="button"
+      >
+        {label}
+      </button>
+      <Button
+        aria-label={labels.next}
+        onClick={onNext}
+        size="icon-xs"
+        variant="ghost"
+      >
+        <DirectionalIcon icon={ChevronRightIcon} />
+      </Button>
+    </div>
+  );
+};
+
+// -- Time row (date-time mode) --
+
+/**
+ * Hour and minute selects in the locale's own clock and numerals. Inert
+ * until a day is picked, since a time alone is not a value.
+ */
+const TimeField = ({
+  disabled,
+  label,
+  locale,
+  onChange,
+  time,
+}: {
+  disabled: boolean;
+  label: string;
+  locale: string;
+  onChange: (clock: PickerClock) => void;
+  time: string | null;
+}) => {
+  const labelId = useId();
+  const hourOptions = useMemo(() => getHourOptions(locale), [locale]);
+  const minuteOptions = useMemo(() => getMinuteOptions(locale), [locale]);
+  const fieldNames = useMemo(() => getTimeFieldNames(locale), [locale]);
+  const clock = time === null ? null : splitPickerTime(time);
+
+  return (
+    <div
+      aria-labelledby={labelId}
+      className="mt-1 flex items-center gap-1.5 border-t pt-1"
+      role="group"
+    >
+      <span className="text-foreground-label shrink-0 text-xs" id={labelId}>
+        {label}
+      </span>
+      <TimePartSelect
+        disabled={disabled}
+        label={fieldNames.hour}
+        onChange={(hour) => onChange({ hour, minute: clock?.minute ?? 0 })}
+        options={hourOptions}
+        value={clock?.hour ?? null}
+      />
+      <span aria-hidden="true" className="text-muted-foreground text-xs">
+        :
+      </span>
+      <TimePartSelect
+        disabled={disabled}
+        label={fieldNames.minute}
+        onChange={(minute) => onChange({ hour: clock?.hour ?? 0, minute })}
+        options={minuteOptions}
+        value={clock?.minute ?? null}
+      />
+    </div>
+  );
+};
+
+const TimePartSelect = ({
+  disabled,
+  label,
+  onChange,
+  options,
+  value,
+}: {
+  disabled: boolean;
+  label: string;
+  onChange: (value: number) => void;
+  options: PickerTimeOption[];
+  value: number | null;
+}) => (
+  <Select
+    disabled={disabled}
+    onValueChange={(next) => {
+      if (typeof next === "number") {
+        onChange(next);
+      }
+    }}
+    value={value}
+  >
+    <SelectTrigger aria-label={label} className="min-w-0 flex-1" size="sm">
+      <SelectValue placeholder={"\u2014"} />
+    </SelectTrigger>
+    <SelectPopup>
+      {options.map((option) => (
+        <SelectItem key={option.value} value={option.value}>
+          {option.label}
+        </SelectItem>
+      ))}
+    </SelectPopup>
+  </Select>
+);
+
 // -- Month picker grid (4×3) --
 
 const MONTHS_PER_ROW = 3;
@@ -826,10 +1206,12 @@ const MonthGrid = ({
   viewYear,
   currentMonth,
   currentYear,
+  cellClassName,
   onSelect,
   today,
 }: {
   locale: string;
+  cellClassName: string;
   viewYear: number;
   currentMonth: number | null;
   currentYear: number | null;
@@ -863,6 +1245,7 @@ const MonthGrid = ({
                 aria-selected={isSelected || undefined}
                 className={cn(
                   "rounded-md px-2 py-1.5 text-xs",
+                  cellClassName,
                   "hover:bg-muted cursor-pointer",
                   "focus-visible:ring-ring focus-visible:ring-1 focus-visible:outline-none",
                   isNow && !isSelected && "ring-foreground font-medium ring-1",
@@ -902,10 +1285,12 @@ const YEARS_PER_ROW = 3;
 const YearGrid = ({
   decadeBase,
   currentYear,
+  cellClassName,
   onSelect,
   today,
 }: {
   decadeBase: number;
+  cellClassName: string;
   currentYear: number | null;
   onSelect: (year: number) => void;
   today: string;
@@ -938,6 +1323,7 @@ const YearGrid = ({
                 aria-selected={isSelected || undefined}
                 className={cn(
                   "rounded-md px-2 py-1.5 text-xs",
+                  cellClassName,
                   "hover:bg-muted cursor-pointer",
                   "focus-visible:ring-ring focus-visible:ring-1 focus-visible:outline-none",
                   isOutside && !isSelected && "text-foreground-subtle",
