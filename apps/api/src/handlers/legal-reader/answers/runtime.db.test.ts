@@ -355,7 +355,9 @@ describe("reader answer turn lifecycle", () => {
     ).toBe(true);
     expect(
       statements.some((statement) =>
-        statement.includes('update "legal_reader_answer_messages"'),
+        statement
+          .toLowerCase()
+          .includes('update "legal_reader_answer_messages"'),
       ),
     ).toBe(true);
     expect(
@@ -881,10 +883,10 @@ describe("reader answer turn lifecycle", () => {
     });
     type RunFrozenTurnOptions = {
       prepared: ReaderAnswerStreamOptions["prepared"];
-      expectedHistory: readonly {
-        role: "user" | "assistant";
-        content: string;
-      }[];
+      expectedHistory: Pick<
+        ReaderAnswerStreamOptions["prepared"]["history"][number],
+        "role" | "content"
+      >[];
       content: string;
     };
     const runTurn = async ({
@@ -953,13 +955,16 @@ describe("reader answer turn lifecycle", () => {
       { role: "user", content: "Question one" },
       { role: "assistant", content: "Answer one" },
       { role: "user", content: "Question two" },
-    ] as const;
+    ] satisfies RunFrozenTurnOptions["expectedHistory"];
     await runTurn({
       prepared: followUp,
       expectedHistory: history,
       content: "Answer two",
     });
-    const expected = [...history, { role: "assistant", content: "Answer two" }];
+    const expected = [
+      ...history,
+      { role: "assistant", content: "Answer two" },
+    ] satisfies RunFrozenTurnOptions["expectedHistory"];
     const listed = await reloadThread(followUp);
     expect(
       listed?.messages.map(({ role, content }) => ({ role, content })),

@@ -7,7 +7,7 @@ import nodePath from "node:path";
 const database = new PGlite();
 afterAll(async () => await database.close());
 
-test("backfills each thread in its previous order and requires unique positive positions", async () => {
+test("backfills each thread in its previous order and preserves unique positive positions on replay", async () => {
   await database.exec(`
     CREATE TABLE legal_reader_answer_messages (
       id integer PRIMARY KEY, answer_id integer NOT NULL, created_at timestamptz NOT NULL
@@ -23,11 +23,21 @@ test("backfills each thread in its previous order and requires unique positive p
   const migration = readFileSync(
     nodePath.resolve(
       import.meta.dir,
-      "../../drizzle/20261010005300_reader_answer_message_sequence/migration.sql",
+      "../../drizzle/20261010212300_reader_answer_message_sequence/migration.sql",
     ),
     "utf-8",
   );
-  await database.exec(migration.replaceAll("--> statement-breakpoint", ""));
+  const migrate = async () => {
+    await database.exec("BEGIN");
+    for (const statement of migration.split("--> statement-breakpoint")) {
+      if (statement.trim().length > 0) {
+        await database.exec(statement);
+      }
+    }
+    await database.exec("COMMIT");
+  };
+  await migrate();
+  await migrate();
   const ordered = await database.query<{
     id: number;
     answer_id: number;
@@ -69,8 +79,9 @@ test("backfills each thread in its previous order and requires unique positive p
   expect(omitted.isErr()).toBe(true);
   await database.exec(`
     INSERT INTO legal_reader_answer_messages (id, answer_id, created_at, sequence)
-    VALUES (10, 1, now(), 3), (11, 2, now(), 3);
+    VALUES (10, 1, '2020-01-01 00:00:00+00', 3), (11, 2, '2020-01-01 00:00:00+00', 3);
   `);
+  await migrate();
   const added = await database.query<{ answer_id: number; sequence: number }>(
     `SELECT answer_id, sequence FROM legal_reader_answer_messages WHERE id IN (10, 11) ORDER BY answer_id`,
   );

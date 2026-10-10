@@ -26,6 +26,8 @@ import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { timestampMatchesCasToken } from "@/api/lib/db/timestamp-cas";
+import { TRANSITIONS } from "@/api/lib/db/transition-specs";
+import { transitionScopedCount } from "@/api/lib/db/transitions";
 import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { failureSink } from "@/api/lib/observability/failure";
@@ -121,29 +123,46 @@ const persistReaderAnswerSettlement = async ({
   invalidCitationCount,
 }: PersistReaderAnswerSettlementOptions) =>
   await scope.safeDb(async (tx) => {
-    const rows = await tx
-      .update(legalReaderAnswerMessages)
-      .set({ ...settlement, invalidCitationCount, updatedAt: new Date() })
-      .where(streamOwnerPredicate({ tx, scope, prepared }))
-      .returning({
-        id: legalReaderAnswerMessages.id,
-        status: legalReaderAnswerMessages.status,
-        content: legalReaderAnswerMessages.content,
-        citations: legalReaderAnswerMessages.citations,
-        model: legalReaderAnswerMessages.model,
-        usage: legalReaderAnswerMessages.usage,
-        errorCode: legalReaderAnswerMessages.errorCode,
-        invalidCitationCount: legalReaderAnswerMessages.invalidCitationCount,
-      });
-    const saved = rows.at(0);
-    if (saved === undefined) {
+    const { status, ...metadata } = settlement;
+    const count = await transitionScopedCount({
+      tx,
+      spec: TRANSITIONS.legalReaderAnswerMessages,
+      where:
+        streamOwnerPredicate({ tx, scope, prepared }) ??
+        panic("Reader answer settlement requires its owner predicate"),
+      options: {
+        from: ["streaming"],
+        to: status,
+        set: { ...metadata, invalidCitationCount, updatedAt: new Date() },
+      },
+      recordTransitionAuditEvent: async (auditTx) =>
+        await scope.recordAuditEvent(auditTx, {
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.CASE_LAW_READER_ANSWER,
+          resourceId: prepared.answer.id,
+        }),
+    });
+    if (count === 0) {
       return null;
     }
-    await scope.recordAuditEvent(tx, {
-      action: AUDIT_ACTION.UPDATE,
-      resourceType: AUDIT_RESOURCE_TYPE.CASE_LAW_READER_ANSWER,
-      resourceId: prepared.answer.id,
-    });
+    const saved =
+      (
+        await tx
+          .select({
+            id: legalReaderAnswerMessages.id,
+            status: legalReaderAnswerMessages.status,
+            content: legalReaderAnswerMessages.content,
+            citations: legalReaderAnswerMessages.citations,
+            model: legalReaderAnswerMessages.model,
+            usage: legalReaderAnswerMessages.usage,
+            errorCode: legalReaderAnswerMessages.errorCode,
+            invalidCitationCount:
+              legalReaderAnswerMessages.invalidCitationCount,
+          })
+          .from(legalReaderAnswerMessages)
+          .where(eq(legalReaderAnswerMessages.id, prepared.messageId))
+          .limit(1)
+      ).at(0) ?? panic("A transitioned reader message must exist");
     const evidence = {
       messageId: saved.id,
       content: saved.content,

@@ -173,7 +173,7 @@ const inputFixture = () => {
       actionType: "chat",
       serviceTier: "standard",
       workspaceId: null,
-      safeDb: async () =>
+      safeDb: async (_run) =>
         Result.err(
           new DatabaseError({
             message: "Fixture tenant database is unavailable",
@@ -293,9 +293,9 @@ describe("reader answer real SDK model boundary", () => {
         orgAIConfig,
         metering: {
           ...input.metering,
-          safeDb: async () => {
+          safeDb: async (transactionCallback) => {
             meteringAttempts++;
-            return input.metering.safeDb(async () => Result.ok(undefined));
+            return input.metering.safeDb(transactionCallback);
           },
         },
       },

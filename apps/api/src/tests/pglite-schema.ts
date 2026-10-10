@@ -457,7 +457,7 @@ export const installPgliteReaderAnswerRls = async (
   const statements = readMigrationStatements(
     nodePath.join(
       DRIZZLE_DIR,
-      "20261010005100_reader_answers",
+      "20261010212100_reader_answers",
       "migration.sql",
     ),
   );

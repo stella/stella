@@ -19,6 +19,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { readReaderAnswerDecision } from "@/api/lib/case-law/reader-answer-corpus";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { timestampCasToken } from "@/api/lib/db/timestamp-cas";
+import { TRANSITIONS } from "@/api/lib/db/transition-specs";
+import { transitionScopedCount } from "@/api/lib/db/transitions";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type {
   UnprojectedColumns,
@@ -335,15 +337,26 @@ export const prepareReaderAnswer = async (
       );
     }
     if (streaming !== undefined) {
-      await tx
-        .update(legalReaderAnswerMessages)
-        .set({ status: "failed", errorCode: "owner-lost", updatedAt: now })
-        .where(
+      await transitionScopedCount({
+        tx,
+        spec: TRANSITIONS.legalReaderAnswerMessages,
+        where:
           and(
             eq(legalReaderAnswerMessages.answerId, answerId),
             eq(legalReaderAnswerMessages.status, "streaming"),
-          ),
-        );
+          ) ?? panic("Reader answer transition requires its owner predicate"),
+        options: {
+          from: ["streaming"],
+          to: "failed",
+          set: { errorCode: "owner-lost", updatedAt: now },
+        },
+        recordTransitionAuditEvent: async (auditTx) =>
+          await scope.recordAuditEvent(auditTx, {
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.CASE_LAW_READER_ANSWER,
+            resourceId: answerId,
+          }),
+      });
     }
     if (command.type === "regenerate") {
       return await regenerateLastReaderAnswer({

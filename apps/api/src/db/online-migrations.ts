@@ -345,6 +345,15 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
   },
   {
     createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "legal_reader_answer_messages_answer_sequence_idx" ON public."legal_reader_answer_messages" USING btree ("answer_id", "sequence")',
+    definitionBody:
+      "ON public.legal_reader_answer_messages USING btree (answer_id, sequence)",
+    isUnique: true,
+    name: "legal_reader_answer_messages_answer_sequence_idx",
+    tableName: "legal_reader_answer_messages",
+  },
+  {
+    createSql:
       'CREATE UNIQUE INDEX CONCURRENTLY "case_law_ingestion_failures_source_record_uidx" ON public."case_law_ingestion_failures" USING btree ("source_id", "record_identity") WHERE "record_identity" IS NOT NULL',
     definitionBody:
       "ON public.case_law_ingestion_failures USING btree (source_id, record_identity) WHERE (record_identity IS NOT NULL)",
@@ -423,6 +432,10 @@ type OnlineIndexReplacement = {
 };
 
 const ONLINE_INDEX_REPLACEMENTS: readonly OnlineIndexReplacement[] = [
+  {
+    legacyName: "legal_reader_answer_messages_answer_idx",
+    replacementNames: ["legal_reader_answer_messages_answer_sequence_idx"],
+  },
   {
     legacyName: "case_law_decisions_document_pending_date_idx",
     replacementNames: [DOCUMENT_OUTSTANDING_DATE_INDEX.name],

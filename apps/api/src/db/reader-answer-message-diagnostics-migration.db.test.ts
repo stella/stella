@@ -9,7 +9,7 @@ import { READER_ANSWER_ERROR_CODES } from "@stll/api-contract/reader-answers";
 const database = new PGlite();
 afterAll(async () => await database.close());
 
-test("adds validated diagnostics while preserving existing failed messages", async () => {
+test("adds validated diagnostics and replays without changing failed messages", async () => {
   await database.exec(`
     CREATE TABLE legal_reader_answer_messages (id integer PRIMARY KEY, status text NOT NULL);
     INSERT INTO legal_reader_answer_messages VALUES (1, 'failed'), (2, 'complete');
@@ -17,11 +17,20 @@ test("adds validated diagnostics while preserving existing failed messages", asy
   const migration = readFileSync(
     nodePath.resolve(
       import.meta.dir,
-      "../../drizzle/20261010005200_reader_answer_message_diagnostics/migration.sql",
+      "../../drizzle/20261010212200_reader_answer_message_diagnostics/migration.sql",
     ),
     "utf-8",
   );
-  await database.exec(migration.replaceAll("--> statement-breakpoint", ""));
+  const migrate = async () => {
+    await database.exec("BEGIN");
+    for (const statement of migration.split("--> statement-breakpoint")) {
+      if (statement.trim().length > 0) {
+        await database.exec(statement);
+      }
+    }
+    await database.exec("COMMIT");
+  };
+  await migrate();
   const existing = await database.query<{
     id: number;
     error_code: string | null;
@@ -38,11 +47,19 @@ test("adds validated diagnostics while preserving existing failed messages", asy
      SELECT 2 + ordinal::integer, 'failed', code, 1 FROM unnest($1::text[]) WITH ORDINALITY AS codes(code, ordinal)`,
     [READER_ANSWER_ERROR_CODES],
   );
+  await migrate();
   const codes = await database.query<{ error_code: string }>(
     `SELECT error_code FROM legal_reader_answer_messages WHERE error_code IS NOT NULL`,
   );
   expect(new Set(codes.rows.map((row) => row.error_code))).toEqual(
     new Set(READER_ANSWER_ERROR_CODES),
+  );
+  const counts = await database.query<{ invalid_citation_count: number }>(
+    `SELECT invalid_citation_count FROM legal_reader_answer_messages WHERE error_code IS NOT NULL`,
+  );
+  expect(counts.rows).toHaveLength(READER_ANSWER_ERROR_CODES.length);
+  expect(counts.rows.every((row) => row.invalid_citation_count === 1)).toBe(
+    true,
   );
   const checks = await database.query<{ convalidated: boolean }>(
     `SELECT convalidated FROM pg_constraint WHERE conrelid = 'legal_reader_answer_messages'::regclass AND contype = 'c'`,

@@ -1,6 +1,6 @@
 /** Local harness handoff and deterministic scoring; never loads a provider. */
 import { panic } from "better-result";
-import { appendFileSync, readFileSync } from "node:fs";
+import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import * as v from "valibot";
 
@@ -13,14 +13,16 @@ import {
   scoreExplainCase,
 } from "./lib/reader-explain-score";
 
-const [mode, capturePath, resultOrCase, tracePath] = process.argv.slice(2);
+const [mode, capturePath, resultOrCase, tracePath, toolRunId] =
+  process.argv.slice(2);
 if (
   (mode !== "prompts" && mode !== "score" && mode !== "tool") ||
   !capturePath ||
-  ((mode === "score" || mode === "tool") && (!resultOrCase || !tracePath))
+  ((mode === "score" || mode === "tool") && (!resultOrCase || !tracePath)) ||
+  (mode === "tool" && !toolRunId)
 ) {
   panic(
-    "Usage: bun run evals/reader-explain-local.ts prompts <corpus-capture.json> | score <corpus-capture.json> <local-results.jsonl> <tool-trace.jsonl> | tool <corpus-capture.json> <case-id> <tool-trace.jsonl>",
+    "Usage: bun run evals/reader-explain-local.ts prompts <corpus-capture.json> | score <corpus-capture.json> <local-results.jsonl> <tool-trace.jsonl> | tool <corpus-capture.json> <case-id> <tool-trace.jsonl> <run-id>",
   );
 }
 const corpus = v.parse(
@@ -28,10 +30,15 @@ const corpus = v.parse(
   JSON.parse(readFileSync(capturePath, "utf-8")),
 );
 if (mode === "prompts") {
+  const runId = Bun.randomUUIDv7();
+  const runTracePath = `${path.resolve(capturePath)}.${runId}.tool-trace.jsonl`;
+  writeFileSync(runTracePath, "", { flag: "wx", mode: 0o600 });
   for (const scenario of readerExplainCases) {
     const { selection, context } = resolveExplainCase(scenario, corpus);
     console.log(
       JSON.stringify({
+        runId,
+        tracePath: runTracePath,
         caseId: scenario.id,
         selection,
         decisionContext: context,
@@ -44,10 +51,11 @@ if (mode === "prompts") {
             "tool",
             path.resolve(capturePath),
             scenario.id,
-            `${path.resolve(capturePath)}.tool-trace.jsonl`,
+            runTracePath,
+            runId,
           ],
         },
-        instruction: `${scenario.instruction} Explain the selection in this decision's context in English. If related case law helps, call fetch_related_decision_excerpts; execute its command with the local shell tool to replay bounded captured corpus excerpts. Cite by decisionId and paragraphId. Return JSON with caseId, harness (a nonempty local run label), answer, citations.`,
+        instruction: `${scenario.instruction} Explain the selection in this decision's context in English. If related case law helps, call fetch_related_decision_excerpts; execute its command with the local shell tool to replay bounded captured corpus excerpts. Cite by decisionId and paragraphId. Return JSON with runId (${runId}), caseId, harness (a nonempty local run label), answer, citations.`,
       }),
     );
   }
@@ -57,13 +65,18 @@ if (mode === "prompts") {
     panic("Unknown Explain case");
   }
   const { excerpts } = resolveExplainCase(scenario, corpus);
-  if (!tracePath) {
-    panic("Missing local tool trace path");
+  if (!tracePath || !toolRunId) {
+    panic("Missing local tool trace path or run id");
   }
-  appendFileSync(
-    tracePath,
-    `${JSON.stringify({ caseId: scenario.id, citations: excerpts.map(({ decisionId, paragraphId }) => ({ decisionId, paragraphId })) })}\n`,
-  );
+  const trace = v.parse(explainToolTraceSchema, {
+    runId: toolRunId,
+    caseId: scenario.id,
+    citations: excerpts.map(({ decisionId, paragraphId }) => ({
+      decisionId,
+      paragraphId,
+    })),
+  });
+  appendFileSync(tracePath, `${JSON.stringify(trace)}\n`);
   console.log(JSON.stringify({ excerpts }));
 } else {
   if (!resultOrCase || !tracePath) {
@@ -82,6 +95,9 @@ if (mode === "prompts") {
   if (JSON.stringify(expectedIds) !== JSON.stringify(resultIds)) {
     panic("Results must cover each Explain case exactly once");
   }
+  if (new Set(results.map(({ runId }) => runId)).size !== 1) {
+    panic("Results must belong to one Explain run");
+  }
   let failed = false;
   for (const scenario of readerExplainCases) {
     const result = results.find(({ caseId }) => caseId === scenario.id);
@@ -92,9 +108,7 @@ if (mode === "prompts") {
       scenario,
       corpus,
       result,
-      toolReturnedCitations: traces
-        .filter(({ caseId }) => caseId === scenario.id)
-        .flatMap(({ citations }) => citations),
+      toolTraces: traces,
     });
     console.log(JSON.stringify(score));
     if (!score.citationPass) {

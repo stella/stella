@@ -109,18 +109,22 @@ number and only locates the captured anchor. From `apps/api`:
 
 ```sh
 bun run evals/reader-explain-local.ts prompts /absolute/path/corpus-capture.json > /absolute/path/prompts.jsonl
-bun run evals/reader-explain-local.ts score /absolute/path/corpus-capture.json /absolute/path/local-results.jsonl /absolute/path/corpus-capture.json.tool-trace.jsonl
+bun run evals/reader-explain-local.ts score /absolute/path/corpus-capture.json /absolute/path/local-results.jsonl <tracePath-from-prompts>
 ```
 
 Run each emitted prompt through a local coding-agent harness, making the
 emitted `fetch_related_decision_excerpts.command` available as a local shell
 operation. The `tool` mode replays at most eight captured related paragraphs;
 prompts include bounded context from the selected decision.
-Record each result as JSONL with `caseId`, `harness` (a nonempty local run label), `answer`,
+Each prompt invocation creates a unique `runId` and an empty trace at the emitted
+`tracePath`; all prompts in that invocation share them. Record each result as
+JSONL with that `runId`, `caseId`, `harness` (a nonempty local run label), `answer`,
 `citations: [{decisionId, paragraphId}]`. The tool command appends its actual
 returned citations to a local trace; scoring reads this trace separately from
-model output, so a model cannot claim it fetched a paragraph it never retrieved.
-Start with an empty trace for each run. The runner never imports a provider or calls a model API; it emits local
+model output and accepts only entries matching the result's run and case.
+The tool preserves each excerpt's cited or citing direction and prioritizes the
+case direction and expected paragraph before applying its bound.
+The runner never imports a provider or calls a model API; it emits local
 harness inputs and scores captured outputs. It requires exactly one result per
 case and rejects invented or unreturned citations. The content and the expected
 legal distinction are emitted together for separate review; citation success

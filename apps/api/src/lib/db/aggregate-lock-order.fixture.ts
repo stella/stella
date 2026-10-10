@@ -70,6 +70,11 @@ export const aggregateFences = () => {
       id: { id: threadId, organizationId, userId },
       mode: "update",
     },
+    readerAnswer: {
+      aggregate: "readerAnswer",
+      id: { id: createSafeId<"legalReaderAnswer">(), organizationId, userId },
+      mode: "update",
+    },
     chatTurn: {
       aggregate: "chatTurn",
       id: { threadId, organizationId, userId, toolCallId: "test-call" },
