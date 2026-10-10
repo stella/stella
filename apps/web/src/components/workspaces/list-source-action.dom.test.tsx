@@ -143,7 +143,12 @@ const mountAction = async ({
   client.setQueryData(roleOptions.queryKey, role);
   client.setQueryData(workspaceFilesOptions(workspaceId).queryKey, matterFiles);
   client.setQueryData(
-    legalListSourcesOptions(workspaceId, listId, itemEntityId).queryKey,
+    legalListSourcesOptions({
+      workspaceId,
+      listId,
+      itemEntityId,
+      viewer: principal,
+    }).queryKey,
     emptySources,
   );
   client.setQueryData(legalListKeys.items(workspaceId, listId), { pages: [] });
@@ -357,7 +362,12 @@ test("zero sources show an explicit empty message after a successful query", asy
   const mounted = await mountAction({ showSources: true });
   expect(
     mounted.client.getQueryState(
-      legalListSourcesOptions(workspaceId, listId, itemEntityId).queryKey,
+      legalListSourcesOptions({
+        workspaceId,
+        listId,
+        itemEntityId,
+        viewer: principal,
+      }).queryKey,
     )?.status,
   ).toBe("success");
   expect(mounted.view.getByText(english.common.empty)).toBeTruthy();
