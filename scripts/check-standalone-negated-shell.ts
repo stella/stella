@@ -18,6 +18,10 @@ const WORKFLOW_FILE =
 const BASH_SHEBANG = /^#![^\n]*\b(?:\/|\s)bash(?:\s|$)/u;
 const NEGATED_STATEMENT = /^\s*!\s+\S/u;
 const LIST_CONTINUATION = /(?:&&|\|\|)\s*$/u;
+// Only `||` consumes a failed negation; a non-final `&&` command skips errexit too.
+const STATUS_CONSUMED = /\s\|\|\s/u;
+// `<<<` is a here-string, not a heredoc.
+const HEREDOC_START = /(?<!<)<<-?(?!<)\s*['"]?([A-Za-z_][A-Za-z0-9_]*)['"]?/u;
 const CONDITION_START = /^\s*(?:if|while|until)(?:\s|$)/u;
 const CONDITION_END = /(?:^|[;\s])(?:then|do)(?:[;\s]|$)/u;
 const FUNCTION_START = /^\s*[A-Za-z_][A-Za-z0-9_]*\s*\(\s*\)\s*\{\s*(?:#.*)?$/u;
@@ -83,10 +87,11 @@ const shellFindings = ({ file, lineOffset, source }: ShellSource) => {
       continue;
     }
 
-    const heredoc = line.match(/<<-?\s*['"]?([A-Za-z_][A-Za-z0-9_]*)['"]?/u);
+    const heredoc = line.match(HEREDOC_START);
     const candidate = NEGATED_STATEMENT.test(line);
     const allowed =
       LIST_CONTINUATION.test(previousMeaningful) ||
+      STATUS_CONSUMED.test(line) ||
       conditionOpen ||
       isFinalFunctionStatus(lines, index);
     if (candidate && !allowed) {

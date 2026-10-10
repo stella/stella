@@ -52,6 +52,13 @@ fi`;
   expect(check("scripts/passing.bash", source)).toEqual([]);
 });
 
+test("accepts a negation consumed by || on the same line, not by &&", () => {
+  expect(check("scripts/or.sh", "! grep -q x file || exit 1")).toEqual([]);
+  expect(
+    check("scripts/and.sh", "! grep -q x file && echo found"),
+  ).toHaveLength(1);
+});
+
 test("does not exempt a non-final standalone negation inside a function", () => {
   expect(
     check(
@@ -70,4 +77,7 @@ test("checks Bash shebang files and ignores non-shell and heredoc content", () =
       "cat <<'SCRIPT'\n! this is fixture text\nSCRIPT",
     ),
   ).toEqual([]);
+  expect(
+    check("scripts/here-string.sh", 'cat <<< "text"\n! false\n! true'),
+  ).toHaveLength(2);
 });
