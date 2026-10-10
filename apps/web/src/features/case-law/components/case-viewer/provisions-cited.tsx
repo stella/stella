@@ -122,9 +122,15 @@ export const ProvisionsCited = ({
   const statuteByWork = statuteByCitedWork(resolved);
   const inconsistentWorks = publisherInconsistentCitedWorks(resolved);
 
-  const status = data?.pages.at(0)?.status;
+  const firstPage = data?.pages.at(0);
   const statusMessage =
-    status === undefined ? null : provisionStatusMessage(status, groups.length);
+    firstPage === undefined
+      ? null
+      : provisionStatusMessage(
+          firstPage.status,
+          groups.length,
+          firstPage.capability,
+        );
   const environmentHydrated = useHydrated();
   const hydrated = isHydrated ?? environmentHydrated;
   if (!hydrated || (data === undefined && !isError)) {

@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 
+import type { ProvisionLinkCapability } from "@stll/api-contract/provision-link-capability";
 import type { ProvisionLinkStatus } from "@stll/api-contract/provision-link-status";
 import type { ProvisionVersionBasis } from "@stll/api-contract/provision-version-basis";
 import type { ProvisionReference } from "@stll/legal-ast/provision-reference";
@@ -292,7 +293,12 @@ const provisionStatusMessages = {
 export const provisionStatusMessage = (
   status: ProvisionLinkStatus,
   count: number,
-) =>
-  status.type === "current" && count === 0
+  capability: ProvisionLinkCapability,
+) => {
+  if (capability.type === "notSupportedYet") {
+    return "caseLaw.viewer.provisionsUnsupported";
+  }
+  return status.type === "current" && count === 0
     ? "caseLaw.viewer.provisionsNoneFound"
     : provisionStatusMessages[status.type];
+};

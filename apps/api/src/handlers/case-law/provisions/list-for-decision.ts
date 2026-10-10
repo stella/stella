@@ -34,6 +34,7 @@ import {
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 
+import { provisionStatusForCapability } from "./status-for-capability";
 import {
   PROVISION_VERSION_COLUMNS,
   projectProvisionVersion,
@@ -175,11 +176,11 @@ const provisionPage = ({
     cursorForItem: (item) =>
       encodePaginationCursor([generation, item.spanStart, item.anchor]),
   }),
-  status: linkStatus,
+  status: provisionStatusForCapability(capability, linkStatus),
   generation,
   publishedProjectionDigest,
   capability,
-  pendingSince,
+  pendingSince: capability.type === "notSupportedYet" ? null : pendingSince,
 });
 
 /** Check on this transaction, so a grant rollout takes effect without a restart. */
