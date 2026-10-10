@@ -179,13 +179,9 @@ export const createLegalResolveRoute = ({
       if (auditedRequests.has(request)) {
         return;
       }
-      const pendingAuthorization =
-        getAuthorization.getExistingAuthorization(request);
-      if (pendingAuthorization === undefined) {
-        return;
-      }
-      const authorization = await pendingAuthorization;
-      if (authorization.session === undefined) {
+      const authorization =
+        await getAuthorization.getExistingAuthorization(request);
+      if (authorization?.session === undefined) {
         return;
       }
       auditedRequests.add(request);

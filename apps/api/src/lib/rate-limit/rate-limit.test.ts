@@ -81,12 +81,12 @@ test("client-bound windows isolate clients and share the daily budget across rou
         context,
         duration: 60_000,
         generator: (request) =>
-          `${request.headers.get("x-client")}:${new URL(request.url).pathname}`,
+          `${request.headers.get("x-client") ?? "anonymous"}:${new URL(request.url).pathname}`,
         max: (request) =>
           request.headers.get("x-client") === "small" ? 1 : 120,
         additionalBudgets: (request) => [
           {
-            key: `${request.headers.get("x-client")}:daily`,
+            key: `${request.headers.get("x-client") ?? "anonymous"}:daily`,
             duration: 86_400_000,
             max: 2,
           },

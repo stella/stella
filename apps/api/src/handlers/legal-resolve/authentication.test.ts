@@ -15,7 +15,7 @@ test("dispatches service tokens after one law-audience verification", async () =
   const result = await authenticateLegalResolveToken("synthetic-token", {
     verifyToken: async (_token, options) => {
       verifications += 1;
-      expect(options.verifyOptions?.audience).toBe(getMcpResourceUrl("law"));
+      expect(options.verifyOptions.audience).toBe(getMcpResourceUrl("law"));
       return {
         stella_principal: "service",
         sub: "client",
@@ -79,9 +79,7 @@ test("verifies default-resource user tokens once against the default audience", 
     mode: "default",
     verifyToken: async (_token, options) => {
       verifications += 1;
-      expect(options.verifyOptions?.audience).toBe(
-        getMcpResourceUrl("default"),
-      );
+      expect(options.verifyOptions.audience).toBe(getMcpResourceUrl("default"));
       return {
         sub: "synthetic-user",
         org_id: "synthetic-org",

@@ -38,5 +38,4 @@ export type LegalResolveSession = McpSession | ServiceOAuthPrincipal;
 
 export const isServiceResolveSession = (
   session: LegalResolveSession,
-): session is ServiceOAuthPrincipal =>
-  "type" in session && session.type === SERVICE_CLIENT_PRINCIPAL;
+): session is ServiceOAuthPrincipal => "type" in session;

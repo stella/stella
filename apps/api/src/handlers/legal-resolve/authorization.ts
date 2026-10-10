@@ -183,7 +183,8 @@ export const authorizeOncePerRequest = (
     return await authorization;
   };
   return Object.assign(authorizeRequest, {
-    getExistingAuthorization: (request: Request) => byRequest.get(request),
+    getExistingAuthorization: async (request: Request) =>
+      await byRequest.get(request),
   });
 };
 

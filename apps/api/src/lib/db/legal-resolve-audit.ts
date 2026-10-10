@@ -45,12 +45,12 @@ export const recordLegalResolveAuditInTransaction = async ({
           parseAuthProviderId<"user">(principal.userId) ??
           panic("Invalid resolve user identity"),
       } as const);
-  const execution = {
+  const execution: AuditExecutionContext = {
     performer,
     trigger: isServiceResolveSession(principal)
       ? { type: "system", source: "legal-resolve" }
       : { type: "direct" },
-  } as const satisfies AuditExecutionContext;
+  };
   const userId =
     performer.type === "service"
       ? TENANT_SYSTEM_ACTOR.serviceClient

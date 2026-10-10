@@ -348,9 +348,7 @@ describe("confidential service OAuth lifecycle", () => {
       {
         verifyToken: async (_token, options) => {
           verifications += 1;
-          expect(options.verifyOptions?.audience).toBe(
-            getMcpResourceUrl("law"),
-          );
+          expect(options.verifyOptions.audience).toBe(getMcpResourceUrl("law"));
           return payload;
         },
       },
