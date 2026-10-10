@@ -171,7 +171,10 @@ describe.skipIf(!runPostgresTests)(
           WHERE n.nspname = 'public' AND p.proname LIKE 'entity_feature_gate_%'`;
         expect(routines.length).toBeGreaterThan(0);
         for (const routine of routines) {
-          expect(routine.proconfig, routine.proname).toContain("jit=off");
+          expect([routine.proname, routine.proconfig]).toEqual([
+            routine.proname,
+            expect.arrayContaining(["jit=off"]),
+          ]);
         }
       });
     });
