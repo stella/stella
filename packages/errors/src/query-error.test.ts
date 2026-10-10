@@ -262,6 +262,56 @@ test("query output projects ordinary errors with query text in their stack", () 
   expect(error.stack).toContain(SECRET);
 });
 
+test("ordinary errors are replaced only when their own graph contains query data", () => {
+  const ordinary = Object.assign(
+    new Error("Network failed", { cause: { code: "ECONNRESET" } }),
+    { operation: "fetch" },
+  );
+  expect(sanitizeErrorForOutput(ordinary)).toBe(ordinary);
+  expect(ordinary.message).toBe("Network failed");
+  expect(ordinary.operation).toBe("fetch");
+
+  const wrapped = new Error("Network failed", {
+    cause: failure("select $1"),
+  });
+  const safe = sanitizeErrorForOutput(wrapped);
+  expect(safe).not.toBe(wrapped);
+  expect(inspect(safe, { depth: 20 })).not.toContain(SECRET);
+  expect(inspect(safe, { depth: 20 })).toContain(
+    "Error caused by database query failure",
+  );
+});
+
+test("unrelated errors beside query failures retain their diagnostics", () => {
+  const ordinary = Object.assign(new Error("Network failed"), {
+    code: "ECONNRESET",
+  });
+  const projected = sanitizeErrorForOutput([ordinary, failure("select $1")]);
+  expect(projected).toEqual([ordinary, expect.any(Error)]);
+});
+
+test("inline SQL literals redact equal sibling diagnostics", () => {
+  const query = Object.assign(new Error("Database query failed"), {
+    name: "PostgresError",
+    query: `select '${SECRET}'`,
+  });
+  expect(
+    sanitizeErrorForOutput([SECRET, "unrelated diagnostic", query]),
+  ).toEqual(["[redacted]", "unrelated diagnostic", expect.any(Error)]);
+});
+
+test("query values reachable through symbol fields redact sibling diagnostics", () => {
+  const privateField = Symbol("driver diagnostic");
+  const query = Object.assign(new Error("Database query failed"), {
+    name: "PostgresError",
+    [privateField]: SECRET,
+  });
+  expect(sanitizeErrorForOutput([SECRET, query])).toEqual([
+    "[redacted]",
+    expect.any(Error),
+  ]);
+});
+
 test("ordinary error stacks use the shared query field policy", () => {
   for (const field of QUERY_ERROR_OUTPUT_FIELDS) {
     const error = new Error("Database operation failed");
@@ -426,6 +476,20 @@ test("binary query parameters are redacted when diagnostics carry their bytes", 
     { unrelated: "[redacted]" },
     expect.any(Error),
   ]);
+});
+
+test("errors holding query fields in plain records are projected", () => {
+  const value = "fixture-plain-record-query-value";
+  for (const input of [
+    new Error("Network failed", { cause: { params: [value] } }),
+    Object.assign(new Error("Network failed"), {
+      details: { params: [value] },
+    }),
+  ]) {
+    const output = sanitizeErrorForOutput(input);
+    expect(output).not.toBe(input);
+    expect(inspect(output, { depth: 20 })).not.toContain(value);
+  }
 });
 
 test("query attribute output projects the whole record and keeps a record on failure", () => {

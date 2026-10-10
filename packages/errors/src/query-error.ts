@@ -58,8 +58,7 @@ const hexOfBytes = (bytes: Uint8Array): string =>
 
 type QueryObjectValues = {
   text: Set<string>;
-  // Hex of every binary parameter: the same bytes in a sibling diagnostic
-  // would otherwise be projected byte by byte.
+  // Binary parameters are matched by byte content across diagnostics.
   binary: Set<string>;
 };
 
@@ -93,15 +92,41 @@ const isQueryError = (value: Record<string, unknown>): boolean =>
   (typeof value["code"] === "string" && SQLSTATE.test(value["code"])) ||
   (typeof value["errno"] === "string" && SQLSTATE.test(value["errno"]));
 
+const scanQuery = (query: string): string[] =>
+  query.match(
+    /--[^\n]*|\/\*[\s\S]*?\*\/|(?:[eE])?'(?:[^'\\]|\\[\s\S]|'')*'|"(?:[^"]|"")*"|\$(?:[a-zA-Z_]\w*)?\$[\s\S]*?\$(?:[a-zA-Z_]\w*)?\$|\$\d+|[a-zA-Z_]\w*|\d+(?:\.\d+)?|[(),=<>.*;+/-]|\S/gu,
+  ) ?? [];
+
+const recordQueryLiterals = (queryValues: Set<string>, query: string): void => {
+  for (const token of scanQuery(query)) {
+    let literal: string | undefined;
+    if (/^[eE]?'/u.test(token)) {
+      literal = token.replace(/^[eE]?'/u, "").replace(/'$/u, "");
+      literal = literal.replace(/''/gu, "'").replace(/\\(['\\])/gu, "$1");
+    } else if (token.startsWith('"')) {
+      literal = token.slice(1).replace(/"$/u, "").replace(/""/gu, '"');
+    } else {
+      const delimiter = /^\$[a-zA-Z_]*\$/u.exec(token)?.at(0);
+      if (delimiter !== undefined) {
+        literal = token.slice(delimiter.length, -delimiter.length);
+      } else if (token.startsWith("--")) {
+        literal = token.slice(2).trim();
+      } else if (token.startsWith("/*")) {
+        literal = token.slice(2, -2).trim();
+      }
+    }
+    if (literal !== undefined) {
+      recordQueryText(queryValues, literal);
+    }
+  }
+};
+
 /** Only vocabulary and placeholders survive; literals and identifiers do not. */
 const queryShape = (query: string): string => {
   if (query === SQL_REDACTED_SHAPE) {
     return SQL_REDACTED_SHAPE;
   }
-  const tokens =
-    query.match(
-      /--[^\n]*|\/\*[\s\S]*?\*\/|(?:[eE])?'(?:[^'\\]|\\[\s\S]|'')*'|"(?:[^"]|"")*"|\$(?:[a-zA-Z_]\w*)?\$[\s\S]*?\$(?:[a-zA-Z_]\w*)?\$|\$\d+|[a-zA-Z_]\w*|\d+(?:\.\d+)?|[(),=<>.*;+/-]|\S/gu,
-    ) ?? [];
+  const tokens = scanQuery(query);
   if (tokens.some((token) => token === "'" || token === '"')) {
     return SQL_REDACTED_SHAPE;
   }
@@ -147,6 +172,91 @@ const queryErrorMetadata = (input: Record<string, unknown>, cause: unknown) => {
   return Object.fromEntries(fields);
 };
 
+type VisitErrorOptions = {
+  input: unknown;
+  databaseCause?: boolean;
+  depth?: number;
+};
+
+type ProjectErrorOptions = {
+  input: Record<string, unknown>;
+  database: boolean;
+  cause: unknown;
+  causeRedacted: boolean;
+  depth: number;
+  redaction: { count: number };
+  projectText: (text: string) => string;
+  visit: (options: VisitErrorOptions) => unknown;
+};
+
+const projectError = ({
+  input,
+  database,
+  cause,
+  causeRedacted,
+  depth,
+  redaction,
+  projectText,
+  visit,
+}: ProjectErrorOptions): unknown => {
+  const beforeMembers = redaction.count;
+  const aggregateErrors =
+    input instanceof AggregateError
+      ? input.errors.map((member: unknown) =>
+          visit({ input: member, databaseCause: database, depth: depth + 1 }),
+        )
+      : undefined;
+  const membersRedacted = redaction.count > beforeMembers;
+  const beforeFields = redaction.count;
+  for (const key of Reflect.ownKeys(input)) {
+    if (input instanceof AggregateError && key === "errors") {
+      continue;
+    }
+    if (typeof key === "string" && isQueryErrorOutputKey(key)) {
+      redaction.count += 1;
+      continue;
+    }
+    if (key !== "cause") {
+      visit({ input: Reflect.get(input, key), depth: depth + 1 });
+    }
+  }
+  projectText(input instanceof Error ? input.message : "");
+  if (input instanceof Error && input.stack !== undefined) {
+    projectText(input.stack);
+  }
+  const fieldsRedacted = redaction.count > beforeFields;
+  if (!database && !causeRedacted && !membersRedacted && !fieldsRedacted) {
+    return input;
+  }
+  const message = database
+    ? "Database query failed (values redacted)"
+    : "Error caused by database query failure";
+  const output =
+    input instanceof AggregateError
+      ? new AggregateError(aggregateErrors ?? [], message)
+      : new Error(message);
+  output.name =
+    ERROR_OUTPUT_NAMES.find((name) => name === input["name"]) ?? "Error";
+  if (cause !== undefined) {
+    output.cause = cause;
+  }
+  for (const [key, field] of Object.entries(queryErrorMetadata(input, cause))) {
+    Reflect.set(output, key, projectText(field));
+  }
+  const sql = input["query"] ?? input["sqlShape"];
+  if (typeof sql === "string") {
+    const shape = queryShape(sql);
+    Reflect.set(output, "sqlShape", shape);
+    output.message += `: ${shape}`;
+  }
+  // Query projections omit stacks; telemetry owns frame diagnostics.
+  delete output.stack;
+  if (database) {
+    redaction.count += 1;
+  }
+  return output;
+};
+
 /**
  * Keep the original error in process for retries and classification. Output
  * receives standard Error or AggregateError projections without custom serializers.
@@ -158,14 +268,16 @@ export const sanitizeErrorForOutput = (value: unknown): unknown => {
   const queryValues = new Set<string>();
   const queryPrimitiveValues = new Set<number | bigint | boolean>();
   const queryBinaryValues = new Set<string>();
-  let queryGraph = false;
+  const redaction = { count: 0 };
   const projectText = (text: string): string => {
     const output = sanitizeQueryErrorText(text);
     if (output !== text) {
+      redaction.count += 1;
       return output;
     }
     for (const queryValue of queryValues) {
       if (text.includes(queryValue)) {
+        redaction.count += 1;
         return "[redacted]";
       }
     }
@@ -178,21 +290,18 @@ export const sanitizeErrorForOutput = (value: unknown): unknown => {
       typeof input === "boolean") &&
       queryPrimitiveValues.has(input)) ||
     (input instanceof Uint8Array && queryBinaryValues.has(hexOfBytes(input)));
-  type VisitErrorOptions = {
-    input: unknown;
-    databaseCause?: boolean;
-    depth?: number;
-  };
   const visit = ({
     input,
     databaseCause = false,
     depth = 0,
   }: VisitErrorOptions): unknown => {
     if (isQueryParameterValue(input)) {
+      redaction.count += 1;
       return "[redacted]";
     }
     if (!isRecord(input)) {
       if (databaseCause) {
+        redaction.count += 1;
         return "[redacted]";
       }
       if (typeof input === "function" || typeof input === "symbol") {
@@ -216,6 +325,7 @@ export const sanitizeErrorForOutput = (value: unknown): unknown => {
       );
     }
     const database = databaseCause || isQueryError(input);
+    const beforeCause = redaction.count;
     const cause =
       input["cause"] === undefined
         ? undefined
@@ -224,60 +334,32 @@ export const sanitizeErrorForOutput = (value: unknown): unknown => {
             databaseCause: database,
             depth: depth + 1,
           });
-    const causeChanged = cause !== input["cause"];
+    const causeRedacted = redaction.count > beforeCause;
     if (input instanceof Error || database) {
-      if (!queryGraph && !database && !causeChanged) {
-        return input;
-      }
-      const message = database
-        ? "Database query failed (values redacted)"
-        : "Error caused by database query failure";
-      const output =
-        input instanceof AggregateError
-          ? new AggregateError(
-              input.errors.map((member: unknown) =>
-                visit({
-                  input: member,
-                  databaseCause: database,
-                  depth: depth + 1,
-                }),
-              ),
-              message,
-            )
-          : new Error(message);
-      output.name =
-        ERROR_OUTPUT_NAMES.find((name) => name === input["name"]) ?? "Error";
-      if (cause !== undefined) {
-        output.cause = cause;
-      }
-      for (const [key, field] of Object.entries(
-        queryErrorMetadata(input, cause),
-      )) {
-        Reflect.set(output, key, projectText(field));
-      }
-      const sql = input["query"] ?? input["sqlShape"];
-      if (typeof sql === "string") {
-        const shape = queryShape(sql);
-        Reflect.set(output, "sqlShape", shape);
-        output.message += `: ${shape}`;
-      }
-      // Query projections omit stacks; telemetry owns frame diagnostics.
-      delete output.stack;
-      return output;
+      return projectError({
+        input,
+        database,
+        cause,
+        causeRedacted,
+        depth,
+        redaction,
+        projectText,
+        visit,
+      });
     }
+    const entries = Object.entries(input);
+    const kept = entries.filter(([key]) => !isQueryErrorOutputKey(key));
+    // Dropping a query field is a redaction: an error holding this record
+    // must not fall back to returning its original, unprojected self.
+    redaction.count += entries.length - kept.length;
     return Object.fromEntries(
-      Object.entries(input)
-        .filter(([key]) => !isQueryErrorOutputKey(key))
-        .map(([key, item]) => {
-          const safeKey = projectText(key);
-          if (key === "message" && queryGraph && typeof item === "string") {
-            return [safeKey, "Error caused by database query failure"];
-          }
-          if (key === "cause") {
-            return [safeKey, cause];
-          }
-          return [safeKey, visit({ input: item, depth: depth + 1 })];
-        }),
+      kept.map(([key, item]) => {
+        const safeKey = projectText(key);
+        if (key === "cause") {
+          return [safeKey, cause];
+        }
+        return [safeKey, visit({ input: item, depth: depth + 1 })];
+      }),
     );
   };
   return Result.try(() => {
@@ -297,7 +379,6 @@ export const sanitizeErrorForOutput = (value: unknown): unknown => {
       const { input, source } = entry;
       if (!isRecord(input)) {
         if (typeof input === "string") {
-          queryGraph ||= sanitizeQueryErrorText(input) !== input;
           if (source === "query") {
             recordQueryText(queryValues, input);
           }
@@ -326,16 +407,29 @@ export const sanitizeErrorForOutput = (value: unknown): unknown => {
         continue;
       }
       visited.add(input);
-      queryGraph ||= isQueryError(input);
-      for (const key of Object.getOwnPropertyNames(input)) {
+      const queryError = isQueryError(input);
+      for (const key of Reflect.ownKeys(input)) {
         if (isUnknownArray(input) && key === "length") {
           continue;
         }
-        const queryField = isQueryErrorOutputKey(key);
-        queryGraph ||= queryField;
+        const queryField =
+          typeof key === "string" && isQueryErrorOutputKey(key);
+        if (
+          queryError &&
+          typeof key === "string" &&
+          (key === "query" || key === "sql") &&
+          typeof input[key] === "string"
+        ) {
+          recordQueryLiterals(queryValues, input[key]);
+        }
         pending.push({
-          input: input[key],
-          source: source === "query" || queryField ? "query" : "output",
+          input: Reflect.get(input, key),
+          source:
+            source === "query" ||
+            queryField ||
+            (queryError && typeof key === "symbol")
+              ? "query"
+              : "output",
         });
       }
     }

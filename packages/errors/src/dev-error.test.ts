@@ -60,9 +60,7 @@ test("dev sinks drop every shared query field from context", () => {
   const error = new Error("fixture error");
   log(error, { requestId: "fixture-request", ...fields, nested: fields });
   expect(sink).toHaveBeenCalledWith({
-    error: expect.objectContaining({
-      message: "Error caused by database query failure",
-    }),
+    error,
     context: { requestId: "fixture-request", nested: {} },
   });
 });
