@@ -47,6 +47,8 @@ jobs:
         # records failed evidence and leaves time to publish remediation tasks.
         timeout-minutes: 50
         run: bun scripts/dated-waiver-healing.ts --probe --evidence "$RUNNER_TEMP/dated-waiver-evidence.json"
+        env:
+          GH_TOKEN: ${{ github.token }}
 
       - name: Validate private task configuration
         timeout-minutes: 1

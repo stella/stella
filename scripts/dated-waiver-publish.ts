@@ -3,6 +3,9 @@ import path from "node:path";
 import ts from "typescript";
 import * as v from "valibot";
 
+import { waiverKey } from "./dated-waiver-fix-task";
+import type { DatedWaiver } from "./dated-waivers";
+
 export const REMOVAL_TITLE = "chore: remove verified dated waiver";
 type RemovalPr = { number: number; body: string; title: string };
 type ReconcileRemovalOptions = {
@@ -163,17 +166,88 @@ type RemovalBranchOptions = {
   repo: string | undefined;
   request: typeof githubRequest;
 };
+const REMOVAL_BRANCH = /^chore\/dated-waiver-([a-f0-9]{24})$/u;
+const requireRemovalRepository = (repo: string | undefined) => {
+  if (repo !== "stella/stella") {
+    panic("Dated-waiver publishing requires stella/stella");
+  }
+  return repo;
+};
 const removalLocation = ({
   branch,
   repo,
 }: Pick<RemovalBranchOptions, "branch" | "repo">) => {
-  if (!/^chore\/dated-waiver-[a-f0-9]{24}$/u.test(branch)) {
+  if (!REMOVAL_BRANCH.test(branch)) {
     panic("Invalid removal branch");
   }
-  if (repo !== "stella/stella") {
-    panic("Dated-waiver publishing requires stella/stella");
+  const repository = requireRemovalRepository(repo);
+  return {
+    api: `repos/${repository}`,
+    owner: repository.slice(0, repository.indexOf("/")),
+  };
+};
+
+export type RemovalProposal = { branch: string; key: string };
+const proposalListSchema = v.array(
+  v.object({
+    head: v.object({
+      ref: v.string(),
+      repo: v.nullable(v.object({ full_name: v.string() })),
+    }),
+    base: v.object({ ref: v.string() }),
+  }),
+);
+type ListRemovalProposalsOptions = Pick<
+  RemovalBranchOptions,
+  "repo" | "request"
+>;
+export const listRemovalProposals = async ({
+  repo,
+  request,
+}: ListRemovalProposalsOptions): Promise<RemovalProposal[]> => {
+  const repository = requireRemovalRepository(repo);
+  const proposals = new Map<string, RemovalProposal>();
+  for (let page = 1; ; page++) {
+    const pulls = v.parse(
+      proposalListSchema,
+      await request([
+        `repos/${repository}/pulls`,
+        "--method",
+        "GET",
+        "-f",
+        "state=open",
+        "-f",
+        "base=main",
+        "-f",
+        "per_page=100",
+        "-f",
+        `page=${page}`,
+      ]),
+    );
+    for (const pull of pulls) {
+      if (
+        pull.base.ref !== "main" ||
+        pull.head.repo?.full_name !== repository
+      ) {
+        continue;
+      }
+      const key = REMOVAL_BRANCH.exec(pull.head.ref)?.at(1);
+      if (key) {
+        proposals.set(pull.head.ref, { branch: pull.head.ref, key });
+      }
+    }
+    if (pulls.length < 100) {
+      return [...proposals.values()];
+    }
   }
-  return { api: `repos/${repo}`, owner: repo.slice(0, repo.indexOf("/")) };
+};
+
+export const orphanRemovalProposals = (
+  inventory: readonly DatedWaiver[],
+  proposals: readonly RemovalProposal[],
+): RemovalProposal[] => {
+  const current = new Set(inventory.map(waiverKey));
+  return proposals.filter(({ key }) => !current.has(key));
 };
 const listRemovalPrs = async ({
   branch,

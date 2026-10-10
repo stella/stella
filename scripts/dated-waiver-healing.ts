@@ -28,6 +28,9 @@ import {
 } from "./dated-waiver-probes";
 import {
   githubRequest,
+  listRemovalProposals,
+  orphanRemovalProposals,
+  type RemovalProposal,
   publishRemoval,
   retireRemoval,
   validateRemovalModules,
@@ -258,11 +261,16 @@ type ApplyHealingOptions = {
   report: HealingReport;
   actions: HealingActions;
   now: Date;
+  reconciliation?: {
+    discover: () => Promise<readonly RemovalProposal[]>;
+    retire: (proposal: RemovalProposal) => Promise<void>;
+  };
 };
 export const applyHealing = async ({
   report,
   actions,
   now,
+  reconciliation,
 }: ApplyHealingOptions): Promise<void> => {
   const failures: HealingFailure[] = report.failures.map((failure) => ({
     ...failure,
@@ -300,6 +308,29 @@ export const applyHealing = async ({
         stage: "evidence",
         cause: completed.error,
       });
+    }
+  }
+  if (reconciliation) {
+    const discovered = await Result.tryPromise(reconciliation.discover);
+    if (Result.isError(discovered)) {
+      failures.push({
+        key: "evidence-0",
+        stage: "evidence",
+        cause: discovered.error,
+      });
+    } else {
+      for (const proposal of discovered.value) {
+        const retired = await Result.tryPromise(async () =>
+          reconciliation.retire(proposal),
+        );
+        if (Result.isError(retired)) {
+          failures.push({
+            key: proposal.key,
+            stage: "retireRemoval",
+            cause: retired.error,
+          });
+        }
+      }
     }
   }
   if (failures.length > 0) {
@@ -797,8 +828,22 @@ export const renderHealingFailureSignal = (error: HealingRunError) => ({
   failures: error.failures.map(({ key, stage }) => ({ key, stage })),
 });
 
-export const healingWriteNeeded = (report: HealingReport) =>
-  report.entries.length > 0 || report.failures.length > 0;
+export const healingWriteNeeded = (
+  report: HealingReport,
+  orphanProposals: readonly RemovalProposal[] = [],
+) =>
+  report.entries.length > 0 ||
+  report.failures.length > 0 ||
+  orphanProposals.length > 0;
+
+const discoverOrphanRemovals = async (inventory: readonly DatedWaiver[]) =>
+  orphanRemovalProposals(
+    inventory,
+    await listRemovalProposals({
+      repo: "stella/stella",
+      request: githubRequest,
+    }),
+  );
 
 const main = async (): Promise<void> => {
   const fileIndex = process.argv.indexOf("--evidence");
@@ -809,7 +854,8 @@ const main = async (): Promise<void> => {
   if (process.argv.includes("--probe")) {
     const sha = checkedGit(["rev-parse", "HEAD"]);
     const now = new Date();
-    const due = dueWaivers(await loadWaivers(), now);
+    const inventory = await loadWaivers();
+    const due = dueWaivers(inventory, now);
     const budget = createProbeBudget({
       attempts: due
         .filter(
@@ -844,11 +890,23 @@ const main = async (): Promise<void> => {
         baseFiles: {},
       }),
     });
+    // Discovery uses the read-only workflow token and the full inventory, even
+    // when no entries are due. A failed discovery remains a recorded run failure.
+    const discovered = await Result.tryPromise(async () =>
+      discoverOrphanRemovals(inventory),
+    );
+    if (Result.isError(discovered)) {
+      report.failures.push({ key: "evidence-0", stage: "evidence" });
+    }
+    const orphans = Result.isOk(discovered) ? discovered.value : [];
     mkdirSync(path.dirname(file), { recursive: true });
     writeFileSync(file, JSON.stringify(report), { mode: 0o600 });
     const output = process.env["GITHUB_OUTPUT"];
     if (output) {
-      appendFileSync(output, `write_needed=${healingWriteNeeded(report)}\n`);
+      appendFileSync(
+        output,
+        `write_needed=${healingWriteNeeded(report, orphans)}\n`,
+      );
     }
     console.log(
       JSON.stringify({
@@ -865,7 +923,16 @@ const main = async (): Promise<void> => {
     panic("Publishing requires the scheduled repository workflow");
   }
   const report = await readReport(file);
-  if (!healingWriteNeeded(report)) {
+  const inventory = await loadWaivers();
+  // Re-read proposals on the write path: runner evidence never supplies branch
+  // names or authority to retire a proposal.
+  const discovered = await Result.tryPromise(async () =>
+    discoverOrphanRemovals(inventory),
+  );
+  if (
+    Result.isOk(discovered) &&
+    !healingWriteNeeded(report, discovered.value)
+  ) {
     return;
   }
   const privateRepo = process.env["DATED_WAIVER_FIX_REPO"];
@@ -879,6 +946,21 @@ const main = async (): Promise<void> => {
   await applyHealing({
     report,
     now: new Date(),
+    reconciliation: {
+      discover: async () => {
+        if (Result.isError(discovered)) {
+          throw discovered.error;
+        }
+        return discovered.value;
+      },
+      retire: async ({ branch }) =>
+        retireRemoval({
+          branch,
+          repo: "stella/stella",
+          request: githubRequest,
+          disarm: disarmRemovalThroughBar,
+        }),
+    },
     actions: {
       ...sink,
       openRemoval: async ({ entry, outcome }) =>

@@ -75,6 +75,7 @@ test("package and probe execution precede conditional write credential minting",
     steps.indexOf(probe),
   );
   expect(steps.indexOf(probe)).toBeLessThan(steps.indexOf(token));
+  expect(probe.env?.["GH_TOKEN"]).toBe(`\${{ github.token }}`);
   expect(token.if).toBe(condition);
   expect(publish.if).toBe(condition);
   expect(requiredStep("Validate private task configuration").if).toBe(

@@ -5,9 +5,12 @@ import { compareCodeUnit } from "@stll/collation";
 import { rejectionOf } from "@stll/property-testing/rejection";
 import { sha256Hex } from "@stll/sha256/bun";
 
+import { waiverKey } from "./dated-waiver-fix-task";
 import { applyHealing, HealingRunError } from "./dated-waiver-healing";
 import type { HealingActions } from "./dated-waiver-healing";
 import {
+  listRemovalProposals,
+  orphanRemovalProposals,
   publishRemoval,
   REMOVAL_TITLE,
   retireRemoval,
@@ -304,6 +307,133 @@ const healingPublication = async ({
     },
   });
 };
+
+type ProposalFixtureOptions = {
+  branch?: string;
+  repo?: string | null;
+  base?: string;
+};
+const proposalFixture = ({
+  branch = BRANCH,
+  repo = "stella/stella",
+  base = "main",
+}: ProposalFixtureOptions = {}) => ({
+  head: { ref: branch, repo: repo === null ? null : { full_name: repo } },
+  base: { ref: base },
+});
+
+describe("the complete removal proposal inventory", () => {
+  test("pagination retains only exact repository reserved branches and deduplicates across pages", async () => {
+    const otherKey = "a".repeat(24);
+    const otherBranch = `chore/dated-waiver-${otherKey}`;
+    const pages = [
+      [
+        proposalFixture(),
+        proposalFixture(),
+        ...Array.from({ length: 98 }, (_, index) =>
+          proposalFixture({ branch: `feature-${index}` }),
+        ),
+      ],
+      [
+        proposalFixture(),
+        proposalFixture({ branch: otherBranch }),
+        proposalFixture({ repo: "other/repo" }),
+        proposalFixture({ repo: null }),
+        proposalFixture({ base: "release" }),
+        proposalFixture({ branch: "chore/dated-waiver-abc" }),
+        proposalFixture({ branch: `chore/dated-waiver-${"A".repeat(24)}` }),
+        proposalFixture({ branch: `${otherBranch}-next` }),
+      ],
+    ];
+    const reads: number[] = [];
+    const proposals = await listRemovalProposals({
+      repo: "stella/stella",
+      request: async (args, input) => {
+        expect(input).toBeUndefined();
+        expect(args.at(0)).toBe(`${API}/pulls`);
+        expect(args).toContain("GET");
+        expect(args).toContain("state=open");
+        expect(args).toContain("base=main");
+        expect(args).toContain("per_page=100");
+        const page = Number(
+          args.find((arg) => arg.startsWith("page="))?.slice("page=".length),
+        );
+        reads.push(page);
+        const pulls = pages.at(page - 1);
+        if (!pulls) {
+          throw new TypeError("Unexpected proposal page");
+        }
+        return pulls;
+      },
+    });
+    expect(reads).toEqual([1, 2]);
+    expect(proposals).toEqual([
+      { branch: BRANCH, key: BRANCH.slice("chore/dated-waiver-".length) },
+      { branch: otherBranch, key: otherKey },
+    ]);
+  });
+
+  test("invalid repository scope refuses reads and malformed metadata is rejected", async () => {
+    let reads = 0;
+    expect(
+      await rejectionOf(
+        listRemovalProposals({
+          repo: "other/repo",
+          request: async () => {
+            reads++;
+            return [];
+          },
+        }),
+      ),
+    ).toMatchObject({
+      message: expect.stringContaining("requires stella/stella"),
+    });
+    expect(reads).toBe(0);
+    for (const malformed of [
+      { head: { ref: 42, repo: null }, base: { ref: "main" } },
+      { head: { ref: BRANCH, repo: { full_name: 42 } }, base: { ref: "main" } },
+      { head: { ref: BRANCH, repo: null }, base: { ref: 42 } },
+    ]) {
+      expect(
+        await rejectionOf(
+          listRemovalProposals({
+            repo: "stella/stella",
+            request: async () => [malformed],
+          }),
+        ),
+      ).toMatchObject({ name: "ValiError" });
+    }
+  });
+
+  test("orphan detection retains every owner entry including future and expired deadlines", () => {
+    const owner = {
+      source: FILE,
+      line: 1,
+      id: "present",
+      kind: "release-age-exclusion",
+      expiresAt: "2026-10-15T00:00:00.000Z",
+      probe: { command: ["bun", "probe"], attempts: 3 },
+    } as const satisfies DatedWaiver;
+    const inventory = [
+      owner,
+      { ...owner, id: "future", expiresAt: "2030-10-15T00:00:00.000Z" },
+      { ...owner, id: "expired", expiresAt: "2020-10-15T00:00:00.000Z" },
+    ] as const satisfies readonly DatedWaiver[];
+    const retained = inventory.map((entry) => ({
+      branch: `chore/dated-waiver-${waiverKey(entry)}`,
+      key: waiverKey(entry),
+    }));
+    const missingKey = waiverKey({ ...owner, id: "removed" });
+    const orphan = {
+      branch: `chore/dated-waiver-${missingKey}`,
+      key: missingKey,
+    };
+    const proposals = [...retained, orphan];
+    expect(orphanRemovalProposals(inventory, proposals)).toEqual([orphan]);
+    expect(orphanRemovalProposals([], proposals)).toEqual(proposals);
+    expect(orphanRemovalProposals(inventory, retained)).toEqual([]);
+  });
+});
 
 describe("dated waiver removal publication", () => {
   test("a proposal with additional content is rebuilt from the probe base before arming", async () => {

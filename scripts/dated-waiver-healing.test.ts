@@ -41,7 +41,11 @@ import {
   PROBE_PHASE_BUDGET_MS,
   runWaiverProbe,
 } from "./dated-waiver-probes";
-import { retireRemoval } from "./dated-waiver-publish";
+import {
+  listRemovalProposals,
+  orphanRemovalProposals,
+  retireRemoval,
+} from "./dated-waiver-publish";
 import {
   collectWaivers,
   dueWaivers,
@@ -913,9 +917,11 @@ const proposalLifecycle = async (owner: DatedWaiver = lifecycleOwner) => {
   ): Promise<unknown> => {
     const endpoint = args.at(0);
     if (endpoint === "repos/stella/stella/pulls" && input === undefined) {
-      expect(args).toContain(
-        `head=stella:chore/dated-waiver-${waiverKey(owner)}`,
-      );
+      if (args.some((arg) => arg.startsWith("head="))) {
+        expect(args).toContain(
+          `head=stella:chore/dated-waiver-${waiverKey(owner)}`,
+        );
+      }
       if (!proposal) {
         return [];
       }
@@ -925,7 +931,15 @@ const proposalLifecycle = async (owner: DatedWaiver = lifecycleOwner) => {
         case "armed":
         case "unarmed":
           return [
-            { ...proposal, title: "chore: remove verified dated waiver" },
+            {
+              ...proposal,
+              title: "chore: remove verified dated waiver",
+              base: { ref: "main" },
+              head: {
+                ref: `chore/dated-waiver-${waiverKey(owner)}`,
+                repo: { full_name: "stella/stella" },
+              },
+            },
           ];
         default:
           proposal.status satisfies never;
@@ -949,6 +963,25 @@ const proposalLifecycle = async (owner: DatedWaiver = lifecycleOwner) => {
     }
     throw new TypeError(`Unexpected proposal fixture endpoint: ${endpoint}`);
   };
+  const retireBranch = async (branch: string) =>
+    retireRemoval({
+      branch,
+      repo: "stella/stella",
+      request,
+      disarm: async (number) =>
+        disarmRemovalThroughBar(number, async (pr, mode) => {
+          expect(mode).toBe("disarm");
+          if (!proposal) {
+            throw new TypeError("Proposal fixture missing");
+          }
+          expect(pr).toBe(proposal.number);
+          effects.push("disarm");
+          if (disarmExit === 0) {
+            proposal.status = "unarmed";
+          }
+          return disarmExit;
+        }),
+    });
   const actions = {
     ...sink,
     openRemoval: async () => {
@@ -975,24 +1008,7 @@ const proposalLifecycle = async (owner: DatedWaiver = lifecycleOwner) => {
       });
     },
     retireRemoval: async (waiver: DatedWaiver) =>
-      retireRemoval({
-        branch: `chore/dated-waiver-${waiverKey(waiver)}`,
-        repo: "stella/stella",
-        request,
-        disarm: async (number) =>
-          disarmRemovalThroughBar(number, async (pr, mode) => {
-            expect(mode).toBe("disarm");
-            if (!proposal) {
-              throw new TypeError("Proposal fixture missing");
-            }
-            expect(pr).toBe(proposal.number);
-            effects.push("disarm");
-            if (disarmExit === 0) {
-              proposal.status = "unarmed";
-            }
-            return disarmExit;
-          }),
-      }),
+      retireBranch(`chore/dated-waiver-${waiverKey(waiver)}`),
   };
   const run = async (status: "green" | "red", proof: FixEvidence = evidence) =>
     applyHealing({
@@ -1013,11 +1029,174 @@ const proposalLifecycle = async (owner: DatedWaiver = lifecycleOwner) => {
     actions,
     run,
     proposal: () => proposal,
+    reconciliation: (inventory: readonly DatedWaiver[]) => ({
+      discover: async () =>
+        orphanRemovalProposals(
+          inventory,
+          await listRemovalProposals({ repo: "stella/stella", request }),
+        ),
+      retire: async ({ branch }: { branch: string }) => retireBranch(branch),
+    }),
     refuseDisarm: (exit: number) => {
       disarmExit = exit;
     },
   };
 };
+
+test("a removal proposal is retired when another change removes its waiver", async () => {
+  const healing = await proposalLifecycle();
+  await healing.run("green");
+  expect(healing.proposal()?.status).toBe("armed");
+  const empty = {
+    sha: "next-main",
+    observedAt: evidence.observedAt,
+    entries: [],
+    failures: [],
+  };
+  const reconciliation = healing.reconciliation([]);
+  const orphans = await reconciliation.discover();
+  expect(orphans).toEqual([
+    {
+      branch: `chore/dated-waiver-${waiverKey(lifecycleOwner)}`,
+      key: waiverKey(lifecycleOwner),
+    },
+  ]);
+  expect(healingWriteNeeded(empty, orphans)).toBe(true);
+  await applyHealing({
+    report: empty,
+    actions: healing.actions,
+    now: new Date(evidence.observedAt),
+    reconciliation,
+  });
+  expect(healing.effects).toEqual(["publish", "arm", "disarm", "close"]);
+  expect(healing.proposal()?.status).toBe("closed");
+  expect(healing.proposal()?.body).toEndWith(
+    "This dated maintenance proposal is superseded.",
+  );
+  expect(healing.fake.tasks).toEqual([]);
+  expect(await reconciliation.discover()).toEqual([]);
+  expect(healingWriteNeeded(empty, await reconciliation.discover())).toBe(
+    false,
+  );
+  await applyHealing({
+    report: empty,
+    actions: healing.actions,
+    now: new Date(evidence.observedAt),
+    reconciliation,
+  });
+  expect(healing.effects).toEqual(["publish", "arm", "disarm", "close"]);
+});
+
+test("orphan retirement refusals join the run failure and leave a recoverable proposal", async () => {
+  const healing = await proposalLifecycle();
+  await healing.run("green");
+  healing.refuseDisarm(1);
+  const error = await rejectionOf(
+    applyHealing({
+      report: {
+        sha: "next-main",
+        observedAt: evidence.observedAt,
+        entries: [],
+        failures: [],
+      },
+      actions: healing.actions,
+      now: new Date(evidence.observedAt),
+      reconciliation: healing.reconciliation([]),
+    }),
+  );
+  expect(error).toBeInstanceOf(HealingRunError);
+  expect(error).toMatchObject({
+    failures: [{ key: waiverKey(lifecycleOwner), stage: "retireRemoval" }],
+  });
+  expect(healing.proposal()?.status).toBe("armed");
+  expect(healing.effects).toEqual(["publish", "arm", "disarm"]);
+});
+
+test("proposal discovery failure is aggregated after red evidence publication", async () => {
+  const healing = scenario([]);
+  const error = await rejectionOf(
+    applyHealing({
+      report: {
+        sha: evidence.sha,
+        observedAt: evidence.observedAt,
+        entries: [{ entry, outcome: { ...green, status: "red" } }],
+        failures: [],
+      },
+      actions: healing.actions,
+      now: new Date(evidence.observedAt),
+      reconciliation: {
+        discover: async () => {
+          throw new TypeError("Fixture proposal discovery unavailable");
+        },
+        retire: async () => {
+          throw new TypeError("Unexpected retirement without discovery");
+        },
+      },
+    }),
+  );
+  expect(healing.effects).toContain("fix");
+  expect(error).toBeInstanceOf(HealingRunError);
+  expect(error).toMatchObject({
+    failures: [{ key: "evidence-0", stage: "evidence" }],
+  });
+});
+
+test("every subset of orphan retirement failures preserves all red tasks and attempts all retirements", async () => {
+  const proposals = Array.from({ length: 4 }, (_, index) => {
+    const key = index.toString(16).padStart(24, "0");
+    return { key, branch: `chore/dated-waiver-${key}` };
+  });
+  for (let subset = 0; subset < 16; subset++) {
+    const healing = scenario([]);
+    const attempted: string[] = [];
+    const completed = await runHealingBoundary(async () =>
+      applyHealing({
+        report: {
+          sha: evidence.sha,
+          observedAt: evidence.observedAt,
+          entries: [entry, { ...entry, id: "another-fixture" }].map(
+            (owner) => ({
+              entry: owner,
+              outcome: { ...green, status: "red" as const },
+            }),
+          ),
+          failures: [],
+        },
+        actions: healing.actions,
+        now: new Date(evidence.observedAt),
+        reconciliation: {
+          discover: async () => proposals,
+          retire: async ({ key }) => {
+            attempted.push(key);
+            const index = proposals.findIndex(
+              (proposal) => proposal.key === key,
+            );
+            if (Math.floor(subset / 2 ** index) % 2 === 1) {
+              throw new TypeError("Fixture retirement unavailable");
+            }
+          },
+        },
+      }),
+    );
+    expect(attempted).toEqual(proposals.map(({ key }) => key));
+    expect(healing.effects.filter((effect) => effect === "fix")).toHaveLength(
+      2,
+    );
+    if (subset === 0) {
+      expect(completed).toEqual({ status: "complete", exitCode: 0 });
+    } else {
+      expect(completed.status).toBe("failed");
+      if (completed.status === "failed") {
+        expect(JSON.parse(completed.output)).toEqual({
+          signal: "dated-waiver-failed",
+          failures: proposals
+            .filter((_, index) => Math.floor(subset / 2 ** index) % 2 === 1)
+            .map(({ key }) => ({ key, stage: "retireRemoval" })),
+        });
+      }
+    }
+  }
+});
 
 test("shifted exceptions reconcile their failed task and armed proposal before accepting recovery", async () => {
   const annotation = `# release-age-quarantine-exception: ${entry.expiresAt}`;
