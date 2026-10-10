@@ -515,6 +515,92 @@ const persistNativeInterruptTurn = async (
 };
 
 describe("snapshot tool-result reconciliation", () => {
+  const olderHistory = [
+    {
+      id: "older-user",
+      role: "user",
+      parts: [{ type: "text", content: "Earlier question" }],
+    },
+    {
+      id: "older-assistant",
+      role: "assistant",
+      parts: [{ type: "text", content: "Earlier answer" }],
+    },
+  ] satisfies ChatMessage[];
+  for (const historyLength of [0, 1, 2]) {
+    test(`history-only snapshots retain the streamed response with ${String(historyLength)} older messages`, async () => {
+      const history = olderHistory.slice(0, historyLength);
+      const snapshot = buildEngineSnapshot(history);
+      const { emitted, finish } = await persistNativeInterruptTurn(
+        streamChunks([
+          {
+            type: EventType.RUN_STARTED,
+            runId: "history-run",
+            threadId: "history-thread",
+          },
+          {
+            type: EventType.TEXT_MESSAGE_START,
+            messageId: "current-assistant",
+            role: "assistant",
+          },
+          {
+            type: EventType.TEXT_MESSAGE_CONTENT,
+            messageId: "current-assistant",
+            delta: "Current answer",
+          },
+          snapshot,
+          snapshot,
+          {
+            type: EventType.TEXT_MESSAGE_CONTENT,
+            messageId: "current-assistant",
+            delta: " continues.",
+          },
+          {
+            type: EventType.RUN_FINISHED,
+            runId: "history-run",
+            threadId: "history-thread",
+            finishReason: "stop",
+          },
+        ]),
+        { ...uncutTurnSignals(), initialMessages: history },
+      );
+      if (finish === null) {
+        panic("History-only snapshot did not persist its turn");
+      }
+      const client = new StreamProcessor();
+      let snapshots = 0;
+      for (const chunk of emitted) {
+        client.processChunk(chunk);
+        if (chunk.type !== EventType.MESSAGES_SNAPSHOT) {
+          continue;
+        }
+        snapshots += 1;
+        expect(
+          client
+            .getMessages()
+            .find(({ id }) => id === finish.responseMessage.id)?.parts,
+        ).toMatchObject([{ type: "text", content: "Current answer" }]);
+      }
+      expect(snapshots).toBe(2);
+      expect(finish.responseMessage.parts).toMatchObject([
+        { type: "text", content: "Current answer continues." },
+      ]);
+      const reload = chatMessageFromPersisted({
+        id: finish.responseMessage.id,
+        role: finish.responseMessage.role,
+        content: structuredClone(
+          chatMessageContentFromMessage(finish.responseMessage),
+        ),
+      });
+      expect(
+        diffLiveAgainstReload({
+          live: client.getMessages(),
+          reload: [...history, reload],
+        }),
+      ).toEqual([]);
+    });
+  }
+
   const canonicalResults = {
     streaming: {
       type: "tool-result",

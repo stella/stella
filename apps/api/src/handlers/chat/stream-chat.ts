@@ -2411,17 +2411,33 @@ const processPersistenceChunk = ({
     return { type: "deferred" };
   }
   if (chunk.type === EventType.MESSAGES_SNAPSHOT) {
+    const previous = processor
+      .getMessages()
+      .find(({ id }) => id === responseMessageId);
+    // History-only snapshots must preserve the in-flight response on both
+    // processors. Feed its streamed parts through the same reconciliation
+    // path as a snapshot that already includes this turn.
+    if (
+      previous?.role === "assistant" &&
+      !chunk.messages.some(
+        ({ id, role }) => id === responseMessageId && role === "assistant",
+      )
+    ) {
+      chunk = {
+        ...chunk,
+        messages: [
+          ...chunk.messages,
+          { ...previous, role: "assistant", content: "" },
+        ],
+      };
+    }
     // A snapshot can carry resumed results without corresponding deltas.
-    // Only reconcile one that includes this turn; a snapshot omitting it
-    // cannot erase already streamed content or reactivate an older turn.
+    // Only a snapshot with this turn can reactivate the owning response.
     if (
       chunk.messages.some(
         ({ id, role }) => id === responseMessageId && role === "assistant",
       )
     ) {
-      const previous = processor
-        .getMessages()
-        .find(({ id }) => id === responseMessageId);
       processor.processChunk(chunk);
       const snapshot = processor
         .getMessages()
@@ -2547,8 +2563,14 @@ const processPersistenceChunk = ({
         processor.processChunk(chunk);
       }
       // Snapshots reset run state; the deferred finish still needs the
-      // owning assistant active to capture the complete turn.
-      processor.processChunk(assistantMessageStartChunk(responseMessageId));
+      // owning assistant active to capture the complete turn. An empty delta
+      // resumes the SDK's accumulator from the retained parts; START would
+      // create an empty accumulator that truncates the next text delta.
+      processor.processChunk({
+        type: EventType.TEXT_MESSAGE_CONTENT,
+        messageId: responseMessageId,
+        delta: "",
+      });
     }
   } else {
     processor.processChunk(chunk);
