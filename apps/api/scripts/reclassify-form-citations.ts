@@ -117,7 +117,7 @@ const main = async () => {
     }
     default: {
       args satisfies never;
-      return panic("Unhandled form repair command mode");
+      panic("Unhandled form repair command mode");
     }
   }
 };

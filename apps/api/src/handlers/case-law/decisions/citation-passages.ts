@@ -289,7 +289,7 @@ const readDecisionTextByDecision = async (
         const read = await Result.tryPromise(
           async () =>
             await readDecisionAnalysisAst(
-              { ...pointer, documentAst: row?.documentAst ?? null },
+              { ...pointer, documentAst: row.documentAst ?? null },
               readCorpusTombstones,
             ),
         );
@@ -299,12 +299,12 @@ const readDecisionTextByDecision = async (
           });
           return {
             id: pointer.id,
-            text: { ast: null, sections: row?.sections ?? null },
+            text: { ast: null, sections: row.sections ?? null },
           };
         }
         return {
           id: pointer.id,
-          text: { ast: read.value, sections: row?.sections ?? null },
+          text: { ast: read.value, sections: row.sections ?? null },
         };
       }),
     );
@@ -455,7 +455,7 @@ export const completeDecisionCitations = async ({
       citationText: textWithheldReason === null ? item.citationText : null,
       textWithheldReason,
       passage:
-        textWithheldReason !== null || text === undefined || text.ast === null
+        textWithheldReason !== null || !text?.ast
           ? null
           : citationPassageIn({
               ast: text.ast,

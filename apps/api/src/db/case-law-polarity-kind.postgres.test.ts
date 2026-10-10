@@ -75,7 +75,7 @@ describe.skipIf(!enabled)("persisted polarity rule kinds", () => {
         expect(
           constraints.filter((constraint) => constraint.convalidated === true)
             .length,
-        ).toBe(2);
+        ).toBe(0);
         expect(
           constraints
             .filter((constraint) => constraint.convalidated === false)
@@ -86,6 +86,8 @@ describe.skipIf(!enabled)("persisted polarity rule kinds", () => {
           "citations_polarity_confidence_bounds",
           "citations_polarity_source_values",
           "citations_polarity_window_bounds",
+          "polarity_rules_form_neutral",
+          "polarity_rules_kind_values",
         ]);
         for (const statement of validationMigration.split(
           "--> statement-breakpoint",

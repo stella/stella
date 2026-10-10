@@ -89,8 +89,6 @@ ALTER TABLE "case_law_polarity_rules" ALTER COLUMN "kind" DROP DEFAULT;--> state
 ALTER TABLE "case_law_polarity_rules"
   ADD CONSTRAINT "polarity_rules_kind_values" CHECK ("kind" IN ('stance', 'form')) NOT VALID,
   ADD CONSTRAINT "polarity_rules_form_neutral" CHECK ("kind" <> 'form' OR "polarity" = 'neutral') NOT VALID;--> statement-breakpoint
-ALTER TABLE "case_law_polarity_rules" VALIDATE CONSTRAINT "polarity_rules_kind_values";--> statement-breakpoint
-ALTER TABLE "case_law_polarity_rules" VALIDATE CONSTRAINT "polarity_rules_form_neutral";--> statement-breakpoint
 
 ALTER TABLE "case_law_citations"
   ADD COLUMN "polarity_source" text,
