@@ -506,6 +506,11 @@ type StatusConsumptionContext = Omit<NegationContext, "groups"> & {
   readonly end: number;
 };
 
+// The first operator at or after `from`; redirections between a group and a
+// pipe are words, so they do not hide the pipe.
+const followingOperator = (tokens: readonly Token[], from: number) =>
+  tokens.slice(from).find((token) => token.type === "operator");
+
 const statusConsumed = ({
   file,
   tokens,
@@ -566,7 +571,7 @@ const statusConsumed = ({
     tokens[tail]?.value !== enclosingGroup.close ||
     // Without pipefail a pipeline returns its last command's status, so a
     // group that feeds a pipe hands nothing on.
-    isOperator(tokens[tail + 1], PIPES)
+    isOperator(followingOperator(tokens, tail + 1), PIPES)
   ) {
     return false;
   }

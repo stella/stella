@@ -496,6 +496,18 @@ test("a group that feeds a pipe does not pass its status on", () => {
     check("scripts/group-pipe.sh", "if ( ! grep -q x file ) | cat; then :; fi"),
   ).toHaveLength(1);
   expect(
+    check(
+      "scripts/group-redirect-pipe.sh",
+      "if ( ! grep -q x file ) 2>/dev/null | cat; then :; fi",
+    ),
+  ).toHaveLength(1);
+  expect(
+    check(
+      "scripts/group-redirect.sh",
+      "if ( ! grep -q x file ) 2>/dev/null; then :; fi",
+    ),
+  ).toEqual([]);
+  expect(
     check("scripts/group-last.sh", "if cat | ( ! grep -q x file ); then :; fi"),
   ).toEqual([]);
 });
