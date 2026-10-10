@@ -14,6 +14,7 @@ import type {
   StreamChunk,
   TokenUsage,
   ToolCallPart,
+  ToolResultPart,
   UIMessage,
 } from "@tanstack/ai";
 import { createOpenaiChat } from "@tanstack/ai-openai";
@@ -104,6 +105,7 @@ import {
   buildWireSnapshot,
   unsafeFixture,
 } from "@/api/tests/helpers/chat-fixtures";
+import { diffLiveAgainstReload } from "@/api/tests/helpers/chat-live-reload-invariants";
 import { memberDocumentWriteAccess } from "@/api/tests/helpers/document-write-access";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -136,6 +138,7 @@ import {
   remapOutgoingMessageIds,
 } from "./stream-message-identity";
 import type { MessageIdMapper, StoredHistory } from "./stream-message-identity";
+import type { TANSTACK_TOOL_RESULT_STATE_LIFECYCLE } from "./tanstack-chat-lifecycle";
 
 /** A run whose history the engine holds exactly as stored. */
 const NOTHING_REWRITTEN: StoredHistory = {
@@ -510,6 +513,175 @@ const persistNativeInterruptTurn = async (
   }
   return { emitted, finish: terminal.finish, source };
 };
+
+describe("snapshot tool-result reconciliation", () => {
+  const canonicalResults = {
+    streaming: {
+      type: "tool-result",
+      toolCallId: "snapshot-call",
+      state: "streaming",
+      content: "Canonical partial result",
+    },
+    complete: {
+      type: "tool-result",
+      toolCallId: "snapshot-call",
+      state: "complete",
+      content: "Canonical completed result",
+    },
+    error: {
+      type: "tool-result",
+      toolCallId: "snapshot-call",
+      state: "error",
+      content: "Canonical denied result",
+      error: "The user declined the call",
+      outcome: "denied",
+    },
+  } as const satisfies Record<
+    keyof typeof TANSTACK_TOOL_RESULT_STATE_LIFECYCLE,
+    ToolResultPart
+  >;
+  const results = Object.values(canonicalResults);
+  const previousResults = [...results, undefined];
+  for (const previous of previousResults) {
+    for (const next of results) {
+      test(`selects the more final result for ${previous?.state ?? "absent"} followed by ${next.state}`, async () => {
+        const incoming = {
+          ...next,
+          content: `Snapshot ${next.state} result`,
+        };
+        const expected =
+          previous === undefined ||
+          (previous.state === "streaming" &&
+            (incoming.state === "complete" || incoming.state === "error"))
+            ? incoming
+            : previous;
+        const toolCall = {
+          type: "tool-call",
+          id: "snapshot-call",
+          name: "lookup",
+          arguments: "{}",
+          input: {},
+          state: "input-complete",
+        } as const satisfies ToolCallPart;
+        const initial = {
+          id: "snapshot-assistant",
+          role: "assistant",
+          parts: [toolCall, ...(previous === undefined ? [] : [previous])],
+        } satisfies UIMessage;
+        const updated = {
+          id: initial.id,
+          role: "assistant",
+          parts: [
+            {
+              ...toolCall,
+              state: next.state === "streaming" ? "input-complete" : next.state,
+            },
+            incoming,
+          ],
+        } satisfies UIMessage;
+        const { emitted, finish } = await persistNativeInterruptTurn(
+          streamChunks([
+            {
+              type: EventType.RUN_STARTED,
+              runId: "snapshot-run",
+              threadId: "snapshot-thread",
+            },
+            {
+              type: EventType.TEXT_MESSAGE_START,
+              messageId: initial.id,
+              role: "assistant",
+            },
+            {
+              type: EventType.TEXT_MESSAGE_CONTENT,
+              messageId: initial.id,
+              delta: "Checking the result.",
+            },
+            unsafeFixture(
+              "Exhaustive result-state matrix preserves the server's UI-parts snapshot extension without model-history conversion",
+              {
+                type: EventType.MESSAGES_SNAPSHOT,
+                messages: [initial],
+              } satisfies StreamChunk,
+            ),
+            unsafeFixture(
+              "Exhaustive result-state matrix preserves the server's UI-parts snapshot extension without model-history conversion",
+              {
+                type: EventType.MESSAGES_SNAPSHOT,
+                messages: [updated],
+              } satisfies StreamChunk,
+            ),
+            {
+              type: EventType.RUN_FINISHED,
+              runId: "snapshot-run",
+              threadId: "snapshot-thread",
+              finishReason: "stop",
+            },
+          ]),
+        );
+        if (finish === null) {
+          panic("Snapshot reconciliation did not persist its turn");
+        }
+        const client = new StreamProcessor();
+        let snapshots = 0;
+        for (const chunk of emitted) {
+          client.processChunk(chunk);
+          if (chunk.type !== EventType.MESSAGES_SNAPSHOT) {
+            continue;
+          }
+          snapshots += 1;
+          const visibleResults = client
+            .getMessages()
+            .flatMap(({ parts }) =>
+              parts.filter((part) => part.type === "tool-result"),
+            );
+          const initialResults = previous === undefined ? [] : [previous];
+          const expectedResults = snapshots === 1 ? initialResults : [expected];
+          expect(visibleResults).toHaveLength(expectedResults.length);
+          expect(visibleResults).toMatchObject(expectedResults);
+          if (snapshots === 2 && expected.state !== "streaming") {
+            const visibleCalls = client
+              .getMessages()
+              .flatMap(({ parts }) =>
+                parts.filter((part) => part.type === "tool-call"),
+              );
+            expect(visibleCalls).toMatchObject([
+              { id: toolCall.id, state: expected.state },
+            ]);
+            if (previous?.state === "streaming" && next.state !== "streaming") {
+              expect(visibleCalls).toMatchObject([
+                { id: toolCall.id, output: incoming.content },
+              ]);
+            }
+          }
+        }
+        expect(snapshots).toBe(2);
+        const storedResults = finish.responseMessage.parts.filter(
+          (part) => part.type === "tool-result",
+        );
+        expect(storedResults).toHaveLength(1);
+        expect(storedResults).toMatchObject([expected]);
+        expect(
+          finish.responseMessage.parts.filter(
+            (part) => part.type === "tool-call",
+          ),
+        ).toHaveLength(1);
+        const reload = chatMessageFromPersisted({
+          id: finish.responseMessage.id,
+          role: finish.responseMessage.role,
+          content: structuredClone(
+            chatMessageContentFromMessage(finish.responseMessage),
+          ),
+        });
+        expect(
+          diffLiveAgainstReload({
+            live: client.getMessages(),
+            reload: [reload],
+          }),
+        ).toEqual([]);
+      });
+    }
+  }
+});
 
 test("transient visual preview reaches the in-turn model but not wire, persistence or reload", async () => {
   const preview = {

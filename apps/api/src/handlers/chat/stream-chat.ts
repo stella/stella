@@ -108,6 +108,7 @@ import type {
 } from "@/api/handlers/chat/stream-message-identity";
 import {
   createTanStackTerminalHooks,
+  TANSTACK_TOOL_RESULT_STATE_LIFECYCLE,
   tanStackStreamEventLifecycle,
 } from "@/api/handlers/chat/tanstack-chat-lifecycle";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
@@ -2375,20 +2376,62 @@ const processPersistenceChunk = ({
           };
         });
         for (const part of snapshot.parts) {
-          if (
-            (part.type === "tool-call" &&
+          if (part.type === "tool-call") {
+            if (
               !parts.some(
                 (existing) =>
                   existing.type === "tool-call" && existing.id === part.id,
-              )) ||
-            (part.type === "tool-result" &&
-              !parts.some(
-                (existing) =>
-                  existing.type === "tool-result" &&
-                  existing.toolCallId === part.toolCallId,
-              ))
-          ) {
+              )
+            ) {
+              parts.push(part);
+            }
+            continue;
+          }
+          if (part.type !== "tool-result") {
+            continue;
+          }
+          const existingIndex = parts.findIndex(
+            (existing) =>
+              existing.type === "tool-result" &&
+              existing.toolCallId === part.toolCallId,
+          );
+          if (existingIndex === -1) {
             parts.push(part);
+            continue;
+          }
+          const existing = parts.at(existingIndex);
+          if (existing?.type !== "tool-result") {
+            panic("A matching snapshot result has no streamed tool result");
+          }
+          // Advance partial results, but retain canonical content and denied
+          // outcomes when both versions have the same lifecycle finality.
+          if (
+            TANSTACK_TOOL_RESULT_STATE_LIFECYCLE[existing.state] === "active" &&
+            TANSTACK_TOOL_RESULT_STATE_LIFECYCLE[part.state] === "settled"
+          ) {
+            parts[existingIndex] = part;
+            if (part.state === "streaming") {
+              panic("A promoted snapshot result is still streaming");
+            }
+            const callIndex = parts.findIndex(
+              (candidate) =>
+                candidate.type === "tool-call" &&
+                candidate.id === part.toolCallId,
+            );
+            const call = callIndex === -1 ? undefined : parts.at(callIndex);
+            if (call?.type !== "tool-call") {
+              panic("A promoted snapshot result has no tool call");
+            }
+            // The SDK can preserve a partial output on an already-complete call.
+            // Publish the promoted result and its call as one terminal version.
+            parts[callIndex] = {
+              ...call,
+              state: part.state,
+              output:
+                typeof part.content === "string"
+                  ? parseToolResultContent(part.content).value
+                  : part.content,
+            };
           }
         }
         chunk = {
