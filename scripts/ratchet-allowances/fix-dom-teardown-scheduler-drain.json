@@ -1,0 +1,5 @@
+{
+  "metric": "web-lib-top-level-entries",
+  "delta": 1,
+  "reason": "react-scheduler-drain.ts owns draining React's scheduler queue, shared by every web DOM test teardown; no existing lib subfolder covers React runtime utilities, and a test-support location would make it unclassifiable as a test subject."
+}
