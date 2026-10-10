@@ -55,7 +55,7 @@ describe("form-derived citation repair", () => {
         expect(planned.status).toBe(
           polarity === POLARITY.NEUTRAL ? "retained" : "repair",
         );
-        if (planned.status === "repair") {
+        if (planned.status === "repair" && polarity !== POLARITY.NEUTRAL) {
           expect(planned.row.oldPolarity).toBe(polarity);
           expect(planned.row.newPolarity).toBe(POLARITY.NEUTRAL);
         }

@@ -13,7 +13,7 @@ import { compileRules } from "./rule-engine";
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
-describe.skipIf(!databaseUrl || !enabled)(
+describe.skipIf(!enabled)(
   "form repair preview and compare-and-swap on Postgres",
   () => {
     test("repairs only unchanged neutral rereadings of unreviewed form-derived rows", async () => {

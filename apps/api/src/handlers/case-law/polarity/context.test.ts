@@ -126,12 +126,16 @@ describe("the windows around a citation", () => {
     expect(excerpt.slice(0, 10)).toBe(
       sections
         .at(1)
-        ?.text.slice(start - sectionOffset, start - sectionOffset + 10),
+        ?.text.slice(start - sectionOffset, start - sectionOffset + 10) ??
+        "missing",
     );
     expect(excerpt.match(/CIT/gu)).toHaveLength(2);
     expect(excerpt.endsWith("CIT konec.")).toBe(true);
-    expect(
-      excerpt.normalize("NFC").startsWith(windows?.contexts[0] ?? "missing"),
-    ).toBe(true);
+    // Normalize after slicing: the next combining mark outside the first
+    // window can compose its final character in the larger evidence span.
+    const firstWindowEnd = excerpt.indexOf("CIT") + "CIT".length + 200;
+    expect(excerpt.slice(0, firstWindowEnd).normalize("NFC")).toBe(
+      windows?.contexts[0] ?? "missing",
+    );
   });
 });

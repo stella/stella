@@ -122,7 +122,7 @@ describe("the excerpt a citation travels with", () => {
 describe("stored polarity evidence windows", () => {
   test("slice the original joined sections across Unicode and section boundaries", () => {
     assertProperty(
-      "case-law polarity evidence preserves original joined-section offsets",
+      "slice the original joined sections across Unicode and section boundaries",
       fc.property(
         fc.array(
           fc
@@ -197,7 +197,7 @@ test("widely separated polarity mentions return bounded evidence with an explici
 
 test("every long evidence window stays bounded and preserves both recorded ends", () => {
   assertProperty(
-    "case-law long polarity evidence excerpts remain bounded",
+    "every long evidence window stays bounded and preserves both recorded ends",
     fc.property(
       fc.integer({
         min: LIMITS.caseLawCitationPassageChars + 1,

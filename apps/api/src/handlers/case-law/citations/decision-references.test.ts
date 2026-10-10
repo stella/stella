@@ -160,7 +160,7 @@ test.each(vectors.map((vector) => [vector.name, vector] as const))(
         return row;
       },
     );
-    expect(recordedRows).toEqual(vector.rows);
+    expect(vector.rows).toEqual(recordedRows);
   },
 );
 

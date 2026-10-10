@@ -1778,6 +1778,13 @@ const CONTRACT_CORPUS = {
               {
                 id: toSafeId<"caseLawCitation">(uid(57)),
                 citationText: "22 Cdo 1000/2020",
+                citedPart: "not-stated",
+                polarityEvidence: {
+                  source: null,
+                  ruleId: null,
+                  classifierVersion: null,
+                  excerpt: null,
+                },
                 textWithheldReason: null,
                 sectionIndex: 1,
                 treatment: "positive",

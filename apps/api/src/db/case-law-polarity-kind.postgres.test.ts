@@ -30,137 +30,144 @@ test("the committed kind backfill is derived from every typed seed", () => {
   expect(migration).toContain(renderSeedRuleKindBackfill());
 });
 
-describe.skipIf(!databaseUrl || !enabled)(
-  "persisted polarity rule kinds",
-  () => {
-    test("backfills registered forms as neutral and unmatched rows as stance", async () => {
-      if (!databaseUrl) {
-        throw new TypeError("Postgres test requires DATABASE_URL");
-      }
-      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
-        const { sql } = openClient();
-        await sql.begin(async (tx) => {
-          await tx`CREATE TEMP TABLE deployed_polarity_rules
+describe.skipIf(!enabled)("persisted polarity rule kinds", () => {
+  test("backfills registered forms as neutral and unmatched rows as stance", async () => {
+    if (!databaseUrl) {
+      throw new TypeError("Postgres test requires DATABASE_URL");
+    }
+    await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+      const { sql } = openClient();
+      await sql.begin(async (tx) => {
+        await tx`CREATE TEMP TABLE deployed_polarity_rules
           (LIKE public.case_law_polarity_rules INCLUDING DEFAULTS INCLUDING CONSTRAINTS) ON COMMIT DROP`;
-          await tx`SAVEPOINT deployed_form_check`;
-          expect(
-            await rejectionOf(tx`INSERT INTO deployed_polarity_rules (id, pattern, language, kind, polarity)
+        await tx`SAVEPOINT deployed_form_check`;
+        expect(
+          await rejectionOf(tx`INSERT INTO deployed_polarity_rules (id, pattern, language, kind, polarity)
           VALUES (${Bun.randomUUIDv7()}::uuid, 'invalid-form', 'xx', 'form', 'supportive')`),
-          ).toHaveProperty("constraint", "polarity_rules_form_neutral");
-          await tx`ROLLBACK TO SAVEPOINT deployed_form_check`;
-          // Temporary relations isolate the rollout from the CI corpus tables.
-          await tx`CREATE TEMP TABLE case_law_polarity_rules (
+        ).toHaveProperty("constraint", "polarity_rules_form_neutral");
+        await tx`ROLLBACK TO SAVEPOINT deployed_form_check`;
+        // Temporary relations isolate the rollout from the CI corpus tables.
+        await tx`CREATE TEMP TABLE case_law_polarity_rules (
           pattern text NOT NULL, language text NOT NULL, polarity text NOT NULL
         ) ON COMMIT DROP`;
-          await tx`CREATE TEMP TABLE case_law_citations (id text) ON COMMIT DROP`;
-          const fixtures = JSON.stringify(
-            SEED_RULES.map((seed) => ({
-              pattern: seed.pattern,
-              language: seed.language,
-              polarity: "supportive",
-            })),
-          );
-          await tx`INSERT INTO case_law_polarity_rules (pattern, language, polarity)
+        await tx`CREATE TEMP TABLE case_law_citations (id text) ON COMMIT DROP`;
+        const fixtures = JSON.stringify(
+          SEED_RULES.map((seed) => ({
+            pattern: seed.pattern,
+            language: seed.language,
+            polarity: "supportive",
+          })),
+        );
+        await tx`INSERT INTO case_law_polarity_rules (pattern, language, polarity)
           SELECT pattern, language, polarity FROM jsonb_to_recordset(${fixtures}::text::jsonb)
           AS seeds(pattern text, language text, polarity text)`;
-          await tx`INSERT INTO case_law_polarity_rules VALUES
+        await tx`INSERT INTO case_law_polarity_rules VALUES
           ('unregistered-manual', 'xx', 'negative'), ('unregistered-model', 'xx', 'supportive')`;
-          for (const statement of migration.split("--> statement-breakpoint")) {
-            await tx.unsafe(statement);
-          }
-          const constraints =
-            await tx`SELECT conname, convalidated FROM pg_constraint
-          WHERE contype = 'c' AND conrelid IN ('pg_temp.case_law_polarity_rules'::regclass, 'pg_temp.case_law_citations'::regclass)`;
-          expect(constraints.length).toBe(6);
-          expect(
-            constraints.filter((constraint) => constraint.convalidated === true)
-              .length,
-          ).toBe(2);
-          expect(
-            constraints
-              .filter((constraint) => constraint.convalidated === false)
-              .map((constraint) => constraint.conname)
-              .toSorted(),
-          ).toEqual([
-            "citations_cited_part_values",
-            "citations_polarity_confidence_bounds",
-            "citations_polarity_source_values",
-            "citations_polarity_window_bounds",
-          ]);
-          for (const statement of validationMigration.split(
-            "--> statement-breakpoint",
-          )) {
-            await tx.unsafe(statement);
-          }
-          const validatedConstraints =
-            await tx`SELECT convalidated FROM pg_constraint
-          WHERE contype = 'c' AND conrelid IN ('pg_temp.case_law_polarity_rules'::regclass, 'pg_temp.case_law_citations'::regclass)`;
-          expect(validatedConstraints.length).toBe(6);
-          expect(
-            validatedConstraints.every(
-              (constraint) => constraint.convalidated === true,
-            ),
-          ).toBe(true);
-          const rows =
-            await tx`SELECT pattern, language, kind, polarity FROM case_law_polarity_rules ORDER BY pattern, language`;
-          for (const seed of SEED_RULES) {
-            const row = rows.find(
-              (candidate) =>
-                candidate.pattern === seed.pattern &&
-                candidate.language === seed.language,
-            );
-            expect(row).toMatchObject({
-              kind: seed.kind,
-              polarity:
-                seed.kind === POLARITY_RULE_KIND.FORM
-                  ? "neutral"
-                  : "supportive",
-            });
-          }
-          expect(rows.filter((row) => row.language === "xx")).toEqual([
-            {
-              pattern: "unregistered-manual",
-              language: "xx",
-              polarity: "negative",
-              kind: "stance",
-            },
-            {
-              pattern: "unregistered-model",
-              language: "xx",
-              polarity: "supportive",
-              kind: "stance",
-            },
-          ]);
-          for (const polarity of [
-            "positive",
-            "supportive",
-            "negative",
-            "mixed",
-            "unknown",
-          ]) {
-            await tx`SAVEPOINT rejected_form`;
-            expect(
-              await rejectionOf(tx`INSERT INTO case_law_polarity_rules (pattern, language, kind, polarity)
-            VALUES ('invalid-form', 'xx', 'form', ${polarity})`),
-            ).toHaveProperty("constraint", "polarity_rules_form_neutral");
-            await tx`ROLLBACK TO SAVEPOINT rejected_form`;
-          }
-          await tx`SAVEPOINT rejected_kind`;
+        for (const statement of migration.split("--> statement-breakpoint")) {
+          await tx.unsafe(statement);
+        }
+        const constraints = await tx.unsafe<
+          { conname: string; convalidated: boolean }[]
+        >(
+          "SELECT conname, convalidated FROM pg_constraint WHERE contype = 'c' AND conrelid IN ('pg_temp.case_law_polarity_rules'::regclass, 'pg_temp.case_law_citations'::regclass)",
+        );
+        expect(constraints.length).toBe(6);
+        expect(
+          constraints.filter((constraint) => constraint.convalidated === true)
+            .length,
+        ).toBe(2);
+        expect(
+          constraints
+            .filter((constraint) => constraint.convalidated === false)
+            .map((constraint) => constraint.conname)
+            .toSorted(),
+        ).toEqual([
+          "citations_cited_part_values",
+          "citations_polarity_confidence_bounds",
+          "citations_polarity_source_values",
+          "citations_polarity_window_bounds",
+        ]);
+        for (const statement of validationMigration.split(
+          "--> statement-breakpoint",
+        )) {
+          await tx.unsafe(statement);
+        }
+        const validatedConstraints = await tx.unsafe<
+          { convalidated: boolean }[]
+        >(
+          "SELECT convalidated FROM pg_constraint WHERE contype = 'c' AND conrelid IN ('pg_temp.case_law_polarity_rules'::regclass, 'pg_temp.case_law_citations'::regclass)",
+        );
+        expect(validatedConstraints.length).toBe(6);
+        expect(
+          validatedConstraints.every(
+            (constraint) => constraint.convalidated === true,
+          ),
+        ).toBe(true);
+        const rows = await tx.unsafe<
+          {
+            pattern: string;
+            language: string;
+            kind: string;
+            polarity: string;
+          }[]
+        >(
+          "SELECT pattern, language, kind, polarity FROM case_law_polarity_rules ORDER BY pattern, language",
+        );
+        for (const seed of SEED_RULES) {
+          const row = rows.find(
+            (candidate) =>
+              candidate.pattern === seed.pattern &&
+              candidate.language === seed.language,
+          );
+          expect(row).toMatchObject({
+            kind: seed.kind,
+            polarity:
+              seed.kind === POLARITY_RULE_KIND.FORM ? "neutral" : "supportive",
+          });
+        }
+        expect(rows.filter((row) => row.language === "xx")).toEqual([
+          {
+            pattern: "unregistered-manual",
+            language: "xx",
+            polarity: "negative",
+            kind: "stance",
+          },
+          {
+            pattern: "unregistered-model",
+            language: "xx",
+            polarity: "supportive",
+            kind: "stance",
+          },
+        ]);
+        for (const polarity of [
+          "positive",
+          "supportive",
+          "negative",
+          "mixed",
+          "unknown",
+        ]) {
+          await tx`SAVEPOINT rejected_form`;
           expect(
             await rejectionOf(tx`INSERT INTO case_law_polarity_rules (pattern, language, kind, polarity)
+            VALUES ('invalid-form', 'xx', 'form', ${polarity})`),
+          ).toHaveProperty("constraint", "polarity_rules_form_neutral");
+          await tx`ROLLBACK TO SAVEPOINT rejected_form`;
+        }
+        await tx`SAVEPOINT rejected_kind`;
+        expect(
+          await rejectionOf(tx`INSERT INTO case_law_polarity_rules (pattern, language, kind, polarity)
           VALUES ('invalid-kind', 'xx', 'other', 'neutral')`),
-          ).toHaveProperty("constraint", "polarity_rules_kind_values");
-          await tx`ROLLBACK TO SAVEPOINT rejected_kind`;
-          await tx`SAVEPOINT missing_kind`;
-          expect(
-            await rejectionOf(tx`INSERT INTO case_law_polarity_rules (pattern, language, polarity)
+        ).toHaveProperty("constraint", "polarity_rules_kind_values");
+        await tx`ROLLBACK TO SAVEPOINT rejected_kind`;
+        await tx`SAVEPOINT missing_kind`;
+        expect(
+          await rejectionOf(tx`INSERT INTO case_law_polarity_rules (pattern, language, polarity)
           VALUES ('missing-kind', 'xx', 'neutral')`),
-          ).toMatchObject({ code: "23502", column: "kind" });
-          await tx`ROLLBACK TO SAVEPOINT missing_kind`;
-          await tx`INSERT INTO case_law_polarity_rules (pattern, language, kind, polarity)
+        ).toMatchObject({ code: "23502", column: "kind" });
+        await tx`ROLLBACK TO SAVEPOINT missing_kind`;
+        await tx`INSERT INTO case_law_polarity_rules (pattern, language, kind, polarity)
           VALUES ('valid-form', 'xx', 'form', 'neutral'), ('valid-stance', 'xx', 'stance', 'supportive')`;
-        });
       });
     });
-  },
-);
+  });
+});
