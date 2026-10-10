@@ -260,7 +260,7 @@ test("a computed global hook configuration selects every shard", () => {
   try {
     write(
       "apps/web/e2e/playwright.config.ts",
-      'const hook = process.env.E2E_HOOK;\nexport default { testDir: "./specs", globalSetup: hook };\n',
+      'const hook = globalThis.e2eHookPath;\nexport default { testDir: "./specs", globalSetup: hook };\n',
     );
     expect(selectedE2ePlan(["apps/web/e2e/helpers/only-a.ts"], root)).toEqual({
       status: "full",
