@@ -9,6 +9,7 @@ import {
   test,
 } from "bun:test";
 import { eq } from "drizzle-orm";
+import * as v from "valibot";
 
 import { sleep } from "@stll/concurrency/sleep";
 
@@ -542,6 +543,71 @@ describe("reader answer turn lifecycle", () => {
     },
   );
 
+  test.each(["before-cas", "after-cas-audit"] as const)(
+    "a settlement crossing the deadline has one durable terminal event at %s",
+    async (phase) => {
+      setSystemTime(new Date(Date.now() - READER_ANSWER_DEADLINE_MS + 400));
+      const prepared = await create();
+      setSystemTime();
+      const actor = scope();
+      let transactionCalls = 0;
+      let settledTransactions = 0;
+      const audits: string[] = [];
+      const delayedDb: SafeDb = async (run, retry) => {
+        transactionCalls++;
+        if (phase === "before-cas" && transactionCalls === 1) {
+          await sleep(Math.max(0, prepared.deadlineAt + 100 - Date.now()));
+        }
+        const result = await actor.safeDb(run, retry);
+        settledTransactions++;
+        return result;
+      };
+      const result = await complete(prepared, {
+        safeDb: delayedDb,
+        recordAuditEvent: async (tx) => {
+          const saved = (
+            await tx
+              .select({ status: legalReaderAnswerMessages.status })
+              .from(legalReaderAnswerMessages)
+              .where(eq(legalReaderAnswerMessages.id, prepared.messageId))
+          ).at(0);
+          expect(saved).toBeDefined();
+          if (saved) {
+            audits.push(saved.status);
+          }
+          if (phase === "after-cas-audit") {
+            await sleep(Math.max(0, prepared.deadlineAt + 100 - Date.now()));
+          }
+        },
+      });
+      // Let the losing transaction and its callback finish after the response closes.
+      await sleep(Math.max(0, prepared.deadlineAt + 200 - Date.now()));
+      expect(transactionCalls).toBe(2);
+      expect(settledTransactions).toBe(2);
+      const expectedStatus = phase === "before-cas" ? "failed" : "complete";
+      expect(audits).toEqual([expectedStatus]);
+      const saved = await message(prepared);
+      expect(saved?.status).toBe(expectedStatus);
+      const events = result.text
+        .split("\n")
+        .filter((line) => line.startsWith("data: "))
+        .map((line) =>
+          v.parse(
+            v.object({ type: v.string(), content: v.optional(v.string()) }),
+            JSON.parse(line.slice(6)),
+          ),
+        );
+      const terminals = events.filter(
+        ({ type }) => type === "complete" || type === "failed",
+      );
+      expect(terminals).toHaveLength(1);
+      expect(terminals.at(0)).toMatchObject({
+        type: expectedStatus,
+        content: saved?.content,
+      });
+    },
+  );
+
   test("a reclaimed stream cannot settle or fail a newer regeneration claim", async () => {
     const first = await create();
     const staleAt = new Date("2000-01-01T00:00:00Z");
@@ -558,7 +624,8 @@ describe("reader answer turn lifecycle", () => {
     expect(regenerated.messageId).not.toBe(stale.messageId);
     expect(await message(stale)).toBeUndefined();
     const old = await complete(stale);
-    expect(old.text).toContain('"type":"failed"');
+    expect(old.text).not.toContain('"type":"failed"');
+    expect(old.text).not.toContain('"type":"complete"');
     expect(await message(regenerated)).toMatchObject({
       status: "streaming",
       content: "",

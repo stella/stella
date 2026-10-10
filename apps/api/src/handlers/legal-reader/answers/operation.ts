@@ -1,5 +1,5 @@
-import { Result } from "better-result";
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { panic, Result } from "better-result";
+import { and, asc, eq, getColumns, isNull } from "drizzle-orm";
 
 import { READER_ANSWER_MAX_MESSAGES } from "@stll/api-contract/reader-answers";
 import type {
@@ -18,6 +18,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { readReaderAnswerDecision } from "@/api/lib/case-law/reader-answer-corpus";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
+import { timestampCasToken } from "@/api/lib/db/timestamp-cas";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type {
   UnprojectedColumns,
@@ -131,15 +132,25 @@ const regenerateLastReaderAnswer = async ({
         eq(legalReaderAnswerMessages.id, last.id),
       ),
     );
-  await tx.insert(legalReaderAnswerMessages).values({
-    id: messageId,
-    answerId,
-    role: "assistant",
-    content: "",
-    status: "streaming",
-    createdAt: last.createdAt,
-    updatedAt: now,
-  });
+  const inserted =
+    (
+      await tx
+        .insert(legalReaderAnswerMessages)
+        .values({
+          id: messageId,
+          answerId,
+          role: "assistant",
+          content: "",
+          status: "streaming",
+          createdAt: last.createdAt,
+          updatedAt: now,
+        })
+        .returning({
+          claimToken: timestampCasToken(legalReaderAnswerMessages.updatedAt),
+          updatedAt: legalReaderAnswerMessages.updatedAt,
+        })
+    ).at(0) ??
+    panic("Reader answer regeneration did not create its claimed message");
   await tx
     .update(legalReaderAnswers)
     .set({ updatedAt: now })
@@ -153,7 +164,8 @@ const regenerateLastReaderAnswer = async ({
     answer,
     messageId,
     history: messages.slice(0, -1),
-    deadlineAt: readerAnswerDeadlineAt(now),
+    deadlineAt: readerAnswerDeadlineAt(inserted.updatedAt),
+    claimToken: inserted.claimToken,
   };
 };
 
@@ -391,7 +403,13 @@ export const prepareReaderAnswer = async (
           updatedAt: now,
         },
       ])
-      .returning();
+      .returning({
+        ...getColumns(legalReaderAnswerMessages),
+        claimToken: timestampCasToken(legalReaderAnswerMessages.updatedAt),
+      });
+    const assistant =
+      inserted.find(({ id }) => id === messageId) ??
+      panic("Reader answer did not create its claimed message");
     await tx
       .update(legalReaderAnswers)
       .set({ updatedAt: now })
@@ -405,7 +423,8 @@ export const prepareReaderAnswer = async (
     return {
       answer,
       messageId,
-      deadlineAt: readerAnswerDeadlineAt(now),
+      deadlineAt: readerAnswerDeadlineAt(assistant.updatedAt),
+      claimToken: assistant.claimToken,
       history: [...messages, ...inserted.filter(({ role }) => role === "user")],
     };
   });
