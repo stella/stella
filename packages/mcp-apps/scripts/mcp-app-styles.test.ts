@@ -12,12 +12,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import postcss from "postcss";
 
-import { MCP_APPS } from "../src/mcp/apps/manifest";
+import { MCP_APPS } from "../src/manifest";
 
 test("MCP styles stay unchanged when generated bundles contain stale utilities", async () => {
   const root = mkdtempSync(path.join(tmpdir(), "mcp-app-styles-"));
   try {
-    const appsRoot = path.join(root, "apps/api/src/mcp/apps");
+    const appsRoot = path.join(root, "packages/mcp-apps/src");
     const stylePath = path.join(appsRoot, "shared/style.css");
     const uiRoot = path.join(root, "packages/ui/src");
     mkdirSync(path.dirname(stylePath), { recursive: true });
@@ -36,7 +36,7 @@ test("MCP styles stay unchanged when generated bundles contain stale utilities",
       .join("/");
     // Resolve dependencies outside the fixture while retaining the real scan policy.
     const input = readFileSync(
-      path.join(import.meta.dirname, "../src/mcp/apps/shared/style.css"),
+      path.join(import.meta.dirname, "../src/shared/style.css"),
       "utf-8",
     )
       .replace('"tailwindcss"', () => JSON.stringify(tailwindPath))
