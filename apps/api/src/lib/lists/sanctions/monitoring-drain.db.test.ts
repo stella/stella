@@ -14,6 +14,7 @@ import {
   SANCTIONS_SOURCES,
 } from "@stll/sanctions";
 import type { SanctionsEntry, SanctionsSource } from "@stll/sanctions";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import { organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -520,7 +521,7 @@ test(
 
 const emptyEdition = async () => {
   const editionId = toSafeId<"sanctionsEdition">(Bun.randomUUIDv7());
-  const hash = new Bun.CryptoHasher("sha256").update(editionId).digest("hex");
+  const hash = hashSha256Hex(editionId);
   await db.insert(sanctionsEditions).values({
     id: editionId,
     sourceId: "eu",
@@ -1075,7 +1076,7 @@ const seedIdentityEdition = async (now: Date) => {
     { sourceEntryId: "identity-a", name: "Alexandrov Zhuravlev" },
     { sourceEntryId: "identity-d", name: "Kwame Nkrumah" },
   ];
-  const hash = new Bun.CryptoHasher("sha256").update(editionId).digest("hex");
+  const hash = hashSha256Hex(editionId);
   await db.insert(sanctionsEditions).values({
     id: editionId,
     sourceId: "eu",
@@ -1102,9 +1103,7 @@ const seedIdentityEdition = async (now: Date) => {
       listedOn: null,
       sourceUrl: "https://example.test/identity",
     } satisfies SanctionsEntry;
-    const contentHash = new Bun.CryptoHasher("sha256")
-      .update(JSON.stringify(payload))
-      .digest("hex");
+    const contentHash = hashSha256Hex(JSON.stringify(payload));
     await db
       .insert(sanctionsEntryPayloads)
       .values({ contentHash, payload })
@@ -1384,7 +1383,7 @@ test(
     try {
       for (const sourceId of sources) {
         const id = toSafeId<"sanctionsEdition">(Bun.randomUUIDv7());
-        const hash = new Bun.CryptoHasher("sha256").update(id).digest("hex");
+        const hash = hashSha256Hex(id);
         await db.insert(sanctionsEditions).values({
           id,
           sourceId,
@@ -2238,9 +2237,7 @@ test(
       for (const source of sources) {
         const editionId = toSafeId<"sanctionsEdition">(Bun.randomUUIDv7());
         editions.set(source, editionId);
-        const hash = new Bun.CryptoHasher("sha256")
-          .update(editionId)
-          .digest("hex");
+        const hash = hashSha256Hex(editionId);
         const entries = Array.from(
           { length: 13 },
           (_, index) =>
@@ -2274,9 +2271,7 @@ test(
           entryCount: entries.length,
         });
         const payloads = entries.map((payload) => ({
-          contentHash: new Bun.CryptoHasher("sha256")
-            .update(JSON.stringify(payload))
-            .digest("hex"),
+          contentHash: hashSha256Hex(JSON.stringify(payload)),
           payload,
         }));
         await db

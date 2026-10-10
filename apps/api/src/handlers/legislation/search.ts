@@ -3,7 +3,6 @@ import { and, eq, getColumns, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { status } from "elysia";
 import type { Static } from "elysia";
-import { createHash } from "node:crypto";
 
 import {
   PUBLIC_LEGISLATION_COUNTRIES,
@@ -15,6 +14,7 @@ import {
   SEARCH_TOTAL_NOT_COUNTED,
 } from "@stll/api-contract/search";
 import type { RegistryRequestObservation } from "@stll/business-registries/shared/request-observer";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { isUuid } from "@stll/uuid-codec";
 
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
@@ -990,21 +990,19 @@ const pgSearch = async (
 export const legislationQueryFingerprint = (
   body: SearchLegislationBody,
 ): string =>
-  createHash("sha256")
-    .update(
-      JSON.stringify([
-        "legislation",
-        body.query,
-        body.jurisdiction ?? null,
-        body.documentType ?? null,
-        body.status ?? null,
-        body.source ?? null,
-        body.language ?? null,
-        body.dateFrom ?? null,
-        body.dateTo ?? null,
-      ]),
-    )
-    .digest("hex");
+  hashSha256Hex(
+    JSON.stringify([
+      "legislation",
+      body.query,
+      body.jurisdiction ?? null,
+      body.documentType ?? null,
+      body.status ?? null,
+      body.source ?? null,
+      body.language ?? null,
+      body.dateFrom ?? null,
+      body.dateTo ?? null,
+    ]),
+  );
 
 type CorpusLegislationSearchOptions = {
   body: SearchLegislationBody;

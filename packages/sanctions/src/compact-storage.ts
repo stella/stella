@@ -492,9 +492,18 @@ export class PostingColumn {
  * Screening caches live as long as the index, so an unbounded one would grow
  * with every distinct query token and undo the compact layout.
  */
+type CacheEntry<K, V> = {
+  key: K;
+  value: V;
+  previous: CacheEntry<K, V> | undefined;
+  next: CacheEntry<K, V> | undefined;
+};
+
 export class BoundedCache<K, V> {
-  private readonly entries = new Map<K, V>();
+  private readonly entries = new Map<K, CacheEntry<K, V>>();
   private readonly limit: number;
+  private oldest: CacheEntry<K, V> | undefined;
+  private newest: CacheEntry<K, V> | undefined;
 
   constructor(limit: number) {
     if (!Number.isSafeInteger(limit) || limit <= 0) {
@@ -507,24 +516,56 @@ export class BoundedCache<K, V> {
     return this.entries.size;
   }
 
+  private touch(entry: CacheEntry<K, V>): void {
+    if (this.newest === entry) {
+      return;
+    }
+    if (entry.previous !== undefined) {
+      entry.previous.next = entry.next;
+    } else if (this.oldest === entry) {
+      this.oldest = entry.next;
+    }
+    if (entry.next !== undefined) {
+      entry.next.previous = entry.previous;
+    }
+    entry.previous = this.newest;
+    entry.next = undefined;
+    if (this.newest !== undefined) {
+      this.newest.next = entry;
+    }
+    this.newest = entry;
+    this.oldest ??= entry;
+  }
+
   get(key: K): V | undefined {
-    const value = this.entries.get(key);
-    if (value === undefined) {
+    const entry = this.entries.get(key);
+    if (entry === undefined) {
       return undefined;
     }
-    this.entries.delete(key);
-    this.entries.set(key, value);
-    return value;
+    this.touch(entry);
+    return entry.value;
   }
 
   set(key: K, value: V): void {
-    this.entries.delete(key);
-    this.entries.set(key, value);
-    if (this.entries.size > this.limit) {
-      const oldest = this.entries.keys().next();
-      if (!oldest.done) {
-        this.entries.delete(oldest.value);
-      }
+    const known = this.entries.get(key);
+    if (known !== undefined) {
+      known.value = value;
+      this.touch(known);
+      return;
+    }
+    const entry = { key, value, previous: undefined, next: undefined };
+    this.entries.set(key, entry);
+    this.touch(entry);
+    if (this.entries.size <= this.limit) {
+      return;
+    }
+    // Map.keys().next() repeatedly walks deleted buckets in JSC. Keep the
+    // eviction order separately so churn costs constant work per lookup.
+    const oldest = this.oldest ?? panic("Missing oldest cache entry");
+    this.entries.delete(oldest.key);
+    this.oldest = oldest.next;
+    if (this.oldest !== undefined) {
+      this.oldest.previous = undefined;
     }
   }
 }

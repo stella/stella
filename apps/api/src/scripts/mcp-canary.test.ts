@@ -12,6 +12,7 @@ import {
   DESKTOP_ACCOUNT_PROTOCOL_HEADER,
 } from "@stll/api-contract/desktop-registry";
 import { rejectionOf } from "@stll/property-testing/rejection";
+import { sha256Base64Url as legacySha256Base64Url } from "@stll/sha256/node";
 
 import { bridgeOauthUiRedirect } from "@/api/lib/oauth-ui-fragment";
 import { SAMPLE_MATTERS } from "@/api/lib/review-organization/sample-data";
@@ -511,9 +512,7 @@ describe("restricted review-account journey", () => {
       }
       expect(authorize.searchParams.get("code_challenge_method")).toBe("S256");
       expect(authorize.searchParams.get("code_challenge")).toBe(
-        await crypto.subtle
-          .digest("SHA-256", new TextEncoder().encode(verifier))
-          .then((hash) => Buffer.from(hash).toString("base64url")),
+        legacySha256Base64Url(verifier),
       );
       expect(authorize.searchParams.get("scope")).toContain(
         "stella:admin_write",

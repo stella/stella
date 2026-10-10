@@ -1,5 +1,6 @@
 import { panic, Result, TaggedError } from "better-result";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import { envBase } from "@/api/env-base";
@@ -83,9 +84,6 @@ export type RawSourcePayloadOwner =
     }
   | (RawDocumentOwner & { family: typeof RAW_SOURCE_FAMILY.CASE_LAW });
 
-const sha256Of = (data: Uint8Array | string): string =>
-  new Bun.CryptoHasher("sha256").update(data).digest("hex");
-
 /** A document's payload key for a payload of this digest. */
 export const rawDocumentPayloadKey = (
   owner: RawDocumentOwner,
@@ -102,10 +100,10 @@ export const rawSourcePayloadKey = ({
 }): string => {
   switch (owner.family) {
     case RAW_SOURCE_FAMILY.CASE_LAW:
-      return rawDocumentPayloadKey(owner, sha256Of(data));
+      return rawDocumentPayloadKey(owner, hashSha256Hex(data));
     case RAW_SOURCE_FAMILY.LEGISLATION:
     case RAW_SOURCE_FAMILY.SOFT_LAW:
-      return `${owner.family}/raw/${owner.sourceId}/${sha256Of(data)}`;
+      return `${owner.family}/raw/${owner.sourceId}/${hashSha256Hex(data)}`;
     default:
       owner satisfies never;
       return panic(`Unhandled raw source owner ${String(owner)}`);
@@ -323,7 +321,7 @@ export const sourceBinaryRef = ({
   contentType,
   ...owner
 }: SourceBinaryInput): SourceRawObjectRef => {
-  const sha256 = sha256Of(bytes);
+  const sha256 = hashSha256Hex(bytes);
   return {
     location: formatCorpusLocation({
       type: "object",
@@ -592,7 +590,7 @@ export const copyRawObject = async ({
   if (
     bytes === null ||
     bytes.byteLength !== ref.byteLength ||
-    sha256Of(bytes) !== ref.sha256
+    hashSha256Hex(bytes) !== ref.sha256
   ) {
     return uncopyable(
       `A copy source does not hold the bytes its name states: ${fromKey}`,

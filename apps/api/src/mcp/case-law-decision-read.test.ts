@@ -39,6 +39,8 @@ const related = (
   citationAuthority: 0,
   country: "CZE",
   court: "Nejvyšší soud",
+  courtAbbreviation: "NS",
+  sourceUrl: null,
   decisionDate: "2020-01-01",
   decisionType: "rozsudek",
   ecli: null,

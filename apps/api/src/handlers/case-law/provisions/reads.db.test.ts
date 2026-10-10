@@ -65,6 +65,8 @@ const decisionRow = ({
   citationAuthority,
   country: JURISDICTION,
   court: "Court",
+  ecli: "ECLI:CZ:US:2025:1",
+  sourceUrl: `https://example.test/decision/${id}`,
   decisionDate,
   id,
   language: "cs",
@@ -347,6 +349,12 @@ test("citing decisions order by decision date, newest first", async () => {
   ]);
   expect(page.items.at(0)?.decisionDate).toBe("2025-01-01");
   expect(page.items.at(0)?.citationAuthority).toBe(1);
+  for (const item of page.items) {
+    expect(item.courtAbbreviation).toBe("ÚS");
+    expect(item.sourceUrl).toBe(
+      `https://example.test/decision/${item.decisionId}`,
+    );
+  }
   expect(page.items.map((item) => item.versionBasis)).toEqual(
     page.items.map(() => ({ type: "inferred", kind: "decision_date" })),
   );

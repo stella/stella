@@ -66,6 +66,7 @@ import readFileChatThread from "@/api/handlers/chat/read-file-thread";
 import resolveFileChatThread from "@/api/handlers/chat/resolve-file-thread";
 import resolveTemplateChatThread from "@/api/handlers/chat/resolve-template-thread";
 import rotateTemplateChatThread from "@/api/handlers/chat/rotate-template-thread";
+import readSavedChatSecret from "@/api/handlers/chat/saved-secret";
 import { createSendMessage } from "@/api/handlers/chat/send-message";
 import { compactMessagesForContext } from "@/api/handlers/chat/send-message-compaction";
 import {
@@ -73,6 +74,7 @@ import {
   uploadMessageFilesWithRollback,
 } from "@/api/handlers/chat/send-message-side-effects";
 import listUnavailableChatSkills from "@/api/handlers/chat/skill-availability/list";
+import submitChatSecret from "@/api/handlers/chat/submit-secret";
 import { createSuggestThreadTitle } from "@/api/handlers/chat/suggest-thread-title";
 import { RECAP_PROMPT_VERSION } from "@/api/handlers/chat/thread-recap";
 import deleteChatThread from "@/api/handlers/chat/threads/delete";
@@ -1464,6 +1466,49 @@ const isolationCases: IsolationCase[] = [
     expectDenied: expectStatus(404),
     expectPositive: (result) =>
       expect(result).toEqual({ title: expect.any(String) }),
+  },
+  {
+    name: "chat saved private input availability",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(readSavedChatSecret, workspaceA, {
+        params: { threadId: chatThreadB },
+        query: { connectorSlug: "missing-connector" },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(readSavedChatSecret, sameUserWorkspaceB, {
+        params: { threadId: chatThreadB },
+        query: { connectorSlug: "missing-connector" },
+      }),
+    expectDenied: (result) => {
+      expect(getStatusCode(result)).toBe(404);
+      expect(recordField(result, "response")).toMatchObject({
+        message: "Chat thread not found",
+      });
+    },
+    expectPositive: (result) => {
+      expect(getStatusCode(result)).toBe(404);
+      expect(recordField(result, "response")).toMatchObject({
+        message:
+          "Enable this connector in settings before providing a credential",
+      });
+    },
+  },
+  {
+    name: "chat private input submission",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(submitChatSecret, workspaceA, {
+        body: { decision: "decline" },
+        params: { threadId: chatThreadB, toolCallId: "missing-request" },
+        query: {},
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(submitChatSecret, sameUserWorkspaceB, {
+        body: { decision: "decline" },
+        params: { threadId: chatThreadB, toolCallId: "missing-request" },
+        query: {},
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: expectStatus(409),
   },
   {
     name: "chat thread rename",
