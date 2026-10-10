@@ -30,10 +30,16 @@ type AdapterFixtureOptions = {
   mode: FixtureMode;
   turns: number[];
   toolCalls: number;
+  toolResults: unknown[];
 };
 
 /** Real SDK engine, fixture transport: no provider API or module mock. */
-const adapterFixture = ({ mode, turns, toolCalls }: AdapterFixtureOptions) =>
+const adapterFixture = ({
+  mode,
+  turns,
+  toolCalls,
+  toolResults,
+}: AdapterFixtureOptions) =>
   ({
     kind: "text",
     name: "reader-fixture",
@@ -106,6 +112,12 @@ const adapterFixture = ({ mode, turns, toolCalls }: AdapterFixtureOptions) =>
         }
       }
       if (mode === "tools" && iteration === 2) {
+        for (const message of messages) {
+          if (message.role !== "tool" || typeof message.content !== "string") {
+            continue;
+          }
+          toolResults.push(JSON.parse(message.content));
+        }
         // Assert the model receives all tool results including the explicit cap result.
         expect(messages.filter(({ role }) => role === "tool")).toHaveLength(
           toolCalls,
@@ -196,9 +208,10 @@ const modelFixture = ({
   keySource = "instance",
 }: ModelFixtureOptions) => {
   const turns: number[] = [];
+  const toolResults: unknown[] = [];
   const events: ServerAnalyticsCaptureParams[] = [];
   const model = {
-    adapter: adapterFixture({ mode, turns, toolCalls }),
+    adapter: adapterFixture({ mode, turns, toolCalls, toolResults }),
     keySource,
     modelId: "gpt-5.5",
     modelOptions: {},
@@ -211,7 +224,7 @@ const modelFixture = ({
     identifyOrganizationGroup: () => undefined,
     flush: async () => undefined,
   } satisfies ServerAnalytics;
-  return { model, turns, events, analytics };
+  return { model, turns, toolResults, events, analytics };
 };
 
 describe("reader answer real SDK model boundary", () => {
@@ -254,6 +267,9 @@ describe("reader answer real SDK model boundary", () => {
           return Result.ok([
             {
               decisionId: input.decisionId,
+              direction: "cited",
+              decisionDate: "2026-01-01",
+              court: "Test court",
               paragraphId: "related-1",
               text: "Liability precedent",
             },
@@ -266,7 +282,28 @@ describe("reader answer real SDK model boundary", () => {
     }
     expect(fixture.turns).toEqual([1, 2]);
     expect(reads).toBe(3);
+    expect(fixture.toolResults).toEqual([
+      ...Array.from({ length: 3 }, () => ({
+        status: "read",
+        excerpts: [
+          {
+            decisionId: input.decisionId,
+            direction: "cited",
+            decisionDate: "2026-01-01",
+            court: "Test court",
+            paragraphId: "related-1",
+            text: "Liability precedent",
+          },
+        ],
+      })),
+      { status: "limit", excerpts: [] },
+    ]);
     expect(evidence).toHaveLength(3);
+    for (const citations of evidence) {
+      expect(citations).toEqual([
+        { decisionId: input.decisionId, paragraphId: "related-1" },
+      ]);
+    }
     expect(result.value.content).toBe(deltas.join(""));
     expect(result.value.content).toBe("Context. Explained.");
     expect(result.value.model).toBe("gpt-5.5");

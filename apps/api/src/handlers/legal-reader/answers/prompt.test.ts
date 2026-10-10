@@ -25,6 +25,8 @@ describe("reader answer evidence", () => {
     const prompt = buildReaderAnswerPrompt({
       decision: {
         decisionId,
+        court: "Test court",
+        decisionDate: "2026-01-01",
         paragraphs: [
           { paragraphId: "p-1", text: "The facts" },
           { paragraphId: "p-2", text: "selected passage" },
@@ -35,8 +37,16 @@ describe("reader answer evidence", () => {
       locale: "cs-CZ",
     });
     expect(prompt.system).toContain("Respond in locale cs-CZ");
+    expect(prompt.system).toContain(
+      '"cited" means a decision cited by THIS decision',
+    );
+    expect(prompt.system).toContain(
+      '"citing" means a decision that cites THIS decision',
+    );
     expect(JSON.parse(prompt.context)).toEqual({
       decisionId,
+      court: "Test court",
+      decisionDate: "2026-01-01",
       selection: anchor,
       paragraphs: [
         { paragraphId: "p-1", text: "The facts" },
@@ -53,6 +63,8 @@ describe("reader answer evidence", () => {
     const prompt = buildReaderAnswerPrompt({
       decision: {
         decisionId,
+        court: "Test court",
+        decisionDate: "2026-01-01",
         paragraphs: [
           { paragraphId: "p-1", text: "a".repeat(READER_ANSWER_CONTEXT_CHARS) },
           { paragraphId: "p-2", text: anchor.quote },
@@ -80,6 +92,8 @@ describe("reader answer evidence", () => {
     const prompt = buildReaderAnswerPrompt({
       decision: {
         decisionId,
+        court: "Test court",
+        decisionDate: "2026-01-01",
         paragraphs: [
           {
             paragraphId: anchor.paragraphId,

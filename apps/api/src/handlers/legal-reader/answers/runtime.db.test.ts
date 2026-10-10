@@ -93,6 +93,8 @@ const prepare = async (
     readDecision: async () =>
       Result.ok({
         decisionId,
+        court: "Test court",
+        decisionDate: "2026-01-01",
         paragraphs: [{ paragraphId: "p-1", text: "The holding follows." }],
       }),
   });
@@ -275,7 +277,12 @@ describe("reader answer turn lifecycle", () => {
           },
         },
         readDecision: async () =>
-          Result.ok({ decisionId, paragraphs: [{ paragraphId: "p-1", text }] }),
+          Result.ok({
+            decisionId,
+            court: "Test court",
+            decisionDate: "2026-01-01",
+            paragraphs: [{ paragraphId: "p-1", text }],
+          }),
       });
       expect(Result.isError(result)).toBe(true);
       if (Result.isError(result)) {
@@ -307,6 +314,8 @@ describe("reader answer turn lifecycle", () => {
         readDecision: async () =>
           Result.ok({
             decisionId,
+            court: "Test court",
+            decisionDate: "2026-01-01",
             paragraphs: [{ paragraphId: "p-1", text: "The holding follows." }],
           }),
       });

@@ -135,6 +135,8 @@ const seedFixture = async (db: GatedTestDb) => {
     history,
     decision: {
       decisionId,
+      court: "Test court",
+      decisionDate: "2026-01-01",
       paragraphs: [
         { paragraphId: anchor.paragraphId, text: "The holding follows." },
       ],

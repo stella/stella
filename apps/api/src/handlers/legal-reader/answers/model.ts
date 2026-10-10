@@ -140,7 +140,7 @@ export const runReaderAnswerModel = async (
   const related = toolDefinition({
     name: "related_decision_paragraphs",
     description:
-      "Read relevant paragraph excerpts from decisions cited by or citing this decision in the admitted public-law corpus. No web or external sources. Cite only returned decisionId and paragraphId pairs.",
+      "Read relevant paragraph excerpts from decisions cited by or citing this decision in the admitted public-law corpus. Excerpts preserve direction: cited is cited by this decision; citing cites this decision. Court and decisionDate identify the returned source. No web or external sources. Cite only returned decisionId and paragraphId pairs.",
     inputSchema: toTanStackValibotSchema(
       v.object({
         direction: v.picklist(["cited", "citing", "both"]),
