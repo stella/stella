@@ -549,7 +549,7 @@ for (const response of ["error", "null", "empty"] as const) {
     const requests: ReturnType<
       typeof Promise.withResolvers<ProvisionPreviewData | null>
     >[] = [];
-    const readFull = () => {
+    const readFull = async () => {
       const request = Promise.withResolvers<ProvisionPreviewData | null>();
       requests.push(request);
       return request.promise;
