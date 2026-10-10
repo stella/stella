@@ -324,6 +324,68 @@ test("verbatim parser source moves do not require a version bump", () => {
   expect(changed(base, head)).toEqual([]);
 });
 
+test("verbatim parser source moves require equivalent resolved dependencies", () => {
+  const base = fixture({ adapters: ["A"] });
+  const originalDirectory = `${PARSERS}original`;
+  const destinationDirectory = `${PARSERS}destination`;
+  const helperSource =
+    'import { dependency } from "./dependency";\nexport const helper = () => dependency();\n';
+  base.set(`${originalDirectory}/helper.ts`, helperSource);
+  base.set(
+    `${originalDirectory}/dependency.ts`,
+    "export const dependency = () => 'base';\n",
+  );
+  base.set(
+    `${destinationDirectory}/dependency.ts`,
+    "export const dependency = () => 'different';\n",
+  );
+  base.set(
+    `${PARSERS}parser-a.ts`,
+    'import { helper } from "./original/helper";\nexport const parseA = () => helper();\n',
+  );
+  const head = new Map(base);
+  head.delete(`${originalDirectory}/helper.ts`);
+  head.set(`${destinationDirectory}/helper.ts`, helperSource);
+  head.set(
+    `${PARSERS}parser-a.ts`,
+    '// parser-output-unchanged: helper moved\nimport { helper } from "./destination/helper";\nexport const parseA = () => helper();\n',
+  );
+
+  expect(changed(base, head)).toEqual([
+    expect.stringContaining("test-a: parser version 1 must exceed base 1"),
+  ]);
+});
+
+test("a verbatim parser folder move preserves moved dependencies", () => {
+  const base = fixture({ adapters: ["A"] });
+  const head = new Map(base);
+  const originalDirectory = `${PARSERS}original`;
+  const destinationDirectory = `${PARSERS}destination`;
+  const movedFiles = new Map([
+    [
+      "helper.ts",
+      'import { dependency } from "./dependency";\nexport const helper = () => dependency();\n',
+    ],
+    ["dependency.ts", "export const dependency = () => 'base';\n"],
+  ]);
+  for (const [file, source] of movedFiles) {
+    base.set(`${originalDirectory}/${file}`, source);
+    head.set(`${destinationDirectory}/${file}`, source);
+  }
+  base.set(
+    `${PARSERS}parser-a.ts`,
+    'import { helper } from "./original/helper";\nexport const parseA = () => helper();\n',
+  );
+  head.delete(`${originalDirectory}/helper.ts`);
+  head.delete(`${originalDirectory}/dependency.ts`);
+  head.set(
+    `${PARSERS}parser-a.ts`,
+    '// parser-output-unchanged: helper folder moved\nimport { helper } from "./destination/helper";\nexport const parseA = () => helper();\n',
+  );
+
+  expect(changed(base, head)).toEqual([]);
+});
+
 test("parser source moves with logic changes still require a version bump", () => {
   const { base, head } = movedHelper({ changedOutput: true });
   expect(changed(base, head)).toEqual([

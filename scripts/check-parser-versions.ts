@@ -520,9 +520,11 @@ const withoutOutputUnchangedMarkers = (source: string): string =>
     .join("\n");
 
 const movedParserSources = (
-  base: SourceTree,
-  head: SourceTree,
+  baseTree: StaticTree,
+  headTree: StaticTree,
 ): ReadonlySet<string> => {
+  const base = baseTree.files;
+  const head = headTree.files;
   const addedBySource = new Map<string, string[]>();
   for (const [file, source] of head) {
     if (base.has(file)) {
@@ -534,7 +536,7 @@ const movedParserSources = (
     addedBySource.set(comparable, paths);
   }
 
-  const moved = new Set<string>();
+  const moveDestinations = new Map<string, readonly string[]>();
   for (const [file, source] of base) {
     if (head.has(file)) {
       continue;
@@ -545,8 +547,29 @@ const movedParserSources = (
     if (destinations === undefined) {
       continue;
     }
-    moved.add(file);
+    moveDestinations.set(file, destinations);
+  }
+
+  const moved = new Set<string>();
+  for (const [file, destinations] of moveDestinations) {
+    const mappedImports = new Set(
+      baseTree
+        .imports(file)
+        .flatMap(
+          (dependency) => moveDestinations.get(dependency) ?? [dependency],
+        ),
+    );
     for (const destination of destinations) {
+      const destinationImports = new Set(headTree.imports(destination));
+      if (
+        mappedImports.size !== destinationImports.size ||
+        [...mappedImports].some(
+          (dependency) => !destinationImports.has(dependency),
+        )
+      ) {
+        continue;
+      }
+      moved.add(file);
       moved.add(destination);
     }
   }
@@ -564,7 +587,7 @@ export const checkParserVersions = ({
   const before = baseTree.owners();
   const after = headTree.owners();
   const errors = [...before.errors, ...after.errors];
-  const movedSources = movedParserSources(base, head);
+  const movedSources = movedParserSources(baseTree, headTree);
   const deletedReexports = new Set<string>();
   for (const [file, source] of base) {
     if (!head.has(file) && isReexportOnlyModule(source)) {
