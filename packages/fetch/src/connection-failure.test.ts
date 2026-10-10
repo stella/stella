@@ -17,7 +17,10 @@ describe("connection failure classification", () => {
       (error: unknown) => error,
     );
     expect(cause).toBeInstanceOf(TypeError);
-    expect(cause).toMatchObject({ code: expect.any(String) });
+    if (!(cause instanceof TypeError) || !("code" in cause)) {
+      throw new TypeError("Expected a coded transport error");
+    }
+    expect(typeof cause.code).toBe("string");
     expect(
       isConnectionFailure(cause),
       JSON.stringify(cause, Object.getOwnPropertyNames(cause)),
