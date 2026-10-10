@@ -93,9 +93,6 @@
     "windows-scripts": {
       "if": "needs.ci-plan.outputs.run_required != 'false' && ( github.event_name != 'pull_request' && ( needs.ci-plan.outputs.queue_depth != 'thin' && ((needs.ci-plan.outputs.trusted == 'true'\n || github.event_name == 'workflow_dispatch')\n&& needs.ci-plan.outputs.windows_scripts_required == 'true' ) ) )"
     },
-    "desktop-clippy": {
-      "if": "needs.ci-plan.outputs.run_required != 'false' && ( github.event_name != 'pull_request' && ( needs.ci-plan.outputs.queue_depth != 'thin' && ((needs.ci-plan.outputs.trusted == 'true'\n || github.event_name == 'workflow_dispatch')\n&& needs.ci-plan.outputs.desktop_rust_checks_required == 'true' ) ) )"
-    },
     "dependency-malware": {
       "if": "needs.ci-plan.outputs.run_required != 'false' && ( needs.ci-plan.outputs.queue_depth != 'thin' && (needs.ci-plan.outputs.trusted == 'true' && needs.ci-plan.outputs.dependency_malware_required == 'true') )"
     },
@@ -107,6 +104,12 @@
     },
     "code-quality-web-rest": {
       "if": "needs.ci-plan.outputs.run_required != 'false' && ( inputs.heavy_only != true && (\n  needs.ci-plan.outputs.package_checks_required == 'true'\n  && (needs.ci-plan.outputs.trusted == 'true'\n  || github.event_name == 'workflow_dispatch')\n) )"
+    },
+    "desktop-rust-tests": {
+      "if": "needs.ci-plan.outputs.run_required != 'false' && ( github.event_name != 'pull_request' && ( needs.ci-plan.outputs.queue_depth != 'thin' && ((needs.ci-plan.outputs.trusted == 'true'\n || github.event_name == 'workflow_dispatch')\n&& needs.ci-plan.outputs.desktop_rust_checks_required == 'true' ) ) )"
+    },
+    "desktop-rust-lint": {
+      "if": "inputs.pr_depth_only != true && inputs.heavy_only != true && (github.event_name == 'merge_group' || needs.ci-plan.outputs.run_required != 'false') && (needs.ci-plan.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch') && needs.ci-plan.outputs.desktop_rust_checks_required == 'true'"
     }
   }
 }

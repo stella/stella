@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 
 export const PILOT_FAST_ROOTS = [
+  "desktop-rust-lint",
   "ci-checks-docs",
   "ci-checks-generated",
   "ci-checks-policy",
@@ -34,7 +35,7 @@ export const PILOT_DEFERRED = [
   "api-image-smoke",
   "legal-atlas-image",
   "windows-scripts",
-  "desktop-clippy",
+  "desktop-rust-tests",
   "dependency-malware",
   "api-test-durations",
 ] as const;

@@ -47,6 +47,7 @@ import {
   mainHeavyJobs,
   prDepthJobs,
   queueAdmittedJobs,
+  thinJobs,
 } from "./main-heavy-plan";
 import { TEST_JOB_SHARDS, type TestShardId } from "./test-shards";
 import { flattenWorkflowSteps } from "./workflow-steps";
@@ -1950,11 +1951,60 @@ test("a planned release screenshot check certifies the merge group", () => {
 });
 
 test("path-scoped platform checks run in the merge group", () => {
-  for (const job of ["desktop-clippy", "windows-scripts"]) {
+  for (const job of ["desktop-rust-tests", "windows-scripts"]) {
     expect(fastRequired, job).not.toContain(job);
     expect(heavyJobs, job).toContain(job);
     expect(typeof jobScopes[job], job).toBe("string");
   }
+});
+
+test("desktop Rust lint is required on PRs and every merge-group depth", () => {
+  const lint = "desktop-rust-lint";
+  expect(fastRequired).toContain(lint);
+  expect(thinJobs({ jobs: ciJobs })).toContain(lint);
+  expect(jobScopes[lint]).toBe("desktop_rust_checks_required");
+  for (const event of [EVENT.pullRequest, EVENT.mergeGroup]) {
+    for (const queueDepth of ["thin", "full"] as const) {
+      expect(
+        runsAtDepth(jobIf(ciJobs[lint]), {
+          event,
+          depth:
+            event === EVENT.pullRequest ? SUITE_DEPTH.fast : SUITE_DEPTH.full,
+          queueDepth,
+        }),
+      ).toBe(true);
+    }
+    expect(evaluateResult({ event, results: { [lint]: "skipped" } })).toBe(1);
+    expect(
+      evaluateResult({
+        event,
+        results: { [lint]: "skipped" },
+        unplannedScopes: ["desktop_rust_checks_required"],
+      }),
+    ).toBe(0);
+  }
+  const job = v.parse(
+    v.object({
+      strategy: v.object({
+        matrix: v.object({ include: v.array(v.object({ os: v.string() })) }),
+      }),
+      steps: v.array(
+        v.looseObject({
+          run: v.optional(v.string()),
+          if: v.optional(v.string()),
+        }),
+      ),
+    }),
+    ciJobs[lint],
+  );
+  expect(job.strategy.matrix.include.map(({ os }) => os).toSorted()).toEqual([
+    "macos",
+    "windows",
+  ]);
+  const clippy = job.steps.find(({ run }) => run?.includes("cargo clippy"));
+  expect(clippy?.run).toContain("--workspace --all-targets");
+  expect(clippy?.run).toContain("--locked -- -D warnings");
+  expect(clippy?.if).toBeUndefined();
 });
 
 test("every bounded-install implementation and fixture selects Windows", () => {
@@ -4845,6 +4895,135 @@ const parityViolations = (
   }
   return violations;
 };
+
+type ScopedCheck = {
+  name: string;
+  scope: string;
+  condition: string;
+  requiredOnPr: boolean;
+  requiredOnThin: boolean;
+};
+const scopedCoverageViolations = (
+  checks: readonly ScopedCheck[],
+  exceptions: Record<string, string> = {},
+) => {
+  const scopes = new Set(checks.map(({ scope }) => scope));
+  return [...scopes].filter(
+    (scope) =>
+      !Object.hasOwn(exceptions, scope) &&
+      !checks.some(
+        (check) =>
+          check.scope === scope &&
+          ((check.requiredOnPr &&
+            runsAtDepth(check.condition, {
+              event: EVENT.pullRequest,
+              depth: SUITE_DEPTH.fast,
+            })) ||
+            (check.requiredOnThin &&
+              ["thin", "full"].every((queueDepth) =>
+                runsAtDepth(check.condition, {
+                  event: EVENT.mergeGroup,
+                  depth: SUITE_DEPTH.full,
+                  queueDepth: queueDepth === "thin" ? "thin" : "full",
+                }),
+              ))),
+      ),
+  );
+};
+
+test("path-scoped lint and test areas have required pre-merge coverage", () => {
+  const plan = v.parse(
+    v.object({ outputs: v.record(v.string(), v.string()) }),
+    ciJobs["ci-plan"],
+  );
+  const scopes = new Set(
+    Object.entries(plan.outputs)
+      .filter(
+        ([scope, source]) =>
+          scope.endsWith("_checks_required") &&
+          source.includes("steps.changed-files.outputs."),
+      )
+      .map(([scope]) => scope),
+  );
+  const thin = thinJobs({ jobs: ciJobs });
+  const checks = Object.entries(ciJobs).flatMap(([name, body]) => {
+    const scope = jobScopes[name];
+    if (typeof scope !== "string" || !scopes.has(scope)) {
+      return [];
+    }
+    const job = v.parse(
+      v.object({
+        steps: v.optional(
+          v.array(
+            v.looseObject({
+              name: v.optional(v.string()),
+              run: v.optional(v.string()),
+            }),
+          ),
+          [],
+        ),
+      }),
+      body,
+    );
+    if (
+      !job.steps.some(
+        ({ name: stepName, run }) =>
+          run !== undefined &&
+          /\b(?:checks?|clippy|lint|tests?|typecheck)\b/iu.test(stepName ?? ""),
+      )
+    ) {
+      return [];
+    }
+    expect(jobIf(body), name).toContain(`needs.ci-plan.outputs.${scope}`);
+    return [
+      {
+        name,
+        scope,
+        condition: jobIf(body),
+        requiredOnPr: fastRequired.includes(name),
+        requiredOnThin: thin.includes(name),
+      },
+    ];
+  });
+  expect(checks.length).toBeGreaterThan(0);
+  expect(new Set(checks.map(({ scope }) => scope))).toEqual(scopes);
+  // Container suites keep their reviewed full-queue policy; the platform lint
+  // path has no depth exception. A stale exception fails this census.
+  const queueOnlyScopes = {
+    docker_checks_required: "Container suites certify the full queued tree",
+  };
+  expect(scopedCoverageViolations(checks)).toEqual(
+    Object.keys(queueOnlyScopes),
+  );
+  expect(scopedCoverageViolations(checks, queueOnlyScopes)).toEqual([]);
+});
+
+test("path-scoped coverage rejects event and queue-depth exclusions", () => {
+  const scoped = "needs.ci-plan.outputs.example_checks_required == 'true'";
+  const check = {
+    name: "example-lint",
+    scope: "example_checks_required",
+    condition: scoped,
+    requiredOnPr: true,
+    requiredOnThin: true,
+  };
+  expect(scopedCoverageViolations([check])).toEqual([]);
+  expect(
+    scopedCoverageViolations([
+      {
+        ...check,
+        condition: `github.event_name != 'pull_request' && needs.ci-plan.outputs.queue_depth != 'thin' && (${scoped})`,
+      },
+    ]),
+  ).toEqual([check.scope]);
+  const desktop = jobIf(ciJobs["desktop-rust-lint"]);
+  expect(
+    runsAtDepth(`github.event_name != 'pull_request' && (${desktop})`, {
+      event: EVENT.pullRequest,
+      depth: SUITE_DEPTH.fast,
+    }),
+  ).toBe(false);
+});
 
 const parityJobs = gatedJobs.map((name) => ({
   name,
