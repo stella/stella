@@ -93,6 +93,13 @@ describe.serial("corpus mutation provenance", () => {
       await lint("return db.update(checkpoint).set({ cursor: 1 }).execute();"),
     ).toEqual([]);
   });
+  test("an opaque computed key retains the audit requirement", async () => {
+    expect(
+      await lint(
+        "await db.update(checkpoint).set({ cursor: checkpoint[resolveKey()] });",
+      ),
+    ).toEqual([4]);
+  });
   test("a changed SQL value retains the audit requirement", async () => {
     expect(
       await lint(

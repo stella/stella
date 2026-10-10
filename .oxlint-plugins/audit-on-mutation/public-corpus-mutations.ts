@@ -1,5 +1,6 @@
 import type { PublicCorpusBookkeepingTable } from "../../apps/api/src/lib/db/public-corpus-audit/membership.ts";
 import {
+  type AstNode,
   type ImportedFromOptions,
   isAstNode,
   isIdentifierReference,
@@ -26,7 +27,55 @@ type MutationArgs = {
   tables: readonly Membership[];
 };
 
+const isPlainMember = (node: unknown): node is AstNode =>
+  isAstNode(node) &&
+  node.type === "MemberExpression" &&
+  node.computed === false &&
+  (node.optional === undefined || node.optional === false) &&
+  isIdentifier(node.property);
+
+type ImportShapeArgs = { context: Context; node: unknown; seen?: Set<unknown> };
+const hasProvenImportShape = ({
+  context,
+  node,
+  seen = new Set(),
+}: ImportShapeArgs): boolean => {
+  if (!isAstNode(node) || seen.has(node)) {
+    return false;
+  }
+  seen.add(node);
+  switch (node.type) {
+    case "Identifier": {
+      if (!isIdentifierReference(node)) {
+        return false;
+      }
+      const variable = resolveVariable(context, node);
+      if (
+        variable?.defs.length === 1 &&
+        variable.defs.at(0)?.type === "ImportBinding"
+      ) {
+        return true;
+      }
+      const initializer = singleUseInitializer(context, node);
+      return (
+        initializer !== null &&
+        hasProvenImportShape({ context, node: initializer, seen })
+      );
+    }
+    case "MemberExpression":
+      return (
+        isPlainMember(node) &&
+        hasProvenImportShape({ context, node: node.object, seen })
+      );
+    default:
+      return false;
+  }
+};
+
 const tableFor = ({ context, node, tables }: MutationArgs) => {
+  if (!hasProvenImportShape({ context, node })) {
+    return undefined;
+  }
   const binding = resolveImportedExpression(context, node);
   const imported =
     binding === null
@@ -121,12 +170,13 @@ const singleUseInitializer = (context: Context, node: unknown) => {
 type StaticSqlArgs = { context: Context; node: unknown };
 
 const staticSql = ({ context, node }: StaticSqlArgs): string | null => {
-  let expression = unwrapExpression(node);
+  let expression = isAstNode(node) ? node : null;
   if (isIdentifierReference(expression)) {
-    expression = unwrapExpression(singleUseInitializer(context, expression));
+    expression = singleUseInitializer(context, expression);
   }
   if (
     expression?.type !== "TaggedTemplateExpression" ||
+    !hasProvenImportShape({ context, node: expression.tag }) ||
     !isImportedFrom({
       context,
       node: expression.tag,
@@ -151,60 +201,66 @@ const staticSql = ({ context, node }: StaticSqlArgs): string | null => {
     : null;
 };
 
-type ReadArgs = MutationArgs & { seen?: Set<unknown> };
-const containsRead = ({
+type ValueArgs = MutationArgs & { seen?: Set<unknown> };
+const isProvenValue = ({
   context,
   node,
   tables,
   seen = new Set(),
-}: ReadArgs): boolean => {
-  const expression = unwrapExpression(node);
-  if (expression === null || seen.has(expression)) {
-    return true;
-  }
-  seen.add(expression);
-  if (
-    expression.type === "Literal" ||
-    expression.type === "StringLiteral" ||
-    expression.type === "NumericLiteral" ||
-    expression.type === "BooleanLiteral" ||
-    expression.type === "NullLiteral"
-  ) {
+}: ValueArgs): boolean => {
+  if (!isAstNode(node) || seen.has(node)) {
     return false;
   }
-  if (
-    expression.type === "ObjectExpression" &&
-    Array.isArray(expression.properties)
-  ) {
-    return expression.properties.some(
-      (property) =>
-        !isAstNode(property) ||
-        property.type !== "Property" ||
-        property.computed === true ||
-        containsRead({ context, node: property.value, tables, seen }),
-    );
+  seen.add(node);
+  switch (node.type) {
+    case "Literal":
+    case "StringLiteral":
+    case "NumericLiteral":
+    case "BooleanLiteral":
+    case "NullLiteral":
+      return (
+        node.regex === undefined &&
+        (node.value === null ||
+          ["string", "number", "boolean", "bigint"].includes(typeof node.value))
+      );
+    case "ObjectExpression":
+      return (
+        Array.isArray(node.properties) &&
+        node.properties.every(
+          (property) =>
+            isAstNode(property) &&
+            property.type === "Property" &&
+            property.kind === "init" &&
+            property.method === false &&
+            property.computed === false &&
+            isProvenValue({ context, node: property.value, tables, seen }),
+        )
+      );
+    case "ArrayExpression":
+      return (
+        Array.isArray(node.elements) &&
+        node.elements.every((element) =>
+          isProvenValue({ context, node: element, tables, seen }),
+        )
+      );
+    case "MemberExpression":
+      return (
+        isPlainMember(node) &&
+        tableFor({ context, node: node.object, tables }) !== undefined
+      );
+    case "Identifier": {
+      if (tableFor({ context, node, tables }) !== undefined) {
+        return true;
+      }
+      const initializer = singleUseInitializer(context, node);
+      return (
+        initializer !== null &&
+        isProvenValue({ context, node: initializer, tables, seen })
+      );
+    }
+    default:
+      return false;
   }
-  if (
-    expression.type === "ArrayExpression" &&
-    Array.isArray(expression.elements)
-  ) {
-    return expression.elements.some((element) =>
-      containsRead({ context, node: element, tables, seen }),
-    );
-  }
-  if (expression.type === "MemberExpression") {
-    return tableFor({ context, node: expression.object, tables }) === undefined;
-  }
-  if (isIdentifierReference(expression)) {
-    const initializer = singleUseInitializer(context, expression);
-    return (
-      initializer === null ||
-      containsRead({ context, node: initializer, tables, seen })
-    );
-  }
-  // Opaque calls, SQL templates, spreads and other expressions cannot prove
-  // that their input contains only public corpus values.
-  return true;
 };
 
 const hasProvenExecution = (
@@ -237,13 +293,14 @@ const hasUnprovenRead = ({ context, node, tables }: MutationArgs): boolean => {
   let terminal = mutation;
   while (current !== null) {
     const parent = isAstNode(current.parent) ? current.parent : null;
-    if (parent?.type !== "MemberExpression" || parent.object !== current) {
+    if (!isPlainMember(parent) || parent.object !== current) {
       break;
     }
     const method = memberPropertyName(parent);
     const invocation = isAstNode(parent.parent) ? parent.parent : null;
     if (
       invocation?.type !== "CallExpression" ||
+      (invocation.optional !== undefined && invocation.optional !== false) ||
       !Array.isArray(invocation.arguments)
     ) {
       return true;
@@ -280,8 +337,8 @@ const hasUnprovenRead = ({ context, node, tables }: MutationArgs): boolean => {
     const argumentsToCheck =
       method === "from" ? invocation.arguments.slice(1) : invocation.arguments;
     if (
-      argumentsToCheck.some((argument) =>
-        containsRead({ context, node: argument, tables }),
+      argumentsToCheck.some(
+        (argument) => !isProvenValue({ context, node: argument, tables }),
       )
     ) {
       return true;
@@ -298,11 +355,15 @@ export const isPublicCorpusMutation = ({
   tables,
 }: MutationArgs): boolean => {
   const call = unwrapExpression(node);
-  if (call?.type !== "CallExpression" || !Array.isArray(call.arguments)) {
+  if (
+    call?.type !== "CallExpression" ||
+    (call.optional !== undefined && call.optional !== false) ||
+    !Array.isArray(call.arguments)
+  ) {
     return false;
   }
-  const callee = unwrapExpression(call.callee);
-  if (callee?.type !== "MemberExpression") {
+  const callee = isAstNode(call.callee) ? call.callee : null;
+  if (!isPlainMember(callee)) {
     return false;
   }
   const method = memberPropertyName(callee);
@@ -312,7 +373,7 @@ export const isPublicCorpusMutation = ({
       !hasUnprovenRead({ context, node: call, tables }) &&
       !call.arguments
         .slice(1)
-        .some((argument) => containsRead({ context, node: argument, tables }))
+        .some((argument) => !isProvenValue({ context, node: argument, tables }))
     );
   }
   if (method !== "execute") {
