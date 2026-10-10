@@ -70,7 +70,11 @@ if (!runPostgres || !process.env["DATABASE_URL"]) {
     context.adapter.incrementOne = originalIncrement;
   });
 
-  const fixture = async () => {
+  const fixture = async (
+    tokenEndpointAuthMethod:
+      | "client_secret_post"
+      | "none" = "client_secret_post",
+  ) => {
     const browser = await signInHuman(
       `rotation-${Bun.randomUUIDv7()}@example.test`,
     );
@@ -86,7 +90,10 @@ if (!runPostgres || !process.env["DATABASE_URL"]) {
         await rootDb.delete(organization).where(eq(organization.id, firm.id)),
     );
     await browser.setActiveOrganization(firm.id);
-    const client = await registerOAuthClient();
+    const client = await registerOAuthClient(
+      undefined,
+      tokenEndpointAuthMethod,
+    );
     cleanup.push(
       async () =>
         await rootDb
@@ -104,6 +111,46 @@ if (!runPostgres || !process.env["DATABASE_URL"]) {
     );
 
   describe("OAuth refresh reuse window (postgres)", () => {
+    test.each([1, 2])(
+      "rotates public grants %s times and immediately refuses consumed refresh tokens",
+      async (rotations) => {
+        const { client, grant } = await fixture("none");
+        const consumed = [];
+        let refreshToken = grant.refreshToken;
+        for (let round = 0; round < rotations; round += 1) {
+          consumed.push(refreshToken);
+          const start = performance.now();
+          const response = await refreshOAuthGrant({ client, refreshToken });
+          expect(performance.now() - start).toBeLessThan(10_000);
+          expect(response.status).toBe(200);
+          const tokens = v.parse(tokenSchema, await response.json());
+          expect(tokens.refresh_token).not.toBe(refreshToken);
+          refreshToken = tokens.refresh_token;
+        }
+        const rows = await rootDb
+          .select()
+          .from(oauthRefreshToken)
+          .where(eq(oauthRefreshToken.clientId, client.clientId));
+        expect(rows.filter((row) => row.rotatedAt !== null)).toHaveLength(
+          rotations,
+        );
+        for (const row of rows) {
+          expect(row.rotationReplayExpiresAt).toBeNull();
+          expect(row.rotationReplayResponse).toBeNull();
+        }
+        for (const oldToken of consumed) {
+          const response = await refreshOAuthGrant({
+            client,
+            refreshToken: oldToken,
+          });
+          expect(response.status).toBe(400);
+          expect(await response.json()).toMatchObject({
+            error: "invalid_grant",
+          });
+        }
+      },
+    );
+
     test("reuses a discarded rotation response and preserves its successor", async () => {
       const { client, grant } = await fixture();
       expect(await countRefreshRows(client.clientId)).toBe(1);
@@ -181,64 +228,67 @@ if (!runPostgres || !process.env["DATABASE_URL"]) {
       ).toBe(400);
     });
     // Both requests read the unrotated row before the conditional update.
-    test("rejects the losing concurrent update and preserves the winning rotation", async () => {
-      const { client, grant } = await fixture();
-      expect(await countRefreshRows(client.clientId)).toBe(1);
-      let arrived = 0;
-      let release = () => {};
-      const bothArrived = new Promise<void>((resolve) => {
-        release = resolve;
-      });
-      context.adapter.incrementOne = async (args) => {
-        if (args.model === "oauthRefreshToken") {
-          arrived += 1;
-          if (arrived === 2) {
-            release();
+    test.each(["client_secret_post", "none"] as const)(
+      "rejects the losing concurrent update and preserves the winning %s rotation",
+      async (method) => {
+        const { client, grant } = await fixture(method);
+        expect(await countRefreshRows(client.clientId)).toBe(1);
+        let arrived = 0;
+        let release = () => {};
+        const bothArrived = new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        context.adapter.incrementOne = async (args) => {
+          if (args.model === "oauthRefreshToken") {
+            arrived += 1;
+            if (arrived === 2) {
+              release();
+            }
+            await bothArrived;
           }
-          await bothArrived;
-        }
-        return await originalIncrement(args);
-      };
-      const responses = await Promise.all([
-        refreshOAuthGrant({ client, refreshToken: grant.refreshToken }),
-        refreshOAuthGrant({ client, refreshToken: grant.refreshToken }),
-      ]);
-      context.adapter.incrementOne = originalIncrement;
-      expect(arrived).toBe(2);
-      expect(await countRefreshRows(client.clientId)).toBe(2);
-      const statuses = responses
-        .map(({ status }) => status)
-        .toSorted((left, right) => left - right);
-      const accepted =
-        responses.find(({ status }) => status === 200) ??
-        panic("One rotation must succeed");
-      const tokens = v.parse(tokenSchema, await accepted.json());
-      expect(
-        await isOAuthTokenActive({
+          return await originalIncrement(args);
+        };
+        const responses = await Promise.all([
+          refreshOAuthGrant({ client, refreshToken: grant.refreshToken }),
+          refreshOAuthGrant({ client, refreshToken: grant.refreshToken }),
+        ]);
+        context.adapter.incrementOne = originalIncrement;
+        expect(arrived).toBe(2);
+        expect(await countRefreshRows(client.clientId)).toBe(2);
+        const statuses = responses
+          .map(({ status }) => status)
+          .toSorted((left, right) => left - right);
+        const accepted =
+          responses.find(({ status }) => status === 200) ??
+          panic("One rotation must succeed");
+        const tokens = v.parse(tokenSchema, await accepted.json());
+        expect(
+          await isOAuthTokenActive({
+            client,
+            token: tokens.refresh_token,
+            tokenTypeHint: "refresh_token",
+          }),
+        ).toBe(true);
+        expect(statuses).toEqual([200, 400]);
+        const rejected =
+          responses.find(({ status }) => status === 400) ??
+          panic("One rotation must be rejected");
+        expect(await rejected.json()).toMatchObject({ error: "invalid_grant" });
+        const nextRotation = await refreshOAuthGrant({
           client,
-          token: tokens.refresh_token,
-          tokenTypeHint: "refresh_token",
-        }),
-      ).toBe(true);
-      expect(statuses).toEqual([200, 400]);
-      const rejected =
-        responses.find(({ status }) => status === 400) ??
-        panic("One rotation must be rejected");
-      expect(await rejected.json()).toMatchObject({ error: "invalid_grant" });
-      const nextRotation = await refreshOAuthGrant({
-        client,
-        refreshToken: tokens.refresh_token,
-      });
-      expect(nextRotation.status).toBe(200);
-      const nextTokens = v.parse(tokenSchema, await nextRotation.json());
-      expect(
-        await isOAuthTokenActive({
-          client,
-          token: nextTokens.refresh_token,
-          tokenTypeHint: "refresh_token",
-        }),
-      ).toBe(true);
-      expect(await countRefreshRows(client.clientId)).toBe(3);
-    });
+          refreshToken: tokens.refresh_token,
+        });
+        expect(nextRotation.status).toBe(200);
+        const nextTokens = v.parse(tokenSchema, await nextRotation.json());
+        expect(
+          await isOAuthTokenActive({
+            client,
+            token: nextTokens.refresh_token,
+            tokenTypeHint: "refresh_token",
+          }),
+        ).toBe(true);
+        expect(await countRefreshRows(client.clientId)).toBe(3);
+      },
+    );
   });
 }

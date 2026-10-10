@@ -12,6 +12,13 @@ const OPTIONS = {
   environment: "staging",
   smokeSecret: "smoke-fixture-secret",
 } as const;
+const PRODUCTION_OPTIONS = {
+  ...OPTIONS,
+  environment: "production",
+  configuredBaseUrl: BASE_URL,
+  email: "restricted@example.test",
+  password: "password-fixture-secret",
+} as const;
 const STEPS = [
   "bootstrap",
   "discovery",
@@ -30,6 +37,10 @@ type FixtureOptions = {
   repeatRefresh?: number;
   responseBody?: { step: string; body: unknown };
   wrongCallbackState?: boolean;
+  callbackIssuer?: string | null;
+  metadataIssuer?: string;
+  acceptsReusedToken?: boolean;
+  reuseError?: string;
 };
 
 const createTransport = ({
@@ -37,6 +48,10 @@ const createTransport = ({
   repeatRefresh,
   responseBody,
   wrongCallbackState,
+  callbackIssuer = `${BASE_URL}/api/auth`,
+  metadataIssuer = `${BASE_URL}/api/auth`,
+  acceptsReusedToken,
+  reuseError = "invalid_grant",
 }: FixtureOptions = {}) => {
   const requests: { url: URL; headers: Headers; body: string; step: string }[] =
     [];
@@ -45,6 +60,10 @@ const createTransport = ({
   const fetcher: CanaryFetcher = async (input, init) => {
     const request = input instanceof Request ? input : undefined;
     const url = new URL(input instanceof Request ? input.url : input);
+    if (url.pathname !== "/mcp") {
+      expect(init.timeout).toEqual({ type: "idle", ms: 10_000 });
+      expect(init.signal?.aborted).toBe(false);
+    }
     const headers = new Headers(init.headers ?? request?.headers);
     let body = "";
     if (typeof init.body === "string") {
@@ -55,6 +74,24 @@ const createTransport = ({
     let step: string;
     let response: Response;
     switch (url.pathname) {
+      case "/api/auth/sign-in/email":
+        step = "sign-in";
+        expect(JSON.parse(body)).toEqual({
+          email: PRODUCTION_OPTIONS.email,
+          password: PRODUCTION_OPTIONS.password,
+        });
+        response = Response.json(
+          { user: { email: PRODUCTION_OPTIONS.email } },
+          { headers: { "set-cookie": "session=restricted-cookie; HttpOnly" } },
+        );
+        break;
+      case "/api/auth/get-session":
+        step = "session";
+        response = Response.json({
+          user: { email: PRODUCTION_OPTIONS.email },
+          session: { activeOrganizationId: "restricted-org" },
+        });
+        break;
       case "/smoke/session":
         step = "bootstrap";
         response = Response.json({
@@ -72,6 +109,7 @@ const createTransport = ({
       case "/.well-known/oauth-authorization-server/api/auth": {
         step = "discovery";
         const metadata = {
+          issuer: metadataIssuer,
           authorization_endpoint: `${FRONTEND_URL}/api/auth/oauth2/authorize`,
           token_endpoint: `${FRONTEND_URL}/api/auth/oauth2/token`,
           registration_endpoint: `${FRONTEND_URL}/api/auth/oauth2/register`,
@@ -101,12 +139,25 @@ const createTransport = ({
           wrongCallbackState ? "wrong-state" : state,
         );
         redirect.searchParams.set("code", "fixture-code");
+        if (callbackIssuer !== null) {
+          redirect.searchParams.set("iss", callbackIssuer);
+        }
         response = Response.json({ url: redirect.toString() });
         break;
       }
       case "/api/auth/oauth2/token": {
         const grant = new URLSearchParams(body);
         if (grant.get("grant_type") === "refresh_token") {
+          if (rotation > 0 && grant.get("refresh_token") === "refresh-0") {
+            step = "reject reused token";
+            response = acceptsReusedToken
+              ? Response.json({
+                  access_token: "reused-access",
+                  refresh_token: "reused-refresh",
+                })
+              : Response.json({ error: reuseError }, { status: 400 });
+            break;
+          }
           rotation += 1;
           step = `refresh ${String(rotation)}`;
           expect(grant.get("refresh_token")).toBe(
@@ -234,9 +285,13 @@ describe("per-run OAuth refresh journey", () => {
     const { fetcher, requests } = createTransport();
     const results = await runRefreshJourney(OPTIONS, fetcher);
     expect(results.map(({ name, status }) => [name, status])).toEqual(
-      [...STEPS.slice(0, 4), "callback", ...STEPS.slice(4), "revoke"].map(
-        (step) => [`OAuth refresh: ${step}`, "passed"],
-      ),
+      [
+        ...STEPS.slice(0, 4),
+        "callback",
+        ...STEPS.slice(4),
+        "reject reused token",
+        "revoke",
+      ].map((step) => [`OAuth refresh: ${step}`, "passed"]),
     );
     const authorize = requests.find(({ step }) => step === "authorize");
     expect(authorize?.url.searchParams.get("scope")?.split(" ")).toContain(
@@ -342,23 +397,158 @@ describe("per-run OAuth refresh journey", () => {
     },
   );
 
-  test("reports the production browser-session reason without making a request", async () => {
+  test("signs in once in production, rotates twice, rejects the initial token and revokes the grant", async () => {
+    const { fetcher, requests } = createTransport();
+    const results = await runRefreshJourney(PRODUCTION_OPTIONS, fetcher);
+    expect(summarize(results)).toEqual({ failed: 0, skipped: 0 });
+    expect(results.map(({ name }) => name)).toEqual(
+      [
+        "sign-in",
+        "session",
+        "discovery",
+        "authorize",
+        "consent",
+        "callback",
+        "token",
+        ...[1, 2].flatMap((round) => [
+          `refresh ${String(round)}`,
+          `successor ${String(round)} initialize`,
+          `successor ${String(round)} read`,
+        ]),
+        "reject reused token",
+        "revoke",
+      ].map((step) => `OAuth refresh: ${step}`),
+    );
+    expect(requests.filter(({ step }) => step === "sign-in")).toHaveLength(1);
+    expect(requests.some(({ step }) => step === "bootstrap")).toBe(false);
+    const authorize = requests.find(({ step }) => step === "authorize");
+    expect(authorize?.url.searchParams.get("resource")).toBe(`${BASE_URL}/mcp`);
+    expect(authorize?.url.searchParams.get("scope")?.split(" ")).toContain(
+      "offline_access",
+    );
+    for (const { step, url, headers, body } of requests) {
+      expect([BASE_URL, FRONTEND_URL]).toContain(url.origin);
+      if (url.pathname.startsWith("/api/auth/") && step !== "sign-in") {
+        expect(headers.get("cookie")).toBe("session=restricted-cookie");
+      }
+      if (url.pathname === "/api/auth/oauth2/token") {
+        expect(headers.get("content-type")).toBe(
+          "application/x-www-form-urlencoded",
+        );
+        expect(new URLSearchParams(body).get("resource")).toBe(
+          `${BASE_URL}/mcp`,
+        );
+      }
+      expect(headers.has("x-smoke-secret")).toBe(false);
+    }
+    expect(new URLSearchParams(requests.at(-1)?.body).get("token")).toBe(
+      "refresh-2",
+    );
+    expect(JSON.stringify(results)).not.toContain(PRODUCTION_OPTIONS.password);
+  });
+
+  test.each([undefined, "http", "transport", "malformed"] as const)(
+    "stops production sign-in without retry on %s failure",
+    async (kind) => {
+      const { fetcher, requests } = createTransport(
+        kind
+          ? { failure: { step: "sign-in", kind } }
+          : {
+              responseBody: {
+                step: "sign-in",
+                body: { user: { email: "different@example.test" } },
+              },
+            },
+      );
+      const results = await runRefreshJourney(PRODUCTION_OPTIONS, fetcher);
+      expect(results.filter(({ status }) => status === "failed")).toMatchObject(
+        [{ name: "OAuth refresh: sign-in" }],
+      );
+      expect(requests).toHaveLength(1);
+      expect(JSON.stringify(results)).not.toContain(
+        PRODUCTION_OPTIONS.password,
+      );
+    },
+  );
+
+  test.each([
+    null,
+    "https://api.example/api/auth/",
+    "https://other.example/api/auth",
+  ])(
+    "rejects callback issuer %s before exchanging the code",
+    async (callbackIssuer) => {
+      const { fetcher, requests } = createTransport({ callbackIssuer });
+      const results = await runRefreshJourney(PRODUCTION_OPTIONS, fetcher);
+      expect(results.filter(({ status }) => status === "failed")).toMatchObject(
+        [{ name: "OAuth refresh: callback" }],
+      );
+      expect(requests.some(({ step }) => step === "token")).toBe(false);
+    },
+  );
+
+  test.each([
+    "https://api.example/api/auth/",
+    "https://other.example/api/auth",
+  ])(
+    "rejects metadata issuer %s differing from resource discovery",
+    async (metadataIssuer) => {
+      const { fetcher, requests } = createTransport({ metadataIssuer });
+      const results = await runRefreshJourney(PRODUCTION_OPTIONS, fetcher);
+      expect(results.filter(({ status }) => status === "failed")).toMatchObject(
+        [{ name: "OAuth refresh: discovery" }],
+      );
+      expect(requests.some(({ step }) => step === "authorize")).toBe(false);
+    },
+  );
+
+  test.each([
+    { acceptsReusedToken: true },
+    { reuseError: "invalid_request" },
+    { reuseError: "custom_error" },
+  ])(
+    "requires invalid_grant when replaying the initial token: %j",
+    async (options) => {
+      const { fetcher, requests } = createTransport(options);
+      const results = await runRefreshJourney(PRODUCTION_OPTIONS, fetcher);
+      expect(results.filter(({ status }) => status === "failed")).toMatchObject(
+        [{ name: "OAuth refresh: reject reused token" }],
+      );
+      expect(requests.at(-1)?.step).toBe("revoke");
+    },
+  );
+
+  test.each([
+    { email: undefined },
+    { password: undefined },
+    { configuredBaseUrl: "https://other.example" },
+  ])(
+    "fails production with unavailable or mismatched credentials: %j",
+    async (options) => {
+      const fetcher: CanaryFetcher = async () => {
+        throw new TypeError("must not fetch");
+      };
+      expect(
+        summarize(
+          await runRefreshJourney(
+            { ...PRODUCTION_OPTIONS, ...options },
+            fetcher,
+          ),
+        ),
+      ).toEqual({ failed: 1, skipped: 0 });
+    },
+  );
+
+  test("omits the production refresh journey in frequent mode", async () => {
     const fetcher: CanaryFetcher = async () => {
       throw new TypeError("must not fetch");
     };
     expect(
       await runRefreshJourney(
-        { ...OPTIONS, environment: "production" },
+        { ...PRODUCTION_OPTIONS, mode: "frequent" },
         fetcher,
       ),
-    ).toEqual([
-      {
-        name: "OAuth refresh",
-        status: "skipped",
-        reason: "no_prod_browser_session",
-        detail: "no prod browser session mechanism for the canary org",
-      },
-    ]);
+    ).toEqual([]);
   });
 
   test("fails staging bootstrap when its session credential is absent", async () => {
