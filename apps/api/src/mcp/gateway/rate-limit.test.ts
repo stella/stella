@@ -116,7 +116,9 @@ test.each(["redis", "fallback"] as const)(
       }),
       now: () => 1000,
       onRedisError: () => undefined,
-      recordRejection: (observation) => observations.push(observation),
+      recordRejection: (observation) => {
+        observations.push(observation);
+      },
     });
     for (let index = 0; index < MCP_RATE_LIMITS.gateway.max; index += 1) {
       expect(

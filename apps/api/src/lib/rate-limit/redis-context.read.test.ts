@@ -81,7 +81,7 @@ test.each(["local", "redis"] as const)(
       await context.decrement(successorKey);
       expect((await context.read(successorKey))?.count).toBe(0);
     } finally {
-      await context.kill();
+      context.kill();
     }
   },
 );
@@ -127,7 +127,7 @@ test.each([
       expect(read?.args.at(0)).not.toMatch(/HINCRBY|HSET|PEXPIRE|HDEL/u);
       expect(read?.args.at(2)).not.toContain("request");
     } finally {
-      await context.kill();
+      context.kill();
     }
   },
 );
@@ -143,7 +143,9 @@ test.each(["fail_open_local", "fail_closed"] as const)(
           throw new TypeError("unavailable");
         },
       }),
-      onRedisError: (_error, operation) => operations.push(operation),
+      onRedisError: (_error, operation) => {
+        operations.push(operation);
+      },
     });
     context.init({ duration: 60_000 });
     try {
@@ -158,7 +160,7 @@ test.each(["fail_open_local", "fail_closed"] as const)(
         expect(empty?.count).toBe(Number.MAX_SAFE_INTEGER);
       }
     } finally {
-      await context.kill();
+      context.kill();
     }
   },
 );

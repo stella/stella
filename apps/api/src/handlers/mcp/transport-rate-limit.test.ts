@@ -340,7 +340,9 @@ test("authentication address refusals emit one bounded budget observation", asyn
       generator: mcpTransportAddressRateLimitKey,
       max: 1,
     },
-    (observation) => observations.push(observation),
+    (observation) => {
+      observations.push(observation);
+    },
   );
   const request = transportRequest({ token: "invalid-credential" });
   try {
@@ -395,7 +397,9 @@ test("an exhausted address rejects a new bearer before verification", async () =
       generator: mcpTransportAddressRateLimitKey,
       max: 2,
     },
-    (observation) => observations.push(observation),
+    (observation) => {
+      observations.push(observation);
+    },
   );
   const app = createMcpRoute({
     handleMcpHttpRequest: verify,
@@ -560,11 +564,13 @@ test.each(["e2e", "skip"] as const)(
         max: 1,
         skip: async () => mode === "skip",
       },
-      (observation) => observations.push(observation),
+      (observation) => {
+        observations.push(observation);
+      },
     );
     try {
       const request = transportRequest({ token: "invalid" });
-      await context.increment("mcp-transport-address");
+      context.increment("mcp-transport-address");
       testState.setConfig("E2E_DISABLE_AUTH_RATE_LIMIT", mode === "e2e");
       expect(
         (

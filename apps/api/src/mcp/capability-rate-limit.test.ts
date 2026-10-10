@@ -258,7 +258,9 @@ test("source capability refusals retain the source owner observation without a d
     capabilityId: "skills.discover",
     organizationId: org("source-org"),
     userId: user("source-user"),
-    recordRejection: (observation) => observations.push(observation),
+    recordRejection: (observation) => {
+      observations.push(observation);
+    },
     consumeSkillSource: async (input) =>
       await consumeSkillSourceRateLimit({
         ...input,
@@ -270,7 +272,9 @@ test("source capability refusals retain the source owner observation without a d
           }),
           complete: async () => undefined,
         },
-        recordRejection: (observation) => observations.push(observation),
+        recordRejection: (observation) => {
+          observations.push(observation);
+        },
       }),
   });
   expect(result.ok).toBe(false);

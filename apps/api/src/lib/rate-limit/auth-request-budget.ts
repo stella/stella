@@ -219,14 +219,16 @@ const readAuthBudgetGrant = async ({
     grantType,
   );
   if (grantType === "refresh_token") {
-    const row = await ctx.context.adapter.findOne({
-      model: "oauthRefreshToken",
-      where: [{ field: "token", value: storedToken }],
-    });
-    if (!row) {
+    const grant = v.parse(
+      v.nullable(refreshGrantSchema),
+      await ctx.context.adapter.findOne({
+        model: "oauthRefreshToken",
+        where: [{ field: "token", value: storedToken }],
+      }),
+    );
+    if (grant === null) {
       return undefined;
     }
-    const grant = v.parse(refreshGrantSchema, row);
     // Possession identifies the budget owner; the provider owns expiry, revocation and replay.
     return { userId: grant.userId, clientId: grant.clientId };
   }
