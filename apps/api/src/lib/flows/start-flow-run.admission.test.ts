@@ -75,7 +75,7 @@ describe("flow kickoff acceptance", () => {
             email: "member@example.test",
             role: "owner",
             workspace: { id: workspaceId, status: "active" },
-            ...NO_FEATURE_ACCESS_FACTS,
+            ...PLAIN_MEMBER_FACTS,
           };
         },
         insertWithinCap: async ({ rows }) => {
