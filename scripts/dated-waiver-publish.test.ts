@@ -448,7 +448,7 @@ describe("dated waiver removal publication", () => {
     github.prs.push({ number: 42, title: REMOVAL_TITLE, body: BODY });
     github.refs.set(BRANCH, "previous-head");
     const calls: string[] = [];
-    let state: "armed" | "unarmed" = "unarmed";
+    const proposal: { state: "armed" | "unarmed" } = { state: "unarmed" };
     const run = async (command: string[]) => {
       if (command.at(-1) === "--disable-auto") {
         expect(command).toEqual([
@@ -461,15 +461,15 @@ describe("dated waiver removal publication", () => {
           "--disable-auto",
         ]);
         calls.push("disarm");
-        state = "unarmed";
+        proposal.state = "unarmed";
       } else {
         calls.push("arm");
-        state = "armed";
+        proposal.state = "armed";
       }
       return { exitCode: 0, stderr: "" };
     };
     await armRemoval({ number: 42, headSha: "a".repeat(40) }, run);
-    expect(state).toBe("armed");
+    expect(proposal.state).toBe("armed");
     calls.length = 0;
     const published = await publishRemoval({
       branch: BRANCH,
@@ -482,7 +482,7 @@ describe("dated waiver removal publication", () => {
       request: async (args, input) => {
         if (input !== undefined && args.at(0)?.startsWith(`${API}/git/refs`)) {
           calls.push("branch-update");
-          expect(state).toBe("unarmed");
+          expect(proposal.state).toBe("unarmed");
         }
         return github.request(args, input);
       },
@@ -493,7 +493,7 @@ describe("dated waiver removal publication", () => {
     await armRemovalUnlessHeld({ removal: published, mergeHold: "1", run });
     expect(calls).toEqual(["disarm", "branch-update", "branch-update"]);
     expect(published.number).toBe(42);
-    expect(state).toBe("unarmed");
+    expect(proposal.state).toBe("unarmed");
   });
 
   test("a hold disarm failure prevents every publication write", async () => {
