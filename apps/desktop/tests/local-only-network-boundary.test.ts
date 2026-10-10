@@ -37,7 +37,7 @@ const expectFixedMessageLogs = (file: string, source: string) => {
     /(?:tracing|log)::(?:trace|debug|info|warn|error)!\([\s\S]*?\);/gu,
   )) {
     expect(log[0], file).toMatch(
-      /^(?:tracing|log)::(?:trace|debug|info|warn|error)!\(\s*"(?:\\.|[^"\\])*"\s*,?\s*\);$/u,
+      /^(?:tracing|log)::(?:trace|debug|info|warn|error)!\(\s*"(?:\\.|[^"\\{}])*"\s*,?\s*\);$/u,
     );
   }
 };
@@ -50,6 +50,7 @@ describe("local-only network boundary", () => {
     );
     for (const source of [
       'let payload = &segment.window_title; tracing::warn!(?payload, "debug");',
+      'tracing::warn!("window: {title}");',
       'tracing::warn!(error = %error, "activity day is unreadable");',
       'use tracing::warn; warn!("{}", document);',
       'println!("{}", document);',

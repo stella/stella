@@ -6,7 +6,7 @@ const MINUTE_MS = 60_000;
 /** Active periods closer than this merge into one proposed block. */
 export const BLOCK_GAP_MS = 10 * MINUTE_MS;
 /** Proposed block durations round up to this increment (a tenth of an hour). */
-export const BLOCK_INCREMENT_MS = 6 * MINUTE_MS;
+const BLOCK_INCREMENT_MS = 6 * MINUTE_MS;
 const TOP_APPS_PER_BLOCK = 3;
 /** Shorter spans remain in the timeline and active total, without a proposal. */
 export const MIN_PROPOSED_BLOCK_MS = 3 * MINUTE_MS;
