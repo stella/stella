@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 /**
  * The court a citation names, read from the citing sentence.
  *
@@ -14,17 +15,13 @@
  * normalization, `courtNameKeySql`, so the comparison never depends on a
  * per-court spelling list.
  */
-
-import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import {
   CITATION_MARKER_SOURCE,
   DECISION_DATE_SOURCE,
 } from "@/api/handlers/case-law/citation-decision-date";
-
-/** Fits the column; a court name is a few words, not a paragraph. */
-export const CITATION_COURT_HINT_MAX_LENGTH = 128;
+import { fitsCitationStorageField } from "@/api/lib/case-law/citation-storage-bounds";
 
 /**
  * How far before the number the court phrase may begin. The longest common
@@ -82,7 +79,7 @@ export const detectCitationCourtHint = (
     return null;
   }
   const normalized = court.replace(/\s+/gu, " ").trim();
-  return normalized.length > CITATION_COURT_HINT_MAX_LENGTH ? null : normalized;
+  return fitsCitationStorageField("courtHint", normalized) ? normalized : null;
 };
 
 /**

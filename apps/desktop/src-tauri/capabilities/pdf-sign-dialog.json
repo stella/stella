@@ -1,6 +1,6 @@
 {
   "identifier": "pdf-sign-dialog",
-  "description": "Minimal capabilities for the PDF signing prompt; it only invokes the pdf_sign_respond command",
+  "description": "Scoped response and content-size permissions for this native prompt",
   "windows": ["pdf-sign-dialog"],
-  "permissions": ["allow-pdf-sign-respond"]
+  "permissions": ["allow-pdf-sign-respond", "allow-fit-static-dialog"]
 }

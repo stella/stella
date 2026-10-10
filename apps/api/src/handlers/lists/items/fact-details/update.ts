@@ -24,6 +24,7 @@ import {
   FACT_SCORING,
 } from "@/api/lib/lists/fact-details";
 import type { FactDatePrecision } from "@/api/lib/lists/fact-details";
+import { LIST_VERIFICATION_ITEM_OPERATION } from "@/api/lib/lists/item-operations";
 import type {
   UnbackedProjectionKeys,
   UnprojectedColumns,
@@ -193,7 +194,10 @@ const updateFactDetails = createSafeHandler(
           resourceType: AUDIT_RESOURCE_TYPE.LEGAL_LIST_ITEM,
           resourceId: itemEntityId,
           changes,
-          metadata: { operation: "fact_details_set", listId },
+          metadata: {
+            operation: LIST_VERIFICATION_ITEM_OPERATION.factDetailsSet,
+            listId,
+          },
         });
         return { type: "updated" } as const;
       }),

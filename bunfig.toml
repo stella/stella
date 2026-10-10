@@ -16,7 +16,6 @@ publicHoistPattern = ["*"]
 minimumReleaseAge = 432_000
 minimumReleaseAgeExcludes = [
   # quarantine exception granted 2026-10-07: @gdp-ts/core can be installed now
-  "@gdp-ts/core", # quarantine-expires: 2026-10-10T13:31:08.275Z
   # TanStack Charts is needed before its quarantine ends.
   # Temporary third-party exceptions must carry the exact instant at which
   # the normal five-day quarantine admits the currently pinned release.

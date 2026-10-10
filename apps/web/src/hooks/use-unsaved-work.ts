@@ -13,6 +13,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 // installing their own blocker or unload listener.
 
 type UnsavedWorkSurface =
+  | "ai-provider-settings"
   | "chat-draft"
   | "docx-edit-session"
   | "document-docx-editor"
@@ -25,6 +26,7 @@ type UnsavedWorkSurface =
 const useUnsavedWorkStore = create<
   Readonly<Record<UnsavedWorkSurface, number>>
 >(() => ({
+  "ai-provider-settings": 0,
   "chat-draft": 0,
   "docx-edit-session": 0,
   "document-docx-editor": 0,

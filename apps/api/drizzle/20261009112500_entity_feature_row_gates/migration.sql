@@ -664,10 +664,9 @@ SET LOCAL ROLE stella_entity_gate;
 -- stella-migration-safety: reviewed security-definer - Dedicated-role trigger routines derive stored visibility and lock trusted graph parents; fixed search_path and no PUBLIC execute.
 CREATE OR REPLACE FUNCTION public.entity_feature_gate_value(table_name text, row_data jsonb)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER
-SET search_path = pg_catalog SET row_security = on AS $function$
+SET search_path = pg_catalog SET row_security = on SET jit = off AS $function$
 DECLARE
-  graph jsonb := public.entity_feature_gate_graph();
-  descriptor jsonb := graph -> table_name;
+  descriptor jsonb;
   reference jsonb;
   parent_descriptor jsonb;
   parent_row jsonb;
@@ -676,19 +675,20 @@ DECLARE
   workspace_ids uuid[] := '{}';
   organization_ids text[] := '{}';
 BEGIN
-  IF descriptor IS NULL THEN
-    RAISE EXCEPTION 'Unregistered entity feature relation: %', table_name;
-  END IF;
   IF table_name = 'entities' THEN
     RETURN jsonb_build_object('state', CASE WHEN row_data->>'list_item_type' IS NULL
       OR row_data->>'list_item_type' = 'task' THEN 'open' ELSE 'legal-lists' END,
       'workspaceIds', '[]'::jsonb, 'organizationIds', '[]'::jsonb);
   END IF;
+  descriptor := public.entity_feature_gate_graph() -> table_name;
+  IF descriptor IS NULL THEN
+    RAISE EXCEPTION 'Unregistered entity feature relation: %', table_name;
+  END IF;
   -- References are ordered by parent relation and column; concurrent child
   -- writers take compatible SHARE locks, which exclude parent reclassification.
   FOR reference IN SELECT value FROM jsonb_array_elements(descriptor->'refs') LOOP
     IF row_data->>(reference->>'column') IS NULL THEN CONTINUE; END IF;
-    parent_descriptor := graph -> (reference->>'parent');
+    parent_descriptor := public.entity_feature_gate_graph() -> (reference->>'parent');
     parent_row := NULL;
     EXECUTE format('SELECT %s FROM public.%I p WHERE p.id = $1::uuid FOR SHARE',
       parent_descriptor->>'projection', reference->>'parent')
@@ -710,25 +710,35 @@ BEGIN
     ELSIF parent_value->>'state' NOT IN ('open', 'legal-lists') THEN
       RAISE EXCEPTION 'Invalid parent entity feature gate';
     END IF;
-    workspace_ids := workspace_ids || ARRAY(SELECT value::uuid
-      FROM jsonb_array_elements_text(parent_value->'workspaceIds'));
-    organization_ids := organization_ids || ARRAY(SELECT value
-      FROM jsonb_array_elements_text(parent_value->'organizationIds'));
-    IF (parent_descriptor->>'ownWorkspace')::boolean THEN
-      workspace_ids := array_append(workspace_ids, (parent_row->>'workspace_id')::uuid);
+    -- Paired row scope already enforces these requirements. Only inherited
+    -- scope needs array accumulation and normalization.
+    IF (descriptor->>'needsWorkspace')::boolean THEN
+      workspace_ids := workspace_ids || ARRAY(SELECT value::uuid
+        FROM jsonb_array_elements_text(parent_value->'workspaceIds'));
+      IF (parent_descriptor->>'ownWorkspace')::boolean THEN
+        workspace_ids := array_append(workspace_ids, (parent_row->>'workspace_id')::uuid);
+      END IF;
     END IF;
-    IF (parent_descriptor->>'ownOrganization')::boolean THEN
-      organization_ids := array_append(organization_ids, parent_row->>'organization_id');
+    IF (descriptor->>'needsOrganization')::boolean THEN
+      organization_ids := organization_ids || ARRAY(SELECT value
+        FROM jsonb_array_elements_text(parent_value->'organizationIds'));
+      IF (parent_descriptor->>'ownOrganization')::boolean THEN
+        organization_ids := array_append(organization_ids, parent_row->>'organization_id');
+      END IF;
     END IF;
   END LOOP;
-  SELECT coalesce(array_agg(DISTINCT id ORDER BY id), '{}') INTO workspace_ids
-    FROM unnest(workspace_ids) id
-    WHERE NOT ((descriptor->>'ownWorkspace')::boolean
-      AND id = (row_data->>'workspace_id')::uuid);
-  SELECT coalesce(array_agg(DISTINCT id ORDER BY id), '{}') INTO organization_ids
-    FROM unnest(organization_ids) id
-    WHERE NOT ((descriptor->>'ownOrganization')::boolean
-      AND id = row_data->>'organization_id');
+  IF (descriptor->>'needsWorkspace')::boolean THEN
+    SELECT coalesce(array_agg(DISTINCT id ORDER BY id), '{}') INTO workspace_ids
+      FROM unnest(workspace_ids) id
+      WHERE NOT ((descriptor->>'ownWorkspace')::boolean
+        AND id = (row_data->>'workspace_id')::uuid);
+  END IF;
+  IF (descriptor->>'needsOrganization')::boolean THEN
+    SELECT coalesce(array_agg(DISTINCT id ORDER BY id), '{}') INTO organization_ids
+      FROM unnest(organization_ids) id
+      WHERE NOT ((descriptor->>'ownOrganization')::boolean
+        AND id = row_data->>'organization_id');
+  END IF;
   RETURN jsonb_build_object('state', state, 'workspaceIds', workspace_ids,
     'organizationIds', organization_ids);
 END
@@ -739,23 +749,74 @@ REVOKE ALL ON FUNCTION public.entity_feature_gate_value(text, jsonb) FROM PUBLIC
 -- stella-migration-safety: reviewed security-definer - Dedicated-role trigger routines derive stored visibility and lock trusted graph parents; fixed search_path and no PUBLIC execute.
 CREATE OR REPLACE FUNCTION public.entity_feature_gate_write()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER
-SET search_path = pg_catalog SET row_security = on AS $function$
+SET search_path = pg_catalog SET row_security = on SET jit = off AS $function$
 DECLARE
-  descriptor jsonb := public.entity_feature_gate_graph()->TG_TABLE_NAME;
-  gate jsonb := public.entity_feature_gate_value(TG_TABLE_NAME, to_jsonb(NEW));
-  patch jsonb := jsonb_build_object('entity_feature_gate', gate->>'state');
+  row_data jsonb;
+  gate jsonb;
+  patch jsonb;
+  parent_gate text;
+  parent_workspace uuid;
+  parent_entity uuid;
 BEGIN
+  -- The root gate depends only on this row, including updates to cached input.
+  IF TG_TABLE_NAME = 'entities' THEN
+    NEW.entity_feature_gate := CASE WHEN NEW.list_item_type IS NULL
+      OR NEW.list_item_type = 'task' THEN 'open' ELSE 'legal-lists' END;
+    RETURN NEW;
+  END IF;
+  -- These single-parent paths use cached static plans and scalar reads. Do not
+  -- serialize file contents or search text just to derive visibility.
+  IF TG_TABLE_NAME = 'entity_versions' OR TG_TABLE_NAME = 'search_documents' THEN
+    SELECT CASE WHEN p.list_item_type IS NULL OR p.list_item_type = 'task'
+      THEN 'open' ELSE 'legal-lists' END, p.workspace_id
+      INTO parent_gate, parent_workspace
+      FROM public.entities p WHERE p.id = NEW.entity_id FOR SHARE;
+    NEW.entity_feature_gate := coalesce(parent_gate, 'missing');
+    IF TG_TABLE_NAME = 'search_documents' THEN
+      NEW.entity_feature_workspace_ids := CASE
+        WHEN parent_workspace IS NOT NULL AND parent_workspace <> NEW.workspace_id
+        THEN ARRAY[parent_workspace] ELSE '{}'::uuid[] END;
+    END IF;
+  ELSIF TG_TABLE_NAME = 'fields' THEN
+    SELECT p.entity_feature_gate, p.workspace_id, p.entity_id
+      INTO parent_gate, parent_workspace, parent_entity
+      FROM public.entity_versions p WHERE p.id = NEW.entity_version_id FOR SHARE;
+    -- A pending version can exist during backfill. Derive it from the locked
+    -- entity rather than persisting a pending child gate.
+    IF parent_gate = 'pending' THEN
+      SELECT CASE WHEN p.list_item_type IS NULL OR p.list_item_type = 'task'
+        THEN 'open' ELSE 'legal-lists' END INTO parent_gate
+        FROM public.entities p WHERE p.id = parent_entity FOR SHARE;
+    END IF;
+    NEW.entity_feature_gate := coalesce(parent_gate, 'missing');
+    NEW.entity_feature_workspace_ids := CASE
+      WHEN parent_workspace IS NOT NULL AND parent_workspace <> NEW.workspace_id
+      THEN ARRAY[parent_workspace] ELSE '{}'::uuid[] END;
+  ELSE
+    row_data := to_jsonb(NEW);
+    gate := public.entity_feature_gate_value(TG_TABLE_NAME, row_data);
+  END IF;
+  IF TG_TABLE_NAME IN ('entity_versions', 'fields', 'search_documents') THEN
+    IF TG_OP = 'INSERT' AND NEW.entity_feature_gate = 'missing'
+      AND current_setting('role', true) = 'stella' THEN
+      RAISE EXCEPTION 'The referenced entity feature parent no longer exists'
+        USING ERRCODE = '23503', TABLE = TG_TABLE_NAME;
+    END IF;
+    RETURN NEW;
+  END IF;
+  patch := jsonb_build_object('entity_feature_gate', gate->>'state');
   -- A scoped child write may wait for a parent that moved or disappeared.
   -- Preserve the FK-shaped refusal its caller already handles; maintenance
   -- can still persist denied gates for historical missing-parent rows.
-  IF gate->>'state' = 'missing' AND current_setting('role', true) = 'stella' THEN
+  IF TG_OP = 'INSERT' AND gate->>'state' = 'missing'
+    AND current_setting('role', true) = 'stella' THEN
     RAISE EXCEPTION 'The referenced entity feature parent no longer exists'
       USING ERRCODE = '23503', TABLE = TG_TABLE_NAME;
   END IF;
-  IF (descriptor->>'needsWorkspace')::boolean THEN
+  IF row_data ? 'entity_feature_workspace_ids' THEN
     patch := patch || jsonb_build_object('entity_feature_workspace_ids', gate->'workspaceIds');
   END IF;
-  IF (descriptor->>'needsOrganization')::boolean THEN
+  IF row_data ? 'entity_feature_organization_ids' THEN
     patch := patch || jsonb_build_object('entity_feature_organization_ids', gate->'organizationIds');
   END IF;
   -- A paired scope is enforced by its FK after this BEFORE trigger. Invalid
@@ -771,96 +832,763 @@ REVOKE ALL ON FUNCTION public.entity_feature_gate_write() FROM PUBLIC;
 -- stella-migration-safety: reviewed security-definer - Dedicated-role trigger routines derive stored visibility and lock trusted graph parents; fixed search_path and no PUBLIC execute.
 CREATE OR REPLACE FUNCTION public.entity_feature_gate_propagate()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER
-SET search_path = pg_catalog SET row_security = on AS $function$
+SET search_path = pg_catalog SET row_security = on
+SET plan_cache_mode = force_generic_plan SET jit = off AS $function$
 DECLARE
-  graph jsonb;
-  child record;
-  reference jsonb;
-  predicate text;
-  changed text;
-  has_changes boolean;
-  insert_proof jsonb;
+  changed_ids uuid[];
+  changed_workspace_ids uuid[];
+  matching_children text[];
+  child_name text;
 BEGIN
-  IF TG_OP = 'UPDATE' THEN
-    IF TG_TABLE_NAME = 'entities' THEN
-      changed := 'SELECT o.id FROM entity_feature_old_rows o JOIN entity_feature_new_rows n USING (id)
-        WHERE (o.list_item_type, o.workspace_id) IS DISTINCT FROM (n.list_item_type, n.workspace_id)
-        UNION SELECT id FROM entity_feature_old_rows EXCEPT SELECT id FROM entity_feature_new_rows';
+  -- Generated by apps/api/scripts/generate-entity-feature-gate-propagation.ts.
+  -- Generic plans cache statement shapes; relational membership permits hash
+  -- semijoins for large ID batches instead of linear array tests per child.
+  -- Cache descendant probes and writes; transition rows supply only IDs and
+  -- gate inputs. Keep orphan repair and the parent SHARE-lock protocol intact.
+  IF TG_TABLE_NAME = 'entities' THEN
+    IF TG_OP = 'UPDATE' THEN
+      WITH changed AS MATERIALIZED (
+        SELECT o.id AS old_id, n.id AS new_id
+        FROM entity_feature_old_rows o FULL JOIN entity_feature_new_rows n USING (id)
+        WHERE ROW(o."id", o."list_item_type", o."workspace_id") IS DISTINCT FROM ROW(n."id", n."list_item_type", n."workspace_id"))
+      SELECT ARRAY(SELECT old_id FROM changed WHERE old_id IS NOT NULL
+          UNION SELECT new_id FROM changed WHERE new_id IS NOT NULL),
+        ARRAY(SELECT o.workspace_id FROM entity_feature_old_rows o
+          UNION SELECT n.workspace_id FROM entity_feature_new_rows n)
+        INTO changed_ids, changed_workspace_ids;
+    ELSIF TG_OP = 'DELETE' THEN
+      SELECT ARRAY(SELECT id FROM entity_feature_old_rows),
+        ARRAY(SELECT DISTINCT o.workspace_id FROM entity_feature_old_rows o)
+        INTO changed_ids, changed_workspace_ids;
     ELSE
-      changed := 'SELECT o.id FROM entity_feature_old_rows o JOIN entity_feature_new_rows n USING (id)
-        WHERE (to_jsonb(o)->''entity_feature_gate'', to_jsonb(o)->''entity_feature_workspace_ids'',
-          to_jsonb(o)->''entity_feature_organization_ids'', to_jsonb(o)->''workspace_id'', to_jsonb(o)->''organization_id'')
-        IS DISTINCT FROM (to_jsonb(n)->''entity_feature_gate'', to_jsonb(n)->''entity_feature_workspace_ids'',
-          to_jsonb(n)->''entity_feature_organization_ids'', to_jsonb(n)->''workspace_id'', to_jsonb(n)->''organization_id'')
-        UNION SELECT id FROM entity_feature_old_rows EXCEPT SELECT id FROM entity_feature_new_rows';
+      SELECT ARRAY(SELECT id FROM entity_feature_new_rows),
+        ARRAY(SELECT DISTINCT n.workspace_id FROM entity_feature_new_rows n)
+        INTO changed_ids, changed_workspace_ids;
     END IF;
-    -- UNION/EXCEPT precedence must not subtract the changed IDs.
-    changed := replace(changed, 'UNION SELECT id FROM entity_feature_old_rows EXCEPT SELECT id FROM entity_feature_new_rows',
-      'UNION (SELECT id FROM entity_feature_old_rows EXCEPT SELECT id FROM entity_feature_new_rows) UNION (SELECT id FROM entity_feature_new_rows EXCEPT SELECT id FROM entity_feature_old_rows)');
-  ELSIF TG_OP = 'DELETE' THEN
-    changed := 'SELECT id FROM entity_feature_old_rows';
-  ELSE
-    changed := 'SELECT id FROM entity_feature_new_rows';
-  END IF;
-  -- Display-name and other unrelated updates must not plan every child write.
-  EXECUTE 'SELECT EXISTS (' || changed || ')' INTO has_changes;
-  IF NOT has_changes THEN RETURN NULL; END IF;
-  -- Empty child updates have no descendants to refresh.
-  graph := public.entity_feature_gate_graph();
-  IF TG_OP <> 'INSERT' AND current_setting('transaction_isolation') <> 'read committed' THEN
-    -- A fixed snapshot cannot observe a child that committed while this parent
-    -- waited for its SHARE lock. Retry the change with the writer isolation level.
-    RAISE EXCEPTION 'Entity feature propagation requires a current snapshot'
-      USING ERRCODE = '40001';
-  END IF;
-  -- One catalog read proves which references cannot predate this insertion.
-  -- Nullable companion keys, deferred/unvalidated FKs, and references without FKs
-  -- keep their repair path; UPDATE and DELETE still refresh every descendant.
-  IF TG_OP = 'INSERT' THEN
-    SELECT coalesce(jsonb_object_agg(reference_key, true), '{}'::jsonb) INTO insert_proof
-    FROM (
-      SELECT DISTINCT child_table.relname || ':' || child_column.attname AS reference_key
-      FROM pg_catalog.pg_constraint fk
-      JOIN pg_catalog.pg_class child_table ON child_table.oid = fk.conrelid
-      JOIN pg_catalog.pg_attribute child_column
-        ON child_column.attrelid = fk.conrelid AND child_column.attnum = ANY(fk.conkey)
-      JOIN pg_catalog.pg_attribute parent_column
-        ON parent_column.attrelid = fk.confrelid AND parent_column.attnum = ANY(fk.confkey)
-      WHERE fk.contype = 'f' AND fk.convalidated AND NOT fk.condeferrable
-        AND fk.confrelid = TG_RELID AND child_table.relnamespace = 'public'::regnamespace
-        AND parent_column.attname = 'id'
-        AND array_position(fk.conkey, child_column.attnum) = array_position(fk.confkey, parent_column.attnum)
-        AND NOT EXISTS (SELECT 1 FROM pg_catalog.pg_attribute companion
-          WHERE companion.attrelid = fk.conrelid AND companion.attnum = ANY(fk.conkey)
-            AND companion.attnum <> child_column.attnum AND NOT companion.attnotnull)
-    ) proven_references;
-  END IF;
-  FOR child IN SELECT candidate.key, candidate.value FROM jsonb_each(graph) candidate
-    WHERE TG_OP <> 'INSERT' OR EXISTS (
-      SELECT 1 FROM jsonb_array_elements(candidate.value->'refs') insertion_reference
-      WHERE insertion_reference->>'parent' = TG_TABLE_NAME AND NOT (
-        (insertion_reference->>'hasForeignKey')::boolean
-          AND insert_proof ? (candidate.key || ':' || (insertion_reference->>'column'))
-      )
-    ) ORDER BY candidate.key LOOP
-    predicate := '';
-    FOR reference IN SELECT value FROM jsonb_array_elements(child.value->'refs') LOOP
-      IF reference->>'parent' <> TG_TABLE_NAME THEN CONTINUE; END IF;
-      IF predicate <> '' THEN predicate := predicate || ' OR '; END IF;
-      IF (reference->>'sameWorkspace')::boolean THEN
-        predicate := predicate || format('(c.%I IN (SELECT id FROM changed) AND c.workspace_id IN (%s))',
-          reference->>'column', CASE TG_OP
-            WHEN 'INSERT' THEN 'SELECT workspace_id FROM entity_feature_new_rows'
-            WHEN 'DELETE' THEN 'SELECT workspace_id FROM entity_feature_old_rows'
-            ELSE 'SELECT workspace_id FROM entity_feature_old_rows UNION SELECT workspace_id FROM entity_feature_new_rows' END);
+    IF cardinality(changed_ids) = 0 THEN RETURN NULL; END IF;
+    IF TG_OP <> 'INSERT' AND current_setting('transaction_isolation') <> 'read committed' THEN
+      RAISE EXCEPTION 'Entity feature propagation requires a current snapshot'
+        USING ERRCODE = '40001';
+    END IF;
+    SELECT ARRAY(SELECT candidates.child_name FROM (
+        SELECT 'anonymization_allowlist_entries'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."anonymization_allowlist_entries" c WHERE (c."entity_id" IN (SELECT unnest(changed_ids))))
+        UNION ALL
+        SELECT 'correspondence'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."correspondence" c WHERE (c."source_entity_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids))))
+        UNION ALL
+        SELECT 'correspondence_attachments'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."correspondence_attachments" c WHERE (c."entity_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids))))
+        UNION ALL
+        SELECT 'desktop_edit_handoffs'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."desktop_edit_handoffs" c WHERE (c."entity_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids))))
+        UNION ALL
+        SELECT 'desktop_edit_sessions'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."desktop_edit_sessions" c WHERE (c."entity_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids))))
+        UNION ALL
+        SELECT 'document_processing_runs'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."document_processing_runs" c WHERE (c."entity_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids))))
+        UNION ALL
+        SELECT 'document_review_parties'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."document_review_parties" c WHERE (c."entity_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids))))
+        UNION ALL
+        SELECT 'document_review_reference_passages'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."document_review_reference_passages" c WHERE (c."entity_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids))))
+        UNION ALL
+        SELECT 'document_translation_runs'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."document_translation_runs" c WHERE (c."entity_id" IN (SELECT unnest(changed_ids))))
+        UNION ALL
+        SELECT 'docx_suggestions'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."docx_suggestions" c WHERE (c."entity_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids))))
+        UNION ALL
+        SELECT 'entity_links'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."entity_links" c WHERE (c."source_entity_id" IN (SELECT unnest(changed_ids))) OR (c."target_entity_id" IN (SELECT unnest(changed_ids))))
+        UNION ALL
+        SELECT 'entity_version_ai_summaries'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."entity_version_ai_summaries" c WHERE (c."entity_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids))))
+        UNION ALL
+        SELECT 'entity_versions'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."entity_versions" c WHERE (c."entity_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids))))
+        UNION ALL
+        SELECT 'extracted_content'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."extracted_content" c WHERE (c."entity_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids))))
+        UNION ALL
+        SELECT 'file_chat_threads'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."file_chat_threads" c WHERE (c."entity_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids))))
+        UNION ALL
+        SELECT 'flow_run_steps'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."flow_run_steps" c WHERE (c."review_task_entity_id" IN (SELECT unnest(changed_ids))))
+        UNION ALL
+        SELECT 'folio_collab_contributions'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."folio_collab_contributions" c WHERE (c."entity_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids))))
+        UNION ALL
+        SELECT 'folio_collab_publications'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."folio_collab_publications" c WHERE (c."entity_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids))))
+        UNION ALL
+        SELECT 'folio_collab_rooms'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."folio_collab_rooms" c WHERE (c."entity_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids))))
+        UNION ALL
+        SELECT 'legal_list_fact_details'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."legal_list_fact_details" c WHERE (c."item_entity_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids))))
+        UNION ALL
+        SELECT 'legal_list_generation_candidate_sources'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."legal_list_generation_candidate_sources" c WHERE (c."source_entity_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids))))
+        UNION ALL
+        SELECT 'legal_list_generation_candidates'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."legal_list_generation_candidates" c WHERE (c."accepted_entity_id" IN (SELECT unnest(changed_ids))))
+        UNION ALL
+        SELECT 'legal_list_generation_sources'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."legal_list_generation_sources" c WHERE (c."source_entity_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids))))
+        UNION ALL
+        SELECT 'legal_list_item_comments'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."legal_list_item_comments" c WHERE (c."item_entity_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids))))
+        UNION ALL
+        SELECT 'legal_list_item_reviews'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."legal_list_item_reviews" c WHERE (c."item_entity_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids))))
+        UNION ALL
+        SELECT 'legal_list_item_sources'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."legal_list_item_sources" c WHERE (c."item_entity_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids))) OR (c."source_entity_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids))))
+        UNION ALL
+        SELECT 'legal_list_items'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."legal_list_items" c WHERE (c."entity_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids))))
+        UNION ALL
+        SELECT 'legal_list_verification_runs'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."legal_list_verification_runs" c WHERE (c."entity_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids))))
+        UNION ALL
+        SELECT 'office_file_evidence'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."office_file_evidence" c WHERE (c."entity_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids))))
+        UNION ALL
+        SELECT 'pdf_signing_sessions'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."pdf_signing_sessions" c WHERE (c."entity_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids))))
+        UNION ALL
+        SELECT 'report_exports'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."report_exports" c WHERE (c."result_entity_id" IN (SELECT unnest(changed_ids))))
+        UNION ALL
+        SELECT 'search_document_preview_passages'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."search_document_preview_passages" c WHERE (c."entity_id" IN (SELECT unnest(changed_ids))))
+        UNION ALL
+        SELECT 'search_documents'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."search_documents" c WHERE (c."entity_id" IN (SELECT unnest(changed_ids))))
+        UNION ALL
+        SELECT 'task_assignees'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."task_assignees" c WHERE (c."entity_id" IN (SELECT unnest(changed_ids))))
+        UNION ALL
+        SELECT 'work_obligation_events'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."work_obligation_events" c WHERE (c."obligation_entity_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids))))
+        UNION ALL
+        SELECT 'work_obligations'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."work_obligations" c WHERE (c."entity_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids))))) candidates ORDER BY candidates.child_name)
+      INTO matching_children;
+    FOREACH child_name IN ARRAY matching_children LOOP
+      IF child_name = 'anonymization_allowlist_entries' THEN
+          UPDATE public."anonymization_allowlist_entries" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."entity_id" IN (SELECT unnest(changed_ids)));
+      ELSIF child_name = 'correspondence' THEN
+          UPDATE public."correspondence" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."source_entity_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids)));
+      ELSIF child_name = 'correspondence_attachments' THEN
+          UPDATE public."correspondence_attachments" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."entity_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids)));
+      ELSIF child_name = 'desktop_edit_handoffs' THEN
+          UPDATE public."desktop_edit_handoffs" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."entity_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids)));
+      ELSIF child_name = 'desktop_edit_sessions' THEN
+          UPDATE public."desktop_edit_sessions" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."entity_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids)));
+      ELSIF child_name = 'document_processing_runs' THEN
+          UPDATE public."document_processing_runs" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."entity_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids)));
+      ELSIF child_name = 'document_review_parties' THEN
+          UPDATE public."document_review_parties" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."entity_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids)));
+      ELSIF child_name = 'document_review_reference_passages' THEN
+          UPDATE public."document_review_reference_passages" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."entity_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids)));
+      ELSIF child_name = 'document_translation_runs' THEN
+          UPDATE public."document_translation_runs" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."entity_id" IN (SELECT unnest(changed_ids)));
+      ELSIF child_name = 'docx_suggestions' THEN
+          UPDATE public."docx_suggestions" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."entity_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids)));
+      ELSIF child_name = 'entity_links' THEN
+          UPDATE public."entity_links" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."source_entity_id" IN (SELECT unnest(changed_ids))) OR (c."target_entity_id" IN (SELECT unnest(changed_ids)));
+      ELSIF child_name = 'entity_version_ai_summaries' THEN
+          UPDATE public."entity_version_ai_summaries" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."entity_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids)));
+      ELSIF child_name = 'entity_versions' THEN
+          UPDATE public."entity_versions" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."entity_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids)));
+      ELSIF child_name = 'extracted_content' THEN
+          UPDATE public."extracted_content" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."entity_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids)));
+      ELSIF child_name = 'file_chat_threads' THEN
+          UPDATE public."file_chat_threads" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."entity_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids)));
+      ELSIF child_name = 'flow_run_steps' THEN
+          UPDATE public."flow_run_steps" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."review_task_entity_id" IN (SELECT unnest(changed_ids)));
+      ELSIF child_name = 'folio_collab_contributions' THEN
+          UPDATE public."folio_collab_contributions" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."entity_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids)));
+      ELSIF child_name = 'folio_collab_publications' THEN
+          UPDATE public."folio_collab_publications" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."entity_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids)));
+      ELSIF child_name = 'folio_collab_rooms' THEN
+          UPDATE public."folio_collab_rooms" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."entity_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids)));
+      ELSIF child_name = 'legal_list_fact_details' THEN
+          UPDATE public."legal_list_fact_details" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."item_entity_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids)));
+      ELSIF child_name = 'legal_list_generation_candidate_sources' THEN
+          UPDATE public."legal_list_generation_candidate_sources" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."source_entity_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids)));
+      ELSIF child_name = 'legal_list_generation_candidates' THEN
+          UPDATE public."legal_list_generation_candidates" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."accepted_entity_id" IN (SELECT unnest(changed_ids)));
+      ELSIF child_name = 'legal_list_generation_sources' THEN
+          UPDATE public."legal_list_generation_sources" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."source_entity_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids)));
+      ELSIF child_name = 'legal_list_item_comments' THEN
+          UPDATE public."legal_list_item_comments" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."item_entity_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids)));
+      ELSIF child_name = 'legal_list_item_reviews' THEN
+          UPDATE public."legal_list_item_reviews" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."item_entity_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids)));
+      ELSIF child_name = 'legal_list_item_sources' THEN
+          UPDATE public."legal_list_item_sources" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."item_entity_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids))) OR (c."source_entity_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids)));
+      ELSIF child_name = 'legal_list_items' THEN
+          UPDATE public."legal_list_items" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."entity_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids)));
+      ELSIF child_name = 'legal_list_verification_runs' THEN
+          UPDATE public."legal_list_verification_runs" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."entity_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids)));
+      ELSIF child_name = 'office_file_evidence' THEN
+          UPDATE public."office_file_evidence" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."entity_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids)));
+      ELSIF child_name = 'pdf_signing_sessions' THEN
+          UPDATE public."pdf_signing_sessions" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."entity_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids)));
+      ELSIF child_name = 'report_exports' THEN
+          UPDATE public."report_exports" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."result_entity_id" IN (SELECT unnest(changed_ids)));
+      ELSIF child_name = 'search_document_preview_passages' THEN
+          UPDATE public."search_document_preview_passages" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."entity_id" IN (SELECT unnest(changed_ids)));
+      ELSIF child_name = 'search_documents' THEN
+          UPDATE public."search_documents" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."entity_id" IN (SELECT unnest(changed_ids)));
+      ELSIF child_name = 'task_assignees' THEN
+          UPDATE public."task_assignees" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."entity_id" IN (SELECT unnest(changed_ids)));
+      ELSIF child_name = 'work_obligation_events' THEN
+          UPDATE public."work_obligation_events" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."obligation_entity_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids)));
+      ELSIF child_name = 'work_obligations' THEN
+          UPDATE public."work_obligations" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."entity_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids)));
       ELSE
-        predicate := predicate || format('c.%I IN (SELECT id FROM changed)', reference->>'column');
+        RAISE EXCEPTION 'Unknown entity feature child %', child_name USING ERRCODE = 'XX000';
       END IF;
     END LOOP;
-    IF predicate = '' THEN CONTINUE; END IF;
-    EXECUTE format('WITH changed AS MATERIALIZED (%s) UPDATE public.%I c
-      SET entity_feature_gate = c.entity_feature_gate WHERE %s', changed, child.key, predicate);
-  END LOOP;
+    RETURN NULL;
+  END IF;
+  IF TG_TABLE_NAME = 'entity_versions' THEN
+    IF TG_OP = 'UPDATE' THEN
+      WITH changed AS MATERIALIZED (
+        SELECT o.id AS old_id, n.id AS new_id
+        FROM entity_feature_old_rows o FULL JOIN entity_feature_new_rows n USING (id)
+        WHERE ROW(o."id", o."entity_feature_gate", o."workspace_id") IS DISTINCT FROM ROW(n."id", n."entity_feature_gate", n."workspace_id"))
+      SELECT ARRAY(SELECT old_id FROM changed WHERE old_id IS NOT NULL
+          UNION SELECT new_id FROM changed WHERE new_id IS NOT NULL),
+        ARRAY(SELECT o.workspace_id FROM entity_feature_old_rows o
+          UNION SELECT n.workspace_id FROM entity_feature_new_rows n)
+        INTO changed_ids, changed_workspace_ids;
+    ELSIF TG_OP = 'DELETE' THEN
+      SELECT ARRAY(SELECT id FROM entity_feature_old_rows),
+        ARRAY(SELECT DISTINCT o.workspace_id FROM entity_feature_old_rows o)
+        INTO changed_ids, changed_workspace_ids;
+    ELSE
+      SELECT ARRAY(SELECT id FROM entity_feature_new_rows),
+        ARRAY(SELECT DISTINCT n.workspace_id FROM entity_feature_new_rows n)
+        INTO changed_ids, changed_workspace_ids;
+    END IF;
+    IF cardinality(changed_ids) = 0 THEN RETURN NULL; END IF;
+    IF TG_OP <> 'INSERT' AND current_setting('transaction_isolation') <> 'read committed' THEN
+      RAISE EXCEPTION 'Entity feature propagation requires a current snapshot'
+        USING ERRCODE = '40001';
+    END IF;
+    SELECT ARRAY(SELECT candidates.child_name FROM (
+        SELECT 'cell_metadata'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."cell_metadata" c WHERE (c."entity_version_id" IN (SELECT unnest(changed_ids))))
+        UNION ALL
+        SELECT 'desktop_edit_sessions'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."desktop_edit_sessions" c WHERE (c."base_version_id" IN (SELECT unnest(changed_ids))) OR (c."finalized_version_id" IN (SELECT unnest(changed_ids))))
+        UNION ALL
+        SELECT 'document_processing_runs'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."document_processing_runs" c WHERE (c."entity_version_id" IN (SELECT unnest(changed_ids))))
+        UNION ALL
+        SELECT 'document_review_parties'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."document_review_parties" c WHERE (c."entity_version_id" IN (SELECT unnest(changed_ids))))
+        UNION ALL
+        SELECT 'entity_version_ai_summaries'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."entity_version_ai_summaries" c WHERE (c."entity_version_id" IN (SELECT unnest(changed_ids))))
+        UNION ALL
+        SELECT 'extracted_content'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."extracted_content" c WHERE (c."source_entity_version_id" IN (SELECT unnest(changed_ids))))
+        UNION ALL
+        SELECT 'fields'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."fields" c WHERE (c."entity_version_id" IN (SELECT unnest(changed_ids))))
+        UNION ALL
+        SELECT 'folio_collab_contributions'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."folio_collab_contributions" c WHERE (c."since_version_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids))))
+        UNION ALL
+        SELECT 'folio_collab_publications'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."folio_collab_publications" c WHERE (c."entity_version_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids))))
+        UNION ALL
+        SELECT 'folio_collab_rooms'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."folio_collab_rooms" c WHERE (c."base_version_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids))) OR (c."source_version_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids))))
+        UNION ALL
+        SELECT 'legal_list_generation_candidate_sources'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."legal_list_generation_candidate_sources" c WHERE (c."source_entity_version_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids))))
+        UNION ALL
+        SELECT 'legal_list_generation_sources'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."legal_list_generation_sources" c WHERE (c."source_entity_version_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids))))
+        UNION ALL
+        SELECT 'legal_list_item_sources'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."legal_list_item_sources" c WHERE (c."source_entity_version_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids))))
+        UNION ALL
+        SELECT 'office_file_evidence'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."office_file_evidence" c WHERE (c."entity_version_id" IN (SELECT unnest(changed_ids))))
+        UNION ALL
+        SELECT 'pdf_signing_sessions'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."pdf_signing_sessions" c WHERE (c."base_version_id" IN (SELECT unnest(changed_ids))) OR (c."finalized_version_id" IN (SELECT unnest(changed_ids))))) candidates ORDER BY candidates.child_name)
+      INTO matching_children;
+    FOREACH child_name IN ARRAY matching_children LOOP
+      IF child_name = 'cell_metadata' THEN
+          UPDATE public."cell_metadata" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."entity_version_id" IN (SELECT unnest(changed_ids)));
+      ELSIF child_name = 'desktop_edit_sessions' THEN
+          UPDATE public."desktop_edit_sessions" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."base_version_id" IN (SELECT unnest(changed_ids))) OR (c."finalized_version_id" IN (SELECT unnest(changed_ids)));
+      ELSIF child_name = 'document_processing_runs' THEN
+          UPDATE public."document_processing_runs" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."entity_version_id" IN (SELECT unnest(changed_ids)));
+      ELSIF child_name = 'document_review_parties' THEN
+          UPDATE public."document_review_parties" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."entity_version_id" IN (SELECT unnest(changed_ids)));
+      ELSIF child_name = 'entity_version_ai_summaries' THEN
+          UPDATE public."entity_version_ai_summaries" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."entity_version_id" IN (SELECT unnest(changed_ids)));
+      ELSIF child_name = 'extracted_content' THEN
+          UPDATE public."extracted_content" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."source_entity_version_id" IN (SELECT unnest(changed_ids)));
+      ELSIF child_name = 'fields' THEN
+          UPDATE public."fields" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."entity_version_id" IN (SELECT unnest(changed_ids)));
+      ELSIF child_name = 'folio_collab_contributions' THEN
+          UPDATE public."folio_collab_contributions" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."since_version_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids)));
+      ELSIF child_name = 'folio_collab_publications' THEN
+          UPDATE public."folio_collab_publications" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."entity_version_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids)));
+      ELSIF child_name = 'folio_collab_rooms' THEN
+          UPDATE public."folio_collab_rooms" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."base_version_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids))) OR (c."source_version_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids)));
+      ELSIF child_name = 'legal_list_generation_candidate_sources' THEN
+          UPDATE public."legal_list_generation_candidate_sources" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."source_entity_version_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids)));
+      ELSIF child_name = 'legal_list_generation_sources' THEN
+          UPDATE public."legal_list_generation_sources" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."source_entity_version_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids)));
+      ELSIF child_name = 'legal_list_item_sources' THEN
+          UPDATE public."legal_list_item_sources" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."source_entity_version_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids)));
+      ELSIF child_name = 'office_file_evidence' THEN
+          UPDATE public."office_file_evidence" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."entity_version_id" IN (SELECT unnest(changed_ids)));
+      ELSIF child_name = 'pdf_signing_sessions' THEN
+          UPDATE public."pdf_signing_sessions" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."base_version_id" IN (SELECT unnest(changed_ids))) OR (c."finalized_version_id" IN (SELECT unnest(changed_ids)));
+      ELSE
+        RAISE EXCEPTION 'Unknown entity feature child %', child_name USING ERRCODE = 'XX000';
+      END IF;
+    END LOOP;
+    RETURN NULL;
+  END IF;
+  IF TG_TABLE_NAME = 'correspondence' THEN
+    IF TG_OP = 'UPDATE' THEN
+      WITH changed AS MATERIALIZED (
+        SELECT o.id AS old_id, n.id AS new_id
+        FROM entity_feature_old_rows o FULL JOIN entity_feature_new_rows n USING (id)
+        WHERE ROW(o."id", o."entity_feature_gate", o."workspace_id", o."organization_id") IS DISTINCT FROM ROW(n."id", n."entity_feature_gate", n."workspace_id", n."organization_id"))
+      SELECT ARRAY(SELECT old_id FROM changed WHERE old_id IS NOT NULL
+          UNION SELECT new_id FROM changed WHERE new_id IS NOT NULL),
+        ARRAY(SELECT o.workspace_id FROM entity_feature_old_rows o
+          UNION SELECT n.workspace_id FROM entity_feature_new_rows n)
+        INTO changed_ids, changed_workspace_ids;
+    ELSIF TG_OP = 'DELETE' THEN
+      SELECT ARRAY(SELECT id FROM entity_feature_old_rows),
+        ARRAY(SELECT DISTINCT o.workspace_id FROM entity_feature_old_rows o)
+        INTO changed_ids, changed_workspace_ids;
+    ELSE
+      SELECT ARRAY(SELECT id FROM entity_feature_new_rows),
+        ARRAY(SELECT DISTINCT n.workspace_id FROM entity_feature_new_rows n)
+        INTO changed_ids, changed_workspace_ids;
+    END IF;
+    IF cardinality(changed_ids) = 0 THEN RETURN NULL; END IF;
+    IF TG_OP <> 'INSERT' AND current_setting('transaction_isolation') <> 'read committed' THEN
+      RAISE EXCEPTION 'Entity feature propagation requires a current snapshot'
+        USING ERRCODE = '40001';
+    END IF;
+    SELECT ARRAY(SELECT candidates.child_name FROM (
+        SELECT 'correspondence_attachments'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."correspondence_attachments" c WHERE (c."correspondence_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids))))
+        UNION ALL
+        SELECT 'correspondence_filers'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."correspondence_filers" c WHERE (c."correspondence_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids))))) candidates ORDER BY candidates.child_name)
+      INTO matching_children;
+    FOREACH child_name IN ARRAY matching_children LOOP
+      IF child_name = 'correspondence_attachments' THEN
+          UPDATE public."correspondence_attachments" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."correspondence_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids)));
+      ELSIF child_name = 'correspondence_filers' THEN
+          UPDATE public."correspondence_filers" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."correspondence_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids)));
+      ELSE
+        RAISE EXCEPTION 'Unknown entity feature child %', child_name USING ERRCODE = 'XX000';
+      END IF;
+    END LOOP;
+    RETURN NULL;
+  END IF;
+  IF TG_TABLE_NAME = 'desktop_edit_sessions' THEN
+    IF TG_OP = 'UPDATE' THEN
+      WITH changed AS MATERIALIZED (
+        SELECT o.id AS old_id, n.id AS new_id
+        FROM entity_feature_old_rows o FULL JOIN entity_feature_new_rows n USING (id)
+        WHERE ROW(o."id", o."entity_feature_gate", o."workspace_id", o."entity_feature_workspace_ids") IS DISTINCT FROM ROW(n."id", n."entity_feature_gate", n."workspace_id", n."entity_feature_workspace_ids"))
+      SELECT ARRAY(SELECT old_id FROM changed WHERE old_id IS NOT NULL
+          UNION SELECT new_id FROM changed WHERE new_id IS NOT NULL),
+        ARRAY(SELECT o.workspace_id FROM entity_feature_old_rows o
+          UNION SELECT n.workspace_id FROM entity_feature_new_rows n)
+        INTO changed_ids, changed_workspace_ids;
+    ELSIF TG_OP = 'DELETE' THEN
+      SELECT ARRAY(SELECT id FROM entity_feature_old_rows),
+        ARRAY(SELECT DISTINCT o.workspace_id FROM entity_feature_old_rows o)
+        INTO changed_ids, changed_workspace_ids;
+    ELSE
+      SELECT ARRAY(SELECT id FROM entity_feature_new_rows),
+        ARRAY(SELECT DISTINCT n.workspace_id FROM entity_feature_new_rows n)
+        INTO changed_ids, changed_workspace_ids;
+    END IF;
+    IF cardinality(changed_ids) = 0 THEN RETURN NULL; END IF;
+    IF TG_OP <> 'INSERT' AND current_setting('transaction_isolation') <> 'read committed' THEN
+      RAISE EXCEPTION 'Entity feature propagation requires a current snapshot'
+        USING ERRCODE = '40001';
+    END IF;
+    SELECT ARRAY(SELECT candidates.child_name FROM (
+        SELECT 'desktop_edit_handoffs'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."desktop_edit_handoffs" c WHERE (c."desktop_session_id" IN (SELECT unnest(changed_ids))))) candidates ORDER BY candidates.child_name)
+      INTO matching_children;
+    FOREACH child_name IN ARRAY matching_children LOOP
+      IF child_name = 'desktop_edit_handoffs' THEN
+          UPDATE public."desktop_edit_handoffs" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."desktop_session_id" IN (SELECT unnest(changed_ids)));
+      ELSE
+        RAISE EXCEPTION 'Unknown entity feature child %', child_name USING ERRCODE = 'XX000';
+      END IF;
+    END LOOP;
+    RETURN NULL;
+  END IF;
+  IF TG_TABLE_NAME = 'fields' THEN
+    IF TG_OP = 'UPDATE' THEN
+      WITH changed AS MATERIALIZED (
+        SELECT o.id AS old_id, n.id AS new_id
+        FROM entity_feature_old_rows o FULL JOIN entity_feature_new_rows n USING (id)
+        WHERE ROW(o."id", o."entity_feature_gate", o."workspace_id", o."entity_feature_workspace_ids") IS DISTINCT FROM ROW(n."id", n."entity_feature_gate", n."workspace_id", n."entity_feature_workspace_ids"))
+      SELECT ARRAY(SELECT old_id FROM changed WHERE old_id IS NOT NULL
+          UNION SELECT new_id FROM changed WHERE new_id IS NOT NULL),
+        ARRAY(SELECT o.workspace_id FROM entity_feature_old_rows o
+          UNION SELECT n.workspace_id FROM entity_feature_new_rows n)
+        INTO changed_ids, changed_workspace_ids;
+    ELSIF TG_OP = 'DELETE' THEN
+      SELECT ARRAY(SELECT id FROM entity_feature_old_rows),
+        ARRAY(SELECT DISTINCT o.workspace_id FROM entity_feature_old_rows o)
+        INTO changed_ids, changed_workspace_ids;
+    ELSE
+      SELECT ARRAY(SELECT id FROM entity_feature_new_rows),
+        ARRAY(SELECT DISTINCT n.workspace_id FROM entity_feature_new_rows n)
+        INTO changed_ids, changed_workspace_ids;
+    END IF;
+    IF cardinality(changed_ids) = 0 THEN RETURN NULL; END IF;
+    IF TG_OP <> 'INSERT' AND current_setting('transaction_isolation') <> 'read committed' THEN
+      RAISE EXCEPTION 'Entity feature propagation requires a current snapshot'
+        USING ERRCODE = '40001';
+    END IF;
+    SELECT ARRAY(SELECT candidates.child_name FROM (
+        SELECT 'document_processing_runs'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."document_processing_runs" c WHERE (c."field_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids))))
+        UNION ALL
+        SELECT 'extracted_content'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."extracted_content" c WHERE (c."source_field_id" IN (SELECT unnest(changed_ids))))
+        UNION ALL
+        SELECT 'file_chat_threads'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."file_chat_threads" c WHERE (c."field_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids))))
+        UNION ALL
+        SELECT 'justifications'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."justifications" c WHERE (c."field_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids))))
+        UNION ALL
+        SELECT 'office_file_evidence'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."office_file_evidence" c WHERE (c."field_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids))))
+        UNION ALL
+        SELECT 'report_exports'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."report_exports" c WHERE (c."result_field_id" IN (SELECT unnest(changed_ids))))) candidates ORDER BY candidates.child_name)
+      INTO matching_children;
+    FOREACH child_name IN ARRAY matching_children LOOP
+      IF child_name = 'document_processing_runs' THEN
+          UPDATE public."document_processing_runs" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."field_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids)));
+      ELSIF child_name = 'extracted_content' THEN
+          UPDATE public."extracted_content" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."source_field_id" IN (SELECT unnest(changed_ids)));
+      ELSIF child_name = 'file_chat_threads' THEN
+          UPDATE public."file_chat_threads" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."field_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids)));
+      ELSIF child_name = 'justifications' THEN
+          UPDATE public."justifications" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."field_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids)));
+      ELSIF child_name = 'office_file_evidence' THEN
+          UPDATE public."office_file_evidence" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."field_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids)));
+      ELSIF child_name = 'report_exports' THEN
+          UPDATE public."report_exports" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."result_field_id" IN (SELECT unnest(changed_ids)));
+      ELSE
+        RAISE EXCEPTION 'Unknown entity feature child %', child_name USING ERRCODE = 'XX000';
+      END IF;
+    END LOOP;
+    RETURN NULL;
+  END IF;
+  IF TG_TABLE_NAME = 'document_translation_runs' THEN
+    IF TG_OP = 'UPDATE' THEN
+      WITH changed AS MATERIALIZED (
+        SELECT o.id AS old_id, n.id AS new_id
+        FROM entity_feature_old_rows o FULL JOIN entity_feature_new_rows n USING (id)
+        WHERE ROW(o."id", o."entity_feature_gate", o."workspace_id", o."organization_id", o."entity_feature_workspace_ids") IS DISTINCT FROM ROW(n."id", n."entity_feature_gate", n."workspace_id", n."organization_id", n."entity_feature_workspace_ids"))
+      SELECT ARRAY(SELECT old_id FROM changed WHERE old_id IS NOT NULL
+          UNION SELECT new_id FROM changed WHERE new_id IS NOT NULL),
+        ARRAY(SELECT o.workspace_id FROM entity_feature_old_rows o
+          UNION SELECT n.workspace_id FROM entity_feature_new_rows n)
+        INTO changed_ids, changed_workspace_ids;
+    ELSIF TG_OP = 'DELETE' THEN
+      SELECT ARRAY(SELECT id FROM entity_feature_old_rows),
+        ARRAY(SELECT DISTINCT o.workspace_id FROM entity_feature_old_rows o)
+        INTO changed_ids, changed_workspace_ids;
+    ELSE
+      SELECT ARRAY(SELECT id FROM entity_feature_new_rows),
+        ARRAY(SELECT DISTINCT n.workspace_id FROM entity_feature_new_rows n)
+        INTO changed_ids, changed_workspace_ids;
+    END IF;
+    IF cardinality(changed_ids) = 0 THEN RETURN NULL; END IF;
+    IF TG_OP <> 'INSERT' AND current_setting('transaction_isolation') <> 'read committed' THEN
+      RAISE EXCEPTION 'Entity feature propagation requires a current snapshot'
+        USING ERRCODE = '40001';
+    END IF;
+    SELECT ARRAY(SELECT candidates.child_name FROM (
+        SELECT 'document_translation_units'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."document_translation_units" c WHERE (c."run_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids))))) candidates ORDER BY candidates.child_name)
+      INTO matching_children;
+    FOREACH child_name IN ARRAY matching_children LOOP
+      IF child_name = 'document_translation_units' THEN
+          UPDATE public."document_translation_units" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."run_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids)));
+      ELSE
+        RAISE EXCEPTION 'Unknown entity feature child %', child_name USING ERRCODE = 'XX000';
+      END IF;
+    END LOOP;
+    RETURN NULL;
+  END IF;
+  IF TG_TABLE_NAME = 'folio_collab_rooms' THEN
+    IF TG_OP = 'UPDATE' THEN
+      WITH changed AS MATERIALIZED (
+        SELECT o.id AS old_id, n.id AS new_id
+        FROM entity_feature_old_rows o FULL JOIN entity_feature_new_rows n USING (id)
+        WHERE ROW(o."id", o."entity_feature_gate", o."workspace_id") IS DISTINCT FROM ROW(n."id", n."entity_feature_gate", n."workspace_id"))
+      SELECT ARRAY(SELECT old_id FROM changed WHERE old_id IS NOT NULL
+          UNION SELECT new_id FROM changed WHERE new_id IS NOT NULL),
+        ARRAY(SELECT o.workspace_id FROM entity_feature_old_rows o
+          UNION SELECT n.workspace_id FROM entity_feature_new_rows n)
+        INTO changed_ids, changed_workspace_ids;
+    ELSIF TG_OP = 'DELETE' THEN
+      SELECT ARRAY(SELECT id FROM entity_feature_old_rows),
+        ARRAY(SELECT DISTINCT o.workspace_id FROM entity_feature_old_rows o)
+        INTO changed_ids, changed_workspace_ids;
+    ELSE
+      SELECT ARRAY(SELECT id FROM entity_feature_new_rows),
+        ARRAY(SELECT DISTINCT n.workspace_id FROM entity_feature_new_rows n)
+        INTO changed_ids, changed_workspace_ids;
+    END IF;
+    IF cardinality(changed_ids) = 0 THEN RETURN NULL; END IF;
+    IF TG_OP <> 'INSERT' AND current_setting('transaction_isolation') <> 'read committed' THEN
+      RAISE EXCEPTION 'Entity feature propagation requires a current snapshot'
+        USING ERRCODE = '40001';
+    END IF;
+    SELECT ARRAY(SELECT candidates.child_name FROM (
+        SELECT 'folio_collab_contributions'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."folio_collab_contributions" c WHERE (c."room_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids))))
+        UNION ALL
+        SELECT 'folio_collab_publications'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."folio_collab_publications" c WHERE (c."room_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids))))
+        UNION ALL
+        SELECT 'folio_collab_room_tokens'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."folio_collab_room_tokens" c WHERE (c."room_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids))))) candidates ORDER BY candidates.child_name)
+      INTO matching_children;
+    FOREACH child_name IN ARRAY matching_children LOOP
+      IF child_name = 'folio_collab_contributions' THEN
+          UPDATE public."folio_collab_contributions" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."room_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids)));
+      ELSIF child_name = 'folio_collab_publications' THEN
+          UPDATE public."folio_collab_publications" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."room_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids)));
+      ELSIF child_name = 'folio_collab_room_tokens' THEN
+          UPDATE public."folio_collab_room_tokens" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."room_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids)));
+      ELSE
+        RAISE EXCEPTION 'Unknown entity feature child %', child_name USING ERRCODE = 'XX000';
+      END IF;
+    END LOOP;
+    RETURN NULL;
+  END IF;
+  IF TG_TABLE_NAME = 'legal_list_verification_runs' THEN
+    IF TG_OP = 'UPDATE' THEN
+      WITH changed AS MATERIALIZED (
+        SELECT o.id AS old_id, n.id AS new_id
+        FROM entity_feature_old_rows o FULL JOIN entity_feature_new_rows n USING (id)
+        WHERE ROW(o."id", o."entity_feature_gate", o."workspace_id", o."organization_id") IS DISTINCT FROM ROW(n."id", n."entity_feature_gate", n."workspace_id", n."organization_id"))
+      SELECT ARRAY(SELECT old_id FROM changed WHERE old_id IS NOT NULL
+          UNION SELECT new_id FROM changed WHERE new_id IS NOT NULL),
+        ARRAY(SELECT o.workspace_id FROM entity_feature_old_rows o
+          UNION SELECT n.workspace_id FROM entity_feature_new_rows n)
+        INTO changed_ids, changed_workspace_ids;
+    ELSIF TG_OP = 'DELETE' THEN
+      SELECT ARRAY(SELECT id FROM entity_feature_old_rows),
+        ARRAY(SELECT DISTINCT o.workspace_id FROM entity_feature_old_rows o)
+        INTO changed_ids, changed_workspace_ids;
+    ELSE
+      SELECT ARRAY(SELECT id FROM entity_feature_new_rows),
+        ARRAY(SELECT DISTINCT n.workspace_id FROM entity_feature_new_rows n)
+        INTO changed_ids, changed_workspace_ids;
+    END IF;
+    IF cardinality(changed_ids) = 0 THEN RETURN NULL; END IF;
+    IF TG_OP <> 'INSERT' AND current_setting('transaction_isolation') <> 'read committed' THEN
+      RAISE EXCEPTION 'Entity feature propagation requires a current snapshot'
+        USING ERRCODE = '40001';
+    END IF;
+    SELECT ARRAY(SELECT candidates.child_name FROM (
+        SELECT 'legal_list_claims'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."legal_list_claims" c WHERE (c."run_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids))))
+        UNION ALL
+        SELECT 'legal_list_verification_blocks'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."legal_list_verification_blocks" c WHERE (c."run_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids))))
+        UNION ALL
+        SELECT 'legal_list_verification_read_receipts'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."legal_list_verification_read_receipts" c WHERE (c."run_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids))))) candidates ORDER BY candidates.child_name)
+      INTO matching_children;
+    FOREACH child_name IN ARRAY matching_children LOOP
+      IF child_name = 'legal_list_claims' THEN
+          UPDATE public."legal_list_claims" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."run_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids)));
+      ELSIF child_name = 'legal_list_verification_blocks' THEN
+          UPDATE public."legal_list_verification_blocks" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."run_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids)));
+      ELSIF child_name = 'legal_list_verification_read_receipts' THEN
+          UPDATE public."legal_list_verification_read_receipts" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."run_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids)));
+      ELSE
+        RAISE EXCEPTION 'Unknown entity feature child %', child_name USING ERRCODE = 'XX000';
+      END IF;
+    END LOOP;
+    RETURN NULL;
+  END IF;
+  IF TG_TABLE_NAME = 'legal_list_claims' THEN
+    IF TG_OP = 'UPDATE' THEN
+      WITH changed AS MATERIALIZED (
+        SELECT o.id AS old_id, n.id AS new_id
+        FROM entity_feature_old_rows o FULL JOIN entity_feature_new_rows n USING (id)
+        WHERE ROW(o."id", o."entity_feature_gate", o."workspace_id", o."entity_feature_organization_ids") IS DISTINCT FROM ROW(n."id", n."entity_feature_gate", n."workspace_id", n."entity_feature_organization_ids"))
+      SELECT ARRAY(SELECT old_id FROM changed WHERE old_id IS NOT NULL
+          UNION SELECT new_id FROM changed WHERE new_id IS NOT NULL),
+        ARRAY(SELECT o.workspace_id FROM entity_feature_old_rows o
+          UNION SELECT n.workspace_id FROM entity_feature_new_rows n)
+        INTO changed_ids, changed_workspace_ids;
+    ELSIF TG_OP = 'DELETE' THEN
+      SELECT ARRAY(SELECT id FROM entity_feature_old_rows),
+        ARRAY(SELECT DISTINCT o.workspace_id FROM entity_feature_old_rows o)
+        INTO changed_ids, changed_workspace_ids;
+    ELSE
+      SELECT ARRAY(SELECT id FROM entity_feature_new_rows),
+        ARRAY(SELECT DISTINCT n.workspace_id FROM entity_feature_new_rows n)
+        INTO changed_ids, changed_workspace_ids;
+    END IF;
+    IF cardinality(changed_ids) = 0 THEN RETURN NULL; END IF;
+    IF TG_OP <> 'INSERT' AND current_setting('transaction_isolation') <> 'read committed' THEN
+      RAISE EXCEPTION 'Entity feature propagation requires a current snapshot'
+        USING ERRCODE = '40001';
+    END IF;
+    SELECT ARRAY(SELECT candidates.child_name FROM (
+        SELECT 'legal_list_claim_review_events'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."legal_list_claim_review_events" c WHERE (c."claim_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids))))) candidates ORDER BY candidates.child_name)
+      INTO matching_children;
+    FOREACH child_name IN ARRAY matching_children LOOP
+      IF child_name = 'legal_list_claim_review_events' THEN
+          UPDATE public."legal_list_claim_review_events" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."claim_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids)));
+      ELSE
+        RAISE EXCEPTION 'Unknown entity feature child %', child_name USING ERRCODE = 'XX000';
+      END IF;
+    END LOOP;
+    RETURN NULL;
+  END IF;
+  IF TG_TABLE_NAME = 'legal_list_generation_candidates' THEN
+    IF TG_OP = 'UPDATE' THEN
+      WITH changed AS MATERIALIZED (
+        SELECT o.id AS old_id, n.id AS new_id
+        FROM entity_feature_old_rows o FULL JOIN entity_feature_new_rows n USING (id)
+        WHERE ROW(o."id", o."entity_feature_gate", o."workspace_id", o."entity_feature_workspace_ids") IS DISTINCT FROM ROW(n."id", n."entity_feature_gate", n."workspace_id", n."entity_feature_workspace_ids"))
+      SELECT ARRAY(SELECT old_id FROM changed WHERE old_id IS NOT NULL
+          UNION SELECT new_id FROM changed WHERE new_id IS NOT NULL),
+        ARRAY(SELECT o.workspace_id FROM entity_feature_old_rows o
+          UNION SELECT n.workspace_id FROM entity_feature_new_rows n)
+        INTO changed_ids, changed_workspace_ids;
+    ELSIF TG_OP = 'DELETE' THEN
+      SELECT ARRAY(SELECT id FROM entity_feature_old_rows),
+        ARRAY(SELECT DISTINCT o.workspace_id FROM entity_feature_old_rows o)
+        INTO changed_ids, changed_workspace_ids;
+    ELSE
+      SELECT ARRAY(SELECT id FROM entity_feature_new_rows),
+        ARRAY(SELECT DISTINCT n.workspace_id FROM entity_feature_new_rows n)
+        INTO changed_ids, changed_workspace_ids;
+    END IF;
+    IF cardinality(changed_ids) = 0 THEN RETURN NULL; END IF;
+    IF TG_OP <> 'INSERT' AND current_setting('transaction_isolation') <> 'read committed' THEN
+      RAISE EXCEPTION 'Entity feature propagation requires a current snapshot'
+        USING ERRCODE = '40001';
+    END IF;
+    SELECT ARRAY(SELECT candidates.child_name FROM (
+        SELECT 'legal_list_generation_candidate_sources'::text AS child_name WHERE EXISTS (
+          SELECT 1 FROM public."legal_list_generation_candidate_sources" c WHERE (c."candidate_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids))))) candidates ORDER BY candidates.child_name)
+      INTO matching_children;
+    FOREACH child_name IN ARRAY matching_children LOOP
+      IF child_name = 'legal_list_generation_candidate_sources' THEN
+          UPDATE public."legal_list_generation_candidate_sources" c SET entity_feature_gate = c.entity_feature_gate
+            WHERE (c."candidate_id" IN (SELECT unnest(changed_ids)) AND c.workspace_id IN (SELECT unnest(changed_workspace_ids)));
+      ELSE
+        RAISE EXCEPTION 'Unknown entity feature child %', child_name USING ERRCODE = 'XX000';
+      END IF;
+    END LOOP;
+    RETURN NULL;
+  END IF;
   RETURN NULL;
 END
 $function$;
@@ -870,9 +1598,9 @@ REVOKE ALL ON FUNCTION public.entity_feature_gate_propagate() FROM PUBLIC;
 -- stella-migration-safety: reviewed security-definer - Dedicated-role trigger routines derive stored visibility and lock trusted graph parents; fixed search_path and no PUBLIC execute.
 CREATE OR REPLACE FUNCTION public.entity_feature_gate_repair_missing()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER
-SET search_path = pg_catalog SET row_security = on AS $function$
+SET search_path = pg_catalog SET row_security = on SET jit = off AS $function$
 DECLARE
-  descriptor jsonb := public.entity_feature_gate_graph()->TG_TABLE_NAME;
+  descriptor jsonb;
   predicate text;
   gate jsonb;
 BEGIN
@@ -881,6 +1609,7 @@ BEGIN
   -- have waited there for a parent that its BEFORE trigger could not see.
   gate := public.entity_feature_gate_value(TG_TABLE_NAME, to_jsonb(NEW));
   IF gate->>'state' = 'missing' THEN RETURN NULL; END IF;
+  descriptor := public.entity_feature_gate_graph()->TG_TABLE_NAME;
   SELECT string_agg(format('t.%I = k.%I', value, value), ' AND ')
     INTO predicate FROM jsonb_array_elements_text(descriptor->'primaryKey');
   EXECUTE format('UPDATE public.%I t SET entity_feature_gate = t.entity_feature_gate
@@ -895,7 +1624,7 @@ REVOKE ALL ON FUNCTION public.entity_feature_gate_repair_missing() FROM PUBLIC;
 -- stella-migration-safety: reviewed security-definer - Dedicated-role trigger routines derive stored visibility and lock trusted graph parents; fixed search_path and no PUBLIC execute.
 CREATE OR REPLACE FUNCTION public.entity_feature_gate_backfill(table_name text, batch_cursor text, batch_size integer)
 RETURNS TABLE(cursor text, count integer, pending boolean)
-LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog SET row_security = on AS $function$
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog SET row_security = on SET jit = off AS $function$
 DECLARE
   descriptor jsonb := public.entity_feature_gate_graph()->table_name;
   key_columns text;

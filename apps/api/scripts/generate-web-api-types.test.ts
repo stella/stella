@@ -1,4 +1,6 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
+import path from "node:path";
 import ts from "typescript";
 
 import { printContract } from "./generate-web-api-types";
@@ -9,7 +11,9 @@ import { nameAliases } from "./lib/web-api-alias-names";
 // touches the file conflicts with every other one. These run the real printer
 // on a small in-memory contract and compare the aliases before and after.
 
-const CONTRACT_FILE = "/virtual/eden-contract.ts";
+// Resolve package imports from the API's dependency tree, as the real contract
+// does. Absolute declaration paths can create a second library symbol identity.
+const CONTRACT_FILE = path.resolve(import.meta.dir, "__printer-contract__.ts");
 
 const programOf = (source: string) => {
   const options: ts.CompilerOptions = {
@@ -17,6 +21,7 @@ const programOf = (source: string) => {
     noEmit: true,
     target: ts.ScriptTarget.ESNext,
     module: ts.ModuleKind.ESNext,
+    moduleResolution: ts.ModuleResolutionKind.Bundler,
   };
   const host = ts.createCompilerHost(options);
   const getSourceFile = host.getSourceFile.bind(host);
@@ -58,14 +63,76 @@ const aliasesOf = (source: string): Map<string, string> =>
     ]),
   );
 
+test("preserves an imported generic interface behind a local alias", () => {
+  const { program, contractSource, checker } = programOf(`
+import type { StandardTypedV1 } from "@standard-schema/spec";
+type Local<Input> = StandardTypedV1<Input, string>;
+export type WebApiContract = { Tool: Local<number> };
+`);
+  const tool = checker
+    .getPropertiesOfType(
+      declaredType({ program, contractSource, checker }, "WebApiContract"),
+    )
+    .at(0);
+  expect(tool).toBeDefined();
+  if (tool === undefined) {
+    panic("Imported interface fixture lost its tool property");
+  }
+  // A local alias must reach the imported interface, rather than bypassing
+  // the fault by referring to the package export directly.
+  expect(checker.getTypeOfSymbol(tool).aliasSymbol?.getName()).toBe("Local");
+  const result = printContract({
+    program,
+    contractSource,
+    webDependencies: new Set(["@standard-schema/spec"]),
+    responseDates: "wire",
+  });
+  expect(result.declarations.at(0)?.text).toBe(
+    "standard_schema_spec_StandardTypedV1<number, string>",
+  );
+});
+
+test("preserves imported generic interfaces inside client-tool schema arguments", () => {
+  const { program, contractSource } = programOf(`
+import type { StandardSchemaV1, StandardJSONSchemaV1 } from "@standard-schema/spec";
+import type { ClientTool } from "@tanstack/ai";
+type LocalSchema<Input> = StandardSchemaV1<Input, string> & StandardJSONSchemaV1<Input, string>;
+type LocalTool = ClientTool<LocalSchema<number>, undefined, "save">;
+export type WebApiContract = { Tool: LocalTool };
+`);
+  const result = printContract({
+    program,
+    contractSource,
+    webDependencies: new Set(["@standard-schema/spec", "@tanstack/ai"]),
+    responseDates: "wire",
+  });
+  expect(result.packageReferences.get("@tanstack/ai#ClientTool")).toBe(1);
+  expect(
+    result.packageReferences.get("@standard-schema/spec#StandardSchemaV1"),
+  ).toBe(1);
+  expect(
+    result.packageReferences.get("@standard-schema/spec#StandardJSONSchemaV1"),
+  ).toBe(1);
+  expect(result.declarations.at(0)?.text).toContain("tanstack_ai_ClientTool<");
+});
+
 // A type alias declared in the contract module, resolved by the checker.
 const declaredType = (
   { checker, contractSource }: ReturnType<typeof programOf>,
   name: string,
 ): ts.Type => {
-  const symbol = checker
-    .getSymbolsInScope(contractSource, ts.SymbolFlags.TypeAlias)
-    .find((candidate) => candidate.getName() === name);
+  const module = checker.getSymbolAtLocation(contractSource);
+  const exported =
+    module === undefined
+      ? undefined
+      : checker
+          .getExportsOfModule(module)
+          .find((candidate) => candidate.getName() === name);
+  const symbol =
+    exported ??
+    checker
+      .getSymbolsInScope(contractSource, ts.SymbolFlags.TypeAlias)
+      .find((candidate) => candidate.getName() === name);
   if (symbol === undefined) {
     throw new Error(`type ${name} not declared`);
   }

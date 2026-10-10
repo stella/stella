@@ -170,6 +170,7 @@ export const projectCaseLawSearchResponse = (
     CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH,
   ),
   paginationOutcome: response.paginationOutcome,
+  pageReach: response.pageReach,
   queryUsed: truncateTextBytes(response.queryUsed, bytes.queryUsed),
   warnings: response.warnings
     .slice(0, CASE_LAW_SEARCH_WARNING_CODES.length)

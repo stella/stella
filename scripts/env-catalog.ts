@@ -1318,6 +1318,19 @@ export const DEPLOYMENT_ENV_KEYS = new Set([
 ]);
 
 export const TOOLING_ENV_KEYS = new Set([
+  // CI image resolution and smoke tooling; product defaults remain upstream.
+  "CI_IMAGE_MIRROR_ENABLED",
+  "CI_PLAYWRIGHT_IMAGE",
+  "POSTGRES_IMAGE",
+  "REDIS_IMAGE",
+  // The manual checks workflow passes its inputs and result files to its scripts.
+  "CHECK_CHECK",
+  "CHECK_EXIT_FILE",
+  "CHECK_LOG_FILE",
+  "CHECK_REF",
+  "CHECK_SHA",
+  "CHECK_START_FILE",
+  "CHECK_TARGET",
   // Local verification host configuration, remote recursion guard, and base preparation.
   "STELLA_VERIFY_CONFIG",
   "REMOTE_CHECK",
@@ -1331,12 +1344,6 @@ export const TOOLING_ENV_KEYS = new Set([
   "FOLDED_SUITES",
   // CI steps export the GitHub API retry helper's path after installing it.
   "GH_RETRY_SCRIPT",
-  // merge-bar CLI tests skip the origin/main freshness check (local test runs only).
-  "STELLA_MERGE_BAR_TEST_SKIP_FRESHNESS",
-  // Durable branch-update receipts and locks can use an operator-selected directory.
-  "STELLA_MERGE_BAR_STATE_DIR",
-  // While this file exists, merge-bar refuses every native mutation.
-  "STELLA_MERGE_BAR_STOP_FILE",
   // Preserve Bun global-store links inside browser containers.
   "BUN_INSTALL_CACHE_DIR",
   // Browser commands use only executables baked into the pinned image.
@@ -1513,7 +1520,6 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_DEV_INSTANCE",
   "STELLA_INFRA_OFFSET",
   "STELLA_MERGE_HOLD",
-  "STELLA_MERGE_HOLD_CHECKED_BY_WORKFLOW",
   "STELLA_PORT_OFFSET",
   "STELLA_QUERY_PLAN_SCALE_PROFILE",
   "STELLA_RUN_CORPUS_ENGINE_TESTS",
@@ -1541,6 +1547,16 @@ export const TOOLING_ENV_KEYS = new Set([
   "TURN_OUTCOME_SHARD",
   "UPDATE_CHAT_PROMPT_BASELINE",
   "UPDATE_PROVIDER_REQUEST_PATHS",
+  // Release dependency-audit gate: a reasoned waiver and the remediation branch.
+  "WAIVE_DEPENDENCY_AUDIT",
+  "WAIVER_REASON",
+  "FIX_BRANCH",
+  // Shell fixtures for the dependency-audit gate and remediation scripts.
+  "TEST_AUDIT_STATUS",
+  "TEST_CONCURRENT_SHA",
+  "TEST_FIX_AVAILABLE",
+  "TEST_OPEN_PRS",
+  "TEST_ADVISORIES_REMAIN",
   "WXT_STELLA_ORIGINS",
 ]);
 
