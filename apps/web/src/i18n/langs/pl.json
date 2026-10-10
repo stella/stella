@@ -988,10 +988,14 @@
     "viewer": {
       "abstract": "Streszczenie",
       "appliedVersionNotStated": "Nie podano zastosowanego brzmienia",
+      "appliedVersionNotStatedCompact": "Wersja niewskazana",
       "appliedVersionStatedAmendment": "Brzmienie po nowelizacji <reference>{amendment}</reference>",
+      "appliedVersionStatedAmendmentCompact": "Wskazano: <reference>{amendment}</reference>",
       "appliedVersionStatedDate": "{relation, select, on {Brzmienie obowiązujące w dniu {date}} until {Brzmienie obowiązujące do {date}} from {Brzmienie obowiązujące od {date}} other {Brzmienie obowiązujące w dniu {date}}}",
+      "appliedVersionStatedDateCompact": "{relation, select, on {Wskazano: {date}} until {Wskazano: do {date}} from {Wskazano: od {date}} other {Wskazano: {date}}}",
       "caseFileMayHoldOthers": "Akta tej sprawy mogą zawierać także inne orzeczenia.",
       "citedBy": "Cytowane przez",
+      "citedDecisionPassage": "Fragment orzeczenia",
       "cites": "Cytuje",
       "dissentByline": "Zdanie odrębne: <bdi>{names}</bdi>",
       "judgeRole": {
@@ -1018,7 +1022,9 @@
       "textPending": "Tekst orzeczenia jest wciąż pobierany",
       "textReadFailed": "Nie udało się wczytać tekstu orzeczenia",
       "textUnavailable": "Do tego orzeczenia nie ma dostępnego tekstu",
-      "versionAtDecisionDateInferred": "Brzmienie na dzień orzeczenia (wywnioskowane)"
+      "versionAtDecisionDateInferred": "Brzmienie na dzień orzeczenia (wywnioskowane)",
+      "versionBasisInferredCompact": "Data orzeczenia · wywnioskowane",
+      "versionBasisInferredExplanation": "Wersję ustalono na podstawie daty orzeczenia. Orzeczenie nie wskazuje, które brzmienie ma zastosowanie."
     }
   },
   "catalogue": {
