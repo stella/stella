@@ -7262,6 +7262,29 @@ const runSelfTest = (): number => {
 
 // --- Entry ------------------------------------------------------------------
 
+const USAGE = `Usage: bun scripts/ratchet.ts [mode] [options]
+
+Modes:
+  (no mode)       Report current metric counts against the comparison base.
+  --check         Exit nonzero when an increase lacks an exact allowance.
+  --self-test     Run the ratchet's counter and gate checks.
+
+Options:
+  --base <commit> Compare against this revision instead of the merge base.
+  --head <commit> Measure this revision instead of the working tree.
+  --details       Include per-file counts in report mode.
+  -h, --help      Print this usage and exit.
+
+Allowances:
+  Add scripts/ratchet-allowances/<slug>.json in the measured head with:
+  { "metric": "<metric-id>", "delta": <positive integer>, "reason": "<justification>" }
+  Per-file metrics also require "file": "<repository-relative path>".
+  The total allowance must exactly match the measured increase.`;
+
+const printUsage = (write: (message: string) => void = console.log): void => {
+  write(USAGE);
+};
+
 const main = (): number => {
   const supportedFlags = new Set([
     "--check",
@@ -7270,9 +7293,15 @@ const main = (): number => {
     "--head",
     "--details",
   ]);
+  if (process.argv.includes("--help") || process.argv.includes("-h")) {
+    printUsage();
+    return 0;
+  }
   for (const argument of process.argv.slice(2)) {
-    if (argument.startsWith("--") && !supportedFlags.has(argument)) {
-      return panic(`unsupported ratchet option: ${argument}`);
+    if (argument.startsWith("-") && !supportedFlags.has(argument)) {
+      console.error(`unsupported ratchet option: ${argument}\n`);
+      printUsage(console.error);
+      return 1;
     }
   }
   if (process.argv.includes("--self-test")) {
