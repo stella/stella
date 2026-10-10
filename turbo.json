@@ -814,6 +814,8 @@
         "$TURBO_ROOT$/packages/decision-reader/src/**",
         "$TURBO_ROOT$/packages/legal-ast/src/document-ast.ts",
         "$TURBO_ROOT$/packages/legal-ast/src/inline.ts",
+        "$TURBO_ROOT$/packages/skills/blueprints/**",
+        "$TURBO_ROOT$/packages/skills/skills/**",
         "$TURBO_ROOT$/oxlint.config.ts",
         "$TURBO_ROOT$/scripts/check-aggregate-mutations.ts",
         "$TURBO_ROOT$/scripts/ownership/**",
