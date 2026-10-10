@@ -3,6 +3,7 @@
   "largest-route": 568513,
   "routes": 9507822,
   "total": 10539913,
+  "vendor-ai": 47641,
   "vendor-anonymize-data": 0,
   "vendor-base-ui": 105586,
   "vendor-editor": 115717,
@@ -10,7 +11,6 @@
   "vendor-icons": 17720,
   "vendor-react": 56524,
   "vendor-tanstack": 560488,
-  "vendor-tanstack-ai": 47641,
   "vendor-tanstack-server-fn": 1538,
   "wasm-vendor": 0
 }

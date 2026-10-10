@@ -61,18 +61,18 @@
       "oracle": "chat.live.equals-reload"
     },
     {
-      "id": "persistence-preserves-streamed-parts",
+      "id": "snapshot-preserves-reconciled-denials",
       "fix": "#2186",
-      "behaviour": "Snapshot reconciliation preserves streamed call metadata and transcript parts while incorporating resumed results.",
+      "behaviour": "Denial restoration preserves reconciled snapshot parts, including denied tool results; the SDK migration consumes snapshots to recover resumed results.",
       "status": "active",
-      "file": "src/handlers/chat/stream-chat.ts",
-      "search": "      if (previous !== undefined && snapshot !== undefined) {",
-      "replace": "      if (false && previous !== undefined && snapshot !== undefined) {",
+      "file": "src/handlers/chat/stream-message-identity.ts",
+      "search": "      \"parts\" in message ||\n",
+      "replace": "",
       "scenario": {
         "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
-        "test": "keeps a run's server call and the approval it then asks for"
+        "test": "keeps a denied call denied when the model then asks for another approval"
       },
-      "oracle": "chat.ledger.calls-present"
+      "oracle": "chat.live.equals-reload"
     },
     {
       "id": "same-run-iterations-stay-one-message",

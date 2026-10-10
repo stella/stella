@@ -454,7 +454,7 @@ export default defineConfig(({ mode, command }) => {
             ) {
               // Cache the SDK independently of router/query updates. This
               // chunk remains eager and has its own bundle-size budget.
-              return "vendor-tanstack-ai";
+              return "vendor-ai";
             }
             if (id.includes("node_modules/@tanstack/start-client-core/")) {
               return "vendor-tanstack-server-fn";
