@@ -224,6 +224,7 @@ const MCP_SERVER_VERSION = `${STELLA_API_CONTRACT.protocol}.${STELLA_API_CONTRAC
  * their logs off it, so each audience is named, not left to a fallback.
  */
 const MCP_SERVER_NAME_BY_MODE = {
+  advanced: "stella (advanced)",
   default: "stella",
   documents: "stella (documents)",
   anonymized: "stella (anonymized)",

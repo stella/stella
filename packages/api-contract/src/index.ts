@@ -385,6 +385,8 @@ export {
 } from "./matter-reference";
 export type { MatterReferenceToken } from "./matter-reference";
 export {
+  MCP_ADVANCED_HTTP_PATH,
+  MCP_ADVANCED_RESOURCE_SCOPES,
   MCP_ANONYMIZED_HTTP_PATH,
   MCP_ANONYMIZED_RESOURCE_SCOPES,
   MCP_ANONYMIZED_SCOPE_BY_DEFAULT_SCOPE,

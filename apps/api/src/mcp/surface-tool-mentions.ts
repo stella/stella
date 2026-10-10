@@ -34,6 +34,7 @@ const toVocabulary = (
 });
 
 const SURFACE_TOOL_VOCABULARY = {
+  advanced: toVocabulary("advanced"),
   default: toVocabulary("default"),
   documents: toVocabulary("documents"),
   anonymized: toVocabulary("anonymized"),
