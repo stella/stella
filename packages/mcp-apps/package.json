@@ -20,6 +20,7 @@
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",
     "test": "bun test src scripts",
+    "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src --include='*.test.ts' --include='*.test.tsx')",
     "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error packages/mcp-apps",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/mcp-apps",
