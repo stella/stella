@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  getSkillResourceKind,
+  SKILL_NAME_PATTERN,
+  SKILL_PACKAGE_LIMITS,
+} from "./format";
+import {
   listSkillMetadata,
   loadSkill,
   parseSkillFile,
@@ -9,8 +14,6 @@ import {
   readSkillDisplayName,
   SkillFileError,
 } from "./loader";
-import { SKILL_NAME_PATTERN, SKILL_PACKAGE_LIMITS } from "./package-limits";
-import { getSkillResourceKind } from "./resource-kinds";
 import { GENERATED_SKILLS } from "./skills.gen";
 
 // Unwraps a parse for assertions; a refused file surfaces as its typed error.

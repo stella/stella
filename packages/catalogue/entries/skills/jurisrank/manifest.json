@@ -2,7 +2,7 @@
   "$schema": "../../../schema.json",
   "kind": "skill",
   "source": "github",
-  "slug": "jurisrank-csjn-analysis",
+  "slug": "jurisrank",
   "displayName": "JurisRank — Argentine Supreme Court Analysis",
   "description": "Analyzes Argentine Supreme Court (CSJN) and federal citation networks using JurisRank, a PageRank-style algorithm with temporal decay for measuring jurisprudential authority. Ranks precedents by citation influence, traces doctrinal evolution, and helps assess whether a cited precedent is genuinely authoritative.",
   "author": "Adrián Lerer",

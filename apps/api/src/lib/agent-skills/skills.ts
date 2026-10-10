@@ -11,7 +11,7 @@ import {
   readSkillResource,
 } from "@stll/skills";
 import type { SkillMetadata, SkillResource } from "@stll/skills";
-import type { SkillResourceKind } from "@stll/skills/resource-kinds";
+import type { SkillResourceKind } from "@stll/skills/format";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {

@@ -1,22 +1,18 @@
 import { panic, Result } from "better-result";
 import type JSZip from "jszip";
 
-import { createSha256 } from "@stll/sha256/bun";
 import {
   getSkillResourceKind,
   isAllowedResourcePath,
   normalizeResourcePath,
-  parseSkillFile,
+  validateSkillPackage,
 } from "@stll/skills";
-import type { SkillMetadata, SkillResourceKind } from "@stll/skills";
-import {
-  SKILL_NAME_PATTERN,
-  SKILL_PACKAGE_LIMITS,
-} from "@stll/skills/package-limits";
+import type { SkillPackageDiagnostic, SkillResourceKind } from "@stll/skills";
+import { hashSkillPackage, SKILL_PACKAGE_LIMITS } from "@stll/skills/format";
 import { Temporal } from "@stll/time";
 
 import { hashSkillPackageContent } from "@/api/lib/agent-skills/content-hash";
-import { validateSkillRequiredTools } from "@/api/lib/agent-skills/required-tools-validation";
+import { skillRequirableToolNames } from "@/api/lib/agent-skills/required-tools-validation";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { loadDocx } from "@/api/lib/docx-archive";
 import { HandlerError, unreachable } from "@/api/lib/errors/tagged-errors";
@@ -37,8 +33,6 @@ const GITHUB_REPO_PATTERN = /^[a-z0-9._-]{1,100}$/iu;
 const GITHUB_DISCOVERY_MAX_SKILLS = 50;
 const GITHUB_DISCOVERY_CONCURRENCY = 6;
 const GITHUB_TREE_MAX_BYTES = 4 * 1024 * 1024;
-const BIDI_FORMATTING_CONTROL_PATTERN =
-  /[\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/u;
 const UTF8_DECODER = new TextDecoder("utf-8", { fatal: true });
 const UTF8_ENCODER = new TextEncoder();
 const GITHUB_SKILL_HOSTNAMES = new Set([
@@ -642,54 +636,100 @@ const checkZipUncompressedLimit = (
 const parseSkillFiles = (
   files: readonly SkillFile[],
 ): Result<ParsedSkillPackage, HandlerError> => {
-  const skillFile = findSkillFile(files);
-  if (skillFile.isErr()) {
-    return Result.err(skillFile.error);
-  }
-  const rootPrefix = skillFolderPrefix(skillFile.value.path);
-  const relativeSkillSource = skillFile.value.content;
-  const parsedFile = parseSkillFile(relativeSkillSource);
-  if (parsedFile.isErr()) {
-    return Result.err(
-      new HandlerError({
-        status: 400,
-        message: parsedFile.error.message,
-        cause: parsedFile.error,
-      }),
-    );
-  }
-  const parsed = parsedFile.value;
-  const name = parsed.metadata.name;
-
-  if (!SKILL_NAME_PATTERN.test(name)) {
-    return rejectSkillPackage(
-      "Skill name must use lowercase letters and digits, joined by single hyphens",
-    );
-  }
-  const frontmatter = checkFrontmatterLimits(parsed.metadata);
-  if (frontmatter.isErr()) {
-    return Result.err(frontmatter.error);
-  }
-  if (parsed.body.length > LIMITS.agentSkillBodyMaxChars) {
-    return rejectSkillPackage("Skill instructions are too large");
-  }
-
-  const resources = collectResources({ files, rootPrefix });
-  if (resources.isErr()) {
-    return Result.err(resources.error);
-  }
-  return Result.ok({
-    body: parsed.body,
-    compatibility: parsed.metadata.compatibility ?? null,
-    description: parsed.metadata.description,
-    entrypointHash: hashSkillEntrypoint(relativeSkillSource),
-    license: parsed.metadata.license ?? null,
-    metadata: parsed.metadata.metadata ?? {},
-    name,
-    resources: resources.value,
-    sourceUrl: null,
-    version: parsed.metadata.version,
+  const validated = validateSkillPackage({
+    files,
+    tools: { known: skillRequirableToolNames(), type: "check" },
   });
+  if (validated.isErr()) {
+    return Result.err(skillPackageDiagnosticToHandlerError(validated.error[0]));
+  }
+  const { body, metadata, resources, source } = validated.value;
+  return Result.ok({
+    body,
+    compatibility: metadata.compatibility ?? null,
+    description: metadata.description,
+    entrypointHash: hashSkillPackage({
+      resources,
+      source,
+    }),
+    license: metadata.license ?? null,
+    metadata: metadata.metadata ?? {},
+    name: metadata.name,
+    resources: resources.map((resource) => ({
+      ...resource,
+      sizeBytes:
+        resource.sizeBytes ?? UTF8_ENCODER.encode(resource.content).byteLength,
+    })),
+    sourceUrl: null,
+    version: metadata.version,
+  });
+};
+
+const skillPackageDiagnosticToHandlerError = (
+  diagnostic: SkillPackageDiagnostic | undefined,
+): HandlerError => {
+  if (diagnostic === undefined) {
+    return panic("Invalid skill package has at least one diagnostic");
+  }
+  switch (diagnostic.type) {
+    case "entrypoint_missing":
+      return new HandlerError({
+        status: 400,
+        message: "Skill pack must include SKILL.md",
+      });
+    case "frontmatter_invalid":
+      return new HandlerError({ status: 400, message: diagnostic.message });
+    case "limit_exceeded":
+      return new HandlerError({
+        status: 400,
+        message: `Skill ${diagnostic.field} exceeds its limit`,
+      });
+    case "bidi_control":
+      return new HandlerError({
+        status: 400,
+        message: `Skill ${diagnostic.field} contains bidirectional formatting controls`,
+      });
+    case "name_invalid":
+      return new HandlerError({
+        status: 400,
+        message:
+          "Skill name must use lowercase letters and digits, joined by single hyphens",
+      });
+    case "metadata_key_unknown":
+      return new HandlerError({
+        status: 400,
+        message: `Skill metadata key is unknown: ${diagnostic.key}`,
+      });
+    case "metadata_value_invalid":
+      return new HandlerError({
+        status: 400,
+        message: `Skill metadata value is invalid: ${diagnostic.key}`,
+      });
+    case "required_tool_unknown":
+      return new HandlerError({
+        status: 400,
+        message: `Skill metadata names a tool stella does not have: ${diagnostic.tool}`,
+      });
+    case "resource_path_invalid":
+      return new HandlerError({
+        status: 400,
+        message: `Skill resource path is invalid: ${diagnostic.path}`,
+      });
+    case "resource_duplicate":
+      return new HandlerError({
+        status: 400,
+        message: `Skill contains a duplicate resource path: ${diagnostic.path}`,
+      });
+    case "resource_reference_missing":
+      return new HandlerError({
+        status: 400,
+        message: `Skill references a missing resource: ${diagnostic.path}`,
+      });
+    default: {
+      diagnostic satisfies never;
+      return panic("Unknown skill package diagnostic");
+    }
+  }
 };
 
 /** The shallowest SKILL.md in the package is its entry point. */
@@ -710,167 +750,6 @@ const findSkillFilePath = (
 
 const skillFolderPrefix = (skillFilePath: string): string =>
   skillFilePath.slice(0, -SKILL_FILE_NAME.length);
-
-const findSkillFile = (
-  files: readonly SkillFile[],
-): Result<SkillFile, HandlerError> => {
-  const skillFilePath = findSkillFilePath(files.map((file) => file.path));
-  if (skillFilePath.isErr()) {
-    return Result.err(skillFilePath.error);
-  }
-  const skillFile = files.find((file) => file.path === skillFilePath.value);
-  if (!skillFile) {
-    return panic("The chosen SKILL.md path is one of the package files");
-  }
-  return Result.ok(skillFile);
-};
-
-const collectResources = ({
-  files,
-  rootPrefix,
-}: {
-  files: readonly SkillFile[];
-  rootPrefix: string;
-}): Result<ParsedSkillResource[], HandlerError> => {
-  const resources: ParsedSkillResource[] = [];
-  const resourcePaths = new Set<string>();
-
-  for (const file of files) {
-    if (!file.path.startsWith(rootPrefix)) {
-      continue;
-    }
-
-    const relativePath = file.path.slice(rootPrefix.length);
-    if (relativePath === SKILL_FILE_NAME || relativePath.length === 0) {
-      continue;
-    }
-
-    const normalizedPath = normalizeResourcePath(relativePath);
-    if (!isAllowedResourcePath(normalizedPath)) {
-      continue;
-    }
-
-    const resourcePath = checkSkillResourcePath(normalizedPath);
-    if (resourcePath.isErr()) {
-      return Result.err(resourcePath.error);
-    }
-    if (resourcePaths.has(normalizedPath)) {
-      return rejectSkillPackage(
-        `Skill contains a duplicate resource path: ${normalizedPath}`,
-      );
-    }
-    resourcePaths.add(normalizedPath);
-
-    if (file.content.length > LIMITS.agentSkillResourceMaxChars) {
-      return rejectSkillPackage(
-        `Skill resource is too large: ${normalizedPath}`,
-      );
-    }
-
-    const kind = getSkillResourceKind(normalizedPath);
-    if (!kind) {
-      continue;
-    }
-
-    resources.push({
-      content: file.content,
-      kind,
-      path: normalizedPath,
-      sizeBytes: file.sizeBytes,
-    });
-  }
-
-  if (resources.length > LIMITS.agentSkillResourcesPerSkill) {
-    return rejectSkillPackage("Skill pack has too many resources");
-  }
-
-  // oxlint-disable-next-line require-cached-collator/require-cached-collator -- file path, sorted for deterministic archive layout, not display text
-  return Result.ok(resources.toSorted((a, b) => a.path.localeCompare(b.path)));
-};
-
-const checkFrontmatterLimits = (
-  metadata: SkillMetadata,
-): Result<void, HandlerError> =>
-  Result.gen(function* () {
-    yield* checkFrontmatterField({
-      field: "description",
-      limit: LIMITS.agentSkillDescriptionMaxChars,
-      value: metadata.description,
-    });
-    yield* checkFrontmatterField({
-      field: "version",
-      limit: LIMITS.agentSkillVersionMaxChars,
-      value: metadata.version,
-    });
-    yield* checkFrontmatterField({
-      field: "license",
-      limit: LIMITS.agentSkillLicenseMaxChars,
-      value: metadata.license,
-    });
-    yield* checkNoBidiFormattingControls({
-      field: "version",
-      value: metadata.version,
-    });
-    yield* checkNoBidiFormattingControls({
-      field: "license",
-      value: metadata.license,
-    });
-    yield* checkFrontmatterField({
-      field: "compatibility",
-      limit: LIMITS.agentSkillCompatibilityMaxChars,
-      value: metadata.compatibility,
-    });
-    yield* checkFrontmatterMetadata(metadata.metadata);
-    return Result.ok();
-  });
-
-const checkNoBidiFormattingControls = ({
-  field,
-  value,
-}: {
-  field: string;
-  value: string | null | undefined;
-}): Result<void, HandlerError> =>
-  !value || !BIDI_FORMATTING_CONTROL_PATTERN.test(value)
-    ? Result.ok()
-    : rejectSkillPackage(
-        `Skill ${field} contains bidirectional formatting controls`,
-      );
-
-const checkFrontmatterField = ({
-  field,
-  limit,
-  value,
-}: {
-  field: string;
-  limit: number;
-  value: string | null | undefined;
-}): Result<void, HandlerError> =>
-  !value || value.length <= limit
-    ? Result.ok()
-    : rejectSkillPackage(`Skill ${field} is too large`);
-
-const checkFrontmatterMetadata = (
-  metadata: Record<string, string> | undefined,
-): Result<void, HandlerError> => {
-  const entries = Object.entries(metadata ?? {});
-  if (entries.length > LIMITS.agentSkillMetadataEntriesMax) {
-    return rejectSkillPackage("Skill metadata has too many entries");
-  }
-
-  for (const [key, value] of entries) {
-    if (key.length > LIMITS.agentSkillMetadataKeyMaxChars) {
-      return rejectSkillPackage("Skill metadata key is too large");
-    }
-    if (value.length > LIMITS.agentSkillMetadataValueMaxChars) {
-      return rejectSkillPackage("Skill metadata value is too large");
-    }
-  }
-  const requiredTools = validateSkillRequiredTools(metadata);
-  return Result.isError(requiredTools)
-    ? rejectSkillPackage(requiredTools.error.message)
-    : Result.ok();
-};
 
 const fetchGithubSkillPackage = async (
   target: GithubSkillPath,
@@ -1426,20 +1305,6 @@ const pathParts = (url: URL): Result<string[], HandlerError> =>
 // a package file is ignored rather than failing the import.
 const normalizePackageFilePath = (path: string): string | null =>
   Result.try(() => normalizeResourcePath(path)).unwrapOr(null);
-
-// Identifies the SKILL.md a GitHub preview showed, independent of resources.
-const hashSkillEntrypoint = (source: string) => {
-  const hasher = createSha256();
-  const updateField = (value: string) => {
-    const bytes = UTF8_ENCODER.encode(value);
-    hasher.update(`${bytes.byteLength}:`);
-    hasher.update(bytes);
-  };
-  updateField("stella-skill-package-v1");
-  updateField(source);
-  updateField("0");
-  return hasher.digest("hex");
-};
 
 type FetchSafeBytesOptions = {
   access?: GithubSkillFetchAccess;

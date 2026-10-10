@@ -17,9 +17,30 @@ export {
 } from "./loader";
 export type { SkillMetadata, SkillResource, StellaSkill } from "./loader";
 export {
+  getSkillResourceKind,
+  hashSkillPackage,
+  isAllowedFirstPartySkillPackageSkip,
+  SKILL_FILE_NAME,
+  SKILL_METADATA_REGISTRY,
+  SKILL_NAME_PATTERN,
+  SKILL_PACKAGE_LIMITS,
+  SKILL_RESOURCE_EXTENSIONS,
+  SKILL_RESOURCE_FOLDER_KINDS,
+  SKILL_RESOURCE_KINDS,
+  SKILL_RESOURCE_PATH_PATTERN,
+  validateSkillPackage,
+} from "./format";
+export type {
+  SkillPackageDiagnostic,
+  SkillPackageFile,
+  SkillPackageSkipReason,
+  SkillResourceKind,
+  SkippedSkillPackageFile,
+  ValidatedSkillPackage,
+  ValidatedSkillResource,
+} from "./format";
+export {
   readSkillRequiredTools,
   SKILL_REQUIRED_TOOLS_MAX,
   SKILL_REQUIRED_TOOLS_METADATA_KEY,
 } from "./required-tools";
-export { getSkillResourceKind } from "./resource-kinds";
-export type { SkillResourceKind } from "./resource-kinds";

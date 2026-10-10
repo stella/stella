@@ -28,7 +28,7 @@ import {
   CHAT_CONTEXT_FILE_MAX_BYTES,
   CHAT_CONTEXT_FILE_MAX_MEGABYTES,
 } from "@stll/chat-limits";
-import { SKILL_PACKAGE_LIMITS } from "@stll/skills/package-limits";
+import { SKILL_PACKAGE_LIMITS } from "@stll/skills/format";
 
 import type { env } from "@/api/env";
 

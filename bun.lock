@@ -1122,6 +1122,7 @@
       "name": "@stll/skills",
       "version": "0.0.0",
       "dependencies": {
+        "@stll/sha256": "workspace:*",
         "better-result": "catalog:",
       },
       "devDependencies": {

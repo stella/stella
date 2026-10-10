@@ -790,6 +790,9 @@
       "passThroughEnv": ["API_TEST_TIMINGS_DIR", "API_TEST_DURATIONS_FILE"],
       "cache": false
     },
+    "@stll/skills#test": {
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/README.md"]
+    },
     "@stll/api#test": {
       "dependsOn": ["@stll/cli#codegen:runtime", "generate:capability-runtime"],
       "env": ["API_TEST_DURATIONS_HASH", "API_TEST_SHARD", "API_TEST_FILES"],
@@ -814,6 +817,7 @@
         "$TURBO_ROOT$/packages/decision-reader/src/**",
         "$TURBO_ROOT$/packages/legal-ast/src/document-ast.ts",
         "$TURBO_ROOT$/packages/legal-ast/src/inline.ts",
+        "$TURBO_ROOT$/packages/skills/**",
         "$TURBO_ROOT$/oxlint.config.ts",
         "$TURBO_ROOT$/scripts/check-aggregate-mutations.ts",
         "$TURBO_ROOT$/scripts/ownership/**",

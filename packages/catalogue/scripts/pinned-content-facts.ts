@@ -1,4 +1,4 @@
-import { Result, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import type { MaybePromise } from "bun";
 import nodePath from "node:path";
 import * as v from "valibot";
@@ -7,6 +7,7 @@ import { sha256Hex } from "@stll/sha256/bun";
 import type { SkillMetadata } from "@stll/skills";
 import { stableStringify } from "@stll/stable-stringify";
 
+import { isGithubSkillEntry, loadCatalogue } from "../src/loader";
 import { CATALOGUE_LICENSES } from "../src/schema";
 
 export class PinnedContentError extends TaggedError("PinnedContentError")<{
@@ -25,12 +26,24 @@ const frontmatterSchema = v.strictObject({
   licenseUtf16Length: count,
   compatibilityUtf16Length: count,
   metadata: v.array(
-    v.strictObject({ keyUtf16Length: count, valueUtf16Length: count }),
+    v.variant("type", [
+      v.strictObject({
+        type: v.literal("stella"),
+        key: v.string(),
+        value: v.string(),
+      }),
+      v.strictObject({
+        type: v.literal("other"),
+        keyUtf16Length: count,
+        valueUtf16Length: count,
+      }),
+    ]),
   ),
 });
 const skillSchema = v.strictObject({
   ...fileFields,
   bodyUtf16Length: count,
+  referencedResourcePaths: v.array(v.string()),
   frontmatter: frontmatterSchema,
 });
 const targetSchema = v.strictObject({
@@ -57,7 +70,7 @@ const entrySchema = v.strictObject({
   resources: v.array(v.strictObject({ path: v.string(), ...fileFields })),
 });
 const snapshotSchema = v.strictObject({
-  version: v.literal(1),
+  version: v.literal(2),
   parserFingerprint: digest,
   factsSha256: digest,
   entries: v.array(entrySchema),
@@ -68,6 +81,9 @@ export type FrontmatterFacts = v.InferOutput<typeof frontmatterSchema>;
 type FileFacts = v.InferOutput<typeof fileSchema>;
 type SkillFacts = v.InferOutput<typeof skillSchema>;
 type EntryFacts = v.InferOutput<typeof entrySchema>;
+type PinnedSnapshotSource = PinnedSource & {
+  entries: EntryFacts[];
+};
 export type PinnedSource = {
   skill: (target: GithubTarget) => MaybePromise<SkillFacts | null>;
   directory: (args: {
@@ -86,8 +102,7 @@ export const PINNED_SNAPSHOT_PATH = nodePath.resolve(
 const root = nodePath.resolve(import.meta.dir, "../../..");
 const PARSER_INPUTS = [
   "packages/skills/src/loader.ts",
-  "packages/skills/src/resource-kinds.ts",
-  "packages/skills/src/package-limits.ts",
+  "packages/skills/src/format.ts",
   "packages/skills/package.json",
   "packages/catalogue/scripts/pinned-content-facts.ts",
   "packages/catalogue/scripts/pinned-content-upstream.ts",
@@ -115,10 +130,15 @@ export const projectFrontmatter = (
   compatibilityUtf16Length: metadata.compatibility?.length ?? 0,
   metadata: Object.entries(metadata.metadata ?? {})
     .toSorted(([left], [right]) => compareKeys(left, right))
-    .map(([key, value]) => ({
-      keyUtf16Length: key.length,
-      valueUtf16Length: value.length,
-    })),
+    .map(([key, value]) =>
+      key.startsWith("stella-")
+        ? { type: "stella" as const, key, value }
+        : {
+            type: "other" as const,
+            keyUtf16Length: key.length,
+            valueUtf16Length: value.length,
+          },
+    ),
 });
 
 export const assertCompleteGithubContentsListing = ({
@@ -159,7 +179,7 @@ export const buildPinnedSnapshot = async (entries: EntryFacts[]) => {
   }
   const detachedEntries = parsed.output;
   return {
-    version: 1 as const,
+    version: 2 as const,
     parserFingerprint: await fingerprint(),
     factsSha256: sha256Hex(stableStringify(detachedEntries)),
     entries: detachedEntries,
@@ -242,7 +262,7 @@ export const recordingPinnedSource = (upstream: PinnedSource) => {
 export const readPinnedSnapshot = async (
   targets: GithubTarget[],
   file = PINNED_SNAPSHOT_PATH,
-): Promise<PinnedSource> => {
+): Promise<PinnedSnapshotSource> => {
   const read = await Result.tryPromise(async () => Bun.file(file).text());
   if (read.isErr()) {
     throw new PinnedContentError({
@@ -311,6 +331,7 @@ export const readPinnedSnapshot = async (
     return item;
   };
   return {
+    entries: snapshot.entries,
     skill: (target) => get(target).skill,
     directory: ({ target, directory }) => {
       const listing = get(target).directories.find(
@@ -333,4 +354,81 @@ export const readPinnedSnapshot = async (
       return resource;
     },
   };
+};
+
+export const collectGithubTargets = (): GithubTarget[] =>
+  loadCatalogue()
+    .filter(isGithubSkillEntry)
+    .map((entry) => ({
+      directory: entry.directory ?? "",
+      license: entry.license,
+      repo: entry.repo,
+      rev: entry.rev,
+      slug: entry.slug,
+    }));
+
+const repeatedMetadataKey = (length: number, index: number): string => {
+  const suffix = index.toString(36);
+  return `${"k".repeat(Math.max(0, length - suffix.length))}${suffix}`.slice(
+    -length,
+  );
+};
+
+export const syntheticSkillSource = (
+  frontmatter: FrontmatterFacts,
+  bodyLength: number,
+  referencedResourcePaths: readonly string[],
+): string => {
+  const lines = [
+    "---",
+    `name: ${JSON.stringify(frontmatter.name)}`,
+    `description: ${JSON.stringify("d".repeat(frontmatter.descriptionUtf16Length))}`,
+  ];
+  if (frontmatter.versionUtf16Length > 0) {
+    lines.push(
+      `version: ${JSON.stringify("v".repeat(frontmatter.versionUtf16Length))}`,
+    );
+  }
+  if (frontmatter.license !== null) {
+    lines.push(`license: ${JSON.stringify(frontmatter.license)}`);
+  }
+  if (frontmatter.compatibilityUtf16Length > 0) {
+    lines.push(
+      `compatibility: ${JSON.stringify("c".repeat(frontmatter.compatibilityUtf16Length))}`,
+    );
+  }
+  if (frontmatter.metadata.length > 0) {
+    lines.push("metadata:");
+    for (const [index, entry] of frontmatter.metadata.entries()) {
+      switch (entry.type) {
+        case "stella":
+          lines.push(
+            `  ${JSON.stringify(entry.key)}: ${JSON.stringify(entry.value)}`,
+          );
+          break;
+        case "other": {
+          const key = repeatedMetadataKey(entry.keyUtf16Length, index);
+          lines.push(
+            `  ${JSON.stringify(key)}: ${JSON.stringify("v".repeat(entry.valueUtf16Length))}`,
+          );
+          break;
+        }
+        default:
+          entry satisfies never;
+          return panic("Unknown pinned metadata fact");
+      }
+    }
+  }
+  const references = referencedResourcePaths
+    .map((resourcePath) => `\`${resourcePath}\``)
+    .join("");
+  if (references.length > bodyLength) {
+    return panic("Pinned skill references exceed the recorded body length");
+  }
+  lines.push(
+    "---",
+    "",
+    `${references}${"b".repeat(bodyLength - references.length)}`,
+  );
+  return lines.join("\n");
 };

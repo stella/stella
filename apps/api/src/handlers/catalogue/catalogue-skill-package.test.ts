@@ -11,9 +11,9 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { GithubSkillPath } from "@/api/lib/skills/skill-package";
 
 const inTreePayload = {
-  slug: "contract-review",
+  slug: "contract-review-anthropic",
   body: `---
-name: contract-review
+name: contract-review-anthropic
 description: Review contracts using a structured checklist.
 license: Apache-2.0
 ---
@@ -36,7 +36,7 @@ describe("resolveCatalogueSkillPackage", () => {
     if (Result.isError(result)) {
       throw result.error;
     }
-    expect(result.value.name).toBe("contract-review");
+    expect(result.value.name).toBe("contract-review-anthropic");
     expect(result.value.license).toBe("Apache-2.0");
     expect(result.value.resources.map((resource) => resource.path)).toEqual([
       "references/checklist.md",
@@ -72,60 +72,63 @@ describe("resolveCatalogueSkillPackage", () => {
     expect(result.error.status).toBe(404);
   });
 
-  test("installs a github skill under the catalogue slug, not the upstream frontmatter name", async () => {
-    // `jurisrank-csjn-analysis` is a real github-sourced catalogue
-    // entry. Its upstream SKILL.md frontmatter name can differ from the
-    // slug; the resolver must still resolve to the catalogue slug so the
-    // stored row is findable by install-state matching and uninstall.
+  test("installs a github skill under its matching catalogue id", async () => {
     const captured: { target: GithubSkillPath | null; sourceUrl: string } = {
       target: null,
       sourceUrl: "",
     };
-    const result = await resolveCatalogueSkillPackage(
-      "jurisrank-csjn-analysis",
-      {
-        permit: grantThirdPartyOutboundPermit(),
-        fetchGithubSkill: async ({ target, sourceUrl }) => {
-          captured.target = target;
-          captured.sourceUrl = sourceUrl;
-          return Result.ok({
-            body: "Analyze the ruling.",
-            compatibility: null,
-            description: "Upstream skill.",
-            entrypointHash: "entrypoint-hash",
-            license: "cc-by-4.0",
-            metadata: {},
-            // Upstream frontmatter name deliberately differs from the slug.
-            name: "jurisrank-upstream-name",
-            resources: [],
-            sourceUrl: `${sourceUrl}SKILL.md`,
-            version: null,
-          });
-        },
+    const result = await resolveCatalogueSkillPackage("jurisrank", {
+      permit: grantThirdPartyOutboundPermit(),
+      fetchGithubSkill: async ({ target, sourceUrl }) => {
+        captured.target = target;
+        captured.sourceUrl = sourceUrl;
+        return Result.ok({
+          body: "Analyze the ruling.",
+          compatibility: null,
+          description: "Upstream skill.",
+          entrypointHash: "entrypoint-hash",
+          license: "cc-by-4.0",
+          metadata: {},
+          name: "jurisrank",
+          resources: [],
+          sourceUrl: `${sourceUrl}SKILL.md`,
+          version: null,
+        });
       },
-    );
+    });
 
     expect(Result.isOk(result)).toBe(true);
     if (Result.isError(result)) {
       throw result.error;
     }
-    expect(result.value.installSlug).toBe("jurisrank-csjn-analysis");
-    expect(result.value.package.name).toBe("jurisrank-upstream-name");
+    expect(result.value.installSlug).toBe("jurisrank");
+    expect(result.value.package.name).toBe("jurisrank");
     // The pinned commit SHA (not a branch) is threaded through as the ref.
     expect(captured.target?.ref).toMatch(/^[0-9a-f]{40}$/u);
     expect(captured.sourceUrl).toContain("raw.githubusercontent.com");
     expect(result.value.package.license).toBe("CC-BY-4.0");
   });
 
+  test("rejects an upstream name that differs from the catalogue id", async () => {
+    const result = await resolveCatalogueSkillPackage("jurisrank", {
+      permit: grantThirdPartyOutboundPermit(),
+      fetchGithubSkill: async () =>
+        Result.ok(parsedGithubPackage({ name: "different-name" })),
+    });
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isOk(result)) {
+      throw new Error("expected a mismatched name to fail");
+    }
+    expect(result.error.status).toBe(502);
+  });
+
   test("rejects an upstream license that differs from the reviewed manifest", async () => {
-    const result = await resolveCatalogueSkillPackage(
-      "jurisrank-csjn-analysis",
-      {
-        permit: grantThirdPartyOutboundPermit(),
-        fetchGithubSkill: async () =>
-          Result.ok(parsedGithubPackage({ license: "MIT" })),
-      },
-    );
+    const result = await resolveCatalogueSkillPackage("jurisrank", {
+      permit: grantThirdPartyOutboundPermit(),
+      fetchGithubSkill: async () =>
+        Result.ok(parsedGithubPackage({ license: "MIT" })),
+    });
 
     expect(Result.isError(result)).toBe(true);
     if (Result.isOk(result)) {
@@ -236,14 +239,17 @@ const githubPackageOptions = () => ({
   },
 });
 
-const parsedGithubPackage = ({ license = "CC-BY-4.0" } = {}) => ({
+const parsedGithubPackage = ({
+  license = "CC-BY-4.0",
+  name = "jurisrank",
+} = {}) => ({
   body: "Review the agreement.",
   compatibility: null,
   description: "Review agreements.",
   entrypointHash: "entrypoint-hash",
   license,
   metadata: { author: "Stella" },
-  name: "review",
+  name,
   resources: [
     {
       content: "Reference",

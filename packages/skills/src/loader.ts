@@ -1,8 +1,27 @@
 import { panic, Result, TaggedError } from "better-result";
 
-import { getSkillResourceKind } from "./resource-kinds";
-import type { SkillResourceKind } from "./resource-kinds";
 import { GENERATED_SKILLS } from "./skills.gen";
+
+type SkillResourceKind =
+  | "asset"
+  | "knowledge"
+  | "prompt"
+  | "reference"
+  | "script"
+  | "template";
+
+const RESOURCE_FOLDERS = new Map<string, SkillResourceKind>([
+  ["assets", "asset"],
+  ["knowledge", "knowledge"],
+  ["prompts", "prompt"],
+  ["reference", "reference"],
+  ["references", "reference"],
+  ["scripts", "script"],
+  ["templates", "template"],
+]);
+
+const getSkillResourceKind = (path: string): SkillResourceKind | null =>
+  RESOURCE_FOLDERS.get(path.split("/").at(0) ?? "") ?? null;
 
 export type SkillMetadata = {
   compatibility?: string | null;
