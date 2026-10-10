@@ -23,9 +23,9 @@ and coordinate development.
 6. Start the dev environment: `bun run dev`
 
 For machines running many agent sessions, the documentation MCP server also has
-an opt-in shared HTTP mode. Configure Claude Code with
-`{"type": "http", "url": "http://127.0.0.1:8765/mcp"}` or Codex with
-`url = "http://127.0.0.1:8765/mcp"`; the existing setup remains the default.
+an opt-in shared HTTP mode (`bun run serve:http` in `.claude/mcp`). Point an MCP
+client that supports HTTP servers at `http://127.0.0.1:8765/mcp` in its
+user-level configuration; the existing per-session setup remains the default.
 
 `bun run dev` now prepares the local stack for the current checkout,
 including worktree-aware `.env` linking and automatic port offsets when

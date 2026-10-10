@@ -163,6 +163,33 @@ describe("shared documentation MCP HTTP server", () => {
     }
   });
 
+  test("rejects requests from an unrelated Origin", async () => {
+    const { baseUrl } = await startHttpServer();
+    const initialize = {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: {
+        protocolVersion: "2025-06-18",
+        capabilities: {},
+        clientInfo: { name: "origin-check", version: "1.0.0" },
+      },
+    };
+    const send = (origin?: string) =>
+      fetch(`${baseUrl}/mcp`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          accept: "application/json, text/event-stream",
+          ...(origin === undefined ? {} : { origin }),
+        },
+        body: JSON.stringify(initialize),
+      });
+    expect((await send("http://evil.example")).status).toBe(403);
+    expect((await send(baseUrl)).status).toBe(200);
+    expect((await send()).status).toBe(200);
+  });
+
   test("rejects requests with an unexpected Host header", async () => {
     const { baseUrl } = await startHttpServer();
     const response = await fetch(`${baseUrl}/healthz`, {

@@ -38,6 +38,11 @@ type Session = {
 
 const sessions = new Map<string, Session>();
 const allowedHosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`]);
+// Browsers send Origin; command-line MCP clients do not. Any Origin other than this
+// loopback endpoint is a cross-site request and is refused.
+const allowedOrigins = new Set(
+  [...allowedHosts].map((host) => `http://${host}`),
+);
 
 const sendJson = (response: ServerResponse, status: number, body: unknown) => {
   response.writeHead(status, { "content-type": "application/json" });
@@ -79,6 +84,11 @@ const getSessionId = (request: IncomingMessage) => {
 
 const httpServer = createServer(async (request, response) => {
   if (!request.headers.host || !allowedHosts.has(request.headers.host)) {
+    response.writeHead(403).end("Forbidden");
+    return;
+  }
+  const { origin } = request.headers;
+  if (origin !== undefined && !allowedOrigins.has(origin)) {
     response.writeHead(403).end("Forbidden");
     return;
   }
