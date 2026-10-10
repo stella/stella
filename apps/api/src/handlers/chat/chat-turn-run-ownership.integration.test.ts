@@ -33,6 +33,7 @@ import type { ChatTurnOutcome } from "@/api/handlers/chat/types";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { buildWireSnapshot } from "@/api/tests/helpers/chat-fixtures";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -275,16 +276,13 @@ const expireLease = async (turnId: SafeId<"chatTurn">) => {
 describe("a producing run", () => {
   test("delivers a large snapshot over HTTP to a continuously reading client", async () => {
     const { execution, threadId } = await seedRunningTurn();
-    const snapshot = {
-      type: EventType.MESSAGES_SNAPSHOT,
-      messages: [
-        {
-          id: "large-history",
-          role: "assistant",
-          content: "x".repeat(8 * 1024 * 1024),
-        },
-      ],
-    } satisfies StreamChunk;
+    const snapshot = buildWireSnapshot([
+      {
+        id: "large-history",
+        role: "assistant",
+        content: "x".repeat(8 * 1024 * 1024),
+      },
+    ]);
     const encodedSnapshot = JSON.stringify(snapshot);
     expect(
       new TextEncoder().encode(encodedSnapshot).byteLength,
@@ -347,16 +345,13 @@ describe("a producing run", () => {
   test("fails a stalled HTTP reader while preserving the completed turn", async () => {
     const { execution, threadId } = await seedRunningTurn();
     const clientConnected = Promise.withResolvers<undefined>();
-    const snapshot = {
-      type: EventType.MESSAGES_SNAPSHOT,
-      messages: [
-        {
-          id: "stalled-http-history",
-          role: "assistant",
-          content: "x".repeat(32 * 1024 * 1024),
-        },
-      ],
-    } satisfies StreamChunk;
+    const snapshot = buildWireSnapshot([
+      {
+        id: "stalled-http-history",
+        role: "assistant",
+        content: "x".repeat(32 * 1024 * 1024),
+      },
+    ]);
     const chunks = async function* (): AsyncGenerator<StreamChunk> {
       yield {
         type: EventType.TEXT_MESSAGE_CONTENT,
