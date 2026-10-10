@@ -1,4 +1,5 @@
 import {
+  ChangeMessageVisibilityBatchCommand,
   DeleteMessageCommand,
   ReceiveMessageCommand,
   type Message,
@@ -25,6 +26,7 @@ const RECEIVE_WAIT_SECONDS = 1;
 // batch so a later run cannot take a message that is still being filed.
 const VISIBILITY_TIMEOUT_SECONDS = 600;
 const DELETE_TIMEOUT_MS = 5000;
+const RELEASE_TIMEOUT_MS = 5000;
 
 // SES publishes this once when a receipt rule's topic is configured.
 const SES_SETUP_NOTIFICATION = "AMAZON_SES_SETUP_NOTIFICATION";
@@ -152,6 +154,7 @@ type InboundQueueDrainCounts = {
   retry: number;
   poison: number;
   deleteFailed: number;
+  releaseFailed: number;
 };
 
 type InboundQueueDrainSummary = InboundQueueDrainCounts & {
@@ -171,9 +174,8 @@ type DrainInboundMailQueueOptions = {
 /**
  * A message is deleted only after a terminal outcome: filed, duplicate,
  * dropped (its drop log committed), a prior raw deletion, or a setup notice.
- * Anything else stays
- * on the queue; its visibility timeout re-offers it and the queue's redrive
- * policy moves it to the dead-letter queue after the receive limit.
+ * Anything else stays on the queue; abort releases unprocessed deliveries,
+ * while other retries wait for their visibility timeout and redrive policy.
  */
 export const drainInboundMailQueue = async ({
   client,
@@ -194,6 +196,7 @@ export const drainInboundMailQueue = async ({
     retry: 0,
     poison: 0,
     deleteFailed: 0,
+    releaseFailed: 0,
   };
   const deadline = Temporal.Now.instant().epochMilliseconds + RUN_BUDGET_MS;
 
@@ -239,6 +242,41 @@ export const drainInboundMailQueue = async ({
       logger.warn("inbound_mail.queue.delete_failed", {
         "queue.delivery_id": messageId,
         "error.type": errorTag(deleted.error),
+      });
+    }
+  };
+
+  const releaseMessages = async (messages: readonly Message[]) => {
+    const released = await Result.tryPromise({
+      try: async () =>
+        await client.send(
+          new ChangeMessageVisibilityBatchCommand({
+            QueueUrl: queueUrl,
+            Entries: messages.map((message, index) => ({
+              Id: String(index),
+              ReceiptHandle: message.ReceiptHandle,
+              VisibilityTimeout: 0,
+            })),
+          }),
+          { abortSignal: AbortSignal.timeout(RELEASE_TIMEOUT_MS) },
+        ),
+      catch: (cause) => cause,
+    });
+    const failedIds = released.isErr()
+      ? messages.map((_, index) => String(index))
+      : released.value.Failed?.map(({ Id }) => Id);
+    // SQS omits `Failed` when every entry was released.
+    if (failedIds === undefined) {
+      return;
+    }
+    for (const failedId of failedIds) {
+      const message = messages.at(Number(failedId));
+      counts.releaseFailed += 1;
+      logger.warn("inbound_mail.queue.release_failed", {
+        "queue.delivery_id": message?.MessageId ?? "unknown",
+        "error.type": released.isErr()
+          ? errorTag(released.error)
+          : "SqsBatchEntryError",
       });
     }
   };
@@ -345,10 +383,10 @@ export const drainInboundMailQueue = async ({
     if (messages === undefined || messages.length === 0) {
       return summary(batch, "drained");
     }
-    for (const message of messages) {
-      // On abort the unhandled rest stay leased until their visibility
-      // timeout ends; they are redelivered, never deleted.
+    for (const [index, message] of messages.entries()) {
+      // On abort, immediately re-offer only deliveries that have not started.
       if (aborted()) {
+        await releaseMessages(messages.slice(index));
         return summary(batch + 1, "aborted");
       }
       // Messages are filed one at a time so an abort leaves no delivery

@@ -7,6 +7,8 @@ import type {
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { sleep } from "@stll/concurrency/sleep";
+
 import {
   finishReasonOf,
   STRIPPED_CHUNK_KEYS,
@@ -63,9 +65,7 @@ test("finishes an asynchronous document mutation before a sibling read starts", 
       name: "write_document",
       description: "Write the document",
     }).server(async () => {
-      await new Promise<void>((resolve) => {
-        setTimeout(resolve, 0);
-      });
+      await sleep(0);
       documentVersion = 2;
       return { version: documentVersion };
     }),

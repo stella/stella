@@ -1,9 +1,9 @@
 import { panic } from "better-result";
 
+import { courtAbbreviation } from "@stll/api-contract/case-law-court-abbreviations";
 import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-grammar";
 import { Temporal } from "@stll/time";
 
-import { courtAbbreviation } from "@/api/lib/case-law/court-abbreviations";
 import {
   SK_COLLECTION_SERIES,
   type SkCollectionDecision,

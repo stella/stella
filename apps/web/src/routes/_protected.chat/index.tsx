@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from "react";
+import type { MouseEvent } from "react";
 
 import {
   useInfiniteQuery,
@@ -50,6 +51,11 @@ import {
 import { ChatInputSurface } from "@/components/chat-input-surface";
 import { ChatComposerDock } from "@/components/chat/chat-composer-dock";
 import { ChatMatterPicker } from "@/components/chat/chat-matter-picker";
+import {
+  ChatThreadDecisionLabel,
+  drawableChatThreadDecision,
+  useOpenChatThreadDecision,
+} from "@/components/chat/chat-thread-decision";
 import { ChatThreadOriginPrefix } from "@/components/chat/chat-thread-origin-prefix";
 import { useChatModelSelection } from "@/components/chat/use-chat-model-selection";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
@@ -74,6 +80,7 @@ import {
   listChatHistoryItems,
   mergeGroupedChatThreadPages,
 } from "@/features/chat/queries";
+import type { ChatHistoryItem } from "@/features/chat/queries";
 import { TeamAvatars } from "@/features/workspaces/team-avatars";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -413,6 +420,11 @@ function ChatIndex() {
     () => listChatHistoryItems(groupedThreads).slice(0, 5),
     [groupedThreads],
   );
+  const openChatThreadDecision = useOpenChatThreadDecision();
+  const openDecisionChatOnClick =
+    (chat: ChatHistoryItem) => (event: MouseEvent<HTMLAnchorElement>) => {
+      openChatThreadDecision(event, chat);
+    };
   const storedMatterColor = (workspaceId: string) =>
     workspaces?.find(({ id }) => id === workspaceId)?.color ?? null;
 
@@ -780,6 +792,7 @@ function ChatIndex() {
                 <Link
                   className={cn(LANDING_ROW_CLASS, "flex items-center gap-3")}
                   key={chat.id}
+                  onClick={openDecisionChatOnClick(chat)}
                   params={{
                     workspaceId: chat.workspaceId,
                     threadId: chat.id,
@@ -805,6 +818,7 @@ function ChatIndex() {
                           />
                           <BidiText>{chat.workspaceName}</BidiText>
                           {" · "}
+                          <ChatDecisionMetaPrefix chat={chat} />
                           {formatRelativeTime(chat.updatedAt)}
                         </>
                       }
@@ -821,6 +835,7 @@ function ChatIndex() {
                 <Link
                   className={cn(LANDING_ROW_CLASS, "flex items-center gap-3")}
                   key={chat.id}
+                  onClick={openDecisionChatOnClick(chat)}
                   params={{ threadId: chat.id }}
                   to="/chat/$threadId"
                 >
@@ -829,6 +844,7 @@ function ChatIndex() {
                       meta={
                         <>
                           <ChatThreadOriginPrefix origin={chat.origin} />
+                          <ChatDecisionMetaPrefix chat={chat} />
                           {formatRelativeTime(chat.updatedAt)}
                         </>
                       }
@@ -862,6 +878,17 @@ function ChatIndex() {
     </LandingLayout>
   );
 }
+
+/** A decision chat's decision, leading its row's time; nothing for others. */
+const ChatDecisionMetaPrefix = ({ chat }: { chat: ChatHistoryItem }) => {
+  const decision = drawableChatThreadDecision(chat);
+  return decision === null ? null : (
+    <>
+      <ChatThreadDecisionLabel decision={decision} />
+      {" · "}
+    </>
+  );
+};
 
 type SuggestedSkillRowProps = {
   onSelect: () => void;

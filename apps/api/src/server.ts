@@ -37,6 +37,7 @@ import {
   clausesRoute,
 } from "@/api/handlers/clauses/routes";
 import { contactsRoute } from "@/api/handlers/contacts/routes";
+import { desktopFeatureAccessRoute } from "@/api/handlers/desktop-feature-access/routes";
 import { desktopPresenceRoute } from "@/api/handlers/desktop-presence/routes";
 import { desktopRegistryRoute } from "@/api/handlers/desktop-registry/routes";
 import { documentReviewPassagesRoute } from "@/api/handlers/document-reviews/passages-routes";
@@ -65,6 +66,7 @@ import { healthRoute } from "@/api/handlers/health/routes";
 import { hostedUsageWebhookRoute } from "@/api/handlers/hosted-usage-webhook/routes";
 import { invoicesRoute } from "@/api/handlers/invoices/routes";
 import { legalReaderRoute } from "@/api/handlers/legal-reader/routes";
+import { legalResolveRoute } from "@/api/handlers/legal-resolve/routes";
 import { legislationCorpusRoute } from "@/api/handlers/legislation/corpus-routes";
 import { publicLegislationRoute } from "@/api/handlers/legislation/public-routes";
 import { legislationRoute } from "@/api/handlers/legislation/routes";
@@ -93,6 +95,7 @@ import { reportsRoute } from "@/api/handlers/reports/routes";
 import { publicSanctionsRoute } from "@/api/handlers/sanctions/public-routes";
 import { savedSearchesRoute } from "@/api/handlers/saved-searches/routes";
 import { savedTimeNarrativesRoute } from "@/api/handlers/saved-time-narratives/routes";
+import { searchHistoryRoute } from "@/api/handlers/search-history/routes";
 import { searchRoute } from "@/api/handlers/search/routes";
 import { sellerProfilesRoute } from "@/api/handlers/seller-profiles/routes";
 import { sharepointRoute } from "@/api/handlers/sharepoint/routes";
@@ -209,6 +212,7 @@ import { clearByokAdapterCache } from "@/api/lib/tanstack-ai-models";
 import { isUploadRateLimitedPath } from "@/api/lib/upload-rate-limit";
 import { flushActionCostRecords } from "@/api/lib/usage/action-costs/recorder";
 import { isLocalDevOpen, runtimeMode } from "@/api/runtime-mode";
+import { startConfiguredScheduler } from "@/api/server-scheduled-jobs";
 import {
   API_SHUTDOWN_OUTCOME,
   shutdownApiServices,
@@ -554,12 +558,22 @@ const api = new Elysia()
       .use(legislationCorpusRoute)
       .use(new Elysia().use(publicLegislationRoute).use(publicSanctionsRoute))
       .use(publicKnowledgeRoute)
-      .use(searchRoute)
-      .use(savedSearchesRoute)
+      // Compose the search slice in one link to bound the server's inferred
+      // Elysia chain depth while preserving each route's full contract.
+      .use(
+        new Elysia()
+          .use(searchRoute)
+          .use(savedSearchesRoute)
+          .use(searchHistoryRoute),
+      )
       .use(savedTimeNarrativesRoute)
       .use(auditLogsRoute)
-      .use(caseLawRoute)
-      .use(legalReaderRoute)
+      .use(
+        new Elysia()
+          .use(caseLawRoute)
+          .use(legalReaderRoute)
+          .use(legalResolveRoute),
+      )
       .use(chatRoute)
       .use(userFilesRoute)
       .use(skillsRoute)
@@ -580,7 +594,12 @@ const api = new Elysia()
   // TypeScript's instantiation limit for the browser's Eden client. The
   // signing route carries the version prefix itself.
   .use(feedbackRoute)
-  .use(new Elysia().use(pdfSigningSessionsRoute).use(desktopPresenceRoute));
+  .use(
+    new Elysia()
+      .use(pdfSigningSessionsRoute)
+      .use(desktopPresenceRoute)
+      .use(desktopFeatureAccessRoute),
+  );
 
 export default api;
 
@@ -741,7 +760,7 @@ const startServer = async (): Promise<void> => {
   await initBuiltinReportTemplates();
 
   const closeManagedProviderChecks = await startManagedProviderChecks();
-  const backgroundWorkers = initApiBackgroundWorkers();
+  const backgroundWorkers = initApiBackgroundWorkers(env.SCHEDULED_JOBS_MODE);
 
   // Every process outside local development starts it. Same URL as the pools
   // in `db/root.ts`.
@@ -773,7 +792,9 @@ const startServer = async (): Promise<void> => {
   // during scheduler registration still finds a shutdown path. A holder rather
   // than a binding because the shutdown closure is created before the loop
   // exists and has to observe it once it does.
-  const scheduler: { loop?: ReturnType<typeof startSchedulerLoop> } = {};
+  const scheduler: {
+    loop: ReturnType<typeof startSchedulerLoop> | undefined;
+  } = { loop: undefined };
 
   // Graceful shutdown: stop accepting HTTP requests, close long-lived SSE
   // streams, then drain the BullMQ workers on SIGTERM/SIGINT (deploy,
@@ -855,17 +876,17 @@ const startServer = async (): Promise<void> => {
   // After the signal handlers, because registration is awaited,
   // and a deploy landing inside that window would otherwise find no shutdown
   // path for the SSE loop, the S3 refresh loop and the listening socket.
-  if (env.SCHEDULED_JOBS_MODE === "enabled") {
-    await ensureDefaultSchedulerJobs();
-    scheduler.loop = startSchedulerLoop({
-      registry: createSchedulerTaskRegistry(
-        createReapOwnerlessChatTurnsTask(reapOwnerlessChatTurnOnTx),
-      ),
-    });
-    logger.info("scheduler.started", {
-      "scheduler.runner_id": scheduler.loop.runnerId,
-    });
-  }
+  scheduler.loop = await startConfiguredScheduler({
+    mode: env.SCHEDULED_JOBS_MODE,
+    ensureDefaultJobs: ensureDefaultSchedulerJobs,
+    startLoop: () =>
+      startSchedulerLoop({
+        registry: createSchedulerTaskRegistry(
+          createReapOwnerlessChatTurnsTask(reapOwnerlessChatTurnOnTx),
+        ),
+      }),
+    logger,
+  });
   markScheduledJobsReady();
 };
 

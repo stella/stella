@@ -61,13 +61,13 @@
       "oracle": "chat.live.equals-reload"
     },
     {
-      "id": "persistence-ignores-snapshots",
+      "id": "persistence-preserves-streamed-parts",
       "fix": "#2186",
-      "behaviour": "The persistence processor never consumes a messages snapshot, which would reset what it accumulated.",
+      "behaviour": "Snapshot reconciliation preserves streamed call metadata and transcript parts while incorporating resumed results.",
       "status": "active",
       "file": "src/handlers/chat/stream-chat.ts",
-      "search": "  if (chunk.type !== EventType.MESSAGES_SNAPSHOT) {\n    processor.processChunk(chunk);\n  }",
-      "replace": "  processor.processChunk(chunk);",
+      "search": "      if (previous !== undefined && snapshot !== undefined) {",
+      "replace": "      if (false && previous !== undefined && snapshot !== undefined) {",
       "scenario": {
         "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
         "test": "keeps a run's server call and the approval it then asks for"

@@ -33,11 +33,39 @@ const workflow = v.parse(
     ),
   ),
 );
+const nightlyWorkflow = v.parse(
+  v.looseObject({
+    jobs: v.looseObject({
+      "full-typecheck": v.looseObject({
+        "timeout-minutes": v.number(),
+        steps: v.array(
+          v.looseObject({
+            name: v.optional(v.string()),
+            run: v.optional(v.string()),
+            env: v.optional(v.record(v.string(), v.string())),
+          }),
+        ),
+      }),
+    }),
+  }),
+  Bun.YAML.parse(
+    readFileSync(
+      new URL("../.github/workflows/nightly-typecheck.yml", import.meta.url),
+      "utf-8",
+    ),
+  ),
+);
 const step =
   workflow.jobs["release-typecheck"].steps.find(
     ({ name }) => name === "Full release typecheck",
   ) ?? panic("Missing full release typecheck");
 const command = step.run ?? panic("Missing release typecheck command");
+const nightlyStep =
+  nightlyWorkflow.jobs["full-typecheck"].steps.find(
+    ({ name }) => name === "Full typecheck (no --affected, no turbo cache)",
+  ) ?? panic("Missing nightly full typecheck");
+const nightlyCommand =
+  nightlyStep.run ?? panic("Missing nightly typecheck command");
 const scripts = v.parse(
   v.object({
     scripts: v.object({ typecheck: v.string(), "typecheck:repo": v.string() }),
@@ -47,7 +75,17 @@ const scripts = v.parse(
   ),
 ).scripts;
 
-const assertBounded = (candidate = command) => {
+type AssertBoundedOptions = {
+  candidate: string;
+  env: Record<string, string> | undefined;
+  failureMessage: string;
+};
+
+const assertBounded = ({
+  candidate,
+  env,
+  failureMessage,
+}: AssertBoundedOptions) => {
   const directory = mkdtempSync(
     path.join(tmpdir(), "release-typecheck-contract-"),
   );
@@ -75,14 +113,13 @@ const assertBounded = (candidate = command) => {
       env: {
         PATH: `${path.dirname(process.execPath)}:${process.env["PATH"] ?? ""}`,
         CALLS: calls,
-        ...step.env,
+        ...env,
       },
     });
     expect(result.exitCode, result.stderr.toString()).toBe(0);
-    expect(
-      readFileSync(calls, "utf-8"),
-      "release compiler tasks must run serially before the repository check",
-    ).toBe("run typecheck --concurrency=1\nrepo\n");
+    expect(readFileSync(calls, "utf-8"), failureMessage).toBe(
+      "run typecheck --concurrency=1\nrepo\n",
+    );
     expect(scripts["typecheck:repo"]).not.toContain("turbo");
   } finally {
     rmSync(directory, { recursive: true, force: true });
@@ -94,7 +131,12 @@ test("the release job forwards a serial task limit to Turbo and retains the subs
     workflow.jobs["release-typecheck"]["timeout-minutes"],
     "serial release typechecks retain their time budget",
   ).toBeGreaterThanOrEqual(40);
-  assertBounded();
+  assertBounded({
+    candidate: command,
+    env: step.env,
+    failureMessage:
+      "release compiler tasks must run serially before the repository check",
+  });
 });
 test("removing or increasing release concurrency, bypassing it with parallel, or dropping repository checks violates the contract", () => {
   for (const mutant of [
@@ -105,8 +147,46 @@ test("removing or increasing release concurrency, bypassing it with parallel, or
     command.replace(" && bun run typecheck:repo", ""),
   ]) {
     expect(mutant).not.toBe(command);
-    expect(() => assertBounded(mutant)).toThrow(
-      "release compiler tasks must run serially",
-    );
+    expect(() =>
+      assertBounded({
+        candidate: mutant,
+        env: step.env,
+        failureMessage:
+          "release compiler tasks must run serially before the repository check",
+      }),
+    ).toThrow("release compiler tasks must run serially");
+  }
+});
+
+test("the nightly job serializes Turbo before repository checks", () => {
+  expect(
+    nightlyWorkflow.jobs["full-typecheck"]["timeout-minutes"],
+    "serial nightly typechecks retain their time budget",
+  ).toBeGreaterThanOrEqual(40);
+  assertBounded({
+    candidate: nightlyCommand,
+    env: nightlyStep.env,
+    failureMessage:
+      "nightly compiler tasks must run serially before the repository check",
+  });
+});
+
+test("nightly typecheck concurrency and repository checks stay enforced", () => {
+  for (const mutant of [
+    nightlyCommand.replace(" --concurrency=1", ""),
+    nightlyCommand.replace("--concurrency=1", "--concurrency=2"),
+    nightlyCommand.replace("--concurrency=1", "--concurrency=10"),
+    nightlyCommand.replace("--concurrency=1", "--concurrency=1 --parallel"),
+    nightlyCommand.replace(" && bun run typecheck:repo", ""),
+  ]) {
+    expect(mutant).not.toBe(nightlyCommand);
+    expect(() =>
+      assertBounded({
+        candidate: mutant,
+        env: nightlyStep.env,
+        failureMessage:
+          "nightly compiler tasks must run serially before the repository check",
+      }),
+    ).toThrow("nightly compiler tasks must run serially");
   }
 });

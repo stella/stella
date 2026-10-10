@@ -17,6 +17,7 @@ pub use macos::after_update;
 
 #[cfg(not(target_os = "macos"))]
 pub fn after_update(handle: &tauri::AppHandle) -> Result<(), String> {
+  crate::desktop_crash::clean_exit(handle);
   handle.restart()
 }
 

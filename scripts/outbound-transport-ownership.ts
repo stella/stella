@@ -136,6 +136,28 @@ const bindingMemberName = (element: ts.BindingElement) => {
   return ts.isStringLiteralLike(value) ? value.text : undefined;
 };
 
+const assignmentMemberName = (element: ts.ObjectLiteralElementLike) => {
+  if (ts.isSpreadAssignment(element)) {
+    return undefined;
+  }
+  const name = element.name;
+  if (ts.isIdentifier(name) || ts.isStringLiteralLike(name)) {
+    return name.text;
+  }
+  if (!ts.isComputedPropertyName(name)) {
+    return undefined;
+  }
+  const value = unwrap(name.expression);
+  return ts.isStringLiteralLike(value) ? value.text : undefined;
+};
+
+const objectLiteralExpression = (
+  expression: ts.Expression,
+): ts.ObjectLiteralExpression | undefined => {
+  const value = unwrap(expression);
+  return ts.isObjectLiteralExpression(value) ? value : undefined;
+};
+
 const bindingNames = (name: ts.BindingName): string[] => {
   if (ts.isIdentifier(name)) {
     return [name.text];
@@ -369,6 +391,48 @@ const globalObjectName = ({
   return globalObjectName({ scopes, node: initializer, seen });
 };
 
+type ObjectIdentityOptions = {
+  scopes: BindingScopes;
+  node: ts.Expression;
+  seen?: Set<ts.Expression>;
+};
+
+const isReflectObject = ({
+  scopes,
+  node,
+  seen = new Set<ts.Expression>(),
+}: ObjectIdentityOptions): boolean => {
+  const value = unwrap(node);
+  if (seen.has(value)) {
+    return false;
+  }
+  seen.add(value);
+  if (ts.isIdentifier(value)) {
+    const initializer = lookupBinding({
+      scopes,
+      node: value,
+      name: value.text,
+    });
+    if (initializer === undefined) {
+      return value.text === "Reflect";
+    }
+    return (
+      initializer !== null &&
+      isReflectObject({ scopes, node: initializer, seen })
+    );
+  }
+  if (
+    ts.isPropertyAccessExpression(value) ||
+    ts.isElementAccessExpression(value)
+  ) {
+    return (
+      globalObjectName({ scopes, node: value.expression }) !== undefined &&
+      memberName(value) === "Reflect"
+    );
+  }
+  return false;
+};
+
 type RegisterGlobalOptions = {
   capabilities: Set<string>;
   object: string | undefined;
@@ -421,7 +485,8 @@ const registerModule = ({
   }
   if (
     module === "@stll/start-runtime/local-module-loader" ||
-    module === canonicalModuleId(LOCAL_MODULE_LOADER_OWNER, file)
+    module === canonicalModuleId(LOCAL_MODULE_LOADER_OWNER, file) ||
+    module.endsWith(`/${canonicalModuleId(LOCAL_MODULE_LOADER_OWNER, file)}`)
   ) {
     capabilities.add("local:module-loader");
     return;
@@ -590,7 +655,8 @@ const isGlobalNamePosition = (node: ts.Identifier): boolean => {
       ts.isMethodDeclaration(parent) ||
       ts.isPropertyDeclaration(parent) ||
       ts.isMethodSignature(parent) ||
-      ts.isPropertySignature(parent)) &&
+      ts.isPropertySignature(parent) ||
+      ts.isJsxAttribute(parent)) &&
     parent.name === node
   ) {
     return true;
@@ -607,6 +673,77 @@ type VisitGlobalReferenceOptions = {
   capabilities: Set<string>;
 };
 
+type DestructuredMember = { member: string | undefined; isRest: boolean };
+type GlobalDestructuring = {
+  members: DestructuredMember[];
+  value: ts.Expression;
+  isAssignment: boolean;
+};
+
+const globalDestructuring = (
+  node: ts.Node,
+): GlobalDestructuring | undefined => {
+  if (
+    ts.isVariableDeclaration(node) &&
+    ts.isObjectBindingPattern(node.name) &&
+    node.initializer
+  ) {
+    return {
+      members: node.name.elements.map((element) => ({
+        member: bindingMemberName(element),
+        isRest: element.dotDotDotToken !== undefined,
+      })),
+      value: node.initializer,
+      isAssignment: false,
+    };
+  }
+  if (
+    !ts.isBinaryExpression(node) ||
+    node.operatorToken.kind !== ts.SyntaxKind.EqualsToken
+  ) {
+    return undefined;
+  }
+  const pattern = objectLiteralExpression(node.left);
+  if (!pattern) {
+    return undefined;
+  }
+  return {
+    members: pattern.properties.map((element) => ({
+      member: assignmentMemberName(element),
+      isRest: ts.isSpreadAssignment(element),
+    })),
+    value: node.right,
+    isAssignment: true,
+  };
+};
+
+const visitGlobalDestructuring = ({
+  node,
+  scopes,
+  capabilities,
+}: VisitGlobalReferenceOptions): void => {
+  const destructuring = globalDestructuring(node);
+  if (!destructuring) {
+    return;
+  }
+  const object = globalObjectName({ scopes, node: destructuring.value });
+  if (object && destructuring.isAssignment) {
+    capabilities.add(INDIRECT_TRANSPORT);
+  }
+  for (const { member, isRest } of destructuring.members) {
+    if (
+      object &&
+      (isRest ||
+        member === undefined ||
+        member === "Reflect" ||
+        GLOBAL_ROOTS.has(member))
+    ) {
+      capabilities.add(INDIRECT_TRANSPORT);
+    }
+    registerGlobal({ capabilities, object, name: member });
+  }
+};
+
 const visitGlobalReference = ({
   node,
   scopes,
@@ -616,35 +753,57 @@ const visitGlobalReference = ({
     ts.isPropertyAccessExpression(node) ||
     ts.isElementAccessExpression(node)
   ) {
+    const object = globalObjectName({ scopes, node: node.expression });
+    const name = memberName(node);
+    if (object && name === undefined) {
+      capabilities.add(INDIRECT_TRANSPORT);
+    }
     registerGlobal({
       capabilities,
-      object: globalObjectName({ scopes, node: node.expression }),
-      name: memberName(node),
+      object,
+      name,
     });
+  }
+  visitGlobalDestructuring({ node, scopes, capabilities });
+  if (ts.isCallExpression(node)) {
+    const callee = unwrap(node.expression);
+    if (
+      (ts.isPropertyAccessExpression(callee) ||
+        ts.isElementAccessExpression(callee)) &&
+      isReflectObject({ scopes, node: callee.expression })
+    ) {
+      const target = node.arguments.at(0);
+      const object = target
+        ? globalObjectName({ scopes, node: target })
+        : undefined;
+      if (object) {
+        capabilities.add(INDIRECT_TRANSPORT);
+        const key = node.arguments.at(1);
+        const value = key && unwrap(key);
+        registerGlobal({
+          capabilities,
+          object,
+          name: value && ts.isStringLiteralLike(value) ? value.text : undefined,
+        });
+      }
+    }
   }
   if (
     ts.isVariableDeclaration(node) &&
-    ts.isObjectBindingPattern(node.name) &&
-    node.initializer
+    ts.isIdentifier(node.name) &&
+    node.initializer &&
+    (globalObjectName({ scopes, node: node.initializer }) !== undefined ||
+      isReflectObject({ scopes, node: node.initializer }))
   ) {
-    for (const element of node.name.elements) {
-      const member = bindingMemberName(element);
-      const object = globalObjectName({ scopes, node: node.initializer });
-      if (object && member !== undefined && GLOBAL_ROOTS.has(member)) {
-        capabilities.add(INDIRECT_TRANSPORT);
-      }
-      registerGlobal({ capabilities, object, name: member });
-    }
+    capabilities.add(INDIRECT_TRANSPORT);
   }
-  if (ts.isCallExpression(node)) {
-    const reflected = reflectedGlobalMember({ scopes, node });
-    if (reflected) {
-      const object = globalObjectName({ scopes, node: reflected.target });
-      if (object) {
-        capabilities.add(INDIRECT_TRANSPORT);
-        registerGlobal({ capabilities, object, name: reflected.name });
-      }
-    }
+  if (
+    ts.isBinaryExpression(node) &&
+    node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+    (globalObjectName({ scopes, node: node.right }) !== undefined ||
+      isReflectObject({ scopes, node: node.right }))
+  ) {
+    capabilities.add(INDIRECT_TRANSPORT);
   }
   if (
     ts.isIdentifier(node) &&

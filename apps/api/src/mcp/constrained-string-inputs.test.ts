@@ -118,6 +118,11 @@ const HAND_CONSTRAINED_STRING_INPUTS: Record<string, string> = {
   // for a value-kind reader to normalize.
   "fetch.id": "an id `search` minted, echoed back verbatim",
 
+  // Court paragraph grammar rather than a value kind: the shared range parser
+  // is the reader, and its typed issue names the accepted spellings.
+  "open_case_law_decision.paragraphs":
+    "court paragraph number or range (`48`, `48-53`, `48–53`)",
+
   "GET /v1/legislation/search.query.cursor":
     "an opaque server-issued page token, not a model-authored value",
 

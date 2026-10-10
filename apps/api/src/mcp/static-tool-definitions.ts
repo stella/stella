@@ -11,6 +11,7 @@ import {
   MCP_DEFAULT_RESOURCE_SCOPES,
 } from "@/api/mcp/constants";
 import type { McpMode } from "@/api/mcp/constants";
+import { DECISION_READER_TOOL_SET } from "@/api/mcp/decision-reader-tools";
 import { DOCUMENT_TOOL_SET } from "@/api/mcp/document-tools";
 import { FEEDBACK_TOOL_SET } from "@/api/mcp/feedback-tools";
 import { KNOWLEDGE_TOOL_SET } from "@/api/mcp/knowledge-tools";
@@ -35,6 +36,7 @@ import type {
 export const DEFAULT_MCP_TOOL_SETS = [
   COMPAT_TOOL_SET,
   STELLA_TOOL_SET,
+  DECISION_READER_TOOL_SET,
   LEGISLATION_TOOL_SET,
   TEMPLATE_TOOL_SET,
   DOCUMENT_TOOL_SET,
@@ -55,6 +57,7 @@ export const DEFAULT_MCP_TOOL_SETS = [
 export const DEFAULT_MCP_TOOL_DEFINITIONS = [
   ...COMPAT_TOOL_SET.definitions,
   ...STELLA_TOOL_SET.definitions,
+  ...DECISION_READER_TOOL_SET.definitions,
   ...LEGISLATION_TOOL_SET.definitions,
   ...TEMPLATE_TOOL_SET.definitions,
   ...DOCUMENT_TOOL_SET.definitions,
@@ -324,6 +327,9 @@ export const LAW_MCP_TOOL_DISPOSITION = {
   lookup_case_law: "corpus",
   case_law_coverage: "corpus",
   read_case_law_decision: "corpus",
+  open_case_law_decision: "corpus",
+  read_case_law_decision_blocks: "corpus",
+  preview_cited_provision: "corpus",
   read_case_law_citations: "corpus",
   search_legislation: "corpus",
   read_statute: "corpus",

@@ -1,6 +1,7 @@
-import { readFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
+
+import { sourceFileIndex } from "./source-file-index";
 
 type Imported = { module: string; name: string };
 type Opening = ts.JsxOpeningElement | ts.JsxSelfClosingElement;
@@ -50,28 +51,32 @@ function createInventory({
   overrides = new Map(),
   previous,
 }: CreateInventoryOptions) {
-  const sourcePaths = [
-    ...new Bun.Glob("**/*.{ts,tsx}").scanSync({ cwd: sourceRoot }),
-  ]
-    .filter(
-      (file) =>
-        !/\.(?:test|spec|gen)\./u.test(file) && !file.includes("__fixtures__"),
-    )
-    .map((file) => path.join(sourceRoot, file));
+  const sources = sourceFileIndex(sourceRoot).filter(
+    ({ relativePath }) =>
+      !/\.(?:test|spec|gen)\./u.test(relativePath) &&
+      !relativePath.includes("__fixtures__"),
+  );
 
   const units = new Map<string, Unit>();
-  for (const file of sourcePaths) {
-    const existing = previous?.units.get(file);
-    if (existing && !overrides.has(file)) {
-      units.set(file, existing);
+  for (const entry of sources) {
+    const existing = previous?.units.get(entry.filePath);
+    if (existing && !overrides.has(entry.filePath)) {
+      units.set(entry.filePath, existing);
       continue;
     }
-    const source = ts.createSourceFile(
-      file,
-      overrides.get(file) ?? readFileSync(file, "utf-8"),
-      ts.ScriptTarget.Latest,
-      true,
-    );
+    const override = overrides.get(entry.filePath);
+    const source =
+      override === undefined
+        ? entry.sourceFile()
+        : ts.createSourceFile(
+            entry.filePath,
+            override,
+            ts.ScriptTarget.Latest,
+            true,
+            entry.filePath.endsWith(".tsx")
+              ? ts.ScriptKind.TSX
+              : ts.ScriptKind.TS,
+          );
     const unit: Unit = {
       source,
       imports: new Map(),
@@ -112,7 +117,7 @@ function createInventory({
         unit.anchors.push(node);
       }
     });
-    units.set(file, unit);
+    units.set(entry.filePath, unit);
   }
   return {
     sourceRoot,

@@ -3,6 +3,7 @@ import { useCallback, useState } from "react";
 
 import { useTranslations } from "use-intl";
 
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { Button } from "@stll/ui/button";
 import {
   BanknoteIcon,
@@ -22,7 +23,6 @@ import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";
 import Tooltip from "@/components/tooltip";
 import type { KnowledgeToolDetail } from "@/features/knowledge/views/tools/tools-seam";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
-import { sanitizeHref } from "@/lib/sanitize-href";
 
 type ToolDetailPanelViewProps = {
   tool: KnowledgeToolDetail;

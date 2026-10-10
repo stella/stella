@@ -549,7 +549,13 @@ const keepDeniedApprovals = ({
     if (message.role === "tool") {
       return [message];
     }
-    if (message.role !== "assistant" || message.toolCalls === undefined) {
+    // Reconciled UI snapshots already carry the stored denial and results.
+    // Rebuilding them from model toolCalls would discard those result parts.
+    if (
+      message.role !== "assistant" ||
+      "parts" in message ||
+      message.toolCalls === undefined
+    ) {
       return [message];
     }
     const { toolCalls } = message;

@@ -7,6 +7,7 @@ import { useTranslations } from "use-intl";
 
 import { isThirdPartyBoundaryRefusalError } from "@stll/anonymize-chat";
 import type { AIErrorKind } from "@stll/api-contract";
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { Button } from "@stll/ui/button";
 import {
   ArrowUpIcon,
@@ -35,6 +36,7 @@ import {
   resolveChatActivityIndicatorState,
 } from "@/components/chat/chat-activity.logic";
 import { useChatApproval } from "@/components/chat/chat-approval-context";
+import { ChatAnswerDecisionProvider } from "@/components/chat/chat-decision-citation";
 import { ChatImageAttachment } from "@/components/chat/chat-image-attachment";
 import { ChatMessageActionsMenu } from "@/components/chat/chat-message-actions-menu";
 import {
@@ -67,6 +69,7 @@ import type {
   ChatUIPart,
   ChatUITools,
   PersistedChatMessage,
+  RegisteredChatUIToolCallPart,
 } from "@/components/chat/chat-ui-tools";
 import {
   getAwaitedAssistantMessageId,
@@ -85,11 +88,13 @@ import { findCreateDocumentArtifactForMessage } from "@/components/chat/message-
 import { NeedsMatterCard } from "@/components/chat/needs-matter-card";
 import type { CreateDocumentDestination } from "@/components/chat/needs-matter-card";
 import { rehypeAnonSpans } from "@/components/chat/rehype-anon-spans";
+import { RequestSecretCard } from "@/components/chat/request-secret-card";
 import { SourceChips } from "@/components/chat/source-chips";
 import { SpawnSubagentsCard } from "@/components/chat/spawn-subagents-card";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { ToolApprovalCard } from "@/components/chat/tool-approval-card";
 import { ToolCallCard } from "@/components/chat/tool-call-card";
+import { uiResourceRenderer } from "@/components/chat/ui-resource-renderer";
 import { WebSearchSources } from "@/components/chat/web-search-sources";
 import { CopyActionButton } from "@/components/copy-action-button";
 import { ReferenceRenderScope } from "@/components/references/reference-chip";
@@ -109,7 +114,6 @@ import { detached } from "@/lib/detached";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
 import { chatRefusal } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { sanitizeHref } from "@/lib/sanitize-href";
 import {
   getUserFileContentUrl,
   getUserFileThumbnailUrl,
@@ -128,6 +132,8 @@ export const ChatThreadMessages = ({
   loadOlderError = false,
   messages: rawMessages,
   onLoadOlder,
+  onAnswerEdited,
+  answerRewriteAvailability = "unknown",
   scrollContainerRef,
   onResend,
   onSendWithoutAnonymization,
@@ -280,7 +286,15 @@ export const ChatThreadMessages = ({
       key={message.id}
       data-chat-message-id={message.id}
     >
-      <MessageContent>
+      <MessageContent
+        className={cn(
+          message.parts.some(
+            (part) =>
+              part.type === "ui-resource" &&
+              uiResourceRenderer(part.resource.mimeType) === "generated-visual",
+          ) && "w-full",
+        )}
+      >
         {(() => {
           const policy = CHAT_MESSAGE_RENDER_POLICY[message.role];
           switch (policy) {
@@ -288,7 +302,10 @@ export const ChatThreadMessages = ({
               return renderActivityMessage(message.parts);
             case "assistant":
               return (
-                <>
+                <ChatAnswerDecisionProvider
+                  message={message}
+                  isAwaitingUser={awaitedAssistantMessageId === message.id}
+                >
                   <AssistantMessageParts
                     activeFileName={activeFileName}
                     activeOrganizationId={activeOrganizationId}
@@ -344,35 +361,15 @@ export const ChatThreadMessages = ({
                       workspaceId={workspaceId}
                     />
                   </div>
-                </>
+                </ChatAnswerDecisionProvider>
               );
             case "text":
               return (
-                <>
-                  {(() => {
-                    const fileParts: ChatAttachmentPart[] = [];
-                    for (const part of message.parts) {
-                      if (isChatAttachmentPart(part)) {
-                        fileParts.push(part);
-                      }
-                    }
-
-                    return <UserAttachments parts={fileParts} />;
-                  })()}
-                  {message.parts.map((part, partIndex) =>
-                    part.type === "text" ? (
-                      <UserMessageText
-                        // oxlint-disable-next-line react/no-array-index-key -- message.parts is append-only during streaming (never reordered/removed); index only disambiguates parts within this single message.
-                        key={`${message.id}-user-text-${partIndex}`}
-                        restorationPairs={getFollowingAssistantRestorations(
-                          messages,
-                          index,
-                        )}
-                        text={normalizeUserMessageTextForDisplay(part.content)}
-                      />
-                    ) : null,
-                  )}
-                </>
+                <TextMessageParts
+                  message={message}
+                  messages={messages}
+                  index={index}
+                />
               );
             default:
               policy satisfies never;
@@ -389,7 +386,15 @@ export const ChatThreadMessages = ({
     <ReferenceRenderScope workspaceId={workspaceId}>
       {scrollRef !== null && <ChatTranscriptCopy rootRef={scrollRef} />}
       {branchSource !== undefined && scrollRef !== null && (
-        <ChatSelectionToolbar rootRef={scrollRef} source={branchSource} />
+        <ChatSelectionToolbar
+          key={branchSource.threadRef.threadId}
+          rootRef={scrollRef}
+          source={branchSource}
+          messages={messages}
+          isGenerating={generationActive}
+          onAnswerEdited={onAnswerEdited}
+          answerRewriteAvailability={answerRewriteAvailability}
+        />
       )}
       {canLoadOlder && (
         <LoadOlderSentinel
@@ -1222,6 +1227,12 @@ type ChatThreadMessagesProps = {
    *  sentinel cannot loop the request (the manual button still retries). */
   loadOlderError?: boolean | undefined;
   messages: ChatUIMessage[];
+  onAnswerEdited?: ((messageId: string) => Promise<void>) | undefined;
+  answerRewriteAvailability?:
+    | "available"
+    | "anonymized"
+    | "unknown"
+    | undefined;
   /** Explicit scroll container for surfaces that render outside a
    *  `Conversation`/StickToBottom provider (e.g. the file-chat overlay);
    *  falls back to the StickToBottom context when omitted. */
@@ -1404,6 +1415,41 @@ type AssistantPartRenderEntry =
       part: Exclude<ChatUIPart, RichChatPart>;
     };
 
+type TextMessagePartsProps = {
+  message: ChatUIMessage;
+  messages: ChatUIMessage[];
+  index: number;
+};
+
+const TextMessageParts = ({
+  message,
+  messages,
+  index,
+}: TextMessagePartsProps) => (
+  <>
+    {(() => {
+      const fileParts: ChatAttachmentPart[] = [];
+      for (const part of message.parts) {
+        if (isChatAttachmentPart(part)) {
+          fileParts.push(part);
+        }
+      }
+
+      return <UserAttachments parts={fileParts} />;
+    })()}
+    {message.parts.map((part, partIndex) =>
+      part.type === "text" ? (
+        <UserMessageText
+          // oxlint-disable-next-line react/no-array-index-key -- message.parts is append-only during streaming (never reordered/removed); index only disambiguates parts within this single message.
+          key={`${message.id}-user-text-${partIndex}`}
+          restorationPairs={getFollowingAssistantRestorations(messages, index)}
+          text={normalizeUserMessageTextForDisplay(part.content)}
+        />
+      ) : null,
+    )}
+  </>
+);
+
 type ChatActivityPartProps = {
   part: Extract<ChatUIPart, { type: "activity" }>;
 };
@@ -1428,6 +1474,16 @@ const renderActivityMessage = (parts: readonly ChatUIPart[]) => {
   }
   return <ChatActivityPart part={part} />;
 };
+
+type RequestSecretToolCallPart = Extract<
+  RegisteredChatUIToolCallPart,
+  { name: "request_secret" }
+>;
+
+const isRequestSecretToolCallPart = (
+  part: ChatPart,
+): part is RequestSecretToolCallPart =>
+  part.type === "tool-call" && part.name === "request_secret";
 
 const richPartRenderIdentity = (part: RichChatPart): string => {
   if (part.type === "ui-resource") {
@@ -1631,6 +1687,10 @@ const AssistantMessageParts = ({
   const renderEntries = toAssistantPartRenderEntries(message.parts);
   const isTurnActive = isGenerating && isLatestAssistantMessage;
   const renderGroups = toAssistantPartRenderGroups(renderEntries);
+  const thinkingDisplayState =
+    !hasAnswerContent && isGenerating && isLatestAssistantMessage
+      ? "expanded"
+      : "folded";
   const renderEntry = (entry: AssistantPartRenderEntry, index: number) => {
     if (entry.type === "rich") {
       return (
@@ -1654,15 +1714,7 @@ const AssistantMessageParts = ({
       return (
         <AssistantThinkingPart
           components={streamdownComponents}
-          displayState={
-            // Start open while this message is actively streaming its
-            // reasoning (no answer text yet), but always render the same
-            // disclosure so the user can collapse it immediately. Once
-            // the stream settles it folds unless the user already did so.
-            !hasAnswerContent && isGenerating && isLatestAssistantMessage
-              ? "expanded"
-              : "folded"
-          }
+          displayState={thinkingDisplayState}
           key={`${message.id}-thinking-${index}`}
           reasoningTokenCount={
             index === firstThinkingPartIndex ? reasoningTokenCount : null
@@ -1686,6 +1738,8 @@ const AssistantMessageParts = ({
           components={streamdownComponents}
           key={`${message.id}-text-${index}`}
           restorationPairs={restorationPairs}
+          partIndex={index}
+          sourceOffsets={!isTurnActive}
           text={part.content}
         />
       );
@@ -1726,6 +1780,16 @@ const AssistantMessageParts = ({
           part={part}
           restorationPairs={restorationPairs}
           workspaceId={workspaceId}
+        />
+      );
+    }
+
+    if (isRequestSecretToolCallPart(part)) {
+      return (
+        <RequestSecretCard
+          isAwaitingUser={isAwaitingUser}
+          key={part.id}
+          part={part}
         />
       );
     }
@@ -2067,11 +2131,15 @@ const AssistantTextPart = ({
   className,
   components,
   restorationPairs,
+  partIndex,
+  sourceOffsets = false,
   text,
 }: {
   className?: string | undefined;
   components: ChatThreadMessagesProps["streamdownComponents"];
   restorationPairs: readonly ChatAnonRestoration[];
+  partIndex?: number;
+  sourceOffsets?: boolean;
   text: string;
 }) => {
   // Stable identity so MessageResponse memo can short-circuit when
@@ -2090,6 +2158,8 @@ const AssistantTextPart = ({
     return (
       <MessageResponse
         components={components}
+        data-text-part-index={partIndex}
+        sourceOffsets={sourceOffsets}
         fallbackChildren={assistantMessageFallbackText(text)}
         {...classNamePatch}
       >
@@ -2100,6 +2170,8 @@ const AssistantTextPart = ({
   return (
     <MessageResponse
       components={components}
+      data-text-part-index={partIndex}
+      sourceOffsets={sourceOffsets}
       fallbackChildren={assistantMessageFallbackText(text)}
       rehypePlugins={rehypePlugins}
       {...classNamePatch}

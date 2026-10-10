@@ -1,3 +1,5 @@
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
+
 import { resolveRateLimitClientAddress } from "@/api/lib/client-ip";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
 import type {
@@ -54,7 +56,7 @@ export const mcpTransportRateLimitKey: RateLimitGenerator = (
   if (token.length === 0) {
     return addressKey(MCP_TRANSPORT_RATE_LIMIT_SCOPE, request, server);
   }
-  const digest = new Bun.CryptoHasher("sha256").update(token).digest("hex");
+  const digest = hashSha256Hex(token);
   return `${MCP_TRANSPORT_RATE_LIMIT_SCOPE}:token:${digest}`;
 };
 

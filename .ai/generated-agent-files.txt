@@ -2,6 +2,8 @@ AGENTS.md
 GEMINI.md
 apps/api/AGENTS.md
 apps/api/GEMINI.md
+apps/api/src/handlers/case-law/AGENTS.md
+apps/api/src/handlers/case-law/GEMINI.md
 apps/desktop/AGENTS.md
 apps/desktop/GEMINI.md
 apps/landing/AGENTS.md

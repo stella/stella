@@ -21,3 +21,7 @@ must separately exercise the real chart, frame bridge and composer chip.
 The page calls only `stella` APIs. The host owns the opaque shell's nonce
 handshake, including source/origin checks and a fresh handshake on reload;
 authored pages do not send raw bridge messages or manage frame nonces.
+
+`court-year-showcase.prepared.json` is the page `prepareGeneratedVisual` returns
+for this fixture. Browser captures read it from disk; `showcase.test.ts` fails
+when it drifts from the sanitizer output.

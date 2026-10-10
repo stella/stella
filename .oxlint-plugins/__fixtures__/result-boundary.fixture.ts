@@ -206,10 +206,11 @@ const _rejectsResultError = async (input: string) => {
 // A rejection built from a mapping call is not a bare Result error.
 const _rejectsMappedError = async (input: string) => {
   const parsed = Result.try(() => parseInput(input));
-  return Result.isError(parsed)
-    ? // expect-clean: result-boundary/no-rejected-result-error
-      await Promise.reject(mapError(parsed.error))
-    : parsed.value;
+  if (Result.isError(parsed)) {
+    // expect-clean: result-boundary/no-rejected-result-error
+    return await Promise.reject(mapError(parsed.error));
+  }
+  return parsed.value;
 };
 
 export const __resultBoundaryFixture = {

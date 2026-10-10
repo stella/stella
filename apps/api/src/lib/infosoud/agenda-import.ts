@@ -6,6 +6,7 @@ import {
   parseInfoSoudDateTime,
 } from "@stll/infosoud";
 import type { CaseEvent, CaseSearchResult, HearingEvent } from "@stll/infosoud";
+import { createSha256 } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
@@ -268,7 +269,7 @@ const toDateFromUnixMs = (unixMs: number | null): Date | null =>
   unixMs === null ? null : new Date(unixMs);
 
 const toStableExternalId = (kind: string, value: unknown): string => {
-  const hasher = new Bun.CryptoHasher("sha256");
+  const hasher = createSha256();
   hasher.update(JSON.stringify(value));
   return `${INFO_SOUD_EXTERNAL_SOURCE}:${kind}:${hasher.digest("hex").slice(0, 40)}`;
 };

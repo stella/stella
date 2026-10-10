@@ -1,6 +1,7 @@
 Canonical TOOL_CALL_END input updates completed calls without resetting their state.
 No-approval server calls execute while sibling calls await approval.
 RUN_ERROR raw evidence retains HTTP status and AWS exception identity.
+Reasoning provenance survives UI/model conversions and AG-UI snapshots.
 Remove each hunk when upstream preserves the same behavior.
 
 diff --git a/dist/esm/activities/chat/stream/processor.js b/dist/esm/activities/chat/stream/processor.js
@@ -113,3 +114,49 @@ index adf8a899dda16d289331cebfece36a6c80263d0c..c62fdcfe2421fea1e474165ebcdbbe5a
  }
  //#endregion
  export { isAbortShapedError, toRunErrorPayload, toRunErrorRawEvent };
+diff --git a/dist/esm/activities/chat/messages.js b/dist/esm/activities/chat/messages.js
+--- a/dist/esm/activities/chat/messages.js
++++ b/dist/esm/activities/chat/messages.js
+@@ -160,6 +160,7 @@
+ 			if (content || signature !== void 0) pendingThinking.push({
+ 				content: typeof content === "string" ? content : "",
+ 				...signature !== void 0 ? { signature } : {},
++				...msg.metadata?.tanstack?.reasoningProvenance !== void 0 && { provenance: msg.metadata.tanstack.reasoningProvenance },
+ 				...redactedFrom(msg)
+ 			});
+ 			continue;
+@@ -499,6 +500,7 @@
+ 				pendingThinking.push({
+ 					content: part.content,
+ 					...part.signature && { signature: part.signature },
++					...part.provenance !== void 0 && { provenance: part.provenance },
+ 					...part.redacted && { redacted: true }
+ 				});
+ 			}
+@@ -583,6 +585,7 @@
+ 			type: "thinking",
+ 			content: thinking.content,
+ 			...thinking.signature && { signature: thinking.signature },
++			...thinking.provenance !== void 0 && { provenance: thinking.provenance },
+ 			...thinking.redacted && { redacted: true }
+ 		});
+ 	}
+@@ -729,6 +732,7 @@
+ 					type: "thinking",
+ 					content,
+ 					...signature !== void 0 ? { signature } : {},
++					...message.metadata?.tanstack?.reasoningProvenance !== void 0 && { provenance: message.metadata.tanstack.reasoningProvenance },
+ 					...redactedFrom(message)
+ 				}] : []
+ 			});
+diff --git a/dist/esm/utilities/ag-ui-wire.js b/dist/esm/utilities/ag-ui-wire.js
+--- a/dist/esm/utilities/ag-ui-wire.js
++++ b/dist/esm/utilities/ag-ui-wire.js
+@@ -111,6 +111,7 @@
+ 					content: part.content
+ 				};
+ 				if (part.signature) reasoning.encryptedValue = part.signature;
++				if (part.provenance !== void 0) reasoning.metadata = { tanstack: { reasoningProvenance: part.provenance } };
+ 				wire.push(reasoning);
+ 			}
+ 			const text = collectText(segment.parts);

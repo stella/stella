@@ -15,14 +15,23 @@ import {
   VIEW_SORTS_MAX,
   WORKSPACES_PER_ORGANIZATION_MAX,
 } from "@stll/api-contract";
-import { SEARCH_QUERY_MAX_LENGTH } from "@stll/api-contract/limits";
+import {
+  CASE_LAW_RESULT_DEPTH_MAX,
+  SEARCH_QUERY_MAX_LENGTH,
+  SEARCH_HISTORY_TITLE_MAX_LENGTH,
+  SEARCH_HISTORY_IMPORT_MAX,
+  READER_PAGE_MAX_CHARS,
+  READER_PROVISION_ANCHOR_MIN_CHARS,
+  READER_PROVISION_ANCHOR_MAX_CHARS,
+} from "@stll/api-contract/limits";
 import { PUBLIC_STATUTE_SEARCH_PAGE_SIZE_MAX } from "@stll/api-contract/search";
 import { BETTER_AUTH_ORGANIZATION_OPTIONS } from "@stll/auth-model";
 import {
   CHAT_CONTEXT_FILE_MAX_BYTES,
   CHAT_CONTEXT_FILE_MAX_MEGABYTES,
 } from "@stll/chat-limits";
-import { SKILL_PACKAGE_LIMITS } from "@stll/skills/package-limits";
+import { SKILL_PACKAGE_LIMITS } from "@stll/skills/format";
+import { DAY_IN_MS } from "@stll/time";
 
 import type { env } from "@/api/env";
 
@@ -332,6 +341,17 @@ export const LIMITS = {
    *  version, read whole when the reader opens the document. */
   readerAnnotationsPageSizeDefault: 100,
   readerAnnotationsPageSizeMax: 100,
+  decisionReaderPageMaxChars: READER_PAGE_MAX_CHARS,
+  decisionReaderPageContentChars: 50_000,
+  decisionReaderOpenTextChars: 8000,
+  decisionReaderOutlineEntries: 40,
+  decisionReaderCursorOffsetMin: 0,
+  decisionReaderProvisionAnchorMinChars: READER_PROVISION_ANCHOR_MIN_CHARS,
+  decisionReaderProvisionAnchorMaxChars: READER_PROVISION_ANCHOR_MAX_CHARS,
+  // A reader cursor nests a provision page cursor (generation, span start and
+  // an anchor up to the limit above) beside two digests; its maximal encoding
+  // is under 900 characters.
+  decisionReaderCursorMaxChars: 1024,
   exportPdfRowLimit: 5000,
   /** Hard cap on rows (contracts) a single view-to-report export may span.
    *  A DD report drafts per-contract AI narrative, so the row count bounds
@@ -381,6 +401,21 @@ export const LIMITS = {
   savedSearchesPageSizeDefault: 50,
   savedSearchesPageSizeMax: 100,
   savedTimeNarrativesPerUser: 100,
+  /**
+   * Search history entries a list returns unless asked for more: the law
+   * page shows the latest 20. A display bound only; storage keeps every
+   * entry its user has not deleted, one row per distinct entry.
+   */
+  searchHistoryPageSizeDefault: 20,
+  searchHistoryPageSizeMax: 100,
+  /** Browser-kept entries one import call takes (three kinds of 50, twice). */
+  searchHistoryImportMax: SEARCH_HISTORY_IMPORT_MAX,
+  // Import clocks may differ by at most one day in either direction.
+  searchHistoryClockSkewMaxMs: DAY_IN_MS,
+  // Older deletion identities compact into an owner import cutoff.
+  searchHistoryTombstonesMax: 128,
+  searchHistoryTitleMaxLength: SEARCH_HISTORY_TITLE_MAX_LENGTH,
+  searchHistoryPathMaxLength: 1024,
   /** Cap on the rolled-up message text indexed per chat thread for
    *  global search. Bounds the stored tsv so a long conversation
    *  cannot blow up the index; the headline only reads the first
@@ -541,6 +576,7 @@ export const LIMITS = {
   caseLawDecisionBatchHydrationsMax: 3,
   caseLawSearchPageSizeDefault: 20,
   caseLawSearchPageSizeMax: 100,
+  caseLawResultDepthMax: CASE_LAW_RESULT_DEPTH_MAX,
   /** Max language variants for one decision's languageGroupKey. Bounds the
    *  alternate-language reads (decision detail + sitemap hreflang) so a
    *  malformed/over-merged group key cannot load an unbounded set. */
@@ -572,6 +608,8 @@ export const LIMITS = {
   caseLawYearFacetLimit: 200,
   /** One-row budget for the headnote a list row shows under the case number. */
   caseLawHeadnoteMaxChars: 240,
+  mcpCaseLawHeadnoteMaxChars: 4000,
+  mcpCaseLawSearchPageMaxChars: 60_000,
   /**
    * Terms of a publisher's classification one row draws as tags. A subject
    * index runs to dozens of terms on some sources, and a row is a hook, not
@@ -856,6 +894,9 @@ export const API_RATE_LIMITS = {
   /** REST API: 1000 req/min per IP. Covers normal navigation
    *  (5-10 requests per page load × frequent workspace switching). */
   api: { duration: 60_000, max: 1000 },
+  /** Legal identity resolution: 120 requests/minute for each credential and
+   * organization, with separate counters for decisions and legislation. */
+  legalResolve: { duration: 60_000, max: 120 },
   /** Anonymous sanctions searches: 20 req/min per IP. Each search matches
    *  across the shared sanctions indexes, so it has a separate CPU budget. */
   publicSanctionsSearch: { duration: 60_000, max: 20, maxConcurrent: 2 },

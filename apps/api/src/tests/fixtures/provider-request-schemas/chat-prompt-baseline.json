@@ -34,8 +34,8 @@
         "tokens": 32475
       },
       {
-        "reason": "Render code-mode descriptions once while retaining SDK field documentation and explicit OpenRouter strict false",
-        "tokens": 32151
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 33250
       }
     ],
     "anthropic/extended": [
@@ -72,8 +72,8 @@
         "tokens": 32966
       },
       {
-        "reason": "Render code-mode descriptions once while retaining SDK field documentation and explicit OpenRouter strict false",
-        "tokens": 32640
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 33740
       }
     ],
     "bedrock/default": [
@@ -110,8 +110,8 @@
         "tokens": 32697
       },
       {
-        "reason": "Render code-mode descriptions once while retaining SDK field documentation and explicit OpenRouter strict false",
-        "tokens": 32373
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 33483
       }
     ],
     "bedrock/extended": [
@@ -148,8 +148,8 @@
         "tokens": 33187
       },
       {
-        "reason": "Render code-mode descriptions once while retaining SDK field documentation and explicit OpenRouter strict false",
-        "tokens": 32861
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 33971
       }
     ],
     "google/default": [
@@ -182,8 +182,8 @@
         "tokens": 31964
       },
       {
-        "reason": "Render code-mode descriptions once while retaining SDK field documentation and explicit OpenRouter strict false",
-        "tokens": 31640
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 32592
       }
     ],
     "google/extended": [
@@ -212,8 +212,8 @@
         "tokens": 32443
       },
       {
-        "reason": "Render code-mode descriptions once while retaining SDK field documentation and explicit OpenRouter strict false",
-        "tokens": 32117
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 33071
       }
     ],
     "mistral/default": [
@@ -250,8 +250,8 @@
         "tokens": 33922
       },
       {
-        "reason": "Render code-mode descriptions once while retaining SDK field documentation and explicit OpenRouter strict false",
-        "tokens": 33597
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 34735
       }
     ],
     "mistral/extended": [
@@ -288,8 +288,8 @@
         "tokens": 34449
       },
       {
-        "reason": "Render code-mode descriptions once while retaining SDK field documentation and explicit OpenRouter strict false",
-        "tokens": 34123
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 35261
       }
     ],
     "openai/default": [
@@ -326,8 +326,8 @@
         "tokens": 33535
       },
       {
-        "reason": "Render code-mode descriptions once while retaining SDK field documentation and explicit OpenRouter strict false",
-        "tokens": 33211
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 34338
       }
     ],
     "openai/extended": [
@@ -364,8 +364,8 @@
         "tokens": 34051
       },
       {
-        "reason": "Render code-mode descriptions once while retaining SDK field documentation and explicit OpenRouter strict false",
-        "tokens": 33726
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 34853
       }
     ],
     "openrouter-anthropic/default": [
@@ -400,6 +400,10 @@
       {
         "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
         "tokens": 33502
+      },
+      {
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 34298
       }
     ],
     "openrouter-anthropic/extended": [
@@ -434,6 +438,10 @@
       {
         "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
         "tokens": 34002
+      },
+      {
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 34797
       }
     ],
     "openrouter/default": [
@@ -468,6 +476,10 @@
       {
         "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
         "tokens": 33502
+      },
+      {
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 34298
       }
     ],
     "openrouter/extended": [
@@ -502,6 +514,10 @@
       {
         "reason": "Feature admission omits unavailable legal-list capabilities from the stable prompt",
         "tokens": 34002
+      },
+      {
+        "reason": "Connector input tools and feature admission share the stable prefix",
+        "tokens": 34797
       }
     ]
   },

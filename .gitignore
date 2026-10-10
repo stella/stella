@@ -68,7 +68,8 @@ apps/playground/public/fixtures
 # Bun binary lockfile (text-based bun.lock is committed instead)
 bun.lockb
 
-# Debug
+# Debug and tool logs (committed fixture logs are force-added)
+*.log
 npm-debug.log*
 
 # Misc

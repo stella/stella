@@ -31,6 +31,7 @@ import type {
   WorkspaceTable as WorkspaceTableType,
 } from "@/components/workspaces/table/types";
 import {
+  WORKSPACE_TABLE_SCROLL_SLOT,
   WorkspaceGridFillerCell,
   WorkspaceGridRow,
 } from "@/components/workspaces/table/workspace-grid";
@@ -586,7 +587,7 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
         className={cn(
           inlineFlow ? "w-full" : "scrollbar-subtle h-full overflow-auto",
         )}
-        data-slot="workspace-table-scroll"
+        data-slot={WORKSPACE_TABLE_SCROLL_SLOT}
         ref={tableWrapperRef}
       >
         <div

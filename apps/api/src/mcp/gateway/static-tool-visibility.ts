@@ -9,6 +9,7 @@ import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
 import { isMcpToolFeatureEnabled } from "@/api/mcp/tool-feature";
 import type { McpToolDefinition, ToolScope } from "@/api/mcp/tool-types";
 import { enumProp } from "@/api/mcp/tool-utils";
+import { isMcpToolVisibleTo } from "@/api/mcp/tool-visibility";
 import {
   hasMcpToolAuthority,
   isAccountAuthorizedForMcpTool,
@@ -110,7 +111,9 @@ const narrowBusinessRegistryTool = (
  * this deployment, visible to its member role, confirmable by its client, and
  * (on the default surface) narrowed to the business registers its organization
  * can reach. `tools/list` serves these, and a skill is offered over MCP only
- * when every tool it requires is among them.
+ * when every tool it requires is among them. Host discovery omits `audience`
+ * so app-only definitions reach hosts with their visibility metadata; model
+ * consumers select `audience: "model"`. Audience is never an authorization grant.
  *
  * Visibility is keyed to the primary scope only. Compound tools must remain
  * discoverable when an additional grant is missing so MCP clients can call
@@ -122,15 +125,18 @@ export const listOfferedStaticMcpToolDefinitions = ({
   context,
   mode,
   scopes,
+  audience,
 }: {
   context: McpRequestContext;
   mode: McpMode;
   scopes?: readonly string[] | undefined;
+  audience?: "model" | "app";
 }): readonly McpToolDefinition[] => {
   const staticDefinitions = listStaticMcpToolDefinitions(mode)
     .map((definition) => projectMcpFeatureInput(context, definition))
     .filter(
       (definition) =>
+        (audience === undefined || isMcpToolVisibleTo(definition, audience)) &&
         hasGrantedScope(scopes, definition.scope) &&
         isMcpDescriptorFeatureEnabled({
           context,

@@ -74,7 +74,40 @@ const HOSTED_CLIENT_BODY = {
   token_endpoint_auth_method: "client_secret_post",
 } as const;
 
+export const OAUTH_REQUIRED_CALLBACK_FIXTURES = Object.fromEntries(
+  (
+    [
+      [
+        "hostedPlatform",
+        "https://chatgpt.com/connector_platform_oauth_redirect",
+      ],
+      ["hostedAccount", "https://chatgpt.com/connector/oauth/callback-fixture"],
+      ["hostedWeb", "https://claude.ai/api/mcp/auth_callback"],
+      ["loopbackName", "http://localhost:51001/callback"],
+      ["loopbackAddress", "http://127.0.0.1:51002/callback"],
+    ] as const
+  ).map(
+    ([name, redirectUri]) =>
+      [
+        name,
+        {
+          client: `public callback ${name}`,
+          origin: "synthetic",
+          body: {
+            client_name: "Public callback client",
+            grant_types: ["authorization_code", "refresh_token"],
+            redirect_uris: [redirectUri],
+            response_types: ["code"],
+            scope: ALL_RESOURCE_SCOPES_WITH_REFRESH,
+            token_endpoint_auth_method: "none",
+          },
+        } satisfies OAuthClientRegistrationFixture,
+      ] as const,
+  ),
+);
+
 export const OAUTH_CLIENT_REGISTRATION_FIXTURES = {
+  ...OAUTH_REQUIRED_CALLBACK_FIXTURES,
   claudeWebConnector: {
     client: "Claude web connector",
     origin: "captured",

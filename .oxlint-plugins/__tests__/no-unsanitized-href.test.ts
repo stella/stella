@@ -20,7 +20,7 @@ test("accepts canonical sanitizer aliases and reader policy gates", async () => 
   expect(
     await lintSingleRule(
       "no-unsanitized-href",
-      'import { sanitizeHref as clean } from "@/lib/sanitize-href";\nimport { readerHref } from "@/components/legal-reader/source-link-policy";\nconst a = <a href={clean(value)}>Open</a>;\nconst b = <a href={readerHref(value, policy)}>Open</a>;',
+      'import { sanitizeHref as clean } from "@stll/decision-reader/sanitize-href";\nimport { readerHref } from "@stll/decision-reader/source-link-policy";\nconst a = <a href={clean(value)}>Open</a>;\nconst b = <a href={readerHref(value, policy)}>Open</a>;',
       {
         plugin: "security-guards",
         sourcePath: "apps/web/src/components/example.tsx",
@@ -76,7 +76,7 @@ test("rejects a lexically shadowed sanitizer import", async () => {
   expect(
     await lintSingleRule(
       "no-unsanitized-href",
-      'import { sanitizeHref } from "@/lib/sanitize-href";\nfunction local(sanitizeHref) { return <a href={sanitizeHref(value)}>Open</a>; }',
+      'import { sanitizeHref } from "@stll/decision-reader/sanitize-href";\nfunction local(sanitizeHref) { return <a href={sanitizeHref(value)}>Open</a>; }',
       {
         plugin: "security-guards",
         sourcePath: "apps/web/src/components/example.tsx",

@@ -647,9 +647,13 @@ const ActivityTimeline = ({
   workspaceId: string;
 }) => {
   const t = useTranslations();
-  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
+  const user = useAuthenticatedUser();
   const query = useSuspenseInfiniteQuery(
-    overviewActivityOptions({ activeOrganizationId, filters, workspaceId }),
+    overviewActivityOptions({
+      viewer: { userId: user.id, organizationId: user.activeOrganizationId },
+      filters,
+      workspaceId,
+    }),
   );
   const items = query.data.pages.flatMap((page) => page.items);
   const groups = groupActivityItems(items);
@@ -781,7 +785,7 @@ const observeActivityIntersection = ({
 }: ObserveActivityIntersectionOptions) => {
   const observer = new IntersectionObserver(
     (entries) => {
-      if (!entries.at(0)?.isIntersecting) {
+      if (!entries.at(-1)?.isIntersecting) {
         return;
       }
       observer.disconnect();
