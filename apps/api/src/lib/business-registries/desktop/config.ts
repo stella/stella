@@ -29,6 +29,7 @@ export const DESKTOP_REGISTRY_PERMISSION = {
 const desktopRegistryMetadata = v.strictObject({
   purpose: v.literal(DESKTOP_REGISTRY_KEY_CONFIG),
   organizationId: v.pipe(v.string(), v.nonEmpty()),
+  deviceJkt: v.pipe(v.string(), v.regex(/^[A-Za-z0-9_-]{43}$/u)),
   inactivityExpiresAt: v.union([
     v.pipe(
       v.string(),

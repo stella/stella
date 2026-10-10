@@ -1193,8 +1193,10 @@
       "name": "@stll/stable-stringify",
       "version": "0.2.1",
       "devDependencies": {
+        "@stll/property-testing": "workspace:*",
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
+        "fast-check": "catalog:",
       },
     },
     "packages/start-runtime": {

@@ -236,6 +236,22 @@ describe("outbound transport ownership", () => {
     );
   });
 
+  test("JSX attribute names do not acquire transport capabilities", () => {
+    assertProperty(
+      "JSX attribute names do not acquire transport capabilities",
+      fc.property(
+        fc.constantFrom("fetch", "WebSocket", "EventSource", "XMLHttpRequest"),
+        (name) => {
+          const file = "apps/web/src/components/census-fixture.tsx";
+          expect(references(`<Card ${name}={section} />`, file)).toEqual([]);
+          expect(references(`<Card ${name}={${name}} />`, file)).toEqual([
+            `global:${name}`,
+          ]);
+        },
+      ),
+    );
+  });
+
   test("finds platform request constructors", () => {
     expect(references("void Bun.fetch(url);")).toEqual(["global:Bun.fetch"]);
     expect(references("void new WebSocket(url);")).toEqual([

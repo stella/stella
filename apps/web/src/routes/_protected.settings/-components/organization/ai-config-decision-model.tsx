@@ -1,9 +1,15 @@
 import { useTranslations } from "use-intl";
 
+import { DECISION_MODEL_CATALOG } from "@stll/ai-catalog";
 import { Button } from "@stll/ui/button";
-import { Field, FieldDescription, FieldLabel } from "@stll/ui/field";
-import { PlusIcon, Trash2Icon } from "@stll/ui/icons";
-import { Input } from "@stll/ui/input";
+import {
+  Combobox,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+  ComboboxPopup,
+} from "@stll/ui/combobox";
+import { Field } from "@stll/ui/field";
 import {
   Select,
   SelectItem,
@@ -12,12 +18,11 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 
+import { AIConfigModelRow } from "@/components/ai-config-model-row";
 import {
   createDecisionModelState,
   decisionModelDraft,
   DECISION_PROVIDER_KEYS,
-  DECISION_PROVIDER_LABELS,
-  DEFAULT_DECISION_MODEL_ID,
 } from "@/components/ai-config-role-models.logic";
 import type {
   DecisionModelState,
@@ -26,9 +31,10 @@ import type {
 } from "@/components/ai-config-role-models.logic";
 import { SecretInput } from "@/components/secret-input";
 
+const DEFAULT_SELECTION = "default";
+
 type AIConfigDecisionModelProps = {
-  disabled?: boolean;
-  /** The instance carries a decision model orgs without one fall back to. */
+  disabled: boolean;
   instanceProvisioned: boolean;
   onStateChange: (state: DecisionModelState) => void;
   state: DecisionModelState;
@@ -36,147 +42,153 @@ type AIConfigDecisionModelProps = {
 };
 
 export const AIConfigDecisionModel = ({
-  disabled = false,
+  disabled,
   instanceProvisioned,
   onStateChange,
   state,
   stored,
 }: AIConfigDecisionModelProps) => {
   const t = useTranslations("organization");
-  const tCommon = useTranslations("common");
+  const common = useTranslations("common");
   const draft = decisionModelDraft({ state, stored });
-
-  // Each edit rebuilds the whole `set` branch, so a field a previous branch
-  // carried can never leak through into the next state.
-  const setDecision = (next: {
-    provider: DecisionProviderValue;
-    apiKey: string;
-    modelId: string;
-  }) => onStateChange({ kind: "set", ...next });
+  const role = t("aiConfig.decision.label");
+  const modelOptions = draft
+    ? Array.from(
+        new Set(
+          [
+            DECISION_MODEL_CATALOG[draft.provider].defaultModelId,
+            draft.modelId,
+          ].filter(Boolean),
+        ),
+      )
+    : [];
 
   return (
-    <Field>
-      <div className="flex w-full items-start gap-3">
-        <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <FieldLabel>{t("aiConfig.decision.label")}</FieldLabel>
-          <FieldDescription>
+    <AIConfigModelRow label={role}>
+      <Select
+        disabled={disabled}
+        value={draft?.provider ?? DEFAULT_SELECTION}
+        onValueChange={(value) => {
+          if (value === DEFAULT_SELECTION) {
+            onStateChange({ kind: "cleared" });
+          } else if (isDecisionProvider(value)) {
+            onStateChange(createDecisionModelState(value));
+          }
+        }}
+      >
+        <SelectTrigger
+          aria-label={t("aiConfig.providerForRole", { role })}
+          className="min-w-0"
+        >
+          <SelectValue />
+        </SelectTrigger>
+        <SelectPopup alignItemWithTrigger={false}>
+          <SelectItem value={DEFAULT_SELECTION}>
+            {t("aiConfig.usingDefaults")}
+          </SelectItem>
+          {DECISION_PROVIDER_KEYS.map((provider) => (
+            <SelectItem key={provider} value={provider}>
+              {DECISION_MODEL_CATALOG[provider].label}
+            </SelectItem>
+          ))}
+        </SelectPopup>
+      </Select>
+      <Combobox
+        disabled={disabled || draft === null}
+        items={modelOptions}
+        value={draft?.modelId ?? null}
+        inputValue={draft?.modelId ?? ""}
+        onInputValueChange={(modelId) => {
+          if (draft && modelId !== draft.modelId) {
+            onStateChange({
+              kind: "set",
+              provider: draft.provider,
+              apiKey: draft.apiKey,
+              modelId,
+            });
+          }
+        }}
+        onValueChange={(modelId) => {
+          if (draft && modelId !== null) {
+            onStateChange({
+              kind: "set",
+              provider: draft.provider,
+              apiKey: draft.apiKey,
+              modelId,
+            });
+          }
+        }}
+      >
+        <ComboboxInput
+          aria-label={t("aiConfig.modelForRole", { role })}
+          aria-invalid={draft !== null && !draft.modelId.trim()}
+          className="min-w-0"
+          placeholder={t("aiConfig.usingDefaults")}
+        />
+        <ComboboxPopup>
+          <ComboboxList>
+            {(modelId: string) => (
+              <ComboboxItem key={modelId} value={modelId}>
+                {modelId}
+              </ComboboxItem>
+            )}
+          </ComboboxList>
+        </ComboboxPopup>
+      </Combobox>
+      <div className="flex min-w-0 items-start justify-between gap-2 sm:col-span-3">
+        <div className="min-w-0 text-xs">
+          <p>{draft ? common("custom") : t("aiConfig.usingDefaults")}</p>
+          <p className="text-muted-foreground wrap-anywhere">
             {t("aiConfig.decision.description")}
-          </FieldDescription>
+          </p>
+          {draft === null && (
+            <p className="text-muted-foreground wrap-anywhere">
+              {t(
+                instanceProvisioned
+                  ? "aiConfig.decision.instanceProvided"
+                  : "aiConfig.decision.generativeFallback",
+              )}
+            </p>
+          )}
         </div>
-        {draft === null && (
+        {draft && (
           <Button
-            className="ms-auto shrink-0"
-            disabled={disabled}
-            onClick={() => onStateChange(createDecisionModelState())}
-            size="sm"
             type="button"
+            size="sm"
             variant="ghost"
+            disabled={disabled}
+            onClick={() => onStateChange({ kind: "cleared" })}
           >
-            <PlusIcon className="size-4" />
-            {t("aiConfig.decision.add")}
+            {common("resetToDefault")}
           </Button>
         )}
       </div>
-
-      {draft === null ? (
-        instanceProvisioned && (
-          <p className="text-muted-foreground text-xs">
-            {t("aiConfig.decision.instanceProvided")}
-          </p>
-        )
-      ) : (
-        <div className="grid w-full gap-3 rounded-md border p-3 sm:grid-cols-[minmax(8rem,0.7fr)_minmax(0,1.2fr)_minmax(0,1fr)] sm:items-start">
-          <Field className="min-w-0">
-            <FieldLabel>{t("aiConfig.provider")}</FieldLabel>
-            <Select
-              disabled={disabled}
-              onValueChange={(value) => {
-                if (!isDecisionProvider(value)) {
-                  return;
-                }
-                // The stored key was issued for the previous provider, so the
-                // switch starts the new one without a key to reuse.
-                setDecision({
-                  provider: value,
-                  apiKey: "",
-                  modelId: draft.modelId,
-                });
-              }}
-              value={draft.provider}
-            >
-              <SelectTrigger className="min-w-0">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectPopup alignItemWithTrigger={false}>
-                {DECISION_PROVIDER_KEYS.map((provider) => (
-                  <SelectItem key={provider} value={provider}>
-                    {DECISION_PROVIDER_LABELS[provider]}
-                  </SelectItem>
-                ))}
-              </SelectPopup>
-            </Select>
-          </Field>
-
-          <Field className="min-w-0">
-            <FieldLabel>
-              {draft.apiKeyMasked === undefined
-                ? t("aiConfig.apiKey")
-                : t("aiConfig.newApiKey")}
-            </FieldLabel>
-            <SecretInput
-              autoComplete="off"
-              disabled={disabled}
-              onChange={(event) =>
-                setDecision({
-                  provider: draft.provider,
-                  apiKey: event.target.value,
-                  modelId: draft.modelId,
-                })
-              }
-              placeholder={
-                draft.apiKeyMasked === undefined
-                  ? t("aiConfig.apiKeyPlaceholder")
-                  : t("aiConfig.apiKeyConfiguredPlaceholder", {
-                      key: draft.apiKeyMasked,
-                    })
-              }
-              value={draft.apiKey}
-            />
-          </Field>
-
-          <div className="flex min-w-0 items-end gap-2">
-            <Field className="min-w-0 flex-1">
-              <FieldLabel>{t("aiConfig.decision.modelId")}</FieldLabel>
-              <Input
-                autoComplete="off"
-                dir="ltr"
-                disabled={disabled}
-                onChange={(event) =>
-                  setDecision({
-                    provider: draft.provider,
-                    apiKey: draft.apiKey,
-                    modelId: event.target.value,
+      {draft && (
+        <Field className="min-w-0 sm:col-span-2 sm:col-start-2">
+          <SecretInput
+            aria-label={t("aiConfig.apiKey")}
+            autoComplete="off"
+            disabled={disabled}
+            onChange={(event) =>
+              onStateChange({
+                kind: "set",
+                provider: draft.provider,
+                apiKey: event.target.value,
+                modelId: draft.modelId,
+              })
+            }
+            placeholder={
+              draft.apiKeyMasked === undefined
+                ? t("aiConfig.apiKeyPlaceholder")
+                : t("aiConfig.apiKeyConfiguredPlaceholder", {
+                    key: draft.apiKeyMasked,
                   })
-                }
-                placeholder={DEFAULT_DECISION_MODEL_ID}
-                spellCheck={false}
-                value={draft.modelId}
-              />
-            </Field>
-            <Button
-              aria-label={tCommon("remove")}
-              disabled={disabled}
-              onClick={() => onStateChange({ kind: "cleared" })}
-              size="icon"
-              type="button"
-              variant="ghost"
-            >
-              <Trash2Icon className="size-4" />
-            </Button>
-          </div>
-        </div>
+            }
+            value={draft.apiKey}
+          />
+        </Field>
       )}
-    </Field>
+    </AIConfigModelRow>
   );
 };
 

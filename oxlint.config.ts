@@ -2364,9 +2364,13 @@ const config = defineConfig({
     },
     {
       // The desktop shell runs in the system WebView of its minimum macOS
-      // version, which predates `Array#toSorted`; sort a fresh array there.
+      // version, which predates `Array#toSorted` and `Array#toReversed`; sort
+      // or reverse a fresh array there (apps/desktop/tests/webview-baseline).
       files: ["apps/desktop/src/**/*.{ts,tsx}"],
-      rules: { "unicorn/no-array-sort": "off" },
+      rules: {
+        "unicorn/no-array-sort": "off",
+        "unicorn/no-array-reverse": "off",
+      },
     },
     {
       // Two guards contradict each other in apps/web; this override picks one.

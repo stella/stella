@@ -1127,6 +1127,7 @@ const ACTION_COVERAGE: Record<string, ActionCoverage> = {
   "open-created-document": READS_ONLY,
   "open-draft": READS_ONLY,
   "open-playbook": READS_ONLY,
+  "refresh-edited-answer": READS_ONLY,
   "remove-queued-message": notModelled(
     "The send queue lives in the session hook, which the harness does not render.",
   ),

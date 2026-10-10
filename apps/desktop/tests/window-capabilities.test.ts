@@ -2,11 +2,19 @@ import { describe, expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
+import { LOCAL_ONLY_FEATURES } from "./local-only-features";
+
 const DESKTOP_ROOT = path.join(import.meta.dir, "..");
 const ENTRY_MODULE = "src/mainview/main.tsx";
 const INVOKE_COMMAND_PATTERN = /\binvoke(?:<[^>]+>)?\(\s*"([a-z_]+)"/gu;
-const SNAPSHOT_COMMAND_PATTERN =
-  /\b(?:applySnapshotCommand|onCommand)\(\s*"(clipboard_[a-z_]+)"/gu;
+const LOCAL_COMMAND_PREFIXES = LOCAL_ONLY_FEATURES.map(
+  (feature) => feature.commandPrefix,
+).join("|");
+/** Commands a local-only window routes through its own command helper. */
+const ROUTED_COMMAND_PATTERN = new RegExp(
+  `\\b(?:applySnapshotCommand|onCommand|runCommand)\\(\\s*"((?:${LOCAL_COMMAND_PREFIXES})[a-z_]+)"`,
+  "gu",
+);
 
 /**
  * Command owners called by the shell before or outside its window branch.
@@ -25,21 +33,18 @@ const SHELL_INVOKE_SOURCES = [
   },
 ] as const;
 
-/** The branch `main.tsx` renders for a window, keyed by that window's capability. */
-const WINDOW_MODULES = {
-  "src-tauri/capabilities/clipboard-editor.json": [
-    "src/clipboard/ClipboardEditor.tsx",
-    "src/clipboard/ClipboardGroupFields.tsx",
-    "src/clipboard/ClipboardImagePreview.tsx",
-  ],
-  "src-tauri/capabilities/clipboard.json": [
-    "src/clipboard/ClipboardApp.tsx",
-    "src/clipboard/ClipboardGroupFields.tsx",
-    "src/clipboard/ClipboardImagePreview.tsx",
-    "src/registry/RegistrySearch.tsx",
-  ],
+/**
+ * The branch `main.tsx` renders for a window, keyed by that window's
+ * capability. Local-only windows come from their feature entry.
+ */
+const WINDOW_MODULES: Record<string, readonly string[]> = {
+  ...Object.fromEntries(
+    LOCAL_ONLY_FEATURES.flatMap((feature) =>
+      Object.entries(feature.windowModules),
+    ),
+  ),
   "src-tauri/capabilities/default.json": ["src/mainview/App.tsx"],
-} as const satisfies Record<string, readonly string[]>;
+};
 
 /**
  * The static prompt windows Rust opens: plain HTML with no shell behind it,
@@ -59,7 +64,7 @@ const readSource = async (sourcePath: string) =>
   readFile(path.join(DESKTOP_ROOT, sourcePath), "utf-8");
 
 const invokedCommandsInSource = (source: string) =>
-  [INVOKE_COMMAND_PATTERN, SNAPSHOT_COMMAND_PATTERN].flatMap((pattern) =>
+  [INVOKE_COMMAND_PATTERN, ROUTED_COMMAND_PATTERN].flatMap((pattern) =>
     [...source.matchAll(pattern)].flatMap((match) => {
       const command = match.at(1);
       return command ? [command] : [];
