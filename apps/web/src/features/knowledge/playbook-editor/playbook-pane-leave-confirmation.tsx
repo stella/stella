@@ -29,7 +29,7 @@ export const PlaybookPaneLeaveConfirmation = () => {
   const failed =
     request.type === "confirm" && request.leaveState === "save-failed";
   const saving = request.type === "confirm" && request.phase === "saving";
-  const retryUnavailable = failed && request.saveBeforeLeave === null;
+  const discardFailedDraft = failed && request.saveBeforeLeave === null;
   return (
     <AlertDialog
       open={request.type === "confirm"}
@@ -44,7 +44,7 @@ export const PlaybookPaneLeaveConfirmation = () => {
           <AlertDialogTitle>{t("common.confirmAction")}</AlertDialogTitle>
           <AlertDialogDescription>
             {t(
-              failed
+              failed && !discardFailedDraft
                 ? "knowledge.playbooks.saveFailed"
                 : "common.unsavedLeaveConfirm",
             )}
@@ -55,7 +55,7 @@ export const PlaybookPaneLeaveConfirmation = () => {
             {t("common.goBackToEditing")}
           </AlertDialogClose>
           <Button
-            disabled={saving || retryUnavailable}
+            disabled={saving}
             onClick={() =>
               detached(
                 confirmPlaybookPaneLeave(),
@@ -63,7 +63,11 @@ export const PlaybookPaneLeaveConfirmation = () => {
               )
             }
           >
-            {t(failed ? "common.save" : "clauses.leaveAndDiscard")}
+            {t(
+              failed && !discardFailedDraft
+                ? "common.save"
+                : "clauses.leaveAndDiscard",
+            )}
           </Button>
         </AlertDialogFooter>
       </AlertDialogPopup>

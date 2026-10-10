@@ -1,3 +1,4 @@
+// parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { Result, panic } from "better-result";
@@ -5,6 +6,8 @@ import { Result, panic } from "better-result";
 import { polishAdministrativeDocketOf } from "@stll/api-contract/decision-docket-grammar";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
+// parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
+import { sha256Hex as hashContent, createSha256 } from "@stll/sha256/bun";
 /**
  * Polish data-protection authority (Prezes UODO) adapter.
  *
@@ -89,10 +92,7 @@ import { plCommonCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapt
 import { plSupremeCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-sn-ruling-keys";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
-import {
-  adapterCatch,
-  hashContent,
-} from "@/api/handlers/case-law/ingestion/adapters/utils";
+import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parsePlUodoDecisionXml } from "@/api/handlers/case-law/ingestion/parsers/pl-uodo";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import {
@@ -108,6 +108,8 @@ import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-asse
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
+
+import { logDocumentParseFailure } from "./document-parse-failure";
 
 // ── Publisher boundary ───────────────────────────────────
 
@@ -1095,7 +1097,7 @@ const checksumMatches = (
   if (stated === undefined) {
     return undefined;
   }
-  return new Bun.CryptoHasher("sha256").update(bytes).digest("hex") === stated;
+  return createSha256().update(bytes).digest("hex") === stated;
 };
 
 export type PlUodoBody = {
@@ -1357,10 +1359,10 @@ const assembleAuthorityDecision = ({
           sourceUrl,
         });
   if (parsed !== null && Result.isError(parsed)) {
-    logger.warn("case_law.ingestion.document_parse_failed", {
+    logDocumentParseFailure({
       adapterKey: ADAPTER_KEYS.PL_UODO,
       caseNumber,
-      "error.type": errorTag(parsed.error),
+      error: errorTag(parsed.error),
     });
   }
   const document = parsed !== null && Result.isOk(parsed) ? parsed.value : null;

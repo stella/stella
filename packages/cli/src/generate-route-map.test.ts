@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   classifyProp,
+  type PropSchema,
   generateRouteMap,
   RouteGenerationError,
 } from "./generate-route-map.js";
@@ -319,6 +320,41 @@ describe("generateRouteMap: discriminator split (S2)", () => {
 });
 
 describe("generateRouteMap: flag mapping (S3)", () => {
+  test("finite string literal unions produce enum flags", () => {
+    const schema = {
+      anyOf: [
+        { type: "string", const: "search" },
+        { type: "string", const: "decision" },
+        { type: "string", const: "statute" },
+      ],
+    } as const satisfies PropSchema;
+    expect(classifyProp("kind", schema)).toEqual({
+      kind: "flag",
+      spec: {
+        flag: "--kind",
+        prop: "kind",
+        kind: "enum",
+        enum: ["search", "decision", "statute"],
+        repeatable: false,
+      },
+    });
+  });
+
+  test.each([
+    { label: "number literal", branch: { type: "number", const: 1 } },
+    { label: "unbounded string", branch: { type: "string" } },
+    { label: "object", branch: { type: "object", properties: {} } },
+  ])(
+    "mixed string literal unions retain input-only safety: $label",
+    ({ branch }) => {
+      expect(
+        classifyProp("kind", {
+          anyOf: [{ type: "string", const: "search" }, branch],
+        }),
+      ).toEqual({ kind: "input-only" });
+    },
+  );
+
   test("one-character query properties get a parser-safe long flag", () => {
     expect(classifyProp("q", { type: "string" })).toEqual({
       kind: "flag",

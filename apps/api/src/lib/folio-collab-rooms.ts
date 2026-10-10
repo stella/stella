@@ -3,6 +3,7 @@ import { and, eq, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import { CLIENT_MATTER_ADMIN_ROLES, roles } from "@stll/permissions";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import { member, user } from "@/api/db/auth-schema";
@@ -77,8 +78,7 @@ const createFolioCollabToken = () =>
     .replaceAll("-", "")
     .slice(0, FOLIO_COLLAB_TOKEN_PART_LENGTH);
 
-const hashFolioCollabToken = (token: string) =>
-  new Bun.CryptoHasher("sha256").update(token).digest("hex");
+const hashFolioCollabToken = (token: string) => hashSha256Hex(token);
 
 export const computeFolioCollabTokenExpiresAt = (now = new Date()) =>
   new Date(now.getTime() + FOLIO_COLLAB_TOKEN_TTL_MS);
@@ -143,11 +143,20 @@ type FolioCollabSnapshotStoreAuthority =
   | { type: "collab-service" }
   | { type: "participant"; userId: SafeId<"user"> };
 
+type FolioCollabTokenIssueDb = {
+  execute: (query: SQL) => Promise<unknown>;
+  insert: (table: typeof folioCollabRoomTokens) => {
+    values: (
+      row: typeof folioCollabRoomTokens.$inferInsert,
+    ) => PromiseLike<unknown>;
+  };
+};
+
 type IssueFolioCollabTokenOptions = {
   generation: number;
   permissions: FolioCollabTokenPermissions;
   roomId: SafeId<"folioCollabRoom">;
-  tx: Transaction;
+  tx: FolioCollabTokenIssueDb;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace">;
 };
@@ -831,12 +840,13 @@ export const storeFolioCollabSnapshot = async ({
           organizationId: value.organizationId,
           objectKey: nextKey,
           sizeBytes: snapshotBytes.byteLength,
-          write: async () =>
+          content: snapshotBytes,
+          write: async ({ content, objectKey }) =>
             await writeS3ObjectWithRetry(
               {
                 contentType: FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
-                data: snapshotBytes,
-                key: nextKey,
+                data: content,
+                key: objectKey,
               },
               { type: "cleanup-intent", intent: nextCleanupIntentId },
             ),

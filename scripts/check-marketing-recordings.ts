@@ -10,6 +10,7 @@ import { existsSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
 
 import { compareCodeUnit } from "@stll/collation";
+import { createSha256 } from "@stll/sha256/bun";
 
 import {
   CAPTURE_THEMES,
@@ -23,6 +24,7 @@ import type {
 } from "../apps/web/e2e/marketing/captures";
 import {
   readProductMediaManifestSync,
+  updateRecordingArtifactDigest,
   recordingArtifactPaths,
   recordingArtifactsHashFromManifest,
 } from "./product-media";
@@ -122,7 +124,7 @@ export const watchedPathsHashAtHead = (
     "--",
     ...normalizedPaths,
   ]);
-  return new Bun.CryptoHasher("sha256")
+  return createSha256()
     .update(`${JSON.stringify(normalizedPaths)}\n${tree}\n`)
     .digest("hex");
 };
@@ -144,10 +146,13 @@ export const recordingArtifactsHash = (
       return manifestHash;
     }
   }
-  const hasher = new Bun.CryptoHasher("sha256");
+  const hasher = createSha256();
   for (const path of paths) {
-    hasher.update(`${path}\0`);
-    hasher.update(readFileSync(nodePath.join(ROOT_DIR, path)));
+    updateRecordingArtifactDigest({
+      hasher,
+      path,
+      bytes: readFileSync(nodePath.join(ROOT_DIR, path)),
+    });
   }
   return hasher.digest("hex");
 };

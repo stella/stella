@@ -427,6 +427,23 @@ export const printContract = ({
   const packageReference = (type: ts.Type): string | undefined => {
     let symbol = type.aliasSymbol;
     let typeArguments: readonly ts.Type[] = type.aliasTypeArguments ?? [];
+    // A local alias of an imported generic interface still has the
+    // interface's identity. Print that reference rather than its expanded
+    // members when the alias itself cannot be imported by the browser.
+    const aliasFile = symbol?.declarations?.at(0)?.getSourceFile().fileName;
+    const aliasPackage =
+      aliasFile === undefined ? undefined : packageOfFile(aliasFile);
+    if (
+      symbol !== undefined &&
+      (aliasPackage === undefined || !webDependencies.has(aliasPackage)) &&
+      isTypeReference(type) &&
+      isInterfaceOrClass(type.target.objectFlags)
+    ) {
+      symbol = type.target.symbol;
+      typeArguments = checker
+        .getTypeArguments(type)
+        .slice(0, type.target.typeParameters?.length ?? 0);
+    }
     if (symbol === undefined && isTypeReference(type)) {
       const { target } = type;
       if (isInterfaceOrClass(target.objectFlags)) {

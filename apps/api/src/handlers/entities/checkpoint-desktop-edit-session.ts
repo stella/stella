@@ -4,6 +4,7 @@ import { status, t } from "elysia";
 import type { Static } from "elysia";
 
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import { desktopEditSessions, workspaces } from "@/api/db/schema";
@@ -32,6 +33,9 @@ import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import { writeS3ObjectWithRetry } from "@/api/lib/s3";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
+
+export const hashDesktopEditCheckpoint = (buffer: ArrayBuffer): string =>
+  hashSha256Hex(new Uint8Array(buffer));
 
 export const checkpointDesktopEditSessionParamsSchema = t.Object({
   sessionId: tSafeId("desktopEditSession"),
@@ -102,7 +106,7 @@ export const checkpointDesktopEditSessionHandler = async ({
 
   const fileName = authorizedSession.value.fileName;
   const buffer = await file.arrayBuffer();
-  const sha256Hex = new Bun.CryptoHasher("sha256").update(buffer).digest("hex");
+  const sha256Hex = hashDesktopEditCheckpoint(buffer);
 
   const validation = await validateDesktopEditFileBuffer({
     buffer,
@@ -262,9 +266,10 @@ export const checkpointDesktopEditSessionHandler = async ({
         objectKey: key,
         sizeBytes: checkpointBytes.byteLength,
         contentSha256Hex: sha256Hex,
-        write: async () =>
+        content: checkpointBytes,
+        write: async ({ content, objectKey }) =>
           await writeS3ObjectWithRetry(
-            { data: checkpointBytes, key },
+            { data: content, key: objectKey },
             {
               type: "fixed-key",
               reason: "Row-locked per-session checkpoint slot",

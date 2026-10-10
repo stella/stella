@@ -6,6 +6,21 @@ import {
 
 import type { CreatableContentType } from "@/components/workspaces/properties/composer-primitives";
 import type { SortHint } from "@/components/workspaces/properties/sort-property";
+import type { ActionDescriptor } from "@/lib/organization/feature-access/action-capabilities.logic";
+import type { WorkspaceProperty } from "@/lib/types";
+
+const PROPERTY_TOOL_ACTIONS = {
+  "manual-input": { capability: null },
+  "ai-model": { capability: "ai" },
+  "playbook-verdict": { capability: "ai" },
+} as const satisfies Record<
+  WorkspaceProperty["tool"]["type"],
+  ActionDescriptor
+>;
+
+export const propertyToolAction = (
+  toolType: WorkspaceProperty["tool"]["type"] | undefined,
+) => PROPERTY_TOOL_ACTIONS[toolType ?? "ai-model"];
 
 export const isCreatableContentType = (t: string): t is CreatableContentType =>
   t === "text" ||

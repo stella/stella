@@ -10,6 +10,7 @@ import {
 } from "@/api/lib/agent-skills/content-hash";
 import {
   RESOURCE_PATH_PATTERN,
+  RESOURCE_PATH_MAX_CHARS,
   inferResourceKind,
 } from "@/api/lib/agent-skills/resource-path";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -24,7 +25,7 @@ const createSkillResourceParamsSchema = t.Object({
 });
 
 const createSkillResourceBodySchema = t.Object({
-  path: t.String({ minLength: 1, maxLength: 512 }),
+  path: t.String({ minLength: 1, maxLength: RESOURCE_PATH_MAX_CHARS }),
   content: t.String({ maxLength: LIMITS.agentSkillResourceMaxChars }),
   // A literal tuple, not `t.UnionEnum`: Elysia fills an absent optional
   // UnionEnum with its first member, so the path inference below would never
@@ -74,7 +75,11 @@ const createSkillResource = createSafeRootHandler(
     user,
   }) {
     const path = body.path.trim();
-    if (!path || path.length > 512 || !RESOURCE_PATH_PATTERN.test(path)) {
+    if (
+      !path ||
+      path.length > RESOURCE_PATH_MAX_CHARS ||
+      !RESOURCE_PATH_PATTERN.test(path)
+    ) {
       return Result.err(
         new HandlerError({ status: 400, message: "Invalid resource path" }),
       );

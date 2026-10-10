@@ -1,5 +1,5 @@
 /**
- * Generates a minimal valid .docx (~1 KB) used by the e2e suite.
+ * Generates the small DOCX fixtures used by the e2e suite.
  * Run when you need to refresh the fixture:
  *   bun apps/web/e2e/fixtures/generate.ts
  *
@@ -41,3 +41,26 @@ const out = await zip.generateAsync({
 const target = path.resolve(import.meta.dirname, "simple.docx");
 await writeFile(target, out);
 console.log(`wrote ${target} (${String(out.byteLength)} bytes)`);
+
+// Two outline entries make the outline available; explicit A4 dimensions
+// exercise page fitting independently of editor defaults.
+zip.file(
+  "word/document.xml",
+  `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:p><w:pPr><w:outlineLvl w:val="0"/></w:pPr><w:r><w:t>Template fit heading</w:t></w:r></w:p>
+    <w:p><w:r><w:t>E2E page fit document.</w:t></w:r></w:p>
+    <w:p><w:pPr><w:outlineLvl w:val="1"/></w:pPr><w:r><w:t>Template fit subheading</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Used to verify fitting with the outline and inspector.</w:t></w:r></w:p>
+    <w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/></w:sectPr>
+  </w:body>
+</w:document>`,
+);
+const fitOutput = await zip.generateAsync({
+  type: "uint8array",
+  compression: "DEFLATE",
+});
+const fitTarget = path.resolve(import.meta.dirname, "template-fit.docx");
+await writeFile(fitTarget, fitOutput);
+console.log(`wrote ${fitTarget} (${String(fitOutput.byteLength)} bytes)`);

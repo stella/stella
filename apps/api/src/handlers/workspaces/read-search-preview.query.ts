@@ -48,6 +48,7 @@ type PreviewSourceColumns = typeof AGENDA_COLUMNS &
   typeof LEGACY_DOCUMENT_COLUMNS;
 
 const UNPROJECTED_PREVIEW_COLUMNS = [
+  "entityFeatureGate", // RLS state is internal to the gate.
   "workspaceId", // Already supplied by the authorized route.
   "kind", // Each query fixes the kind; the response groups identify it.
   "listItemType", // Task-list presentation is not part of a deadline highlight.

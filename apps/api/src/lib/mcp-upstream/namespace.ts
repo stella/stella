@@ -1,5 +1,7 @@
 import { panic } from "better-result";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
+
 /**
  * Every dynamically resolved tool family, keyed by the name prefix its tools
  * carry on the wire. Policy maps over dynamic tools (output contracts,
@@ -56,10 +58,7 @@ export const sanitizeToolNamePart = (value: string): string => {
 };
 
 export const shortToolNameHash = (value: string): string =>
-  new Bun.CryptoHasher("sha256")
-    .update(value)
-    .digest("hex")
-    .slice(0, TOOL_NAME_HASH_LENGTH);
+  hashSha256Hex(value).slice(0, TOOL_NAME_HASH_LENGTH);
 
 /**
  * Clips a derived name to the length limit. A clipped name ends in a hash of

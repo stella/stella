@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * The immutable contract of every corpus index generation: what its indexes
  * are shaped like, what a projection writes into them, and how a jurisdiction
@@ -30,13 +31,12 @@
  * draining, because a projection attempt is per physical index.
  */
 
-import { panic } from "better-result";
-
 import {
   CASE_LAW_JURISDICTIONS,
   isCaseLawJurisdiction,
   type CaseLawJurisdiction,
 } from "@stll/api-contract/case-law-jurisdictions";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import {
   CASE_LAW_INDEX_GROUP_CONTRACT_OF,
@@ -783,7 +783,7 @@ const canonicalJson = (value: unknown): string => {
 };
 
 export const corpusIndexContractDigest = (value: unknown): string =>
-  new Bun.CryptoHasher("sha256").update(canonicalJson(value)).digest("hex");
+  hashSha256Hex(canonicalJson(value));
 
 const manifestDigestByIdentity = new WeakMap<CorpusIndexManifest, string>();
 

@@ -2,6 +2,8 @@
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { panic, Result } from "better-result";
 
+// parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
+import { sha256Hex as hashContent } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import {
@@ -41,10 +43,7 @@ import {
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import type { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
-import {
-  adapterCatch,
-  hashContent,
-} from "@/api/handlers/case-law/ingestion/adapters/utils";
+import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parseRisDecisionXml } from "@/api/handlers/case-law/ingestion/parsers/at-ris";
 import type { RisDocumentSections } from "@/api/handlers/case-law/ingestion/parsers/at-ris";
 import { sectionsFromAst } from "@/api/handlers/case-law/ingestion/sections-from-ast";
