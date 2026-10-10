@@ -5,12 +5,12 @@ import { FILE_COMPARISON_TRANSPORT } from "@stll/api-contract";
 import { fetchWithTimeout } from "@stll/fetch";
 
 import { hashUploadFile } from "../file-content-hash";
+import { applyUploadHostStyles } from "../shared/bridge";
 import { appLocale, setAppDocumentLocale } from "../shared/locale";
 import {
   isUploadRecord,
   parseUploadToolPayload,
   createUploadTranslator,
-  applyUploadHostStyles,
   connectUploadApp,
   createUploadSubscriptions,
   bindUploadSdkErrors,

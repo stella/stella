@@ -1,8 +1,3 @@
-import {
-  applyDocumentTheme,
-  applyHostFonts,
-  applyHostStyleVariables,
-} from "@modelcontextprotocol/ext-apps";
 import type { App } from "@modelcontextprotocol/ext-apps";
 import { Result } from "better-result";
 import { createTranslator } from "use-intl";
@@ -45,24 +40,6 @@ export const createUploadTranslator =
       messages: locale.messages,
     })(key, values);
   };
-
-export const applyUploadHostStyles = (
-  context: ReturnType<App["getHostContext"]>,
-) => {
-  if (!context) {
-    return;
-  }
-  if (context.theme) {
-    applyDocumentTheme(context.theme);
-    document.documentElement.classList.toggle("dark", context.theme === "dark");
-  }
-  if (context.styles?.variables) {
-    applyHostStyleVariables(context.styles.variables);
-  }
-  if (context.styles?.css?.fonts) {
-    applyHostFonts(context.styles.css.fonts);
-  }
-};
 
 type ConnectUploadAppOptions = {
   app: App;
