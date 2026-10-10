@@ -478,3 +478,12 @@ test("a case arm inside a function or group keeps the enclosing frame", () => {
     ),
   ).toHaveLength(1);
 });
+
+test("a group that feeds a pipe does not pass its status on", () => {
+  expect(
+    check("scripts/group-pipe.sh", "if ( ! grep -q x file ) | cat; then :; fi"),
+  ).toHaveLength(1);
+  expect(
+    check("scripts/group-last.sh", "if cat | ( ! grep -q x file ); then :; fi"),
+  ).toEqual([]);
+});

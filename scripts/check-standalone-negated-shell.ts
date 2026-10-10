@@ -410,6 +410,7 @@ const STATEMENT_ENDS = new Set([";", "\n", "#"]);
 const OPEN_PAREN = new Set(["("]);
 const CLOSE_PAREN = new Set([")"]);
 const SEMICOLON = new Set([";"]);
+const PIPES = new Set(["|", "|&"]);
 const OPEN_BRACE = new Set(["{"]);
 const CLOSE_BRACE = new Set(["}"]);
 
@@ -561,7 +562,10 @@ const statusConsumed = ({
     enclosingGroup === undefined ||
     enclosingGroup.functionBody ||
     tokens[tail]?.type !== "operator" ||
-    tokens[tail]?.value !== enclosingGroup.close
+    tokens[tail]?.value !== enclosingGroup.close ||
+    // Without pipefail a pipeline returns its last command's status, so a
+    // group that feeds a pipe hands nothing on.
+    isOperator(tokens[tail + 1], PIPES)
   ) {
     return false;
   }
