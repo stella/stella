@@ -356,6 +356,27 @@ test("verbatim parser source moves require equivalent resolved dependencies", ()
   ]);
 });
 
+test("verbatim moves of location-dependent parser sources still require a version bump", () => {
+  const base = fixture({ adapters: ["A"] });
+  const helperSource = "export const helper = () => import.meta.url;\n";
+  base.set(`${PARSERS}original/helper.ts`, helperSource);
+  base.set(
+    `${PARSERS}parser-a.ts`,
+    'import { helper } from "./original/helper";\nexport const parseA = () => helper();\n',
+  );
+  const head = new Map(base);
+  head.delete(`${PARSERS}original/helper.ts`);
+  head.set(`${PARSERS}destination/helper.ts`, helperSource);
+  head.set(
+    `${PARSERS}parser-a.ts`,
+    '// parser-output-unchanged: helper moved\nimport { helper } from "./destination/helper";\nexport const parseA = () => helper();\n',
+  );
+
+  expect(changed(base, head)).toEqual([
+    expect.stringContaining("test-a: parser version 1 must exceed base 1"),
+  ]);
+});
+
 test("a verbatim parser folder move preserves moved dependencies", () => {
   const base = fixture({ adapters: ["A"] });
   const head = new Map(base);
