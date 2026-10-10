@@ -673,7 +673,7 @@ mechanics, and similar), not gaps in coverage.
 | --- | --- |
 | account_lifecycle | 4 |
 | assistant_chat | 16 |
-| auth_plumbing | 21 |
+| auth_plumbing | 23 |
 | billing_ui | 1 |
 | chat_thread_ui | 6 |
 | compound_consent | 1 |
