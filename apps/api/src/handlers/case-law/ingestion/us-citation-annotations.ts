@@ -22,7 +22,12 @@
 import { panic, Result } from "better-result";
 
 import { hasInlineChildren, plainTextOf } from "@stll/legal-ast/document-ast";
-import type { Block, DocumentAst, Inline } from "@stll/legal-ast/document-ast";
+import type {
+  Block,
+  DocumentAst,
+  Inline,
+  TableCell,
+} from "@stll/legal-ast/document-ast";
 import type { InlineCitation } from "@stll/legal-ast/inline";
 
 import type { UsCitationOccurrence } from "@/api/handlers/case-law/ingestion/us-citation-occurrences";
@@ -435,9 +440,9 @@ const annotateBlock = (
       };
     }
     case "table": {
-      const rows: typeof block.rows = [];
+      const rows: TableCell[][] = [];
       for (const [row, cells] of block.rows.entries()) {
-        const annotatedCells: (typeof block.rows)[number] = [];
+        const annotatedCells: TableCell[] = [];
         for (const [column, cell] of cells.entries()) {
           const inlines = annotateRun(
             budget,

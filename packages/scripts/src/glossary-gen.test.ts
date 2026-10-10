@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtemp, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 
+import { formattedLikeRepository } from "../../../scripts/generated-artifacts";
 import { generate, LOCALES, parseGlossary, renderTable } from "./glossary-gen";
 
 const fill = (value: string): Record<string, string> =>
@@ -32,7 +36,7 @@ const blankDoc = [
 ].join("\n");
 
 describe("renderTable", () => {
-  test("pads each column to its widest cell (oxfmt-canonical)", () => {
+  test("pads each column to its widest cell", () => {
     expect(
       renderTable(
         ["A", "Long header"],
@@ -69,7 +73,7 @@ describe("generate", () => {
     expect(result).toContain("Arabic");
   });
 
-  test("is idempotent (a formatter and CI fixpoint)", () => {
+  test("repeating table generation leaves its intermediate output unchanged", () => {
     const once = generate(blankDoc, glossary);
     expect(generate(once, glossary)).toBe(once);
   });
@@ -164,4 +168,75 @@ describe("parseGlossary", () => {
       ),
     ).toThrow(/unknown locale "xx" in/u);
   });
+});
+
+test("the real CLI writes canonical Arabic tables that pass its check without changing prose", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "glossary-cli-"));
+  try {
+    const document = `# Terminology\n\nIntroductory prose remains intact.\n\n${blankDoc}\nClosing prose remains intact.\n`;
+    const input = JSON.stringify({
+      verbs: [
+        {
+          id: "close",
+          en: "Close",
+          translations: { ...fill("Close"), ar: "إغلاق" },
+        },
+      ],
+      legalConcepts: [
+        {
+          id: "case-law",
+          en: "Case law",
+          translations: { ...fill("Case law"), ar: "الاجتهاد القضائي" },
+        },
+      ],
+      ptBR: [],
+    });
+    const terminology = path.join(directory, "TERMINOLOGY.md");
+    await Bun.write(path.join(directory, "glossary.json"), input);
+    await Bun.write(terminology, document);
+
+    // The fixture reaches the width mismatch before testing the final output.
+    const intermediate = generate(document, parseGlossary(input));
+    expect(await formattedLikeRepository(intermediate, "md")).not.toBe(
+      intermediate,
+    );
+
+    const runCli = async (flags: string[]) => {
+      const child = Bun.spawn({
+        cmd: [
+          process.execPath,
+          path.join(import.meta.dir, "glossary-gen.ts"),
+          directory,
+          ...flags,
+        ],
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      const [status, stdout, stderr] = await Promise.all([
+        child.exited,
+        new Response(child.stdout).text(),
+        new Response(child.stderr).text(),
+      ]);
+      return { status, stdout, stderr };
+    };
+    const written = await runCli([]);
+    expect(written.stderr).toBe("");
+    expect(written.status).toBe(0);
+    expect(written.stdout).toContain("Generated");
+    const emitted = await Bun.file(terminology).text();
+    expect(emitted).toBe(await formattedLikeRepository(emitted, "md"));
+    expect(emitted).toContain("إغلاق");
+    expect(emitted).toContain("الاجتهاد القضائي");
+    expect(emitted).toContain("**Close**");
+    expect(emitted).toContain("**Case law**");
+    expect(emitted).toContain("Introductory prose remains intact.");
+    expect(emitted).toContain("Closing prose remains intact.");
+    const checked = await runCli(["--check"]);
+    expect(checked.stderr).toBe("");
+    expect(checked.status).toBe(0);
+    expect(checked.stdout).toContain("is in sync (2 terms)");
+    expect(await Bun.file(terminology).text()).toBe(emitted);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 });
