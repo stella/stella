@@ -169,6 +169,16 @@ const cases = [
     lines: [],
   },
   {
+    title: "does not anchor through a shadowed fixture of the same spelling",
+    source: [
+      "test('shadowed', () => {",
+      "  { const fx = first; expect(detect(fx.text)).toBe('court'); }",
+      "  { const fx = second; expect(detect(fx.text)).toBe(derive(fx.text)); }",
+      "});",
+    ].join("\n"),
+    lines: [3],
+  },
+  {
     title: "rejects an unanchored repeated observation",
     source: [
       "const firstRead = readFileSync(path.join(fixture.directory, 'failure.json'));",

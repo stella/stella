@@ -585,6 +585,16 @@ export default eslintCompatPlugin({
                       actualText ||
                       context.sourceCode.getText(candidateParts.actual) ===
                         repeatedName) &&
+                    // Same spelling is not enough: a shadowed fixture in
+                    // another block resolves to a different binding.
+                    pathsDependOn(
+                      pathsIn(candidateParts.actual, {
+                        aliases,
+                        resolveBinding,
+                        values: expectedValues,
+                      }),
+                      sharedPath,
+                    ) &&
                     isIndependentAnchor(candidateParts.expected, {
                       aliases,
                       values: expectedValues,
