@@ -1,5 +1,17 @@
+import { ACTION_ADMISSION_CODES } from "./action-admission";
+import {
+  CHAT_TURN_FAILURE_CODES,
+  CHAT_TURN_INTERRUPTION_REASONS,
+} from "./chat-turn-errors";
 import type { ReaderAnnotationVisibility } from "./legal-reader-annotations";
 import type { SafeId } from "./safe-id";
+
+export const READER_ANSWER_ERROR_CODES = [
+  ...CHAT_TURN_FAILURE_CODES,
+  ...CHAT_TURN_INTERRUPTION_REASONS,
+  ...Object.values(ACTION_ADMISSION_CODES),
+] as const;
+export type ReaderAnswerErrorCode = (typeof READER_ANSWER_ERROR_CODES)[number];
 
 export const READER_ANSWER_KINDS = ["ask", "explain"] as const;
 export const READER_ANSWER_MESSAGE_ROLES = ["user", "assistant"] as const;
@@ -62,6 +74,8 @@ export type ReaderAnswerMessage = {
   model: string | null;
   usage: ReaderAnswerUsage | null;
   status: ReaderAnswerMessageStatus;
+  errorCode: ReaderAnswerErrorCode | null;
+  invalidCitationCount: number;
   createdAt: string;
   updatedAt: string;
 };
@@ -105,6 +119,7 @@ export type ReaderAnswerStreamEvent =
     }
   | {
       type: "failed";
+      errorCode: ReaderAnswerErrorCode;
       messageId: SafeId<"legalReaderAnswerMessage">;
       message: string;
       content: string;

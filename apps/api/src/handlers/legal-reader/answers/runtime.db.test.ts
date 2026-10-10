@@ -11,6 +11,8 @@ import {
 import { eq } from "drizzle-orm";
 import * as v from "valibot";
 
+import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
+import { READER_ANSWER_ERROR_CODES } from "@stll/api-contract/reader-answers";
 import { sleep } from "@stll/concurrency/sleep";
 
 import { organization, user } from "@/api/db/auth-schema";
@@ -18,6 +20,7 @@ import type { SafeDb } from "@/api/db/safe-db";
 import { legalReaderAnswerMessages, legalReaderAnswers } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import { deleteReaderAnswerHandler } from "@/api/handlers/legal-reader/answers/delete";
+import { listReaderAnswersHandler } from "@/api/handlers/legal-reader/answers/list";
 import {
   READER_ANSWER_DEADLINE_MS,
   prepareReaderAnswer,
@@ -28,7 +31,8 @@ import type { ReaderAnswerStreamOptions } from "@/api/handlers/legal-reader/answ
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
+import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { testModelActionAdmitter } from "@/api/tests/helpers/model-dispatch-admission";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -127,7 +131,9 @@ const complete = async (
     },
     ...overrides,
   });
-  return { response, text: await response.text() };
+  const text = await response.text();
+  terminalEvents(text);
+  return { response, text };
 };
 const message = async (prepared: ReaderAnswerStreamOptions["prepared"]) =>
   (
@@ -136,6 +142,57 @@ const message = async (prepared: ReaderAnswerStreamOptions["prepared"]) =>
       .from(legalReaderAnswerMessages)
       .where(eq(legalReaderAnswerMessages.id, prepared.messageId))
   ).at(0);
+
+const reload = async (prepared: ReaderAnswerStreamOptions["prepared"]) => {
+  const result = await Result.gen(async function* () {
+    return yield* listReaderAnswersHandler({
+      ...scope(),
+      query: { decisionId, limit: 100 },
+    });
+  });
+  if (result.isErr()) {
+    throw result.error;
+  }
+  const thread = result.value.items.find(({ id }) => id === prepared.answer.id);
+  const assistant = thread?.messages.find(
+    ({ id }) => id === prepared.messageId,
+  );
+  expect(assistant).toBeDefined();
+  expect(
+    thread?.messages
+      .filter(({ role }) => role === "user")
+      .every(
+        (entry) => entry.errorCode === null && entry.invalidCitationCount === 0,
+      ),
+  ).toBe(true);
+  return assistant;
+};
+const terminalEvents = (text: string) =>
+  text
+    .split("\n")
+    .filter((line) => line.startsWith("data: "))
+    .map((line) =>
+      v.parse(
+        v.variant("type", [
+          v.object({ type: v.literal("started") }),
+          v.object({ type: v.literal("delta") }),
+          v.object({
+            type: v.literal("complete"),
+            content: v.string(),
+            invalidCitationCount: v.number(),
+            errorCode: v.optional(v.picklist(READER_ANSWER_ERROR_CODES)),
+          }),
+          v.object({
+            type: v.literal("failed"),
+            content: v.string(),
+            invalidCitationCount: v.number(),
+            errorCode: v.picklist(READER_ANSWER_ERROR_CODES),
+          }),
+        ]),
+        JSON.parse(line.slice(6)),
+      ),
+    )
+    .filter((event) => event.type === "complete" || event.type === "failed");
 
 describe("reader answer turn lifecycle", () => {
   test.each(["complete", "failed"] as const)(
@@ -331,31 +388,62 @@ describe("reader answer turn lifecycle", () => {
     });
   });
 
-  test("a refused budget does not dispatch a model and persists a failed turn", async () => {
-    const prepared = await create();
-    let called = false;
-    const { text } = await complete(prepared, {
-      admitModelAction: async () =>
-        Result.err(
-          new HandlerError({ status: 429, message: "Budget exhausted" }),
-        ),
-      runModel: async () => {
-        called = true;
-        return Result.ok({
-          content: "Unexpected",
-          model: "fixture",
-          usage: null,
-        });
-      },
-    });
-    expect(called).toBe(false);
-    expect(text).toContain('"type":"failed"');
-    expect(await message(prepared)).toMatchObject({
-      status: "failed",
-      content: "",
-      citations: [],
-    });
-  });
+  test.each([
+    {
+      reason: "period_exhausted",
+      code: ACTION_ADMISSION_CODES.periodExhausted,
+    },
+    { reason: "busy", code: ACTION_ADMISSION_CODES.concurrencyBusy },
+    { reason: "not_enabled", code: ACTION_ADMISSION_CODES.notEnabled },
+    {
+      reason: "unavailable",
+      code: ACTION_ADMISSION_CODES.admissionUnavailable,
+    },
+  ] as const)(
+    "admission $reason persists its precise recovery code on stream and reload",
+    async ({ reason, code }) => {
+      const prepared = await create();
+      let called = false;
+      const { text } = await complete(prepared, {
+        admitModelAction: async () =>
+          Result.err(
+            new ActionAdmissionError({
+              reason,
+              message: "Fixture admission refusal",
+            }),
+          ),
+        runModel: async () => {
+          called = true;
+          return Result.ok({
+            content: "Unexpected",
+            model: "fixture",
+            usage: null,
+          });
+        },
+      });
+      expect(called).toBe(false);
+      expect(terminalEvents(text)).toEqual([
+        {
+          type: "failed",
+          content: "",
+          errorCode: code,
+          invalidCitationCount: 0,
+        },
+      ]);
+      expect(await message(prepared)).toMatchObject({
+        status: "failed",
+        content: "",
+        citations: [],
+        errorCode: code,
+        invalidCitationCount: 0,
+      });
+      expect(await reload(prepared)).toMatchObject({
+        status: "failed",
+        errorCode: code,
+        invalidCitationCount: 0,
+      });
+    },
+  );
 
   test("model failures settle streaming messages as failed", async () => {
     const prepared = await create();
@@ -366,7 +454,101 @@ describe("reader answer turn lifecycle", () => {
         ),
     });
     expect(text).toContain('"type":"failed"');
-    expect(await message(prepared)).toMatchObject({ status: "failed" });
+    expect(await message(prepared)).toMatchObject({
+      status: "failed",
+      errorCode: "provider-error",
+      invalidCitationCount: 0,
+    });
+    expect(terminalEvents(text).at(0)?.errorCode).toBe("provider-error");
+    expect(await reload(prepared)).toMatchObject({
+      status: "failed",
+      errorCode: "provider-error",
+      invalidCitationCount: 0,
+    });
+  });
+
+  test("a double settlement failure emits a safe terminal error and leaves the claim recoverable", async () => {
+    const prepared = await create();
+    let writes = 0;
+    let audits = 0;
+    const { text } = await complete(prepared, {
+      safeDb: async () => {
+        writes++;
+        return Result.err(
+          new DatabaseError({ message: "PRIVATE_DATABASE_FAILURE_DETAIL" }),
+        );
+      },
+      recordAuditEvent: async () => {
+        audits++;
+      },
+      runModel: async ({ onDelta, onEvidence }) => {
+        onEvidence([{ decisionId: relatedId, paragraphId: "p-7" }]);
+        const content = `Related [[${relatedId}#p-7]]. Invented [[${relatedId}#p-99]].`;
+        onDelta(content);
+        return Result.ok({ content, model: "fixture", usage: null });
+      },
+    });
+    expect(writes).toBe(2);
+    expect(audits).toBe(0);
+    expect(terminalEvents(text)).toEqual([
+      {
+        type: "failed",
+        content: `Related [[${relatedId}#p-7]]. Invented .`,
+        errorCode: "persistence",
+        invalidCitationCount: 1,
+      },
+    ]);
+    const events: unknown[] = text
+      .split("\n")
+      .filter((line) => line.startsWith("data: "))
+      .map((line) => JSON.parse(line.slice(6)));
+    expect(
+      events.find(
+        (event) =>
+          typeof event === "object" &&
+          event !== null &&
+          "type" in event &&
+          event.type === "failed",
+      ),
+    ).toEqual({
+      type: "failed",
+      messageId: prepared.messageId,
+      message: "Reader answer generation failed",
+      errorCode: "persistence",
+      content: `Related [[${relatedId}#p-7]]. Invented .`,
+      citations: [{ decisionId: relatedId, paragraphId: "p-7" }],
+      invalidCitationCount: 1,
+    });
+    expect(text).not.toContain("PRIVATE_DATABASE_FAILURE_DETAIL");
+    expect(await message(prepared)).toMatchObject({
+      status: "streaming",
+      content: "",
+      errorCode: null,
+      invalidCitationCount: 0,
+    });
+    expect(await reload(prepared)).toMatchObject({
+      status: "streaming",
+      errorCode: null,
+      invalidCitationCount: 0,
+    });
+    await database
+      .update(legalReaderAnswerMessages)
+      .set({ updatedAt: new Date(Date.now() - READER_ANSWER_DEADLINE_MS - 1) })
+      .where(eq(legalReaderAnswerMessages.id, prepared.messageId));
+    const followUp = await prepare({
+      type: "follow-up",
+      answerId: prepared.answer.id,
+      body: { question: "Continue after recovery?", locale: "cs-CZ" },
+    });
+    expect(await message(prepared)).toMatchObject({
+      status: "failed",
+      errorCode: "owner-lost",
+    });
+    await complete(followUp);
+    expect(await reload(followUp)).toMatchObject({
+      status: "complete",
+      errorCode: null,
+    });
   });
 
   test("a failed stream preserves sanitized partial content identically on reload", async () => {
@@ -409,6 +591,13 @@ describe("reader answer turn lifecycle", () => {
       message: "Reader answer generation failed",
       content: stored?.content,
       citations: stored?.citations,
+      invalidCitationCount: 1,
+      errorCode: "provider-error",
+    });
+    expect(await reload(prepared)).toMatchObject({
+      content: stored?.content,
+      citations: stored?.citations,
+      errorCode: "provider-error",
       invalidCitationCount: 1,
     });
     expect(text).not.toContain('"type":"complete"');
@@ -531,6 +720,7 @@ describe("reader answer turn lifecycle", () => {
       expect(maxActive).toBe(1);
       expect(active).toBe(0);
       expect(expired.text).toContain('"type":"failed"');
+      expect(terminalEvents(expired.text).at(0)?.errorCode).toBe("timeout");
       expect(expired.text).not.toContain('"type":"complete"');
       expect(expired.text).not.toContain("Late reclaimed content.");
       expect(expired.text).not.toContain('"paragraphId":"late"');
@@ -588,6 +778,15 @@ describe("reader answer turn lifecycle", () => {
       expect(audits).toEqual([expectedStatus]);
       const saved = await message(prepared);
       expect(saved?.status).toBe(expectedStatus);
+      expect(saved?.errorCode).toBe(
+        expectedStatus === "failed" ? "timeout" : null,
+      );
+      expect(saved?.invalidCitationCount).toBe(0);
+      expect(await reload(prepared)).toMatchObject({
+        status: expectedStatus,
+        errorCode: saved?.errorCode,
+        invalidCitationCount: 0,
+      });
       const events = result.text
         .split("\n")
         .filter((line) => line.startsWith("data: "))
@@ -647,8 +846,15 @@ describe("reader answer turn lifecycle", () => {
       },
     });
     expect(text).toContain('"invalidCitationCount":1');
+    expect(await reload(prepared)).toMatchObject({
+      status: "complete",
+      errorCode: null,
+      invalidCitationCount: 1,
+    });
     expect(await message(prepared)).toMatchObject({
       content: `Related [[${relatedId}#p-7]]. Invented .`,
+      errorCode: null,
+      invalidCitationCount: 1,
       citations: [{ decisionId: relatedId, paragraphId: "p-7" }],
     });
   });

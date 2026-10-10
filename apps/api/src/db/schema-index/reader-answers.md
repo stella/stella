@@ -4,39 +4,41 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## legal_reader_answers · `legalReaderAnswers` · reader-answers.ts:31 · rls
+## legal_reader_answers · `legalReaderAnswers` · reader-answers.ts:32 · rls
 
 Corpus IDs deliberately have no FK: the public corpus can live separately.
 
 ```text
-legal_reader_answers.id               pUuid               pk,not null       reader-answers.ts:34
-legal_reader_answers.organization_id  safeOrganizationId  fk,not null       reader-answers.ts:35
-legal_reader_answers.user_id          text                fk,not null       reader-answers.ts:38
-legal_reader_answers.decision_id      safeUuid            not null          reader-answers.ts:42
-legal_reader_answers.kind             text                not null          reader-answers.ts:43
-legal_reader_answers.visibility       text                default,not null  reader-answers.ts:44
-legal_reader_answers.paragraph_id     varchar             not null          reader-answers.ts:48
-legal_reader_answers.quote            text                not null          reader-answers.ts:49
-legal_reader_answers.start_offset     integer             not null          reader-answers.ts:50
-legal_reader_answers.end_offset       integer             not null          reader-answers.ts:51
-legal_reader_answers.created_at       timestamptz         default,not null  reader-answers.ts:52
-legal_reader_answers.updated_at       timestamptz         default,not null  reader-answers.ts:53
-legal_reader_answers.deleted_at       timestamptz         null              reader-answers.ts:54
+legal_reader_answers.id               pUuid               pk,not null       reader-answers.ts:35
+legal_reader_answers.organization_id  safeOrganizationId  fk,not null       reader-answers.ts:36
+legal_reader_answers.user_id          text                fk,not null       reader-answers.ts:39
+legal_reader_answers.decision_id      safeUuid            not null          reader-answers.ts:43
+legal_reader_answers.kind             text                not null          reader-answers.ts:44
+legal_reader_answers.visibility       text                default,not null  reader-answers.ts:45
+legal_reader_answers.paragraph_id     varchar             not null          reader-answers.ts:49
+legal_reader_answers.quote            text                not null          reader-answers.ts:50
+legal_reader_answers.start_offset     integer             not null          reader-answers.ts:51
+legal_reader_answers.end_offset       integer             not null          reader-answers.ts:52
+legal_reader_answers.created_at       timestamptz         default,not null  reader-answers.ts:53
+legal_reader_answers.updated_at       timestamptz         default,not null  reader-answers.ts:54
+legal_reader_answers.deleted_at       timestamptz         null              reader-answers.ts:55
 ```
 
-## legal_reader_answer_messages · `legalReaderAnswerMessages` · reader-answers.ts:91 · rls
+## legal_reader_answer_messages · `legalReaderAnswerMessages` · reader-answers.ts:92 · rls
 
 Message access follows the parent's current author and sharing scope.
 
 ```text
-legal_reader_answer_messages.id          pUuid        pk,not null       reader-answers.ts:94
-legal_reader_answer_messages.answer_id   safeUuid     not null          reader-answers.ts:95
-legal_reader_answer_messages.role        text         not null          reader-answers.ts:96
-legal_reader_answer_messages.content     text         not null          reader-answers.ts:97
-legal_reader_answer_messages.citations   jsonb        default,not null  reader-answers.ts:98
-legal_reader_answer_messages.model       text         null              reader-answers.ts:102
-legal_reader_answer_messages.usage       jsonb        null              reader-answers.ts:103
-legal_reader_answer_messages.status      text         not null          reader-answers.ts:104
-legal_reader_answer_messages.created_at  timestamptz  default,not null  reader-answers.ts:107
-legal_reader_answer_messages.updated_at  timestamptz  default,not null  reader-answers.ts:108
+legal_reader_answer_messages.id                      pUuid        pk,not null       reader-answers.ts:95
+legal_reader_answer_messages.answer_id               safeUuid     not null          reader-answers.ts:96
+legal_reader_answer_messages.role                    text         not null          reader-answers.ts:97
+legal_reader_answer_messages.content                 text         not null          reader-answers.ts:98
+legal_reader_answer_messages.citations               jsonb        default,not null  reader-answers.ts:99
+legal_reader_answer_messages.model                   text         null              reader-answers.ts:103
+legal_reader_answer_messages.usage                   jsonb        null              reader-answers.ts:104
+legal_reader_answer_messages.status                  text         not null          reader-answers.ts:105
+legal_reader_answer_messages.error_code              text         null              reader-answers.ts:109  Stable failure code preserved when the reader reloads a message.
+legal_reader_answer_messages.invalid_citation_count  integer      default,not null  reader-answers.ts:111  Number of generated citations withheld by validation.
+legal_reader_answer_messages.created_at              timestamptz  default,not null  reader-answers.ts:115
+legal_reader_answer_messages.updated_at              timestamptz  default,not null  reader-answers.ts:116
 ```

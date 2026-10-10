@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
+import { READER_ANSWER_ERROR_CODES } from "@stll/api-contract/reader-answers";
+
 import { organization, user } from "@/api/db/auth-schema";
 import { legalReaderAnswers, legalReaderAnswerMessages } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -139,5 +141,69 @@ describe("reader answer storage", () => {
         relforcerowsecurity: true,
       },
     ]);
+  });
+
+  test("stores every error code and defaults absent diagnostics", async () => {
+    const answer = answerRow();
+    await database.insert(legalReaderAnswers).values(answer);
+    const defaults = await database
+      .insert(legalReaderAnswerMessages)
+      .values({
+        answerId: answer.id,
+        role: "assistant",
+        content: "",
+        status: "failed",
+      })
+      .returning();
+    expect(defaults.at(0)?.errorCode).toBeNull();
+    expect(defaults.at(0)?.invalidCitationCount).toBe(0);
+    const diagnostics = await database
+      .insert(legalReaderAnswerMessages)
+      .values(
+        READER_ANSWER_ERROR_CODES.map((errorCode) => ({
+          answerId: answer.id,
+          role: "assistant" as const,
+          content: "",
+          status: "failed" as const,
+          errorCode,
+          invalidCitationCount: 2,
+        })),
+      )
+      .returning();
+    expect(new Set(diagnostics.map((message) => message.errorCode))).toEqual(
+      new Set(READER_ANSWER_ERROR_CODES),
+    );
+    expect(
+      diagnostics.every((message) => message.invalidCitationCount === 2),
+    ).toBe(true);
+  });
+
+  test("refuses unknown error codes and negative citation counts", async () => {
+    const answer = answerRow();
+    await database.insert(legalReaderAnswers).values(answer);
+    const invalidCode = await Result.tryPromise(
+      async () =>
+        await database.execute(sql`
+      INSERT INTO legal_reader_answer_messages (id, answer_id, role, content, status, error_code)
+      VALUES (${Bun.randomUUIDv7()}, ${answer.id}, 'assistant', '', 'failed', 'unknown')
+    `),
+    );
+    expect(invalidCode.isErr()).toBe(true);
+    expect(causeText(invalidCode.isErr() ? invalidCode.error : null)).toContain(
+      "legal_reader_answer_messages_error_code_values",
+    );
+    const invalidCount = await Result.tryPromise(
+      async () =>
+        await database.execute(sql`
+      INSERT INTO legal_reader_answer_messages (id, answer_id, role, content, status, invalid_citation_count)
+      VALUES (${Bun.randomUUIDv7()}, ${answer.id}, 'assistant', '', 'complete', -1)
+    `),
+    );
+    expect(invalidCount.isErr()).toBe(true);
+    expect(
+      causeText(invalidCount.isErr() ? invalidCount.error : null),
+    ).toContain(
+      "legal_reader_answer_messages_invalid_citation_count_nonnegative",
+    );
   });
 });

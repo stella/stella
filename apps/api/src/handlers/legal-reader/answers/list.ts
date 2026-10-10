@@ -60,6 +60,8 @@ const MESSAGE_PROJECTION = {
   model: legalReaderAnswerMessages.model,
   usage: legalReaderAnswerMessages.usage,
   status: legalReaderAnswerMessages.status,
+  errorCode: legalReaderAnswerMessages.errorCode,
+  invalidCitationCount: legalReaderAnswerMessages.invalidCitationCount,
   createdAt: legalReaderAnswerMessages.createdAt,
   updatedAt: legalReaderAnswerMessages.updatedAt,
 } as const;
@@ -199,6 +201,8 @@ export const listReaderAnswersHandler = async function* ({
         model: message.model,
         usage: message.usage,
         status: message.status,
+        errorCode: message.errorCode,
+        invalidCitationCount: message.invalidCitationCount,
         createdAt: message.createdAt.toISOString(),
         updatedAt: message.updatedAt.toISOString(),
       })),

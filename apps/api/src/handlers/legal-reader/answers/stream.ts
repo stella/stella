@@ -1,11 +1,14 @@
 import { panic, Result } from "better-result";
 import { and, eq, exists } from "drizzle-orm";
 
+import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
 import type {
+  ReaderAnswerErrorCode,
   ReaderAnswerCitation,
   ReaderAnswerStreamEvent,
   ReaderAnswerUsage,
 } from "@stll/api-contract/reader-answers";
+import { READER_ANSWER_ERROR_CODES } from "@stll/api-contract/reader-answers";
 import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
@@ -23,6 +26,7 @@ import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { timestampMatchesCasToken } from "@/api/lib/db/timestamp-cas";
+import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -43,6 +47,22 @@ const READER_ANSWER_PERSISTENCE_FAILURE = failureSink({
   event: "reader_answer.persistence_failed",
   expected: [],
 });
+
+const readerAnswerFailureCode = (
+  error: unknown,
+  fallbackCode: ReaderAnswerErrorCode,
+): ReaderAnswerErrorCode => {
+  if (ActionAdmissionError.is(error)) {
+    return error.code;
+  }
+  if (HandlerError.is(error)) {
+    return (
+      READER_ANSWER_ERROR_CODES.find((code) => code === error.code) ??
+      fallbackCode
+    );
+  }
+  return fallbackCode;
+};
 
 type StreamOwnerPredicateOptions = {
   tx: Transaction;
@@ -77,9 +97,15 @@ type PersistReaderAnswerSettlementOptions = {
   prepared: PreparedReaderAnswer;
   invalidCitationCount: number;
   settlement:
-    | { status: "failed"; content: string; citations: ReaderAnswerCitation[] }
+    | {
+        status: "failed";
+        errorCode: ReaderAnswerErrorCode;
+        content: string;
+        citations: ReaderAnswerCitation[];
+      }
     | {
         status: "complete";
+        errorCode: null;
         content: string;
         citations: ReaderAnswerCitation[];
         model: string;
@@ -97,7 +123,7 @@ const persistReaderAnswerSettlement = async ({
   await scope.safeDb(async (tx) => {
     const rows = await tx
       .update(legalReaderAnswerMessages)
-      .set({ ...settlement, updatedAt: new Date() })
+      .set({ ...settlement, invalidCitationCount, updatedAt: new Date() })
       .where(streamOwnerPredicate({ tx, scope, prepared }))
       .returning({
         id: legalReaderAnswerMessages.id,
@@ -106,6 +132,8 @@ const persistReaderAnswerSettlement = async ({
         citations: legalReaderAnswerMessages.citations,
         model: legalReaderAnswerMessages.model,
         usage: legalReaderAnswerMessages.usage,
+        errorCode: legalReaderAnswerMessages.errorCode,
+        invalidCitationCount: legalReaderAnswerMessages.invalidCitationCount,
       });
     const saved = rows.at(0);
     if (saved === undefined) {
@@ -120,7 +148,7 @@ const persistReaderAnswerSettlement = async ({
       messageId: saved.id,
       content: saved.content,
       citations: saved.citations,
-      invalidCitationCount,
+      invalidCitationCount: saved.invalidCitationCount,
     };
     switch (saved.status) {
       case "complete":
@@ -135,6 +163,8 @@ const persistReaderAnswerSettlement = async ({
           type: "failed",
           ...evidence,
           message: "Reader answer generation failed",
+          errorCode:
+            saved.errorCode ?? panic("Failed reader answer has no error code"),
         } as const satisfies ReaderAnswerStreamEvent;
       case "streaming":
         return panic("Reader answer settlement did not reach a terminal state");
@@ -148,15 +178,19 @@ type FailReaderAnswerStreamOptions = {
   scope: AnnotationAuthorScope;
   prepared: PreparedReaderAnswer;
   error: unknown;
+  fallbackCode: ReaderAnswerErrorCode;
   content: string;
   allowed: ReaderAnswerCitation[];
+  emit: (event: ReaderAnswerStreamEvent) => void;
 };
 const failReaderAnswerStream = async ({
   scope,
   prepared,
   error,
+  fallbackCode,
   content,
   allowed,
+  emit,
 }: FailReaderAnswerStreamOptions) => {
   observeFailure(error, { sink: READER_ANSWER_GENERATION_FAILURE });
   const partial = validateReaderAnswerCitations({ content, allowed });
@@ -166,12 +200,23 @@ const failReaderAnswerStream = async ({
     invalidCitationCount: partial.invalidCitationCount,
     settlement: {
       status: "failed",
+      errorCode: readerAnswerFailureCode(error, fallbackCode),
       content: partial.content,
       citations: partial.citations,
     },
   });
   if (failed.isErr()) {
     observeFailure(failed.error, { sink: READER_ANSWER_PERSISTENCE_FAILURE });
+    // Storage is unavailable; the claim remains reclaimable at its deadline.
+    emit({
+      type: "failed",
+      messageId: prepared.messageId,
+      message: "Reader answer generation failed",
+      errorCode: "persistence",
+      content: partial.content,
+      citations: partial.citations,
+      invalidCitationCount: partial.invalidCitationCount,
+    });
   }
   return failed;
 };
@@ -203,6 +248,8 @@ export const streamReaderAnswer = ({
   const encoder = new TextEncoder();
   let partialContent = "";
   let connected = true;
+  let failureCode: ReaderAnswerErrorCode =
+    ACTION_ADMISSION_CODES.admissionUnavailable;
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       const emit = (event: ReaderAnswerStreamEvent) => {
@@ -235,6 +282,7 @@ export const streamReaderAnswer = ({
                     await admitModelAction(
                       async ({ admission, signal }) =>
                         await Result.gen(async function* () {
+                          failureCode = "provider-error";
                           const runSignal = AbortSignal.any([
                             signal,
                             requestSignal,
@@ -306,6 +354,7 @@ export const streamReaderAnswer = ({
                             content: output.content,
                             allowed,
                           });
+                          failureCode = "persistence";
                           const saved = yield* Result.await(
                             persistReaderAnswerSettlement({
                               scope,
@@ -314,6 +363,7 @@ export const streamReaderAnswer = ({
                                 validated.invalidCitationCount,
                               settlement: {
                                 status: "complete",
+                                errorCode: null,
                                 content: validated.content,
                                 citations: validated.citations,
                                 model: output.model,
@@ -342,12 +392,19 @@ export const streamReaderAnswer = ({
         .andThen((admission) => admission)
         .andThen((settlement) => settlement);
       if (Result.isError(outcome)) {
+        if (Temporal.Now.instant().epochMilliseconds >= prepared.deadlineAt) {
+          failureCode = "timeout";
+        } else if (requestSignal.aborted || cancellation.signal.aborted) {
+          failureCode = "client-disconnected";
+        }
         const failed = await failReaderAnswerStream({
           scope,
           prepared,
           error: outcome.error,
+          fallbackCode: failureCode,
           content: partialContent,
           allowed,
+          emit,
         });
         if (failed.isOk() && failed.value !== null) {
           emit(failed.value);

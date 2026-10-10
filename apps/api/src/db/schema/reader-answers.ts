@@ -1,5 +1,6 @@
 import { READER_ANNOTATION_VISIBILITIES } from "@stll/api-contract/legal-reader-annotations";
 import {
+  READER_ANSWER_ERROR_CODES,
   READER_ANSWER_KINDS,
   READER_ANSWER_MESSAGE_ROLES,
   READER_ANSWER_MESSAGE_STATUSES,
@@ -104,6 +105,13 @@ export const legalReaderAnswerMessages = p.pgTable(
     status: p
       .text("status", { enum: READER_ANSWER_MESSAGE_STATUSES })
       .notNull(),
+    /** Stable failure code preserved when the reader reloads a message. */
+    errorCode: p.text("error_code", { enum: READER_ANSWER_ERROR_CODES }),
+    /** Number of generated citations withheld by validation. */
+    invalidCitationCount: p
+      .integer("invalid_citation_count")
+      .notNull()
+      .default(0),
     createdAt: timestamptz("created_at").defaultNow().notNull(),
     updatedAt: timestamptz("updated_at").defaultNow().notNull(),
   },
@@ -129,6 +137,14 @@ export const legalReaderAnswerMessages = p.pgTable(
     p.check(
       "legal_reader_answer_messages_citations_array",
       sql`jsonb_typeof(${t.citations}) = 'array'`,
+    ),
+    p.check(
+      "legal_reader_answer_messages_error_code_values",
+      sql`${t.errorCode} IS NULL OR ${t.errorCode} IN (${sqlValues(READER_ANSWER_ERROR_CODES)})`,
+    ),
+    p.check(
+      "legal_reader_answer_messages_invalid_citation_count_nonnegative",
+      sql`${t.invalidCitationCount} >= 0`,
     ),
     p.pgPolicy("answer_select", {
       for: "select",

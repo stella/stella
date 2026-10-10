@@ -339,7 +339,7 @@ export const prepareReaderAnswer = async (
     if (streaming !== undefined) {
       await tx
         .update(legalReaderAnswerMessages)
-        .set({ status: "failed", updatedAt: now })
+        .set({ status: "failed", errorCode: "owner-lost", updatedAt: now })
         .where(
           and(
             eq(legalReaderAnswerMessages.answerId, answerId),
