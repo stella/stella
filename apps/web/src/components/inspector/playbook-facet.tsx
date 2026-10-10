@@ -91,7 +91,7 @@ import {
 } from "@/components/ai-suggestions/document-review-passage-texts";
 import {
   decideReviewFinding,
-  documentReviewPartiesOptions,
+  documentReviewPartiesDetectOptions,
   documentReviewRunOptions,
   documentReviewRunsOptions,
   documentReviewSourcesOptions,
@@ -1584,9 +1584,13 @@ const Launcher = ({
   // The document's own sides, read before a reference is even chosen: the
   // question "whose side are we on" is about the contract on screen, and
   // asking it after the proposal has been paid for is asking it too late.
+  const queryClient = useQueryClient();
   const partiesQuery = useQuery({
-    ...documentReviewPartiesOptions({ workspaceId, ...target }),
-    select: (answer) => answer.parties,
+    ...documentReviewPartiesDetectOptions(
+      { workspaceId, ...target },
+      queryClient,
+    ),
+    select: (answer) => (answer.type === "cached" ? answer.parties : []),
   });
   const parties = useQueryView(partiesQuery);
   const setup: ReviewSetup = {
