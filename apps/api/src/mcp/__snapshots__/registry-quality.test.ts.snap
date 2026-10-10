@@ -363,7 +363,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "scope": "stella:read",
     "access": "read",
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Resolve case references to decisions: docket numbers as the courts write them and ECLIs. Matches identity columns, not ranked text or citations. Each \`identifiers[]\` entry is answered on its own, in input order, under \`status\`: \`found\` carries that decision's id, resourceName, appUrl, caseNumber (citable reference, not always a docket), court, date and ECLI; \`ambiguous\` carries the candidates: a docket is unique per court, not per corpus, so none is picked; \`not_found\` says what to call instead; \`lookup_failed\`: the read did not complete; retry that entry. Use this when the user names a case; use search_case_law when they describe one. Pass a \`found\` decisionId to read_case_law_decision for the text and typed identifiers. Use \`url\` for the reader and \`source_url\` for the publisher.",
+    "description": "Resolve case references to decisions: docket numbers as the courts write them and ECLIs. Matches identity columns, not ranked text or citations. Each \`identifiers[]\` entry is answered on its own, in input order, under \`status\`: \`found\` carries that decision's id, resourceName, appUrl, caseNumber (citable, not always a docket), court, date and ECLI; \`incomplete_identifier\` names the missing docket components; \`ambiguous\` carries several real candidates: a docket is unique per court, so none is picked; \`not_found\` says what to call instead; \`lookup_failed\`: retry that entry. Use this when the user names a case; use search_case_law when they describe one. Pass a \`found\` decisionId to read_case_law_decision for the text and typed identifiers. Use \`url\` for the reader and \`source_url\` for the publisher.",
     "annotations": {
       "title": "Look up case law by identifier",
       "destructiveHint": false,
@@ -387,7 +387,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           },
           "minItems": 1,
           "maxItems": 50,
-          "description": "The references to resolve, at most 50 per call: a docket number as the court writes it (the sheet number after it is ignored) or an ECLI. Each is answered on its own."
+          "description": "The references to resolve, at most 50 per call: a docket number as the court writes it, with the sheet number when the court publishes one (it picks a single decision when the file holds several), or an ECLI. Each is answered on its own."
         },
         "country": {
           "type": "string",
@@ -473,7 +473,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "type": "integer",
           "minimum": 1,
           "maximum": 8000,
-          "description": "Page size per decision, 1–8000 characters. In a batch each decision gets its own page of this size, trimmed evenly so the call returns at most 40000 characters; omitted, the batch shares 8000 characters. Use a JSON number; a value outside the range is clamped to it.",
+          "description": "Requested page size per decision, 1–8000 characters. A batch stays within 40000 characters: each decision gets an even share, and unused characters finish other decisions in input order when one fits whole; a decision still cut keeps the even share. Omitted, the batch shares 8000 characters the same way. Use a JSON number; a value outside the range is clamped to it.",
           "x-stella-agent-input": {
             "kind": "number",
             "range": "clamp"
@@ -490,7 +490,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         },
         "full": {
           "type": "boolean",
-          "description": "true returns the whole text in one page, up to 200000 characters (shared evenly by a batch); a longer text continues on page 2. Takes no max_chars."
+          "description": "true returns the whole text in one page, up to 200000 characters (shared by a batch; unused shares finish other decisions in input order when one fits whole); a longer text continues on page 2. Takes no max_chars."
         },
         "text_version": {
           "type": "string",
@@ -7277,7 +7277,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     "scope": "stella:read_anonymized",
     "access": "read",
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Resolve case references to decisions: docket numbers as the courts write them and ECLIs. Matches identity columns, not ranked text or citations. Each \`identifiers[]\` entry is answered on its own, in input order, under \`status\`: \`found\` carries that decision's id, resourceName, appUrl, caseNumber (citable reference, not always a docket), court, date and ECLI; \`ambiguous\` carries the candidates: a docket is unique per court, not per corpus, so none is picked; \`not_found\` says what to call instead; \`lookup_failed\`: the read did not complete; retry that entry. Use this when the user names a case; use search_case_law when they describe one. Pass a \`found\` decisionId to read_case_law_decision for the text and typed identifiers. Use \`url\` for the reader and \`source_url\` for the publisher.",
+    "description": "Resolve case references to decisions: docket numbers as the courts write them and ECLIs. Matches identity columns, not ranked text or citations. Each \`identifiers[]\` entry is answered on its own, in input order, under \`status\`: \`found\` carries that decision's id, resourceName, appUrl, caseNumber (citable, not always a docket), court, date and ECLI; \`incomplete_identifier\` names the missing docket components; \`ambiguous\` carries several real candidates: a docket is unique per court, so none is picked; \`not_found\` says what to call instead; \`lookup_failed\`: retry that entry. Use this when the user names a case; use search_case_law when they describe one. Pass a \`found\` decisionId to read_case_law_decision for the text and typed identifiers. Use \`url\` for the reader and \`source_url\` for the publisher.",
     "annotations": {
       "title": "Look up case law by identifier",
       "destructiveHint": false,
@@ -7301,7 +7301,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
           },
           "minItems": 1,
           "maxItems": 50,
-          "description": "The references to resolve, at most 50 per call: a docket number as the court writes it (the sheet number after it is ignored) or an ECLI. Each is answered on its own."
+          "description": "The references to resolve, at most 50 per call: a docket number as the court writes it, with the sheet number when the court publishes one (it picks a single decision when the file holds several), or an ECLI. Each is answered on its own."
         },
         "country": {
           "type": "string",
@@ -7387,7 +7387,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
           "type": "integer",
           "minimum": 1,
           "maximum": 8000,
-          "description": "Page size per decision, 1–8000 characters. In a batch each decision gets its own page of this size, trimmed evenly so the call returns at most 40000 characters; omitted, the batch shares 8000 characters. Use a JSON number; a value outside the range is clamped to it.",
+          "description": "Requested page size per decision, 1–8000 characters. A batch stays within 40000 characters: each decision gets an even share, and unused characters finish other decisions in input order when one fits whole; a decision still cut keeps the even share. Omitted, the batch shares 8000 characters the same way. Use a JSON number; a value outside the range is clamped to it.",
           "x-stella-agent-input": {
             "kind": "number",
             "range": "clamp"
@@ -7404,7 +7404,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         },
         "full": {
           "type": "boolean",
-          "description": "true returns the whole text in one page, up to 200000 characters (shared evenly by a batch); a longer text continues on page 2. Takes no max_chars."
+          "description": "true returns the whole text in one page, up to 200000 characters (shared by a batch; unused shares finish other decisions in input order when one fits whole); a longer text continues on page 2. Takes no max_chars."
         },
         "text_version": {
           "type": "string",
@@ -8971,7 +8971,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
     "scope": "stella:read",
     "access": "read",
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Resolve case references to decisions: docket numbers as the courts write them and ECLIs. Matches identity columns, not ranked text or citations. Each \`identifiers[]\` entry is answered on its own, in input order, under \`status\`: \`found\` carries that decision's id, resourceName, appUrl, caseNumber (citable reference, not always a docket), court, date and ECLI; \`ambiguous\` carries the candidates: a docket is unique per court, not per corpus, so none is picked; \`not_found\` says what to call instead; \`lookup_failed\`: the read did not complete; retry that entry. Use this when the user names a case; use search_case_law when they describe one. Pass a \`found\` decisionId to read_case_law_decision for the text and typed identifiers. Use \`url\` for the reader and \`source_url\` for the publisher.",
+    "description": "Resolve case references to decisions: docket numbers as the courts write them and ECLIs. Matches identity columns, not ranked text or citations. Each \`identifiers[]\` entry is answered on its own, in input order, under \`status\`: \`found\` carries that decision's id, resourceName, appUrl, caseNumber (citable, not always a docket), court, date and ECLI; \`incomplete_identifier\` names the missing docket components; \`ambiguous\` carries several real candidates: a docket is unique per court, so none is picked; \`not_found\` says what to call instead; \`lookup_failed\`: retry that entry. Use this when the user names a case; use search_case_law when they describe one. Pass a \`found\` decisionId to read_case_law_decision for the text and typed identifiers. Use \`url\` for the reader and \`source_url\` for the publisher.",
     "annotations": {
       "title": "Look up case law by identifier",
       "destructiveHint": false,
@@ -8995,7 +8995,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
           },
           "minItems": 1,
           "maxItems": 50,
-          "description": "The references to resolve, at most 50 per call: a docket number as the court writes it (the sheet number after it is ignored) or an ECLI. Each is answered on its own."
+          "description": "The references to resolve, at most 50 per call: a docket number as the court writes it, with the sheet number when the court publishes one (it picks a single decision when the file holds several), or an ECLI. Each is answered on its own."
         },
         "country": {
           "type": "string",
@@ -9049,7 +9049,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
           "type": "integer",
           "minimum": 1,
           "maximum": 8000,
-          "description": "Page size per decision, 1–8000 characters. In a batch each decision gets its own page of this size, trimmed evenly so the call returns at most 40000 characters; omitted, the batch shares 8000 characters. Use a JSON number; a value outside the range is clamped to it.",
+          "description": "Requested page size per decision, 1–8000 characters. A batch stays within 40000 characters: each decision gets an even share, and unused characters finish other decisions in input order when one fits whole; a decision still cut keeps the even share. Omitted, the batch shares 8000 characters the same way. Use a JSON number; a value outside the range is clamped to it.",
           "x-stella-agent-input": {
             "kind": "number",
             "range": "clamp"
@@ -9066,7 +9066,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
         },
         "full": {
           "type": "boolean",
-          "description": "true returns the whole text in one page, up to 200000 characters (shared evenly by a batch); a longer text continues on page 2. Takes no max_chars."
+          "description": "true returns the whole text in one page, up to 200000 characters (shared by a batch; unused shares finish other decisions in input order when one fits whole); a longer text continues on page 2. Takes no max_chars."
         },
         "text_version": {
           "type": "string",
