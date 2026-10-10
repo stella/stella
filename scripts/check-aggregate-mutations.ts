@@ -1673,7 +1673,7 @@ const awaitedAggregateNames = ({
           identifier: node.expression.expression,
           access,
           module: REGISTRY,
-          exported: ["withAggregateLock"],
+          exported: ["withAggregateLock", "withAggregateRowQuery"],
         }) &&
         options !== undefined &&
         ts.isObjectLiteralExpression(options)
@@ -1821,7 +1821,7 @@ type HeldAggregateOptions = {
 };
 /**
  * The union of aggregates the handler locks itself and those its joined
- * direct calls lock through withAggregateLock in their own bodies,
+ * direct calls lock through the aggregate lock owner in their own bodies,
  * including inline callbacks those bodies pass to awaited calls. Named
  * functions a callee calls in turn are never followed.
  */

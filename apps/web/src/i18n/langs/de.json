@@ -2863,6 +2863,12 @@
     "editSessionReleased": "Dieses Dokument wurde an anderer Stelle zum Bearbeiten geöffnet, daher ist dieser Tab schreibgeschützt.",
     "editSessionReleasedUnsaved": "Ihre nicht gespeicherten Änderungen bleiben hier erhalten.",
     "editSessionReopen": "Erneut zum Bearbeiten öffnen",
+    "editor": {
+      "outlineDepthAll": "Alle Ebenen",
+      "outlineDepthLabel": "Gliederungstiefe",
+      "outlineDepthThree": "1–3",
+      "outlineDepthTwo": "1–2"
+    },
     "evidenceReferences": "Beweisverweise",
     "evidenceUnavailable": "Dieser Beweisverweis kann in dieser Akte nicht geöffnet werden.",
     "findReplace": {

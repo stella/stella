@@ -2863,6 +2863,12 @@
     "editSessionReleased": "Šis dokumentas buvo atidarytas redaguoti kitur, todėl šis skirtukas yra tik skaitymui.",
     "editSessionReleasedUnsaved": "Jūsų neįrašyti pakeitimai lieka čia.",
     "editSessionReopen": "Atidaryti redaguoti iš naujo",
+    "editor": {
+      "outlineDepthAll": "Visi lygiai",
+      "outlineDepthLabel": "Antraščių gylis",
+      "outlineDepthThree": "1–3",
+      "outlineDepthTwo": "1–2"
+    },
     "evidenceReferences": "Įrodymų nuorodos",
     "evidenceUnavailable": "Šios įrodymo nuorodos šioje byloje atidaryti negalima.",
     "findReplace": {

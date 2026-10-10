@@ -152,12 +152,10 @@
     --color-foreground: var(--foreground);
     --color-border: var(--border);
     --color-info: var(--info);
-    --color-accent: var(--accent);
     --color-muted-foreground: var(--muted-foreground);
     --color-foreground-disabled: var(--foreground-disabled);
     --color-muted: var(--muted);
     --color-primary: var(--primary);
-    --color-popover: var(--popover);
     --color-card: var(--card);
     --ease-spring: linear(
     0,
@@ -1339,10 +1337,6 @@
   }
   .-translate-x-1\/2 {
     --tw-translate-x: calc(calc(1 / 2 * 100%) * -1);
-    translate: var(--tw-translate-x) var(--tw-translate-y);
-  }
-  .-translate-x-6 {
-    --tw-translate-x: calc(var(--spacing) * -6);
     translate: var(--tw-translate-x) var(--tw-translate-y);
   }
   .-translate-x-px {
@@ -3878,35 +3872,6 @@
       background-color: var(--sidebar-border);
     }
   }
-  .focus\:not-sr-only:focus {
-    position: static;
-    width: auto;
-    height: auto;
-    padding: 0;
-    margin: 0;
-    overflow: visible;
-    clip-path: none;
-    white-space: normal;
-  }
-  .focus\:absolute:focus {
-    position: absolute;
-  }
-  .focus\:w-max:focus {
-    width: max-content;
-  }
-  .focus\:rounded-md:focus {
-    border-radius: var(--radius-md);
-  }
-  .focus\:border:focus {
-    border-style: var(--tw-border-style);
-    border-width: 1px;
-  }
-  .focus\:px-2:focus {
-    padding-inline: calc(var(--spacing) * 2);
-  }
-  .focus\:py-1:focus {
-    padding-block: var(--spacing);
-  }
   .focus\:outline-none:focus {
     --tw-outline-style: none;
     outline-style: none;
@@ -4841,11 +4806,6 @@
       padding-top: 0px;
     }
   }
-  @media (width < 64rem) {
-    .max-lg\:hidden {
-      display: none;
-    }
-  }
   @media (width < 40rem) {
     .max-sm\:col-span-2 {
       grid-column: span 2 / span 2;
@@ -5423,6 +5383,9 @@
     }
   }
   @media (pointer: coarse) {
+    .pointer-coarse\:my-1\.5 {
+      margin-block: calc(var(--spacing) * 1.5);
+    }
     .pointer-coarse\:size-11 {
       width: calc(var(--spacing) * 11);
       height: calc(var(--spacing) * 11);

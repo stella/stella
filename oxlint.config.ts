@@ -2517,6 +2517,12 @@ const config = defineConfig({
           {
             approvedAdapters: [
               {
+                path: "apps/api/src/handlers/chat/messages/revisions/accept.ts",
+                binding: "acceptedEditSchema",
+                reason:
+                  "Runtime JSON Schema and static type are derived from the same shared Valibot edit schema.",
+              },
+              {
                 path: "apps/api/src/handlers/case-law/decisions/search-schema.ts",
                 binding: "courtYearSchema",
                 reason:

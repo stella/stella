@@ -2863,6 +2863,12 @@
     "editSessionReleased": "Tento dokument bol otvorený na úpravy inde, takže je táto karta len na čítanie.",
     "editSessionReleasedUnsaved": "Vaše neuložené zmeny tu zostávajú.",
     "editSessionReopen": "Znova otvoriť na úpravy",
+    "editor": {
+      "outlineDepthAll": "Všetky úrovne",
+      "outlineDepthLabel": "Hĺbka osnovy",
+      "outlineDepthThree": "1–3",
+      "outlineDepthTwo": "1–2"
+    },
     "evidenceReferences": "Odkazy na dôkazy",
     "evidenceUnavailable": "Tento odkaz na dôkaz nie je možné v tomto spise otvoriť.",
     "findReplace": {

@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads, userFiles } from "@/api/db/schema";
@@ -218,6 +218,29 @@ describe("loadChatMessagePage keyset pagination", () => {
 });
 
 describe("loadClientMessages", () => {
+  test("current pages and acceptance snapshots expose the stored revision", async () => {
+    const { threadId, messages } = await seedThread([new Date()]);
+    const first = messages.at(0);
+    if (!first) {
+      throw new TypeError("Expected the seeded message");
+    }
+    await testDb
+      .update(chatMessages)
+      .set({ revision: 3 })
+      .where(eq(chatMessages.id, first.id));
+
+    const page = await loadPage(threadId);
+    const served = await loadClientMessages({
+      messageIds: [first.id],
+      safeDb,
+      threadId,
+      userId: ids.userA1,
+    });
+
+    expect(page.messages.at(0)).toMatchObject({ revision: 3, edited: true });
+    expect(served).toEqual(Result.ok(page.messages));
+  });
+
   test("serves each message exactly as the thread's page does", async () => {
     const base = Date.parse("2026-05-01T00:00:00.000Z");
     const { threadId, messages } = await seedThread([

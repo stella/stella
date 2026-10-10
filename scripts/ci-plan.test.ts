@@ -2425,9 +2425,9 @@ test("CLI packaging parity runs whenever CLI sources, codegen or generated outpu
   ].map((glob) =>
     glob.replaceAll("**", "example/generated.ts").replaceAll("*", "example"),
   );
-  // The scope is not trivially on: provenance-only changes skip it.
-  expect(packageChecksPlan(["provenance/attestation.json"])).toBe("false");
-  // Every CLI path, alone and on either side of skipped provenance files.
+  // Ordinary documentation still skips package checks.
+  expect(packageChecksPlan(["README.md"])).toBe("false");
+  // Every CLI path, alone and on either side of provenance files.
   const provenance = [".provenance.yml", "provenance/attestation.json"];
   for (const cliPath of cliPaths) {
     for (const files of [
@@ -4771,7 +4771,7 @@ test("property suites and their budgets select required PR checks", () => {
   ]) {
     expect(packageChecksPlan([file]), file).toBe("true");
   }
-  expect(packageChecksPlan(["provenance/manifest.json"])).toBe("false");
+  expect(packageChecksPlan(["provenance/manifest.json"])).toBe("true");
   for (const job of ["ci-tests", "ci-checks-policy", "ci-checks-rest"]) {
     expect(
       runsAtDepth(jobIf(ciJobs[job]), {
