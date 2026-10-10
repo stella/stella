@@ -248,6 +248,7 @@ describe("application throttle keying census", () => {
         "AUTH_RATE_LIMITS.defaultEmail",
       ],
       "lib/rate-limit/standard-api.ts": ["API_RATE_LIMITS.api.max"],
+      "handlers/legal-resolve/routes.ts": ["...API_RATE_LIMITS.legalResolve"],
       "lib/signup-abuse.ts": [
         "OTP_DELIVERY_RATE_LIMITS.existingAccountEmailMax",
       ],

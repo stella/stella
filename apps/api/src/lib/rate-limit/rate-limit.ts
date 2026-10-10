@@ -337,12 +337,12 @@ export const rateLimit = ({
     });
 
     if (exceeded) {
-      recordBudgetRejection({
-        ...(typeof budget === "function"
-          ? budget(key)
-          : (budget ?? { name: "api.address", keyKind: "address" })),
-        windowMs: duration,
-      });
+      if (budget !== undefined) {
+        recordBudgetRejection({
+          ...(typeof budget === "function" ? budget(key) : budget),
+          windowMs: duration,
+        });
+      }
       onLimit?.({ key, duration });
       requestState.set(request, { type: "limited", key });
       set.status = 429;
