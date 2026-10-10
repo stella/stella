@@ -23,6 +23,7 @@ export * from "./schema/corpus-index-generations";
 export * from "./schema/corpus-index-projections";
 export * from "./schema/lists";
 export * from "./schema/chat";
+export * from "./schema/chat-secrets";
 export * from "./schema/docx-suggestions";
 export * from "./schema/extraction-runs";
 export * from "./schema/file-comparisons";

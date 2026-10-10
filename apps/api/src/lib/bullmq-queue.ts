@@ -155,6 +155,13 @@ type BullMqHostCoverage<
         >;
       });
 
+/**
+ * The one switch for background writers. `disabled` starts no worker at all,
+ * for any host and any queue, so a worker added later is off in a seeded stack
+ * without anyone remembering to list it.
+ */
+export type BullMqWorkerHostMode = "enabled" | "disabled";
+
 type BullMqWorkerHostHandle = {
   /** Drains every worker. A failed close is captured, never thrown. */
   close: () => Promise<void>;
@@ -166,8 +173,12 @@ export const createBullMqWorkerHost = <
 >(
   host: Host,
   context: BullMqWorkerContext,
+  mode: BullMqWorkerHostMode,
   starters: Starters & BullMqHostCoverage<Host, Starters>,
 ): BullMqWorkerHostHandle => {
+  if (mode === "disabled") {
+    return { close: async () => await Promise.resolve() };
+  }
   const running = starters.map((start) => start(context));
   return {
     close: async () => {

@@ -276,6 +276,55 @@ describe("aggregate mutation route coverage", () => {
     expect(() => enumerate(sources)).toThrow("must await withAggregateLock");
   });
 
+  test("both registered row-lock APIs require trusted awaited acquisitions", () => {
+    const module = "apps/api/src/handlers/example/create.ts";
+    const setup = () => {
+      const sources = fixture('post("/existing", existing.handler)');
+      sources.set(
+        routes,
+        `import existing from "@/api/handlers/example/create"; ${String(sources.get(routes))}`,
+      );
+      return sources;
+    };
+    const declaration =
+      'declareAggregateMutation(existing.handler, {type: "aggregate", aggregates: ["workspace"]}); export default existing;';
+
+    for (const api of ["withAggregateLock", "withAggregateRowQuery"]) {
+      const options =
+        api === "withAggregateLock"
+          ? '{aggregate: "workspace", id, mode: "update", tx}'
+          : '{aggregate: "workspace", id, mode: "update", tx, select: (tx) => tx.select().from(workspaces)}';
+      const acquire = `await acquireRows(${options});`;
+      const imports =
+        'import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration"; import { createSafeHandler } from "@/api/lib/api-handlers";';
+      const sources = setup();
+
+      sources.set(
+        module,
+        `${imports} import { ${api} as acquireRows } from "@/api/lib/db/aggregate-lock"; const existing = createSafeHandler({}, async () => { ${acquire} }); ${declaration}`,
+      );
+      expect(enumerate(sources).at(0)?.declared).toBe(true);
+
+      sources.set(
+        module,
+        `${imports} import { ${api} as acquireRows } from "@/api/lib/db/aggregate-lock"; const existing = createSafeHandler({}, async () => { acquireRows(${options}); }); ${declaration}`,
+      );
+      expect(() => enumerate(sources)).toThrow("must await withAggregateLock");
+
+      sources.set(
+        module,
+        `${imports} import { ${api} as acquireRows } from "@/api/lib/fake-lock"; const existing = createSafeHandler({}, async () => { ${acquire} }); ${declaration}`,
+      );
+      expect(() => enumerate(sources)).toThrow("must await withAggregateLock");
+
+      sources.set(
+        module,
+        `${imports} import { ${api} as acquireRows } from "@/api/lib/db/aggregate-lock"; const existing = createSafeHandler({}, async () => { const acquireRows = async () => {}; await acquireRows(${options}); }); ${declaration}`,
+      );
+      expect(() => enumerate(sources)).toThrow("must await withAggregateLock");
+    }
+  });
+
   test("detached callbacks cannot cover an aggregate declaration", () => {
     const sources = fixture('post("/existing", existing.handler)');
     sources.set(

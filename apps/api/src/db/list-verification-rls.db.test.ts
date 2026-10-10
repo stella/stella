@@ -11,6 +11,7 @@ import {
   legalListClaims,
   legalListClaimReviewEvents,
   legalListVerificationRuns,
+  legalListVerificationBlocks,
 } from "@/api/db/schema";
 import { markRlsDatabase } from "@/api/db/scoped";
 import { env } from "@/api/env";
@@ -33,6 +34,7 @@ import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import { createRootRunActor } from "@/api/lib/root-scoped-db";
 import { brandPersistedListVerificationRunId } from "@/api/lib/safe-id-boundaries";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
+import { addEntityFeatureFixtureColumns } from "@/api/tests/helpers/entity-feature-fixture-columns";
 import { organizationFeatureGrants } from "@/api/tests/helpers/feature-grants";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 
@@ -138,6 +140,12 @@ describe.skipIf(!enabled)("list verification row security", () => {
             }
           });
         }
+        await addEntityFeatureFixtureColumns(db, [
+          legalListVerificationRuns,
+          legalListClaims,
+          legalListClaimReviewEvents,
+          legalListVerificationBlocks,
+        ]);
         const posture = await client<
           { name: string; enabled: boolean; forced: boolean }[]
         >`

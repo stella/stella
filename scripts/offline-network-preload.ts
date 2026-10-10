@@ -1,4 +1,5 @@
 import { TaggedError } from "better-result";
+import childProcess from "node:child_process";
 import dgram from "node:dgram";
 import dns from "node:dns";
 import dnsPromises from "node:dns/promises";
@@ -15,10 +16,12 @@ class OfflineCheckNetworkError extends TaggedError("OfflineCheckNetworkError")<{
 }> {}
 
 // A declaration is constructable, so calls and constructors throw the same error.
+const checkName = Bun.main || "unknown check";
+
 function disabledNetwork(): never {
   process.exitCode = 1;
   throw new OfflineCheckNetworkError({
-    message: "network disabled in offline check",
+    message: `network disabled in offline check: ${checkName}`,
   });
 }
 
@@ -75,6 +78,20 @@ if (process.argv.includes("--check")) {
   }
   denyTransport(Bun, "connect");
   denyTransport(Bun, "udpSocket");
+  for (const key of ["spawn", "spawnSync", "$"]) {
+    denyTransport(Bun, key);
+  }
+  for (const key of [
+    "exec",
+    "execFile",
+    "execFileSync",
+    "execSync",
+    "fork",
+    "spawn",
+    "spawnSync",
+  ]) {
+    denyTransport(childProcess, key);
+  }
   denyDns(Bun.dns);
   syncBuiltinESMExports();
 }

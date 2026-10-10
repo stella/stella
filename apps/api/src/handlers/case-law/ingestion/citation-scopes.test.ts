@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { isDocumentAst, plainTextOf } from "@stll/legal-ast/document-ast";
+import { createSha256 } from "@stll/sha256/node";
 import { stableStringify } from "@stll/stable-stringify";
 
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
@@ -106,7 +107,7 @@ describe("persisted citation scopes", () => {
       const previousBytes = stableStringify(persisted);
       expect(JSON.stringify(sortDeep(documentAst))).toBe(previousBytes);
       expect(citationScopeAstHash(documentAst)).toBe(
-        new Bun.CryptoHasher("sha256").update(previousBytes).digest("hex"),
+        createSha256().update(previousBytes).digest("hex"),
       );
       compared += 1;
     }

@@ -59,6 +59,7 @@ const row = ({
 });
 
 const activeConnection = {
+  responseDisposition: "normal",
   allowedTools: null,
   connectorId,
   description: "Registry connector",

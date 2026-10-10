@@ -7,6 +7,11 @@ import type { ClauseDirectiveWarning } from "@/api/lib/clauses/clause-directives
 import type { AiFieldError } from "@/api/lib/docx/resolve-ai-fields";
 import { LOOKUP_REGISTRIES } from "@/api/lib/docx/types";
 
+import {
+  entityFeatureGateChecks,
+  entityFeatureGateColumns,
+  entityFeatureWorkspaceGateColumns,
+} from "../entity-feature-gate-columns";
 import { entityFeaturePolicies } from "../entity-feature-policies";
 import {
   deletionCleanupConstraints,
@@ -517,6 +522,8 @@ export const templateDeletionCleanupRequests = p.pgTable(
 export const searchDocuments = p.pgTable(
   "search_documents",
   {
+    ...entityFeatureGateColumns(),
+    ...entityFeatureWorkspaceGateColumns(),
     entityId: safeUuid<"entity">("entity_id")
       .primaryKey()
       .references(() => entities.id, { onDelete: "cascade" }),
@@ -535,6 +542,7 @@ export const searchDocuments = p.pgTable(
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     p.index("search_documents_org_id_idx").on(table.organizationId),
     p
       .index("search_documents_org_workspace_idx")
@@ -562,6 +570,8 @@ export const searchDocuments = p.pgTable(
 export const searchDocumentPreviewPassages = p.pgTable(
   "search_document_preview_passages",
   {
+    ...entityFeatureGateColumns(),
+    ...entityFeatureWorkspaceGateColumns(),
     entityId: safeUuid<"entity">("entity_id")
       .notNull()
       .references(() => searchDocuments.entityId, { onDelete: "cascade" }),
@@ -573,6 +583,7 @@ export const searchDocumentPreviewPassages = p.pgTable(
     tsv: tsvector().notNull(),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     p.primaryKey({
       columns: [table.entityId, table.generation, table.ordinal],
       name: "search_document_preview_passages_pk",
@@ -849,6 +860,8 @@ export const searchProjectionRepairQueue = p.pgTable(
 export const extractedContent = p.pgTable(
   "extracted_content",
   {
+    ...entityFeatureGateColumns(),
+    ...entityFeatureWorkspaceGateColumns(),
     entityId: safeUuid<"entity">("entity_id").primaryKey(),
     organizationId: safeOrganizationId("organization_id")
       .notNull()
@@ -879,6 +892,7 @@ export const extractedContent = p.pgTable(
     extractedAt: timestamptz("extracted_at").notNull().defaultNow(),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     p.index("extracted_content_org_id_idx").on(table.organizationId),
     p
       .foreignKey({
