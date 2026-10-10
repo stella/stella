@@ -17,6 +17,8 @@
 // and locally, so a re-anchor written locally would not hold in CI.
 
 export const BASELINE_PATHS = {
+  /** scripts/check-actionlint-baseline.ts */
+  actionlint: ".github/actionlint-baseline.json",
   /** scripts/check-test-state-baseline.ts */
   testState: "scripts/test-state-baseline.json",
   /** scripts/check-aggregate-locks.ts */
