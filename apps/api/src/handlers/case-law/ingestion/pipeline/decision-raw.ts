@@ -149,8 +149,9 @@ export const acquireSourceRawArtifact = async ({
       logger.error("case_law.ingestion.source_raw_write_failed", {
         sourceId,
         caseNumber: result.caseNumber,
-        ...errorSystemFields(safeError),
-        ...pgErrorFields(safeError),
+        // Structured fields are validated codes, never caller text.
+        ...errorSystemFields(error),
+        ...pgErrorFields(error),
         "error.detail": wrappedErrorDetail(safeError),
       });
       captureError(safeError, { sourceId, step: "uploadSourceRaw" });

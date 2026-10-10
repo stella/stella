@@ -79,7 +79,7 @@ export const absorbComposedSupplementRows = async ({
           sourceId,
           judgmentId,
           sourceDocumentId,
-          ...errorSystemFields(safeError),
+          ...errorSystemFields(rehomeError),
           "error.detail": wrappedErrorDetail(safeError),
         });
         return [sourceDocumentId];
@@ -98,7 +98,7 @@ export const absorbComposedSupplementRows = async ({
           sourceId,
           judgmentId,
           sourceDocumentId,
-          ...errorSystemFields(safeError),
+          ...errorSystemFields(absorbed.error),
           "error.detail": wrappedErrorDetail(safeError),
         });
         captureError(safeError, {
