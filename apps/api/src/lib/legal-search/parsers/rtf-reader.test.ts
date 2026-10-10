@@ -637,7 +637,7 @@ test("Unicode transport emits literal characters as complete Unicode controls", 
 
 test("RTF line boundaries never merge a heading or word with following body text", () => {
   assertProperty(
-    "rtf-line-structure-parity",
+    "RTF line boundaries never merge a heading or word with following body text",
     fc.property(
       fc.constantFrom("Odůvodnění", "Odlišné stanovisko", "Indokolás", "alpha"),
       fc

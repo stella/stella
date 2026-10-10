@@ -915,7 +915,7 @@ test("a Hungarian note heading cannot change the following body section", () => 
 test("heading text inserted into any HU note never changes body structure or section attribution", () => {
   const baseline = parseHuNoteHeading(["Neutral note"]);
   assertProperty(
-    "hu-note-heading-isolation",
+    "heading text inserted into any HU note never changes body structure or section attribution",
     fc.property(
       fc.array(
         fc.constantFrom(

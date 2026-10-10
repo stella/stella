@@ -1095,7 +1095,7 @@ test("a note heading cannot turn later majority text into dissent", () => {
 test("heading text inserted into any CZ note never changes body structure or section attribution", () => {
   const baseline = parseNoteHeading("Neutral note");
   assertProperty(
-    "cz-note-heading-isolation",
+    "heading text inserted into any CZ note never changes body structure or section attribution",
     fc.property(
       fc.array(
         fc.constantFrom(

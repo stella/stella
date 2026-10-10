@@ -21,7 +21,7 @@ const paragraphOf = (ids: readonly number[]): Paragraph => ({
 
 test("note placement follows paragraph reference order, independently of package order", () => {
   assertProperty(
-    "document-footnotes-reference-order",
+    "note placement follows paragraph reference order, independently of package order",
     fc.property(
       fc.array(fc.array(fc.integer({ min: 1, max: 8 }), { maxLength: 8 }), {
         maxLength: 8,

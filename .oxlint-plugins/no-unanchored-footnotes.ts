@@ -33,6 +33,9 @@ export default eslintCompatPlugin({
             }
           },
           MemberExpression(node) {
+            if (!isAstNode(node)) {
+              return;
+            }
             if (
               ["footnotes", "createParagraphFootnoteReader"].includes(
                 memberPropertyName(node) ?? "",
