@@ -219,3 +219,30 @@ test("folded workflow blocks are analysed as YAML joins them", () => {
     ),
   ).toHaveLength(1);
 });
+
+test("workflow run values follow YAML block scalar semantics", () => {
+  expect(
+    check(
+      ".github/workflows/indented.yml",
+      "jobs:\n  a:\n    steps:\n      - run: |2\n            ! grep -q x file\n          echo continued",
+    ),
+  ).toEqual([
+    {
+      file: ".github/workflows/indented.yml",
+      line: 5,
+      source: "! grep -q x file",
+    },
+  ]);
+  expect(
+    check(
+      ".github/workflows/folded-consumed.yml",
+      "jobs:\n  a:\n    steps:\n      - run: >\n          ! grep -q x file\n          || exit 1",
+    ),
+  ).toEqual([]);
+  expect(
+    check(
+      ".github/workflows/defaults.yml",
+      "defaults:\n  run:\n    shell: bash\njobs:\n  a:\n    steps:\n      - run: |\n          ! true\n          echo x",
+    ),
+  ).toHaveLength(1);
+});

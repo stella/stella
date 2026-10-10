@@ -16,8 +16,6 @@ const SHELL_FILE = /\.(?:sh|bash)$/u;
 const WORKFLOW_FILE =
   /^\.github\/(?:workflows\/[^/]+\.ya?ml|actions\/.+\/action\.ya?ml)$/u;
 const BASH_SHEBANG = /^#![^\n]*\b(?:\/|\s)bash(?:\s|$)/u;
-const RUN_BLOCK = /^(\s*)(?:-\s+)?run:\s*([|>])([+-]?)(?:\s*#.*)?$/u;
-const RUN_INLINE = /^\s*(?:-\s+)?run:\s*(?![|>])(\S.*)$/u;
 
 export type StandaloneNegationFinding = {
   readonly file: string;
@@ -430,64 +428,61 @@ const shellFindings = ({ file, lineOffset, source }: ShellSource) => {
   return findings;
 };
 
-const decodeYamlRun = (yaml: string): string | undefined => {
-  const value: unknown = Bun.YAML.parse(yaml);
-  const run =
-    typeof value === "object" && value !== null
-      ? Reflect.get(value, "run")
-      : undefined;
-  return typeof run === "string" ? run : undefined;
+// Matches a `run:` mapping key line; block scalars start on the next line.
+const RUN_KEY = /^\s*(?:-\s+)?run:/u;
+const RUN_BLOCK_SCALAR = /^\s*(?:-\s+)?run:\s*[|>]/u;
+
+// Every `run` key in document order; non-string values (e.g. `defaults.run`)
+// keep their slot so the order lines up with the key lines.
+const collectRunValues = (value: unknown, runs: unknown[]) => {
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      collectRunValues(item, runs);
+    }
+    return;
+  }
+  if (typeof value !== "object" || value === null) {
+    return;
+  }
+  for (const [key, child] of Object.entries(value)) {
+    if (key === "run") {
+      runs.push(child);
+    }
+    collectRunValues(child, runs);
+  }
 };
 
-const workflowShellSources = (file: string, source: string): ShellSource[] => {
-  const lines = source.split("\n");
-  const blocks: ShellSource[] = [];
-  for (let index = 0; index < lines.length; index += 1) {
-    const inline = (lines[index] ?? "").match(RUN_INLINE);
-    if (inline !== null) {
-      const command = decodeYamlRun(`run: ${inline[1] ?? ""}`);
-      if (command !== undefined) {
-        blocks.push({ file, lineOffset: index, source: command });
-      }
-      continue;
-    }
-    const match = (lines[index] ?? "").match(RUN_BLOCK);
-    if (match === null) {
-      continue;
-    }
-    const parentIndent = match[1]?.length ?? 0;
-    const body: string[] = [];
-    let bodyIndent: number | undefined;
-    let cursor = index + 1;
-    while (cursor < lines.length) {
-      const line = lines[cursor] ?? "";
-      if (line.trim() === "") {
-        body.push("");
-        cursor += 1;
-        continue;
-      }
-      const indent = line.length - line.trimStart().length;
-      if (indent <= parentIndent) {
-        break;
-      }
-      bodyIndent ??= indent;
-      body.push(line.slice(bodyIndent));
-      cursor += 1;
-    }
-    const text = body.join("\n");
-    // A folded block runs as joined lines, so decode it before analysis.
-    const blockSource =
-      match[2] === ">"
-        ? decodeYamlRun(
-            `run: >${match[3] ?? ""}\n${body.map((line) => `  ${line}`).join("\n")}`,
-          )
-        : text;
-    if (blockSource !== undefined) {
-      blocks.push({ file, lineOffset: index + 1, source: blockSource });
-    }
-    index = cursor - 1;
+// YAML decides what each run step executes (folding, chomping, indentation
+// indicators); the key line only anchors reported line numbers.
+const workflowShellSources = (
+  file: string,
+  source: string,
+): ShellSource[] | undefined => {
+  const runs: unknown[] = [];
+  collectRunValues(Bun.YAML.parse(source), runs);
+  const keyLines = source
+    .split("\n")
+    .flatMap((line, index) =>
+      RUN_KEY.test(line)
+        ? [{ index, blockScalar: RUN_BLOCK_SCALAR.test(line) }]
+        : [],
+    );
+  if (keyLines.length !== runs.length) {
+    return undefined;
   }
-  return blocks;
+  return runs.flatMap((run, position) => {
+    const key = keyLines[position];
+    if (typeof run !== "string" || key === undefined) {
+      return [];
+    }
+    return [
+      {
+        file,
+        lineOffset: key.blockScalar ? key.index + 1 : key.index,
+        source: run,
+      },
+    ];
+  });
 };
 
 const hasBashShebang = (file: string): boolean => {
@@ -504,7 +499,17 @@ export const findStandaloneNegatedShellStatements = (
   const findings: StandaloneNegationFinding[] = [];
   for (const [file, source] of sources) {
     if (WORKFLOW_FILE.test(file)) {
-      for (const block of workflowShellSources(file, source)) {
+      const blocks = workflowShellSources(file, source);
+      if (blocks === undefined) {
+        // Fails closed: an unmapped run value would otherwise go unchecked.
+        findings.push({
+          file,
+          line: 1,
+          source: "run values do not map one-to-one onto `run:` key lines",
+        });
+        continue;
+      }
+      for (const block of blocks) {
         findings.push(...shellFindings(block));
       }
       continue;
