@@ -3,6 +3,7 @@ import {
   type ImportedFromOptions,
   isAstNode,
   isIdentifierReference,
+  isIdentifier,
   isImportedFrom,
   memberPropertyName,
   resolveImportedExpression,
@@ -183,8 +184,20 @@ const containsRead = ({
   if (isIdentifierReference(expression)) {
     const variable = resolveVariable(context, expression);
     const initializer = variable === null ? null : stableInitializer(variable);
+    const definition = variable?.defs.at(0);
+    // A stable binding alone does not prove its referenced value is unchanged.
+    // Admit only its declaration and this use; other references are unproven.
     return (
       initializer === null ||
+      variable === null ||
+      !isAstNode(definition?.node) ||
+      !isIdentifier(definition.node.id, expression.name) ||
+      variable.references.some(
+        (reference) =>
+          !reference.init &&
+          (reference.identifier.range[0] !== expression.range[0] ||
+            reference.identifier.range[1] !== expression.range[1]),
+      ) ||
       containsRead({ context, node: initializer, tables, seen })
     );
   }

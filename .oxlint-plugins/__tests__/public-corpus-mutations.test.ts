@@ -185,6 +185,15 @@ describe.serial("corpus mutation provenance", () => {
       await lint("const cursor = 1; db.update(checkpoint).set({ cursor });"),
     ).toEqual([]);
   });
+  test.each(["values.cursor = nextValue();", "visit(values);"])(
+    "payload bindings require a single proven use: %s",
+    async (change) => {
+      const declaration = "const values = { cursor: 1 };";
+      const write = "db.update(checkpoint).set(values);";
+      expect(await lint(`${declaration} ${write}`)).toEqual([]);
+      expect(await lint(`${declaration} ${change} ${write}`)).toEqual([4]);
+    },
+  );
   test("mixed scopes retain existing audit and skip handling", async () => {
     expect(
       await lint(
