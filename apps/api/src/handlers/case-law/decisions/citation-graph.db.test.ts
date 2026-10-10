@@ -7,7 +7,6 @@ import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import {
   caseLawCitations,
-  caseLawDecisionAliases,
   caseLawDecisions,
   caseLawSources,
 } from "@/api/db/schema";
@@ -40,8 +39,11 @@ import {
   CITATION_TREATMENTS,
 } from "@/api/lib/case-law/citation-vocabulary";
 import type { CitationDirection } from "@/api/lib/case-law/citation-vocabulary";
+import { metadataWithDecisionAbsorption } from "@/api/lib/case-law/decision-absorption";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 import type { RedistributableDecisionSubject } from "@/api/lib/case-law/public-subject";
+import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
+import { metadataMarkedListingOnly } from "@/api/lib/legal-search/partial-observation-sql";
 import {
   CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION,
   publicLawColumnPairs,
@@ -1021,11 +1023,19 @@ test("outgoing citations through a retired UUID retain canonical passages and ev
       ],
     },
   ]);
-  await db.insert(caseLawDecisionAliases).values({
-    retiredDecisionId: retiredId,
-    canonicalDecisionId: canonicalId,
-  });
-  await db.delete(caseLawDecisions).where(eq(caseLawDecisions.id, retiredId));
+  await db
+    .update(caseLawDecisions)
+    .set({
+      metadata: metadataWithDecisionAbsorption(
+        metadataMarkedListingOnly(caseLawDecisions.metadata),
+        {
+          decisionId: canonicalId,
+          kind: DECISION_SUPPLEMENT_KIND.REASONS,
+          sourceDocumentId: "retired-reasons",
+        },
+      ),
+    })
+    .where(eq(caseLawDecisions.id, retiredId));
   await db.insert(caseLawCitations).values({
     id: referenceId,
     citingDecisionId: canonicalId,
@@ -1040,12 +1050,6 @@ test("outgoing citations through a retired UUID retain canonical passages and ev
     citedPart: "majority",
   });
   expect(retiredId).not.toBe(canonicalId);
-  expect(
-    await db
-      .select({ id: caseLawDecisions.id })
-      .from(caseLawDecisions)
-      .where(eq(caseLawDecisions.id, retiredId)),
-  ).toEqual([]);
 
   const canonical = await readGatedDecisionCitations({
     caseLawDb,

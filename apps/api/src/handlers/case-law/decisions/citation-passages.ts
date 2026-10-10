@@ -318,8 +318,9 @@ export const readCitationDecisionText = async ({
               }),
           });
           if (Result.isError(tombstones)) {
-            eligibilityFailures.push(tombstones.error);
-            throw tombstones.error;
+            const error = tombstones.error;
+            eligibilityFailures.push(error);
+            throw error;
           }
           if (locations.some((location) => tombstones.value.has(location))) {
             const error = new CitationTextGateError({

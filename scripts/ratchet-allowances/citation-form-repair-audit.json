@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 1,
+  "reason": "applyFormRepairs updates derived public-corpus citation classifications using a preview and compare-and-swap; it does not mutate workspace data or perform a user action. The explicit audit-skip directive records this maintenance ownership, matching the ingestion and reclassification writers."
+}

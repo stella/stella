@@ -30,10 +30,16 @@ import type {
   Polarity,
   PolarityRuleKind,
 } from "@/api/handlers/case-law/polarity/consts";
-import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { TelemetryError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
+
+const invalidPolarityRule = failureSink({
+  event: "case_law.polarity.invalid_rule",
+  expected: [],
+});
 
 type CompiledRuleBase = {
   id: SafeId<"caseLawPolarityRule">;
@@ -217,31 +223,31 @@ export const compileRules = (
   for (const row of rows) {
     const regex = compilePattern(row.pattern);
     if (!regex) {
-      captureError(
+      observeFailure(
         new TelemetryError({
           message: "Polarity rule pattern does not compile",
         }),
-        { pattern: row.pattern, ruleId: row.id },
+        { sink: invalidPolarityRule, ctx: { entityId: row.id } },
       );
       continue;
     }
 
     if (!isClassifiablePolarity(row.polarity)) {
-      captureError(
+      observeFailure(
         new TelemetryError({
           message: "Polarity rule carries a polarity no match may assign",
         }),
-        { polarity: row.polarity, ruleId: row.id },
+        { sink: invalidPolarityRule, ctx: { entityId: row.id } },
       );
       continue;
     }
 
     if (!isValidRuleKindPolarity(row)) {
-      captureError(
+      observeFailure(
         new TelemetryError({
           message: "Citation-form rule carries a stance polarity",
         }),
-        { polarity: row.polarity, ruleId: row.id },
+        { sink: invalidPolarityRule, ctx: { entityId: row.id } },
       );
       continue;
     }

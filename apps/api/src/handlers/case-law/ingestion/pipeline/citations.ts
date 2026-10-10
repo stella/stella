@@ -33,6 +33,7 @@ import type {
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { assertCitationStorageField } from "@/api/lib/case-law/citation-storage-bounds";
+import { CITED_PART } from "@/api/lib/case-law/citation-vocabulary";
 import type { CitedPart } from "@/api/lib/case-law/citation-vocabulary";
 import { persistedColumnNumber } from "@/api/lib/db/column-storage";
 import { executedRows } from "@/api/lib/db/executed-rows";
@@ -194,11 +195,14 @@ export const planDecisionCitations = async ({
       return {
         reference,
         windows,
-        citedPart: classifyCitedPart({
-          contexts: windows?.contexts ?? [],
-          citationText: reference.printed,
-          language,
-        }),
+        citedPart:
+          windows === null
+            ? CITED_PART.NOT_STATED
+            : classifyCitedPart({
+                contexts: windows.contexts,
+                citationText: reference.printed,
+                language,
+              }),
         verdict:
           reference.polarityMentions === null
             ? null
