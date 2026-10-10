@@ -3,7 +3,12 @@ import { describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
 import { WORKSPACE_ACCESS_MODE } from "@/api/db/rls";
-import { auditLogs, billingArrangements, timeTimers } from "@/api/db/schema";
+import {
+  auditLogs,
+  billingArrangements,
+  BILLING_ARRANGEMENT_MODES,
+  timeTimers,
+} from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
@@ -12,6 +17,7 @@ import {
 } from "@/api/lib/review-organization/reset-scope";
 import { closeRemovedMemberActiveTimer } from "@/api/lib/time-entry-offboarding";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
+import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -28,8 +34,8 @@ describe.skipIf(!enabled)(
         const suffix = Bun.randomUUIDv7().replaceAll("-", "");
         const schema = `timer_cleanup_${suffix}`;
         const ownerRole = `timer_owner_${suffix}`;
-        const organizationId = createSafeId<"organization">();
-        const userId = createSafeId<"user">();
+        const organizationId = mintAuthProviderId<"organization">();
+        const userId = mintAuthProviderId<"user">();
         const timerId = createSafeId<"timeTimer">();
         await client.unsafe(`CREATE SCHEMA ${schema}`);
         try {
@@ -170,7 +176,7 @@ describe.skipIf(!enabled)(
                 workspaceIds.map((workspaceId) => ({
                   workspaceId,
                   organizationId,
-                  mode: "hourly",
+                  mode: BILLING_ARRANGEMENT_MODES[0],
                   currency: "USD",
                 })),
               ),

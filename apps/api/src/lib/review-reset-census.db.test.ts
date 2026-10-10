@@ -8,6 +8,7 @@ import {
   sweepReviewOrganization,
 } from "@/api/lib/review-organization/reset-scope";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
+import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -24,10 +25,10 @@ describe.skipIf(!enabled)("review reset policy census", () => {
       const suffix = Bun.randomUUIDv7().replaceAll("-", "");
       const schema = `reset_census_${suffix}`;
       const owner = `reset_owner_${suffix}`;
-      const organizationId = createSafeId<"organization">();
-      const otherOrganizationId = createSafeId<"organization">();
-      const reviewerId = createSafeId<"user">();
-      const formerUserId = createSafeId<"user">();
+      const organizationId = mintAuthProviderId<"organization">();
+      const otherOrganizationId = mintAuthProviderId<"organization">();
+      const reviewerId = mintAuthProviderId<"user">();
+      const formerUserId = mintAuthProviderId<"user">();
       const workspaceIds = [
         createSafeId<"workspace">(),
         createSafeId<"workspace">(),
