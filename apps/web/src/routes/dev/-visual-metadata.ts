@@ -24,6 +24,7 @@ export const playbookEditorStates = Object.keys(playbookEditorFixtures);
 // Browser tests share the fixture census without importing the app graph.
 export const visualRegistry = {
   "chat-long-paste": { label: "Chat long paste", layout: "plain" },
+  "reader-answers": { label: "Reader anchored answers", layout: "plain" },
   "answer-edit": { label: "Chat answer edits", layout: "plain" },
   autocomplete: { label: "Autocomplete", layout: "plain" },
   ui: { label: "UI components", layout: "plain" },

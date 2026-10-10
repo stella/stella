@@ -1,0 +1,119 @@
+import { queryOptions } from "@tanstack/react-query";
+
+import type {
+  ReaderAnswer,
+  ReaderAnswerStreamEvent,
+} from "@stll/api-contract/reader-answers";
+import { fetchWithTimeout } from "@stll/fetch";
+
+import { api } from "@/lib/api";
+import { getApiRequestHeaders } from "@/lib/api-request-context";
+import { apiUrl } from "@/lib/api-url";
+import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { toSafeId } from "@/lib/safe-id";
+
+import {
+  consumeReaderAnswerStream,
+  ReaderAnswerFailure,
+} from "./reader-answers.logic";
+
+type ReaderAnswersKey = {
+  decisionId: string;
+  organizationId: string;
+  userId: string;
+};
+export const readerAnswersOptions = ({
+  decisionId,
+  organizationId,
+  userId,
+}: ReaderAnswersKey) =>
+  queryOptions({
+    queryKey: ["reader-answers", organizationId, userId, decisionId],
+    queryFn: async ({ signal }): Promise<ReaderAnswer[]> => {
+      const answers: ReaderAnswer[] = [];
+      const cursors = new Set<string>();
+      let cursor: string | undefined;
+      do {
+        const page = unwrapEden(
+          // oxlint-disable-next-line no-network-await-in-loop/no-network-await-in-loop -- The next page cursor is known only after the preceding response.
+          await api.reader.answers.get({
+            query: {
+              decisionId: toSafeId<"caseLawDecision">(decisionId),
+              limit: 50,
+              ...(cursor === undefined ? {} : { cursor }),
+            },
+            fetch: { signal },
+          }),
+        );
+        answers.push(...page.items);
+        cursor = page.nextCursor ?? undefined;
+        if (cursor !== undefined) {
+          if (cursors.has(cursor)) {
+            throw new ReaderAnswerFailure({
+              kind: "protocol",
+              message: "Reader answer pagination did not advance",
+            });
+          }
+          cursors.add(cursor);
+        }
+      } while (cursor !== undefined);
+      return answers;
+    },
+    staleTime: 0,
+  });
+
+type StreamReaderAnswerOptions = {
+  path: string;
+  body: object;
+  signal: AbortSignal;
+  onEvent: (event: ReaderAnswerStreamEvent) => void;
+};
+export const streamReaderAnswer = async ({
+  path,
+  body,
+  signal,
+  onEvent,
+}: StreamReaderAnswerOptions) => {
+  const response = await fetchWithTimeout(apiUrl(`/reader/answers${path}`), {
+    method: "POST",
+    credentials: "include",
+    signal,
+    timeoutMs: 120_000,
+    headers: { ...getApiRequestHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    const value: unknown = await response.json();
+    throw toAPIError({ status: response.status, value });
+  }
+  if (
+    !response.body ||
+    !response.headers.get("content-type")?.includes("text/event-stream")
+  ) {
+    throw new ReaderAnswerFailure({
+      kind: "protocol",
+      message: "Missing reader answer stream",
+    });
+  }
+  await consumeReaderAnswerStream({ body: response.body, signal, onEvent });
+};
+
+export const deleteReaderAnswer = async (
+  answerId: string,
+  signal: AbortSignal,
+) =>
+  unwrapEden(
+    await api.reader
+      .answers({ answerId: toSafeId<"legalReaderAnswer">(answerId) })
+      .delete({ fetch: { signal } }),
+  );
+export const changeReaderAnswerVisibility = async (
+  answerId: string,
+  visibility: ReaderAnswer["visibility"],
+  signal: AbortSignal,
+) =>
+  unwrapEden(
+    await api.reader
+      .answers({ answerId: toSafeId<"legalReaderAnswer">(answerId) })
+      .patch({ visibility }, { fetch: { signal } }),
+  );
