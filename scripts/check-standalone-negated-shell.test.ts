@@ -253,6 +253,12 @@ test("a condition negation counts only in the list that decides the condition", 
   ).toHaveLength(1);
   expect(
     check(
+      "scripts/condition-list-discarded.sh",
+      "if ! true && echo absent; true; then echo x; fi",
+    ),
+  ).toHaveLength(1);
+  expect(
+    check(
       "scripts/condition-kept.sh",
       "if true; ! false; then echo x; fi\nwhile ! ready && sleep 1; do :; done",
     ),

@@ -429,10 +429,17 @@ const negationConsumed = ({
     tail === tokens.length &&
     !WORKFLOW_FILE.test(file);
   const inAndOrList = isOperator(tokens[index - 1], AND_OR);
-  // In a condition only the final and-or list before `then`/`do` decides.
-  const controlsCondition =
-    inCondition &&
-    (isOperator(tokens[end], AND_OR) || isConditionEnd(tokens[tail]));
+  // In a condition only the final and-or list before `then`/`do` decides, so
+  // follow the list containing the negation to its end.
+  let listEnd = end;
+  while (isOperator(tokens[listEnd], AND_OR)) {
+    listEnd = pipelineEnd(tokens, listEnd);
+  }
+  let listTail = listEnd;
+  while (isOperator(tokens[listTail], STATEMENT_ENDS)) {
+    listTail += 1;
+  }
+  const controlsCondition = inCondition && isConditionEnd(tokens[listTail]);
   return (
     controlsCondition ||
     isOperator(tokens[end], OR) ||
