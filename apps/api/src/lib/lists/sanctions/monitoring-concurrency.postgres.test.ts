@@ -4,6 +4,7 @@ import { eq, inArray, sql } from "drizzle-orm";
 
 import { SANCTIONS_SOURCES } from "@stll/sanctions";
 import type { SanctionsEntry } from "@stll/sanctions";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import { organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -244,7 +245,7 @@ if (!databaseUrl || !runPostgresTests) {
       const editionId = createSafeId<"sanctionsEdition">();
       const suffix = editionId.replaceAll("-", "");
       const gate = BigInt(`0x${suffix.slice(-15)}`);
-      const hash = new Bun.CryptoHasher("sha256").update(suffix).digest("hex");
+      const hash = hashSha256Hex(suffix);
       const sourceBefore =
         (
           await controlDb

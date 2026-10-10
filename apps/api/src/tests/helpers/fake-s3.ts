@@ -1,5 +1,7 @@
 import { panic } from "better-result";
 
+import { sha256Base64 as hashSha256Base64 } from "@stll/sha256/bun";
+
 import { configureS3ForTesting, resetS3ForTesting } from "@/api/lib/s3";
 import {
   configureS3PresignForTesting,
@@ -118,7 +120,7 @@ const escapeXml = (value: string): string =>
 const requestedSha256 = (headers: Headers, bytes: Uint8Array): string | null =>
   (headers.get("x-amz-sdk-checksum-algorithm") ??
     headers.get("x-amz-checksum-algorithm")) === "SHA256"
-    ? new Bun.CryptoHasher("sha256").update(bytes).digest("base64")
+    ? hashSha256Base64(bytes)
     : null;
 
 type CopiedSha256Options = {
