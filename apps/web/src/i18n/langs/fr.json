@@ -1762,6 +1762,7 @@
     "description": "Description",
     "details": "Détails",
     "detailsHiddenFeatureUnavailable": "Détails masqués : fonctionnalité non activée",
+    "detailsUnavailable": "Détails indisponibles",
     "disconnect": "Déconnecter",
     "dismiss": "Ignorer",
     "displayName": "Nom affiché",

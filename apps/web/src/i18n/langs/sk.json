@@ -1762,6 +1762,7 @@
     "description": "Popis",
     "details": "Detaily",
     "detailsHiddenFeatureUnavailable": "Podrobnosti sú skryté: funkcia nie je zapnutá",
+    "detailsUnavailable": "Podrobnosti nie sú dostupné",
     "disconnect": "Odpojiť",
     "dismiss": "Zamietnuť",
     "displayName": "Zobrazované meno",

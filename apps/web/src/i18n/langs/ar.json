@@ -1762,6 +1762,7 @@
     "description": "الوصف",
     "details": "التفاصيل",
     "detailsHiddenFeatureUnavailable": "التفاصيل مخفية: الميزة غير مفعّلة",
+    "detailsUnavailable": "التفاصيل غير متاحة",
     "disconnect": "قطع الاتصال",
     "dismiss": "تجاهل",
     "displayName": "الاسم المعروض",

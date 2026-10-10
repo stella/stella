@@ -38,6 +38,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/handlers/billing-codes/**/*.ts",
   "apps/api/src/handlers/clauses/**/*.ts",
   "apps/api/src/handlers/contacts/**/*.ts",
+  "apps/api/src/handlers/desktop-feature-access/**/*.ts",
   "apps/api/src/handlers/desktop-presence/**/*.ts",
   "apps/api/src/handlers/desktop-registry/**/*.ts",
   "apps/api/src/handlers/dev/**/*.ts",
