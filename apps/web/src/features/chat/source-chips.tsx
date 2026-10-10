@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
+import { Result } from "better-result";
 
 import { isEntityKind } from "@stll/api-contract";
 import { BidiText } from "@stll/ui/bidi-text";
@@ -203,16 +204,11 @@ type SourceFaviconProps = {
 
 const SourceFavicon = ({ url, loaded }: SourceFaviconProps) => {
   const [errored, setErrored] = useState(false);
-  const hostname = (() => {
-    if (!url) {
-      return null;
-    }
-    try {
-      return new URL(url).hostname.replace(/^www\./u, "");
-    } catch {
-      return null;
-    }
-  })();
+  const hostname = url
+    ? Result.try(() => new URL(url).hostname.replace(/^www\./u, "")).unwrapOr(
+        null,
+      )
+    : null;
   if (!hostname || errored || !loaded) {
     return <ExternalLinkIcon className={cn(cls, "text-muted-foreground")} />;
   }

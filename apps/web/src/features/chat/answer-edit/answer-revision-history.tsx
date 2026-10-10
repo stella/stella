@@ -129,16 +129,16 @@ export const AnswerRevisionHistoryContent = ({
   };
   const refreshAfterRestore = async (restoredRevision: number) => {
     setWriteState({ status: "refreshing", revision: restoredRevision });
-    const refreshed = await Result.tryPromise({
+    const refetched = await Result.tryPromise({
       try: async () => {
         await onAnswerEdited?.(messageId);
-        const history = await query.refetch();
-        if (history.isError) {
-          throw history.error;
-        }
+        return query.refetch();
       },
       catch: (error) => error,
     });
+    const refreshed = refetched.andThen((history) =>
+      history.isError ? Result.err(history.error) : Result.ok(history),
+    );
     if (Result.isError(refreshed)) {
       getAnalytics().captureError(refreshed.error);
       setWriteState({ status: "refresh-error", revision: restoredRevision });

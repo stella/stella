@@ -4,15 +4,12 @@ import { fromMarkdown } from "mdast-util-from-markdown";
 import { gfmFromMarkdown } from "mdast-util-gfm";
 import { gfm } from "micromark-extension-gfm";
 
-import { createTestState } from "../../../../../api/src/tests/helpers/test-state";
+import { createWebTestEnvironment } from "../../../../tests/environment.test-fixtures";
 import type { AnswerFormatPanelProps } from "./answer-format-panel";
 
 GlobalRegistrator.register({ url: "https://app.example.test/chat/thread" });
-const state = createTestState({ file: import.meta.path, config: {} });
-state.setEnv(
-  "VITE_API_URL",
-  process.env["VITE_API_URL"] ?? "https://api.example.test",
-);
+const testEnvironment = createWebTestEnvironment({ file: import.meta.path });
+testEnvironment.setEnvIfAbsent("VITE_API_URL", "https://api.example.test");
 const { act, cleanup, fireEvent, render, waitFor } =
   await import("@testing-library/react");
 const { AuthenticatedUserProvider } =

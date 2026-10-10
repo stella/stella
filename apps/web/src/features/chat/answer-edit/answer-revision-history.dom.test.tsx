@@ -2,14 +2,11 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic } from "better-result";
 import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
 
-import { createTestState } from "../../../../../api/src/tests/helpers/test-state";
+import { createWebTestEnvironment } from "../../../../tests/environment.test-fixtures";
 
 GlobalRegistrator.register({ url: "https://app.example.test/chat/thread" });
-const state = createTestState({ file: import.meta.path, config: {} });
-state.setEnv(
-  "VITE_API_URL",
-  process.env["VITE_API_URL"] ?? "https://api.example.test",
-);
+const testEnvironment = createWebTestEnvironment({ file: import.meta.path });
+testEnvironment.setEnvIfAbsent("VITE_API_URL", "https://api.example.test");
 const { act, cleanup, fireEvent, render, waitFor } =
   await import("@testing-library/react");
 const { AuthenticatedUserProvider } =

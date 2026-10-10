@@ -13,7 +13,7 @@ describe("canonical answer snapshots", () => {
           {
             type: "tool-call",
             id: "call",
-            name: "search",
+            name: "web_search",
             arguments: "{}",
             state: "complete",
           },

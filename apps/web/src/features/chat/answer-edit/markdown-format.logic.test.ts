@@ -218,7 +218,7 @@ test("existing links replace the whole destination while retaining nested label 
 
 test("explicit link removal round-trips label formatting", () => {
   assertProperty(
-    "links toggle off only the exact owning destination and round-trip label formatting",
+    "explicit link removal round-trips label formatting",
     fc.property(words, (text) => {
       const source = `Before ${text} after`;
       const start = "Before ".length;
