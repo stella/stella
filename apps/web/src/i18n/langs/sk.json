@@ -1326,7 +1326,9 @@
     "pastedText": {
       "expand": "Zobraziť celý text",
       "fromClipboard": "Vložené {count, plural, one {# znak} few {# znaky} other {# znakov}}",
-      "fromPromptFallback": "Zručnosť"
+      "fromPromptFallback": "Zručnosť",
+      "showInTextField": "Zobraziť v textovom poli",
+      "title": "Vložený text"
     },
     "placeholder": "Sem napíšte svoju otázku, / pre zručnosti, @ na pridanie kontextu",
     "promptImprovementStrategies": {
@@ -3911,7 +3913,9 @@
   },
   "lawHome": {
     "clearRecent": "Vymazať nedávne",
+    "clearRecentConfirmation": "Vymazať všetky vaše nedávne vyhľadávania, rozhodnutia a predpisy v tejto organizácii? Túto akciu nemožno vrátiť späť.",
     "enteringIntoForce": "Čoskoro nadobudne účinnosť",
+    "importFailed": "Miestnu históriu sa nepodarilo importovať. Stále je uložená v tomto zariadení.",
     "inForceFrom": "Účinné od {date}",
     "noRecent": "Zatiaľ žiadna nedávna aktivita",
     "noSignals": "Zatiaľ žiadne signály",
@@ -4799,7 +4803,17 @@
     "amendedTimes": "{count, plural, =0 {Nenovelizované} one {Novelizované #×} few {Novelizované #×} many {Novelizované #×} other {Novelizované #×}}",
     "asOf": "Znenie účinné k",
     "backToList": "Všetky predpisy",
+    "citingDecisionHideSnippet": "Zbaliť úryvok",
+    "citingDecisionMentionCount": "citované {count}×",
+    "citingDecisionOlderVersion": "Staršia verzia",
+    "citingDecisionShowSnippet": "Zobraziť celý úryvok",
+    "citingDecisionsCourtPlaceholder": "Všetky súdy",
     "citingDecisionsFilterPlaceholder": "Filtrovať načítané rozhodnutia",
+    "citingDecisionsSnapshotCapped": "Zobrazených {count} rozhodnutí (najviac {limit} s najväčším počtom zmienok o tomto ustanovení).",
+    "citingDecisionsSortCitations": "Zmienky o tomto ustanovení",
+    "citingDecisionsSortDate": "Dátum rozhodnutia",
+    "citingDecisionsYear": "Rok rozhodnutia",
+    "citingDecisionsYearPlaceholder": "Všetky roky",
     "columns": {
       "act": "Predpis",
       "amendments": "Novely",
@@ -4841,6 +4855,7 @@
     "inForceSince": "Účinné od {date}",
     "ineligibleVersion": "{range} ({label})",
     "leadingDecisions": "Kľúčové rozhodnutia",
+    "leadingDecisionsExplanation": "Prvá zmienka v každom rozhodnutí, zoradená podľa citačnej autority: vážené prichádzajúce citácie so zohľadnením úrovne súdu, polarity citácie a jej veku.",
     "noVersionInForce": "K vybranému dňu nebolo účinné žiadne znenie tohto predpisu.",
     "openEnded": "súčasnosť",
     "openProvision": "Otvoriť ustanovenie",

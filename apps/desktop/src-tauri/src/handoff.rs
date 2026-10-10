@@ -306,8 +306,7 @@ mod tests {
         }),
       })
       .unwrap()
-      .build()
-      .unwrap();
+      .build();
       assert_eq!(req.method(), reqwest::Method::POST);
       assert_eq!(req.url().path(), target.path());
       assert_eq!(req.headers()[PROTOCOL_HEADER], "1");

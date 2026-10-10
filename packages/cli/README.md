@@ -135,6 +135,9 @@ CLI package version.
 
 ## Capability execution
 
+The CLI connects to the advanced MCP resource at `/mcp/advanced`; the default
+MCP resource stays limited to purpose-built tools.
+
 Generated capability commands select `read_capability` or `write_capability`
 from the catalog's access classification. For an explicit capability id, use
 `stella capability read --capability <id> --input '<json>'` or

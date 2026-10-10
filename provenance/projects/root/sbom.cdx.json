@@ -9102,7 +9102,7 @@
         }
       ],
       "bom-ref": "pkg:npm/@modelcontextprotocol/ext-apps@2.0.3",
-      "description": "MCP Apps SDK — Enable MCP servers to display interactive user interfaces in conversational clients.",
+      "description": "MCP Apps SDK \u2014 Enable MCP servers to display interactive user interfaces in conversational clients.",
       "evidence": {
         "identity": [
           {
@@ -9982,7 +9982,7 @@
         }
       ],
       "bom-ref": "pkg:npm/@silurus/ooxml@0.87.0",
-      "description": "Browser-based OOXML viewer (docx/xlsx/pptx) — Rust/WASM parser + Canvas renderer",
+      "description": "Browser-based OOXML viewer (docx/xlsx/pptx) \u2014 Rust/WASM parser + Canvas renderer",
       "evidence": {
         "identity": [
           {
@@ -11038,7 +11038,7 @@
     },
     {
       "bom-ref": "pkg:npm/@tanstack/ai-bedrock@0.3.15",
-      "description": "Amazon Bedrock adapter for TanStack AI — OpenAI-compatible chat, responses, tools, and reasoning.",
+      "description": "Amazon Bedrock adapter for TanStack AI \u2014 OpenAI-compatible chat, responses, tools, and reasoning.",
       "evidence": {
         "identity": [
           {
@@ -11281,7 +11281,7 @@
     },
     {
       "bom-ref": "pkg:npm/@tanstack/ai-codex@0.5.12",
-      "description": "Codex harness adapter for TanStack AI — run OpenAI Codex as a chat backend with local tool execution and stateful sessions.",
+      "description": "Codex harness adapter for TanStack AI \u2014 run OpenAI Codex as a chat backend with local tool execution and stateful sessions.",
       "evidence": {
         "identity": [
           {
@@ -11701,7 +11701,7 @@
     },
     {
       "bom-ref": "pkg:npm/@tanstack/ai-sandbox@0.5.15",
-      "description": "Provider-agnostic sandbox layer for TanStack AI — run harness adapters inside isolated sandboxes (defineSandbox, defineWorkspace, withSandbox) with a uniform SandboxHandle, workspace bootstrap, policy, and resumable lifecycle.",
+      "description": "Provider-agnostic sandbox layer for TanStack AI \u2014 run harness adapters inside isolated sandboxes (defineSandbox, defineWorkspace, withSandbox) with a uniform SandboxHandle, workspace bootstrap, policy, and resumable lifecycle.",
       "evidence": {
         "identity": [
           {
@@ -31532,21 +31532,6 @@
             "location": "scripts/main-heavy-plan.ts#1"
           },
           {
-            "location": "scripts/merge-bar-ci-coverage.ts#1"
-          },
-          {
-            "location": "scripts/merge-bar-freshness.ts#17"
-          },
-          {
-            "location": "scripts/merge-bar-jump-reset.ts#1"
-          },
-          {
-            "location": "scripts/merge-bar-update-branch.ts#1"
-          },
-          {
-            "location": "scripts/merge-bar.ts#60"
-          },
-          {
             "location": "scripts/migration-catalog.ts#3"
           },
           {
@@ -32967,7 +32952,7 @@
         }
       ],
       "bom-ref": "pkg:npm/class-variance-authority@0.7.1",
-      "description": "Class Variance Authority 🧬",
+      "description": "Class Variance Authority \ud83e\uddec",
       "evidence": {
         "identity": [
           {
@@ -41214,7 +41199,7 @@
     {
       "authors": [
         {
-          "name": "Postal Systems OÜ"
+          "name": "Postal Systems O\u00dc"
         }
       ],
       "bom-ref": "pkg:npm/mailauth@7.1.0",
@@ -46612,7 +46597,7 @@
         }
       ],
       "bom-ref": "pkg:npm/thinking-orbs@0.3.2",
-      "description": "Dotted thought-orb loading indicators for AI & agent UIs — nine tuned states, two sizes, auto dark/light",
+      "description": "Dotted thought-orb loading indicators for AI & agent UIs \u2014 nine tuned states, two sizes, auto dark/light",
       "evidence": {
         "identity": [
           {
@@ -46681,7 +46666,7 @@
     {
       "authors": [
         {
-          "name": "Rémi Berson"
+          "name": "R\u00e9mi Berson"
         }
       ],
       "bom-ref": "pkg:npm/tldts@7.4.16",
@@ -51367,7 +51352,7 @@
         }
       ],
       "bom-ref": "pkg:npm/wxt@0.21.4",
-      "description": "⚡ Next-gen Web Extension Framework",
+      "description": "\u26a1 Next-gen Web Extension Framework",
       "evidence": {
         "identity": [
           {
@@ -51579,7 +51564,7 @@
         }
       ],
       "bom-ref": "pkg:npm/zustand@5.0.15",
-      "description": "🐻 Bear necessities for state management in React",
+      "description": "\ud83d\udc3b Bear necessities for state management in React",
       "evidence": {
         "identity": [
           {

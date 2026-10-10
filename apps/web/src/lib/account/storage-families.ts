@@ -3,7 +3,7 @@ import { Result } from "better-result";
 import { DOCX_OUTLINE_DEPTH_STORAGE_KEY } from "@/components/docx/docx-outline-depth.logic";
 import { READER_PROVISION_MODE_STORAGE_KEY } from "@/components/legal-reader/reader-provision-mode.logic";
 import {
-  LAW_SEARCH_HISTORY_KEY,
+  LAW_HISTORY_STORAGE_KEY,
   mergeLawRecent,
 } from "@/lib/law-search-history/law-search-history.logic";
 
@@ -148,7 +148,7 @@ export const USER_STORAGE_FAMILIES: readonly UserStorageFamily[] = [
   // The user's own public-law searches and opened decisions and statutes.
   {
     area: "local",
-    prefix: LAW_SEARCH_HISTORY_KEY,
+    prefix: LAW_HISTORY_STORAGE_KEY,
     owner: "scoped",
     retention: "kept-for-owner",
     legacy: { keys: "bare", adopt: mergeLawRecent },
