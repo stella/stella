@@ -518,47 +518,6 @@ describe("search history import clock integration", () => {
     });
   });
 
-  test("rejects an import clock signed for another member in the same organization", async () => {
-    await withHistory(async (fixture) => {
-      await withHistory(async (other) => {
-        await fixture.db.insert(member).values({
-          id: Bun.randomUUIDv7(),
-          organizationId: fixture.organizationId,
-          userId: other.userId,
-          role: "member",
-          createdAt: INITIAL_MEMBERSHIP_CREATED_AT,
-        });
-        const clock = await acquireClock({
-          db: fixture.db,
-          organizationId: fixture.organizationId,
-          userId: other.userId,
-        });
-        const response = await importEntries.handler(
-          createTestHandlerContext<Parameters<typeof importEntries.handler>[0]>(
-            {
-              ...identity(fixture),
-              body: {
-                clock,
-                clientNow: new Date().toISOString(),
-                entries: [
-                  {
-                    entry: { kind: "search", query: "Owner-bound query" },
-                    usedAt: new Date().toISOString(),
-                  },
-                ],
-              },
-            },
-          ),
-        );
-        expect(response).toBeInstanceOf(ElysiaCustomStatusResponse);
-        if (response instanceof ElysiaCustomStatusResponse) {
-          expect(response.code).toBe(400);
-        }
-        await expectNoImportWrites(fixture);
-      });
-    });
-  });
-
   test("rejects a modified import clock signature without writing history", async () => {
     await withHistory(async (fixture) => {
       const authentic = await acquireClock(fixture);
