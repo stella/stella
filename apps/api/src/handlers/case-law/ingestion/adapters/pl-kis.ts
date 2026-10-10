@@ -1,4 +1,5 @@
 // parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
+import { Result, panic } from "better-result";
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 /**
@@ -48,11 +49,11 @@
  * of its own, ahead of the first month.
  */
 
-import { Result, panic } from "better-result";
-
 // parser-output-unchanged: imports the document AST from its package owner
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
+// parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
+import { sha256Hex as hashContent, createSha256 } from "@stll/sha256/bun";
 import { readCappedBytes } from "@stll/skills/streaming";
 import { parsePlainDate, Temporal } from "@stll/time";
 
@@ -91,10 +92,7 @@ import type {
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
-import {
-  adapterCatch,
-  hashContent,
-} from "@/api/handlers/case-law/ingestion/adapters/utils";
+import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import {
   parsePlKisDocumentHtml,
   parsePlKisDocumentPdf,
@@ -1352,7 +1350,7 @@ export const assemblePlKisDecision = async ({
       rawHash:
         parsed?.from === "pdf" && pdfBytes !== undefined
           ? hashContent(
-              `${sourceRaw}\n${new Bun.CryptoHasher("sha256").update(pdfBytes).digest("hex")}`,
+              `${sourceRaw}\n${createSha256().update(pdfBytes).digest("hex")}`,
             )
           : hashContent(sourceRaw),
       parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.PL_KIS],

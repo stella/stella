@@ -32,6 +32,7 @@ import {
   THUMBNAIL_MIME_TYPE,
 } from "@/api/lib/files/image-derivative";
 import {
+  type CheckedFileWrite,
   removeOrganizationFilesBytes,
   writeOrganizationFiles,
 } from "@/api/lib/files/organization-file-usage";
@@ -243,7 +244,9 @@ const backfillChatFilePage = async (
             panic("Tracked thumbnail has no organization"),
           objectKey: thumbnail.thumbnailKey,
           sizeBytes: thumbnail.webp.byteLength,
-          write: async () => await write(thumbnail),
+          content: thumbnail,
+          write: async ({ content }: CheckedFileWrite<PreparedThumbnail>) =>
+            await write(content),
         })),
       );
     }

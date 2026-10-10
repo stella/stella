@@ -1,14 +1,20 @@
 import { Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 
+import { CHAT_THREAD_PLACEHOLDER_TITLE } from "@stll/api-contract";
+
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
+import type { chatThreads } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { PG_ERROR } from "@/api/lib/pg-error";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
+import {
+  createScopedDbMock,
+  createSelectQueryMock,
+} from "@/api/tests/scoped-db-mock";
 
 import { loadThread } from "./send-message-thread";
 
@@ -53,6 +59,7 @@ describe("send-message thread loading", () => {
       organizationId,
       recordAuditEvent: async () => undefined,
       safeDb,
+      subjectDecisionId: null,
       threadId,
       title: "Incoming title",
       userId,
@@ -144,6 +151,7 @@ describe("send-message thread loading", () => {
       organizationId,
       recordAuditEvent: async () => undefined,
       safeDb,
+      subjectDecisionId: null,
       threadId,
       title: "New thread",
       userId,
@@ -187,6 +195,7 @@ describe("send-message thread loading", () => {
       organizationId,
       recordAuditEvent,
       safeDb,
+      subjectDecisionId: null,
       threadId,
       title: "New thread",
       userId,
@@ -223,6 +232,7 @@ const expectCreatedThreadDataScope = async (
     organizationId,
     recordAuditEvent,
     safeDb,
+    subjectDecisionId: null,
     threadId,
     title: "New thread",
     userId,
@@ -253,3 +263,100 @@ const expectCreatedThreadDataScope = async (
   ]);
   expect(recordAuditEvent).toHaveBeenCalledTimes(1);
 };
+
+describe("the decision a thread is about", () => {
+  const decisionId = toSafeId<"caseLawDecision">(
+    "00000000-0000-0000-0000-000000000006",
+  );
+
+  test("a send that creates the thread records its decision", async () => {
+    const insertedRows: unknown[] = [];
+    const { safeDb } = createScopedDbMock({
+      insert: () => ({
+        values: async (values: unknown) => {
+          insertedRows.push(values);
+        },
+      }),
+      query: { chatThreads: { findFirst: async () => null } },
+    });
+
+    const result = await loadThread({
+      initialDataWorkspaceIds: [],
+      initialContextMatterIds: [],
+      organizationId,
+      recordAuditEvent: async () => undefined,
+      safeDb,
+      subjectDecisionId: decisionId,
+      threadId,
+      title: "New thread",
+      userId,
+      workspaceId: null,
+    });
+
+    expect(Result.isOk(result)).toBe(true);
+    expect(insertedRows).toEqual([
+      expect.objectContaining({ subjectDecisionId: decisionId }),
+    ]);
+  });
+
+  test("an existing thread keeps its decision when a send names another", async () => {
+    const incomingDecisionId = toSafeId<"caseLawDecision">(
+      "00000000-0000-0000-0000-000000000007",
+    );
+    const existingThread = {
+      id: threadId,
+      title: CHAT_THREAD_PLACEHOLDER_TITLE,
+      workspaceId: null,
+      contextMatterIds: [],
+      dataWorkspaceIds: [],
+      webSearchEnabled: false,
+      chatModel: null,
+      chatReasoningEffort: null,
+      rollbackToken: null,
+      subjectDecisionId: decisionId,
+    };
+    const insert = mock(() => ({
+      values: async () => await Promise.resolve(),
+    }));
+    const { safeDb } = createScopedDbMock({
+      insert,
+      query: {
+        chatThreads: {
+          findFirst: async () => await Promise.resolve(existingThread),
+        },
+        chatThreadCompactions: {
+          findFirst: async () => await Promise.resolve(null),
+        },
+      },
+      select: () => createSelectQueryMock([]),
+      update: () => ({
+        set: (values: Partial<typeof chatThreads.$inferInsert>) => ({
+          where: async () => {
+            Object.assign(existingThread, values);
+            await Promise.resolve();
+          },
+        }),
+      }),
+    });
+
+    expect(incomingDecisionId).not.toBe(decisionId);
+    const result = await loadThread({
+      initialDataWorkspaceIds: [],
+      initialContextMatterIds: [],
+      organizationId,
+      recordAuditEvent: async () => await Promise.resolve(),
+      safeDb,
+      subjectDecisionId: incomingDecisionId,
+      threadId,
+      title: "Incoming title",
+      userId,
+      workspaceId: null,
+    });
+
+    expect(Result.isOk(result)).toBe(true);
+    expect(result).toMatchObject({ value: { type: "existing" } });
+    expect(existingThread.title).toBe("Incoming title");
+    expect(existingThread.subjectDecisionId).toBe(decisionId);
+    expect(insert).not.toHaveBeenCalled();
+  });
+});

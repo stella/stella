@@ -16,7 +16,7 @@ import {
   ACTION_ADMISSION_REFUSALS,
   isActionAdmissionCode,
 } from "@stll/api-contract/action-admission";
-import type { SkillMetadata } from "@stll/skills";
+import type { SkillMetadata } from "@stll/skills/frontmatter";
 
 import type { SafeDb, SafeDbError, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads } from "@/api/db/schema";
@@ -217,7 +217,7 @@ import { captureError, detached } from "@/api/lib/analytics/capture";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import {
   ACCOUNT_ACCESS,
-  assertUsageAvailableForHandler,
+  authorizeHandlerUsage,
   createSafeRootHandler,
 } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -1774,6 +1774,7 @@ const prepareValidatedIncomingMessage = async ({
         organizationId,
         recordAuditEvent,
         safeDb,
+        subjectDecisionId: body.activeDecision?.decisionId ?? null,
         threadId: body.threadId,
         title: initialThreadTitle,
         userId,
@@ -1878,7 +1879,7 @@ const prepareValidatedIncomingMessage = async ({
       const poolCheck = yield* Result.await(
         Result.tryPromise({
           try: async () =>
-            await assertUsageAvailableForHandler({
+            await authorizeHandlerUsage({
               metering: { actionType: "chat" },
               organizationId,
               orgAIConfig,
@@ -1894,10 +1895,12 @@ const prepareValidatedIncomingMessage = async ({
             }),
         }),
       );
-      if (poolCheck !== null) {
-        return Result.err(poolCheck);
+      if (Result.isError(poolCheck)) {
+        return Result.err(poolCheck.error);
       }
-      turnLane = { lane: "pool" };
+      turnLane = await poolCheck.value.execute(
+        async () => await Promise.resolve({ lane: "pool" as const }),
+      );
     } else if (turnLane.lane === "fallback") {
       chatModelOverride = turnLane.forcedModelSelection;
       chatReasoningEffort = undefined;
@@ -2032,6 +2035,7 @@ const assembleTurnSystemPrompt = ({
 });
 
 export type SendMessageDependencies = {
+  caseLawDb?: Parameters<typeof buildChatSystemPromptParts>[0]["caseLawDb"];
   startAdmission?: typeof startExecutionAdmission;
   compactMessagesForContext: typeof compactMessagesForContext;
   createRefRegistry: typeof createChatRefRegistry;
@@ -2786,6 +2790,7 @@ export const createSendMessage = (
           return skillToolNames;
         };
         const chatContextResult = await prepareChatContext({
+          caseLawDb: dependencies.caseLawDb,
           featureAccessSnapshot,
           activeDecision: body.activeDecision,
           activeDraft: body.activeDraft,
@@ -2803,6 +2808,7 @@ export const createSendMessage = (
           offeredToolNamesForSkills,
           safeDb,
           sendMode: body.sendMode,
+          threadId: thread.data.id,
           toolAvailability: {
             docxEditMode: registeredDocxEditMode,
             templateAuthoring: areTemplateAuthoringToolsRegistered(memberRole),
@@ -3338,6 +3344,7 @@ export const shouldLoadExternalMcpToolsForStreaming = (
 ): boolean => runMode !== CHAT_RUN_MODE.agent;
 
 type PrepareChatContextProps = {
+  caseLawDb?: SendMessageDependencies["caseLawDb"];
   featureAccessSnapshot: FeatureAccessSnapshot;
   activeDecision: IncomingActiveDecision | undefined;
   activeDraft: IncomingActiveDraft | undefined;
@@ -3357,6 +3364,7 @@ type PrepareChatContextProps = {
   refRegistry: ReturnType<typeof createChatRefRegistry>;
   safeDb: SafeDb;
   sendMode: ChatSendMode;
+  threadId: SafeId<"chatThread">;
   toolAvailability: ChatToolAvailability;
   userContext: IncomingUserContext | undefined;
   userId: SafeId<"user">;
@@ -3385,6 +3393,7 @@ type PrepareChatContextResult = Result<
 >;
 
 const prepareChatContext = async ({
+  caseLawDb,
   featureAccessSnapshot,
   activeDecision,
   activeDraft,
@@ -3403,6 +3412,7 @@ const prepareChatContext = async ({
   refRegistry,
   safeDb,
   sendMode,
+  threadId,
   toolAvailability,
   userContext,
   userId,
@@ -3423,6 +3433,7 @@ const prepareChatContext = async ({
 
     const promptAndMessagesResult = await Result.allAsync([
       buildChatSystemPromptParts({
+        ...(caseLawDb === undefined ? {} : { caseLawDb }),
         featureAccessContext: { featureAccessSnapshot, organizationId, userId },
         activeDecision,
         activeDraft,
@@ -3438,6 +3449,8 @@ const prepareChatContext = async ({
         practiceJurisdictions,
         refRegistry,
         safeDb,
+        messages: messageWindow,
+        threadId,
         toolAvailability,
         userContext,
         userId,

@@ -260,7 +260,7 @@ const ACCESS_TOKEN_EXPIRES_IN = 15 * 60;
 
 /** Refresh token lifetime in seconds (30 days). */
 const REFRESH_TOKEN_EXPIRES_IN = 30 * 24 * 60 * 60;
-// A lost-response retry inside this window receives the same tokens and keeps the refresh family.
+// A lost rotation response can be replayed idempotently within this window.
 const REFRESH_TOKEN_REUSE_INTERVAL = 30;
 
 const VERIFY_EMAIL_PATH = "/email-otp/verify-email";

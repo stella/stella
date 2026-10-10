@@ -6,6 +6,164 @@ import { lintSingleRule } from "./lint-single-rule.ts";
 
 setDefaultTimeout(20_000);
 
+describe.serial("audit detail read ownership", () => {
+  const entry = OWNERSHIP.find(({ id }) => id === "audit-detail-read");
+  const readerPath = "apps/api/src/handlers/audit-logs/example.ts";
+  const options = {
+    ruleOptions: { entries: [entry] },
+    sourcePath: readerPath,
+    cwd: "scratch",
+  } as const;
+
+  test("confines persisted changes to the projection owner without production exceptions", () => {
+    expect(entry?.owner).toEqual(["apps/api/src/lib/audit-log-details.ts"]);
+    expect(entry?.enforcement).toEqual({
+      kind: "table-column-read",
+      specifiers: ["@/api/db/schema", "@/api/db/schema/contacts"],
+      table: "auditLogs",
+      columns: ["changes"],
+      allowed: [],
+    });
+  });
+
+  test("rejects column reads through canonical imports, computed access and local aliases", async () => {
+    const sources = [
+      'import { auditLogs as table } from "@/api/db/schema";',
+      'import { auditLogs as table } from "@/api/db/schema/contacts.ts";',
+      'import { auditLogs as table } from "../../db/schema.ts";',
+      'import * as schema from "@/api/db/schema"; const { auditLogs: table } = schema;',
+      'const { auditLogs: table } = await import("@/api/db/schema");',
+    ];
+    const reads = [
+      "const direct = table.changes;",
+      'const computed = table["changes"];',
+      "const template = table[`changes`];",
+      "const optional = table?.changes;",
+      "const { changes: destructured } = table;",
+      "const { id, ...rest } = table;",
+      "const copy = table; const copiedChanges = copy.changes;",
+      "const aliased = alias(table, 'entries'); const aliasedChanges = aliased.changes;",
+      "const columns = getTableColumns(table);",
+      "const spread = { ...table };",
+      "const dynamic = table[key];",
+      "({ changes: reassigned } = table);",
+      "const safeId = table.id;",
+      "const { resourceId } = table;",
+    ];
+    for (const source of sources) {
+      expect(
+        await lintSingleRule(
+          "confine-owner",
+          [
+            source,
+            'import { alias } from "drizzle-orm/pg-core"; import { getTableColumns } from "drizzle-orm";',
+            ...reads,
+          ].join("\n"),
+          options,
+        ),
+      ).toEqual([3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]);
+    }
+  });
+
+  test("rejects implicit complete rows and admits selections of other columns", async () => {
+    const source = [
+      'import { auditLogs } from "@/api/db/schema";',
+      "db.select().from(auditLogs);",
+      "db.selectDistinct().from(auditLogs);",
+      "db.selectDistinctOn([auditLogs.id]).from(auditLogs);",
+      "db.insert(auditLogs).values({}).returning();",
+      "db.update(auditLogs).set({}).returning();",
+      "db.delete(auditLogs).returning();",
+      "db.select().from(otherTable).leftJoin(auditLogs, condition);",
+      "db.select().from(otherTable).innerJoin(auditLogs, condition);",
+      "db.select({ id: auditLogs.id }).from(auditLogs);",
+      "db.selectDistinct({ id: auditLogs.id }).from(auditLogs);",
+      "db.selectDistinctOn([auditLogs.id], { id: auditLogs.id }).from(auditLogs);",
+      "db.insert(auditLogs).values({}).returning({ id: auditLogs.id });",
+      "db.select({ id: otherTable.id }).from(otherTable).leftJoin(auditLogs, condition);",
+      "db.insert(auditLogs).values({ changes: payload });",
+    ].join("\n");
+    expect(await lintSingleRule("confine-owner", source, options)).toEqual([
+      2, 3, 4, 5, 6, 7, 8, 9,
+    ]);
+  });
+
+  test("requires relational reads to exclude changes or select only other columns", async () => {
+    const source = [
+      "db.query.auditLogs.findMany();",
+      "db.query.auditLogs.findFirst({ where });",
+      "db.query.auditLogs.findMany({ columns: {} });",
+      "db.query.auditLogs.findMany({ columns: { id: false } });",
+      "db.query.auditLogs.findMany({ columns: { changes: true } });",
+      "db.query.auditLogs.findMany({ columns: { ...columns, changes: false } });",
+      "db.query.auditLogs.findMany({ columns: input });",
+      "const all = db.query.auditLogs; all.findFirst();",
+      "db['query']['auditLogs'].findMany();",
+      "db.query.auditLogs.findMany({ columns: { changes: false }, ...input });",
+      "db.query.auditLogs.findMany({ columns: { changes: false }, columns: { changes: true } });",
+      "db.query.auditLogs.findMany({ columns: { id: true } });",
+      "db.query.auditLogs.findFirst({ columns: { changes: false } });",
+      "db.query.auditLogs.findMany({ columns: { id: true, changes: false } });",
+      "const projection = { changes: false }; const opts = { columns: projection }; db.query.auditLogs.findMany(opts);",
+      "db.query.otherTable.findMany();",
+    ].join("\n");
+    expect(await lintSingleRule("confine-owner", source, options)).toEqual([
+      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
+    ]);
+  });
+
+  test("admits the owner and ignores unrelated bindings with the same names", async () => {
+    const source = [
+      'import { auditLogs } from "@/api/db/schema";',
+      "const changes = auditLogs.changes;",
+      "db.select().from(auditLogs);",
+      "db.query.auditLogs.findMany();",
+    ].join("\n");
+    expect(
+      await lintSingleRule("confine-owner", source, {
+        ...options,
+        sourcePath: "apps/api/src/lib/audit-log-details.ts",
+      }),
+    ).toEqual([]);
+    expect(
+      await lintSingleRule(
+        "confine-owner",
+        [
+          'import { auditLogs } from "different-package";',
+          "const changes = auditLogs.changes;",
+          "db.select().from(auditLogs);",
+          "const alias = (table) => table; const sameName = alias(auditLogs); sameName.changes;",
+        ].join("\n"),
+        options,
+      ),
+    ).toEqual([]);
+    expect(
+      await lintSingleRule(
+        "confine-owner",
+        [
+          'import { auditLogs } from "@/api/db/schema";',
+          "const read = (auditLogs) => auditLogs.changes;",
+        ].join("\n"),
+        options,
+      ),
+    ).toEqual([]);
+  });
+
+  test("the raw-read self-test reaches the column guard", async () => {
+    const source = [
+      'import { auditLogs } from "@/api/db/schema";',
+      "db.select({ changes: auditLogs.changes }).from(auditLogs);",
+    ].join("\n");
+    expect(await lintSingleRule("confine-owner", source, options)).toEqual([2]);
+    expect(
+      await lintSingleRule("confine-owner", source, {
+        ...options,
+        ruleOptions: { entries: [] },
+      }),
+    ).toEqual([]);
+  });
+});
+
 describe.serial("BullMQ worker ownership", () => {
   const entry = OWNERSHIP.find(({ id }) => id === "bullmq-worker");
   const source = [
@@ -564,4 +722,53 @@ describe.serial("transaction proof ownership", () => {
       ).toEqual([]);
     }
   });
+});
+
+describe.serial("checked operation ownership", () => {
+  for (const id of [
+    "operation-proof-predicates",
+    "conditional-operation-predicates",
+    "checked-operation-execution",
+    "file-reservation-evidence",
+    "file-reservation-checks",
+    "model-operation-callers",
+  ]) {
+    test(`${id} confines execution to checking owners`, async () => {
+      const entry = OWNERSHIP.find((candidate) => candidate.id === id);
+      if (entry?.enforcement.kind !== "import") {
+        throw new TypeError("Checked operation ownership must confine imports");
+      }
+      const specifier = entry.enforcement.specifiers.at(0);
+      const member = entry.enforcement.names?.at(0);
+      if (!specifier || !member) {
+        throw new TypeError("Checked operation ownership needs a named import");
+      }
+      const source = [
+        `import { ${member} as unchecked } from "${specifier}";`,
+        `import * as core from "${specifier}";`,
+        `export { ${member} } from "${specifier}";`,
+        `const { ${member} } = await import("${specifier}");`,
+      ].join("\n");
+      for (const sourcePath of [
+        "apps/api/src/handlers/example/unchecked.ts",
+        "apps/api/src/mcp/unchecked.ts",
+        "apps/api/src/lib/scheduler/tasks/unchecked.ts",
+      ]) {
+        expect(
+          await lintSingleRule("confine-owner", source, {
+            sourcePath,
+            ruleOptions: { entries: [entry] },
+          }),
+        ).toEqual([1, 2, 3, 4]);
+      }
+      for (const sourcePath of entry.owner) {
+        expect(
+          await lintSingleRule("confine-owner", source, {
+            sourcePath,
+            ruleOptions: { entries: [entry] },
+          }),
+        ).toEqual([]);
+      }
+    });
+  }
 });

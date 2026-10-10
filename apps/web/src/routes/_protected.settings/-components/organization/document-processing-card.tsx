@@ -8,20 +8,21 @@ import { Field, FieldLabel } from "@stll/ui/field";
 import { Frame, FramePanel } from "@stll/ui/frame";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
-import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { unwrapEden } from "@/lib/errors/api";
 import { useQueryView } from "@/lib/use-query-view";
-import {
-  organizationSettingsKeys,
-  organizationSettingsOptions,
-} from "@/queries/organization-settings";
-import { useSettingsMutation } from "@/routes/_protected.settings/-hooks/use-settings-mutation";
+import { organizationSettingsOptions } from "@/queries/organization-settings";
+
+import { AISettingsSectionFeedback } from "./ai-settings-section";
+import type { ToggleSettingsSectionProps } from "./ai-settings-section";
 
 const SEARCHABLE_TEXT_MODE = "searchable-text";
-const DOCUMENT_PROCESSING_OFF_MODE = "off";
 
-export const DocumentProcessingCard = () => {
+export const DocumentProcessingCard = ({
+  value,
+  onChange,
+  disabled,
+  feedback,
+}: ToggleSettingsSectionProps) => {
   const t = useTranslations();
   const checkboxId = useId();
   const { activeOrganizationId, id: userId } = useAuthenticatedUser();
@@ -35,27 +36,12 @@ export const DocumentProcessingCard = () => {
   const settings =
     settingsView.type === "items" ? settingsView.items : undefined;
 
-  const mutation = useSettingsMutation({
-    mutationFn: async (nextEnabled: boolean) =>
-      unwrapEden(
-        await api["organization-settings"].post({
-          documentProcessingMode: nextEnabled
-            ? SEARCHABLE_TEXT_MODE
-            : DOCUMENT_PROCESSING_OFF_MODE,
-        }),
-      ),
-    invalidate: organizationSettingsKeys.all,
-    successToast: {
-      title: t("settings.organization.documentProcessing.updated"),
-    },
-    errorToast: { title: t("errors.actionFailed") },
-  });
-
   if (!settings) {
     return <QueryViewFeedback view={settingsView} />;
   }
 
-  const enabled = settings.documentProcessingMode === SEARCHABLE_TEXT_MODE;
+  const enabled =
+    value ?? settings.documentProcessingMode === SEARCHABLE_TEXT_MODE;
   return (
     <Frame>
       <QueryViewFeedback view={settingsView} />
@@ -70,16 +56,15 @@ export const DocumentProcessingCard = () => {
           <Field className="flex-row items-center gap-2">
             <Checkbox
               checked={enabled}
-              disabled={mutation.isPending}
+              disabled={disabled}
               id={checkboxId}
-              onCheckedChange={(next) => {
-                mutation.mutate(next);
-              }}
+              onCheckedChange={onChange}
             />
             <FieldLabel htmlFor={checkboxId}>
               {t("settings.organization.documentProcessing.toggleLabel")}
             </FieldLabel>
           </Field>
+          <AISettingsSectionFeedback feedback={feedback} />
         </div>
       </FramePanel>
     </Frame>

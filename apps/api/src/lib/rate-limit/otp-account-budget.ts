@@ -6,8 +6,8 @@ import {
   isAPIError,
 } from "better-auth/api";
 import { panic, Result } from "better-result";
-import { createHash } from "node:crypto";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import type { RateLimitContext } from "@/api/lib/rate-limit/rate-limit";
@@ -56,7 +56,7 @@ export const createAccountAttemptBudget = (
   reserve: async (email: string) => {
     const normalizedEmail = email.trim().toLowerCase();
     const accountBudget = budgetFor(normalizedEmail);
-    const account = createHash("sha256").update(normalizedEmail).digest("hex");
+    const account = hashSha256Hex(normalizedEmail);
     const key = createRedisRateLimitRequestKey({
       counterKey: `${counterPrefix}:${account}`,
       requestId: Bun.randomUUIDv7(),

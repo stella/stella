@@ -304,6 +304,9 @@ export class CorpusPayloadUnavailableError extends TaggedError(
 export const UNPERSISTABLE_DECISION_FIELDS = {
   IDENTIFIER: "identifier",
   IDENTIFIER_COUNT: "identifier-count",
+  CASE_NUMBER_LENGTH: "case-number-length",
+  COURT_LENGTH: "court-length",
+  SEARCH_CANDIDATE_BYTES: "search-candidate-bytes",
   SOURCE_DOCUMENT_ID: "source-document-id",
   SOURCE_DOCUMENT_ID_LENGTH: "source-document-id-length",
   VALUE_LIST: "value-list",

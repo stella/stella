@@ -1,6 +1,6 @@
 import * as v from "valibot";
 
-import { SKILL_RESOURCE_KINDS } from "@stll/skills/resource-kinds";
+import { SKILL_RESOURCE_KINDS } from "@stll/skills/format";
 
 import { AGENT_SKILL_ORIGINS } from "@/api/db/schema";
 import { CHAT_SKILL_SOURCE } from "@/api/lib/agent-skills/skills";

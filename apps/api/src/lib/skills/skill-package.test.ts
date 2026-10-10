@@ -6,6 +6,10 @@ import { hashSkillPackageContent } from "@/api/lib/agent-skills/content-hash";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import type {
+  SafeOutboundFetchResponse,
+  safeOutboundFetchBytes,
+} from "@/api/lib/safe-outbound-fetch";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 
 import {
@@ -36,6 +40,110 @@ const parseUpload = async (file: File) =>
   );
 
 describe("agent skill package imports", () => {
+  test("installs an unchanged discovered GitHub package by entrypoint integrity", async () => {
+    const commitSha = "c".repeat(40);
+    const directorySha = "d".repeat(40);
+    const sourceUrl = `https://github.com/example/skills/tree/${commitSha}/review`;
+    let skillSource = `---
+name: review
+description: Review agreements.
+---
+
+Use references/check.md.`;
+    let resourceSource = "# Check";
+    const response = (body: string): Result<SafeOutboundFetchResponse, never> =>
+      Result.ok({
+        body: new TextEncoder().encode(body).buffer,
+        headers: new Headers(),
+        ok: true,
+        status: 200,
+      });
+    const fetchBytes: typeof safeOutboundFetchBytes = async ({ url }) => {
+      const requestUrl = typeof url === "string" ? new URL(url) : url;
+      if (requestUrl.hostname === "raw.githubusercontent.com") {
+        return response(
+          requestUrl.pathname.endsWith("/references/check.md")
+            ? resourceSource
+            : skillSource,
+        );
+      }
+      if (requestUrl.pathname.endsWith(`/git/trees/${commitSha}`)) {
+        return response(
+          JSON.stringify({
+            tree: [{ path: "review", sha: directorySha, type: "tree" }],
+          }),
+        );
+      }
+      return response(
+        JSON.stringify({
+          tree: [
+            { path: "SKILL.md", type: "blob" },
+            { path: "references/check.md", type: "blob" },
+          ],
+        }),
+      );
+    };
+
+    const discovery = await discoverSkillPackagesFromUrl({
+      fetchBytes,
+      permit,
+      rawUrl: sourceUrl,
+    });
+    expect(discovery.isOk()).toBe(true);
+    if (discovery.isErr()) {
+      throw discovery.error;
+    }
+    const discovered = discovery.value.skills.at(0);
+    if (discovered === undefined) {
+      throw new TypeError("Expected one discovered skill");
+    }
+    const install = async () => {
+      const fetched = await fetchSkillPackageFromUrl(
+        sourceUrl,
+        createSkillPackageFetchContext({ fetchBytes, permit }),
+      );
+      if (fetched.isErr()) {
+        throw fetched.error;
+      }
+      return fetched.value;
+    };
+
+    const unchanged = await install();
+    expect(
+      verifySkillPackageIntegrity({
+        integrity: discovered.integrity,
+        parsed: unchanged,
+        sourceUrl,
+      }).isOk(),
+    ).toBe(true);
+
+    const originalEntrypointHash = unchanged.entrypointHash;
+    resourceSource = "# Changed check";
+    const resourceChanged = await install();
+    expect(resourceChanged.entrypointHash).toBe(originalEntrypointHash);
+    expect(
+      verifySkillPackageIntegrity({
+        integrity: discovered.integrity,
+        parsed: resourceChanged,
+        sourceUrl,
+      }).isOk(),
+    ).toBe(true);
+
+    skillSource = skillSource.replace(
+      "Review agreements.",
+      "Review contracts.",
+    );
+    const entrypointChanged = await install();
+    expect(entrypointChanged.entrypointHash).not.toBe(originalEntrypointHash);
+    expect(
+      verifySkillPackageIntegrity({
+        integrity: discovered.integrity,
+        parsed: entrypointChanged,
+        sourceUrl,
+      }).isErr(),
+    ).toBe(true);
+  });
+
   test("parses a single SKILL.md upload", async () => {
     const result = await parseUpload(
       new File(
@@ -151,7 +259,7 @@ name: mixed-pack
 description: A pack with files the importer does not keep.
 ---
 
-Use the references.`,
+Use \`assets/logo.png\` and the references.`,
     );
     zip.file("skill/references/guide.md", "# Guide");
     // Latin-1 "Müller": a supported path whose bytes are not UTF-8 text.
