@@ -33,6 +33,7 @@ export const visualRegistry = {
   "provision-header": { label: "Provision header", layout: "provision-header" },
   "shell-pending": { label: "Shell pending", layout: "plain" },
   "workspace-table": { label: "Workspace table", layout: "workspace-table" },
+  "chat-history-decision": { label: "Chat history decision", layout: "plain" },
 } as const satisfies Record<string, VisualEntry>;
 
 export type VisualName = keyof typeof visualRegistry;

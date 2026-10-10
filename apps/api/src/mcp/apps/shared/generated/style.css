@@ -2507,6 +2507,10 @@
   .text-\[calc\(1rem\*var\(--reader-text-scale\)\)\] {
     font-size: calc(1rem * var(--reader-text-scale));
   }
+  .leading-3\.5 {
+    --tw-leading: calc(var(--spacing) * 3.5);
+    line-height: calc(var(--spacing) * 3.5);
+  }
   .leading-4 {
     --tw-leading: calc(var(--spacing) * 4);
     line-height: calc(var(--spacing) * 4);
