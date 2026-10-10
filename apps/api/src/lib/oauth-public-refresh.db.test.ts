@@ -78,22 +78,25 @@ const countTokenRows = async ({
 }: {
   clientId: string;
   userId: string;
-}) => ({
-  refresh: await rootDb.$count(
-    oauthRefreshToken,
-    and(
-      eq(oauthRefreshToken.clientId, clientId),
-      eq(oauthRefreshToken.userId, userId),
+}) => {
+  const database = await initAgentAuthTestDb();
+  return {
+    refresh: await database.$count(
+      oauthRefreshToken,
+      and(
+        eq(oauthRefreshToken.clientId, clientId),
+        eq(oauthRefreshToken.userId, userId),
+      ),
     ),
-  ),
-  access: await rootDb.$count(
-    oauthAccessToken,
-    and(
-      eq(oauthAccessToken.clientId, clientId),
-      eq(oauthAccessToken.userId, userId),
+    access: await database.$count(
+      oauthAccessToken,
+      and(
+        eq(oauthAccessToken.clientId, clientId),
+        eq(oauthAccessToken.userId, userId),
+      ),
     ),
-  ),
-});
+  };
+};
 
 describe("resource-bound refresh grants", () => {
   test.each([
