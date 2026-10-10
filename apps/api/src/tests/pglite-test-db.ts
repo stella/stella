@@ -21,6 +21,8 @@ import {
   installPgliteDesktopPresenceRls,
   installPgliteFlowTransitions,
   installPgliteChatRunLogRls,
+  installPgliteChatMessageRevisionsRls,
+  installPgliteChatSecretRls,
   installPgliteChatTurnRunIdLookup,
   installPgliteAgentSkillRevisionTrigger,
   installPgliteCaseLawObservationFence,
@@ -686,6 +688,8 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteWorkspaceContactCapacity(db);
   await installPgliteListVerificationBudgets(db);
   await installPgliteChatRunLogRls(db);
+  await installPgliteChatMessageRevisionsRls(db);
+  await installPgliteChatSecretRls(db);
   await installPgliteSchedulerJobPauseLog(db);
   await installPgliteTreeParentGuards(db);
 

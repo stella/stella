@@ -1256,6 +1256,10 @@ export type OutboundPermitGrantOwner = {
 /** Direct request boundaries allowed to create outbound permits. */
 export const OUTBOUND_PERMIT_GRANT_OWNERS = [
   {
+    path: "apps/api/src/handlers/chat/tools/secret-tools.ts",
+    reason: "Native chat tool boundary for a scoped connector request.",
+  },
+  {
     path: "apps/api/src/handlers/catalogue/install.ts",
     reason: "Issues request authority for catalogue skill installation.",
   },

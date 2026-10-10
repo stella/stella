@@ -503,7 +503,15 @@ describe("detect-e2e-changes", () => {
 
     // The route network baseline has a leg of its own, and the Playwright
     // shards skip it there.
-    expect(production).toContain("shard: [1, 2, network-baseline]");
+    expect(production).toContain(
+      `shard: ${githubExpression("fromJSON(needs.ci-plan.outputs.e2e_production_matrix).shard")}`,
+    );
+    expect(workflowJob("ci-plan")).toContain(
+      "matrix=$(bun scripts/e2e-spec-shards-core.ts all)",
+    );
+    expect(workflowJob("ci-plan")).toContain(
+      'echo "selection_required=true" >> "$GITHUB_OUTPUT"',
+    );
     expect(
       requiredExpression(
         workflowStepValue(production, "Check route network baseline")["if"],
@@ -518,6 +526,18 @@ describe("detect-e2e-changes", () => {
         stepName,
       ).toContain("matrix.shard != 'network-baseline'");
     }
+  });
+
+  test("skips an eligible pull request when no e2e specs are selected", () => {
+    const plan = workflowJob("ci-plan");
+    expect(plan).toContain(`if [[ "$matrix" == '{"shard":[]}' ]]`);
+    expect(plan).toContain(
+      'echo "selection_required=false" >> "$GITHUB_OUTPUT"',
+    );
+    expect(
+      ciContract.jobs["ci-plan"]?.outputs?.["e2e_production_required"],
+    ).toBe(githubExpression("steps.e2e-pr-plan.outputs.required"));
+    expect(plan).toContain('echo "required=false" >> "$GITHUB_OUTPUT"');
   });
 
   test("starts only infrastructure exercised by pull request E2E", () => {
@@ -1157,6 +1177,7 @@ describe("detect-e2e-changes", () => {
                       needs: {
                         "ci-plan": {
                           outputs: {
+                            coverage_profile: "normal-v1",
                             queue_depth: "full",
                             suite_depth: depth,
                             run_required: "true",
@@ -1171,7 +1192,6 @@ describe("detect-e2e-changes", () => {
                       cancelled: () => cancelled,
                     };
                     const certified =
-                      event !== "pull_request" &&
                       planned &&
                       (trusted || event === "workflow_dispatch") &&
                       (webResult === "success" || heavyResult === "success") &&
@@ -1187,12 +1207,15 @@ describe("detect-e2e-changes", () => {
                     expect(
                       Boolean(evaluateExpression(predicate, context)),
                       `${label}/thin`,
-                    ).toBe(event === "merge_group" && certified);
+                    ).toBe(
+                      (event === "pull_request" || event === "merge_group") &&
+                        certified,
+                    );
                     context.vars.QUEUE_BROWSER_SUITES = "off";
                     expect(
                       Boolean(evaluateExpression(predicate, context)),
                       `${label}/thin/off`,
-                    ).toBe(false);
+                    ).toBe(event === "pull_request" && certified);
                   }
                 }
               }

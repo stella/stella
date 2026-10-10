@@ -121,7 +121,17 @@ const hosts = discoveredHosts.filter(
 );
 test("every discovered selection toolbar mount supplies its own clipping boundary", () => {
   expect(wrappers.length).toBeGreaterThan(0);
-  expect(hosts.length).toBeGreaterThan(wrappers.length);
+  // Branches can mount the primitive more than once in the same owner.
+  // Compare owners while still checking every primitive mount below.
+  const wrapperOwners = wrappers.filter(
+    (wrapper, index) =>
+      wrappers.findIndex(
+        (candidate) =>
+          candidate.file === wrapper.file &&
+          candidate.component === wrapper.component,
+      ) === index,
+  );
+  expect(hosts.length).toBeGreaterThan(wrapperOwners.length);
   for (const wrapper of wrappers) {
     expect(wrapper.component).not.toBe("");
     expect(wrapper.props).toContain("anchorRect");

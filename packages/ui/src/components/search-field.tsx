@@ -2,7 +2,7 @@
 
 import type * as React from "react";
 
-import { SearchIcon, XIcon } from "../icons";
+import { XIcon } from "../icons";
 import { cn } from "../lib/utils";
 import { Button } from "./button";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "./input-group";
@@ -35,9 +35,6 @@ const SearchField = ({
   ...props
 }: SearchFieldProps) => (
   <InputGroup className={cn("min-h-11 sm:min-h-0", groupClassName)}>
-    <InputGroupAddon>
-      <SearchIcon />
-    </InputGroupAddon>
     <InputGroupInput
       autoComplete="off"
       spellCheck={false}

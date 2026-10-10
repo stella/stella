@@ -180,8 +180,3 @@ runs:
           POSTHOG_SOURCEMAP_PROJECT_ID=${{ inputs.posthog-project-id }}
           ${{ steps.args.outputs.values }}
           ${{ steps.args.outputs.posthog-name }}=${{ inputs.posthog-key }}
-
-    - name: Log out of GitHub Container Registry
-      if: always()
-      shell: bash
-      run: docker logout ghcr.io

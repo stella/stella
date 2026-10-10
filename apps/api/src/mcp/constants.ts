@@ -1,4 +1,6 @@
 import {
+  MCP_ADVANCED_HTTP_PATH,
+  MCP_ADVANCED_RESOURCE_SCOPES,
   MCP_ANONYMIZED_HTTP_PATH,
   MCP_ANONYMIZED_RESOURCE_SCOPES,
   MCP_ANONYMIZED_SCOPE_BY_DEFAULT_SCOPE,
@@ -16,6 +18,7 @@ import { declareCliSupportBand } from "@/api/mcp/cli-support-band";
 import {
   getMcpResourceModeConfig,
   getMcpResourceScopes,
+  MCP_ADVANCED_DISCOVERY_PATH,
   MCP_ANONYMIZED_DISCOVERY_PATH,
   MCP_DISCOVERY_PATH,
   MCP_DOCUMENTS_RESOURCE_SCOPES,
@@ -28,6 +31,7 @@ import {
 import type { McpMode } from "@/api/mcp/resource-policy-contract";
 
 export {
+  MCP_ADVANCED_RESOURCE_SCOPES,
   MCP_ANONYMIZED_RESOURCE_SCOPES,
   MCP_ANONYMIZED_SCOPE_BY_DEFAULT_SCOPE,
   MCP_DEFAULT_RESOURCE_SCOPES,
@@ -38,7 +42,7 @@ export { MCP_DOCUMENTS_RESOURCE_SCOPES, MCP_LAW_RESOURCE_SCOPES, MCP_MODES };
 export type { McpMode };
 
 export const MCP_ALL_RESOURCE_SCOPES = [
-  ...MCP_DEFAULT_RESOURCE_SCOPES,
+  ...MCP_ADVANCED_RESOURCE_SCOPES,
   ...MCP_ANONYMIZED_RESOURCE_SCOPES,
 ] as const;
 
@@ -56,6 +60,7 @@ export const MCP_OAUTH_SCOPES = [
 export type { McpOAuthScope };
 
 export {
+  MCP_ADVANCED_HTTP_PATH,
   MCP_ANONYMIZED_HTTP_PATH,
   MCP_DOCUMENTS_HTTP_PATH,
   MCP_HTTP_PATH,
@@ -89,6 +94,7 @@ export const MCP_MAX_REQUEST_BODY_BYTES = 512 * 1024;
 export { MCP_NOTIFICATION_KEEP_ALIVE_MS } from "./transport-contract";
 
 export {
+  MCP_ADVANCED_DISCOVERY_PATH,
   MCP_ANONYMIZED_DISCOVERY_PATH,
   MCP_DISCOVERY_PATH,
   MCP_DOCUMENTS_DISCOVERY_PATH,
@@ -181,7 +187,7 @@ export const MCP_EXPOSE_HEADERS = [
   REQUEST_ID_HEADER,
 ] as const;
 
-export { getMcpResourceScopes };
+export { getMcpResourceModeConfig, getMcpResourceScopes };
 
 export const getMcpBaseUrl = () => env.PUBLIC_URL ?? env.BETTER_AUTH_URL;
 

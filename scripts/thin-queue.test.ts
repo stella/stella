@@ -133,6 +133,7 @@ const plan = {
   service_suites_pr_required: "false",
   corpus_suites_required: "false",
   fix_tests_on_base_required: "false",
+  browser_spec_selection_required: "true",
   api_test_shards: "4",
   pr_depth_reused: "false",
 };
@@ -292,6 +293,11 @@ type ExpectedPrSelectionOptions = {
   baseline: boolean;
   value: ReturnType<typeof context>;
 };
+const DECLARED_PR_PLAN_CHANGES = new Set([
+  "ci-browser",
+  "e2e-production-shard",
+  "web-build",
+]);
 const expectedPrSelection = ({
   job,
   baseline,
@@ -302,9 +308,29 @@ const expectedPrSelection = ({
     panic(`Missing CI event disposition: ${job}`);
   }
   if (job === "ci-browser") {
+    expect(DECLARED_PR_PLAN_CHANGES.has(job)).toBe(true);
     return (
       value.needs["ci-plan"]?.outputs["trusted"] === "true" &&
       value.needs["ci-plan"].outputs["desktop_browser_required"] === "true"
+    );
+  }
+  if (job === "web-build") {
+    expect(DECLARED_PR_PLAN_CHANGES.has(job)).toBe(true);
+    return (
+      !value.inputs.heavy_only &&
+      value.needs["ci-plan"]?.outputs["trusted"] === "true" &&
+      value.needs["ci-plan"].outputs["browser_spec_selection_required"] ===
+        "true"
+    );
+  }
+  if (job === "e2e-production-shard") {
+    expect(DECLARED_PR_PLAN_CHANGES.has(job)).toBe(true);
+    return (
+      value.needs["ci-plan"]?.outputs["coverage_profile"] === "normal-v1" &&
+      value.needs["ci-plan"].outputs["trusted"] === "true" &&
+      value.needs["ci-plan"].outputs["e2e_production_required"] === "true" &&
+      (value.needs["web-build"]?.result === "success" ||
+        value.needs["heavy-web-build"]?.result === "success")
     );
   }
   switch (disposition) {
@@ -748,6 +774,7 @@ test("unset and full preserve historical predicates except declared PR, Postgres
     ["code-quality-web", "code-quality-web-rest"],
     ["code-quality-rest", "code-quality-web-rest"],
     ["typecheck-baseline", "ci-checks-generated"],
+    ["desktop-clippy", "desktop-rust-tests"],
   ]);
   expect(Object.keys(ci.jobs).toSorted()).toEqual(
     [
@@ -761,9 +788,16 @@ test("unset and full preserve historical predicates except declared PR, Postgres
         "ci-checks-docs",
         "code-quality-web-rest",
         "dated-waiver-expiry",
+        "desktop-rust-tests",
+        "desktop-rust-lint",
       ]),
     ].toSorted(),
   );
+  expect([...DECLARED_PR_PLAN_CHANGES].toSorted()).toEqual([
+    "ci-browser",
+    "e2e-production-shard",
+    "web-build",
+  ]);
   for (const event of events) {
     for (const { variable, proveFix } of ["", "full"].flatMap((queueVariable) =>
       [false, true].map((labelRequested) => ({
@@ -777,7 +811,11 @@ test("unset and full preserve historical predicates except declared PR, Postgres
           continue;
         }
         let expected = selected(body.if, value);
-        if (job === "service-suites") {
+        if (job === "docker-checks" && event.event === "merge_group") {
+          expected =
+            value.needs["ci-plan"]?.outputs["docker_checks_required"] ===
+            "true";
+        } else if (job === "service-suites") {
           expected = expectedServiceSelection(value);
         } else if (job === "route-smoke") {
           expected = expectedRouteSelection(value);
@@ -871,7 +909,11 @@ test("one variable moves only derived heavy jobs from merge groups to ordinary m
               }
             : value;
         let expected = selected(baseline.jobs[job]?.if, certified);
-        if (job === "service-suites") {
+        if (job === "docker-checks" && event.event === "merge_group") {
+          expected =
+            value.needs["ci-plan"]?.outputs["docker_checks_required"] ===
+            "true";
+        } else if (job === "service-suites") {
           expected = expectedServiceSelection(value);
         } else if (job === "route-smoke") {
           expected = expectedRouteSelection(value);
@@ -971,14 +1013,24 @@ const evaluate = ({
   result,
   script = outcome.run,
 }: EvaluateOptions) => {
+  const folded = v.parse(
+    v.record(v.string(), v.record(v.string(), v.string())),
+    JSON.parse(outcome.env?.["FOLDED_SUITES"] ?? "{}"),
+  );
   const dependencies = Object.fromEntries(
     needs.map((name) => {
+      let jobResult = heavy.includes(name) ? "skipped" : "success";
       if (name === job) {
-        return [name, { result, outputs: {} }];
+        jobResult = result ?? "missing";
       }
       return [
         name,
-        { result: heavy.includes(name) ? "skipped" : "success", outputs: {} },
+        {
+          result: jobResult,
+          outputs: Object.fromEntries(
+            Object.keys(folded[name] ?? {}).map((suite) => [suite, jobResult]),
+          ),
+        },
       ];
     }),
   );
@@ -1297,7 +1349,11 @@ test("the queue switch admits browser suites only in merge groups", () => {
       expect(
         selected(ci.jobs[job]?.if, value),
         `${job}/${event.event}/${event.message}`,
-      ).toBe(false);
+      ).toBe(
+        DECLARED_PR_PLAN_CHANGES.has(job) &&
+          job === "e2e-production-shard" &&
+          event.event === "pull_request",
+      );
     }
   }
 });

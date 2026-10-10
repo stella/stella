@@ -2,6 +2,7 @@ import type { ChatClientState } from "@tanstack/ai-client";
 import { panic } from "better-result";
 
 import type { ChatSendMode } from "@stll/anonymize-chat";
+import { isChatPastedTextPart } from "@stll/api-contract/chat";
 
 import type {
   ChatSendMessageOptions,
@@ -74,14 +75,16 @@ export const describeQueuedMessage = (
 
   const textParts: string[] = [];
   for (const part of message.content) {
-    if (part.type === "text") {
+    if (part.type === "text" && !isChatPastedTextPart(part)) {
       textParts.push(part.content);
     }
   }
 
   return {
     text: textParts.join("\n\n"),
-    fileCount: message.content.filter((part) => part.type !== "text").length,
+    fileCount: message.content.filter(
+      (part) => part.type !== "text" || isChatPastedTextPart(part),
+    ).length,
   };
 };
 

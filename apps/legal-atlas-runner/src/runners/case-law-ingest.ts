@@ -46,7 +46,7 @@ import {
 import {
   getAdapter,
   listAdapters,
-  skCourtsDocumentFetch,
+  listDeferredDocumentDrains,
 } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
 import type { SliceRetrySchedule } from "@/api/handlers/case-law/ingestion/reconciliation-engine";
@@ -72,7 +72,6 @@ import { backfillSearchIndex } from "@/api/lib/legal-search/case-law-search-inde
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import {
   DOCUMENT_FETCH_BUDGET_MS,
-  fetchDecisionDocument,
   hasPendingDeferredDocuments,
   scopedPendingDocumentTierLoaders,
 } from "@/api/lib/legal-search/sk-document-backfill";
@@ -128,8 +127,8 @@ import {
   nextRecomputeDelayMs,
 } from "./recompute-schedule";
 import {
-  SK_DOCUMENT_DRAIN_TIMING,
-  runSkDocumentDrain,
+  DEFERRED_DOCUMENT_DRAIN_TIMING,
+  runDeferredDocumentDrain,
 } from "./sk-document-drain";
 import {
   SOURCE_TOTAL_POLL_TIMING,
@@ -224,12 +223,12 @@ const SEARCH_INDEX_INTERVAL_MS = 10_000;
 const SEARCH_INDEX_IDLE_MAX_MS = 15 * 60_000;
 const SEARCH_INDEX_BATCH_SIZE = 20;
 const SEARCH_INDEX_DRAIN_CONCURRENCY = 4;
-// Deferred Slovak documents. The page size is how many rows one tier query
+// Deferred documents. The page size is how many rows one tier query
 // reads ahead of the walk, and the probe interval is the longest a decision
 // a reader asked for waits behind the bulk tier. Neither touches throughput:
 // that is the fetch gap and nothing else.
-const SK_DOCUMENT_PAGE_SIZE = 20;
-const SK_DOCUMENT_REQUESTED_POLL_INTERVAL_MS = 5000;
+const DEFERRED_DOCUMENT_PAGE_SIZE = 20;
+const DEFERRED_DOCUMENT_REQUESTED_POLL_INTERVAL_MS = 5000;
 // Citation authority decays slowly; a pass over the corpus every interval
 // keeps the materialized ranking signal fresh without per-cycle cost. The
 // pass's position is persisted, so a process whose lifetime is shorter than a
@@ -1373,99 +1372,105 @@ export const runCaseLawIngest = async (
     }
   })();
 
-  // Deferred Slovak document walk: `sk-courts` ingests metadata only, so
+  // Deferred document walks, one per adapter whose manifest declares a
+  // `deferred` document stage: such an adapter ingests metadata only, so
   // every page it stores leaves decisions with nothing readable until this
-  // fetches and parses their PDF. Continuous rather than scheduled, because
-  // the fetch gap is already the constraint and an outer interval could only
-  // hold it below that. Gated: it is the one loop here that fetches from a
-  // publisher outside an adapter crawl.
+  // fetches and parses their document. Continuous rather than scheduled,
+  // because the fetch gap is already the constraint and an outer interval
+  // could only hold it below that. Gated: these are the loops here that
+  // fetch from a publisher outside an adapter crawl. Each walk paces its own
+  // publisher with the configured gap.
   //
   // Overlapping runner replicas each pace their own clock, so the aggregate
   // fetch rate briefly multiplies during a rolling deployment. Accepted
   // rather than leased: the queue's per-document claims keep the work
   // correct and unduplicated, the service runs one task otherwise, and the
   // overlap is bounded by the deployment window.
-  const skDocumentLoop = (async () => {
-    if (!LEGAL_ATLAS_RUNNER_ENV.skDocumentBackfillEnabled) {
-      return;
-    }
-    const fetchDelayMs = LEGAL_ATLAS_RUNNER_ENV.skDocumentFetchDelayMs;
-    logInfo(`[sk-documents] Enabled (one fetch per ${fetchDelayMs}ms)`);
-    const documentLoaders = scopedPendingDocumentTierLoaders(backfillDb);
-    await runSkDocumentDrain({
-      documentObservations: {
-        source: ADAPTER_KEYS.SK_COURTS,
-        observe: async (observation) => {
-          if (observation.event === DOCUMENT_FETCH_EVENT.window) {
-            await logDocumentStageObservation(observation);
-          }
-        },
-        hasPending: async () => {
-          const pending = await Result.tryPromise({
-            try: async () => await hasPendingDeferredDocuments(backfillDb),
-            catch: (error) => error,
-          });
-          if (Result.isError(pending)) {
-            await logDocumentStageObservation(
-              documentFetchErrorOutcome(ADAPTER_KEYS.SK_COURTS, pending.error),
-            );
-            throw pending.error;
-          }
-          return pending.value;
-        },
-      },
-      queue: createPendingDocumentQueue({
-        loaders: documentLoaders,
-        pageSize: SK_DOCUMENT_PAGE_SIZE,
-        requestedPollIntervalMs: SK_DOCUMENT_REQUESTED_POLL_INTERVAL_MS,
-      }),
-      // The unit bounds itself (download timeout, wall-clock budget) and
-      // the transaction handle bounds its writes; the hard deadline is the
-      // same backstop the other loops carry, for a future await that slips
-      // in unbounded and would otherwise park the walk forever.
-      fetchDocument: async (decision, onDocumentObservation) =>
-        await runWithHardDeadline(
-          "sk-documents",
-          BACKFILL_HARD_DEADLINE_MS,
-          async () =>
-            await fetchDecisionDocument({
-              onDocumentObservation,
-              decisionId: decision.id,
-              fetchDocument: skCourtsDocumentFetch,
-              scopedDb: backfillDb,
-              signal: AbortSignal.timeout(DOCUMENT_FETCH_BUDGET_MS),
+  const deferredDocumentLoops = LEGAL_ATLAS_RUNNER_ENV.skDocumentBackfillEnabled
+    ? listDeferredDocumentDrains().map(
+        async ({ adapterKey, processDocument }) => {
+          const fetchDelayMs = LEGAL_ATLAS_RUNNER_ENV.skDocumentFetchDelayMs;
+          logInfo(
+            `[deferred-documents] Enabled source=${adapterKey} (one fetch per ${fetchDelayMs}ms)`,
+          );
+          await runDeferredDocumentDrain({
+            documentObservations: {
+              source: adapterKey,
+              observe: async (observation) => {
+                if (observation.event === DOCUMENT_FETCH_EVENT.window) {
+                  await logDocumentStageObservation(observation);
+                }
+              },
+              hasPending: async () => {
+                const pending = await Result.tryPromise({
+                  try: async () =>
+                    await hasPendingDeferredDocuments(backfillDb, adapterKey),
+                  catch: (error) => error,
+                });
+                if (Result.isError(pending)) {
+                  await logDocumentStageObservation(
+                    documentFetchErrorOutcome(adapterKey, pending.error),
+                  );
+                  throw pending.error;
+                }
+                return pending.value;
+              },
+            },
+            queue: createPendingDocumentQueue({
+              loaders: scopedPendingDocumentTierLoaders(backfillDb, adapterKey),
+              pageSize: DEFERRED_DOCUMENT_PAGE_SIZE,
+              requestedPollIntervalMs:
+                DEFERRED_DOCUMENT_REQUESTED_POLL_INTERVAL_MS,
             }),
-        ),
-      isDraining,
-      now: () => Temporal.Now.instant().epochMilliseconds,
-      report: (summary) => {
-        logInfo(
-          `[sk-documents] case_law.sk_documents.swept ` +
-            `attempted=${summary.attempted} ` +
-            `filled=${summary.filled} ` +
-            `unavailable=${summary.unavailable} ` +
-            `claimed=${summary.claimed} ` +
-            `superseded=${summary.superseded} ` +
-            `deferred=${summary.deferred} ` +
-            `parked=${summary.parked} ` +
-            `publisherStatus=${summary.failures["publisher-status"]} ` +
-            `network=${summary.failures.network} ` +
-            `tooLarge=${summary.failures["too-large"]} ` +
-            `unparseable=${summary.failures.unparseable} ` +
-            `lastFailure=${summary.lastFailureDetail ?? "none"} ` +
-            `failed=${summary.failed} ` +
-            `lastErrorType=${summary.failed === 0 ? "none" : errorTag(summary.lastError)} ` +
-            `lastErrorKind=${summary.lastErrorDiagnostic?.kind ?? "none"} ` +
-            `lastHttpStatus=${summary.lastErrorDiagnostic?.httpStatus ?? "none"} ` +
-            `lastHttpStatusClass=${summary.lastErrorDiagnostic?.httpStatusClass ?? "none"}`,
-        );
-      },
-      sleep: async (ms) => {
-        await Bun.sleep(ms);
-      },
-      timing: { ...SK_DOCUMENT_DRAIN_TIMING, fetchDelayMs },
-    });
-  })();
+            // The unit bounds itself (download timeout, wall-clock budget) and
+            // the transaction handle bounds its writes; the hard deadline is the
+            // same backstop the other loops carry, for a future await that slips
+            // in unbounded and would otherwise park the walk forever.
+            fetchDocument: async (decision, onDocumentObservation) =>
+              await runWithHardDeadline(
+                `deferred-documents ${adapterKey}`,
+                BACKFILL_HARD_DEADLINE_MS,
+                async () =>
+                  await processDocument({
+                    onDocumentObservation,
+                    decisionId: decision.id,
+                    scopedDb: backfillDb,
+                    signal: AbortSignal.timeout(DOCUMENT_FETCH_BUDGET_MS),
+                  }),
+              ),
+            isDraining,
+            now: () => Temporal.Now.instant().epochMilliseconds,
+            report: (summary) => {
+              logInfo(
+                `[deferred-documents] case_law.deferred_documents.swept ` +
+                  `source=${adapterKey} ` +
+                  `attempted=${summary.attempted} ` +
+                  `filled=${summary.filled} ` +
+                  `unavailable=${summary.unavailable} ` +
+                  `claimed=${summary.claimed} ` +
+                  `superseded=${summary.superseded} ` +
+                  `deferred=${summary.deferred} ` +
+                  `parked=${summary.parked} ` +
+                  `publisherStatus=${summary.failures["publisher-status"]} ` +
+                  `network=${summary.failures.network} ` +
+                  `tooLarge=${summary.failures["too-large"]} ` +
+                  `unparseable=${summary.failures.unparseable} ` +
+                  `lastFailure=${summary.lastFailureDetail ?? "none"} ` +
+                  `failed=${summary.failed} ` +
+                  `lastErrorType=${summary.failed === 0 ? "none" : errorTag(summary.lastError)} ` +
+                  `lastErrorKind=${summary.lastErrorDiagnostic?.kind ?? "none"} ` +
+                  `lastHttpStatus=${summary.lastErrorDiagnostic?.httpStatus ?? "none"} ` +
+                  `lastHttpStatusClass=${summary.lastErrorDiagnostic?.httpStatusClass ?? "none"}`,
+              );
+            },
+            sleep: async (ms) => {
+              await Bun.sleep(ms);
+            },
+            timing: { ...DEFERRED_DOCUMENT_DRAIN_TIMING, fetchDelayMs },
+          });
+        },
+      )
+    : [];
 
   // The standing listing reconciliation: for every source whose adapter can
   // be asked what its publisher lists for a slice, keep verifying that what is
@@ -1648,7 +1653,7 @@ export const runCaseLawIngest = async (
     citationResolutionLoop,
     citationAuthorityLoop,
     legislationSearchIndexLoop,
-    skDocumentLoop,
+    ...deferredDocumentLoops,
     reconciliationLoop,
     sourceTotalLoop,
   ]);

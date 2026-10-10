@@ -322,15 +322,15 @@ jobs:
             STELLA_VERSION=${{ needs.resolve.outputs.version }}
             STELLA_COMMIT_SHA=${{ needs.resolve.outputs.release_sha }}
 
-      - name: Log out of GitHub Container Registry
-        if: always()
-        run: docker logout ghcr.io
-
       - name: Attest image provenance
         uses: ./.github/actions/provenance
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           subject-digest: ${{ steps.build.outputs.digest }}
+
+      - name: Log out of GitHub Container Registry
+        if: always()
+        run: docker logout ghcr.io
 
   prepare-web-image:
     name: Build and publish web image
@@ -487,10 +487,6 @@ jobs:
           source-path: .release-source
           tooling-path: .workflow-source
 
-      - name: Log out of GitHub Container Registry
-        if: always()
-        run: docker logout ghcr.io
-
       - name: Write web image publication predicate
         if: steps.existing.outputs.reused != 'true'
         env:
@@ -567,6 +563,10 @@ jobs:
             exit 1
           fi
           echo "digest=${digest}" >> "$GITHUB_OUTPUT"
+
+      - name: Log out of GitHub Container Registry
+        if: always()
+        run: docker logout ghcr.io
 
   manifest:
     name: Assemble multi-arch manifest and GitHub release

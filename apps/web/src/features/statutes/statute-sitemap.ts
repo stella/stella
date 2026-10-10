@@ -14,7 +14,7 @@ import {
   escapeSitemapXml,
   SITEMAP_XML_RESPONSE_HEADERS,
 } from "@/lib/public-sitemap";
-import { isPublicStatuteCountry } from "@/lib/statute-route";
+import { isPublicStatuteCountry } from "@/lib/statutes/statute-route";
 
 const LAW_STATUTES_SITEMAP_BASE_PATH = "/sitemaps/law-statutes";
 const STATUTE_SITEMAP_ALL_BUCKET = "all";

@@ -296,3 +296,51 @@ test("staging promotion treats browser mirror authentication as optional", () =>
     );
   expect(login).toHaveProperty("continue-on-error", true);
 });
+
+// Attestations push to GHCR with the job's registry login, so a job logs out
+// only after its last attestation; a login in between re-authenticates.
+test("GHCR attestations run before the job logs out of GHCR", () => {
+  const files = [
+    ...new Bun.Glob(".github/workflows/*.{yml,yaml}").scanSync({ cwd: root }),
+  ];
+  const violations: string[] = [];
+  for (const file of files) {
+    const document = readWorkflow(file);
+    for (const [name, rawJob] of Object.entries(record(document["jobs"]))) {
+      const steps = record(rawJob)["steps"];
+      if (!Array.isArray(steps)) {
+        continue;
+      }
+      let loggedIn = false;
+      for (const step of steps.map(record)) {
+        const uses = typeof step["uses"] === "string" ? step["uses"] : "";
+        const run = typeof step["run"] === "string" ? step["run"] : "";
+        if (
+          uses.startsWith("docker/login-action@") ||
+          uses.endsWith("/build-web-image")
+        ) {
+          loggedIn = true;
+        }
+        if (run.includes("docker logout ghcr.io")) {
+          loggedIn = false;
+        }
+        const attests =
+          uses.endsWith("/provenance") ||
+          (uses.startsWith("actions/attest@") &&
+            record(step["with"] ?? {})["push-to-registry"] === true);
+        if (attests && !loggedIn) {
+          violations.push(`${file} ${name}: ${String(step["name"])}`);
+        }
+      }
+    }
+  }
+  // The shared web image action leaves its login to the caller, which
+  // attests the pushed image before logging out.
+  expect(
+    readFileSync(
+      path.join(root, ".github/actions/build-web-image/action.yml"),
+      "utf-8",
+    ),
+  ).not.toContain("docker logout");
+  expect(violations).toEqual([]);
+});

@@ -448,6 +448,10 @@ jobs:
           source-sha: ${{ needs.resolve.outputs.sha }}
           main-sha: ${{ needs.resolve.outputs.main-sha }}
 
+      - name: Log out of GitHub Container Registry
+        if: always()
+        run: docker logout ghcr.io
+
   promote-staging:
     name: Promote staging images
     needs: [resolve, build-api, build-web]

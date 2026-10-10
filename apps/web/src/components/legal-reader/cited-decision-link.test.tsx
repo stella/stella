@@ -9,18 +9,6 @@ import { CitationPassageQuote } from "@/features/case-law/components/case-viewer
 import { FormattingProvider } from "@/i18n/formatting-context";
 import messages from "@/i18n/langs/en.json";
 
-const decision = {
-  caseNumber: "Pl. ÚS 36/08",
-  country: "CZE",
-  court: "Ústavní soud",
-  decisionDate: "2009-04-08",
-  decisionType: "Nález",
-  id: "2c1f0f3d-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
-  language: "cs",
-  languageAlternates: [],
-  slug: "pl-us-36-08",
-};
-
 const render = (node: ReactNode): string =>
   renderToStaticMarkup(
     <IntlProvider locale="en" messages={messages} timeZone="UTC">
@@ -31,31 +19,14 @@ const render = (node: ReactNode): string =>
   );
 
 describe("CitedDecisionPreview", () => {
-  test("places the decision and offers opening it as the one action", () => {
-    const markup = render(
-      <CitedDecisionPreview decision={decision} onOpen={() => undefined} />,
-    );
-
-    expect(markup).toContain(decision.court);
-    expect(markup).toContain(messages.caseLaw.citation.openDecision);
-  });
-
   test("states how the citing text treats the decision", () => {
-    const markup = render(
-      <CitedDecisionPreview
-        decision={decision}
-        onOpen={() => undefined}
-        treatment="negative"
-      />,
-    );
+    const markup = render(<CitedDecisionPreview treatment="negative" />);
 
     expect(markup).toContain(messages.caseLaw.citation.treatment.negative);
   });
 
   test("says nothing about treatment where the citation carries none", () => {
-    const markup = render(
-      <CitedDecisionPreview decision={decision} onOpen={() => undefined} />,
-    );
+    const markup = render(<CitedDecisionPreview />);
 
     // Every label, not a chosen few: a treatment added later cannot creep
     // into a preview that was given none.
