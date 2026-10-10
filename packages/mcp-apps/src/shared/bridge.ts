@@ -13,13 +13,10 @@ import { parseLegalCitationHttpUrl } from "@stll/api-contract/legal-citation-lin
 import { createDetached } from "@stll/errors";
 
 import type { PresentationApp } from "../manifest";
-import { appLocale } from "./locale";
+import { setAppDocumentLocale } from "./locale";
 
 const applyHostPresentation = (context: McpUiHostContext) => {
-  const locale = appLocale(context.locale);
-  document.documentElement.lang = locale.locale;
-  document.documentElement.dir = locale.direction;
-  document.title = locale.messages.title;
+  setAppDocumentLocale(context.locale);
   if (context.theme !== undefined) {
     applyDocumentTheme(context.theme);
     document.documentElement.classList.toggle("dark", context.theme === "dark");
@@ -106,6 +103,7 @@ export const createPresentationBridge = <View>({
     { name: `stella ${manifest.directory}`, version: "1.0.0" },
     {},
   );
+  setAppDocumentLocale(undefined);
   const listeners = new Set<() => void>();
   let snapshot: AppSnapshot<View> = {
     context: {},

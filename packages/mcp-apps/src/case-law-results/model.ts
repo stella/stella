@@ -8,7 +8,10 @@ import {
 import { parseLegalCitationHttpUrl } from "@stll/api-contract/legal-citation-links";
 import { compareCodeUnit, getCollator } from "@stll/collation";
 
-import type { LookupResults, SearchResults } from "../shared/contracts";
+import type {
+  LookupResults,
+  SearchResults,
+} from "../shared/generated/contracts";
 
 type SearchPage = Extract<SearchResults, { results: unknown }>;
 type LookupPage = Extract<LookupResults, { items: unknown }>;
@@ -221,22 +224,22 @@ export const searchFilterInput = ({
 export const filterDefaults = (input: Record<string, unknown>) => {
   const country = normalizeCountry(input["country"]);
   if (!country.ok) {
-    return { status: "invalid", message: country.hint } as const;
+    return { status: "invalid", messageKey: "invalidCountry" } as const;
   }
   const from = normalizeDateBound(input["date_from"] ?? "", { bound: "start" });
   if (from.ok === false) {
-    return { status: "invalid", message: from.hint } as const;
+    return { status: "invalid", messageKey: "invalidDateFrom" } as const;
   }
   const to = normalizeDateBound(input["date_to"] ?? "", { bound: "end" });
   if (to.ok === false) {
-    return { status: "invalid", message: to.hint } as const;
+    return { status: "invalid", messageKey: "invalidDateTo" } as const;
   }
   const courts =
     input["courts"] === undefined || input["courts"] === null
       ? ({ ok: true, value: [] } as const)
       : normalizeStringList(input["courts"], { split: "never" });
   if (!courts.ok) {
-    return { status: "invalid", message: courts.hint } as const;
+    return { status: "invalid", messageKey: "invalidCourts" } as const;
   }
   return {
     status: "ready",
