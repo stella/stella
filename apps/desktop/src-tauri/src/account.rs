@@ -100,6 +100,7 @@ impl LinkedAccount {
     use sha2::{Digest, Sha256};
     let mut hash = Sha256::new();
     for field in [
+      self.api_base_url.as_str(),
       self.identity.organization_id.as_str(),
       self.identity.user_id.as_str(),
     ] {
@@ -672,8 +673,14 @@ pub async fn account_record_use(
   if !matches!(window.label(), "main" | "clipboard" | "clipboard-editor") {
     return Err("account activity is not available in this window".into());
   }
-  let _account = foreground_account(&state).await?;
-  notify(&app);
+  let previous = current(&state).await?;
+  let request = foreground_account(&state).await?;
+  let changed = previous.as_ref().map(|account| &account.credential.key)
+    != request.as_ref().map(|request| &request.account.credential.key);
+  drop(request);
+  if changed {
+    notify(&app);
+  }
   Ok(())
 }
 
@@ -1275,7 +1282,6 @@ async fn redeem_browser_connection(
       {
         return Err("Desktop connection does not match".into());
       }
-      notify(app);
       return Ok(());
     }
     RedeemedLink::Credential {
@@ -1523,7 +1529,7 @@ mod tests {
   }
 
   #[test]
-  fn local_data_namespaces_bind_organization_and_user_only() {
+  fn local_data_namespaces_bind_server_organization_and_user() {
     let a = fixture("stella_dr_a", 3600);
     let namespace = a.local_data_namespace();
     assert_eq!(namespace.len(), 64);
@@ -1531,12 +1537,12 @@ mod tests {
     let mut refreshed = a.clone();
     refreshed.credential.key = "stella_dr_rotated".into();
     refreshed.account.email = "changed@example.test".into();
-    refreshed.api_base_url = "https://another.example.test".into();
     refreshed.web_origin = "https://another-web.example.test".into();
     assert_eq!(namespace, refreshed.local_data_namespace());
-    for field in ["organization", "user"] {
+    for field in ["server", "organization", "user"] {
       let mut b = a.clone();
       match field {
+        "server" => b.api_base_url = "https://another.example.test".into(),
         "organization" => b.identity.organization_id.push_str("-other"),
         "user" => b.identity.user_id.push_str("-other"),
         _ => unreachable!(),

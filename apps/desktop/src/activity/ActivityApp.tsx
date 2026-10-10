@@ -1158,7 +1158,9 @@ const ActivityApp = () => {
       <DayContent
         header={
           <DayHeader
-            onNavigate={setDate}
+            onNavigate={(next) =>
+              setDate(next === snapshot.today ? null : next)
+            }
             onToggleRecording={() =>
               runCommand("activity_set_recording_status", {
                 status:

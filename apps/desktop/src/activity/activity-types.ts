@@ -19,8 +19,7 @@ export const ACTIVITY_RECORDING_STATUSES = [
   "recording",
   "paused",
 ] as const;
-export type ActivityRecordingStatus =
-  (typeof ACTIVITY_RECORDING_STATUSES)[number];
+type ActivityRecordingStatus = (typeof ACTIVITY_RECORDING_STATUSES)[number];
 
 const ACTIVITY_PERSISTENCE_STATUSES = [
   "initializing",
@@ -28,8 +27,7 @@ const ACTIVITY_PERSISTENCE_STATUSES = [
   "memoryOnly",
   "deletionOnly",
 ] as const;
-export type ActivityPersistenceStatus =
-  (typeof ACTIVITY_PERSISTENCE_STATUSES)[number];
+type ActivityPersistenceStatus = (typeof ACTIVITY_PERSISTENCE_STATUSES)[number];
 
 export const ACTIVITY_DETAILS_ACCESS = [
   "disabled",
@@ -189,22 +187,39 @@ const isOptionalMetadata = (value: unknown) =>
     new TextEncoder().encode(value).byteLength <= MAX_ACTIVITY_METADATA_BYTES &&
     !/\p{Cc}/u.test(value));
 
-const isSegment = (value: unknown): value is ActivitySegment =>
-  isRecord(value) &&
-  typeof value["appIdentifier"] === "string" &&
-  typeof value["appName"] === "string" &&
-  typeof value["start"] === "string" &&
-  typeof value["end"] === "string" &&
-  (value["matterId"] === undefined ||
-    value["matterId"] === null ||
-    typeof value["matterId"] === "string") &&
-  isOptionalMetadata(value["windowTitle"]) &&
-  isOptionalMetadata(value["document"]);
+const isSegment = (value: unknown): value is ActivitySegment => {
+  if (!isRecord(value)) {
+    return false;
+  }
+  const {
+    appIdentifier,
+    appName,
+    start,
+    end,
+    windowTitle,
+    document,
+    matterId,
+  } = value;
+  return (
+    typeof appIdentifier === "string" &&
+    typeof appName === "string" &&
+    typeof start === "string" &&
+    typeof end === "string" &&
+    (matterId === undefined ||
+      matterId === null ||
+      typeof matterId === "string") &&
+    isOptionalMetadata(windowTitle) &&
+    isOptionalMetadata(document)
+  );
+};
 
-const isExclusion = (value: unknown): value is ActivityAppExclusion =>
-  isRecord(value) &&
-  typeof value["identifier"] === "string" &&
-  typeof value["name"] === "string";
+const isExclusion = (value: unknown): value is ActivityAppExclusion => {
+  if (!isRecord(value)) {
+    return false;
+  }
+  const { identifier, name } = value;
+  return typeof identifier === "string" && typeof name === "string";
+};
 
 const isDraftedEntry = (value: unknown) => {
   if (!isRecord(value) || !isRange(value)) {
@@ -227,31 +242,55 @@ const isReviewState = ({
 
 export const isActivityDaySnapshot = (
   value: unknown,
-): value is ActivityDaySnapshot =>
-  isRecord(value) &&
-  typeof value["date"] === "string" &&
-  typeof value["today"] === "string" &&
-  typeof value["earliestDate"] === "string" &&
-  typeof value["unreadable"] === "boolean" &&
-  typeof value["timeBillingEnabled"] === "boolean" &&
-  isReviewState(value) &&
-  typeof value["captureDetails"] === "boolean" &&
-  isOneOf(ACTIVITY_DETAILS_ACCESS, value["detailsAccess"]) &&
-  Array.isArray(value["appNameOnlyApps"]) &&
-  value["appNameOnlyApps"].every(isExclusion) &&
-  Array.isArray(value["browserApps"]) &&
-  value["browserApps"].every(isExclusion) &&
-  Array.isArray(value["browserTitleApps"]) &&
-  value["browserTitleApps"].every(isExclusion) &&
-  typeof value["otherAccountHistoryDays"] === "number" &&
-  Number.isSafeInteger(value["otherAccountHistoryDays"]) &&
-  value["otherAccountHistoryDays"] >= 0 &&
-  isOneOf(ACTIVITY_PERSISTENCE_STATUSES, value["persistence"]) &&
-  isOneOf(ACTIVITY_RECORDING_STATUSES, value["recordingStatus"]) &&
-  isOneOf(ACTIVITY_RETENTIONS, value["retention"]) &&
-  Array.isArray(value["sourceAppVisuals"]) &&
-  value["sourceAppVisuals"].every(isClipboardSourceAppVisual) &&
-  Array.isArray(value["segments"]) &&
-  value["segments"].every(isSegment) &&
-  Array.isArray(value["excludedApps"]) &&
-  value["excludedApps"].every(isExclusion);
+): value is ActivityDaySnapshot => {
+  if (!isRecord(value)) {
+    return false;
+  }
+  const {
+    date,
+    today,
+    earliestDate,
+    unreadable,
+    timeBillingEnabled,
+    sourceAppVisuals,
+    captureDetails,
+    detailsAccess,
+    appNameOnlyApps,
+    browserApps,
+    browserTitleApps,
+    otherAccountHistoryDays,
+    persistence,
+    recordingStatus,
+    retention,
+    segments,
+    excludedApps,
+  } = value;
+  return (
+    typeof date === "string" &&
+    typeof today === "string" &&
+    typeof earliestDate === "string" &&
+    typeof unreadable === "boolean" &&
+    typeof timeBillingEnabled === "boolean" &&
+    isReviewState(value) &&
+    Array.isArray(sourceAppVisuals) &&
+    sourceAppVisuals.every(isClipboardSourceAppVisual) &&
+    typeof captureDetails === "boolean" &&
+    isOneOf(ACTIVITY_DETAILS_ACCESS, detailsAccess) &&
+    Array.isArray(appNameOnlyApps) &&
+    appNameOnlyApps.every(isExclusion) &&
+    Array.isArray(browserApps) &&
+    browserApps.every(isExclusion) &&
+    Array.isArray(browserTitleApps) &&
+    browserTitleApps.every(isExclusion) &&
+    typeof otherAccountHistoryDays === "number" &&
+    Number.isSafeInteger(otherAccountHistoryDays) &&
+    otherAccountHistoryDays >= 0 &&
+    isOneOf(ACTIVITY_PERSISTENCE_STATUSES, persistence) &&
+    isOneOf(ACTIVITY_RECORDING_STATUSES, recordingStatus) &&
+    isOneOf(ACTIVITY_RETENTIONS, retention) &&
+    Array.isArray(segments) &&
+    segments.every(isSegment) &&
+    Array.isArray(excludedApps) &&
+    excludedApps.every(isExclusion)
+  );
+};

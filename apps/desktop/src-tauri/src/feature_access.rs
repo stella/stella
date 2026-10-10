@@ -14,7 +14,7 @@ use std::{
 };
 use tauri::{AppHandle, Manager};
 
-use crate::account::{self, AccountState, LinkedAccount};
+use crate::account::{self, AccountState, AccountRequest};
 use crate::feature_gate::{DesktopFeature, FeatureGates};
 use crate::http_client::{DesktopHttpClient, HttpClientOptions};
 
@@ -75,11 +75,11 @@ fn client() -> Result<&'static DesktopHttpClient, String> {
   Ok(CLIENT.get_or_init(|| client))
 }
 
-async fn fetch(account: &LinkedAccount) -> Result<HashSet<DesktopFeature>, String> {
-  let url = format!("{}{}", account.api_base_url, contract().path);
+async fn fetch(request: &AccountRequest) -> Result<HashSet<DesktopFeature>, String> {
+  let url = format!("{}{}", request.api_base_url, contract().path);
   let mut response = client()?
     .get(url)
-    .bearer_auth(&account.credential.key)
+    .bearer_auth(&request.credential.key)
     .send()
     .await
     .map_err(|_| "feature access request failed".to_string())?;
@@ -118,19 +118,19 @@ async fn current_decision(app: &AppHandle) -> AccountDecision {
   let Some(state) = app.try_state::<AccountState>() else {
     return closed();
   };
-  let account = match account::current(&state).await {
-    Ok(Some(account)) => account,
+  let request = match account::request_account(&state).await {
+    Ok(Some(request)) => request,
     Ok(None) => return closed(),
     Err(error) => {
       tracing::warn!(error = %error, "feature access skipped: account is unreadable");
       return closed();
     }
   };
-  let namespace = Some(account.local_data_namespace());
-  let expires_at = chrono::DateTime::parse_from_rfc3339(&account.credential.expires_at)
+  let namespace = Some(request.local_data_namespace());
+  let expires_at = chrono::DateTime::parse_from_rfc3339(&request.credential.expires_at)
     .ok()
     .map(|expiry| expiry.with_timezone(&chrono::Utc));
-  let enabled = fetch(&account).await.unwrap_or_else(|error| {
+  let enabled = fetch(&request).await.unwrap_or_else(|error| {
     tracing::warn!(error = %error, "feature access is unavailable; gated features stay off");
     HashSet::new()
   });
@@ -196,6 +196,7 @@ pub fn start(app: AppHandle, on_change: FeatureChangeHandler) {
 #[cfg(test)]
 mod tests {
   use super::*;
+  use crate::account::LinkedAccount;
 
   #[test]
   fn the_contract_lists_exactly_the_known_features() {
@@ -285,10 +286,10 @@ mod tests {
     };
 
     assert_eq!(
-      fetch(&account("stella_dr_good")).await.unwrap(),
+      fetch(&AccountRequest::fixture(account("stella_dr_good")).await).await.unwrap(),
       HashSet::from([DesktopFeature::ActivityTimeline])
     );
-    assert!(fetch(&account("stella_dr_bad")).await.is_err());
+    assert!(fetch(&AccountRequest::fixture(account("stella_dr_bad")).await).await.is_err());
     server.abort();
   }
 }
