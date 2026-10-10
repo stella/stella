@@ -389,10 +389,14 @@ fn content_bounds(binary: &GrayImage, dpi: f32) -> Option<ContentBox> {
                 component_bounds.2 = component_bounds.2.max(current_x);
                 component_bounds.3 = component_bounds.3.max(current_y);
                 for (next_x, next_y) in [
+                    (current_x.saturating_sub(1), current_y.saturating_sub(1)),
                     (current_x.saturating_sub(1), current_y),
+                    (current_x.saturating_sub(1), current_y.saturating_add(1)),
                     (current_x.saturating_add(1), current_y),
                     (current_x, current_y.saturating_sub(1)),
                     (current_x, current_y.saturating_add(1)),
+                    (current_x.saturating_add(1), current_y.saturating_sub(1)),
+                    (current_x.saturating_add(1), current_y.saturating_add(1)),
                 ] {
                     if next_x >= width || next_y >= height {
                         continue;

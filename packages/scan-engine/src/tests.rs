@@ -175,6 +175,60 @@ fn content_crop_uses_physical_padding_and_ignores_a_noise_speck() {
 }
 
 #[test]
+fn content_crop_recognizes_a_thin_diagonal_stroke() {
+    let mut source = GrayImage::from_pixel(64, 64, Luma([255]));
+    for coordinate in 10..=50 {
+        source.put_pixel(coordinate, coordinate, Luma([0]));
+    }
+    let detected = content_bounds(&source, 300.0).expect("diagonal should exceed the dust limit");
+    assert_eq!(
+        (detected.x, detected.y, detected.width, detected.height),
+        (10, 10, 41, 41)
+    );
+
+    let result = clean_scan(
+        &source,
+        CleanOptions {
+            content_crop: true,
+            ..options(CleanOutput::Binary)
+        },
+    )
+    .expect("diagonal stroke should be recognized as content");
+
+    assert!(result.content_box.x <= 10);
+    assert!(result.content_box.y <= 10);
+    assert!(result.content_box.x + result.content_box.width > 50);
+    assert!(result.content_box.y + result.content_box.height > 50);
+}
+
+#[test]
+fn content_crop_includes_a_thin_diagonal_stroke_next_to_other_content() {
+    let mut source = GrayImage::from_pixel(128, 128, Luma([245]));
+    for coordinate in 10..=30 {
+        source.put_pixel(coordinate, coordinate, Luma([25]));
+    }
+    for y in 80..85 {
+        for x in 80..=110 {
+            source.put_pixel(x, y, Luma([25]));
+        }
+    }
+
+    let result = clean_scan(
+        &source,
+        CleanOptions {
+            content_crop: true,
+            ..options(CleanOutput::Binary)
+        },
+    )
+    .expect("page content should clean");
+
+    assert!(result.content_box.x <= 10);
+    assert!(result.content_box.y <= 10);
+    assert!(result.content_box.x + result.content_box.width > 110);
+    assert!(result.content_box.y + result.content_box.height > 84);
+}
+
+#[test]
 fn photographed_page_keeps_its_aspect_ratio() {
     let mut source = GrayImage::from_pixel(900, 700, Luma([20]));
     let quad = [(210, 80), (660, 110), (700, 610), (180, 590)];
