@@ -1,3 +1,4 @@
+// @api-test-heavy-db: retains a full-size 20,000-entry sanctions corpus.
 import { Result, panic } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";

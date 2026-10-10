@@ -1,3 +1,4 @@
+// @api-test-heavy-db: retains a full-size 20,000-entry sanctions corpus.
 import { Value } from "@sinclair/typebox/value";
 import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
