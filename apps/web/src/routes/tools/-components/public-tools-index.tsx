@@ -98,8 +98,8 @@ const featuredEntry = (slug: string): LoadedCatalogueEntry => {
   return entry;
 };
 
-const contractReview = featuredEntry("contract-review");
-const jurisRank = featuredEntry("jurisrank-csjn-analysis");
+const contractReview = featuredEntry("contract-review-anthropic");
+const jurisRank = featuredEntry("jurisrank");
 const ares = featuredEntry("ares");
 
 type PublicToolsIndexProps = {

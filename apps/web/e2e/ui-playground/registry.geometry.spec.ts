@@ -23,6 +23,19 @@ for (const [name, { label }] of Object.entries(visualRegistry)) {
     await expect(
       section.locator(":scope > :not(header)").first(),
     ).toBeVisible();
+    if (name === "chat-history-decision") {
+      // The fixtures stay out of this spec: they are typed against the web
+      // API routes, which would pull the app's types into the browser tests.
+      const rows = await section.locator("[data-playground-state]").all();
+      expect(rows.length).toBeGreaterThan(0);
+      for (const row of rows) {
+        await expect(row).toBeVisible();
+        const fitsRow = await row.evaluate(
+          (element) => element.scrollWidth <= element.clientWidth,
+        );
+        expect(fitsRow).toBe(true);
+      }
+    }
     const sharesPageScrollFlow = await section.evaluate((fixture) => {
       const main = fixture.closest("main");
       const header = fixture.querySelector("header");

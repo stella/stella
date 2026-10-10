@@ -101,6 +101,18 @@ describe("test subject reachability", () => {
     ]);
   });
 
+  test("resolves a NodeNext .js import to its TypeScript source", () => {
+    const input = fixture(
+      "import { reduceWidgetState } from './widget.js';\ntest('state', () => expect(reduceWidgetState()).toBe('real'));\n",
+    );
+    expect(
+      analyzeTestSubjectReachability({
+        repoRoot: input.root,
+        files: input.files,
+      }),
+    ).toEqual([]);
+  });
+
   test("follows a module-scope result initializer to the real subject", () => {
     const input = fixture(
       "import { reduceWidgetState } from './widget';\nconst actual = reduceWidgetState();\ntest('state', () => expect(actual).toBe('real'));\n",

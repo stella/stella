@@ -24,7 +24,7 @@ const skillEntry = entry({
   displayName: "JurisRank",
   jurisdictions: ["AR"],
   kind: "skill",
-  slug: "jurisrank-csjn-analysis",
+  slug: "jurisrank",
   tags: ["litigation"],
 });
 const dataSourceEntry = entry({

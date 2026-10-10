@@ -100,6 +100,7 @@ export const readEditableMessageOnTx = async ({
       usedAnonymization: row.thread.usedAnonymization,
       parentThreadId: row.thread.parentThreadId,
       forkedFromMessageId: row.thread.forkedFromMessageId,
+      subjectDecisionId: row.thread.subjectDecisionId,
       compactionScheduledAt: row.thread.compactionScheduledAt,
       compactionAttemptedAt: row.thread.compactionAttemptedAt,
       compactionAttempts: row.thread.compactionAttempts,
