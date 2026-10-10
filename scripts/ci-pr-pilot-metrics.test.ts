@@ -39,6 +39,65 @@ ${body}
   return JSON.parse(result.stdout.toString());
 };
 
+test("workflow-derived display names classify matrix PR and queue failures by job ID", () => {
+  const result = execute(`
+def connection(nodes):
+    return {"nodes": nodes, "pageInfo": {"hasNextPage": False}}
+workflow = json.loads(m.subprocess.run(["bun", "--no-env-file", "-e",
+    "console.log(JSON.stringify(Bun.YAML.parse(await Bun.file(process.argv[1]).text()).jobs))",
+    ".github/workflows/ci.yml"], check=True, capture_output=True, text=True).stdout)
+lint_name = workflow["desktop-rust-lint"]["name"].replace("\${{ matrix.os }}", "macos")
+heavy_name = workflow["desktop-rust-tests"]["name"].replace("\${{ matrix.os }}", "windows")
+job = {"databaseId": 1, "name": lint_name, "conclusion": "FAILURE",
+       "startedAt": "2000-01-10T10:02:00Z", "completedAt": "2000-01-10T10:03:00Z"}
+suite = {"createdAt": "2000-01-10T10:00:00Z", "status": "COMPLETED",
+         "workflowRun": {"databaseId": 1, "event": "pull_request", "workflow": {"name": "CI Checks"}},
+         "checkRuns": connection([job])}
+pull = {"number": 1, "mergedAt": None, "timelineItems": connection([
+    {"__typename": "AutoMergeEnabledEvent", "createdAt": "2000-01-10T09:00:00Z"}]),
+    "commits": connection([{"commit": {"oid": "head", "checkSuites": connection([suite])}}])}
+start = dt.datetime(2000, 1, 10, tzinfo=dt.UTC)
+fast = m.summarize([pull], start, now, {"desktop-rust-lint"})
+job["name"] = heavy_name
+heavy = m.summarize([pull], start, now, {"desktop-rust-lint"})
+class Fixture(m.Collector):
+    def rest(self, endpoint, parameters):
+        if endpoint.endswith("/runs"):
+            return {"total_count": 1, "workflow_runs": [{"id": 1, "head_sha": "a" * 40,
+                "pull_requests": [{"number": 1}]}]}
+        return {"total_count": 1, "jobs": [{"name": heavy_name, "conclusion": "failure"}]}
+queue = Fixture("stella/stella").queue_failures(now, {"desktop-rust-tests"})
+print(json.dumps([m.workflow_job_id(lint_name), m.workflow_job_id("ci-tests (example)"),
+    fast["postArmDeferredFailureHeads"], heavy["postArmDeferredFailureHeads"],
+    queue["postArmDeferredQueueFailureHeads"]]))
+`);
+  expect(result).toEqual(["desktop-rust-lint", "ci-tests", 0, 1, 1]);
+});
+
+test("unmapped or ambiguous workflow check names cannot certify pilot evidence", () => {
+  const result = execute(`
+m.workflow_job_patterns = lambda: m.job_name_patterns({
+    "example-a": "Example (\${{ matrix.os }})",
+    "example-b": "Example (\${{ matrix.platform }})",
+})
+pulls = json.loads(Path("scripts/fixtures/ci-pr-pilot-metrics/pulls.json").read_text())
+start = dt.datetime(2000, 1, 2, 11, 20, 20, tzinfo=dt.UTC)
+previous = {"profile": "pilot-v1", "startedAt": start.isoformat(), "stopped": False,
+            "baselineArmToMergeP50Minutes": 10}
+report = m.build_report(pulls, previous, start + dt.timedelta(days=2), True,
+                       set(), baseline, sampling)
+class Fixture(m.Collector):
+    def rest(self, endpoint, parameters):
+        if endpoint.endswith("/runs"):
+            return {"total_count": 1, "workflow_runs": [{"id": 1, "pull_requests": []}]}
+        return {"total_count": 1, "jobs": [{"name": "Unknown name", "conclusion": "failure"}]}
+queue = Fixture("stella/stella").queue_failures(now, set())
+print(json.dumps([m.workflow_job_id("Example (platform)"), m.workflow_job_id("Unknown name"),
+                  report["complete"], queue["queueFailureEvidenceComplete"]]))
+`);
+  expect(result).toEqual([null, null, false, false]);
+});
+
 test("metrics preserve a stop across generations and expire after one week", () => {
   const values = execute(`
 initial = m.build_report([], None, now, True, set(), baseline, sampling, seed)
