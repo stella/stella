@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { t } from "elysia";
 import * as v from "valibot";
 
+import { SKILL_RESOURCE_FOLDERS } from "@stll/skills/format";
+
 import { stripMarkdownFences } from "@/api/lib/agent-skills/markdown-fences";
 import { resolveCaching } from "@/api/lib/ai-config";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
@@ -28,6 +30,9 @@ const PREVIOUS_RESOURCE_CONTENT_MAX = LIMITS.agentSkillResourceMaxChars;
 const GENERATION_TIMEOUT_MS = 90_000;
 const GENERATION_MAX_OUTPUT_TOKENS = 8192;
 const AI_RESOURCES_MAX = 8;
+const RESOURCE_FOLDER_LIST = [...SKILL_RESOURCE_FOLDERS]
+  .map((folder) => `${folder}/`)
+  .join(", ");
 
 const previousResourceSchema = t.Object({
   path: t.String({ minLength: 1, maxLength: PREVIOUS_RESOURCE_PATH_MAX }),
@@ -48,7 +53,7 @@ const config = {
   actionAdmission: { type: "handler", actionKind: "skills.generate-draft" },
   description:
     "Draft a skill bundle with the model: returns SKILL.md markdown plus up " +
-    "to eight companion files under references/, prompts/, or knowledge/. " +
+    `to eight companion files under ${RESOURCE_FOLDER_LIST}. ` +
     "Pass intent, optionally examples, and, to revise an existing draft, " +
     "previousDraft with previousResources and feedback. Nothing is stored: " +
     "pass the result to skills.create and the resource endpoints to keep it. " +
@@ -75,7 +80,7 @@ const aiResourceSchema = v.strictObject({
   path: v.pipe(
     v.string(),
     v.description(
-      "Relative path inside the skill folder. Must start with references/, prompts/, or knowledge/ and end in .md. Subfolders are allowed to organise material (e.g. references/cz/act-110.md). Use lowercase letters, digits, hyphens, dots, or underscores in each segment.",
+      `Relative path inside the skill folder. Must start with one of ${RESOURCE_FOLDER_LIST} and end in .md. Subfolders are allowed to organise material (e.g. references/cz/act-110.md). Use lowercase letters, digits, hyphens, dots, or underscores in each segment.`,
     ),
   ),
   content: v.pipe(
@@ -241,13 +246,13 @@ SKILL.md rules:
 - YAML frontmatter delimited by lines containing only "---".
 - Required: name (lowercase letters/digits/hyphens, max 64 chars, starts with a letter or digit) and description (one sentence, <= 300 chars, helps the AI decide when to trigger the skill).
 - Optional: version (semver), license (SPDX id), compatibility.
-- Body: clear, imperative Markdown for the agent. Cover when to use the skill, the steps to follow, and any constraints. Reference companion files by relative path when appropriate (e.g. "see knowledge/01-foundations.md").
+- Body: clear, imperative Markdown for the agent. Cover when to use the skill, the steps to follow, and any constraints. Reference companion files by relative path when appropriate (e.g. "see references/01-foundations.md").
 - Keep the body under 2,000 words. No code fences around the whole file.
 
 Companion files (the "resources" array):
-- Each path must start with references/, prompts/, or knowledge/ and end in .md. Lowercase letters, digits, hyphens, dots, and underscores only. Subfolders are allowed to organise material by topic, jurisdiction, or source type. Examples: knowledge/01-foundations.md, prompts/draft-summary.prompt.md, references/checklists.md, references/cz/act-110.md, references/case-law/supreme.md.
-- knowledge/* — background material the agent reads (definitions, frameworks, examples).
-- prompts/* — reusable prompts the agent can run for sub-tasks.
+- Each path must start with one of ${RESOURCE_FOLDER_LIST} and end in .md. Lowercase letters, digits, hyphens, dots, and underscores only. Subfolders are allowed to organise material by topic, jurisdiction, or source type. Examples: references/01-foundations.md, references/draft-summary.prompt.md, references/checklists.md, references/cz/act-110.md, references/case-law/supreme.md.
+- scripts/* — Markdown instructions for helper scripts.
+- assets/* — supporting text assets.
 - references/* — checklists, lookup tables, format guides.
 - Each file is plain Markdown. No frontmatter on companion files.
 - Return at most ${AI_RESOURCES_MAX} files. Only include a file if it genuinely helps the skill; return an empty array if none are needed.
