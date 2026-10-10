@@ -154,12 +154,12 @@ describe("a tab told that the session changed elsewhere", () => {
         ?.getObserversCount(),
     ).toBe(0);
 
-    const accepted = unwrapEden(
+    unwrapEden(
       await api.me["professional-use"].post({
         statementVersion: PROFESSIONAL_USE_STATEMENT_VERSION,
       }),
     );
-    tabB.queryClient.setQueryData(options.queryKey, accepted);
+    const accepted = await tabB.queryClient.query(options);
     // The existing session broadcast delivers the acceptance note to tab A.
     tabA.receive();
     await settle();

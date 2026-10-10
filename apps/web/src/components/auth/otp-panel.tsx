@@ -181,7 +181,7 @@ export const OTPPanel = ({
           body: {
             email: emailArg,
             otp: otpArg,
-            // The sign-in page showed this statement; a new account is
+            // This panel shows the statement; a new account is
             // created accepted only when it is the current one.
             [PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD]:
               PROFESSIONAL_USE_STATEMENT_VERSION,
@@ -255,6 +255,9 @@ export const OTPPanel = ({
         dirty={otp !== (initialOtp ?? "")}
         onDiscard={() => setOtp(initialOtp ?? "")}
       />
+      <p className="text-foreground-muted px-6 pt-6 text-xs">
+        {t("auth.professionalUseStatement")}
+      </p>
       {resetConfirmation ? (
         <div className="flex flex-col gap-4 p-6">
           <FrameDescription>
