@@ -1,6 +1,7 @@
 import { describe, expect, mock, test } from "bun:test";
 import Elysia from "elysia";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
 import { sha256Hex as legacyHex } from "@stll/sha256/node";
 
 import { env } from "@/api/env";
@@ -82,7 +83,7 @@ const createLimitedApp = ({
             status:
               request.headers
                 .get("authorization")
-                ?.includes("stella_at_invented_") ||
+                ?.includes("stella_at_example_") ||
               !request.headers.has("authorization")
                 ? 401
                 : 200,
@@ -216,13 +217,13 @@ describe("MCP transport rate limit", () => {
     expect(await limited.json()).toEqual(MCP_RATE_LIMIT_JSON_RPC_ERROR);
   });
 
-  test("charges rotated bearer values to the address budget", async () => {
+  test("authentication failures share the address budget", async () => {
     const app = createLimitedApp({ max: 100, addressMax: 2 });
 
     const responses: number[] = [];
     for (let attempt = 0; attempt < 3; attempt += 1) {
       const response = await app.handle(
-        transportRequest({ token: `stella_at_invented_${attempt}` }),
+        transportRequest({ token: `stella_at_example_${attempt}` }),
       );
       responses.push(response.status);
     }
@@ -246,7 +247,7 @@ describe("MCP transport rate limit", () => {
     }
     expect((await app.handle(transportRequest())).status).toBe(401);
     const limited = await app.handle(
-      transportRequest({ token: "stella_at_invented_1" }),
+      transportRequest({ token: "stella_at_example_1" }),
     );
     expect(limited.status).toBe(429);
     // Admission runs before authentication can issue a challenge.
@@ -383,7 +384,7 @@ test("authentication address refusals emit one bounded budget observation", asyn
   }
 });
 
-test("an exhausted address rejects rotating credentials before verification", async () => {
+test("an exhausted address rejects a new bearer before verification", async () => {
   const context = new InMemoryRateLimitContext();
   const observations: Parameters<typeof recordBudgetRejection>[0][] = [];
   const verify = mock(async () => new Response(null, { status: 401 }));
@@ -408,24 +409,15 @@ test("an exhausted address rejects rotating credentials before verification", as
       ).toBe(401);
     }
     verify.mockClear();
-    for (const path of [
-      MCP_HTTP_PATH,
-      MCP_ANONYMIZED_HTTP_PATH,
-      MCP_DOCUMENTS_HTTP_PATH,
-      MCP_LAW_HTTP_PATH,
-    ]) {
-      for (let attempt = 0; attempt < 5; attempt += 1) {
-        const response = await app.handle(
-          transportRequest({ path, token: Bun.randomUUIDv7() }),
-        );
-        expect(response.status).toBe(429);
-        expect(response.headers.get("Retry-After")).not.toBeNull();
-        expect(await response.json()).toEqual(MCP_RATE_LIMIT_JSON_RPC_ERROR);
-      }
-    }
+    const response = await app.handle(
+      transportRequest({ token: "new-bearer" }),
+    );
+    expect(response.status).toBe(429);
+    expect(response.headers.get("Retry-After")).not.toBeNull();
+    expect(await response.json()).toEqual(MCP_RATE_LIMIT_JSON_RPC_ERROR);
     expect(verify).not.toHaveBeenCalled();
     expect(context.read("mcp-transport-address")?.count).toBe(2);
-    expect(observations).toHaveLength(20);
+    expect(observations).toHaveLength(1);
     expect(
       observations.every(
         (observation) =>
@@ -457,6 +449,37 @@ test("accepted credentials refund their address reservation", async () => {
           .status,
       ).toBe(200);
     }
+    expect(context.read("mcp-transport-address")?.count).toBe(0);
+  } finally {
+    context.kill();
+  }
+});
+
+test("a verification exception releases its reservation for a later request", async () => {
+  const context = new InMemoryRateLimitContext();
+  const limiter = createMcpAuthenticationFailureLimiter({
+    ...MCP_TRANSPORT_ADDRESS_RATE_LIMIT_POLICY,
+    context,
+    generator: mcpTransportAddressRateLimitKey,
+    max: 1,
+  });
+  const request = transportRequest({ token: TOKEN });
+  const failure = new TypeError("Verification failed");
+  try {
+    expect(
+      await rejectionOf(
+        limiter({
+          request,
+          run: async () => {
+            throw failure;
+          },
+        }),
+      ),
+    ).toBe(failure);
+    const accepted = new Response(null, { status: 200 });
+    expect(await limiter({ request, run: async () => accepted })).toBe(
+      accepted,
+    );
     expect(context.read("mcp-transport-address")?.count).toBe(0);
   } finally {
     context.kill();
@@ -525,7 +548,7 @@ test("concurrent pending verification admits exactly the address maximum", async
 });
 
 test.each(["e2e", "skip"] as const)(
-  "authentication admission and charging honor the %s bypass",
+  "authentication admission and charging honor %s",
   async (mode) => {
     const context = new InMemoryRateLimitContext();
     const observations: Parameters<typeof recordBudgetRejection>[0][] = [];

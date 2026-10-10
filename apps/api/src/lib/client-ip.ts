@@ -20,8 +20,8 @@ import { panic } from "better-result";
  * example CloudFront's `CloudFront-Viewer-Address`) is named with
  * `STELLA_CLIENT_ADDRESS_HEADER`. That header is read only from a trusted
  * peer and takes precedence over the `x-forwarded-for` chain. CloudFront
- * requires a matching origin verification value because its origin is publicly
- * reachable. Custom proxy headers may leave origin verification unconfigured.
+ * viewer headers are honoured only with a matching origin verification value.
+ * Custom proxy headers may leave origin verification unconfigured.
  *
  * A further edge may supply the address in {@link FRONTEND_ADDRESS_HEADER},
  * accepted only with a matching {@link FRONTEND_VERIFY_HEADER}. From a
