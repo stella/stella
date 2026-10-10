@@ -1,3 +1,8 @@
+import {
+  convertMessagesToModelMessages,
+  StreamProcessor,
+  uiMessagesToWire,
+} from "@tanstack/ai";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
@@ -6,6 +11,7 @@ import {
   resourceRef,
   RESOURCE_TYPE,
 } from "@stll/api-contract";
+import { createChatPastedTextPart } from "@stll/api-contract/chat";
 import { propertyConfig } from "@stll/property-testing";
 
 import {
@@ -40,6 +46,27 @@ import { CHAT_REF_ENCODING } from "@/api/lib/chat/ref-token";
 import { LIMITS } from "@/api/lib/limits";
 
 import { richChatParts, unsafeScriptUrl } from "./__fixtures__/rich-chat-parts";
+
+test("pasted text reaches the model exactly like native text", () => {
+  const content = " \r\n<p>literal &amp; text</p>\n\t ";
+  const part = createChatPastedTextPart(content);
+  expect(new StreamProcessor().addUserMessage([part]).parts).toEqual([part]);
+  const message = toPersistableChatMessage({
+    id: toSafeId<"chatMessage">("msg_pasted_model"),
+    role: "user",
+    parts: [part],
+  });
+  expect(isIncomingChatPart(part)).toBe(true);
+  expect(isProviderVisibleChatPart(part)).toBe(true);
+  expect(uiMessagesToWire([message])).toEqual([
+    { id: message.id, role: "user", content },
+  ]);
+  expect(convertMessagesToModelMessages([message])).toEqual(
+    convertMessagesToModelMessages([
+      { ...message, parts: [{ type: "text", content }] },
+    ]),
+  );
+});
 
 const budgetPropertyPartFromKind = (kind: number): ChatPart => {
   switch (kind) {

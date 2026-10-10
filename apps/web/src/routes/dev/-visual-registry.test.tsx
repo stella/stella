@@ -27,6 +27,16 @@ describe("registered visual fixtures", () => {
     });
   }
 
+  test("long paste is registered as a standalone chat fixture", () => {
+    expect(v.parse(visualSearchSchema, { visual: "chat-long-paste" })).toEqual({
+      visual: "chat-long-paste",
+    });
+    expect(visualRegistry["chat-long-paste"]).toEqual({
+      label: "Chat long paste",
+      layout: "plain",
+    });
+  });
+
   test("registers the playbook lifecycle capture states", () => {
     expect(visualRegistry["playbook-editor"].layout).toBe("plain");
     expect(playbookEditorStates).toEqual(["rejected", "editing", "parked"]);

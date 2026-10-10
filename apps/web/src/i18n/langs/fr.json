@@ -1326,7 +1326,9 @@
     "pastedText": {
       "expand": "Afficher le texte complet",
       "fromClipboard": "Collé : {count, plural, one {# caractère} other {# caractères}}",
-      "fromPromptFallback": "Compétence"
+      "fromPromptFallback": "Compétence",
+      "showInTextField": "Afficher dans le champ de texte",
+      "title": "Texte collé"
     },
     "placeholder": "Saisissez votre question ici, / pour les compétences, @ pour ajouter du contexte",
     "promptImprovementStrategies": {
