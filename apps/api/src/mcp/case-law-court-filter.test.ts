@@ -1,9 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import {
+  apexCourtAbbreviations,
+  courtAbbreviation,
+} from "@stll/api-contract/case-law-court-abbreviations";
 import { assertProperty } from "@stll/property-testing";
 
-import { courtAbbreviation } from "@/api/lib/case-law/court-abbreviations";
 import {
   combineCourtFilters,
   readCourtFilter,
@@ -79,9 +82,9 @@ const spellingsOf = ({
   );
 
 describe("court filters read a court as every spelling the corpus stores it under", () => {
-  test("an abbreviation reads as exactly its court's stored spellings", () => {
+  test("a code reads one court identity and drops several identities", () => {
     assertProperty(
-      "an abbreviation reads as exactly its court's stored spellings",
+      "a code reads one court identity and drops several identities",
       fc.property(storedCourtsArb, ({ country, courts }) => {
         const identities = storedCourtIdentities(country, courts);
         const abbreviations = new Set(
@@ -91,13 +94,22 @@ describe("court filters read a court as every spelling the corpus stores it unde
         );
         for (const abbreviation of abbreviations) {
           const reading = readCourtFilter({ court: abbreviation, identities });
+          const matches = spellingsOf({ abbreviation, country, courts });
+          const namesOneCourt =
+            apexCourtAbbreviations(country).includes(abbreviation) ||
+            matches.length === 1;
+          if (!namesOneCourt) {
+            expect(reading).toMatchObject({
+              type: "dropped",
+              warning: { code: "filter_dropped" },
+            });
+            continue;
+          }
           expect(reading.type).toBe("court");
           if (reading.type !== "court") {
             continue;
           }
-          expect(sorted(reading.courts)).toEqual(
-            sorted(spellingsOf({ abbreviation, country, courts })),
-          );
+          expect(sorted(reading.courts)).toEqual(sorted(matches));
         }
       }),
     );
@@ -116,9 +128,10 @@ describe("court filters read a court as every spelling the corpus stores it unde
           }
           const abbreviation = courtAbbreviation({ country, court });
           expect(sorted(reading.courts)).toEqual(
-            abbreviation === undefined
-              ? [court]
-              : sorted(spellingsOf({ abbreviation, country, courts })),
+            abbreviation !== undefined &&
+              apexCourtAbbreviations(country).includes(abbreviation)
+              ? sorted(spellingsOf({ abbreviation, country, courts }))
+              : [court],
           );
         }
       }),
@@ -134,6 +147,12 @@ describe("court filters read a court as every spelling the corpus stores it unde
           sorted(identities.flatMap(({ spellings }) => spellings)),
         ).toEqual(sorted(courts));
         for (const { abbreviation, spellings } of identities) {
+          if (
+            abbreviation === undefined ||
+            !apexCourtAbbreviations(country).includes(abbreviation)
+          ) {
+            expect(spellings).toHaveLength(1);
+          }
           for (const court of spellings) {
             expect(courtAbbreviation({ country, court })).toBe(abbreviation);
           }

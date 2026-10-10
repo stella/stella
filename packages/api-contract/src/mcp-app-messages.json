@@ -49,7 +49,9 @@
     "headnoteNotStated": "لم يرد في الحكم",
     "keywords": "الكلمات الأساسية",
     "keywordsOmitted": "{count} أخرى",
-    "headnoteOmitted": "حُذفت خلاصات الأحكام لتقليل حجم هذه الصفحة. افتح القرار للاطلاع على التفاصيل."
+    "headnoteOmitted": "حُذفت خلاصات الأحكام لتقليل حجم هذه الصفحة. افتح القرار للاطلاع على التفاصيل.",
+    "chooseFile": "اختيار ملف",
+    "noFileChosen": "لم يتم اختيار أي ملف"
   },
   "cs": {
     "constitutional": "Ústavní soudy",
@@ -101,7 +103,9 @@
     "headnoteNotStated": "Rozhodnutí neuvádí",
     "keywords": "Klíčová slova",
     "keywordsOmitted": "Dalších {count}",
-    "headnoteOmitted": "Právní věty jsou vynechány, aby stránka zůstala malá. Podrobnosti najdete po otevření rozhodnutí."
+    "headnoteOmitted": "Právní věty jsou vynechány, aby stránka zůstala malá. Podrobnosti najdete po otevření rozhodnutí.",
+    "chooseFile": "Vybrat soubor",
+    "noFileChosen": "Žádný soubor nebyl vybrán"
   },
   "de": {
     "constitutional": "Verfassungsgerichte",
@@ -153,7 +157,9 @@
     "headnoteNotStated": "In der Entscheidung nicht angegeben",
     "keywords": "Stichwörter",
     "keywordsOmitted": "{count} weitere",
-    "headnoteOmitted": "Leitsätze wurden ausgelassen, um die Seite klein zu halten. Öffnen Sie die Entscheidung für weitere Einzelheiten."
+    "headnoteOmitted": "Leitsätze wurden ausgelassen, um die Seite klein zu halten. Öffnen Sie die Entscheidung für weitere Einzelheiten.",
+    "chooseFile": "Datei auswählen",
+    "noFileChosen": "Keine Datei ausgewählt"
   },
   "en": {
     "constitutional": "Constitutional courts",
@@ -205,7 +211,9 @@
     "headnoteNotStated": "Not stated in the decision",
     "keywords": "Keywords",
     "keywordsOmitted": "{count} more",
-    "headnoteOmitted": "Headnotes omitted to keep this page small. Open the decision for details."
+    "headnoteOmitted": "Headnotes omitted to keep this page small. Open the decision for details.",
+    "chooseFile": "Choose file",
+    "noFileChosen": "No file selected"
   },
   "et": {
     "constitutional": "Põhiseaduslikkuse järelevalve kohtud",
@@ -257,7 +265,9 @@
     "headnoteNotStated": "Lahendis pole märgitud",
     "keywords": "Märksõnad",
     "keywordsOmitted": "Veel {count}",
-    "headnoteOmitted": "Õiguslikud seisukohad on lehe mahu vähendamiseks välja jäetud. Üksikasju leiate kohtulahendist."
+    "headnoteOmitted": "Õiguslikud seisukohad on lehe mahu vähendamiseks välja jäetud. Üksikasju leiate kohtulahendist.",
+    "chooseFile": "Vali fail",
+    "noFileChosen": "Faili pole valitud"
   },
   "fr": {
     "constitutional": "Juridictions constitutionnelles",
@@ -309,7 +319,9 @@
     "headnoteNotStated": "Non précisé dans la décision",
     "keywords": "Mots clés",
     "keywordsOmitted": "{count} de plus",
-    "headnoteOmitted": "Les sommaires sont omis pour limiter la taille de cette page. Ouvrez la décision pour plus de détails."
+    "headnoteOmitted": "Les sommaires sont omis pour limiter la taille de cette page. Ouvrez la décision pour plus de détails.",
+    "chooseFile": "Choisir un fichier",
+    "noFileChosen": "Aucun fichier sélectionné"
   },
   "hu": {
     "constitutional": "Alkotmánybíróságok",
@@ -361,7 +373,9 @@
     "headnoteNotStated": "A határozat nem tartalmazza",
     "keywords": "Kulcsszavak",
     "keywordsOmitted": "További {count}",
-    "headnoteOmitted": "A döntvényi összefoglalók az oldal méretének csökkentése érdekében kimaradtak. A részletekért nyissa meg a határozatot."
+    "headnoteOmitted": "A döntvényi összefoglalók az oldal méretének csökkentése érdekében kimaradtak. A részletekért nyissa meg a határozatot.",
+    "chooseFile": "Fájl kiválasztása",
+    "noFileChosen": "Nincs kiválasztott fájl"
   },
   "lv": {
     "constitutional": "Konstitucionālās tiesas",
@@ -413,7 +427,9 @@
     "headnoteNotStated": "Nolēmumā nav norādīts",
     "keywords": "Atslēgvārdi",
     "keywordsOmitted": "Vēl {count}",
-    "headnoteOmitted": "Tēzes ir izlaistas, lai samazinātu šīs lapas apjomu. Lai skatītu sīkāku informāciju, atveriet nolēmumu."
+    "headnoteOmitted": "Tēzes ir izlaistas, lai samazinātu šīs lapas apjomu. Lai skatītu sīkāku informāciju, atveriet nolēmumu.",
+    "chooseFile": "Izvēlēties failu",
+    "noFileChosen": "Nav izvēlēts neviens fails"
   },
   "lt": {
     "constitutional": "Konstituciniai teismai",
@@ -465,7 +481,9 @@
     "headnoteNotStated": "Sprendime nenurodyta",
     "keywords": "Raktažodžiai",
     "keywordsOmitted": "Dar {count}",
-    "headnoteOmitted": "Tezės praleistos, kad šis puslapis būtų mažesnis. Daugiau informacijos rasite atidarę sprendimą."
+    "headnoteOmitted": "Tezės praleistos, kad šis puslapis būtų mažesnis. Daugiau informacijos rasite atidarę sprendimą.",
+    "chooseFile": "Pasirinkti failą",
+    "noFileChosen": "Failas nepasirinktas"
   },
   "pl": {
     "constitutional": "Trybunały konstytucyjne",
@@ -517,7 +535,9 @@
     "headnoteNotStated": "Orzeczenie tego nie wskazuje",
     "keywords": "Słowa kluczowe",
     "keywordsOmitted": "Jeszcze {count}",
-    "headnoteOmitted": "Tezy pominięto, aby ograniczyć rozmiar tej strony. Otwórz orzeczenie, aby zobaczyć szczegóły."
+    "headnoteOmitted": "Tezy pominięto, aby ograniczyć rozmiar tej strony. Otwórz orzeczenie, aby zobaczyć szczegóły.",
+    "chooseFile": "Wybierz plik",
+    "noFileChosen": "Nie wybrano pliku"
   },
   "pt-BR": {
     "constitutional": "Tribunais constitucionais",
@@ -570,7 +590,9 @@
     "headnoteNotStated": "Não consta na decisão",
     "keywords": "Palavras-chave",
     "keywordsOmitted": "Mais {count}",
-    "headnoteOmitted": "As ementas foram omitidas para limitar o tamanho desta página. Abra a decisão para consultar os detalhes."
+    "headnoteOmitted": "As ementas foram omitidas para limitar o tamanho desta página. Abra a decisão para consultar os detalhes.",
+    "chooseFile": "Escolher arquivo",
+    "noFileChosen": "Nenhum arquivo selecionado"
   },
   "sk": {
     "constitutional": "Ústavné súdy",
@@ -622,7 +644,9 @@
     "headnoteNotStated": "Rozhodnutie neuvádza",
     "keywords": "Kľúčové slová",
     "keywordsOmitted": "Ďalších {count}",
-    "headnoteOmitted": "Právne vety sú vynechané, aby stránka zostala malá. Podrobnosti nájdete po otvorení rozhodnutia."
+    "headnoteOmitted": "Právne vety sú vynechané, aby stránka zostala malá. Podrobnosti nájdete po otvorení rozhodnutia.",
+    "chooseFile": "Vybrať súbor",
+    "noFileChosen": "Nebol vybraný žiadny súbor"
   },
   "es": {
     "constitutional": "Tribunales constitucionales",
@@ -674,6 +698,8 @@
     "headnoteNotStated": "La resolución no lo indica",
     "keywords": "Palabras clave",
     "keywordsOmitted": "{count} más",
-    "headnoteOmitted": "Se omiten los sumarios para limitar el tamaño de esta página. Abra la resolución para consultar los detalles."
+    "headnoteOmitted": "Se omiten los sumarios para limitar el tamaño de esta página. Abra la resolución para consultar los detalles.",
+    "chooseFile": "Elegir archivo",
+    "noFileChosen": "Ningún archivo seleccionado"
   }
 }

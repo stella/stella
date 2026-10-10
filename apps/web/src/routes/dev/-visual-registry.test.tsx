@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
-import { visualRegistry } from "./-visual-metadata";
+import { playbookEditorStates, visualRegistry } from "./-visual-metadata";
 import { FixtureSection, visualSearchSchema } from "./-visual-registry";
 
 describe("registered visual fixtures", () => {
@@ -26,6 +26,11 @@ describe("registered visual fixtures", () => {
       expect(html).toContain('data-fixture-content="true"');
     });
   }
+
+  test("registers the playbook lifecycle capture states", () => {
+    expect(visualRegistry["playbook-editor"].layout).toBe("plain");
+    expect(playbookEditorStates).toEqual(["rejected", "editing", "parked"]);
+  });
 
   test("rejects unknown names and inherited object keys", () => {
     for (const visual of ["unknown", "toString", "__proto__", 1, null]) {

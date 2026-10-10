@@ -211,6 +211,8 @@ export const corpusStatusResponseSchema = t.Object(
 const relatedDecision = t.Object(
   {
     ...decision,
+    courtAbbreviation: nullableBoundedString(2048),
+    sourceUrl: nullableBoundedString(8192),
     caseNumberType: t.UnionEnum(DECISION_PRIMARY_REFERENCE_TYPES),
     citationAuthority: t.Number(),
   } satisfies Record<

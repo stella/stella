@@ -441,6 +441,9 @@ const fixtureRuleOverrides = [
     "bun-test-hygiene/no-promise-matchers",
     "bun-test-hygiene/no-unmanaged-database-client",
   ]),
+  fixtureRuleOverride("no-same-fixture-member-oracle.fixture.ts", [
+    "no-same-fixture-member-oracle/no-same-fixture-member-oracle",
+  ]),
   fixtureRuleOverride("no-untyped-updates.fixture.ts", [
     "no-untyped-updates/no-untyped-updates",
   ]),
@@ -1638,6 +1641,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-omitted-prop-respread.ts",
     "./.oxlint-plugins/no-duplicate-jsx-sibling-key.ts",
     "./.oxlint-plugins/bun-test-hygiene.ts",
+    "./.oxlint-plugins/no-same-fixture-member-oracle.ts",
     "./.oxlint-plugins/result-boundary.ts",
     "./.oxlint-plugins/require-exhaustive-panic.ts",
   ],
@@ -1767,6 +1771,7 @@ const config = defineConfig({
         "bun-test-hygiene/no-disabled-tests": "error",
         "bun-test-hygiene/no-identical-title": "error",
         "bun-test-hygiene/no-promise-matchers": "error",
+        "no-same-fixture-member-oracle/no-same-fixture-member-oracle": "error",
       },
     },
     {
@@ -4429,6 +4434,13 @@ const config = defineConfig({
       rules: {
         "no-secret-in-log-sink/no-secret-in-log-sink": "error",
       },
+    },
+    {
+      files: [
+        "apps/web/src/components/chat/request-secret-card.tsx",
+        "apps/web/src/features/chat/hooks/use-chat-session.ts",
+      ],
+      rules: { "no-secret-in-log-sink/no-secret-in-log-sink": "error" },
     },
     {
       files: ["apps/api/src/handlers/**/*.ts"],

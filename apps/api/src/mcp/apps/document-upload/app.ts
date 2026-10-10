@@ -16,7 +16,7 @@ import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-exec
 import { fetchWithTimeout } from "@stll/fetch";
 
 import { hashUploadFile } from "../file-content-hash";
-import "../style.css";
+import { mountFilePicker } from "../shared/file-picker";
 import { createUploadTargetController } from "./upload-target";
 
 const UPLOAD_TIMEOUT_MS = 1_800_000;
@@ -25,11 +25,11 @@ class UploadAppError extends TaggedError("UploadAppError")<{
   message: string;
 }> {}
 
-const fileInput = document.querySelector<HTMLInputElement>("#file");
+const picker = mountFilePicker();
 const uploadButton = document.querySelector<HTMLButtonElement>("#upload");
 const statusElement = document.querySelector<HTMLElement>("#status");
 const targetElement = document.querySelector<HTMLElement>("#target");
-if (!fileInput || !uploadButton || !statusElement || !targetElement) {
+if (!uploadButton || !statusElement || !targetElement) {
   panic("Document upload app markup is incomplete");
 }
 
@@ -54,18 +54,16 @@ const parsePayload = (result: AppToolResult): unknown => {
 };
 
 const targetController = createUploadTargetController({
-  hasSelectedFile: () => Boolean(fileInput.files?.item(0)),
+  hasSelectedFile: () => Boolean(picker.getFile("file")),
   setLabel: (label) => {
     targetElement.textContent = label;
   },
-  setUploadEnabled: (enabled) => {
-    uploadButton.disabled = !enabled;
-  },
+  setUploadEnabled: picker.setUploadEnabled,
 });
 
 const setStatus = (message: string, state: "idle" | "error" | "success") => {
   statusElement.textContent = message;
-  statusElement.className = `status-${state}`;
+  statusElement.className = `text-sm empty:hidden status-${state}`;
 };
 
 const callCapability = async (
@@ -132,8 +130,10 @@ const applyHostContext = (context: ReturnType<App["getHostContext"]>) => {
   if (!context) {
     return;
   }
+  picker.setLocale(context.locale);
   if (context.theme) {
     applyDocumentTheme(context.theme);
+    document.documentElement.classList.toggle("dark", context.theme === "dark");
   }
   if (context.styles?.variables) {
     applyHostStyleVariables(context.styles.variables);
@@ -151,18 +151,18 @@ app.addEventListener("toolresult", (result) =>
   targetController.handleToolResult(result.structuredContent),
 );
 
-fileInput.addEventListener("change", () => {
+picker.onFilesChanged(() => {
   targetController.handleFileChange();
   setStatus("", "idle");
 });
 
 const uploadSelectedFile = async (): Promise<void> => {
-  const file = fileInput.files?.item(0);
+  const file = picker.getFile("file");
   const uploadTarget = targetController.snapshot();
   if (!file || !uploadTarget) {
     return;
   }
-  uploadButton.disabled = true;
+  picker.setActivity("uploading");
   setStatus("Preparing upload…", "idle");
   let uploadId: string | undefined;
   try {
@@ -206,7 +206,7 @@ const uploadSelectedFile = async (): Promise<void> => {
       }),
     );
     uploadId = undefined;
-    fileInput.value = "";
+    picker.clearFiles();
     setStatus("New version uploaded.", "success");
   } catch (error) {
     let message = error instanceof Error ? error.message : "Upload failed";
@@ -235,12 +235,17 @@ const uploadSelectedFile = async (): Promise<void> => {
 };
 
 uploadButton.addEventListener("click", () => {
-  uploadSelectedFile().catch((error: unknown) => {
-    setStatus(
-      error instanceof Error ? error.message : "Upload failed",
-      "error",
-    );
-  });
+  uploadSelectedFile()
+    .finally(() => {
+      picker.setActivity("idle");
+      targetController.handleFileChange();
+    })
+    .catch((error: unknown) => {
+      setStatus(
+        error instanceof Error ? error.message : "Upload failed",
+        "error",
+      );
+    });
 });
 
 await app.connect();

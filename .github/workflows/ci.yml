@@ -2432,6 +2432,12 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun test scripts/ratchet-scan.test.ts
 
+      - name: Test subject reachability census
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: |
+          bun scripts/test-subject-reachability.ts --self-test
+          bun scripts/test-subject-reachability.ts --base "$RATCHET_BASE_REF"
+
       - name: Deployment feature guard
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # Every declared deployment flag has a reader and every flag read is
