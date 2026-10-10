@@ -104,15 +104,15 @@ describe("consumeInvokeCapabilityRateLimit", () => {
     ).toBe(true);
   });
 
-  test("skill source capabilities share one per-IP budget across organizations", async () => {
+  test("skill source capabilities share one per-user budget across organizations", async () => {
     const max = resolveInvokeRateLimit("skills.discover").max;
     const counts = new Map<string, number>();
     const consumeSkillSource = async ({
-      clientIp,
+      userId,
     }: {
-      clientIp: string | null;
+      userId: ReturnType<typeof user>;
     }) => {
-      const key = clientIp ?? "unknown";
+      const key = userId;
       const count = (counts.get(key) ?? 0) + 1;
       counts.set(key, count);
       return { ok: count <= max, retryAfterSeconds: 60 };
@@ -149,7 +149,18 @@ describe("consumeInvokeCapabilityRateLimit", () => {
         })
       ).ok,
     ).toBe(false);
-    expect(counts.get("192.0.2.1")).toBe(max + 1);
+    expect(counts.get("user_a")).toBe(max + 1);
+    expect(
+      (
+        await consumeInvokeCapabilityRateLimit({
+          capabilityId: "skills.discover",
+          clientIp: "192.0.2.1",
+          consumeSkillSource,
+          organizationId: org("org_a"),
+          userId: user("user_b"),
+        })
+      ).ok,
+    ).toBe(true);
   });
 
   test("distinct callers in one organization share no budget", async () => {

@@ -1,4 +1,5 @@
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
+import { Temporal } from "@stll/time";
 
 import { resolveRateLimitClientAddress } from "@/api/lib/client-ip";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
@@ -69,12 +70,7 @@ const addressKey = (
   return clientIp ? `${scope}:ip:${clientIp}` : scope;
 };
 
-/**
- * The credential bucket alone does not bound a caller who invents a new
- * bearer value per request: every value opens a fresh bucket, and every
- * request still costs a token verification. The address bucket sits in front
- * of it so that rotation is charged to the one thing the caller cannot rotate.
- */
+/** Invalid credentials share an address budget; authenticated traffic does not. */
 export const mcpTransportAddressRateLimitKey: RateLimitGenerator = (
   request,
   server,
@@ -134,3 +130,52 @@ export const createMcpTransportAddressRateLimitOptions = () =>
       scope: MCP_TRANSPORT_ADDRESS_RATE_LIMIT_SCOPE,
     }),
   }) as const satisfies RateLimitOptions;
+
+export const createMcpAuthenticationFailureLimiter = (
+  options: RateLimitOptions = createMcpTransportAddressRateLimitOptions(),
+) => {
+  options.context.init({ duration: options.duration });
+  return async ({
+    request,
+    response,
+    clientIp,
+  }: {
+    request: Request;
+    response: Response;
+    clientIp?: string | null | undefined;
+  }): Promise<Response> => {
+    // Authentication owns the 401 decision. Charging accepted credentials here
+    // would turn a shared assistant egress address into a shared user quota.
+    if (response.status !== 401) {
+      return response;
+    }
+    const key = await options.generator(
+      request,
+      clientIp ? { requestIP: () => ({ address: clientIp }) } : null,
+    );
+    const counter = await options.context.increment(key, options.duration);
+    await options.context.complete(key);
+    if (counter.count <= options.max) {
+      return response;
+    }
+    const resetSeconds = Math.max(
+      1,
+      Math.ceil(
+        (counter.nextReset.getTime() -
+          Temporal.Now.instant().epochMilliseconds) /
+          1000,
+      ),
+    );
+    const headers = new Headers(response.headers);
+    headers.delete("content-length");
+    headers.set("content-type", "application/json");
+    headers.set("Retry-After", String(resetSeconds));
+    headers.set("RateLimit-Limit", String(options.max));
+    headers.set("RateLimit-Remaining", "0");
+    headers.set("RateLimit-Reset", String(resetSeconds));
+    return Response.json(MCP_RATE_LIMIT_JSON_RPC_ERROR, {
+      status: 429,
+      headers,
+    });
+  };
+};

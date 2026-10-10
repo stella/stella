@@ -27,7 +27,7 @@ import {
 
 type HandleMcpHttpRequest = (
   request: Request,
-  options?: { clientIp?: string | null; mode?: McpMode },
+  options?: { clientIp?: string | null | undefined; mode?: McpMode },
 ) => Promise<Response>;
 
 type RouteSet = {
@@ -116,15 +116,21 @@ const discoveryOptionsHandler = ({ set }: { set: RouteSet }) => {
 
 export const createMcpRoute = ({
   handleMcpHttpRequest,
+  limitAuthenticationFailure,
 }: {
   handleMcpHttpRequest: HandleMcpHttpRequest;
+  limitAuthenticationFailure?: (options: {
+    request: Request;
+    response: Response;
+    clientIp?: string | null | undefined;
+  }) => Promise<Response>;
 }) => {
   const handleMcpTransportRoute = async ({
     options,
     request,
     set,
   }: {
-    options?: { clientIp?: string | null; mode?: McpMode };
+    options?: { clientIp?: string | null | undefined; mode?: McpMode };
     request: Request;
     set: RouteSet;
   }) => {
@@ -137,7 +143,14 @@ export const createMcpRoute = ({
       });
     }
 
-    return await handleMcpHttpRequest(request, options);
+    const response = await handleMcpHttpRequest(request, options);
+    return limitAuthenticationFailure
+      ? await limitAuthenticationFailure({
+          request,
+          response,
+          clientIp: options?.clientIp,
+        })
+      : response;
   };
 
   return new Elysia()

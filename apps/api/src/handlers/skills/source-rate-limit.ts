@@ -1,10 +1,14 @@
 import { Temporal } from "@stll/time";
 
-import { normalizeRateLimitClientAddress } from "@/api/lib/client-ip";
-import { API_RATE_LIMITS } from "@/api/lib/limits";
+import type { SafeId } from "@/api/lib/branded-types";
 import {
-  type RateLimitContext,
-  scopedGenerator,
+  resolveRateLimitClientAddress,
+  normalizeRateLimitClientAddress,
+} from "@/api/lib/client-ip";
+import { API_RATE_LIMITS } from "@/api/lib/limits";
+import type {
+  RateLimitContext,
+  RateLimitGenerator,
 } from "@/api/lib/rate-limit/rate-limit";
 import {
   createRedisRateLimit,
@@ -19,13 +23,41 @@ const SKILL_SOURCE_PATHS = new Set([
 
 const SKILL_SOURCE_RATE_LIMIT_SCOPE = "skill-source";
 
-const skillSourceRateLimitCounterKey = (clientIp: string | null): string =>
-  clientIp
+const skillSourceRateLimitCounterKey = ({
+  clientIp,
+  userId,
+}: {
+  clientIp: string | null;
+  userId?: SafeId<"user"> | undefined;
+}): string => {
+  if (userId) {
+    return `${SKILL_SOURCE_RATE_LIMIT_SCOPE}:user:${userId}`;
+  }
+  return clientIp
     ? `${SKILL_SOURCE_RATE_LIMIT_SCOPE}:${normalizeRateLimitClientAddress(clientIp)}`
     : SKILL_SOURCE_RATE_LIMIT_SCOPE;
+};
+
+export const createSkillSourceRateLimitGenerator =
+  (
+    readUserId: (request: Request) => Promise<SafeId<"user"> | null> = async (
+      request,
+    ) => {
+      // auth.ts composes the generated capability registry, which imports this owner.
+      const { resolveRateLimitSessionUserId } = await import("@/api/lib/auth");
+      return await resolveRateLimitSessionUserId(request.headers);
+    },
+  ): RateLimitGenerator =>
+  async (request, server) => {
+    const userId = await readUserId(request);
+    return skillSourceRateLimitCounterKey({
+      clientIp: resolveRateLimitClientAddress({ request, server }),
+      ...(userId ? { userId } : {}),
+    });
+  };
 
 export const skillSourceRateLimitBinding = createRedisRateLimit({
-  counterKeyGenerator: scopedGenerator(SKILL_SOURCE_RATE_LIMIT_SCOPE),
+  counterKeyGenerator: createSkillSourceRateLimitGenerator(),
   failurePolicy: "fail_open_local",
   scope: SKILL_SOURCE_RATE_LIMIT_SCOPE,
 });
@@ -37,18 +69,22 @@ export type SkillSourceRateLimitResult = {
 
 export const consumeSkillSourceRateLimit = async ({
   clientIp,
+  userId,
   context = skillSourceRateLimitBinding.context,
   requestId = Bun.randomUUIDv7(),
 }: {
   clientIp: string | null;
-  context?: Pick<RateLimitContext, "increment">;
+  userId?: SafeId<"user"> | undefined;
+  context?: Pick<RateLimitContext, "increment" | "complete">;
   requestId?: string;
 }): Promise<SkillSourceRateLimitResult> => {
-  const counterKey = skillSourceRateLimitCounterKey(clientIp);
+  const counterKey = skillSourceRateLimitCounterKey({ clientIp, userId });
+  const key = createRedisRateLimitRequestKey({ counterKey, requestId });
   const counter = await context.increment(
-    createRedisRateLimitRequestKey({ counterKey, requestId }),
+    key,
     API_RATE_LIMITS.skillSource.duration,
   );
+  await context.complete(key);
   return {
     ok: counter.count <= API_RATE_LIMITS.skillSource.max,
     retryAfterSeconds: Math.max(

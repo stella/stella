@@ -19,7 +19,9 @@ import { panic } from "better-result";
  * An edge that reports the viewer address in a header of its own (for
  * example CloudFront's `CloudFront-Viewer-Address`) is named with
  * `STELLA_CLIENT_ADDRESS_HEADER`. That header is read only from a trusted
- * peer and takes precedence over the `x-forwarded-for` chain.
+ * peer and takes precedence over the `x-forwarded-for` chain. Hosted production
+ * requires a matching origin verification value; development and the stock
+ * self-host profile may leave origin verification unconfigured.
  *
  * A further edge may supply the address in {@link FRONTEND_ADDRESS_HEADER},
  * accepted only with a matching {@link FRONTEND_VERIFY_HEADER}. From a
@@ -30,6 +32,7 @@ import { panic } from "better-result";
 import { timingSafeEqual } from "node:crypto";
 import { BlockList, isIP, isIPv4, isIPv6 } from "node:net";
 
+import { NODE_ENV, type NodeEnvLabel } from "@stll/runtime-mode";
 import { sha256Bytes as hashSha256Bytes } from "@stll/sha256/bun";
 
 import { env } from "@/api/env";
@@ -42,6 +45,7 @@ import {
   type SignupRateLimitIpSource,
 } from "@/api/lib/client-ip-config";
 import { logger } from "@/api/lib/observability/logger";
+import { runtimeNodeEnv } from "@/api/runtime-mode";
 
 /**
  * The header stella sets on every request after resolving the client address,
@@ -231,12 +235,14 @@ export const parseEdgeClientAddress = (
 };
 
 type ClientAddressOptions = {
+  nodeEnv?: NodeEnvLabel | undefined;
+  selfhostLocalPasswordAuth?: boolean | undefined;
   trusted?: TrustedProxies;
   /** Header name carrying the edge's viewer address; null disables it. */
   edgeHeader?: string | null;
   /**
-   * Accepted {@link ORIGIN_VERIFY_HEADER} values; when non-empty, the edge
-   * header is read only from requests carrying one of them.
+   * Configured origin values must match in every runtime. Without values,
+   * hosted production ignores the edge header; development and self-host do not.
    */
   originSecrets?: readonly string[];
   /** How the edge header spells the address; defaults to the configured one. */
@@ -266,19 +272,44 @@ const carriesSecret = (
     .includes(true);
 };
 
-// Without origin values the API edge's header is trusted from any trusted
-// peer, as before origin verification existed.
-const carriesOriginSecret = (
-  request: Request,
-  secrets: readonly string[],
-): boolean =>
-  secrets.length === 0 || carriesSecret(request, ORIGIN_VERIFY_HEADER, secrets);
-
 const parseSecretList = (value: string | undefined): readonly string[] =>
   (value ?? "")
     .split(",")
     .map((part) => part.trim())
     .filter((part) => part.length > 0);
+
+type ClientAddressConfigurationOptions = {
+  nodeEnv: NodeEnvLabel;
+  selfhostLocalPasswordAuth?: boolean | undefined;
+  edgeHeader?: string | undefined;
+  originVerifySecret?: string | undefined;
+  frontendVerifySecret?: string | undefined;
+};
+
+/** Structured warning event for deployments unable to verify a viewer header. */
+export const clientAddressConfigurationWarning = ({
+  nodeEnv,
+  selfhostLocalPasswordAuth = false,
+  edgeHeader,
+  originVerifySecret,
+  frontendVerifySecret,
+}: ClientAddressConfigurationOptions):
+  | "client_ip.viewer_address_unconfigured"
+  | null => {
+  if (nodeEnv !== NODE_ENV.production || selfhostLocalPasswordAuth) {
+    return null;
+  }
+  const edgeRequested = Boolean(edgeHeader?.trim());
+  const edgeConfigured =
+    edgeRequested && parseSecretList(originVerifySecret).length > 0;
+  if (edgeRequested && !edgeConfigured) {
+    return "client_ip.viewer_address_unconfigured";
+  }
+  const frontendConfigured = parseSecretList(frontendVerifySecret).length > 0;
+  return edgeConfigured || frontendConfigured
+    ? null
+    : "client_ip.viewer_address_unconfigured";
+};
 
 let cachedOriginSecrets: readonly string[] | null = null;
 
@@ -302,6 +333,7 @@ type TrustedPeerInput = {
   originSecrets: readonly string[];
   edgeAddressFormat: EdgeAddressFormat;
   frontendSecrets: readonly string[];
+  originVerification: "required" | "optional";
 };
 
 const addressFromTrustedPeer = ({
@@ -312,6 +344,7 @@ const addressFromTrustedPeer = ({
   originSecrets,
   edgeAddressFormat,
   frontendSecrets,
+  originVerification,
 }: TrustedPeerInput): ClientAddress | null => {
   // The frontend edge writes the bare address; any other spelling falls
   // through.
@@ -324,7 +357,11 @@ const addressFromTrustedPeer = ({
       return { address, source: CLIENT_ADDRESS_SOURCE.frontendHeader };
     }
   }
-  if (edgeHeader !== null && carriesOriginSecret(request, originSecrets)) {
+  if (
+    edgeHeader !== null &&
+    ((originSecrets.length === 0 && originVerification === "optional") ||
+      carriesSecret(request, ORIGIN_VERIFY_HEADER, originSecrets))
+  ) {
     const address = parseEdgeClientAddress(
       request.headers.get(edgeHeader),
       edgeAddressFormat,
@@ -378,6 +415,13 @@ export const resolveClientAddress = (
       edgeAddressFormat:
         options?.edgeAddressFormat ?? env.STELLA_CLIENT_ADDRESS_FORMAT,
       frontendSecrets: options?.frontendSecrets ?? getFrontendSecrets(),
+      originVerification:
+        (options?.nodeEnv ?? runtimeNodeEnv()) === NODE_ENV.production &&
+        !(
+          options?.selfhostLocalPasswordAuth ?? env.SELFHOST_LOCAL_PASSWORD_AUTH
+        )
+          ? "required"
+          : "optional",
     }) ?? {
       address: peer,
       source: CLIENT_ADDRESS_SOURCE.peer,
@@ -484,6 +528,13 @@ export const resolveSignupRateLimitClientIp = (
       edgeAddressFormat:
         options?.edgeAddressFormat ?? env.STELLA_CLIENT_ADDRESS_FORMAT,
       frontendSecrets: options?.frontendSecrets ?? getFrontendSecrets(),
+      originVerification:
+        (options?.nodeEnv ?? runtimeNodeEnv()) === NODE_ENV.production &&
+        !(
+          options?.selfhostLocalPasswordAuth ?? env.SELFHOST_LOCAL_PASSWORD_AUTH
+        )
+          ? "required"
+          : "optional",
     })?.address ?? null
   );
 };

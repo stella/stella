@@ -18,6 +18,11 @@ import {
   isLoopbackRedirectUri,
   OAUTH_CLIENT_REGISTRATION_PATH,
 } from "@/api/lib/oauth-loopback-registration";
+import {
+  createAuthRequestBudgetMiddleware,
+  isAuthRequestBudgetPath,
+} from "@/api/lib/rate-limit/auth-request-budget";
+import type { createAuthRateLimitStorage } from "@/api/lib/rate-limit/auth-storage";
 import { isRecord } from "@/api/lib/type-guards";
 
 export const OAUTH_REGISTRATION_SCOPE_POLICY = {
@@ -403,7 +408,16 @@ type StellaOAuthProviderOptions = OAuthOptions<Scope[]> &
 
 export const createStellaOAuthProvider = (
   options: StellaOAuthProviderOptions,
-  { verifiedOrigins }: { verifiedOrigins: readonly string[] },
+  {
+    verifiedOrigins,
+    requestBudget,
+  }: {
+    verifiedOrigins: readonly string[];
+    requestBudget: {
+      storage: ReturnType<typeof createAuthRateLimitStorage>;
+      enabled: boolean;
+    };
+  },
 ) => {
   if (options.requestUriResolver) {
     // The scope policy reads the request's own parameters; a resolved
@@ -452,6 +466,16 @@ export const createStellaOAuthProvider = (
     hooks: {
       ...provider.hooks,
       before: [
+        {
+          matcher: (ctx: HookEndpointContext) =>
+            isAuthRequestBudgetPath(ctx.path ?? "") &&
+            (ctx.path?.startsWith("/oauth2/") ?? false),
+          handler: createAuthRequestBudgetMiddleware({
+            ...requestBudget,
+            type: "oauth",
+            providerOptions: policyOptions,
+          }),
+        },
         ...provider.hooks.before,
         {
           matcher: (ctx: HookEndpointContext) =>
