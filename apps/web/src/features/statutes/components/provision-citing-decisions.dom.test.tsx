@@ -204,7 +204,7 @@ for (const [locale, messages] of [
     );
     const ui = await mount({ client: createClient(), locale, messages });
 
-    expect(ui.queryByRole("status")).not.toBeNull();
+    expect(ui.container.querySelector('[aria-busy="true"]')).not.toBeNull();
     await act(async () => {
       firstRead.resolve(
         Response.json({ message: "Read unavailable" }, { status: 503 }),
@@ -233,9 +233,11 @@ for (const [locale, messages] of [
       onFiltersChange: (nextFilters) => changes.push(nextFilters),
     });
 
-    expect(ui.getAllByRole("link", { name: /1 C 11\/2020/u })).toHaveLength(1);
+    expect(ui.getAllByRole("button", { name: /1 C 11\/2020/u })).toHaveLength(
+      1,
+    );
     fireEvent.change(
-      ui.getByRole("searchbox", { name: messages.caseLaw.filters.court }),
+      ui.getByRole("searchbox", { name: messages.common.court }),
       {
         target: { value: " Supreme Court " },
       },
@@ -255,11 +257,11 @@ for (const [locale, messages] of [
     expect(ui.getByRole("button", { name: /1 C 11\/2020/u })).toBeTruthy();
 
     fireEvent.click(ui.getByRole("combobox", { name: messages.common.sort }));
-    fireEvent.click(
-      await ui.findByRole("option", {
-        name: messages.statutes.citingDecisionsSortCitations,
-      }),
-    );
+    const citationSort = await ui.findByRole("option", {
+      name: messages.statutes.citingDecisionsSortCitations,
+    });
+    fireEvent.pointerDown(citationSort, { pointerType: "mouse" });
+    fireEvent.click(citationSort, { detail: 1 });
     expect(changes.at(-1)).toEqual({
       citingSort: "citations",
     });
@@ -270,7 +272,7 @@ for (const [locale, messages] of [
     seed(client, []);
     const ui = await mount({ client, locale, messages });
     expect(ui.getByText(messages.common.noResults)).toBeTruthy();
-    expect(ui.queryByRole("status")).toBeNull();
+    expect(ui.container.querySelector('[aria-busy="true"]')).toBeNull();
   });
 
   test(`${locale}: capped citation snapshot shows its count and has no load more`, async () => {

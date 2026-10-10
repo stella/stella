@@ -130,12 +130,9 @@ test("citing filters update route search and the next API request, then clear bo
   );
 
   await waitFor(() => expect(requests).toHaveLength(1));
-  fireEvent.change(
-    ui.getByRole("searchbox", { name: messages.caseLaw.filters.court }),
-    {
-      target: { value: " Supreme Court " },
-    },
-  );
+  fireEvent.change(ui.getByRole("searchbox", { name: messages.common.court }), {
+    target: { value: " Supreme Court " },
+  });
   fireEvent.change(
     ui.getByRole("spinbutton", {
       name: messages.statutes.citingDecisionsYear,
@@ -158,12 +155,9 @@ test("citing filters update route search and the next API request, then clear bo
   expect(requests.at(1)?.searchParams.get("court")).toBe("Supreme Court");
   expect(requests.at(1)?.searchParams.get("year")).toBe("2020");
 
-  fireEvent.change(
-    ui.getByRole("searchbox", { name: messages.caseLaw.filters.court }),
-    {
-      target: { value: "" },
-    },
-  );
+  fireEvent.change(ui.getByRole("searchbox", { name: messages.common.court }), {
+    target: { value: "" },
+  });
   fireEvent.change(
     ui.getByRole("spinbutton", {
       name: messages.statutes.citingDecisionsYear,

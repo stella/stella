@@ -104,7 +104,7 @@ export const ProvisionCitingDecisions = ({
         }}
       >
         <Input
-          aria-label={t("caseLaw.filters.court")}
+          aria-label={t("common.court")}
           className="min-w-24 flex-1"
           size="sm"
           defaultValue={filters.citingCourt ?? ""}
