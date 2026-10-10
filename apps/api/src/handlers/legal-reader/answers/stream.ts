@@ -308,6 +308,10 @@ export const streamReaderAnswer = ({
                                 { role: "user", content: prompt.context },
                                 ...prepared.history
                                   .filter(({ status }) => status === "complete")
+                                  .toSorted(
+                                    (left, right) =>
+                                      left.sequence - right.sequence,
+                                  )
                                   .map(({ role, content }) => ({
                                     role,
                                     content,

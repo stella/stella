@@ -8,7 +8,7 @@ import {
   setSystemTime,
   test,
 } from "bun:test";
-import { eq } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import * as v from "valibot";
 
 import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
@@ -143,7 +143,9 @@ const message = async (prepared: ReaderAnswerStreamOptions["prepared"]) =>
       .where(eq(legalReaderAnswerMessages.id, prepared.messageId))
   ).at(0);
 
-const reload = async (prepared: ReaderAnswerStreamOptions["prepared"]) => {
+const reloadThread = async (
+  prepared: ReaderAnswerStreamOptions["prepared"],
+) => {
   const result = await Result.gen(async function* () {
     return yield* listReaderAnswersHandler({
       ...scope(),
@@ -154,6 +156,11 @@ const reload = async (prepared: ReaderAnswerStreamOptions["prepared"]) => {
     throw result.error;
   }
   const thread = result.value.items.find(({ id }) => id === prepared.answer.id);
+  expect(thread).toBeDefined();
+  return thread;
+};
+const reload = async (prepared: ReaderAnswerStreamOptions["prepared"]) => {
+  const thread = await reloadThread(prepared);
   const assistant = thread?.messages.find(
     ({ id }) => id === prepared.messageId,
   );
@@ -857,6 +864,145 @@ describe("reader answer turn lifecycle", () => {
       invalidCitationCount: 1,
       citations: [{ decisionId: relatedId, paragraphId: "p-7" }],
     });
+  });
+
+  test("frozen timestamps preserve turn order in prompts and list reload across regeneration", async () => {
+    const frozenAt = new Date();
+    setSystemTime(frozenAt);
+    const first = await prepare({
+      type: "create",
+      body: {
+        kind: "ask",
+        question: "Question one",
+        decisionId,
+        anchor,
+        locale: "cs-CZ",
+      },
+    });
+    type RunFrozenTurnOptions = {
+      prepared: ReaderAnswerStreamOptions["prepared"];
+      expectedHistory: readonly {
+        role: "user" | "assistant";
+        content: string;
+      }[];
+      content: string;
+    };
+    const runTurn = async ({
+      prepared,
+      expectedHistory,
+      content,
+    }: RunFrozenTurnOptions) => {
+      expect(
+        prepared.history.map(({ role, content: text }) => ({
+          role,
+          content: text,
+        })),
+      ).toEqual(expectedHistory);
+      await complete(prepared, {
+        runModel: async (input) => {
+          expect(
+            input.messages
+              .slice(1)
+              .map(({ role, content: text }) => ({ role, content: text })),
+          ).toEqual(expectedHistory);
+          return Result.ok({ content, model: "fixture", usage: null });
+        },
+      });
+    };
+    await runTurn({
+      prepared: first,
+      expectedHistory: [{ role: "user", content: "Question one" }],
+      content: "Answer one",
+    });
+    const pair = await database
+      .select()
+      .from(legalReaderAnswerMessages)
+      .where(eq(legalReaderAnswerMessages.answerId, first.answer.id));
+    const firstUser = pair.find(({ role }) => role === "user");
+    const firstAssistant = pair.find(({ role }) => role === "assistant");
+    if (firstUser === undefined || firstAssistant === undefined) {
+      throw new HandlerError({
+        status: 500,
+        message: "Missing frozen-clock fixture turn",
+      });
+    }
+    // Pin UUID order opposite turn order; random UUID ordering must not decide this test.
+    if (firstUser.id < firstAssistant.id) {
+      const temporaryId = createSafeId<"legalReaderAnswerMessage">();
+      await database.transaction(async (tx) => {
+        await tx
+          .update(legalReaderAnswerMessages)
+          .set({ id: temporaryId })
+          .where(eq(legalReaderAnswerMessages.id, firstUser.id));
+        await tx
+          .update(legalReaderAnswerMessages)
+          .set({ id: firstUser.id })
+          .where(eq(legalReaderAnswerMessages.id, firstAssistant.id));
+        await tx
+          .update(legalReaderAnswerMessages)
+          .set({ id: firstAssistant.id })
+          .where(eq(legalReaderAnswerMessages.id, temporaryId));
+      });
+    }
+    const followUp = await prepare({
+      type: "follow-up",
+      answerId: first.answer.id,
+      body: { question: "Question two", locale: "cs-CZ" },
+    });
+    const history = [
+      { role: "user", content: "Question one" },
+      { role: "assistant", content: "Answer one" },
+      { role: "user", content: "Question two" },
+    ] as const;
+    await runTurn({
+      prepared: followUp,
+      expectedHistory: history,
+      content: "Answer two",
+    });
+    const expected = [...history, { role: "assistant", content: "Answer two" }];
+    const listed = await reloadThread(followUp);
+    expect(
+      listed?.messages.map(({ role, content }) => ({ role, content })),
+    ).toEqual(expected);
+    const legacy = await database
+      .select()
+      .from(legalReaderAnswerMessages)
+      .where(eq(legalReaderAnswerMessages.answerId, first.answer.id))
+      .orderBy(
+        asc(legalReaderAnswerMessages.createdAt),
+        asc(legalReaderAnswerMessages.id),
+      );
+    expect(
+      legacy.every(
+        ({ createdAt }) => createdAt.getTime() === frozenAt.getTime(),
+      ),
+    ).toBe(true);
+    expect(legacy.map(({ role, content }) => ({ role, content }))).not.toEqual(
+      expected,
+    );
+    const oldSequence = (await message(followUp))?.sequence;
+    const regenerated = await prepare({
+      type: "regenerate",
+      answerId: first.answer.id,
+      body: { locale: "cs-CZ" },
+    });
+    expect(regenerated.messageId).not.toBe(followUp.messageId);
+    expect((await message(regenerated))?.sequence).toBe(oldSequence);
+    await runTurn({
+      prepared: regenerated,
+      expectedHistory: history,
+      content: "Answer two regenerated",
+    });
+    expect(
+      (await reloadThread(regenerated))?.messages.map(({ role, content }) => ({
+        role,
+        content,
+      })),
+    ).toEqual([
+      ...history,
+      { role: "assistant", content: "Answer two regenerated" },
+    ]);
+    expect(await message(followUp)).toBeUndefined();
   });
 
   test("follow-up preserves history and regeneration replaces the final assistant message", async () => {

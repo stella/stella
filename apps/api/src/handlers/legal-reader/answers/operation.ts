@@ -139,6 +139,7 @@ const regenerateLastReaderAnswer = async ({
         .values({
           id: messageId,
           answerId,
+          sequence: last.sequence,
           role: "assistant",
           content: "",
           status: "streaming",
@@ -318,10 +319,7 @@ export const prepareReaderAnswer = async (
       .select()
       .from(legalReaderAnswerMessages)
       .where(eq(legalReaderAnswerMessages.answerId, answerId))
-      .orderBy(
-        asc(legalReaderAnswerMessages.createdAt),
-        asc(legalReaderAnswerMessages.id),
-      )
+      .orderBy(asc(legalReaderAnswerMessages.sequence))
       .limit(READER_ANSWER_MAX_MESSAGES);
     const streaming = messages.find(({ status }) => status === "streaming");
     const now = new Date();
@@ -381,21 +379,28 @@ export const prepareReaderAnswer = async (
       );
     }
     const messageId = createSafeId<"legalReaderAnswerMessage">();
+    // The parent lock serializes sequence allocation across turn claims.
+    let nextSequence = 1;
+    for (const { sequence } of messages) {
+      nextSequence = Math.max(nextSequence, sequence + 1);
+    }
     const inserted = await tx
       .insert(legalReaderAnswerMessages)
       .values([
         {
           id: createSafeId<"legalReaderAnswerMessage">(),
           answerId,
+          sequence: nextSequence,
           role: "user",
           content: question,
           status: "complete",
-          createdAt: new Date(now.getTime() - 1),
+          createdAt: now,
           updatedAt: now,
         },
         {
           id: messageId,
           answerId,
+          sequence: nextSequence + 1,
           role: "assistant",
           content: "",
           status: "streaming",

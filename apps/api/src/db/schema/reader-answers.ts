@@ -94,6 +94,8 @@ export const legalReaderAnswerMessages = p.pgTable(
   {
     id: pUuid<"legalReaderAnswerMessage">().primaryKey(),
     answerId: safeUuid<"legalReaderAnswer">("answer_id").notNull(),
+    /** Stable conversational order assigned while the parent answer is locked. */
+    sequence: p.integer("sequence").notNull(),
     role: p.text("role", { enum: READER_ANSWER_MESSAGE_ROLES }).notNull(),
     content: p.text("content").notNull(),
     citations: jsonb("citations")
@@ -124,8 +126,12 @@ export const legalReaderAnswerMessages = p.pgTable(
       })
       .onDelete("cascade"),
     p
-      .index("legal_reader_answer_messages_answer_idx")
-      .on(t.answerId, t.createdAt, t.id),
+      .uniqueIndex("legal_reader_answer_messages_answer_sequence_idx")
+      .on(t.answerId, t.sequence),
+    p.check(
+      "legal_reader_answer_messages_sequence_positive",
+      sql`${t.sequence} > 0`,
+    ),
     p.check(
       "legal_reader_answer_messages_role_values",
       sql`${t.role} IN (${sqlValues(READER_ANSWER_MESSAGE_ROLES)})`,

@@ -84,13 +84,19 @@ type UnexpectedAnswerColumn = UnbackedProjectionKeys<
   typeof ANSWER_PROJECTION,
   (typeof UNPROJECTED_ANSWER_COLUMNS)[number]
 >;
+const UNPROJECTED_MESSAGE_COLUMNS = [
+  // Sequence orders the returned array without exposing storage positions.
+  "sequence",
+] as const satisfies readonly (keyof typeof legalReaderAnswerMessages.$inferSelect)[];
 type MissingMessageColumn = UnprojectedColumns<
   typeof legalReaderAnswerMessages.$inferSelect,
-  typeof MESSAGE_PROJECTION
+  typeof MESSAGE_PROJECTION,
+  (typeof UNPROJECTED_MESSAGE_COLUMNS)[number]
 >;
 type UnexpectedMessageColumn = UnbackedProjectionKeys<
   typeof legalReaderAnswerMessages.$inferSelect,
-  typeof MESSAGE_PROJECTION
+  typeof MESSAGE_PROJECTION,
+  (typeof UNPROJECTED_MESSAGE_COLUMNS)[number]
 >;
 
 true satisfies MissingAnswerColumn extends never ? true : never;
@@ -170,8 +176,8 @@ export const listReaderAnswersHandler = async function* ({
               )
               .where(inArray(legalReaderAnswerMessages.answerId, ids))
               .orderBy(
-                asc(legalReaderAnswerMessages.createdAt),
-                asc(legalReaderAnswerMessages.id),
+                asc(legalReaderAnswerMessages.answerId),
+                asc(legalReaderAnswerMessages.sequence),
               )
               .limit(limit * READER_ANSWER_MAX_MESSAGES),
           ),
