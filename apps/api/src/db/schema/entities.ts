@@ -13,6 +13,11 @@ import {
 import type { SkippedSkillFile } from "@/api/lib/skills/skill-package";
 
 import {
+  entityFeatureGateChecks,
+  entityFeatureGateColumns,
+  entityFeatureWorkspaceGateColumns,
+} from "../entity-feature-gate-columns";
+import {
   deletionCleanupConstraints,
   deletionCleanupRetryColumns,
   destructiveEffectChunkColumns,
@@ -72,6 +77,7 @@ const ENTITY_DELETION_CLEANUP_STATUS_SQL_VALUES =
 export const entities = p.pgTable(
   "entities",
   {
+    ...entityFeatureGateColumns(),
     id: pUuid<"entity">().primaryKey(),
     workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
@@ -178,6 +184,7 @@ export const entities = p.pgTable(
       .index("entities_due_date_idx")
       .on(table.workspaceId, table.dueDate)
       .where(isNotNull(table.dueDate)),
+    ...entityFeatureGateChecks(table),
     p.check(
       "entities_list_item_type_task_only",
       sql`${table.listItemType} IS NULL OR (${table.kind} = 'task' AND ${table.listItemType} IN (${sql.join(LIST_ITEM_TYPE_SQL_VALUES, sql`, `)}))`,
@@ -292,6 +299,8 @@ export const entityDeletionEffectChunks = p.pgTable.withRLS(
 export const taskAssignees = p.pgTable(
   "task_assignees",
   {
+    ...entityFeatureGateColumns(),
+    ...entityFeatureWorkspaceGateColumns(),
     id: pUuid<"taskAssignee">().primaryKey(),
     workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
@@ -307,6 +316,7 @@ export const taskAssignees = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     p.index("task_assignees_workspace_id_idx").on(table.workspaceId),
     p.index("task_assignees_entity_id_idx").on(table.entityId),
     p.index("task_assignees_user_id_idx").on(table.userId),
@@ -325,6 +335,8 @@ export const taskAssignees = p.pgTable(
 export const entityLinks = p.pgTable(
   "entity_links",
   {
+    ...entityFeatureGateColumns(),
+    ...entityFeatureWorkspaceGateColumns(),
     id: pUuid<"entityLink">().primaryKey(),
     workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
@@ -342,6 +354,7 @@ export const entityLinks = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     p.index("entity_links_workspace_id_idx").on(table.workspaceId),
     p.index("entity_links_source_idx").on(table.sourceEntityId),
     p.index("entity_links_target_idx").on(table.targetEntityId),
@@ -372,6 +385,7 @@ export const entityLinks = p.pgTable(
 export const entityVersions = p.pgTable(
   "entity_versions",
   {
+    ...entityFeatureGateColumns(),
     id: pUuid<"entityVersion">().primaryKey(),
     workspaceId: safeWorkspaceId("workspace_id").notNull(),
     entityId: safeUuid<"entity">("entity_id").notNull(),
@@ -422,6 +436,7 @@ export const entityVersions = p.pgTable(
     deletedBy: p.text("deleted_by"),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     p
       .uniqueIndex("entity_versions_id_entity_ws_uidx")
       .on(table.id, table.entityId, table.workspaceId),
@@ -433,6 +448,9 @@ export const entityVersions = p.pgTable(
       sql`${table.collaborationContributorUserIds} IS NULL OR (jsonb_typeof(${table.collaborationContributorUserIds}) = 'array' AND jsonb_array_length(${table.collaborationContributorUserIds}) <= ${FOLIO_COLLAB_CONTRIBUTOR_MAX_COUNT})`,
     ),
     p.index("entity_versions_entity_id_idx").on(table.entityId),
+    // Equality reads need the heap's row-local gate; hash lookup avoids repeated
+    // B-tree levels when search checks the current version for each match.
+    p.index("entity_versions_id_hash_idx").using("hash", table.id),
     p
       .index("entity_versions_stamp_idx")
       .on(table.stamp)
@@ -460,6 +478,8 @@ export const entityVersions = p.pgTable(
 export const entityVersionAiSummaries = p.pgTable(
   "entity_version_ai_summaries",
   {
+    ...entityFeatureGateColumns(),
+    ...entityFeatureWorkspaceGateColumns(),
     id: pUuid<"entityVersionAiSummary">().primaryKey(),
     organizationId: safeOrganizationId("organization_id")
       .notNull()
@@ -478,6 +498,7 @@ export const entityVersionAiSummaries = p.pgTable(
     generatedAt: timestamptz("generated_at").notNull().defaultNow(),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     p.index("entity_version_ai_summaries_workspace_idx").on(table.workspaceId),
     p.index("entity_version_ai_summaries_entity_idx").on(table.entityId),
     p
@@ -529,6 +550,8 @@ export type FolioCollabTokenPermissions = {
 export const desktopEditSessions = p.pgTable(
   "desktop_edit_sessions",
   {
+    ...entityFeatureGateColumns(),
+    ...entityFeatureWorkspaceGateColumns(),
     id: pUuid<"desktopEditSession">().primaryKey(),
     workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
@@ -575,6 +598,7 @@ export const desktopEditSessions = p.pgTable(
     ),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     p.index("desktop_edit_sessions_workspace_id_idx").on(table.workspaceId),
     p.index("desktop_edit_sessions_entity_id_idx").on(table.entityId),
     p.index("desktop_edit_sessions_property_id_idx").on(table.propertyId),
@@ -634,6 +658,9 @@ export const desktopEditSessions = p.pgTable(
         [table.entityId, { target: "entities", kind: "owned-content" }],
       ]),
     }),
+    p
+      .index("desktop_edit_sessions_ef_finalized_version_id_idx")
+      .on(table.finalizedVersionId),
   ],
 );
 
@@ -646,6 +673,8 @@ export type DesktopEditLinkedAccountSnapshot = {
 export const desktopEditHandoffs = p.pgTable(
   "desktop_edit_handoffs",
   {
+    ...entityFeatureGateColumns(),
+    ...entityFeatureWorkspaceGateColumns(),
     id: pUuid<"desktopEditHandoff">().primaryKey(),
     workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
@@ -677,6 +706,7 @@ export const desktopEditHandoffs = p.pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     p.check(
       "desktop_edit_handoffs_failure_check",
       sql`(${table.failedAt} is null and ${table.failureReason} is null) or (${table.failedAt} is not null and ${table.consumedAt} is null and ${table.openedAt} is null and ${table.failureReason} is not null and ${table.failureReason} in (${sql.raw(DESKTOP_HANDOFF_FAILURE_REASONS.map((reason) => `'${reason}'`).join(", "))}))`,
@@ -716,6 +746,12 @@ export const desktopEditHandoffs = p.pgTable(
         ],
       ]),
     }),
+    p
+      .index("desktop_edit_handoffs_ef_desktop_session_id_idx")
+      .on(table.desktopSessionId),
+    p
+      .index("desktop_edit_handoffs_ef_entity_id_idx")
+      .on(table.workspaceId, table.entityId),
   ],
 );
 
@@ -729,6 +765,7 @@ const FOLIO_COLLAB_ROOM_UNSEEDED_STATE_SQL_VALUES = sql.raw(
 export const folioCollabRooms = p.pgTable(
   "folio_collab_rooms",
   {
+    ...entityFeatureGateColumns(),
     id: pUuid<"folioCollabRoom">().primaryKey(),
     workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
@@ -774,6 +811,7 @@ export const folioCollabRooms = p.pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     p
       .uniqueIndex("folio_collab_rooms_target_uidx")
       .on(table.workspaceId, table.entityId, table.propertyId),
@@ -873,12 +911,16 @@ export const folioCollabRooms = p.pgTable(
         ],
       ]),
     }),
+    p
+      .index("folio_collab_rooms_ef_base_version_id_idx")
+      .on(table.workspaceId, table.baseVersionId),
   ],
 );
 
 export const folioCollabRoomTokens = p.pgTable(
   "folio_collab_room_tokens",
   {
+    ...entityFeatureGateColumns(),
     id: pUuid<"folioCollabRoomToken">().primaryKey(),
     roomId: safeUuid<"folioCollabRoom">("room_id").notNull(),
     workspaceId: safeWorkspaceId("workspace_id")
@@ -897,6 +939,7 @@ export const folioCollabRoomTokens = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     p
       .index("folio_collab_room_tokens_workspace_expiry_idx")
       .on(table.workspaceId, table.expiresAt),
@@ -930,6 +973,7 @@ export const folioCollabRoomTokens = p.pgTable(
 export const folioCollabContributions = p.pgTable(
   "folio_collab_contributions",
   {
+    ...entityFeatureGateColumns(),
     id: pUuid<"folioCollabContribution">().primaryKey(),
     roomId: safeUuid<"folioCollabRoom">("room_id").notNull(),
     workspaceId: safeWorkspaceId("workspace_id").notNull(),
@@ -946,6 +990,7 @@ export const folioCollabContributions = p.pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     p
       .uniqueIndex("folio_collab_contributions_room_user_uidx")
       .on(table.roomId, table.userId),
@@ -981,6 +1026,12 @@ export const folioCollabContributions = p.pgTable(
         [table.roomId, { kind: "owned-by-parent", parent: folioCollabRooms }],
       ]),
     }),
+    p
+      .index("folio_collab_contributions_ef_entity_id_idx")
+      .on(table.workspaceId, table.entityId),
+    p
+      .index("folio_collab_contributions_ef_since_version_id_idx")
+      .on(table.workspaceId, table.sinceVersionId),
   ],
 );
 
@@ -989,6 +1040,7 @@ export const folioCollabContributions = p.pgTable(
 export const folioCollabPublications = p.pgTable(
   "folio_collab_publications",
   {
+    ...entityFeatureGateColumns(),
     id: pUuid<"folioCollabPublication">().primaryKey(),
     roomId: safeUuid<"folioCollabRoom">("room_id").notNull(),
     workspaceId: safeWorkspaceId("workspace_id").notNull(),
@@ -1002,6 +1054,7 @@ export const folioCollabPublications = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     p
       .uniqueIndex("folio_collab_publications_idempotency_uidx")
       .on(table.idempotencyKey),
@@ -1041,6 +1094,12 @@ export const folioCollabPublications = p.pgTable(
         [table.roomId, { kind: "owned-by-parent", parent: folioCollabRooms }],
       ]),
     }),
+    p
+      .index("folio_collab_publications_ef_entity_id_idx")
+      .on(table.workspaceId, table.entityId),
+    p
+      .index("folio_collab_publications_ef_entity_version_id_idx")
+      .on(table.workspaceId, table.entityVersionId),
   ],
 );
 
@@ -1394,6 +1453,8 @@ export const bufferObjectCleanupIntents = p.pgTable(
 export const fields = p.pgTable(
   "fields",
   {
+    ...entityFeatureGateColumns(),
+    ...entityFeatureWorkspaceGateColumns(),
     id: pUuid<"field">().primaryKey(),
     workspaceId: safeWorkspaceId("workspace_id").notNull(),
     propertyId: safeUuid<"property">("property_id").notNull(),
@@ -1404,6 +1465,7 @@ export const fields = p.pgTable(
     content: jsonb().$type<FieldContent>().notNull(),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     p
       .uniqueIndex("fields_property_id_entity_version_id_key")
       .on(table.propertyId, table.entityVersionId),
@@ -1475,12 +1537,15 @@ export const fields = p.pgTable(
         ],
       ]),
     }),
+    p.index("fields_ef_entity_version_id_idx").on(table.entityVersionId),
   ],
 );
 
 export const cellMetadata = p.pgTable(
   "cell_metadata",
   {
+    ...entityFeatureGateColumns(),
+    ...entityFeatureWorkspaceGateColumns(),
     workspaceId: safeWorkspaceId("workspace_id").notNull(),
     entityVersionId: safeUuid<"entityVersion">("entity_version_id")
       .notNull()
@@ -1497,6 +1562,7 @@ export const cellMetadata = p.pgTable(
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     p.primaryKey({
       columns: [table.entityVersionId, table.propertyId],
       name: "cell_metadata_entity_version_id_property_id_pk",
@@ -1525,6 +1591,8 @@ export const cellMetadata = p.pgTable(
 export const justifications = p.pgTable(
   "justifications",
   {
+    ...entityFeatureGateColumns(),
+    ...entityFeatureWorkspaceGateColumns(),
     id: pUuid<"justification">().primaryKey(),
     workspaceId: safeWorkspaceId("workspace_id").notNull(),
     fieldId: safeUuid<"field">("field_id").notNull(),
@@ -1536,6 +1604,7 @@ export const justifications = p.pgTable(
       .default([]),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     p.uniqueIndex("justifications_field_id_key").on(table.fieldId),
     p
       .foreignKey({

@@ -85,12 +85,12 @@ const readVerifications = createSafeHandler(
 type MissingProjectedRunColumn = UnprojectedColumns<
   RunRow,
   RunSummaryColumnProjection,
-  (typeof UNPROJECTED_RUN_SUMMARY_COLUMNS)[number]
+  (typeof UNPROJECTED_RUN_SUMMARY_COLUMNS)[number] | "entityFeatureGate"
 >;
 type UnexpectedProjectedRunColumn = UnbackedProjectionKeys<
   RunRow,
   RunSummaryColumnProjection,
-  (typeof UNPROJECTED_RUN_SUMMARY_COLUMNS)[number]
+  (typeof UNPROJECTED_RUN_SUMMARY_COLUMNS)[number] | "entityFeatureGate"
 >;
 
 true satisfies MissingProjectedRunColumn extends never ? true : never;
