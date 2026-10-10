@@ -516,12 +516,16 @@ const processPdfDerivativeJob = async ({
         organizationId: branded.organizationId,
         objectKey: pdfKey,
         sizeBytes: pdfBytes.byteLength,
-        write: async () =>
+        content: pdfBytes,
+        write: async ({
+          content: checkedContent,
+          objectKey: checkedObjectKey,
+        }) =>
           await withTimeout(
             async (signal) =>
               await putS3ObjectWithSignal(
-                pdfKey,
-                pdfBytes,
+                checkedObjectKey,
+                checkedContent,
                 PDF_MIME_TYPE,
                 signal,
               ),
@@ -763,12 +767,16 @@ const processImageThumbnailJob = async ({
         organizationId: branded.organizationId,
         objectKey: thumbnailKey,
         sizeBytes: thumbnailResult.value.webp.byteLength,
-        write: async () =>
+        content: thumbnailResult.value.webp,
+        write: async ({
+          content: checkedContent,
+          objectKey: checkedObjectKey,
+        }) =>
           await withTimeout(
             async (signal) =>
               await putS3ObjectWithSignal(
-                thumbnailKey,
-                thumbnailResult.value.webp,
+                checkedObjectKey,
+                checkedContent,
                 THUMBNAIL_MIME_TYPE,
                 signal,
               ),

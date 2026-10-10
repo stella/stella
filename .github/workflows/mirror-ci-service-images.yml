@@ -53,7 +53,7 @@ jobs:
           DOCKER_CONFIG: ${{ runner.temp }}/ci-mirror-auth
         run: |
           set -euo pipefail
-          bash scripts/mirror-ci-service-images.sh "$RUNNER_TEMP/ci-mirror-digests"
+          bash scripts/ci-mirror-service-images.sh "$RUNNER_TEMP/ci-mirror-digests"
       - name: Upload image digests
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

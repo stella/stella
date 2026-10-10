@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * The pieces of `read_case_law_decision`'s answer that are pure functions of
  * a read: page arithmetic, the text version, the compact metadata block, the
@@ -7,7 +8,8 @@
  * one projection MCP and chat share is built from the same functions.
  */
 
-import { panic } from "better-result";
+import type { DecisionTextWithheldReason } from "@stll/api-contract/case-law-text-field";
+import { createSha256 } from "@stll/sha256/bun";
 
 import type { DecisionCitationDigest } from "@/api/handlers/case-law/decisions/citation-digest";
 import type { RankedRelatedDecision } from "@/api/handlers/case-law/decisions/citation-graph";
@@ -80,10 +82,36 @@ const TEXT_VERSION_CHARS = 12;
  * so page numbers it holds may now address other passages.
  */
 export const decisionTextVersion = (text: string): string =>
-  new Bun.CryptoHasher("sha256")
-    .update(text)
-    .digest("base64url")
-    .slice(0, TEXT_VERSION_CHARS);
+  createSha256().update(text).digest("base64url").slice(0, TEXT_VERSION_CHARS);
+
+/**
+ * Split one fixed text budget without stranding the shares of short texts.
+ * The first pass is even; the second gives the remainder to truncated texts
+ * in input order. This order is part of the batch-read contract.
+ */
+export const decisionTextAllowances = (
+  lengths: readonly number[],
+  cap: number,
+): number[] => {
+  if (lengths.length === 0) {
+    return [];
+  }
+  const share = Math.floor(cap / lengths.length);
+  const allowances = lengths.map((length) => Math.min(length, share));
+  let remaining = cap - allowances.reduce((sum, value) => sum + value, 0);
+  // Unused shares only complete documents, in input order. A document that
+  // stays truncated keeps exactly the even share, so its later pages use the
+  // same window whatever its siblings' lengths are on that request.
+  for (const [index, length] of lengths.entries()) {
+    const allowance = allowances[index] ?? 0;
+    const needed = length - allowance;
+    if (needed > 0 && needed <= remaining) {
+      allowances[index] = length;
+      remaining -= needed;
+    }
+  }
+  return allowances;
+};
 
 /**
  * Ordinal order for keys, ISO dates and ids: none of them is language, so no
@@ -243,13 +271,31 @@ export const citationSummaryOutput = (
   const cited = new Map<
     string,
     | { caseNumber: string; decisionId: string; url?: string }
-    | { citation: string }
+    | { citation: string; textWithheldReason: null }
+    | { citation: null; textWithheldReason: DecisionTextWithheldReason }
   >();
   for (const row of digest.cites) {
     if (row.decision === null) {
-      const key = `text:${row.citationText.trim().toLowerCase()}`;
+      if (row.textWithheldReason !== null) {
+        const key = `withheld:${row.textWithheldReason}`;
+        if (!cited.has(key)) {
+          cited.set(key, {
+            citation: null,
+            textWithheldReason: row.textWithheldReason,
+          });
+        }
+        continue;
+      }
+      const citationText = row.citationText;
+      if (citationText === null) {
+        return panic("Available citation text must be present");
+      }
+      const key = `text:${citationText.trim().toLowerCase()}`;
       if (!cited.has(key)) {
-        cited.set(key, { citation: row.citationText.trim() });
+        cited.set(key, {
+          citation: citationText.trim(),
+          textWithheldReason: null,
+        });
       }
       continue;
     }

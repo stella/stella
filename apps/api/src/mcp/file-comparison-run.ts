@@ -1,3 +1,5 @@
+import { Result } from "better-result";
+import { and, eq, gt, inArray } from "drizzle-orm";
 /**
  * The `uploads` source of `compare_documents`: redline two DOCX files stella
  * does not store. The bytes arrive through `prepare_file_comparison`'s signed
@@ -7,10 +9,9 @@
  * content, and every object and row is deleted or expires.
  */
 
-import { Result } from "better-result";
-import { and, eq, gt, inArray } from "drizzle-orm";
-
 import type { CompareResult } from "@stll/folio-core";
+import { sha256Base64ToHex } from "@stll/sha256";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import { fileComparisonUploads } from "@/api/db/schema";
@@ -52,7 +53,6 @@ import type {
   TemporaryRedlineDelivery,
 } from "@/api/lib/uploads/file-comparison/deliver-redline";
 import { fileComparisonObjectKey } from "@/api/lib/uploads/file-comparison/uploads";
-import { sha256Base64ToHex } from "@/api/lib/uploads/runtime";
 import { withTimeout } from "@/api/lib/with-timeout";
 import type { McpRequestContext } from "@/api/mcp/context";
 import type { InternalToolErrorResult } from "@/api/mcp/tool-types";
@@ -321,9 +321,7 @@ const loadInput = async ({
   // that header, so this covers a store that does not return it rather than a
   // client that skipped it.
   if (storedSha256 === null) {
-    const uploadedSha256 = new Bun.CryptoHasher("sha256")
-      .update(buffer)
-      .digest("hex");
+    const uploadedSha256 = hashSha256Hex(new Uint8Array(buffer));
     if (uploadedSha256 !== row.declaredSha256) {
       return await refuse(
         "The uploaded file's SHA-256 does not match the one that was declared",

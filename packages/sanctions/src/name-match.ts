@@ -2,6 +2,19 @@ import { panic } from "better-result";
 
 import { distance } from "@stll/fuzzy-search";
 
+import {
+  type SpellingColumn,
+  appendUnsigned,
+  spellingColumnSteps,
+  stringIdsSteps,
+  UnsignedReader,
+  BoundedCache,
+  NumberColumn,
+  ObjectColumn,
+  PostingColumn,
+  type PackedPostings,
+  StringMap,
+} from "./compact-storage";
 import type { AliasQuality, EntityType, SanctionsEntry } from "./entry";
 import { nameReading } from "./normalise";
 import type { NameToken, NameReading } from "./normalise";
@@ -31,6 +44,13 @@ const screeningWorkExhausted = (budget: ScreeningWorkBudget): boolean =>
 
 const MAX_SCORED_PATTERNS = 256;
 const MAX_FUZZY_STRINGS = 64;
+// Screening caches are bounded so a long-lived index cannot grow with every
+// distinct query token: about 65 matches per similarity entry, and one
+// short histogram and spelling per decoded string.
+const SIMILARITY_CACHE_LIMIT = 2048;
+const CHARACTER_CACHE_LIMIT = 16_384;
+const SPELLING_CACHE_LIMIT = 16_384;
+const NO_VOCABULARY_ID = -1;
 
 const METRIC = "damerau-levenshtein";
 
@@ -77,21 +97,79 @@ const editBudget = (length: number): number => {
  * Distinct strings of one spelling form, with a bigram index over them keyed
  * by string length, so a lookup only walks lengths within its edit budget.
  */
+type Spellings = {
+  strings: ObjectColumn<string> | SpellingColumn;
+  lengths: NumberColumn;
+  gramCounts: NumberColumn;
+  characterOffsets: NumberColumn;
+  characterCounts: NumberColumn;
+  characterCache: BoundedCache<number, Uint32Array>;
+};
+
+class VocabularyStrings {
+  // Direct-mapped slots avoid an LRU node allocation for every one-off
+  // spelling when a query traverses more unique tokens than the cache holds.
+  private readonly cacheIds = new Uint32Array(SPELLING_CACHE_LIMIT);
+  private readonly cacheStrings: (string | undefined)[] = Array.from(
+    { length: SPELLING_CACHE_LIMIT },
+    () => undefined,
+  );
+  private readonly spellings;
+  private readonly ids;
+  constructor(spellings: Spellings, ids: NumberColumn) {
+    this.spellings = spellings;
+    this.ids = ids;
+  }
+  get length(): number {
+    return this.ids.length;
+  }
+  get(id: number): string {
+    const slot = id % SPELLING_CACHE_LIMIT;
+    if (this.cacheIds[slot] === id + 1) {
+      return (
+        this.cacheStrings[slot] ?? panic("Missing cached vocabulary spelling")
+      );
+    }
+    const spelling = this.spellings.strings.get(this.ids.get(id));
+    this.cacheIds[slot] = id + 1;
+    this.cacheStrings[slot] = spelling;
+    return spelling;
+  }
+}
+
+type ReadonlyPostings = {
+  get: (id: number) => Iterable<number>;
+  size: (id: number) => number;
+};
+
 type Vocabulary = {
-  strings: string[];
-  /** Per string, its length in code points and its number of distinct bigrams. */
-  lengths: number[];
-  gramCounts: number[];
-  /** Alternating Unicode code point and count pairs, one compact histogram per spelling. */
-  characterCounts: Uint32Array[];
-  ids: Map<string, number>;
-  bigrams: Map<string, number[]>;
-  /** Aliases that contain the string as a token. */
-  postings: number[][];
-  /** Aliases in which two adjacent tokens join into the string. */
-  joinPostings: number[][];
-  /** Reused by synchronous lookups; generations make clearing proportional to touched ids. */
+  strings: { readonly length: number; get: (id: number) => string };
+  spellingIds: NumberColumn;
+  spellings: Spellings;
+  ids: Pick<StringMap<number>, "get">;
+  bigrams: StringMap<number>;
+  gramPostings: ReadonlyPostings & Pick<PackedPostings, "reader">;
+  postings: ReadonlyPostings;
+  joinPostings: ReadonlyPostings;
   lookupScratch?: LookupScratch;
+  similarityCache: BoundedCache<
+    string,
+    {
+      readonly matches: Map<number, number>;
+      readonly cost: number;
+      readonly partial: boolean;
+    }
+  >;
+};
+
+type BuildingVocabulary = Omit<
+  Vocabulary,
+  "ids" | "gramPostings" | "postings" | "joinPostings"
+> & {
+  ids: StringMap<number>;
+  gramPostings: PostingColumn;
+  postings: PostingColumn;
+  joinPostings: PostingColumn;
 };
 
 type LookupScratch = {
@@ -142,29 +220,147 @@ type IndexedAlias = {
     folded: number;
     raw: number;
   }[];
-  exactKey: string;
   patternKey: string;
 };
 
+const QUALITIES = [
+  "strong",
+  "weak",
+  "unknown",
+] as const satisfies readonly AliasQuality[];
+
+type AliasMetadata = Omit<IndexedAlias, "name" | "tokens">;
+
+type AliasColumnOptions = {
+  folded: Vocabulary["strings"];
+  raw: Vocabulary["strings"];
+};
+class AliasColumn {
+  private readonly names = new ObjectColumn<string>();
+  private readonly entries = new NumberColumn();
+  private readonly qualities = new NumberColumn();
+  private readonly entityTypes = new ObjectColumn<EntityType>();
+  private readonly tokenOffsets = new NumberColumn();
+  private readonly joinOffsets = new NumberColumn();
+  private readonly tokenIds = new NumberColumn();
+  private readonly joinIds = new NumberColumn();
+
+  private readonly folded;
+  private readonly raw;
+  constructor({ folded, raw }: AliasColumnOptions) {
+    this.folded = folded;
+    this.raw = raw;
+    this.tokenOffsets.push(0);
+    this.joinOffsets.push(0);
+  }
+
+  get length(): number {
+    return this.names.length;
+  }
+
+  setQuality(id: number, quality: AliasQuality): void {
+    this.qualities.set(id, QUALITIES.indexOf(quality));
+  }
+
+  push(alias: IndexedAlias): number {
+    const id = this.names.push(alias.name);
+    this.entries.push(alias.entry);
+    this.qualities.push(QUALITIES.indexOf(alias.quality));
+    this.entityTypes.push(alias.entityType);
+    for (let position = 0; position < alias.tokens.length; position += 1) {
+      this.tokenIds.push(
+        alias.folded[position] ?? panic("Missing folded token"),
+      );
+      this.tokenIds.push(alias.raw[position] ?? panic("Missing raw token"));
+    }
+    for (const join of alias.joins) {
+      this.joinIds.push(join.positions[0]);
+      this.joinIds.push(join.positions[1]);
+      this.joinIds.push(join.folded);
+      this.joinIds.push(join.raw);
+    }
+    this.tokenOffsets.push(this.tokenIds.length);
+    this.joinOffsets.push(this.joinIds.length);
+    return id;
+  }
+
+  metadata(id: number): AliasMetadata {
+    const folded: number[] = [];
+    const raw: number[] = [];
+    const joins: IndexedAlias["joins"][number][] = [];
+    const tokenEnd = this.tokenOffsets.get(id + 1);
+    for (
+      let offset = this.tokenOffsets.get(id);
+      offset < tokenEnd;
+      offset += 2
+    ) {
+      const foldedId = this.tokenIds.getUnchecked(offset);
+      const rawId = this.tokenIds.getUnchecked(offset + 1);
+      folded.push(foldedId);
+      raw.push(rawId);
+    }
+    const joinEnd = this.joinOffsets.get(id + 1);
+    for (let offset = this.joinOffsets.get(id); offset < joinEnd; offset += 4) {
+      joins.push({
+        positions: [
+          this.joinIds.getUnchecked(offset),
+          this.joinIds.getUnchecked(offset + 1),
+        ],
+        folded: this.joinIds.getUnchecked(offset + 2),
+        raw: this.joinIds.getUnchecked(offset + 3),
+      });
+    }
+    const entityType = this.entityTypes.get(id);
+    const key = `${raw.join(",")}|${joins.map((join) => join.positions.join(",")).join(";")}`;
+    return {
+      entry: this.entries.get(id),
+      quality:
+        QUALITIES[this.qualities.get(id)] ?? panic("Missing alias quality"),
+      entityType,
+      folded,
+      raw,
+      joins,
+      patternKey: `${entityType}|${key}`,
+    };
+  }
+
+  get(id: number): IndexedAlias {
+    const metadata = this.metadata(id);
+    const tokens = metadata.raw.map((rawId, position) => {
+      const foldedId =
+        metadata.folded[position] ?? panic("Missing folded token");
+      const folded = this.folded.get(foldedId);
+      return {
+        folded,
+        raw: this.raw === this.folded ? folded : this.raw.get(rawId),
+      };
+    });
+    return { ...metadata, name: this.names.get(id), tokens };
+  }
+}
+
 export type NameIndex = {
-  aliases: readonly IndexedAlias[];
+  aliases: AliasColumn;
   folded: Vocabulary;
   raw: Vocabulary;
-  /** Inverse document frequency per folded id; join-only strings get the maximum. */
-  weights: readonly number[];
+  weights: NumberColumn;
   maxWeight: number;
 };
 
-const emptyVocabulary = (): Vocabulary => ({
-  strings: [],
-  lengths: [],
-  gramCounts: [],
-  characterCounts: [],
-  ids: new Map(),
-  bigrams: new Map(),
-  postings: [],
-  joinPostings: [],
-});
+const emptyVocabulary = (spellings: Spellings): BuildingVocabulary => {
+  const spellingIds = new NumberColumn();
+  return {
+    strings: new VocabularyStrings(spellings, spellingIds),
+    spellingIds,
+    spellings,
+    ids: new StringMap(),
+    bigrams: new StringMap(),
+    gramPostings: new PostingColumn(),
+    postings: new PostingColumn(),
+    joinPostings: new PostingColumn(),
+    similarityCache: new BoundedCache(SIMILARITY_CACHE_LIMIT),
+  };
+};
 
 const bigrams = (text: string): Set<string> => {
   const chars = ["^", ...Array.from(text), "$"];
@@ -206,7 +402,12 @@ const compactCharacterCounts = (text: string): Uint32Array => {
   return Uint32Array.from(pairs);
 };
 
-const intern = (vocabulary: Vocabulary, text: string): number => {
+type InternOptions = {
+  vocabulary: BuildingVocabulary;
+  text: string;
+  spellingIds: StringMap<number>;
+};
+const intern = ({ vocabulary, text, spellingIds }: InternOptions): number => {
   const known = vocabulary.ids.get(text);
   if (known !== undefined) {
     return known;
@@ -214,38 +415,72 @@ const intern = (vocabulary: Vocabulary, text: string): number => {
   const id = vocabulary.strings.length;
   const grams = bigrams(text);
   const length = Array.from(text).length;
-  vocabulary.strings.push(text);
-  vocabulary.lengths.push(length);
-  vocabulary.gramCounts.push(grams.size);
-  vocabulary.characterCounts.push(compactCharacterCounts(text));
+  const { spellings } = vocabulary;
+  let spelling = spellingIds.get(text);
+  if (spelling === undefined) {
+    spelling = spellings.strings.push(text);
+    spellingIds.set(text, spelling);
+    spellings.lengths.push(length);
+    spellings.gramCounts.push(grams.size);
+    let previousCodePoint = 0;
+    const counts = compactCharacterCounts(text);
+    for (let offset = 0; offset < counts.length; offset += 2) {
+      const codePoint =
+        counts.at(offset) ?? panic("Missing spelling code point");
+      appendUnsigned(spellings.characterCounts, codePoint - previousCodePoint);
+      appendUnsigned(
+        spellings.characterCounts,
+        counts.at(offset + 1) ?? panic("Missing spelling count"),
+      );
+      previousCodePoint = codePoint;
+    }
+    spellings.characterOffsets.push(spellings.characterCounts.length);
+  }
+  vocabulary.spellingIds.push(spelling);
   vocabulary.ids.set(text, id);
-  vocabulary.postings.push([]);
-  vocabulary.joinPostings.push([]);
+  vocabulary.postings.addList();
+  vocabulary.joinPostings.addList();
   for (const gram of grams) {
     const key = gramKey(length, gram);
-    const ids = vocabulary.bigrams.get(key);
-    if (ids === undefined) {
-      vocabulary.bigrams.set(key, [id]);
-    } else {
-      ids.push(id);
+    let list = vocabulary.bigrams.get(key);
+    if (list === undefined) {
+      list = vocabulary.gramPostings.addList();
+      vocabulary.bigrams.set(key, list);
     }
+    vocabulary.gramPostings.push(list, id);
   }
   return id;
 };
 
-const post = (lists: number[][], ids: readonly number[], alias: number) => {
+const post = (lists: PostingColumn, ids: readonly number[], alias: number) => {
   for (const id of new Set(ids)) {
-    lists[id]?.push(alias);
+    lists.push(id, alias);
   }
 };
+
+function* compactVocabulary(
+  vocabulary: BuildingVocabulary,
+): Generator<void, Vocabulary, void> {
+  return {
+    ...vocabulary,
+    ids: yield* stringIdsSteps(vocabulary.strings),
+    gramPostings: yield* vocabulary.gramPostings.compact(),
+    postings: yield* vocabulary.postings.compact(),
+    joinPostings: yield* vocabulary.joinPostings.compact(),
+  };
+}
 
 /**
  * Builds the name index one entry at a time, pausing after each so a caller
  * on a serving event loop can give way between entries; see
  * {@link buildNameIndex} for the uninterrupted build.
+ * @yields Control between entries and fixed-size packing chunks.
  */
 export function* nameIndexSteps(
-  entries: readonly SanctionsEntry[],
+  entries: Iterable<SanctionsEntry> & {
+    readonly length: number;
+    entries: () => Iterable<[number, SanctionsEntry]>;
+  },
 ): Generator<void, NameIndex, void> {
   let canShareVocabularies = true;
   for (const { names, entityType } of entries) {
@@ -259,28 +494,39 @@ export function* nameIndexSteps(
     }
     yield;
   }
-  const folded = emptyVocabulary();
-  const raw = canShareVocabularies ? folded : emptyVocabulary();
-  const aliases: IndexedAlias[] = [];
-  const entryCounts = new Map<number, number>();
+  const spellings: Spellings = {
+    strings: new ObjectColumn(),
+    lengths: new NumberColumn(),
+    gramCounts: new NumberColumn(),
+    characterOffsets: new NumberColumn(),
+    characterCounts: new NumberColumn("byte"),
+    characterCache: new BoundedCache(CHARACTER_CACHE_LIMIT),
+  };
+  spellings.characterOffsets.push(0);
+  const spellingIds = new StringMap<number>();
+  const folded = emptyVocabulary(spellings);
+  const raw = canShareVocabularies ? folded : emptyVocabulary(spellings);
+  const aliases = new AliasColumn({ folded: folded.strings, raw: raw.strings });
+  const entryCounts = new NumberColumn();
 
   for (const [entryIndex, entry] of entries.entries()) {
-    const byKey = new Map<string, IndexedAlias>();
+    const byKey = new Map<string, { alias: IndexedAlias; id: number }>();
     const entryTokens = new Set<number>();
     for (const { name, quality } of entry.names) {
       const { tokens, adjacent } = nameReading(name, entry.entityType);
       const key = `${tokens.map((token) => token.raw).join(" ")}|${adjacent.join(";")}`;
       const existing = byKey.get(key);
-      if (tokens.length === 0 || existing?.quality === "strong") {
+      if (tokens.length === 0 || existing?.alias.quality === "strong") {
         continue;
       }
       if (existing !== undefined) {
         // A weak alias the entry also lists as a strong one counts as strong.
         if (
           quality === "strong" ||
-          (quality === "unknown" && existing.quality === "weak")
+          (quality === "unknown" && existing.alias.quality === "weak")
         ) {
-          existing.quality = quality;
+          existing.alias.quality = quality;
+          aliases.setQuality(existing.id, quality);
         }
         continue;
       }
@@ -290,28 +536,32 @@ export function* nameIndexSteps(
         quality,
         entityType: entry.entityType,
         tokens,
-        folded: tokens.map((token) => intern(folded, token.folded)),
-        raw: tokens.map((token) => intern(raw, token.raw)),
+        folded: tokens.map((token) =>
+          intern({ vocabulary: folded, text: token.folded, spellingIds }),
+        ),
+        raw: tokens.map((token) =>
+          intern({ vocabulary: raw, text: token.raw, spellingIds }),
+        ),
         joins: adjacent.map((positions) => ({
           positions,
-          folded: intern(
-            folded,
-            positions
+          folded: intern({
+            vocabulary: folded,
+            text: positions
               .map((position) => tokens[position]?.folded ?? "")
               .join(""),
-          ),
-          raw: intern(
-            raw,
-            positions.map((position) => tokens[position]?.raw ?? "").join(""),
-          ),
+            spellingIds,
+          }),
+          raw: intern({
+            vocabulary: raw,
+            text: positions
+              .map((position) => tokens[position]?.raw ?? "")
+              .join(""),
+            spellingIds,
+          }),
         })),
         patternKey: `${entry.entityType}|${key}`,
-        exactKey: tokens
-          .map((token) => token.raw)
-          .toSorted()
-          .join(" "),
       };
-      byKey.set(key, alias);
+      byKey.set(key, { alias, id: aliases.length });
       post(folded.postings, alias.folded, aliases.length);
       if (raw !== folded) {
         post(raw.postings, alias.raw, aliases.length);
@@ -334,22 +584,37 @@ export function* nameIndexSteps(
       aliases.push(alias);
     }
     for (const id of entryTokens) {
-      entryCounts.set(id, (entryCounts.get(id) ?? 0) + 1);
+      while (entryCounts.length <= id) {
+        entryCounts.push(0);
+      }
+      entryCounts.set(id, entryCounts.get(id) + 1);
     }
     yield;
   }
 
   const maxWeight = Math.log(Math.max(entries.length, 1)) + 1;
+  const weights = new NumberColumn("float");
+  for (let id = 0; id < folded.strings.length; id += 1) {
+    const count = id < entryCounts.length ? entryCounts.get(id) : 0;
+    weights.push(
+      count === 0 ? maxWeight : Math.log(entries.length / count) + 1,
+    );
+    if (id % 4096 === 0) {
+      yield;
+    }
+  }
+  if (!(spellings.strings instanceof ObjectColumn)) {
+    panic("Spelling column was already packed");
+  }
+  spellings.strings = yield* spellingColumnSteps(spellings.strings);
+  const compactFolded = yield* compactVocabulary(folded);
+  const compactRaw =
+    raw === folded ? compactFolded : yield* compactVocabulary(raw);
   return {
     aliases,
-    folded,
-    raw,
-    weights: folded.strings.map((_, id) => {
-      const count = entryCounts.get(id);
-      return count === undefined
-        ? maxWeight
-        : Math.log(entries.length / count) + 1;
-    }),
+    folded: compactFolded,
+    raw: compactRaw,
+    weights,
     maxWeight,
   };
 }
@@ -380,30 +645,6 @@ type CharacterDistanceOptions = {
   lengthDifference: number;
 };
 
-const indexedCharacterCount = (
-  counts: Uint32Array,
-  codePoint: number,
-): number => {
-  let lower = 0;
-  let upper = counts.length / 2;
-  while (lower < upper) {
-    const middle = Math.floor((lower + upper) / 2);
-    const indexedCodePoint =
-      counts.at(middle * 2) ?? panic("Missing indexed character code point");
-    if (indexedCodePoint === codePoint) {
-      return (
-        counts.at(middle * 2 + 1) ?? panic("Missing indexed character count")
-      );
-    }
-    if (indexedCodePoint < codePoint) {
-      lower = middle + 1;
-    } else {
-      upper = middle;
-    }
-  }
-  return 0;
-};
-
 // Transpositions preserve counts; other edits repair at most one deficit per side.
 const characterDistanceLowerBound = ({
   query,
@@ -411,10 +652,41 @@ const characterDistanceLowerBound = ({
   lengthDifference,
 }: CharacterDistanceOptions): number => {
   let missing = 0;
-  for (const [codePoint, count] of query) {
-    missing += Math.max(0, count - indexedCharacterCount(candidate, codePoint));
+  for (const count of query.values()) {
+    missing += count;
+  }
+  for (let offset = 0; offset < candidate.length; offset += 2) {
+    const codePoint =
+      candidate[offset] ?? panic("Missing compact character code point");
+    const count =
+      candidate[offset + 1] ?? panic("Missing compact character count");
+    missing -= Math.min(count, query.get(codePoint) ?? 0);
   }
   return Math.max(missing, lengthDifference + missing);
+};
+
+const spellingCharacterCounts = (
+  spellings: Spellings,
+  spelling: number,
+): Uint32Array => {
+  const known = spellings.characterCache.get(spelling);
+  if (known !== undefined) {
+    return known;
+  }
+  const reader = new UnsignedReader({
+    bytes: spellings.characterCounts,
+    from: spellings.characterOffsets.get(spelling),
+    to: spellings.characterOffsets.get(spelling + 1),
+  });
+  const counts: number[] = [];
+  let codePoint = 0;
+  while (!reader.done) {
+    codePoint += reader.read();
+    counts.push(codePoint, reader.read());
+  }
+  const decoded = Uint32Array.from(counts);
+  spellings.characterCache.set(spelling, decoded);
+  return decoded;
 };
 
 type SimilarStringsOptions = {
@@ -427,6 +699,7 @@ const similarStrings = ({
   text,
   work,
 }: SimilarStringsOptions): Map<number, number> => {
+  const initialWork = work.remaining;
   const similar = new Map<number, number>();
   if (!spendScreeningWork(work, text.length + 1)) {
     return similar;
@@ -434,6 +707,17 @@ const similarStrings = ({
   const exact = vocabulary.ids.get(text);
   if (exact !== undefined) {
     similar.set(exact, 1);
+  }
+  const cached = vocabulary.similarityCache.get(text);
+  if (cached !== undefined) {
+    const remainingCost = cached.cost - (text.length + 1);
+    if (!spendScreeningWork(work, remainingCost)) {
+      return similar;
+    }
+    if (cached.partial) {
+      work.selection = "partial";
+    }
+    return cached.matches;
   }
   const length = Array.from(text).length;
   const budget = editBudget(length);
@@ -449,7 +733,12 @@ const similarStrings = ({
   candidates.length = 0;
   for (let other = length - budget; other <= length + budget; other += 1) {
     for (const gram of grams) {
-      for (const id of vocabulary.bigrams.get(gramKey(other, gram)) ?? []) {
+      const list = vocabulary.bigrams.get(gramKey(other, gram));
+      if (list === undefined) {
+        continue;
+      }
+      const postings = vocabulary.gramPostings.reader(list);
+      for (let id = postings.read(); id !== undefined; id = postings.read()) {
         if (!spendScreeningWork(work)) {
           return similar;
         }
@@ -466,24 +755,26 @@ const similarStrings = ({
     if (!spendScreeningWork(work)) {
       return similar;
     }
-    const candidateLength = vocabulary.lengths[id] ?? 0;
+    const spelling = vocabulary.spellingIds.getUnchecked(id);
+    const candidateLength = vocabulary.spellings.lengths.getUnchecked(spelling);
     const pairBudget = editBudget(Math.min(length, candidateLength));
     if (
       id === exact ||
       pairBudget === 0 ||
       Math.abs(candidateLength - length) > pairBudget ||
       (sharedCounts[id] ?? 0) <
-        Math.max(grams.size, vocabulary.gramCounts[id] ?? 0) - 3 * pairBudget
+        Math.max(
+          grams.size,
+          vocabulary.spellings.gramCounts.getUnchecked(spelling),
+        ) -
+          3 * pairBudget
     ) {
       continue;
     }
-    const otherCounts =
-      vocabulary.characterCounts[id] ??
-      panic("Missing indexed character counts");
     if (
       characterDistanceLowerBound({
         query: counts,
-        candidate: otherCounts,
+        candidate: spellingCharacterCounts(vocabulary.spellings, spelling),
         lengthDifference: candidateLength - length,
       }) > pairBudget
     ) {
@@ -502,12 +793,24 @@ const similarStrings = ({
   candidates.sort(
     (left, right) =>
       (sharedCounts[right] ?? 0) /
-        Math.max(grams.size, vocabulary.gramCounts[right] ?? 0) -
+        Math.max(
+          grams.size,
+          vocabulary.spellings.gramCounts.getUnchecked(
+            vocabulary.spellingIds.getUnchecked(right),
+          ),
+        ) -
         (sharedCounts[left] ?? 0) /
-          Math.max(grams.size, vocabulary.gramCounts[left] ?? 0) ||
-      left - right,
+          Math.max(
+            grams.size,
+            vocabulary.spellings.gramCounts.getUnchecked(
+              vocabulary.spellingIds.getUnchecked(left),
+            ),
+          ) || left - right,
   );
-  if (candidates.length > MAX_FUZZY_STRINGS) {
+  // This lookup's own truncation, independent of what earlier tokens already
+  // did to the shared work selection: the cache must replay it exactly.
+  const truncated = candidates.length > MAX_FUZZY_STRINGS;
+  if (truncated) {
     work.selection = "partial";
   }
   for (
@@ -516,15 +819,24 @@ const similarStrings = ({
     index += 1
   ) {
     const id = candidates.at(index) ?? panic("Missing fuzzy candidate");
-    const candidateLength = vocabulary.lengths[id] ?? 0;
+    const candidateLength = vocabulary.spellings.lengths.getUnchecked(
+      vocabulary.spellingIds.getUnchecked(id),
+    );
     const pairBudget = editBudget(Math.min(length, candidateLength));
     if (!spendScreeningWork(work, length * candidateLength)) {
       return similar;
     }
-    const edits = distance(text, vocabulary.strings[id] ?? "", METRIC);
+    const edits = distance(text, vocabulary.strings.get(id), METRIC);
     if (edits <= pairBudget) {
       similar.set(id, 1 - edits / Math.max(length, candidateLength));
     }
+  }
+  if (!screeningWorkExhausted(work)) {
+    vocabulary.similarityCache.set(text, {
+      matches: similar,
+      cost: initialWork - work.remaining,
+      partial: truncated,
+    });
   }
   return similar;
 };
@@ -629,9 +941,9 @@ const prepareQuery = ({
     let weight = index.maxWeight;
     let best = -1;
     for (const [id, similarity] of single?.folded ?? []) {
-      if (similarity > best && (index.folded.postings[id]?.length ?? 0) > 0) {
+      if (similarity > best && index.folded.postings.size(id) > 0) {
         best = similarity;
-        weight = index.weights[id] ?? weight;
+        weight = index.weights.get(id);
       }
     }
     return weight;
@@ -764,24 +1076,35 @@ const align = (pairs: Pair[]): Alignment => {
 /** Shares of the listed name's weight for ranking and optimistic filtering. */
 type ListedCoverageOptions = {
   index: NameIndex;
-  alias: IndexedAlias;
+  alias: AliasMetadata;
   matched: ReadonlyMap<number, number>;
 };
 const listedCoverage = ({ index, alias, matched }: ListedCoverageOptions) => {
   let alignedTotal = 0;
   let minimumTotal = 0;
   let explained = 0;
-  const last = alias.tokens.length - 1;
-  for (const [listed, token] of alias.tokens.entries()) {
+  const last = alias.raw.length - 1;
+  for (const [listed, rawId] of alias.raw.entries()) {
+    const raw = index.raw.strings.get(rawId);
     const weight =
-      token.raw.length === 1
+      raw.length === 1
         ? INITIAL_WEIGHT
-        : (index.weights[alias.folded[listed] ?? -1] ?? index.maxWeight);
+        : index.weights.get(
+            alias.folded[listed] ?? panic("Missing weighted token"),
+          );
     const optional =
       alias.entityType === "person" &&
       ((listed > 0 && listed < last) ||
-        PATRONYMIC.test(token.folded) ||
-        PARTICLES.has(token.folded));
+        PATRONYMIC.test(
+          index.folded.strings.get(
+            alias.folded[listed] ?? panic("Missing folded token"),
+          ),
+        ) ||
+        PARTICLES.has(
+          index.folded.strings.get(
+            alias.folded[listed] ?? panic("Missing folded token"),
+          ),
+        ));
     const minimumWeight = optional ? weight * MIDDLE_NAME_DISCOUNT : weight;
     minimumTotal += minimumWeight;
     const similarity = matched.get(listed);
@@ -794,6 +1117,19 @@ const listedCoverage = ({ index, alias, matched }: ListedCoverageOptions) => {
     minimum: Math.min(1, explained / minimumTotal),
     aligned: Math.min(1, explained / alignedTotal),
   };
+};
+
+const queryCoverage = (
+  weights: readonly number[],
+  matched: ReadonlyMap<number, number>,
+): number => {
+  let totalWeight = 0;
+  let explainedWeight = 0;
+  for (const [position, weight] of weights.entries()) {
+    totalWeight += weight;
+    explainedWeight += weight * (matched.get(position) ?? 0);
+  }
+  return explainedWeight / totalWeight;
 };
 
 /**
@@ -810,14 +1146,8 @@ const scoreAlias = (
   if (!alignment.anchored) {
     return 0;
   }
-  let queryTotal = 0;
-  let queryExplained = 0;
-  for (const [position, weight] of query.weights.entries()) {
-    queryTotal += weight;
-    queryExplained += weight * (alignment.query.get(position) ?? 0);
-  }
   const score = Math.sqrt(
-    (queryExplained / queryTotal) *
+    queryCoverage(query.weights, alignment.query) *
       listedCoverage({
         index,
         alias,
@@ -827,10 +1157,58 @@ const scoreAlias = (
   return alias.quality === "weak" ? score * WEAK_ALIAS_FACTOR : score;
 };
 
+type InitialCoverageOptions = {
+  index: NameIndex;
+  alias: AliasMetadata;
+  query: PreparedQuery;
+  queryMatched: Map<number, number>;
+  listedMatched: Map<number, number>;
+};
+
+const accumulateInitialCoverage = ({
+  index,
+  alias,
+  query,
+  queryMatched,
+  listedMatched,
+}: InitialCoverageOptions): void => {
+  const hasQueryInitials = query.initials.some(Boolean);
+  for (const [listed, rawId] of alias.raw.entries()) {
+    const listedRaw = index.raw.strings.get(rawId);
+    const listedInitial = listedRaw.length === 1;
+    if (!hasQueryInitials && !listedInitial) {
+      continue;
+    }
+    for (const [position, token] of query.tokens.entries()) {
+      const queryInitial = query.initials[position] === true;
+      let similarity = 0;
+      if (queryInitial && listedRaw.startsWith(token.raw)) {
+        similarity = listedInitial ? 1 : INITIAL_SIMILARITY;
+      } else if (
+        !queryInitial &&
+        listedInitial &&
+        token.raw.startsWith(listedRaw)
+      ) {
+        similarity = INITIAL_SIMILARITY;
+      }
+      if (similarity > 0) {
+        queryMatched.set(
+          position,
+          Math.max(queryMatched.get(position) ?? 0, similarity),
+        );
+        listedMatched.set(
+          listed,
+          Math.max(listedMatched.get(listed) ?? 0, similarity),
+        );
+      }
+    }
+  }
+};
+
 type CandidateEstimate = { bound: number; rank: number };
 type CandidateEstimateOptions = {
   index: NameIndex;
-  alias: IndexedAlias;
+  alias: AliasMetadata;
   query: PreparedQuery;
 };
 const candidateEstimate = ({
@@ -849,7 +1227,7 @@ const candidateEstimate = ({
   ) {
     const matched = new Map<number, number>();
     let similarity = 0;
-    for (let position = 0; position < alias.tokens.length; position += 1) {
+    for (let position = 0; position < alias.raw.length; position += 1) {
       const current = unitSimilarity(
         single,
         alias.folded[position],
@@ -867,33 +1245,62 @@ const candidateEstimate = ({
       rank: Math.sqrt(similarity * coverage.aligned),
     };
   }
-  const pairs = candidatePairs(alias, query);
-  if (!pairs.some((pair) => pair.kind === "word")) {
-    return { bound: 0, rank: 0 };
-  }
   const queryMatched = new Map<number, number>();
   const listedMatched = new Map<number, number>();
-  for (const pair of pairs) {
-    for (const position of pair.query) {
-      queryMatched.set(
-        position,
-        Math.max(queryMatched.get(position) ?? 0, pair.similarity),
+  let anchored = false;
+  for (const queryUnit of query.units) {
+    for (let listed = 0; listed < alias.raw.length; listed += 1) {
+      const similarity = unitSimilarity(
+        queryUnit,
+        alias.folded[listed],
+        alias.raw[listed],
       );
-    }
-    for (const position of pair.listed) {
+      if (similarity === 0) {
+        continue;
+      }
+      anchored = true;
+      for (const position of queryUnit.positions) {
+        queryMatched.set(
+          position,
+          Math.max(queryMatched.get(position) ?? 0, similarity),
+        );
+      }
       listedMatched.set(
-        position,
-        Math.max(listedMatched.get(position) ?? 0, pair.similarity),
+        listed,
+        Math.max(listedMatched.get(listed) ?? 0, similarity),
       );
     }
+    for (const join of alias.joins) {
+      const similarity = unitSimilarity(queryUnit, join.folded, join.raw);
+      if (similarity === 0) {
+        continue;
+      }
+      anchored = true;
+      for (const position of queryUnit.positions) {
+        queryMatched.set(
+          position,
+          Math.max(queryMatched.get(position) ?? 0, similarity),
+        );
+      }
+      for (const listed of join.positions) {
+        listedMatched.set(
+          listed,
+          Math.max(listedMatched.get(listed) ?? 0, similarity),
+        );
+      }
+    }
   }
-  let queryTotal = 0;
-  let queryExplained = 0;
-  for (const [position, weight] of query.weights.entries()) {
-    queryTotal += weight;
-    queryExplained += weight * (queryMatched.get(position) ?? 0);
+  if (!anchored) {
+    return { bound: 0, rank: 0 };
   }
-  const queryShare = queryExplained / queryTotal;
+  accumulateInitialCoverage({
+    index,
+    alias,
+    query,
+    queryMatched,
+    listedMatched,
+  });
+  const queryShare = queryCoverage(query.weights, queryMatched);
   const coverage = listedCoverage({ index, alias, matched: listedMatched });
   return {
     bound: Math.sqrt(queryShare * coverage.minimum),
@@ -953,10 +1360,12 @@ const rankCandidateGroups = ({
 }: RankCandidateGroupsOptions): CandidateGroup[] | undefined => {
   const byPattern = new Map<string, CandidateGroup>();
   const estimates = new Map<string, CandidateEstimate>();
+  // Vocabulary IDs are bijective with raw spellings; compare their multisets
+  // without rebuilding and sorting decoded spelling strings for every alias.
   const exactKey = query.tokens
-    .map((token) => token.raw)
-    .toSorted()
-    .join(" ");
+    .map((token) => index.raw.ids.get(token.raw) ?? NO_VOCABULARY_ID)
+    .toSorted((left, right) => left - right)
+    .join(",");
   for (const [aliasIndex, weight] of reachedWeight) {
     if (!spendScreeningWork(work)) {
       return undefined;
@@ -964,16 +1373,17 @@ const rankCandidateGroups = ({
     if (ceiling((weight + initialWeight) / totalWeight) < cutoff) {
       continue;
     }
-    const alias =
-      index.aliases[aliasIndex] ?? panic("Missing reached candidate alias");
-    const exact = alias.exactKey === exactKey;
+    const alias = index.aliases.metadata(aliasIndex);
+    const exact =
+      alias.raw.length === query.tokens.length &&
+      alias.raw.toSorted((left, right) => left - right).join(",") === exactKey;
     let estimate = exact
       ? { bound: 1, rank: 1 }
       : estimates.get(alias.patternKey);
     if (estimate === undefined) {
       const pairWork =
-        query.units.length * (alias.tokens.length + alias.joins.length) +
-        query.tokens.length * alias.tokens.length;
+        query.units.length * (alias.raw.length + alias.joins.length) +
+        query.tokens.length * alias.raw.length;
       if (!spendScreeningWork(work, pairWork)) {
         return undefined;
       }
@@ -1056,13 +1466,13 @@ export const matchNames = ({
         [index.raw, queryUnit.raw],
       ] as const) {
         for (const id of similar.keys()) {
-          for (const alias of vocabulary.postings[id] ?? []) {
+          for (const alias of vocabulary.postings.get(id)) {
             if (!spendScreeningWork(work)) {
               return undefined;
             }
             reached.add(alias);
           }
-          for (const alias of vocabulary.joinPostings[id] ?? []) {
+          for (const alias of vocabulary.joinPostings.get(id)) {
             if (!spendScreeningWork(work)) {
               return undefined;
             }
@@ -1101,9 +1511,7 @@ export const matchNames = ({
       .slice(0, MAX_SCORED_PATTERNS),
   ];
   for (const { aliasIndices, exact } of selected) {
-    const alias =
-      index.aliases[aliasIndices[0]] ??
-      panic("Missing selected candidate alias");
+    const alias = index.aliases.get(aliasIndices[0]);
     let score = alias.quality === "weak" ? WEAK_ALIAS_FACTOR : 1;
     if (!exact) {
       const pairs =
@@ -1124,8 +1532,7 @@ export const matchNames = ({
       if (!spendScreeningWork(work)) {
         return undefined;
       }
-      const member =
-        index.aliases[aliasIndex] ?? panic("Missing grouped candidate alias");
+      const member = index.aliases.get(aliasIndex);
       const current = best.get(member.entry);
       if (score > 0 && (current === undefined || score > current.score)) {
         best.set(member.entry, { score, name: member.name });

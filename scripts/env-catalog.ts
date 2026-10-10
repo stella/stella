@@ -1318,6 +1318,19 @@ export const DEPLOYMENT_ENV_KEYS = new Set([
 ]);
 
 export const TOOLING_ENV_KEYS = new Set([
+  // CI image resolution and smoke tooling; product defaults remain upstream.
+  "CI_IMAGE_MIRROR_ENABLED",
+  "CI_PLAYWRIGHT_IMAGE",
+  "POSTGRES_IMAGE",
+  "REDIS_IMAGE",
+  // The manual checks workflow passes its inputs and result files to its scripts.
+  "CHECK_CHECK",
+  "CHECK_EXIT_FILE",
+  "CHECK_LOG_FILE",
+  "CHECK_REF",
+  "CHECK_SHA",
+  "CHECK_START_FILE",
+  "CHECK_TARGET",
   // Local verification host configuration, remote recursion guard, and base preparation.
   "STELLA_VERIFY_CONFIG",
   "REMOTE_CHECK",
@@ -1505,6 +1518,7 @@ export const TOOLING_ENV_KEYS = new Set([
   // Private loopback endpoint passed to the isolated corpus-suite preload.
   "STELLA_CORPUS_ENGINE_TEST_ENDPOINT",
   "STELLA_DESKTOP_DOWNLOAD_BASE_URL",
+  "STELLA_DESKTOP_NOW_EPOCH",
   "STELLA_DESKTOP_RELEASE_API_PATH",
   "STELLA_DESKTOP_RELEASE_EXPECTED_TAG",
   "STELLA_DESKTOP_RETRY_PAUSE_SECONDS",
@@ -1540,6 +1554,16 @@ export const TOOLING_ENV_KEYS = new Set([
   "TURN_OUTCOME_SHARD",
   "UPDATE_CHAT_PROMPT_BASELINE",
   "UPDATE_PROVIDER_REQUEST_PATHS",
+  // Release dependency-audit gate: a reasoned waiver and the remediation branch.
+  "WAIVE_DEPENDENCY_AUDIT",
+  "WAIVER_REASON",
+  "FIX_BRANCH",
+  // Shell fixtures for the dependency-audit gate and remediation scripts.
+  "TEST_AUDIT_STATUS",
+  "TEST_CONCURRENT_SHA",
+  "TEST_FIX_AVAILABLE",
+  "TEST_OPEN_PRS",
+  "TEST_ADVISORIES_REMAIN",
   "WXT_STELLA_ORIGINS",
 ]);
 

@@ -15,6 +15,8 @@ export const DECISION_LOOKUP_STATUS = {
   found: "found",
   /** Several do, and which one is meant is the caller's decision. */
   ambiguous: "ambiguous",
+  /** The identifier names a file but omits a component needed to pick a decision. */
+  incompleteIdentifier: "incomplete_identifier",
   /** None does, or the identifier is not one the corpus's grammars claim. */
   notFound: "not_found",
   /**

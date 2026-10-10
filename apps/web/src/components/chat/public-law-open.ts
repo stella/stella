@@ -9,7 +9,7 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 
 type OpenPublicLawLinkOptions<Resolved> = {
   /** What the link names, or null when nothing answers to it. */
-  resolve: () => Promise<Resolved | null>;
+  resolve: () => Promise<Resolved | null> | Resolved | null;
   open: (resolved: Resolved) => Promise<void> | void;
 };
 

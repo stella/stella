@@ -27,8 +27,8 @@ describe("decisionMatchToOpen", () => {
     expect(
       decisionMatchToOpen<Hit>({
         candidates: [first],
-        reason: "file_incomplete",
-        status: "ambiguous",
+        missing: ["sheet"],
+        status: "incomplete_identifier",
       }),
     ).toEqual({ decision: first, fileMayHoldOthers: true });
   });
@@ -38,10 +38,10 @@ describe("decisionMatchToOpen", () => {
       { status: "none" },
       {
         candidates: [first, second],
-        reason: "file_incomplete",
-        status: "ambiguous",
+        missing: ["sheet"],
+        status: "incomplete_identifier",
       },
-      { candidates: [], reason: "file_incomplete", status: "ambiguous" },
+      { candidates: [], missing: ["sheet"], status: "incomplete_identifier" },
       { candidates: [first, second], reason: "several", status: "ambiguous" },
       { candidates: [first], reason: "several", status: "ambiguous" },
       {

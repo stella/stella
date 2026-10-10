@@ -34,6 +34,7 @@ import {
 } from "@stll/api-contract/chat-file-types";
 import { CHAT_CONTEXT_FILE_MAX_BYTES } from "@stll/chat-limits";
 import { openFilePicker as openBrowserFilePicker } from "@stll/ui/file-picker";
+import { stellaToast } from "@stll/ui/toast";
 
 import {
   decisionPassageContent,
@@ -44,7 +45,10 @@ import {
   updateCarriesDraftEcho,
 } from "@/components/chat-editor-echo";
 import { createChatComposerDocument } from "@/components/chat-editor-markdown.logic";
-import { readChatPaste } from "@/components/chat-editor-paste.logic";
+import {
+  insertCredentialPasteRequest,
+  readChatPaste,
+} from "@/components/chat-editor-paste.logic";
 import type { ComposerSource } from "@/components/chat-editor-source";
 import { ChatMention } from "@/components/chat-mention-extension";
 import type { ChatMentionOption } from "@/components/chat-mention-extension";
@@ -55,6 +59,7 @@ import {
   pastedTextChipContent,
 } from "@/components/chat-pasted-text-extension";
 import type { PastedTextAttrs } from "@/components/chat-pasted-text-extension";
+import { containsCredentialCandidate } from "@/components/chat-secret-candidate.logic";
 import { ChatAnonDecorations } from "@/components/chat/chat-anon-decorations-extension";
 import {
   mountedEditorFor,
@@ -637,6 +642,7 @@ export const useChatEditor = ({
   // oxlint-disable-next-line react/refs -- latest-ref mirror: consumed by out-of-render editor handlers, must reflect this render's prop
   suggestedFollowupPromptRef.current = suggestedFollowupPrompt;
   const submitHandlerRef = useRef<(() => Promise<void>) | null>(null);
+  const confirmedCredentialSendRef = useRef(false);
   const fileIdCounterRef = useRef(0);
   const activePluginKeysRef = useRef<(string | PluginKey)[]>([]);
   const editorRef = useRef<Editor | null>(null);
@@ -694,6 +700,22 @@ export const useChatEditor = ({
     isEmptyRef.current = nextIsEmpty;
     setIsEmpty(nextIsEmpty);
   });
+  const showCredentialPasteNotice = useLatestCallback(
+    (targetEditor: Editor) => {
+      stellaToast.warning(t("chat.credentialPasteTitle"), {
+        description: t("chat.credentialPasteDescription"),
+        action: {
+          label: t("chat.credentialPasteAction"),
+          onClick: () => {
+            insertCredentialPasteRequest(
+              targetEditor,
+              t("chat.credentialPasteRequest"),
+            );
+          },
+        },
+      });
+    },
+  );
   const attachmentsRef = useRef(attachments);
   // oxlint-disable-next-line react/refs -- latest-ref mirror: read at submit time out-of-render, must hold this render's attachments
   attachmentsRef.current = attachments;
@@ -986,6 +1008,9 @@ export const useChatEditor = ({
             source: "paste",
             text: paste.text,
           });
+          return true;
+        case "credential":
+          showCredentialPasteNotice(targetEditor);
           return true;
         case "text":
           targetEditor.commands.insertContent(paste.content, {
@@ -1345,6 +1370,27 @@ export const useChatEditor = ({
       const doc = editor.getJSON();
       const files = attachmentsRef.current;
 
+      if (
+        !confirmedCredentialSendRef.current &&
+        containsCredentialCandidate(editor.getText())
+      ) {
+        stellaToast.warning(t("chat.credentialSendTitle"), {
+          description: t("chat.credentialSendDescription"),
+          action: {
+            label: t("chat.credentialSendAction"),
+            onClick: () => {
+              confirmedCredentialSendRef.current = true;
+              detached(
+                submitHandlerRef.current?.(),
+                "chat-editor-provider.credential-send-anyway",
+              );
+            },
+          },
+        });
+        return;
+      }
+      confirmedCredentialSendRef.current = false;
+
       if (!html && files.length === 0) {
         return;
       }
@@ -1394,6 +1440,7 @@ export const useChatEditor = ({
       editor,
       queryClient,
       setDraft,
+      t,
       threadKey,
     ],
   );
