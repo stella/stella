@@ -772,7 +772,11 @@ export const readReport = async (
   return { sha: parsed.sha, observedAt: parsed.observedAt, entries, failures };
 };
 
-const runRemovalMerge = async (command: string[]): Promise<number> => {
+type RemovalMergeResult = { exitCode: number; stderr: string };
+
+const runRemovalMerge = async (
+  command: string[],
+): Promise<RemovalMergeResult> => {
   const proc = Bun.spawn(command, {
     cwd: root,
     stdout: "pipe",
@@ -785,7 +789,7 @@ const runRemovalMerge = async (command: string[]): Promise<number> => {
     boundedOutput(proc.stderr),
     proc.exited,
   ]);
-  return execution[2];
+  return { exitCode: execution[2], stderr: execution[1] };
 };
 
 const REMOVAL_REPOSITORY = "stella/stella";
@@ -799,7 +803,7 @@ export const armRemoval = async (
       message: "Removal head is not a full commit SHA.",
     });
   }
-  const exit = await run([
+  const { exitCode } = await run([
     "gh",
     "pr",
     "merge",
@@ -810,7 +814,7 @@ export const armRemoval = async (
     "--match-head-commit",
     headSha,
   ]);
-  if (exit !== 0) {
+  if (exitCode !== 0) {
     throw new HealingError({
       message: "Removal enqueue refused or failed; diagnostic output withheld.",
     });
@@ -822,21 +826,43 @@ export const disarmRemoval = async (
   number: number,
   run = runRemovalMerge,
 ): Promise<void> => {
-  if (
-    (await run([
-      "gh",
-      "pr",
-      "merge",
-      String(number),
-      "--repo",
-      REMOVAL_REPOSITORY,
-      "--disable-auto",
-    ])) !== 0
-  ) {
+  const { exitCode, stderr } = await run([
+    "gh",
+    "pr",
+    "merge",
+    String(number),
+    "--repo",
+    REMOVAL_REPOSITORY,
+    "--disable-auto",
+  ]);
+  // Accept only the mutation's already-disarmed response, preserving other failures.
+  const alreadyDisarmed =
+    /^GraphQL: (?:Pull request )?Auto merge is not enabled \(disablePullRequestAutoMerge\)\s*$/iu.test(
+      stderr,
+    );
+  if (exitCode !== 0 && !(exitCode === 1 && alreadyDisarmed)) {
     throw new HealingError({
       message: "Removal disarm refused or failed; diagnostic output withheld.",
     });
   }
+};
+
+type ReconcileRemovalMergeOptions = {
+  removal: PublishedRemoval;
+  mergeHold: string | undefined;
+  run?: typeof runRemovalMerge;
+};
+
+export const reconcileRemovalMerge = async ({
+  removal,
+  mergeHold,
+  run = runRemovalMerge,
+}: ReconcileRemovalMergeOptions) => {
+  if (mergeHold) {
+    await disarmRemoval(removal.number, run);
+    return { signal: "dated-waiver-disarmed", pr: removal.number } as const;
+  }
+  return armRemoval(removal, run);
 };
 
 export const renderHealingFailureSignal = (error: HealingRunError) => ({
@@ -995,10 +1021,14 @@ const main = async (): Promise<void> => {
           disarm: disarmRemoval,
         }),
       armRemoval: async (removal) => {
-        if (process.env["MERGE_HOLD"]) {
-          return;
-        }
-        console.log(JSON.stringify(await armRemoval(removal)));
+        console.log(
+          JSON.stringify(
+            await reconcileRemovalMerge({
+              removal,
+              mergeHold: process.env["MERGE_HOLD"],
+            }),
+          ),
+        );
       },
     },
   });

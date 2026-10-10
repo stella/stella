@@ -22,6 +22,7 @@ import {
   applyHealing,
   armRemoval,
   disarmRemoval,
+  reconcileRemovalMerge,
   collectProbeReport,
   readReport,
   renderHealingFailureSignal,
@@ -141,7 +142,7 @@ test("enqueue refusals fail publication instead of reporting a pending arm", asy
   const calls: string[][] = [];
   const armed = await armRemoval(removal, async (command) => {
     calls.push(command);
-    return 0;
+    return { exitCode: 0, stderr: "" };
   });
   expect(armed).toEqual({ signal: "dated-waiver-armed", pr: 42 });
   expect(calls).toEqual([
@@ -159,19 +160,67 @@ test("enqueue refusals fail publication instead of reporting a pending arm", asy
   ]);
   expect(
     await rejectionOf(
-      armRemoval({ ...removal, headSha: "bad" }, async () => 0),
+      armRemoval({ ...removal, headSha: "bad" }, async () => ({
+        exitCode: 0,
+        stderr: "",
+      })),
     ),
   ).toHaveProperty("message", "Removal head is not a full commit SHA.");
   for (const exit of [1, 2, 137]) {
     const run = scenario([{ entry, outcome: green }]);
     run.actions.armRemoval = async (published) => {
-      await armRemoval(published, async () => exit);
+      await armRemoval(published, async () => ({ exitCode: exit, stderr: "" }));
     };
     expect(await rejectionOf(run.run("2026-10-10T00:00:00Z"))).toMatchObject({
       message: "Dated waiver operations failed; diagnostic output withheld.",
       failures: [{ key: waiverKey(entry), stage: "armRemoval" }],
     });
     expect(run.effects).toEqual(["remove", "resolve"]);
+  }
+});
+
+test("disarm accepts only the exact already-disarmed response", async () => {
+  const command = [
+    "gh",
+    "pr",
+    "merge",
+    "42",
+    "--repo",
+    "stella/stella",
+    "--disable-auto",
+  ];
+  await disarmRemoval(42, async (actual) => {
+    expect(actual).toEqual(command);
+    return {
+      exitCode: 1,
+      stderr:
+        "GraphQL: Auto merge is not enabled (disablePullRequestAutoMerge)\n",
+    };
+  });
+  for (const result of [
+    { exitCode: 1, stderr: "GraphQL: permission denied\n" },
+    {
+      exitCode: 1,
+      stderr:
+        "GraphQL: Auto merge is not enabled (disablePullRequestAutoMerge)\nAnother failure",
+    },
+    {
+      exitCode: 137,
+      stderr:
+        "GraphQL: Auto merge is not enabled (disablePullRequestAutoMerge)\n",
+    },
+  ]) {
+    expect(
+      await rejectionOf(
+        disarmRemoval(42, async (actual) => {
+          expect(actual).toEqual(command);
+          return result;
+        }),
+      ),
+    ).toHaveProperty(
+      "message",
+      "Removal disarm refused or failed; diagnostic output withheld.",
+    );
   }
 });
 
@@ -188,7 +237,7 @@ test("recorded failures publish before an earlier removal's enqueue can refuse",
     },
   ]);
   run.actions.armRemoval = async (published) => {
-    await armRemoval(published, async () => 1);
+    await armRemoval(published, async () => ({ exitCode: 1, stderr: "" }));
   };
   expect(await rejectionOf(run.run("2026-10-10T00:00:00Z"))).toMatchObject({
     message: "Dated waiver operations failed; diagnostic output withheld.",
@@ -934,6 +983,8 @@ const proposalLifecycle = async (owner: DatedWaiver = lifecycleOwner) => {
     | undefined;
   let created = 0;
   let disarmExit = 0;
+  let mergeHold: string | undefined;
+  let publications = 0;
   const effects: string[] = [];
   const request = async (
     args: readonly string[],
@@ -1013,12 +1064,13 @@ const proposalLifecycle = async (owner: DatedWaiver = lifecycleOwner) => {
           if (disarmExit === 0) {
             proposal.status = "unarmed";
           }
-          return disarmExit;
+          return { exitCode: disarmExit, stderr: "" };
         }),
     });
   const actions = {
     ...sink,
     openRemoval: async () => {
+      publications++;
       if (!proposal || proposal.status === "closed") {
         proposal = {
           number: ++created,
@@ -1033,25 +1085,46 @@ const proposalLifecycle = async (owner: DatedWaiver = lifecycleOwner) => {
       } satisfies PublishedRemoval;
     },
     armRemoval: async (published: PublishedRemoval) => {
-      await armRemoval(published, async (command) => {
-        expect(command).toEqual([
-          "gh",
-          "pr",
-          "merge",
-          String(published.number),
-          "--repo",
-          "stella/stella",
-          "--auto",
-          "--match-head-commit",
-          removal.headSha,
-        ]);
-        if (!proposal) {
-          throw new TypeError("Proposal fixture missing");
-        }
-        expect(published.number).toBe(proposal.number);
-        proposal.status = "armed";
-        effects.push("arm");
-        return 0;
+      await reconcileRemovalMerge({
+        removal: published,
+        mergeHold,
+        run: async (command) => {
+          expect(command).toEqual(
+            mergeHold
+              ? [
+                  "gh",
+                  "pr",
+                  "merge",
+                  String(published.number),
+                  "--repo",
+                  "stella/stella",
+                  "--disable-auto",
+                ]
+              : [
+                  "gh",
+                  "pr",
+                  "merge",
+                  String(published.number),
+                  "--repo",
+                  "stella/stella",
+                  "--auto",
+                  "--match-head-commit",
+                  removal.headSha,
+                ],
+          );
+          if (!proposal) {
+            throw new TypeError("Proposal fixture missing");
+          }
+          expect(published.number).toBe(proposal.number);
+          if (mergeHold) {
+            proposal.status = "unarmed";
+            effects.push("disarm");
+          } else {
+            proposal.status = "armed";
+            effects.push("arm");
+          }
+          return { exitCode: disarmExit, stderr: "" };
+        },
       });
     },
     retireRemoval: async (waiver: DatedWaiver) =>
@@ -1087,6 +1160,10 @@ const proposalLifecycle = async (owner: DatedWaiver = lifecycleOwner) => {
     refuseDisarm: (exit: number) => {
       disarmExit = exit;
     },
+    holdMerge: (value: string) => {
+      mergeHold = value;
+    },
+    publications: () => publications,
   };
 };
 
@@ -1132,6 +1209,21 @@ test("a removal proposal is retired when another change removes its waiver", asy
     reconciliation,
   });
   expect(healing.effects).toEqual(["publish", "arm", "disarm", "close"]);
+});
+
+test("a merge hold disarms a republished green removal", async () => {
+  const healing = await proposalLifecycle();
+  await healing.run("green");
+  expect(healing.proposal()?.status).toBe("armed");
+  const publicationsBeforeRefresh = healing.publications();
+  const number = healing.proposal()?.number;
+
+  healing.holdMerge("1");
+  await healing.run("green");
+
+  expect(healing.publications()).toBe(publicationsBeforeRefresh + 1);
+  expect(healing.effects).toEqual(["publish", "arm", "disarm"]);
+  expect(healing.proposal()).toMatchObject({ number, status: "unarmed" });
 });
 
 test("orphan retirement refusals join the run failure and leave a recoverable proposal", async () => {
