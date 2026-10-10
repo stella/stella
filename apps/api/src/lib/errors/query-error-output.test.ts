@@ -288,27 +288,11 @@ test("output sinks exclude query text present only in an ordinary error stack", 
   }
 });
 
-test("output sinks redact query markers across sibling and nested payloads", () => {
+test("output sinks redact query markers in a nested payload", () => {
   const marker = SECRETS[1];
+  // One canonical nested shape; payload variants live in the private probes.
   const cases = [
     {
-      name: "string",
-      payload: `Diagnostic ${marker}`,
-      failure: () =>
-        new Error(`Diagnostic ${marker}`, { cause: queryFailure() }),
-    },
-    {
-      name: "array",
-      payload: [queryFailure(), `Diagnostic ${marker}`],
-      failure: () => new Error("array wrapper", { cause: queryFailure() }),
-    },
-    {
-      name: "plain object wrapper",
-      payload: { message: `Diagnostic ${marker}`, cause: queryFailure() },
-      failure: () => new Error("object wrapper", { cause: queryFailure() }),
-    },
-    {
-      name: "nested cause",
       payload: new Error(`Diagnostic ${marker}`, {
         cause: {
           failure: new Error("inner wrapper", { cause: queryFailure() }),
