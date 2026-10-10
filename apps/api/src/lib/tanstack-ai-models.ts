@@ -39,6 +39,7 @@ import type {
   ResolvedReasoningEffort,
   TanStackAIProvider,
 } from "@stll/ai-catalog";
+import { createSha256 } from "@stll/sha256/bun";
 
 import { env } from "@/api/env";
 import {
@@ -1366,7 +1367,7 @@ export const clearByokAdapterCache = () => {
 };
 
 const byokCacheKey = (config: OrgAIProviderConfig): string => {
-  const hasher = new Bun.CryptoHasher("sha256");
+  const hasher = createSha256();
   hasher.update(config.provider);
   hasher.update(config.apiKey);
   switch (config.provider) {

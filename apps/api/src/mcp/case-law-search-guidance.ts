@@ -1,6 +1,6 @@
+import { apexCourtAbbreviations } from "@stll/api-contract/case-law-court-abbreviations";
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 
-import { apexCourtAbbreviations } from "@/api/lib/case-law/court-abbreviations";
 import type { CaseLawSearchGuidanceMode } from "@/api/lib/case-law/search-guidance-mode";
 import { LIMITS } from "@/api/lib/limits";
 

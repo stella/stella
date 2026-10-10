@@ -23,6 +23,7 @@ import * as folio from "@stll/folio-core/server";
 // expect-clean: confine-owner/confine-owner
 import { paragraph } from "@stll/folio-core/server";
 
+import { auditLogs } from "@/api/db/schema";
 // oxlint-disable-next-line confine-owner/confine-owner -- fixture proves a static import of an owned module is rejected
 import { createRedisClient } from "@/api/lib/redis-client";
 // oxlint-disable-next-line confine-owner/confine-owner -- fixture proves a type-only import still opens the owned surface and is rejected
@@ -36,6 +37,11 @@ import { createRedisClient as relativeClient } from "../../apps/api/src/lib/redi
 import { createRootRunActor } from "../../apps/api/src/lib/root-scoped-db.ts";
 // oxlint-disable-next-line confine-owner/confine-owner -- fixture proves a deep relative import of an owned package source file is rejected
 import { countryCodeFromAlpha3 } from "../../packages/country-codes/src/alpha3.ts";
+
+// oxlint-disable-next-line confine-owner/confine-owner -- fixture proves a raw audit change selection is confined to its projection owner
+export const rawAuditSelection = { changes: auditLogs.changes };
+// expect-clean: confine-owner/confine-owner
+export const auditIdentitySelection = { id: auditLogs.id };
 
 // oxlint-disable-next-line confine-owner/confine-owner -- fixture proves a facade re-exporting an owned binding is rejected
 export { createDocx as serialize } from "@stll/folio-core/server";

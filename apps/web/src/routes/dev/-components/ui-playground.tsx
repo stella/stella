@@ -1689,6 +1689,28 @@ function SharedChatRendererSample() {
             handleDeny: () => {
               /* no-op in playground */
             },
+            continueRequestSecret: async () => {
+              /* no-op in playground */
+            },
+            handleRequestSecret: async () =>
+              await Promise.resolve({
+                status: "declined" as const,
+                target: {
+                  type: "mcp-connector" as const,
+                  connectorSlug: "playground",
+                },
+              }),
+            secretAvailabilityKey: "playground-thread",
+            resolveSecretTarget: async () =>
+              await Promise.resolve({
+                available: false,
+                connector: {
+                  connectionId: "sample-connection",
+                  displayName: "Sample connector",
+                  host: "sample.test",
+                  responseDisposition: "normal" as const,
+                },
+              }),
           }}
         >
           <ChatThreadMessages
@@ -1729,6 +1751,8 @@ const COMPLETED_TOOL_STEP = {
       {
         messageId: "playground-message-indemnity",
         role: "assistant",
+        revision: 0,
+        edited: false,
         excerpt: "The playbook uses a 36-month survival period.",
         createdAt: "2026-07-21T10:30:00.000Z",
       },

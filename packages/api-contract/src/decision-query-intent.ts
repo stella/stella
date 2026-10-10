@@ -531,7 +531,7 @@ export const exactDecisionMatches = <THit extends DecisionHitIdentity>(
  *   carry, so the file's decisions come back rather than one of them, even
  *   when the file shows one; for a sheet, only those whose sheet is unknown,
  *   since one known under another sheet is not the decision named.
- *   `file_incomplete` is a bare docket finding one
+ * - `incomplete_identifier`: a bare docket finding one
  *   decision where stored dockets can still carry their sheet
  *   (`DECISION_DOCKETS_STORED_WITH_SHEETS`), so the file may hold members the
  *   read did not reach.
@@ -552,7 +552,12 @@ export type DecisionIdentityResolution<THit> =
   | {
       readonly status: "ambiguous";
       readonly candidates: readonly THit[];
-      readonly reason: "several" | "selector_unmatched" | "file_incomplete";
+      readonly reason: "several" | "selector_unmatched";
+    }
+  | {
+      readonly status: "incomplete_identifier";
+      readonly candidates: readonly THit[];
+      readonly missing: readonly ["sheet"];
     };
 
 /** A digit run as a number would read it, so `05` and `5` compare equal. */
@@ -816,9 +821,9 @@ export const resolveDecisionIdentity = <THit extends DecisionHitIdentity>(
       DECISION_DOCKETS_STORED_WITH_SHEETS[identifier.jurisdiction]
     ) {
       return {
-        status: "ambiguous",
+        status: "incomplete_identifier",
         candidates: family,
-        reason: "file_incomplete",
+        missing: ["sheet"],
       };
     }
     return resolvedAmong(family, "docket");
@@ -883,6 +888,7 @@ export const namedDecisionsOf = <THit extends DecisionHitIdentity>(
     case "unique":
       return [resolution.decision];
     case "ambiguous":
+    case "incomplete_identifier":
       return resolution.candidates;
     default: {
       resolution satisfies never;

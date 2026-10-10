@@ -2,6 +2,7 @@ import type { LucideIcon } from "@stll/ui/icons";
 
 import type { TranslationKey } from "@/i18n/types";
 import type { ShortcutId } from "@/lib/hotkeys";
+import type { Capability } from "@/lib/organization/feature-access/action-capabilities.logic";
 
 type CommandActionGroup = "create" | "navigate" | "view" | "workspace";
 
@@ -39,6 +40,7 @@ export type CommandActionContext = {
 };
 
 export type CommandAction = {
+  capability: Capability | null;
   id: CommandActionId;
   group: CommandActionGroup;
   titleKey: CommandActionTextKey;

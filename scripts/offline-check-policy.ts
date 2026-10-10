@@ -41,7 +41,7 @@ const offlineCheckEntry = (words: readonly string[], cwd: string) => {
   const relativeCwd = path.relative(root, cwd);
   const invocation = parseBunFlags({
     args: words.slice(1),
-    context: { root, expanding: new Set() },
+    context: { root, expanding: new Set(), checkouts: [] },
     cwd: relativeCwd,
     stdin: undefined,
   });
@@ -72,7 +72,7 @@ export const usesOfflineCheckPreload = (
 const packageCheckEntry = (words: readonly string[]) => {
   const invocation = parseBunFlags({
     args: words.slice(1),
-    context: { root, expanding: new Set() },
+    context: { root, expanding: new Set(), checkouts: [] },
     cwd: "",
     stdin: undefined,
   });

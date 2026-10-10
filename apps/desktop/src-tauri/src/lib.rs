@@ -17,13 +17,17 @@ mod deep_link;
 mod desktop_crash;
 mod desktop_crash_native;
 mod desktop_telemetry;
+mod device_proof;
 mod diagnostics;
 #[cfg(test)]
 mod e2e;
+mod foreground_app;
 mod handoff;
 mod http_client;
 mod i18n;
 mod keychain;
+mod local_store;
+mod local_window;
 mod logging;
 mod marker_file;
 mod pdf_signing;
