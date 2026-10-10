@@ -137,7 +137,7 @@ for (const app of ["document-upload", "file-comparison"] as const) {
       "Fixture upload failed",
     );
     await expect
-      .poll(() => page.evaluate(() => window.pickerFixtureCalls))
+      .poll(async () => page.evaluate(() => window.pickerFixtureCalls))
       .toBe(1);
     await expect(upload).toBeEnabled();
     for (let index = 0; index < count; index += 1) {
@@ -146,7 +146,7 @@ for (const app of ["document-upload", "file-comparison"] as const) {
     await upload.focus();
     await upload.press("Space");
     await expect
-      .poll(() => page.evaluate(() => window.pickerFixtureCalls))
+      .poll(async () => page.evaluate(() => window.pickerFixtureCalls))
       .toBe(2);
     await expect(upload).toBeEnabled();
   });
