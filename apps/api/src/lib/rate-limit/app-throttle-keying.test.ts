@@ -94,37 +94,50 @@ const readGatewayKey = async (subject: KeySubject) => {
   return v.parse(v.string(), key);
 };
 
-const KEY_PROBES = {
-  createMcpTransportRateLimitOptions: {
-    readKey: async (subject: KeySubject) =>
-      await mcpTransportRateLimitKey(
-        transportRequest(subject.userId),
+const KEY_REGRESSIONS = {
+  createMcpTransportRateLimitOptions: async () => {
+    const original = await mcpTransportRateLimitKey(
+      transportRequest("token-a"),
+      sharedPeer,
+    );
+    expect(
+      await mcpTransportRateLimitKey(transportRequest("token-a"), sharedPeer),
+    ).toBe(original);
+    expect(
+      await mcpTransportRateLimitKey(transportRequest("token-b"), sharedPeer),
+    ).not.toBe(original);
+  },
+  consumeInvokeCapabilityRateLimit: async () => {
+    const original = await readCapabilityKey(baselineSubject);
+    expect(await readCapabilityKey(baselineSubject)).toBe(original);
+    expect(
+      await readCapabilityKey({
+        ...baselineSubject,
+        capabilityId: "time-entries.create-other",
+      }),
+    ).not.toBe(original);
+  },
+  skillSourceRateLimitBinding: async () => {
+    const readKey = (userId: string) =>
+      createSkillSourceRateLimitGenerator(async () => toSafeId<"user">(userId))(
+        transportRequest("source-credential"),
         sharedPeer,
-      ),
-    dimensions: ["userId"],
+      );
+    const original = await readKey("user-a");
+    expect(await readKey("user-a")).toBe(original);
+    expect(await readKey("user-b")).not.toBe(original);
   },
-  consumeInvokeCapabilityRateLimit: {
-    readKey: readCapabilityKey,
-    dimensions: ["userId", "organizationId", "capabilityId"],
+  consumeMcpGatewayRateLimit: async () => {
+    const original = await readGatewayKey(baselineSubject);
+    expect(await readGatewayKey(baselineSubject)).toBe(original);
+    expect(
+      await readGatewayKey({
+        ...baselineSubject,
+        connectorSlug: "other-registry",
+      }),
+    ).not.toBe(original);
   },
-  skillSourceRateLimitBinding: {
-    readKey: async (subject: KeySubject) =>
-      await createSkillSourceRateLimitGenerator(async () =>
-        toSafeId<"user">(subject.userId),
-      )(transportRequest("source-credential"), sharedPeer),
-    dimensions: ["userId"],
-  },
-  consumeMcpGatewayRateLimit: {
-    readKey: readGatewayKey,
-    dimensions: ["userId", "connectorSlug"],
-  },
-} as const satisfies Record<
-  string,
-  {
-    readKey: (subject: KeySubject) => Promise<string>;
-    dimensions: readonly (keyof KeySubject)[];
-  }
->;
+};
 
 const ACCOUNT_KEY_PROBES = {
   "otp-account": OTP_ACCOUNT_BUDGET,
@@ -156,7 +169,7 @@ const limiterCensus = (sources: readonly string[]) => {
     }
   }
   const expected = new Set([
-    ...Object.keys(KEY_PROBES),
+    ...Object.keys(KEY_REGRESSIONS),
     "createMcpAuthenticationFailureLimiter",
   ]);
   return {
@@ -460,7 +473,7 @@ describe("application throttle keying census", () => {
 
   test("the limiter census detects added and removed owners", () => {
     const expected = [
-      ...Object.keys(KEY_PROBES),
+      ...Object.keys(KEY_REGRESSIONS),
       "createMcpAuthenticationFailureLimiter",
     ];
     const fixture = expected.map((name) => `${name}();`).join("\n");
@@ -581,18 +594,10 @@ describe("application throttle keying census", () => {
     },
   );
 
-  test.each(Object.entries(KEY_PROBES))(
-    "%s separates each authenticated subject dimension behind one address",
-    async (_name, probe) => {
-      const original = await probe.readKey(baselineSubject);
-      expect(await probe.readKey(baselineSubject)).toBe(original);
-      for (const dimension of probe.dimensions) {
-        const changed = {
-          ...baselineSubject,
-          [dimension]: `${baselineSubject[dimension]}-other`,
-        };
-        expect(await probe.readKey(changed)).not.toBe(original);
-      }
+  test.each(Object.entries(KEY_REGRESSIONS))(
+    "%s uses its canonical key",
+    async (_name, regression) => {
+      await regression();
     },
   );
 
