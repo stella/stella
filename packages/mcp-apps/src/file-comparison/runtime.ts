@@ -159,11 +159,13 @@ type HandOffOptions = {
   app: App;
   next: ComparisonReservation["next"];
   text: string;
+  failureMessage: string;
 };
 const handOffToModel = async ({
   app,
   next,
   text,
+  failureMessage,
 }: HandOffOptions): Promise<Result<HandoffOutcome, ComparisonAppError>> => {
   const capabilities = app.getHostCapabilities();
   if (capabilities?.message) {
@@ -174,9 +176,13 @@ const handOffToModel = async ({
           content: [{ type: "text", text }],
         }),
     );
-    return Result.isError(sent)
-      ? Result.err(wrapped(sent.error))
-      : Result.ok("delivered");
+    if (Result.isError(sent)) {
+      return Result.err(wrapped(sent.error));
+    }
+    if (sent.value.isError === true) {
+      return Result.err(comparisonError(failureMessage));
+    }
+    return Result.ok("delivered");
   }
   if (capabilities?.updateModelContext) {
     const updated = await Result.tryPromise(
@@ -322,6 +328,7 @@ export const createFileComparisonRuntime = (
     const outcome = await handOffToModel({
       app,
       next,
+      failureMessage: t("capabilityFailed"),
       text: `Both files are uploaded. Call ${FILE_COMPARISON_TRANSPORT.compareToolName} with source ${JSON.stringify(next.source)}.`,
     });
     if (Result.isError(outcome)) {

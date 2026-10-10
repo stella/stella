@@ -14,7 +14,7 @@
   "wasm-vendor": 0,
   "mcpApps": {
     "document-upload": 531683,
-    "file-comparison": 531496,
+    "file-comparison": 531528,
     "case-law-results": 843858,
     "decision-reader": 742027
   }
