@@ -148,6 +148,7 @@ test("checked file writes receive the values snapshotted before reservation", as
 
   operation.objectKey = "unchecked/key";
   operation.sizeBytes = 999;
+  originalContent[0] = 7;
   operation.content = new Uint8Array([9]);
   finishReservation?.();
 
@@ -164,7 +165,7 @@ test("checked file writes receive the values snapshotted before reservation", as
     {
       objectKey: "checked/key",
       sizeBytes: 3,
-      content: originalContent,
+      content: new Uint8Array([1, 2, 3]),
     },
   ]);
 });

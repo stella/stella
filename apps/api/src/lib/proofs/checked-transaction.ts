@@ -192,6 +192,19 @@ const copyOperationData = (
   value: unknown,
   context: OperationCopyContext,
 ): unknown => {
+  // File content is checked by value: a caller mutating its buffer in place
+  // must not change the bytes a checked writer receives.
+  if (value instanceof Uint8Array) {
+    const existing = context.copies.get(value);
+    if (existing) {
+      return existing;
+    }
+    const copy = Buffer.isBuffer(value)
+      ? Buffer.from(value)
+      : new Uint8Array(value);
+    context.copies.set(value, copy);
+    return copy;
+  }
   if (!isPlainOperationData(value)) {
     return value;
   }
