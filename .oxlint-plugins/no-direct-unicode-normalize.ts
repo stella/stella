@@ -40,7 +40,9 @@ const isEmptyStringLiteral = (node: unknown): boolean =>
       node.quasis.every(
         (quasi: unknown) =>
           isAstNode(quasi) &&
-          isAstNode(quasi.value) &&
+          typeof quasi.value === "object" &&
+          quasi.value !== null &&
+          "cooked" in quasi.value &&
           quasi.value.cooked === "",
       )));
 

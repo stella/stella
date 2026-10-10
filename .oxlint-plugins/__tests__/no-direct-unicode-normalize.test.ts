@@ -29,9 +29,10 @@ test("rejects each owned mark class with and without the unicode flag", async ()
     'text.replaceAll(/\\p{Diacritic}+/g, "");',
     'text.replace(/[\\u0300-\\u036f]/gu, "");',
     'text.replaceAll(/[̀-ͯ]+/g, "");',
+    "text.replace(/\\p{M}/gu, ``);",
   ].join("\n");
   expect(await lintSingleRule("no-direct-unicode-normalize", source)).toEqual([
-    1, 2, 3, 4, 5, 6, 7, 8,
+    1, 2, 3, 4, 5, 6, 7, 8, 9,
   ]);
 });
 
