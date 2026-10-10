@@ -930,7 +930,10 @@ describe("retiring an ineligible removal proposal", () => {
     await retire();
     expect(disarmed).toEqual([42, 42]);
     expect(github.prs.at(0)?.state).toBe("closed");
-    expect(await github.publish("Verified fresh green evidence.")).toBe(43);
+    expect(await github.publish("Verified fresh green evidence.")).toEqual({
+      number: 43,
+      headSha: "signed-2",
+    });
     expect(github.prs.filter(({ state }) => state !== "closed")).toEqual([
       {
         number: 43,
