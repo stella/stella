@@ -5,8 +5,8 @@ import { useTranslations } from "use-intl";
 import type { ReaderMessages } from "@stll/decision-reader/reader-adapters";
 import { BidiText } from "@stll/ui/bidi-text";
 
-import { formatValidityDate } from "@/features/statutes/statute-format";
 import { useFormatter } from "@/i18n/formatting-context";
+import { formatValidityDate } from "@/lib/statutes/statute-format";
 
 export const useWebReaderMessages = (): ReaderMessages => {
   const t = useTranslations();

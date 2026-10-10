@@ -4,39 +4,41 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## document_processing_runs · `documentProcessingRuns` · document-processing.ts:193
+## document_processing_runs · `documentProcessingRuns` · document-processing.ts:198
 
 Durable execution record for processing one immutable document source.
 
 ```text
-document_processing_runs.id                            pUuid               pk,not null       document-processing.ts:196
-document_processing_runs.organization_id               safeOrganizationId  fk,not null       document-processing.ts:197
-document_processing_runs.workspace_id                  safeWorkspaceId     fk,not null       document-processing.ts:200
-document_processing_runs.entity_id                     safeUuid            not null          document-processing.ts:203
-document_processing_runs.entity_version_id             safeUuid            not null          document-processing.ts:204
-document_processing_runs.field_id                      safeUuid            not null          document-processing.ts:205
-document_processing_runs.source_file_id                uuid                not null          document-processing.ts:207  UUIDv7 stored in `fields.content.id`; deliberately not a table FK.
-document_processing_runs.source_sha256_hex             varchar             not null          document-processing.ts:208
-document_processing_runs.kind                          text                not null          document-processing.ts:209
-document_processing_runs.processor_version             integer             default,not null  document-processing.ts:211  Bump when a processor's persisted-output contract changes.
-document_processing_runs.request_source                text                not null          document-processing.ts:212
-document_processing_runs.requested_by                  text                fk,null           document-processing.ts:217
-document_processing_runs.status                        text                default,not null  document-processing.ts:220
-document_processing_runs.deadline_scout_status         text                default,not null  document-processing.ts:224
-document_processing_runs.deadline_scout_attempt_count  integer             default,not null  document-processing.ts:230
-document_processing_runs.deadline_scout_claimed_at     timestamp           null              document-processing.ts:234
-document_processing_runs.deadline_scout_error_code     varchar             null              document-processing.ts:237
-document_processing_runs.deadline_scout_skipped_until  timestamp           null              document-processing.ts:244  A pending scan refused for an exhausted action period waits for the period's end; dispatch and claim skip it until then.
-document_processing_runs.attempt_count                 integer             default,not null  document-processing.ts:247
-document_processing_runs.progress_completed            integer             default,not null  document-processing.ts:248
-document_processing_runs.progress_total                integer             null              document-processing.ts:249
-document_processing_runs.error_code                    varchar             null              document-processing.ts:250
-document_processing_runs.error_at                      timestamp           null              document-processing.ts:251
-document_processing_runs.claimed_at                    timestamp           null              document-processing.ts:252
-document_processing_runs.claimed_by                    varchar             null              document-processing.ts:253
-document_processing_runs.next_attempt_at               timestamp           null              document-processing.ts:254
-document_processing_runs.started_at                    timestamp           null              document-processing.ts:255
-document_processing_runs.finished_at                   timestamp           null              document-processing.ts:256
-document_processing_runs.created_at                    timestamp           default,not null  document-processing.ts:257
-document_processing_runs.updated_at                    timestamp           default,not null  document-processing.ts:261
+document_processing_runs.{...entityFeatureGateColumns()}           spread                                document-processing.ts:201
+document_processing_runs.{...entityFeatureWorkspaceGateColumns()}  spread                                document-processing.ts:202
+document_processing_runs.id                                        pUuid               pk,not null       document-processing.ts:203
+document_processing_runs.organization_id                           safeOrganizationId  fk,not null       document-processing.ts:204
+document_processing_runs.workspace_id                              safeWorkspaceId     fk,not null       document-processing.ts:207
+document_processing_runs.entity_id                                 safeUuid            not null          document-processing.ts:210
+document_processing_runs.entity_version_id                         safeUuid            not null          document-processing.ts:211
+document_processing_runs.field_id                                  safeUuid            not null          document-processing.ts:212
+document_processing_runs.source_file_id                            uuid                not null          document-processing.ts:214  UUIDv7 stored in `fields.content.id`; deliberately not a table FK.
+document_processing_runs.source_sha256_hex                         varchar             not null          document-processing.ts:215
+document_processing_runs.kind                                      text                not null          document-processing.ts:216
+document_processing_runs.processor_version                         integer             default,not null  document-processing.ts:218  Bump when a processor's persisted-output contract changes.
+document_processing_runs.request_source                            text                not null          document-processing.ts:219
+document_processing_runs.requested_by                              text                fk,null           document-processing.ts:224
+document_processing_runs.status                                    text                default,not null  document-processing.ts:227
+document_processing_runs.deadline_scout_status                     text                default,not null  document-processing.ts:231
+document_processing_runs.deadline_scout_attempt_count              integer             default,not null  document-processing.ts:237
+document_processing_runs.deadline_scout_claimed_at                 timestamp           null              document-processing.ts:241
+document_processing_runs.deadline_scout_error_code                 varchar             null              document-processing.ts:244
+document_processing_runs.deadline_scout_skipped_until              timestamp           null              document-processing.ts:251  A pending scan refused for an exhausted action period waits for the period's end; dispatch and claim skip it until then.
+document_processing_runs.attempt_count                             integer             default,not null  document-processing.ts:254
+document_processing_runs.progress_completed                        integer             default,not null  document-processing.ts:255
+document_processing_runs.progress_total                            integer             null              document-processing.ts:256
+document_processing_runs.error_code                                varchar             null              document-processing.ts:257
+document_processing_runs.error_at                                  timestamp           null              document-processing.ts:258
+document_processing_runs.claimed_at                                timestamp           null              document-processing.ts:259
+document_processing_runs.claimed_by                                varchar             null              document-processing.ts:260
+document_processing_runs.next_attempt_at                           timestamp           null              document-processing.ts:261
+document_processing_runs.started_at                                timestamp           null              document-processing.ts:262
+document_processing_runs.finished_at                               timestamp           null              document-processing.ts:263
+document_processing_runs.created_at                                timestamp           default,not null  document-processing.ts:264
+document_processing_runs.updated_at                                timestamp           default,not null  document-processing.ts:268
 ```
