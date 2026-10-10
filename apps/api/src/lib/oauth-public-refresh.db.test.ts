@@ -261,7 +261,12 @@ describe("resource-bound refresh grants", () => {
       new Request(getAuthEndpointUrl("jwks")),
     );
     expect(response.status).toBe(200);
-    const keys = createLocalJWKSet(await response.json());
+    const keys = createLocalJWKSet(
+      v.parse(
+        v.object({ keys: v.array(v.looseObject({ kty: v.string() })) }),
+        await response.json(),
+      ),
+    );
     const refreshed = await refreshOAuthGrant({
       client,
       refreshToken: grant.refreshToken,

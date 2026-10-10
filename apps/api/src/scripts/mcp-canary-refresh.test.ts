@@ -63,7 +63,7 @@ const createTransport = ({
     const url = new URL(input instanceof Request ? input.url : input);
     if (url.pathname !== "/mcp") {
       expect(init.timeout).toEqual({ type: "idle", ms: 10_000 });
-      expect(init.signal?.aborted).toBe(false);
+      expect(init.signal).toBeUndefined();
     }
     const headers = new Headers(init.headers ?? request?.headers);
     let body = "";

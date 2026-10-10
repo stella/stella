@@ -36,7 +36,22 @@ const runPostgres = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const tokenSchema = v.looseObject({
   access_token: v.string(),
   refresh_token: v.string(),
+  scope: v.string(),
+  token_type: v.string(),
+  expires_at: v.number(),
+  expires_in: v.number(),
 });
+type OAuthTokens = v.InferOutput<typeof tokenSchema>;
+
+const expectReplayedTokens = (replayed: OAuthTokens, original: OAuthTokens) => {
+  expect(replayed.access_token).toBe(original.access_token);
+  expect(replayed.refresh_token).toBe(original.refresh_token);
+  expect(replayed.scope).toBe(original.scope);
+  expect(replayed.token_type).toBe(original.token_type);
+  expect(replayed.expires_at).toBe(original.expires_at);
+  expect(replayed.expires_in).toBeGreaterThanOrEqual(0);
+  expect(replayed.expires_in).toBeLessThanOrEqual(original.expires_in);
+};
 setDefaultTimeout(120_000);
 
 if (!runPostgres || !process.env["DATABASE_URL"]) {
@@ -145,17 +160,21 @@ if (!runPostgres || !process.env["DATABASE_URL"]) {
         });
         expect(retry.status).toBe(200);
         const tokens = v.parse(tokenSchema, await retry.json());
-        expect(tokens).toEqual(firstRotation);
+        expectReplayedTokens(tokens, firstRotation);
         expect(tokens.refresh_token).not.toBe(grant.refreshToken);
         expect(await countTokenRows(client.clientId)).toEqual(rowsBeforeReplay);
         expect(await countRefreshRows(client.clientId)).toBe(2);
-        expect(
-          await isOAuthTokenActive({
-            client,
-            token: tokens.refresh_token,
-            tokenTypeHint: "refresh_token",
-          }),
-        ).toBe(true);
+        // Public clients cannot authenticate introspection; redemption below
+        // proves that their replayed successor remains live.
+        if (method === "client_secret_post") {
+          expect(
+            await isOAuthTokenActive({
+              client,
+              token: tokens.refresh_token,
+              tokenTypeHint: "refresh_token",
+            }),
+          ).toBe(true);
+        }
         expect(
           (
             await refreshOAuthGrant({
@@ -255,7 +274,8 @@ if (!runPostgres || !process.env["DATABASE_URL"]) {
           refreshToken: grant.refreshToken,
         });
         expect(rightfulReplay.status).toBe(200);
-        expect(v.parse(tokenSchema, await rightfulReplay.json())).toEqual(
+        expectReplayedTokens(
+          v.parse(tokenSchema, await rightfulReplay.json()),
           firstRotation,
         );
         expect(await countTokenRows(client.clientId)).toEqual(ownerRows);
@@ -296,13 +316,17 @@ if (!runPostgres || !process.env["DATABASE_URL"]) {
           responses.find(({ status }) => status === 200) ??
           panic("One rotation must succeed");
         const tokens = v.parse(tokenSchema, await accepted.json());
-        expect(
-          await isOAuthTokenActive({
-            client,
-            token: tokens.refresh_token,
-            tokenTypeHint: "refresh_token",
-          }),
-        ).toBe(true);
+        // Public clients cannot authenticate introspection; redeem the winner
+        // and its successor to prove both remain live after the losing request.
+        if (method === "client_secret_post") {
+          expect(
+            await isOAuthTokenActive({
+              client,
+              token: tokens.refresh_token,
+              tokenTypeHint: "refresh_token",
+            }),
+          ).toBe(true);
+        }
         expect(statuses).toEqual([200, 400]);
         const rejected =
           responses.find(({ status }) => status === 400) ??
@@ -314,14 +338,25 @@ if (!runPostgres || !process.env["DATABASE_URL"]) {
         });
         expect(nextRotation.status).toBe(200);
         const nextTokens = v.parse(tokenSchema, await nextRotation.json());
-        expect(
-          await isOAuthTokenActive({
-            client,
-            token: nextTokens.refresh_token,
-            tokenTypeHint: "refresh_token",
-          }),
-        ).toBe(true);
         expect(await countRefreshRows(client.clientId)).toBe(3);
+        if (method === "client_secret_post") {
+          expect(
+            await isOAuthTokenActive({
+              client,
+              token: nextTokens.refresh_token,
+              tokenTypeHint: "refresh_token",
+            }),
+          ).toBe(true);
+        } else {
+          const thirdRotation = await refreshOAuthGrant({
+            client,
+            refreshToken: nextTokens.refresh_token,
+          });
+          expect(thirdRotation.status).toBe(200);
+          const thirdTokens = v.parse(tokenSchema, await thirdRotation.json());
+          expect(thirdTokens.refresh_token).not.toBe(nextTokens.refresh_token);
+          expect(await countRefreshRows(client.clientId)).toBe(4);
+        }
       },
     );
   });

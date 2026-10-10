@@ -12,6 +12,7 @@ import {
   OPEN_REGISTRATION_SCOPES,
   OAUTH_REGISTRATION_SCOPE_POLICY,
 } from "@/api/lib/auth/oauth-registration-policy";
+import { AUTH_CLIENT_ADDRESS_HEADER } from "@/api/lib/client-ip";
 import {
   CACHE_CONTROL_HEADER,
   PRIVATE_CACHE_CONTROL,
@@ -59,7 +60,7 @@ const registerClient = async (body: Record<string, unknown>) => {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        "x-forwarded-for": `198.51.100.${String(registrationsIssued)}`,
+        [AUTH_CLIENT_ADDRESS_HEADER]: `198.51.100.${String(registrationsIssued)}`,
       },
       body: JSON.stringify(body),
     }),
@@ -259,7 +260,7 @@ describe("OAuth dynamic client registration", () => {
             headers: {
               "content-type": "application/x-www-form-urlencoded",
               cookie: browser.cookieHeader(),
-              "x-forwarded-for": `198.51.100.${String(registrationsIssued)}`,
+              [AUTH_CLIENT_ADDRESS_HEADER]: `198.51.100.${String(registrationsIssued)}`,
             },
             ...(method === "POST" ? { body: query.toString() } : {}),
           },
@@ -354,7 +355,7 @@ describe("OAuth dynamic client registration", () => {
         {
           headers: {
             cookie: browser.cookieHeader(),
-            "x-forwarded-for": `198.51.100.${String(registrationsIssued)}`,
+            [AUTH_CLIENT_ADDRESS_HEADER]: `198.51.100.${String(registrationsIssued)}`,
           },
         },
       ),

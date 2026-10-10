@@ -1537,10 +1537,6 @@ const createReviewJourneyContext = (
       ...init,
       headers,
       timeout: { type: "idle", ms: requestBudgetMs ?? PROBE_TIMEOUT_MS },
-      signal:
-        requestBudgetMs === undefined
-          ? undefined
-          : AbortSignal.timeout(requestBudgetMs),
     });
     const responseCookies = cookies.get(origin) ?? new Map<string, string>();
     for (const cookie of response.headers.getSetCookie()) {
