@@ -190,6 +190,28 @@ describe("shared documentation MCP HTTP server", () => {
     expect((await send()).status).toBe(200);
   });
 
+  test("answers malformed and oversized bodies as client errors", async () => {
+    const { baseUrl } = await startHttpServer();
+    const post = (body: string) =>
+      fetch(`${baseUrl}/mcp`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          accept: "application/json, text/event-stream",
+        },
+        body,
+      });
+    const malformed = await post("{not json");
+    expect(malformed.status).toBe(400);
+    expect(
+      ((await malformed.json()) as { error: { code: number } }).error.code,
+    ).toBe(-32_700);
+    const oversized = await post(
+      JSON.stringify({ padding: "x".repeat(1024 * 1024 + 1) }),
+    );
+    expect(oversized.status).toBe(413);
+  });
+
   test("rejects requests with an unexpected Host header", async () => {
     const { baseUrl } = await startHttpServer();
     const response = await fetch(`${baseUrl}/healthz`, {

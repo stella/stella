@@ -53,13 +53,27 @@ const sendError = (
   response: ServerResponse,
   status: number,
   message: string,
+  code = -32_000,
 ) => {
   sendJson(response, status, {
     jsonrpc: "2.0",
-    error: { code: -32_000, message },
+    error: { code, message },
     id: null,
   });
 };
+
+// A client-side body fault (oversized or not JSON): answered as 413/400, not logged as a server failure.
+class RequestBodyError extends Error {
+  readonly status: number;
+  readonly rpcCode: number;
+
+  constructor(status: number, rpcCode: number, message: string) {
+    super(message);
+    this.name = "RequestBodyError";
+    this.status = status;
+    this.rpcCode = rpcCode;
+  }
+}
 
 const readJsonBody = async (request: IncomingMessage) => {
   const chunks: Buffer[] = [];
@@ -68,13 +82,21 @@ const readJsonBody = async (request: IncomingMessage) => {
   for await (const chunk of request) {
     const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
     size += buffer.byteLength;
-    if (size > MAX_REQUEST_BYTES) {
-      throw new Error("Request body exceeds 1 MiB");
+    // Past the limit the rest is drained and discarded, so the client reliably
+    // receives the 413 instead of a reset connection.
+    if (size <= MAX_REQUEST_BYTES) {
+      chunks.push(buffer);
     }
-    chunks.push(buffer);
+  }
+  if (size > MAX_REQUEST_BYTES) {
+    throw new RequestBodyError(413, -32_000, "Request body exceeds 1 MiB");
   }
 
-  return JSON.parse(Buffer.concat(chunks).toString("utf-8")) as unknown;
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString("utf-8")) as unknown;
+  } catch {
+    throw new RequestBodyError(400, -32_700, "Parse error");
+  }
 };
 
 const getSessionId = (request: IncomingMessage) => {
@@ -151,6 +173,12 @@ const httpServer = createServer(async (request, response) => {
     await server.connect(transport as Transport);
     await transport.handleRequest(request, response, body);
   } catch (error) {
+    if (error instanceof RequestBodyError) {
+      if (!response.headersSent) {
+        sendError(response, error.status, error.message, error.rpcCode);
+      }
+      return;
+    }
     process.stderr.write(
       `[stella-docs] HTTP request failed: ${String(error)}\n`,
     );
