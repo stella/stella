@@ -1,4 +1,8 @@
 import type { FirstPartyModelProvider } from "@stll/ai-catalog";
+import {
+  BYOK_MODEL_OPTIONS,
+  FIRST_PARTY_MODEL_PROVIDERS,
+} from "@stll/ai-catalog";
 
 /**
  * The discovery epoch is a reviewed baseline, not a rolling window. It never
@@ -21,6 +25,200 @@ export type UpstreamDiscoveryModel = {
 };
 
 type DiscoveryModelKey = `${FirstPartyModelProvider}:${string}`;
+
+type ModelGeneration = readonly [major: number, minor: number];
+
+type ParsedModelFamily = {
+  family: string;
+  generation: ModelGeneration;
+};
+
+type FamilyParser = (modelId: string) => ParsedModelFamily | null;
+
+const parseGeneration = (major: string, minor?: string): ModelGeneration => [
+  Number(major),
+  minor === undefined ? 0 : Number(minor),
+];
+
+const MODEL_FAMILY_PARSERS = {
+  anthropic: (modelId) => {
+    const match =
+      /^claude-(fable|haiku|opus|sonnet)-(\d+)(?:[.-](\d+))?(?:-\d{8})?$/u.exec(
+        modelId,
+      );
+    return match?.[1] !== undefined && match[2] !== undefined
+      ? { family: match[1], generation: parseGeneration(match[2], match[3]) }
+      : null;
+  },
+  google: (modelId) => {
+    const match =
+      /^gemini-(\d+)(?:\.(\d+))?-(flash-lite|flash|pro)(?:-preview)?$/u.exec(
+        modelId,
+      );
+    return match?.[3] !== undefined && match[1] !== undefined
+      ? { family: match[3], generation: parseGeneration(match[1], match[2]) }
+      : null;
+  },
+  mistral: (modelId) => {
+    const match = /^mistral-(large|medium|small)-(\d{1,2})$/u.exec(modelId);
+    return match?.[1] !== undefined && match[2] !== undefined
+      ? { family: match[1], generation: parseGeneration(match[2]) }
+      : null;
+  },
+  openai: (modelId) => {
+    const match = /^gpt-(\d+)(?:\.(\d+))?(?:-(?:astra|luna|sol|terra))?$/u.exec(
+      modelId,
+    );
+    return match?.[1] !== undefined
+      ? { family: "gpt", generation: parseGeneration(match[1], match[2]) }
+      : null;
+  },
+} as const satisfies Record<FirstPartyModelProvider, FamilyParser>;
+
+const KNOWN_NON_FAMILY_MODEL_PATTERNS = {
+  anthropic: [] as const,
+  google: [
+    /^(?:deep-research|gemma|lyria|veo)-/u,
+    /^gemini-(?:embedding|flash-latest|flash-lite-latest|omni-)/u,
+    /^gemini-\d+(?:\.\d+)?-(?:computer-use|flash-image|flash-live|flash-tts|live-translate|pro-image)/u,
+    /^gemini-\d+(?:\.\d+)?-(?:flash|pro)-preview-(?:customtools|tts)$/u,
+    /^gemini-\d+(?:\.\d+)?-flash-lite-(?:image|preview)$/u,
+  ],
+  mistral: [
+    /^(?:codestral|devstral|glm|labs-|magistral|ministral|open-|pixtral|voxtral|zai-)/u,
+    /^mistral-(?:embed|nemo)$/u,
+    /^mistral-(?:large|medium|small)-(?:latest|\d{4})$/u,
+  ],
+  openai: [
+    /^(?:chatgpt-image|gpt-image|gpt-realtime|o\d|text-embedding-)/u,
+    /^gpt-(?:3\.5|4(?:\.1|o)?)(?:-|$)/u,
+    /^gpt-\d+(?:\.\d+)?-(?:chat-latest|codex|mini|nano|pro)(?:-|$)/u,
+    /^gpt-daybreak-/u,
+  ],
+} as const satisfies Record<FirstPartyModelProvider, readonly RegExp[]>;
+
+export type GenerationExclusion = {
+  reviewedOn: `${number}-${number}-${number}`;
+  expiresOn: `${number}-${number}-${number}`;
+  reason: string;
+};
+
+type GenerationExclusionKey = `${FirstPartyModelProvider}:${string}`;
+
+// Keys are arbitrary upstream IDs; a missing entry means "not reviewed".
+const NEWER_GENERATION_EXCLUSIONS: ReadonlyMap<
+  GenerationExclusionKey,
+  GenerationExclusion
+> = new Map();
+
+export type FindNewerGenerationModelsOptions = {
+  upstreamIds: Readonly<Record<FirstPartyModelProvider, readonly string[]>>;
+  offered?: Readonly<Record<FirstPartyModelProvider, readonly string[]>>;
+  exclusions?: ReadonlyMap<GenerationExclusionKey, GenerationExclusion>;
+  asOf: string;
+};
+
+export type GenerationGuardFailure =
+  | {
+      type: "newer-generation";
+      provider: FirstPartyModelProvider;
+      modelId: string;
+    }
+  | { type: "unparseable"; provider: FirstPartyModelProvider; modelId: string }
+  | {
+      type: "invalid-exclusion";
+      provider: FirstPartyModelProvider;
+      modelId: string;
+    };
+
+const compareGeneration = (left: ModelGeneration, right: ModelGeneration) =>
+  left[0] - right[0] || left[1] - right[1];
+
+const parseFamily = (
+  provider: FirstPartyModelProvider,
+  modelId: string,
+): ParsedModelFamily | "known-non-family" | null => {
+  const parsed = MODEL_FAMILY_PARSERS[provider](modelId);
+  if (parsed !== null) {
+    return parsed;
+  }
+  return KNOWN_NON_FAMILY_MODEL_PATTERNS[provider].some((pattern) =>
+    pattern.test(modelId),
+  )
+    ? "known-non-family"
+    : null;
+};
+
+export const findNewerGenerationModels = ({
+  upstreamIds,
+  offered = BYOK_MODEL_OPTIONS,
+  exclusions = NEWER_GENERATION_EXCLUSIONS,
+  asOf,
+}: FindNewerGenerationModelsOptions): GenerationGuardFailure[] => {
+  const failures: GenerationGuardFailure[] = [];
+
+  for (const provider of FIRST_PARTY_MODEL_PROVIDERS) {
+    const offeredGenerations = new Map<string, ModelGeneration>();
+    for (const modelId of offered[provider]) {
+      const parsed = parseFamily(provider, modelId);
+      if (parsed === null) {
+        failures.push({ type: "unparseable", provider, modelId });
+        continue;
+      }
+      if (parsed === "known-non-family") {
+        continue;
+      }
+      const current = offeredGenerations.get(parsed.family);
+      if (
+        current === undefined ||
+        compareGeneration(parsed.generation, current) > 0
+      ) {
+        offeredGenerations.set(parsed.family, parsed.generation);
+      }
+    }
+
+    for (const modelId of upstreamIds[provider]) {
+      const parsed = parseFamily(provider, modelId);
+      if (parsed === null) {
+        failures.push({ type: "unparseable", provider, modelId });
+        continue;
+      }
+      if (
+        parsed === "known-non-family" ||
+        offered[provider].includes(modelId)
+      ) {
+        continue;
+      }
+      const offeredGeneration = offeredGenerations.get(parsed.family);
+      if (
+        offeredGeneration === undefined ||
+        compareGeneration(parsed.generation, offeredGeneration) <= 0
+      ) {
+        continue;
+      }
+      const exclusion = exclusions.get(`${provider}:${modelId}`);
+      if (
+        exclusion === undefined ||
+        exclusion.reason.trim() === "" ||
+        exclusion.reviewedOn > asOf ||
+        exclusion.expiresOn < asOf
+      ) {
+        failures.push({
+          type:
+            exclusion === undefined ? "newer-generation" : "invalid-exclusion",
+          provider,
+          modelId,
+        });
+      }
+    }
+  }
+
+  return failures.toSorted((left, right) =>
+    `${left.provider}:${left.modelId}`.localeCompare(
+      `${right.provider}:${right.modelId}`,
+    ),
+  );
+};
 
 /**
  * The only grounds on which a picker-relevant model may stay unoffered. The

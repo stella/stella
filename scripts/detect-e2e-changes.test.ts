@@ -776,6 +776,9 @@ describe("detect-e2e-changes", () => {
     expect(driftGuardRun).toContain(
       "bun --filter @stll/ai-catalog gen:capabilities --check",
     );
+    expect(driftGuardRun).toContain(
+      "bun --filter @stll/ai-catalog check:generations",
+    );
     // Path-scoped: the drift output is a required operand, never one of
     // several alternatives. The package-checks operand only ties the step to
     // the dependency install its generators import from.

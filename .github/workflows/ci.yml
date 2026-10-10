@@ -3339,6 +3339,7 @@ jobs:
           bun scripts/offline-check-policy.ts
           bun --filter @stll/ai-catalog gen:rates --check
           bun --filter @stll/ai-catalog gen:capabilities --check
+          bun --filter @stll/ai-catalog check:generations
 
       - name: Model catalog snapshot drift check
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && needs.ci-plan.outputs.model_catalog_drift_required == 'true') }}
@@ -3350,6 +3351,7 @@ jobs:
         run: |
           bun --filter @stll/ai-catalog gen:rates --check
           bun --filter @stll/ai-catalog gen:capabilities --check
+          bun --filter @stll/ai-catalog check:generations
 
       - name: Capability description ledger
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
