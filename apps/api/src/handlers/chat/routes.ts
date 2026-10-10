@@ -16,8 +16,10 @@ import readFileThread from "@/api/handlers/chat/read-file-thread";
 import resolveFileThread from "@/api/handlers/chat/resolve-file-thread";
 import resolveTemplateThread from "@/api/handlers/chat/resolve-template-thread";
 import rotateTemplateThread from "@/api/handlers/chat/rotate-template-thread";
+import savedSecret from "@/api/handlers/chat/saved-secret";
 import sendMessage from "@/api/handlers/chat/send-message";
 import listUnavailableChatSkills from "@/api/handlers/chat/skill-availability/list";
+import submitSecret from "@/api/handlers/chat/submit-secret";
 import suggestThreadTitle from "@/api/handlers/chat/suggest-thread-title";
 import deleteThread from "@/api/handlers/chat/threads/delete";
 import getThreads from "@/api/handlers/chat/threads/list";
@@ -43,6 +45,16 @@ export const chatRoute = new Elysia({ prefix: "/chat" })
   .post("/", sendMessage.handler, {
     body: sendMessage.config.body,
     permissions: sendMessage.config.permissions,
+  })
+  .post("/threads/:threadId/secrets/:toolCallId", submitSecret.handler, {
+    body: submitSecret.config.body,
+    params: submitSecret.config.params,
+    permissions: submitSecret.config.permissions,
+  })
+  .get("/threads/:threadId/saved-secret", savedSecret.handler, {
+    params: savedSecret.config.params,
+    query: savedSecret.config.query,
+    permissions: savedSecret.config.permissions,
   })
   .post("/workspaces/:workspaceId/file-thread", resolveFileThread.handler, {
     body: resolveFileThread.config.body,

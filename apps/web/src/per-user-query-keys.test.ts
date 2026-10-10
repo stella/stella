@@ -252,6 +252,7 @@ const PER_USER_READS: Record<string, PerUserRead> = {
       "chatKeys.templateThread(activeOrganizationId, key)": KEY_TYPE_HAS_USER,
     },
   },
+  "chat/saved-secret.ts": { kind: "owned-id", reason: OWNED_THREAD },
   "chat/skill-availability/list.ts": {
     kind: "keyed",
     calls: ['api.chat["skill-availability"].get'],

@@ -249,6 +249,8 @@ const RETAINED_MEMBER_COLUMNS = {
     "Retained edit attribution; current thread ownership and matter membership gate access.",
   "chat_messages.user_id":
     "User-owned matter content or preferences; current organization/matter membership gates access.",
+  "chat_secrets.user_id":
+    "Short-lived private input receipt in the user's own thread; current organization membership gates access and the payload expires within a day.",
   "chat_threads.user_id":
     "User-owned matter content or preferences; current organization/matter membership gates access.",
   "chat_turns.user_id":

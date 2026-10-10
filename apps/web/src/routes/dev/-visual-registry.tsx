@@ -39,6 +39,13 @@ const visualLoaders = {
       return { default: InspectorPanePlayground };
     },
   },
+  "playbook-editor": {
+    load: async () => {
+      const { PlaybookEditorPlayground } =
+        await import("./-components/playbook-editor-playground");
+      return { default: PlaybookEditorPlayground };
+    },
+  },
   "shell-pending": {
     load: async () => {
       const { ProtectedPendingSkeleton } =

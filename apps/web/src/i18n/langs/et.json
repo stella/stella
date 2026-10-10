@@ -707,6 +707,15 @@
     },
     "writeOff": "Mahakandmine"
   },
+  "capabilityActions": {
+    "aiMissing": "Tehisintellekt pole seadistatud.",
+    "availabilityUnknown": "Saadavust ei õnnestunud kinnitada.",
+    "deeplMissing": "DeepL pole seadistatud.",
+    "desktopUnavailable": "Ühendage või uuendage stella desktopi.",
+    "featureUnavailable": "See funktsioon pole saadaval.",
+    "ocrUnavailable": "OCR pole saadaval.",
+    "translationMissing": "Tõlketeenus pole seadistatud."
+  },
   "caseLaw": {
     "analysis": {
       "abstract": "Kokkuvõte",
@@ -748,6 +757,7 @@
     "citation": {
       "citedAtLeast": "Viidatud vähemalt {count} korda",
       "citedSummary": "{count, plural, =0 {Viitamata} one {Viidatud üks kord} other {Viidatud # korda}}",
+      "dateUnavailable": "Kuupäev pole saadaval",
       "decisionCount": "{count, plural, =0 {Lahendeid pole} one {# lahend} other {# lahendit}}",
       "lastNegative": "viimane negatiivne viide aastal {year}",
       "negativeCount": "{count, plural, one {# negatiivne} other {# negatiivset}}",
@@ -757,6 +767,7 @@
       "partialSummary": "Viidete koguarvud ja ajajoon on osalised.",
       "passageNotFound": "Viitavat lõiku tekstist ei leitud",
       "positiveCount": "{count, plural, one {# positiivne} other {# positiivset}}",
+      "referenceLabel": "{court}, {caseNumber}, {date}",
       "showAll": "{count, plural, one {Näita # lahendit} other {Näita kõiki # lahendit}}",
       "stripLabel": "Viited aastate kaupa",
       "treatment": {
@@ -1185,6 +1196,13 @@
       "previewWaiting": "Sisu ootamine…",
       "savePendingReview": "Enne dokumendi salvestamist lahendage ülevaatust ootavad AI soovitused."
     },
+    "credentialPasteAction": "Kasuta privaatset kaarti",
+    "credentialPasteDescription": "See tekst näib olevat mandaat. Kasuta privaatset kaarti, et see vestlusesse ei satuks. Kui kaart ilmub, kleebi väärtus sinna uuesti.",
+    "credentialPasteRequest": "Paluge seda mandaati privaatse kaardi kaudu.",
+    "credentialPasteTitle": "Mandaadi kleepimine peatati",
+    "credentialSendAction": "Saada siiski",
+    "credentialSendDescription": "Saada see ainult siis, kui soovid seda väärtust vestluses jagada.",
+    "credentialSendTitle": "See sõnum võib sisaldada mandaati",
     "deleteThread": "Kustuta vestlus",
     "editMode": {
       "autoDirect": "Automaatne · kirjuta ümber",
@@ -1323,6 +1341,31 @@
     "removeSuggestion": "(eemalda)",
     "renameThread": "Nimeta vestlus ümber",
     "renameUnavailableEmptyThread": "Saada esmalt sõnum, seejärel saab vestluse ümber nimetada.",
+    "requestSecret": {
+      "checkingTarget": "Kontrollin ühenduse üksikasju…",
+      "connectionDisposition": "Ühendus: {disposition}",
+      "continuationError": "Teie vastus salvestati, kuid vestlust ei saanud jätkata.",
+      "declined": "Keeldutud",
+      "description": "Assistent vajab seda jätkamiseks",
+      "error": "Mandaadi saatmine ebaõnnestus. Proovi uuesti.",
+      "kind": {
+        "token": "Juurdepääsutõend"
+      },
+      "normalConnection": "Tavaline ühendus",
+      "private": "Assistent seda väärtust ei näe.",
+      "provideAction": "Anna",
+      "provided": "Antud",
+      "purposeByAi": "Tehisintellekti kirjutatud eesmärk: {purpose}",
+      "receiptOnlyConnection": "Ainult privaatne ühendus",
+      "replaceOrdinaryConnection": "Asenda tavaline ühendus ainult privaatse kasutusega",
+      "retryContinuationAction": "Jätka vestlust",
+      "saveForFuture": "Salvesta tulevaste vestluste jaoks",
+      "savedAvailabilityError": "Salvestatud mandaadi olemasolu ei saanud kontrollida.",
+      "target": "Sihtkoht: {target}",
+      "title": "Küsi privaatset mandaati",
+      "useSavedAction": "Kasuta salvestatud mandaati",
+      "valueLabel": "Mandaat"
+    },
     "resend": "Saada uuesti",
     "resizeThread": "Muuda vestluse suurust",
     "richContentLoading": "Interaktiivse sisu laadimine…",
@@ -1446,6 +1489,7 @@
       "read_story": "Dokumendi osa lugemine",
       "remember": "Mällu salvestamine",
       "reply_comment": "Kommentaarile vastamine",
+      "request_secret": "Privaatse mandaadi küsimine",
       "resolve_comment": "Kommentaari lahendamine",
       "review_folder_consistency": "Kausta kooskõla kontrollimine",
       "run-stella-query": "Toimiku andmete lugemine",
@@ -1479,6 +1523,7 @@
       "update-entity-fields": "Metaandmete uuendamine",
       "update_reader_annotation": "Muuda esiletõstu või kommentaari",
       "use-browser": "Teie brauseri kasutamine",
+      "use_connector_secret": "Konnektori mandaadi kasutamine",
       "web_search": "Veebist otsimine"
     },
     "toolCall": {
@@ -4548,6 +4593,7 @@
       "noMatches": "Päringule „{query}“ ei vasta ükski ühendus",
       "notConnected": "Ühendamata",
       "permissionCount": "{count, plural, one {# õigus} other {# õigust}}",
+      "privateCredentialOnly": "Ainult privaatne mandaat",
       "searchPlaceholder": "Otsi ühendusi",
       "title": "Ühendused",
       "turnedOff": "Välja lülitatud"

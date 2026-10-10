@@ -450,6 +450,26 @@ export const installPgliteChatRunLogRls = async (
   await db.execute(sql.raw(entriesStatement));
 };
 
+/** Apply the committed setting omitted by schema push. */
+export const installPgliteChatSecretRls = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    nodePath.join(DRIZZLE_DIR, "20261008090000_chat_secrets", "migration.sql"),
+  );
+  for (const table of ["chat_secrets"]) {
+    const statement = statements.find((candidate) =>
+      executableSql(candidate).startsWith(
+        `ALTER TABLE "${table}" FORCE ROW LEVEL SECURITY`,
+      ),
+    );
+    if (statement === undefined) {
+      panic("Chat secret FORCE RLS migration statement is missing");
+    }
+    await db.execute(sql.raw(statement));
+  }
+};
+
 const PDF_SIGNING_TOKEN_SCOPE_STATEMENT_PREFIXES = [
   'ALTER TABLE "pdf_signing_sessions"\n  FORCE ROW LEVEL SECURITY',
   "CREATE FUNCTION",

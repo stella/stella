@@ -22,6 +22,11 @@ import {
 import { formatValidityDate } from "@/features/statutes/statute-format";
 import { useSessionStorage } from "@/hooks/use-session-storage";
 import { useFormatter } from "@/i18n/formatting-context";
+import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
+import {
+  CapabilityAction,
+  useActionCapabilities,
+} from "@/lib/organization/feature-access/capability-actions";
 
 const QUESTION_MAX_LENGTH = 2000;
 
@@ -66,6 +71,9 @@ export const ProvisionAskActions = ({
 }: ProvisionAskActionsProps) => {
   const t = useTranslations();
   const format = useFormatter();
+  const user = useMaybeAuthenticatedUser();
+  const aiCapability = useActionCapabilities(user === null ? null : "ai")
+    .capabilities.ai;
   const storage = useSessionStorage();
   const draftKey = provisionQuestionDraftKey(payload);
   const [question, setQuestion] = useState("");
@@ -131,6 +139,9 @@ export const ProvisionAskActions = ({
   };
 
   const ask = () => {
+    if (user !== null && aiCapability.type !== "available") {
+      return;
+    }
     const trimmed = question.trim();
     if (trimmed === "") {
       return;
@@ -156,15 +167,23 @@ export const ProvisionAskActions = ({
 
   return (
     <div className="flex flex-col gap-2">
-      <Button
-        className="h-auto justify-start px-2 py-1.5 whitespace-normal"
-        onClick={summarize}
-        size="sm"
-        variant="outline"
+      <CapabilityAction
+        action={{ capability: user === null ? null : "ai" }}
+        surface="control"
       >
-        <AiActionIcon aria-hidden="true" className="size-3.5 shrink-0" />
-        {t("statutes.provisionAskSummarize")}
-      </Button>
+        {(capabilityProps) => (
+          <Button
+            className="h-auto justify-start px-2 py-1.5 whitespace-normal"
+            onClick={summarize}
+            size="sm"
+            variant="outline"
+            {...capabilityProps}
+          >
+            <AiActionIcon aria-hidden="true" className="size-3.5 shrink-0" />
+            {t("statutes.provisionAskSummarize")}
+          </Button>
+        )}
+      </CapabilityAction>
       <form
         className="flex flex-col gap-2"
         onSubmit={(event) => {
@@ -190,16 +209,24 @@ export const ProvisionAskActions = ({
           placeholder={t("statutes.provisionAskPlaceholder")}
           value={question}
         />
-        <Button
-          className="self-end"
-          disabled={question.trim() === ""}
-          size="sm"
-          type="submit"
-          variant="ghost"
+        <CapabilityAction
+          action={{ capability: user === null ? null : "ai" }}
+          surface="control"
         >
-          <ArrowUpIcon aria-hidden="true" className="size-3.5" />
-          {t("common.ask")}
-        </Button>
+          {(capabilityProps) => (
+            <Button
+              className="self-end"
+              disabled={question.trim() === ""}
+              size="sm"
+              type="submit"
+              variant="ghost"
+              {...capabilityProps}
+            >
+              <ArrowUpIcon aria-hidden="true" className="size-3.5" />
+              {t("common.ask")}
+            </Button>
+          )}
+        </CapabilityAction>
       </form>
     </div>
   );

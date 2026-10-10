@@ -273,6 +273,8 @@ export const CaseDecisionInspectorView = ({
                     caseNumberType: decision.caseNumberType,
                     country: decision.country,
                     court: decision.court,
+                    courtAbbreviation: decision.courtAbbreviation,
+                    sourceUrl: decision.sourceUrl,
                     decisionDate: decision.decisionDate,
                     decisionType: decision.decisionType,
                     ecli: decision.ecli,

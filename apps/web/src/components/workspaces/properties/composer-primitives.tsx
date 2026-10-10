@@ -18,6 +18,8 @@ import {
 import { cn } from "@stll/ui/utils";
 
 import Tooltip from "@/components/tooltip";
+import type { Capability } from "@/lib/organization/feature-access/action-capabilities.logic";
+import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 import { contentTypeValueKind, VALUE_TYPE_META } from "@/lib/value-types";
 
 const CREATABLE_CONTENT_TYPES = [
@@ -69,6 +71,7 @@ type TypeChipsRowProps<TType extends string> = {
   showSeparator?: boolean;
   typeChanged: boolean;
   manualChip?: ManualChipOption;
+  capability: Capability | null;
 };
 
 const CHIP_BASE_CLASS =
@@ -85,6 +88,7 @@ export const TypeChipsRow = <TType extends string>({
   showSeparator = false,
   typeChanged,
   manualChip,
+  capability,
 }: TypeChipsRowProps<TType>) => {
   const t = useTranslations();
   return (
@@ -105,18 +109,26 @@ export const TypeChipsRow = <TType extends string>({
           // together; they're orthogonal axes (mode vs shape).
           const active = contentType === type;
           return (
-            <button
-              className={cn(
-                CHIP_BASE_CLASS,
-                active ? CHIP_ACTIVE_CLASS : CHIP_IDLE_CLASS,
-              )}
+            <CapabilityAction
+              action={{ capability }}
+              surface="control"
               key={type}
-              onClick={() => onContentTypeChange(type)}
-              type="button"
             >
-              <Icon className="size-2.5" />
-              {label}
-            </button>
+              {(capabilityProps) => (
+                <button
+                  className={cn(
+                    CHIP_BASE_CLASS,
+                    active ? CHIP_ACTIVE_CLASS : CHIP_IDLE_CLASS,
+                  )}
+                  onClick={() => onContentTypeChange(type)}
+                  type="button"
+                  {...capabilityProps}
+                >
+                  <Icon className="size-2.5" />
+                  {label}
+                </button>
+              )}
+            </CapabilityAction>
           );
         })}
         {manualChip && (

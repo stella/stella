@@ -55,6 +55,11 @@ describe("projectToolMapForSubagent", () => {
       ),
       "create-document": clientTool("create-document"),
       "ask-user": clientTool("ask-user"),
+      request_secret: clientTool("request_secret"),
+      use_connector_secret: withPolicy(
+        serverTool("use_connector_secret"),
+        CHAT_TOOL_POLICY_KIND.external,
+      ),
       [SUGGEST_CHANGES_TOOL_NAME]: clientTool(SUGGEST_CHANGES_TOOL_NAME),
     };
 

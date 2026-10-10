@@ -163,6 +163,20 @@ const resolveByRoute = async ({
   );
 };
 
+const openResolution = async (
+  resolved: Resolution,
+  open: (target: DecisionTabTarget) => void,
+  anchorId: string | undefined,
+) => {
+  const { decision } = resolved;
+  // Loaded on open: the document parser stays out of the chunks every
+  // page preloads.
+  const { anchorAfterResolution } =
+    await import("@/features/case-law/decision-resolution.logic");
+  const target = anchorAfterResolution({ ...resolved, anchorId });
+  open(target === undefined ? decision : { ...decision, anchorId: target });
+};
+
 const resolveCaseLawDecision = async (
   locator: CaseLawDecisionLocator,
 ): Promise<Resolution | null> => {
@@ -190,12 +204,22 @@ export const openCaseLawDecision = async (
   await openPublicLawLink({
     resolve: async () => await resolveCaseLawDecision(locator),
     open: async (resolved) => {
-      const { decision } = resolved;
-      // Loaded on open: the document parser stays out of the chunks every
-      // page preloads.
-      const { anchorAfterResolution } =
-        await import("@/features/case-law/decision-resolution.logic");
-      const target = anchorAfterResolution({ ...resolved, anchorId });
-      open(target === undefined ? decision : { ...decision, anchorId: target });
+      await openResolution(resolved, open, anchorId);
+    },
+  });
+
+/**
+ * Open a decision the caller has already read, at the same anchor
+ * `openCaseLawDecision` would choose, without reading it a second time.
+ */
+export const openReadCaseLawDecision = async (
+  read: DecisionRead,
+  open: (target: DecisionTabTarget) => void,
+  { anchorId }: OpenCaseLawDecisionOptions = {},
+) =>
+  await openPublicLawLink({
+    resolve: () => fromDecisionRead(read),
+    open: async (resolved) => {
+      await openResolution(resolved, open, anchorId);
     },
   });

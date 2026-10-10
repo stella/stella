@@ -1106,6 +1106,10 @@ const ACTION_COVERAGE: Record<string, ActionCoverage> = {
   "attach-files": notModelled(
     "The harness posts text messages only; attachments need stored files.",
   ),
+  "check-saved-private-input": READS_ONLY,
+  "continue-private-input": notModelled(
+    "Private input cards submit through their own endpoint, which the harness does not drive.",
+  ),
   copy: READS_ONLY,
   "delete-thread": notModelled(
     "Deleting the thread ends the conversation; nothing is left to check.",
@@ -1147,6 +1151,9 @@ const ACTION_COVERAGE: Record<string, ActionCoverage> = {
       SendUserMessage.allows(model) ||
       SupersedeCards.allows(model) ||
       isBusy(model),
+  ),
+  "submit-private-input": notModelled(
+    "Private input cards submit through their own endpoint, which the harness does not drive.",
   ),
   "send-queued-message-now": notModelled(
     "The send queue lives in the session hook, which the harness does not render; the stop it issues is modelled as stop.",
