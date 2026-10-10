@@ -1,3 +1,4 @@
+// parser-output-unchanged: Unicode owner migration retains native normalization forms, mark classes and operation order; no folding is added.
 /**
  * Czech Supreme Administrative Court (NSS) HTML parser.
  *
@@ -33,7 +34,7 @@ import {
 } from "@stll/legal-ast/czech-document-roles";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { Block, DocumentAst, Inline } from "@stll/legal-ast/document-ast";
-import { collapseSpacedLetters } from "@stll/text-normalize";
+import { normalizeUnicode, collapseSpacedLetters } from "@stll/text-normalize";
 
 import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";
 
@@ -640,8 +641,7 @@ const isDecisionTitleKey = (
 const canonicalDecisionTitle = (
   plainText: string,
 ): CanonicalDecisionTitle | null => {
-  const compact = plainText
-    .normalize("NFKC")
+  const compact = normalizeUnicode(plainText, "NFKC")
     .toLocaleUpperCase("cs-CZ")
     .replace(/\s+/gu, "");
 

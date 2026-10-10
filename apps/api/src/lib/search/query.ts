@@ -4,6 +4,7 @@ import type { SQL } from "drizzle-orm";
 
 import { isDocumentReferenceQuery } from "@stll/api-contract";
 import {
+  normalizeUnicode,
   applyArabicFolds,
   foldToAscii,
   arabicNormalize,
@@ -339,9 +340,10 @@ const toSearchLexemes = (
   mode: ArabicFoldMode = "folded",
 ): string[] =>
   Array.from(
-    foldToAscii(normalizeTextForLexemes(query))
-      .normalize("NFKC")
-      .matchAll(/[\p{L}\p{N}]+/gu),
+    normalizeUnicode(
+      foldToAscii(normalizeTextForLexemes(query)),
+      "NFKC",
+    ).matchAll(/[\p{L}\p{N}]+/gu),
     (match) => match[0],
   )
     .flatMap((token) => {

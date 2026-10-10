@@ -46,6 +46,7 @@
   },
   "dependencies": {
     "@stll/anonymize-wasm": "catalog:",
+    "@stll/text-normalize": "workspace:*",
     "better-result": "catalog:",
     "valibot": "catalog:"
   },

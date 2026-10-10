@@ -10,7 +10,7 @@ import {
 } from "@stll/api-contract/public-country-capability";
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
 import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
-import { foldToAscii } from "@stll/text-normalize";
+import { normalizeUnicode, foldToAscii } from "@stll/text-normalize";
 
 import {
   LEGISLATION_TITLE_SORT_KEY_CHARS,
@@ -973,7 +973,9 @@ describe("public statute list", () => {
   test("matches a title typed without diacritics or case", async () => {
     // The fixture differs from the query before folding, so the match below
     // is the fold's doing and not a coincidence of the seed.
-    expect("občanský zákoník".normalize("NFC")).not.toBe("OBCANSKY zakonik");
+    expect(normalizeUnicode("občanský zákoník", "NFC")).not.toBe(
+      "OBCANSKY zakonik",
+    );
     const page = expectPage(
       await listStatutesHandler(
         { country: "CZE", query: "OBCANSKY zakonik" },

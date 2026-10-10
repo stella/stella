@@ -31,6 +31,7 @@
     "format": "bun ../../scripts/run-oxfmt.ts ."
   },
   "dependencies": {
+    "@stll/text-normalize": "workspace:*",
     "better-result": "catalog:"
   },
   "devDependencies": {

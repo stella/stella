@@ -1,15 +1,22 @@
 import { Result } from "better-result";
 
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
+import { normalizeUnicode } from "@stll/text-normalize";
 import { parsePlainDate } from "@stll/time";
 
 import { SoftLawItemError } from "./soft-law-types";
 import type { SoftLawDocumentInput, SoftLawMetadata } from "./soft-law-types";
 
 const normalizeTitle = (value: string) =>
-  value.normalize("NFC").trim().replace(/\s+/gu, " ").toLocaleLowerCase("und");
+  normalizeUnicode(value, "NFC")
+    .trim()
+    .replace(/\s+/gu, " ")
+    .toLocaleLowerCase("und");
 const normalizeReference = (value: string) =>
-  value.normalize("NFKC").trim().replace(/\s+/gu, " ").toLocaleLowerCase("und");
+  normalizeUnicode(value, "NFKC")
+    .trim()
+    .replace(/\s+/gu, " ")
+    .toLocaleLowerCase("und");
 const compareCanonicalKeys = (left: string, right: string) => {
   if (left === right) {
     return 0;

@@ -1,3 +1,6 @@
+// parser-output-unchanged: Unicode owner migration retains native normalization forms, mark classes and operation order; no folding is added.
+import { normalizeUnicode } from "@stll/text-normalize";
+
 import type { DecisionReporterGrammar } from "./decision-query-intent";
 import {
   US_REPORTER_EDITIONS,
@@ -236,7 +239,7 @@ const citationOf =
   });
 
 const foldInput = (raw: string): string =>
-  raw.normalize("NFKC").replace(/\s+/gu, " ").trim();
+  normalizeUnicode(raw, "NFKC").replace(/\s+/gu, " ").trim();
 
 /**
  * Reads a whole entry as one reporter citation, or null. The entry must be

@@ -1,6 +1,9 @@
+// parser-output-unchanged: Unicode owner migration retains native normalization forms, mark classes and operation order; no folding is added.
 // parser-output-unchanged: Identifier checks are named for schema publication; accepted values are identical.
 import { panic } from "better-result";
 import * as v from "valibot";
+
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import { stripDangerousChars } from "./text-sanitize.js";
 
@@ -64,8 +67,7 @@ export const DECISION_IDENTIFIER_MAX_LENGTH = 256;
 export const DECISION_IDENTIFIER_MAX_COUNT = 32;
 
 const normalizeStructuredCitation = (value: string): string =>
-  stripDangerousChars(value)
-    .normalize("NFKC")
+  normalizeUnicode(stripDangerousChars(value), "NFKC")
     .toLocaleLowerCase("und")
     .replace(/[\p{P}\p{Z}\s]+/gu, "")
     .trim();

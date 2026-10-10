@@ -155,6 +155,9 @@ const enforcementCell = (enforcement: OwnershipEnforcement): string => {
     case "none": {
       return "none";
     }
+    case "custom-rule": {
+      return `custom rule \`${enforcement.rule}\` (${enforcement.reason})`;
+    }
     case "import": {
       const specifiers = enforcement.specifiers.join("`, `");
       return enforcement.names === undefined
@@ -192,7 +195,9 @@ const enforcementCell = (enforcement: OwnershipEnforcement): string => {
 const allowedFiles = (
   enforcement: OwnershipEnforcement,
 ): readonly AllowedFile[] =>
-  enforcement.kind === "none" ? [] : enforcement.allowed;
+  enforcement.kind === "none" || enforcement.kind === "custom-rule"
+    ? []
+    : enforcement.allowed;
 
 const allowedCell = (enforcement: OwnershipEnforcement): string => {
   const allowed = allowedFiles(enforcement);

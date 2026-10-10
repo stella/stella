@@ -1,3 +1,4 @@
+import { PDF } from "@libpdf/core";
 /**
  * Sandboxed searchable-PDF worker.
  *
@@ -6,9 +7,9 @@
  *         when it is signed or encrypted; the OCR text then lives only in the
  *         extracted-text and search data
  */
-
-import { PDF } from "@libpdf/core";
 import { TaggedError } from "better-result";
+
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import type {
   DocumentOcrLine,
@@ -153,7 +154,7 @@ const addTextLayer = async ({
     const scaleX = page.width / ocrPage.width;
     const scaleY = page.height / ocrPage.height;
     for (const line of ocrPage.lines) {
-      const text = line.text.normalize("NFC");
+      const text = normalizeUnicode(line.text, "NFC");
       if (!font.canEncode(text)) {
         continue;
       }

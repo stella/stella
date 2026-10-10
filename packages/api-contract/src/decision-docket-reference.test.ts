@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { assertProperty, propertyConfig } from "@stll/property-testing";
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import {
   DECISION_DOCKET_GRAMMARS,
@@ -97,7 +98,7 @@ const spellingOf = (docket: Docket, tail: Tail) =>
         "č.j. ",
         "čj. ",
         "č. k. ",
-        "č. j. ".normalize("NFD"),
+        normalizeUnicode("č. j. ", "NFD"),
       ),
       senateGap: fc.constantFrom(" ", "", "  ", " "),
       numberGap: fc.constantFrom(" ", "", "  "),

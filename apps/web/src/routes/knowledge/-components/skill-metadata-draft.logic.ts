@@ -1,11 +1,11 @@
+import { stripUnicodeMarks } from "@stll/text-normalize";
+
 // A skill is invoked in chat via /its-command; suggest the skill's name as that
 // command by default (lowercase, hyphenated) so the field reads as /skill-name.
 // Diacritics are decomposed and stripped first so a name like "Česká dovednost"
 // suggests "ceska-dovednost" rather than dropping the accented letters.
 const slugifyCommand = (name: string): string =>
-  name
-    .normalize("NFD")
-    .replaceAll(/[\u0300-\u036f]/gu, "")
+  stripUnicodeMarks(name, { form: "NFD", markClass: "basic-combining" })
     .toLowerCase()
     .replaceAll(/[^a-z0-9]+/gu, "-")
     .replace(/^-/u, "")

@@ -600,6 +600,7 @@
       "version": "0.1.8",
       "dependencies": {
         "@stll/anonymize-wasm": "catalog:",
+        "@stll/text-normalize": "workspace:*",
         "better-result": "catalog:",
         "valibot": "catalog:",
       },
@@ -671,6 +672,7 @@
       "dependencies": {
         "@stll/country-codes": "workspace:*",
         "@stll/stdnum": "^2.3.2",
+        "@stll/text-normalize": "workspace:*",
         "better-result": "catalog:",
         "fast-xml-parser": "^5.11.2",
         "saxes": "catalog:",
@@ -909,6 +911,7 @@
         "infosoud": "./dist/cli.js",
       },
       "dependencies": {
+        "@stll/text-normalize": "workspace:*",
         "better-result": "catalog:",
         "temporal-polyfill": "catalog:",
       },
@@ -924,6 +927,7 @@
       "version": "0.1.0",
       "dependencies": {
         "@stll/money": "workspace:*",
+        "@stll/text-normalize": "workspace:*",
         "better-result": "catalog:",
       },
       "devDependencies": {
@@ -956,6 +960,7 @@
         "@stll/api-contract": "workspace:*",
         "@stll/concurrency": "workspace:*",
         "@stll/legal-ast": "workspace:*",
+        "@stll/text-normalize": "workspace:*",
         "better-result": "catalog:",
         "valibot": "catalog:",
       },
@@ -992,6 +997,7 @@
       "name": "@stll/mojibake",
       "version": "0.0.0",
       "dependencies": {
+        "@stll/text-normalize": "workspace:*",
         "better-result": "catalog:",
       },
       "devDependencies": {
@@ -1071,6 +1077,7 @@
         "@stll/country-codes": "workspace:*",
         "@stll/fuzzy-search": "catalog:",
         "@stll/sha256": "workspace:*",
+        "@stll/text-normalize": "workspace:*",
         "@stll/time": "workspace:*",
         "better-result": "catalog:",
         "saxes": "catalog:",
@@ -1100,6 +1107,7 @@
         "@stll/permissions": "workspace:*",
         "@stll/sha256": "workspace:*",
         "@stll/skills": "workspace:*",
+        "@stll/text-normalize": "workspace:*",
         "@stll/time": "workspace:*",
         "better-result": "catalog:",
         "typescript": "catalog:",

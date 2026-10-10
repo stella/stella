@@ -1,3 +1,4 @@
+import { expect, test } from "bun:test";
 /**
  * Invariants the stemmers must hold for every language over arbitrary input.
  *
@@ -6,11 +7,10 @@
  * what downstream indexing relies on: a stem never grows, never becomes
  * empty for non-empty input, and never throws.
  */
-
-import { expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { propertyConfig } from "@stll/property-testing";
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import {
   MORPHOLOGY_LANGUAGES,
@@ -51,7 +51,7 @@ test("a stem never grows and never empties a non-empty term", () => {
       // algorithm's prelude rewrites it as "ss" before any suffix is removed,
       // so a term ending in it can come back one code point longer per sharp
       // s. The bound allows exactly that expansion and nothing else.
-      const normalized = input.normalize("NFC").toLowerCase();
+      const normalized = normalizeUnicode(input, "NFC").toLowerCase();
       const bound =
         code === "de"
           ? normalized.replaceAll("ß", "ss").length
@@ -87,8 +87,8 @@ test("normalisation form does not change the stem", () => {
   // the same word must not index one way and query another.
   fc.assert(
     fc.property(decomposableTerm, language, (input, code) => {
-      expect<string>(stemLegalTerm(input.normalize("NFD"), code)).toBe(
-        stemLegalTerm(input.normalize("NFC"), code),
+      expect<string>(stemLegalTerm(normalizeUnicode(input, "NFD"), code)).toBe(
+        stemLegalTerm(normalizeUnicode(input, "NFC"), code),
       );
     }),
     propertyConfig({ numRuns: 2000 }),

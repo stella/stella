@@ -1,4 +1,5 @@
 import {
+  normalizeUnicode,
   applyArabicFolds,
   spacedLetterRunRegex,
   stripDiacritics,
@@ -91,7 +92,7 @@ const normalizeReaderSearchText = (text: string): NormalizedText => {
     // not split first); stripDiacritics (NFD + mark removal) strips the
     // remaining Latin/Arabic combining diacritics.
     const normalizedChar = stripDiacritics(
-      applyArabicFolds(rawChar.normalize("NFKC")),
+      applyArabicFolds(normalizeUnicode(rawChar, "NFKC")),
     );
     const origStart = originalIndex;
     const origEnd = originalIndex + rawChar.length;

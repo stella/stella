@@ -11,6 +11,7 @@ import {
 
 /* oxlint-disable typescript/promise-function-async -- fetch mock callbacks return Promise.resolve without being async */
 import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import {
   buildSkUsDecision,
@@ -1875,7 +1876,7 @@ describe("sk-us rows as the court sends them", () => {
     mockFetch({ search: [] });
     const values = [
       " Ústavná sťažnosť ",
-      "Ústavná sťažnosť".normalize("NFD"),
+      normalizeUnicode("Ústavná sťažnosť", "NFD"),
       "",
       "Iné",
     ];

@@ -1,6 +1,8 @@
 import type { Result } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { stripUnicodeMarks } from "@stll/text-normalize";
+
 import { lookupByIco, searchByName } from "./client.js";
 import type { RpoClientError } from "./client.js";
 import { RpoAPIError, RpoRequestError, RpoValidationError } from "./errors.js";
@@ -362,9 +364,7 @@ describe("searchByName", () => {
     // A row whose name lacks the query never outranks one that has it,
     // matched regardless of case and diacritics ("Slovnafť").
     const hasQuery = results.map(({ name }) =>
-      name
-        .normalize("NFD")
-        .replaceAll(/\p{M}/gu, "")
+      stripUnicodeMarks(name, { form: "NFD", markClass: "combining" })
         .toLowerCase()
         .includes("slovnaft"),
     );

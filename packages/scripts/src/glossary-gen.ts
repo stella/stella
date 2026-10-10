@@ -17,6 +17,7 @@ import { panic } from "better-result";
 import path from "node:path";
 
 import type { UiLocale } from "@stll/locales";
+import { normalizeUnicode } from "@stll/text-normalize";
 
 const TERMINOLOGY_FILE = "TERMINOLOGY.md";
 export const CI_MARKDOWN_READER_INPUTS = [path.join("**", TERMINOLOGY_FILE)];
@@ -323,7 +324,7 @@ export const parseGlossary = (json: string): Glossary => {
 // Display width counts NFC code points, matching how oxfmt/GFM align cells,
 // so generated tables are a formatter fixpoint (no reflow on `bun run format`).
 const width = (cell: string): number =>
-  Array.from(cell.normalize("NFC")).length;
+  Array.from(normalizeUnicode(cell, "NFC")).length;
 
 export const renderTable = (headers: string[], rows: string[][]): string => {
   const widths = headers.map((header, col) =>

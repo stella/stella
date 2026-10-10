@@ -36,6 +36,7 @@ import type {
   DecisionPrimaryReferenceType,
 } from "@stll/legal-ast/decision-identifier";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import { detectCitationCourtHint } from "@/api/handlers/case-law/citation-court-hint";
 import { detectCitationDecisionDate } from "@/api/handlers/case-law/citation-decision-date";
@@ -257,8 +258,7 @@ const CZ_US_REPORT_VOLUME_RE =
  * meet `N 53/26`.
  */
 const czechConstitutionalDesignation = (value: string): string | null => {
-  const text = value
-    .normalize("NFC")
+  const text = normalizeUnicode(value, "NFC")
     .replace(/\s+/gu, " ")
     .replace(/ ?\/ ?/gu, "/")
     .trim();
@@ -525,7 +525,9 @@ const hungarianSeriesKey = (text: string): string | null => {
  */
 const hungarianConstitutionalDesignation = (value: string): string | null => {
   const groups = HU_CONSTITUTIONAL_RE.exec(
-    normalizeDashes(value.normalize("NFC")).replace(/\s+/gu, " ").trim(),
+    normalizeDashes(normalizeUnicode(value, "NFC"))
+      .replace(/\s+/gu, " ")
+      .trim(),
   )?.groups;
   return groups === undefined
     ? null
@@ -544,7 +546,7 @@ type HungarianCitationForm =
 export const hungarianCitationForm = (
   citationText: string,
 ): HungarianCitationForm | null => {
-  const text = normalizeDashes(citationText.normalize("NFC"))
+  const text = normalizeDashes(normalizeUnicode(citationText, "NFC"))
     .replace(/\s+/gu, " ")
     .trim();
   if (
@@ -1226,12 +1228,7 @@ const hungarianDocketKey = (parts: RegExpGroups): string =>
  *    "EBH.2018.K.17"); see `hungarianSeriesKey`.
  */
 const canonicalizeDedupKey = (text: string): string => {
-  const normalized = normalizeDashes(text)
-    // One key per case, whatever normalization form the publisher served:
-    // a decomposed "Ú" is the same letter as a precomposed one, and only
-    // the key folds it -- `citationText` stays verbatim so the reader can
-    // still find it in the document's own characters.
-    .normalize("NFC")
+  const normalized = normalizeUnicode(normalizeDashes(text), "NFC")
     .replace(/­/gu, "") // soft hyphen: invisible, never load-bearing
     .replace(/\u00A0/gu, " ") // NBSP -> space
     .replace(/\s+/gu, " ") // collapse line-wraps and repeated spaces

@@ -1,5 +1,7 @@
 import * as v from "valibot";
 
+import { normalizeUnicode } from "@stll/text-normalize";
+
 /**
  * The jurisdiction-neutral shape a provision citation resolves to.
  *
@@ -40,7 +42,7 @@ const designatorSchema = v.pipe(
     (value) => value.isWellFormed() && !/[\p{Cc}\p{Cf}]/u.test(value),
     "Invalid provision designator",
   ),
-  v.transform((value) => value.normalize("NFC")),
+  v.transform((value) => normalizeUnicode(value, "NFC")),
 );
 
 export const provisionReferenceSchema = v.object({

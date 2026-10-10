@@ -10,6 +10,7 @@ import type {
   DecisionIdentifiers,
 } from "@stll/legal-ast/decision-identifier";
 import { propertyConfig } from "@stll/property-testing";
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import {
   normalizeHuBhgyRow,
@@ -111,16 +112,18 @@ describe("extractCitations", () => {
     // normalizes a decision on the way in, and a `[ÚU]S` class reads the
     // decomposed spelling as a bare "U" followed by a mark: every
     // Constitutional Court citation in that paragraph went missing.
-    const text =
-      "současně založit kolizi se zásadami vyjádřenými v hlavě páté Listiny (nález Ústavního soudu sp. zn. I. ÚS 1135/17, ze dne 1. 11. 2017).".normalize(
-        "NFD",
-      );
-    expect(text).not.toBe(text.normalize("NFC"));
+    const text = normalizeUnicode(
+      "současně založit kolizi se zásadami vyjádřenými v hlavě páté Listiny (nález Ústavního soudu sp. zn. I. ÚS 1135/17, ze dne 1. 11. 2017).",
+      "NFD",
+    );
+    expect(text).not.toBe(normalizeUnicode(text, "NFC"));
 
     const citations = extractCitations([{ index: 0, text }]);
 
     expect(citations).toHaveLength(1);
-    expect(citations[0]?.citationText).toBe("I. ÚS 1135/17".normalize("NFD"));
+    expect(citations[0]?.citationText).toBe(
+      normalizeUnicode("I. ÚS 1135/17", "NFD"),
+    );
     // Either normalization form reaches the resolver as one key, so the
     // decomposed spelling still joins the composed corpus row.
     expect(bareCitationKey(citations[0]?.citationText ?? "")).toBe(

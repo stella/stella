@@ -6,6 +6,7 @@ import {
   normalizeStructuredDecisionIdentifier,
 } from "@stll/legal-ast/decision-identifier";
 import { propertyConfig } from "@stll/property-testing";
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import {
   foldRulingIdentity,
@@ -226,8 +227,8 @@ describe("language-independent comparison", () => {
   });
 
   test("normalization fixtures differ before folding", () => {
-    expect("Ú".normalize("NFD")).not.toBe("Ú".normalize("NFC"));
-    expect("３８／０６".normalize("NFKC")).not.toBe("３８／０６");
+    expect(normalizeUnicode("Ú", "NFD")).not.toBe(normalizeUnicode("Ú", "NFC"));
+    expect(normalizeUnicode("３８／０６", "NFKC")).not.toBe("３８／０６");
   });
 
   test("preserves separated digits, removes leading zeros, and never widens years", () => {
@@ -291,10 +292,10 @@ describe("language-independent comparison", () => {
     fc.assert(
       fc.property(unicodeString, (input) => {
         for (const normalization of ["NFC", "NFD", "NFKC"] as const) {
-          expect(foldRulingIdentity(input.normalize(normalization))).toBe(
-            foldRulingIdentity(input),
-          );
-          expect(docketOf(input.normalize(normalization))).toBe(
+          expect(
+            foldRulingIdentity(normalizeUnicode(input, normalization)),
+          ).toBe(foldRulingIdentity(input));
+          expect(docketOf(normalizeUnicode(input, normalization))).toBe(
             docketOf(input),
           );
         }
@@ -319,7 +320,7 @@ describe("language-independent comparison", () => {
       fc.property(unicodeString, gaps, (input, separator) => {
         // Test after compatibility normalization: otherwise insertion can break
         // a ligature into a different sequence of alphanumeric boundaries.
-        const points = Array.from(input.normalize("NFKC"));
+        const points = Array.from(normalizeUnicode(input, "NFKC"));
         let spaced = "";
         for (const [index, point] of points.entries()) {
           const previous = points.at(index - 1);

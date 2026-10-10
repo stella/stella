@@ -17,6 +17,7 @@ import type {
   CatalogueLicense,
   CatalogueSetup,
 } from "@stll/catalogue";
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import { STELLA_REPO_URL } from "@/features/knowledge/public/tools/tool-detail.logic";
 
@@ -56,7 +57,7 @@ const MANIFEST_SCHEMA_REF = "../../../schema.json";
  * hyphens, and cap length to the schema's 64-char limit.
  */
 export const deriveSlug = (name: string): string => {
-  const normalized = name.normalize("NFKD").toLowerCase();
+  const normalized = normalizeUnicode(name, "NFKD").toLowerCase();
   let kebab = "";
   for (const character of normalized) {
     const codePoint = character.codePointAt(0);

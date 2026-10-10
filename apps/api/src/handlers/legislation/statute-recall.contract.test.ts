@@ -9,6 +9,7 @@ import * as v from "valibot";
 import { normalizeEli } from "@stll/agent-input";
 import { readStatuteQueryReferences } from "@stll/api-contract/statute-query-intent";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import {
   corpusIndexGenerations,
@@ -469,8 +470,11 @@ describe.skipIf(!runEngineTests)(
         }
         expect(hit.match.type).toBe("relaxed");
         expect(hit.headline).not.toBeNull();
+        if (hit.headline === null) {
+          panic("Protected official passage has no headline");
+        }
         expect(
-          hit.headline?.replace(/<\/?mark>/gu, "").normalize("NFC"),
+          normalizeUnicode(hit.headline.replace(/<\/?mark>/gu, ""), "NFC"),
         ).toMatch(/dobr[éeá] (?:víře|víra)/u);
       },
       ENGINE_TIMEOUT_MS,

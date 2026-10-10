@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import { foldStatuteQuery, parseStatuteQuery } from "./statute-query-intent";
 
@@ -211,7 +212,7 @@ test(
         ),
         fc.constantFrom("\t", "\n", "\u00a0", "\u202f"),
         (text, gap) => {
-          const spelling = `${gap}${text.normalize("NFD").replaceAll(" ", () => gap)}${gap}`;
+          const spelling = `${gap}${normalizeUnicode(text, "NFD").replaceAll(" ", () => gap)}${gap}`;
           expect(spelling).not.toBe(text);
           const folded = foldStatuteQuery(text);
           expect(foldStatuteQuery(spelling)).toBe(folded);

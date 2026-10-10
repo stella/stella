@@ -1,6 +1,9 @@
+// parser-output-unchanged: Unicode owner migration retains native normalization forms, mark classes and operation order; no folding is added.
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
 // parser-output-unchanged: removes an unused type guard; no adapter calls it.
 /** Shared utilities for case-law ingestion adapters. */
+
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 
@@ -48,7 +51,7 @@ export const normalizeMetadataValues = (
     return [];
   }
   const normalized = values.map((value) =>
-    value.normalize("NFC").replaceAll(/\s+/gu, " ").trim(),
+    normalizeUnicode(value, "NFC").replaceAll(/\s+/gu, " ").trim(),
   );
   return [...new Set(normalized.filter((value) => value.length > 0))];
 };

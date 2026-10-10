@@ -1,7 +1,12 @@
+// parser-output-unchanged: Unicode owner migration retains native normalization forms, mark classes and operation order; no folding is added.
+import { normalizeUnicode } from "@stll/text-normalize";
+
 // parser-output-unchanged: decisionTypeKey is unchanged; only cz-nss reads the docket check, and it bumps its own version.
 /** A comparison key only; the publisher's spelling remains on the decision. */
 export const decisionTypeKey = (stated: string | null | undefined) =>
-  stated?.normalize("NFC").trim().toLowerCase() || undefined;
+  (stated === null || stated === undefined
+    ? undefined
+    : normalizeUnicode(stated, "NFC").trim().toLowerCase()) || undefined;
 
 /** A number over a year: the core of every docket (`63 Az 17/2026 - 28`). */
 const DOCKET_SHAPE = /\d ?\/ ?\d{4}/u;
