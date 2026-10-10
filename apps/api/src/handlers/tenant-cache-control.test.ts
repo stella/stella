@@ -4,6 +4,10 @@ import { describe, expect, test } from "bun:test";
 import { env } from "@/api/env";
 import { getPublicHandlerCachePolicy } from "@/api/lib/api-handlers";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
+import {
+  MCP_MODES,
+  MCP_RESOURCE_MODE_CONFIG,
+} from "@/api/mcp/resource-policy-contract";
 import api from "@/api/server";
 
 // TTL changes and new shared-cache routes require an explicit review decision.
@@ -12,12 +16,12 @@ const PUBLIC_CACHE_HEADERS = {
   "GET /.well-known/oauth-authorization-server/api/auth": "public, max-age=300",
   "GET /.well-known/openid-configuration": "public, max-age=300",
   "GET /.well-known/oauth-protected-resource": "public, max-age=300",
-  "GET /.well-known/oauth-protected-resource/mcp": "public, max-age=300",
-  "GET /.well-known/oauth-protected-resource/mcp-anonymized":
-    "public, max-age=300",
-  "GET /.well-known/oauth-protected-resource/mcp-documents":
-    "public, max-age=300",
-  "GET /.well-known/oauth-protected-resource/mcp-law": "public, max-age=300",
+  ...Object.fromEntries(
+    MCP_MODES.map((mode) => [
+      `GET ${MCP_RESOURCE_MODE_CONFIG[mode].discoveryPath}`,
+      "public, max-age=300",
+    ]),
+  ),
   "GET /auth.md": "public, max-age=300",
   "GET /v1/mcp/oauth/client-metadata.json": "public, max-age=3600",
   "GET /v1/mcp/oauth/cli-client-metadata.json": "public, max-age=3600",

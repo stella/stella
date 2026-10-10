@@ -25,6 +25,7 @@ import { MCP_MAX_REQUEST_BODY_BYTES } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { TEMPLATE_FIELD_REFERENCE_URI } from "@/api/mcp/template-field-reference";
 import { TEMPLATE_MARKER_REFERENCE_URI } from "@/api/mcp/template-marker-reference";
+import { TEMPLATE_TOOL_SET } from "@/api/mcp/template-tools";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
@@ -398,6 +399,13 @@ const makeDocxFile = async (paragraphs: string[]): Promise<ScannedFile> => {
 };
 
 describe("MCP template tools", () => {
+  test("fill_template advertises registry lookup egress", () => {
+    expect(
+      TEMPLATE_TOOL_SET.definitions.find(({ name }) => name === "fill_template")
+        ?.annotations.openWorldHint,
+    ).toBe(true);
+  });
+
   let analytics: RecordingAnalytics;
 
   beforeEach(() => {
@@ -3480,6 +3488,11 @@ describe("MCP template tools", () => {
     expect(result.isError).toBeFalsy();
     // A rename is metadata: it must not mint a version of the same bytes.
     expect(writeStoredTemplateMock).not.toHaveBeenCalled();
+    expect(
+      TEMPLATE_TOOL_SET.definitions.find(
+        ({ name }) => name === "create_template",
+      )?.annotations.destructiveHint,
+    ).toBe(true);
     expect(renameStoredTemplateMock).toHaveBeenCalledWith(
       expect.objectContaining({ templateId: TEMPLATE_ID, name: "Renamed" }),
     );

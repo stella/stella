@@ -8,6 +8,7 @@ import type {
 } from "@/api/lib/rate-limit/rate-limit";
 import { createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
 import {
+  MCP_ADVANCED_HTTP_PATH,
   MCP_ANONYMIZED_HTTP_PATH,
   MCP_DOCUMENTS_HTTP_PATH,
   MCP_HTTP_PATH,
@@ -18,6 +19,7 @@ const MCP_TRANSPORT_RATE_LIMIT_SCOPE = "mcp-transport";
 const MCP_TRANSPORT_ADDRESS_RATE_LIMIT_SCOPE = "mcp-transport-address";
 
 const MCP_TRANSPORT_PATHS: ReadonlySet<string> = new Set([
+  MCP_ADVANCED_HTTP_PATH,
   MCP_ANONYMIZED_HTTP_PATH,
   MCP_DOCUMENTS_HTTP_PATH,
   MCP_HTTP_PATH,

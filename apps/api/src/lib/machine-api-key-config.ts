@@ -1,6 +1,6 @@
 import * as v from "valibot";
 
-import { MCP_DEFAULT_RESOURCE_SCOPES } from "@stll/api-contract";
+import { MCP_ADVANCED_RESOURCE_SCOPES } from "@stll/api-contract";
 import { statements } from "@stll/permissions";
 import type { PermissionInput } from "@stll/permissions";
 
@@ -94,7 +94,7 @@ export const MACHINE_API_KEY_EXPIRY = {
  * excluded: they exist for a different consent surface and are not something an
  * org admin grants to a headless caller here.
  */
-export const MACHINE_API_KEY_GRANTABLE_SCOPES = MCP_DEFAULT_RESOURCE_SCOPES;
+export const MACHINE_API_KEY_GRANTABLE_SCOPES = MCP_ADVANCED_RESOURCE_SCOPES;
 
 export type MachineApiKeyScope =
   (typeof MACHINE_API_KEY_GRANTABLE_SCOPES)[number];
@@ -152,6 +152,7 @@ const machineApiKeyScopeSchema = v.picklist(MACHINE_API_KEY_GRANTABLE_SCOPES);
  * list equals it, so a new audience cannot quietly fail to be offered here.
  */
 export const MACHINE_API_KEY_GRANTABLE_AUDIENCES = [
+  "advanced",
   "default",
   "documents",
   "law",

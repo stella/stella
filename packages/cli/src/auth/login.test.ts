@@ -213,7 +213,7 @@ describe("login orchestration", () => {
     const provider = startProvider();
     onBrowserOpen = async (authorizeUrl) => {
       expect(new URL(authorizeUrl).searchParams.get("resource")).toBe(
-        `${provider.url}/mcp`,
+        `${provider.url}/mcp/advanced`,
       );
       await driveCallback()(authorizeUrl);
     };
