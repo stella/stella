@@ -431,11 +431,11 @@ export const Route = createFileRoute("/law/cases/")({
   // waits there is the grid alone: the box, the toolbar, the chips and the
   // pager are the URL's own and are already correct.
   component: lazyRouteComponent(
-    () => import("./-case-law-index-page"),
+    async () => import("./-case-law-index-page"),
     "PublicCaseLawIndex",
   ),
   pendingComponent: lazyRouteComponent(
-    () => import("./-case-law-index-page"),
+    async () => import("./-case-law-index-page"),
     "PublicCaseLawIndexPending",
   ),
 });
