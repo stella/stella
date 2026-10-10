@@ -20,7 +20,10 @@ const firstRead = readFixture(fixture.input);
 expect(firstRead).toContain("court");
 expect(readFixture(fixture.input)).toBe(firstRead);
 const row = { name: "court", reason: "expected reason" };
-expect([row.name, detectCourt(row.reason)]).toEqual([row.name, row.reason]);
+expect([row.name, detectCourt(row.reason)]).toEqual([
+  row.name,
+  "expected reason",
+]);
 expect({ start: 0, end: fixture.input.length }).toEqual({
   start: 0,
   end: fixture.input.length,

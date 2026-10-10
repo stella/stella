@@ -42,6 +42,44 @@ const cases = [
     lines: [3],
   },
   {
+    title:
+      "does not treat a domain name containing a fixture word as a fixture",
+    source: [
+      "expect(detect(caseLawDecisions.id)).toEqual([derive(caseLawDecisions.id)]);",
+      "expect(detect(CASE_LAW_REPORTER.OPERATOR)).toEqual({ value: derive(CASE_LAW_REPORTER.OPERATOR) });",
+      "expect(detect(throwable.text)).toBe(derive(throwable.text));",
+    ].join("\n"),
+    lines: [],
+  },
+  {
+    title: "treats a fixture noun at the head of a compound root as a fixture",
+    source: [
+      "expect(detect(testCase.text)).toBe(derive(testCase.text));",
+      "expect(detect(input_rows.text)).toBe(derive(input_rows.text));",
+    ].join("\n"),
+    lines: [1, 2],
+  },
+  {
+    title: "treats an awaited state read as an observation, not an oracle",
+    source: [
+      "const before = await fixture.row(listing.id);",
+      "await fixture.walk();",
+      "expect(await fixture.row(listing.id)).toMatchObject({ status, attempts: before?.attempts });",
+      "const own = (await decisionBy(fixture.sourceId, 'a')).key;",
+      "expect(keysUnder(fixture.sourceId, id)).toEqual([own]);",
+    ].join("\n"),
+    lines: [],
+  },
+  {
+    title: "still traces an oracle awaited on the expected side",
+    source: [
+      "const expected = await derive(fx.input);",
+      "expect(await detect(fx.input)).toEqual([expected]);",
+      "expect(detect(fx.text)).toEqual([await wrap(derive(fx.text))]);",
+    ].join("\n"),
+    lines: [2, 3],
+  },
+  {
     title: "reports a detector compared with an oracle over the same member",
     source: "expect(detect(fx.text)).toBe(derive(fx.text));",
     lines: [1],

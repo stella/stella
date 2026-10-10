@@ -59,7 +59,7 @@ describe("corpus mirror state columns", () => {
         status: CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
       }),
     ).toEqual({
-      corpusMirrorStatus: "pending",
+      corpusMirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
       textS3Key: null,
       normalizedS3Key: null,
       astS3Key: null,
@@ -76,7 +76,7 @@ describe("corpus mirror state columns", () => {
         },
       }),
     ).toEqual({
-      corpusMirrorStatus: "settled",
+      corpusMirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
       textS3Key: "corpus/text.zst",
       normalizedS3Key: "corpus/sections.zst",
       astS3Key: "corpus/ast.zst",

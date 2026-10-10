@@ -25,14 +25,24 @@ const TEST_FUNCTIONS = new Set(["describe", "it", "test"]);
 const TEST_MODIFIERS = new Set(["each", "if", "only", "skip", "skipIf"]);
 const ORACLE_NAME =
   /(?:classif|detect|derive|project|extract|parse|read|build|expected)/iu;
-const FIXTURE_ROOT =
-  /^[A-Za-z0-9_$]*(?:fixture|fx|case|sample|input|record|row)[A-Za-z0-9_$]*(?:\.|$)/iu;
+const FIXTURE_NOUN = /^(?:fixture|fx|case|sample|input|record|row)s?$/u;
 
 type AliasMap = Map<Variable, string>;
 type ValueMap = Map<Variable, unknown>;
 type ResolveBinding = (identifier: unknown) => Variable | null;
 
 const pathText = (path: string): string => path.slice(path.indexOf(":") + 1);
+
+// Judge the root by its head noun (`testCase`, `inputRow`), not a substring:
+// domain names such as `caseLawDecisions` or `CASE_LAW_*` are not fixtures.
+const hasFixtureRoot = (path: string): boolean => {
+  const root = pathText(path).split(".").at(0) ?? "";
+  const head = root
+    .replaceAll(/([a-z0-9])([A-Z])/gu, "$1_$2")
+    .split(/[_$]+/u)
+    .findLast((segment) => segment.length > 0);
+  return head !== undefined && FIXTURE_NOUN.test(head.toLowerCase());
+};
 
 const pathDependsOn = (path: string, dependency: string): boolean =>
   path === dependency || path.startsWith(`${dependency}.`);
@@ -67,12 +77,26 @@ const memberPath = (
   return property === null || object === null ? null : `${object}.${property}`;
 };
 
+// "opaque": an awaited call with no oracle inside reads system state (a
+// snapshot before an action, a row from another store); its result is an
+// observation, not a value computed from the fixture keys it was given.
+type ObservationTracing = "opaque" | "traced";
+
 type PathsInOptions = {
   aliases: AliasMap;
   resolveBinding: ResolveBinding;
   paths?: Set<string>;
-  values?: ValueMap;
+  values?: ValueMap | undefined;
   expanded?: Set<unknown>;
+  observations?: ObservationTracing;
+};
+
+const isAwaitedObservation = (node: AstNode): boolean => {
+  if (node.type !== "AwaitExpression") {
+    return false;
+  }
+  const argument = unwrapExpression(node.argument);
+  return argument?.type === "CallExpression" && !containsOracleCall(argument);
 };
 
 const pathsIn = (
@@ -83,17 +107,17 @@ const pathsIn = (
     paths = new Set<string>(),
     values,
     expanded = new Set<unknown>(),
+    observations = "traced",
   }: PathsInOptions,
 ) => {
   if (!isAstNode(node)) {
     return paths;
   }
+  if (observations === "opaque" && isAwaitedObservation(node)) {
+    return paths;
+  }
   const path = memberPath(node, aliases, resolveBinding);
-  if (
-    path !== null &&
-    path.includes(".") &&
-    FIXTURE_ROOT.test(pathText(path))
-  ) {
+  if (path !== null && path.includes(".") && hasFixtureRoot(path)) {
     paths.add(path);
     if (node.type === "MemberExpression") {
       return paths;
@@ -111,6 +135,7 @@ const pathsIn = (
         paths,
         values,
         expanded,
+        observations,
       });
     }
   }
@@ -130,10 +155,24 @@ const pathsIn = (
     }
     if (Array.isArray(value)) {
       for (const child of value) {
-        pathsIn(child, { aliases, resolveBinding, paths, values, expanded });
+        pathsIn(child, {
+          aliases,
+          resolveBinding,
+          paths,
+          values,
+          expanded,
+          observations,
+        });
       }
     } else if (isAstNode(value)) {
-      pathsIn(value, { aliases, resolveBinding, paths, values, expanded });
+      pathsIn(value, {
+        aliases,
+        resolveBinding,
+        paths,
+        values,
+        expanded,
+        observations,
+      });
     }
   }
   return paths;
@@ -480,6 +519,7 @@ export default eslintCompatPlugin({
                 aliases,
                 resolveBinding,
                 values: expectedValues,
+                observations: "opaque",
               });
               const sharedPaths = [...actualPaths].filter((path) =>
                 pathsDependOn(expectedPaths, path),

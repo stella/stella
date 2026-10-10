@@ -218,7 +218,7 @@ describe("source completeness", () => {
       }),
     ).toMatchObject({
       state: "measured",
-      reportedBy: "operator",
+      reportedBy: CASE_LAW_TOTAL_REPORTER.OPERATOR,
     });
   });
 });
