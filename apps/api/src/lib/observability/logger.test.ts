@@ -75,6 +75,59 @@ describe("logger attributes", () => {
     expect(output).not.toContain('"body"');
   });
 
+  test("direct and nested bigint attributes emit as strings", () => {
+    const attributes = {
+      count: 123n,
+      diagnostic: { count: 456n, values: [789n] },
+      attempts: 1,
+    };
+    const expected = {
+      count: "123",
+      diagnostic: '{"count":"456","values":["789"]}',
+      attempts: 1,
+    };
+    expect(sanitizeLogAttributes(attributes)).toEqual(expected);
+    const recording = installRecordingLogger();
+    try {
+      logger.error("test.failed", attributes);
+      expect(recording.records).toEqual([
+        { severityText: "ERROR", message: "test.failed", attributes: expected },
+      ]);
+    } finally {
+      recording.restore();
+    }
+    const chunks: string[] = [];
+    process.stderr.write = (chunk: string | Uint8Array): boolean => {
+      chunks.push(typeof chunk === "string" ? chunk : chunk.toString());
+      return true;
+    };
+    logger.error("test.failed", attributes);
+    expect(chunks).toHaveLength(1);
+    expect(JSON.parse(chunks.join(""))).toEqual({
+      severity: "ERROR",
+      message: "test.failed",
+      ...expected,
+    });
+  });
+
+  test("error attributes use projected fields during JSON serialization", () => {
+    const value = "fixture-query-value";
+    const diagnostic = Object.assign(new Error("Diagnostic unavailable"), {
+      operation: "fetch",
+      toJSON: () => ({ params: [value] }),
+    });
+    const recording = installRecordingLogger();
+    try {
+      logger.error("test.failed", { diagnostic });
+      const serialized = recording.records.at(0)?.attributes?.["diagnostic"];
+      expect(serialized).toContain('"operation":"fetch"');
+      expect(serialized).not.toContain(value);
+      expect(serialized).not.toContain('"params"');
+    } finally {
+      recording.restore();
+    }
+  });
+
   test("streams operational info while keeping debug off the backstop", () => {
     const chunks: string[] = [];
     process.stderr.write = (chunk: string | Uint8Array): boolean => {

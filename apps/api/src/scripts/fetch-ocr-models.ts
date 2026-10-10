@@ -11,6 +11,7 @@ import { panic, Result } from "better-result";
 import path from "node:path";
 
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
+import { sanitizeQueryErrorText } from "@stll/errors";
 
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
@@ -81,7 +82,7 @@ const download = async ({
     return response.value.body;
   }
   const failure = Result.isError(response)
-    ? response.error.message
+    ? sanitizeQueryErrorText(response.error.message)
     : `HTTP ${response.value.status}`;
   const transient =
     Result.isError(response) || isTransientStatus(response.value.status);
