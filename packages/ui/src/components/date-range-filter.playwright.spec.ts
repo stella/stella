@@ -97,6 +97,23 @@ test("both calendars forbid crossing the selected range", async ({ page }) => {
   ).toBeEnabled();
 });
 
+for (const activation of ["Enter", "Space"]) {
+  test(`opening To directly by ${activation} focuses its selected day`, async ({
+    page,
+  }) => {
+    const trigger = page
+      .getByRole("region", { name: "Any range" })
+      .getByRole("button", { name: /^To/u });
+    await trigger.focus();
+    await trigger.press(activation);
+    await expect(
+      page.locator(
+        '[data-slot="popover-popup"][data-open] [data-slot="date-picker-popup"] [data-date="2026-03-10"]',
+      ),
+    ).toBeFocused();
+  });
+}
+
 for (const activation of ["mouse", "Enter", "Space"]) {
   test(`picking From by ${activation} focuses To and opens its calendar`, async ({
     page,

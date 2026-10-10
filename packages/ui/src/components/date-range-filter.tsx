@@ -30,6 +30,11 @@ type DateRangeFilterProps = Omit<
   toLabel: string;
 };
 
+type RangePickerState =
+  | { type: "closed" }
+  | { type: "from" }
+  | { type: "to"; focus: "calendar" | "trigger" };
+
 /** Both calendar bounds and the focus handoff belong to the range. */
 const DateRangeFilter = ({
   from,
@@ -44,7 +49,7 @@ const DateRangeFilter = ({
 }: DateRangeFilterProps) => {
   const id = useId();
   const toRef = useRef<HTMLButtonElement>(null);
-  const [activeBound, setActiveBound] = useState<"from" | "to" | null>(null);
+  const [picker, setPicker] = useState<RangePickerState>({ type: "closed" });
   const fromMax = to && (!maxDate || to < maxDate) ? to : maxDate;
 
   return (
@@ -68,14 +73,16 @@ const DateRangeFilter = ({
           minDate={undefined}
           triggerRef={undefined}
           focusTriggerOnOpen={false}
-          open={activeBound === "from"}
-          onOpenChange={(open) => setActiveBound(open ? "from" : null)}
+          open={picker.type === "from"}
+          onOpenChange={(open) =>
+            setPicker(open ? { type: "from" } : { type: "closed" })
+          }
           onChange={(next) => {
             onFromChange(next);
             if (!next) {
               return;
             }
-            setActiveBound("to");
+            setPicker({ type: "to", focus: "trigger" });
             toRef.current?.focus();
           }}
         />
@@ -97,10 +104,16 @@ const DateRangeFilter = ({
           value={to}
           minDate={from ?? undefined}
           maxDate={maxDate}
-          open={activeBound === "to"}
+          open={picker.type === "to"}
           triggerRef={toRef}
-          focusTriggerOnOpen
-          onOpenChange={(open) => setActiveBound(open ? "to" : null)}
+          focusTriggerOnOpen={
+            picker.type === "to" && picker.focus === "trigger"
+          }
+          onOpenChange={(open) =>
+            setPicker(
+              open ? { type: "to", focus: "calendar" } : { type: "closed" },
+            )
+          }
           onChange={onToChange}
         />
       </div>
