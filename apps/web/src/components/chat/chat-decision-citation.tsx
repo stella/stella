@@ -2,6 +2,7 @@ import { createContext, useContext } from "react";
 import type { ReactNode } from "react";
 
 import { useQueries, useQuery } from "@tanstack/react-query";
+import type { QueryFunctionContext } from "@tanstack/react-query";
 import { panic } from "better-result";
 
 import { createCaseLawDecisionPath } from "@stll/api-contract/case-law-decision-route";
@@ -36,6 +37,7 @@ import {
 } from "@/features/case-law/queries/decisions";
 import { detached } from "@/lib/detached";
 import { queryView } from "@/lib/query-view.logic";
+import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { useQueryView } from "@/lib/use-query-view";
 
 type CitationCacheRequest =
@@ -279,12 +281,28 @@ export const ChatAnswerDecisionProvider = ({
     }
   }
   const queries = useQueries({
-    // Keep the dynamic observer array clear of queryOptions' optional generic
-    // callbacks; these observers only follow the canonical decision caches.
-    queries: requests.map(({ options }) => ({
-      queryKey: options.queryKey,
-      queryFn: options.queryFn,
-      staleTime: options.staleTime,
+    // Adapt both key shapes to one fetcher signature rather than distributing
+    // queryOptions' optional generic callbacks through the dynamic array.
+    queries: requests.map((request) => ({
+      queryKey: request.options.queryKey,
+      queryFn: (context: QueryFunctionContext) => {
+        switch (request.type) {
+          case "id":
+            return (
+              request.options.queryFn ??
+              panic("Decision id options must provide a fetcher")
+            )({ ...context, queryKey: request.options.queryKey });
+          case "route":
+            return (
+              request.options.queryFn ??
+              panic("Decision slug options must provide a fetcher")
+            )({ ...context, queryKey: request.options.queryKey });
+          default:
+            request satisfies never;
+            return panic("Unhandled citation cache request");
+        }
+      },
+      staleTime: ROUTE_QUERY_STALE_TIME_MS,
       enabled: false,
     })),
   });
