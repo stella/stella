@@ -1,8 +1,7 @@
 diff --git a/dist/authorize-CLuqtSXQ.mjs b/dist/authorize-CLuqtSXQ.mjs
-index 52dbf4ee9e5fd9ef25f9eaf5deea8ff2cc584c63..97396e144dc3316c85ddc12f5776a71aa28a2e26 100644
 --- a/dist/authorize-CLuqtSXQ.mjs
 +++ b/dist/authorize-CLuqtSXQ.mjs
-@@ -3504,45 +3504,10 @@ async function revokeRefreshToken(ctx, opts, token, clientId) {
+@@ -3504,45 +3504,10 @@
  			value: await getStoredToken(opts.storeTokens, token, "refresh_token")
  		}]
  	});
@@ -52,7 +51,7 @@ index 52dbf4ee9e5fd9ef25f9eaf5deea8ff2cc584c63..97396e144dc3316c85ddc12f5776a71a
  }
  /**
  * We don't know the access token format so we try to validate it
-@@ -3606,7 +3571,7 @@ async function revokeEndpoint(ctx, opts) {
+@@ -3606,7 +3571,7 @@
  	} catch (error) {
  		if (error instanceof APIError$1) {
  			if (error.body?.error === "unsupported_token_type") throw error;
@@ -61,7 +60,18 @@ index 52dbf4ee9e5fd9ef25f9eaf5deea8ff2cc584c63..97396e144dc3316c85ddc12f5776a71a
  			throw error;
  		} else if (error instanceof Error) {
  			logger.error("Introspection error:", error.message, error.stack);
-@@ -5438,14 +5403,29 @@ function findRegisteredRedirectUri(registered, requested) {
+@@ -5375,8 +5340,8 @@
+ * Error page url if redirect_uri has not been verified yet
+ * Generates Url for custom error page
+ */
+-function getErrorURL(ctx, error, description) {
+-	return formatErrorURL(ctx.context.options.onAPIError?.errorURL || `${ctx.context.baseURL}/error`, error, description);
++function getErrorURL(ctx, error, description, opts) {
++	return formatErrorURL(ctx.context.options.onAPIError?.errorURL || `${ctx.context.baseURL}/error`, error, description, void 0, getIssuer(ctx, opts));
+ }
+ /**
+ * Based on the loopback port matching approach in node-oidc-provider.
+@@ -5438,12 +5403,27 @@
  	const hasFragment = requested.includes("#");
  	const hasUserinfo = requestedUrl.username.length > 0 || requestedUrl.password.length > 0;
  	if (hasFragment || hasUserinfo) return;
@@ -71,11 +81,12 @@ index 52dbf4ee9e5fd9ef25f9eaf5deea8ff2cc584c63..97396e144dc3316c85ddc12f5776a71a
  		if (url === requested) return true;
 -		if (!requestedWithoutPort) return false;
 -		return stripLoopbackRedirectPort(url) === requestedWithoutPort;
+-	});
 +		if (!requestedLoopback) return false;
 +		return canonicalNativeLoopbackRedirect(url) === requestedLoopback;
- 	});
- }
- /**
++	});
++}
++/**
 +* RFC 8252 sections 7.3 and 8.3: a native client's loopback redirect may use
 +* any port, and the loopback IP literals `127.0.0.1` and `[::1]` are one
 +* interface the client binds on whichever IP version is available. `localhost`
@@ -89,15 +100,49 @@ index 52dbf4ee9e5fd9ef25f9eaf5deea8ff2cc584c63..97396e144dc3316c85ddc12f5776a71a
 +	const match = /^http:\/\/(?:127\.0\.0\.1|\[::1\])(?=[/?#]|$)/u.exec(withoutPort);
 +	if (!match) return withoutPort;
 +	return `http://loopback-ip${withoutPort.slice(match[0].length)}`;
-+}
-+/**
+ }
+ /**
  * Loads the client, verifies it's enabled, and returns the requested
- * redirect_uri when it matches a registered entry. Returns null whenever the
- * RP cannot be safely reached, so callers can fall back to the server error
+@@ -5477,7 +5457,7 @@
+ 		const raw = ctx.query ?? {};
+ 		const trusted = await resolveTrustedRedirectUri(ctx, opts, typeof raw.client_id === "string" ? raw.client_id : void 0, typeof raw.redirect_uri === "string" ? raw.redirect_uri : void 0);
+ 		if (trusted) return handleRedirect(ctx, formatErrorURL(trusted, error, error_description, typeof raw.state === "string" ? raw.state : void 0, getIssuer(ctx, opts), deriveResponseMode(raw)));
+-		return handleRedirect(ctx, getErrorURL(ctx, error, error_description));
++		return handleRedirect(ctx, getErrorURL(ctx, error, error_description, opts));
+ 	};
+ }
+ async function authorizeEndpoint(ctx, opts, settings) {
+@@ -5546,13 +5526,13 @@
+ 	});
+ 	const promptSet = ctx.query?.prompt ? parsePrompt(ctx.query?.prompt) : void 0;
+ 	const promptNone = promptSet?.has("none") ?? false;
+-	if (promptSet?.has("select_account") && !opts.selectAccount?.page) return handleRedirect(ctx, getErrorURL(ctx, `unsupported_prompt_select_account`, "unsupported prompt type"));
+-	if (!(query.response_type === "code")) return handleRedirect(ctx, getErrorURL(ctx, "unsupported_response_type", "unsupported response type"));
++	if (promptSet?.has("select_account") && !opts.selectAccount?.page) return handleRedirect(ctx, getErrorURL(ctx, `unsupported_prompt_select_account`, "unsupported prompt type", opts));
++	if (!(query.response_type === "code")) return handleRedirect(ctx, getErrorURL(ctx, "unsupported_response_type", "unsupported response type", opts));
+ 	const client = await getClient(ctx, opts, query.client_id);
+-	if (!client) return handleRedirect(ctx, getErrorURL(ctx, "invalid_client", "client_id is required"));
+-	if (client.disabled) return handleRedirect(ctx, getErrorURL(ctx, "client_disabled", "client is disabled"));
+-	if (!clientAllowsGrant(client, "authorization_code")) return handleRedirect(ctx, getErrorURL(ctx, "unauthorized_client", "client is not authorized to use the authorization_code grant"));
+-	if (!findRegisteredRedirectUri(client.redirectUris, query.redirect_uri) || !query.redirect_uri) return handleRedirect(ctx, getErrorURL(ctx, "invalid_redirect", "invalid redirect uri"));
++	if (!client) return handleRedirect(ctx, getErrorURL(ctx, "invalid_client", "client_id is required", opts));
++	if (client.disabled) return handleRedirect(ctx, getErrorURL(ctx, "client_disabled", "client is disabled", opts));
++	if (!clientAllowsGrant(client, "authorization_code")) return handleRedirect(ctx, getErrorURL(ctx, "unauthorized_client", "client is not authorized to use the authorization_code grant", opts));
++	if (!findRegisteredRedirectUri(client.redirectUris, query.redirect_uri) || !query.redirect_uri) return handleRedirect(ctx, getErrorURL(ctx, "invalid_redirect", "invalid redirect uri", opts));
+ 	let requestedScopes = query.scope?.split(" ").filter((s) => s);
+ 	if (requestedScopes) {
+ 		const validScopes = new Set(client.scopes ?? opts.scopes);
 diff --git a/dist/introspect-CbYi2MJT.mjs b/dist/introspect-CbYi2MJT.mjs
-index c41408fff2544b24d5e2666209f45b0833fe0853..bfe560490927286402c34e63a29326ac07c19a57 100644
+index c41408fff2544b24d5e2666209f45b0833fe0853..5a374e48b44a6fb3b04c363a0dfff227b3413151 100644
 --- a/dist/introspect-CbYi2MJT.mjs
 +++ b/dist/introspect-CbYi2MJT.mjs
+@@ -1,5 +1,5 @@
+ import { t as __exportAll } from "./rolldown-runtime-wcPFST8Q.mjs";
+-import { A as collectExtensionAccessTokenClaims, C as storeToken, E as validateClientCredentials, F as getExtensionGrantHandler, L as getSupportedGrantTypes, M as collectExtensionUserInfoClaims, R as hasUserInfoClaimExtension, T as toResourceList, a as getClient, b as resolveSubjectIdentifier, c as getStoredToken, h as parseClientMetadata, i as extractClientCredentials, j as collectExtensionIdTokenClaims, l as isPKCERequired, n as decryptStoredClientSecret, o as getJwtPlugin, p as normalizeTimestampValue, r as destructureCredentials, t as clientAllowsGrant, w as toAudienceClaim, y as resolveSessionAuthTime } from "./utils-CoqjzHuU.mjs";
++import { A as collectExtensionAccessTokenClaims, C as storeToken, D as validateClientScopes, E as validateClientCredentials, F as getExtensionGrantHandler, L as getSupportedGrantTypes, M as collectExtensionUserInfoClaims, R as hasUserInfoClaimExtension, T as toResourceList, a as getClient, b as resolveSubjectIdentifier, c as getStoredToken, h as parseClientMetadata, i as extractClientCredentials, j as collectExtensionIdTokenClaims, l as isPKCERequired, n as decryptStoredClientSecret, o as getJwtPlugin, p as normalizeTimestampValue, r as destructureCredentials, t as clientAllowsGrant, w as toAudienceClaim, y as resolveSessionAuthTime } from "./utils-CoqjzHuU.mjs";
+ import { APIError } from "better-auth/api";
+ import { generateRandomString, symmetricDecrypt, symmetricEncrypt } from "better-auth/crypto";
+ import { APIError as APIError$1 } from "better-call";
 @@ -806,6 +806,7 @@ async function seedResources(ctx, opts) {
  	const inputs = collectResourceInputs(opts);
  	if (inputs.length === 0) return;
@@ -123,6 +168,56 @@ index c41408fff2544b24d5e2666209f45b0833fe0853..bfe560490927286402c34e63a29326ac
  	tos_uri: z.string().optional(),
  	policy_uri: z.string().optional(),
  	software_id: z.string().optional(),
+@@ -1557,7 +1566,7 @@
+ 		authTime,
+ 		confirmation,
+ 		requestedUserInfoClaims: requestedUserInfoClaims?.length ? requestedUserInfoClaims : void 0,
+-		scopes,
++		scopes: originalRefresh?.scopes.includes("offline_access") && !scopes.includes("offline_access") ? [...scopes, "offline_access"] : scopes,
+ 		resources,
+ 		createdAt: /* @__PURE__ */ new Date(iat * 1e3),
+ 		expiresAt: /* @__PURE__ */ new Date(exp * 1e3)
+@@ -2134,6 +2143,31 @@
+ 		error: "invalid_target"
+ 	});
+ 	const scopes = refreshToken?.scopes;
++	// Authenticate without conflating current client policy with request scope expansion.
++	const client = await validateClientCredentials(ctx, opts, client_id, client_secret, void 0, preVerified, "refresh_token", authMethod);
++	if (!scopes.includes("offline_access")) throw new APIError("BAD_REQUEST", {
++		error_description: "stored grant cannot refresh",
++		error: "invalid_grant"
++	});
++	// Validate the stored grant independently of any scope reduction in this request.
++	let storedPolicy;
++	try {
++		storedPolicy = await resolveResourcePolicy(ctx, opts, {
++			resource: refreshToken.resources,
++			clientId: client.clientId,
++			requestedScopes: scopes
++		});
++	} catch (error) {
++		if (error instanceof APIError && error.body?.error === "invalid_scope") throw new APIError("BAD_REQUEST", {
++			error_description: "stored grant scopes are not allowed for this resource",
++			error: "invalid_grant"
++		});
++		throw error;
++	}
++	if (!storedPolicy.effectiveScopes.includes("offline_access")) throw new APIError("BAD_REQUEST", {
++		error_description: "stored grant cannot refresh for this resource",
++		error: "invalid_grant"
++	});
+ 	const requestedScopes = scope?.split(" ");
+ 	if (requestedScopes) {
+ 		const validScopes = new Set(scopes);
+@@ -2142,7 +2176,7 @@
+ 			error: "invalid_scope"
+ 		});
+ 	}
+-	const client = await validateClientCredentials(ctx, opts, client_id, client_secret, requestedScopes ?? scopes, preVerified, "refresh_token", authMethod);
++	validateClientScopes(client, requestedScopes ?? scopes);
+ 	if (refreshToken.revoked) {
+ 		if (isWithinRefreshTokenReuseInterval(refreshToken)) {
+ 			const replay = await getRefreshTokenRotationReplay(ctx, refreshToken, await resolveRefreshTokenRotationReplayRequest(ctx, opts, {
 diff --git a/dist/oauth-1Ud-hvZY.d.mts b/dist/oauth-1Ud-hvZY.d.mts
 index 130fd5d8f3ddd36d1b776338367af5b8cb7f0e79..e44e3a50806c1d72a885841319a68145c274f579 100644
 --- a/dist/oauth-1Ud-hvZY.d.mts

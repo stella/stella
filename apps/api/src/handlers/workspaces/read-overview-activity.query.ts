@@ -26,7 +26,6 @@ import type {
 import type { Transaction } from "@/api/db/root";
 import type { SafeDbError } from "@/api/db/safe-db";
 import {
-  auditActivityActionSql,
   auditLogs,
   auditRelationshipChangeSql,
   contacts,
@@ -36,10 +35,16 @@ import {
   fields,
 } from "@/api/db/schema";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import {
+  auditReadActivityActionSql,
+  auditReadChangesSql,
+} from "@/api/lib/audit-log-details";
+import type { AuditReadContext } from "@/api/lib/audit-log-details";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import { createCursorPage } from "@/api/lib/pagination";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import {
@@ -74,14 +79,24 @@ const contactSnapshotAuditLogs = alias(
 
 type ActivityCategory = Exclude<MatterActivityCategory, "all">;
 
-const legacyEntityKind = () =>
-  sql<string>`coalesce(
+const createEntitySnapshotExpressions = (context: AuditReadContext) => {
+  const projectedChanges = auditReadChangesSql(context, auditLogs);
+  const projectedVersionChanges = auditReadChangesSql(
+    context,
+    versionSnapshotAuditLogs,
+  );
+  const projectedEntityChanges = auditReadChangesSql(
+    context,
+    entitySnapshotAuditLogs,
+  );
+  const legacyEntityKind = () =>
+    sql<string>`coalesce(
     ${auditLogs.metadata} ->> 'kind',
-    ${auditLogs.changes} -> 'created' -> 'new' ->> 'kind',
-    ${auditLogs.changes} -> 'deleted' -> 'old' ->> 'kind'
+    ${projectedChanges} -> 'created' -> 'new' ->> 'kind',
+    ${projectedChanges} -> 'deleted' -> 'old' ->> 'kind'
   )`;
 
-const legacyEntityVersionIdText = () => sql<string>`coalesce(
+  const legacyEntityVersionIdText = () => sql<string>`coalesce(
   nullif(${auditLogs.metadata} ->> 'entityVersionId', ''),
   case
     when ${auditLogs.resourceType} = ${AUDIT_RESOURCE_TYPE.ENTITY_VERSION}
@@ -91,21 +106,21 @@ const legacyEntityVersionIdText = () => sql<string>`coalesce(
   end
 )`;
 
-const auditEntityIdSnapshot = () => sql<string | null>`coalesce(
+  const auditEntityIdSnapshot = () => sql<string | null>`coalesce(
   ${auditLogs.metadata} ->> 'entityId',
-  ${auditLogs.changes} -> 'created' -> 'new' ->> 'entityId',
-  ${auditLogs.changes} -> 'deleted' -> 'old' ->> 'entityId',
+  ${projectedChanges} -> 'created' -> 'new' ->> 'entityId',
+  ${projectedChanges} -> 'deleted' -> 'old' ->> 'entityId',
   case
     when ${auditLogs.resourceType} = ${AUDIT_RESOURCE_TYPE.ENTITY}
       then ${auditLogs.resourceId}
   end
 )`;
 
-const siblingVersionEntityIdSnapshot = () => sql<string | null>`(
+  const siblingVersionEntityIdSnapshot = () => sql<string | null>`(
   select coalesce(
     ${versionSnapshotAuditLogs.metadata} ->> 'entityId',
-    ${versionSnapshotAuditLogs.changes} -> 'created' -> 'new' ->> 'entityId',
-    ${versionSnapshotAuditLogs.changes} -> 'deleted' -> 'old' ->> 'entityId'
+    ${projectedVersionChanges} -> 'created' -> 'new' ->> 'entityId',
+    ${projectedVersionChanges} -> 'deleted' -> 'old' ->> 'entityId'
   )
   from ${auditLogs} as "version_snapshot_audit_logs"
   where ${versionSnapshotAuditLogs.organizationId} = ${auditLogs.organizationId}
@@ -115,41 +130,41 @@ const siblingVersionEntityIdSnapshot = () => sql<string | null>`(
     and ${versionSnapshotAuditLogs.resourceId} = ${auditLogs.resourceId}
     and coalesce(
       ${versionSnapshotAuditLogs.metadata} ->> 'entityId',
-      ${versionSnapshotAuditLogs.changes} -> 'created' -> 'new' ->> 'entityId',
-      ${versionSnapshotAuditLogs.changes} -> 'deleted' -> 'old' ->> 'entityId'
+      ${projectedVersionChanges} -> 'created' -> 'new' ->> 'entityId',
+      ${projectedVersionChanges} -> 'deleted' -> 'old' ->> 'entityId'
     ) is not null
   order by ${versionSnapshotAuditLogs.createdAt}, ${versionSnapshotAuditLogs.id}
   limit 1
 )`;
 
-const resolvedAuditEntityIdSnapshot = () => sql<string | null>`coalesce(
+  const resolvedAuditEntityIdSnapshot = () => sql<string | null>`coalesce(
   ${auditEntityIdSnapshot()},
   ${siblingVersionEntityIdSnapshot()}
 )`;
 
-const auditEntityNameSnapshot = () => sql<string | null>`coalesce(
+  const auditEntityNameSnapshot = () => sql<string | null>`coalesce(
   ${auditLogs.metadata} ->> 'entityName',
   ${auditLogs.metadata} ->> 'fileName',
-  ${auditLogs.changes} -> 'created' -> 'new' ->> 'name',
-  ${auditLogs.changes} -> 'created' -> 'new' ->> 'fileName',
-  ${auditLogs.changes} -> 'deleted' -> 'old' ->> 'fileName',
-  ${auditLogs.changes} -> 'deleted' -> 'old' ->> 'name'
+  ${projectedChanges} -> 'created' -> 'new' ->> 'name',
+  ${projectedChanges} -> 'created' -> 'new' ->> 'fileName',
+  ${projectedChanges} -> 'deleted' -> 'old' ->> 'fileName',
+  ${projectedChanges} -> 'deleted' -> 'old' ->> 'name'
 )`;
 
-const auditEntityMimeTypeSnapshot = () => sql<string | null>`coalesce(
+  const auditEntityMimeTypeSnapshot = () => sql<string | null>`coalesce(
   ${auditLogs.metadata} ->> 'mimeType',
-  ${auditLogs.changes} -> 'created' -> 'new' ->> 'mimeType',
-  ${auditLogs.changes} -> 'deleted' -> 'old' ->> 'mimeType'
+  ${projectedChanges} -> 'created' -> 'new' ->> 'mimeType',
+  ${projectedChanges} -> 'deleted' -> 'old' ->> 'mimeType'
 )`;
 
-const siblingVersionEntityNameSnapshot = () => sql<string | null>`(
+  const siblingVersionEntityNameSnapshot = () => sql<string | null>`(
   select coalesce(
     ${versionSnapshotAuditLogs.metadata} ->> 'entityName',
     ${versionSnapshotAuditLogs.metadata} ->> 'fileName',
-    ${versionSnapshotAuditLogs.changes} -> 'created' -> 'new' ->> 'name',
-    ${versionSnapshotAuditLogs.changes} -> 'created' -> 'new' ->> 'fileName',
-    ${versionSnapshotAuditLogs.changes} -> 'deleted' -> 'old' ->> 'fileName',
-    ${versionSnapshotAuditLogs.changes} -> 'deleted' -> 'old' ->> 'name'
+    ${projectedVersionChanges} -> 'created' -> 'new' ->> 'name',
+    ${projectedVersionChanges} -> 'created' -> 'new' ->> 'fileName',
+    ${projectedVersionChanges} -> 'deleted' -> 'old' ->> 'fileName',
+    ${projectedVersionChanges} -> 'deleted' -> 'old' ->> 'name'
   )
   from ${auditLogs} as "version_snapshot_audit_logs"
   where ${versionSnapshotAuditLogs.organizationId} = ${auditLogs.organizationId}
@@ -160,31 +175,31 @@ const siblingVersionEntityNameSnapshot = () => sql<string | null>`(
     and coalesce(
       ${versionSnapshotAuditLogs.metadata} ->> 'entityName',
       ${versionSnapshotAuditLogs.metadata} ->> 'fileName',
-      ${versionSnapshotAuditLogs.changes} -> 'created' -> 'new' ->> 'name',
-      ${versionSnapshotAuditLogs.changes} -> 'created' -> 'new' ->> 'fileName',
-      ${versionSnapshotAuditLogs.changes} -> 'deleted' -> 'old' ->> 'fileName',
-      ${versionSnapshotAuditLogs.changes} -> 'deleted' -> 'old' ->> 'name'
+      ${projectedVersionChanges} -> 'created' -> 'new' ->> 'name',
+      ${projectedVersionChanges} -> 'created' -> 'new' ->> 'fileName',
+      ${projectedVersionChanges} -> 'deleted' -> 'old' ->> 'fileName',
+      ${projectedVersionChanges} -> 'deleted' -> 'old' ->> 'name'
     ) is not null
   order by ${versionSnapshotAuditLogs.createdAt}, ${versionSnapshotAuditLogs.id}
   limit 1
 )`;
 
-const siblingDeletedEntityKind = () => sql<string | null>`(
-  select ${entitySnapshotAuditLogs.changes} -> 'deleted' -> 'old' ->> 'kind'
+  const siblingDeletedEntityKind = () => sql<string | null>`(
+  select ${projectedEntityChanges} -> 'deleted' -> 'old' ->> 'kind'
   from ${auditLogs} as "entity_snapshot_audit_logs"
   where ${entitySnapshotAuditLogs.organizationId} = ${auditLogs.organizationId}
     and ${entitySnapshotAuditLogs.workspaceId} = ${auditLogs.workspaceId}
     and ${entitySnapshotAuditLogs.resourceType} = ${AUDIT_RESOURCE_TYPE.ENTITY}
     and ${entitySnapshotAuditLogs.resourceId} = ${resolvedAuditEntityIdSnapshot()}
-    and ${entitySnapshotAuditLogs.changes} -> 'deleted' -> 'old' ->> 'kind' is not null
+    and ${projectedEntityChanges} -> 'deleted' -> 'old' ->> 'kind' is not null
   order by ${entitySnapshotAuditLogs.createdAt} desc, ${entitySnapshotAuditLogs.id} desc
   limit 1
 )`;
 
-const siblingDeletedEntityName = () => sql<string | null>`(
+  const siblingDeletedEntityName = () => sql<string | null>`(
   select coalesce(
-    ${entitySnapshotAuditLogs.changes} -> 'deleted' -> 'old' ->> 'fileName',
-    ${entitySnapshotAuditLogs.changes} -> 'deleted' -> 'old' ->> 'name'
+    ${projectedEntityChanges} -> 'deleted' -> 'old' ->> 'fileName',
+    ${projectedEntityChanges} -> 'deleted' -> 'old' ->> 'name'
   )
   from ${auditLogs} as "entity_snapshot_audit_logs"
   where ${entitySnapshotAuditLogs.organizationId} = ${auditLogs.organizationId}
@@ -192,26 +207,26 @@ const siblingDeletedEntityName = () => sql<string | null>`(
     and ${entitySnapshotAuditLogs.resourceType} = ${AUDIT_RESOURCE_TYPE.ENTITY}
     and ${entitySnapshotAuditLogs.resourceId} = ${resolvedAuditEntityIdSnapshot()}
     and coalesce(
-      ${entitySnapshotAuditLogs.changes} -> 'deleted' -> 'old' ->> 'fileName',
-      ${entitySnapshotAuditLogs.changes} -> 'deleted' -> 'old' ->> 'name'
+      ${projectedEntityChanges} -> 'deleted' -> 'old' ->> 'fileName',
+      ${projectedEntityChanges} -> 'deleted' -> 'old' ->> 'name'
     ) is not null
   order by ${entitySnapshotAuditLogs.createdAt} desc, ${entitySnapshotAuditLogs.id} desc
   limit 1
 )`;
 
-const siblingDeletedEntityMimeType = () => sql<string | null>`(
-  select ${entitySnapshotAuditLogs.changes} -> 'deleted' -> 'old' ->> 'mimeType'
+  const siblingDeletedEntityMimeType = () => sql<string | null>`(
+  select ${projectedEntityChanges} -> 'deleted' -> 'old' ->> 'mimeType'
   from ${auditLogs} as "entity_snapshot_audit_logs"
   where ${entitySnapshotAuditLogs.organizationId} = ${auditLogs.organizationId}
     and ${entitySnapshotAuditLogs.workspaceId} = ${auditLogs.workspaceId}
     and ${entitySnapshotAuditLogs.resourceType} = ${AUDIT_RESOURCE_TYPE.ENTITY}
     and ${entitySnapshotAuditLogs.resourceId} = ${resolvedAuditEntityIdSnapshot()}
-    and ${entitySnapshotAuditLogs.changes} -> 'deleted' -> 'old' ->> 'mimeType' is not null
+    and ${projectedEntityChanges} -> 'deleted' -> 'old' ->> 'mimeType' is not null
   order by ${entitySnapshotAuditLogs.createdAt} desc, ${entitySnapshotAuditLogs.id} desc
   limit 1
 )`;
 
-const legacyRelatedEntityKind = () => sql<string | null>`(
+  const legacyRelatedEntityKind = () => sql<string | null>`(
   select ${entities.kind}
   from ${entityVersions}
   inner join ${entities}
@@ -226,7 +241,7 @@ const legacyRelatedEntityKind = () => sql<string | null>`(
   limit 1
 )`;
 
-const legacyDirectEntityKind = () => sql<string | null>`(
+  const legacyDirectEntityKind = () => sql<string | null>`(
   select ${entities.kind}
   from ${entities}
   where ${entities.workspaceId} = ${auditLogs.workspaceId}
@@ -239,67 +254,98 @@ const legacyDirectEntityKind = () => sql<string | null>`(
   limit 1
 )`;
 
-const legacyResourceKind = () =>
-  sql<string>`coalesce(
+  const legacyResourceKind = () =>
+    sql<string>`coalesce(
     ${legacyEntityKind()},
     ${legacyDirectEntityKind()},
     ${siblingDeletedEntityKind()},
     ${legacyRelatedEntityKind()}
   )`;
 
-const taskEntityResourceCondition = () =>
-  and(
-    inArray(auditLogs.resourceType, [
-      AUDIT_RESOURCE_TYPE.ENTITY,
-      AUDIT_RESOURCE_TYPE.ENTITY_VERSION,
-      AUDIT_RESOURCE_TYPE.FIELD,
-    ]),
-    sql`${legacyResourceKind()} = 'task'`,
-  ) ?? sql`false`;
+  return {
+    resolvedAuditEntityIdSnapshot,
+    auditEntityNameSnapshot,
+    auditEntityMimeTypeSnapshot,
+    siblingVersionEntityNameSnapshot,
+    siblingDeletedEntityName,
+    siblingDeletedEntityMimeType,
+    legacyResourceKind,
+  };
+};
 
-const legacyWorkspaceTeamEvent = () =>
-  sql<boolean>`(
-    ${auditLogs.changes} ? 'membersAdded'
-    OR ${auditLogs.changes} ? 'membersRemoved'
+const createActivityExpressions = (context: AuditReadContext) => {
+  const projectedChanges = auditReadChangesSql(context, auditLogs);
+  const projectedContactChanges = auditReadChangesSql(
+    context,
+    contactSnapshotAuditLogs,
+  );
+  const activityColumns = {
+    action: auditLogs.action,
+    resourceType: auditLogs.resourceType,
+    changes: projectedChanges,
+  };
+  const {
+    resolvedAuditEntityIdSnapshot,
+    auditEntityNameSnapshot,
+    auditEntityMimeTypeSnapshot,
+    siblingVersionEntityNameSnapshot,
+    siblingDeletedEntityName,
+    siblingDeletedEntityMimeType,
+    legacyResourceKind,
+  } = createEntitySnapshotExpressions(context);
+  const taskEntityResourceCondition = () =>
+    and(
+      inArray(auditLogs.resourceType, [
+        AUDIT_RESOURCE_TYPE.ENTITY,
+        AUDIT_RESOURCE_TYPE.ENTITY_VERSION,
+        AUDIT_RESOURCE_TYPE.FIELD,
+      ]),
+      sql`${legacyResourceKind()} = 'task'`,
+    ) ?? sql`false`;
+
+  const legacyWorkspaceTeamEvent = () =>
+    sql<boolean>`(
+    ${projectedChanges} ? 'membersAdded'
+    OR ${projectedChanges} ? 'membersRemoved'
   )`;
 
-// True when the audit row's only recorded change is the name, so the client
-// can distinguish a rename from other updates (a move records `parentId`).
-const renameOnlyChange = () => sql<boolean>`coalesce((
-  ${auditLogs.changes} ? 'name'
-  and (select count(*) = 1 from jsonb_object_keys(${auditLogs.changes}))
+  // True when the audit row's only recorded change is the name, so the client
+  // can distinguish a rename from other updates (a move records `parentId`).
+  const renameOnlyChange = () => sql<boolean>`coalesce((
+  ${projectedChanges} ? 'name'
+  and (select count(*) = 1 from jsonb_object_keys(${projectedChanges}))
 ), false)`;
 
-// The reviewed document's name as the run pinned it, so a review whose run
-// row is gone still names what it reviewed.
-const auditReviewDocumentName = () => sql<string | null>`case
+  // The reviewed document's name as the run pinned it, so a review whose run
+  // row is gone still names what it reviewed.
+  const auditReviewDocumentName = () => sql<string | null>`case
   when ${auditLogs.resourceType} = ${AUDIT_RESOURCE_TYPE.DOCUMENT_REVIEW_RUN}
     then ${auditLogs.metadata} ->> 'documentName'
   else null
 end`;
 
-const auditCorrespondenceSubject = () => sql<string | null>`case
+  const auditCorrespondenceSubject = () => sql<string | null>`case
   when ${auditLogs.resourceType} = ${AUDIT_RESOURCE_TYPE.CORRESPONDENCE}
     then coalesce(
       ${auditLogs.metadata} ->> 'subject',
-      ${auditLogs.changes} -> 'subject' ->> 'new',
-      ${auditLogs.changes} -> 'subject' ->> 'old',
-      ${auditLogs.changes} -> 'created' -> 'new' ->> 'subject',
-      ${auditLogs.changes} -> 'deleted' -> 'old' ->> 'subject'
+      ${projectedChanges} -> 'subject' ->> 'new',
+      ${projectedChanges} -> 'subject' ->> 'old',
+      ${projectedChanges} -> 'created' -> 'new' ->> 'subject',
+      ${projectedChanges} -> 'deleted' -> 'old' ->> 'subject'
     )
   else null
 end`;
 
-const teamContactIdSnapshot = () => sql<string | null>`case
+  const teamContactIdSnapshot = () => sql<string | null>`case
   when ${auditLogs.resourceType} = ${AUDIT_RESOURCE_TYPE.WORKSPACE_CONTACT}
     then coalesce(
-      ${auditLogs.changes} -> 'created' -> 'new' ->> 'contactId',
-      ${auditLogs.changes} -> 'deleted' -> 'old' ->> 'contactId'
+      ${projectedChanges} -> 'created' -> 'new' ->> 'contactId',
+      ${projectedChanges} -> 'deleted' -> 'old' ->> 'contactId'
     )
   else null
 end`;
 
-const teamContactNameSnapshot = () => sql<string | null>`coalesce(
+  const teamContactNameSnapshot = () => sql<string | null>`coalesce(
   (
     select ${contacts.displayName}
     from ${contacts}
@@ -312,7 +358,7 @@ const teamContactNameSnapshot = () => sql<string | null>`coalesce(
     limit 1
   ),
   (
-    select ${contactSnapshotAuditLogs.changes} -> 'deleted' -> 'old' ->> 'displayName'
+    select ${projectedContactChanges} -> 'deleted' -> 'old' ->> 'displayName'
     from ${auditLogs} as "contact_snapshot_audit_logs"
     where ${contactSnapshotAuditLogs.organizationId} = ${auditLogs.organizationId}
       and ${contactSnapshotAuditLogs.workspaceId} is null
@@ -323,92 +369,113 @@ const teamContactNameSnapshot = () => sql<string | null>`coalesce(
   )
 )`;
 
-const teamUserIdSnapshot = () => sql<string | null>`case
+  const teamUserIdSnapshot = () => sql<string | null>`case
   when ${auditLogs.resourceType} = ${AUDIT_RESOURCE_TYPE.WORKSPACE_MEMBER}
     then coalesce(
-      ${auditLogs.changes} -> 'created' -> 'new' ->> 'userId',
-      ${auditLogs.changes} -> 'deleted' -> 'old' ->> 'userId'
+      ${projectedChanges} -> 'created' -> 'new' ->> 'userId',
+      ${projectedChanges} -> 'deleted' -> 'old' ->> 'userId'
     )
   when ${auditLogs.resourceType} = ${AUDIT_RESOURCE_TYPE.WORKSPACE}
     and jsonb_array_length(
       case
-        when jsonb_typeof(${auditLogs.changes} -> 'membersAdded' -> 'new') = 'array'
-          then ${auditLogs.changes} -> 'membersAdded' -> 'new'
+        when jsonb_typeof(${projectedChanges} -> 'membersAdded' -> 'new') = 'array'
+          then ${projectedChanges} -> 'membersAdded' -> 'new'
         else '[]'::jsonb
       end
     ) = 1
-    then ${auditLogs.changes} -> 'membersAdded' -> 'new' ->> 0
+    then ${projectedChanges} -> 'membersAdded' -> 'new' ->> 0
   else null
 end`;
 
-const legacyCategoryCondition = (category: ActivityCategory): SQL => {
-  switch (category) {
-    case "documents":
-      return (
-        or(
-          eq(auditLogs.resourceType, AUDIT_RESOURCE_TYPE.USER_FILE),
+  const legacyCategoryCondition = (category: ActivityCategory): SQL => {
+    switch (category) {
+      case "documents":
+        return (
+          or(
+            eq(auditLogs.resourceType, AUDIT_RESOURCE_TYPE.USER_FILE),
+            and(
+              inArray(auditLogs.resourceType, [
+                AUDIT_RESOURCE_TYPE.ENTITY,
+                AUDIT_RESOURCE_TYPE.ENTITY_VERSION,
+                AUDIT_RESOURCE_TYPE.FIELD,
+              ]),
+              sql`coalesce(${legacyResourceKind()}, '') <> 'task'`,
+            ),
+          ) ?? sql`false`
+        );
+      case "tasks":
+        return (
           and(
             inArray(auditLogs.resourceType, [
               AUDIT_RESOURCE_TYPE.ENTITY,
               AUDIT_RESOURCE_TYPE.ENTITY_VERSION,
               AUDIT_RESOURCE_TYPE.FIELD,
             ]),
-            sql`coalesce(${legacyResourceKind()}, '') <> 'task'`,
-          ),
-        ) ?? sql`false`
-      );
-    case "tasks":
-      return (
-        and(
-          inArray(auditLogs.resourceType, [
-            AUDIT_RESOURCE_TYPE.ENTITY,
-            AUDIT_RESOURCE_TYPE.ENTITY_VERSION,
-            AUDIT_RESOURCE_TYPE.FIELD,
-          ]),
-          sql`${legacyResourceKind()} = 'task'`,
-        ) ?? sql`false`
-      );
-    case "matter":
-      return (
-        and(
-          eq(auditLogs.resourceType, AUDIT_RESOURCE_TYPE.WORKSPACE),
-          sql`NOT ${legacyWorkspaceTeamEvent()}`,
-        ) ?? sql`false`
-      );
-    case "team":
-      return (
-        or(
-          inArray(auditLogs.resourceType, [
-            AUDIT_RESOURCE_TYPE.WORKSPACE_MEMBER,
-            AUDIT_RESOURCE_TYPE.WORKSPACE_CONTACT,
-          ]),
+            sql`${legacyResourceKind()} = 'task'`,
+          ) ?? sql`false`
+        );
+      case "matter":
+        return (
           and(
             eq(auditLogs.resourceType, AUDIT_RESOURCE_TYPE.WORKSPACE),
-            legacyWorkspaceTeamEvent(),
-          ),
-        ) ?? sql`false`
-      );
-    case "court":
-      return eq(
-        auditLogs.resourceType,
-        AUDIT_RESOURCE_TYPE.CASE_LAW_MATTER_LINK,
-      );
-    case "automation":
-      return eq(auditLogs.resourceType, AUDIT_RESOURCE_TYPE.FLOW_RUN);
-    case "correspondence":
-      return eq(auditLogs.resourceType, AUDIT_RESOURCE_TYPE.CORRESPONDENCE);
-    default: {
-      category satisfies never;
-      return panic(`Unhandled category: ${String(category)}`);
+            sql`NOT ${legacyWorkspaceTeamEvent()}`,
+          ) ?? sql`false`
+        );
+      case "team":
+        return (
+          or(
+            inArray(auditLogs.resourceType, [
+              AUDIT_RESOURCE_TYPE.WORKSPACE_MEMBER,
+              AUDIT_RESOURCE_TYPE.WORKSPACE_CONTACT,
+            ]),
+            and(
+              eq(auditLogs.resourceType, AUDIT_RESOURCE_TYPE.WORKSPACE),
+              legacyWorkspaceTeamEvent(),
+            ),
+          ) ?? sql`false`
+        );
+      case "court":
+        return eq(
+          auditLogs.resourceType,
+          AUDIT_RESOURCE_TYPE.CASE_LAW_MATTER_LINK,
+        );
+      case "automation":
+        return eq(auditLogs.resourceType, AUDIT_RESOURCE_TYPE.FLOW_RUN);
+      case "correspondence":
+        return eq(auditLogs.resourceType, AUDIT_RESOURCE_TYPE.CORRESPONDENCE);
+      default: {
+        category satisfies never;
+        return panic(`Unhandled category: ${String(category)}`);
+      }
     }
-  }
-};
+  };
 
-const activityActionCondition = (action: MatterActivityAction): SQL => {
-  if (action === "all") {
-    return sql`true`;
-  }
-  return sql`${auditActivityActionSql(auditLogs)} = ${action}`;
+  const activityActionCondition = (action: MatterActivityAction): SQL => {
+    if (action === "all") {
+      return sql`true`;
+    }
+    return sql`${auditReadActivityActionSql()} = ${action}`;
+  };
+
+  return {
+    resolvedAuditEntityIdSnapshot,
+    auditEntityNameSnapshot,
+    auditEntityMimeTypeSnapshot,
+    siblingVersionEntityNameSnapshot,
+    siblingDeletedEntityName,
+    siblingDeletedEntityMimeType,
+    legacyResourceKind,
+    taskEntityResourceCondition,
+    legacyWorkspaceTeamEvent,
+    renameOnlyChange,
+    auditReviewDocumentName,
+    auditCorrespondenceSubject,
+    teamContactNameSnapshot,
+    teamUserIdSnapshot,
+    legacyCategoryCondition,
+    activityActionCondition,
+    activityColumns,
+  };
 };
 
 const activityCursor = createTimestampIdCursorCodec({
@@ -502,6 +569,8 @@ type ActivityReadTransaction = Pick<
 > & { query: Pick<Transaction["query"], "workspaces"> };
 
 type ReadOverviewActivityPageOptions = {
+  featureAccessSnapshot: FeatureAccessSnapshot | undefined;
+  userId: string | null;
   cursor: string | null;
   filters: MatterActivityFilters;
   limit: number;
@@ -547,6 +616,8 @@ const normalizeActivityReadWindow = (
 const readOverviewActivity = async ({
   read,
   filters,
+  featureAccessSnapshot,
+  userId,
   organizationId,
   safeDb,
   workspaceId,
@@ -554,6 +625,28 @@ const readOverviewActivity = async ({
   Result<MatterActivityPage, HandlerError | SafeDbError>
 > =>
   await Result.gen(async function* () {
+    const {
+      resolvedAuditEntityIdSnapshot,
+      auditEntityNameSnapshot,
+      auditEntityMimeTypeSnapshot,
+      siblingVersionEntityNameSnapshot,
+      siblingDeletedEntityName,
+      siblingDeletedEntityMimeType,
+      legacyResourceKind,
+      taskEntityResourceCondition,
+      legacyWorkspaceTeamEvent,
+      renameOnlyChange,
+      auditReviewDocumentName,
+      auditCorrespondenceSubject,
+      teamContactNameSnapshot,
+      teamUserIdSnapshot,
+      legacyCategoryCondition,
+      activityActionCondition,
+      activityColumns,
+    } = createActivityExpressions({
+      featureAccessSnapshot,
+      principal: { organizationId, userId },
+    });
     const { limit, cursorValue } = normalizeActivityReadWindow(read);
     const fromDate =
       filters.from === null ? null : timestampMicroseconds(filters.from);
@@ -688,7 +781,7 @@ const readOverviewActivity = async ({
             resourceId: auditLogs.resourceId,
             resourceType: auditLogs.resourceType,
             reviewDocumentNameSnapshot: auditReviewDocumentName(),
-            relationshipChange: auditRelationshipChangeSql(auditLogs),
+            relationshipChange: auditRelationshipChangeSql(activityColumns),
             renameOnly: renameOnlyChange(),
             runId: auditLogs.runId,
             triggerSource: auditLogs.triggerSource,

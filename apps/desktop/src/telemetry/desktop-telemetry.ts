@@ -6,6 +6,7 @@ export const DESKTOP_TELEMETRY_WINDOWS = {
   main: "main",
   selfHostConnectDialog: "selfHostConnectDialog",
   takeoverDialog: "takeoverDialog",
+  activity: "activity",
 } as const;
 
 export const DESKTOP_TELEMETRY_OPERATIONS = {
@@ -23,6 +24,9 @@ export const DESKTOP_TELEMETRY_OPERATIONS = {
   registryConnectionSubscribe: "registryConnectionSubscribe",
   render: "render",
   runtime: "runtime",
+  activityRead: "activityRead",
+  activitySubscribe: "activitySubscribe",
+  activityUpdate: "activityUpdate",
 } as const;
 
 export const DESKTOP_TELEMETRY_ERROR_CODES = {
@@ -378,6 +382,8 @@ export const desktopTelemetryWindowFromLabel = (
       return DESKTOP_TELEMETRY_WINDOWS.selfHostConnectDialog;
     case "takeover-dialog":
       return DESKTOP_TELEMETRY_WINDOWS.takeoverDialog;
+    case "activity":
+      return DESKTOP_TELEMETRY_WINDOWS.activity;
     default:
       reportDesktopError({
         code: DESKTOP_TELEMETRY_ERROR_CODES.windowLabelMismatch,

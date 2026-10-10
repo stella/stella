@@ -11,6 +11,8 @@ import {
   test,
 } from "bun:test";
 
+import { sha256Base64 as hashSha256Base64 } from "@stll/sha256/node";
+
 import { getS3 } from "@/api/lib/s3";
 import {
   copyObject,
@@ -36,9 +38,6 @@ import type { S3SigningScope } from "@/api/lib/s3-presign";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 
-const sha256Base64 = (data: string): string =>
-  new Bun.CryptoHasher("sha256").update(data).digest("base64");
-
 const parseSignedHeaders = (url: string): Set<string> => {
   const parsed = new URL(url);
   const raw = parsed.searchParams.get("X-Amz-SignedHeaders");
@@ -49,7 +48,7 @@ const parseSignedHeaders = (url: string): Set<string> => {
 };
 
 const HELLO_BODY = "hello";
-const HELLO_SHA256_BASE64 = sha256Base64(HELLO_BODY);
+const HELLO_SHA256_BASE64 = hashSha256Base64(HELLO_BODY);
 const HELLO_BYTES = new TextEncoder().encode(HELLO_BODY);
 
 describe("isS3KeyInSigningScope", () => {
@@ -167,7 +166,7 @@ describe("presignUploadUrl", () => {
       expiresIn: 60,
       contentType: "text/plain",
       contentLength: 1,
-      sha256Base64: sha256Base64("x"),
+      sha256Base64: hashSha256Base64("x"),
     });
     expect(Result.isOk(result)).toBe(true);
     if (!Result.isOk(result)) {

@@ -73,6 +73,11 @@ export default {
     names: MODEL_REQUEST_NAMES,
     allowed: [
       {
+        path: "apps/api/src/handlers/chat/messages/revisions/span-edit.ts",
+        reason:
+          "Proposes an answer rewrite from stored content; reads the thread send mode after loading the answer and refuses anonymized threads.",
+      },
+      {
         path: "apps/api/src/handlers/chat/stream-chat.ts",
         reason:
           "The chat turn: messages, system text, tools and resumed payloads pass through the turn's third-party boundary right before the request.",

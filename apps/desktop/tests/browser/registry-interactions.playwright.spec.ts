@@ -95,6 +95,7 @@ const SNAPSHOT = {
 type Connection =
   | { status: "disconnected" }
   | { status: "expired" }
+  | { status: "reconnectRequired" }
   | ({
       status: "connected";
       accountLabel: string;
@@ -108,7 +109,8 @@ type BoundaryMode =
   | "reject-first-state"
   | "defer-first-state"
   | "reject-first-connect"
-  | "reject-first-activity";
+  | "reject-first-activity"
+  | "reject-disconnect";
 type BoundaryOptions = {
   mode?: BoundaryMode;
   welcome?: boolean;
@@ -116,8 +118,8 @@ type BoundaryOptions = {
 };
 const SETTINGS_SNAPSHOT = {
   bridgePort: 45_901,
-  bridgeVersion: 17,
-  capabilities: ["office-edit.v1", "self-host.connect", "account-link.v4"],
+  bridgeVersion: 19,
+  capabilities: ["office-edit.v1", "self-host.connect", "account-link.v5"],
   notificationPreferences: {
     documentReady: true,
     revisionCreated: true,
@@ -244,6 +246,7 @@ const installNativeBoundary = async (
       let stateCount = 0;
       let connectCount = 0;
       let activityCount = 0;
+      let telemetryEnabled = true;
       let resolveFirstState: ((value: Connection) => void) | null = null;
       let currentConnection = initialConnection;
       let resolveFirstSearch:
@@ -269,6 +272,11 @@ const installNativeBoundary = async (
         invoke: async (command: string, args: Record<string, unknown> = {}) => {
           invocations.push({ args, command });
           switch (command) {
+            case "account_disconnect":
+              if (initialMode === "reject-disconnect") {
+                throw new TypeError("Deliberate disconnect failure");
+              }
+              return undefined;
             case "account_record_use":
               activityCount += 1;
               if (Object.keys(args).length !== 0) {
@@ -282,6 +290,15 @@ const installNativeBoundary = async (
                 throw new TypeError("Deliberate account activity failure");
               }
               return null;
+            case "get_desktop_telemetry_enabled":
+              return telemetryEnabled;
+            case "set_desktop_telemetry_enabled":
+              if (typeof args["enabled"] !== "boolean") {
+                unexpected.push("set_desktop_telemetry_enabled arguments");
+                throw new TypeError("Reporting preference must be a boolean");
+              }
+              telemetryEnabled = args["enabled"];
+              return telemetryEnabled;
             case "get_desktop_language":
               return navigator.language === "ar" ? "ar" : "en";
             case "clipboard_get_snapshot":
@@ -309,7 +326,6 @@ const installNativeBoundary = async (
             case "desktop_report_timing":
             case "desktop_report_error":
             case "clipboard_hide":
-            case "account_disconnect":
             case "registry_copy":
             case "registry_open_company_format":
               return undefined;
@@ -1238,7 +1254,12 @@ for (const language of ["en", "ar"] as const) {
       await expect(welcome).toBeVisible();
     });
 
-    for (const status of ["connected", "disconnected", "expired"] as const) {
+    for (const status of [
+      "connected",
+      "disconnected",
+      "expired",
+      "reconnectRequired",
+    ] as const) {
       test(`${status} welcome can finish without linking or opening an account`, async ({
         page,
       }) => {
@@ -1311,6 +1332,42 @@ for (const language of ["en", "ar"] as const) {
       await expect(welcome).toBeVisible();
     });
 
+    test("Settings can disable and re-enable crash and error reporting", async ({
+      page,
+    }) => {
+      await installNativeBoundary(page, connected(), { settings: true });
+      await page.goto("/#general");
+      const reporting = page.getByRole("switch", {
+        name: messages.settings.sendCrashReports,
+        exact: true,
+      });
+      await expect(reporting).toBeEnabled();
+      await expect(reporting).toBeChecked();
+      await expect(
+        page.getByText(messages.settings.sendCrashReportsDescription, {
+          exact: true,
+        }),
+      ).toBeVisible();
+      await reporting.click();
+      await expect(reporting).not.toBeChecked();
+      await expect(reporting).toBeEnabled();
+      await reporting.click();
+      await expect(reporting).toBeChecked();
+      await expect
+        .poll(async () =>
+          (await readInvocations(page)).filter(
+            ({ command }) => command === "set_desktop_telemetry_enabled",
+          ),
+        )
+        .toEqual([
+          {
+            command: "set_desktop_telemetry_enabled",
+            args: { enabled: false },
+          },
+          { command: "set_desktop_telemetry_enabled", args: { enabled: true } },
+        ]);
+    });
+
     test("expired Settings shows an expiry badge and offers reconnect", async ({
       page,
     }) => {
@@ -1374,6 +1431,78 @@ for (const language of ["en", "ar"] as const) {
         )
         .toEqual([{ command: "open_stella_account", args: {} }]);
     });
+
+    for (const surface of ["welcome", "settings", "registry"] as const) {
+      for (const mode of ["normal", "reject-disconnect"] as const) {
+        test(`${surface} missing device key reconnect ${mode} clears credentials before opening the account`, async ({
+          page,
+        }) => {
+          await installNativeBoundary(
+            page,
+            { status: "reconnectRequired" },
+            {
+              mode,
+              welcome: surface === "welcome",
+              settings: surface === "settings",
+            },
+          );
+          await page.goto(surface === "settings" ? "/#general" : "/");
+          if (surface === "registry") {
+            await activateRegistry(page, "Synthetic company");
+            expect(await searches(page)).toEqual([]);
+          }
+          const area = surface === "welcome" ? page.getByRole("dialog") : page;
+          if (surface === "settings") {
+            await expect(
+              page.getByText(messages.settings.notConnected, { exact: true }),
+            ).toBeVisible();
+          }
+          await area
+            .getByRole("button", {
+              name: messages.settings.reconnectToStella,
+              exact: true,
+            })
+            .click();
+          const accountActions = async () =>
+            (await readInvocations(page)).filter(
+              ({ command }) =>
+                command === "account_disconnect" ||
+                command === "open_stella_account",
+            );
+          if (mode === "normal") {
+            await expect.poll(accountActions).toEqual([
+              { command: "account_disconnect", args: {} },
+              { command: "open_stella_account", args: {} },
+            ]);
+          } else {
+            const error =
+              surface === "settings"
+                ? "Deliberate disconnect failure"
+                : messages.clipboard.registryErrorConnect;
+            if (surface === "settings") {
+              await expect(
+                page.getByText(error, { exact: true }),
+              ).toBeVisible();
+            } else {
+              await expect(area.getByRole("alert")).toHaveText(error);
+            }
+            expect(await accountActions()).toEqual([
+              { command: "account_disconnect", args: {} },
+            ]);
+            await expect(
+              area.getByRole("button", {
+                name: messages.settings.reconnectToStella,
+                exact: true,
+              }),
+            ).toBeVisible();
+          }
+          expect(await searches(page)).toEqual([]);
+          if (surface === "welcome") {
+            await expect(page.getByRole("dialog")).toBeVisible();
+          }
+        });
+      }
+    }
 
     test("connected welcome omits the connect prompt", async ({ page }) => {
       await installNativeBoundary(page, connected(), { welcome: true });

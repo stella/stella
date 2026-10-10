@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
 
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { Block } from "@stll/legal-ast/document-ast";
+import { assertProperty } from "@stll/property-testing";
 
 import type { DecisionCitationDigest } from "@/api/handlers/case-law/decisions/citation-digest";
 import type { RankedRelatedDecision } from "@/api/handlers/case-law/decisions/citation-graph";
@@ -13,6 +15,7 @@ import { locateDecisionBlocks } from "@/api/mcp/case-law-decision-outline";
 import {
   citationSummaryOutput,
   compactDecisionMetadata,
+  decisionTextAllowances,
   decisionParagraphs,
   decisionTextVersion,
   pageOfOffset,
@@ -23,6 +26,45 @@ import {
   textPageStarts,
   TOP_CITING_DECISIONS,
 } from "@/api/mcp/case-law-decision-read";
+
+test("decision text allowances give unused shares only to documents they complete, in input order", () => {
+  expect(decisionTextAllowances([100, 1, 100], 90)).toEqual([30, 1, 30]);
+  expect(decisionTextAllowances([50, 1, 100], 90)).toEqual([50, 1, 30]);
+  expect(decisionTextAllowances([40, 40, 1], 90)).toEqual([40, 40, 1]);
+  // Two documents compete for the same remainder: the earlier one wins.
+  expect(decisionTextAllowances([50, 1, 50], 90)).toEqual([50, 1, 30]);
+});
+
+test("decision text allowances keep a truncated document on the even share", () => {
+  assertProperty(
+    "decision text allowances keep a truncated document on the even share",
+    fc.property(
+      fc.array(fc.integer({ min: 0, max: 100_000 }), {
+        minLength: 1,
+        maxLength: 50,
+      }),
+      fc.integer({ min: 1, max: 200_000 }),
+      (lengths, cap) => {
+        const allowances = decisionTextAllowances(lengths, cap);
+        expect(allowances).toEqual(decisionTextAllowances(lengths, cap));
+        expect(
+          allowances.reduce((sum, value) => sum + value, 0),
+        ).toBeLessThanOrEqual(cap);
+        expect(
+          allowances.every((value, index) => value <= (lengths[index] ?? 0)),
+        ).toBe(true);
+        // A truncated document's window depends only on the cap and the batch
+        // size, so its continuation pages stay aligned when siblings change.
+        const share = Math.floor(cap / lengths.length);
+        for (const [index, value] of allowances.entries()) {
+          if (value < (lengths[index] ?? 0)) {
+            expect(value).toBe(share);
+          }
+        }
+      },
+    ),
+  );
+});
 
 const decisionId = (n: number) =>
   brandPersistedCaseLawDecisionId(
@@ -39,6 +81,8 @@ const related = (
   citationAuthority: 0,
   country: "CZE",
   court: "Nejvyšší soud",
+  courtAbbreviation: "NS",
+  sourceUrl: null,
   decisionDate: "2020-01-01",
   decisionType: "rozsudek",
   ecli: null,
@@ -270,6 +314,7 @@ describe("citation summary", () => {
         `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`,
       ),
       citationText,
+      textWithheldReason: null,
       sectionIndex: n,
       treatment: "unclassified" as const,
       decision,
@@ -288,8 +333,8 @@ describe("citation summary", () => {
       appUrlOf,
     );
     expect(summary.cites.decisions).toEqual([
-      { citation: "sp. zn. 29 Odo 1/2001" },
-      { citation: "29 Odo 1/2001" },
+      { citation: "sp. zn. 29 Odo 1/2001", textWithheldReason: null },
+      { citation: "29 Odo 1/2001", textWithheldReason: null },
       {
         caseNumber: "5 Cdo 5/2020",
         decisionId: decisionId(5),
@@ -297,6 +342,29 @@ describe("citation summary", () => {
       },
     ]);
     expect(summary.cites.more).toBe(true);
+  });
+
+  test("restricted unresolved citation text is represented only by its marker", () => {
+    const summary = citationSummaryOutput(
+      digestOf({
+        cites: [
+          {
+            id: brandPersistedCaseLawCitationId(
+              "00000000-0000-4000-8000-000000000099",
+            ),
+            citationText: null,
+            textWithheldReason: "source_licence",
+            sectionIndex: null,
+            treatment: "unclassified",
+            decision: null,
+          },
+        ],
+      }),
+      appUrlOf,
+    );
+    expect(summary.cites.decisions).toEqual([
+      { citation: null, textWithheldReason: "source_licence" },
+    ]);
   });
 });
 

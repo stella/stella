@@ -52,6 +52,7 @@ describe("clientMessageFromPageRow", () => {
         createdAt: CREATED_AT,
         id: MESSAGE_ID,
         role: "assistant",
+        revision: 0,
         content: toChatMessageContent({
           version: 2,
           data: [{ type: "text", content: "Done" }],
@@ -99,5 +100,32 @@ describe("clientMessageFromPageRow", () => {
       },
     });
     expect(message.createdAt).toBe(CREATED_AT.toISOString());
+    expect(message.revision).toBe(0);
+    expect(message.edited).toBe(false);
   });
+
+  test.each([0, 1, 4])(
+    "exposes revision %i and its edited state",
+    (revision) => {
+      const message = clientMessageFromPageRow(
+        {
+          createdAt: CREATED_AT,
+          id: MESSAGE_ID,
+          role: "assistant",
+          revision,
+          content: toChatMessageContent({
+            version: 2,
+            data: [{ type: "text", content: "Current answer" }],
+          }),
+        },
+        new Map(),
+      );
+
+      expect(message.revision).toBe(revision);
+      expect(message.edited).toBe(revision !== 0);
+      expect(message.parts).toEqual([
+        { type: "text", content: "Current answer" },
+      ]);
+    },
+  );
 });

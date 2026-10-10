@@ -27,6 +27,7 @@ export const OAUTH_REGISTRATION_SCOPE_POLICY = {
   offline_access: "open",
   "stella:search": "open",
   "stella:read": "open",
+  "stella:law_read": "open",
   "stella:templates": "open",
   "stella:documents_write": "open",
   "stella:matters_write": "open",

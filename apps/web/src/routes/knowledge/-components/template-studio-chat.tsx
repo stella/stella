@@ -655,6 +655,7 @@ const TemplateStudioChatInner = ({
   const {
     error,
     messages,
+    refreshAnswers,
     resendLatestMessage,
     sendMessage,
     queuedMessages,
@@ -668,6 +669,10 @@ const TemplateStudioChatInner = ({
     handleApprove,
     handleAllowInConversation,
     handleDeny,
+    handleRequestSecret,
+    continueRequestSecret,
+    resolveSecretTarget,
+    secretAvailabilityKey,
     handleAskUserSubmit,
     handleAskUserEditAndRerun,
     handleAlwaysAllow,
@@ -1331,6 +1336,10 @@ const TemplateStudioChatInner = ({
           handleAlwaysAllow,
           handleApprove: handleApproveForTemplate,
           handleDeny,
+          handleRequestSecret,
+          continueRequestSecret,
+          resolveSecretTarget,
+          secretAvailabilityKey,
         }}
       >
         {threadVisible && (
@@ -1339,6 +1348,10 @@ const TemplateStudioChatInner = ({
             scrollRef={threadScrollRef}
           >
             <ChatThreadMessages
+              onAnswerEdited={refreshAnswers}
+              answerRewriteAvailability={
+                data.usedAnonymization ? "anonymized" : "available"
+              }
               approvalPendingMessageId={approvalPendingMessageId}
               error={error}
               isGenerating={isGenerating}
