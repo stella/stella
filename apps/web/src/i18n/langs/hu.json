@@ -707,6 +707,15 @@
     },
     "writeOff": "Leírás"
   },
+  "capabilityActions": {
+    "aiMissing": "Az AI nincs beállítva.",
+    "availabilityUnknown": "Az elérhetőséget nem sikerült megerősíteni.",
+    "deeplMissing": "A DeepL nincs beállítva.",
+    "desktopUnavailable": "Csatlakoztassa vagy frissítse a stella desktop alkalmazást.",
+    "featureUnavailable": "Ez a funkció nem érhető el.",
+    "ocrUnavailable": "Az OCR nem érhető el.",
+    "translationMissing": "Nincs beállítva fordítási szolgáltatás."
+  },
   "caseLaw": {
     "analysis": {
       "abstract": "Összefoglaló",
@@ -748,6 +757,7 @@
     "citation": {
       "citedAtLeast": "Legalább {count} alkalommal idézték",
       "citedSummary": "{count, plural, =0 {Nem hivatkozták} one {Egyszer hivatkozták} other {#-szor hivatkozták}}",
+      "dateUnavailable": "Dátum nem érhető el",
       "decisionCount": "{count, plural, =0 {Nincs határozat} one {# határozat} other {# határozat}}",
       "lastNegative": "utolsó elutasító hivatkozás: {year}",
       "negativeCount": "{count, plural, one {# elutasító} other {# elutasító}}",
@@ -757,6 +767,7 @@
       "partialSummary": "Az idézettségi összesítések és az idővonal hiányosak.",
       "passageNotFound": "A hivatkozó szövegrész nem található a szövegben",
       "positiveCount": "{count, plural, one {# támogató} other {# támogató}}",
+      "referenceLabel": "{court}, {caseNumber}, {date}",
       "showAll": "{count, plural, one {Mind a # határozat megjelenítése} other {Mind a # határozat megjelenítése}}",
       "stripLabel": "Hivatkozások évenként",
       "treatment": {
@@ -1185,6 +1196,13 @@
       "previewWaiting": "Várakozás a tartalomra…",
       "savePendingReview": "A dokumentum mentése előtt kezelje a felülvizsgálatra váró AI-javaslatokat."
     },
+    "credentialPasteAction": "Privát kártya használata",
+    "credentialPasteDescription": "Ez a szöveg hitelesítő adatnak tűnik. Használj privát kártyát, hogy ne kerüljön a csevegésbe. Amikor megjelenik a kártya, illeszd be újra az értéket.",
+    "credentialPasteRequest": "Kérd ezt a hitelesítő adatot privát kártyán keresztül.",
+    "credentialPasteTitle": "Hitelesítő adat beillesztése felfüggesztve",
+    "credentialSendAction": "Küldés mindenképpen",
+    "credentialSendDescription": "Csak akkor küldd el, ha meg szeretnéd osztani ezt az értéket a beszélgetésben.",
+    "credentialSendTitle": "Ez az üzenet hitelesítő adatot tartalmazhat",
     "deleteThread": "Beszélgetés törlése",
     "editMode": {
       "autoDirect": "Automatikus · átírás",
@@ -1323,6 +1341,31 @@
     "removeSuggestion": "(eltávolítás)",
     "renameThread": "Beszélgetés átnevezése",
     "renameUnavailableEmptyThread": "Először küldjön egy üzenetet, utána a beszélgetés átnevezhető.",
+    "requestSecret": {
+      "checkingTarget": "A csatlakozó adatainak ellenőrzése…",
+      "connectionDisposition": "Kapcsolat: {disposition}",
+      "continuationError": "A válaszát mentettük, de a csevegés nem tudott folytatódni.",
+      "declined": "Elutasítva",
+      "description": "Az asszisztensnek szüksége van erre a folytatáshoz",
+      "error": "Nem sikerült elküldeni a hitelesítő adatot. Próbáld újra.",
+      "kind": {
+        "token": "Hozzáférési token"
+      },
+      "normalConnection": "Szokásos kapcsolat",
+      "private": "Az asszisztens nem fogja látni ezt az értéket.",
+      "provideAction": "Megadás",
+      "provided": "Megadva",
+      "purposeByAi": "A mesterséges intelligencia által megadott cél: {purpose}",
+      "receiptOnlyConnection": "Csak privát kapcsolat",
+      "replaceOrdinaryConnection": "A szokásos kapcsolat lecserélése privát használatra",
+      "retryContinuationAction": "Csevegés folytatása",
+      "saveForFuture": "Mentés későbbi csevegésekhez",
+      "savedAvailabilityError": "Nem sikerült ellenőrizni a mentett hitelesítő adatot.",
+      "target": "Cél: {target}",
+      "title": "Privát hitelesítő adat kérése",
+      "useSavedAction": "Mentett hitelesítő adat használata",
+      "valueLabel": "Hitelesítő adat"
+    },
     "resend": "Újraküldés",
     "resizeThread": "Beszélgetés méretezése",
     "richContentLoading": "Interaktív tartalom betöltése…",
@@ -1446,6 +1489,7 @@
       "read_story": "Dokumentumrész olvasása",
       "remember": "Mentés a memóriába",
       "reply_comment": "Megjegyzés megválaszolása",
+      "request_secret": "Privát hitelesítő adat kérése",
       "resolve_comment": "Megjegyzés megoldása",
       "review_folder_consistency": "Mappa konzisztenciájának ellenőrzése",
       "run-stella-query": "Ügyadatok olvasása",
@@ -1479,6 +1523,7 @@
       "update-entity-fields": "Metaadatok frissítése",
       "update_reader_annotation": "Kiemelés vagy megjegyzés szerkesztése",
       "use-browser": "A böngésző használata",
+      "use_connector_secret": "A csatlakozó hitelesítő adatának használata",
       "web_search": "Keresés az interneten"
     },
     "toolCall": {
@@ -2818,6 +2863,12 @@
     "editSessionReleased": "Ezt a dokumentumot máshol nyitották meg szerkesztésre, ezért ez a lap csak olvasható.",
     "editSessionReleasedUnsaved": "A nem mentett módosításai itt megmaradnak.",
     "editSessionReopen": "Újranyitás szerkesztésre",
+    "editor": {
+      "outlineDepthAll": "Minden szint",
+      "outlineDepthLabel": "A vázlat mélysége",
+      "outlineDepthThree": "1–3",
+      "outlineDepthTwo": "1–2"
+    },
     "evidenceReferences": "Bizonyíték-hivatkozások",
     "evidenceUnavailable": "Ez a bizonyíték-hivatkozás ebben az ügyben nem nyitható meg.",
     "findReplace": {
@@ -4549,6 +4600,7 @@
       "noMatches": "Egy kapcsolat sem felel meg ennek: „{query}”",
       "notConnected": "Nincs csatlakoztatva",
       "permissionCount": "{count, plural, one {# jogosultság} other {# jogosultság}}",
+      "privateCredentialOnly": "Csak privát hitelesítő adat",
       "searchPlaceholder": "Kapcsolatok keresése",
       "title": "Kapcsolatok",
       "turnedOff": "Kikapcsolva"

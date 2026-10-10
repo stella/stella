@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 
 import type { LoadedCatalogueResource } from "@stll/catalogue/install-payloads";
+import { createSha256 } from "@stll/sha256/bun";
 import {
   getSkillResourceKind,
   isAllowedResourcePath,
@@ -145,7 +146,7 @@ export const hashBundledSkillPackage = ({
   resources: readonly ParsedSkillResource[];
   source: string;
 }): string => {
-  const hasher = new Bun.CryptoHasher("sha256");
+  const hasher = createSha256();
   hasher.update(source);
   for (const resource of resources) {
     hasher.update("\0");

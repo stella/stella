@@ -101,12 +101,12 @@ export type ChatAttachmentPart = Extract<
 export type ChatMessageMetadata = NonNullable<ChatMessage["metadata"]>;
 export type SharedChatUITools = Pick<ChatUITools, "ask-user">;
 export type AskUserOutput = SharedChatUITools["ask-user"]["output"];
-// `create-document` is client-executed and renders its own draft UI, not the
-// approval flow. Keep it out of the approval set so `NeedsMatterCard` renders
-// instead of `ToolApprovalCard`.
+// These tools have dedicated user-input cards or draft UI instead of the
+// approval flow. Keep them out of the approval set so their owning cards
+// handle the interaction.
 type BuiltInApprovalToolName = Exclude<
   keyof ChatUITools,
-  "ask-user" | "create-document"
+  "ask-user" | "create-document" | "request_secret"
 >;
 export type ApprovalToolName = BuiltInApprovalToolName | `mcp__${string}`;
 const MCP_CONNECTOR_APPROVAL_GRANT_PREFIX = "mcp-connector:";
@@ -155,6 +155,7 @@ const isChatToolCallState = (
   Object.hasOwn(TOOL_CALL_STATE_IS_RUNNING, value);
 const USER_INPUT_TOOL_NAMES = {
   "ask-user": true,
+  request_secret: true,
 } as const satisfies Record<string, true>;
 
 // folio-agents tools a DOCX surface auto-runs against its bridge with no
@@ -214,6 +215,8 @@ const CHAT_TOOL_TITLE_KEYS = {
   show_visual: "chat.generatedView",
   add_comment: "chat.tool.add_comment",
   "ask-user": "chat.tool.ask-user",
+  request_secret: "chat.tool.request_secret",
+  use_connector_secret: "chat.tool.use_connector_secret",
   boe_find_related_laws: "chat.tool.boe_find_related_laws",
   boe_get_law: "chat.tool.boe_get_law",
   boe_get_law_block: "chat.tool.boe_get_law_block",
@@ -340,6 +343,7 @@ const PUBLIC_OFFICIAL_CHAT_TOOL_NAMES = {
 const EXTERNAL_INPUT_CHAT_TOOL_NAMES = {
   boe_search_legislation: true,
   fetch_url: true,
+  use_connector_secret: true,
   "use-browser": true,
   web_search: true,
 } as const satisfies Record<ExternalInputToolName, true>;
@@ -424,6 +428,7 @@ const MANUAL_CHAT_TOOL_GRANT_POLICY = {
   reply_comment: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
   resolve_comment: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
   "search-all-past-chats": CHAT_TOOL_GRANT_POLICY_KIND.grantable,
+  use_connector_secret: CHAT_TOOL_GRANT_POLICY_KIND.approveOnce,
   // Only the server-executed apply variant ever requests approval; it writes
   // a new document version, so each call is approved on its own.
   suggest_changes: CHAT_TOOL_GRANT_POLICY_KIND.approveOnce,
@@ -513,6 +518,7 @@ const REGISTRY_WRITE_SUMMARY_TOOL_NAMES = {
   "update-current-skill-resource": false,
   "update-entity-fields": false,
   update_reader_annotation: true,
+  use_connector_secret: false,
   "use-browser": false,
   web_search: false,
 } as const satisfies Record<
@@ -578,7 +584,8 @@ export const isApprovalToolName = (
   return (
     isChatToolName(toolName) &&
     toolName !== "ask-user" &&
-    toolName !== "create-document"
+    toolName !== "create-document" &&
+    toolName !== "request_secret"
   );
 };
 
@@ -1200,9 +1207,11 @@ export type PlaybookSaveMessage = DocumentDeletionMessage;
  */
 export const consumePlaybookSaveToolCalls = ({
   handledToolCallIds,
+  historicalToolCallIds,
   messages,
 }: {
   handledToolCallIds: Set<string>;
+  historicalToolCallIds?: ReadonlySet<string>;
   messages: readonly PlaybookSaveMessage[];
 }): { playbookId: string | null } | null => {
   let latestPlaybookId: string | null = null;
@@ -1231,7 +1240,9 @@ export const consumePlaybookSaveToolCalls = ({
 
       handledToolCallIds.add(part["id"]);
       hasNewSaves = true;
-      latestPlaybookId = part["output"]["playbookId"];
+      latestPlaybookId = historicalToolCallIds?.has(part["id"])
+        ? null
+        : part["output"]["playbookId"];
     }
   }
 

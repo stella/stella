@@ -707,6 +707,15 @@
     },
     "writeOff": "Norakstīt"
   },
+  "capabilityActions": {
+    "aiMissing": "AI nav konfigurēts.",
+    "availabilityUnknown": "Neizdevās apstiprināt pieejamību.",
+    "deeplMissing": "DeepL nav konfigurēts.",
+    "desktopUnavailable": "Savienojiet vai atjauniniet stella desktop.",
+    "featureUnavailable": "Šī funkcija nav pieejama.",
+    "ocrUnavailable": "OCR nav pieejams.",
+    "translationMissing": "Nav konfigurēts neviens tulkošanas pakalpojums."
+  },
   "caseLaw": {
     "analysis": {
       "abstract": "Kopsavilkums",
@@ -748,6 +757,7 @@
     "citation": {
       "citedAtLeast": "Citēts vismaz {count} reizes",
       "citedSummary": "{count, plural, =0 {Nav citēts} zero {Citēts # reižu} one {Citēts vienu reizi} other {Citēts # reizes}}",
+      "dateUnavailable": "Datums nav norādīts",
       "decisionCount": "{count, plural, =0 {Nav nolēmumu} zero {# nolēmumu} one {# nolēmums} other {# nolēmumi}}",
       "lastNegative": "pēdējā negatīvā atsauce {year}. gadā",
       "negativeCount": "{count, plural, zero {# negatīvu} one {# negatīva} other {# negatīvas}}",
@@ -757,6 +767,7 @@
       "partialSummary": "Citējumu kopsummas un laika skala ir nepilnīgas.",
       "passageNotFound": "Citējošais fragments tekstā netika atrasts",
       "positiveCount": "{count, plural, zero {# pozitīvu} one {# pozitīvs} other {# pozitīvi}}",
+      "referenceLabel": "{court}, {caseNumber}, {date}",
       "showAll": "{count, plural, zero {Rādīt visus # nolēmumus} one {Rādīt # nolēmumu} other {Rādīt visus # nolēmumus}}",
       "stripLabel": "Atsauces pa gadiem",
       "treatment": {
@@ -1185,6 +1196,13 @@
       "previewWaiting": "Gaida saturu…",
       "savePendingReview": "Pirms dokumenta saglabāšanas izskatiet pārskatīšanu gaidošos AI ieteikumus."
     },
+    "credentialPasteAction": "Izmantot privātu kartīti",
+    "credentialPasteDescription": "Šis teksts izskatās pēc piekļuves informācijas. Izmantojiet privātu kartīti, lai tā nenonāktu tērzēšanā. Kad kartīte parādās, ielīmējiet vērtību tajā vēlreiz.",
+    "credentialPasteRequest": "Pieprasiet šo piekļuves informāciju, izmantojot privātu kartīti.",
+    "credentialPasteTitle": "Piekļuves informācijas ielīmēšana apturēta",
+    "credentialSendAction": "Sūtīt tik un tā",
+    "credentialSendDescription": "Sūtiet tikai tad, ja vēlaties šo vērtību kopīgot sarunā.",
+    "credentialSendTitle": "Šajā ziņojumā var būt piekļuves informācija",
     "deleteThread": "Dzēst sarunu",
     "editMode": {
       "autoDirect": "Automātiski · pārrakstīt",
@@ -1323,6 +1341,31 @@
     "removeSuggestion": "(noņemt)",
     "renameThread": "Pārdēvēt sarunu",
     "renameUnavailableEmptyThread": "Vispirms nosūtiet ziņu, pēc tam sarunu varēs pārdēvēt.",
+    "requestSecret": {
+      "checkingTarget": "Tiek pārbaudīta savienotāja informācija…",
+      "connectionDisposition": "Savienojums: {disposition}",
+      "continuationError": "Jūsu atbilde ir saglabāta, bet tērzēšanu neizdevās turpināt.",
+      "declined": "Atteikts",
+      "description": "Asistentam tā ir vajadzīga, lai turpinātu",
+      "error": "Neizdevās iesniegt piekļuves informāciju. Mēģiniet vēlreiz.",
+      "kind": {
+        "token": "Piekļuves tokens"
+      },
+      "normalConnection": "Parastais savienojums",
+      "private": "Asistents šo vērtību neredzēs.",
+      "provideAction": "Iesniegt",
+      "provided": "Iesniegts",
+      "purposeByAi": "AI norādītais mērķis: {purpose}",
+      "receiptOnlyConnection": "Tikai privāts savienojums",
+      "replaceOrdinaryConnection": "Aizstāt parasto savienojumu ar tikai privātu izmantošanu",
+      "retryContinuationAction": "Turpināt tērzēšanu",
+      "saveForFuture": "Saglabāt turpmākām tērzēšanas sarunām",
+      "savedAvailabilityError": "Neizdevās pārbaudīt, vai ir saglabāti piekļuves dati.",
+      "target": "Mērķis: {target}",
+      "title": "Pieprasīt privātu piekļuves informāciju",
+      "useSavedAction": "Izmantot saglabātos piekļuves datus",
+      "valueLabel": "Piekļuves informācija"
+    },
     "resend": "Nosūtīt vēlreiz",
     "resizeThread": "Mainīt sarunas izmēru",
     "richContentLoading": "Notiek interaktīvā satura ielāde…",
@@ -1446,6 +1489,7 @@
       "read_story": "Dokumenta daļas lasīšana",
       "remember": "Saglabāšana atmiņā",
       "reply_comment": "Atbildēšana uz komentāru",
+      "request_secret": "Pieprasa privātu piekļuves informāciju",
       "resolve_comment": "Komentāra atrisināšana",
       "review_folder_consistency": "Mapes konsekvences pārbaude",
       "run-stella-query": "Lietas datu lasīšana",
@@ -1479,6 +1523,7 @@
       "update-entity-fields": "Metadatu atjaunināšana",
       "update_reader_annotation": "Rediģēt izcēlumu vai komentāru",
       "use-browser": "Jūsu pārlūkprogrammas izmantošana",
+      "use_connector_secret": "Izmanto savienotāja piekļuves informāciju",
       "web_search": "Meklēšana tīmeklī"
     },
     "toolCall": {
@@ -2818,6 +2863,12 @@
     "editSessionReleased": "Šis dokuments tika atvērts rediģēšanai citur, tāpēc šī cilne ir tikai lasāma.",
     "editSessionReleasedUnsaved": "Jūsu nesaglabātās izmaiņas paliek šeit.",
     "editSessionReopen": "Atkārtoti atvērt rediģēšanai",
+    "editor": {
+      "outlineDepthAll": "Visi līmeņi",
+      "outlineDepthLabel": "Virsrakstu dziļums",
+      "outlineDepthThree": "1–3",
+      "outlineDepthTwo": "1–2"
+    },
     "evidenceReferences": "Pierādījumu atsauces",
     "evidenceUnavailable": "Šo pierādījuma atsauci šajā lietā nevar atvērt.",
     "findReplace": {
@@ -4549,6 +4600,7 @@
       "noMatches": "Vaicājumam “{query}” neatbilst neviens savienojums",
       "notConnected": "Nav pievienots",
       "permissionCount": "{count, plural, zero {# atļauju} one {# atļauja} other {# atļaujas}}",
+      "privateCredentialOnly": "Tikai privāta piekļuves informācija",
       "searchPlaceholder": "Meklēt savienojumus",
       "title": "Savienojumi",
       "turnedOff": "Izslēgts"

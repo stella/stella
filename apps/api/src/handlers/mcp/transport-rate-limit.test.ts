@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import Elysia from "elysia";
 
+import { sha256Hex as legacyHex } from "@stll/sha256/node";
+
 import { createMcpRoute } from "@/api/handlers/mcp/routes-core";
 import {
   isMcpTransportRateLimitedRequest,
@@ -255,4 +257,13 @@ describe("MCP transport rate limit", () => {
       API_RATE_LIMITS.mcpTransport.max,
     );
   });
+});
+
+test("credential rate-limit keys retain legacy UTF-8 token bytes", async () => {
+  for (const token of ["abc", "Élève-é"]) {
+    const request = transportRequest({ token });
+    expect(
+      await mcpTransportRateLimitKey(request, ipServer("203.0.113.7")),
+    ).toBe(`mcp-transport:token:${legacyHex(token)}`);
+  }
 });

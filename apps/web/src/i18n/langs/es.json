@@ -707,6 +707,15 @@
     },
     "writeOff": "Cancelar"
   },
+  "capabilityActions": {
+    "aiMissing": "La IA no está configurada.",
+    "availabilityUnknown": "No se pudo confirmar la disponibilidad.",
+    "deeplMissing": "DeepL no está configurado.",
+    "desktopUnavailable": "Conecta o actualiza stella desktop.",
+    "featureUnavailable": "Esta función no está disponible.",
+    "ocrUnavailable": "El OCR no está disponible.",
+    "translationMissing": "No hay ningún servicio de traducción configurado."
+  },
   "caseLaw": {
     "analysis": {
       "abstract": "Resumen",
@@ -748,6 +757,7 @@
     "citation": {
       "citedAtLeast": "Citada al menos {count} veces",
       "citedSummary": "{count, plural, =0 {Sin citas} one {Citada una vez} other {Citada # veces}}",
+      "dateUnavailable": "Fecha no disponible",
       "decisionCount": "{count, plural, =0 {Ninguna resolución} one {# resolución} other {# resoluciones}}",
       "lastNegative": "última cita negativa en {year}",
       "negativeCount": "{count, plural, one {# negativa} many {# negativas} other {# negativas}}",
@@ -757,6 +767,7 @@
       "partialSummary": "Los totales de citas y la cronología son parciales.",
       "passageNotFound": "No se encontró el pasaje citante en el texto",
       "positiveCount": "{count, plural, one {# positiva} many {# positivas} other {# positivas}}",
+      "referenceLabel": "{court}, {caseNumber}, {date}",
       "showAll": "{count, plural, one {Mostrar la resolución} many {Mostrar las # resoluciones} other {Mostrar las # resoluciones}}",
       "stripLabel": "Citas por año",
       "treatment": {
@@ -1185,6 +1196,13 @@
       "previewWaiting": "Esperando contenido…",
       "savePendingReview": "Resuelva las sugerencias de IA pendientes antes de guardar el documento."
     },
+    "credentialPasteAction": "Usar una tarjeta privada",
+    "credentialPasteDescription": "Este texto parece una credencial. Usa una tarjeta privada para que no aparezca en el chat. Vuelve a pegarla en la tarjeta cuando aparezca.",
+    "credentialPasteRequest": "Solicita esta credencial mediante una tarjeta privada.",
+    "credentialPasteTitle": "Pegado de credenciales detenido",
+    "credentialSendAction": "Enviar de todos modos",
+    "credentialSendDescription": "Envíalo solo si quieres compartir este valor en la conversación.",
+    "credentialSendTitle": "Este mensaje puede contener una credencial",
     "deleteThread": "Eliminar conversación",
     "editMode": {
       "autoDirect": "Automático · reescribir",
@@ -1323,6 +1341,31 @@
     "removeSuggestion": "(eliminar)",
     "renameThread": "Cambiar el nombre de la conversación",
     "renameUnavailableEmptyThread": "Envía un mensaje primero; después podrás cambiar el nombre de la conversación.",
+    "requestSecret": {
+      "checkingTarget": "Comprobando los datos del conector…",
+      "connectionDisposition": "Conexión: {disposition}",
+      "continuationError": "Tu respuesta se ha guardado, pero el chat no ha podido continuar.",
+      "declined": "Rechazada",
+      "description": "El asistente la necesita para continuar",
+      "error": "No se pudo enviar la credencial. Inténtalo de nuevo.",
+      "kind": {
+        "token": "Token de acceso"
+      },
+      "normalConnection": "Conexión normal",
+      "private": "El asistente no verá este valor.",
+      "provideAction": "Proporcionar",
+      "provided": "Proporcionada",
+      "purposeByAi": "Propósito escrito por la IA: {purpose}",
+      "receiptOnlyConnection": "Conexión solo privada",
+      "replaceOrdinaryConnection": "Sustituir la conexión normal por un uso solo privado",
+      "retryContinuationAction": "Continuar el chat",
+      "saveForFuture": "Guardar para futuros chats",
+      "savedAvailabilityError": "No se pudo comprobar si hay una credencial guardada.",
+      "target": "Destino: {target}",
+      "title": "Solicitar una credencial privada",
+      "useSavedAction": "Usar credencial guardada",
+      "valueLabel": "Credencial"
+    },
     "resend": "Reenviar",
     "resizeThread": "Cambiar tamaño de la conversación",
     "richContentLoading": "Cargando contenido interactivo…",
@@ -1446,6 +1489,7 @@
       "read_story": "Leyendo una parte del documento",
       "remember": "Guardando en la memoria",
       "reply_comment": "Respondiendo al comentario",
+      "request_secret": "Solicitando una credencial privada",
       "resolve_comment": "Resolviendo comentario",
       "review_folder_consistency": "Revisando la coherencia de la carpeta",
       "run-stella-query": "Leyendo datos del asunto",
@@ -1479,6 +1523,7 @@
       "update-entity-fields": "Actualizando metadatos",
       "update_reader_annotation": "Editar resaltado o comentario",
       "use-browser": "Usando tu navegador",
+      "use_connector_secret": "Usando la credencial del conector",
       "web_search": "Buscando en la web"
     },
     "toolCall": {
@@ -2818,6 +2863,12 @@
     "editSessionReleased": "Este documento se abrió para editarlo en otro lugar, por lo que esta pestaña es de solo lectura.",
     "editSessionReleasedUnsaved": "Sus cambios sin guardar se conservan aquí.",
     "editSessionReopen": "Volver a abrir para editar",
+    "editor": {
+      "outlineDepthAll": "Todos los niveles",
+      "outlineDepthLabel": "Profundidad del esquema",
+      "outlineDepthThree": "1–3",
+      "outlineDepthTwo": "1–2"
+    },
     "evidenceReferences": "Referencias de prueba",
     "evidenceUnavailable": "Esta referencia de prueba no se puede abrir en este asunto.",
     "findReplace": {
@@ -4549,6 +4600,7 @@
       "noMatches": "Ninguna conexión coincide con «{query}»",
       "notConnected": "Sin conectar",
       "permissionCount": "{count, plural, one {# permiso} other {# permisos}}",
+      "privateCredentialOnly": "Solo credencial privada",
       "searchPlaceholder": "Buscar conexiones",
       "title": "Conexiones",
       "turnedOff": "Desactivada"

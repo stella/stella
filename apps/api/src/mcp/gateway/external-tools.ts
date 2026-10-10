@@ -4,7 +4,11 @@ import { and, asc, eq } from "drizzle-orm";
 
 import { Temporal } from "@stll/time";
 
-import { mcpConnectors, mcpUserConnections } from "@/api/db/schema";
+import {
+  mcpConnectors,
+  mcpUserConnections,
+  MCP_RESPONSE_DISPOSITION,
+} from "@/api/db/schema";
 import type { CachedMcpToolDefinition } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -345,6 +349,10 @@ const loadCachedGatewayToolRows = async ({
           eq(mcpUserConnections.userId, context.userId),
           eq(mcpUserConnections.enabled, true),
           eq(mcpUserConnections.status, "connected"),
+          eq(
+            mcpUserConnections.responseDisposition,
+            MCP_RESPONSE_DISPOSITION.normal,
+          ),
         ),
       )
       .orderBy(asc(mcpUserConnections.createdAt), asc(mcpUserConnections.id))

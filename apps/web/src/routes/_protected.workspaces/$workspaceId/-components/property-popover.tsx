@@ -40,6 +40,7 @@ import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 import { type SafeId, toSafeId } from "@/lib/safe-id";
 import type {
   ConditionNode,
@@ -429,26 +430,34 @@ export const PropertyPopover = ({
                     rows: tableRows,
                   });
                   return (
-                    <Button
-                      className="justify-start gap-1.5 font-normal"
-                      disabled={targetIds.length === 0}
+                    <CapabilityAction
+                      action={{ capability: "ai" }}
+                      surface="control"
                       key={action}
-                      onClick={() => {
-                        detached(
-                          runPropertyRows(targetIds),
-                          "property-popover.run-property-page",
-                        );
-                      }}
-                      size="sm"
-                      variant="ghost"
                     >
-                      {action === "remaining" ? (
-                        <PlayIcon />
-                      ) : (
-                        <RefreshCwIcon />
+                      {(capabilityProps) => (
+                        <Button
+                          className="justify-start gap-1.5 font-normal"
+                          disabled={targetIds.length === 0}
+                          onClick={() => {
+                            detached(
+                              runPropertyRows(targetIds),
+                              "property-popover.run-property-page",
+                            );
+                          }}
+                          size="sm"
+                          variant="ghost"
+                          {...capabilityProps}
+                        >
+                          {action === "remaining" ? (
+                            <PlayIcon />
+                          ) : (
+                            <RefreshCwIcon />
+                          )}
+                          {t(label)}
+                        </Button>
                       )}
-                      {t(label)}
-                    </Button>
+                    </CapabilityAction>
                   );
                 })}
               {groupScope && (
