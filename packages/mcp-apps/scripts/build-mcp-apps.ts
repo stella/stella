@@ -169,6 +169,15 @@ const buildMcpApp = async ({
     panic(messages || `MCP app build failed for ${app} without a diagnostic`);
   }
 
+  const graph =
+    result.metafile ?? panic("MCP app build did not report reachable inputs");
+  const apiInputs = Object.keys(graph.inputs).filter((file) =>
+    path.relative(repoRoot, path.resolve(file)).startsWith("apps/api/"),
+  );
+  if (apiInputs.length > 0) {
+    panic(`MCP app ${app} reaches API source: ${apiInputs.join(", ")}`);
+  }
+
   const readerDirectory = MCP_READER_UI_APP_DIRECTORIES.find(
     (name) => name === directory,
   );
