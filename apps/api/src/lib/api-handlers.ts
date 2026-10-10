@@ -1,5 +1,5 @@
 import type { Static, TSchema } from "@sinclair/typebox";
-import type { Err } from "better-result";
+import type { Err, Ok } from "better-result";
 import { Result, UnhandledException } from "better-result";
 import type { AnySchema, Context, InputSchema, UnwrapRoute } from "elysia";
 import { ElysiaCustomStatusResponse, status, t } from "elysia";
@@ -2072,14 +2072,100 @@ export const createSafeUncheckedBoundedPublicHandler = <
  * (`safePublicHandlerErrorResponseSchema`), whether the failure is handled
  * by the factory or returned as a status by the handler itself.
  */
-export const createSafeBoundedPublicHandler = <
+type GeneratorResult<TGenerator> =
+  TGenerator extends AsyncGenerator<infer _Yield, infer TReturn, infer _Next>
+    ? TReturn
+    : never;
+
+type GeneratorSuccess<TResult> = TResult extends {
+  status: "ok";
+  value: infer TPayload;
+}
+  ? TPayload
+  : never;
+
+type BoundedGeneratorResult =
+  | Pick<Ok<SafeHandlerPayload, SafeHandlerError>, "status" | "value">
+  | Pick<Err<never, SafeHandlerError>, "status" | "error">;
+
+type InvalidGeneratorResult<TResult> =
+  TResult extends BoundedGeneratorResult & {
+    isErr: () => boolean;
+    isOk: () => boolean;
+  }
+    ? never
+    : TResult;
+
+type BoundedPublicHandlerDefinition<
+  TConfig extends PublicHandlerConfig,
+  TGenerator,
+> = ReturnType<
+  typeof createSafeUncheckedBoundedPublicHandler<
+    TConfig,
+    GeneratorSuccess<GeneratorResult<TGenerator>> & SafeHandlerPayload
+  >
+>;
+
+type GeneratorYield<TGenerator> =
+  TGenerator extends AsyncGenerator<infer TYield, infer _Return, infer _Next>
+    ? TYield
+    : never;
+
+// Whole-generator capture has no schema-shaped return constraint, so this
+// boundary also checks the forward direction normally checked by Elysia.
+type BoundedPublicSuccessSchemaGuard<TConfig, TResult> = TConfig extends {
+  response: { 200: infer TSuccessSchema extends TSchema };
+}
+  ? [SuccessPayload<TResult>] extends [never]
+    ? unknown
+    : [ReadonlyWire<SuccessPayload<TResult>>, Static<TSuccessSchema>] extends [
+          ReadonlyWire<Static<TSuccessSchema>>,
+          ReadonlyWire<SuccessPayload<TResult>>,
+        ]
+      ? unknown
+      : {
+          responseSchemaMismatch: {
+            schema: Static<TSuccessSchema>;
+            data: SuccessPayload<TResult>;
+          };
+        }
+  : unknown;
+
+type BoundedPublicGeneratorGuard<TConfig, TGenerator> = [
+  Exclude<
+    GeneratorYield<TGenerator>,
+    Pick<Err<never, SafeHandlerError>, "status" | "error"> & {
+      isErr: () => boolean;
+      isOk: () => boolean;
+    }
+  >,
+  InvalidGeneratorResult<GeneratorResult<TGenerator>>,
+] extends [never, never]
+  ? BoundedPublicSuccessSchemaGuard<
+      TConfig,
+      GeneratorSuccess<GeneratorResult<TGenerator>>
+    >
+  : { invalidGenerator: TGenerator };
+
+// Capture the concrete generator before checking the response boundary.
+export function createSafeBoundedPublicHandler<
+  TConfig extends PublicHandlerConfig,
+  TGenerator,
+>(
+  config: TConfig & NoInfer<BoundedPublicGeneratorGuard<TConfig, TGenerator>>,
+  handler: (
+    ctx: PublicHandlerContext<TConfig>,
+  ) => TGenerator & AsyncGenerator<unknown, unknown, never>,
+): BoundedPublicHandlerDefinition<TConfig, TGenerator>;
+export function createSafeBoundedPublicHandler<
   TConfig extends PublicHandlerConfig,
   TResult extends SafeHandlerPayload,
 >(
   config: TConfig,
-  handler: SafeHandlerFn<PublicHandlerContext<TConfig>, TResult> &
-    NoInfer<ExactSuccessSchemaGuard<TConfig, TResult>>,
-) => createSafeUncheckedBoundedPublicHandler(config, handler);
+  handler: SafeHandlerFn<PublicHandlerContext<TConfig>, TResult>,
+) {
+  return createSafeUncheckedBoundedPublicHandler(config, handler);
+}
 
 /**
  * Whether a failure also reaches the exception reporter.

@@ -3,7 +3,7 @@ import * as v from "valibot";
 export const desktopMatterSchema = v.strictObject({
   id: v.string(),
   name: v.string(),
-  reference: v.nullable(v.string()),
+  reference: v.string(),
   color: v.nullable(v.string()),
 });
 

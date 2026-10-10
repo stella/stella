@@ -92,7 +92,7 @@ export const createDesktopTimeEntryEndpoint = (
           new HandlerError({ status: 404, message: "Matter not found" }),
         );
       }
-      return yield* createTimeEntryHandler({
+      const result = yield* createTimeEntryHandler({
         safeDb: account.safeDb,
         organizationId: account.organizationId,
         userId: account.userId,
@@ -108,6 +108,7 @@ export const createDesktopTimeEntryEndpoint = (
           server: null,
         }),
       });
+      return result.map(({ id }) => ({ id: String(id) }));
     },
   );
 

@@ -195,32 +195,68 @@ const DECISION_ID = toSafeId<"caseLawDecision">(
 const PAGE = { limit: 50 } as const;
 
 test("bounded public handlers bind the 200 schema to the payload both ways", () => {
-  const brandWidened = createSafeBoundedPublicHandler(
+  const nonGenerator = createSafeBoundedPublicHandler(
     configFor(t.Object({ id: t.String() })),
+    // @ts-expect-error - safe handlers must be async generators
+    async () => Result.ok({ id: "entry" }),
+  );
+  const invalidYield = createSafeBoundedPublicHandler(
+    // @ts-expect-error - intermediate values must be typed failures
+    configFor(t.Object({ id: t.String() })),
+    async function* () {
+      yield "invalid";
+      return Result.ok({ id: "entry" });
+    },
+  );
+  void nonGenerator;
+  void invalidYield;
+  const undefinedPayload = createSafeBoundedPublicHandler(
+    // @ts-expect-error - successful handlers must return a non-nullish payload
+    configFor(t.Object({ id: t.String() })),
+    async function* () {
+      return Result.ok(undefined);
+    },
+  );
+  const plainPayload = createSafeBoundedPublicHandler(
+    // @ts-expect-error - a handler must return a Result rather than a plain object
+    configFor(t.Object({ id: t.String() })),
+    async function* () {
+      return { id: "entry" };
+    },
+  );
+  const missingPayload = createSafeBoundedPublicHandler(
+    // @ts-expect-error - an empty inferred payload cannot satisfy the id schema
+    configFor(t.Object({ id: t.String() })),
+    async function* () {
+      return Result.ok({});
+    },
+  );
+  const brandWidened = createSafeBoundedPublicHandler(
     // @ts-expect-error - a plain string schema misdescribes a branded id
+    configFor(t.Object({ id: t.String() })),
     async function* () {
       return Result.ok({ id: DECISION_ID });
     },
   );
   const nullableWidened = createSafeBoundedPublicHandler(
+    // @ts-expect-error - the data is never null
     configFor(
       t.Object({ id: t.Union([tSafeId("caseLawDecision"), t.Null()]) }),
     ),
-    // @ts-expect-error - the data is never null
     async function* () {
       return Result.ok({ id: DECISION_ID });
     },
   );
   const literalWidened = createSafeBoundedPublicHandler(
-    configFor(t.Object({ limit: t.Number() })),
     // @ts-expect-error - the data is one fixed limit
+    configFor(t.Object({ limit: t.Number() })),
     async function* () {
       return Result.ok({ limit: PAGE.limit });
     },
   );
   const keyDropped = createSafeBoundedPublicHandler(
-    configFor(t.Object({ ok: t.Boolean() })),
     // @ts-expect-error - Elysia would strip `extra` from the wire
+    configFor(t.Object({ ok: t.Boolean() })),
     async function* () {
       return Result.ok({ ok: true, extra: 1 });
     },
@@ -240,6 +276,9 @@ test("bounded public handlers bind the 200 schema to the payload both ways", () 
   );
   // The cases are compile-time; each definition still registers at runtime.
   for (const definition of [
+    undefinedPayload,
+    plainPayload,
+    missingPayload,
     brandWidened,
     nullableWidened,
     literalWidened,

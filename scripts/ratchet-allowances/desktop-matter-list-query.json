@@ -1,0 +1,5 @@
+{
+  "metric": "cross-handler-imports",
+  "delta": 1,
+  "reason": "The desktop matter picker reuses the canonical scoped workspace-list query so access filtering and archived-matter behavior have one owner; copying the query would create a second implementation."
+}
