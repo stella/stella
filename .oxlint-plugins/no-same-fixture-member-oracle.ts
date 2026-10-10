@@ -30,6 +30,8 @@ const COMPUTED_NAME =
 const ORACLE_NAME =
   /(?:classif|detect|derive|project|extract|parse|read|build|expected)/iu;
 const FIXTURE_NOUN = /^(?:fixture|fx|case|sample|input|record|row)s?$/u;
+const FIXTURE_DESCRIPTOR =
+  /^(?:data|payload|values?|text|json|body|bytes|fields|props|args|options|params|list|set|map)$/u;
 
 type AliasMap = Map<Variable, string>;
 type ValueMap = Map<Variable, unknown>;
@@ -37,15 +39,31 @@ type ResolveBinding = (identifier: unknown) => Variable | null;
 
 const pathText = (path: string): string => path.slice(path.indexOf(":") + 1);
 
-// Judge the root by its head noun (`testCase`, `inputRow`), not a substring:
-// domain names such as `caseLawDecisions` or `CASE_LAW_*` are not fixtures.
+// Judge the root by its words, not a substring: a fixture noun as the head
+// (`testCase`, `inputRow`) or followed by one descriptor (`fixturePayload`,
+// `rowData`). Domain names such as `caseLawDecisions` or `CASE_LAW_*` are not
+// fixtures.
 const hasFixtureRoot = (path: string): boolean => {
   const root = pathText(path).split(".").at(0) ?? "";
-  const head = root
+  const words = root
     .replaceAll(/([a-z0-9])([A-Z])/gu, "$1_$2")
     .split(/[_$]+/u)
-    .findLast((segment) => segment.length > 0);
-  return head !== undefined && FIXTURE_NOUN.test(head.toLowerCase());
+    .filter((word) => word.length > 0)
+    .map((word) => word.toLowerCase());
+  const head = words.at(-1);
+  if (head === undefined) {
+    return false;
+  }
+  if (FIXTURE_NOUN.test(head)) {
+    return true;
+  }
+  const noun = words.at(-2);
+  return (
+    words.length === 2 &&
+    noun !== undefined &&
+    FIXTURE_NOUN.test(noun) &&
+    FIXTURE_DESCRIPTOR.test(head)
+  );
 };
 
 const pathDependsOn = (path: string, dependency: string): boolean =>

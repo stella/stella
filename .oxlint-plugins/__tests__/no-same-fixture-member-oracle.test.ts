@@ -56,8 +56,11 @@ const cases = [
     source: [
       "expect(detect(testCase.text)).toBe(derive(testCase.text));",
       "expect(detect(input_rows.text)).toBe(derive(input_rows.text));",
+      "expect(detect(fixtureData.text)).toBe(derive(fixtureData.text));",
+      "expect(detect(rowPayload.text)).toBe(derive(rowPayload.text));",
+      "expect(detect(caseLawData.text)).toBe(derive(caseLawData.text));",
     ].join("\n"),
-    lines: [1, 2],
+    lines: [1, 2, 3, 4],
   },
   {
     title: "treats an awaited state read as an observation, not an oracle",
