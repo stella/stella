@@ -156,7 +156,7 @@ test("links serialize destinations without escaping the Markdown destination", (
       source: "label",
       start: 0,
       end: 5,
-      action: { format: "link", url },
+      action: { format: "link", intent: "set", url },
     });
     expect(result.status).toBe("proposal");
     if (result.status !== "proposal") {
@@ -167,7 +167,11 @@ test("links serialize destinations without escaping the Markdown destination", (
       paragraph?.type === "paragraph" ? paragraph.children.at(0) : undefined;
     expect(link?.type).toBe("link");
     expect(result.edit.format).toBe("link");
-    if (link?.type === "link" && result.edit.format === "link") {
+    if (
+      link?.type === "link" &&
+      result.edit.format === "link" &&
+      result.edit.intent === "set"
+    ) {
       expect(link.children).toMatchObject([{ type: "text", value: "label" }]);
       expect(link.url).toBe(result.edit.url);
     }
@@ -184,7 +188,7 @@ test("links serialize destinations without escaping the Markdown destination", (
         source: "label",
         start: 0,
         end: 5,
-        action: { format: "link", url },
+        action: { format: "link", intent: "set", url },
       }).status,
     ).toBe("unsupported");
   }
@@ -197,7 +201,7 @@ test("existing links replace the whole destination while retaining nested label 
     source,
     start,
     end: start + 5,
-    action: { format: "link", url: "https://new.test/a(b)" },
+    action: { format: "link", intent: "set", url: "https://new.test/a(b)" },
   });
   expect(result).toMatchObject({
     status: "proposal",
@@ -206,7 +210,7 @@ test("existing links replace the whole destination while retaining nested label 
   });
 });
 
-test("links toggle off only the exact owning destination and round-trip label formatting", () => {
+test("explicit link removal round-trips label formatting", () => {
   assertProperty(
     "links toggle off only the exact owning destination and round-trip label formatting",
     fc.property(words, (text) => {
@@ -216,7 +220,11 @@ test("links toggle off only the exact owning destination and round-trip label fo
         source,
         start,
         end: start + text.length,
-        action: { format: "link", url: "https://example.test/a(b)" },
+        action: {
+          format: "link",
+          intent: "set",
+          url: "https://example.test/a(b)",
+        },
       });
       expect(added.status).toBe("proposal");
       if (added.status !== "proposal") {
@@ -238,7 +246,7 @@ test("links toggle off only the exact owning destination and round-trip label fo
       }
       const removed = formatAnswerSpan({
         ...selected,
-        action: { format: "link", url },
+        action: { format: "link", intent: "remove" },
       });
       expect(removed).toMatchObject({
         status: "proposal",
@@ -262,7 +270,7 @@ test("links toggle off only the exact owning destination and round-trip label fo
     source,
     start,
     end: start + 5,
-    action: { format: "link", url: url ?? "" },
+    action: { format: "link", intent: "remove" },
   });
   expect(removed).toMatchObject({
     status: "proposal",
@@ -522,7 +530,7 @@ test.each([
     source,
     start,
     end: start + text.length,
-    action: { format: "link", url: linked.url },
+    action: { format: "link", intent: "remove" },
   });
   expect(result.status).toBe("proposal");
   if (result.status !== "proposal") {
@@ -541,4 +549,24 @@ test.each([
     node.type === "linkReference" ||
     ("children" in node && node.children.some(containsLink));
   expect(containsLink(converted)).toBe(false);
+});
+
+test.each([
+  "[label](https://example.test/)",
+  "https://example.test/",
+  "<https://example.test/>",
+])("setting an unchanged destination is a no-op for %s", (source) => {
+  const label = source.startsWith("[label]")
+    ? "label"
+    : "https://example.test/";
+  const start = source.indexOf(label);
+  expect(
+    formatAnswerSpan({
+      source,
+      start,
+      end: start + label.length,
+      action: { format: "link", intent: "set", url: "https://example.test/" },
+    }),
+  ).toEqual({ status: "unchanged" });
+  expect(renderedText(parsedMarkdown(source))).toBe(label);
 });

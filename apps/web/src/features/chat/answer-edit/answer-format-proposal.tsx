@@ -129,6 +129,9 @@ export const AnswerFormatProposal = ({
       </div>
     );
   }
+  if (result.status === "unchanged") {
+    return null;
+  }
   if (result.status === "unsupported") {
     return (
       <div

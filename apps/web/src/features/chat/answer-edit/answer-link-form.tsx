@@ -4,7 +4,10 @@ import { useForm } from "@tanstack/react-form";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
-import { CHAT_MESSAGE_EDIT_URL_MAX_LENGTH } from "@stll/api-contract/chat-message-revisions";
+import {
+  CHAT_MESSAGE_EDIT_URL_MAX_LENGTH,
+  CHAT_MESSAGE_LINK_INTENT,
+} from "@stll/api-contract/chat-message-revisions";
 import { Button } from "@stll/ui/button";
 import { Input } from "@stll/ui/input";
 
@@ -43,7 +46,16 @@ export const AnswerLinkForm = ({
       }),
       defaultValues: { url: existingUrl ?? "" },
       submitValues: "schema-output",
-      onSubmit: ({ value }) => onAction({ format: "link", url: value.url }),
+      onSubmit: ({ value }) => {
+        if (value.url === existingUrl) {
+          return;
+        }
+        onAction({
+          format: "link",
+          intent: CHAT_MESSAGE_LINK_INTENT.set,
+          url: value.url,
+        });
+      },
     }),
   );
   return (
@@ -99,7 +111,12 @@ export const AnswerLinkForm = ({
           size="sm"
           variant="ghost"
           disabled={disabled}
-          onClick={() => onAction({ format: "link", url: existingUrl })}
+          onClick={() =>
+            onAction({
+              format: "link",
+              intent: CHAT_MESSAGE_LINK_INTENT.remove,
+            })
+          }
         >
           {t("folio.removeLink")}
         </Button>

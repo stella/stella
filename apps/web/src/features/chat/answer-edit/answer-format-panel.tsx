@@ -25,7 +25,10 @@ import type { AnswerEditAnchor } from "./answer-edit-api";
 import type { AnswerSourceSelection } from "./answer-edit-selection";
 import { AnswerFormatProposal } from "./answer-format-proposal";
 import { AnswerLinkForm } from "./answer-link-form";
-import { selectedMarkdownLinkUrl } from "./markdown-format.logic";
+import {
+  selectedMarkdownLinkUrl,
+  formatAnswerSpan,
+} from "./markdown-format.logic";
 import type { AnswerFormatAction } from "./markdown-format.logic";
 
 export const AnswerFormatPanel = ({
@@ -56,7 +59,17 @@ export const AnswerFormatPanel = ({
             start: selection.start,
             end: selection.end,
           })}
-          onAction={setAction}
+          onAction={(nextAction) => {
+            const result = formatAnswerSpan({
+              source: selection.source,
+              start: selection.start,
+              end: selection.end,
+              action: nextAction,
+            });
+            if (result.status !== "unchanged") {
+              setAction(nextAction);
+            }
+          }}
           onCancel={onCancel}
           disabled={disabled}
         />

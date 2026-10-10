@@ -1,7 +1,11 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
+import { fromMarkdown } from "mdast-util-from-markdown";
+import { gfmFromMarkdown } from "mdast-util-gfm";
+import { gfm } from "micromark-extension-gfm";
 
 import { createTestState } from "../../../../../api/src/tests/helpers/test-state";
+import type { AnswerFormatPanelProps } from "./answer-format-panel";
 
 GlobalRegistrator.register({ url: "https://app.example.test/chat/thread" });
 const state = createTestState({ file: import.meta.path, config: {} });
@@ -29,6 +33,7 @@ const { default: messages } = await import("@/i18n/langs/en.json");
 const { AnswerFormatPanel } = await import("./answer-format-panel");
 const { createAppQueryClient } = await import("@/lib/react-query");
 const { api } = await import("@/lib/api");
+const { toSafeId } = await import("@/lib/safe-id");
 const messageResource = api.chat
   .threads({ threadId: "thread-1" })
   .messages({ messageId: "message-1" });
@@ -37,41 +42,46 @@ type CurrentAnswer = NonNullable<
 >;
 const requests: { method: string; body: unknown }[] = [];
 let acceptStatus = 200;
+let answerSource = "old text";
 const boundary = spyOn(globalThis, "fetch").mockImplementation(
-  async (_input, init) => {
-    const method = init?.method ?? "GET";
-    requests.push({
-      method,
-      body:
-        init?.body === undefined ? undefined : JSON.parse(String(init.body)),
-    });
-    if (method === "POST") {
-      return Response.json(
-        acceptStatus === 409
-          ? { message: "Changed" }
-          : { revision: 3, edited: true },
-        { status: acceptStatus },
-      );
-    }
-    return Response.json({
-      revision: 2,
-      id: "message-1",
-      role: "assistant",
-      edited: true,
-      createdAt: "2026-10-10T10:00:00Z",
-      parts: [{ type: "text", content: "old text" }],
-      content: {
-        version: 3,
-        data: [{ type: "text", content: "old text" }],
-        metadata: { sendMode: "rawOverride" },
-      },
-    } satisfies CurrentAnswer);
-  },
+  Object.assign(
+    async (input: RequestInfo | URL, init?: RequestInit) => {
+      const request = new Request(input, init);
+      const method = request.method;
+      requests.push({
+        method,
+        body: request.body === null ? undefined : await request.json(),
+      });
+      if (method === "POST") {
+        return Response.json(
+          acceptStatus === 409
+            ? { message: "Changed" }
+            : { revision: 3, edited: true },
+          { status: acceptStatus },
+        );
+      }
+      return Response.json({
+        revision: 2,
+        id: toSafeId<"chatMessage">("message-1"),
+        role: "assistant",
+        edited: true,
+        createdAt: "2026-10-10T10:00:00Z",
+        parts: [{ type: "text", content: answerSource }],
+        content: {
+          version: 3,
+          data: [{ type: "text", content: answerSource }],
+          metadata: { sendMode: "rawOverride" },
+        },
+      } satisfies CurrentAnswer);
+    },
+    { preconnect: () => undefined },
+  ),
 );
 afterEach(async () => {
   await act(async () => cleanup());
   requests.length = 0;
   acceptStatus = 200;
+  answerSource = "old text";
 });
 afterAll(async () => {
   boundary.mockRestore();
@@ -81,9 +91,15 @@ afterAll(async () => {
 const mount = ({
   onCancel,
   onAnswerEdited,
+  entry = "bold",
+  start = 0,
+  end = answerSource.length,
 }: {
   onCancel: () => void;
   onAnswerEdited: () => Promise<void>;
+  entry?: AnswerFormatPanelProps["entry"];
+  start?: number;
+  end?: number;
 }) =>
   render(
     <AuthenticatedUserProvider user={USER}>
@@ -97,18 +113,18 @@ const mount = ({
           }}
         >
           <AnswerFormatPanel
-            entry="bold"
+            entry={entry}
             anchor={{
               messageId: "message-1",
               baseRevision: 2,
-              start: 0,
-              end: 8,
-              selectedSource: "old text",
+              start,
+              end,
+              selectedSource: answerSource.slice(start, end),
             }}
             selection={{
-              source: "old text",
-              start: 0,
-              end: 8,
+              source: answerSource,
+              start,
+              end,
               partIndex: 0,
               partOffset: 0,
             }}
@@ -186,7 +202,7 @@ test("format acceptance conflict reloads the answer before requesting a new sele
   );
 });
 
-test("link addresses reject unsafe schemes and Remove link emits the existing destination toggle", async () => {
+test("link addresses reject unsafe schemes and Remove link emits explicit removal", async () => {
   const { AnswerLinkForm } = await import("./answer-link-form");
   const actions: unknown[] = [];
   const view = render(
@@ -220,5 +236,133 @@ test("link addresses reject unsafe schemes and Remove link emits the existing de
   fireEvent.click(
     view.getByRole("button", { name: messages.folio.removeLink }),
   );
-  expect(actions).toEqual([{ format: "link", url: "https://example.test" }]);
+  expect(actions).toEqual([{ format: "link", intent: "remove" }]);
+});
+
+test("confirming an unchanged link address emits no action", async () => {
+  const { AnswerLinkForm } = await import("./answer-link-form");
+  const actions: unknown[] = [];
+  const view = render(
+    <IntlProvider locale="en" messages={messages}>
+      <AnswerLinkForm
+        existingUrl="https://example.test"
+        disabled={false}
+        onCancel={() => undefined}
+        onAction={(action) => actions.push(action)}
+      />
+    </IntlProvider>,
+  );
+  await act(async () =>
+    fireEvent.click(
+      view.getByRole("button", { name: messages.common.confirm }),
+    ),
+  );
+  expect(actions).toEqual([]);
+});
+
+test("confirming an unchanged link keeps its source without proposing or writing a revision", async () => {
+  answerSource = "[old text](https://example.test)";
+  const original = answerSource;
+  const view = mount({
+    entry: "link",
+    start: 1,
+    end: 9,
+    onCancel: () => undefined,
+    onAnswerEdited: async () => undefined,
+  });
+  expect(view.getByRole("textbox").getAttribute("value")).toBe(
+    "https://example.test/",
+  );
+  await act(async () =>
+    fireEvent.click(
+      view.getByRole("button", { name: messages.common.confirm }),
+    ),
+  );
+  expect(view.queryByRole("button", { name: "Accept" })).toBeNull();
+  expect(view.container.querySelector("ins")).toBeNull();
+  expect(requests).toEqual([]);
+  expect(view.getByRole("textbox").getAttribute("value")).toBe(
+    "https://example.test/",
+  );
+  expect(answerSource).toBe(original);
+});
+
+test("confirming a changed link explicitly sets its destination in the preview and accepted revision", async () => {
+  answerSource = "[old text](https://example.test)";
+  const view = mount({
+    entry: "link",
+    start: 1,
+    end: 9,
+    onCancel: () => undefined,
+    onAnswerEdited: async () => undefined,
+  });
+  fireEvent.change(view.getByRole("textbox"), {
+    target: { value: "https://updated.test" },
+  });
+  fireEvent.click(view.getByRole("button", { name: messages.common.confirm }));
+  await waitFor(() =>
+    expect(view.getByRole("button", { name: "Accept" })).toBeTruthy(),
+  );
+  expect(view.container.querySelector("ins")?.textContent).toBe(
+    "[old text](<https://updated.test/>)",
+  );
+  fireEvent.click(view.getByRole("button", { name: "Accept" }));
+  await waitFor(() =>
+    expect(requests.some((request) => request.method === "POST")).toBe(true),
+  );
+  expect(
+    requests.find((request) => request.method === "POST")?.body,
+  ).toMatchObject({
+    content: {
+      data: [{ type: "text", content: "[old text](<https://updated.test/>)" }],
+    },
+    edit: {
+      type: "format",
+      format: "link",
+      intent: "set",
+      url: "https://updated.test/",
+    },
+  });
+});
+
+test("Remove link explicitly unlinks a URL-shaped label while preserving its visible text", async () => {
+  answerSource = "<https://example.test>";
+  const view = mount({
+    entry: "link",
+    start: 1,
+    end: answerSource.length - 1,
+    onCancel: () => undefined,
+    onAnswerEdited: async () => undefined,
+  });
+  fireEvent.click(
+    view.getByRole("button", { name: messages.folio.removeLink }),
+  );
+  await waitFor(() =>
+    expect(view.getByRole("button", { name: "Accept" })).toBeTruthy(),
+  );
+  const replacement = view.container.querySelector("ins")?.textContent;
+  expect(typeof replacement).toBe("string");
+  if (typeof replacement !== "string") {
+    return;
+  }
+  const tree = fromMarkdown(replacement, {
+    extensions: [gfm()],
+    mdastExtensions: [gfmFromMarkdown()],
+  });
+  expect(tree.children).toMatchObject([
+    {
+      type: "paragraph",
+      children: [{ type: "text", value: "https://example.test" }],
+    },
+  ]);
+  fireEvent.click(view.getByRole("button", { name: "Accept" }));
+  await waitFor(() =>
+    expect(requests.some((request) => request.method === "POST")).toBe(true),
+  );
+  expect(
+    requests.find((request) => request.method === "POST")?.body,
+  ).toMatchObject({
+    content: { data: [{ type: "text", content: replacement }] },
+    edit: { type: "format", format: "link", intent: "remove" },
+  });
 });

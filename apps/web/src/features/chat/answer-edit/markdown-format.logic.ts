@@ -8,6 +8,7 @@ import {
   CHAT_MESSAGE_EDIT_FORMAT,
   CHAT_MESSAGE_EDIT_TYPE,
   CHAT_MESSAGE_EDIT_URL_MAX_LENGTH,
+  CHAT_MESSAGE_LINK_INTENT,
 } from "@stll/api-contract/chat-message-revisions";
 import type { ChatMessageAcceptedEdit } from "@stll/api-contract/chat-message-revisions";
 
@@ -425,10 +426,6 @@ const formatLink = (
   >,
 ) => {
   const { start, end } = span;
-  const url = validLinkUrl(action.url);
-  if (!url) {
-    return unsupported("invalid-url");
-  }
   const enclosing = nodes.find(
     (node) =>
       (node.type === "link" || node.type === "linkReference") &&
@@ -463,7 +460,10 @@ const formatLink = (
     label = source.slice(labelStart, labelEnd);
   }
   const previousUrl = enclosing ? existingLinkUrl(enclosing, nodes) : undefined;
-  if (previousUrl !== undefined && validLinkUrl(previousUrl) === url) {
+  if (action.intent === CHAT_MESSAGE_LINK_INTENT.remove) {
+    if (!enclosing) {
+      return unsupported("ambiguous");
+    }
     let replacement = label;
     // A URL-shaped label can immediately become a GFM autolink again. Escape
     // only reparsed link spans, preserving the label's existing inline marks.
@@ -498,7 +498,8 @@ const formatLink = (
           nodeSpan.end > changedSpan.start
         );
       }) ||
-      blockText(source, position) !== blockText(candidate, changedSpan)
+      blockText(source, { start: 0, end: source.length }) !==
+        blockText(candidate, { start: 0, end: candidate.length })
     ) {
       return unsupported("ambiguous");
     }
@@ -506,8 +507,18 @@ const formatLink = (
       source,
       span: position,
       replacement,
-      action: { format: CHAT_MESSAGE_EDIT_FORMAT.link, url },
+      action: {
+        format: CHAT_MESSAGE_EDIT_FORMAT.link,
+        intent: CHAT_MESSAGE_LINK_INTENT.remove,
+      },
     });
+  }
+  const url = validLinkUrl(action.url);
+  if (!url) {
+    return unsupported("invalid-url");
+  }
+  if (previousUrl !== undefined && validLinkUrl(previousUrl) === url) {
+    return { status: "unchanged" as const };
   }
   const replacement = `[${label}](<${url}>)`;
   const candidate =
@@ -526,7 +537,11 @@ const formatLink = (
         source,
         span: position,
         replacement,
-        action: { format: CHAT_MESSAGE_EDIT_FORMAT.link, url },
+        action: {
+          format: CHAT_MESSAGE_EDIT_FORMAT.link,
+          intent: CHAT_MESSAGE_LINK_INTENT.set,
+          url,
+        },
       })
     : unsupported("ambiguous");
 };
