@@ -134,6 +134,8 @@ export type SafeIdType =
   | "legalListItemSource"
   | "legalListSection"
   | "legalReaderAnnotation"
+  | "legalReaderAnswer"
+  | "legalReaderAnswerMessage"
   | "matter"
   | "matterCounter"
   | "mcpConnector"
