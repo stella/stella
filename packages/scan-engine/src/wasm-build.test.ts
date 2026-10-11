@@ -8,7 +8,7 @@ const toolchain = readFileSync(
   new URL("../rust-toolchain.toml", import.meta.url),
   "utf-8",
 );
-const pinnedVersion = toolchain.match(/^channel = "([^"]+)"/mu)?.at(1);
+const pinnedVersion = /^channel = "([^"]+)"/mu.exec(toolchain)?.at(1);
 if (pinnedVersion === undefined) {
   panic("Missing pinned scan engine Rust version");
 }
