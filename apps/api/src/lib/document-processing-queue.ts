@@ -538,6 +538,76 @@ type OcrProjectionPersistenceOutcome =
   | "source_cancelled"
   | "stale_claim";
 
+const lockOcrProjectionSource = async (
+  tx: RootTransaction,
+  run: typeof documentProcessingRuns.$inferSelect,
+) => {
+  // The field owns its version identity; stale runs may refer to an older one.
+  const sourceFields = await tx
+    .select({ entityVersionId: fields.entityVersionId })
+    .from(fields)
+    .where(
+      and(eq(fields.id, run.fieldId), eq(fields.workspaceId, run.workspaceId)),
+    )
+    .limit(1);
+  const sourceField = sourceFields.at(0);
+  if (!sourceField) {
+    return null;
+  }
+
+  const lockedSource = await withAggregateRowQuery({
+    tx,
+    aggregate: "entity",
+    id: { id: run.entityId, workspaceId: run.workspaceId },
+    mode: "update",
+    children: [
+      {
+        aggregate: "entityVersion",
+        id: {
+          id: sourceField.entityVersionId,
+          workspaceId: run.workspaceId,
+        },
+      },
+      {
+        aggregate: "field",
+        id: { id: run.fieldId, workspaceId: run.workspaceId },
+      },
+    ],
+    select: (lockTx) =>
+      lockTx
+        .select({
+          sourceEntityId: entities.id,
+          workspaceId: entities.workspaceId,
+          versionId: entityVersions.id,
+          versionWorkspaceId: entityVersions.workspaceId,
+          fieldId: fields.id,
+          fieldWorkspaceId: fields.workspaceId,
+          content: fields.content,
+          currentVersionId: entities.currentVersionId,
+          entityReadOnly: entities.readOnly,
+          fieldEntityVersionId: fields.entityVersionId,
+          versionDeletedAt: entityVersions.deletedAt,
+        })
+        .from(entities)
+        .innerJoin(
+          entityVersions,
+          and(
+            eq(entityVersions.entityId, entities.id),
+            eq(entityVersions.workspaceId, run.workspaceId),
+          ),
+        )
+        .innerJoin(
+          fields,
+          and(
+            eq(fields.id, run.fieldId),
+            eq(fields.workspaceId, run.workspaceId),
+            eq(fields.entityVersionId, entityVersions.id),
+          ),
+        ),
+  });
+  return lockedSource.rows.at(0) ?? null;
+};
+
 export const persistOcrProjection = async ({
   claimToken,
   ciphertext,
@@ -564,72 +634,7 @@ export const persistOcrProjection = async ({
     if (!workspace) {
       return "source_cancelled";
     }
-    // The field owns its version identity; stale runs may refer to an older one.
-    const sourceFields = await tx
-      .select({ entityVersionId: fields.entityVersionId })
-      .from(fields)
-      .where(
-        and(
-          eq(fields.id, run.fieldId),
-          eq(fields.workspaceId, run.workspaceId),
-        ),
-      )
-      .limit(1);
-    const sourceField = sourceFields.at(0);
-    const lockedRows = sourceField
-      ? (
-          await withAggregateRowQuery({
-            tx,
-            aggregate: "entity",
-            id: { id: run.entityId, workspaceId: run.workspaceId },
-            mode: "update",
-            children: [
-              {
-                aggregate: "entityVersion",
-                id: {
-                  id: sourceField.entityVersionId,
-                  workspaceId: run.workspaceId,
-                },
-              },
-              {
-                aggregate: "field",
-                id: { id: run.fieldId, workspaceId: run.workspaceId },
-              },
-            ],
-            select: (lockTx) =>
-              lockTx
-                .select({
-                  sourceEntityId: entities.id,
-                  workspaceId: entities.workspaceId,
-                  versionId: entityVersions.id,
-                  versionWorkspaceId: entityVersions.workspaceId,
-                  fieldId: fields.id,
-                  fieldWorkspaceId: fields.workspaceId,
-                  content: fields.content,
-                  currentVersionId: entities.currentVersionId,
-                  entityReadOnly: entities.readOnly,
-                  fieldEntityVersionId: fields.entityVersionId,
-                  versionDeletedAt: entityVersions.deletedAt,
-                })
-                .from(entities)
-                .innerJoin(
-                  entityVersions,
-                  and(
-                    eq(entityVersions.entityId, entities.id),
-                    eq(entityVersions.workspaceId, run.workspaceId),
-                  ),
-                )
-                .innerJoin(
-                  fields,
-                  and(
-                    eq(fields.id, run.fieldId),
-                    eq(fields.workspaceId, run.workspaceId),
-                    eq(fields.entityVersionId, entityVersions.id),
-                  ),
-                ),
-          })
-        ).rows
-      : [];
+    const source = await lockOcrProjectionSource(tx, run);
     const ownedClaims = await tx
       .update(documentProcessingRuns)
       .set({ claimedAt: new Date(), updatedAt: new Date() })
@@ -649,7 +654,6 @@ export const persistOcrProjection = async ({
       return "stale_claim";
     }
 
-    const source = lockedRows.at(0) ?? null;
     const sourceState = classifyOcrProjectionSource({
       run,
       source,

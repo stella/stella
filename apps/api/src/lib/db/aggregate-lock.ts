@@ -583,6 +583,31 @@ type RowResource = {
   scopeColumns: readonly string[];
   scopeValues: readonly (string | number)[];
 };
+const memberCleanupRowResource = (
+  id: AggregateIdentities["memberCleanup"],
+): RowResource => {
+  switch (id.type) {
+    case "organization-member":
+      return {
+        table: "member",
+        columns: ["id"],
+        values: [id.id],
+        scopeColumns: ["organization_id"],
+        scopeValues: [id.organizationId],
+      };
+    case "workspace-member":
+      return {
+        table: "workspace_members",
+        columns: ["id"],
+        values: [id.id],
+        scopeColumns: ["workspace_id"],
+        scopeValues: [id.workspaceId],
+      };
+    default:
+      id satisfies never;
+      return panic("Unknown member cleanup resource");
+  }
+};
 const rowResource = (options: RowIdentityOptions): RowResource => {
   switch (options.aggregate) {
     case "organization":
@@ -758,27 +783,7 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
         scopeValues: [options.id.workspaceId],
       };
     case "memberCleanup":
-      switch (options.id.type) {
-        case "organization-member":
-          return {
-            table: "member",
-            columns: ["id"],
-            values: [options.id.id],
-            scopeColumns: ["organization_id"],
-            scopeValues: [options.id.organizationId],
-          };
-        case "workspace-member":
-          return {
-            table: "workspace_members",
-            columns: ["id"],
-            values: [options.id.id],
-            scopeColumns: ["workspace_id"],
-            scopeValues: [options.id.workspaceId],
-          };
-        default:
-          options.id satisfies never;
-          return panic("Unknown member cleanup resource");
-      }
+      return memberCleanupRowResource(options.id);
     default:
       options satisfies never;
       return panic("Unknown row aggregate");
