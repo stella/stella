@@ -177,6 +177,94 @@ for (const scope of ["landing", "marketing"]) {
   });
 }
 
+const assertScopedBrowserWorkspaces = (source: unknown) => {
+  const { jobs } = v.parse(
+    v.object({
+      jobs: v.record(
+        v.string(),
+        v.looseObject({
+          env: v.optional(v.record(v.string(), v.unknown()), {}),
+          uses: v.optional(v.string()),
+        }),
+      ),
+    }),
+    source,
+  );
+  let checked = 0;
+  for (const [job, configuration] of Object.entries(jobs)) {
+    if (configuration.uses !== undefined) {
+      continue;
+    }
+    let selectedDirectory: string | undefined;
+    for (const step of workflowJobSteps(source, job)) {
+      if (step["uses"] === "./.github/actions/setup-playwright") {
+        const inputs = v.parse(
+          v.optional(v.record(v.string(), v.unknown()), {}),
+          step["with"],
+        );
+        selectedDirectory = v.parse(
+          v.optional(v.string()),
+          inputs["package-directory"],
+        );
+      }
+      if (
+        selectedDirectory === undefined ||
+        typeof step["run"] !== "string" ||
+        !step["run"].includes("setup-playwright/run-in-image.sh")
+      ) {
+        continue;
+      }
+      const environment = v.parse(
+        v.optional(v.record(v.string(), v.unknown()), {}),
+        step["env"],
+      );
+      const directory =
+        environment["PLAYWRIGHT_PACKAGE_DIR"] ??
+        configuration.env["PLAYWRIGHT_PACKAGE_DIR"];
+      expect(
+        directory,
+        `${job}/${v.parse(v.optional(v.string(), "unnamed"), step["name"])} browser workspace`,
+      ).toBe(selectedDirectory);
+      checked++;
+    }
+  }
+  expect(checked).toBeGreaterThan(0);
+};
+
+test("every image invocation after scoped browser setup retains its workspace", () => {
+  assertScopedBrowserWorkspaces(workflow);
+});
+
+test("the workflow guard rejects missing or mismatched browser workspace propagation", () => {
+  for (const directory of [undefined, "apps/web"]) {
+    const fixture = {
+      jobs: {
+        browser: {
+          steps: [
+            {
+              uses: "./.github/actions/setup-playwright",
+              with: { "package-directory": "apps/landing" },
+            },
+            {
+              name: "First browser tests",
+              run: "bash .github/actions/setup-playwright/run-in-image.sh bun test",
+              env: { PLAYWRIGHT_PACKAGE_DIR: "apps/landing" },
+            },
+            {
+              name: "Browser tests",
+              run: "bash .github/actions/setup-playwright/run-in-image.sh bun test",
+              env: { PLAYWRIGHT_PACKAGE_DIR: directory },
+            },
+          ],
+        },
+      },
+    };
+    expect(() => assertScopedBrowserWorkspaces(fixture)).toThrow(
+      "browser/Browser tests browser workspace",
+    );
+  }
+});
+
 test("landing verification and failure diagnostics use its installed workspace", () => {
   const steps = workflowJobSteps(workflow, "e2e-landing");
   const setup = v.parse(

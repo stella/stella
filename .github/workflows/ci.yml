@@ -7162,6 +7162,7 @@ jobs:
 
       - name: Check landing islands
         env:
+          PLAYWRIGHT_PACKAGE_DIR: apps/landing
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/check-landing-islands.json
         run: E2E_LANDING_URL=http://localhost:4321 bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/landing test:e2e
 
