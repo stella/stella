@@ -322,6 +322,28 @@ describe("write contracts cover the mutation route graph", () => {
       );
     }
   });
+  test("a comparison that some write path can skip does not count", () => {
+    const config = `{contract: 'replace', precondition: {type: 'updatedAt', field: 'expectedUpdatedAt'}}`;
+    const call = `enforceWritePrecondition({type: 'updatedAt', field: 'expectedUpdatedAt'})`;
+    for (const body of [
+      `if (body.expectedUpdatedAt) { ${call}; }`,
+      `body.expectedUpdatedAt && ${call};`,
+      `body.expectedUpdatedAt ? ${call} : undefined;`,
+      `for (const item of body.items) { ${call}; }`,
+      `try { body.check(); } catch { ${call}; }`,
+    ]) {
+      const sources = fixture(config);
+      sources.set(
+        handler,
+        `import { createSafeHandler } from '@/api/lib/api-handlers';
+        import { enforceWritePrecondition } from '@/api/lib/write-contract';
+        export default createSafeHandler(${config}, async ({ body }) => { ${body} return {}; });`,
+      );
+      expect(check(sources)).toContainEqual(
+        expect.stringContaining("Replacement must reach owner enforcement"),
+      );
+    }
+  });
   test("compound revision declarations require every owner comparison", () => {
     const config = `{contract: 'replace', precondition: {type: 'revision', fields: ['baseRevision', 'selectedTextHash']}}`;
     const sources = fixture(config);

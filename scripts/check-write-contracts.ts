@@ -727,7 +727,16 @@ class WriteSourceResolver {
     seen.add(key);
     const scope = wrapperScope(resolved);
     const visit = (node: ts.Node, currentScope: LexicalScope) => {
-      if (ts.isFunctionLike(node)) {
+      // Only unconditional comparisons count: a branch, loop, catch, short
+      // circuit or optional call may skip the comparison on some write path.
+      if (ts.isFunctionLike(node) || isConditionalExecution(node)) {
+        return;
+      }
+      if (
+        ts.isBinaryExpression(node) &&
+        isShortCircuit(node.operatorToken.kind)
+      ) {
+        visit(node.left, currentScope);
         return;
       }
       const nestedScope = ts.isBlock(node)
@@ -891,6 +900,22 @@ class WriteSourceResolver {
   };
   isSafe = (handler: string) => this.safeBoundaries.has(handler);
 }
+
+const isShortCircuit = (kind: ts.SyntaxKind): boolean =>
+  kind === ts.SyntaxKind.AmpersandAmpersandToken ||
+  kind === ts.SyntaxKind.BarBarToken ||
+  kind === ts.SyntaxKind.QuestionQuestionToken ||
+  kind === ts.SyntaxKind.AmpersandAmpersandEqualsToken ||
+  kind === ts.SyntaxKind.BarBarEqualsToken ||
+  kind === ts.SyntaxKind.QuestionQuestionEqualsToken;
+
+const isConditionalExecution = (node: ts.Node): boolean =>
+  ts.isIfStatement(node) ||
+  ts.isConditionalExpression(node) ||
+  ts.isSwitchStatement(node) ||
+  ts.isIterationStatement(node, false) ||
+  ts.isCatchClause(node) ||
+  (ts.isCallExpression(node) && ts.isOptionalChain(node));
 
 const preconditionFields = (type: string | undefined): string[] => {
   switch (type) {
