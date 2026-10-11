@@ -13,6 +13,7 @@ import { LIMITS } from "@/api/lib/limits";
 import { parseStoredViewLayout } from "@/api/lib/views-schema";
 
 const config = {
+  contract: "patch",
   description:
     "List your own saved view templates, newest first, each with its name, " +
     "layout, layout type, and the columns that layout needs. Personal: " +

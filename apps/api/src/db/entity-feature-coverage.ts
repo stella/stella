@@ -8,7 +8,12 @@ const targetsApplicationRole = (to: PgPolicyConfig["to"]): boolean => {
   if (Array.isArray(to)) {
     return to.some(targetsApplicationRole);
   }
-  return to === "stella" || (is(to, PgRole) && to.name === "stella");
+  return (
+    to === undefined ||
+    to === "public" ||
+    to === "stella" ||
+    (is(to, PgRole) && (to.name === "stella" || to.name === "public"))
+  );
 };
 
 const ENTITY_RELATION_ALIASES = {
@@ -164,9 +169,14 @@ export const entityFeatureCoverageViolations = (
       policy.for === "all" &&
       policy.withCheck !== undefined &&
       dialect.sqlToQuery(policy.withCheck).sql === expression &&
-      expression.includes(`"${config.name}"."${column.name}"`) &&
-      (relationExpression === undefined ||
-        expression.includes(relationExpression));
+      ((root === undefined &&
+        config.columns.some(
+          (candidate) => candidate.name === "entity_feature_gate",
+        ) &&
+        expression.includes(`"${config.name}"."entity_feature_gate"`)) ||
+        (expression.includes(`"${config.name}"."${column.name}"`) &&
+          (relationExpression === undefined ||
+            expression.includes(relationExpression))));
     for (const { column, target } of required) {
       if (target !== undefined) {
         const classification = entityReferenceClassification(column);

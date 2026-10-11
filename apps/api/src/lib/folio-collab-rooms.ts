@@ -766,7 +766,11 @@ export const storeFolioCollabSnapshot = async ({
     try: async () =>
       await value.scopedDb(async (tx) => {
         await lockOrganizationObjectIntentsForWriter(tx, value.organizationId);
-        await lockActiveWorkspaceForBufferIntent(tx, value.workspaceId);
+        await lockActiveWorkspaceForBufferIntent({
+          tx,
+          workspaceId: value.workspaceId,
+          mode: "share",
+        });
         // Reserve cleanup ownership before the object can exist. A process crash
         // after PUT therefore leaves a durable exact-key tombstone for recovery.
         await tx.insert(bufferObjectCleanupIntents).values({
@@ -840,12 +844,13 @@ export const storeFolioCollabSnapshot = async ({
           organizationId: value.organizationId,
           objectKey: nextKey,
           sizeBytes: snapshotBytes.byteLength,
-          write: async () =>
+          content: snapshotBytes,
+          write: async ({ content, objectKey }) =>
             await writeS3ObjectWithRetry(
               {
                 contentType: FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
-                data: snapshotBytes,
-                key: nextKey,
+                data: content,
+                key: objectKey,
               },
               { type: "cleanup-intent", intent: nextCleanupIntentId },
             ),

@@ -33,6 +33,7 @@ import type {
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 
 const config = {
+  contract: "patch",
   featureAccess: { featureId: LIST_VERIFICATION_FEATURE_ID, type: "required" },
   description:
     "List the list verifications of one document, newest first with cursor " +
@@ -85,12 +86,12 @@ const readVerifications = createSafeHandler(
 type MissingProjectedRunColumn = UnprojectedColumns<
   RunRow,
   RunSummaryColumnProjection,
-  (typeof UNPROJECTED_RUN_SUMMARY_COLUMNS)[number]
+  (typeof UNPROJECTED_RUN_SUMMARY_COLUMNS)[number] | "entityFeatureGate"
 >;
 type UnexpectedProjectedRunColumn = UnbackedProjectionKeys<
   RunRow,
   RunSummaryColumnProjection,
-  (typeof UNPROJECTED_RUN_SUMMARY_COLUMNS)[number]
+  (typeof UNPROJECTED_RUN_SUMMARY_COLUMNS)[number] | "entityFeatureGate"
 >;
 
 true satisfies MissingProjectedRunColumn extends never ? true : never;

@@ -131,12 +131,13 @@ export const writeFolioCollabCheckpointObject = async ({
           organizationId,
           objectKey: checkpointKey,
           sizeBytes: checkpointBytes.byteLength,
-          write: async () =>
+          content: checkpointBytes,
+          write: async ({ content, objectKey }) =>
             await writeS3ObjectWithRetry(
               {
                 contentType: DOCX_MIME_TYPE,
-                data: checkpointBytes,
-                key: checkpointKey,
+                data: content,
+                key: objectKey,
               },
               ownership,
             ),
@@ -147,6 +148,7 @@ export const writeFolioCollabCheckpointObject = async ({
 
 const checkpointFolioCollabRoom = createSafeHandler(
   {
+    contract: "patch",
     contentDelivery: {
       type: "none",
       reason: "Processes collaboration content without returning stored files.",
@@ -391,7 +393,11 @@ const checkpointFolioCollabRoom = createSafeHandler(
 
     const checkpointedAt = new Date();
     const storedResult = await safeDb(async (tx) => {
-      await lockActiveWorkspaceForBufferIntent(tx, workspaceId);
+      await lockActiveWorkspaceForBufferIntent({
+        tx,
+        workspaceId,
+        mode: "share",
+      });
       const rooms = await tx
         .select({
           baseVersionId: folioCollabRooms.baseVersionId,

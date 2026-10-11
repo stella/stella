@@ -1,0 +1,353 @@
+import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
+import { fromMarkdown } from "mdast-util-from-markdown";
+import { gfmFromMarkdown } from "mdast-util-gfm";
+import { gfm } from "micromark-extension-gfm";
+
+import { assertProperty } from "@stll/property-testing";
+import { sha256Hex } from "@stll/sha256/bun";
+
+import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
+import {
+  findAnchoredSpan,
+  isSpanReplacementBalanced,
+  spliceSpanProposal,
+} from "@/api/handlers/chat/messages/revisions/span-proposal";
+
+const content = toPersistedChatMessageContentV3({
+  data: [
+    { type: "text", content: "Hello " },
+    {
+      type: "tool-call",
+      id: "call",
+      name: "boe_search_legislation",
+      arguments: "{}",
+      state: "complete",
+    },
+    { type: "text", content: "world 🌍" },
+  ],
+});
+
+describe("anchored answer proposals", () => {
+  test("global text offsets splice one part and retain every other part", () => {
+    const anchor = findAnchoredSpan({
+      content,
+      start: 6,
+      end: 11,
+      selectedTextHash: sha256Hex("world"),
+    });
+    expect(anchor?.selected).toBe("world");
+    if (!anchor) {
+      throw new TypeError("Expected a valid anchor");
+    }
+    const proposal = spliceSpanProposal({
+      content,
+      anchor,
+      replacement: "everyone",
+    });
+    expect(proposal.data.slice(0, 2)).toEqual(content.data.slice(0, 2));
+    expect(proposal.data.at(2)).toEqual({
+      type: "text",
+      content: "everyone 🌍",
+    });
+    expect(proposal.metadata).toEqual(content.metadata);
+  });
+
+  test.each([
+    { start: 6, end: 11, text: "wrong" },
+    { start: 5, end: 8, text: " wo" },
+    { start: 6, end: 20, text: "world 🌍" },
+    { start: 6, end: 6, text: "" },
+  ])(
+    "rejects an outdated or cross-part anchor $start..$end",
+    ({ start, end, text }) => {
+      expect(
+        findAnchoredSpan({
+          content,
+          start,
+          end,
+          selectedTextHash: sha256Hex(text),
+        }),
+      ).toBeNull();
+    },
+  );
+});
+
+describe("Markdown replacement boundaries", () => {
+  test.each([
+    { source: "Use a | b here", start: 4, end: 5, replacement: "c | d" },
+    { source: "  prose | tail", start: 0, end: 1, replacement: "word" },
+    { source: "a selected word", start: 2, end: 10, replacement: "new\nblock" },
+    {
+      source: "a selected word",
+      start: 2,
+      end: 10,
+      replacement: "```ts\ncode",
+    },
+    { source: "| old | cell |", start: 2, end: 5, replacement: "a | b" },
+  ])("accepts prose without inventing structure in $source", (options) => {
+    expect(isSpanReplacementBalanced(options)).toBe(true);
+  });
+  test("plain-text edits preserve generated prose containing Markdown punctuation", () => {
+    const punctuation = ["|", "*", "_", "`", "#", ">", "-"] as const;
+    const characters = fc
+      .array(fc.constantFrom("a", "b", "c", " ", ...punctuation), {
+        maxLength: 24,
+      })
+      .map((parts) => parts.join(""));
+    const prose = (source: string) => {
+      const root = fromMarkdown(source, {
+        extensions: [gfm()],
+        mdastExtensions: [gfmFromMarkdown()],
+      });
+      return (
+        root.children.length === 1 &&
+        root.children.every(
+          (node) =>
+            node.type === "paragraph" &&
+            node.children.every((child) => child.type === "text"),
+        )
+      );
+    };
+    // Classify prose with the parser: generated headings, emphasis and code
+    // are structural edits, rather than members of this literal-text class.
+    const edits = fc
+      .record({
+        before: characters,
+        marker: fc.constantFrom(...punctuation),
+        after: characters,
+        position: fc.nat({ max: 100 }),
+        width: fc.nat({ max: 100 }),
+        replacement: fc
+          .array(fc.constantFrom("x", "y", "z", " ", ...punctuation), {
+            minLength: 1,
+            maxLength: 12,
+          })
+          .map((parts) => parts.join("")),
+      })
+      .map(({ before, marker, after, position, width, replacement }) => {
+        const source = before + marker + after;
+        const start = position % source.length;
+        const end = start + 1 + (width % (source.length - start));
+        return { source, start, end, replacement };
+      })
+      .filter(
+        ({ source, start, end, replacement }) =>
+          prose(source) &&
+          prose(source.slice(0, start) + replacement + source.slice(end)),
+      );
+    assertProperty(
+      "plain-text edits preserve generated prose containing Markdown punctuation",
+      fc.property(edits, (options) => {
+        expect(isSpanReplacementBalanced(options)).toBe(true);
+      }),
+      { numRuns: 140 },
+    );
+  });
+  test.each([
+    { source: "hello world", start: 0, end: 6 },
+    { source: "hello world", start: 3, end: 8 },
+    { source: "hello world", start: 6, end: 11 },
+    { source: "hello world", start: 0, end: 11 },
+    { source: "left\n\n**right**", start: 0, end: 4 },
+    { source: "**left**\n\nright", start: 10, end: 15 },
+  ])("permits empty replacements at $start..$end in $source", (options) => {
+    expect(isSpanReplacementBalanced({ ...options, replacement: "" })).toBe(
+      true,
+    );
+  });
+  test("every contiguous plain-text deletion preserves the remaining structure", () => {
+    const source = "abcdef";
+    for (let start = 0; start < source.length; start += 1) {
+      for (let end = start + 1; end <= source.length; end += 1) {
+        expect(
+          isSpanReplacementBalanced({ source, start, end, replacement: "" }),
+        ).toBe(true);
+      }
+    }
+  });
+  test.each([
+    { source: "hello world", start: 0 },
+    { source: "hello world", start: 5 },
+    { source: "hello world", start: 11 },
+    { source: "**left**\n\nright", start: 0 },
+    { source: "**left**\n\nright", start: 8 },
+    { source: "**left**\n\nright", start: 10 },
+    { source: "**left**\n\nright", start: 15 },
+  ])(
+    "permits plain-text insertion at boundary $start in $source",
+    (options) => {
+      expect(
+        isSpanReplacementBalanced({
+          ...options,
+          end: options.start,
+          replacement: "added",
+        }),
+      ).toBe(true);
+    },
+  );
+  test.each([
+    { source: "**bold** tail", start: 0, end: 1, replacement: "" },
+    { source: "`code` tail", start: 0, end: 1, replacement: "" },
+    { source: "left\n\nright", start: 4, end: 6, replacement: "" },
+    { source: "**bold** tail", start: 1, end: 1, replacement: "added" },
+  ])(
+    "rejects boundary edits that change surrounding structure in $source",
+    (options) => {
+      expect(isSpanReplacementBalanced(options)).toBe(false);
+    },
+  );
+  test.each([
+    "plain text",
+    "**bold**",
+    "`code`",
+    "``a ` b``",
+    "**bold *nested***",
+    "Multiply 2 * 3",
+    "**open",
+    "`open",
+    "[label](https://example.com",
+    "[label](https://example.com)",
+    "[label](<https://example.test/a(b>)",
+    "[label](<https://example.test/a)b>)",
+    '[label](https://example.test "Title with (unmatched parenthesis")',
+    "[label](https://example.test 'Title with )unmatched parenthesis')",
+  ])("accepts balanced inline replacement %s", (replacement) => {
+    expect(
+      isSpanReplacementBalanced({
+        source: "a selected word",
+        start: 2,
+        end: 10,
+        replacement,
+      }),
+    ).toBe(true);
+  });
+  test.each(["new\n\nblock", "\n\n```ts\ncode"])(
+    "rejects unbalanced or block replacement %s",
+    (replacement) => {
+      expect(
+        isSpanReplacementBalanced({
+          source: "a selected word",
+          start: 2,
+          end: 10,
+          replacement,
+        }),
+      ).toBe(false);
+    },
+  );
+  test("accepts complete fenced blocks but rejects table cell separators", () => {
+    expect(
+      isSpanReplacementBalanced({
+        source: "old",
+        start: 0,
+        end: 3,
+        replacement: "```ts\nconst x = 1;\n```",
+      }),
+    ).toBe(true);
+    expect(
+      isSpanReplacementBalanced({
+        source: "| old | cell |\n| --- | --- |",
+        start: 2,
+        end: 5,
+        replacement: "a | b",
+      }),
+    ).toBe(false);
+  });
+  test("retains enclosing bold syntax and permits intraword underscores", () => {
+    expect(
+      isSpanReplacementBalanced({
+        source: "**Hello** world",
+        start: 2,
+        end: 7,
+        replacement: "Hi",
+      }),
+    ).toBe(true);
+    expect(
+      isSpanReplacementBalanced({
+        source: "**Hello** world",
+        start: 2,
+        end: 7,
+        replacement: "**Hi**",
+      }),
+    ).toBe(true);
+    expect(
+      isSpanReplacementBalanced({
+        source: "a selected word",
+        start: 2,
+        end: 10,
+        replacement: "some_identifier",
+      }),
+    ).toBe(true);
+  });
+  test("rejects an unclosed fenced block even when the entire source is replaced", () => {
+    expect(
+      isSpanReplacementBalanced({
+        source: "old",
+        start: 0,
+        end: 3,
+        replacement: "```ts\ncode",
+      }),
+    ).toBe(false);
+  });
+  test.each([
+    "old\n\n```ts\nexisting",
+    "old\n\n- ```ts\n  existing\n\noutside",
+    "old\n\n> ```ts\n> existing\n\noutside",
+  ])(
+    "preserves an existing unclosed fence outside the edit in %s",
+    (source) => {
+      expect(
+        isSpanReplacementBalanced({
+          source,
+          start: 0,
+          end: 3,
+          replacement: "rewritten",
+        }),
+      ).toBe(true);
+    },
+  );
+  test("rejects a newly introduced unclosed fence beside an existing one", () => {
+    expect(
+      isSpanReplacementBalanced({
+        source: "old\n\n> ```ts\n> existing\n\noutside",
+        start: 0,
+        end: 3,
+        replacement: "- ```js\n  new\n\nrewritten",
+      }),
+    ).toBe(false);
+  });
+  test("rejects replacing an unclosed fence even if another existing fence remains", () => {
+    const source = "- ```ts\n  old\n\n> ```js\n> existing";
+    expect(
+      isSpanReplacementBalanced({
+        source,
+        start: 0,
+        end: source.indexOf("\n\n>"),
+        replacement: "- ```py\n  new",
+      }),
+    ).toBe(false);
+  });
+  test("rejects a wholly rewritten unclosed fence", () => {
+    const source = "```ts\nold";
+    expect(
+      isSpanReplacementBalanced({
+        source,
+        start: 0,
+        end: source.length,
+        replacement: "```js\nnew",
+      }),
+    ).toBe(false);
+  });
+  test.each([
+    { source: "- [ ] old item", start: 3, end: 4, replacement: "x" },
+    { source: "```ts\nold\n```", start: 3, end: 5, replacement: "js" },
+    {
+      source: '[old](https://example.test "Title")',
+      start: 28,
+      end: 33,
+      replacement: "Changed title",
+    },
+  ])("preserves enclosing semantic attributes in $source", (options) => {
+    expect(isSpanReplacementBalanced(options)).toBe(false);
+  });
+});

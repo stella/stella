@@ -53,7 +53,7 @@ test("published catalogue documents require indexing permission", () => {
   for (const publicToolsCrawlAllowed of [false, true]) {
     for (const [pathname, fullPath] of [
       ["/tools", "/tools/"],
-      ["/tools/contract-review", "/tools/$slug"],
+      ["/tools/contract-review-anthropic", "/tools/$slug"],
       ["/tools/contribute", "/tools/contribute"],
     ] as const) {
       expect(

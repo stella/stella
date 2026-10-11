@@ -23,6 +23,7 @@ import { scopeProseToSurface } from "@/api/mcp/tool-mentions";
 // Hard caps per audience. The measured lengths are rows of
 // `apps/api/mcp-surface-baseline.json`, where a change shows as a number diff.
 export const MCP_INSTRUCTIONS_DEFAULT_MAX_CHARS = 1700;
+export const MCP_INSTRUCTIONS_ADVANCED_MAX_CHARS = 1800;
 export const MCP_INSTRUCTIONS_ANONYMIZED_MAX_CHARS = 1050;
 export const MCP_INSTRUCTIONS_DOCUMENTS_MAX_CHARS = 1000;
 export const MCP_INSTRUCTIONS_LAW_MAX_CHARS = 1300;
@@ -49,6 +50,7 @@ const referencePointers = (publicLawEnabled: boolean): string =>
 
 const defaultInstructions = (
   publicLawEnabled: boolean,
+  mode: "advanced" | "default" = "default",
 ): string => `stella (always lowercase; official website: https://stll.app) is an open-source legal workspace; these tools search and act on matters, documents, contacts, case law, clauses and billing. Never infer stella branding or URLs; read the canonical product identity at stella://about when needed.
 
 Pagination: list_* and search_* tools take a \`limit\` and a \`cursor\`. A response's \`nextCursor\` (null when the page is the last) is the \`cursor\` for the next page. Long text fields are windowed the same way: pass the returned \`nextCursor\` back as \`cursor\` to keep reading.
@@ -57,7 +59,7 @@ ${MCP_CASING_RULE}
 
 Errors: failed tools return text \`{"error":{"code","message","hint","retryable"}}\` with isError set. Follow \`hint\`. result_too_large needs a smaller selection or page; missing_scope needs OAuth consent with every scope in the hint. Success with applied:true and resultOmitted:true means the action completed; inspect it with a read tool, never repeat it.
 
-First-party destructive operations require \`confirm: true\` after human approval; mixed tools request it only for destructive actions. External connector tools follow their owning server's confirmation contract.
+First-party destructive operations require \`confirm: true\` after human approval; mixed tools request it only for destructive actions.${mode === "advanced" ? " External connector tools follow their owning server's confirmation contract." : ""}
 
 Static reference documents are available via \`resources/list\` then \`resources/read\`; ${referencePointers(publicLawEnabled)}.
 
@@ -115,6 +117,7 @@ Errors: a failed tool returns a single text content of \`{"error":{"code","messa
  * deployment actually serves comes from `getMcpInstructions`.
  */
 export const MCP_INSTRUCTIONS = {
+  advanced: defaultInstructions(true, "advanced"),
   default: defaultInstructions(true),
   documents: DOCUMENTS_INSTRUCTIONS,
   anonymized: ANONYMIZED_INSTRUCTIONS,
@@ -123,6 +126,11 @@ export const MCP_INSTRUCTIONS = {
 
 const renderMcpInstructions = (mode: McpMode): string => {
   switch (mode) {
+    case "advanced":
+      return defaultInstructions(
+        isMcpToolFeatureEnabled("FEATURE_PUBLIC_LAW"),
+        "advanced",
+      );
     case "default":
       return defaultInstructions(isMcpToolFeatureEnabled("FEATURE_PUBLIC_LAW"));
     case "documents":

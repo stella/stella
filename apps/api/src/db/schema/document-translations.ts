@@ -16,6 +16,11 @@ import type {
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 import {
+  entityFeatureGateChecks,
+  entityFeatureGateColumns,
+  entityFeatureWorkspaceGateColumns,
+} from "../entity-feature-gate-columns";
+import {
   jsonb,
   organization,
   p,
@@ -47,6 +52,8 @@ const UNIT_STATUS_VALUES = quoted(DOCUMENT_TRANSLATION_UNIT_STATUSES);
 export const documentTranslationRuns = p.pgTable(
   "document_translation_runs",
   {
+    ...entityFeatureGateColumns(),
+    ...entityFeatureWorkspaceGateColumns(),
     id: pUuid<"documentTranslationRun">().primaryKey(),
     organizationId: safeOrganizationId("organization_id")
       .notNull()
@@ -92,6 +99,7 @@ export const documentTranslationRuns = p.pgTable(
     finishedAt: timestamptz("finished_at"),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     p
       .index("document_translation_runs_document_created_idx")
       .on(
@@ -157,12 +165,15 @@ export const documentTranslationRuns = p.pgTable(
         [table.entityId, { target: "entities", kind: "owned-content" }],
       ]),
     }),
+    p.index("document_translation_runs_ef_entity_id_idx").on(table.entityId),
   ],
 );
 
 export const documentTranslationUnits = p.pgTable(
   "document_translation_units",
   {
+    ...entityFeatureGateColumns(),
+    ...entityFeatureWorkspaceGateColumns(),
     id: pUuid<"documentTranslationUnit">().primaryKey(),
     organizationId: safeOrganizationId("organization_id")
       .notNull()
@@ -187,6 +198,7 @@ export const documentTranslationUnits = p.pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     p
       .uniqueIndex("document_translation_units_run_key_uidx")
       .on(table.runId, table.unitKey),

@@ -11,6 +11,7 @@ import type { CommandAction } from "./types";
 export const COMMAND_ACTIONS: readonly CommandAction[] = [
   {
     id: "log-time",
+    capability: null,
     group: "create",
     titleKey: "common.logTime",
     icon: Clock,
@@ -22,6 +23,7 @@ export const COMMAND_ACTIONS: readonly CommandAction[] = [
   },
   {
     id: "new-matter",
+    capability: null,
     group: "create",
     titleKey: "common.newMatter",
     icon: Plus,
@@ -33,6 +35,7 @@ export const COMMAND_ACTIONS: readonly CommandAction[] = [
   },
   {
     id: "new-chat",
+    capability: "ai",
     group: "create",
     titleKey: "chat.newChat",
     icon: MessageSquare,
@@ -44,6 +47,7 @@ export const COMMAND_ACTIONS: readonly CommandAction[] = [
   },
   {
     id: "upload-document",
+    capability: null,
     group: "create",
     titleKey: "workspaces.kanban.uploadDocument",
     icon: Upload,
@@ -54,6 +58,7 @@ export const COMMAND_ACTIONS: readonly CommandAction[] = [
   },
   {
     id: "new-task",
+    capability: null,
     group: "create",
     titleKey: "tasks.newTask",
     icon: SquareCheck,

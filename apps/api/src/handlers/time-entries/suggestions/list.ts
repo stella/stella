@@ -16,6 +16,7 @@ const listTimeSuggestionsQuerySchema = t.Object({
 
 const listTimeSuggestions = createSafeHandler(
   {
+    contract: "patch",
     description:
       "List suggested time entries for one day in the current matter, drawn " +
       "from the signed-in user's own activity here: chat messages they sent " +
@@ -36,9 +37,17 @@ const listTimeSuggestions = createSafeHandler(
     access: "read",
     query: listTimeSuggestionsQuerySchema,
   },
-  async function* ({ query, safeDb, session, user, workspaceId }) {
+  async function* ({
+    query,
+    safeDb,
+    session,
+    user,
+    workspaceId,
+    featureAccessSnapshot,
+  }) {
     const loaded = yield* loadTimeSuggestions({
       safeDb,
+      featureAccessSnapshot,
       organizationId: session.activeOrganizationId,
       workspaceId,
       userId: user.id,

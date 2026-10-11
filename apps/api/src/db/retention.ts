@@ -3,6 +3,22 @@ export type TableRetention =
   | { boundedBy: string };
 
 export const TABLE_RETENTION = {
+  desktop_device_proof_replays: {
+    ttlColumn: "expires_at",
+    sweeper: "pruneDesktopProofReceipts",
+  },
+  mcp_user_connections: {
+    boundedBy:
+      "One saved connection per organization, account and connector; cascade-deleted with any owner.",
+  },
+  chat_secrets: {
+    boundedBy:
+      "One receipt per thread tool call, cascade-deleted with its thread; encrypted payloads expire through chat.purgeSecrets.",
+  },
+  service_oauth_clients: {
+    boundedBy:
+      "Operator-managed clients, cascade-deleted with their OAuth client or organization.",
+  },
   desktop_presence: {
     boundedBy:
       "One observation per account, organization and installation, overwritten by heartbeats and cascade-deleted with the account or organization.",

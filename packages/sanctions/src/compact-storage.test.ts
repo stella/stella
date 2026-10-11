@@ -184,8 +184,14 @@ test("a bounded cache never holds more than its limit and evicts the least recen
   expect(cache.get(2)).toBeUndefined();
   expect(cache.get(1)).toBe("a");
   expect(cache.get(3)).toBe("c");
+  cache.set(1, "updated");
+  cache.set(4, "d");
+  expect(cache.get(3)).toBeUndefined();
+  expect(cache.get(1)).toBe("updated");
   for (let key = 10; key < 1000; key += 1) {
     cache.set(key, String(key));
+    expect(cache.size).toBe(2);
+    expect(cache.get(key - 1)).toBe(key === 10 ? undefined : String(key - 1));
+    expect(cache.get(key)).toBe(String(key));
   }
-  expect(cache.size).toBe(2);
 });

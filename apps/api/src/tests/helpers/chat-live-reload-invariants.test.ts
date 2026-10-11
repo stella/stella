@@ -341,10 +341,12 @@ describe("the stored results oracle", () => {
 describe("the served snapshot oracle", () => {
   const served = {
     createdAt: "2026-01-02T03:04:05.000Z",
+    edited: false,
     id: toSafeId<"chatMessage">("01a0e22c-ba01-7525-803d-b57dcb87e6fb"),
     metadata: { turnOutcome: { type: "completed" } },
     parts: [{ content: "Draft the NDA", type: "text" }],
     role: "user",
+    revision: 0,
   } satisfies ClientMessage;
   const asEngineHolds: UIMessage = {
     id: served.id,

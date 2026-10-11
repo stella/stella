@@ -10,7 +10,7 @@ import {
 import { flowRunRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import {
   ACCOUNT_ACCESS,
-  assertRunSizeConfirmedForHandler,
+  authorizeHandlerRunSize,
   createSafeHandler,
 } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
@@ -25,6 +25,7 @@ import { ActionAdmissionError } from "@/api/lib/rate-limit/action-admission";
 import { getTanStackTextModelInfoForRole } from "@/api/lib/tanstack-ai-models";
 
 const config = {
+  contract: "patch",
   description:
     "Start a manual flow run in a matter using a flow definition and optional input documents. Returns the run ID and initial status.",
   permissions: { flow: ["run"] },
@@ -98,7 +99,7 @@ const startFlowRunHandler = createSafeHandler(
             orgAIConfig,
             { dataClass: "customer", organizationId },
           );
-          return await assertRunSizeConfirmedForHandler({
+          return await authorizeHandlerRunSize({
             metering: { actionType: "background", modelRole: "chat" },
             estimatedUnits: estimateFlowRunUnits({
               modelId: stepModel.modelId,
@@ -106,6 +107,8 @@ const startFlowRunHandler = createSafeHandler(
               inputEntityCount: body.inputEntityIds.length,
             }),
             confirmedUnits: body.confirmedUnits,
+            steps,
+            definitionId: body.definitionId,
             organizationId,
             orgAIConfig,
             workspaceId,

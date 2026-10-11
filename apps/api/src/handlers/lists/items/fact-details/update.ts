@@ -24,6 +24,7 @@ import {
   FACT_SCORING,
 } from "@/api/lib/lists/fact-details";
 import type { FactDatePrecision } from "@/api/lib/lists/fact-details";
+import { LIST_VERIFICATION_ITEM_OPERATION } from "@/api/lib/lists/item-operations";
 import type {
   UnbackedProjectionKeys,
   UnprojectedColumns,
@@ -58,6 +59,11 @@ const bodySchema = t.Object({
 });
 
 const config = {
+  contract: "replace",
+  precondition: {
+    type: "deferred",
+    baselineId: "apps/api/src/handlers/lists/items/fact-details/update.ts",
+  },
   featureAccess: { featureId: LIST_VERIFICATION_FEATURE_ID, type: "required" },
   description:
     "Set the evidential detail of one fact item, replacing what it had: when " +
@@ -193,7 +199,10 @@ const updateFactDetails = createSafeHandler(
           resourceType: AUDIT_RESOURCE_TYPE.LEGAL_LIST_ITEM,
           resourceId: itemEntityId,
           changes,
-          metadata: { operation: "fact_details_set", listId },
+          metadata: {
+            operation: LIST_VERIFICATION_ITEM_OPERATION.factDetailsSet,
+            listId,
+          },
         });
         return { type: "updated" } as const;
       }),
@@ -225,6 +234,7 @@ type FactDetailsProjection = Pick<
 >;
 
 const UNPROJECTED_FACT_DETAIL_COLUMNS = [
+  "entityFeatureGate", // RLS state is internal to the gate.
   // Scope keys the caller sent in the request.
   "workspaceId",
   "listId",

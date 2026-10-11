@@ -24,6 +24,7 @@ type MatterActivityExportFormat =
   (typeof MATTER_ACTIVITY_EXPORT_FORMATS)[number];
 
 const config = {
+  contract: "patch",
   accountAccess: ACCOUNT_ACCESS.standard,
   contentDelivery: { type: "audited" },
   permissions: { workspace: ["read"] },
@@ -105,13 +106,23 @@ const matterActivityJson = ({
 
 const exportOverviewActivity = createSafeHandler(
   config,
-  async function* ({ query, recordAuditEvent, safeDb, session, workspaceId }) {
+  async function* ({
+    query,
+    recordAuditEvent,
+    safeDb,
+    session,
+    workspaceId,
+    user,
+    featureAccessSnapshot,
+  }) {
     const filters = toMatterActivityFilters(query);
     const items = yield* Result.await(
       readOverviewActivityExport({
         filters,
         cap: LIMITS.exportRowLimit,
         organizationId: session.activeOrganizationId,
+        userId: user.id,
+        featureAccessSnapshot,
         safeDb,
         workspaceId,
       }),

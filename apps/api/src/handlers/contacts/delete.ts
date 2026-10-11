@@ -148,6 +148,7 @@ export const deleteContactHandler = async function* ({
 
 const deleteContactById = createSafeRootHandler(
   {
+    contract: "patch",
     description:
       "Permanently delete a contact from the organization address book. " +
       "Rejected while the contact is still the client of any matter. This is " +

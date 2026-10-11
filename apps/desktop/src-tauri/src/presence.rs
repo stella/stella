@@ -170,11 +170,16 @@ fn request(
   client: &DesktopHttpClient,
   account: &crate::account::AccountRequest,
   report: &Report<'_>,
-) -> reqwest::RequestBuilder {
-  client
+) -> Result<crate::http_client::DeviceProofRequest, String> {
+  let builder = client
     .post(format!("{}/v1/desktop/presence", account.api_base_url))
-    .bearer_auth(&account.credential.key)
-    .json(report)
+    .json(report);
+  crate::http_client::device_proof_request(
+    builder,
+    &account.device_key,
+    Some(&account.credential.key),
+    None,
+  )
 }
 
 async fn report(handle: &AppHandle) {
@@ -207,7 +212,7 @@ async fn report(handle: &AppHandle) {
     return;
   };
   let version = handle.package_info().version.to_string();
-  let result = request(
+  let Ok(request) = request(
     &client,
     &account,
     &Report {
@@ -215,9 +220,11 @@ async fn report(handle: &AppHandle) {
       version: &version,
       protocol: crate::handoff::PROTOCOL_VERSION,
     },
-  )
-  .send()
-  .await;
+  ) else {
+    tracing::warn!("desktop presence device proof unavailable");
+    return;
+  };
+  let result = request.send().await;
   match result {
     Ok(response) if response.status().is_success() => {}
     Ok(response) => {
@@ -287,14 +294,20 @@ mod tests {
         protocol: crate::handoff::PROTOCOL_VERSION,
       },
     )
-    .build()
-    .unwrap();
+    .unwrap()
+    .build();
     assert_eq!(req.method(), reqwest::Method::POST);
     assert_eq!(
       req.url().as_str(),
       "https://api.example.test/v1/desktop/presence"
     );
     assert_eq!(req.headers()["authorization"], "Bearer account-key");
+    crate::device_proof::tests::verify_request(
+      &req,
+      &account.device_key.thumbprint().unwrap(),
+      Some("account-key"),
+      None,
+    );
     let body: serde_json::Value =
       serde_json::from_slice(req.body().unwrap().as_bytes().unwrap()).unwrap();
     assert_eq!(body, fixture);

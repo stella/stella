@@ -86,12 +86,18 @@ export const APP_LOOKUP_FIXTURE = {
     },
     {
       identifier: "124/24",
+      missing: ["sheet"],
+      message: "Add the sheet.",
+      status: "incomplete_identifier" as const,
+    },
+    {
+      identifier: "125/24",
       hint: "Search case law.",
       message: "No matching decision.",
       status: "not_found" as const,
     },
     {
-      identifier: "125/24",
+      identifier: "126/24",
       message: "Lookup unavailable.",
       status: "lookup_failed" as const,
     },

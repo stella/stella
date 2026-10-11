@@ -10,9 +10,12 @@ import * as v from "valibot";
 import { assertProperty } from "@stll/property-testing";
 import { createSha256 } from "@stll/sha256/node";
 
-import { pilotQueueJobs } from "./ci-pr-pilot-plan";
+import { PILOT_ALWAYS, pilotQueueJobs } from "./ci-pr-pilot-plan";
 import { contextWithPlanOutputs, evaluate } from "./github-expression";
 import { prDepthJobs, thinJobs } from "./main-heavy-plan";
+
+// Wall-clock checks: no reused or queued plan can certify them, so they run.
+const ALWAYS_RUN: readonly string[] = PILOT_ALWAYS;
 
 const stepSchema = v.looseObject({
   name: v.string(),
@@ -402,8 +405,11 @@ test("push, dispatch and queue events always run without querying evidence", asy
 test("reused depth prevents every nonstructural CI job and expensive planner step", () => {
   const reused = contextWithPlanOutputs({
     context: {
+      status: { cancelled: false },
       values: {
         "github.event_name": "pull_request",
+        "github.event.pull_request.draft": false,
+        "inputs.heavy_only": false,
         "needs.ci-plan.outputs.run_required": "false",
       },
     },
@@ -413,7 +419,9 @@ test("reused depth prevents every nonstructural CI job and expensive planner ste
     if (name === "ci-plan" || name === "ci-result") {
       continue;
     }
-    expect(evaluate(job.if ?? "true", reused), name).toBe(false);
+    expect(evaluate(job.if ?? "true", reused), name).toBe(
+      ALWAYS_RUN.includes(name),
+    );
   }
   const checkout = planner.steps.findIndex((step) => step.name === "Checkout");
   expect(checkout).toBeGreaterThan(-1);
@@ -963,8 +971,11 @@ test("enqueue events leave every PR suite to unchanged merge-group validation", 
   expect(requests).toHaveLength(0);
   const enqueued = contextWithPlanOutputs({
     context: {
+      status: { cancelled: false },
       values: {
         "github.event_name": "pull_request",
+        "github.event.pull_request.draft": false,
+        "inputs.heavy_only": false,
         "needs.ci-plan.outputs.run_required": "false",
         "needs.ci-plan.outputs.coverage_profile": "normal-v1",
       },
@@ -975,7 +986,9 @@ test("enqueue events leave every PR suite to unchanged merge-group validation", 
     if (["ci-plan", "ci-result"].includes(name)) {
       continue;
     }
-    expect(evaluate(job.if ?? "true", enqueued), name).toBe(false);
+    expect(evaluate(job.if ?? "true", enqueued), name).toBe(
+      ALWAYS_RUN.includes(name),
+    );
   }
 });
 
@@ -1111,6 +1124,7 @@ test("thin groups run and require every deferred normal PR check unless normal c
       context: {
         values: {
           "github.event_name": "merge_group",
+          "vars.QUEUE_BROWSER_SUITES": "on",
           "inputs.heavy_only": false,
           "steps.completed-depth.outputs.normal_completion": completion,
           "steps.pilot-queue-plan.outputs.queue_jobs": JSON.stringify(
@@ -1121,6 +1135,8 @@ test("thin groups run and require every deferred normal PR check unless normal c
           "needs.ci-plan.outputs.trusted": "true",
           "needs.ci-plan.outputs.suite_depth": "full",
           "needs.ci-plan.outputs.queue_depth": "thin",
+          "needs.web-build.result": "success",
+          "needs.heavy-web-build.result": "skipped",
           "inputs.pr_depth_only": false,
           ...Object.fromEntries(
             Object.entries(allScopes).map(([name, value]) => [
@@ -1129,7 +1145,12 @@ test("thin groups run and require every deferred normal PR check unless normal c
             ]),
           ),
         },
-        status: { success: true, failure: false, cancelled: false },
+        status: {
+          always: true,
+          success: true,
+          failure: false,
+          cancelled: false,
+        },
       },
     });
     const queueJobs = v.parse(
@@ -1147,7 +1168,9 @@ test("thin groups run and require every deferred normal PR check unless normal c
         name,
         {
           result:
-            thin.includes(name) || queueJobs.includes(name)
+            thin.includes(name) ||
+            queueJobs.includes(name) ||
+            name === "desktop-rust-tests"
               ? "success"
               : "skipped",
         },
@@ -1177,8 +1200,21 @@ test("thin groups run and require every deferred normal PR check unless normal c
         },
       });
     expect(runAggregation(dependencies).exitCode).toBe(0);
+    expect(evaluate(jobs["desktop-rust-tests"]?.if ?? "false", context)).toBe(
+      true,
+    );
+    for (const outcome of ["skipped", "failure", "cancelled"]) {
+      expect(
+        runAggregation({
+          ...dependencies,
+          "desktop-rust-tests": { result: outcome },
+        }).exitCode,
+        `desktop-rust-tests/${completion}/${outcome}`,
+      ).toBe(1);
+    }
     for (const job of deferred.jobs) {
       const scheduled = evaluate(jobs[job]?.if ?? "true", context);
+      expect(typeof scheduled, job).toBe("boolean");
       if (completion !== "complete") {
         expect(scheduled, job).toBe(true);
         for (const outcome of ["skipped", "failure"]) {
@@ -1188,8 +1224,6 @@ test("thin groups run and require every deferred normal PR check unless normal c
             `${job}/${outcome}`,
           ).toBe(1);
         }
-      } else if (!thin.includes(job)) {
-        expect(scheduled, job).toBe(false);
       }
     }
   }

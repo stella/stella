@@ -114,7 +114,7 @@ requires (request it at `stella auth login --scopes`).
 | contact | `stella contact lookup-registry` | read |  |
 | contact | `stella contact read` | read |  |
 | contact | `stella contact save` | matters_write | destructive (needs `--yes` off a TTY) |
-| document | `stella document compare` | documents_write | destructive (needs `--yes` off a TTY) |
+| document | `stella document compare` | documents_write |  |
 | document | `stella document comparison prepare` | documents_write |  |
 | document | `stella document comparison prepare-from-links` | documents_write |  |
 | document | `stella document content` | read | paginated; windowed text |
@@ -202,7 +202,7 @@ are omitted here. Input union keys are required unless marked `?`.
 - `stella case-law coverage`
   - optional: --country
 - `stella case-law lookup`
-  - `--identifiers` — The references to resolve, at most 50 per call: a docket number as the court writes it (the sheet number after it is ignored) or an ECLI. Each is answered on its own. (string-array, repeatable)
+  - `--identifiers` — The references to resolve, at most 50 per call: a docket number as the court writes it, with the sheet number when the court publishes one (it picks a single decision when the file holds several), or an ECLI. Each is answered on its own. (string-array, repeatable)
   - `--country` — Required corpus country. Admitted: CZE. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
 - `stella case-law open`
   - `--decision-id` — Decision ID returned by search_case_law or lookup_case_law. (string)
@@ -405,7 +405,7 @@ code (no envelope) still maps to 5; anything else falls to 4.
 
 ## Capability commands (full surface)
 
-Beyond the curated commands above, the CLI generates 409
+Beyond the curated commands above, the CLI generates 413
 capability commands from the server's capability catalog: every safe handler
 that is not a curated tool, reached through `read_capability` or `write_capability`
 paths. Every generated command lives at `stella capability <domain> <action>`;
@@ -429,10 +429,10 @@ multi-segment capability actions are flattened with hyphens into `<action>`.
 ### When no curated command fits
 
 The curated commands above cover common tasks; anything else goes through the
-generic capability path. Current domains: `audit-logs`, `billing-codes`, `case-law`, `catalogue`, `chat`, `clauses`, `contacts`, `document-translations`, `document-types`, `documents`, `entities`, `entity-views`, `expenses`, `fields`, `flows`, `invoices`, `legal-reader`, `legislation`, `lists`, `matters`, `number-series`, `organization-settings`, `playbooks`, `properties`, `rates`, `reports`, `saved-time-narratives`, `seller-profiles`, `signals`, `skills`, `style-sets`, `tasks`, `template-packs`, `template-recipes`, `templates`, `time-entries`, `time-timers`, `uploads`, `usage`, `vat-rates`, `view-templates`, `views`, `work-obligations`.
+generic capability path. Current domains: `audit-logs`, `billing-codes`, `case-law`, `catalogue`, `chat`, `clauses`, `contacts`, `document-translations`, `document-types`, `documents`, `entities`, `entity-views`, `expenses`, `fields`, `flows`, `invoices`, `legal-reader`, `legislation`, `lists`, `matters`, `number-series`, `organization-settings`, `playbooks`, `properties`, `rates`, `reports`, `saved-time-narratives`, `search-history`, `seller-profiles`, `signals`, `skills`, `style-sets`, `tasks`, `template-packs`, `template-recipes`, `templates`, `time-entries`, `time-timers`, `uploads`, `usage`, `vat-rates`, `view-templates`, `views`, `work-obligations`.
 
 - Start a document translation run: `stella capability document-translations runs-create --matter-id <matter-id> --input '{"body":{"entityId":"value","fieldId":"value","targetLang":"value","engine":"deepl","output":"translated"}}'`.
-- Start workflow extraction: `stella capability matters workflow-start --matter-id <matter-id> --input '{"body":{"serviceTier":"standard"}}'`.
+- Start workflow extraction: `stella capability matters workflow-start --matter-id <matter-id>`.
 - **`--input` casing is not uniform; never guess it.** A curated command's
   `--input` JSON (the table and flags above) uses the MCP tool schema's own
   keys, snake_case (`matter_id`, `contact_id`). A capability command's

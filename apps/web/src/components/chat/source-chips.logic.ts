@@ -6,12 +6,14 @@ import {
 import { parseStatutePath } from "@stll/api-contract/statute-route";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 
+import type { ChatToolCallPart } from "@/components/chat/chat-ui-tools";
 import type {
   BusinessRegistrySourceReference,
   CaseLawDecisionSourceReference,
   ExternalSourceReference,
 } from "@/components/chat/external-source-store";
-import type { ChatSourceDocument } from "@/lib/api-contract";
+import { decisionCitationCourtLabel } from "@/components/references/decision-citation-chip.logic";
+import type { ChatMessage, ChatSourceDocument } from "@/lib/api-contract";
 
 export type SourceDocumentEntry = {
   data: ChatSourceDocument;
@@ -140,7 +142,33 @@ const getCaseLawDecisionReference = (
   ) {
     return undefined;
   }
-  return { caseNumber: caseNumber.trim(), decisionId: decisionId.trim() };
+  const court = value["court"];
+  const country = value["country"];
+  const date = value["decisionDate"];
+  const abbreviation = getStringField(value, ["courtAbbreviation"]);
+  const ecli = value["ecli"];
+  const citation =
+    typeof court === "string" &&
+    court.trim().length > 0 &&
+    typeof country === "string" &&
+    country.trim().length > 0 &&
+    (typeof date === "string" || date === null)
+      ? {
+          court,
+          courtShortCode: decisionCitationCourtLabel({
+            court,
+            country,
+            courtAbbreviation: abbreviation,
+            ecli: typeof ecli === "string" ? ecli : null,
+          }),
+          decisionDate: date,
+        }
+      : undefined;
+  return {
+    caseNumber: caseNumber.trim(),
+    decisionId: decisionId.trim(),
+    ...(citation === undefined ? {} : { citation }),
+  };
 };
 
 const collectTextValue = (value: unknown, depth = 0): string | undefined => {
@@ -204,7 +232,7 @@ const isChatSourceDocument = (value: unknown): value is ChatSourceDocument => {
   );
 };
 
-export const collectSourceDocuments = (
+const collectSourceDocuments = (
   value: unknown,
   sources: SourceDocumentEntry[],
   depth = 0,
@@ -350,4 +378,84 @@ export const dedupeExternalSources = (
     );
   }
   return Array.from(sourcesByUrl.values());
+};
+
+type McpToolInfo = {
+  connectorSlug: string;
+  sourceToolName: string;
+};
+
+const getToolOutput = (part: ChatMessage["parts"][number]): unknown => {
+  if (part.type !== "tool-call" || !("output" in part)) {
+    return undefined;
+  }
+
+  return part.output;
+};
+
+const getMcpToolInfo = (part: ChatToolCallPart): McpToolInfo | null => {
+  const sourceToolName = part.name;
+  if (!sourceToolName.startsWith("mcp__")) {
+    return null;
+  }
+
+  const [, connectorSlug, ...toolParts] = sourceToolName.split("__");
+  if (!connectorSlug || toolParts.length === 0) {
+    return null;
+  }
+
+  return { connectorSlug, sourceToolName };
+};
+
+export const collectSourceChipEntries = ({
+  parts,
+  sourceDocuments = [],
+}: {
+  parts: ChatMessage["parts"];
+  sourceDocuments?: readonly ChatSourceDocument[] | undefined;
+}): {
+  uniqueExternalSources: ExternalSourceEntry[];
+  uniqueSources: SourceDocumentEntry[];
+} => {
+  const sources: SourceDocumentEntry[] = [];
+  const externalSources: ExternalSourceEntry[] = [];
+  for (const sourceDocument of sourceDocuments) {
+    sources.push({ data: sourceDocument });
+  }
+
+  for (const part of parts) {
+    if (part.type !== "tool-call") {
+      continue;
+    }
+
+    const toolOutput = getToolOutput(part);
+    collectSourceDocuments(toolOutput, sources);
+    const mcpToolInfo = getMcpToolInfo(part);
+    const toolExternalSources: ExternalSourceEntry[] = [];
+    collectExternalSources(toolOutput, toolExternalSources);
+    for (const source of toolExternalSources) {
+      externalSources.push({
+        ...source,
+        caseLawDecision: mcpToolInfo ? undefined : source.caseLawDecision,
+        appUrl: mcpToolInfo ? undefined : source.appUrl,
+        sourceUrl: mcpToolInfo ? undefined : source.sourceUrl,
+        connectorSlug: source.connectorSlug ?? mcpToolInfo?.connectorSlug,
+        sourceToolName: source.sourceToolName ?? mcpToolInfo?.sourceToolName,
+      });
+    }
+  }
+
+  const seen = new Set<string>();
+  const uniqueSources = sources.filter(({ data }) => {
+    const key = `${data.workspaceId ?? ""}:${data.entityId}`;
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+  return {
+    uniqueExternalSources: dedupeExternalSources(externalSources),
+    uniqueSources,
+  };
 };

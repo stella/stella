@@ -61,6 +61,7 @@ type Messages = {
     "resources": "Resources";
     "sourceCode": "Source code";
     "status": "Status";
+    "support": "Support";
     "tabularReview": "Tabular review";
     "tagline": "Open legal workspace for work that matters.";
     "templates": "Templates";

@@ -1,19 +1,15 @@
-import {
-  App,
-  applyDocumentTheme,
-  applyHostFonts,
-  applyHostStyleVariables,
-} from "@modelcontextprotocol/ext-apps";
+import { App } from "@modelcontextprotocol/ext-apps";
 import { panic, Result, TaggedError } from "better-result";
 
 import { FILE_COMPARISON_TRANSPORT } from "@stll/api-contract";
 import { fetchWithTimeout } from "@stll/fetch";
 
 import { hashUploadFile } from "../file-content-hash";
-import "../style.css";
+import { formatAppError, LocalizedAppError } from "../shared/app-error";
+import { parseAppToolPayload } from "../shared/bridge";
+import { mountFilePicker } from "../shared/file-picker";
 
 const UPLOAD_TIMEOUT_MS = 1_800_000;
-const INVALID_RESERVATION = "stella returned an invalid comparison reservation";
 
 class ComparisonAppError extends TaggedError("ComparisonAppError")<{
   message: string;
@@ -26,39 +22,22 @@ const comparisonError = (message: string): ComparisonAppError =>
 const wrapped = ({ message }: { message: string }): ComparisonAppError =>
   comparisonError(message);
 
-const baseInput = document.querySelector<HTMLInputElement>("#base");
-const targetInput = document.querySelector<HTMLInputElement>("#target");
+const picker = mountFilePicker();
+const t = picker.translate;
+const applyHostContext = picker.applyHostContext;
 const uploadButton = document.querySelector<HTMLButtonElement>("#upload");
-const statusElement = document.querySelector<HTMLElement>("#status");
-if (!baseInput || !targetInput || !uploadButton || !statusElement) {
+if (!uploadButton) {
   panic("File comparison app markup is incomplete");
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-type AppToolResult = Awaited<ReturnType<App["callServerTool"]>>;
-
-const parsePayload = (result: AppToolResult): unknown => {
-  if (result.structuredContent !== undefined) {
-    return result.structuredContent;
-  }
-  const text = result.content.find((part) => part.type === "text")?.text;
-  if (text === undefined) {
-    return undefined;
-  }
-  const parsed = Result.try((): unknown => JSON.parse(text));
-  return Result.isError(parsed) ? undefined : parsed.value;
-};
-
-const setStatus = (message: string, state: "idle" | "error" | "success") => {
-  statusElement.textContent = message;
-  statusElement.className = `status-${state}`;
-};
+const setStatus = picker.setStatus;
 
 const refreshUploadEnabled = (): void => {
-  uploadButton.disabled = !(
-    baseInput.files?.item(0) && targetInput.files?.item(0)
+  picker.setUploadEnabled(
+    Boolean(picker.getFile("base") && picker.getFile("target")),
   );
 };
 
@@ -98,20 +77,22 @@ type ComparisonReservation = {
 
 const parsePreparedUpload = (
   value: unknown,
-): Result<PreparedUpload, ComparisonAppError> => {
+): Result<PreparedUpload, ComparisonAppError | LocalizedAppError> => {
   if (!isRecord(value)) {
-    return Result.err(comparisonError(INVALID_RESERVATION));
+    return Result.err(
+      new LocalizedAppError({ key: "invalidComparisonReservation" }),
+    );
   }
   const { headers, url } = value;
   if (typeof url !== "string" || !isRecord(headers)) {
-    return Result.err(comparisonError(INVALID_RESERVATION));
+    return Result.err(
+      new LocalizedAppError({ key: "invalidComparisonReservation" }),
+    );
   }
   const headerEntries: [string, string][] = [];
   for (const [key, headerValue] of Object.entries(headers)) {
     if (typeof headerValue !== "string") {
-      return Result.err(
-        comparisonError("stella returned invalid upload headers"),
-      );
+      return Result.err(new LocalizedAppError({ key: "invalidUploadHeaders" }));
     }
     headerEntries.push([key, headerValue]);
   }
@@ -126,17 +107,23 @@ const isComparisonSource = (value: unknown): value is ComparisonSource =>
 
 const parseReservation = (
   value: unknown,
-): Result<ComparisonReservation, ComparisonAppError> => {
+): Result<ComparisonReservation, ComparisonAppError | LocalizedAppError> => {
   if (!isRecord(value)) {
-    return Result.err(comparisonError(INVALID_RESERVATION));
+    return Result.err(
+      new LocalizedAppError({ key: "invalidComparisonReservation" }),
+    );
   }
   const { base, next, target } = value;
   if (!isRecord(next)) {
-    return Result.err(comparisonError(INVALID_RESERVATION));
+    return Result.err(
+      new LocalizedAppError({ key: "invalidComparisonReservation" }),
+    );
   }
   const { source } = next;
   if (!isComparisonSource(source)) {
-    return Result.err(comparisonError(INVALID_RESERVATION));
+    return Result.err(
+      new LocalizedAppError({ key: "invalidComparisonReservation" }),
+    );
   }
   const parsedBase = parsePreparedUpload(base);
   if (Result.isError(parsedBase)) {
@@ -158,7 +145,9 @@ const app = new App({ name: "stella file comparison", version: "1.0.0" });
 const prepareComparison = async (
   base: File,
   target: File,
-): Promise<Result<ComparisonReservation, ComparisonAppError>> => {
+): Promise<
+  Result<ComparisonReservation, ComparisonAppError | LocalizedAppError>
+> => {
   const [baseFile, targetFile] = await Promise.all([
     describeFile(base),
     describeFile(target),
@@ -183,12 +172,15 @@ const prepareComparison = async (
   if (result.isError === true) {
     const message = result.content.find((part) => part.type === "text")?.text;
     return Result.err(
-      comparisonError(
-        message ?? `${FILE_COMPARISON_TRANSPORT.prepareToolName} failed`,
-      ),
+      message !== undefined
+        ? comparisonError(message)
+        : new LocalizedAppError({
+            key: "capabilityFailed",
+            values: { capability: FILE_COMPARISON_TRANSPORT.prepareToolName },
+          }),
     );
   }
-  const payload = parsePayload(result);
+  const payload = parseAppToolPayload(result);
   return parseReservation(
     isRecord(payload) && "result" in payload ? payload["result"] : payload,
   );
@@ -197,7 +189,7 @@ const prepareComparison = async (
 const putFile = async (
   upload: PreparedUpload,
   file: File,
-): Promise<Result<void, ComparisonAppError>> => {
+): Promise<Result<void, ComparisonAppError | LocalizedAppError>> => {
   const response = await Result.tryPromise(
     async () =>
       await fetchWithTimeout(upload.url, {
@@ -212,9 +204,10 @@ const putFile = async (
   }
   if (!response.value.ok) {
     return Result.err(
-      comparisonError(
-        `Storage rejected the upload (HTTP ${response.value.status})`,
-      ),
+      new LocalizedAppError({
+        key: "storageRejected",
+        values: { status: response.value.status },
+      }),
     );
   }
   return Result.ok();
@@ -260,90 +253,86 @@ const handOffToModel = async (
 };
 
 const uploadSelectedFiles = async (): Promise<void> => {
-  const base = baseInput.files?.item(0);
-  const target = targetInput.files?.item(0);
+  const base = picker.getFile("base");
+  const target = picker.getFile("target");
   if (!base || !target) {
     return;
   }
-  uploadButton.disabled = true;
-  setStatus("Preparing upload…", "idle");
+  picker.setActivity("uploading");
+  setStatus(() => t("preparingUpload"), "idle");
   const reservation = await prepareComparison(base, target);
   if (Result.isError(reservation)) {
-    setStatus(reservation.error.message, "error");
+    setStatus(
+      () => formatAppError(reservation.error, t, "uploadFailed"),
+      "error",
+    );
     refreshUploadEnabled();
     return;
   }
 
-  setStatus("Uploading…", "idle");
+  setStatus(() => t("uploading"), "idle");
   const puts = await Promise.all([
     putFile(reservation.value.base, base),
     putFile(reservation.value.target, target),
   ]);
   for (const put of puts) {
     if (Result.isError(put)) {
-      setStatus(put.error.message, "error");
+      setStatus(() => formatAppError(put.error, t, "uploadFailed"), "error");
       refreshUploadEnabled();
       return;
     }
   }
 
-  baseInput.value = "";
-  targetInput.value = "";
+  picker.clearFiles();
   refreshUploadEnabled();
 
   const { next } = reservation.value;
   // The bytes are already staged, so a failed handoff still has to leave the
   // user able to ask for the redline themselves.
-  const ask = `Ask for the redline with source ${JSON.stringify(next.source)}.`;
+  const ask = () => t("askRedline", { source: JSON.stringify(next.source) });
   const outcome = await handOffToModel(
     next,
-    `Both files are uploaded. Call ${FILE_COMPARISON_TRANSPORT.compareToolName} with source ${JSON.stringify(next.source)}.`,
+    t("redlineHandoff", {
+      tool: FILE_COMPARISON_TRANSPORT.compareToolName,
+      source: JSON.stringify(next.source),
+    }),
   );
   if (Result.isError(outcome)) {
     setStatus(
-      `Uploaded, but stella could not start the redline: ${outcome.error.message} ${ask}`,
+      () =>
+        t("redlineStartFailed", {
+          message: formatAppError(outcome.error, t, "uploadFailed"),
+          ask: ask(),
+        }),
       "error",
     );
     return;
   }
   setStatus(
-    outcome.value === "delivered"
-      ? "Uploaded. The redline runs next."
-      : `Uploaded. ${ask}`,
+    () =>
+      outcome.value === "delivered"
+        ? t("redlineNext")
+        : t("redlineAsk", { ask: ask() }),
     "success",
   );
 };
 
-const applyHostContext = (context: ReturnType<App["getHostContext"]>) => {
-  if (!context) {
-    return;
-  }
-  if (context.theme) {
-    applyDocumentTheme(context.theme);
-  }
-  if (context.styles?.variables) {
-    applyHostStyleVariables(context.styles.variables);
-  }
-  if (context.styles?.css?.fonts) {
-    applyHostFonts(context.styles.css.fonts);
-  }
-};
 app.addEventListener("hostcontextchanged", applyHostContext);
 
-for (const input of [baseInput, targetInput]) {
-  input.addEventListener("change", () => {
-    refreshUploadEnabled();
-    setStatus("", "idle");
-  });
-}
+picker.onFilesChanged(() => {
+  refreshUploadEnabled();
+  setStatus(() => "", "idle");
+});
 
 uploadButton.addEventListener("click", () => {
-  uploadSelectedFiles().catch((error: unknown) => {
-    setStatus(
-      error instanceof Error ? error.message : "Upload failed",
-      "error",
-    );
-  });
+  uploadSelectedFiles()
+    .finally(() => {
+      picker.setActivity("idle");
+      refreshUploadEnabled();
+    })
+    .catch((error: unknown) => {
+      setStatus(() => formatAppError(error, t, "uploadFailed"), "error");
+    });
 });
 
 await app.connect();

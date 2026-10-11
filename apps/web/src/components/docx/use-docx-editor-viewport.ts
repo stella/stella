@@ -6,6 +6,7 @@ import { composeRefs } from "@stll/ui/utils";
 
 import { useDocxFitZoom } from "@/components/docx-preview-zoom";
 import { useDocxFind } from "@/components/docx/use-docx-find";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFindSurface } from "@/lib/find-owner";
 
 /** The inspector docks the editor beside the page; full view owns the page. */
@@ -29,6 +30,14 @@ export const useDocxEditorViewport = ({
     scaleOffset,
     maxAutoZoom: 0.85,
   });
+  const zoomMode = scaleOffset === 0 ? "fit-width" : "manual-offset";
+  // Switching initialZoom back to fit-width reattaches Folio's inner-viewport
+  // observer; a numeric setZoom here would override that first fit measurement.
+  useExternalSyncEffect(() => {
+    if (zoomMode === "manual-offset") {
+      editorRef.current?.setZoom(targetZoom);
+    }
+  }, [editorRef, zoomMode, targetZoom]);
   // Stable ref callback so React doesn't detach/re-attach the fit-zoom
   // ResizeObserver every render.
   const composedContainerRef = useMemo(
@@ -57,5 +66,5 @@ export const useDocxEditorViewport = ({
     scope: "app",
   });
 
-  return { composedContainerRef, find, targetZoom };
+  return { composedContainerRef, find, targetZoom, zoomMode };
 };

@@ -1,0 +1,5 @@
+{
+  "metric": "throw-outside-boundary",
+  "delta": 2,
+  "reason": "Sanitized decision width refusals propagate UnpersistableDecisionFieldError through the ingestion Result boundary and failure ledger, retaining the existing typed refusal contract."
+}

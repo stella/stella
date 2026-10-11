@@ -193,7 +193,7 @@ const ResultTableRow = ({
                 <Input
                   readOnly
                   value={row.ecli}
-                  aria-label={`${t("copy")} ECLI`}
+                  aria-label={t("copyEcli")}
                   className="font-mono text-xs"
                   onFocus={(event) => event.currentTarget.select()}
                 />
@@ -497,9 +497,12 @@ const SearchControls = ({
           placeholder={t("searchPlaceholder")}
           groupClassName="flex-1"
         />
-        <Button type="submit" variant="outline">
-          <SearchIcon />
-          <span className="max-sm:sr-only">{t("search")}</span>
+        <Button
+          type="submit"
+          variant="outline"
+          className="h-auto shrink-0 max-sm:h-11 sm:h-auto"
+        >
+          {t("search")}
         </Button>
       </div>
       <div className="grid grid-cols-2 items-end gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_auto]">
@@ -662,7 +665,7 @@ const SearchResults = ({
   return (
     <div className="space-y-5">
       {defaults.status === "invalid" ? (
-        <p role="alert">{defaults.message}</p>
+        <p role="alert">{t("invalidFilters")}</p>
       ) : (
         <SearchControls
           bridge={bridge}

@@ -51,6 +51,15 @@ describe("the United States court directory", () => {
     ]);
   });
 
+  test("every registered court has a publisher short code", () => {
+    for (const registeredCourt of US_COURTS) {
+      expect(registeredCourt.shortCode, registeredCourt.id).not.toBe("");
+      expect(registeredCourt.shortCode, registeredCourt.id).toBe(
+        registeredCourt.shortCode.normalize("NFC").trim(),
+      );
+    }
+  });
+
   test("an accepted court resolves to its entry, by its exact id only", () => {
     expect(resolveUsCourt("scotus")).toEqual({
       type: "accepted",
@@ -59,6 +68,7 @@ describe("the United States court directory", () => {
         id: "scotus",
         sourceName: "Supreme Court of the United States",
         canonicalName: "Supreme Court of the United States",
+        shortCode: "SCOTUS",
         rawJurisdiction: "F",
         classification: "court",
         system: "federal",

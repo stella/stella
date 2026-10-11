@@ -2,7 +2,11 @@ import { panic, Result } from "better-result";
 import { t } from "elysia";
 
 import type { SafeDbError } from "@/api/db/safe-db";
-import { estimateChatContextPromptTokens } from "@/api/handlers/chat/chat-prompt";
+import {
+  estimateChatContextPromptTokens,
+  estimateChatRevisionNoteTokens,
+} from "@/api/handlers/chat/chat-prompt";
+import { readChatRevisionContextChanges } from "@/api/handlers/chat/chat-revision-context";
 import {
   assertChatThreadScopeMatches,
   resolveChatScope,
@@ -94,6 +98,7 @@ const resolveForkProvenance = ({
 };
 
 const config = {
+  contract: "patch",
   contentDelivery: {
     type: "none",
     reason:
@@ -150,11 +155,13 @@ const getMessages = createSafeRootHandler(
     // next send would use.
     const buildNextSendContext = ({
       messages,
+      revisionNoteTokens = 0,
       summary,
       threadChatModel,
       webResearch,
     }: {
       messages: readonly ChatMessage[];
+      revisionNoteTokens?: number;
       summary: {
         summarizedMessageCount: number;
         summaryMarkdown: string;
@@ -183,6 +190,7 @@ const getMessages = createSafeRootHandler(
       });
       return computeThreadContextUsage({
         messages,
+        conversationContextTokens: revisionNoteTokens,
         promptTokens,
         toolTokens,
         triggerTokens,
@@ -313,6 +321,13 @@ const getMessages = createSafeRootHandler(
             checkpoint,
           }),
         );
+        const revisionChanges = unwrapTxRead(
+          await readChatRevisionContextChanges({
+            messages: windowedMessages,
+            threadId,
+            tx,
+          }),
+        );
 
         return {
           kind: "ok" as const,
@@ -323,6 +338,7 @@ const getMessages = createSafeRootHandler(
           parent,
           checkpoint,
           windowedMessages,
+          revisionNoteTokens: estimateChatRevisionNoteTokens(revisionChanges),
         };
       }),
     );
@@ -382,6 +398,7 @@ const getMessages = createSafeRootHandler(
       parent,
       checkpoint,
       windowedMessages,
+      revisionNoteTokens,
     } = reads;
 
     // Estimated for every thread, empty ones included: with no messages and no
@@ -392,6 +409,7 @@ const getMessages = createSafeRootHandler(
     // template studio) the standalone read path never carries template-authoring
     // tools. The trigger denominator resolves the same model the next send uses.
     const context = buildNextSendContext({
+      revisionNoteTokens,
       messages: windowedMessages.map((message) => ({
         id: message.id,
         role: message.role,

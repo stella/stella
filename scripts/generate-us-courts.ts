@@ -73,7 +73,7 @@ import {
 import { hashGeneratedSource } from "./generated-source-hash";
 
 /** Bumped when the rendering or the resolution rules change. */
-const GENERATOR_VERSION = 3;
+const GENERATOR_VERSION = 4;
 
 const REPO_ROOT = path.join(import.meta.dir, "..");
 const DATA_DIR = path.join(REPO_ROOT, "packages/api-contract/data/us-courts");
@@ -888,11 +888,17 @@ const acceptedEntry = (
   if (source.in_use !== "t" && source.in_use !== "f") {
     problems.push(`${source.id}: in_use is ${JSON.stringify(source.in_use)}`);
   }
+  const shortCode =
+    source.id === "scotus" ? "SCOTUS" : normalizedName(source.short_name);
+  if (shortCode.length === 0) {
+    problems.push(`${source.id}: source short_name is empty`);
+  }
   return {
     status: "accepted",
     id: source.id,
     sourceName: source.full_name,
     canonicalName,
+    shortCode,
     rawJurisdiction: source.jurisdiction,
     classification,
     system,

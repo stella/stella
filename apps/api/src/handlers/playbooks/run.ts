@@ -40,6 +40,7 @@ const runPlaybookBodySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "Run a review playbook over a matter's documents. Every DOCX document is " +
     "reviewed against the playbook's latest approved version, and each " +

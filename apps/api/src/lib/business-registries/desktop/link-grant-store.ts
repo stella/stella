@@ -18,11 +18,13 @@ const grantValue = ({
   userId,
   organizationId,
   verifierHash,
+  deviceJkt,
 }: {
   userId: SafeId<"user">;
   organizationId: SafeId<"organization">;
   verifierHash: string;
-}) => JSON.stringify({ userId, organizationId, verifierHash });
+  deviceJkt: string;
+}) => JSON.stringify({ userId, organizationId, verifierHash, deviceJkt });
 
 // Auth verification rows deny ordinary application access. A single root
 // DELETE commits the claim independently of later credential issuance.
@@ -51,6 +53,7 @@ const sweepExpiredLinkGrants = async (db: LinkGrantDb, now: Date) => {
 export type CreateDesktopLinkGrantOptions = {
   correlationId: string;
   verifierHash: string;
+  deviceJkt: string;
   userId: SafeId<"user">;
   organizationId: SafeId<"organization">;
   db: LinkGrantDb;
@@ -60,6 +63,7 @@ export type CreateDesktopLinkGrantOptions = {
 export const createDesktopLinkGrant = async ({
   correlationId,
   verifierHash,
+  deviceJkt,
   userId,
   organizationId,
   db,
@@ -72,7 +76,7 @@ export const createDesktopLinkGrant = async ({
       await db.insert(verification).values({
         id: `${LINK_GRANT_PREFIX}:${correlationId}`,
         identifier: `${LINK_GRANT_PREFIX}:${correlationId}`,
-        value: grantValue({ userId, organizationId, verifierHash }),
+        value: grantValue({ userId, organizationId, verifierHash, deviceJkt }),
         expiresAt,
       });
       return { userId, organizationId, expiresAt: expiresAt.toISOString() };
@@ -90,6 +94,7 @@ export type ConsumeDesktopLinkGrantOptions = {
   verifier: string;
   expectedUserId: string;
   expectedOrganizationId: string;
+  deviceJkt: string;
   db: LinkGrantDb;
   now?: Date;
 };
@@ -99,6 +104,7 @@ export const consumeDesktopLinkGrant = async ({
   verifier,
   expectedUserId,
   expectedOrganizationId,
+  deviceJkt,
   db,
   now = new Date(Temporal.Now.instant().epochMilliseconds),
 }: ConsumeDesktopLinkGrantOptions) => {
@@ -122,6 +128,7 @@ export const consumeDesktopLinkGrant = async ({
               grantValue({
                 userId: identity.userId,
                 organizationId: identity.organizationId,
+                deviceJkt,
                 verifierHash: hashSha256Hex(verifier),
               }),
             ),
@@ -149,5 +156,5 @@ export const consumeDesktopLinkGrant = async ({
   }
   // The conditional claim proves these exact identity values were stored by
   // the signed-in browser; request identity alone never authorizes a member.
-  return Result.ok(identity);
+  return Result.ok({ ...identity, deviceJkt });
 };

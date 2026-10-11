@@ -13,6 +13,7 @@ import {
 import { readOverviewActivityPage } from "./read-overview-activity.query";
 
 const config = {
+  contract: "patch",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "ui_navigation_state" },
@@ -31,13 +32,22 @@ const config = {
 
 const readOverviewActivity = createSafeHandler(
   config,
-  async function* ({ query, safeDb, session, workspaceId }) {
+  async function* ({
+    query,
+    safeDb,
+    session,
+    workspaceId,
+    user,
+    featureAccessSnapshot,
+  }) {
     const page = yield* Result.await(
       readOverviewActivityPage({
         cursor: query.cursor ?? null,
         filters: toMatterActivityFilters(query),
         limit: query.limit ?? LIMITS.matterActivityPageSizeDefault,
         organizationId: session.activeOrganizationId,
+        userId: user.id,
+        featureAccessSnapshot,
         safeDb,
         workspaceId,
       }),

@@ -24,6 +24,7 @@ import { AIConfigProvidersEditor } from "@/components/ai-config-providers-editor
 import { AIConfigRoleModelPicker } from "@/components/ai-config-role-model-picker";
 import {
   createProviderCredentialDraft,
+  haveSameRoleModelSelections,
   createDefaultRoleModels,
   ensureRoleModelsForProviders,
   getProviderValues,
@@ -435,7 +436,10 @@ export const AIKeyRequiredDialog = ({
         <DialogFormState
           dirty={
             JSON.stringify(providers) !== JSON.stringify(initialProviders) ||
-            JSON.stringify(roleModels) !== JSON.stringify(initialRoleModels)
+            !haveSameRoleModelSelections({
+              current: roleModels,
+              baseline: initialRoleModels,
+            })
           }
           onDiscard={() => {
             setProviders(initialProviders);

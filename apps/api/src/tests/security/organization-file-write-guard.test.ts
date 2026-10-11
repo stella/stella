@@ -789,7 +789,7 @@ describe("durable organization file writes", () => {
           const source = await Bun.file(
             path.join(root, "apps/api", site.file),
           ).text();
-          expect(source).toContain("reserveOrganizationFileBytes(");
+          expect(source).toContain("authorizeOrganizationFileWrite(");
           expect(source).toContain("commitOrganizationFileBytes(");
           break;
         }

@@ -21,6 +21,8 @@ export const BASELINE_PATHS = {
   testState: "scripts/test-state-baseline.json",
   /** scripts/check-aggregate-locks.ts */
   aggregateLocks: "scripts/aggregate-lock-baseline.json",
+  /** scripts/check-write-contracts.ts */
+  writeContracts: "scripts/write-contracts-baseline.json",
   /** scripts/check-aggregate-mutations.ts */
   aggregateMutations: "scripts/aggregate-mutations-baseline.json",
   /** scripts/check-oxlint-effective-config.ts */
@@ -47,6 +49,8 @@ export const BASELINE_PATHS = {
   transferRead: "scripts/transfer-read-guard-baseline.json",
   /** scripts/source-fingerprint-baseline.ts */
   sourceFingerprint: "scripts/source-fingerprint-baseline.json",
+  /** scripts/test-subject-reachability.ts */
+  testSubjectReachability: "scripts/test-subject-reachability-baseline.json",
   /** scripts/sql-perf-baseline.ts */
   sqlPerf: ".oxlint-plugins/sql-perf-baseline.json",
   /** apps/api/scripts/mcp-coverage-guard.ts */

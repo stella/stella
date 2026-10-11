@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * Hungarian courts (Bírósági Határozatok Gyűjteménye) decision parser.
  *
@@ -21,8 +22,6 @@
  * order, and only a line it does recognise gains a heading or a role.
  */
 
-import { panic } from "better-result";
-
 import type {
   BlockContent,
   Document as FolioDocument,
@@ -30,7 +29,6 @@ import type {
   Paragraph as FolioParagraph,
   ParagraphContent as FolioParagraphContent,
   Run as FolioRun,
-  RunContent as FolioRunContent,
   TrackedRunContent,
   Table as FolioTable,
   TextFormatting,
@@ -53,14 +51,20 @@ import type {
 import { collapseSpacedLetters } from "@stll/text-normalize";
 
 import {
-  inlinesToPlainText,
-  stripInlinePrefix,
+  normalizeInlineLine,
+  stripInlineLinePrefix,
 } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 import { sectionsFromAst } from "@/api/handlers/case-law/ingestion/sections-from-ast";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import type { DecisionJudgeInput } from "@/api/lib/legal-search/ingestion-types";
+import {
+  createParagraphLineReader,
+  type BodyDocumentLine,
+  type DocumentLine,
+} from "@/api/lib/legal-search/parsers/document-footnotes";
+import { runContentVisibleText } from "@/api/lib/legal-search/parsers/run-content-text";
 import {
   buildValidationHtml,
   validateAndLog,
@@ -82,53 +86,19 @@ type DocRun = {
   readonly colored: boolean;
 };
 
-type DocLine = {
+type DocLineData = {
   readonly runs: readonly DocRun[];
   readonly text: string;
   readonly centered: boolean;
-  /** The note this line belongs to, where it is a footnote's text. */
-  readonly note?: { readonly label: string; readonly noteId: string };
 };
 
-type DocTable = { readonly rows: readonly (readonly DocLine[])[] };
+type DocLine = DocumentLine<DocLineData>;
+type DocCell = BodyDocumentLine<DocLineData>;
+type DocTable = { readonly rows: readonly (readonly DocCell[])[] };
 
 type DocItem =
   | { readonly type: "line"; readonly line: DocLine }
   | { readonly type: "table"; readonly table: DocTable };
-
-/** The characters one run item contributes to the document's text. */
-const runContentText = (item: FolioRunContent): string => {
-  switch (item.type) {
-    case "text":
-      return item.text;
-    case "tab":
-      return "\t";
-    case "break":
-      return "\n";
-    // Verbatim-preserved markup folio does not model. Its `text` is what the
-    // markup puts on the line (a `w:ruby` base is a word of the decision), so
-    // the extraction takes it rather than dropping the characters.
-    case "preservedXml":
-      return item.text;
-    // Carry no characters of their own: a symbol, a note mark, a field's own
-    // instruction text, a hyphen the layout inserted, a drawing or a shape all
-    // reach the text through the runs around them.
-    case "symbol":
-    case "footnoteRef":
-    case "endnoteRef":
-    case "fieldChar":
-    case "instrText":
-    case "softHyphen":
-    case "noBreakHyphen":
-    case "renderedPageBreak":
-    case "drawing":
-    case "shape":
-      return "";
-    default:
-      item satisfies never;
-      return panic(`Unhandled run content: ${JSON.stringify(item)}`);
-  }
-};
 
 type FolioInlineContent =
   | FolioParagraphContent
@@ -142,7 +112,7 @@ const runsOf = (paragraph: FolioParagraph): DocRun[] => {
     fallbackFormatting?: TextFormatting,
   ): void => {
     const formatting = run.formatting ?? fallbackFormatting;
-    const text = run.content.map(runContentText).join("");
+    const text = run.content.map(runContentVisibleText).join("");
     if (text.length === 0) {
       return;
     }
@@ -221,7 +191,7 @@ const runsOf = (paragraph: FolioParagraph): DocRun[] => {
   return runs;
 };
 
-const lineOf = (paragraph: FolioParagraph, note?: DocLine["note"]): DocLine => {
+const lineOf = (paragraph: FolioParagraph): DocLineData => {
   const runs = runsOf(paragraph);
   const alignment = paragraph.formatting?.alignment;
   return {
@@ -235,54 +205,122 @@ const lineOf = (paragraph: FolioParagraph, note?: DocLine["note"]): DocLine => {
       .join("")
       .trimEnd(),
     centered: alignment === "center",
-    ...(note === undefined ? {} : { note }),
   };
 };
 
 /**
  * A cell's own paragraphs, read through the content controls that wrap them;
- * a nested table is not part of the cell's text.
+ * nested tables retain their paragraphs in source order.
  */
 const cellParagraphsOf = (content: readonly BlockContent[]): FolioParagraph[] =>
   content.flatMap((item) => {
-    if (item.type === "paragraph") {
-      return [item];
+    switch (item.type) {
+      case "paragraph":
+        return [item];
+      case "table":
+        return item.rows.flatMap((row) =>
+          row.cells.flatMap((cell) => cellParagraphsOf(cell.content)),
+        );
+      case "blockSdt":
+      case "blockCustomXml":
+        return cellParagraphsOf(item.content);
+      case "preservedBlock":
+      case "bookmarkStart":
+      case "bookmarkEnd":
+        return [];
+      default:
+        item satisfies never;
+        return panic("Unhandled table-cell block");
     }
-    return item.type === "blockSdt" || item.type === "blockCustomXml"
-      ? cellParagraphsOf(item.content)
-      : [];
   });
 
-const tableOf = (table: FolioTable): DocTable => ({
-  rows: table.rows.map((row) =>
-    row.cells.map((cell) => {
-      const paragraphs = cellParagraphsOf(cell.content);
-      const lines = paragraphs.map((item) => lineOf(item));
-      const text = lines
-        .map(({ text: cellText }) => cellText)
-        .filter((cellText) => cellText.length > 0)
-        .join("\n");
-      return {
-        runs: lines.flatMap(({ runs }) => runs),
-        text,
-        centered: lines.every(({ centered }) => centered),
-      };
-    }),
-  ),
+type ParagraphLineReader = ReturnType<
+  typeof createParagraphLineReader<DocLineData>
+>;
+
+const linesWithNotesOf = (
+  paragraph: FolioParagraph,
+  readLines?: ParagraphLineReader,
+): DocLine[] =>
+  readLines === undefined
+    ? [{ kind: "body", value: lineOf(paragraph) }]
+    : readLines(paragraph);
+
+/** Only body-kind lines can enter a cell; notes are separate blocks after
+ * their containing row, before any subsequent row or following body paragraph. */
+const cellOf = (lines: readonly BodyDocumentLine<DocLineData>[]): DocCell => ({
+  kind: "body",
+  value: {
+    runs: lines.flatMap(({ value }) => value.runs),
+    text: lines
+      .map(({ value }) => value.text)
+      .filter((text) => text.length > 0)
+      .join("\n"),
+    centered: lines.every(({ value }) => value.centered),
+  },
 });
 
+const tableItemsOf = (
+  table: FolioTable,
+  readLines?: ParagraphLineReader,
+): DocItem[] => {
+  const items: DocItem[] = [];
+  let rows: DocCell[][] = [];
+  for (const row of table.rows) {
+    const notes: Extract<DocLine, { kind: "note" }>[] = [];
+    const cells = row.cells.map((cell) => {
+      const body: BodyDocumentLine<DocLineData>[] = [];
+      for (const paragraph of cellParagraphsOf(cell.content)) {
+        for (const line of linesWithNotesOf(paragraph, readLines)) {
+          switch (line.kind) {
+            case "body":
+              body.push(line);
+              break;
+            case "note":
+              notes.push(line);
+              break;
+            default:
+              line satisfies never;
+              panic("Unhandled table line membership");
+          }
+        }
+      }
+      return cellOf(body);
+    });
+    rows.push(cells);
+    if (notes.length === 0) {
+      continue;
+    }
+    items.push({ type: "table", table: { rows } });
+    rows = [];
+    for (const line of notes) {
+      items.push({ type: "line", line });
+    }
+  }
+  if (rows.length > 0) {
+    items.push({ type: "table", table: { rows } });
+  }
+  return items;
+};
+
 /** Walk folio's blocks into the flat line-and-table sequence this parser reads. */
-const itemsOf = (content: readonly BlockContent[]): DocItem[] =>
+const itemsOf = (
+  content: readonly BlockContent[],
+  notesAfter?: ParagraphLineReader,
+): DocItem[] =>
   content.flatMap((block): DocItem[] => {
     switch (block.type) {
       case "paragraph":
-        return [{ type: "line", line: lineOf(block) }];
+        return linesWithNotesOf(block, notesAfter).map((line) => ({
+          type: "line",
+          line,
+        }));
       case "table":
-        return [{ type: "table", table: tableOf(block) }];
+        return tableItemsOf(block, notesAfter);
       case "blockSdt":
       case "blockCustomXml":
         // A content control is a wrapper; its children are the document's.
-        return itemsOf(block.content);
+        return itemsOf(block.content, notesAfter);
       // No line of the decision: a preserved block is opaque markup folio does
       // not model and holds no text, and a bookmark marker is a position. This
       // parser reads text, so it skips all three rather than round-tripping
@@ -700,7 +738,7 @@ const DATE_ENDS_LINE = /\d{1,2}\.(?:\s*napján\.?)?$/u;
  * The date of a closing line a soft break put inside a longer paragraph.
  *
  * A break renders as a newline inside one line rather than ending it
- * (`runContentText` maps `break` to "\n"), so a body paragraph built with
+ * (`runContentVisibleText` maps `break` to "\n"), so a body paragraph built with
  * `\line` carries the place-and-date line after its own text, where a match
  * anchored to the paragraph's start never sees it. Each visual line after the
  * first is read on its own, as `huDocketFrom` reads the header; the first is
@@ -824,7 +862,7 @@ const persistableDocket = (docket: string): string | undefined =>
 export const huDocketFrom = (lines: readonly string[]): string | undefined => {
   for (const block of lines) {
     // A soft break renders as a newline inside one line rather than ending
-    // it (`runContentText` maps `break` to "\n"), so a header paragraph built
+    // it (`runContentVisibleText` maps `break` to "\n"), so a header paragraph built
     // with `\line` instead of `\par` carries the rest of the document with
     // it. The docket is stated on its own visual line, so read those: an
     // unbounded slice of the block took the whole body into the docket.
@@ -998,15 +1036,15 @@ export const huBhgyHeaderLabelsOf = (
 ): readonly HuBhgyHeaderLabel[] => {
   const labels = new Set<HuBhgyHeaderLabel>();
   for (const item of itemsOf(document.package.document.content)) {
-    if (item.type !== "line") {
+    if (item.type !== "line" || item.line.kind !== "body") {
       continue;
     }
     // The header ends where the first section does. Past it a sentence can
     // open with a party's name, and a label is only a label in the header.
-    if (sectionHeadingIn(headingKey(item.line.text)) !== null) {
+    if (sectionHeadingIn(headingKey(item.line.value.text)) !== null) {
       break;
     }
-    const labelled = huBhgyHeaderLabelIn(item.line.text);
+    const labelled = huBhgyHeaderLabelIn(item.line.value.text);
     if (labelled !== null) {
       labels.add(labelled.label);
     }
@@ -1067,20 +1105,10 @@ const HEADING_ROLE_BY_LEVEL = {
 export const parseHuBhgyDecision = (
   input: ParseHuBhgyInput,
 ): ParseHuBhgyOutput => {
-  const items = itemsOf(input.document.package.document.content);
-  const noteLines: DocLine[] = [];
-  for (const note of arrayOrEmpty(input.document.package.footnotes)) {
-    if (note.noteType !== undefined && note.noteType !== "normal") {
-      continue;
-    }
-    const label = String(note.id);
-    const noteId = `fn-${note.id}`;
-    for (const block of note.content) {
-      if (block.type === "paragraph") {
-        noteLines.push(lineOf(block, { label, noteId }));
-      }
-    }
-  }
+  const items = itemsOf(
+    input.document.package.document.content,
+    createParagraphLineReader(input.document, lineOf),
+  );
 
   const builder = createBlockBuilder();
   const lineTexts: string[] = [];
@@ -1102,29 +1130,8 @@ export const parseHuBhgyDecision = (
   /** Lines before the first section heading, where the kind is printed. */
   const titleLines: string[] = [];
 
-  const emitLine = (line: DocLine): void => {
-    if (line.text.trim().length === 0) {
-      return;
-    }
-    lineTexts.push(line.text);
-
-    // ── A footnote's own text ──
-    //
-    // The notes are walked after the body, so every rule below reads a region
-    // and a wording this line has nothing to do with: it is the publisher's
-    // apparatus wherever the body left off, and it carries the mark it hangs
-    // from.
-    if (line.note !== undefined) {
-      builder.paragraph({
-        type: "paragraph",
-        role: "apparatus",
-        note: { type: "footnote", ...line.note },
-        inlines: inlinesOf(line.runs),
-        plainText: line.text,
-      });
-      return;
-    }
-
+  const classifyBodyLine = (body: BodyDocumentLine<DocLineData>): void => {
+    const line = body.value;
     const key = headingKey(line.text);
 
     if (region === "front") {
@@ -1248,29 +1255,51 @@ export const parseHuBhgyDecision = (
     // A footnote returned above, so a note's date-shaped line never dates the
     // decision; nor does the kiadmány's, which opens the closing region first.
     softBreakDate ??= closingDateAfterSoftBreak(line.text);
-    const numbered = COURT_PARAGRAPH_NUMBER.exec(line.text);
-    const inlines = inlinesOf(line.runs);
+    const normalized = normalizeInlineLine(inlinesOf(line.runs));
+    const { match: numbered, line: unnumbered } = stripInlineLinePrefix(
+      normalized,
+      COURT_PARAGRAPH_NUMBER,
+    );
     const number = numbered?.groups?.["number"];
     const role: ParagraphRole = BODY_ROLE[region];
     if (numbered === null || number === undefined) {
       builder.paragraph({
         type: "paragraph",
         role,
-        inlines,
-        plainText: line.text,
+        inlines: normalized.inlines,
+        plainText: normalized.plainText,
       });
       return;
     }
     // The bracketed number is the citable paragraph number, so it is kept as
     // structure: a citation names `[31]`, and a prefix inside the text would
     // make every search for the paragraph's words find the number too.
-    const rest = stripInlinePrefix(inlines, numbered[0].length);
     builder.paragraph({
       type: "paragraph",
       role,
       number: Number(number),
-      inlines: rest,
-      plainText: inlinesToPlainText(rest),
+      inlines: unnumbered.inlines,
+      plainText: unnumbered.plainText,
+    });
+  };
+
+  const emitLine = (line: DocLine): void => {
+    const value = line.kind === "body" ? line.value : line.note.value;
+    if (value.text.trim().length === 0) {
+      return;
+    }
+    lineTexts.push(value.text);
+    if (line.kind === "body") {
+      classifyBodyLine(line);
+      return;
+    }
+    const { label, noteId } = line.note;
+    builder.paragraph({
+      type: "paragraph",
+      role: "apparatus",
+      note: { type: "footnote", label, noteId },
+      inlines: inlinesOf(value.runs),
+      plainText: value.text,
     });
   };
 
@@ -1281,22 +1310,18 @@ export const parseHuBhgyDecision = (
     }
     const rows: TableCell[][] = item.table.rows.map((row) =>
       row.map((cell) => ({
-        inlines: inlinesOf(cell.runs),
-        plainText: cell.text,
+        inlines: inlinesOf(cell.value.runs),
+        plainText: cell.value.text,
       })),
     );
     const plainText = item.table.rows
-      .map((row) => row.map(({ text }) => text).join("\t"))
+      .map((row) => row.map(({ value }) => value.text).join("\t"))
       .join("\n");
     if (plainText.trim().length === 0) {
       continue;
     }
     lineTexts.push(plainText);
     builder.table({ type: "table", rows, plainText });
-  }
-
-  for (const line of noteLines) {
-    emitLine(line);
   }
 
   const { blocks } = builder;
@@ -1342,7 +1367,7 @@ export const parseHuBhgyDecision = (
   return {
     documentAst: ast,
     fulltext,
-    sections: sectionsFromAst(blocks),
+    sections: sectionsFromAst(blocks, "paragraph-anchor"),
     decisionDate,
     decisionType: huDecisionTypeFrom(titleLines),
     documentDocket,

@@ -908,14 +908,15 @@ export const uploadEntityHandler = async function* ({
         organizationId,
         objectKey: sourceKey,
         sizeBytes: storedSizeBytes,
+        content: storedBytes,
         ...(fileUsageDb === undefined ? {} : { db: fileUsageDb }),
-        write: async () => {
+        write: async ({ content, objectKey }) => {
           writeState = S3_OBJECT_WRITE_CERTAINTY.UNCERTAIN;
           return await writeS3ObjectWithRetry(
             {
               contentType: file.type,
-              data: storedBytes,
-              key: sourceKey,
+              data: content,
+              key: objectKey,
             },
             { type: "cleanup-intent", intent: cleanupIntentId },
           );
@@ -1309,6 +1310,7 @@ export const uploadEntityHandler = async function* ({
 };
 
 const config = {
+  contract: "patch",
   contentDelivery: {
     type: "none",
     reason:
@@ -1364,6 +1366,7 @@ const uploadEntity = createSafeHandler(
 );
 
 const generatedDocumentConfig = {
+  contract: "patch",
   contentDelivery: {
     type: "none",
     reason:

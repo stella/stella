@@ -1,6 +1,12 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import type { Transaction } from "@/api/db/root";
+import type { CachedMcpToolDefinition } from "@/api/db/schema";
+import { toSafeId } from "@/api/lib/branded-types";
+import type { LoadedMcpConnection } from "@/api/lib/mcp-upstream/connections";
 import type { McpRequestContext } from "@/api/mcp/context";
+import type { ExternalGatewayDependencies } from "@/api/mcp/gateway/external-tools";
 import {
   getGatewayMcpToolDefinition,
   listGatewayMcpToolDefinitions,
@@ -71,12 +77,120 @@ const definitionWithSchema = (
     openWorldHint: false,
     readOnlyHint: true,
   },
+  annotationReasons: {
+    readOnlyHint: "Reads fixture data without modifying it.",
+    destructiveHint: "The fixture changes no existing data.",
+    openWorldHint: "The fixture reads local data only.",
+  },
   anonymized: { exposure: "passthrough" },
   consumesServices: true,
   description: "Test schema conversion",
   inputSchema,
   name: "test_schema_conversion",
   scope: "stella:read",
+});
+
+const externalToolName = "mcp__registry__lookup";
+const externalCachedTool = {
+  exposedName: externalToolName,
+  inputSchema: { type: "object", properties: {} },
+  rawName: "lookup",
+  readOnlyHint: true,
+} satisfies CachedMcpToolDefinition;
+const externalConnection = {
+  responseDisposition: "normal",
+  allowedTools: null,
+  connectorId: toSafeId<"mcpConnector">("connector_1"),
+  description: "Registry connector",
+  displayName: "Registry",
+  slug: "registry",
+  type: "none",
+  url: "https://mcp.example.test",
+  userConnectionId: toSafeId<"mcpUserConnection">("connection_1"),
+} satisfies LoadedMcpConnection;
+const externalGatewayDependencies = {
+  loadActiveMcpConnectionsForUser: async () => [externalConnection],
+  proxyMcpToolCall: async () => ({ content: [] }),
+  refreshCachedMcpToolsForConnection: async () => undefined,
+} satisfies ExternalGatewayDependencies;
+
+const contextWithExternalServer = (
+  grantedScopes: readonly string[],
+): McpRequestContext => {
+  const builder = {
+    from: () => builder,
+    innerJoin: () => builder,
+    where: () => builder,
+    orderBy: () => builder,
+    limit: async () => [
+      {
+        allowedTools: null,
+        cachedTools: [externalCachedTool],
+        connectorId: externalConnection.connectorId,
+        displayName: externalConnection.displayName,
+        slug: externalConnection.slug,
+        userConnectionId: externalConnection.userConnectionId,
+      },
+    ],
+  };
+  const safeDb: McpRequestContext["safeDb"] = async (callback) =>
+    Result.ok(
+      await callback(asTestRaw<Transaction>({ select: () => builder })),
+    );
+  return asTestRaw<McpRequestContext>({
+    ...contextWith(undefined),
+    grantedScopes: [...grantedScopes],
+    safeDb,
+  });
+};
+
+describe("external gateway mode boundary", () => {
+  for (const scopes of [[], ["stella:external_mcps"]] as const) {
+    const scopeLabel = scopes.length === 0 ? "without scope" : "with scope";
+
+    test(`default mode exposes no external gateway tools ${scopeLabel}`, async () => {
+      const context = contextWithExternalServer(scopes);
+      const definitions = await listGatewayMcpToolDefinitions({
+        context,
+        mode: "default",
+        scopes,
+        externalGatewayDependencies,
+      });
+      const exact = await getGatewayMcpToolDefinition({
+        context,
+        mode: "default",
+        toolName: externalToolName,
+        externalGatewayDependencies,
+      });
+
+      expect(definitions.some(({ name }) => name === externalToolName)).toBe(
+        false,
+      );
+      expect(exact).toBeUndefined();
+    });
+
+    test(`advanced mode applies the external gateway scope ${scopeLabel}`, async () => {
+      const context = contextWithExternalServer(scopes);
+      const definitions = await listGatewayMcpToolDefinitions({
+        context,
+        mode: "advanced",
+        scopes,
+        externalGatewayDependencies,
+      });
+      const exact = await getGatewayMcpToolDefinition({
+        context: contextWithExternalServer(scopes),
+        mode: "advanced",
+        toolName: externalToolName,
+        externalGatewayDependencies,
+      });
+      const expected = scopes.length > 0;
+
+      expect(definitions.some(({ name }) => name === externalToolName)).toBe(
+        expected,
+      );
+      expect(exact?.name === externalToolName).toBe(expected);
+    });
+  }
 });
 
 describe("listGatewayMcpToolDefinitions business-registry narrowing", () => {

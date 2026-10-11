@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { courtAbbreviation } from "@/api/lib/case-law/court-abbreviations";
+import { courtAbbreviation } from "@stll/api-contract/case-law-court-abbreviations";
 
 type Case = {
   name: string;
@@ -270,13 +270,13 @@ const NAME_CASES: readonly Case[] = [
   },
 ];
 
-/** Nothing states an abbreviation, so the chip is absent rather than invented. */
+/** Registered names still resolve when an identifier is absent or malformed. */
 const UNKNOWN_CASES: readonly Case[] = [
   {
-    name: "a regional court with no ECLI",
+    name: "a registered regional court with no ECLI",
     country: "CZE",
     court: "Krajský soud v Ostravě",
-    expected: undefined,
+    expected: "KS",
   },
   {
     name: "a district court with no ECLI",
@@ -317,24 +317,24 @@ const UNKNOWN_CASES: readonly Case[] = [
     expected: undefined,
   },
   {
-    name: "a country with no apex patterns",
+    name: "an Austrian apex court by its publisher name",
     country: "AUT",
     court: "Oberster Gerichtshof",
-    expected: undefined,
+    expected: "OGH",
   },
   {
     name: "a malformed ECLI falls through to the name",
     country: "CZE",
     court: "Krajský soud v Brně",
     ecli: "not-an-ecli",
-    expected: undefined,
+    expected: "KS",
   },
   {
     name: "a null ECLI",
     country: "CZE",
     court: "Krajský soud v Brně",
     ecli: null,
-    expected: undefined,
+    expected: "KS",
   },
 ];
 

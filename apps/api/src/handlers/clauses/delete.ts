@@ -92,6 +92,7 @@ export const deleteClauseHandler = async function* ({
 };
 
 const config = {
+  contract: "patch",
   description:
     "Permanently delete a clause and all its variants and versions from the " +
     "organization's clause library. This is irreversible.",

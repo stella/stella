@@ -2,6 +2,7 @@ import { panic, Result, TaggedError } from "better-result";
 import { mkdirSync, openSync, closeSync, readFileSync, rmSync } from "node:fs";
 import path from "node:path";
 
+import { printError } from "@stll/errors";
 import { childExitStatus } from "@stll/scripts/src/child-exit-status";
 
 import packageJson from "../package.json" with { type: "json" };
@@ -361,7 +362,7 @@ if (import.meta.main) {
     });
     process.exitCode = result.exitCode;
   } catch (error) {
-    process.stderr.write(`${String(error)}\n`);
+    printError(error);
     process.exitCode = 1;
   } finally {
     process.off("SIGINT", stop);

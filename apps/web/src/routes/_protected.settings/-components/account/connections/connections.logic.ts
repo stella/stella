@@ -28,7 +28,7 @@ export const matchesConnectionQuery = (
 
 export type IntegrationConnection = Pick<
   McpConnectionsResponse["connections"][number],
-  "enabled" | "status"
+  "enabled" | "responseDisposition" | "status"
 >;
 export type IntegrationAuthorizationStatus =
   McpConnectorsResponse["connectors"][number]["authorizationStatus"];
@@ -90,6 +90,12 @@ export const integrationStatus = ({
     return {
       tone: "neutral",
       labelKey: "settings.connections.turnedOff",
+    } as const satisfies IntegrationStatus;
+  }
+  if (connection.responseDisposition === "receipt-only") {
+    return {
+      tone: "neutral",
+      labelKey: "settings.connections.privateCredentialOnly",
     } as const satisfies IntegrationStatus;
   }
   return {

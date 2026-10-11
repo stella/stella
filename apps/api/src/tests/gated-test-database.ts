@@ -26,6 +26,7 @@ export type GatedTestDb = ReturnType<typeof openDatabase>;
 type CleanupStep = () => Promise<void>;
 
 export type GatedTestDatabase = {
+  readonly sql: SQL;
   readonly db: GatedTestDb;
   /**
    * Registers suite cleanup (deleting the rows the suite wrote). Steps run
@@ -43,9 +44,9 @@ export type GatedTestDatabase = {
  */
 export const openGatedTestDatabase = (
   databaseUrl: string,
-  options: { max?: number } = {},
+  { max, cleanupTimeoutMs }: { max?: number; cleanupTimeoutMs?: number } = {},
 ): GatedTestDatabase => {
-  const client = new SQL({ url: databaseUrl, ...options });
+  const client = new SQL({ url: databaseUrl, max });
   const cleanupSteps: CleanupStep[] = [];
 
   afterAll(async () => {
@@ -56,9 +57,10 @@ export const openGatedTestDatabase = (
     } finally {
       await client.close();
     }
-  });
+  }, cleanupTimeoutMs);
 
   return {
+    sql: client,
     db: openDatabase(client),
     cleanUp: (step) => {
       cleanupSteps.push(step);
@@ -73,6 +75,8 @@ type GatedTestClient = {
 };
 
 type OpenClientOptions = {
+  /** A separately authenticated fixture login on the same test server. */
+  readonly databaseUrl?: string;
   readonly logger?: Logger;
   /** Connections in this client's pool. */
   readonly max?: number;
@@ -111,12 +115,18 @@ export const withGatedTestClients = async <T>(
 ): Promise<T> => {
   const opened: SQL[] = [];
   const openClient = ({
+    databaseUrl: clientDatabaseUrl = databaseUrl,
     max = 1,
     idleTimeout,
     connection,
     logger,
   }: OpenClientOptions = {}) => {
-    const client = new SQL({ url: databaseUrl, max, idleTimeout, connection });
+    const client = new SQL({
+      url: clientDatabaseUrl,
+      max,
+      idleTimeout,
+      connection,
+    });
     opened.push(client);
     return { sql: client, db: openDatabase(client, logger) };
   };
