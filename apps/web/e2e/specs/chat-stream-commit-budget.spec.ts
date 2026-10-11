@@ -84,18 +84,22 @@ for (const kind of KINDS) {
     expect(await (await streamed).finished()).toBeNull();
     const stop = page.getByRole("button", { name: "Stop" });
     await expect(stop).toHaveCount(0, { timeout: 60_000 });
-    const commits = (await readCommits()) - commitsBefore;
-    const seconds = (Date.now() - startedAt) / 1000;
-
     if (WAITS_ON_USER[kind]) {
       await expect(
         transcript.getByRole("button", { name: "Submit answers" }),
       ).toBeVisible({ timeout: 30_000 });
     } else {
+      // The initial reply already has one Retry action. The second proves the
+      // browser processed this turn's terminal before sampling its commits.
+      await expect(
+        transcript.getByRole("button", { name: "Retry" }),
+      ).toHaveCount(2);
       await expect(
         transcript.getByRole("button", { name: "Resend" }),
       ).toHaveCount(0);
     }
+    const commits = (await readCommits()) - commitsBefore;
+    const seconds = (Date.now() - startedAt) / 1000;
     const detail = `chat.render.stream-commits-bounded: ${String(commits)} commits in ${seconds.toFixed(1)} s while ${streams} streamed`;
     expect(commits / seconds, detail).toBeLessThanOrEqual(budget);
   });
