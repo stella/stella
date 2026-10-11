@@ -5,9 +5,8 @@
 // failure, logs `console.warn("Failed to create exactMirror...")`, and falls
 // back to slow per-request serialization. The usual trigger is a recursive
 // schema (`t.Recursive`, or a `Type.Unsafe` wrapping a self-referential
-// TypeBox node) in a route contract; on the export route this fallback has
-// previously taken the whole API down at boot. The failure is runtime-only:
-// typecheck and lint both pass.
+// TypeBox node) in a route contract. Route body/response contracts must use
+// finite nesting so exactMirror can compile their serializers.
 //
 // This guard constructs the real app (every route mounted, exactly as
 // `src/server.ts` builds it — importing the module is side-effect-free thanks
@@ -192,9 +191,9 @@ const reportToExitCode = (report: ExactMirrorReport): number => {
     }
     console.error(
       "\nA route whose body/response schema exactMirror cannot build falls back\n" +
-        "to slow per-request serialization (and has previously taken the API down\n" +
-        "at boot). The usual cause is a recursive schema (t.Recursive, or a\n" +
-        "Type.Unsafe wrapping a self-referential TypeBox node) in the route\n" +
+        "to slow per-request serialization. The usual cause is a recursive schema\n" +
+        "(t.Recursive or Type.Unsafe wrapping a self-referential TypeBox node)\n" +
+        "in the route\n" +
         "contract. Keep recursive schemas out of route body/response contracts:\n" +
         "use a fixed finite nesting (see apps/api/src/lib/conditions/contract.ts).",
     );
