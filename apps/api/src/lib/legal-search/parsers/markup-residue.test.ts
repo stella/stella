@@ -6,8 +6,12 @@ import { assertProperty } from "@stll/property-testing";
 import { markupResidueIn } from "@/api/handlers/case-law/ingestion/parsers/courtlistener/markup-residue";
 
 import { entityResidueIn } from "./entity-residue";
+import { RTF_CONTROLS } from "./rtf-control-vocabulary";
 
 const LETTERS = fc.stringMatching(/^[a-z]{2,20}$/u);
+const RTF_CONTROL_WORDS = new Set<string>(
+  RTF_CONTROLS.filter((control) => /^[a-z]+$/u.test(control)),
+);
 
 // Invented OCR fragments and publisher paths retain their literal wording.
 test("backslashed prose and paths are not RTF controls", () => {
@@ -27,15 +31,21 @@ test("backslashed OCR fragments and publisher paths remain literal", () => {
   assertProperty(
     "backslashed OCR fragments and publisher paths remain literal",
     fc.property(LETTERS, LETTERS, (first, second) => {
-      for (const text of [
-        `\\a\\${second} finding`,
-        `C:\\directory${first}\\document${second}.wpd`,
-      ]) {
-        expect(text).toMatch(/\\[a-z]+\\[a-z]+/u);
-        expect(markupResidueIn(text)).toBeUndefined();
-      }
+      const escapedWord = `\\a\\${second} finding`;
+      expect(escapedWord).toMatch(/\\[a-z]+\\[a-z]+/u);
+      expect(markupResidueIn(escapedWord)?.rule).toBe(
+        RTF_CONTROL_WORDS.has(second) ? "rtf-control" : undefined,
+      );
+
+      const path = `C:\\directory${first}\\document${second}.wpd`;
+      expect(path).toMatch(/\\[a-z]+\\[a-z]+/u);
+      expect(markupResidueIn(path)).toBeUndefined();
     }),
   );
+});
+
+test("a known control word after an unknown control is residue", () => {
+  expect(markupResidueIn(String.raw`\a\ab finding`)?.rule).toBe("rtf-control");
 });
 
 test("real RTF groups and control sequences are detected", () => {
