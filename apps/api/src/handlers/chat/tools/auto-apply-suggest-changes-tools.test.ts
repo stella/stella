@@ -304,10 +304,12 @@ const buildTx = ({
             return {
               toSQL: () => query.toSQL(),
               as: (alias: string) => query.as(alias),
-              where: (predicate: SQL) => ({
-                toSQL: () => query.where(predicate).toSQL(),
-                for: async () => rows,
-              }),
+              where: (predicate: SQL) =>
+                Object.assign(Promise.resolve(rows), {
+                  toSQL: () => query.where(predicate).toSQL(),
+                  for: async () => rows,
+                  limit: async (count: number) => rows.slice(0, count),
+                }),
             };
           },
         };
