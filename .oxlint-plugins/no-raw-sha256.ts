@@ -10,7 +10,7 @@ import { panic } from "better-result";
 import { SHA256_OWNERS } from "../scripts/sha256-owners.ts";
 import {
   type ScopeContext,
-  dynamicModuleSource,
+  dynamicModuleSourceForEnforcement,
   isAstNode,
   isIdentifier,
   isIdentifierReference,
@@ -18,7 +18,7 @@ import {
   memberPropertyName,
   patternKeyFor,
   repoRelativeFilename,
-  resolveImportedExpression,
+  resolveImportedExpressionForEnforcement,
   resolveVariable,
   staticStringValue,
   stableInitializer,
@@ -72,7 +72,7 @@ const importedPrimitivePath = (
   context: ScopeContext,
   node: unknown,
 ): string | null => {
-  const imported = resolveImportedExpression(context, node);
+  const imported = resolveImportedExpressionForEnforcement(context, node);
   return imported === null ? null : cryptoImportPath(imported);
 };
 
@@ -267,7 +267,7 @@ const expandCryptoSource = ({
   if (path !== null) {
     return [{ type: "path", value: path }];
   }
-  const loaded = dynamicModuleSource(node);
+  const loaded = dynamicModuleSourceForEnforcement(node, context);
   if (loaded !== null) {
     if (
       node.type === "CallExpression" &&
@@ -773,7 +773,7 @@ const containsCryptoExport = ({
   if (isCryptoBearingValue(normalizedPath(primitivePath(context, node)))) {
     return true;
   }
-  const loaded = dynamicModuleSource(node);
+  const loaded = dynamicModuleSourceForEnforcement(node, context);
   if (loaded !== null) {
     if (
       node.type === "CallExpression" &&
