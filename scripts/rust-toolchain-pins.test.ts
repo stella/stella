@@ -63,9 +63,11 @@ const toolchainUses = (): ToolchainUse[] =>
                   ? step["env"]["RUSTUP_TOOLCHAIN"]
                   : undefined,
                 typeof step["uses"] === "string" &&
-                step["uses"].startsWith("dtolnay/rust-toolchain@") &&
-                isRecord(step["with"])
-                  ? step["with"]["toolchain"]
+                step["uses"].startsWith("dtolnay/rust-toolchain@")
+                  ? // Without an input the action installs its floating default.
+                    ((isRecord(step["with"])
+                      ? step["with"]["toolchain"]
+                      : undefined) ?? "stable")
                   : undefined,
               ]
             : [],
