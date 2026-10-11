@@ -306,7 +306,9 @@ for (const feature of FEATURES) {
               enabled && enrolled ? expectedCapabilities.toSorted() : [],
             );
             for (const capability of expectedCapabilities) {
-              expect(omittedCapabilities).not.toContain(capability);
+              expect(omittedCapabilities.includes(capability)).toBe(
+                !enabled && enrolled,
+              );
               const result = await handleMcpToolCall({
                 toolName:
                   MCP_CAPABILITY_EXECUTORS[
@@ -317,10 +319,12 @@ for (const feature of FEATURES) {
                 args: { capability, input: {} },
                 context: { ...context, grantedScopes: [] },
               });
-              if (!enabled || !enrolled) {
+              if (!enrolled) {
                 expect(errorCodeOf(result)).toBe("not_found");
+              } else if (!enabled) {
+                expect(errorCodeOf(result)).toBe("feature_disabled");
               } else {
-                expect(errorCodeOf(result)).not.toBe("not_found");
+                expect(errorCodeOf(result)).toBe("missing_scope");
               }
             }
           });

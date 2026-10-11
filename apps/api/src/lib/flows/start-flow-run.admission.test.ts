@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { beforeEach, describe, expect, test } from "bun:test";
 
 import { safeDbFromScoped } from "@/api/db/safe-db";
@@ -74,6 +74,7 @@ describe("flow kickoff acceptance", () => {
         workspaceId,
         createdByUserId: userId,
         triggerSource: { type: "schedule" },
+        expectedScheduleTrigger: definition.trigger,
         inputEntityIds,
         logContext: {},
       },
@@ -100,7 +101,12 @@ describe("flow kickoff acceptance", () => {
           await run(new AbortController().signal, async () => undefined),
       },
     );
-    await entered.promise;
+    await Promise.race([
+      entered.promise,
+      result.then(() =>
+        panic("Flow start missed its pending admission barrier"),
+      ),
+    ]);
     inputEntityIds.push(createSafeId<"entity">());
     loadedDefinition.steps.push({
       kind: "review-gate",
@@ -185,7 +191,12 @@ describe("flow kickoff acceptance", () => {
       enqueueStep: async () => await Promise.resolve(),
     } satisfies Parameters<typeof startFlowRun>[0];
     const result = startFlowRun(options);
-    await entered.promise;
+    await Promise.race([
+      entered.promise,
+      result.then(() =>
+        panic("Flow start missed its pending admission barrier"),
+      ),
+    ]);
     inputEntityIds.push(createSafeId<"entity">());
     loadedDefinition.steps.push({
       kind: "review-gate",
