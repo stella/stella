@@ -27,14 +27,15 @@ export const dbTestBatchSize = (propertyOnly: boolean) =>
  */
 export const SOLO_TEST_PATHS: ReadonlySet<string> = new Set([
   ...Object.values(RECORDED_CONVERSATION_SUITES),
-  // The 20,000-entry corpus plus PGlite leaves no room for another DB suite.
-  "src/handlers/sanctions/public-routes.db.test.ts",
   // Its 25,000-row plan fixture grows PGlite's retained WASM memory; closing
   // the client cannot reclaim it, and a three-file Linux batch peaked at 2816 MB.
   "src/lib/scheduler/tasks/legislation-expression-id-backfill-plan.db.test.ts",
   // Seeds 32,000 legislation versions; a three-file batch with it peaked at
   // 2909 MB on Linux.
   "src/handlers/legislation/work-names-plan.db.test.ts",
+  // The full-size refresh corpus retains PGlite and screening-index memory;
+  // sharing with monitoring-drain peaked at 2633 MB against the 2560 MB cap.
+  "src/lib/lists/sanctions/refresh-event-loop.db.test.ts",
   // Sets the deployment's public address before the environment is read.
   "src/lib/oauth-cli-client-document.db.test.ts",
   // Owns the CIMD transport module and the AS JWKS fetch for the whole process.
@@ -393,6 +394,7 @@ export const parseRssMeasurementArguments = (arguments_: readonly string[]) => {
 export const TEST_BATCH_KIND = {
   db: "db",
   heavyLogic: "heavy-logic",
+  heavyDb: "heavy-db",
   moduleMock: "module-mock",
   regular: "regular",
 } as const;
@@ -403,21 +405,31 @@ export type TestBatchKind =
 type ClassifyTestBatchOptions = {
   dbBacked: boolean;
   heavyLogic: boolean;
+  heavyDb: boolean;
   installsModuleMock: boolean;
   propertyOnly: boolean;
 };
 
 /**
- * Select the one execution class a test belongs to. Property DB isolation
+ * Heavy DB markers require a DB-backed file and exclude heavy logic markers.
+ * Heavy DB isolation takes precedence over mocks and property mode: a singleton
+ * process satisfies all three constraints. Property DB isolation
  * takes precedence over module-mock batching because either class may retain
  * process-wide state, while a singleton process satisfies both constraints.
  */
 export const classifyTestBatch = ({
   dbBacked,
+  heavyDb,
   heavyLogic,
   installsModuleMock,
   propertyOnly,
 }: ClassifyTestBatchOptions) => {
+  if (heavyDb) {
+    if (!dbBacked || heavyLogic) {
+      panic("Heavy DB tests must be DB-backed and cannot also be heavy logic");
+    }
+    return TEST_BATCH_KIND.heavyDb;
+  }
   if (propertyOnly && dbBacked) {
     return TEST_BATCH_KIND.db;
   }
