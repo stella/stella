@@ -4,6 +4,10 @@ import Elysia, { status, t } from "elysia";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import { parseTrustedProxies } from "@/api/lib/client-ip";
+import {
+  resetMetricLineSinkForTesting,
+  setMetricLineSinkForTesting,
+} from "@/api/lib/observability/request-metrics";
 import { withDemoActionBudget } from "@/api/lib/rate-limit/demo-action-budget";
 import {
   createOtpAccountBudget,
@@ -24,6 +28,7 @@ import {
   RedisRateLimitContext,
 } from "@/api/lib/rate-limit/redis-context";
 import { consumeSignupOtpRateLimit } from "@/api/lib/signup-abuse";
+import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 
 const WINDOW_MS = 1000;
 const RATE_LIMIT_OPTIONS = {
@@ -149,6 +154,65 @@ class FakeRedisClient {
     return current.count;
   }
 }
+
+test("HTTP quota rejection emits its named policy once without the counter key", async () => {
+  const context = new TrackingRateLimitContext();
+  const logs = installRecordingLogger();
+  const metrics: string[] = [];
+  setMetricLineSinkForTesting((line) => {
+    metrics.push(line);
+  });
+  const app = new Elysia()
+    .use(
+      rateLimit({
+        context,
+        duration: WINDOW_MS,
+        max: 1,
+        generator: () => "private-caller-credential",
+        budget: () => ({ name: "mcp.transport.bearer", keyKind: "bearer" }),
+      }),
+    )
+    .post("/limited", () => "served");
+  try {
+    expect(
+      (
+        await app.handle(
+          new Request("http://localhost/limited", { method: "POST" }),
+        )
+      ).status,
+    ).toBe(200);
+    expect(metrics).toHaveLength(0);
+    expect(
+      (
+        await app.handle(
+          new Request("http://localhost/limited", { method: "POST" }),
+        )
+      ).status,
+    ).toBe(429);
+    const rejections = logs.records.filter(
+      ({ message }) => message === "rate_limit.rejected",
+    );
+    expect(rejections).toHaveLength(1);
+    expect(rejections.at(0)?.attributes).toEqual({
+      budget: "mcp.transport.bearer",
+      "budget.keyKind": "bearer",
+      "budget.windowMs": WINDOW_MS,
+      "http.status_code": 429,
+    });
+    expect(metrics).toHaveLength(1);
+    expect(JSON.parse(metrics.at(0) ?? "{}")).toMatchObject({
+      budgetName: "mcp.transport.bearer",
+      RateLimitRejected: 1,
+    });
+    expect(JSON.stringify(rejections)).not.toContain(
+      "private-caller-credential",
+    );
+  } finally {
+    logs.restore();
+    resetMetricLineSinkForTesting();
+    context.kill();
+  }
+});
 
 describe("RedisRateLimitContext", () => {
   test("keeps one refund identity per request while sharing the counter key", async () => {

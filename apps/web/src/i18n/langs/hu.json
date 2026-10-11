@@ -4171,11 +4171,16 @@
       "customModelDescription": "Ez a modellazonosító nincs a stella katalógusában. A kiválasztott szolgáltatónak pontosan így lesz továbbítva.",
       "customModelHint": "Nincs katalógustalálat. Írjon be bármilyen modellazonosítót; az egyedi azonosítók változatlanul mentésre kerülnek.",
       "decision": {
+        "dataRegion": "Adatrégió",
         "description": "Rögzített válaszú kérdések (dokumentumkategóriák, hivatkozások polaritása)",
         "generativeFallback": "Az adott feladathoz a generatív modellt használja.",
         "incomplete": "Adjon meg API-kulcsot és modellt a döntési modellhez, vagy távolítsa el.",
         "instanceProvided": "stella már biztosít döntési modellt; sajátot csak akkor adjon hozzá, ha másikat szeretne használni.",
-        "label": "Döntéshozatal"
+        "label": "Döntéshozatal",
+        "regionEu": "Európai Unió",
+        "regionGlobal": "Globális",
+        "reuseOpenAIKey": "Saját OpenAI-kulcs használata",
+        "separateKey": "Külön kulcs használata"
       },
       "defaultModel": "Alapértelmezett: {model}",
       "defaultModelOption": "Alapértelmezett",

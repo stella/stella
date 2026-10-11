@@ -33,6 +33,9 @@ export const SOLO_TEST_PATHS: ReadonlySet<string> = new Set([
   // Seeds 32,000 legislation versions; a three-file batch with it peaked at
   // 2909 MB on Linux.
   "src/handlers/legislation/work-names-plan.db.test.ts",
+  // The full-size refresh corpus retains PGlite and screening-index memory;
+  // sharing with monitoring-drain peaked at 2633 MB against the 2560 MB cap.
+  "src/lib/lists/sanctions/refresh-event-loop.db.test.ts",
   // Sets the deployment's public address before the environment is read.
   "src/lib/oauth-cli-client-document.db.test.ts",
   // Owns the CIMD transport module and the AS JWKS fetch for the whole process.

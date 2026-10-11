@@ -4171,11 +4171,16 @@
       "customModelDescription": "Toto ID modelu není v katalogu stella. Vybranému poskytovateli se předá přesně tak, jak je zadané.",
       "customModelHint": "Žádná shoda v katalogu. Zadejte libovolné ID modelu; vlastní ID se uloží přesně tak, jak je napsané.",
       "decision": {
+        "dataRegion": "Oblast dat",
         "description": "Otázky s pevnou odpovědí (kategorie dokumentů, polarita citací)",
         "generativeFallback": "Používá generativní model pro danou úlohu.",
         "incomplete": "Zadejte klíč API a model pro rozhodovací model, nebo jej odeberte.",
         "instanceProvided": "stella už rozhodovací model poskytuje; vlastní přidejte jen tehdy, chcete-li použít jiný.",
-        "label": "Rozhodování"
+        "label": "Rozhodování",
+        "regionEu": "Evropská unie",
+        "regionGlobal": "Globální",
+        "reuseOpenAIKey": "Použít můj klíč OpenAI",
+        "separateKey": "Použít samostatný klíč"
       },
       "defaultModel": "Výchozí: {model}",
       "defaultModelOption": "Výchozí",

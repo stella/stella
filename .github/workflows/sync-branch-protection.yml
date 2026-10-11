@@ -1,5 +1,9 @@
 name: Sync Branch Protection
 
+defaults:
+  run:
+    shell: bash
+
 # Applies checked-in ruleset JSON to the live GitHub repository
 # rulesets. Run after changing `.github/branch-protection/*.json`
 # so the weekly audit workflow stays green.

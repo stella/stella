@@ -19,7 +19,9 @@ import { panic } from "better-result";
  * An edge that reports the viewer address in a header of its own (for
  * example CloudFront's `CloudFront-Viewer-Address`) is named with
  * `STELLA_CLIENT_ADDRESS_HEADER`. That header is read only from a trusted
- * peer and takes precedence over the `x-forwarded-for` chain.
+ * peer and takes precedence over the `x-forwarded-for` chain. CloudFront
+ * viewer headers are honoured only with a matching origin verification value.
+ * Custom proxy headers may leave origin verification unconfigured.
  *
  * A further edge may supply the address in {@link FRONTEND_ADDRESS_HEADER},
  * accepted only with a matching {@link FRONTEND_VERIFY_HEADER}. From a
@@ -235,8 +237,8 @@ type ClientAddressOptions = {
   /** Header name carrying the edge's viewer address; null disables it. */
   edgeHeader?: string | null;
   /**
-   * Accepted {@link ORIGIN_VERIFY_HEADER} values; when non-empty, the edge
-   * header is read only from requests carrying one of them.
+   * Configured origin values must match. CloudFront requires values; custom
+   * proxy headers may rely on the trusted peer alone.
    */
   originSecrets?: readonly string[];
   /** How the edge header spells the address; defaults to the configured one. */
@@ -266,19 +268,33 @@ const carriesSecret = (
     .includes(true);
 };
 
-// Without origin values the API edge's header is trusted from any trusted
-// peer, as before origin verification existed.
-const carriesOriginSecret = (
-  request: Request,
-  secrets: readonly string[],
-): boolean =>
-  secrets.length === 0 || carriesSecret(request, ORIGIN_VERIFY_HEADER, secrets);
-
 const parseSecretList = (value: string | undefined): readonly string[] =>
   (value ?? "")
     .split(",")
     .map((part) => part.trim())
     .filter((part) => part.length > 0);
+
+const CLOUDFRONT_VIEWER_ADDRESS_HEADER = "cloudfront-viewer-address";
+
+const requiresOriginProof = (header: string | null | undefined): boolean =>
+  header?.trim().toLowerCase() === CLOUDFRONT_VIEWER_ADDRESS_HEADER;
+
+type ClientAddressConfigurationOptions = {
+  edgeHeader?: string | undefined;
+  originVerifySecret?: string | undefined;
+};
+
+/** Warn when the CloudFront viewer header cannot be authenticated. */
+export const clientAddressConfigurationWarning = ({
+  edgeHeader,
+  originVerifySecret,
+}: ClientAddressConfigurationOptions):
+  | "client_ip.viewer_address_unconfigured"
+  | null =>
+  requiresOriginProof(edgeHeader) &&
+  parseSecretList(originVerifySecret).length === 0
+    ? "client_ip.viewer_address_unconfigured"
+    : null;
 
 let cachedOriginSecrets: readonly string[] | null = null;
 
@@ -324,7 +340,11 @@ const addressFromTrustedPeer = ({
       return { address, source: CLIENT_ADDRESS_SOURCE.frontendHeader };
     }
   }
-  if (edgeHeader !== null && carriesOriginSecret(request, originSecrets)) {
+  if (
+    edgeHeader !== null &&
+    ((originSecrets.length === 0 && !requiresOriginProof(edgeHeader)) ||
+      carriesSecret(request, ORIGIN_VERIFY_HEADER, originSecrets))
+  ) {
     const address = parseEdgeClientAddress(
       request.headers.get(edgeHeader),
       edgeAddressFormat,

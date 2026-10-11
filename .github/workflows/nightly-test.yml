@@ -1,5 +1,9 @@
 name: Nightly Full Test
 
+defaults:
+  run:
+    shell: bash
+
 on:
   schedule:
     # 04:17 UTC daily, after nightly typecheck.
