@@ -1993,6 +1993,7 @@
     "sort": "Ordenar",
     "source": "Fuente",
     "stale": "Obsoleto",
+    "start": "Empezar",
     "status": "Estado",
     "stepCount": "{count, plural, one {# paso} other {# pasos}}",
     "stepProgress": "{current} de {total}",
@@ -2807,7 +2808,6 @@
       },
       "selectFlow": "Elige un flujo de trabajo",
       "sizeConfirmTitle": "Ejecución de flujo extensa",
-      "start": "Iniciar",
       "startFailed": "No se pudo iniciar el flujo de trabajo.",
       "started": "Flujo de trabajo iniciado",
       "stepProgress": "Paso {current} de {total}",
@@ -3024,8 +3024,7 @@
   "guides": {
     "action": {
       "replay": "Volver a empezar",
-      "skip": "Omitir",
-      "start": "Empezar"
+      "skip": "Omitir"
     },
     "checklist": {
       "progress": "{completed} de {total} completado"
@@ -3705,6 +3704,10 @@
         "nameMissing": "Sin guardar: añade un nombre",
         "positionsNeedAttention": "Sin guardar: {count, plural, one {# posición requiere} other {# posiciones requieren}} atención"
       },
+      "buildWithAi": {
+        "description": "Responda a unas preguntas en un chat y el playbook se irá guardando sobre la marcha.",
+        "title": "Crear con IA"
+      },
       "check": "Usar una regla exacta en lugar de IA",
       "checkHint": "Para condiciones medibles, como: plazo de pago ≤ 30 días.",
       "checkKind": {
@@ -4171,11 +4174,16 @@
       "customModelDescription": "Este ID de modelo no está en el catálogo de stella. Se enviará al proveedor seleccionado tal como lo escribiste.",
       "customModelHint": "No hay coincidencias en el catálogo. Escribe cualquier ID de modelo; los IDs personalizados se guardan tal cual.",
       "decision": {
+        "dataRegion": "Región de datos",
         "description": "Preguntas con respuestas fijas (categorías de documentos, polaridad de las citas)",
         "generativeFallback": "Usa el modelo generativo para la tarea.",
         "incomplete": "Introduce una clave de API y un modelo para el modelo de decisión, o quítalo.",
         "instanceProvided": "stella ya proporciona un modelo de decisión; añade el tuyo solo para usar otro distinto.",
-        "label": "Toma de decisiones"
+        "label": "Toma de decisiones",
+        "regionEu": "Unión Europea",
+        "regionGlobal": "Mundial",
+        "reuseOpenAIKey": "Usar mi clave de OpenAI",
+        "separateKey": "Usar una clave independiente"
       },
       "defaultModel": "Predeterminado: {model}",
       "defaultModelOption": "Predeterminado",
@@ -6094,12 +6102,30 @@
         "addPDF": "Añadir PDF",
         "applyCrop": "Aplicar recorte",
         "crop": "Recortar",
-        "cropBottom": "Abajo",
-        "cropDescription": "{count, plural, one {Configura los márgenes de recorte para la página seleccionada.} other {Configura los márgenes de recorte para las # páginas seleccionadas.}}",
-        "cropLeft": "Izquierda",
-        "cropRight": "Derecha",
+        "cropAdvanced": "Opciones avanzadas",
+        "cropBottom": "Abajo (mm)",
+        "cropDescription": "{count, plural, one {Configura los márgenes de recorte para la página seleccionada en milímetros.} other {Configura los márgenes de recorte para las # páginas seleccionadas en milímetros.}}",
+        "cropHandle": "Cambiar el tamaño del recorte: {position}",
+        "cropHandleBottom": "abajo",
+        "cropHandleBottomLeft": "abajo a la izquierda",
+        "cropHandleBottomRight": "abajo a la derecha",
+        "cropHandleLeft": "izquierda",
+        "cropHandleRight": "derecha",
+        "cropHandleTop": "arriba",
+        "cropHandleTopLeft": "arriba a la izquierda",
+        "cropHandleTopRight": "arriba a la derecha",
+        "cropHint": "Arrastra el área o sus tiradores. Las flechas ajustan el recorte en 1 mm; con Mayús, en 10 mm. Los mismos márgenes se aplican a todas las páginas seleccionadas.",
+        "cropLeft": "Izquierda (mm)",
+        "cropMove": "Mover el área de recorte",
+        "cropNextPage": "Página seleccionada siguiente",
+        "cropPage": "Página {page, number} de {count, number}",
+        "cropPreview": "Vista previa del recorte, página {page, number}",
+        "cropPreviewFailed": "No se pudo mostrar la vista previa de la página.",
+        "cropPreviousPage": "Página seleccionada anterior",
+        "cropRight": "Derecha (mm)",
         "cropTitle": "Recortar páginas",
-        "cropTop": "Arriba",
+        "cropTooSmall": "Esta página es demasiado pequeña para un recorte de al menos 10 mm.",
+        "cropTop": "Arriba (mm)",
         "delete": "Eliminar",
         "deselectAll": "Deseleccionar todo",
         "discard": "Descartar",

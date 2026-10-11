@@ -10,6 +10,11 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createModelActionAdmitter } from "@/api/lib/rate-limit/model-action-admission";
 
 const config = {
+  contract: "replace",
+  precondition: {
+    type: "deferred",
+    baselineId: "apps/api/src/handlers/playbooks/update.ts",
+  },
   description:
     "Replace a playbook definition's name, description, scope, and " +
     "positions; the positions are validated and their automatic questions " +

@@ -13,6 +13,7 @@ const paramsSchema = t.Object({
 
 const boeTextBlock = createSafeRootHandler(
   {
+    contract: "patch",
     description:
       "Read the text of one block of a consolidated Spanish BOE law, " +
       "addressed by the law identifier and a block id taken from " +

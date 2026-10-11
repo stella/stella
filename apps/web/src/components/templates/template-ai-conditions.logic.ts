@@ -263,12 +263,14 @@ const UNDECIDED_TONE = {
   "below-floor": "warning",
   "no-backend": "neutral",
   failed: "neutral",
+  refusal: "neutral",
 } as const satisfies Record<UndecidedReason, ReviewStatusTone>;
 
 const UNDECIDED_ANSWER = {
   "below-floor": { kind: "notSettled" },
   "no-backend": { kind: "onGenerate" },
   failed: { kind: "onGenerate" },
+  refusal: { kind: "onGenerate" },
 } as const satisfies Record<UndecidedReason, ConditionChipAnswer>;
 
 /** Whole percent, so `0.962` reads as `96 %` (or `96%`, per locale). */

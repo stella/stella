@@ -41,6 +41,7 @@ describe("updateWorkObligation", () => {
 
     const { safeDb, scopedDb } = createScopedDbMock(
       {
+        execute: async () => [{ id: workspaceId }],
         select: () => ({
           from: (table: unknown) => ({
             where: () => ({
@@ -138,6 +139,7 @@ describe("updateWorkObligation", () => {
 
     const { safeDb, scopedDb } = createScopedDbMock(
       {
+        execute: async () => [{ id: workspaceId }],
         select: () => ({
           from: (table: unknown) => {
             if (table === taskAssignees) {
@@ -305,6 +307,7 @@ describe("updateWorkObligation", () => {
 
       const { safeDb, scopedDb } = createScopedDbMock(
         {
+          execute: async () => [{ id: workspaceId }],
           select: () => ({
             from: (table: unknown) => ({
               where: () => ({

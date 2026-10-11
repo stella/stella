@@ -18,6 +18,7 @@ import {
  */
 
 const config = {
+  contract: "patch",
   description:
     "Read the calling user's current usage budget state: which budget " +
     "their next chat message draws from and how much of the included " +

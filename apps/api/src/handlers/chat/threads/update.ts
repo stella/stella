@@ -14,6 +14,7 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
+  contract: "patch",
   description:
     "Turn web search on or off for one of your own chat threads. Unlike " +
     "chat.threads.rename this is an upsert: when no thread exists under that " +

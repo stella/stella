@@ -26,6 +26,7 @@ import { startExecutionAdmission } from "@/api/lib/rate-limit/execution-admissio
 import { sseResponse } from "@/api/lib/sse";
 
 const config = {
+  contract: "patch",
   contentDelivery: {
     type: "none",
     reason: "Processes document inputs and streams proposed review positions.",
