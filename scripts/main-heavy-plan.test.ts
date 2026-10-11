@@ -138,15 +138,13 @@ const planned = (plan: Record<string, string>, job: string) => {
 // Computed job scopes also depend on changed-file scopes that are not gated
 // directly. Pin their source outputs; unrelated scopes remain unplanned.
 const directScopePattern =
-  /^\$\{\{\s*(steps\.changed-files\.outputs\.[\w-]+_required)\s*\}\}$/u;
+  /^\$\{\{\s*(steps\.[\w-]+\.outputs\.[\w-]+_required)(?:\s*\|\|\s*'[^']*')?\s*\}\}$/u;
 const computedScopeInputs = new Set(
   Object.values(planOutputs)
     .filter((expression) => !directScopePattern.test(expression))
     .flatMap((expression) =>
       [
-        ...expression.matchAll(
-          /\bsteps\.changed-files\.outputs\.[\w-]+_required\b/gu,
-        ),
+        ...expression.matchAll(/\bsteps\.[\w-]+\.outputs\.[\w-]+_required\b/gu),
       ].map(([reference]) => reference),
     ),
 );

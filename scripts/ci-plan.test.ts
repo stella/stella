@@ -32,6 +32,7 @@ import { selectApiTestImpact } from "./api-test-impact";
 import { FULL_TEST_JOB_SHARDS } from "./api-test-shard-plan";
 import { requiresMalwareScan } from "./check-standalone-lockfiles";
 import { planCiApiTests } from "./ci-api-test-plan";
+import { ciBrowserScopePredicate } from "./ci-browser-scope";
 import { CANONICAL_CANCEL_STEP } from "./ci-cancellation-contract";
 import {
   markdownReaders,
@@ -203,7 +204,13 @@ const onlyOutcome = <T>(outcomes: readonly T[]): T => {
 // The selector's bun detectors, keyed by the script it invokes. Served in
 // process, each answer comes from the same function the CLI prints; a bun
 // call the selector adds without an entry here fails the plan.
+const selectorBrowserScope = ciBrowserScopePredicate();
 const SELECTOR_BUN_CLIS = {
+  "scripts/ci-browser-scope.ts": {
+    variable: "SERVED_BROWSER_SCOPE",
+    flag: "",
+    output: (files: readonly string[]) => String(selectorBrowserScope(files)),
+  },
   "scripts/ci-package-scope.ts": {
     variable: "SERVED_LANDING_BUILD",
     flag: "--landing-build",
@@ -6465,6 +6472,7 @@ type BrowserPlanOptions = {
   trusted?: string;
   queueDepth?: string;
   packageChecksRequired?: string;
+  browserScopeRequired?: string;
 };
 const browserPlanOutput = ({
   event,
@@ -6474,6 +6482,7 @@ const browserPlanOutput = ({
   trusted = "true",
   queueDepth = "full",
   packageChecksRequired = "true",
+  browserScopeRequired = "true",
 }: BrowserPlanOptions) => {
   const { outputs } = v.parse(
     v.object({ outputs: v.record(v.string(), v.string()) }),
@@ -6487,6 +6496,8 @@ const browserPlanOutput = ({
         "steps.completed-depth.outputs.run_required": runRequired,
         "steps.check.outputs.trusted": trusted,
         "steps.changed-files.outputs.desktop_browser_required": desktopRequired,
+        "steps.changed-files.outputs.ci_browser_scope_required":
+          browserScopeRequired,
         "steps.changed-files.outputs.package_checks_required":
           packageChecksRequired,
         "steps.depth.outputs.suite_depth": depth,
