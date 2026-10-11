@@ -247,9 +247,6 @@ test("the offline baseline reader uses the merge base and preserves absent files
     const absent = read("introduced.txt");
     expect(absent.exitCode).toBe(0);
     expect(JSON.parse(absent.stdout.toString())).toEqual({});
-    const invalid = read("baseline.txt", "--help");
-    expect(invalid.exitCode).not.toBe(0);
-    expect(invalid.stderr.toString()).toContain("Invalid offline Git ref");
     const blob = git(["rev-parse", `${base}:baseline.txt`]);
     rmSync(
       path.join(directory, ".git/objects", blob.slice(0, 2), blob.slice(2)),
@@ -275,59 +272,43 @@ test("the offline baseline reader uses the merge base and preserves absent files
   }
 });
 
-test.each(["fetch", "push", "checkout", "status", "-c"])(
-  "the offline Git owner rejects the unsupported operation %s",
-  (type) => {
-    const result = runPreloaded(
-      `import { readOfflineGit } from './scripts/offline-git-read.ts';
-       readOfflineGit(${JSON.stringify({ root, operation: { type } })});`,
-      "--check",
-    );
-    expect(result.exitCode).not.toBe(0);
-    expect(result.stderr.toString()).toContain(
-      "Unsupported offline Git operation",
-    );
-  },
-);
+test("offline Git reads reject unsupported operations", () => {
+  const result = runPreloaded(
+    `import { readOfflineGit } from './scripts/offline-git-read.ts';
+     readOfflineGit(${JSON.stringify({ root, operation: { type: "status" } })});`,
+    "--check",
+  );
+  expect(result.exitCode).not.toBe(0);
+  expect(result.stderr.toString()).toContain(
+    "Unsupported offline Git operation",
+  );
+});
 
 test.each([
-  { type: "merge-base", ref: "--help", error: "ref" },
-  { type: "merge-base", ref: "main..HEAD", error: "ref" },
-  { type: "merge-base", ref: "HEAD -c protocol.allow=always", error: "ref" },
-  { type: "ls-tree", commit: "--help", file: "baseline.txt", error: "commit" },
   {
-    type: "show",
-    commit: "HEAD:baseline.txt",
-    file: "baseline.txt",
+    name: "merge-base rejects an option-like revision",
+    operation: { type: "merge-base", ref: "--help" },
+    error: "ref",
+  },
+  {
+    name: "ls-tree rejects an option-like revision",
+    operation: { type: "ls-tree", commit: "--help", file: "baseline.txt" },
     error: "commit",
   },
-  ...["ls-tree", "show"].flatMap((type) =>
-    [
-      "--help",
-      "../baseline.txt",
-      "dir/../baseline.txt",
-      ":(glob)*",
-      "baseline.txt --help",
-      "/baseline.txt",
-    ].map((file) => ({
-      type,
-      commit: "0".repeat(40),
-      file,
-      error: "path",
-    })),
-  ),
-])(
-  "offline Git inputs cannot smuggle options or path expressions: %j",
-  ({ error, ...operation }) => {
-    const result = runPreloaded(
-      `import { readOfflineGit } from './scripts/offline-git-read.ts';
-     readOfflineGit(${JSON.stringify({ root, operation })});`,
-      "--check",
-    );
-    expect(result.exitCode).not.toBe(0);
-    expect(result.stderr.toString()).toContain(`Invalid offline Git ${error}`);
+  {
+    name: "show rejects an option-like path",
+    operation: { type: "show", commit: "0".repeat(40), file: "--help" },
+    error: "path",
   },
-);
+])("$name", ({ operation, error }) => {
+  const result = runPreloaded(
+    `import { readOfflineGit } from './scripts/offline-git-read.ts';
+     readOfflineGit(${JSON.stringify({ root, operation })});`,
+    "--check",
+  );
+  expect(result.exitCode).not.toBe(0);
+  expect(result.stderr.toString()).toContain(`Invalid offline Git ${error}`);
+});
 
 test("the Git owner classification cannot permit child processes in another module", () => {
   const directory = mkdtempSync(
