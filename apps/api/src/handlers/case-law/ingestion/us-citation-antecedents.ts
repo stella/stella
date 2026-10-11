@@ -40,6 +40,8 @@ const CAPTION_SEPARATOR_RE = /\s(?:v\.?|vs\.|versus)\s/gu;
 // ---------------------------------------------------------------------------
 // Case names
 
+/** Lowercase surname particles that may also be prose prepositions. */
+const NAME_PARTICLES = new Set(["de", "la", "du", "von", "van"]);
 /** Words a party name may run through between capitalised words. */
 const NAME_CONNECTORS = new Set([
   "of",
@@ -51,11 +53,7 @@ const NAME_CONNECTORS = new Set([
   "rel.",
   "et",
   "al.",
-  "de",
-  "la",
-  "du",
-  "von",
-  "van",
+  ...NAME_PARTICLES,
   "re",
 ]);
 /** Words that open a sentence or a citation, never a party's name. */
@@ -80,12 +78,11 @@ const LEADING_NON_NAME = new Set([
   "and",
   "for",
 ]);
+/** Government party words used to bound leading prose particles. */
+const GOVERNMENT_PARTY_WORDS = new Set(["state", "states", "united", "people"]);
 /** Party words that alone never tell one party from another. */
 const GENERIC_PARTY_WORDS = new Set([
-  "state",
-  "states",
-  "united",
-  "people",
+  ...GOVERNMENT_PARTY_WORDS,
   "in",
   "re",
   "ex",
@@ -139,6 +136,17 @@ const trailingPartyName = (text: string): string | null => {
     LEADING_NON_NAME.has((taken.at(0) ?? "").toLocaleLowerCase("und"))
   ) {
     taken.shift();
+  }
+  // A surname particle before a generic government party belongs to the
+  // surrounding prose; retain particles before substantive surname words.
+  const firstNonParticle = taken.find((word) => !NAME_PARTICLES.has(word));
+  if (
+    firstNonParticle !== undefined &&
+    GOVERNMENT_PARTY_WORDS.has(firstNonParticle.toLocaleLowerCase("und"))
+  ) {
+    while (NAME_PARTICLES.has(taken.at(0) ?? "")) {
+      taken.shift();
+    }
   }
   const name = normalizeName(taken.join(" "));
   return name === "" ? null : name;

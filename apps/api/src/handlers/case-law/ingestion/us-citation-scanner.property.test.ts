@@ -65,6 +65,17 @@ test("every unambiguous reporter spelling scans to its parsed identity", () => {
           : [],
       ),
     ).toEqual([canonical]);
+    const placeholder = scan(`319 U.S., ${text}`).result;
+    if (Result.isError(placeholder)) {
+      throw placeholder.error;
+    }
+    expect(
+      placeholder.value.events.flatMap((event) =>
+        event.kind === "token" && event.token.kind === "full"
+          ? [event.token.base?.identifier.value]
+          : [],
+      ),
+    ).toEqual([canonical]);
     const parallel = scan(`319 U.S. 527, ${text}`).result;
     if (Result.isError(parallel)) {
       throw parallel.error;
