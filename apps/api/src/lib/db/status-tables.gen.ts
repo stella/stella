@@ -3,6 +3,7 @@
 export const STATUS_COLUMNS = {
   accountDeletionEffectChunks: ["status"],
   accountDeletionRequests: ["status"],
+  accountExports: ["status"],
   agentRegistration: ["status"],
   agentSkillProposals: ["status"],
   aiMemories: ["status"],

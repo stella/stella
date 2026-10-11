@@ -86,12 +86,16 @@ describe.skipIf(!enabled)("account export lifecycle", () => {
           `ALTER TABLE account_exports OWNER TO ${ownerRole}; ALTER TABLE account_audit_logs OWNER TO ${ownerRole}`,
         );
         await client.unsafe(`SET ROLE ${ownerRole}`);
-        const requested = await requestAccountExport(userId, {
-          db,
-          rateLimitContext,
-        });
+        const requested = (
+          await requestAccountExport(userId, {
+            db,
+            rateLimitContext,
+          })
+        ).unwrap();
         expect(
-          (await requestAccountExport(userId, { db, rateLimitContext })).id,
+          (
+            await requestAccountExport(userId, { db, rateLimitContext })
+          ).unwrap().id,
         ).toBe(requested.id);
         expect(requested.status).toBe("requested");
         expect((await readLatestAccountExport(userId, db))?.id).toBe(
@@ -141,7 +145,10 @@ describe.skipIf(!enabled)("account export lifecycle", () => {
             })
           )?.id,
         ).toBe(requested.id);
-        if (ready === null || ready.expiresAt === null) {
+        if (ready === null) {
+          panic("Ready account export required");
+        }
+        if (ready.expiresAt === null) {
           panic("Ready account export expiry required");
         }
         expect(ready.expiresAt.getTime() - ready.updatedAt.getTime()).toBe(
@@ -149,7 +156,7 @@ describe.skipIf(!enabled)("account export lifecycle", () => {
         );
         expect(await canReclaimAccountExportAttempt(firstClaim, db)).toBe(true);
         expect(await canReclaimAccountExportAttempt(claim, db)).toBe(false);
-        expect(ready?.attemptObjectKeys).toEqual([
+        expect(ready.attemptObjectKeys).toEqual([
           firstClaim.objectKey,
           claim.objectKey,
         ]);
@@ -212,10 +219,12 @@ describe.skipIf(!enabled)("account export lifecycle", () => {
             ?.attemptObjectKeys,
         ).toEqual([]);
 
-        const retrying = await requestAccountExport(userId, {
-          db,
-          rateLimitContext,
-        });
+        const retrying = (
+          await requestAccountExport(userId, {
+            db,
+            rateLimitContext,
+          })
+        ).unwrap();
         for (
           let attempt = 0;
           attempt < ACCOUNT_EXPORT_LIMITS.attempts;
@@ -246,10 +255,12 @@ describe.skipIf(!enabled)("account export lifecycle", () => {
         expect(
           (await listRecoverableAccountExports(db)).items.map(({ id }) => id),
         ).toEqual([retrying.id]);
-        const recovering = await requestAccountExport(recoveryUserId, {
-          db,
-          rateLimitContext,
-        });
+        const recovering = (
+          await requestAccountExport(recoveryUserId, {
+            db,
+            rateLimitContext,
+          })
+        ).unwrap();
         const abandoned = await claimAccountExport(recovering.id, db);
         if (abandoned === null) {
           panic("Initial recovery claim required");

@@ -22,6 +22,11 @@ export default {
           "Exercises migrated lifecycle transitions and generic account isolation.",
       },
       {
+        path: "apps/api/src/lib/db/transition-specs.ts",
+        reason:
+          "Declares the ledger's lifecycle graph for the transition owner.",
+      },
+      {
         path: "apps/api/src/lib/account-deletion-steps.ts",
         reason:
           "Removes the ledger and preserves artifact keys for durable erasure cleanup.",

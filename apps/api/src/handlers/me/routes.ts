@@ -1,11 +1,5 @@
 import Elysia from "elysia";
 
-import {
-  downloadPersonalDataExport,
-  latestPersonalDataExport,
-  personalDataExportStatus,
-  requestPersonalDataExport,
-} from "@/api/handlers/me/account-exports";
 import disconnectOAuthConnection from "@/api/handlers/me/disconnect-oauth-connection";
 import listOAuthConnections from "@/api/handlers/me/list-oauth-connections";
 import deleteAccountPendingTasks from "@/api/handlers/me/pending-tasks";
@@ -27,14 +21,6 @@ const isTwoFactorManageOtpSendPath = (pathname: string): boolean =>
 export const meRoute = new Elysia({ prefix: "/me" })
   .use(sessionAuthMacro)
   .guard({ validateSession: true })
-  .get("/data-exports", latestPersonalDataExport.handler)
-  .post("/data-exports", requestPersonalDataExport.handler)
-  .get("/data-exports/:exportId", personalDataExportStatus.handler, {
-    params: personalDataExportStatus.config.params,
-  })
-  .get("/data-exports/:exportId/download", downloadPersonalDataExport.handler, {
-    params: downloadPersonalDataExport.config.params,
-  })
   .get("/oauth-connections", listOAuthConnections.handler)
   .patch("/guide-progress", updateGuideProgress.handler, {
     body: updateGuideProgress.config.body,

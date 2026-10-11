@@ -22,7 +22,7 @@ import {
   workspaceViewTemplates,
 } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
-import { ACCOUNT_EXPORT_REGISTRY } from "@/api/lib/account-export/registry";
+import type { AccountExportProjections } from "@/api/lib/account-export/projections";
 import type { ExportedAccountTableName } from "@/api/lib/account-export/registry";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -34,7 +34,7 @@ import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
 
 export type AccountExportDataDb = Pick<typeof rootDb, "select">;
-export const ACCOUNT_EXPORT_PAGE_SIZE = 10;
+const ACCOUNT_EXPORT_PAGE_SIZE = 10;
 
 const resolveScopedDatabase = async () => {
   const { rlsDb } = await import("@/api/db/root");
@@ -57,7 +57,11 @@ const personalThread = (userId: SafeId<"user">) =>
   );
 
 type ExportRow = { id: string; value: unknown };
+type FeedbackReportPageRow = Awaited<
+  ReturnType<typeof readOwnFeedbackReportPage>
+>[number];
 type ExportOrganizationPageOptions = {
+  projections: AccountExportProjections;
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
@@ -79,6 +83,7 @@ type OrganizationPageQueryOptions = Omit<
 >;
 
 const readChatThreadsPage = async ({
+  projections,
   scopedDb,
   organizationId,
   userId,
@@ -98,10 +103,11 @@ const readChatThreadsPage = async ({
       )
       .orderBy(asc(chatThreads.id))
       .limit(ACCOUNT_EXPORT_PAGE_SIZE);
-    return projectRows(rows, ACCOUNT_EXPORT_REGISTRY.chat_threads.project);
+    return projectRows(rows, projections.chat_threads);
   });
 
 const readChatMessagesPage = async ({
+  projections,
   scopedDb,
   organizationId,
   userId,
@@ -127,11 +133,12 @@ const readChatMessagesPage = async ({
       .limit(ACCOUNT_EXPORT_PAGE_SIZE);
     return projectRows(
       rows.map(({ row }) => row),
-      ACCOUNT_EXPORT_REGISTRY.chat_messages.project,
+      projections.chat_messages,
     );
   });
 
 const readChatMessageRevisionsPage = async ({
+  projections,
   scopedDb,
   organizationId,
   userId,
@@ -165,11 +172,12 @@ const readChatMessageRevisionsPage = async ({
       .limit(ACCOUNT_EXPORT_PAGE_SIZE);
     return rows.map(({ row, role }) => ({
       id: row.id,
-      value: ACCOUNT_EXPORT_REGISTRY.chat_message_revisions.project(row, role),
+      value: projections.chat_message_revisions(row, role),
     }));
   });
 
 const readAiMemoriesPage = async ({
+  projections,
   scopedDb,
   organizationId,
   userId,
@@ -193,10 +201,11 @@ const readAiMemoriesPage = async ({
       )
       .orderBy(asc(aiMemories.id))
       .limit(ACCOUNT_EXPORT_PAGE_SIZE);
-    return projectRows(rows, ACCOUNT_EXPORT_REGISTRY.ai_memories.project);
+    return projectRows(rows, projections.ai_memories);
   });
 
 const readAgentSkillsPage = async ({
+  projections,
   scopedDb,
   organizationId,
   userId,
@@ -241,7 +250,7 @@ const readAgentSkillsPage = async ({
     }
     return rows.map((row) => ({
       id: row.id,
-      value: ACCOUNT_EXPORT_REGISTRY.agent_skills.project(
+      value: projections.agent_skills(
         row,
         resources.filter(({ skillId }) => skillId === row.id),
       ),
@@ -249,6 +258,7 @@ const readAgentSkillsPage = async ({
   });
 
 const readAgentSkillRevisionsPage = async ({
+  projections,
   scopedDb,
   organizationId,
   userId,
@@ -273,11 +283,12 @@ const readAgentSkillRevisionsPage = async ({
       .limit(ACCOUNT_EXPORT_PAGE_SIZE);
     return projectRows(
       rows.map(({ row }) => row),
-      ACCOUNT_EXPORT_REGISTRY.agent_skill_revisions.project,
+      projections.agent_skill_revisions,
     );
   });
 
 const readSavedSearchesPage = async ({
+  projections,
   scopedDb,
   organizationId,
   userId,
@@ -302,12 +313,13 @@ const readSavedSearchesPage = async ({
       value:
         row.criteria.workspaceIds.length === 0 &&
         row.criteria.editedByUserIds.every((id) => id === userId)
-          ? ACCOUNT_EXPORT_REGISTRY.saved_searches.project(row)
+          ? projections.saved_searches(row)
           : null,
     }));
   });
 
 const readSearchHistoryPage = async ({
+  projections,
   scopedDb,
   organizationId,
   userId,
@@ -330,15 +342,13 @@ const readSearchHistoryPage = async ({
     return await Promise.all(
       rows.map(async (row) => ({
         id: row.id,
-        value: await ACCOUNT_EXPORT_REGISTRY.search_history_entries.project(
-          organizationId,
-          row,
-        ),
+        value: await projections.search_history_entries(organizationId, row),
       })),
     );
   });
 
 const readLegalReaderAnnotationsPage = async ({
+  projections,
   scopedDb,
   organizationId,
   userId,
@@ -359,13 +369,11 @@ const readLegalReaderAnnotationsPage = async ({
       )
       .orderBy(asc(legalReaderAnnotations.id))
       .limit(ACCOUNT_EXPORT_PAGE_SIZE);
-    return projectRows(
-      rows,
-      ACCOUNT_EXPORT_REGISTRY.legal_reader_annotations.project,
-    );
+    return projectRows(rows, projections.legal_reader_annotations);
   });
 
 const readSavedTimeNarrativesPage = async ({
+  projections,
   scopedDb,
   organizationId,
   userId,
@@ -385,13 +393,11 @@ const readSavedTimeNarrativesPage = async ({
       )
       .orderBy(asc(savedTimeNarratives.id))
       .limit(ACCOUNT_EXPORT_PAGE_SIZE);
-    return projectRows(
-      rows,
-      ACCOUNT_EXPORT_REGISTRY.saved_time_narratives.project,
-    );
+    return projectRows(rows, projections.saved_time_narratives);
   });
 
 const readTemplateDefaultsPage = async ({
+  projections,
   scopedDb,
   organizationId,
   userId,
@@ -413,14 +419,12 @@ const readTemplateDefaultsPage = async ({
       .limit(ACCOUNT_EXPORT_PAGE_SIZE);
     return rows.map((row) => ({
       id: row.registry,
-      value:
-        ACCOUNT_EXPORT_REGISTRY.template_lookup_format_user_defaults.project(
-          row,
-        ),
+      value: projections.template_lookup_format_user_defaults(row),
     }));
   });
 
 const readWorkspaceViewTemplatesPage = async ({
+  projections,
   scopedDb,
   organizationId,
   userId,
@@ -440,13 +444,11 @@ const readWorkspaceViewTemplatesPage = async ({
       )
       .orderBy(asc(workspaceViewTemplates.id))
       .limit(ACCOUNT_EXPORT_PAGE_SIZE);
-    return projectRows(
-      rows,
-      ACCOUNT_EXPORT_REGISTRY.workspace_view_templates.project,
-    );
+    return projectRows(rows, projections.workspace_view_templates);
   });
 
 const readUserFilesPage = async ({
+  projections,
   scopedDb,
   organizationId,
   userId,
@@ -470,7 +472,7 @@ const readUserFilesPage = async ({
       .limit(ACCOUNT_EXPORT_PAGE_SIZE);
     return projectRows(
       rows.map(({ row }) => row),
-      ACCOUNT_EXPORT_REGISTRY.user_files.project,
+      projections.user_files,
     );
   });
 
@@ -515,6 +517,7 @@ const readOrganizationPage = async ({
 };
 
 type AccountExportRowsOptions = {
+  projections: AccountExportProjections;
   db: AccountExportDataDb;
   userId: SafeId<"user">;
   table: ExportedAccountTableName;
@@ -534,25 +537,25 @@ async function* accountMemberships({
   let cursor: string | null = null;
   while (true) {
     signal.throwIfAborted();
-    const page = await listAccountMembershipPage({
+    const rows = await listAccountMembershipPage({
       database: db,
       userId,
-      ...(cursor === null ? {} : { afterId: cursor }),
+      ...(cursor === null ? {} : { after: cursor }),
     });
-    for (const row of page.items) {
-      yield row;
-    }
-    if (page.nextAfterId === null) {
+    const next = rows.at(-1)?.id;
+    if (next === undefined) {
       return;
     }
-    if (page.nextAfterId === cursor) {
+    yield* rows;
+    if (next === cursor) {
       panic("Account membership cursor did not advance");
     }
-    cursor = page.nextAfterId;
+    cursor = next;
   }
 }
 
 export async function* exportAccountRows({
+  projections,
   db,
   userId,
   table,
@@ -563,36 +566,37 @@ export async function* exportAccountRows({
   if (table === "user") {
     const row = await readAccountProfileForExport(db, userId);
     if (row !== undefined) {
-      yield ACCOUNT_EXPORT_REGISTRY.user.project(row);
+      yield projections.user(row);
     }
     return;
   }
   if (table === "feedback_reports") {
-    let cursor: string | null = null;
+    let cursor: FeedbackReportPageRow["id"] | null = null;
     while (true) {
       signal.throwIfAborted();
-      const page = await readOwnFeedbackReportPage({
+      const rows: FeedbackReportPageRow[] = await readOwnFeedbackReportPage({
         database: db,
         userId,
-        ...(cursor === null ? {} : { afterId: cursor }),
+        ...(cursor === null ? {} : { after: cursor }),
       });
-      for (const row of page.items) {
-        yield ACCOUNT_EXPORT_REGISTRY.feedback_reports.project(row);
-      }
-      if (page.nextAfterId === null) {
+      const next = rows.at(-1)?.id;
+      if (next === undefined) {
         return;
       }
-      if (page.nextAfterId === cursor) {
+      for (const row of rows) {
+        yield projections.feedback_reports(row);
+      }
+      if (next === cursor) {
         panic("Feedback cursor did not advance");
       }
-      cursor = page.nextAfterId;
+      cursor = next;
     }
   }
   const database = scopedDatabase ?? (await resolveScopedDatabase());
   for await (const membership of accountMemberships({ db, userId, signal })) {
     signal.throwIfAborted();
     if (table === "member") {
-      yield ACCOUNT_EXPORT_REGISTRY.member.project(membership);
+      yield projections.member(membership);
       continue;
     }
     const organizationId = brandPersistedOrganizationId(
@@ -603,6 +607,7 @@ export async function* exportAccountRows({
     while (true) {
       signal.throwIfAborted();
       const rows = await readOrganizationPage({
+        projections,
         scopedDb,
         organizationId,
         userId,
@@ -626,8 +631,38 @@ export async function* exportAccountRows({
   }
 }
 
+type UserFileObjectsPageOptions = Omit<
+  OrganizationPageQueryOptions,
+  "projections"
+>;
+const readUserFileObjectsPage = async ({
+  scopedDb,
+  organizationId,
+  userId,
+  cursor,
+}: UserFileObjectsPageOptions) =>
+  await scopedDb(async (tx) => {
+    const rows = await tx
+      .select({ row: userFiles })
+      .from(userFiles)
+      .innerJoin(chatThreads, eq(chatThreads.id, userFiles.threadId))
+      .where(
+        and(
+          eq(chatThreads.organizationId, organizationId),
+          eq(userFiles.userId, userId),
+          personalThread(userId),
+          stillMember(organizationId, userId),
+          after(userFiles.id, cursor),
+        ),
+      )
+      .orderBy(asc(userFiles.id))
+      .limit(ACCOUNT_EXPORT_PAGE_SIZE);
+    return rows.map(({ row }) => row);
+  });
+
 type AccountExportFilesOptions = Omit<AccountExportRowsOptions, "table">;
 export async function* exportAccountFiles({
+  projections,
   db,
   userId,
   signal,
@@ -642,35 +677,23 @@ export async function* exportAccountFiles({
     let cursor: string | null = null;
     while (true) {
       signal.throwIfAborted();
-      const pageCursor: string | null = cursor;
-      const rows = await scopedDb((tx) =>
-        tx
-          .select({ row: userFiles })
-          .from(userFiles)
-          .innerJoin(chatThreads, eq(chatThreads.id, userFiles.threadId))
-          .where(
-            and(
-              eq(chatThreads.organizationId, organizationId),
-              eq(userFiles.userId, userId),
-              personalThread(userId),
-              stillMember(organizationId, userId),
-              after(userFiles.id, pageCursor),
-            ),
-          )
-          .orderBy(asc(userFiles.id))
-          .limit(ACCOUNT_EXPORT_PAGE_SIZE),
-      );
+      const rows = await readUserFileObjectsPage({
+        scopedDb,
+        organizationId,
+        userId,
+        cursor,
+      });
       if (rows.length === 0) {
         break;
       }
-      for (const { row } of rows) {
+      for (const row of rows) {
         yield {
-          path: ACCOUNT_EXPORT_REGISTRY.user_files.project(row).archivePath,
+          path: projections.user_files(row).archivePath,
           key: row.s3Key,
           sizeBytes: row.sizeBytes,
         };
       }
-      const next = rows.at(-1)?.row.id;
+      const next = rows.at(-1)?.id;
       if (next === undefined || next === cursor) {
         panic("Account file cursor did not advance");
       }

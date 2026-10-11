@@ -23,6 +23,7 @@ const MEMBER_REFERENCE_NAME =
 
 /** JSON columns whose documents can hold user or member ids. */
 const JSON_MEMBER_REFERENCE_COLUMNS = [
+  "account_exports.attempt_object_keys",
   "audit_logs.metadata",
   "audit_logs.changes",
   "cell_metadata.metadata",
@@ -192,6 +193,10 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
 const RETAINED_MEMBER_COLUMNS = {
   "account_audit_logs.user_id":
     "User-owned account audit history; matter and organization removal do not erase the user account or grant membership.",
+  "account_exports.attempt_object_keys":
+    "Storage keys of the account's own archives, named by account id; reclamation and account deletion own them, not membership removal.",
+  "account_exports.user_id":
+    "Account-owned export ledger; matter and organization removal do not erase the user account, and each archive rechecks current membership when built.",
   "entity_versions.collaboration_contributor_user_ids":
     "Contribution history, not membership or write authority.",
   "legal_list_generation_candidates.suggested_assignee_user_ids":

@@ -12,6 +12,7 @@ import { redisConnectionConfig } from "@stll/redis-config";
 import { initApiBackgroundWorkers } from "@/api/api-background-workers";
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
+import { accountExportsRoute } from "@/api/handlers/account-exports/routes";
 import {
   agentAuthConfirmRoute,
   agentAuthRoute,
@@ -585,6 +586,7 @@ const api = new Elysia()
       .use(tasksRoute)
       .use(workObligationsRoute)
       .use(myWorkRoute)
+      .use(accountExportsRoute)
       .use(meRoute)
       .use(localDevVersionedRoutes)
       .use(verifyAuthRoute),

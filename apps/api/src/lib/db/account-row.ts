@@ -6,12 +6,8 @@ import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateRowQuery } from "@/api/lib/db/aggregate-lock";
+import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-
-export {
-  projectAccountMembership,
-  projectAccountProfile,
-} from "@/api/lib/db/account-profile-projection";
 
 // Account-level access to the auth `user` row.
 //
@@ -57,20 +53,16 @@ const ACCOUNT_MEMBERSHIP_PAGE_SIZE = 100;
 type ListAccountMembershipPageOptions = {
   database: Pick<typeof rootDb, "select">;
   userId: SafeId<"user">;
-  afterId?: string;
+  after?: string;
 };
 
 /** Reads this account's memberships in bounded organization/id order. */
 export const listAccountMembershipPage = async ({
   database,
   userId,
-  afterId,
-}: ListAccountMembershipPageOptions) => {
-  const conditions = [eq(member.userId, userId)];
-  if (afterId !== undefined) {
-    conditions.push(gt(member.id, afterId));
-  }
-  const rows = await database
+  after,
+}: ListAccountMembershipPageOptions) =>
+  await database
     .select({
       id: member.id,
       organizationId: member.organizationId,
@@ -78,18 +70,14 @@ export const listAccountMembershipPage = async ({
       createdAt: member.createdAt,
     })
     .from(member)
-    .where(and(...conditions))
+    .where(
+      and(
+        eq(member.userId, userId),
+        after === undefined ? undefined : gt(member.id, after),
+      ),
+    )
     .orderBy(asc(member.id))
-    .limit(ACCOUNT_MEMBERSHIP_PAGE_SIZE + 1);
-  const items = rows.slice(0, ACCOUNT_MEMBERSHIP_PAGE_SIZE);
-  return {
-    items,
-    nextAfterId:
-      rows.length > ACCOUNT_MEMBERSHIP_PAGE_SIZE
-        ? (items.at(-1)?.id ?? null)
-        : null,
-  };
-};
+    .limit(ACCOUNT_MEMBERSHIP_PAGE_SIZE);
 
 /** The caller's own email and two-factor enrollment, by their user id. */
 export const readAccountEmailAndTwoFactor = async (
@@ -173,11 +161,13 @@ export const lockActiveAccountRow = async (
   }
   const row = result.rows.at(0);
   if (row === undefined || row.deletedAt !== null) {
-    throw new HandlerError({
-      status: 404,
-      code: "account_export_account_missing",
-      message: "Account not found.",
-    });
+    abortTransaction(
+      new HandlerError({
+        status: 404,
+        code: "account_export_account_missing",
+        message: "Account not found.",
+      }),
+    );
   }
 };
 

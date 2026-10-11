@@ -1,4 +1,3 @@
-import { panic } from "better-result";
 import {
   count,
   and,
@@ -1041,7 +1040,7 @@ export const deleteFileComparisonUploads = async ({
 
 export type DeleteUserFilesParams = {
   tx: Transaction;
-  currentUserId: string;
+  currentUserId: SafeId<"user">;
   s3KeysToDelete: string[];
 };
 
@@ -1060,40 +1059,32 @@ export const deleteUserFiles = async ({
   currentUserId,
   s3KeysToDelete,
 }: DeleteUserFilesParams): Promise<Date | null> => {
-  let retainedExportObjects = false;
-  // The account lock held by erasure fences claims and completion. Retain all
-  // attempted keys in its durable storage-cleanup request before removing work.
-  while (true) {
-    // db-await-in-loop: consume bounded account export pages under the erasure lock.
-    const page = await tx
-      .select({ id: accountExports.id })
-      .from(accountExports)
-      .where(eq(accountExports.userId, currentUserId))
-      .orderBy(accountExports.id)
-      .limit(ACCOUNT_EXPORT_LIMITS.deletionPageSize);
-    if (page.length === 0) {
-      break;
-    }
-    // db-await-in-loop: preserve object cleanup keys before removing each bounded page.
-    // audit: skip - The enclosing account-deletion request records artifact erasure in this transaction.
-    const exportObjects = await tx
-      .delete(accountExports)
-      .where(
-        and(
-          eq(accountExports.userId, currentUserId),
-          inArray(
-            accountExports.id,
-            page.map(({ id }) => id),
-          ),
+  // The account lock held by erasure fences claims and completion. Reclaimed
+  // ledger rows hold no object keys and leave without a result set.
+  await tx
+    .delete(accountExports)
+    .where(
+      and(
+        eq(accountExports.userId, currentUserId),
+        sql`jsonb_array_length(${accountExports.attemptObjectKeys}) = 0`,
+      ),
+    );
+  // Rows that still name attempted objects are bounded by the request budget
+  // over one reclamation window; their keys join the durable cleanup request.
+  // Claims cannot outlive their absolute lease, so reclamation waits until
+  // every possible publication has stopped, storage cancellation included.
+  const exportObjects = await tx
+    .delete(accountExports)
+    .where(eq(accountExports.userId, currentUserId))
+    .returning({
+      keys: accountExports.attemptObjectKeys,
+      notBefore:
+        sql`clock_timestamp() + (${ACCOUNT_EXPORT_LIMITS.leaseMs + ACCOUNT_EXPORT_LIMITS.publicationCancellationMarginMs} * INTERVAL '1 millisecond')`.mapWith(
+          accountExports.createdAt,
         ),
-      )
-      .returning({ keys: accountExports.attemptObjectKeys });
-    for (const { keys } of exportObjects) {
-      if (keys.length > 0) {
-        retainedExportObjects = true;
-      }
-      s3KeysToDelete.push(...keys);
-    }
+    });
+  for (const { keys } of exportObjects) {
+    s3KeysToDelete.push(...keys);
   }
   const files = await tx
     .select({
@@ -1123,20 +1114,7 @@ export const deleteUserFiles = async ({
   }
 
   await tx.delete(userFiles).where(eq(userFiles.userId, currentUserId));
-  if (!retainedExportObjects) {
-    return null;
-  }
-  // Claims cannot outlive their absolute lease. Delay reclamation until every
-  // possible publication has stopped, including storage cancellation settling.
-  const deadlines = await tx.select({
-    notBefore:
-      sql`clock_timestamp() + (${ACCOUNT_EXPORT_LIMITS.leaseMs + ACCOUNT_EXPORT_LIMITS.publicationCancellationMarginMs} * INTERVAL '1 millisecond')`.mapWith(
-        accountExports.createdAt,
-      ),
-  });
-  return (
-    deadlines.at(0)?.notBefore ?? panic("Missing storage cleanup deadline")
-  );
+  return exportObjects.at(0)?.notBefore ?? null;
 };
 
 export const DELETE_CHAT_THREADS_TABLES = [

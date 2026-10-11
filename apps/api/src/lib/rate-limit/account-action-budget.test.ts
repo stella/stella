@@ -1,6 +1,5 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-
-import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import { admitAccountExportRequest } from "@/api/lib/rate-limit/account-action-budget";
@@ -18,22 +17,20 @@ describe("account export request budget", () => {
     const complete = (key: string) => {
       completed.push(key);
     };
-    await admitAccountExportRequest({
+    const admitted = await admitAccountExportRequest({
       userId,
       max: maximum,
       durationMs: 1000,
       context: { increment: increment(maximum), complete },
     });
-    expect(
-      await rejectionOf(
-        admitAccountExportRequest({
-          userId,
-          max: maximum,
-          durationMs: 1000,
-          context: { increment: increment(maximum + 1), complete },
-        }),
-      ),
-    ).toMatchObject({
+    expect(Result.isOk(admitted)).toBe(true);
+    const refused = await admitAccountExportRequest({
+      userId,
+      max: maximum,
+      durationMs: 1000,
+      context: { increment: increment(maximum + 1), complete },
+    });
+    expect(Result.isError(refused) ? refused.error : null).toMatchObject({
       status: 429,
       code: "account_export_request_limited",
     });
