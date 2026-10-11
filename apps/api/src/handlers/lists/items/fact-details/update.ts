@@ -4,7 +4,7 @@ import { t } from "elysia";
 
 import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
 
-import { abortableTx } from "@/api/db/safe-db";
+import { abortableTx, abortTransaction } from "@/api/db/safe-db";
 import {
   entities,
   legalListFactDetails,
@@ -190,7 +190,7 @@ const updateFactDetails = createSafeHandler(
           resource: "Fact details",
         });
         if (conflict !== null) {
-          return conflict;
+          return abortTransaction(conflict);
         }
 
         const changes: FieldDiffs = {};
@@ -238,12 +238,14 @@ const updateFactDetails = createSafeHandler(
           if (existing !== undefined) {
             return panic("Locked fact details disappeared");
           }
-          throw new HandlerError({
-            code: VERSION_CONFLICT_ERROR_CODE,
-            status: 409,
-            message:
-              "Fact details changed while it was being edited; reload and try again",
-          });
+          return abortTransaction(
+            new HandlerError({
+              code: VERSION_CONFLICT_ERROR_CODE,
+              status: 409,
+              message:
+                "Fact details changed while it was being edited; reload and try again",
+            }),
+          );
         }
         await recordAuditEvent(tx, {
           action: AUDIT_ACTION.UPDATE,
@@ -263,9 +265,6 @@ const updateFactDetails = createSafeHandler(
       return Result.err(
         new HandlerError({ status: 404, message: "List item not found" }),
       );
-    }
-    if (HandlerError.is(result)) {
-      return Result.err(result);
     }
     if (result.type === "not-a-fact") {
       return Result.err(

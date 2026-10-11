@@ -422,9 +422,7 @@ describe("write contracts cover the mutation route graph", () => {
       export default createSafeHandler(${config}, async function* ({body, safeDb}) { ${body} });`;
 
     for (const body of [
-      `return yield* Result.await(safeDb(${returnedCallback}));`,
       `return yield* Result.await(abortableTx(safeDb, ${thrownCallback}));`,
-      `const writeResult = yield* Result.await(safeDb(${returnedCallback})); return writeResult;`,
       `const writeResult = yield* Result.await(abortableTx(safeDb, ${thrownCallback})); return writeResult;`,
       `const writeResult = yield* Result.await(abortableTx(safeDb, ${abortedCallback})); return writeResult;`,
       `const conflict = ${call}; if (conflict !== null) throw conflict; return {};`,
@@ -435,6 +433,10 @@ describe("write contracts cover the mutation route graph", () => {
     }
 
     for (const body of [
+      `return yield* Result.await(safeDb(${returnedCallback}));`,
+      `const writeResult = yield* Result.await(safeDb(${returnedCallback})); return writeResult;`,
+      `const ignored = yield* Result.await(safeDb(${returnedCallback})); return {};`,
+      `yield* Result.await(safeDb(${returnedCallback})); return {};`,
       `safeDb(${returnedCallback}); return {};`,
       `void safeDb(${returnedCallback}); return {};`,
       `const ignored = safeDb(${returnedCallback}); return {};`,

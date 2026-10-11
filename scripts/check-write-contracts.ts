@@ -923,8 +923,7 @@ class WriteSourceResolver {
       (ts.isPropertyAccessExpression(value.node.expression) &&
         value.node.expression.name.text === "transaction") ||
       (ts.isIdentifier(value.node.expression) &&
-        (value.node.expression.text === "safeDb" ||
-          value.node.expression.text === "abortableTx"))
+        value.node.expression.text === "abortableTx")
         ? value.node.arguments
         : [];
     for (const expression of [value.node.expression, ...callbacks]) {
