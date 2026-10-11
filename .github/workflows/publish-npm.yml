@@ -1,6 +1,9 @@
 name: Publish npm packages
 
 # release-chain-alert
+defaults:
+  run:
+    shell: bash
 
 # Keep this filename stable: npm trusted publishing authorizes the calling
 # repository workflow, even though the privileged release transaction is
@@ -314,7 +317,6 @@ jobs:
 
       - name: Build and pack selected packages
         id: pack
-        shell: bash
         env:
           EVENT_NAME: ${{ github.event_name }}
           MANUAL_PACKAGE: ${{ inputs.package || 'all' }}
@@ -412,7 +414,6 @@ jobs:
 
       - name: Smoke-test the packed CLI under plain Node # zizmor: ignore[adhoc-packages] intentionally installs the locally packed artifact as a consumer
         if: contains(fromJSON(steps.pack.outputs.packages), 'cli')
-        shell: bash
         run: |
           set -euo pipefail
           tarball="$(ls "${GITHUB_WORKSPACE}/release-artifacts/cli"/*.tgz)"
@@ -438,7 +439,6 @@ jobs:
         if: >-
           contains(fromJSON(steps.pack.outputs.packages), 'cli')
           && (github.event_name == 'workflow_run' || inputs.publish)
-        shell: bash
         run: |
           set -euo pipefail
           tarball="$(ls "${GITHUB_WORKSPACE}/release-artifacts/cli"/*.tgz)"

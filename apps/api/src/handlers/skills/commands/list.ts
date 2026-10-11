@@ -16,6 +16,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 //   3. its cache key is independent so editor mutations don't blow
 //      away unrelated catalogue/inspector reads
 const config = {
+  contract: "patch",
   description:
     "List the enabled skills that carry a slash command, shaped for the chat " +
     "composer's command menu: id, scope, name, description, command, and the " +

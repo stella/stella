@@ -133,6 +133,7 @@ const MAIN_SKIP = "inputs.pr_depth_only != true";
 const ORCHESTRATION_JOBS = new Set([
   "ci-plan",
   "ci-result",
+  "dated-waiver-expiry",
   "marketing-screenshots-cancel",
 ]);
 

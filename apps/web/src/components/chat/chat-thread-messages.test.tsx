@@ -97,6 +97,37 @@ const renderedText = (html: string) => {
 };
 
 describe("chat thread messages", () => {
+  test("labels a reloaded user stop without labelling other terminal outcomes", () => {
+    for (const outcome of [
+      { type: "cancelled", reason: "user-stop" },
+      { type: "cancelled", reason: "superseded" },
+      { type: "completed" },
+    ] as const) {
+      const stored = {
+        id: "assistant-terminal",
+        role: "assistant",
+        parts: [{ type: "text", content: "A partial answer" }],
+        metadata: { turnOutcome: outcome },
+      } satisfies ChatUIMessage;
+      const html = renderWithProviders(
+        <ChatThreadMessages
+          approvalPendingMessageId={null}
+          messages={[structuredClone(stored)]}
+          onAskUserSubmit={() => {}}
+          onCreateDocumentResolve={() => {}}
+          onOpenCreatedDocument={() => {}}
+          onResend={() => {}}
+          streamdownComponents={{
+            a: ({ children, ...props }) => <a {...props}>{children}</a>,
+          }}
+        />,
+      );
+      expect(renderedText(html).includes(messages.chat.stopped)).toBe(
+        outcome.type === "cancelled" && outcome.reason === "user-stop",
+      );
+    }
+  });
+
   test("renders every reloaded admission refusal with its recovery action", () => {
     for (const code of Object.values(ACTION_ADMISSION_CODES)) {
       const refusal = {
@@ -706,6 +737,47 @@ describe("chat thread messages", () => {
     expect(html).toContain("This step failed — stella will work around it.");
     expect(html).toContain(">Show details<");
     expect(html).toContain("Here is the answer.");
+  });
+
+  test("shows an approval-gated call as a card while its input streams", () => {
+    const chatMessages: ChatUIMessage[] = [
+      {
+        id: "message-A",
+        parts: [
+          { type: "thinking", content: "Drafting the positions." },
+          {
+            type: "tool-call",
+            id: "tool-call-save",
+            name: "save_playbook",
+            arguments: '{"name":"Mutual NDA","positions":[',
+            state: "input-streaming",
+          },
+        ],
+        role: "assistant",
+      },
+    ];
+
+    const html = renderWithProviders(
+      <ChatThreadMessages
+        approvalPendingMessageId={null}
+        isGenerating
+        messages={chatMessages}
+        onAskUserSubmit={() => {}}
+        onCreateDocumentResolve={() => {}}
+        onOpenCreatedDocument={() => {}}
+        streamdownComponents={{
+          a: ({ children, ...props }) => <a {...props}>{children}</a>,
+        }}
+      />,
+    );
+
+    // The save always ends in a question for the user, so it renders as its
+    // own card with a running indicator from the first input byte; only the
+    // reasoning stays folded, and as a settled step rather than a live one.
+    expect(html).toContain("1 step");
+    expect(html).toContain(">Save playbook<");
+    expect(html).toContain('data-slot="loader"');
+    expect(html).not.toContain("animate-skeleton");
   });
 
   test("keeps streaming reasoning visible and immediately collapsible", async () => {

@@ -10,6 +10,7 @@ import { lockVatRateOrganization } from "@/api/lib/billing/vat-rates";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
+  contract: "patch",
   description: "Archive a VAT rate period in the active organization.",
   permissions: { organizationSettings: ["update"] },
   accountAccess: ACCOUNT_ACCESS.standard,

@@ -18,6 +18,7 @@ const readTimeEntryByIdParamsSchema = workspaceParams({
 
 const readTimeEntryById = createSafeHandler(
   {
+    contract: "patch",
     description:
       "Read one time entry in a matter by id, with its minutes, rate, " +
       "currency, narratives, billing status, source, task and activity " +

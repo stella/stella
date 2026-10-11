@@ -24,6 +24,7 @@ const bodySchema = t.Object({
   note: t.Optional(t.Nullable(t.String({ maxLength: 10_000 }))),
 });
 const config = {
+  contract: "patch",
   featureAccess: { type: "required", featureId: LEGAL_LISTS_FEATURE_ID },
   description:
     "Record a review decision on one list item, with an optional note. The " +

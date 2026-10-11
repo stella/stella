@@ -77,6 +77,7 @@ import {
   hasRunningToolCallInLatestAssistantMessage,
   isApprovalPart,
   isOpaquePersistedChatToolCallPart,
+  isPendingApprovalPart,
   savedPlaybookId,
 } from "@/components/chat/chat-ui-tools";
 import {
@@ -92,7 +93,10 @@ import { RequestSecretCard } from "@/components/chat/request-secret-card";
 import { SourceChips } from "@/components/chat/source-chips";
 import { SpawnSubagentsCard } from "@/components/chat/spawn-subagents-card";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
-import { ToolApprovalCard } from "@/components/chat/tool-approval-card";
+import {
+  PendingToolApprovalCard,
+  ToolApprovalCard,
+} from "@/components/chat/tool-approval-card";
 import { ToolCallCard } from "@/components/chat/tool-call-card";
 import { uiResourceRenderer } from "@/components/chat/ui-resource-renderer";
 import { WebSearchSources } from "@/components/chat/web-search-sources";
@@ -975,6 +979,12 @@ const CHAT_ERROR_TRANSLATION_KEYS = {
   model_unavailable: "chat.sendErrorModelUnavailable",
   provider_credentials_rejected: "chat.sendErrorProviderCredentialsRejected",
   provider_stream_incomplete: "chat.sendErrorStreamIncomplete",
+  // A chat turn keeps a `length` answer and carries no schema or deadline of
+  // its own, so these reach it only through a structured side call; each
+  // reads as its nearest chat outcome.
+  output_incomplete: "chat.sendErrorStreamIncomplete",
+  output_invalid: "chat.sendError",
+  deadline_exceeded: "chat.sendErrorProviderUnavailable",
   provider_unavailable: "chat.sendErrorProviderUnavailable",
   quota_exhausted: "chat.sendErrorQuotaExhausted",
 } as const satisfies Record<MappedChatErrorKind, TranslationKey>;
@@ -1167,13 +1177,21 @@ const AssistantMessageActions = ({
   const text = useMemo(() => getMessageText(message), [message]);
   const canRetry = Boolean(onResend) && retryOffered;
   const canFork = Boolean(threadRef) && forkOffered;
+  const outcome = message.metadata?.turnOutcome;
+  const stoppedByUser =
+    outcome?.type === "cancelled" && outcome.reason === "user-stop";
 
-  if (!text && !canRetry && !canFork) {
+  if (!text && !canRetry && !canFork && !stoppedByUser) {
     return null;
   }
 
   return (
     <div className="flex shrink-0 items-center gap-1" data-chat-answer-actions>
+      {stoppedByUser && (
+        <span className="text-muted-foreground px-1.5 text-xs" role="status">
+          {t("chat.stopped")}
+        </span>
+      )}
       {text && (
         <CopyActionButton
           className="text-muted-foreground h-6 px-1.5"
@@ -1498,7 +1516,8 @@ const toAssistantPartRenderEntries = (
 // transport companions, so they stay inside a process run without becoming
 // visible steps or splitting the run. Interactive tool cards (ask-user,
 // create-document, approvals, subagent runs) read as answer content, so
-// they stay outside the folded process disclosure.
+// they stay outside the folded process disclosure; an approval-gated call
+// is one of them from its first input byte, before the request arrives.
 const isProcessRenderEntry = (entry: AssistantPartRenderEntry): boolean => {
   if (entry.type === "rich") {
     return false;
@@ -1515,7 +1534,8 @@ const isProcessRenderEntry = (entry: AssistantPartRenderEntry): boolean => {
     part.name !== "ask-user" &&
     part.name !== "create-document" &&
     part.name !== "spawn_subagents" &&
-    !isApprovalPart(part)
+    !isApprovalPart(part) &&
+    !isPendingApprovalPart(part)
   );
 };
 
@@ -1653,6 +1673,12 @@ const AssistantMessageParts = ({
   const renderEntries = toAssistantPartRenderEntries(message.parts);
   const isTurnActive = isGenerating && isLatestAssistantMessage;
   const renderGroups = toAssistantPartRenderGroups(renderEntries);
+  // Start open while this message is actively streaming its reasoning (no
+  // answer text yet), but always render the same disclosure so the user can
+  // collapse it immediately. Once the stream settles it folds unless the user
+  // already did so.
+  const thinkingDisplayState =
+    !hasAnswerContent && isTurnActive ? "expanded" : "folded";
   const renderEntry = (entry: AssistantPartRenderEntry, index: number) => {
     if (entry.type === "rich") {
       return (
@@ -1670,15 +1696,7 @@ const AssistantMessageParts = ({
       return (
         <AssistantThinkingPart
           components={streamdownComponents}
-          displayState={
-            // Start open while this message is actively streaming its
-            // reasoning (no answer text yet), but always render the same
-            // disclosure so the user can collapse it immediately. Once
-            // the stream settles it folds unless the user already did so.
-            !hasAnswerContent && isGenerating && isLatestAssistantMessage
-              ? "expanded"
-              : "folded"
-          }
+          displayState={thinkingDisplayState}
           key={`${message.id}-thinking-${index}`}
           reasoningTokenCount={
             index === firstThinkingPartIndex ? reasoningTokenCount : null
@@ -1817,6 +1835,10 @@ const AssistantMessageParts = ({
             part={part}
           />
         );
+      }
+
+      if (isPendingApprovalPart(part)) {
+        return <PendingToolApprovalCard key={part.id} part={part} />;
       }
 
       return (
