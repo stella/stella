@@ -7805,17 +7805,21 @@ jobs:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: package.json
 
-      - name: Install dependencies
-        timeout-minutes: 5
+      - name: Select install budget from restored cache
+        id: bun-install-budget
         run: |
           # Prefix-key restores are warm too; inspect the restored cache contents.
           if compgen -G "$HOME/.bun/install/cache/*" > /dev/null; then
-            export CI_INSTALL_CACHE_RESTORED=true
+            echo "cache-restored=true" >> "$GITHUB_OUTPUT"
           else
-            export CI_INSTALL_CACHE_RESTORED=false
+            echo "cache-restored=false" >> "$GITHUB_OUTPUT"
           fi
-          bun scripts/ci-install.ts "$RUNNER_TEMP/bun-install/desktop-windows-dry-run.log" --frozen-lockfile --ignore-scripts
+
+      - name: Install dependencies
+        timeout-minutes: 5
+        run: bun scripts/ci-install.ts "$RUNNER_TEMP/bun-install/desktop-windows-dry-run.log" --frozen-lockfile --ignore-scripts
         env:
+          CI_INSTALL_CACHE_RESTORED: ${{ steps.bun-install-budget.outputs.cache-restored }}
           BUN_INSTALL_GLOBAL_STORE: "0"
           NPM_TOKEN: ""
 

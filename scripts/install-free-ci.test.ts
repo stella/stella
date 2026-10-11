@@ -23,6 +23,7 @@ import {
   type Classification,
   type InstallFreeInvocation,
 } from "./install-free-ci";
+import { workflowJobSteps } from "./workflow-steps";
 
 // CI runs this file in "Test install-free CI commands" without the dependency
 // install, which the check below enforces for this file too.
@@ -57,52 +58,96 @@ test("Windows installs and every explicit CI cold install retain bounded logs", 
   }
 });
 
-test("longer Windows install budgets require an earlier cache restore and matched-key evidence", () => {
-  const restore = {
-    id: "bun-install-cache",
-    uses: "actions/cache/restore@fixture",
-  };
-  const install = {
-    run: 'bun scripts/ci-install.ts "$RUNNER_TEMP/bun-install/windows.log" --ignore-scripts',
-    "timeout-minutes": 5,
-    env: {
-      CI_INSTALL_CACHE_RESTORED: `\${{ steps.bun-install-cache.outputs.cache-matched-key != '' }}`,
-    },
-  };
-  const upload = {
-    uses: "actions/upload-artifact@fixture",
-    if: "failure()",
-    with: { path: `\${{ runner.temp }}/bun-install/*.log` },
-  };
-  const check = (steps: unknown[]) =>
+test("the real Windows dry-run budget requires shared cache restoration and warm/cold evidence before installation", () => {
+  const workflow: unknown = Bun.YAML.parse(
+    readFileSync(path.join(REPO_ROOT, CI_WORKFLOW), "utf-8"),
+  );
+  if (
+    typeof workflow !== "object" ||
+    workflow === null ||
+    !("jobs" in workflow) ||
+    typeof workflow.jobs !== "object" ||
+    workflow.jobs === null ||
+    !("desktop-windows-dry-run" in workflow.jobs)
+  ) {
+    expect.unreachable("Missing real Windows dry-run job");
+  }
+  const job = workflow.jobs["desktop-windows-dry-run"];
+  if (typeof job !== "object" || job === null) {
+    expect.unreachable("Invalid real Windows dry-run job");
+  }
+  const steps = workflowJobSteps(workflow, "desktop-windows-dry-run");
+  const check = (candidateSteps: unknown[]) =>
     boundedInstallProblems(
-      {
-        jobs: {
-          smoke: { "runs-on": "windows-latest", "timeout-minutes": 10, steps },
-        },
-      },
+      { jobs: { fixture: { ...job, steps: candidateSteps } } },
       "windows",
     );
-  expect(check([restore, install, upload])).toEqual([]);
-  for (const steps of [
-    [install, restore, upload],
-    [install, upload],
-    [restore, { ...install, env: {} }, upload],
-    [
-      restore,
-      {
-        ...install,
-        env: {
-          CI_INSTALL_CACHE_RESTORED: `\${{ steps.bun-install-cache.outputs.cache-hit }}`,
-        },
-      },
-      upload,
-    ],
-    [restore, { ...install, "timeout-minutes": 6 }, upload],
-    [restore, { ...install, "timeout-minutes": 3 }, upload],
+  const restore = steps.find(
+    (step) =>
+      typeof step["uses"] === "string" &&
+      step["uses"].startsWith("stella/.github/actions/setup-bun-cached@"),
+  );
+  const install = steps.find(
+    (step) =>
+      typeof step["run"] === "string" &&
+      step["run"].includes("scripts/ci-install.ts"),
+  );
+  const probe = steps.find(
+    (step) =>
+      typeof step["run"] === "string" && step["run"].includes("compgen -G"),
+  );
+  if (
+    restore === undefined ||
+    install === undefined ||
+    probe === undefined ||
+    typeof probe["run"] !== "string"
+  ) {
+    expect.unreachable("Missing real cache-aware install");
+  }
+  expect(install["timeout-minutes"]).toBe(5);
+  expect(check(steps)).toEqual([]);
+  const withoutRestore = steps.filter((step) => step !== restore);
+  const replaceProbe = (run: string) =>
+    steps.map((step) => (step === probe ? { ...step, run } : step));
+
+  for (const invalid of [
+    withoutRestore,
+    steps.filter((step) => step !== probe),
+    [...steps.filter((step) => step !== probe), probe],
+    steps.map((step) =>
+      step === install
+        ? { ...step, env: { CI_INSTALL_CACHE_RESTORED: "true" } }
+        : step,
+    ),
+    steps.map((step) => (step === probe ? { ...step, if: "false" } : step)),
+    steps.map((step) => (step === restore ? { ...step, if: "false" } : step)),
+    [...withoutRestore, restore],
+    steps.map((step) =>
+      step === restore
+        ? { ...step, with: { "install-cache": "runner" } }
+        : step,
+    ),
+    replaceProbe(probe["run"].replace("compgen -G", "echo")),
+    replaceProbe(
+      probe["run"].replace("cache-restored=true", "cache-restored=false"),
+    ),
+    replaceProbe(
+      probe["run"].replace(
+        'echo "cache-restored=false" >> "$GITHUB_OUTPUT"',
+        "",
+      ),
+    ),
+    replaceProbe(
+      probe["run"].replace("$HOME/.bun/install/cache/*", "$HOME/.bun/bin/*"),
+    ),
+    ...[3, 6].map((limit) =>
+      steps.map((step) =>
+        step === install ? { ...step, "timeout-minutes": limit } : step,
+      ),
+    ),
   ]) {
-    expect(check(steps)).toContain(
-      "smoke: install needs a bounded step timeout",
+    expect(check(invalid)).toContain(
+      "fixture: install needs a bounded step timeout",
     );
   }
 });

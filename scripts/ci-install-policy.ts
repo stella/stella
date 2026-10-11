@@ -31,19 +31,54 @@ export const installWorkflowPolicy = (file: string): InstallWorkflowPolicy => {
   );
 };
 
+// The probe must distinguish warm and cold caches; an arbitrary output or
+// unconditional true value cannot justify the longer install budget.
+const RESTORED_CACHE_BUDGET_SCRIPT = `if compgen -G "$HOME/.bun/install/cache/*" > /dev/null; then
+echo "cache-restored=true" >> "$GITHUB_OUTPUT"
+else
+echo "cache-restored=false" >> "$GITHUB_OUTPUT"
+fi`;
+
 const hasRestoredCacheBudget = (
   step: Record<string, unknown>,
   previousSteps: readonly Record<string, unknown>[],
-) =>
-  isRecord(step["env"]) &&
-  step["env"]["CI_INSTALL_CACHE_RESTORED"] ===
-    `\${{ steps.bun-install-cache.outputs.cache-matched-key != '' }}` &&
-  previousSteps.some(
-    (candidate) =>
-      candidate["id"] === "bun-install-cache" &&
-      typeof candidate["uses"] === "string" &&
-      candidate["uses"].startsWith("actions/cache/restore@"),
-  );
+) => {
+  if (!isRecord(step["env"])) {
+    return false;
+  }
+  const evidence = step["env"]["CI_INSTALL_CACHE_RESTORED"];
+  return previousSteps.some((probe, index) => {
+    if (
+      typeof probe["id"] !== "string" ||
+      probe["if"] !== undefined ||
+      typeof probe["run"] !== "string" ||
+      evidence !== `\${{ steps.${probe["id"]}.outputs.cache-restored }}`
+    ) {
+      return false;
+    }
+    const script = probe["run"]
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line !== "" && !line.startsWith("#"))
+      .join("\n");
+    return (
+      script === RESTORED_CACHE_BUDGET_SCRIPT &&
+      previousSteps
+        .slice(0, index)
+        .some(
+          (candidate) =>
+            candidate["if"] === undefined &&
+            typeof candidate["uses"] === "string" &&
+            candidate["uses"].startsWith(
+              "stella/.github/actions/setup-bun-cached@",
+            ) &&
+            (!isRecord(candidate["with"]) ||
+              candidate["with"]["install-cache"] === undefined ||
+              candidate["with"]["install-cache"] === "actions"),
+        )
+    );
+  });
+};
 
 /** Windows workflows and CI's explicit cold installs must share the owner. */
 export const boundedInstallProblems = (
