@@ -30,6 +30,7 @@ import {
 import {
   conditionSkillCapability,
   prepareConditionSkills,
+  SKILL_CATALOG_LOAD_SINK,
   type SkillToolsContext,
 } from "@/api/lib/docx/ai-skill-tools";
 import { omitSourceBoundValues } from "@/api/lib/docx/ai-visible-values";
@@ -40,6 +41,7 @@ import { resolveClauseSlotSources } from "@/api/lib/docx/resolve-clause-slots";
 import type { FieldMeta, TemplateManifest } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { loadStoredTemplateSource } from "@/api/lib/templates/template-fill-service";
 import { decideMany } from "@/api/lib/workflow/decisions/decide";
 import type {
@@ -235,7 +237,21 @@ export const decideTemplateConditions = async ({
     skillContext,
   );
   if (Result.isError(skills)) {
-    throw skills.error;
+    observeFailure(skills.error, { sink: SKILL_CATALOG_LOAD_SINK });
+    return {
+      conditions: conditions.map(({ path, label }) => {
+        const value = supplied.get(path);
+        return {
+          path,
+          label,
+          decision:
+            value === undefined
+              ? { state: "undecided", reason: "failed" }
+              : { state: "decided", decidedBy: "user", value },
+        };
+      }),
+      model: null,
+    };
   }
 
   const runtime =

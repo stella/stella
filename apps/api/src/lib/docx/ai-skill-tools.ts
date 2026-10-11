@@ -28,6 +28,7 @@ import {
   chatToolMapToArray,
   type ChatToolMap,
 } from "@/api/lib/chat/chat-tool-types";
+import { failureSink } from "@/api/lib/observability/failure";
 
 /** Server-validated identity the skill tools resolve skills against. */
 export type SkillToolsContext = {
@@ -118,3 +119,10 @@ export const prepareConditionSkills = async (
           },
   });
 };
+
+// Loading the caller's skill catalog failed before any model call, so it is a
+// database failure of this adapter rather than a generation outcome.
+export const SKILL_CATALOG_LOAD_SINK = failureSink({
+  event: "ai_field.skill_catalog_load_failed",
+  expected: [],
+});

@@ -4,9 +4,10 @@ import { beforeEach, describe, expect, test } from "bun:test";
 import type { Fetcher } from "@stll/fetch";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
+import type { SafeDb } from "@/api/db/safe-db";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { FieldMeta } from "@/api/lib/docx/types";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { DecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 import {
   createSystemOneClient,
@@ -803,4 +804,70 @@ test("mixed preview conditions reserve tools only for the referenced methodology
     expect.objectContaining({ state: "decided", decidedBy: "decision_model" }),
     { state: "decided", decidedBy: "generative_model", value: true },
   ]);
+});
+
+test("preview catalog failure preserves supplied decisions without starting a model", async () => {
+  let catalogReads = 0;
+  const safeDb: SafeDb = async () => {
+    catalogReads += 1;
+    return Result.err(
+      new DatabaseError({ message: "Fixture catalog unavailable" }),
+    );
+  };
+  let generationCalls = 0;
+  const result = await decideTemplateConditions({
+    fields: [
+      {
+        path: "supplied",
+        inputType: "boolean",
+        aiPrompt: "Is this a company?",
+      },
+      {
+        path: "skill",
+        inputType: "boolean",
+        aiPrompt:
+          "Apply [Methodology](#stella-skill-ref=condition-methodology).",
+      },
+      {
+        path: "ordinary",
+        inputType: "boolean",
+        aiPrompt: "Is this a consumer?",
+      },
+    ],
+    values: { supplied: false },
+    orgAIConfig: null,
+    client: answering({ ordinary: 0.94 }),
+    skillContext: {
+      organizationId: toSafeId<"organization">("org_preview"),
+      userId: toSafeId<"user">("user_preview"),
+      safeDb,
+    },
+    generator: async () => {
+      generationCalls += 1;
+      return { model: "test-generative", output: { answers: [] } };
+    },
+  });
+  expect(catalogReads).toBe(1);
+  expect(sent).toEqual([]);
+  expect(generationCalls).toBe(0);
+  expect(result).toEqual({
+    conditions: [
+      {
+        path: "supplied",
+        label: "supplied",
+        decision: { state: "decided", decidedBy: "user", value: false },
+      },
+      {
+        path: "skill",
+        label: "skill",
+        decision: { state: "undecided", reason: "failed" },
+      },
+      {
+        path: "ordinary",
+        label: "ordinary",
+        decision: { state: "undecided", reason: "failed" },
+      },
+    ],
+    model: null,
+  });
 });

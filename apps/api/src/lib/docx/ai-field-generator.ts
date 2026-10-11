@@ -39,6 +39,7 @@ import {
 import {
   maybeSkillTools,
   prepareConditionSkills,
+  SKILL_CATALOG_LOAD_SINK,
   SKILL_REF_GENERATOR_GUIDANCE,
   type SkillToolsContext,
 } from "@/api/lib/docx/ai-skill-tools";
@@ -48,7 +49,6 @@ import type {
   AiFieldDraft,
   AiFieldGenerator,
 } from "@/api/lib/docx/resolve-ai-fields";
-import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import {
@@ -320,13 +320,6 @@ const generateFieldObject = async <TSchema extends v.GenericSchema>(
       : {}),
   });
 };
-
-// Loading the caller's skill catalog failed before any model call, so it is a
-// database failure of this adapter rather than a generation outcome.
-const SKILL_CATALOG_LOAD_SINK = failureSink({
-  event: "ai_field.skill_catalog_load_failed",
-  expected: [],
-});
 
 export const buildAiFieldGenerator = ({
   orgAIConfig,
