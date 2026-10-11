@@ -1088,7 +1088,7 @@ const createParentSelect =
     return {
       from: (table: unknown) => ({
         where: () => ({
-          limit: () => {
+          limit: async () => {
             const parentRows =
               parentKind === null ? [] : [{ id: parentId, kind: parentKind }];
             const rows =
