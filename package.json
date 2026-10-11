@@ -69,6 +69,7 @@
     "lint:css": "bun test scripts/stylelint.test.ts && bun --bun stylelint --config .stylelintrc.json --ignore-path .gitignore --max-warnings 0 \"apps/**/*.css\" \"packages/**/*.css\"",
     "lint:changed": "bun run generate && bun scripts/lint-changed.ts",
     "lint:fix": "turbo run lint:fix",
+    "lint:profile:api": "bun --filter @stll/cli run codegen:runtime && bun --filter @stll/api run generate:capability-runtime && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --debug timings --format=default apps/api",
     "lint:profile:web": "bun run generate && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --debug timings --format=default apps/web",
     "assets:check": "bun test scripts/check-duplicate-raster-assets.test.ts && bun scripts/check-duplicate-raster-assets.ts",
     "lint:ws": "sherif -r unsync-similar-dependencies -i '@babel/core@^7.29.0' && bun packages/scripts/src/workspace-hygiene.ts",

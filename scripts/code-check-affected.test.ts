@@ -835,6 +835,34 @@ process.exit(childExitStatus(result));
     }
   });
 
+  test("API lint awaits generated sources while remaining independent of all typecheck tasks", () => {
+    const tasks = turboTasks();
+    const pending = ["@stll/api#lint"];
+    const visited = new Set<string>();
+    for (const id of pending) {
+      if (visited.has(id)) {
+        continue;
+      }
+      visited.add(id);
+      const taskName = tasks[id] ? id : (id.split("#")[1] ?? id);
+      if (tasks[taskName]?.["dependsOn"] === undefined) {
+        continue;
+      }
+      for (const dependency of taskField(tasks, taskName, "dependsOn")) {
+        const owner = id.split("#")[0];
+        const qualified = dependency.includes("#")
+          ? dependency
+          : `${owner}#${dependency.replace(/^\^/u, "")}`;
+        expect(qualified).not.toMatch(/#typecheck(?:$|:)/u);
+        pending.push(qualified);
+      }
+    }
+    expect(taskField(tasks, "@stll/api#lint", "dependsOn")).toEqual([
+      "@stll/cli#codegen:runtime",
+      "generate:capability-runtime",
+    ]);
+  });
+
   test("landing generates Astro types once, in its typecheck", () => {
     const landing = workspaceManifests().find(
       ({ workspace }) => workspace === "apps/landing",
