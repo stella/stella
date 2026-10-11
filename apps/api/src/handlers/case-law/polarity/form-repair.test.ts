@@ -117,7 +117,7 @@ describe("form-derived citation repair", () => {
       classifierVersion: POLARITY_CLASSIFIER_VERSION,
       language: "en",
       after: null,
-      rows: [planned.row],
+      rows: [{ ...planned.row, ruleFingerprint: "synthetic-rule-identity" }],
       results: [],
       counts: {},
       read: 1,
@@ -130,7 +130,13 @@ describe("form-derived citation repair", () => {
       expect(
         v.safeParse(formRepairPlanSchema, {
           ...plan,
-          rows: [{ ...planned.row, newPolarity: polarity }],
+          rows: [
+            {
+              ...planned.row,
+              ruleFingerprint: "synthetic-rule-identity",
+              newPolarity: polarity,
+            },
+          ],
         }).success,
       ).toBe(false);
     }

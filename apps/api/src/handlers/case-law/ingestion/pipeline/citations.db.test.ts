@@ -558,3 +558,97 @@ test("a form repair skips a citation when its decision text changes before writi
   expect(changed).toBe(true);
   expect(await read()).toEqual(before);
 });
+
+test("a form repair skips a citation when the selected rule confidence changes after preview", async () => {
+  const citingDecisionId = createSafeId<"caseLawDecision">();
+  const sourceId = createSafeId<"caseLawSource">();
+  const formRuleId = createSafeId<"caseLawPolarityRule">();
+  const citationId = createSafeId<"caseLawCitation">();
+  const sections = [
+    {
+      index: 0,
+      type: "argumentation",
+      title: null,
+      text: "consider A 88/2020",
+    },
+  ] satisfies DecisionSection[];
+  await db.insert(caseLawSources).values({
+    id: sourceId,
+    adapterKey: "form-repair-confidence-revision",
+    name: "Synthetic source",
+  });
+  await db.insert(caseLawDecisions).values({
+    id: citingDecisionId,
+    sourceId,
+    caseNumber: "synthetic confidence revision",
+    country: "CZE",
+    court: "Synthetic court",
+    language: "en",
+    sections,
+  });
+  await db.insert(caseLawPolarityRules).values({
+    id: formRuleId,
+    pattern: "consider",
+    language: "en",
+    kind: POLARITY_RULE_KIND.FORM,
+    polarity: POLARITY.NEUTRAL,
+    source: RULE_SOURCE.MANUAL,
+    confidence,
+  });
+  await db.insert(caseLawCitations).values({
+    id: citationId,
+    citingDecisionId,
+    citationText: "A 88/2020",
+    sectionIndex: 0,
+    polarity: POLARITY.SUPPORTIVE,
+    polarityRuleId: formRuleId,
+  });
+  const rules = compileRules([
+    {
+      id: formRuleId,
+      pattern: "consider",
+      kind: POLARITY_RULE_KIND.FORM,
+      polarity: POLARITY.NEUTRAL,
+      confidence,
+    },
+  ]);
+  const scopedDb: ScopedDb = async (run) =>
+    await db.transaction(async (tx) => await run(asTestRaw(tx)));
+  const preview = await previewFormRepairs({
+    scopedDb,
+    language: "en",
+    rules,
+    after: null,
+    limit: 1000,
+  });
+  const plan = {
+    ...preview,
+    rows: preview.rows.filter(({ id }) => id === citationId),
+  };
+  expect(plan.rows).toHaveLength(1);
+  const read = async () =>
+    (
+      await db.execute(
+        sql`SELECT *, xmin::text AS xmin, xmax::text AS xmax FROM ${caseLawCitations} WHERE id = ${citationId}::uuid`,
+      )
+    ).rows;
+  const before = await read();
+  const changedConfidence = 0.812345678;
+  await db
+    .update(caseLawPolarityRules)
+    .set({ confidence: changedConfidence })
+    .where(eq(caseLawPolarityRules.id, formRuleId));
+
+  const transaction: CaseLawRootHandle["transaction"] = async (run) =>
+    await db.transaction(async (tx) => await run(asTestRaw(tx)));
+  expect(await applyFormRepairs({ transaction, plan, rules })).toEqual({
+    applied: 0,
+    skipped: 1,
+  });
+  expect(await read()).toEqual(before);
+  const [storedRule] = await db
+    .select({ confidence: caseLawPolarityRules.confidence })
+    .from(caseLawPolarityRules)
+    .where(eq(caseLawPolarityRules.id, formRuleId));
+  expect(storedRule?.confidence).toBe(changedConfidence);
+});
