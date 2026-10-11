@@ -78,7 +78,10 @@ import {
 } from "@/api/handlers/chat/chat-turn-settlement";
 import type { CutShortOutcome } from "@/api/handlers/chat/chat-turn-settlement";
 import type { ChatTurnFailureCode } from "@/api/handlers/chat/chat-turn-state";
-import { withChatTurnTiming } from "@/api/handlers/chat/chat-turn-timing-stream";
+import {
+  prepareChatTurnTimingBatch,
+  withChatTurnTiming,
+} from "@/api/handlers/chat/chat-turn-timing-stream";
 import { compactModelMessagesForModel } from "@/api/handlers/chat/compaction";
 import {
   createLoopRecoverySystemPrompt,
@@ -923,11 +926,19 @@ export const streamChat = async ({
       {
         ...log,
         append: async (chunks) => {
+          const phase = prepareChatTurnTimingBatch({
+            chunks,
+            terminal:
+              settlement.event === undefined ||
+              settlement.terminalChunk === undefined
+                ? undefined
+                : {
+                    chunk: settlement.terminalChunk,
+                    messageId: settlement.event.responseMessage.id,
+                  },
+          });
           const offsets = await log.append(chunks);
-          if (
-            settlement.terminalChunk !== undefined &&
-            chunks.includes(settlement.terminalChunk)
-          ) {
+          if (phase === "finishing") {
             // Append while fenced; persist the transcript before returning the
             // offsets that allow the SDK to deliver the final terminal event.
             await finishSettlement();

@@ -356,8 +356,12 @@ describe("chat run log database contract", () => {
     await log.append([chunk("prefix"), timingEnd, terminal]);
     expect((await log.snapshot()).map(({ chunk: entry }) => entry)).toEqual([
       chunk("prefix"),
+      timingEnd,
+      terminal,
     ]);
     const reader = log.read("1")[Symbol.asyncIterator]();
+    const nowReader = log.read("now")[Symbol.asyncIterator]();
+    const nowPending = nowReader.next();
     const received: { value: unknown } = { value: null };
     const pending = reader.next().then((next) => {
       received.value = next;
@@ -389,10 +393,18 @@ describe("chat run log database contract", () => {
         chunk: { ...timingEnd, metadata: { turnTiming: timing.value } },
       },
     });
+    expect(await nowPending).toEqual({
+      done: false,
+      value: {
+        offset: "2",
+        chunk: { ...timingEnd, metadata: { turnTiming: timing.value } },
+      },
+    });
     expect(await reader.next()).toEqual({
       done: false,
       value: { offset: "3", chunk: terminal },
     });
+    await nowReader.return?.();
     await reader.return?.();
   });
 

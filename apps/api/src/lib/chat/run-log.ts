@@ -104,8 +104,15 @@ const createRunLogReader = ({
         .select({
           closedAt: chatRunLogs.closedAt,
           nextSeq: chatRunLogs.nextSeq,
-          tailBatchId: chatRunLogEntries.batchId,
           tailChunk: chatRunLogEntries.chunk,
+          tailTimingSeq: sql<string | null>`(
+            select pending.seq::text from chat_run_log_entries pending
+            where pending.organization_id = ${chatRunLogs.organizationId}
+              and pending.run_id = ${chatRunLogs.runId}
+              and pending.seq = ${chatRunLogs.nextSeq} - 2
+              and pending.chunk->>'type' = ${EventType.TEXT_MESSAGE_END}
+              and pending.chunk->'metadata' ? 'turnTiming'
+          )`,
         })
         .from(chatRunLogs)
         .leftJoin(
@@ -119,6 +126,21 @@ const createRunLogReader = ({
         .where(logKey(organizationId, runId))
         .limit(1)
     ).at(0);
+  type RunLogHeader = Awaited<ReturnType<typeof loadHeader>>;
+  const unsettledTailAfter = (log: RunLogHeader) => {
+    if (log?.closedAt !== null) {
+      return undefined;
+    }
+    if (
+      log.tailChunk?.type !== EventType.RUN_FINISHED &&
+      log.tailChunk?.type !== EventType.RUN_ERROR
+    ) {
+      return undefined;
+    }
+    return log.tailTimingSeq === null
+      ? log.nextSeq - 2n
+      : BigInt(log.tailTimingSeq) - 1n;
+  };
   const loadPage = async (after: bigint) =>
     await db(async (tx) => {
       const log = await loadHeader(tx);
@@ -126,7 +148,6 @@ const createRunLogReader = ({
         .select({
           chunk: chatRunLogEntries.chunk,
           seq: chatRunLogEntries.seq,
-          batchId: chatRunLogEntries.batchId,
         })
         .from(chatRunLogEntries)
         .where(
@@ -152,7 +173,11 @@ const createRunLogReader = ({
       }
       if (after === null) {
         const { log } = await loadPage(0n);
-        after = log === undefined ? 0n : log.nextSeq - 1n;
+        // "Now" excludes published history; the unsettled suffix still
+        // belongs to the viewer because it has not passed the tail fence.
+        after =
+          unsettledTailAfter(log) ??
+          (log === undefined ? 0n : log.nextSeq - 1n);
       }
       const deadline =
         Temporal.Now.instant().epochMilliseconds + FIRST_ENTRY_WAIT_MS;
@@ -166,16 +191,8 @@ const createRunLogReader = ({
           // Final append precedes the transaction that stores the transcript
           // and closes the log. Hold an open tail terminal until that commit;
           // intermediate finishes release once the next iteration appends.
-          if (
-            log?.closedAt === null &&
-            (log.tailChunk?.type === EventType.RUN_FINISHED ||
-              log.tailChunk?.type === EventType.RUN_ERROR) &&
-            entry.batchId === log.tailBatchId &&
-            (entry.seq === log.nextSeq - 1n ||
-              (entry.chunk.type === EventType.TEXT_MESSAGE_END &&
-                entry.chunk.metadata !== undefined &&
-                "turnTiming" in entry.chunk.metadata))
-          ) {
+          const heldAfter = unsettledTailAfter(log);
+          if (heldAfter !== undefined && entry.seq > heldAfter) {
             break;
           }
           after = entry.seq;
@@ -205,7 +222,11 @@ const createRunLogReader = ({
     },
     snapshot: async () =>
       await db(async (tx) => {
-        const log = await loadHeader(tx);
+        const [log] = await tx
+          .select({ nextSeq: chatRunLogs.nextSeq })
+          .from(chatRunLogs)
+          .where(logKey(organizationId, runId))
+          .limit(1);
         if (log === undefined) {
           return [];
         }
@@ -217,7 +238,6 @@ const createRunLogReader = ({
             .select({
               chunk: chatRunLogEntries.chunk,
               seq: chatRunLogEntries.seq,
-              batchId: chatRunLogEntries.batchId,
             })
             .from(chatRunLogEntries)
             .where(
@@ -231,18 +251,6 @@ const createRunLogReader = ({
             .limit(READ_PAGE_SIZE);
           for (const entry of entries) {
             after = entry.seq;
-            if (
-              log.closedAt === null &&
-              (log.tailChunk?.type === EventType.RUN_FINISHED ||
-                log.tailChunk?.type === EventType.RUN_ERROR) &&
-              entry.batchId === log.tailBatchId &&
-              (entry.seq === log.nextSeq - 1n ||
-                (entry.chunk.type === EventType.TEXT_MESSAGE_END &&
-                  entry.chunk.metadata !== undefined &&
-                  "turnTiming" in entry.chunk.metadata))
-            ) {
-              continue;
-            }
             result.push({ offset: after.toString(), chunk: entry.chunk });
           }
           if (entries.length < READ_PAGE_SIZE) {
@@ -362,6 +370,16 @@ export const createChatRunLogReplay = async ({
         final?.chunk.type === EventType.RUN_ERROR
       ) {
         prefix.pop();
+        const timingEnd = prefix.at(-1)?.chunk;
+        if (
+          timingEnd?.type === EventType.TEXT_MESSAGE_END &&
+          timingEnd.metadata !== undefined &&
+          "turnTiming" in timingEnd.metadata
+        ) {
+          // The terminal append precedes settlement. Replay the final timing
+          // through the tail fence rather than compacting its placeholder.
+          prefix.pop();
+        }
       }
       const last = prefix.at(-1);
       if (last === undefined) {

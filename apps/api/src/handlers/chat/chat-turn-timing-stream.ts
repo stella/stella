@@ -131,3 +131,44 @@ export const withChatTurnTiming = async function* ({
     yield* emitSettledTiming();
   }
 };
+
+type PrepareChatTurnTimingBatchArgs = {
+  chunks: StreamChunk[];
+  terminal: { chunk: StreamChunk; messageId: string } | undefined;
+};
+
+/** The SDK forwards the mutable append batch after persistence. Move final
+ * timing into the terminal batch even when its source event filled an earlier
+ * batch, so settlement can finalize it before either delivery or replay.
+ */
+export const prepareChatTurnTimingBatch = ({
+  chunks,
+  terminal,
+}: PrepareChatTurnTimingBatchArgs): "pending" | "finishing" => {
+  for (let index = chunks.length - 1; index >= 0; index -= 1) {
+    const chunk = chunks.at(index);
+    if (
+      chunk?.type === EventType.TEXT_MESSAGE_END &&
+      chunk.metadata !== undefined &&
+      "turnTiming" in chunk.metadata
+    ) {
+      chunks.splice(index, 1);
+    }
+  }
+  if (terminal === undefined) {
+    return "pending";
+  }
+  const terminalIndex = chunks.indexOf(terminal.chunk);
+  if (terminalIndex === -1) {
+    return "pending";
+  }
+  chunks.splice(terminalIndex, 0, {
+    type: EventType.TEXT_MESSAGE_END,
+    messageId: terminal.messageId,
+    ...(terminal.chunk.timestamp === undefined
+      ? {}
+      : { timestamp: terminal.chunk.timestamp }),
+    metadata: { turnTiming: null },
+  });
+  return "finishing";
+};

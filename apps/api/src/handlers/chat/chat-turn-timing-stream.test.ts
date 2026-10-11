@@ -1,4 +1,4 @@
-import { EventType } from "@tanstack/ai";
+import { EventType, toServerSentEventsResponse } from "@tanstack/ai";
 import type { StreamChunk } from "@tanstack/ai";
 import { describe, expect, test } from "bun:test";
 
@@ -7,7 +7,10 @@ import {
   getChatTurnDurationMs,
 } from "@stll/api-contract/chat-turn-duration";
 
-import { withChatTurnTiming } from "@/api/handlers/chat/chat-turn-timing-stream";
+import {
+  prepareChatTurnTimingBatch,
+  withChatTurnTiming,
+} from "@/api/handlers/chat/chat-turn-timing-stream";
 import type { ChatTurnTiming } from "@/api/handlers/chat/types";
 import { createStreamMessageCapture } from "@/api/lib/chat/stream-message-capture";
 import { readPresent, readUnavailable } from "@/api/lib/errors/read-outcome";
@@ -519,3 +522,88 @@ test("a failed final timing read clears the live anchor without losing the answe
     { type: "text", content: "Answer" },
   ]);
 });
+
+for (const batchSize of [1, 2, 32]) {
+  test(`durable timing reaches the live SDK and replay at batch size ${batchSize}`, async () => {
+    const stored: StreamChunk[] = [];
+    const capture = createStreamMessageCapture({
+      initialMessages: [],
+      capture: (message) => message,
+    });
+    const response = toServerSentEventsResponse(
+      withChatTurnTiming({
+        source: chunksOf([
+          runStart,
+          starts[0],
+          ...Array.from(
+            { length: 30 },
+            () =>
+              ({
+                type: EventType.TEXT_MESSAGE_CONTENT,
+                messageId: "answer",
+                delta: "x",
+              }) as const satisfies StreamChunk,
+          ),
+          runEnd,
+        ]),
+        getPhase: () => "settled",
+        readTiming: async () => readPresent(running),
+      }),
+      {
+        durability: {
+          batch: batchSize,
+          adapter: {
+            resumeFrom: () => null,
+            append: async (chunks) => {
+              const phase = prepareChatTurnTimingBatch({
+                chunks,
+                terminal: { chunk: runEnd, messageId: "answer" },
+              });
+              if (phase === "finishing") {
+                expect(chunks.at(-1)).toBe(runEnd);
+                const timingEnd = chunks.at(-2);
+                expect(timingEnd?.type).toBe(EventType.TEXT_MESSAGE_END);
+                if (timingEnd?.type !== EventType.TEXT_MESSAGE_END) {
+                  throw new Error("Missing terminal timing event");
+                }
+                timingEnd.metadata = { turnTiming: finished };
+              }
+              const offsets = chunks.map((_chunk, index) =>
+                String(stored.length + index + 1),
+              );
+              stored.push(...structuredClone(chunks));
+              return offsets;
+            },
+            async *read() {
+              for (const [index, chunk] of stored.entries()) {
+                yield { offset: String(index + 1), chunk };
+              }
+            },
+            close: async () => {},
+            snapshot: async () =>
+              stored.map((chunk, index) => ({
+                offset: String(index + 1),
+                chunk: structuredClone(chunk),
+              })),
+          },
+        },
+      },
+    );
+    const body = await response.text();
+    const delivered = body
+      .split("\n")
+      .filter((line) => line.startsWith("data: "))
+      .map((line): unknown => JSON.parse(line.slice(6)));
+    for (const chunk of stored) {
+      capture.processor.processChunk(structuredClone(chunk));
+    }
+    expect(delivered).toEqual(stored);
+    expect(capture.message()?.metadata?.["turnTiming"]).toEqual(finished);
+    expect(capture.message()?.parts).toEqual([
+      { type: "text", content: "x".repeat(30) },
+    ]);
+    expect(
+      stored.filter((chunk) => chunk.type === EventType.TEXT_MESSAGE_END),
+    ).toHaveLength(1);
+  });
+}
