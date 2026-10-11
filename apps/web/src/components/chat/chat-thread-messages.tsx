@@ -111,6 +111,7 @@ import { ToolCallCard } from "@/components/chat/tool-call-card";
 import { uiResourceRenderer } from "@/components/chat/ui-resource-renderer";
 import { WebSearchSources } from "@/components/chat/web-search-sources";
 import { CopyActionButton } from "@/components/copy-action-button";
+import { ProviderDiagnosticMessage } from "@/components/provider-diagnostic-message";
 import { ReferenceRenderScope } from "@/components/references/reference-chip";
 import {
   mentionAttrsToHref,
@@ -128,6 +129,7 @@ import { dedupeById } from "@/lib/dedupe-by-id";
 import { detached } from "@/lib/detached";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
 import { chatRefusal } from "@/lib/errors/api";
+import { providerDiagnosticFromThrown } from "@/lib/errors/provider-diagnostic";
 import { ClientTelemetryError } from "@/lib/errors/telemetry";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import {
@@ -1038,6 +1040,7 @@ export const ChatErrorMessage = ({
     onSendWithoutAnonymization !== undefined &&
     isThirdPartyBoundaryRefusalError(error);
   const refusal = chatRefusal(error);
+  const diagnostic = providerDiagnosticFromThrown(error);
 
   if (actionAdmissionOutcome(error)) {
     return (
@@ -1062,9 +1065,13 @@ export const ChatErrorMessage = ({
   return (
     <Message from="assistant">
       <MessageContent className="bg-destructive/10 border-destructive/20 text-destructive max-w-md rounded-lg border px-3 py-2">
-        <p className="text-sm">
-          {refusal ? refusal.message : t(chatErrorTranslationKey(error))}
-        </p>
+        {diagnostic !== undefined ? (
+          <ProviderDiagnosticMessage diagnostic={diagnostic} />
+        ) : (
+          <p className="text-sm">
+            {refusal ? refusal.message : t(chatErrorTranslationKey(error))}
+          </p>
+        )}
         <div className="flex flex-wrap gap-2">
           {canSendWithoutAnonymization && (
             <Button
