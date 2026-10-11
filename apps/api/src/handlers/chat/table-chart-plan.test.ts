@@ -1,8 +1,19 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import * as v from "valibot";
+
+import {
+  TABLE_CHART_LIMITS,
+  tableChartRequestSchema,
+} from "@stll/api-contract/table-chart";
 
 import { planTableChart } from "@/api/handlers/chat/table-chart-plan";
 import type { TableChartDecisionCaller } from "@/api/handlers/chat/table-chart-plan";
 import type { Decision } from "@/api/lib/workflow/decisions/decide";
+import {
+  DEFAULT_SYSTEM_ONE_MODEL,
+  serializeSystemOneRequest,
+  SYSTEM_ONE_MAX_REQUEST_BYTES,
+} from "@/api/lib/workflow/decisions/system-one";
 import type { ChoiceAnswer } from "@/api/lib/workflow/decisions/system-one";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
@@ -130,6 +141,56 @@ describe("table chart decisions", () => {
     expect(result).toEqual({ status: "unavailable" });
     expect(analytics.exceptions()).toHaveLength(1);
     expect(JSON.stringify(analytics.events)).not.toContain("Revenue");
+  });
+
+  test("cancelled planning preserves the table without error telemetry", async () => {
+    analytics = installRecordingAnalytics();
+    const controller = new AbortController();
+    const result = await planTableChart({
+      table,
+      decisionOptions: { orgAIConfig: null, abortSignal: controller.signal },
+      decide: async () => {
+        controller.abort();
+        return await Promise.reject(controller.signal.reason);
+      },
+    });
+    expect(result).toEqual({ status: "unavailable" });
+    expect(analytics.exceptions()).toHaveLength(0);
+  });
+
+  test("bounded multilingual and escaped tables fit the decision envelope", async () => {
+    for (const cell of ["漢", "😀", "\u0000", "\\", '"']) {
+      const headers = Array.from({ length: TABLE_CHART_LIMITS.columns }, () =>
+        cell.repeat(
+          Math.floor(TABLE_CHART_LIMITS.headerCharacters / cell.length),
+        ),
+      );
+      const rows: string[][] = [];
+      for (let count = 0; count < TABLE_CHART_LIMITS.rows; count += 1) {
+        const row = headers.map(() => cell.repeat(80));
+        const candidate = { headers, rows: [...rows, row] };
+        if (!v.safeParse(tableChartRequestSchema, candidate).success) {
+          break;
+        }
+        rows.push(row);
+      }
+      const bounded = v.parse(tableChartRequestSchema, { headers, rows });
+      await planTableChart({
+        table: bounded,
+        decisionOptions: { orgAIConfig: null },
+        decide: async ({ state, questions }) => {
+          const body = serializeSystemOneRequest({
+            state,
+            questions,
+            model: DEFAULT_SYSTEM_ONE_MODEL,
+          });
+          expect(new TextEncoder().encode(body).byteLength).toBeLessThanOrEqual(
+            SYSTEM_ONE_MAX_REQUEST_BYTES,
+          );
+          return { decisions: {}, model: null };
+        },
+      });
+    }
   });
 
   test("none title is a valid empty descriptive title", async () => {

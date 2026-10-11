@@ -11,6 +11,9 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { decideMany } from "@/api/lib/workflow/decisions/decide";
 
 const config = {
+  contract: "patch",
+  actionAdmission: { type: "handler", actionKind: "chat.table-chart" },
+  requiresUsage: { actionType: "chat", modelRole: "fast" },
   permissions: { chat: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "assistant_chat" },
@@ -21,7 +24,15 @@ const config = {
 const tableChart = createSafeRootHandler(
   config,
   // oxlint-disable-next-line require-yield -- planning returns one Result with no intermediate operation.
-  async function* ({ body, orgAIConfig, request, safeDb, session, user }) {
+  async function* ({
+    actionSignal,
+    body,
+    orgAIConfig,
+    request,
+    safeDb,
+    session,
+    user,
+  }) {
     const table = v.safeParse(tableChartRequestSchema, body);
     if (!table.success) {
       return Result.err(
@@ -38,7 +49,7 @@ const tableChart = createSafeRootHandler(
         decide: decideMany,
         decisionOptions: {
           orgAIConfig,
-          abortSignal: request.signal,
+          abortSignal: actionSignal ?? request.signal,
           usageMetering: {
             actionType: "chat",
             organizationId: session.activeOrganizationId,

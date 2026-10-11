@@ -127,7 +127,9 @@ export const planTableChart = async ({
       }),
   });
   if (Result.isError(asked)) {
-    captureError(asked.error, { source: "chat.table-chart" });
+    if (!decisionOptions.abortSignal?.aborted) {
+      captureError(asked.error, { source: "chat.table-chart" });
+    }
     return { status: "unavailable" };
   }
   const { decisions } = asked.value;

@@ -467,6 +467,7 @@ export const importHandler = async function* ({
 };
 
 const config = {
+  contract: "patch",
   description:
     "Bulk-create clauses from an uploaded file. The content chooses the " +
     "parser: a clauses.export JSON payload (version 1), including variants, " +

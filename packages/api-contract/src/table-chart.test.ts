@@ -63,6 +63,26 @@ describe("table chart contract", () => {
     }
   });
 
+  test("bounds multilingual headers and serialized table bytes", () => {
+    const oversizedHeaders = {
+      headers: Array.from({ length: TABLE_CHART_LIMITS.columns }, () =>
+        "漢".repeat(2000),
+      ),
+      rows: [Array.from({ length: TABLE_CHART_LIMITS.columns }, () => "")],
+    };
+    expect(v.safeParse(tableChartRequestSchema, oversizedHeaders).success).toBe(
+      false,
+    );
+    const escaped = {
+      headers: ["Category", "Value"],
+      rows: Array.from({ length: 10 }, () => ["\u0000".repeat(2000), "1"]),
+    };
+    expect(
+      new TextEncoder().encode(JSON.stringify(escaped)).byteLength,
+    ).toBeGreaterThan(TABLE_CHART_LIMITS.tableBytes);
+    expect(v.safeParse(tableChartRequestSchema, escaped).success).toBe(false);
+  });
+
   test("rejects every invalid index and role combination", () => {
     expect(v.safeParse(tableChartPlanSchema, validPlan()).success).toBe(true);
     for (const index of [

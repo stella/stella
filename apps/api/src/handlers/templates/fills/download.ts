@@ -26,6 +26,7 @@ const fillByIdParamsSchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   accountAccess: ACCOUNT_ACCESS.standard,
   contentDelivery: { type: "audited" },
   description:

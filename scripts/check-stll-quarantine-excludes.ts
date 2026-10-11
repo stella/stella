@@ -39,6 +39,7 @@ const BUNFIG = "bunfig.toml";
 const SCRIPT_PATH = "scripts/check-stll-quarantine-excludes.ts";
 const EXPIRY_MARKER = "quarantine-expires:";
 const EXCLUDED_SINCE_MARKER = "quarantine-excluded-since:";
+export const RELEASE_AGE_EXCEPTION_SOURCES = ["docker-compose.yml"] as const;
 const RELEASE_AGE_EXCEPTION_MARKER = "release-age-quarantine-exception:";
 const EXACT_UTC_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;
 
@@ -265,39 +266,58 @@ const readExcludeAnnotationErrors = (bunfig: string, now: Date): string[] => {
   return errors;
 };
 
-const readReleaseAgeExceptionErrors = (
+type ReleaseAgeException = { source: string; line: number; expiresAt: string };
+type ReleaseAgeExceptionsResult = {
+  entries: ReleaseAgeException[];
+  errors: string[];
+};
+
+export const readReleaseAgeExceptions = (
   sources: Readonly<Record<string, string>>,
-  now: Date,
-): string[] =>
-  Object.entries(sources).flatMap(([source, contents]) =>
-    contents.split("\n").flatMap((line, index) => {
+): ReleaseAgeExceptionsResult => {
+  const entries: ReleaseAgeException[] = [];
+  const errors: string[] = [];
+  for (const [source, contents] of Object.entries(sources)) {
+    for (const [index, line] of contents.split("\n").entries()) {
       const markerIndex = line.indexOf(RELEASE_AGE_EXCEPTION_MARKER);
       if (markerIndex === -1) {
-        return [];
+        continue;
       }
-
       const expiresAt = line
         .slice(markerIndex + RELEASE_AGE_EXCEPTION_MARKER.length)
         .trim();
       const timestampMs = Date.parse(expiresAt);
       if (
-        EXACT_UTC_TIMESTAMP.test(expiresAt) &&
-        !Number.isNaN(timestampMs) &&
-        new Date(timestampMs).toISOString() === expiresAt
+        !EXACT_UTC_TIMESTAMP.test(expiresAt) ||
+        !Number.isFinite(timestampMs) ||
+        new Date(timestampMs).toISOString() !== expiresAt
       ) {
-        if (timestampMs <= now.getTime()) {
-          return [
-            `${source}:${String(index + 1)} release-age quarantine exception expired at ${expiresAt}`,
-          ];
-        }
-        return [];
+        errors.push(
+          `${source}:${index + 1} release-age quarantine exception is missing an exact UTC expiry`,
+        );
+        continue;
       }
+      entries.push({ source, line: index + 1, expiresAt });
+    }
+  }
+  return { entries, errors };
+};
 
-      return [
-        `${source}:${String(index + 1)} release-age quarantine exception is missing an exact UTC expiry`,
-      ];
-    }),
-  );
+const readReleaseAgeExceptionErrors = (
+  sources: Readonly<Record<string, string>>,
+  now: Date,
+): string[] => {
+  const parsed = readReleaseAgeExceptions(sources);
+  return [
+    ...parsed.errors,
+    ...parsed.entries
+      .filter((entry) => Date.parse(entry.expiresAt) <= now.getTime())
+      .map(
+        (entry) =>
+          `${entry.source}:${entry.line} release-age quarantine exception expired at ${entry.expiresAt}`,
+      ),
+  ];
+};
 
 export type TemporaryExclude = {
   name: string;
@@ -400,16 +420,11 @@ const readRegistryStllPackages = (lockfile: string): Set<string> =>
     }),
   );
 
-const HOUR_MS = 60 * 60 * 1000;
-/** How long an expired entry is tolerated while its removal PR waits. */
-const NOTICE_WINDOW_MS = 24 * HOUR_MS;
-
 export type QuarantineExcludeCheckResult = {
   errors: string[];
   excludeCount: number;
   firstPartyCount: number;
   activeTemporaryCount: number;
-  warnings: string[];
 };
 
 export const checkQuarantineExcludes = ({
@@ -449,25 +464,15 @@ export const checkQuarantineExcludes = ({
   }
 
   const nowMs = now.getTime();
-  const warnings: string[] = [];
   for (const { expiresAt, name } of temporary.entries) {
     const expiresAtMs = Date.parse(expiresAt);
 
-    if (nowMs >= expiresAtMs + NOTICE_WINDOW_MS) {
+    if (nowMs >= expiresAtMs) {
       errors.push(
         `${BUNFIG} temporary quarantine exclude "${name}" expired at ${expiresAt} ` +
           `and is still here. Remove it (\`bun ${SCRIPT_PATH} --prune\`): the ` +
           `release-age gate admits the package on its own now, and leaving the ` +
           `entry lets the next version of it publish straight past the quarantine.`,
-      );
-      continue;
-    }
-
-    if (nowMs >= expiresAtMs) {
-      warnings.push(
-        `${BUNFIG} temporary quarantine exclude "${name}" expired at ${expiresAt}. ` +
-          `Its removal PR opens automatically; merge it, or run ` +
-          `\`bun ${SCRIPT_PATH} --prune\` to do it by hand.`,
       );
     }
   }
@@ -477,7 +482,6 @@ export const checkQuarantineExcludes = ({
     errors,
     excludeCount: excludes.size,
     firstPartyCount: firstPartyPackages.size,
-    warnings,
   };
 };
 
@@ -562,17 +566,13 @@ const main = () => {
   const result = checkQuarantineExcludes({
     bunfig: readFileSync(path.join(REPO_ROOT, BUNFIG), "utf-8"),
     lockfile: readFileSync(path.join(REPO_ROOT, LOCKFILE), "utf-8"),
-    releaseAgeExceptionSources: {
-      "docker-compose.yml": readFileSync(
-        path.join(REPO_ROOT, "docker-compose.yml"),
-        "utf-8",
-      ),
-    },
+    releaseAgeExceptionSources: Object.fromEntries(
+      RELEASE_AGE_EXCEPTION_SOURCES.map((source) => [
+        source,
+        readFileSync(path.join(REPO_ROOT, source), "utf-8"),
+      ]),
+    ),
   });
-
-  if (result.warnings.length > 0) {
-    console.warn(`${result.warnings.join("\n")}\n`);
-  }
 
   if (result.errors.length > 0) {
     console.error(result.errors.join("\n\n"));

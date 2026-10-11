@@ -101,18 +101,26 @@ const notification = ({
   });
 
 let db: GatedTestDb;
+const fixtureScoped = () =>
+  createScopedDb(markRlsDatabase(db), [workspaceId], organizationId, memberId);
 let s3: FakeS3;
 
 const records = async () =>
-  await db
-    .select()
-    .from(correspondence)
-    .where(eq(correspondence.organizationId, organizationId));
+  await fixtureScoped()(
+    async (tx) =>
+      await tx
+        .select()
+        .from(correspondence)
+        .where(eq(correspondence.organizationId, organizationId)),
+  );
 const drops = async () =>
-  await db
-    .select()
-    .from(correspondenceDropLogs)
-    .where(eq(correspondenceDropLogs.organizationId, organizationId));
+  await fixtureScoped()(
+    async (tx) =>
+      await tx
+        .select()
+        .from(correspondenceDropLogs)
+        .where(eq(correspondenceDropLogs.organizationId, organizationId)),
+  );
 
 const drainHarness = () => {
   const queue = createFakeSqsQueue();
@@ -216,12 +224,15 @@ if (!databaseUrl || !runPostgresTests) {
         workspaceId,
         userId: memberId,
       });
-      await db.insert(matterInboundAddresses).values({
-        id: createSafeId<"matterInboundAddress">(),
-        organizationId,
-        workspaceId,
-        token,
-      });
+      await fixtureScoped()(
+        async (tx) =>
+          await tx.insert(matterInboundAddresses).values({
+            id: createSafeId<"matterInboundAddress">(),
+            organizationId,
+            workspaceId,
+            token,
+          }),
+      );
     }, 60_000);
 
     afterAll(() => {
@@ -229,12 +240,18 @@ if (!databaseUrl || !runPostgresTests) {
     });
 
     beforeEach(async () => {
-      await db
-        .delete(correspondenceDropLogs)
-        .where(eq(correspondenceDropLogs.organizationId, organizationId));
-      await db
-        .delete(correspondence)
-        .where(eq(correspondence.organizationId, organizationId));
+      await fixtureScoped()(
+        async (tx) =>
+          await tx
+            .delete(correspondenceDropLogs)
+            .where(eq(correspondenceDropLogs.organizationId, organizationId)),
+      );
+      await fixtureScoped()(
+        async (tx) =>
+          await tx
+            .delete(correspondence)
+            .where(eq(correspondence.organizationId, organizationId)),
+      );
     });
 
     test("filed, duplicate and dropped deliveries are acknowledged once durable", async () => {

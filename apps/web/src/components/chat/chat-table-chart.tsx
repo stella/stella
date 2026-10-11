@@ -97,16 +97,7 @@ const ChartableTable = ({
     const result = await Result.tryPromise(async () => {
       const hash = await sha256Hex(JSON.stringify(table));
       // The loader is bound to the complete source whose digest owns the cache entry.
-      const loadPlan = async () => {
-        const response = await Result.tryPromise(
-          async () => await requestPlan(table),
-        );
-        if (Result.isError(response)) {
-          getAnalytics().captureError(response.error);
-          return { status: "unavailable" } as const;
-        }
-        return response.value;
-      };
+      const loadPlan = async () => await requestPlan(table);
       return await queryClient.query({
         queryKey: ["table-chart", cacheScope[0], cacheScope[1], hash],
         queryFn: loadPlan,
@@ -152,13 +143,13 @@ const ChartableTable = ({
   if (chart) {
     toggleLabel = t("workspaces.views.timeline.showTable");
   }
-  const keyPoints =
-    points.length <= 6
-      ? points
-      : points
-          .toSorted((a, b) => b.y - a.y)
-          .slice(0, 3)
-          .concat(points.toSorted((a, b) => a.y - b.y).slice(0, 3));
+  let keyPoints = points;
+  if (points.length > 6) {
+    const sortedPoints = points.toSorted((a, b) => b.y - a.y);
+    keyPoints = sortedPoints
+      .slice(0, 3)
+      .concat(sortedPoints.slice(-3).toReversed());
+  }
   const summary = chart
     ? [
         t("chat.tableChart.summary", { n: points.length }),

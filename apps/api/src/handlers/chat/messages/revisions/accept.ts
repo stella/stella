@@ -30,6 +30,11 @@ const acceptedEditSchema = Type.Unsafe<ChatMessageAcceptedEdit>(
 );
 
 const config = {
+  contract: "replace",
+  precondition: {
+    type: "deferred",
+    baselineId: "apps/api/src/handlers/chat/messages/revisions/accept.ts",
+  },
   description:
     "Accept an edit to a settled assistant answer with optimistic concurrency and a retained snapshot.",
   permissions: CHAT_TURN_PERMISSIONS,

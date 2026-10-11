@@ -4,6 +4,8 @@ export const TABLE_CHART_LIMITS = {
   columns: 20,
   rows: 200,
   cellCharacters: 2000,
+  headerCharacters: 160,
+  tableBytes: 60_000,
   totalCharacters: 40_000,
   titleCharacters: 160,
   points: 500,
@@ -25,7 +27,9 @@ const cellSchema = v.pipe(
 export const tableChartRequestSchema = v.pipe(
   v.strictObject({
     headers: v.pipe(
-      v.array(cellSchema),
+      v.array(
+        v.pipe(cellSchema, v.maxLength(TABLE_CHART_LIMITS.headerCharacters)),
+      ),
       v.minLength(2),
       v.maxLength(TABLE_CHART_LIMITS.columns),
     ),
@@ -47,6 +51,13 @@ export const tableChartRequestSchema = v.pipe(
         rows.reduce((total, row) => total + row.join("").length, 0) <=
       TABLE_CHART_LIMITS.totalCharacters,
     "Table exceeds the chart size limit",
+  ),
+  // Leave room for repeated headers, question rubrics and the model envelope.
+  v.check(
+    (table) =>
+      new TextEncoder().encode(JSON.stringify(table)).byteLength <=
+      TABLE_CHART_LIMITS.tableBytes,
+    "Table exceeds the chart byte limit",
   ),
 );
 

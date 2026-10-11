@@ -2005,6 +2005,7 @@
     "sort": "Sortuj",
     "source": "Źródło",
     "stale": "Nieaktualne",
+    "start": "Rozpocznij",
     "status": "Status",
     "stepCount": "{count, plural, one {# krok} few {# kroki} many {# kroków} other {# kroku}}",
     "stepProgress": "{current} z {total}",
@@ -2819,7 +2820,6 @@
       },
       "selectFlow": "Wybierz przepływ pracy",
       "sizeConfirmTitle": "Obszerne uruchomienie przepływu",
-      "start": "Rozpocznij",
       "startFailed": "Nie udało się uruchomić przepływu pracy.",
       "started": "Uruchomiono przepływ pracy",
       "stepProgress": "Krok {current} z {total}",
@@ -3036,8 +3036,7 @@
   "guides": {
     "action": {
       "replay": "Uruchom ponownie",
-      "skip": "Pomiń",
-      "start": "Rozpocznij"
+      "skip": "Pomiń"
     },
     "checklist": {
       "progress": "Ukończono {completed} z {total}"
@@ -3716,6 +3715,10 @@
         "failed": "Nie udało się zapisać",
         "nameMissing": "Nie zapisano: podaj nazwę",
         "positionsNeedAttention": "Nie zapisano: {count, plural, one {# stanowisko wymaga} few {# stanowiska wymagają} many {# stanowisk wymaga} other {# stanowiska wymaga}} uwagi"
+      },
+      "buildWithAi": {
+        "description": "Odpowiedz na kilka pytań na czacie, a playbook będzie zapisywany na bieżąco.",
+        "title": "Utwórz z AI"
       },
       "check": "Użyj dokładnej reguły zamiast AI",
       "checkHint": "Do mierzalnych warunków, na przykład: termin płatności ≤ 30 dni.",
@@ -6111,12 +6114,30 @@
         "addPDF": "Dodaj PDF",
         "applyCrop": "Zastosuj przycięcie",
         "crop": "Przytnij",
-        "cropBottom": "Dół",
-        "cropDescription": "{count, plural, one {Ustaw marginesy przycięcia dla wybranej strony.} few {Ustaw marginesy przycięcia dla # wybranych stron.} many {Ustaw marginesy przycięcia dla # wybranych stron.} other {Ustaw marginesy przycięcia dla # wybranych stron.}}",
-        "cropLeft": "Lewo",
-        "cropRight": "Prawo",
+        "cropAdvanced": "Zaawansowane",
+        "cropBottom": "Dół (mm)",
+        "cropDescription": "{count, plural, one {Ustaw marginesy przycięcia dla wybranej strony w milimetrach.} few {Ustaw marginesy przycięcia dla # wybranych stron w milimetrach.} many {Ustaw marginesy przycięcia dla # wybranych stron w milimetrach.} other {Ustaw marginesy przycięcia dla # wybranych stron w milimetrach.}}",
+        "cropHandle": "Zmień rozmiar przycięcia: {position}",
+        "cropHandleBottom": "dół",
+        "cropHandleBottomLeft": "lewy dolny róg",
+        "cropHandleBottomRight": "prawy dolny róg",
+        "cropHandleLeft": "lewa strona",
+        "cropHandleRight": "prawa strona",
+        "cropHandleTop": "góra",
+        "cropHandleTopLeft": "lewy górny róg",
+        "cropHandleTopRight": "prawy górny róg",
+        "cropHint": "Przeciągnij obszar lub jego uchwyty. Strzałki zmieniają przycięcie o 1 mm, a z Shiftem o 10 mm. Te same marginesy dotyczą wszystkich wybranych stron.",
+        "cropLeft": "Lewo (mm)",
+        "cropMove": "Przesuń obszar przycięcia",
+        "cropNextPage": "Następna wybrana strona",
+        "cropPage": "Strona {page, number} z {count, number}",
+        "cropPreview": "Podgląd przycięcia, strona {page, number}",
+        "cropPreviewFailed": "Nie udało się wyświetlić podglądu strony.",
+        "cropPreviousPage": "Poprzednia wybrana strona",
+        "cropRight": "Prawo (mm)",
         "cropTitle": "Przytnij strony",
-        "cropTop": "Góra",
+        "cropTooSmall": "Ta strona jest zbyt mała, aby przyciąć ją do co najmniej 10 mm.",
+        "cropTop": "Góra (mm)",
         "delete": "Usuń",
         "deselectAll": "Odznacz wszystko",
         "discard": "Odrzuć",

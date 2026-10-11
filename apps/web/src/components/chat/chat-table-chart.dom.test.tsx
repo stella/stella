@@ -47,6 +47,7 @@ const ready = {
 const mount = (
   requestPlan: () => Promise<TableChartResponse>,
   locale = "en",
+  sourceMarkdown = markdown,
 ) => {
   const client = new QueryClient();
   return render(
@@ -69,7 +70,7 @@ const mount = (
               ),
             }}
           >
-            {markdown}
+            {sourceMarkdown}
           </Streamdown>
         </FormattingProvider>
       </IntlProvider>
@@ -117,30 +118,64 @@ test("requests no decision until clicked, switches kind, returns to table and re
   expect(calls).toBe(1);
 });
 
-test.each(["unavailable", "failure"])(
-  "%s keeps the table and reports a neutral outcome",
-  async (outcome) => {
-    let calls = 0;
-    const view = mount(async () => {
-      calls += 1;
-      if (outcome === "failure") {
-        throw new TypeError("Synthetic chart failure");
-      }
-      return { status: "unavailable" };
-    });
-    fireEvent.click(view.getByRole("button", { name: "Show as chart" }));
-    await waitFor(() =>
-      expect(view.getByRole("status").textContent).toBe(
-        english.chat.tableChart.unavailable,
-      ),
-    );
-    expect(view.getByRole("table")).toBeDefined();
-    expect(view.queryByRole("img")).toBeNull();
-    fireEvent.click(view.getByRole("button", { name: "Show as chart" }));
-    await waitFor(() => expect(view.getByRole("status")).toBeDefined());
-    expect(calls).toBe(1);
-  },
-);
+test("an unavailable decision keeps the table and is reused for the session", async () => {
+  let calls = 0;
+  const view = mount(async () => {
+    calls += 1;
+    return { status: "unavailable" };
+  });
+  fireEvent.click(view.getByRole("button", { name: "Show as chart" }));
+  await waitFor(() =>
+    expect(view.getByRole("status").textContent).toBe(
+      english.chat.tableChart.unavailable,
+    ),
+  );
+  expect(view.getByRole("table")).toBeDefined();
+  expect(view.queryByRole("img")).toBeNull();
+  fireEvent.click(view.getByRole("button", { name: "Show as chart" }));
+  await waitFor(() => expect(view.getByRole("status")).toBeDefined());
+  expect(calls).toBe(1);
+});
+
+test("a failed chart request can be retried and recover", async () => {
+  let calls = 0;
+  const view = mount(async () => {
+    calls += 1;
+    if (calls === 1) {
+      throw new TypeError("Synthetic chart failure");
+    }
+    return ready;
+  });
+  fireEvent.click(view.getByRole("button", { name: "Show as chart" }));
+  await waitFor(() =>
+    expect(view.getByRole("status").textContent).toBe(
+      english.chat.tableChart.unavailable,
+    ),
+  );
+  expect(view.getByRole("table")).toBeDefined();
+  fireEvent.click(view.getByRole("button", { name: "Show as chart" }));
+  await view.findByRole("img", { name: "Hours" });
+  expect(calls).toBe(2);
+});
+
+test("the chart summary lists tied highest and lowest rows only once", async () => {
+  const rows = ["A", "B", "C", "D", "E", "F", "G"]
+    .map((label) => `| Row ${label} | 5 |`)
+    .join("\n");
+  const view = mount(
+    async () => ready,
+    "en",
+    `| Month | Hours |\n| --- | --- |\n${rows}`,
+  );
+  fireEvent.click(view.getByRole("button", { name: "Show as chart" }));
+  await view.findByRole("img", { name: "Hours" });
+  const summary = view.container.querySelector("figcaption bdi")?.textContent;
+  expect(summary).toBeDefined();
+  for (const label of ["Row A", "Row B", "Row C", "Row E", "Row F", "Row G"]) {
+    expect(summary?.match(new RegExp(label, "gu"))).toHaveLength(1);
+  }
+  expect(summary).not.toContain("Row D");
+});
 
 test("Arabic controls and chart summary use translated text and local number formatting", async () => {
   const view = mount(async () => ready, "ar-u-nu-arab");

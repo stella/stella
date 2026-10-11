@@ -96,6 +96,12 @@ const updateAIConfigBody = t.Object({
 });
 
 const config = {
+  contract: "replace",
+  precondition: {
+    type: "deferred",
+    baselineId:
+      "apps/api/src/handlers/organization-settings/update-ai-config.ts",
+  },
   permissions: { organizationSettings: ["update"] },
   accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: { type: "internal", reason: "provider_secret" },

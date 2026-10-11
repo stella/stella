@@ -2005,6 +2005,7 @@
     "sort": "Zoradiť",
     "source": "Zdroj",
     "stale": "Zastarané",
+    "start": "Začať",
     "status": "Stav",
     "stepCount": "{count, plural, one {# krok} few {# kroky} many {# kroku} other {# krokov}}",
     "stepProgress": "{current} z {total}",
@@ -2819,7 +2820,6 @@
       },
       "selectFlow": "Vyberte pracovný postup",
       "sizeConfirmTitle": "Rozsiahly beh postupu",
-      "start": "Spustiť",
       "startFailed": "Pracovný postup sa nepodarilo spustiť.",
       "started": "Pracovný postup spustený",
       "stepProgress": "Krok {current} z {total}",
@@ -3036,8 +3036,7 @@
   "guides": {
     "action": {
       "replay": "Spustiť znova",
-      "skip": "Preskočiť",
-      "start": "Začať"
+      "skip": "Preskočiť"
     },
     "checklist": {
       "progress": "{completed} z {total} dokončených"
@@ -3716,6 +3715,10 @@
         "failed": "Nepodarilo sa uložiť",
         "nameMissing": "Neuložené: zadajte názov",
         "positionsNeedAttention": "Neuložené: {count, plural, one {# pozícia vyžaduje} few {# pozície vyžadujú} other {# pozícií vyžaduje}} pozornosť"
+      },
+      "buildWithAi": {
+        "description": "Odpovedzte v chate na niekoľko otázok a playbook sa bude priebežne ukladať.",
+        "title": "Vytvoriť pomocou AI"
       },
       "check": "Použiť presné pravidlo namiesto AI",
       "checkHint": "Pre merateľné podmienky, napríklad: splatnosť ≤ 30 dní.",
@@ -6111,12 +6114,30 @@
         "addPDF": "Pridať PDF",
         "applyCrop": "Použiť orezanie",
         "crop": "Orezať",
-        "cropBottom": "Dole",
-        "cropDescription": "{count, plural, one {Nastavte okraje orezania pre vybranú stranu.} few {Nastavte okraje orezania pre # vybrané strany.} many {Nastavte okraje orezania pre # vybranej strany.} other {Nastavte okraje orezania pre # vybraných strán.}}",
-        "cropLeft": "Vľavo",
-        "cropRight": "Vpravo",
+        "cropAdvanced": "Rozšírené nastavenia",
+        "cropBottom": "Dole (mm)",
+        "cropDescription": "{count, plural, one {Nastavte okraje orezania pre vybranú stranu v milimetroch.} few {Nastavte okraje orezania pre # vybrané strany v milimetroch.} many {Nastavte okraje orezania pre # vybranej strany v milimetroch.} other {Nastavte okraje orezania pre # vybraných strán v milimetroch.}}",
+        "cropHandle": "Zmeniť veľkosť orezania: {position}",
+        "cropHandleBottom": "dole",
+        "cropHandleBottomLeft": "vľavo dole",
+        "cropHandleBottomRight": "vpravo dole",
+        "cropHandleLeft": "vľavo",
+        "cropHandleRight": "vpravo",
+        "cropHandleTop": "hore",
+        "cropHandleTopLeft": "vľavo hore",
+        "cropHandleTopRight": "vpravo hore",
+        "cropHint": "Potiahnite oblasť alebo jej úchyty. Šípky upravujú o 1 mm, so Shiftom o 10 mm. Rovnaké okraje sa použijú pre všetky vybrané strany.",
+        "cropLeft": "Vľavo (mm)",
+        "cropMove": "Posunúť oblasť orezania",
+        "cropNextPage": "Ďalšia vybraná strana",
+        "cropPage": "Strana {page, number} z {count, number}",
+        "cropPreview": "Náhľad orezania, strana {page, number}",
+        "cropPreviewFailed": "Náhľad strany sa nepodarilo vykresliť.",
+        "cropPreviousPage": "Predchádzajúca vybraná strana",
+        "cropRight": "Vpravo (mm)",
         "cropTitle": "Orezať strany",
-        "cropTop": "Hore",
+        "cropTooSmall": "Táto strana je príliš malá na orezanie s minimálnym rozmerom 10 mm.",
+        "cropTop": "Hore (mm)",
         "delete": "Odstrániť",
         "deselectAll": "Zrušiť výber",
         "discard": "Zahodiť",

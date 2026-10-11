@@ -55,6 +55,7 @@ import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
 import { parseUserFileId, toUserFileUrl } from "@/api/lib/user-files/types";
 
 const config = {
+  contract: "patch",
   contentDelivery: {
     type: "none",
     reason:

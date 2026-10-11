@@ -2005,6 +2005,7 @@
     "sort": "Rūšiuoti",
     "source": "Šaltinis",
     "stale": "Pasenusi",
+    "start": "Pradėti",
     "status": "Būsena",
     "stepCount": "{count, plural, one {# žingsnis} few {# žingsniai} other {# žingsnių}}",
     "stepProgress": "{current} iš {total}",
@@ -2819,7 +2820,6 @@
       },
       "selectFlow": "Pasirinkite darbo eigą",
       "sizeConfirmTitle": "Didelės apimties eigos vykdymas",
-      "start": "Pradėti",
       "startFailed": "Nepavyko paleisti darbo eigos.",
       "started": "Darbo eiga paleista",
       "stepProgress": "{current} žingsnis iš {total}",
@@ -3036,8 +3036,7 @@
   "guides": {
     "action": {
       "replay": "Pradėti iš naujo",
-      "skip": "Praleisti",
-      "start": "Pradėti"
+      "skip": "Praleisti"
     },
     "checklist": {
       "progress": "Atlikta {completed} iš {total}"
@@ -3716,6 +3715,10 @@
         "failed": "Nepavyko išsaugoti",
         "nameMissing": "Neišsaugota: pridėkite pavadinimą",
         "positionsNeedAttention": "Neišsaugota: {count, plural, one {# pozicija reikalauja} few {# pozicijos reikalauja} other {# pozicijų reikalauja}} dėmesio"
+      },
+      "buildWithAi": {
+        "description": "Atsakykite į kelis klausimus pokalbyje, o peržiūros vadovas bus išsaugomas eigoje.",
+        "title": "Kurti su DI"
       },
       "check": "Naudoti tikslią taisyklę vietoje DI",
       "checkHint": "Išmatuojamoms sąlygoms, pavyzdžiui: mokėjimo terminas ≤ 30 dienų.",
@@ -6111,12 +6114,30 @@
         "addPDF": "Pridėti PDF",
         "applyCrop": "Taikyti apkirpimą",
         "crop": "Apkirpti",
-        "cropBottom": "Apačia",
-        "cropDescription": "{count, plural, one {Nustatykite pasirinkto puslapio apkirpimo paraštes.} few {Nustatykite # pasirinktų puslapių apkirpimo paraštes.} other {Nustatykite # pasirinktų puslapių apkirpimo paraštes.}}",
-        "cropLeft": "Kairė",
-        "cropRight": "Dešinė",
+        "cropAdvanced": "Išplėstiniai nustatymai",
+        "cropBottom": "Apačia (mm)",
+        "cropDescription": "{count, plural, one {Nustatykite pasirinkto puslapio apkirpimo paraštes milimetrais.} few {Nustatykite # pasirinktų puslapių apkirpimo paraštes milimetrais.} other {Nustatykite # pasirinktų puslapių apkirpimo paraštes milimetrais.}}",
+        "cropHandle": "Keisti apkirpimo dydį: {position}",
+        "cropHandleBottom": "apačioje",
+        "cropHandleBottomLeft": "apačioje kairėje",
+        "cropHandleBottomRight": "apačioje dešinėje",
+        "cropHandleLeft": "kairėje",
+        "cropHandleRight": "dešinėje",
+        "cropHandleTop": "viršuje",
+        "cropHandleTopLeft": "viršuje kairėje",
+        "cropHandleTopRight": "viršuje dešinėje",
+        "cropHint": "Vilkite sritį arba jos rankenėles. Rodyklių klavišai keičia apkirpimą po 1 mm, o kartu su Shift — po 10 mm. Visiems pasirinktiems puslapiams taikomos tos pačios paraštės.",
+        "cropLeft": "Kairė (mm)",
+        "cropMove": "Perkelti apkirpimo sritį",
+        "cropNextPage": "Kitas pasirinktas puslapis",
+        "cropPage": "{page, number} puslapis iš {count, number}",
+        "cropPreview": "Apkirpimo peržiūra, {page, number} puslapis",
+        "cropPreviewFailed": "Nepavyko parodyti puslapio peržiūros.",
+        "cropPreviousPage": "Ankstesnis pasirinktas puslapis",
+        "cropRight": "Dešinė (mm)",
         "cropTitle": "Apkirpti puslapius",
-        "cropTop": "Viršus",
+        "cropTooSmall": "Šis puslapis per mažas, kad jį būtų galima apkirpti iki bent 10 mm dydžio.",
+        "cropTop": "Viršus (mm)",
         "delete": "Ištrinti",
         "deselectAll": "Atžymėti visus",
         "discard": "Atmesti",
