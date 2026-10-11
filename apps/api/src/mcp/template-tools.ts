@@ -1506,7 +1506,7 @@ const handleFillTemplateTool: McpToolHandler<
   if ("error" in filled) {
     return filled.storedTemplateError === undefined
       ? errorResult(filled.error)
-      : storedTemplateFailureResult(filled.storedTemplateError);
+      : templateFailureResult(filled.storedTemplateError);
   }
   if ("requiredFieldsRejection" in filled) {
     return requiredFieldsRejectionResult(filled.requiredFieldsRejection);
@@ -1992,7 +1992,7 @@ const handleSaveFilledTemplateTool: McpToolHandler<
     await releaseClaim();
     return filled.storedTemplateError === undefined
       ? errorResult(filled.error)
-      : storedTemplateFailureResult(filled.storedTemplateError);
+      : templateFailureResult(filled.storedTemplateError);
   }
   if ("requiredFieldsRejection" in filled) {
     await releaseClaim();
@@ -2631,7 +2631,7 @@ const describeTemplateForAgent = async ({
   if ("error" in described) {
     return described.storedTemplateError === undefined
       ? errorResult(described.error)
-      : storedTemplateFailureResult(described.storedTemplateError);
+      : templateFailureResult(described.storedTemplateError);
   }
   const payload = toTemplateDetailPayload(templateId, described);
   return projectionPayload(TEMPLATE_DESCRIBE_PROJECTION, payload);
@@ -2993,10 +2993,9 @@ const handleConfigureTemplateFieldsTool: TypedMcpToolHandler<
   );
 };
 
-/** A stored template that could not be read: gone, its file refused by the
- *  scan, the scanner unavailable, or the object unreadable. */
-const storedTemplateFailureResult = (
-  error: HandlerError<404 | 422 | 500 | 503>,
+/** Curated template failures and expected usage or admission refusals. */
+const templateFailureResult = (
+  error: HandlerError<402 | 403 | 404 | 422 | 429 | 500 | 503>,
 ): InternalToolErrorResult => {
   switch (error.status) {
     case 404:
@@ -3019,6 +3018,9 @@ const storedTemplateFailureResult = (
         hint: error.hint,
         retryable: true,
       });
+    case 402:
+    case 403:
+    case 429:
     case 500:
       return internalFailureResult(error);
     default:
@@ -3149,7 +3151,7 @@ const handlePreviewTemplateConditionsTool: TypedMcpToolHandler<
       return structuredErrorResult(projectMcpRefusal(decided.error));
     }
     return decided.error.status === 404 || decided.error.status === 422
-      ? storedTemplateFailureResult(decided.error)
+      ? templateFailureResult(decided.error)
       : internalFailureResult(decided.error);
   }
 

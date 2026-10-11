@@ -104,7 +104,7 @@ export const prepareConditionSkills = async (
 ) => {
   const tools = await maybeSkillTools(prompt, context);
   if (Result.isError(tools)) {
-    return tools;
+    return Result.err(tools.error);
   }
   return Result.ok({
     question: conditionSkillCapability(prompt),

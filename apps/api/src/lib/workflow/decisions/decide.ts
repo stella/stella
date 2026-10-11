@@ -511,11 +511,10 @@ const generateDecisions: DecisionGenerator = async ({
   }
   const model = await withGenerationDeadline(
     { ...generation, abortSignal },
-    async (signal) =>
+    async () =>
       await (generation.resolveTextModel ?? resolveTanStackTextModel)({
         ...generation,
         orgAIConfig,
-        abortSignal: signal ?? abortSignal,
       }),
   );
   abortSignal.throwIfAborted();
