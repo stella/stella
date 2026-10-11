@@ -75,6 +75,7 @@ export const PROVIDER_DATA_POLICY = {
   customer: {
     google: { status: "unsupported" },
     openrouter: MANAGED_OPENROUTER_POLICY,
+    // Generative and decision requests use the org credential under BYOK.
     openai: { status: "unsupported" },
     azure_foundry: { status: "unsupported" },
     anthropic: { status: "unsupported" },

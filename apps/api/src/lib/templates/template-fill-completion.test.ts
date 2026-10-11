@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { DECISION_UNDECIDED_REASONS } from "@stll/api-contract/ai-decision-provider";
 import { propertyConfig } from "@stll/property-testing";
 
 import {
@@ -44,11 +45,7 @@ const undecidedConditionArbitrary: fc.Arbitrary<UndecidedAiCondition> =
     path: fc.string({ minLength: 1 }),
     label: fc.string({ minLength: 1 }),
     state: fc.constant("undecided"),
-    reason: fc.constantFrom<UndecidedAiCondition["reason"]>(
-      "no-backend",
-      "below-floor",
-      "failed",
-    ),
+    reason: fc.constantFrom(...DECISION_UNDECIDED_REASONS),
   });
 
 const clauseWarningArbitrary: fc.Arbitrary<ClauseDirectiveWarning> = fc.record({

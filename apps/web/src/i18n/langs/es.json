@@ -4171,11 +4171,16 @@
       "customModelDescription": "Este ID de modelo no está en el catálogo de stella. Se enviará al proveedor seleccionado tal como lo escribiste.",
       "customModelHint": "No hay coincidencias en el catálogo. Escribe cualquier ID de modelo; los IDs personalizados se guardan tal cual.",
       "decision": {
+        "dataRegion": "Región de datos",
         "description": "Preguntas con respuestas fijas (categorías de documentos, polaridad de las citas)",
         "generativeFallback": "Usa el modelo generativo para la tarea.",
         "incomplete": "Introduce una clave de API y un modelo para el modelo de decisión, o quítalo.",
         "instanceProvided": "stella ya proporciona un modelo de decisión; añade el tuyo solo para usar otro distinto.",
-        "label": "Toma de decisiones"
+        "label": "Toma de decisiones",
+        "regionEu": "Unión Europea",
+        "regionGlobal": "Mundial",
+        "reuseOpenAIKey": "Usar mi clave de OpenAI",
+        "separateKey": "Usar una clave independiente"
       },
       "defaultModel": "Predeterminado: {model}",
       "defaultModelOption": "Predeterminado",

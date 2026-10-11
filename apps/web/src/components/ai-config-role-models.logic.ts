@@ -62,6 +62,17 @@ type ProviderCredentialChangesOptions = {
   stored: ProviderCredentialDraft | undefined;
 };
 
+export const hasUsableOpenAIKey = (
+  providers: readonly ProviderCredentialDraft[],
+): boolean =>
+  providers.some(
+    (draft) =>
+      draft.provider === "openai" &&
+      (draft.replacingKey || !draft.apiKeyMasked
+        ? !!draft.apiKey.trim()
+        : true),
+  );
+
 const normalizeWorkspaceId = (value: string | undefined) =>
   value?.trim() || undefined;
 
@@ -637,7 +648,7 @@ const normalizeModelSelection = ({
 /**
  * The decision model: a non-generative model that answers typed questions
  * (a choice from N, yes/no, a score) with probabilities. It sits beside the
- * generative roles with its own provider and key, and merges on its own terms:
+ * generative roles with its own provider and optional separate key, and merges on its own terms:
  * an absent field keeps what is stored, `null` clears it, an object replaces it.
  */
 
@@ -646,33 +657,42 @@ type ConfiguredAIConfig = Extract<OrganizationAIConfig, { configured: true }>;
 /** The stored decision model, as `GET /ai-config` reports it. */
 export type StoredDecisionModel = NonNullable<ConfiguredAIConfig["decision"]>;
 
-export const DECISION_PROVIDER_KEYS =
-  DECISION_MODEL_PROVIDERS satisfies readonly StoredDecisionModel["provider"][];
-
+export const DECISION_PROVIDER_KEYS = DECISION_MODEL_PROVIDERS;
 export type DecisionProviderValue = (typeof DECISION_PROVIDER_KEYS)[number];
-
-// A provider the API accepts but this list never offers would be unreachable
-// from settings; the divergence fails typecheck here instead of going unseen.
-type UnofferedDecisionProvider = Exclude<
+true satisfies Exclude<
   StoredDecisionModel["provider"],
   DecisionProviderValue
->;
+> extends never
+  ? true
+  : never;
 
-true satisfies UnofferedDecisionProvider extends never ? true : never;
+type DecisionSelection =
+  | { provider: "typesafe"; apiKey: string; modelId: string }
+  | {
+      provider: "openai";
+      apiKey: string;
+      modelId: string;
+      region: "eu" | "global";
+      keyMode: "reuse" | "override";
+    };
 
 export type DecisionModelState =
   | { kind: "untouched" }
   | { kind: "cleared" }
-  | {
-      kind: "set";
-      provider: DecisionProviderValue;
-      apiKey: string;
-      modelId: string;
-    };
+  | ({ kind: "set" } & DecisionSelection);
 
-/** The save body's `decision` field: absent keeps, null clears, object sets. */
 type SerializedDecisionModel =
-  | { provider: DecisionProviderValue; apiKey?: string; modelId: string }
+  | {
+      provider: "typesafe";
+      apiKey?: string;
+      modelId: string;
+    }
+  | {
+      provider: "openai";
+      apiKey?: string | null;
+      modelId: string;
+      region: "eu" | "global";
+    }
   | null
   | undefined;
 
@@ -685,14 +705,26 @@ export const serializeDecisionModel = (
     case "cleared":
       return null;
     case "set": {
-      // An empty input is the "keep the stored key" signal, so the field is
-      // omitted rather than sent as a blank string the API would reject.
       const apiKey = state.apiKey.trim();
-      return {
-        provider: state.provider,
-        ...(apiKey ? { apiKey } : {}),
-        modelId: state.modelId.trim(),
-      };
+      const replacementKey = apiKey ? { apiKey } : {};
+      switch (state.provider) {
+        case "typesafe":
+          return {
+            provider: state.provider,
+            ...replacementKey,
+            modelId: state.modelId.trim(),
+          };
+        case "openai":
+          return {
+            provider: state.provider,
+            ...(state.keyMode === "reuse" ? { apiKey: null } : replacementKey),
+            region: state.region,
+            modelId: state.modelId.trim(),
+          };
+        default:
+          state satisfies never;
+          return panic("Unhandled decision model provider");
+      }
     }
     default:
       state satisfies never;
@@ -700,47 +732,63 @@ export const serializeDecisionModel = (
   }
 };
 
-type DecisionModelDraft = {
-  provider: DecisionProviderValue;
-  apiKey: string;
-  /** Masked stored key, present only while a key is stored for this provider. */
+type DecisionModelDraft = DecisionSelection & {
   apiKeyMasked?: string | undefined;
-  modelId: string;
 };
-
 type DecisionModelViewOptions = {
   state: DecisionModelState;
   stored: StoredDecisionModel | null | undefined;
+  hasOpenAIKey?: boolean;
 };
 
-/** What the section renders: the edited draft, or null when there is none. */
 export const decisionModelDraft = ({
   state,
   stored,
 }: DecisionModelViewOptions): DecisionModelDraft | null => {
   switch (state.kind) {
     case "untouched":
-      return stored
+      if (!stored) {
+        return null;
+      }
+      return stored.provider === "openai"
         ? {
-            provider: stored.provider,
+            provider: "openai",
             apiKey: "",
             apiKeyMasked: stored.apiKeyMasked,
             modelId: stored.modelId,
+            region: stored.region,
+            keyMode: stored.apiKeyMasked ? "override" : "reuse",
           }
-        : null;
+        : {
+            provider: "typesafe",
+            apiKey: "",
+            apiKeyMasked: stored.apiKeyMasked,
+            modelId: stored.modelId,
+          };
     case "cleared":
       return null;
-    case "set":
-      return {
-        provider: state.provider,
-        apiKey: state.apiKey,
-        // A stored key belongs to the provider it was issued for, so switching
-        // provider must not present it as reusable.
-        ...(stored?.provider === state.provider
+    case "set": {
+      const masked =
+        stored?.provider === state.provider &&
+        !(state.provider === "openai" && state.keyMode === "reuse")
           ? { apiKeyMasked: stored.apiKeyMasked }
-          : {}),
-        modelId: state.modelId,
-      };
+          : {};
+      return state.provider === "openai"
+        ? {
+            provider: state.provider,
+            apiKey: state.apiKey,
+            modelId: state.modelId,
+            region: state.region,
+            keyMode: state.keyMode,
+            ...masked,
+          }
+        : {
+            provider: state.provider,
+            apiKey: state.apiKey,
+            modelId: state.modelId,
+            ...masked,
+          };
+    }
     default:
       state satisfies never;
       return panic("Unhandled decision model state");
@@ -749,23 +797,47 @@ export const decisionModelDraft = ({
 
 export const createDecisionModelState = (
   provider: DecisionProviderValue = "typesafe",
-): DecisionModelState => ({
-  kind: "set",
-  provider,
-  apiKey: "",
-  modelId: DECISION_MODEL_CATALOG[provider].defaultModelId,
-});
+  hasOpenAIKey = true,
+): DecisionModelState =>
+  provider === "openai"
+    ? {
+        kind: "set",
+        provider,
+        apiKey: "",
+        modelId: DECISION_MODEL_CATALOG.openai.defaultModelId,
+        region: "eu",
+        keyMode: hasOpenAIKey ? "reuse" : "override",
+      }
+    : {
+        kind: "set",
+        provider,
+        apiKey: "",
+        modelId: DECISION_MODEL_CATALOG.typesafe.defaultModelId,
+      };
 
-/** A set decision model needs a model id and a key, typed now or stored before. */
 export const hasUsableDecisionModel = ({
   state,
   stored,
+  hasOpenAIKey = false,
 }: DecisionModelViewOptions): boolean => {
+  if (
+    state.kind === "untouched" &&
+    stored?.provider === "openai" &&
+    stored.apiKeyMasked === undefined
+  ) {
+    return hasOpenAIKey;
+  }
   if (state.kind !== "set") {
     return true;
   }
   if (!state.modelId.trim()) {
     return false;
   }
-  return state.apiKey.trim().length > 0 || stored?.provider === state.provider;
+  if (state.provider === "openai" && state.keyMode === "reuse") {
+    return hasOpenAIKey;
+  }
+  return (
+    state.apiKey.trim().length > 0 ||
+    (stored?.provider === state.provider && stored.apiKeyMasked !== undefined)
+  );
 };

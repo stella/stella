@@ -34,7 +34,7 @@ export const readAiFieldErrorPaths = (headers: Headers) =>
 
 /** How a warning names an undecided condition: its label, or its path when
  *  the template authored an empty label. */
-export const undecidedConditionName = ({
+const undecidedConditionName = ({
   label,
   path,
 }: {

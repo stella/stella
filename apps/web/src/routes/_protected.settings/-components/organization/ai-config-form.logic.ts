@@ -4,6 +4,7 @@ import {
   haveSameRoleModelSelections,
   hasProviderCredentialChanges,
   hasUsableDecisionModel,
+  hasUsableOpenAIKey,
   hasUsableProviderDrafts,
   providerDraftsFromStoredProviders,
   roleOverridesFromStoredModels,
@@ -106,7 +107,11 @@ export const canSaveAIConfig = ({
       providers: getProviderValues(providers),
       overrides: roleModels,
     }).kind === "valid" &&
-    hasUsableDecisionModel({ state: decisionState, stored: storedDecision }));
+    hasUsableDecisionModel({
+      state: decisionState,
+      stored: storedDecision,
+      hasOpenAIKey: hasUsableOpenAIKey(providers),
+    }));
 
 type HasCustomOptions = {
   roleModels: RoleModelOverrides;

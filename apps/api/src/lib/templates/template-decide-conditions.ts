@@ -19,6 +19,7 @@ import { panic, Result } from "better-result";
 import type { Result as ResultType } from "better-result";
 import * as v from "valibot";
 
+import type { DecisionUndecidedReason } from "@stll/api-contract/ai-decision-provider";
 import { evaluateCondition, resolvePath } from "@stll/template-conditions";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -43,10 +44,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { loadStoredTemplateSource } from "@/api/lib/templates/template-fill-service";
 import { decideMany } from "@/api/lib/workflow/decisions/decide";
-import type {
-  Decision,
-  DecisionUndecidedReason,
-} from "@/api/lib/workflow/decisions/decide";
+import type { Decision } from "@/api/lib/workflow/decisions/decide";
 import type { DecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 import type { DecisionUsageMetering } from "@/api/lib/workflow/decisions/decision-usage";
 import type {

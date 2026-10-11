@@ -19,19 +19,10 @@
 import { panic } from "better-result";
 import * as v from "valibot";
 
+import { DECISION_UNDECIDED_REASON_CODES } from "@stll/api-contract/ai-decision-provider";
+
 import type { ResolvedAiCondition } from "@/api/lib/docx/resolve-ai-conditions";
 import type { TemplateConditionAnswer } from "@/api/lib/templates/template-decide-conditions";
-import type { DecisionUndecidedReason } from "@/api/lib/workflow/decisions/decide";
-
-/** Why a condition was not settled. */
-const TEMPLATE_CONDITION_UNDECIDED_REASONS = [
-  /** The organization has no decision model configured. */
-  "no_decision_model",
-  /** The decision model answered under the confidence floor. */
-  "below_floor",
-  /** The call failed, or the generative fallback could not answer. */
-  "failed",
-] as const;
 
 const TEMPLATE_CONDITION_DECISION_MODEL_OUTPUT_SCHEMA = v.strictObject({
   path: v.string(),
@@ -57,7 +48,7 @@ export const TEMPLATE_UNDECIDED_CONDITION_OUTPUT_SCHEMA = v.strictObject({
   path: v.string(),
   label: v.string(),
   state: v.literal("undecided"),
-  reason: v.picklist(TEMPLATE_CONDITION_UNDECIDED_REASONS),
+  reason: v.picklist(Object.values(DECISION_UNDECIDED_REASON_CODES)),
 });
 
 export const TEMPLATE_CONDITION_DECISION_OUTPUT_SCHEMA = v.union([
@@ -72,17 +63,6 @@ export type TemplateConditionDecisionOutput = v.InferInput<
 
 type TemplateUndecidedConditionOutput = v.InferInput<
   typeof TEMPLATE_UNDECIDED_CONDITION_OUTPUT_SCHEMA
->;
-
-/** The decision layer's reasons under the names the wire uses. Total, so a new
- *  reason cannot reach an agent unnamed. */
-const UNDECIDED_REASON_CODE = {
-  "no-backend": "no_decision_model",
-  "below-floor": "below_floor",
-  failed: "failed",
-} as const satisfies Record<
-  DecisionUndecidedReason,
-  (typeof TEMPLATE_CONDITION_UNDECIDED_REASONS)[number]
 >;
 
 /** A condition the fill settled (or could not), as the tool reports it. */
@@ -129,7 +109,7 @@ export const toUndecidedConditionOutput = (
   path: condition.path,
   label: condition.label,
   state: "undecided",
-  reason: UNDECIDED_REASON_CODE[condition.reason],
+  reason: DECISION_UNDECIDED_REASON_CODES[condition.reason],
 });
 
 /** A condition previewed without filling anything. The generative fallback
@@ -163,7 +143,7 @@ export const toPreviewConditionDecision = ({
         path,
         label,
         state: "undecided",
-        reason: UNDECIDED_REASON_CODE[decision.reason],
+        reason: DECISION_UNDECIDED_REASON_CODES[decision.reason],
       };
     default:
       decision satisfies never;

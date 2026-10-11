@@ -330,15 +330,41 @@ describe("describeConditionChip", () => {
     );
   });
 
-  test("only below-floor warns; the others are plain", () => {
-    const tone = (reason: "below-floor" | "no-backend" | "failed") =>
-      describeConditionChip({
-        kind: "model",
-        decision: { state: "undecided", reason },
-      }).tone;
-    expect(tone("below-floor")).toBe("warning");
-    expect(tone("no-backend")).toBe("neutral");
-    expect(tone("failed")).toBe("neutral");
+  test("only below-floor warns; every other undecided reason defers to generation", () => {
+    const expected = {
+      "below-floor": {
+        reason: "below-floor",
+        tone: "warning",
+        answer: { kind: "notSettled" },
+      },
+      "no-backend": {
+        reason: "no-backend",
+        tone: "neutral",
+        answer: { kind: "onGenerate" },
+      },
+      failed: {
+        reason: "failed",
+        tone: "neutral",
+        answer: { kind: "onGenerate" },
+      },
+      refusal: {
+        reason: "refusal",
+        tone: "neutral",
+        answer: { kind: "onGenerate" },
+      },
+    } as const satisfies {
+      [
+        Reason in Extract<ConditionDecision, { state: "undecided" }>["reason"]
+      ]: { reason: Reason } & ReturnType<typeof describeConditionChip>;
+    };
+    for (const { reason, ...appearance } of Object.values(expected)) {
+      expect(
+        describeConditionChip({
+          kind: "model",
+          decision: { state: "undecided", reason },
+        }),
+      ).toEqual(appearance);
+    }
   });
 });
 

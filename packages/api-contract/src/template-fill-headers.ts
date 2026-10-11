@@ -1,5 +1,7 @@
 import * as v from "valibot";
 
+import { DECISION_UNDECIDED_REASONS } from "./ai-decision-provider";
+
 /** Download responses carry only a count; JSON results and receipts retain diagnostics. */
 export const CLAUSE_WARNINGS_HEADER = "X-Clause-Warnings";
 export const clauseWarningCountHeaderSchema = v.pipe(
@@ -11,16 +13,10 @@ export const clauseWarningCountHeaderSchema = v.pipe(
 /** AI-decided conditions a fill left undecided, as URI-encoded JSON. */
 export const UNDECIDED_CONDITIONS_HEADER = "X-Undecided-Conditions";
 
-const UNDECIDED_CONDITION_REASONS = [
-  "no-backend",
-  "below-floor",
-  "failed",
-] as const;
-
 export const undecidedConditionsHeaderSchema = v.array(
   v.object({
     path: v.pipe(v.string(), v.nonEmpty()),
     label: v.string(),
-    reason: v.picklist(UNDECIDED_CONDITION_REASONS),
+    reason: v.picklist(DECISION_UNDECIDED_REASONS),
   }),
 );

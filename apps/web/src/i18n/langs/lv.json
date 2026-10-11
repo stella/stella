@@ -4171,11 +4171,16 @@
       "customModelDescription": "Šis modeļa ID nav stella katalogā. Tas tiks nosūtīts izvēlētajam pakalpojumu sniedzējam tieši tā, kā ievadīts.",
       "customModelHint": "Katalogā nav atbilstības. Ievadiet jebkuru modeļa ID; pielāgotie ID tiek saglabāti tieši tā, kā ievadīti.",
       "decision": {
+        "dataRegion": "Datu reģions",
         "description": "Jautājumi ar noteiktām atbildēm (dokumentu kategorijas, citātu polaritāte)",
         "generativeFallback": "Uzdevumam izmanto ģeneratīvo modeli.",
         "incomplete": "Ievadiet lēmumu modeļa API atslēgu un modeli vai noņemiet to.",
         "instanceProvided": "stella jau nodrošina lēmumu modeli; pievienojiet savu tikai tad, ja vēlaties izmantot citu.",
-        "label": "Lēmumu pieņemšana"
+        "label": "Lēmumu pieņemšana",
+        "regionEu": "Eiropas Savienība",
+        "regionGlobal": "Globāls",
+        "reuseOpenAIKey": "Izmantot manu OpenAI atslēgu",
+        "separateKey": "Izmantot atsevišķu atslēgu"
       },
       "defaultModel": "Noklusējums: {model}",
       "defaultModelOption": "Noklusējums",

@@ -17,12 +17,12 @@
  * leaving an agent to infer it from the rendered text.
  */
 
+import type { DecisionUndecidedReason } from "@stll/api-contract/ai-decision-provider";
 import { mapWithConcurrency } from "@stll/concurrency";
 import { evaluateCondition, resolvePath } from "@stll/template-conditions";
 
 import { isRecord } from "@/api/lib/type-guards";
 
-import type { DecisionUndecidedReason } from "../workflow/decisions/decide";
 import { omitSourceBoundValues } from "./ai-visible-values";
 import { findRepeatableContainer } from "./repeatable-paths";
 import type { FieldMeta } from "./types";

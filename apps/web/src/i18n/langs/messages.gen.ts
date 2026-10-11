@@ -4174,11 +4174,16 @@ type Messages = {
       "customModelDescription": "This model ID is not in stella’s catalog. It will be passed to the selected provider as typed.";
       "customModelHint": "No catalog match. Type any model ID; custom IDs are saved as typed.";
       "decision": {
+        "dataRegion": "Data region";
         "description": "Questions with fixed answers (document categories, citation polarity)";
         "generativeFallback": "Uses the generative model for the task.";
         "incomplete": "Enter an API key and a model for the decision model, or remove it.";
         "instanceProvided": "stella already provides a decision model; add your own only to use a different one.";
         "label": "Decision-making";
+        "regionEu": "European Union";
+        "regionGlobal": "Global";
+        "reuseOpenAIKey": "Use my OpenAI key";
+        "separateKey": "Use a separate key";
       };
       "defaultModel": "Default: {model}";
       "defaultModelOption": "Default";

@@ -1,5 +1,5 @@
 import { Value } from "@sinclair/typebox/value";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, spyOn, test } from "bun:test";
 
 import {
@@ -576,4 +576,131 @@ describe("sparse custom model settings", () => {
       chat: overrideModels.chat,
     });
   });
+});
+
+const openaiDecision = {
+  provider: "openai",
+  modelId: "gpt-6-luna",
+  region: "eu",
+} as const;
+
+const createDecisionRequestSpy = () =>
+  spyOn(globalThis, "fetch").mockImplementation(
+    Object.assign(
+      async () =>
+        Response.json({
+          model: "gpt-6-luna",
+          answers: [{ type: "predicate", name: "probe", probability: 0.99 }],
+          usage: { input_tokens: 10, output_tokens: 0 },
+        }),
+      { preconnect: globalThis.fetch.preconnect },
+    ),
+  );
+
+describe("decision credential dependencies on settings save", () => {
+  test.each(["omitted", "reuse"] as const)(
+    "rejects removing a reused provider with decision %s before probing or writing",
+    async (decisionMode) => {
+      const fetch = createDecisionRequestSpy();
+      try {
+        const db = createSettingsDb("global", {
+          providers: TANSTACK_AI_PROVIDERS.map((provider) => ({
+            provider,
+            apiKey: "test-key",
+            region: "global",
+          })),
+          overrideModels,
+          decision: openaiDecision,
+        });
+        const result = await updateAIConfig.handler(
+          createTestHandlerContext<UpdateContext>({
+            scopedDb: NO_DB,
+            audit: auditRecorderDouble(),
+            safeDb: db.safeDb,
+            body: {
+              providers: [{ provider: "google" }],
+              overrideModels,
+              ...(decisionMode === "reuse"
+                ? { decision: { ...openaiDecision, apiKey: null } }
+                : {}),
+            },
+          }),
+        );
+        expect(result).toMatchObject({
+          code: 400,
+          response: {
+            code: "ai_config_decision_invalid",
+            message:
+              "The decision model reuses your OpenAI API key. Keep that provider and key, add a separate decision API key, or switch the decision provider.",
+          },
+        });
+        expect(db.written()).toBeUndefined();
+        expect(db.operations()).toBe(1);
+        expect(fetch).not.toHaveBeenCalled();
+      } finally {
+        fetch.mockRestore();
+      }
+    },
+  );
+
+  test.each(["existing", "new"] as const)(
+    "allows removing the provider using a separate decision key (%s)",
+    async (keyMode) => {
+      const fetch = createDecisionRequestSpy();
+      try {
+        const db = createSettingsDb("global", {
+          providers: TANSTACK_AI_PROVIDERS.map((provider) => ({
+            provider,
+            apiKey: "test-key",
+            region: "global",
+          })),
+          overrideModels,
+          decision:
+            keyMode === "existing"
+              ? { ...openaiDecision, apiKey: "separate-key" }
+              : openaiDecision,
+        });
+        const result = await updateAIConfig.handler(
+          createTestHandlerContext<UpdateContext>({
+            scopedDb: NO_DB,
+            audit: auditRecorderDouble(),
+            safeDb: db.safeDb,
+            body: {
+              providers: [{ provider: "google" }],
+              overrideModels,
+              ...(keyMode === "new"
+                ? { decision: { ...openaiDecision, apiKey: "separate-key" } }
+                : {}),
+            },
+          }),
+        );
+        expect(result).toMatchObject({
+          providers: [{ provider: "google", region: "global" }],
+          decision: { ...openaiDecision, apiKeyMasked: "****" },
+        });
+        const written = db.written();
+        expect(written).toBeDefined();
+        if (!written) {
+          panic("Expected saved settings");
+        }
+        const saved = await decryptAIConfig(
+          toSafeId<"organization">("org_test"),
+          written.aiConfigEncrypted,
+          written.aiConfigIv,
+        );
+        expect(saved.decision).toEqual({
+          ...openaiDecision,
+          apiKey: "separate-key",
+        });
+        expect(fetch).toHaveBeenCalledTimes(keyMode === "new" ? 1 : 0);
+        if (keyMode === "new") {
+          expect(fetch.mock.calls.at(0)?.at(0)).toBe(
+            "https://eu.api.openai.com/v1/decisions",
+          );
+        }
+      } finally {
+        fetch.mockRestore();
+      }
+    },
+  );
 });

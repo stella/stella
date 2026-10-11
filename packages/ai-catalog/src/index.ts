@@ -1516,11 +1516,12 @@ export const DEFAULT_CONTEXT_WINDOW_TOKENS = 128_000;
 export const getContextWindowTokens = (modelId: string): number =>
   CONTEXT_WINDOW_TOKENS_BY_ID[normalizeModelCatalogId(modelId)] ??
   DEFAULT_CONTEXT_WINDOW_TOKENS;
-export const DECISION_MODEL_PROVIDERS = ["typesafe"] as const;
+export const DECISION_MODEL_PROVIDERS = ["typesafe", "openai"] as const;
 export type DecisionModelProvider = (typeof DECISION_MODEL_PROVIDERS)[number];
 
 export const DECISION_MODEL_CATALOG = {
   typesafe: { label: "TypeSafe", defaultModelId: "jev-latest" },
+  openai: { label: "OpenAI", defaultModelId: "gpt-6-luna" },
 } as const satisfies Record<
   DecisionModelProvider,
   { label: string; defaultModelId: string }

@@ -1947,7 +1947,7 @@
       "inputOnly": ["values"]
     },
     "name": "preview_template_conditions",
-    "description": "Ask what current values decide without filling. Returns every AI condition with `path`, `label`, and either `state: \"decided\"`, its `value`, `decided_by` (`user` or `decision_model`), and `probability` for model answers; or `state: \"undecided\"` and `reason` (`no_decision_model`, `below_floor`, `failed`). Only the decision model runs; fill may later use the generative model. A boolean in `values` wins. Nothing is written.",
+    "description": "Ask what current values decide without filling. Returns every AI condition with `path`, `label`, and either `state: \"decided\"`, its `value`, `decided_by` (`user` or `decision_model`), and `probability` for model answers; or `state: \"undecided\"` and `reason` (`no_decision_model`, `below_floor`, `failed`, `refusal`). Only the decision model runs; fill may later use the generative model. A boolean in `values` wins. Nothing is written.",
     "inputSchema": {
       "type": "object",
       "required": ["template_id", "values"],

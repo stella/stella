@@ -4171,11 +4171,16 @@
       "customModelDescription": "Seda mudeli ID-d stella kataloogis ei ole. See saadetakse valitud teenusepakkujale sisestatud kujul.",
       "customModelHint": "Kataloogis vastet pole. Sisesta ükskõik milline mudeli ID; kohandatud ID salvestatakse sisestatud kujul.",
       "decision": {
+        "dataRegion": "Andmepiirkond",
         "description": "Kindla vastusega küsimused (dokumendikategooriad, viidete polaarsus)",
         "generativeFallback": "Kasutab ülesande jaoks generatiivset mudelit.",
         "incomplete": "Sisesta otsustusmudeli jaoks API-võti ja mudel või eemalda see.",
         "instanceProvided": "stella pakub juba otsustusmudelit; lisa oma ainult siis, kui soovid mõnda teist kasutada.",
-        "label": "Otsustamine"
+        "label": "Otsustamine",
+        "regionEu": "Euroopa Liit",
+        "regionGlobal": "Ülemaailmne",
+        "reuseOpenAIKey": "Kasuta minu OpenAI võtit",
+        "separateKey": "Kasuta eraldi võtit"
       },
       "defaultModel": "Vaikimisi: {model}",
       "defaultModelOption": "Vaikimisi",

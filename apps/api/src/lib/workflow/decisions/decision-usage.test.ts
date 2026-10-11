@@ -5,6 +5,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { decisionUsageUnitsFromTokens } from "@/api/lib/usage/unit-model";
 import { decideMany } from "@/api/lib/workflow/decisions/decide";
 import type { DecisionModel } from "@/api/lib/workflow/decisions/decision-model";
+import { createOpenAIDecisionsClient } from "@/api/lib/workflow/decisions/openai-decisions";
 import {
   createSystemOneClient,
   noul,
@@ -98,6 +99,7 @@ describe("decision usage accounting", () => {
   test("keeps the normal action floor for tiny platform calls", () => {
     expect(
       decisionUsageUnitsFromTokens({
+        provider: "typesafe",
         inputTokens: 1,
         actionType: "case_law",
         isByok: false,
@@ -105,6 +107,7 @@ describe("decision usage accounting", () => {
     ).toEqual({ rawUsageMicroUnits: 1, unitsConsumed: 12 });
     expect(
       decisionUsageUnitsFromTokens({
+        provider: "typesafe",
         inputTokens: 1,
         actionType: "case_law",
         isByok: true,
@@ -165,3 +168,41 @@ describe("decision usage accounting", () => {
     }
   });
 });
+
+test.each(["eu", "global"] as const)(
+  "meters refused OpenAI decisions in %s as BYOK decision usage",
+  async (region) => {
+    const { rows, usageMetering } = setup("byok");
+    const client = createOpenAIDecisionsClient({
+      apiKey: "fixture",
+      region,
+      fetcher: async () =>
+        Response.json({
+          model: "gpt-6-luna",
+          answers: [{ type: "refusal", name: "eligible" }],
+          usage: { input_tokens: 1_000_000, output_tokens: 0 },
+        }),
+    });
+    const result = await decideMany({
+      id: "test.refused-usage",
+      dataClass: "customer",
+      orgAIConfig: null,
+      state: "eligible",
+      questions,
+      client: { ...client, keySource: "byok" },
+      usageMetering,
+    });
+    expect(result.decisions.eligible).toEqual({
+      state: "undecided",
+      reason: "refusal",
+      confidence: null,
+    });
+    expect(rows).toHaveLength(1);
+    expect(rows.at(0)).toMatchObject({
+      modelRole: "decision",
+      rawUsageMicroUnits: region === "eu" ? 11_000 : 10_000,
+      unitsConsumed: 0,
+      isByok: true,
+    });
+  },
+);

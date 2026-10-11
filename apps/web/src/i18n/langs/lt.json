@@ -4171,11 +4171,16 @@
       "customModelDescription": "Šio modelio ID nėra stella kataloge. Jis bus perduotas pasirinktam teikėjui taip, kaip įvestas.",
       "customModelHint": "Kataloge atitikmens nėra. Įveskite bet kokį modelio ID; pasirinktiniai ID išsaugomi taip, kaip įvesti.",
       "decision": {
+        "dataRegion": "Duomenų regionas",
         "description": "Klausimai su fiksuotais atsakymais (dokumentų kategorijos, citatų poliškumas)",
         "generativeFallback": "Užduočiai naudoja generatyvųjį modelį.",
         "incomplete": "Įveskite sprendimų modelio API raktą ir modelį arba jį pašalinkite.",
         "instanceProvided": "stella jau teikia sprendimų modelį; savo pridėkite tik tada, jei norite naudoti kitą.",
-        "label": "Sprendimų priėmimas"
+        "label": "Sprendimų priėmimas",
+        "regionEu": "Europos Sąjunga",
+        "regionGlobal": "Pasaulinis",
+        "reuseOpenAIKey": "Naudoti mano OpenAI raktą",
+        "separateKey": "Naudoti atskirą raktą"
       },
       "defaultModel": "Numatytasis: {model}",
       "defaultModelOption": "Numatytasis",
