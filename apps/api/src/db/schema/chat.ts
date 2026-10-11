@@ -422,6 +422,13 @@ export const chatContentV3BackfillReceipts = p.pgTable.withRLS(
       "chat_content_v3_backfill_receipts_outcome_check",
       sql`${table.outcome} IN (${sql.join(CHAT_CONTENT_V3_BACKFILL_OUTCOME_SQL_VALUES, sql`, `)})`,
     ),
+    // RLS is forced in the migration; only the owning role passes this policy.
+    p.pgPolicy("chat_content_v3_backfill_receipts_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.chat_content_v3_backfill_receipts'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.chat_content_v3_backfill_receipts'::regclass)`,
+    }),
   ],
 );
 

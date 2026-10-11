@@ -93,6 +93,41 @@ const runDeletionRace = async ({ content, source }: DeletionCase) => {
         );
       }
       await connectionA.sql.unsafe(createReceipts);
+      // The race runs under the receipts' forced owner-only row security,
+      // pointed at this schema's copy of the table.
+      const receiptRowSecurity = migration
+        .split("--> statement-breakpoint")
+        .map((statement) => statement.replace(/^(?:\s*--[^\n]*\n)*\s*/u, ""))
+        .filter(
+          (statement) =>
+            statement.startsWith(
+              'ALTER TABLE "chat_content_v3_backfill_receipts" ENABLE',
+            ) ||
+            statement.startsWith(
+              'ALTER TABLE "chat_content_v3_backfill_receipts" FORCE',
+            ) ||
+            statement.startsWith(
+              'CREATE POLICY "chat_content_v3_backfill_receipts_owner_access"',
+            ),
+        )
+        .map((statement) =>
+          statement.replaceAll(
+            "'public.chat_content_v3_backfill_receipts'",
+            () => `'${schema}.chat_content_v3_backfill_receipts'`,
+          ),
+        );
+      expect(receiptRowSecurity).toHaveLength(3);
+      for (const statement of receiptRowSecurity) {
+        await connectionA.sql.unsafe(statement);
+      }
+      expect(
+        await connectionA.sql.unsafe<{ forced: boolean; policies: number }[]>(
+          `SELECT relforcerowsecurity AS forced,
+                  (SELECT count(*)::int FROM pg_policy WHERE polrelid = '${schema}.chat_content_v3_backfill_receipts'::regclass) AS policies
+           FROM pg_class
+           WHERE oid = '${schema}.chat_content_v3_backfill_receipts'::regclass`,
+        ),
+      ).toEqual([{ forced: true, policies: 1 }]);
 
       await connectionA.sql.unsafe(
         "INSERT INTO organization (id) VALUES ($1)",

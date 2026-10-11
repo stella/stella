@@ -19,8 +19,12 @@ CREATE TABLE "chat_content_v3_backfill_receipts" (
 
 CREATE INDEX "chat_content_v3_receipts_org_idx" ON "chat_content_v3_backfill_receipts" ("organization_id");--> statement-breakpoint
 
--- No policies: ordinary application roles cannot read or write repair receipts.
+-- Owner-only: the backfill and deploy repair run as the table owner; request roles get nothing.
 ALTER TABLE "chat_content_v3_backfill_receipts" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "chat_content_v3_backfill_receipts" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
+CREATE POLICY "chat_content_v3_backfill_receipts_owner_access" ON "chat_content_v3_backfill_receipts" AS PERMISSIVE FOR ALL TO public
+  USING (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.chat_content_v3_backfill_receipts'::regclass))
+  WITH CHECK (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.chat_content_v3_backfill_receipts'::regclass));--> statement-breakpoint
 REVOKE ALL PRIVILEGES ON TABLE "chat_content_v3_backfill_receipts" FROM stella;--> statement-breakpoint
 
 CREATE INDEX "chat_content_v3_backfill_receipts_message_idx"
