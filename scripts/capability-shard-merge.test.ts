@@ -23,6 +23,7 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 
 const config = {
+  contract: "patch",
   description: "List synthetic billing-code merge probes.",
   permissions: { workspace: ["read"] },
   featureAccess: { type: "required", featureId: "time-billing" },

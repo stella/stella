@@ -9,6 +9,7 @@ import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-re
 
 import { caseLawSources, SOURCE_TOTAL_ORIGIN } from "@/api/db/schema";
 import type { SourceTotalOrigin } from "@/api/db/schema";
+import { envBase } from "@/api/env-base";
 import {
   type CaseLawSourceArrivals,
   readCaseLawArrivalsQuery,
@@ -613,6 +614,7 @@ export const readCaseLawCoverageHandler = async (
             await readCaseLawCourtCountQuery(tx, {
               country,
               excludedSourceIds: excludedSourceIds.value,
+              engine: envBase.LEGAL_SEARCH_PROVIDER,
             }),
         ),
       ]);

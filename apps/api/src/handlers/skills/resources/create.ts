@@ -11,12 +11,12 @@ import {
 import {
   RESOURCE_PATH_PATTERN,
   RESOURCE_PATH_MAX_CHARS,
-  inferResourceKind,
 } from "@/api/lib/agent-skills/resource-path";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { withAggregateSavepoint } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -27,26 +27,13 @@ const createSkillResourceParamsSchema = t.Object({
 const createSkillResourceBodySchema = t.Object({
   path: t.String({ minLength: 1, maxLength: RESOURCE_PATH_MAX_CHARS }),
   content: t.String({ maxLength: LIMITS.agentSkillResourceMaxChars }),
-  // A literal tuple, not `t.UnionEnum`: Elysia fills an absent optional
-  // UnionEnum with its first member, so the path inference below would never
-  // run. create.test.ts holds the list to SKILL_RESOURCE_KINDS.
-  kind: t.Optional(
-    t.Union([
-      t.Literal("asset"),
-      t.Literal("knowledge"),
-      t.Literal("prompt"),
-      t.Literal("reference"),
-      t.Literal("script"),
-      t.Literal("template"),
-    ]),
-  ),
 });
 
 const config = {
+  contract: "patch",
   description:
     "Add one text file to an agent skill at a path such as " +
-    "references/checklist.md, taking its kind from the path unless you pass " +
-    "one. A path already used in the skill is a 409, a skill at its file " +
+    "references/checklist.md. A path already used in the skill is a 409, a skill at its file " +
     "limit is refused, and bundled skills cannot be edited. Team skills " +
     "require admin or owner, private ones their author. Use " +
     "skills.resources.upload for a DOCX or PDF whose text must be extracted " +
@@ -96,13 +83,12 @@ const createSkillResource = createSafeRootHandler(
       }),
     );
 
-    const kind = body.kind ?? inferResourceKind(path);
     const sizeBytes = new TextEncoder().encode(body.content).byteLength;
 
     const inserted = yield* Result.await(
       safeDb(
         async (tx) =>
-          await tx.transaction(async (innerTx) => {
+          await withAggregateSavepoint(tx, async (innerTx) => {
             const lockedSkill = await lockSkillForResourceWrite(
               innerTx,
               params.skillId,
@@ -113,14 +99,12 @@ const createSkillResource = createSafeRootHandler(
                 organizationId: session.activeOrganizationId,
                 skillId: params.skillId,
                 path,
-                kind,
                 content: body.content,
                 sizeBytes,
               })
               .returning({
                 id: agentSkillResources.id,
                 path: agentSkillResources.path,
-                kind: agentSkillResources.kind,
                 content: agentSkillResources.content,
                 sizeBytes: agentSkillResources.sizeBytes,
               });
@@ -133,7 +117,7 @@ const createSkillResource = createSafeRootHandler(
               changes: {
                 resource: {
                   old: null,
-                  new: { path, kind, sizeBytes },
+                  new: { path, sizeBytes },
                 },
               },
               metadata: { slug: skill.slug, path },
@@ -155,7 +139,6 @@ const createSkillResource = createSafeRootHandler(
       id: row.id,
       skillId: params.skillId,
       path: row.path,
-      kind: row.kind,
       content: row.content,
       sizeBytes: row.sizeBytes,
     });

@@ -199,6 +199,23 @@ test("a total the buckets do not reach ends the breakdown with the rest", () => 
   expect(rows.reduce((sum, row) => sum + row.decisions, 0)).toBe(1500);
 });
 
+test("an unavailable court aggregate keeps the unlisted court count unknown", () => {
+  const rows = caseLawCourtStatusRows({
+    activity: activity({}),
+    buckets: [bucket("Nejvyšší soud", 900)],
+    country: "CZE",
+    courtWeights,
+    total: 1000,
+    courtCount: null,
+  });
+  expect(rows.at(-1)).toEqual({
+    type: "other-courts",
+    tier: "other",
+    courts: null,
+    decisions: 100,
+  });
+});
+
 test("a total the buckets account for adds no row for the rest", () => {
   const rows = caseLawCourtStatusRows({
     activity: activity({}),

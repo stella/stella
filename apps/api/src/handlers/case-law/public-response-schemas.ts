@@ -190,7 +190,7 @@ const courtStatus = t.Union([
     {
       type: t.Literal("other-courts"),
       tier: t.Literal("other"),
-      courts: t.Number(),
+      courts: t.Union([t.Number(), t.Null()]),
       decisions: t.Number(),
     },
     { additionalProperties: false },

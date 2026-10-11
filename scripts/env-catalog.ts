@@ -1353,6 +1353,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "CI_PLAYWRIGHT_IMAGE",
   "POSTGRES_IMAGE",
   "REDIS_IMAGE",
+  // The scan engine drift check builds into a scratch directory and compares it.
+  "SCAN_ENGINE_WASM_OUT_DIR",
   // The manual checks workflow passes its inputs and result files to its scripts.
   "CHECK_CHECK",
   "CHECK_EXIT_FILE",
@@ -1374,6 +1376,10 @@ export const TOOLING_ENV_KEYS = new Set([
   "FOLDED_SUITES",
   // CI steps export the GitHub API retry helper's path after installing it.
   "GH_RETRY_SCRIPT",
+  // Dated-waiver healing: the private repository its fix tasks go to, and
+  // the merge hold that keeps it from arming removals.
+  "DATED_WAIVER_FIX_REPO",
+  "MERGE_HOLD",
   // Preserve Bun global-store links inside browser containers.
   "BUN_INSTALL_CACHE_DIR",
   // Browser commands use only executables baked into the pinned image.
@@ -1571,6 +1577,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "TEST_LATER",
   "CI_GENERATED_SOURCES_MANIFEST",
   "CI_POSTGRES_TEST_SELECTION",
+  "CI_POSTGRES_TEST_SHARD",
+  "POSTGRES_TEST_DURATIONS_FILE",
   "POSTGRES_JUNIT_FILE",
   "CHANGED_MARKDOWN",
   "TURBO_HASH",

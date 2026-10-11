@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 
 import { courtAbbreviation } from "@stll/api-contract/case-law-court-abbreviations";
@@ -15,7 +16,9 @@ import {
   type CourtWeightMap,
 } from "@/api/lib/case-law/court-weights";
 import { publishedCaseLawDecisionSqlFor } from "@/api/lib/case-law/published-decisions";
+import { publishedUnredactedCaseLawDecisionSqlFor } from "@/api/lib/case-law/published-decisions-sql";
 import { executedRows } from "@/api/lib/db/executed-rows";
+import type { LegalSearchEngine } from "@/api/lib/legal-search/types";
 import {
   definePublicLawSharedQuery,
   PUBLIC_LAW_SHARED_QUERY,
@@ -134,16 +137,16 @@ export type CaseLawCourtStatusRow =
        * less the courts listed. The buckets are the largest courts up to a
        * limit, and a breakdown that stopped at the limit would sum to less
        * than the total beside it with nothing to say where the rest went.
-       * The exact court count comes from the cached public-corpus aggregate;
+       * The court count is null when the serving provider cannot enumerate it;
        * the row carries no activity, because none was read for those courts.
        */
       type: "other-courts";
       tier: "other";
-      courts: number;
+      courts: number | null;
       decisions: number;
     };
 
-/** Exact number of searchable courts, read from the public corpus. */
+/** Exact served court count, or null when the provider has no exact aggregate. */
 export const readCaseLawCourtCountQuery = definePublicLawSharedQuery(
   PUBLIC_LAW_SHARED_QUERY.caseLawCourtCount,
   async (
@@ -151,8 +154,20 @@ export const readCaseLawCourtCountQuery = definePublicLawSharedQuery(
     {
       country,
       excludedSourceIds,
-    }: Pick<CourtActivityRead, "country" | "excludedSourceIds">,
-  ): Promise<number> => {
+      engine,
+    }: Pick<CourtActivityRead, "country" | "excludedSourceIds"> & {
+      engine: LegalSearchEngine;
+    },
+  ): Promise<number | null> => {
+    switch (engine) {
+      case "corpus-index":
+        return null;
+      case "pg-fts":
+        break;
+      default:
+        engine satisfies never;
+        return panic("Unhandled court-count provider");
+    }
     const admitted =
       excludedSourceIds.length === 0
         ? sql``
@@ -160,14 +175,15 @@ export const readCaseLawCourtCountQuery = definePublicLawSharedQuery(
           SELECT value::uuid
           FROM jsonb_array_elements_text(${JSON.stringify([...excludedSourceIds])}::text::jsonb) AS value
         )`;
-    const published = sql.raw(publishedCaseLawDecisionSqlFor("d"));
+    const published = sql.raw(publishedUnredactedCaseLawDecisionSqlFor("d"));
     const result: unknown = await withSharedStatementTimeout(
       tx,
       ACTIVITY_STATEMENT_TIMEOUT_MS,
       async () =>
         await tx.execute(sql`
         SELECT count(DISTINCT d.court)::integer AS courts
-        FROM case_law_decisions d
+        FROM case_law_search_documents sd
+        JOIN case_law_decisions d ON d.id = sd.decision_id
         WHERE d.country = ${country}
           AND ${published}
           ${admitted}
@@ -324,8 +340,8 @@ type CourtStatusRowsOptions = {
   activity: ReadonlyMap<string, CourtActivity>;
   /** The jurisdiction's whole searchable count, which the rows must sum to. */
   total: number;
-  /** Exact searchable court count for the jurisdiction. */
-  courtCount: number;
+  /** Exact served court count, or null when the provider cannot enumerate it. */
+  courtCount: number | null;
 };
 
 const NO_ACTIVITY: CourtActivity = {
@@ -362,7 +378,8 @@ export const caseLawCourtStatusRows = ({
   rows.push({
     type: "other-courts",
     tier: "other",
-    courts: Math.max(0, courtCount - buckets.length),
+    courts:
+      courtCount === null ? null : Math.max(0, courtCount - buckets.length),
     decisions: otherDecisions,
   });
   return rows;

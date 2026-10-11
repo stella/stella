@@ -10,6 +10,7 @@ import {
 } from "@stll/api-contract/case-law-launch-readiness";
 
 import { caseLawDecisions } from "@/api/db/schema";
+import { envBase } from "@/api/env-base";
 import { readBrowseFacetsUnderPolicy } from "@/api/handlers/case-law/decisions/facets";
 import {
   type CaseLawCourtStatusRow,
@@ -290,7 +291,13 @@ export const readCaseLawCorpusStatusHandler = async (
               now: new Date(),
             }),
         ),
-        caseLawDb(async (tx) => await readCaseLawCourtCountQuery(tx, read)),
+        caseLawDb(
+          async (tx) =>
+            await readCaseLawCourtCountQuery(tx, {
+              ...read,
+              engine: envBase.LEGAL_SEARCH_PROVIDER,
+            }),
+        ),
       ]);
       return caseLawCourtStatusRows({
         activity,

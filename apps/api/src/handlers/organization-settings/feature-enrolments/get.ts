@@ -41,6 +41,7 @@ true satisfies MissingFeatureEnrolmentColumn extends never ? true : never;
 true satisfies UnexpectedFeatureEnrolmentColumn extends never ? true : never;
 
 const config = {
+  contract: "patch",
   description:
     "List the offered self-serve features and your enrolment in the active organization.",
   permissions: { workspace: ["read"] },

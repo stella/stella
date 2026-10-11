@@ -20,6 +20,7 @@ const cancelPayloadSchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "session_token_exchange" },
   body: permissiveBodySchema({ keys: ["sessionToken", "reason"] }),

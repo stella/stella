@@ -18,6 +18,7 @@ const paramsSchema = t.Object({ styleSetId: tSafeId("styleSet") });
 const bodySchema = t.Object({ name: tDefaultVarchar });
 
 const config = {
+  contract: "patch",
   description:
     "Rename one organization style set; its export file name follows the new " +
     "name. The stored style package is untouched, so use style-sets.replace " +

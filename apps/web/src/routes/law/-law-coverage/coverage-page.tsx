@@ -680,7 +680,7 @@ const SourceCoverageDetails = ({
   const years =
     source.decisionYearFrom === null || source.decisionYearTo === null
       ? NO_VALUE
-      : `${formatter.number(source.decisionYearFrom)}–${formatter.number(source.decisionYearTo)}`;
+      : `${formatter.number(source.decisionYearFrom, YEAR_FORMAT)}–${formatter.number(source.decisionYearTo, YEAR_FORMAT)}`;
   let gaps: string;
   switch (source.knownGaps.type) {
     case "unknown":

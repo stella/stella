@@ -92,6 +92,7 @@ const querySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "List approved and revoked shared mailbox senders for the active organization.",
   permissions: { organizationSettings: ["update"] },

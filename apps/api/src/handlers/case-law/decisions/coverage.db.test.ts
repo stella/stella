@@ -5,7 +5,12 @@ import { and, eq, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/pglite";
 
-import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import {
+  caseLawDecisions,
+  caseLawSearchDocuments,
+  caseLawSources,
+} from "@/api/db/schema";
+import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-seed";
 import {
   CASE_LAW_COVERAGE_AVAILABILITY,
   loadCaseLawCoverage,
@@ -13,6 +18,10 @@ import {
 } from "@/api/handlers/case-law/decisions/coverage";
 import { readCaseLawArrivalsQuery } from "@/api/handlers/case-law/decisions/coverage-arrivals";
 import { CASE_LAW_COVERAGE_HEALTH } from "@/api/handlers/case-law/decisions/coverage-health";
+import {
+  caseLawCourtStatusRows,
+  readCaseLawCourtCountQuery,
+} from "@/api/handlers/case-law/decisions/status-courts";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import {
@@ -221,6 +230,87 @@ beforeAll(
 afterAll(async () => {
   await client.close();
 });
+
+test(
+  "court counts exclude withdrawn, listing-only and unserved courts",
+  async () => {
+    const db = drizzle({ client });
+    const sourceId = createSafeId<"caseLawSource">();
+    await db.insert(caseLawSources).values(
+      caseLawSourceRow({
+        id: sourceId,
+        adapterKey: `court-count-${sourceId}`,
+        name: "Court count fixture",
+      }),
+    );
+    const rows = [
+      { court: "Published court A", metadata: {}, redactedAt: undefined },
+      { court: "Published court B", metadata: {}, redactedAt: undefined },
+      { court: "Withdrawn court", metadata: {}, redactedAt: NOW },
+      {
+        court: "Listing-only court",
+        metadata: LISTING_ONLY,
+        redactedAt: undefined,
+      },
+      { court: "Unserved court", metadata: {}, redactedAt: undefined },
+    ].map(({ court, metadata, redactedAt }) => ({
+      ...decisionRow({
+        caseNumber: court,
+        country: "POL",
+        court,
+        sourceId,
+        createdAt: NOW,
+        metadata,
+        redactedAt,
+      }),
+      id: createSafeId<"caseLawDecision">(),
+    }));
+    await db.insert(caseLawDecisions).values(rows);
+    await db.insert(caseLawSearchDocuments).values(
+      rows.slice(0, 4).map(({ id }) => ({
+        decisionId: id,
+        language: "cs",
+        regconfig: "simple",
+        searchableText: "Published decision text",
+        tsv: sql`to_tsvector('simple', 'Published decision text')`,
+      })),
+    );
+    const courtCount = await readAsReader(
+      async (tx) =>
+        await readCaseLawCourtCountQuery(tx, {
+          country: "POL",
+          excludedSourceIds: [],
+          engine: "pg-fts",
+        }),
+    );
+    expect(courtCount).toBe(2);
+    const breakdown = caseLawCourtStatusRows({
+      country: "POL",
+      buckets: [{ value: "Published court A", count: 1 }],
+      activity: new Map(),
+      courtWeights: courtWeightMapFromSeed(),
+      total: 2,
+      courtCount,
+    });
+    expect(breakdown.find(({ type }) => type === "other-courts")).toEqual({
+      type: "other-courts",
+      tier: "other",
+      courts: 1,
+      decisions: 1,
+    });
+    expect(
+      await readAsReader(
+        async (tx) =>
+          await readCaseLawCourtCountQuery(tx, {
+            country: "POL",
+            excludedSourceIds: [],
+            engine: "corpus-index",
+          }),
+      ),
+    ).toBeNull();
+  },
+  { timeout: DB_TEST_TIMEOUT_MS },
+);
 
 const loadCoverage = async (
   overrides: Partial<Parameters<typeof loadCaseLawCoverage>[0]> = {},

@@ -31,6 +31,7 @@ import { parseStoredViewLayout } from "@/api/lib/views-schema";
 import { convertLayout } from "@/api/lib/views/utils";
 
 const config = {
+  contract: "patch",
   description:
     "Convert one view of a matter to another layout type (table, filesystem, " +
     "kanban, calendar, or timeline), carrying over as much of its filters and sorts as the " +

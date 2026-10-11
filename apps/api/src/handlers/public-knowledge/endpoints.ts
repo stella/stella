@@ -139,6 +139,7 @@ export const createPublicKnowledgeEndpoints = (
 
   const listPacks = createSafePublicHandler(
     {
+      contract: "patch",
       cache: { kind: "public", maxAge: 300 },
       accountAccess: ACCOUNT_ACCESS.sandbox,
       mcp: { type: "internal", reason: "public_indexing" },
@@ -153,6 +154,7 @@ export const createPublicKnowledgeEndpoints = (
 
   const readPack = createSafePublicHandler(
     {
+      contract: "patch",
       cache: { kind: "public", maxAge: 300 },
       accountAccess: ACCOUNT_ACCESS.sandbox,
       mcp: { type: "internal", reason: "public_indexing" },
@@ -169,6 +171,7 @@ export const createPublicKnowledgeEndpoints = (
 
   const readTemplate = createSafePublicHandler(
     {
+      contract: "patch",
       cache: { kind: "public", maxAge: 300 },
       accountAccess: ACCOUNT_ACCESS.sandbox,
       mcp: { type: "internal", reason: "public_indexing" },
@@ -182,6 +185,7 @@ export const createPublicKnowledgeEndpoints = (
 
   const readTemplatePreview = createSafePublicHandler(
     {
+      contract: "patch",
       cache: { kind: "public", maxAge: 300 },
       accountAccess: ACCOUNT_ACCESS.sandbox,
       mcp: { type: "internal", reason: "public_indexing" },
@@ -260,6 +264,7 @@ export const createPublicKnowledgeEndpoints = (
 
   const listStarters = createSafePublicHandler(
     {
+      contract: "patch",
       cache: { kind: "public", maxAge: 300 },
       accountAccess: ACCOUNT_ACCESS.sandbox,
       mcp: { type: "internal", reason: "public_indexing" },
@@ -272,6 +277,7 @@ export const createPublicKnowledgeEndpoints = (
 
   const readStarter = createSafePublicHandler(
     {
+      contract: "patch",
       cache: { kind: "public", maxAge: 300 },
       accountAccess: ACCOUNT_ACCESS.sandbox,
       mcp: { type: "internal", reason: "public_indexing" },
