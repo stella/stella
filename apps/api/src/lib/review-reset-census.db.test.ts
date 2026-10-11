@@ -116,7 +116,7 @@ describe.skipIf(!enabled)("review reset policy census", () => {
             if (policy.name.startsWith("review_reset_owner_")) {
               expect(policy.using).toContain("pg_get_userbyid");
               expect(usingExpression).toContain(
-                () => `'${schema}.${name}'::regclass`,
+                `'${schema}.${name}'::regclass`,
               );
             }
             const using =
