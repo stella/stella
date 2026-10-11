@@ -1,3 +1,6 @@
+/** Maximum processing attempts for one durable document run. */
+export const DOCUMENT_PROCESSING_MAX_ATTEMPTS = 5;
+
 /**
  * Persisted-output contract: v2 adds page geometry and a searchable PDF,
  * v3 switches recognition to the local PP-OCR pipeline (line boxes are in
