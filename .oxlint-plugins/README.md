@@ -48,6 +48,8 @@ runtime validation, or integration tests.
 
 ### Security, identity, files, and external boundaries
 
+- [`require-write-contract`](./require-write-contract.ts) (`require-write-contract`): requires safe handler configs to declare a literal patch or replace contract and rejects Replace-prefixed descriptions declared patch; resolves owner factory imports, their registered config argument shape, local config bindings and ordered spreads. Canonical factory owners may forward typed parameters; concrete leaf configs remain checked.
+
 - [`require-caller-feature-access`](./require-caller-feature-access.ts) (`require-caller-feature-access`): requires routes importing caller-gated features to admit their loaders through the feature-access owner before feature reads, and rejects browser feature flags and preview state.
 - [`auth-lifecycle`](./auth-lifecycle.ts) (`member-removal-revokes-artifacts`, `no-direct-auth-artifact-delete`): keeps authentication-artifact deletion behind the lifecycle that revokes all member-owned credentials; tables, root database, and helper resolve by import; member removal must await the owning operation unconditionally inside the before hook’s root transaction.
 - [`mcp-security`](./mcp-security.ts) (`redact-oauth-registration-response`, `no-direct-oauth-client-join`): redacts OAuth registration secrets and confines OAuth client joins to the authorized MCP boundary.
@@ -351,3 +353,5 @@ implies a hazard that is gone.
 ### Shared concurrency primitives
 
 - [`no-hand-rolled-concurrency`](./no-hand-rolled-concurrency.ts) rejects direct promise resolver timers and the named duplicate sleep, API `chunked`, web research `chunk`, and adapter `backoffMs` helpers. The owner is private `@stll/concurrency`, through `/sleep`, `/chunk`, and `/backoff-delay`. It deliberately does not infer retry policy from arithmetic or array partitioning from generic slice loops. Native `Bun.sleep`, retained deadline timers, string/byte slices, overlapping windows, dynamic budgets, and atomic SQL retry updates retain their contracts. Exact exceptions with reasons live in [`no-hand-rolled-concurrency-exceptions.json`](./no-hand-rolled-concurrency-exceptions.json); `bun scripts/check-concurrency-exceptions.ts` prevents additions, moves, widening, and duplicate allowances after the introducing PR.
+
+- [`no-unanchored-footnotes`](./no-unanchored-footnotes.ts): source parsers resolve footnotes at paragraph references instead of reading the package collection as trailing content.

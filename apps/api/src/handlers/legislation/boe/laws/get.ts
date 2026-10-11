@@ -19,6 +19,7 @@ const querySchema = t.Object({
 
 const boeGetLaw = createSafeRootHandler(
   {
+    contract: "patch",
     description:
       "Read one consolidated Spanish law from the BOE by its BOE-X-YYYY-N " +
       "identifier. The metadata, analysis, fullText, and eli flags select " +

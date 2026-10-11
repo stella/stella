@@ -501,6 +501,7 @@ export const getIngestionStatus = async (
 };
 
 const config = {
+  contract: "patch",
   description:
     "Report case-law corpus ingestion health for operators. Per source: " +
     "adapter key and whether an adapter is still registered for it, enabled " +

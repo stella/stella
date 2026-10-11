@@ -61,6 +61,7 @@ const failingWire = (): FakeWire =>
   wireOver(() => new Response("bad request", { status: 400 }));
 
 const clientThatMustNotRun: DecisionModel = {
+  provider: "typesafe",
   model: "jev-test",
   keySource: "byok",
   ask: () => {

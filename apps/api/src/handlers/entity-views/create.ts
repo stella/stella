@@ -16,6 +16,7 @@ import {
 } from "./shared";
 
 const config = {
+  contract: "patch",
   description:
     "Save a personal Table or Kanban view across accessible matters. Layout filters and sorts use the same contract as matter views.",
   permissions: { view: ["create"] },

@@ -5,7 +5,7 @@ import {
   isAstNode,
   isFileIn,
   isIdentifierReference,
-  resolveImportedExpression,
+  resolveImportedExpressionForEnforcement,
   resolveVariable,
   stableInitializer,
   staticStringValue,
@@ -27,7 +27,10 @@ const toastMethod = (
   }
   seen.add(node);
   if (node.type === "MemberExpression") {
-    const binding = resolveImportedExpression(context, node.object);
+    const binding = resolveImportedExpressionForEnforcement(
+      context,
+      node.object,
+    );
     if (
       binding !== null &&
       TOAST_MODULES.has(binding.source) &&
@@ -57,7 +60,10 @@ const toastMethod = (
     isAstNode(declarator.id) &&
     declarator.id.type === "ObjectPattern"
   ) {
-    const binding = resolveImportedExpression(context, initializer);
+    const binding = resolveImportedExpressionForEnforcement(
+      context,
+      initializer,
+    );
     if (
       binding === null ||
       !TOAST_MODULES.has(binding.source) ||

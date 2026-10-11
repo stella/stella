@@ -21,6 +21,7 @@ import { PLAYBOOK_RUN_PROJECTION } from "@/api/lib/workflow/playbook-run-project
 import { resolveApplicablePlaybooks } from "@/api/lib/workflow/route-playbooks";
 
 const config = {
+  contract: "patch",
   description:
     "Run every applicable playbook over a matter in one pass and materialize " +
     "their columns onto its table: a playbook with no document-type scope " +

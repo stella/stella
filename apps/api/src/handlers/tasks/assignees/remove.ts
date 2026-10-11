@@ -82,6 +82,7 @@ export const removeAssigneeHandler = async function* ({
 
 const removeAssignee = createSafeHandler(
   {
+    contract: "patch",
     description:
       "Unassign one user from a task. Idempotent: removing a user who is not " +
       "assigned still succeeds, and nothing stops a task from ending up with " +
