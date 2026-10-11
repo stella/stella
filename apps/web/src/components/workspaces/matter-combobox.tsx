@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
@@ -125,26 +125,34 @@ export const MatterCombobox = ({
     groupedChatThreadsOptions({ activeOrganizationId, userId }),
   );
   const groupedThreadsView = useQueryView(groupedThreadsQuery);
-  // Nothing to offer until the navigation list has loaded.
-  const workspaces =
-    navigation === undefined ? NO_WORKSPACES : navigation.workspaces;
-  const matters = workspaces.map(toMatterOption);
-  const recentIds = selectPinnedThenRecentWorkspaces({
-    chatActivityByWorkspaceId: chatActivityByWorkspace(
-      mergeGroupedChatThreadPages(
-        groupedThreadsView.type === "items"
-          ? groupedThreadsView.items.pages
-          : undefined,
-      ),
-    ),
-    limit: MATTER_PICKER_RECENT_LIMIT,
-    pinnedOrder,
-    workspaces,
-  }).map((matter) => matter.id);
+  const chatHistory =
+    groupedThreadsView.type === "items" ? groupedThreadsView.items : undefined;
   const browsing = isBrowsingMatters({
     query,
     selectedName: value?.name ?? null,
   });
+  // Base UI copies `items` into its own state whenever the prop's identity
+  // changes, so a list rebuilt on every render re-renders the combobox
+  // forever. Memoized on the cached query results (stable references) and
+  // the pinned order, the list changes only when its inputs do.
+  const items = useMemo(() => {
+    // Nothing to offer until the navigation list has loaded.
+    const workspaces =
+      navigation === undefined ? NO_WORKSPACES : navigation.workspaces;
+    const matters = workspaces.map(toMatterOption);
+    if (!browsing) {
+      return matters;
+    }
+    const recentIds = selectPinnedThenRecentWorkspaces({
+      chatActivityByWorkspaceId: chatActivityByWorkspace(
+        mergeGroupedChatThreadPages(chatHistory?.pages),
+      ),
+      limit: MATTER_PICKER_RECENT_LIMIT,
+      pinnedOrder,
+      workspaces,
+    }).map((matter) => matter.id);
+    return groupMatterOptions({ matters, recentIds });
+  }, [browsing, chatHistory, navigation, pinnedOrder]);
 
   return (
     <div className="flex flex-col gap-2">
@@ -157,7 +165,7 @@ export const MatterCombobox = ({
           contains(matter, search, matterClientName)
         }
         isItemEqualToValue={(item, selected) => item.id === selected.id}
-        items={browsing ? groupMatterOptions({ matters, recentIds }) : matters}
+        items={items}
         itemToStringLabel={(matter) => matter.name}
         onInputValueChange={setQuery}
         onValueChange={(matter) => onChange(matter)}

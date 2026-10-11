@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useId, useMemo, useState } from "react";
 
 import {
   keepPreviousData,
@@ -159,7 +159,12 @@ export const ChatHistoryPage = ({
   const mattersView = useQueryView(mattersQuery);
   useQueryViewError(mattersView);
   const matters = mattersView.type === "items" ? mattersView.items : undefined;
-  const selectedMatter = matterOption(matters?.workspaces, search.matter);
+  // Base UI compares combobox props by identity; hand it one value object per
+  // selection rather than a fresh copy on every render.
+  const selectedMatter = useMemo(
+    () => matterOption(matters?.workspaces, search.matter),
+    [matters, search.matter],
+  );
 
   const clearFilters = () => {
     commitQuery.cancel();

@@ -25,6 +25,7 @@ const { AnalyticsContext } = await import("@/lib/analytics/provider");
 const { noopAnalytics } = await import("@/lib/analytics/noop");
 const { workspacesNavigationOptions } =
   await import("@/lib/workspaces/queries");
+const { RenderLoopGuard } = await import("@/testing/render-loop-guard");
 const { ChatHistoryPage } = await import("./chat-history-page");
 
 type ChatHistorySearch = Parameters<typeof ChatHistoryPage>[0]["search"];
@@ -307,15 +308,22 @@ const openHistory = async (initial: ChatHistorySearch = {}) => {
   await appRouter.load();
   const ui = testing.render(
     <AnalyticsContext value={noopAnalytics}>
-      <query.QueryClientProvider client={createClient()}>
-        <IntlProvider locale="en" messages={messages} now={NOW} timeZone="UTC">
-          <FormattingProvider locale="en" timeZone="UTC">
-            <AuthenticatedUserProvider user={user}>
-              <router.RouterProvider router={appRouter} />
-            </AuthenticatedUserProvider>
-          </FormattingProvider>
-        </IntlProvider>
-      </query.QueryClientProvider>
+      <RenderLoopGuard>
+        <query.QueryClientProvider client={createClient()}>
+          <IntlProvider
+            locale="en"
+            messages={messages}
+            now={NOW}
+            timeZone="UTC"
+          >
+            <FormattingProvider locale="en" timeZone="UTC">
+              <AuthenticatedUserProvider user={user}>
+                <router.RouterProvider router={appRouter} />
+              </AuthenticatedUserProvider>
+            </FormattingProvider>
+          </IntlProvider>
+        </query.QueryClientProvider>
+      </RenderLoopGuard>
     </AnalyticsContext>,
   );
   return { appRouter, searchChanges, ui };
