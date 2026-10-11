@@ -131,13 +131,16 @@ export const readPin = (root: string, source: PinSource): string => {
         readFileSync(path.join(root, source.file), "utf-8"),
         source.name,
       );
-      if (
-        !ts.isArrayLiteralExpression(initializer) ||
-        !initializer.elements.every(ts.isStringLiteral)
-      ) {
+      if (!ts.isArrayLiteralExpression(initializer)) {
         return panic(`${pinSourceKey(source)} must be a literal string array.`);
       }
-      return JSON.stringify(initializer.elements.map(({ text }) => text));
+      return JSON.stringify(
+        initializer.elements.map((element) =>
+          ts.isStringLiteral(element)
+            ? element.text
+            : panic(`${pinSourceKey(source)} must be a literal string array.`),
+        ),
+      );
     }
     default:
       source satisfies never;
