@@ -167,6 +167,27 @@ through Folio gains one it does not have.
   interactive state changes (hover, press) so the browser can
   interrupt mid-animation. Reserve `@keyframes` for staged
   sequences (page load, modals).
+- **Frequency decides whether it animates.** What people repeat many
+  times a day (keyboard shortcuts, command palette open/close, list
+  keyboard navigation) gets no animation; occasional surfaces (dialogs,
+  sheets, toasts) get the standard one.
+- **Easing:** entering and exiting UI uses `ease-out`, movement on
+  screen `ease-in-out`; both are strong curves in the theme and
+  `ease-out` is the default. Never `ease-in` for UI.
+- **Duration ≤ 300ms:** press 100–160ms, tooltip or small popover
+  125–200ms, dropdown 150–250ms, dialog or sheet up to 300ms; exits
+  run faster than enters. Decorative or teaching motion is listed in
+  the rule's allowance with a reason.
+- **Never enter from `scale-0`:** start near full size (`scale-95`
+  to `scale-98`) with opacity 0. Popovers, menus and tooltips scale
+  from their trigger (`origin-(--transform-origin)`); dialogs stay
+  centred. (easing, duration and scale enforced by
+  no-layout-motion-classes)
+- **Tooltips open instantly once one is open:** the app-level
+  `TooltipProvider` groups them; do not mount another provider.
+- **Pressable controls give feedback on press.** The shared `Button`
+  already scales slightly while enabled; do not add per-call-site
+  press effects.
 - **Staggered list entry:** when a list or grid appears (page load,
   filter change), cascade items with a small stagger delay
   (30–60ms per item, capped at ~8 items) so the group reads as a
@@ -265,10 +286,19 @@ through Folio gains one it does not have.
 
 ## Viewport & Responsive
 
-- **Use `min-h-dvh`, not `h-screen`.** `h-screen` ignores the
-  mobile browser chrome and causes scroll/overlap bugs. `dvh`
-  units adapt to the dynamic viewport. (enforced by
+- **Use `min-h-dvh`, not `h-screen`.** `h-screen` and `vh` ignore
+  the mobile browser chrome and cause scroll/overlap bugs. `dvh`
+  adapts to the dynamic viewport; use `svh` for a length that must
+  not move while the toolbar collapses. (enforced by
   no-layout-motion-classes/no-layout-motion-classes and stylelint)
+
+## Mobile
+
+- A surface fixed to a screen edge pads that edge with the
+  `--safe-area-*` properties (`@stll/ui` `lib/safe-area.ts`); shared
+  sheets, dialogs, toasts and the shell already do.
+- A new interactive primitive gets `select-none` and its own pressed
+  state; never `select-none` on text people may copy.
 
 ## Hit Areas
 
