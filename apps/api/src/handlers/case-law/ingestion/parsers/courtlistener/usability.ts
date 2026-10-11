@@ -12,81 +12,120 @@ export const COURTLISTENER_TEXT_USABILITY = {
 export type CourtListenerTextUsability =
   (typeof COURTLISTENER_TEXT_USABILITY)[keyof typeof COURTLISTENER_TEXT_USABILITY];
 
-// These complete replacement messages come from the census and reviewed fixtures.
-// The list deliberately preserves exact identities instead of generalizing IDs.
+type PublisherSlot = { type: "opinion-id" | "court" | "filename" };
+const OPINION_ID = { type: "opinion-id" } as const;
+const PUBLISHER_COURT = { type: "court" } as const;
+const PUBLISHER_FILENAME = { type: "filename" } as const;
+
+// Replacement wording is closed; publisher identifiers occupy bounded slots.
 const SOURCE_PLACEHOLDER_MESSAGES = [
-  "decision removed at the request of the court.",
-  "entry removed as entered in error",
-  "failed to extract text.",
-  "file unavailable",
-  "memorandum decisions",
-  "memorandum decisions.",
-  "no opinion found. click here to view source material.",
-  "no opinion found.click here to view source material.",
-  "opinion # ms 568 was never issued or was withdrawn.",
-  "opinion # ww-1432 was never issued.",
-  "opinion # ww-1239 was never issued.",
-  "opinion # ww11177 was never released.",
-  "opinion # ww-1145 was never released.",
-  "opinion # ww-915 was never issued.",
-  "opinion # zz-98765 was never issued.",
-  "opinion # xy-678 was never released.",
-  "opinion los 7463 was never issued oh was withdrawn.",
-  "opinion x ww-1167 was never issued.",
-  "test document",
-  "test pdf",
-  "testing document",
-  "this opinion has been withdrawn. opinion #c-473",
-  "this opinion was never issued. opinion # ww-1119 '",
-  "this opinion was withdrawn. opinion # wws560",
-  "unable to extract document content",
-  "unavailable",
-  "usca1 opinion can't open 09-2406e.01a.",
-  "usca1 opinion can't open 15-1424p2.01b",
-  "usca1 opinion can't open 15-1544p.01a.",
-  "usca1 opinion can't open 19-1490p.01",
-  "usca1 opinion can't open 19-2192p.01",
-  "usca1 opinion can't open 19-1389p.01",
-  "usca1 opinion can't open 20-1136p.01",
-  "usca1 opinion can't open 21-1479p.01",
-  "usca2 opinion can't open 24-9876a.pdf",
-  "opinion # ms 035 was never issued or was withdrawn.",
-  "opinion # ww-160 was never issued.",
-  "opinion # ww-6491 was never issued.",
-  "opinion # ww-6670 was never released.",
-  "opinion # ww-6794 was never issued.",
-  "opinion # ww66622 was never released.",
-  "opinion los 2739 was never issued oh was withdrawn.",
-  "opinion x ww-6632 was never issued.",
-  "this opinion has been withdrawn. opinion #c-729",
-  "this opinion was never issued. opinion # ww-6661 '",
-  "this opinion was withdrawn. opinion # wws038",
-  "usca6 opinion can't open 46-6721p.86",
-  "usca6 opinion can't open 48-6693p.86",
-  "usca6 opinion can't open 60-6077p.86a.",
-  "usca6 opinion can't open 60-6747p4.86b",
-  "usca6 opinion can't open 61-4614p.86",
-  "usca6 opinion can't open 61-6718p.86",
-  "usca6 opinion can't open 61-6951p.86",
-  "usca6 opinion can't open 81-4783e.86a.",
-] as const;
+  ["decision removed at the request of the court."],
+  ["entry removed as entered in error"],
+  ["failed to extract text."],
+  ["file unavailable"],
+  ["memorandum decisions"],
+  ["memorandum decisions."],
+  ["no opinion found. click here to view source material."],
+  ["no opinion found.click here to view source material."],
+  ["opinion", OPINION_ID, "was never issued or was withdrawn."],
+  ["opinion", OPINION_ID, "was never issued."],
+  ["opinion", OPINION_ID, "was never released."],
+  ["opinion", OPINION_ID, "was never issued oh was withdrawn."],
+  ["opinion x", OPINION_ID, "was never issued."],
+  ["test document"],
+  ["test pdf"],
+  ["testing document"],
+  ...["opinion", "no.", "case"].flatMap((label) => [
+    ["this opinion has been withdrawn.", label, OPINION_ID],
+    ["this opinion was never issued.", label, OPINION_ID, "'"],
+    ["this opinion was withdrawn.", label, OPINION_ID],
+  ]),
+  ["unable to extract document content"],
+  ["unavailable"],
+  [PUBLISHER_COURT, "opinion can't open", PUBLISHER_FILENAME],
+] as const satisfies readonly (readonly (string | PublisherSlot)[])[];
 
 const normalizeSourcePlaceholder = (text: string): string =>
   text.normalize("NFC").replace(/\s+/gu, " ").trim().toLowerCase();
-const SOURCE_PLACEHOLDERS = new Set(
-  SOURCE_PLACEHOLDER_MESSAGES.map(normalizeSourcePlaceholder),
+const SOURCE_PLACEHOLDER_WORD_SEQUENCES = SOURCE_PLACEHOLDER_MESSAGES.map(
+  (message) => {
+    const tokens: (string | PublisherSlot)[] = [];
+    for (const part of message) {
+      if (typeof part === "string") {
+        tokens.push(...part.split(" "));
+      } else {
+        tokens.push(part);
+      }
+    }
+    return tokens;
+  },
 );
 
-const isSourcePlaceholder = (text: string): boolean =>
-  SOURCE_PLACEHOLDERS.has(normalizeSourcePlaceholder(text));
+const matchesPublisherSlot = (slot: PublisherSlot, text: string): boolean => {
+  switch (slot.type) {
+    case "opinion-id":
+      return /^#?[a-z]{0,4}[-–]?\d{1,7}(?:-\d{1,4})?$/u.test(text);
+    case "court":
+      return /^usca(?:[1-9]|1[0-3])$/u.test(text);
+    case "filename":
+      return /^\d{2}-\d{4}(?:[ep]\d?\.\d{2}[a-z]?|[a-z]\.pdf)\.?$/u.test(text);
+    default: {
+      slot.type satisfies never;
+      return panic("Unhandled publisher identifier slot");
+    }
+  }
+};
 
-const SOURCE_PLACEHOLDER_WORD_SEQUENCES = Array.from(
-  SOURCE_PLACEHOLDERS,
-  (message) => message.split(" "),
-);
+const publisherMessageEnds = (words: string[], start: number): number[] => {
+  const ends: number[] = [];
+  for (const message of SOURCE_PLACEHOLDER_WORD_SEQUENCES) {
+    let positions = [start];
+    for (const part of message) {
+      const next: number[] = [];
+      for (const position of positions) {
+        if (typeof part === "string") {
+          if (words[position] === part) {
+            next.push(position + 1);
+          }
+          continue;
+        }
+        const maxWords = part.type === "opinion-id" ? 3 : 1;
+        for (
+          let count = 1;
+          count <= maxWords && position + count <= words.length;
+          count += 1
+        ) {
+          if (
+            matchesPublisherSlot(
+              part,
+              words.slice(position, position + count).join(""),
+            )
+          ) {
+            next.push(position + count);
+          }
+        }
+      }
+      positions = next;
+      if (positions.length === 0) {
+        break;
+      }
+    }
+    ends.push(...positions);
+  }
+  return ends;
+};
 
-// Every token must belong to a complete closed message; whitespace may wrap or
-// separate messages, but unknown tokens always remain candidate ruling text.
+const isSourcePlaceholder = (text: string): boolean => {
+  const normalized = normalizeSourcePlaceholder(text);
+  if (!normalized) {
+    return false;
+  }
+  const words = normalized.split(" ");
+  return publisherMessageEnds(words, 0).includes(words.length);
+};
+
+// Every token must belong to a complete closed message; bounded identifier
+// slots may wrap, but unknown tokens always remain candidate ruling text.
 const isSourcePlaceholderSequence = (text: string): boolean => {
   const normalized = normalizeSourcePlaceholder(text);
   if (!normalized) {
@@ -99,14 +138,8 @@ const isSourcePlaceholderSequence = (text: string): boolean => {
     if (matches[start] === 0) {
       continue;
     }
-    for (const messageWords of SOURCE_PLACEHOLDER_WORD_SEQUENCES) {
-      const end = start + messageWords.length;
-      if (
-        end <= words.length &&
-        messageWords.every((word, offset) => words[start + offset] === word)
-      ) {
-        matches[end] = 1;
-      }
+    for (const end of publisherMessageEnds(words, start)) {
+      matches[end] = 1;
     }
   }
   return matches[words.length] === 1;

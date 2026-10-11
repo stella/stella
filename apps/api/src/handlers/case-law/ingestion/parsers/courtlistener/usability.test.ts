@@ -241,6 +241,40 @@ describe("CourtListener short text usability", () => {
     }
   });
 
+  test.each(["C-730", "730", "ABCD–1234567-1234"])(
+    "recognizes unlisted publisher identifiers: %s",
+    (identifier) => {
+      for (const label of ["Opinion", "No.", "Case"]) {
+        expect(
+          classifyCourtListenerText(
+            `This opinion has been withdrawn.\n\n${label} #${identifier}`,
+          ),
+        ).toBe("source-placeholder");
+      }
+      expect(
+        classifyCourtListenerText(
+          `This opinion has been withdrawn.\n\nOpinion #${identifier}\n\nThe court affirms the judgment.`,
+        ),
+      ).toBe("usable");
+      expect(
+        classifyCourtListenerText(
+          `This opinion concerns case number ${identifier}, in which a motion was withdrawn.`,
+        ),
+      ).toBe("usable");
+    },
+  );
+
+  test.each(["ABCDE-730", "12345678", "C-730-12345", "C-730 extra"])(
+    "keeps an unrecognized publisher identifier usable: %s",
+    (identifier) => {
+      expect(
+        classifyCourtListenerText(
+          `This opinion has been withdrawn.\n\nOpinion #${identifier}`,
+        ),
+      ).toBe("usable");
+    },
+  );
+
   test("synthetic identity swaps preserve the expected outcome of every group", () => {
     const counts = new Map<string, number>();
     for (const { expected, group, texts } of shortTexts) {
@@ -251,11 +285,7 @@ describe("CourtListener short text usability", () => {
           .replace(/\bz(?=\p{L})/giu, (letter) => (letter === "Z" ? "Q" : "q"))
           .replace(/\d/gu, (numeral) => String((Number(numeral) + 1) % 10));
         expect(expected).toBe(classifyCourtListenerText(text));
-        const swappedExpected =
-          expected === "source-placeholder" && swapped !== text
-            ? "usable"
-            : expected;
-        expect(swappedExpected).toBe(classifyCourtListenerText(swapped));
+        expect(expected).toBe(classifyCourtListenerText(swapped));
       }
     }
     expect(Object.fromEntries(counts)).toEqual({

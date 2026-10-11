@@ -285,6 +285,8 @@ describe("which column becomes an opinion's text", () => {
   test.each([
     "This opinion has been withdrawn.\n\nOpinion #C-729",
     "This opinion has been\nwithdrawn.\n\nOpinion #C-729",
+    "This opinion has been withdrawn.\n\nOpinion #C-730",
+    "This opinion has been withdrawn.\n\nOpinion #730",
   ])(
     "rejects a split publisher message after metadata and selects the fallback: %s",
     (message) => {
