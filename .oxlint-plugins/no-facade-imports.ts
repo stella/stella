@@ -19,6 +19,8 @@ const ALLOWED_LEAF_IMPORTS = new Set([
   "@/api/db/backfill-runtime",
   "@/api/db/billing-validators",
   "@/api/db/columns",
+  "@/api/db/connection-budget",
+  "@/api/db/dedicated-connection-slots",
   "@/api/db/corpus-schema-lane",
   "@/api/db/currency-exponents",
   "@/api/db/database-relations",

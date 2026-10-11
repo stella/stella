@@ -220,3 +220,16 @@ describe("redis transport", () => {
     ).toBeNull();
   });
 });
+
+describe("deployed public-law pool transport", () => {
+  test("deployed reads share root and reject a separate public-law URL", () => {
+    expect(envBaseInvariantViolation(deployedCorpusEnvironment)).toBeNull();
+    expect(
+      envBaseInvariantViolation({
+        ...deployedCorpusEnvironment,
+        PUBLIC_LAW_DATABASE_URL:
+          "postgres://reader@database.example/legal?sslmode=require",
+      }),
+    ).toContain("local development");
+  });
+});
