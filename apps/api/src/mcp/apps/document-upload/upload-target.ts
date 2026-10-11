@@ -16,11 +16,11 @@ const parseTarget = (value: unknown): UploadTarget | undefined => {
 
 export const createUploadTargetController = ({
   hasSelectedFile,
-  setLabel,
+  setDocumentId,
   setUploadEnabled,
 }: {
   hasSelectedFile: () => boolean;
-  setLabel: (label: string) => void;
+  setDocumentId: (label: string) => void;
   setUploadEnabled: (enabled: boolean) => void;
 }) => {
   let activeEntityId: string | undefined;
@@ -38,7 +38,7 @@ export const createUploadTargetController = ({
       activeEntityId = typeof entityId === "string" ? entityId : undefined;
       setUploadEnabled(false);
       if (activeEntityId !== undefined) {
-        setLabel(`Document ${activeEntityId}`);
+        setDocumentId(activeEntityId);
       }
     },
     handleToolResult(value: unknown): void {
@@ -47,7 +47,7 @@ export const createUploadTargetController = ({
         return;
       }
       target = next;
-      setLabel(`Document ${next.entityId}`);
+      setDocumentId(next.entityId);
       refreshUploadEnabled();
     },
     snapshot(): UploadTarget | undefined {

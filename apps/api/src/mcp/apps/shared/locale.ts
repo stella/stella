@@ -1,3 +1,5 @@
+import { createTranslator } from "use-intl";
+
 import { normalizeLocale } from "@stll/agent-input";
 import { getUiLocaleDirection, resolveUiLocale } from "@stll/locales";
 
@@ -13,5 +15,14 @@ export const appLocale = (hostLocale: string | undefined) => {
     formattingLocale,
     direction: getUiLocaleDirection(locale),
     messages: messages[locale],
+    t: createTranslator({
+      locale: formattingLocale,
+      messages: messages[locale],
+    }),
   };
 };
+
+export type AppMessageKey = keyof typeof messages.en;
+
+export const isAppMessageKey = (key: string): key is AppMessageKey =>
+  Object.hasOwn(messages.en, key);
