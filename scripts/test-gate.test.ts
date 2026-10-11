@@ -1044,3 +1044,151 @@ context("Playwright configuration filters", () => {
     });
   });
 });
+
+context("Playwright CLI selection", () => {
+  check.each([
+    {
+      body: "playwright test one.spec.ts",
+      invocation: "bun --filter @stll/desktop test:browser",
+    },
+    {
+      body: "playwright test",
+      invocation: "bun --filter @stll/desktop test:browser -- one.spec.ts",
+    },
+    {
+      body: "playwright test --project selected",
+      invocation: "bun --filter @stll/desktop test:browser",
+    },
+    {
+      body: "playwright test",
+      invocation:
+        "bun --filter @stll/desktop test:browser -- --project=selected",
+    },
+  ])(
+    "credits only the selected spec: $body / $invocation",
+    ({ body, invocation }) => {
+      const collects = (name: string) =>
+        gatingPlaywrightCollection({
+          file: `apps/desktop/tests/browser/${name}.spec.ts`,
+          packageFile: "apps/desktop/package.json",
+          scripts: { "test:browser": body },
+          topology: {
+            gatingJobs: new Map([["browser-tests", [invocation]]]),
+            shardedPackages: new Set(),
+            workflow: invocation,
+          },
+          readConfig:
+            () => `export default defineConfig({ testDir: "./tests/browser", projects: [
+        { name: "selected", testMatch: ["**/one.spec.ts"] },
+        { name: "other", testMatch: ["**/two.spec.ts"] },
+      ] });`,
+        });
+      expect(collects("one")).toEqual({ type: "collected" });
+      expect(collects("two")).toEqual({ type: "not-collected" });
+    },
+  );
+});
+
+context("Playwright selector contracts", () => {
+  type SelectionOptions = {
+    arguments_: string;
+    name?: string;
+  };
+  const collect = ({ arguments_, name = "one" }: SelectionOptions) => {
+    const invocation = `bun --filter @stll/desktop test:browser -- ${arguments_}`;
+    return gatingPlaywrightCollection({
+      file: `apps/desktop/tests/browser/${name}.spec.ts`,
+      packageFile: "apps/desktop/package.json",
+      scripts: { "test:browser": "playwright test" },
+      topology: {
+        gatingJobs: new Map([["browser-tests", [invocation]]]),
+        shardedPackages: new Set(),
+        workflow: invocation,
+      },
+      readConfig: () => `export default defineConfig({
+        testDir: "./tests/browser",
+        projects: [
+          { name: "chromium-desktop", testMatch: "**/one.spec.ts" },
+          { name: "chromium-mobile", testMatch: "**/two.spec.ts" },
+          { name: "firefox", testMatch: "**/three.spec.ts" },
+        ],
+      });`,
+    });
+  };
+
+  check.each(["one", "one[.]spec[.]ts$", "one|two"])(
+    "matches positional file filters as regular expressions: %s",
+    (arguments_) => {
+      expect(collect({ arguments_ })).toEqual({ type: "collected" });
+      expect(collect({ arguments_, name: "three" })).toEqual({
+        type: "not-collected",
+      });
+    },
+  );
+
+  check.each([
+    "--project 'chromium-*'",
+    "--project chromium-desktop --project chromium-mobile",
+    "--project chromium-desktop chromium-mobile",
+  ])(
+    "unions selected projects without crediting other projects: %s",
+    (arguments_) => {
+      expect(collect({ arguments_ })).toEqual({ type: "collected" });
+      expect(collect({ arguments_, name: "two" })).toEqual({
+        type: "collected",
+      });
+      expect(collect({ arguments_, name: "three" })).toEqual({
+        type: "not-collected",
+      });
+    },
+  );
+
+  check.each([
+    "--grep=focused",
+    "--last-failed",
+    "--unknown-selector",
+    "--shard=0/2",
+  ])(
+    "names unsupported selection arguments in a command finding: %s",
+    (arguments_) => {
+      const invocation = `bun --filter @stll/desktop test:browser -- ${arguments_}`;
+      expect(collect({ arguments_ })).toEqual({
+        type: "unresolved",
+        finding: `runner command: playwright test (workflow: ${invocation}) has unresolved Playwright selection ${arguments_}`,
+      });
+    },
+  );
+});
+
+context("Playwright shard execution coverage", () => {
+  const collect = (steps: string) => {
+    const workflow = `jobs:
+  browser-tests:
+    steps:
+${steps}
+  ci-result:
+    needs: [browser-tests]
+`;
+    const analysis = analyzeGatingWorkflow(Bun.YAML.parse(workflow));
+    return gatingPlaywrightCollection({
+      file: "apps/desktop/tests/browser/one.spec.ts",
+      packageFile: "apps/desktop/package.json",
+      scripts: { "test:browser": "playwright test" },
+      topology: {
+        gatingJobs: analysis.jobs,
+        shardedPackages: new Set(),
+        workflow,
+      },
+      readConfig: () =>
+        'export default defineConfig({ testDir: "./tests/browser" });',
+    });
+  };
+  const first = "bun --filter @stll/desktop test:browser -- --shard=1/2";
+
+  check("an incomplete shard union remains a named command finding", () => {
+    expect(collect(`      - run: ${first}`)).toEqual({
+      type: "unresolved",
+      finding: `runner command: playwright test (workflow: ${first}) has unresolved Playwright selection --shard=1/2`,
+    });
+  });
+});

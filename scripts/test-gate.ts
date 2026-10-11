@@ -643,6 +643,85 @@ const shellInvocationGates = (
   return false;
 };
 
+type PackageInvocationOptions = {
+  readonly words: readonly string[];
+  readonly index: number;
+  readonly packageDirectory: string;
+  readonly packageName: string;
+  readonly scriptName: string;
+};
+
+const packageInvocationEnd = ({
+  words,
+  index,
+  packageDirectory,
+  packageName,
+  scriptName,
+}: PackageInvocationOptions): number | undefined => {
+  if (words[index] !== "bun") {
+    return undefined;
+  }
+  if (
+    words[index + 1] === "--filter" &&
+    words[index + 2] === packageName &&
+    words[index + 3] === scriptName
+  ) {
+    return index + 4;
+  }
+  const cwdOffset = words[index + 1] === "run" ? 2 : 1;
+  if (
+    words[index + cwdOffset] === "--cwd" &&
+    words[index + cwdOffset + 1] === packageDirectory &&
+    words[index + cwdOffset + 2] === scriptName
+  ) {
+    return index + cwdOffset + 3;
+  }
+  if (
+    words[index + 1] === "run" &&
+    words[index + 2] === scriptName &&
+    words
+      .slice(0, index)
+      .some(
+        (word, cursor) =>
+          word === "cd" && words[cursor + 1] === packageDirectory,
+      )
+  ) {
+    return index + 3;
+  }
+  return undefined;
+};
+
+type GatingArgumentsOptions = {
+  readonly command: string;
+  readonly invocationEnd: (
+    words: readonly string[],
+    index: number,
+  ) => number | undefined;
+};
+
+const gatingArguments = ({
+  command,
+  invocationEnd,
+}: GatingArgumentsOptions): readonly string[][] => {
+  const words = shellWords(command.replaceAll(/\\\r?\n/gu, " "), "include");
+  const invocations: string[][] = [];
+  for (let index = 0; index < words.length; index += 1) {
+    const end = invocationEnd(words, index);
+    if (
+      end === undefined ||
+      !shellInvocationGates(command, (_words, cursor) => cursor === index)
+    ) {
+      continue;
+    }
+    const remaining = words.slice(end);
+    const boundary = remaining.findIndex((word) => SHELL_OPERATORS.has(word));
+    invocations.push(
+      boundary === -1 ? remaining : remaining.slice(0, boundary),
+    );
+  }
+  return invocations;
+};
+
 export const packageTestExecutionFailure = ({
   gatingJobs,
   packageDirectory,
@@ -651,37 +730,17 @@ export const packageTestExecutionFailure = ({
   shardedPackages,
 }: PackageTestExecutionOptions): string | undefined => {
   const invokesPackageScript = (command: string): boolean =>
-    shellInvocationGates(command, (words, index) => {
-      if (
-        words[index] === "bun" &&
-        words[index + 1] === "--filter" &&
-        words[index + 2] === packageName &&
-        words[index + 3] === scriptName
-      ) {
-        return true;
-      }
-      if (words[index] !== "bun") {
-        return false;
-      }
-      const cwdOffset = words[index + 1] === "run" ? 2 : 1;
-      if (
-        words[index + cwdOffset] === "--cwd" &&
-        words[index + cwdOffset + 1] === packageDirectory &&
-        words[index + cwdOffset + 2] === scriptName
-      ) {
-        return true;
-      }
-      return (
-        words[index + 1] === "run" &&
-        words[index + 2] === scriptName &&
-        words
-          .slice(0, index)
-          .some(
-            (word, cursor) =>
-              word === "cd" && words[cursor + 1] === packageDirectory,
-          )
-      );
-    });
+    shellInvocationGates(
+      command,
+      (words, index) =>
+        packageInvocationEnd({
+          words,
+          index,
+          packageDirectory,
+          packageName,
+          scriptName,
+        }) !== undefined,
+    );
   const directExecutionFailure = gatingCommandExecutionFailure({
     commandMatches: invokesPackageScript,
     gatingJobs,
@@ -1342,6 +1401,7 @@ type PlaywrightConfigSource = {
 
 type PlaywrightConfigOptions = PlaywrightConfigSource & {
   readonly file: string;
+  readonly projects: readonly string[];
 };
 
 const playwrightObjectFields = (
@@ -1500,7 +1560,7 @@ const playwrightConfigFields = ({
 const playwrightConfigCollection = (
   options: PlaywrightConfigOptions,
 ): PlaywrightCollection => {
-  const { file, configFile } = options;
+  const { file, configFile, projects: selectedProjects } = options;
   const root = playwrightConfigFields(options);
   const unresolved = (field: string): PlaywrightCollection => ({
     type: "unresolved",
@@ -1570,6 +1630,22 @@ const playwrightConfigCollection = (
   };
   let collected = false;
   for (const scope of scopes) {
+    if (selectedProjects.length > 0) {
+      const name = scope.get("name");
+      if (name !== undefined && !ts.isStringLiteral(name)) {
+        return unresolved("project name");
+      }
+      if (
+        !selectedProjects.some((project) =>
+          new RegExp(
+            `^${project.replaceAll(/[.+?^${}()|[\]\\]/gu, "\\$&").replaceAll("*", ".*")}$`,
+            "u",
+          ).test(name?.text ?? ""),
+        )
+      ) {
+        continue;
+      }
+    }
     const testDir = scope.get("testDir");
     const directory = testDir;
     if (
@@ -1615,6 +1691,129 @@ const playwrightConfigCollection = (
   return collected ? { type: "collected" } : { type: "not-collected" };
 };
 
+type PlaywrightCLI =
+  | {
+      readonly type: "resolved";
+      readonly configName: string;
+      readonly projects: readonly string[];
+      readonly files: readonly RegExp[];
+    }
+  | {
+      readonly type: "unresolved";
+      readonly finding: string;
+      readonly configName: string;
+    };
+
+const resolvedCLIValue = (value: string | undefined): value is string =>
+  value !== undefined && !value.startsWith("-") && !value.includes("$");
+
+const playwrightCLI = (
+  arguments_: readonly string[],
+  command: string,
+): PlaywrightCLI => {
+  let configName = "playwright.config.ts";
+  const projects: string[] = [];
+  const files: RegExp[] = [];
+  let positionalOnly = false;
+  const unresolved = (argument: string): PlaywrightCLI => ({
+    type: "unresolved",
+    configName,
+    finding: `runner command: ${command} has unresolved Playwright selection ${argument}`,
+  });
+  for (let index = 0; index < arguments_.length; index += 1) {
+    const argument = arguments_[index];
+    if (argument === undefined) {
+      continue;
+    }
+    if (argument === "--") {
+      positionalOnly = true;
+      continue;
+    }
+    const equals = argument.indexOf("=");
+    const option = equals === -1 ? argument : argument.slice(0, equals);
+    if (
+      !positionalOnly &&
+      ["--config", "-c", "--project", "--shard"].includes(option)
+    ) {
+      const value =
+        equals === -1 ? arguments_[index + 1] : argument.slice(equals + 1);
+      if (!resolvedCLIValue(value)) {
+        return unresolved(argument);
+      }
+      if (equals === -1) {
+        index += 1;
+      }
+      if (option === "--project") {
+        projects.push(value);
+        while (
+          arguments_.at(index + 1) !== undefined &&
+          !arguments_.at(index + 1)?.startsWith("-")
+        ) {
+          const project = arguments_.at(index + 1);
+          if (project === undefined || project.includes("$")) {
+            return unresolved(argument);
+          }
+          projects.push(project);
+          index += 1;
+        }
+      } else if (option === "--shard") {
+        return unresolved(argument);
+      } else {
+        configName = value;
+      }
+      continue;
+    }
+    if (
+      [
+        "--headed",
+        "--forbid-only",
+        "--fully-parallel",
+        "--quiet",
+        "--ignore-snapshots",
+      ].includes(option) &&
+      !positionalOnly
+    ) {
+      continue;
+    }
+    if (
+      [
+        "--workers",
+        "-j",
+        "--retries",
+        "--timeout",
+        "--reporter",
+        "--output",
+        "--trace",
+        "--update-snapshots",
+      ].includes(option) &&
+      !positionalOnly
+    ) {
+      const value =
+        equals === -1 ? arguments_[index + 1] : argument.slice(equals + 1);
+      if (!resolvedCLIValue(value)) {
+        return unresolved(argument);
+      }
+      if (equals === -1) {
+        index += 1;
+      }
+      continue;
+    }
+    if (
+      (!positionalOnly && argument.startsWith("-")) ||
+      /\$(?:[A-Za-z_]|\{|\()/u.test(argument) ||
+      /:\d+(?::\d+)?$/u.test(argument)
+    ) {
+      return unresolved(argument);
+    }
+    const pattern = Result.try(() => new RegExp(argument, "u"));
+    if (pattern.isErr()) {
+      return unresolved(argument);
+    }
+    files.push(pattern.value);
+  }
+  return { type: "resolved", configName, projects, files };
+};
+
 type GatingPlaywrightOptions = {
   readonly readConfig?: (configFile: string) => string;
   readonly file: string;
@@ -1657,31 +1856,89 @@ export const gatingPlaywrightCollection = ({
     ) {
       continue;
     }
-    const words = shellWords(command);
-    const configFlag = words.findIndex(
-      (word) => word === "--config" || word === "-c",
-    );
-    const configName =
-      configFlag === -1 ? "playwright.config.ts" : words[configFlag + 1];
-    if (configName === undefined) {
-      continue;
-    }
-    const configFile = path.join(ROOT, packageDirectory, configName);
-    if (!existsSync(configFile)) {
-      continue;
-    }
-    const config = readConfig(configFile);
-    const collection = playwrightConfigCollection({
-      file,
-      configFile: path.posix.join(packageDirectory, configName),
-      source: config,
-      readConfig,
+    const bodies = gatingArguments({
+      command,
+      invocationEnd: (words, index) =>
+        words[index] === "playwright" && words[index + 1] === "test"
+          ? index + 2
+          : undefined,
     });
-    if (collection.type === "collected") {
-      return collection;
-    }
-    if (collection.type === "unresolved") {
-      finding = collection;
+    for (const commands of topology.gatingJobs.values()) {
+      const invocations = commands.flatMap((workflowCommand) =>
+        gatingArguments({
+          command: workflowCommand,
+          invocationEnd: (words, index) =>
+            packageInvocationEnd({
+              words,
+              index,
+              packageDirectory,
+              packageName,
+              scriptName,
+            }),
+        }).map((arguments_) => ({
+          workflowCommand,
+          arguments_:
+            arguments_.at(0) === "--" ? arguments_.slice(1) : arguments_,
+        })),
+      );
+      for (const body of bodies) {
+        const selections = invocations.map(({ workflowCommand, arguments_ }) =>
+          playwrightCLI(
+            [...body, ...arguments_],
+            `${command} (workflow: ${workflowCommand})`,
+          ),
+        );
+        for (const cli of selections) {
+          if (cli.type === "unresolved") {
+            const configFile = path.join(
+              ROOT,
+              packageDirectory,
+              cli.configName,
+            );
+            if (
+              existsSync(configFile) &&
+              playwrightConfigCollection({
+                file,
+                configFile: path.posix.join(packageDirectory, cli.configName),
+                source: readConfig(configFile),
+                readConfig,
+                projects: [],
+              }).type === "not-collected"
+            ) {
+              continue;
+            }
+            finding = { type: "unresolved", finding: cli.finding };
+            continue;
+          }
+          if (
+            cli.files.length > 0 &&
+            !cli.files.some((pattern) => pattern.test(path.join(ROOT, file)))
+          ) {
+            continue;
+          }
+          const configFile = path.join(ROOT, packageDirectory, cli.configName);
+          if (!existsSync(configFile)) {
+            finding = {
+              type: "unresolved",
+              finding: `runner config: ${configFile} is missing`,
+            };
+            continue;
+          }
+          const collection = playwrightConfigCollection({
+            file,
+            configFile: path.posix.join(packageDirectory, cli.configName),
+            source: readConfig(configFile),
+            readConfig,
+            projects: cli.projects,
+          });
+          if (collection.type === "collected") {
+            return collection;
+          }
+          if (collection.type === "unresolved") {
+            finding = collection;
+          }
+        }
+      }
     }
   }
   return finding;
