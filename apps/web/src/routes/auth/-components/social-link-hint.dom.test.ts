@@ -1,8 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
-GlobalRegistrator.register({ url: "http://localhost:3000/auth/error" });
 const originalFetch = globalThis.fetch;
+GlobalRegistrator.register({ url: "http://localhost:3000/auth/error" });
 // Auth plugins subscribe to session state during initialization. Keep those
 // background reads inside the fake transport until the DOM has closed.
 const backgroundFetch = Object.assign(async () => Response.json(null), {
