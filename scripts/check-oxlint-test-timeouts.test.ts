@@ -10,6 +10,78 @@ const IMPORTS =
   'import { test, it, describe, setDefaultTimeout } from "bun:test";\n';
 const CLEAN = `${IMPORTS}test("case", () => {});`;
 
+for (const api of ["test", "it", "describe"]) {
+  for (const alias of [
+    `const check = ${api};`,
+    `const { check } = { check: ${api} };`,
+    `const check = ${api}.only;`,
+    `const check = ${api}[key];`,
+    `let check; check = ${api}.skip;`,
+    `const check = (${api});`,
+    `const check = ${api}.each([1]);`,
+    `const check = ${api}.each\`value\n\${1}\`;`,
+    `const check = (${api}.each)([1]);`,
+    `const check = ${api}.bind(undefined);`,
+    `${api}.bind(undefined, "case", () => {}, 60_000)();`,
+    `${api}.call(undefined, "case", () => {}, 60_000);`,
+    `${api}.apply(undefined, ["case", () => {}, 60_000]);`,
+    `${api} = replacement;`,
+    `consume(${api});`,
+  ]) {
+    test(`non-call ${api} references require direct calls: ${alias}`, () => {
+      withFixture((directory, file) => {
+        writeFileSync(file, `${IMPORTS}${alias}`);
+        expect(customLintTestTimeoutViolations({ directory })).toEqual([
+          "fixture.test.ts: call test APIs directly; exceptions require an allow-list reason",
+        ]);
+        writeFileSync(file, CLEAN);
+        expect(customLintTestTimeoutViolations({ directory })).toEqual([]);
+      });
+    });
+  }
+}
+
+test("direct test calls retain their modifiers and imported names", () => {
+  withFixture((directory, file) => {
+    writeFileSync(
+      file,
+      `${IMPORTS}
+import { test as check } from "bun:test";
+import * as suite from "bun:test";
+test.only("case", () => {});
+it.skip("case", () => {});
+describe.each([1])("case", () => {});
+(test.each)([1])("case", () => {});
+test.each\`value\n\${1}\`("case", () => {});
+check.only("case", () => {}, { retry: 2 });
+suite.it.skip("case", { retry: 2 }, () => {});
+suite.expect(true).toBe(true);
+const record = { test: "case", it: "case", describe: "case" };
+`,
+    );
+    expect(customLintTestTimeoutViolations({ directory })).toEqual([]);
+  });
+});
+
+for (const alias of [
+  "const { test: check } = suite;",
+  "let check; ({ it: check } = suite);",
+  "const check = suite.describe.only;",
+  'const check = suite["test"].skip;',
+  "const renamed = suite;",
+  "const check = suite[key];",
+  "suite.test = replacement;",
+]) {
+  test(`namespace test API references require direct calls: ${alias}`, () => {
+    withFixture((directory, file) => {
+      writeFileSync(file, `import * as suite from "bun:test"; ${alias}`);
+      expect(customLintTestTimeoutViolations({ directory })).toEqual([
+        "fixture.test.ts: call test APIs directly; exceptions require an allow-list reason",
+      ]);
+    });
+  });
+}
+
 const withFixture = (run: (directory: string, file: string) => void) => {
   const directory = mkdtempSync(path.join(tmpdir(), "lint-timeout-guard-"));
   const file = path.join(directory, "fixture.test.ts");
