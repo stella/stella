@@ -533,9 +533,6 @@ export const validateDocumentDeadlineScoutClaim = async ({
         ),
       ) ?? panic("Missing deadline scout claim predicates"),
   });
-  if (claimed.status === "busy") {
-    panic("Blocking aggregate acquisition returned busy");
-  }
   if (claimed.rows.length === 0) {
     return "stale_claim" as const;
   }

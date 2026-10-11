@@ -41,6 +41,7 @@ const SPAN_EDIT_TIMEOUT_MS = 45_000;
 const outputSchema = v.strictObject({ replacement: v.string() });
 
 const config = {
+  contract: "patch",
   actionAdmission: { type: "handler", actionKind: "chat.span-edit" },
   permissions: CHAT_TURN_PERMISSIONS,
   accountAccess: ACCOUNT_ACCESS.sandbox,

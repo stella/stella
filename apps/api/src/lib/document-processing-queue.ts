@@ -40,6 +40,11 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { BullMqWorker } from "@/api/lib/bullmq-queue";
 import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import { encryptContent } from "@/api/lib/content-encryption";
+import {
+  withAggregateEntityBatch,
+  withAggregateRowQuery,
+  withAggregateTransaction,
+} from "@/api/lib/db/aggregate-lock";
 import { lockForWrite } from "@/api/lib/db/lock-for-write";
 import {
   timestampCasToken,
@@ -232,8 +237,8 @@ export const storeOcrSearchablePdfDerivative = async ({
 
 type RootTransaction = Parameters<Parameters<typeof rootDb.transaction>[0]>[0];
 
-/** Locks a run's organization and matter first; false when either is gone. */
-const lockRunParents = async (
+/** Workspace status fencing precedes every source and claim acquisition. */
+const lockRunWorkspace = async (
   tx: RootTransaction,
   {
     organizationId,
@@ -242,15 +247,27 @@ const lockRunParents = async (
     organizationId: SafeId<"organization">;
     workspaceId: SafeId<"workspace">;
   },
-): Promise<boolean> => {
-  const parents = await lockForWrite(tx, {
-    organizationIds: [organizationId],
-    workspaceIds: [workspaceId],
+) => {
+  const parents = await lockForWrite(tx, { organizationIds: [organizationId] });
+  if (!parents.organizationIds.has(organizationId)) {
+    return null;
+  }
+  // NO KEY UPDATE serializes status changes while allowing foreign-key inserts.
+  const workspace = await withAggregateRowQuery({
+    tx,
+    aggregate: "workspace",
+    id: { id: workspaceId, organizationId },
+    mode: "no key update",
+    select: (lockTx) =>
+      lockTx
+        .select({
+          id: workspaces.id,
+          organizationId: workspaces.organizationId,
+          status: workspaces.status,
+        })
+        .from(workspaces),
   });
-  return (
-    parents.organizationIds.has(organizationId) &&
-    parents.workspaceIds.has(workspaceId)
-  );
+  return workspace.rows.at(0) ?? null;
 };
 
 /**
@@ -517,6 +534,76 @@ type OcrProjectionPersistenceOutcome =
   | "source_cancelled"
   | "stale_claim";
 
+const lockOcrProjectionSource = async (
+  tx: RootTransaction,
+  run: typeof documentProcessingRuns.$inferSelect,
+) => {
+  // The field owns its version identity; stale runs may refer to an older one.
+  const sourceFields = await tx
+    .select({ entityVersionId: fields.entityVersionId })
+    .from(fields)
+    .where(
+      and(eq(fields.id, run.fieldId), eq(fields.workspaceId, run.workspaceId)),
+    )
+    .limit(1);
+  const sourceField = sourceFields.at(0);
+  if (!sourceField) {
+    return null;
+  }
+
+  const lockedSource = await withAggregateRowQuery({
+    tx,
+    aggregate: "entity",
+    id: { id: run.entityId, workspaceId: run.workspaceId },
+    mode: "update",
+    children: [
+      {
+        aggregate: "entityVersion",
+        id: {
+          id: sourceField.entityVersionId,
+          workspaceId: run.workspaceId,
+        },
+      },
+      {
+        aggregate: "field",
+        id: { id: run.fieldId, workspaceId: run.workspaceId },
+      },
+    ],
+    select: (lockTx) =>
+      lockTx
+        .select({
+          sourceEntityId: entities.id,
+          workspaceId: entities.workspaceId,
+          versionId: entityVersions.id,
+          versionWorkspaceId: entityVersions.workspaceId,
+          fieldId: fields.id,
+          fieldWorkspaceId: fields.workspaceId,
+          content: fields.content,
+          currentVersionId: entities.currentVersionId,
+          entityReadOnly: entities.readOnly,
+          fieldEntityVersionId: fields.entityVersionId,
+          versionDeletedAt: entityVersions.deletedAt,
+        })
+        .from(entities)
+        .innerJoin(
+          entityVersions,
+          and(
+            eq(entityVersions.entityId, entities.id),
+            eq(entityVersions.workspaceId, run.workspaceId),
+          ),
+        )
+        .innerJoin(
+          fields,
+          and(
+            eq(fields.id, run.fieldId),
+            eq(fields.workspaceId, run.workspaceId),
+            eq(fields.entityVersionId, entityVersions.id),
+          ),
+        ),
+  });
+  return lockedSource.rows.at(0) ?? null;
+};
+
 export const persistOcrProjection = async ({
   claimToken,
   ciphertext,
@@ -538,56 +625,12 @@ export const persistOcrProjection = async ({
   run: typeof documentProcessingRuns.$inferSelect;
   textLength: number;
 }): Promise<OcrProjectionPersistenceOutcome> =>
-  await database.transaction(async (tx) => {
-    if (!(await lockRunParents(tx, run))) {
+  await withAggregateTransaction(database, async (tx) => {
+    const workspace = await lockRunWorkspace(tx, run);
+    if (!workspace) {
       return "source_cancelled";
     }
-    const lockedRows = await tx
-      .select({
-        content: fields.content,
-        currentVersionId: entities.currentVersionId,
-        entityReadOnly: entities.readOnly,
-        fieldEntityVersionId: fields.entityVersionId,
-        versionDeletedAt: entityVersions.deletedAt,
-      })
-      .from(entities)
-      .innerJoin(
-        fields,
-        and(
-          eq(fields.id, run.fieldId),
-          eq(fields.workspaceId, run.workspaceId),
-        ),
-      )
-      .innerJoin(
-        entityVersions,
-        and(
-          eq(entityVersions.id, fields.entityVersionId),
-          eq(entityVersions.entityId, entities.id),
-          eq(entityVersions.workspaceId, run.workspaceId),
-        ),
-      )
-      .where(
-        and(
-          eq(entities.id, run.entityId),
-          eq(entities.workspaceId, run.workspaceId),
-        ),
-      )
-      .limit(1)
-      .for("update");
-    // NO KEY UPDATE serializes workspace status changes while remaining
-    // compatible with parent KEY SHARE locks held by projection writers.
-    // OCR does not need to exclude foreign-key child inserts.
-    const workspaceRows = await tx
-      .select({ status: workspaces.status })
-      .from(workspaces)
-      .where(
-        and(
-          eq(workspaces.id, run.workspaceId),
-          eq(workspaces.organizationId, run.organizationId),
-        ),
-      )
-      .limit(1)
-      .for("no key update");
+    const source = await lockOcrProjectionSource(tx, run);
     const ownedClaims = await tx
       .update(documentProcessingRuns)
       .set({ claimedAt: new Date(), updatedAt: new Date() })
@@ -607,11 +650,10 @@ export const persistOcrProjection = async ({
       return "stale_claim";
     }
 
-    const source = lockedRows.at(0) ?? null;
     const sourceState = classifyOcrProjectionSource({
       run,
       source,
-      workspaceStatus: workspaceRows.at(0)?.status,
+      workspaceStatus: workspace.status,
     });
     if (sourceState !== "current") {
       await tx
@@ -868,7 +910,7 @@ export const processDocumentProcessingRun = async (
 ): Promise<void> => {
   lifecycleSignal.throwIfAborted();
   const claimToken = Bun.randomUUIDv7();
-  const run = await database.transaction(async (tx) => {
+  const run = await withAggregateTransaction(database, async (tx) => {
     const runRows = await tx
       .select({
         entityId: documentProcessingRuns.entityId,
@@ -886,7 +928,8 @@ export const processDocumentProcessingRun = async (
       return null;
     }
 
-    if (!(await lockRunParents(tx, runContext))) {
+    const workspace = await lockRunWorkspace(tx, runContext);
+    if (!workspace) {
       return null;
     }
 
@@ -894,17 +937,22 @@ export const processDocumentProcessingRun = async (
     // rejects the tombstone while an OCR run is dispatching. Conversely, a
     // worker that arrives after the tombstone observes the replaced current
     // version and cancels without sending the withdrawn bytes to a provider.
-    const entityRows = await tx
-      .select({ currentVersionId: entities.currentVersionId })
-      .from(entities)
-      .where(
-        and(
-          eq(entities.id, runContext.entityId),
-          eq(entities.workspaceId, runContext.workspaceId),
-        ),
-      )
-      .limit(1)
-      .for("update");
+    const entityRows = (
+      await withAggregateRowQuery({
+        tx,
+        aggregate: "entity",
+        id: { id: runContext.entityId, workspaceId: runContext.workspaceId },
+        mode: "update",
+        select: (lockTx) =>
+          lockTx
+            .select({
+              id: entities.id,
+              workspaceId: entities.workspaceId,
+              currentVersionId: entities.currentVersionId,
+            })
+            .from(entities),
+      })
+    ).rows;
     if (entityRows.at(0)?.currentVersionId !== runContext.entityVersionId) {
       await tx
         .update(documentProcessingRuns)
@@ -924,25 +972,9 @@ export const processDocumentProcessingRun = async (
       return null;
     }
 
-    // This row lock is the dispatch fence. Workspace archive/delete obtains
-    // a conflicting lock before transitioning away from active and refuses to
-    // seal while a run is `running`, so a worker cannot begin OCR after the
-    // workspace has become unavailable.
-    const workspaceRows = await tx
-      .select({ status: workspaces.status })
-      .from(workspaces)
-      .where(
-        and(
-          eq(workspaces.id, runContext.workspaceId),
-          eq(workspaces.organizationId, runContext.organizationId),
-        ),
-      )
-      .limit(1)
-      .for("no key update");
-    const workspace = workspaceRows.at(0);
     const workspaceDispatch = classifyOcrWorkspaceDispatch({
       requestSource: runContext.requestSource,
-      workspaceStatus: workspace?.status,
+      workspaceStatus: workspace.status,
     });
     switch (workspaceDispatch) {
       case "available":
@@ -1274,7 +1306,7 @@ type MarkRunFailedOutcome = {
   retryScheduled: boolean;
 };
 
-const markRunFailed = async ({
+export const markRunFailed = async ({
   claimToken,
   database,
   error,
@@ -1286,23 +1318,27 @@ const markRunFailed = async ({
   run: typeof documentProcessingRuns.$inferSelect;
 }): Promise<"settled" | "unsettled"> => {
   const failureCode = errorCode(error);
-  const outcome = await database.transaction(
+  const outcome = await withAggregateTransaction(
+    database,
     async (tx): Promise<MarkRunFailedOutcome | null> => {
-      const ownedRows = await tx
-        .select({
-          attemptCount: documentProcessingRuns.attemptCount,
-          requestSource: documentProcessingRuns.requestSource,
+      const ownedRows = (
+        await withAggregateRowQuery({
+          tx,
+          aggregate: "processingClaim",
+          id: { id: run.id, workspaceId: run.workspaceId },
+          mode: "update",
+          select: (lockTx) =>
+            lockTx
+              .select({
+                id: documentProcessingRuns.id,
+                workspaceId: documentProcessingRuns.workspaceId,
+                attemptCount: documentProcessingRuns.attemptCount,
+                requestSource: documentProcessingRuns.requestSource,
+              })
+              .from(documentProcessingRuns),
+          where: sql`${documentProcessingRuns.status} = ${"running"} AND ${documentProcessingRuns.claimedBy} = ${claimToken}`,
         })
-        .from(documentProcessingRuns)
-        .where(
-          and(
-            eq(documentProcessingRuns.id, run.id),
-            eq(documentProcessingRuns.status, "running"),
-            eq(documentProcessingRuns.claimedBy, claimToken),
-          ),
-        )
-        .limit(1)
-        .for("update");
+      ).rows;
       const owned = ownedRows.at(0);
       if (!owned) {
         return null;
@@ -1550,34 +1586,20 @@ export const persistMissingNativeExtractionRuns = async (
     return [];
   }
 
-  return await database.transaction(async (tx) => {
+  return await withAggregateTransaction(database, async (tx) => {
     const liveCandidates = await lockLiveNativeCandidates(tx, candidates);
     if (liveCandidates.length === 0) {
       return [];
     }
-    const lockedEntities = await tx
-      .select({
-        currentVersionId: entities.currentVersionId,
-        id: entities.id,
-        readOnly: entities.readOnly,
-        workspaceId: entities.workspaceId,
-      })
-      .from(entities)
-      .where(
-        and(
-          inArray(
-            entities.id,
-            liveCandidates.map(({ entityId }) => entityId),
-          ),
-          inArray(
-            entities.workspaceId,
-            liveCandidates.map((candidate) => candidate.workspaceId),
-          ),
-        ),
-      )
-      .orderBy(asc(entities.id))
-      .limit(RECONCILE_BATCH_SIZE)
-      .for("update");
+    const lockedEntities = await withAggregateEntityBatch({
+      tx,
+      ids: liveCandidates.map((candidate) => ({
+        id: candidate.entityId,
+        workspaceId: candidate.workspaceId,
+      })),
+      mode: "update",
+      limit: RECONCILE_BATCH_SIZE,
+    });
     const lockedEntityById = new Map(
       lockedEntities.map((entity) => [entity.id, entity]),
     );

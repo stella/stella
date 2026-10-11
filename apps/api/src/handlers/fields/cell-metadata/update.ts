@@ -24,6 +24,7 @@ const manualFlagsSchema = t.Array(t.UnionEnum([...REVIEW_FLAGS]), {
 });
 
 const config = {
+  contract: "patch",
   description:
     "Set the manual flags and lock state of one cell, meaning one document's " +
     "value for one property. manualFlags is merged against baseManualFlags " +

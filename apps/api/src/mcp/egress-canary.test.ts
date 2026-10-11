@@ -288,6 +288,7 @@ const buildContext = ({
       describeStoredTemplate: describeStoredTemplateMock,
       templateDecideConditionsLogic: templateDecideConditionsLogicMock,
       loadOrgAIConfig: loadOrgAIConfigMock,
+      loadManagedAIResidency: async () => "eu",
       // The corpus gate has its own tests; here the document is reachable.
       resolveAnnotationTarget: async () =>
         await Promise.resolve({

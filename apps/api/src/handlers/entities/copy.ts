@@ -746,6 +746,7 @@ const copyToWorkspaceHandler = async function* ({
 };
 
 const config = {
+  contract: "patch",
   contentDelivery: {
     type: "none",
     reason:

@@ -155,6 +155,7 @@ export const readEntityByIdHandler = async function* ({
 };
 
 const config = {
+  contract: "patch",
   description:
     "Read one document, folder, or task in a matter: its kind, name, current " +
     "version id, creation time and document reference, that version's field " +

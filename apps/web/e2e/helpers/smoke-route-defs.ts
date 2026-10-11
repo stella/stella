@@ -122,8 +122,10 @@ export const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
     path: (world) => `/workspaces/${world.workspace.id}/timesheets`,
   },
   {
+    // The seeded caller has no flow admission; the guard leaves before its loader.
     template: "/workspaces/$workspaceId/workflows",
     path: (world) => `/workspaces/${world.workspace.id}/workflows`,
+    expectation: { kind: "redirectsTo", to: "" },
   },
   {
     template: "/workspaces/$workspaceId/$viewId",

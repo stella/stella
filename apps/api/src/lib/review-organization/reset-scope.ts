@@ -64,6 +64,7 @@ export const REVIEW_RESET_KEPT_TABLES = {
   mcp_oauth_clients: "OAuth data: never touched by the reset.",
   mcp_oauth_state: "OAuth data: never touched by the reset.",
   mcp_user_connections: "OAuth data: never touched by the reset.",
+  service_oauth_clients: "OAuth data: never touched by the reset.",
   mcp_connectors: "Integration credentials: never touched by the reset.",
   mcp_connector_authorization_reviews:
     "Integration authorization history: never touched by the reset.",

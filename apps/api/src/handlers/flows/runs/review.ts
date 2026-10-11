@@ -11,6 +11,7 @@ import { resolveFlowReviewGate } from "@/api/lib/flows/flow-executor";
 
 const config = {
   featureAccess: { featureId: "flows", type: "required" },
+  contract: "patch",
   description:
     "Resolve a flow run waiting at a review gate: pass decision approved or " +
     "rejected, with an optional note. The run continues or stops " +

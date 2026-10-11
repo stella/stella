@@ -21,6 +21,7 @@ import {
 } from "@/api/lib/feature-access/registry";
 
 const config = {
+  contract: "patch",
   description:
     "Enable a self-serve feature for yourself in the active organization.",
   // permissions-exempt: this mutation changes only the caller's own preference under user + organization RLS.

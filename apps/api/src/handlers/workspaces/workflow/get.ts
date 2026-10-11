@@ -53,6 +53,7 @@ export const readWorkflowHandler = async ({
 };
 
 const config = {
+  contract: "patch",
   description:
     "Report whether an extraction workflow is running in a matter and " +
     "describe its most recent run: scope, status, how many targets it covers " +

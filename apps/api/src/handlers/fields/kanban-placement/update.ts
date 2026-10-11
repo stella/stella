@@ -41,6 +41,7 @@ export const createUpdateKanbanPlacement = ({
 } = {}) =>
   createSafeHandler(
     {
+      contract: "patch",
       description:
         "Move one entity across writable Kanban axes in one transaction. " +
         "The request may change a task status, up to two property values, or both.",

@@ -5,6 +5,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 
 const config = {
   featureAccess: { featureId: "flows", type: "required" },
+  contract: "patch",
   description:
     "List flow definitions available to the organization, with optional status filtering and pagination.",
   permissions: { workspace: ["read"] },

@@ -339,6 +339,7 @@ const readVersionsHandler = async function* ({
 };
 
 const config = {
+  contract: "patch",
   description:
     "List one document's version history, newest first, with a before cursor " +
     "for older pages. Each version carries its number, stamp, label, " +

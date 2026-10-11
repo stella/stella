@@ -1,5 +1,3 @@
-import { panic } from "better-result";
-
 import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
 
 import type { rootDb } from "@/api/db/root";
@@ -141,9 +139,6 @@ export const fileFlowRunCompletionNotice = async (
           })
           .from(flowRuns),
     });
-    if (locked.status === "busy") {
-      return panic("Blocking aggregate acquisition returned busy");
-    }
     const current = locked.rows.at(0);
     if (current?.status !== "completed") {
       return [];

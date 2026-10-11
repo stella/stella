@@ -111,6 +111,7 @@ const readFieldFileHandler = async function* ({
 };
 
 const config = {
+  contract: "patch",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   featureAccess: FLOW_TASK_FEATURE_ACCESS,

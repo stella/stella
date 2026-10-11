@@ -303,6 +303,7 @@ const readAncestorRelation = async ({
 };
 
 const config = {
+  contract: "patch",
   description:
     "Move one document, folder, or task into another folder of the same " +
     "matter, or out to the matter root by passing parentId null. The target " +

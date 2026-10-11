@@ -17,6 +17,7 @@ import { approvedMcpAuthorizationReview } from "@/api/lib/mcp-upstream/authoriza
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 
 const config = {
+  contract: "patch",
   // Connector access is checked in the handler, as on submission: this read
   // writes nothing, so it declares no integration write.
   permissions: { chat: ["create"] },

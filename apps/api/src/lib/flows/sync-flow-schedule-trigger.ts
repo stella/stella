@@ -1,4 +1,3 @@
-import { panic } from "better-result";
 import { and, asc, eq, gt, sql } from "drizzle-orm";
 import * as v from "valibot";
 
@@ -72,9 +71,6 @@ export const syncFlowScheduleTriggerInTransaction = async ({
         .from(flowDefinitions)
         .limit(1),
   });
-  if (acquired.status === "busy") {
-    panic("Blocking aggregate acquisition returned busy");
-  }
   const definition = acquired.rows.at(0);
   const jobId = flowScheduleJobId(definitionId);
   if (definition?.trigger.type !== "schedule") {

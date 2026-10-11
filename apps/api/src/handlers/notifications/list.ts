@@ -20,6 +20,7 @@ import {
 } from "./read-model";
 
 const config = {
+  contract: "patch",
   description:
     "List the caller's own notifications in their active organization, newest " +
     "first, with the unread count. Notifications are awareness pointers " +

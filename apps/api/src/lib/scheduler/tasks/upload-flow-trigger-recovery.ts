@@ -265,9 +265,6 @@ const settleUploadTriggerClaim = async ({
           ),
         ) ?? panic("Missing upload trigger claim predicates"),
     });
-    if (acquired.status === "busy") {
-      panic("Blocking aggregate acquisition returned busy");
-    }
     const current = acquired.rows.at(0);
     if (current?.status !== "pending") {
       return "stale";

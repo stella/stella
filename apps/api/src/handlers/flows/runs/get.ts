@@ -5,6 +5,7 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 
 const config = {
   featureAccess: { featureId: "flows", type: "required" },
+  contract: "patch",
   description:
     "Read one flow run, including its current status, inputs, outputs, steps, and review state.",
   permissions: { workspace: ["read"] },

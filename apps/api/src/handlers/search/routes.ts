@@ -25,6 +25,7 @@ import { authMacro, permissionMacro } from "@/api/lib/auth";
 
 const searchEndpoint = createSafeRootHandler(
   {
+    contract: "patch",
     permissions: { workspace: ["read"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "tool", name: "search" },
@@ -53,6 +54,7 @@ const searchEndpoint = createSafeRootHandler(
 
 const searchFacetsEndpoint = createSafeRootHandler(
   {
+    contract: "patch",
     permissions: { workspace: ["read"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "search_ui" },
@@ -81,6 +83,7 @@ const searchFacetsEndpoint = createSafeRootHandler(
 
 const refineSearchEndpoint = createSafeRootHandler(
   {
+    contract: "patch",
     permissions: { workspace: ["read"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     actionAdmission: { type: "handler", actionKind: "search.refine" },
@@ -124,6 +127,7 @@ const refineSearchEndpoint = createSafeRootHandler(
 
 const summarizeSearchEndpoint = createSafeRootHandler(
   {
+    contract: "patch",
     permissions: { chat: ["create"], workspace: ["read"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     actionAdmission: { type: "handler", actionKind: "search.summarize" },
@@ -172,6 +176,7 @@ const summarizeSearchEndpoint = createSafeRootHandler(
 
 const searchSummaryChatEndpoint = createSafeRootHandler(
   {
+    contract: "patch",
     permissions: { chat: ["create"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "search_ui" },

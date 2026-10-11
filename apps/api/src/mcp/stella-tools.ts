@@ -1073,7 +1073,7 @@ export const STELLA_TOOL_DEFINITIONS = [
     scope: "stella:search",
   }),
   defineValibotMcpTool({
-    consumesServices: true,
+    consumesServices: false,
     annotations: {
       title: "Search case law",
       destructiveHint: false,
@@ -1135,7 +1135,7 @@ export const STELLA_TOOL_DEFINITIONS = [
     scope: "stella:read",
   }),
   defineValibotMcpTool({
-    consumesServices: true,
+    consumesServices: false,
     annotations: {
       title: "Look up case law by identifier",
       destructiveHint: false,
@@ -1206,7 +1206,7 @@ export const STELLA_TOOL_DEFINITIONS = [
     scope: "stella:read",
   }),
   defineValibotMcpTool({
-    consumesServices: true,
+    consumesServices: false,
     annotations: {
       title: "Read case-law decision",
       destructiveHint: false,
@@ -1244,7 +1244,7 @@ export const STELLA_TOOL_DEFINITIONS = [
     scope: "stella:read",
   }),
   defineValibotMcpTool({
-    consumesServices: true,
+    consumesServices: false,
     annotations: {
       title: "Read case-law citations",
       destructiveHint: false,

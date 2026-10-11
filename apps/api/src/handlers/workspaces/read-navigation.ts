@@ -36,6 +36,7 @@ export const workspaceNavigationCursor = createTimestampIdCursorCodec({
 });
 
 const config = {
+  contract: "patch",
   featureAccess: AVT_LAYOUT_DISCOVERY_FEATURE_ACCESS,
   permissions: {
     workspace: ["read"],

@@ -13,6 +13,7 @@ import { resolveWorkAsOf } from "@/api/lib/work-obligations/at-risk";
 
 const config = {
   featureAccess: { featureId: "signals", type: "required" },
+  contract: "patch",
   description:
     "Count what needs the caller in the Inbox: open signals visible to them " +
     "plus their unfinished tasks due on or before `asOf`; feeds the " +

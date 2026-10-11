@@ -151,6 +151,7 @@ const workObligationTransitionViolation = ({
 
 const updateWorkObligation = createSafeHandler(
   {
+    contract: "patch",
     description:
       "Update accountable ownership, dates, type, or provenance for a governed task or deadline.",
     permissions: { entity: ["update"] },

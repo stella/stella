@@ -59,6 +59,7 @@ const readGroupCountsBodySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "document_processing" },

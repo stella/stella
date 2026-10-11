@@ -42,6 +42,7 @@ const calendarTasksBodySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "Read a matter's tasks that fall inside a date-time window, shaped for a " +
     "calendar. datePropertyIds chooses which date fields place an item, " +

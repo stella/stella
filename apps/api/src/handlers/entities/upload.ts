@@ -1321,6 +1321,7 @@ export const uploadEntityHandler = async function* ({
 };
 
 const config = {
+  contract: "patch",
   contentDelivery: {
     type: "none",
     reason:
@@ -1376,6 +1377,7 @@ const uploadEntity = createSafeHandler(
 );
 
 const generatedDocumentConfig = {
+  contract: "patch",
   contentDelivery: {
     type: "none",
     reason:

@@ -8,6 +8,7 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { flowOwnedEntityVisibilitySql } from "@/api/lib/flows/visibility";
 
 const config = {
+  contract: "patch",
   description:
     "Count all documents, folders, and tasks in a matter. The companion " +
     "total for entities.summaries.list, whose pages carry no count of their " +

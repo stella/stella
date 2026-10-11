@@ -13,6 +13,7 @@ import { syncFlowScheduleTriggerInTransaction } from "@/api/lib/flows/sync-flow-
 
 const config = {
   featureAccess: { featureId: "flows", type: "required" },
+  contract: "patch",
   description:
     "Permanently delete one automation flow definition from the organization " +
     "and remove its schedule trigger. Past runs survive on their own " +

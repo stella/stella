@@ -17,6 +17,11 @@ import { syncFlowScheduleTriggerInTransaction } from "@/api/lib/flows/sync-flow-
 
 const config = {
   featureAccess: { featureId: "flows", type: "required" },
+  contract: "replace",
+  precondition: {
+    type: "deferred",
+    baselineId: "apps/api/src/handlers/flows/update.ts",
+  },
   description:
     "Replace one flow definition's name, description, steps, trigger, and " +
     "enabled flag. The whole definition is revalidated and written, so this " +

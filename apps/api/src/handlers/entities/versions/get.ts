@@ -126,6 +126,7 @@ const readVersionByIdHandler = async function* ({
 };
 
 const config = {
+  contract: "patch",
   description:
     "Read one specific version of a document in a matter: its version " +
     "number, stamp, creation time, and the field values stored on that " +

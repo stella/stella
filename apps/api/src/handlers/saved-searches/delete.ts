@@ -10,6 +10,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { savedSearchParamsSchema } from "./schema";
 
 const config = {
+  contract: "patch",
   permissions: { savedSearch: ["delete"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "search_ui" },

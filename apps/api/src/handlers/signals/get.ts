@@ -11,6 +11,7 @@ import {
 
 const config = {
   featureAccess: { featureId: "signals", type: "required" },
+  contract: "patch",
   description:
     "Read one inbox signal with its evidence and suggestions; 404 when it is " +
     "not visible to the caller.",

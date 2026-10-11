@@ -11,6 +11,7 @@ import {
 import { buildLineDiffSegments } from "@/api/lib/text-diff";
 
 const config = {
+  contract: "patch",
   contentDelivery: {
     type: "none",
     reason:

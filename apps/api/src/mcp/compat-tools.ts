@@ -324,7 +324,7 @@ export const resolveCompatFetchReadClass = (args: unknown) => {
 
 const COMPAT_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
-    consumesServices: true,
+    consumesServices: false,
     annotations: {
       title: "Search",
       destructiveHint: false,
@@ -353,7 +353,7 @@ const COMPAT_TOOL_DEFINITIONS = [
     scope: "stella:search",
   }),
   defineValibotMcpTool({
-    consumesServices: true,
+    consumesServices: false,
     annotations: {
       title: "Fetch",
       destructiveHint: false,
@@ -553,7 +553,7 @@ export const compatFetchConsumesServices = (args: unknown): boolean => {
       return false;
     case "decision":
     case "statute":
-      return true;
+      return false;
     default: {
       id satisfies never;
       return panic("Unclassified compat fetch target");

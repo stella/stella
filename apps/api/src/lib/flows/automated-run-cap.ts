@@ -304,9 +304,6 @@ export const insertAutomatedFlowRunWithinCap = async (
         select: (queryTx) =>
           queryTx.select({ id: schedulerJobs.id }).from(schedulerJobs).limit(1),
       });
-      if (owned.status === "busy") {
-        panic("Blocking aggregate acquisition returned busy");
-      }
       if (owned.rows.length === 0) {
         return { outcome: "stale" };
       }
@@ -334,9 +331,6 @@ export const insertAutomatedFlowRunWithinCap = async (
         mode: "no key update",
         select: (queryTx) => queryTx.select().from(flowDefinitions).limit(1),
       });
-      if (definition.status === "busy") {
-        panic("Blocking aggregate acquisition returned busy");
-      }
       currentDefinition = definition.rows.at(0);
     }
 
@@ -372,9 +366,6 @@ export const insertAutomatedFlowRunWithinCap = async (
             .from(flowUploadTriggerIntents)
             .limit(1),
       });
-      if (owned.status === "busy") {
-        panic("Blocking aggregate acquisition returned busy");
-      }
       if (owned.rows.length === 0) {
         return { outcome: "stale" };
       }

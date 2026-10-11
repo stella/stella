@@ -33,6 +33,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const config = {
+  contract: "patch",
   // The run is queued here; its worker takes a background slot.
   actionAdmission: {
     type: "handler",

@@ -129,9 +129,6 @@ export const runScout = async ({
             .limit(1),
         where: claim ?? panic("Missing scout claim predicates"),
       });
-      if (owned.status === "busy") {
-        panic("Blocking aggregate acquisition returned busy");
-      }
       if (!owned.rows.at(0)) {
         observationAccepted = false;
         outcome = "stale";

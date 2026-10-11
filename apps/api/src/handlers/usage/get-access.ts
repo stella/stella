@@ -14,6 +14,7 @@ import {
 import { readOrganizationAccessSnapshot } from "@/api/lib/usage/organization-access-snapshot";
 
 const config = {
+  contract: "patch",
   description:
     "Read the organization's current access notification and its deadline.",
   permissions: { chat: ["create"] },

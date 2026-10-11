@@ -9,6 +9,7 @@ import { flowNotificationVisibilityCondition } from "@/api/lib/flows/visibility"
 import { readUnreadCount } from "./read-model";
 
 const config = {
+  contract: "patch",
   description:
     "Mark every unread notification the caller has in their active " +
     "organization as read. Notifications in the caller's other organizations " +

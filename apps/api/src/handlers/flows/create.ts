@@ -16,6 +16,7 @@ import { LIMITS } from "@/api/lib/limits";
 
 const config = {
   featureAccess: { featureId: "flows", type: "required" },
+  contract: "patch",
   description:
     "Create an automation flow definition in the organization: name, " +
     "description, ordered steps, a trigger, and whether it is enabled. The " +
