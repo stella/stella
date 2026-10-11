@@ -5,6 +5,7 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { testChatApprovalContextValue } from "@/components/chat/chat-approval-context.test-fixtures";
 import type { ChatUIMessage } from "@/components/chat/chat-ui-tools";
+import type { ChatActivitySession } from "@/features/chat/chat-runtime";
 import type { Analytics } from "@/lib/analytics/types";
 
 GlobalRegistrator.register({ url: "https://app.example.test/chat/thread" });
@@ -50,7 +51,7 @@ const activityMessage = (activityType: string) =>
 type ActivityViewOptions = {
   message: ChatUIMessage;
   analytics: Analytics;
-  activitySession: object;
+  activitySession: ChatActivitySession;
 };
 
 const activityView = ({
@@ -97,7 +98,7 @@ test("unknown chat activities report once per type across remounts without rende
     ...noopAnalytics,
     captureError: (error: unknown) => errors.push(error),
   };
-  const activitySession = {};
+  const activitySession = { reportedUnknownActivityTypes: new Set<string>() };
   const message = activityMessage("private-activity-type");
   const view = render(activityView({ message, analytics, activitySession }));
   view.rerender(
@@ -159,8 +160,12 @@ test("a new chat session reports an unknown activity again with the same analyti
     ...noopAnalytics,
     captureError: (error: unknown) => errors.push(error),
   };
-  const firstActivitySession = {};
-  const secondActivitySession = {};
+  const firstActivitySession = {
+    reportedUnknownActivityTypes: new Set<string>(),
+  };
+  const secondActivitySession = {
+    reportedUnknownActivityTypes: new Set<string>(),
+  };
   const message = activityMessage("session-scoped-private-type");
   const firstSession = render(
     activityView({ message, analytics, activitySession: firstActivitySession }),
@@ -195,7 +200,7 @@ test("review activities use the dedicated translated chat label without telemetr
     activityView({
       message: activityMessage("review"),
       analytics,
-      activitySession: {},
+      activitySession: { reportedUnknownActivityTypes: new Set<string>() },
     }),
   );
   expect(view.getByText(messages.chat.activity.review)).toBeDefined();

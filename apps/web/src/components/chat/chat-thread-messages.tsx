@@ -116,6 +116,7 @@ import {
   mentionAttrsToHref,
   mentionTagAttrs,
 } from "@/components/references/reference.logic";
+import type { ChatActivitySession } from "@/features/chat/chat-runtime";
 import type { QueuedChatMessage } from "@/features/chat/hooks/use-chat-session";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -135,16 +136,11 @@ import {
 } from "@/lib/user-files";
 import { downloadFile } from "@/lib/utils";
 
-export const ChatThreadMessages = (props: ChatThreadMessagesProps) => {
-  const [localActivitySession] = useState(() => ({}));
-  return (
-    <ChatActivitySessionContext
-      value={props.activitySession ?? localActivitySession}
-    >
-      <ChatThreadMessagesContent {...props} />
-    </ChatActivitySessionContext>
-  );
-};
+export const ChatThreadMessages = (props: ChatThreadMessagesProps) => (
+  <ChatActivitySessionContext value={props.activitySession}>
+    <ChatThreadMessagesContent {...props} />
+  </ChatActivitySessionContext>
+);
 
 const ChatThreadMessagesContent = ({
   activeFileName,
@@ -1258,7 +1254,7 @@ const getRetryableAssistantMessageId = (
 };
 
 type ChatThreadMessagesProps = {
-  activitySession?: object;
+  activitySession: ChatActivitySession;
   /**
    * The active file's display name, when one is open (the DOCX/PDF file
    * overlay). Threaded down to `ToolApprovalCard` so a `suggest_changes`
@@ -1510,8 +1506,9 @@ const TextMessageParts = ({
   </>
 );
 
-const ChatActivitySessionContext = createContext<object | null>(null);
-const reportedUnknownActivityTypes = new WeakMap<object, Set<string>>();
+const ChatActivitySessionContext = createContext<ChatActivitySession | null>(
+  null,
+);
 
 const UnknownChatActivity = ({ activityType }: { activityType: string }) => {
   const analytics = useAnalytics();
@@ -1519,11 +1516,7 @@ const UnknownChatActivity = ({ activityType }: { activityType: string }) => {
     use(ChatActivitySessionContext) ??
     panic("Chat activities require a session owner");
   useExternalSyncEffect(() => {
-    let reportedTypes = reportedUnknownActivityTypes.get(activitySession);
-    if (!reportedTypes) {
-      reportedTypes = new Set<string>();
-      reportedUnknownActivityTypes.set(activitySession, reportedTypes);
-    }
+    const reportedTypes = activitySession.reportedUnknownActivityTypes;
     if (reportedTypes.has(activityType)) {
       return;
     }

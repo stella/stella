@@ -364,7 +364,8 @@ const textualMetadataIdentityMatches = ({
   if (canonical.type !== "thinking" || incoming.type !== "thinking") {
     return true;
   }
-  const sameStep = canonical.stepId === incoming.stepId;
+  const sameStep =
+    canonical.stepId !== undefined && canonical.stepId === incoming.stepId;
   const sameRedactedIdentity =
     canonical.redacted === true &&
     incoming.redacted === true &&
@@ -407,36 +408,21 @@ const mergeTextualSnapshotMetadata = ({
     })
       ? previous
       : undefined;
+  // Preserve every SDK/provider field, including extensions not named by the
+  // upstream types. Defined incoming fields replace compatible canonical fields;
+  // omitted fields neither erase metadata nor introduce undefined keys.
+  const fields = Object.fromEntries(
+    [canonical, incoming].flatMap((part) =>
+      part === undefined
+        ? []
+        : Object.entries(part).filter(([, value]) => value !== undefined),
+    ),
+  );
   switch (incoming.type) {
-    case "text": {
-      if (canonical !== undefined && canonical.type !== "text") {
-        return panic("Textual snapshot metadata compared different part types");
-      }
-      const metadata =
-        incoming.metadata === undefined
-          ? canonical?.metadata
-          : incoming.metadata;
-      return {
-        type: incoming.type,
-        content,
-        ...(metadata === undefined ? {} : { metadata }),
-      };
-    }
-    case "thinking": {
-      if (canonical !== undefined && canonical.type !== "thinking") {
-        return panic("Textual snapshot metadata compared different part types");
-      }
-      const signature = incoming.signature ?? canonical?.signature;
-      const stepId = incoming.stepId ?? canonical?.stepId;
-      const redacted = incoming.redacted ?? canonical?.redacted;
-      return {
-        type: incoming.type,
-        content,
-        ...(signature === undefined ? {} : { signature }),
-        ...(stepId === undefined ? {} : { stepId }),
-        ...(redacted === undefined ? {} : { redacted }),
-      };
-    }
+    case "text":
+      return { ...fields, type: incoming.type, content };
+    case "thinking":
+      return { ...fields, type: incoming.type, content };
     default:
       incoming satisfies never;
       return panic("Unhandled textual snapshot metadata");

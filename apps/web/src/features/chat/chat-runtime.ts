@@ -124,7 +124,11 @@ export type ChatToolResultInput = Omit<TanStackClientToolResult, "output"> & {
 
 const CHAT_RUNTIME_BRAND: unique symbol = Symbol("StellaChatRuntime");
 
-export type ChatRuntime = {
+export type ChatActivitySession = {
+  readonly reportedUnknownActivityTypes: Set<string>;
+};
+
+export type ChatRuntime = ChatActivitySession & {
   readonly [CHAT_RUNTIME_BRAND]: true;
   resolveToolApproval: (
     response: {
@@ -970,6 +974,7 @@ export const createChatRuntime = ({
 
   const runtime = {
     [CHAT_RUNTIME_BRAND]: true,
+    reportedUnknownActivityTypes: new Set<string>(),
     resolveToolApproval: async (response, options) => {
       if (isStoppedTurn()) {
         return;

@@ -1850,6 +1850,13 @@ test(
               stepId: `signed:${scenario.metadataToken}`,
               signature: `signature:${scenario.metadataToken}`,
               redacted,
+              provenance: {
+                provider: "anthropic",
+                model: `model:${scenario.metadataToken}`,
+                format: redacted
+                  ? "anthropic-redacted-thinking"
+                  : "anthropic-thinking-signature",
+              },
             } as const;
             const unsigned = {
               type: "thinking",
@@ -1868,7 +1875,7 @@ test(
             if (content !== "") {
               expect(split.every((part) => part.content.length > 0)).toBe(true);
             }
-            const { reload } = await collectTurn(
+            const { reload, emitted } = await collectTurn(
               orderedTurn([expected, [unsigned], split, [unsigned], split]),
               (parts) => {
                 expect(
@@ -1881,6 +1888,19 @@ test(
               sdkParts(reload),
               JSON.stringify({ oracle: CHAT_ORACLE.liveEqualsReload }),
             ).toEqual(expected);
+            const live = createStreamMessageCapture({
+              initialMessages: [],
+              capture: (message) => message,
+            });
+            for (const chunk of emitted) {
+              live.processor.processChunk(chunk);
+              if (chunk.type === EventType.MESSAGES_SNAPSHOT) {
+                expect(
+                  live.processor.getMessages().flatMap(({ parts }) => parts),
+                  JSON.stringify({ oracle: CHAT_ORACLE.liveEqualsReload }),
+                ).toEqual(expected);
+              }
+            }
             if (content !== "") {
               const repeated = {
                 type: "thinking",
@@ -1959,6 +1979,89 @@ test(
             ),
           ).toEqual(signed);
         }
+        const opaqueWithoutStep = {
+          type: "thinking",
+          content: "",
+          signature: `opaque:${scenario.metadataToken}`,
+          redacted: true,
+          provenance: {
+            provider: "anthropic",
+            model: `model:${scenario.metadataToken}`,
+            format: "anthropic-redacted-thinking",
+          },
+        } as const;
+        const placeholderWithoutStep = {
+          type: "thinking",
+          content: "",
+        } as const;
+        const sameOpaqueIdentity = {
+          type: "thinking",
+          content: "",
+          signature: opaqueWithoutStep.signature,
+          redacted: true,
+        } as const;
+        const { reload: emptyReload } = await collectTurn(
+          orderedTurn([
+            [opaqueWithoutStep],
+            [placeholderWithoutStep],
+            [placeholderWithoutStep],
+          ]),
+          (parts) => {
+            expect(
+              parts,
+              JSON.stringify({ oracle: CHAT_ORACLE.liveEqualsReload }),
+            ).toEqual([placeholderWithoutStep]);
+          },
+        );
+        expect(
+          sdkParts(emptyReload),
+          JSON.stringify({ oracle: CHAT_ORACLE.liveEqualsReload }),
+        ).toEqual([placeholderWithoutStep]);
+        const { reload: identityReload } = await collectTurn(
+          orderedTurn([
+            [opaqueWithoutStep],
+            [sameOpaqueIdentity],
+            [sameOpaqueIdentity],
+          ]),
+          (parts) => {
+            expect(
+              parts,
+              JSON.stringify({ oracle: CHAT_ORACLE.liveEqualsReload }),
+            ).toEqual([opaqueWithoutStep]);
+          },
+        );
+        expect(
+          sdkParts(identityReload),
+          JSON.stringify({ oracle: CHAT_ORACLE.liveEqualsReload }),
+        ).toEqual([opaqueWithoutStep]);
+        const emptyOwner = new SnapshotPartReconciler([opaqueWithoutStep]);
+        const emptyReconciled = emptyOwner.reconcile({
+          previous: {
+            id: MESSAGE_ID,
+            role: "assistant",
+            parts: [opaqueWithoutStep],
+          },
+          snapshot: {
+            id: MESSAGE_ID,
+            role: "assistant",
+            parts: [placeholderWithoutStep],
+          },
+          preservesPartLayout: true,
+          parseResultOutput: (content) => content,
+        });
+        expect(
+          emptyReconciled.filter(
+            (part) => part.type === "thinking" && part.signature !== undefined,
+          ),
+          JSON.stringify({ oracle: CHAT_ORACLE.liveEqualsReload }),
+        ).toEqual([opaqueWithoutStep]);
+        expect(
+          emptyReconciled.filter(
+            (part) => part.type === "thinking" && part.signature === undefined,
+          ),
+          JSON.stringify({ oracle: CHAT_ORACLE.liveEqualsReload }),
+        ).toEqual([placeholderWithoutStep]);
+        expect(emptyOwner.failure).toBeUndefined();
         const providerText = {
           type: "text",
           content: scenario.streamed,

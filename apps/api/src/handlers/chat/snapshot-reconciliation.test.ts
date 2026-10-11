@@ -640,3 +640,42 @@ test("textual range drift reports once and adopts the SDK projection", () => {
   ).toEqual(snapshot);
   expect(failures).toHaveLength(1);
 });
+
+test("stepId-less empty placeholders cannot inherit a redacted provider block", () => {
+  const signed = {
+    type: "thinking",
+    content: "",
+    signature: "opaque",
+    redacted: true,
+    provenance: {
+      provider: "anthropic",
+      model: "claude-sonnet-4-6",
+      format: "anthropic-redacted-thinking",
+    },
+  } as const;
+  const placeholder = { type: "thinking", content: "" } as const;
+  for (const initial of [[], [signed]]) {
+    const owner = new SnapshotPartReconciler(initial);
+    const previous =
+      initial.length === 0
+        ? owner.reconcile({
+            previous: { id: "answer", role: "assistant", parts: [] },
+            snapshot: { id: "answer", role: "assistant", parts: [signed] },
+            preservesPartLayout: true,
+            parseResultOutput: (content) => content,
+          })
+        : initial;
+    const parts = owner.reconcile({
+      previous: { id: "answer", role: "assistant", parts: previous },
+      snapshot: { id: "answer", role: "assistant", parts: [placeholder] },
+      preservesPartLayout: true,
+      parseResultOutput: (content) => content,
+    });
+    expect(parts.some((part) => deepEquals(part, placeholder))).toBe(true);
+    expect(
+      parts.filter(
+        (part) => part.type === "thinking" && part.signature !== undefined,
+      ),
+    ).toHaveLength(initial.length);
+  }
+});
