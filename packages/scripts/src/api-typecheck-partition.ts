@@ -3,12 +3,10 @@ import { panic } from "better-result";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
+import * as v from "valibot";
 
-import {
-  apiDeclarationCacheInputs,
-  typescriptModuleReferences,
-} from "./api-typecheck-declarations";
-import { childExitStatus } from "./child-exit-status";
+import { typescriptModuleReferences } from "./api-typecheck-declarations";
+import { apiResolvedTypecheckInputs } from "./api-typecheck-inputs";
 import { withoutTsgoOnlyOptionDiagnostics } from "./tsgo-compiler-options";
 import { readTurboTypecheckInputs } from "./turbo-typecheck-inputs";
 
@@ -42,7 +40,8 @@ const readApiSourceConfig = (root: string) => {
 
 // Source roots and compiler resolution determine the census. A test is safe to
 // isolate only when every reachable API implementation enters declared roots.
-export const deriveApiTestPartition = (root: string) => {
+export const deriveApiTestPartition = (directory: string) => {
+  const root = ts.sys.realpath?.(directory) ?? directory;
   const api = path.join(root, "apps/api");
   const parsed = readApiSourceConfig(root);
   const resolutionCache = ts.createModuleResolutionCache(
@@ -96,7 +95,8 @@ export const deriveApiTestPartition = (root: string) => {
         }
         continue;
       }
-      const dependency = path.resolve(resolved.resolvedFileName);
+      const resolvedFile = path.resolve(resolved.resolvedFileName);
+      const dependency = ts.sys.realpath?.(resolvedFile) ?? resolvedFile;
       if (
         dependency.startsWith(`${root}${path.sep}`) &&
         !dependency.includes(`${path.sep}node_modules${path.sep}`) &&
@@ -184,32 +184,28 @@ export const deriveApiTestPartition = (root: string) => {
   };
 };
 
-export const apiTestPartitionInputs = (independent: readonly string[]) => {
-  const common = [
-    "$TURBO_ROOT$/.npmrc",
-    "$TURBO_ROOT$/bunfig.toml",
-    "$TURBO_ROOT$/package.json",
-    "$TURBO_ROOT$/bun.lock",
-    "$TURBO_ROOT$/patches/**",
-    "scripts/**",
-    "$TURBO_ROOT$/packages/**",
-    "!$TURBO_ROOT$/packages/**/.cache/**",
-    "!$TURBO_ROOT$/packages/**/.turbo/**",
-    "$TURBO_ROOT$/types/**",
-    "package.json",
-    "tsconfig*.json",
-  ];
-  return {
-    source: [
-      "src/**",
-      ...independent.map((file) => `!${file}`),
-      "!src/mcp/apps/**",
-      "!src/handlers/visual-sandbox/browser/**",
-      "drizzle.config.ts",
-      ...common,
-    ],
-    tests: [...independent, ...common],
-  };
+const apiProjectInputs = (api: string) => {
+  const manifest = v.parse(
+    v.object({ scripts: v.record(v.string(), v.string()) }),
+    JSON.parse(readFileSync(path.join(api, "package.json"), "utf-8")),
+  );
+  const programs = new Map<string, string[]>();
+  for (const [task, command] of Object.entries(manifest.scripts)) {
+    if (!task.startsWith("typecheck:")) {
+      continue;
+    }
+    const project =
+      /--project(?:=|\s+)([^\s]+)/u.exec(command)?.[1] ??
+      /\b(tsconfig[^\s]*\.json)\s*$/u.exec(command)?.[1];
+    if (!project) {
+      panic(`API typecheck task has no compiler project: ${task}`);
+    }
+    programs.set(
+      `@stll/api#${task}`,
+      apiResolvedTypecheckInputs(path.resolve(api, project)),
+    );
+  }
+  return programs;
 };
 
 export const apiTestPartitionIssues = (root: string) => {
@@ -251,32 +247,22 @@ export const apiTestPartitionIssues = (root: string) => {
       });
     }
   }
+  return issues;
+};
+
+export const apiTypecheckInputIssues = (
+  root: string,
+  programs = apiProjectInputs(path.join(root, "apps/api")),
+) => {
+  const issues: { path: string; message: string }[] = [];
   const turbo = readTurboTypecheckInputs(path.join(root, "turbo.json"));
-  const inputs = apiTestPartitionInputs(independent);
-  const declarations = apiDeclarationCacheInputs(
-    path.join(api, "tsconfig.declarations.json"),
-  );
-  if (
-    JSON.stringify(turbo.tasks["@stll/api#typecheck:declarations"]?.inputs) !==
-    JSON.stringify(declarations)
-  ) {
-    issues.push({
-      path: "turbo.json",
-      message:
-        "Declaration cache inputs must match the canonical resolved source graph; regenerate API test partition",
-    });
-  }
-  for (const [task, expected] of [
-    ["typecheck:src", inputs.source],
-    ["typecheck:tests", inputs.tests],
-  ] as const) {
+  for (const [task, expected] of programs) {
     if (
-      JSON.stringify(turbo.tasks[`@stll/api#${task}`]?.inputs) !==
-      JSON.stringify(expected)
+      JSON.stringify(turbo.tasks[task]?.inputs) !== JSON.stringify(expected)
     ) {
       issues.push({
         path: "turbo.json",
-        message: `${task} cache inputs must match derived API test ownership; regenerate API test partition`,
+        message: `${task} cache inputs must match the native resolved program; regenerate API test partition`,
       });
     }
   }
@@ -285,6 +271,12 @@ export const apiTestPartitionIssues = (root: string) => {
 
 const checkResolvedApiTestPartition = (root: string) => {
   const api = path.join(root, "apps/api");
+  const programs = apiProjectInputs(api);
+  const inputIssues = apiTypecheckInputIssues(root, programs);
+  if (inputIssues.length > 0) {
+    panic(inputIssues.map(({ message }) => message).join("\n"));
+  }
+
   const surface: {
     files: string[];
     compilerOptions: { rootDir: string; outDir: string };
@@ -305,48 +297,21 @@ const checkResolvedApiTestPartition = (root: string) => {
       panic(`Missing API declaration for ${file}`);
     }
   }
-  const child = Bun.spawnSync(
-    [
-      process.execPath,
-      "check",
-      "--listFilesOnly",
-      "--threads=1",
-      "--project",
-      path.join(api, "tsconfig.tests.json"),
-    ],
-    { cwd: root, stdout: "pipe", stderr: "pipe" },
-  );
-  if (childExitStatus(child) !== 0) {
-    panic(child.stdout.toString() + child.stderr.toString());
-  }
-  const files = new Set(
-    child.stdout
-      .toString()
-      .split(/\r?\n/u)
-      .filter((file) => path.isAbsolute(file)),
-  );
+  const programFiles = (task: string) =>
+    new Set(
+      (programs.get(task) ?? [])
+        .filter((file) => /\.[cm]?tsx?$/u.test(file))
+        .map((file) =>
+          path.resolve(
+            file.startsWith("$TURBO_ROOT$/") ? root : api,
+            file.replace("$TURBO_ROOT$/", ""),
+          ),
+        ),
+    );
+  const files = programFiles("@stll/api#typecheck:tests");
   const { independent, coupled } = deriveApiTestPartition(root);
   const owned = new Set(independent.map((file) => path.resolve(api, file)));
-  const sourceChild = Bun.spawnSync(
-    [
-      process.execPath,
-      "check",
-      "--listFilesOnly",
-      "--threads=1",
-      "--project",
-      path.join(api, "tsconfig.src.json"),
-    ],
-    { cwd: root, stdout: "pipe", stderr: "pipe" },
-  );
-  if (childExitStatus(sourceChild) !== 0) {
-    panic(sourceChild.stdout.toString() + sourceChild.stderr.toString());
-  }
-  const sourceFiles = new Set(
-    sourceChild.stdout
-      .toString()
-      .split(/\r?\n/u)
-      .filter((file) => path.isAbsolute(file)),
-  );
+  const sourceFiles = programFiles("@stll/api#typecheck:src");
   for (const file of coupled) {
     if (!sourceFiles.has(path.resolve(api, file))) {
       panic(`API source program omits coupled test: ${file}`);
@@ -411,15 +376,7 @@ if (import.meta.main) {
     const turboPath = path.join(root, "turbo.json");
     const text = readFileSync(turboPath, "utf-8");
     const document = ts.parseJsonText(turboPath, text);
-    const inputs = apiTestPartitionInputs(partition.independent);
-    const expectedInputs = new Map([
-      ["@stll/api#typecheck:src", inputs.source],
-      ["@stll/api#typecheck:tests", inputs.tests],
-      [
-        "@stll/api#typecheck:declarations",
-        apiDeclarationCacheInputs(path.join(api, "tsconfig.declarations.json")),
-      ],
-    ]);
+    const expectedInputs = apiProjectInputs(api);
     const edits: { start: number; end: number; text: string }[] = [];
     const visit = (node: ts.Node) => {
       if (ts.isPropertyAssignment(node) && ts.isStringLiteral(node.name)) {

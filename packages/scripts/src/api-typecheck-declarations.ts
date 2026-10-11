@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
+import { apiResolvedTypecheckInputs } from "./api-typecheck-inputs";
 import { withoutTsgoOnlyOptionDiagnostics } from "./tsgo-compiler-options";
 import { readTurboTypecheckInputs } from "./turbo-typecheck-inputs";
 
@@ -57,79 +58,55 @@ export const typescriptModuleReferences = (text: string, filename: string) => {
   return { imports, dynamic };
 };
 
-// Runtime imports also affect inferred exported types, so cache the resolved
-// source closure, a conservative superset of retained declaration imports.
-export const apiDeclarationCacheInputs = (project: string) => {
+export const apiDeclarationCacheInputs = apiResolvedTypecheckInputs;
+
+// Bun redirects explicit reference roots, so the roots must include every API
+// module retained by declaration serialization, not just the entry modules.
+const apiDeclarationSurfaceFiles = (
+  project: string,
+  files: readonly string[],
+) => {
   const configPath = path.resolve(project);
-  const api = path.dirname(configPath);
-  const root = path.resolve(api, "../..");
-  const config = ts.readConfigFile(configPath, (filename) =>
-    ts.sys.readFile(filename),
-  );
-  const parsed = ts.parseJsonConfigFileContent(
-    config.config,
-    ts.sys,
-    api,
-    undefined,
-    configPath,
-  );
-  const resolutionCache = ts.createModuleResolutionCache(
-    api,
-    (filename) => filename,
-    parsed.options,
-  );
-  const visited = new Set<string>();
-  const queue = [...parsed.fileNames];
-  for (const filename of queue) {
-    if (
-      visited.has(filename) ||
-      filename.includes(`${path.sep}node_modules${path.sep}`)
-    ) {
-      continue;
-    }
-    visited.add(filename);
-    const text = ts.sys.readFile(filename);
-    if (text === undefined) {
-      panic(`Missing declaration cache dependency: ${filename}`);
-    }
-    for (const specifier of typescriptModuleReferences(text, filename)
-      .imports) {
-      const dependency = ts.resolveModuleName(
-        specifier,
-        filename,
-        parsed.options,
-        ts.sys,
-        resolutionCache,
-      ).resolvedModule;
-      if (dependency?.resolvedFileName?.startsWith(`${root}${path.sep}`)) {
-        queue.push(dependency.resolvedFileName);
-      }
-    }
+  const directory = path.dirname(configPath);
+  const api = ts.sys.realpath?.(directory) ?? directory;
+  const source = `${path.join(api, "src")}${path.sep}`;
+  const roots = [
+    ...new Set(
+      files
+        .map((file) => ts.sys.realpath?.(file) ?? file)
+        .filter((file) => file.startsWith(source) && /\.[cm]?tsx?$/u.test(file))
+        .map((file) => path.relative(api, file)),
+    ),
+  ].toSorted();
+  if (roots.length === 0) {
+    panic("API declaration surface has no source modules");
   }
-  return [
-    ...[...visited]
-      .filter((filename) => filename.startsWith(`${api}${path.sep}`))
-      .map((filename) => path.relative(api, filename))
-      .toSorted(),
-    "$TURBO_ROOT$/.npmrc",
-    "$TURBO_ROOT$/bunfig.toml",
-    "$TURBO_ROOT$/package.json",
-    "$TURBO_ROOT$/bun.lock",
-    "$TURBO_ROOT$/patches/**",
-    "$TURBO_ROOT$/packages/**",
-    "!$TURBO_ROOT$/packages/**/.cache/**",
-    "!$TURBO_ROOT$/packages/**/.turbo/**",
-    "$TURBO_ROOT$/types/**",
-    "package.json",
-    "tsconfig*.json",
-  ];
+  return roots;
+};
+
+export const writeApiDeclarationSurface = (
+  project: string,
+  files: readonly string[],
+) => {
+  const configPath = path.resolve(project);
+  const roots = apiDeclarationSurfaceFiles(project, files);
+  const config = ts.readConfigFile(configPath, (file) => ts.sys.readFile(file));
+  if (config.error) {
+    panic(ts.flattenDiagnosticMessageText(config.error.messageText, "\n"));
+  }
+  writeFileSync(
+    configPath,
+    `${JSON.stringify({ ...config.config, files: roots }, null, 2)}\n`,
+  );
+  return roots;
 };
 
 export const missingDeclarationCacheInputs = (
   files: readonly string[],
   project: string,
 ) => {
-  const api = path.dirname(path.resolve(project));
+  const directory = path.dirname(path.resolve(project));
+  const api = ts.sys.realpath?.(directory) ?? directory;
   const root = path.resolve(api, "../..");
   const turbo = path.join(root, "turbo.json");
   if (!existsSync(turbo)) {
@@ -158,12 +135,13 @@ export const missingDeclarationCacheInputs = (
       };
     });
   return files.filter((filename) => {
+    const source = ts.sys.realpath?.(filename) ?? filename;
     const matches = patterns.filter((pattern) =>
-      pattern.glob.match(path.relative(pattern.root, filename)),
+      pattern.glob.match(path.relative(pattern.root, source)),
     );
     return (
       matches.some((pattern) => pattern.excluded) ||
-      (!exact.has(filename) && !matches.some((pattern) => !pattern.excluded))
+      (!exact.has(source) && !matches.some((pattern) => !pattern.excluded))
     );
   });
 };
@@ -179,7 +157,8 @@ const isApiRuntimeBoundary = (source: ts.SourceFile) => {
   }
   if (
     relative === "lib/auth.ts" ||
-    /(?:^|[-/])(?:routes?|server)(?:[-.]|$)/u.test(relative)
+    /(?:^|[-/])routes(?:[-.]|$)/u.test(relative) ||
+    /(?:^|[-/])(?:route|server)\.[cm]?tsx?$/u.test(relative)
   ) {
     return true;
   }
@@ -188,17 +167,20 @@ const isApiRuntimeBoundary = (source: ts.SourceFile) => {
     if (
       !ts.isImportDeclaration(statement) ||
       !ts.isStringLiteralLike(statement.moduleSpecifier) ||
-      statement.moduleSpecifier.text !== "elysia"
+      !["elysia", "@modelcontextprotocol/server"].includes(
+        statement.moduleSpecifier.text,
+      )
     ) {
       continue;
     }
     const clause = statement.importClause;
-    if (clause?.name) {
+    if (clause?.name && statement.moduleSpecifier.text === "elysia") {
       constructors.add(clause.name.text);
     }
     if (clause?.namedBindings && ts.isNamedImports(clause.namedBindings)) {
       for (const binding of clause.namedBindings.elements) {
-        if ((binding.propertyName?.text ?? binding.name.text) === "Elysia") {
+        const imported = binding.propertyName?.text ?? binding.name.text;
+        if (imported === "Elysia" || imported === "Server") {
           constructors.add(binding.name.text);
         }
       }
@@ -358,6 +340,17 @@ if (import.meta.main) {
       }),
     );
     process.exit(1);
+  }
+  if (process.argv.includes("--write-surface")) {
+    writeApiDeclarationSurface(project, files);
+  } else {
+    const config = ts.readConfigFile(project, (file) => ts.sys.readFile(file));
+    const roots = apiDeclarationSurfaceFiles(project, files);
+    if (JSON.stringify(config.config.files) !== JSON.stringify(roots)) {
+      panic(
+        "API declaration roots must match the retained declaration surface; regenerate with --write-surface",
+      );
+    }
   }
   process.stdout.write(`API declaration surface: ${files.length} modules\n`);
 }

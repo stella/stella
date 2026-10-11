@@ -11,6 +11,8 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { apiResolvedTypecheckInputs } from "./api-typecheck-inputs";
+
 const ROOT = path.resolve(import.meta.dir, "../../..");
 const EMITTER = "@stll/api#typecheck:declarations";
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -522,9 +524,9 @@ test("each API test owner invalidates cached checking and rejects a newly introd
       path.join(directory, "node_modules"),
       "dir",
     );
-    for (const [project, file] of [
-      ["src", coupled],
-      ["tests", safe],
+    for (const { project, file } of [
+      { project: "src", file: coupled },
+      { project: "tests", file: safe },
     ]) {
       write(
         `apps/api/tsconfig.${project}.json`,
@@ -567,16 +569,28 @@ test("each API test owner invalidates cached checking and rejects a newly introd
     expect(executions().slice(beforeSafe)).toEqual(["tests"]);
     write(`apps/api/${safe}`, valid);
     check(0);
+    const regenerateInputs = () => {
+      for (const project of ["src", "tests"] as const) {
+        fixtureTasks[`@stll/api#typecheck:${project}`].inputs =
+          apiResolvedTypecheckInputs(
+            path.join(directory, `apps/api/tsconfig.${project}.json`),
+          );
+      }
+      writeTasks();
+    };
     // Both projects can reach API script helpers through relative imports.
     const script = "scripts/test-path-filters.ts";
     write(`apps/api/${script}`, valid);
     for (const file of [safe, coupled]) {
-      const relative = path.relative(path.dirname(file), script);
+      const relative = path
+        .relative(path.dirname(file), script)
+        .replace(/\.ts$/u, "");
       write(
         `apps/api/${file}`,
         `import { value } from '${relative}';\nexport const checked: number = value;\n`,
       );
     }
+    regenerateInputs();
     check(0);
     const beforeScriptError = executions().length;
     write(`apps/api/${script}`, invalid);
@@ -591,9 +605,42 @@ test("each API test owner invalidates cached checking and rejects a newly introd
       write(`apps/api/${file}`, valid);
     }
     check(0);
+    // A directory excluded from root discovery can still enter via imports.
+    const imported = "src/mcp/apps/manifest.ts";
+    expect(sourceTask["inputs"]).toContain(imported);
+    write(`apps/api/${imported}`, valid);
+    const relative = path
+      .relative(path.dirname(coupled), imported)
+      .replace(/\.ts$/u, "");
+    const specifier = relative.startsWith(".") ? relative : `./${relative}`;
+    write(
+      `apps/api/${coupled}`,
+      `import { value } from '${specifier}';\nexport const checked: number = value;\n`,
+    );
+    write(
+      "apps/api/tsconfig.src.json",
+      JSON.stringify({
+        compilerOptions: { strict: true, noEmit: true, types: [] },
+        files: [coupled],
+        exclude: ["src/mcp/apps"],
+      }),
+    );
+    regenerateInputs();
+    expect(fixtureTasks["@stll/api#typecheck:src"].inputs).toContain(imported);
+    check(0);
+    const beforeImported = executions().length;
+    write(`apps/api/${imported}`, "export const value: string = 'changed';\n");
+    check(1);
+    expect(executions().slice(beforeImported)).toEqual(["source"]);
+    write(`apps/api/${imported}`, valid);
+    check(0);
+    write(`apps/api/${coupled}`, valid);
+    check(0);
     // The previous blanket exclusion hides a real coupled-test type error.
     fixtureTasks["@stll/api#typecheck:src"].inputs = [
-      ...sourceTask["inputs"],
+      ...sourceTask["inputs"].filter(
+        (input) => typeof input !== "string" || !/\.test\.tsx?$/u.test(input),
+      ),
       "!src/**/*.test.ts",
       "!src/**/*.test.tsx",
     ];

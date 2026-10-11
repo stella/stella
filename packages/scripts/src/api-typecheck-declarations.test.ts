@@ -5,6 +5,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -15,6 +16,7 @@ import {
   apiDeclarationCacheInputs,
   missingDeclarationCacheInputs,
   emitApiTypecheckDeclarations,
+  writeApiDeclarationSurface,
 } from "./api-typecheck-declarations";
 
 test("declarations follow public type imports without serializing runtime-only route exports", () => {
@@ -112,11 +114,15 @@ test.each([
       const sourceRoot = path.join(directory, "apps/api/src");
       const forbidden = path.join(sourceRoot, module);
       mkdirSync(path.dirname(forbidden), { recursive: true });
+      const constructor = module.endsWith("events.ts")
+        ? 'import Application from "elysia"; export const route = new Application(); '
+        : "";
+      const server = module.endsWith("server-core.ts")
+        ? 'import { Server } from "@modelcontextprotocol/server"; export const server = new Server(); '
+        : "";
       writeFileSync(
         forbidden,
-        module.endsWith("events.ts")
-          ? 'import Application from "elysia"; export const route = new Application(); export interface View { count: number }\n'
-          : "export interface View { count: number }\n",
+        `${constructor}${server}export interface View { count: number }\n`,
       );
       const bridge = path.join(sourceRoot, "bridge.ts");
       writeFileSync(
@@ -156,10 +162,10 @@ test("declaration cache inputs cover roots and transitive emitted dependencies w
   const api = path.join(root, "apps/api");
   const project = path.join(api, "tsconfig.declarations.json");
   const manifest = path.join(api, "src/mcp/apps/manifest.ts");
-  const leaf = path.join(api, "src/mcp/apps/leaf.ts");
-  mkdirSync(path.dirname(manifest), { recursive: true });
+  const leaf = path.join(api, "src/mcp/apps/build/leaf.ts");
+  mkdirSync(path.dirname(leaf), { recursive: true });
   try {
-    writeFileSync(manifest, "export type { Contract } from './leaf';\n");
+    writeFileSync(manifest, "export type { Contract } from './build/leaf';\n");
     writeFileSync(leaf, "export type Contract = string;\n");
     writeFileSync(
       project,
@@ -177,7 +183,7 @@ test("declaration cache inputs cover roots and transitive emitted dependencies w
     );
     const inputs = apiDeclarationCacheInputs(project);
     expect(inputs).toContain("src/mcp/apps/manifest.ts");
-    expect(inputs).toContain("src/mcp/apps/leaf.ts");
+    expect(inputs).toContain("src/mcp/apps/build/leaf.ts");
     const writeInputs = (values: string[]) =>
       writeFileSync(
         path.join(root, "turbo.json"),
@@ -205,6 +211,258 @@ test("declaration cache inputs cover roots and transitive emitted dependencies w
     expect(
       missingDeclarationCacheInputs(result.files, project).toSorted(),
     ).toEqual(result.files.toSorted());
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test.each(["permissive-route-schema.ts", "server-analytics.ts"])(
+  "shared utilities remain serializable without admitting runtime routes: %s",
+  (filename) => {
+    const root = mkdtempSync(path.join(tmpdir(), "api-schema-boundary-"));
+    const source = path.join(root, `apps/api/src/lib/${filename}`);
+    try {
+      mkdirSync(path.dirname(source), { recursive: true });
+      writeFileSync(source, "export interface Schema { value: string }\n");
+      const project = path.join(root, "tsconfig.json");
+      writeFileSync(
+        project,
+        JSON.stringify({
+          compilerOptions: {
+            noCheck: true,
+            declaration: true,
+            emitDeclarationOnly: true,
+            rootDir: root,
+            outDir: path.join(root, "declarations"),
+            types: [],
+          },
+          files: [source],
+        }),
+      );
+      expect(emitApiTypecheckDeclarations(project).diagnostics).toEqual([]);
+      expect(
+        existsSync(
+          path.join(
+            root,
+            `declarations/apps/api/src/lib/${filename.replace(/\.ts$/u, ".d.ts")}`,
+          ),
+        ),
+      ).toBe(true);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  },
+);
+
+test("source-only route assertions do not enter the declaration surface", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "api-route-assertion-"));
+  const source = path.join(root, "apps/api/src");
+  try {
+    mkdirSync(source, { recursive: true });
+    writeFileSync(
+      path.join(source, "routes.ts"),
+      'export type RouteId = "/example";\n',
+    );
+    writeFileSync(
+      path.join(source, "policy.ts"),
+      'import type { RouteId } from "./routes"; export const policy = { "/example": "browse" } as const satisfies Record<RouteId, string>;\n',
+    );
+    const project = path.join(root, "tsconfig.json");
+    writeFileSync(
+      project,
+      JSON.stringify({
+        compilerOptions: {
+          noCheck: true,
+          declaration: true,
+          emitDeclarationOnly: true,
+          rootDir: root,
+          outDir: path.join(root, "declarations"),
+          types: [],
+        },
+        files: [path.join(source, "policy.ts")],
+      }),
+    );
+    const result = emitApiTypecheckDeclarations(project);
+    expect(result.diagnostics).toEqual([]);
+    expect(result.files).toEqual([path.join(source, "policy.ts")]);
+    expect(
+      readFileSync(
+        path.join(root, "declarations/apps/api/src/policy.d.ts"),
+        "utf-8",
+      ),
+    ).toContain('readonly "/example": "browse"');
+    expect(
+      existsSync(path.join(root, "declarations/apps/api/src/routes.d.ts")),
+    ).toBe(false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("workspace symlink imports hash their source files and satisfy emitted-input coverage", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "api-workspace-inputs-"));
+  const api = path.join(root, "apps/api");
+  const shared = path.join(root, "packages/shared");
+  const project = path.join(api, "tsconfig.declarations.json");
+  try {
+    mkdirSync(path.join(api, "src"), { recursive: true });
+    mkdirSync(path.join(api, "node_modules/@stll"), { recursive: true });
+    mkdirSync(path.join(shared, "src"), { recursive: true });
+    writeFileSync(
+      path.join(shared, "package.json"),
+      JSON.stringify({ name: "@stll/shared", types: "src/contract.ts" }),
+    );
+    writeFileSync(
+      path.join(shared, "src/contract.ts"),
+      "export interface Contract { value: string }\n",
+    );
+    symlinkSync(shared, path.join(api, "node_modules/@stll/shared"), "dir");
+    writeFileSync(
+      path.join(api, "src/surface.ts"),
+      'export type { Contract } from "@stll/shared";\n',
+    );
+    writeFileSync(
+      project,
+      JSON.stringify({
+        compilerOptions: {
+          noCheck: true,
+          declaration: true,
+          emitDeclarationOnly: true,
+          preserveSymlinks: true,
+          rootDir: "../..",
+          outDir: ".cache/declarations",
+          types: [],
+        },
+        files: ["src/surface.ts"],
+      }),
+    );
+    const inputs = apiDeclarationCacheInputs(project);
+    expect(inputs).toContain("$TURBO_ROOT$/packages/shared/src/contract.ts");
+    expect(inputs.some((file) => file.includes("node_modules"))).toBe(false);
+    writeFileSync(
+      path.join(root, "turbo.json"),
+      JSON.stringify({
+        tasks: { "@stll/api#typecheck:declarations": { inputs } },
+      }),
+    );
+    const result = emitApiTypecheckDeclarations(project);
+    expect(result.diagnostics).toEqual([]);
+    expect(result.files).toHaveLength(2);
+    expect(missingDeclarationCacheInputs(result.files, project)).toEqual([]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("declaration aliases resolve transitive API contracts without checking their source", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "api-declaration-alias-"));
+  const api = path.join(root, "apps/api");
+  try {
+    mkdirSync(path.join(api, "src"), { recursive: true });
+    writeFileSync(
+      path.join(api, "src/leaf.ts"),
+      "export interface View { count: number }\n",
+    );
+    writeFileSync(
+      path.join(api, "src/runtime.ts"),
+      "export const runtime = { count: 1 };\n",
+    );
+    writeFileSync(
+      path.join(api, "src/surface.ts"),
+      [
+        'import type { View } from "@/api/leaf";',
+        'import { runtime } from "./runtime";',
+        'export type { View } from "@/api/leaf";',
+        'export type Reference = import("@/api/leaf").View;',
+        "export const get = (): View => runtime;",
+      ].join("\n"),
+    );
+    const options = {
+      module: "ESNext",
+      moduleResolution: "Bundler",
+      types: [],
+      paths: { "@/api/*": ["./src/*"] },
+    };
+    const project = path.join(api, "tsconfig.declarations.json");
+    writeFileSync(
+      project,
+      JSON.stringify({
+        compilerOptions: {
+          ...options,
+          composite: true,
+          noCheck: true,
+          declaration: true,
+          emitDeclarationOnly: true,
+          rootDir: ".",
+          outDir: ".cache/declarations",
+        },
+        files: ["src/surface.ts"],
+        include: [],
+      }),
+    );
+    const emitted = emitApiTypecheckDeclarations(project);
+    expect(emitted.diagnostics).toEqual([]);
+    expect(writeApiDeclarationSurface(project, emitted.files)).toEqual([
+      "src/leaf.ts",
+      "src/surface.ts",
+    ]);
+    const declaration = readFileSync(
+      path.join(api, ".cache/declarations/src/surface.d.ts"),
+      "utf-8",
+    );
+    expect(declaration.match(/@\/api\/leaf/gu)).toHaveLength(3);
+    writeFileSync(
+      path.join(api, "consumer.test.ts"),
+      'import { get } from "./src/surface"; export const count: number = get().count;\n',
+    );
+    const consumer = path.join(api, "tsconfig.consumer.json");
+    writeFileSync(
+      consumer,
+      JSON.stringify({
+        compilerOptions: {
+          ...options,
+          noEmit: true,
+          disableSourceOfProjectReferenceRedirect: true,
+        },
+        references: [{ path: "./tsconfig.declarations.json" }],
+        files: ["consumer.test.ts"],
+        include: [],
+      }),
+    );
+    const check = Bun.spawnSync(
+      [
+        process.execPath,
+        "check",
+        "--no-pretty",
+        "--all",
+        `--project=${consumer}`,
+      ],
+      { stdout: "pipe", stderr: "pipe" },
+    );
+    expect(
+      check.exitCode,
+      check.stdout.toString() + check.stderr.toString(),
+    ).toBe(0);
+    const list = Bun.spawnSync(
+      [
+        process.execPath,
+        "check",
+        "--no-pretty",
+        "--all",
+        "--listFilesOnly",
+        `--project=${consumer}`,
+      ],
+      { stdout: "pipe", stderr: "pipe" },
+    );
+    expect(list.exitCode).toBe(0);
+    const files = list.stdout.toString().split(/\r?\n/u);
+    expect(
+      files.some((file) => file.endsWith("/src/leaf.d.ts")),
+      list.stdout.toString(),
+    ).toBe(true);
+    expect(files.some((file) => file.endsWith("/src/leaf.ts"))).toBe(false);
+    expect(files.some((file) => file.endsWith("/src/runtime.ts"))).toBe(false);
+    expect(files.some((file) => file.endsWith("/src/surface.ts"))).toBe(false);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
