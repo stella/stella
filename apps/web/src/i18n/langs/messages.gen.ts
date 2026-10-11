@@ -1997,6 +1997,7 @@ type Messages = {
     "sort": "Sort";
     "source": "Source";
     "stale": "Stale";
+    "start": "Start";
     "status": "Status";
     "stepCount": "{count, plural, one {# step} other {# steps}}";
     "stepProgress": "{current} of {total}";
@@ -2811,7 +2812,6 @@ type Messages = {
       };
       "selectFlow": "Choose a workflow";
       "sizeConfirmTitle": "Large flow run";
-      "start": "Start";
       "startFailed": "Couldn't start the workflow.";
       "started": "Workflow started";
       "stepProgress": "Step {current} of {total}";
@@ -3029,7 +3029,6 @@ type Messages = {
     "action": {
       "replay": "Start again";
       "skip": "Skip";
-      "start": "Start";
     };
     "checklist": {
       "progress": "{completed} of {total} complete";
@@ -3708,6 +3707,10 @@ type Messages = {
         "failed": "Could not save";
         "nameMissing": "Not saved: add a name";
         "positionsNeedAttention": "Not saved: {count, plural, one {# position needs} other {# positions need}} attention";
+      };
+      "buildWithAi": {
+        "description": "Answer a few questions in a chat and the playbook is saved as you go.";
+        "title": "Build with AI";
       };
       "check": "Use an exact rule instead of AI";
       "checkHint": "For measurable conditions, such as payment term ≤ 30 days.";

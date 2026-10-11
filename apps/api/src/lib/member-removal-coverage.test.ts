@@ -70,6 +70,7 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "case_law_sources.descriptor",
   "chat_thread_compactions.summary",
   "chat_thread_names.target",
+  "chat_threads.active_skill",
   "clause_variants.body",
   "clause_versions.body",
   "clauses.body",
