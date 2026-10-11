@@ -84,6 +84,8 @@ type GenerateWorkflowDataProps = {
     | undefined;
   /** Injected by tests; the org's resolved decision model otherwise, null for none. */
   decisionModel?: DecisionModel | null | undefined;
+  /** External model-resolution boundary, injected by focused integration tests. */
+  resolveTextModel?: typeof resolveTanStackTextModel | undefined;
 };
 
 export type WorkflowDataOutput = Record<
@@ -202,14 +204,16 @@ const askSystemOne = async ({
   textInputs,
   abortSignal,
   onPartialAnswer,
-}: SystemOnePhaseOptions): Promise<SystemOnePhaseResult> => {
+}: SystemOnePhaseOptions): Promise<
+  Result<SystemOnePhaseResult, WorkflowIntegrationError>
+> => {
   const fallbackAll: SystemOnePhaseResult = {
     output: {},
     generative: properties,
   };
   const { systemOne, generative } = splitPropertiesForSystemOne(properties);
   if (systemOne.length === 0) {
-    return fallbackAll;
+    return Result.ok(fallbackAll);
   }
 
   const prepared = await Result.tryPromise({
@@ -222,11 +226,11 @@ const askSystemOne = async ({
   });
   if (Result.isError(prepared)) {
     captureError(prepared.error, { source: SYSTEM_ONE_ERROR_SOURCE });
-    return fallbackAll;
+    return Result.ok(fallbackAll);
   }
   const { sources, locators } = prepared.value;
   if (sources.length === 0) {
-    return fallbackAll;
+    return Result.ok(fallbackAll);
   }
 
   const questions = questionsFromProperties(systemOne);
@@ -237,7 +241,7 @@ const askSystemOne = async ({
     questions,
   });
   if (Object.keys(plan.questions).length === 0) {
-    return fallbackAll;
+    return Result.ok(fallbackAll);
   }
 
   const { decisions } = await decideMany({
@@ -258,11 +262,15 @@ const askSystemOne = async ({
       : undefined,
   });
   const outcomes = decodeSystemOneAnswers({ plan, questions, decisions });
-  const { output } = outputFromSystemOneOutcomes({
+  const resolved = outputFromSystemOneOutcomes({
     properties: systemOne,
     outcomes,
     locators,
   });
+  if (Result.isError(resolved)) {
+    return Result.err(resolved.error);
+  }
+  const { output } = resolved.value;
 
   if (onPartialAnswer) {
     for (const property of systemOne) {
@@ -276,13 +284,13 @@ const askSystemOne = async ({
     }
   }
 
-  return {
+  return Result.ok({
     output,
     generative: properties.filter(
       (property) =>
         generative.includes(property) || plan.unplanned.includes(property.id),
     ),
-  };
+  });
 };
 
 export const generateWorkflowData = async ({
@@ -303,6 +311,7 @@ export const generateWorkflowData = async ({
   usageMetering,
   onPartialAnswer,
   decisionModel,
+  resolveTextModel,
 }: GenerateWorkflowDataProps): Promise<
   Result<WorkflowDataOutput, WorkflowIntegrationError>
 > => {
@@ -382,50 +391,55 @@ export const generateWorkflowData = async ({
     }
   }
 
-  const { output: systemOneOutput, generative: generativeProperties } =
-    await askSystemOne({
-      generation: (plannedProperties) => ({
-        dataClass: "customer",
-        role: "pdf",
-        orgAIConfig,
-        managedAIResidency,
-        organizationId,
-        admission,
-        tenantWorkspaceIds: [workspaceId],
-        analytics: createTanStackAIAnalyticsCallbacks(
-          buildWorkflowAIAnalyticsProps({
-            entityVersionId,
-            organizationId,
-            orgAIConfig: orgAIConfig ?? null,
-            propertyCount: plannedProperties.length,
-            usageMetering,
-            workspaceId,
-          }),
-        ),
-        caching: cachingDecision,
-        serviceTier,
-        messages: [
-          {
-            role: "user",
-            content: [
-              ...messageContent,
-              { type: "text", content: buildPromptsMessage(plannedProperties) },
-            ],
-          },
-        ],
-        system: WORKFLOW_SYSTEM_PROMPT,
-        abortSignal,
-        deadlineMs: getWorkflowBatchAITimeoutMs(serviceTier),
-      }),
-      decisionModel,
-      usageMetering,
+  const typedPhase = await askSystemOne({
+    generation: (plannedProperties) => ({
+      dataClass: "customer",
+      role: "pdf",
+      resolveTextModel,
       orgAIConfig,
-      properties,
-      files,
-      textInputs,
+      managedAIResidency,
+      organizationId,
+      admission,
+      tenantWorkspaceIds: [workspaceId],
+      analytics: createTanStackAIAnalyticsCallbacks(
+        buildWorkflowAIAnalyticsProps({
+          entityVersionId,
+          organizationId,
+          orgAIConfig: orgAIConfig ?? null,
+          propertyCount: plannedProperties.length,
+          usageMetering,
+          workspaceId,
+        }),
+      ),
+      caching: cachingDecision,
+      serviceTier,
+      messages: [
+        {
+          role: "user",
+          content: [
+            ...messageContent,
+            { type: "text", content: buildPromptsMessage(plannedProperties) },
+          ],
+        },
+      ],
+      system: WORKFLOW_SYSTEM_PROMPT,
       abortSignal,
-      onPartialAnswer,
-    });
+      deadlineMs: getWorkflowBatchAITimeoutMs(serviceTier),
+    }),
+    decisionModel,
+    usageMetering,
+    orgAIConfig,
+    properties,
+    files,
+    textInputs,
+    abortSignal,
+    onPartialAnswer,
+  });
+  if (Result.isError(typedPhase)) {
+    return Result.err(typedPhase.error);
+  }
+  const { output: systemOneOutput, generative: generativeProperties } =
+    typedPhase.value;
   // Only a batch System One answered in full ends here; an empty batch takes
   // the generative path it has always taken.
   if (properties.length > 0 && generativeProperties.length === 0) {
@@ -437,7 +451,7 @@ export const generateWorkflowData = async ({
   // and cannot know how many of them one request may carry.
   const model = await Result.tryPromise({
     try: async () =>
-      await resolveTanStackTextModel({
+      await (resolveTextModel ?? resolveTanStackTextModel)({
         dataClass: "customer",
         managedAIResidency,
         role: "pdf",
@@ -515,6 +529,7 @@ export const generateWorkflowData = async ({
         const stream = streamTanStackObjectForRole({
           dataClass: "customer",
           role: "pdf",
+          resolveTextModel,
           orgAIConfig,
           managedAIResidency,
           organizationId,

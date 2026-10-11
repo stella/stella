@@ -128,7 +128,16 @@ describe("decision model request policy", () => {
       model: null,
     });
     expect(runtime.analytics.exceptions()).toHaveLength(1);
-    expect(runtime.logger.records).toHaveLength(1);
+    expect(
+      runtime.logger
+        .at("INFO")
+        .filter((record) => record.message === "ai.decision"),
+    ).toHaveLength(1);
+    expect(
+      runtime.logger.records.filter(
+        (record) => record.message === "ai.decision.failed",
+      ),
+    ).toHaveLength(1);
     expect(runtime.fetch).not.toHaveBeenCalled();
   });
 

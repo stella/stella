@@ -16,9 +16,10 @@
  */
 
 import { PDF } from "@libpdf/core";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 
 import type { SafeId } from "@/api/lib/branded-types";
+import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import type { WorkflowDataOutput } from "@/api/lib/workflow/ai-generate-batch";
 import type {
   AnswerOutcome,
@@ -247,14 +248,17 @@ export type SystemOneOutcomeResult = {
 };
 
 /**
- * Planned decisions are terminal. Unresolved answers remain null after the
- * shared generative fallback; only unplanned properties need normal generation.
+ * Planned decisions are terminal. A genuine refusal is a null answer;
+ * operational failures propagate so the batch cannot silently succeed.
  */
 export const outputFromSystemOneOutcomes = ({
   properties,
   outcomes,
   locators,
-}: SystemOneOutcomeOptions): SystemOneOutcomeResult => {
+}: SystemOneOutcomeOptions): Result<
+  SystemOneOutcomeResult,
+  WorkflowIntegrationError
+> => {
   const output: WorkflowDataOutput = {};
   const fallbackPropertyIds: SafeId<"property">[] = [];
   for (const property of properties) {
@@ -265,7 +269,28 @@ export const outputFromSystemOneOutcomes = ({
     }
     switch (outcome.state) {
       case "undecided":
-        output[property.id] = { answer: null, justification: [] };
+        switch (outcome.reason) {
+          case "refusal":
+            output[property.id] = { answer: null, justification: [] };
+            break;
+          case "failed":
+          case "no-backend":
+          case "below-floor":
+            return Result.err(
+              new WorkflowIntegrationError({
+                message: "Workflow typed decision could not be completed",
+                cause: {
+                  propertyId: property.id,
+                  reason: outcome.reason,
+                  source: outcome.source,
+                  model: outcome.model,
+                },
+              }),
+            );
+          default:
+            outcome.reason satisfies never;
+            panic("Unhandled workflow decision reason");
+        }
         break;
       case "not_stated":
         output[property.id] = { answer: null, justification: [] };
@@ -286,5 +311,5 @@ export const outputFromSystemOneOutcomes = ({
         panic("Unhandled System One outcome state");
     }
   }
-  return { output, fallbackPropertyIds };
+  return Result.ok({ output, fallbackPropertyIds });
 };

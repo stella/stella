@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import type { FolioAIBlock } from "@stll/folio-core/server";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import type { AnswerOutcome } from "@/api/lib/workflow/decisions/answer-questions";
 import {
   decodeSystemOneAnswers,
@@ -246,7 +247,7 @@ describe("outputFromSystemOneOutcomes", () => {
         [singleSelect.id, answered("Purchase agreement", "F0#b1", 0.9)],
       ]),
       locators,
-    });
+    }).unwrap();
 
     expect(fallbackPropertyIds).toEqual([]);
     const entry = output[singleSelect.id];
@@ -304,7 +305,7 @@ describe("outputFromSystemOneOutcomes", () => {
         [singleSelect.id, answered("Purchase agreement", "F1#1", 0.9)],
       ]),
       locators,
-    });
+    }).unwrap();
 
     expect(output[singleSelect.id]).toEqual({
       answer: "Purchase agreement",
@@ -312,7 +313,7 @@ describe("outputFromSystemOneOutcomes", () => {
     });
   });
 
-  test("an unresolved decision is terminal and only an unplanned property continues", () => {
+  test("a genuine refusal is null and only an unplanned property continues", () => {
     const { output, fallbackPropertyIds } = outputFromSystemOneOutcomes({
       properties: [singleSelect, dateProperty],
       outcomes: new Map<string, AnswerOutcome>([
@@ -320,14 +321,14 @@ describe("outputFromSystemOneOutcomes", () => {
           singleSelect.id,
           {
             state: "undecided",
-            reason: "failed",
+            reason: "refusal",
             source: "generative",
-            model: null,
+            model: "test-generative",
           },
         ],
       ]),
       locators,
-    });
+    }).unwrap();
 
     // The unplanned date question has no outcome at all, and falls back too.
     expect(fallbackPropertyIds).toEqual([dateProperty.id]);
@@ -335,6 +336,31 @@ describe("outputFromSystemOneOutcomes", () => {
       [singleSelect.id]: { answer: null, justification: [] },
     });
   });
+
+  test.each(["failed", "no-backend", "below-floor"] as const)(
+    "an unresolved %s decision propagates an integration failure",
+    (reason) => {
+      const result = outputFromSystemOneOutcomes({
+        properties: [singleSelect],
+        locators,
+        outcomes: new Map<string, AnswerOutcome>([
+          [
+            singleSelect.id,
+            { state: "undecided", reason, source: "generative", model: null },
+          ],
+        ]),
+      });
+      expect(result.isErr()).toBe(true);
+      if (result.isOk()) {
+        throw new Error("Expected the failed typed decision to propagate");
+      }
+      expect(WorkflowIntegrationError.is(result.error)).toBe(true);
+      expect(result.error.cause).toMatchObject({
+        propertyId: singleSelect.id,
+        reason,
+      });
+    },
+  );
 
   test("with no decision model shared generation settles the planned batch", async () => {
     const { sources, locators: batchLocators } = await sourcesFromPreparedFiles(
@@ -372,7 +398,7 @@ describe("outputFromSystemOneOutcomes", () => {
       properties,
       outcomes: decodeSystemOneAnswers({ plan, questions, decisions }),
       locators: batchLocators,
-    });
+    }).unwrap();
 
     expect(output).toEqual({
       [singleSelect.id]: { answer: null, justification: [] },
@@ -397,7 +423,7 @@ describe("outputFromSystemOneOutcomes", () => {
         ],
       ]),
       locators,
-    });
+    }).unwrap();
 
     expect(fallbackPropertyIds).toEqual([]);
     expect(output[dateProperty.id]).toEqual({
