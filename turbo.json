@@ -24,7 +24,18 @@
       "inputs": ["$TURBO_DEFAULT$"]
     },
     "@stll/visual-preview#typecheck": {
-      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/scripts/browser/**"]
+      "cache": true,
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/.npmrc",
+        "$TURBO_ROOT$/bunfig.toml",
+        "$TURBO_ROOT$/package.json",
+        "$TURBO_ROOT$/packages/typescript-config/**",
+        "$TURBO_ROOT$/patches/**",
+        "$TURBO_ROOT$/types/**",
+        "$TURBO_ROOT$/scripts/browser/**"
+      ],
+      "outputs": []
     },
     "@stll/visual-preview#test:browser": {
       "inputs": [
@@ -99,13 +110,13 @@
     // Compiler scripts prepare direct invocations, but skip that cache restore
     // inside Turbo (TURBO_HASH): these dependencies already prepared the file.
     "@stll/web#typecheck": {
+      "cache": true,
       "dependsOn": ["transit", "generate:api-types", "generate:route-tree"],
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/.npmrc",
         "$TURBO_ROOT$/bunfig.toml",
         "$TURBO_ROOT$/package.json",
-        "$TURBO_ROOT$/bun.lock",
         "$TURBO_ROOT$/packages/typescript-config/**",
         "$TURBO_ROOT$/patches/**",
         "$TURBO_ROOT$/types/**"
@@ -250,7 +261,10 @@
       "dependsOn": ["transit"],
       "cache": false
     },
+    // Successful diagnostic-only tasks cache their logs; no stamp or compiler
+    // build-info is needed. Turbo hashes the relevant dependency lock entries.
     "typecheck": {
+      "cache": true,
       // A package type-checking @stll/api source needs its generated capability
       // runtime modules first.
       "dependsOn": ["transit", "^generate:capability-runtime"],
@@ -262,7 +276,6 @@
         "$TURBO_ROOT$/.npmrc",
         "$TURBO_ROOT$/bunfig.toml",
         "$TURBO_ROOT$/package.json",
-        "$TURBO_ROOT$/bun.lock",
         "$TURBO_ROOT$/packages/typescript-config/**",
         "$TURBO_ROOT$/patches/**",
         "$TURBO_ROOT$/types/**"
@@ -270,6 +283,7 @@
       "outputs": []
     },
     "//#typecheck:repo": {
+      "cache": true,
       "dependsOn": [
         "@stll/web#generate:api-types",
         "@stll/web#generate:route-tree",
@@ -281,13 +295,13 @@
       // between linked worktrees and CI runners.
       "inputs": [
         "$TURBO_DEFAULT$",
+        "!bun.lock",
         "$TURBO_ROOT$/.claude/mcp/**",
         "$TURBO_ROOT$/.npmrc",
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/apps/**",
         "$TURBO_ROOT$/bunfig.toml",
         "$TURBO_ROOT$/package.json",
-        "$TURBO_ROOT$/bun.lock",
         "$TURBO_ROOT$/packages/**",
         "$TURBO_ROOT$/patches/**",
         "$TURBO_ROOT$/scripts/**",
@@ -303,6 +317,7 @@
     // Left unrecorded, a cache hit replays the logs and writes nothing, so the
     // lint would type-check a program without the generated declarations.
     "@stll/landing#typecheck": {
+      "cache": true,
       "dependsOn": ["transit", "@stll/cli#codegen:runtime"],
       // `astro check` generates the `astro:content` types.
       "inputs": [
@@ -310,7 +325,6 @@
         "$TURBO_ROOT$/.npmrc",
         "$TURBO_ROOT$/bunfig.toml",
         "$TURBO_ROOT$/package.json",
-        "$TURBO_ROOT$/bun.lock",
         "$TURBO_ROOT$/packages/typescript-config/**",
         "$TURBO_ROOT$/patches/**",
         "$TURBO_ROOT$/types/**"
@@ -318,6 +332,7 @@
       "outputs": [".astro/**"]
     },
     "@stll/extension#typecheck": {
+      "cache": true,
       "dependsOn": ["transit"],
       // `wxt prepare` generates `.wxt/wxt.d.ts`, which the tsconfig includes
       // for the `import.meta.env` and browser declarations.
@@ -326,7 +341,6 @@
         "$TURBO_ROOT$/.npmrc",
         "$TURBO_ROOT$/bunfig.toml",
         "$TURBO_ROOT$/package.json",
-        "$TURBO_ROOT$/bun.lock",
         "$TURBO_ROOT$/packages/typescript-config/**",
         "$TURBO_ROOT$/patches/**",
         "$TURBO_ROOT$/types/**"
@@ -589,13 +603,13 @@
       "dependsOn": ["^build", "codegen:runtime"]
     },
     "@stll/cli#typecheck": {
+      "cache": true,
       "dependsOn": ["transit", "codegen:runtime"],
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/.npmrc",
         "$TURBO_ROOT$/bunfig.toml",
         "$TURBO_ROOT$/package.json",
-        "$TURBO_ROOT$/bun.lock",
         "$TURBO_ROOT$/packages/typescript-config/**",
         "$TURBO_ROOT$/patches/**",
         "$TURBO_ROOT$/types/**"
@@ -709,6 +723,7 @@
       ]
     },
     "@stll/api#typecheck": {
+      "cache": true,
       "dependsOn": [
         "transit",
         "@stll/cli#codegen:runtime",
@@ -719,7 +734,6 @@
         "$TURBO_ROOT$/.npmrc",
         "$TURBO_ROOT$/bunfig.toml",
         "$TURBO_ROOT$/package.json",
-        "$TURBO_ROOT$/bun.lock",
         "$TURBO_ROOT$/packages/typescript-config/**",
         "$TURBO_ROOT$/patches/**",
         "$TURBO_ROOT$/types/**"
