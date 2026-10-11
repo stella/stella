@@ -232,7 +232,12 @@ const withRunReadBarrier = (tx: Transaction, options: SourceBarrierOptions) => {
   return wrap(tx);
 };
 
-const searchReplayPhase = (db: GatedTestDb, indexEntity: () => Promise<void>) =>
+const searchReplayPhase = (
+  db: GatedTestDb,
+  indexEntity: Parameters<
+    typeof createDocumentProcessingReconciliationPhases
+  >[0]["indexEntity"],
+) =>
   createDocumentProcessingReconciliationPhases({
     database: asTestRaw<typeof rootDb>(db),
     broadcastWorkspaceResourceUpdated: () => undefined,
@@ -385,8 +390,10 @@ if (!databaseUrl || !runPostgresTests) {
       const { db } = openClient();
       const fixture = await seedOcrFixture(db);
       let calls = 0;
-      const phase = searchReplayPhase(db, async () => {
-        calls += 1;
+      const phase = searchReplayPhase(db, async (entityId) => {
+        if (entityId === fixture.source.entityId) {
+          calls += 1;
+        }
         throw new Error("index unavailable");
       });
       try {

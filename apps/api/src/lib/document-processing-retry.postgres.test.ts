@@ -176,7 +176,7 @@ if (!databaseUrl || !runPostgresTests) {
             writeRepairScanCursor: async () => true,
           }).find((phase) => phase.name === "retry") ??
           panic("Retry reconciliation phase missing");
-        expect(await retryPhase.run()).toEqual({ count: 1, hasMore: false });
+        await retryPhase.run();
         const exhausted = (
           await db
             .select()
@@ -200,7 +200,14 @@ if (!databaseUrl || !runPostgresTests) {
         expect(eligible?.attemptCount).toBe(
           DOCUMENT_PROCESSING_MAX_ATTEMPTS - 1,
         );
-        expect(await retryPhase.run()).toEqual({ count: 0, hasMore: false });
+        await retryPhase.run();
+        const exhaustedAfterReplay = (
+          await db
+            .select()
+            .from(documentProcessingRuns)
+            .where(eq(documentProcessingRuns.id, exhaustedId))
+        ).at(0);
+        expect(exhaustedAfterReplay).toEqual(exhausted);
         expect(
           recording
             .at("ERROR")
@@ -242,22 +249,23 @@ if (!databaseUrl || !runPostgresTests) {
           const healthyRunId = await healthyFixture.insertRun({
             nextDeliveryAt: new Date(now.getTime() + 60_000),
           });
-          const retryPhase = createDocumentProcessingReconciliationPhases({
-            database,
-            broadcastWorkspaceResourceUpdated: () => undefined,
-            enqueueDocumentDeadlineScout: async () => undefined,
-            enqueueDocumentProcessingRun: async () => undefined,
-            indexEntity: async () => undefined,
-            now: () => now.getTime(),
-            readRepairScanCursor: async () => null,
-            readyRepairCursor: async () => undefined,
-            repairPassMemo: {
-              completedAt: () => null,
-              recordCompleted: () => undefined,
-            },
-            writeRepairScanCursor: async () => true,
-          }).find((phase) => phase.name === "retry");
-          expect(retryPhase).toBeDefined();
+          const retryPhase =
+            createDocumentProcessingReconciliationPhases({
+              database,
+              broadcastWorkspaceResourceUpdated: () => undefined,
+              enqueueDocumentDeadlineScout: async () => undefined,
+              enqueueDocumentProcessingRun: async () => undefined,
+              indexEntity: async () => undefined,
+              now: () => now.getTime(),
+              readRepairScanCursor: async () => null,
+              readyRepairCursor: async () => undefined,
+              repairPassMemo: {
+                completedAt: () => null,
+                recordCompleted: () => undefined,
+              },
+              writeRepairScanCursor: async () => true,
+            }).find((phase) => phase.name === "retry") ??
+            panic("Retry reconciliation phase missing");
           const observedDelays: number[] = [];
           for (
             let attemptCount = 1;
@@ -344,7 +352,7 @@ if (!databaseUrl || !runPostgresTests) {
             );
             expect(failed?.finishedAt).toBeNull();
             now = new Date(now.getTime() + delay - 1);
-            await retryPhase?.run();
+            await retryPhase.run();
             const earlyNow = now;
             expect(
               await database.transaction(
@@ -358,7 +366,7 @@ if (!databaseUrl || !runPostgresTests) {
               ),
             ).toBeNull();
             now = new Date(now.getTime() + 1);
-            await retryPhase?.run();
+            await retryPhase.run();
           }
           for (const [index, delay] of observedDelays.entries()) {
             if (index > 0) {
@@ -366,7 +374,7 @@ if (!databaseUrl || !runPostgresTests) {
             }
           }
           now = new Date(now.getTime() + 365 * 24 * 60 * 60_000);
-          await retryPhase?.run();
+          await retryPhase.run();
           expect(
             await database.transaction(
               async (tx) =>
