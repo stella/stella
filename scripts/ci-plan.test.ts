@@ -50,6 +50,7 @@ import {
 import {
   mainHeavyJobs,
   prDepthJobs,
+  queueGateJobs,
   queueAdmittedJobs,
   thinJobs,
 } from "./main-heavy-plan";
@@ -713,6 +714,7 @@ const resultJob = v.parse(
 const CANCEL_REUSABLE_JOB = "marketing-screenshots-cancel";
 const MAIN_ONLY_JOBS = new Set(["api-test-durations"]);
 const CANCELLATION_EXCEPTIONS = new Set([
+  "query-perf",
   "fix-tests-on-base",
   "heavy-web-build",
   "marketing-screenshots",
@@ -1173,6 +1175,7 @@ const resultGateCase = ({
       NEEDS: JSON.stringify(needs),
       FAST_REQUIRED: resultStep.env["FAST_REQUIRED"] ?? "",
       FAST_JOB_SCOPES: resultStep.env["FAST_JOB_SCOPES"] ?? "",
+      QUEUE_GATES: resultStep.env["QUEUE_GATES"] ?? "",
       PATH: `${fakeGhDirectory}:${process.env["PATH"] ?? ""}`,
       PR_NUMBER: event === EVENT.pullRequest ? PULL_REQUEST.number : "",
       REPO: PULL_REQUEST.repo,
@@ -3866,7 +3869,7 @@ test("Bun cache saves are main-only and queue Turbo caches remain readable", () 
     Bun.YAML.parse(workflow),
   );
   expect(configured.env["TURBO_CACHE"]).toBe(
-    `\${{ github.event_name == 'merge_group' && 'local:rw,remote:r' || 'local:rw,remote:rw' }}`,
+    `\${{ github.ref == 'refs/heads/main' && 'local:rw,remote:rw' || 'local:rw,remote:r' }}`,
   );
   const cacheSteps = Object.values(ciJobs)
     .flatMap(
@@ -5407,6 +5410,7 @@ test("parity rejects new queue-only jobs, ungated PR paths and stale exemptions"
 test("thin merge groups intentionally skip heavy jobs while full parity stays enforced", () => {
   const heavy = new Set(mainHeavyJobs({ jobs: ciJobs }));
   const admitted = new Set(queueAdmittedJobs({ jobs: ciJobs }));
+  const gates = new Set(queueGateJobs({ jobs: ciJobs }));
   for (const { name, condition } of parityJobs) {
     const full = runsAtDepth(condition, {
       event: EVENT.mergeGroup,
@@ -5441,7 +5445,11 @@ test("thin merge groups intentionally skip heavy jobs while full parity stays en
         queueBrowserSuites: "off",
       }),
       `${name}/off`,
-    ).toBe(heavy.has(name) && name !== "desktop-rust-tests" ? false : full);
+    ).toBe(
+      heavy.has(name) && !gates.has(name) && name !== "desktop-rust-tests"
+        ? false
+        : full,
+    );
     for (const event of [EVENT.pullRequest, EVENT.workflowDispatch]) {
       expect(
         runsAtDepth(condition, {
