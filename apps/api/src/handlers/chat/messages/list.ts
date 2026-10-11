@@ -214,6 +214,7 @@ const getMessages = createSafeRootHandler(
             userId: { eq: user.id },
           },
           columns: {
+            activeSkill: true,
             workspaceId: true,
             contextMatterIds: true,
             webSearchEnabled: true,
@@ -346,6 +347,7 @@ const getMessages = createSafeRootHandler(
     if (reads.kind === "not-found") {
       if (allowMissingThread) {
         return Result.ok({
+          activeSkill: null,
           activeTurnId: null,
           attachedFiles: EMPTY_CHAT_THREAD_ATTACHED_FILES,
           forkProvenance: { type: "none" } as const,
@@ -426,6 +428,7 @@ const getMessages = createSafeRootHandler(
     });
 
     return Result.ok({
+      activeSkill: thread.activeSkill,
       activeTurnId: page.activeTurnId,
       attachedFiles,
       forkProvenance: resolveForkProvenance({
