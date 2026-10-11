@@ -322,6 +322,22 @@ fn page_background(gray: &GrayImage) -> u8 {
         .map_or(255, |(value, _)| value as u8)
 }
 
+fn high_page_level(gray: &GrayImage) -> u8 {
+    let mut counts = [0_u32; 256];
+    for pixel in gray.pixels() {
+        counts[usize::from(pixel[0])] += 1;
+    }
+    let target = gray.width().saturating_mul(gray.height()).saturating_mul(9) / 10;
+    let mut cumulative = 0;
+    counts
+        .iter()
+        .position(|count| {
+            cumulative += count;
+            cumulative >= target
+        })
+        .map_or(255, |value| value as u8)
+}
+
 fn rotation_geometry(gray: &GrayImage, angle: f32) -> Result<RotationGeometry, UnrecognizedReason> {
     let center_x = gray.width() as f32 / 2.0;
     let center_y = gray.height() as f32 / 2.0;
@@ -446,20 +462,11 @@ fn box_filter_scaled(gray: &GrayImage, radius: u32) -> GrayImage {
     filtered
 }
 
-fn flattening_background(gray: &GrayImage) -> GrayImage {
+fn edge_barrier(gray: &GrayImage, scale_reference: u32) -> Vec<bool> {
     let width = gray.width();
     let height = gray.height();
-    let longest_side = width.max(height);
-    // Illumination is smooth while printed regions have sharp, enclosing boundaries. Smooth at
-    // 1/500 of the longest side, then compare samples one smoothing radius apart on either side.
-    // The threshold is therefore the measured contrast across a scale-sized span, rather than a
-    // per-pixel slope that shrinks as resolution increases. Close gaps by 1/250, then flood from
-    // the page boundary: anything the edge barrier encloses is excluded from the background and
-    // filled from its nearest reachable page pixel. Average the final illumination field over
-    // 1/12 of the longest side. Every spatial measurement is resolution-independent.
-    let edge_scale = (longest_side / 500).max(1);
-    let edge_dilation = (longest_side / 250).max(1);
-    let illumination_radius = (longest_side / 12).max(1);
+    let edge_scale = (scale_reference / 500).max(1);
+    let edge_dilation = (scale_reference / 250).max(1);
     let smooth = box_filter_scaled(gray, edge_scale);
     let mut strong_edge = vec![false; (width * height) as usize];
     for y in 0..height {
@@ -500,6 +507,62 @@ fn flattening_background(gray: &GrayImage) -> GrayImage {
                 > 0;
         }
     }
+    barrier
+}
+
+fn largest_open_region(barrier: &[bool], width: u32, height: u32) -> Vec<bool> {
+    let mut visited = vec![false; barrier.len()];
+    let mut largest = Vec::new();
+    for y in 0..height {
+        for x in 0..width {
+            let start = (y * width + x) as usize;
+            if barrier[start] || visited[start] {
+                continue;
+            }
+            visited[start] = true;
+            let mut queue = VecDeque::from([(x, y)]);
+            let mut region = Vec::new();
+            while let Some((current_x, current_y)) = queue.pop_front() {
+                region.push((current_y * width + current_x) as usize);
+                for (next_x, next_y) in [
+                    (current_x.saturating_sub(1), current_y),
+                    (current_x.saturating_add(1), current_y),
+                    (current_x, current_y.saturating_sub(1)),
+                    (current_x, current_y.saturating_add(1)),
+                ] {
+                    if next_x >= width || next_y >= height {
+                        continue;
+                    }
+                    let index = (next_y * width + next_x) as usize;
+                    if !barrier[index] && !visited[index] {
+                        visited[index] = true;
+                        queue.push_back((next_x, next_y));
+                    }
+                }
+            }
+            if region.len() > largest.len() {
+                largest = region;
+            }
+        }
+    }
+    let mut selected = vec![false; barrier.len()];
+    for index in largest {
+        selected[index] = true;
+    }
+    selected
+}
+
+fn flattening_background(gray: &GrayImage) -> GrayImage {
+    let width = gray.width();
+    let height = gray.height();
+    let longest_side = width.max(height);
+    // Illumination is smooth while printed regions have sharp, enclosing boundaries. The edge
+    // measurements scale with resolution. Normally the background is the region reachable from
+    // the page boundary. If a frame blocks that boundary (or leaves only a tiny leak), the largest
+    // region outside the edge barrier is the page background; smaller enclosed regions remain
+    // content. If no open pixel exists, the robust page level is the only safe illumination seed.
+    let barrier = edge_barrier(gray, longest_side);
+    let illumination_radius = (longest_side / 12).max(1);
 
     let mut reachable = vec![false; barrier.len()];
     let mut queue = VecDeque::new();
@@ -527,6 +590,13 @@ fn flattening_background(gray: &GrayImage) -> GrayImage {
                 queue.push_back((next_x, next_y));
             }
         }
+    }
+    let minimum_boundary_background = barrier.len().div_ceil(100);
+    if reachable.iter().filter(|value| **value).count() < minimum_boundary_background {
+        reachable = largest_open_region(&barrier, width, height);
+    }
+    if !reachable.iter().any(|value| *value) {
+        return GrayImage::from_pixel(width, height, Luma([high_page_level(gray)]));
     }
 
     let mut inpainted = gray.clone();

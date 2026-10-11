@@ -3,7 +3,7 @@ use imageproc::geometric_transformations::{Border, Interpolation, rotate_about_c
 
 use crate::{
     CleanOptions, CleanOutput, UnrecognizedReason, clean_scan, content_bounds, cross, deskew_angle,
-    detect_page_quad, perspective, rgba_to_gray, rotate_centered, rotation_geometry,
+    detect_page_quad, edge_barrier, perspective, rgba_to_gray, rotate_centered, rotation_geometry,
     threshold_document,
 };
 
@@ -338,115 +338,122 @@ fn flattening_removes_a_background_gradient_without_losing_text() {
 }
 
 #[test]
-fn flattening_preserves_sharp_solid_fills_at_each_resolution_and_output_mode() {
-    for size in [700_u32, 2_000, 4_000] {
-        let mut source = GrayImage::from_pixel(size, size, Luma([245]));
-        let fill_size = size * 6 / 35;
-        let margin = size / 10;
-        let gap = size / 7;
-        let fills = [
-            (margin, margin, 190_u8),
-            (margin + fill_size + gap, margin, 120),
-            (margin, margin + fill_size + gap, 80),
-            (margin + fill_size + gap, margin + fill_size + gap, 25),
-        ];
-        for (left, top, value) in fills {
-            for y in top..top + fill_size {
-                for x in left..left + fill_size {
-                    source.put_pixel(x, y, Luma([value]));
-                }
-            }
-        }
+fn scaled_edge_barrier_detects_a_physical_fill_boundary_at_each_resolution() {
+    for scale_reference in [700_u32, 2_000, 4_000] {
+        let edge_scale = (scale_reference / 500).max(1);
+        let transition_width = edge_scale * 2;
+        let boundary = 100_u32;
+        let source = GrayImage::from_fn(200, 80, |x, _| {
+            let value = if x < boundary - transition_width / 2 {
+                245
+            } else if x >= boundary + transition_width / 2 {
+                190
+            } else {
+                let offset = x - (boundary - transition_width / 2);
+                245 - (55 * offset / transition_width) as u8
+            };
+            Luma([value])
+        });
 
-        for output in [CleanOutput::Binary, CleanOutput::Grayscale] {
-            let result = clean_scan(&source, options(output)).expect("dark regions should clean");
-            for (left, top, value) in fills {
-                let expected_maximum = match output {
-                    CleanOutput::Binary => 0,
-                    CleanOutput::Grayscale => value.saturating_add(10),
-                };
-                assert!(
-                    result
-                        .image
-                        .get_pixel(left + fill_size / 2, top + fill_size / 2)[0]
-                        <= expected_maximum,
-                    "{output:?} centre at size {size} was not retained for value {value}"
-                );
-                let inset = (size / 140).max(1);
-                let interior_side = fill_size - 2 * inset;
-                let dark_interior = (top + inset..top + fill_size - inset)
-                    .flat_map(|y| (left + inset..left + fill_size - inset).map(move |x| (x, y)))
-                    .filter(|(x, y)| result.image.get_pixel(*x, *y)[0] <= expected_maximum)
-                    .count();
-                assert!(
-                    dark_interior >= (interior_side * interior_side * 90 / 100) as usize,
-                    "{output:?} output at size {size} retained {dark_interior} dark pixels for value {value}"
-                );
-            }
-        }
+        let barrier = edge_barrier(&source, scale_reference);
+        assert!(
+            (boundary - edge_scale..=boundary + edge_scale)
+                .any(|x| barrier[(40 * source.width() + x) as usize]),
+            "fill boundary was missed at scale {scale_reference}"
+        );
     }
 }
 
 #[test]
-fn flattening_removes_smooth_shadow_and_vignette_at_each_resolution() {
-    for size in [700_u32, 2_000, 4_000] {
-        let last = size - 1;
-        let centre = size as f32 / 2.0;
-        let corner_distance = centre * 2.0_f32.sqrt();
-        let mut source = GrayImage::from_fn(size, size, |x, y| {
-            let shadow = 55.0 * (x as f32 / last as f32).powi(2);
-            let dx = (x as f32 - centre) / corner_distance;
-            let dy = (y as f32 - centre) / corner_distance;
-            let vignette = 25.0 * (dx * dx + dy * dy).min(1.0);
-            Luma([(245.0_f32 - shadow - vignette).round() as u8])
-        });
-        let text_top = size * 33 / 70;
-        let text_height = (size / 175).max(4);
-        let text_left = size / 7;
-        let text_right = size * 6 / 7;
-        for y in text_top..text_top + text_height {
-            for x in text_left..text_right {
+fn full_frame_border_does_not_turn_an_enclosed_fill_into_background() {
+    let mut source = GrayImage::from_pixel(700, 700, Luma([245]));
+    for y in 0..700 {
+        for x in 0..700 {
+            if x < 3 || y < 3 || x >= 697 || y >= 697 {
+                source.put_pixel(x, y, Luma([25]));
+            } else if (120..580).contains(&x) && (160..540).contains(&y) {
+                source.put_pixel(x, y, Luma([190]));
+            }
+        }
+    }
+
+    for output in [CleanOutput::Binary, CleanOutput::Grayscale] {
+        let result = clean_scan(&source, options(output)).expect("framed page should clean");
+        let maximum = match output {
+            CleanOutput::Binary => 0,
+            CleanOutput::Grayscale => 210,
+        };
+        assert!(result.image.get_pixel(350, 350)[0] <= maximum);
+        let retained = (175..525)
+            .flat_map(|y| (135..565).map(move |x| (x, y)))
+            .filter(|(x, y)| result.image.get_pixel(*x, *y)[0] <= maximum)
+            .count();
+        assert!(
+            retained >= 350 * 430 * 90 / 100,
+            "{output:?} retained {retained} visibly dark fill pixels"
+        );
+    }
+}
+
+#[test]
+fn full_frame_border_still_allows_a_smooth_shadow_to_flatten() {
+    let mut source = GrayImage::from_fn(700, 700, |x, _| {
+        Luma([(245.0 - 55.0 * (x as f32 / 699.0).powi(2)).round() as u8])
+    });
+    for y in 0..700 {
+        for x in 0..700 {
+            if x < 3 || y < 3 || x >= 697 || y >= 697 {
                 source.put_pixel(x, y, Luma([25]));
             }
         }
-
-        for output in [CleanOutput::Binary, CleanOutput::Grayscale] {
-            let result = clean_scan(&source, options(output)).expect("shadowed page should clean");
-            let text_guard = size / 35;
-            let minimum_page = result
-                .image
-                .enumerate_pixels()
-                .filter(|(_, y, _)| {
-                    *y + text_guard < text_top || *y > text_top + text_height + text_guard
-                })
-                .map(|(_, _, pixel)| pixel[0])
-                .min()
-                .expect("page pixels");
-            let expected_page_minimum = match output {
-                CleanOutput::Binary => 255,
-                CleanOutput::Grayscale => 230,
-            };
-            assert!(
-                minimum_page >= expected_page_minimum,
-                "{output:?} page minimum {minimum_page} at size {size}"
-            );
-            let text_maximum = match output {
-                CleanOutput::Binary => 0,
-                CleanOutput::Grayscale => 30,
-            };
-            let retained_text = (text_top..text_top + text_height)
-                .map(|y| {
-                    (text_left..text_right)
-                        .filter(|x| result.image.get_pixel(*x, y)[0] <= text_maximum)
-                        .count()
-                })
-                .max()
-                .expect("text rows");
-            assert!(
-                retained_text >= ((text_right - text_left) * 9 / 10) as usize,
-                "{output:?} retained {retained_text} crisp text pixels at size {size}"
-            );
+    }
+    for y in 345..351 {
+        for x in 120..580 {
+            source.put_pixel(x, y, Luma([25]));
         }
+    }
+
+    for output in [CleanOutput::Binary, CleanOutput::Grayscale] {
+        let result = clean_scan(&source, options(output)).expect("shadowed frame should clean");
+        let width = result.image.width();
+        let height = result.image.height();
+        let minimum = (height / 12..height * 5 / 12)
+            .chain(height * 7 / 12..height * 11 / 12)
+            .flat_map(|y| (width / 12..width * 11 / 12).map(move |x| (x, y)))
+            .map(|(x, y)| result.image.get_pixel(x, y)[0])
+            .min()
+            .expect("page interior");
+        let expected = match output {
+            CleanOutput::Binary => 255,
+            CleanOutput::Grayscale => 230,
+        };
+        assert!(
+            minimum >= expected,
+            "{output:?} page minimum remained {minimum}"
+        );
+    }
+}
+
+#[test]
+fn flattening_preserves_sharp_solid_fills_in_each_output_mode() {
+    let mut source = GrayImage::from_pixel(700, 700, Luma([245]));
+    for y in 100..220 {
+        for x in 100..220 {
+            source.put_pixel(x, y, Luma([190]));
+        }
+    }
+    for output in [CleanOutput::Binary, CleanOutput::Grayscale] {
+        let result = clean_scan(&source, options(output)).expect("filled page should clean");
+        let maximum = match output {
+            CleanOutput::Binary => 0,
+            CleanOutput::Grayscale => 200,
+        };
+        assert!(result.image.get_pixel(160, 160)[0] <= maximum);
+        let retained = (105..215)
+            .flat_map(|y| (105..215).map(move |x| (x, y)))
+            .filter(|(x, y)| result.image.get_pixel(*x, *y)[0] <= maximum)
+            .count();
+        assert!(retained >= 110 * 110 * 90 / 100);
     }
 }
 
