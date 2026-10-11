@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import path from "node:path";
 
 import { inspectMcpAppHtml } from "./mcp-app-html-guard";
 
@@ -89,17 +90,16 @@ test.each([
 });
 
 test("committed MCP app bundles pass the HTML guard", async () => {
-  const appsDirectory = new URL("../../src/mcp/apps/", import.meta.url)
-    .pathname;
-  const paths = await Array.fromAsync(
+  const appsDirectory = path.join(import.meta.dirname, "../../src/mcp/apps");
+  const bundlePaths = await Array.fromAsync(
     new Bun.Glob("*/generated/app.html.txt").scan({
       absolute: true,
       cwd: appsDirectory,
     }),
   );
 
-  expect(paths.length).toBeGreaterThan(0);
-  for (const path of paths) {
-    expect(inspectMcpAppHtml(await Bun.file(path).text())).toEqual([]);
+  expect(bundlePaths.length).toBeGreaterThan(0);
+  for (const bundlePath of bundlePaths) {
+    expect(inspectMcpAppHtml(await Bun.file(bundlePath).text())).toEqual([]);
   }
 });
