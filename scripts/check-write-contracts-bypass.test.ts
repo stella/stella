@@ -58,6 +58,8 @@ describe("a later comparison cannot cover a prior successful exit", () => {
     "if (body.skipCheck) { const conflict = {}; return conflict; }",
     "if (body.skipCheck) { const Result = {err: () => ({})}; return Result.err(); }",
     "try { replace(); } catch (Result) { return Result.err(); }",
+    "for (const Result of body.items) { return Result.err(); }",
+    "switch (body.mode) { case 'skip': const Result = body.fake; return Result.err(); }",
   ]) {
     test(`rejects bypass: ${before}`, () => {
       expect(check(before)).toContainEqual(

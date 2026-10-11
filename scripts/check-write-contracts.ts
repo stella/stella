@@ -1084,6 +1084,33 @@ class WriteSourceResolver {
           nestedScope.set(name, undefined);
         }
       }
+      if (
+        (ts.isForStatement(current) ||
+          ts.isForInStatement(current) ||
+          ts.isForOfStatement(current)) &&
+        current.initializer !== undefined &&
+        ts.isVariableDeclarationList(current.initializer)
+      ) {
+        for (const declaration of current.initializer.declarations) {
+          for (const name of bindingNames(declaration.name)) {
+            nestedScope.set(name, undefined);
+          }
+        }
+      }
+      if (ts.isCaseBlock(current)) {
+        for (const clause of current.clauses) {
+          for (const statement of clause.statements) {
+            if (!ts.isVariableStatement(statement)) {
+              continue;
+            }
+            for (const declaration of statement.declarationList.declarations) {
+              for (const name of bindingNames(declaration.name)) {
+                nestedScope.set(name, undefined);
+              }
+            }
+          }
+        }
+      }
       if (ts.isReturnStatement(current)) {
         return (
           current.expression === undefined ||
