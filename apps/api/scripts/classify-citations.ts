@@ -247,6 +247,7 @@ const main = async () => {
           sectionIndex: caseLawCitations.sectionIndex,
           language: caseLawDecisions.language,
           sections: caseLawDecisions.sections,
+          contentHash: caseLawDecisions.contentHash,
         })
         .from(caseLawCitations)
         .innerJoin(
@@ -273,6 +274,7 @@ const main = async () => {
   let llmClassified = 0;
   let fallbacks = 0;
   let noContext = 0;
+  let skipped = 0;
 
   for (const citation of citations) {
     const windows = extractContexts(
@@ -297,17 +299,32 @@ const main = async () => {
         options: { ruleCache, dryRun: args.dryRun },
       });
 
-      if (result.source === "regex") {
-        regexMatches++;
-      } else if (result.source === "llm") {
-        llmClassified++;
-      } else {
-        fallbacks++;
-      }
-
+      let applied = true;
       if (!args.dryRun && result.source !== "fallback") {
         // db-await-in-loop: each classification is persisted before the next model call, so a crash keeps finished work
-        await persistPolarity(citation.id, result, scopedDb);
+        const persisted = await persistPolarity({
+          citationId: citation.id,
+          result,
+          scopedDb,
+          textRevision: {
+            contentHash: citation.contentHash,
+            sections: citation.sections,
+          },
+        });
+        if (persisted.skipped > 0) {
+          skipped += persisted.skipped;
+          applied = false;
+        }
+      }
+
+      if (applied) {
+        if (result.source === "regex") {
+          regexMatches++;
+        } else if (result.source === "llm") {
+          llmClassified++;
+        } else {
+          fallbacks++;
+        }
       }
 
       // Rate limit LLM calls
@@ -325,6 +342,7 @@ const main = async () => {
   console.log(`  LLM classified: ${llmClassified}`);
   console.log(`  Fallbacks:      ${fallbacks}`);
   console.log(`  No context:     ${noContext}`);
+  console.log(`  Skipped stale:  ${skipped}`);
   console.log(`  Total:          ${citations.length}`);
 
   if (args.dryRun) {

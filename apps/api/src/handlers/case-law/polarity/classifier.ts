@@ -17,6 +17,7 @@ import { and, eq, sql } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawCitations, caseLawPolarityRules } from "@/api/db/schema";
+import { runCitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
 import { classifyCitedPart } from "@/api/handlers/case-law/polarity/cited-part";
 import {
   phraseToPattern,
@@ -41,6 +42,8 @@ import type {
   ValidRuleKindPolarity,
 } from "@/api/handlers/case-law/polarity/rule-engine";
 import { classifyWithSystemOne } from "@/api/handlers/case-law/polarity/system-one-classifier";
+import type { CitationTextRevision } from "@/api/handlers/case-law/polarity/text-revision";
+import { citationTextRevisionFence } from "@/api/handlers/case-law/polarity/text-revision";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
@@ -346,17 +349,21 @@ const persistedPolaritySource = (
   }
 };
 
-/**
- * Persist a classification result to the citations table.
- *
- * A reviewed citation is left as it is.
- */
-export const persistPolarity = async (
-  citationId: SafeId<"caseLawCitation">,
-  result: ClassifyResult,
-  scopedDb: ScopedDb,
-) => {
-  await scopedDb((tx) =>
+type PersistPolarityArgs = {
+  citationId: SafeId<"caseLawCitation">;
+  result: ClassifyResult;
+  scopedDb: ScopedDb;
+  textRevision: CitationTextRevision;
+};
+
+/** Persist only against the text revision classified; preserve reviewed rows. */
+export const persistPolarity = async ({
+  citationId,
+  result,
+  scopedDb,
+  textRevision,
+}: PersistPolarityArgs) => {
+  const written = await runCitationGraphTransaction(scopedDb, (tx) =>
     // audit: skip — background polarity classification pipeline; no user-facing state change
     tx
       .update(caseLawCitations)
@@ -376,8 +383,15 @@ export const persistPolarity = async (
       .where(
         and(
           eq(caseLawCitations.id, citationId),
+          citationTextRevisionFence({
+            citingDecisionId: caseLawCitations.citingDecisionId,
+            expectedContentHash: sql`${textRevision.contentHash}::text`,
+            expectedSections: sql`${textRevision.sections === null ? null : JSON.stringify(textRevision.sections)}::text::jsonb`,
+          }),
           unreviewedCitationSql(caseLawCitations),
         ),
-      ),
+      )
+      .returning({ id: caseLawCitations.id }),
   );
+  return { applied: written.length, skipped: 1 - written.length };
 };

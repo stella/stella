@@ -26,12 +26,13 @@ import type {
   CitationReviewStanding,
   ReviewablePolarity,
 } from "@/api/handlers/case-law/polarity/consts";
+import {
+  citationTextRevisionFingerprintFence,
+  citationTextRevisionFingerprintSql,
+} from "@/api/handlers/case-law/polarity/text-revision";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import {
-  assertCitationStorageField,
-  fitsCitationStorageField,
-} from "@/api/lib/case-law/citation-storage-bounds";
+import { fitsCitationStorageField } from "@/api/lib/case-law/citation-storage-bounds";
 import type { ConstantMap } from "@/api/lib/constant-map";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
@@ -107,6 +108,8 @@ const aiReviewEntries = {
   promptSha256: sha256Schema,
   /** Digest of the passage the label was read from. */
   evidenceSha256: sha256Schema,
+  /** Revision digest read alongside the passage before producing the label. */
+  textRevisionSha256: sha256Schema,
   runId: provenanceTextSchema,
   producedAt: v.pipe(
     v.string(),
@@ -170,6 +173,7 @@ type CitationReviewProvenance =
       promptVersion: string;
       promptSha256: string;
       evidenceSha256: string;
+      textRevisionSha256: string;
       runId: string;
       producedAt: string;
     };
@@ -188,6 +192,7 @@ const provenanceOf = (
         promptVersion: entry.promptVersion,
         promptSha256: entry.promptSha256,
         evidenceSha256: entry.evidenceSha256,
+        textRevisionSha256: entry.textRevisionSha256,
         runId: entry.runId,
         producedAt: entry.producedAt,
       };
@@ -203,6 +208,7 @@ type ProvenanceColumns = {
   promptVersion: string | null;
   promptSha256: string | null;
   evidenceSha256: string | null;
+  textRevisionSha256: string | null;
   runId: string | null;
   producedAt: string | null;
 };
@@ -219,6 +225,7 @@ const provenanceColumns = (
         promptVersion: null,
         promptSha256: null,
         evidenceSha256: null,
+        textRevisionSha256: null,
         runId: null,
         producedAt: null,
       };
@@ -230,6 +237,7 @@ const provenanceColumns = (
         promptVersion: provenance.promptVersion,
         promptSha256: provenance.promptSha256,
         evidenceSha256: provenance.evidenceSha256,
+        textRevisionSha256: provenance.textRevisionSha256,
         runId: provenance.runId,
         producedAt: provenance.producedAt,
       };
@@ -245,6 +253,7 @@ const REVIEWED_LABEL_OUTCOMES = [
   "unmatched",
   "refused-precedence",
   "invalid",
+  "stale",
 ] as const;
 
 type ReviewedLabelOutcome = (typeof REVIEWED_LABEL_OUTCOMES)[number];
@@ -255,6 +264,7 @@ export const REVIEWED_LABEL_OUTCOME = {
   UNMATCHED: "unmatched",
   REFUSED_PRECEDENCE: "refused-precedence",
   INVALID: "invalid",
+  STALE: "stale",
 } as const satisfies ConstantMap<ReviewedLabelOutcome>;
 
 const REVIEWED_LABEL_INVALID_REASONS = [
@@ -594,16 +604,16 @@ const labelValues = (labels: readonly ReviewedCitationLabel[]): SQL => sql`(
   VALUES ${sql.join(
     labels.map((label, ord) => {
       const columns = provenanceColumns(label.provenance);
-      return sql`(${ord}::int, ${label.citingDecisionId}::uuid, ${label.citationKey}::varchar, ${label.polarity}::varchar, ${label.reviewRef}::varchar, ${columns.origin}::text, ${columns.model}::text, ${columns.promptVersion}::text, ${columns.promptSha256}::text, ${columns.evidenceSha256}::text, ${columns.runId}::text, ${columns.producedAt}::timestamptz)`;
+      return sql`(${ord}::int, ${label.citingDecisionId}::uuid, ${label.citationKey}::varchar, ${label.polarity}::varchar, ${label.reviewRef}::varchar, ${columns.origin}::text, ${columns.model}::text, ${columns.promptVersion}::text, ${columns.promptSha256}::text, ${columns.evidenceSha256}::text, ${columns.textRevisionSha256}::varchar, ${columns.runId}::text, ${columns.producedAt}::timestamptz, ${createSafeId<"caseLawCitationReview">()}::uuid)`;
     }),
     sql`, `,
   )}
-) AS v(ord, citing_decision_id, citation_key, polarity, review_ref, origin, model, prompt_version, prompt_sha256, evidence_sha256, run_id, produced_at)`;
+) AS v(ord, citing_decision_id, citation_key, polarity, review_ref, origin, model, prompt_version, prompt_sha256, evidence_sha256, text_revision_sha256, run_id, produced_at, review_id)`;
 
 /** Every stored field of a review, for comparing a stored one with another. */
 const reviewTuple = (alias: string): SQL =>
   sql.raw(
-    `(${alias}.polarity, ${alias}.review_ref, ${alias}.origin, ${alias}.model, ${alias}.prompt_version, ${alias}.prompt_sha256::text, ${alias}.evidence_sha256::text, ${alias}.run_id, ${alias}.produced_at)`,
+    `(${alias}.polarity, ${alias}.review_ref, ${alias}.origin, ${alias}.model, ${alias}.prompt_version, ${alias}.prompt_sha256::text, ${alias}.evidence_sha256::text, ${alias}.text_revision_sha256::text, ${alias}.run_id, ${alias}.produced_at)`,
   );
 
 /**
@@ -645,6 +655,22 @@ export const reviewMayReplaceSql = ({
     false)`;
 };
 
+const incomingTextRevisionFence = citationTextRevisionFingerprintFence({
+  citingDecisionId: sql`v.citing_decision_id`,
+  expectedFingerprint: sql`v.text_revision_sha256`,
+});
+
+// sql-perf-allow: bounded by the validated input label batch and indexed decision ids
+const incomingReviewCurrentSql = sql`(v.origin = ${CITATION_REVIEW_ORIGIN.HUMAN_REVIEW}
+  OR EXISTS (SELECT 1 FROM case_law_decisions AS review_text_revision
+     WHERE review_text_revision.id = v.citing_decision_id
+       AND v.text_revision_sha256 = ${citationTextRevisionFingerprintSql({
+         contentHash: sql`review_text_revision.content_hash`,
+         sections: sql`review_text_revision.sections`,
+       })}))`;
+
+const incomingReviewEligibleSql = sql`(v.origin = ${CITATION_REVIEW_ORIGIN.HUMAN_REVIEW} OR ${incomingTextRevisionFence})`;
+
 /** Rows a label changes: any other polarity, or a rule attribution. */
 const citationDiffersSql = sql`c.citing_decision_id = v.citing_decision_id
    AND c.citation_key = v.citation_key
@@ -653,8 +679,10 @@ const citationDiffersSql = sql`c.citing_decision_id = v.citing_decision_id
 /** Per label, in input order: the stored review and the citation rows it covers. */
 const reviewedLabelStateStatement = (
   labels: readonly ReviewedCitationLabel[],
+  mode: "plan" | "apply",
 ): SQL => sql`
   SELECT v.ord,
+         ${mode === "apply" ? incomingReviewEligibleSql : incomingReviewCurrentSql} AS text_current,
          (r.id IS NOT NULL
            AND ${reviewTuple("r")} IS NOT DISTINCT FROM ${reviewTuple("v")}) AS same_review,
          (r.id IS NULL OR ${reviewMayReplaceSql({ stored: "r", incoming: "v" })}) AS may_replace,
@@ -672,6 +700,7 @@ const reviewedLabelStateStatement = (
 
 const labelStateRowSchema = v.object({
   ord: v.number(),
+  text_current: v.boolean(),
   same_review: v.boolean(),
   may_replace: v.boolean(),
   citation_rows: v.number(),
@@ -684,6 +713,7 @@ type AcceptedOutcome = Exclude<
   ReviewedLabelOutcome,
   | typeof REVIEWED_LABEL_OUTCOME.INVALID
   | typeof REVIEWED_LABEL_OUTCOME.REFUSED_PRECEDENCE
+  | typeof REVIEWED_LABEL_OUTCOME.STALE
 >;
 
 /**
@@ -692,7 +722,13 @@ type AcceptedOutcome = Exclude<
  */
 const outcomeOf = (
   state: LabelState,
-): AcceptedOutcome | typeof REVIEWED_LABEL_OUTCOME.REFUSED_PRECEDENCE => {
+):
+  | AcceptedOutcome
+  | typeof REVIEWED_LABEL_OUTCOME.REFUSED_PRECEDENCE
+  | typeof REVIEWED_LABEL_OUTCOME.STALE => {
+  if (!state.text_current) {
+    return REVIEWED_LABEL_OUTCOME.STALE;
+  }
   if (state.same_review) {
     return state.changed_rows > 0
       ? REVIEWED_LABEL_OUTCOME.APPLIED
@@ -741,8 +777,11 @@ const planReviewedLabels = (
       return panic(`label state for an unknown ordinal ${state.ord}`);
     }
     const outcome = outcomeOf(state);
-    if (outcome === REVIEWED_LABEL_OUTCOME.REFUSED_PRECEDENCE) {
-      refused.push(refusedRow(label));
+    if (
+      outcome === REVIEWED_LABEL_OUTCOME.REFUSED_PRECEDENCE ||
+      outcome === REVIEWED_LABEL_OUTCOME.STALE
+    ) {
+      refused.push({ ...label.ids, index: label.index, outcome });
       continue;
     }
     accepted.push({
@@ -765,18 +804,13 @@ const upsertReviewsStatement = (
 ): SQL => sql`
   INSERT INTO case_law_citation_reviews AS r
     (id, citing_decision_id, citation_key, polarity, review_ref, origin,
-     model, prompt_version, prompt_sha256, evidence_sha256, run_id, produced_at)
-  VALUES ${sql.join(
-    labels.map((label) => {
-      const checked = assertCitationStorageField("key", label.citationKey);
-      if (checked.isErr()) {
-        throw checked.error;
-      }
-      const columns = provenanceColumns(label.provenance);
-      return sql`(${createSafeId<"caseLawCitationReview">()}::uuid, ${label.citingDecisionId}::uuid, ${checked.value}, ${label.polarity}, ${label.reviewRef}, ${columns.origin}, ${columns.model}::text, ${columns.promptVersion}::text, ${columns.promptSha256}::text, ${columns.evidenceSha256}::text, ${columns.runId}::text, ${columns.producedAt}::timestamptz)`;
-    }),
-    sql`, `,
-  )}
+     model, prompt_version, prompt_sha256, evidence_sha256, text_revision_sha256, run_id, produced_at)
+  SELECT v.review_id, v.citing_decision_id,
+         v.citation_key, v.polarity, v.review_ref, v.origin,
+         v.model, v.prompt_version, v.prompt_sha256, v.evidence_sha256,
+         v.text_revision_sha256, v.run_id, v.produced_at
+    FROM ${labelValues(labels)}
+   WHERE ${incomingReviewEligibleSql}
   ON CONFLICT (citing_decision_id, citation_key) DO UPDATE
      SET polarity = excluded.polarity,
          review_ref = excluded.review_ref,
@@ -785,6 +819,7 @@ const upsertReviewsStatement = (
          prompt_version = excluded.prompt_version,
          prompt_sha256 = excluded.prompt_sha256,
          evidence_sha256 = excluded.evidence_sha256,
+         text_revision_sha256 = excluded.text_revision_sha256,
          run_id = excluded.run_id,
          produced_at = excluded.produced_at,
          reviewed_at = now(),
@@ -817,6 +852,7 @@ const relabelCitationsStatement = (
      AND r.citation_key = v.citation_key
    WHERE c.citing_decision_id = r.citing_decision_id
      AND c.citation_key = r.citation_key
+     AND ${incomingReviewEligibleSql}
      AND (c.polarity IS DISTINCT FROM r.polarity OR c.polarity_rule_id IS NOT NULL OR c.polarity_source IS DISTINCT FROM 'review')
   RETURNING c.id
 `;
@@ -862,6 +898,7 @@ const summarize = (
     unmatched: count(REVIEWED_LABEL_OUTCOME.UNMATCHED),
     "refused-precedence": count(REVIEWED_LABEL_OUTCOME.REFUSED_PRECEDENCE),
     invalid: count(REVIEWED_LABEL_OUTCOME.INVALID),
+    stale: count(REVIEWED_LABEL_OUTCOME.STALE),
     citationRows,
   };
 };
@@ -881,10 +918,17 @@ type DecidedLabels = {
 };
 
 /** Validate and resolve each entry, and decide what becomes of it. */
-const decideReviewedLabels = async (
-  tx: ExecutingTransaction,
-  input: readonly unknown[],
-): Promise<DecidedLabels> => {
+type DecideReviewedLabelsArgs = {
+  tx: ExecutingTransaction;
+  input: readonly unknown[];
+  mode: "plan" | "apply";
+};
+
+const decideReviewedLabels = async ({
+  tx,
+  input,
+  mode,
+}: DecideReviewedLabelsArgs): Promise<DecidedLabels> => {
   const parsed = parseEntries(input);
   const citationIds = citationIdsOf(parsed.entries);
   const identities = parseCitationIdentities(
@@ -912,7 +956,7 @@ const decideReviewedLabels = async (
       : planReviewedLabels(
           settled.labels,
           executedRows(
-            await tx.execute(reviewedLabelStateStatement(settled.labels)),
+            await tx.execute(reviewedLabelStateStatement(settled.labels, mode)),
           ),
         );
   return {
@@ -944,7 +988,11 @@ export const planReviewedCitationLabels = async (
   input: readonly unknown[],
 ): Promise<ReviewedLabelPlan> =>
   await transact(async (tx) => {
-    const { settled, planned } = await decideReviewedLabels(tx, input);
+    const { settled, planned } = await decideReviewedLabels({
+      tx,
+      input,
+      mode: "plan",
+    });
     const rows = inInputOrder([
       ...settled,
       ...planned.refused,
@@ -966,7 +1014,11 @@ const applyReviewedLabelsTx = async (
   tx: ExecutingTransaction,
   input: readonly unknown[],
 ): Promise<ReviewedLabelApplication> => {
-  const { settled, planned } = await decideReviewedLabels(tx, input);
+  const { settled, planned } = await decideReviewedLabels({
+    tx,
+    input,
+    mode: "apply",
+  });
   const toStore = planned.accepted
     .filter(({ storesReview }) => storesReview)
     .map(({ label }) => label);

@@ -161,6 +161,11 @@ export const TRACKED_SUPPRESSION_RULES = [
       "publication recovery ownership retired outside its transaction boundary",
   },
   {
+    rule: "citation-evidence-text-fence/citation-evidence-text-fence",
+    tier: "security",
+    guards: "citation evidence written without its source text revision fence",
+  },
+  {
     rule: "no-direct-ingestion-checkpoint-write/no-direct-ingestion-checkpoint-write",
     tier: "security",
     guards: "ingestion checkpoints advanced outside the replay-safe boundary",

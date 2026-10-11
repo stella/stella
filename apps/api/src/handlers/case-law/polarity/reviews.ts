@@ -2,8 +2,24 @@ import { and, inArray, sql } from "drizzle-orm";
 import type { SQL, SQLWrapper } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
-import { caseLawCitationReviews } from "@/api/db/schema";
+import { caseLawCitationReviews, caseLawDecisions } from "@/api/db/schema";
 import type { caseLawCitations } from "@/api/db/schema";
+import { CITATION_REVIEW_ORIGIN } from "@/api/handlers/case-law/polarity/consts";
+import { citationTextRevisionFingerprintSql } from "@/api/handlers/case-law/polarity/text-revision";
+
+// sql-perf-allow: bounded by the indexed citing decision and citation key of the current page
+const storedReviewTextEligibleSql = sql`(${caseLawCitationReviews.origin} = ${CITATION_REVIEW_ORIGIN.HUMAN_REVIEW}
+  OR (${caseLawCitationReviews.textRevisionSha256} IS NOT NULL
+    AND EXISTS (
+      SELECT 1 FROM ${caseLawDecisions} AS review_text_revision
+       WHERE review_text_revision.id = ${caseLawCitationReviews.citingDecisionId}
+         AND ${caseLawCitationReviews.textRevisionSha256} = ${citationTextRevisionFingerprintSql(
+           {
+             contentHash: sql`review_text_revision.content_hash`,
+             sections: sql`review_text_revision.sections`,
+           },
+         )}
+    )))`;
 
 type CitationInsert = typeof caseLawCitations.$inferInsert;
 
@@ -23,6 +39,7 @@ export const unreviewedCitationSql = ({
   SELECT 1 FROM ${caseLawCitationReviews}
    WHERE ${caseLawCitationReviews.citingDecisionId} = ${citingDecisionId}
      AND ${caseLawCitationReviews.citationKey} = ${citationKey}
+     AND ${storedReviewTextEligibleSql}
 )`;
 
 const identityOf = (citingDecisionId: string, citationKey: string): string =>
@@ -58,6 +75,7 @@ export const applyCitationReviews = async (
       and(
         inArray(caseLawCitationReviews.citingDecisionId, decisionIds),
         inArray(caseLawCitationReviews.citationKey, keys),
+        storedReviewTextEligibleSql,
       ),
     );
   if (reviews.length === 0) {

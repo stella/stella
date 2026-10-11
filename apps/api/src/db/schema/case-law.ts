@@ -2743,8 +2743,8 @@ export const caseLawPolarityRules = p.pgTable(
  * Keyed on the citing decision and the citation key rather than on the
  * citation row: a refresh deletes and re-inserts every citation row of the
  * decision under new ids, and the review has to outlive that. The pipeline
- * re-applies it to the new rows as they are written, and no classifier pass
- * overwrites a row it covers.
+ * re-applies human reviews to new rows; model reviews cover only the exact
+ * text revision they read. Classifier passes leave covered rows alone.
  */
 export const caseLawCitationReviews = p.pgTable(
   "case_law_citation_reviews",
@@ -2771,6 +2771,8 @@ export const caseLawCitationReviews = p.pgTable(
     promptSha256: p.varchar("prompt_sha256", { length: 64 }),
     /** Digest of the passage the label was read from. */
     evidenceSha256: p.varchar("evidence_sha256", { length: 64 }),
+    /** Digest of the decision content hash and sections the model read. */
+    textRevisionSha256: p.varchar("text_revision_sha256", { length: 64 }),
     runId: p.text("run_id"),
     producedAt: timestamptz("produced_at"),
     /** When the current review was made; a changed review moves it. */
@@ -2800,6 +2802,10 @@ export const caseLawCitationReviews = p.pgTable(
     p.check(
       "citation_reviews_origin_values",
       sql`${t.origin} IN (${sql.join(CITATION_REVIEW_ORIGIN_SQL_VALUES, sql.raw(","))})`,
+    ),
+    p.check(
+      "citation_reviews_text_revision_sha256",
+      sql`${t.textRevisionSha256} IS NULL OR ${t.textRevisionSha256} ~ '^[0-9a-f]{64}$'`,
     ),
     p.check(
       "citation_reviews_origin_provenance",

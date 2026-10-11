@@ -54,6 +54,7 @@ import {
 import { loadRules } from "@/api/handlers/case-law/polarity/rule-engine";
 import { resetRetiredRuleVerdicts } from "@/api/handlers/case-law/polarity/rule-retirement";
 import { SEED_RULES } from "@/api/handlers/case-law/polarity/seed-rules";
+import { citationTextRevisionFingerprintSql } from "@/api/handlers/case-law/polarity/text-revision";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { CITATION_STORAGE_WIDTHS } from "@/api/lib/case-law/citation-storage-bounds";
@@ -192,6 +193,22 @@ const ingestRuleLabelled = async (options: IngestOptions) => {
 
 type LabelledRow = Awaited<ReturnType<typeof readCitation>>;
 
+const textRevisionFor = async (id: SafeId<"caseLawDecision">) => {
+  const row = (
+    await db
+      .select({
+        contentHash: caseLawDecisions.contentHash,
+        sections: caseLawDecisions.sections,
+      })
+      .from(caseLawDecisions)
+      .where(eq(caseLawDecisions.id, id))
+  ).at(0);
+  if (row === undefined) {
+    throw new TypeError("Expected a decision text revision");
+  }
+  return row;
+};
+
 /** `xmin`/`xmax` of one row: unchanged, nobody wrote or locked it. */
 const tupleHeader = async (id: SafeId<"caseLawCitation">): Promise<unknown> =>
   (
@@ -213,6 +230,18 @@ const labelFor = (
   origin: CITATION_REVIEW_ORIGIN.HUMAN_REVIEW,
 });
 
+const textRevisionSha256For = async (id: SafeId<"caseLawDecision">) => {
+  const row = (
+    await db.execute(
+      sql`SELECT ${citationTextRevisionFingerprintSql({ contentHash: caseLawDecisions.contentHash, sections: caseLawDecisions.sections })} AS digest FROM ${caseLawDecisions} WHERE id = ${id}::uuid`,
+    )
+  ).rows.at(0);
+  if (typeof row?.["digest"] !== "string") {
+    throw new TypeError("Expected a decision text fingerprint");
+  }
+  return row["digest"];
+};
+
 const DIGEST = "b".repeat(64);
 const PRODUCED_AT = "2026-10-07T08:00:00.000Z";
 const LATER = "2026-10-07T09:00:00.000Z";
@@ -221,6 +250,7 @@ const LATER = "2026-10-07T09:00:00.000Z";
 const provenanceFor = (
   origin: CitationReviewOrigin,
   runId: string,
+  textRevisionSha256: string,
   producedAt = PRODUCED_AT,
 ) =>
   origin === CITATION_REVIEW_ORIGIN.HUMAN_REVIEW
@@ -231,6 +261,7 @@ const provenanceFor = (
         promptVersion: "polarity-v1",
         promptSha256: DIGEST,
         evidenceSha256: DIGEST,
+        textRevisionSha256,
         runId,
         producedAt,
       };
@@ -242,6 +273,7 @@ const EMPTY_SUMMARY = {
   "refused-precedence": 0,
   invalid: 0,
   citationRows: 0,
+  stale: 0,
 };
 
 const keyOf = (row: LabelledRow): string => {
@@ -335,7 +367,11 @@ describe("reviewed citation labels", () => {
         .where(eq(caseLawCitations.id, labelled.id));
       const entry = {
         ...labelFor({ ...labelled, citationKey }, POLARITY.POSITIVE),
-        ...provenanceFor(origin, `unicode-${origin}`),
+        ...provenanceFor(
+          origin,
+          `unicode-${origin}`,
+          await textRevisionSha256For(labelled.citingDecisionId),
+        ),
       };
       expect(v.safeParse(reviewedCitationLabelEntrySchema, entry).success).toBe(
         true,
@@ -494,6 +530,52 @@ describe("reviewed citation labels", () => {
     expect(await readRule(ruleId)).toEqual(before);
   });
 
+  test("a recheck skips a citation when its decision text changes before writing", async () => {
+    const citationText = "sp. zn. 29 Cdo 8808/2015";
+    const citation = await ingestRuleLabelled({
+      caseNumber: "30 Cdo 8808/2026",
+      cited: citationText,
+      rawHash: "recheck-text-revision",
+    });
+    await db
+      .update(caseLawCitations)
+      .set({ polarity: POLARITY.POSITIVE, polarityRuleId: null })
+      .where(eq(caseLawCitations.id, citation.id));
+    const before = await readCitation(citationText);
+    const headerBefore = await tupleHeader(citation.id);
+    let calls = 0;
+    const changingDb: ScopedDb = async (run) => {
+      calls++;
+      if (calls === 2) {
+        await db
+          .update(caseLawDecisions)
+          .set({
+            sections: [
+              {
+                index: 0,
+                type: "argumentation",
+                title: null,
+                text: "Updated decision text.",
+              },
+            ],
+          })
+          .where(eq(caseLawDecisions.id, citation.citingDecisionId));
+      }
+      return await scopedDb(run);
+    };
+    const result = await recheckCitationPolarity({
+      scopedDb: changingDb,
+      language: "cs",
+      rules: await loadRules("cs", scopedDb, new Map()),
+      after: null,
+      limit: 1000,
+      dryRun: false,
+    });
+    expect(result.totals.skipped).toBe(1);
+    expect(await readCitation(citationText)).toEqual(before);
+    expect(await tupleHeader(citation.id)).toEqual(headerBefore);
+  });
+
   test("the recheck walk and the classifier's write leave a reviewed row alone", async () => {
     const unreviewed = await ingestRuleLabelled({
       caseNumber: "30 Cdo 1002/2026",
@@ -553,6 +635,8 @@ describe("reviewed citation labels", () => {
     await persistTightened(scopedDb, [
       {
         id: reviewed.id,
+        citingDecisionId: reviewed.citingDecisionId,
+        textRevision: await textRevisionFor(reviewed.citingDecisionId),
         polarity: POLARITY.NEGATIVE,
         previousPolarity: POLARITY.NEUTRAL,
         ruleId,
@@ -562,9 +646,10 @@ describe("reviewed citation labels", () => {
         citedPart: "not-stated",
       },
     ]);
-    await persistPolarity(
-      reviewed.id,
-      {
+    await persistPolarity({
+      citationId: reviewed.id,
+      textRevision: await textRevisionFor(reviewed.citingDecisionId),
+      result: {
         polarity: POLARITY.NEGATIVE,
         ruleId,
         source: "regex",
@@ -575,15 +660,16 @@ describe("reviewed citation labels", () => {
         confidence: 1,
       },
       scopedDb,
-    );
+    });
     expect(await readCitation("sp. zn. 29 Cdo 3003/2015")).toMatchObject({
       polarity: POLARITY.POSITIVE,
       polarityRuleId: null,
     });
     // The same write reaches a row no review covers.
-    await persistPolarity(
-      unreviewed.id,
-      {
+    await persistPolarity({
+      citationId: unreviewed.id,
+      textRevision: await textRevisionFor(unreviewed.citingDecisionId),
+      result: {
         polarity: POLARITY.NEUTRAL,
         ruleId: null,
         source: "llm",
@@ -594,7 +680,7 @@ describe("reviewed citation labels", () => {
         confidence: 1,
       },
       scopedDb,
-    );
+    });
     expect(await readCitation("sp. zn. 29 Cdo 2002/2015")).toMatchObject({
       polarity: POLARITY.NEUTRAL,
     });
@@ -637,7 +723,11 @@ describe("reviewed citation labels", () => {
     const valid = labelFor(labelled, POLARITY.NEUTRAL);
     const annotated = {
       ...valid,
-      ...provenanceFor(CITATION_REVIEW_ORIGIN.AI_ANNOTATION, "run-invalid"),
+      ...provenanceFor(
+        CITATION_REVIEW_ORIGIN.AI_ANNOTATION,
+        "run-invalid",
+        await textRevisionSha256For(labelled.citingDecisionId),
+      ),
     };
     // The fault boundary: the annotated entry is a valid one.
     expect(
@@ -753,7 +843,11 @@ describe("reviewed citation labels", () => {
     const outranked = await applyLabels([
       {
         ...labelFor(labelled, POLARITY.NEUTRAL),
-        ...provenanceFor(CITATION_REVIEW_ORIGIN.AI_ANNOTATION, "run-a"),
+        ...provenanceFor(
+          CITATION_REVIEW_ORIGIN.AI_ANNOTATION,
+          "run-a",
+          await textRevisionSha256For(labelled.citingDecisionId),
+        ),
       },
       labelFor(labelled, POLARITY.POSITIVE),
     ]);
@@ -788,6 +882,9 @@ describe("reviewed citation labels", () => {
       cited: "sp. zn. 29 Cdo 8008/2015",
       rawHash: "precedence-across-runs",
     });
+    const textRevisionSha256 = await textRevisionSha256For(
+      labelled.citingDecisionId,
+    );
     const pairs = CITATION_REVIEW_ORIGINS.flatMap((stored) =>
       CITATION_REVIEW_ORIGINS.map((incoming) => ({ stored, incoming })),
     );
@@ -805,7 +902,7 @@ describe("reviewed citation labels", () => {
         citationKey,
         polarity,
         reviewRef: runId,
-        ...provenanceFor(origin, runId, producedAt),
+        ...provenanceFor(origin, runId, textRevisionSha256, producedAt),
       });
       const first = await applyLabels([
         entry(POLARITY.POSITIVE, stored, "first", PRODUCED_AT),
@@ -868,13 +965,21 @@ describe("reviewed citation labels", () => {
       citingDecisionId: labelled.citingDecisionId,
       citationKey: keyOf(labelled),
     };
+    const textRevisionSha256 = await textRevisionSha256For(
+      labelled.citingDecisionId,
+    );
     const run = (
       polarity: typeof POLARITY.POSITIVE | typeof POLARITY.NEUTRAL,
       runId: string,
       producedAt: string,
     ) => ({
       ...labelFor(labelled, polarity),
-      ...provenanceFor(CITATION_REVIEW_ORIGIN.AI_ANNOTATION, runId, producedAt),
+      ...provenanceFor(
+        CITATION_REVIEW_ORIGIN.AI_ANNOTATION,
+        runId,
+        textRevisionSha256,
+        producedAt,
+      ),
     });
     const newer = run(POLARITY.POSITIVE, "run-b", LATER);
     expect((await applyLabels([newer])).rows).toEqual([
@@ -1023,13 +1128,21 @@ describe("reviewed citation labels", () => {
       citationKey: keyOf(labelled),
     };
     // timestamptz keeps microseconds: these two are one stored instant.
+    const textRevisionSha256 = await textRevisionSha256For(
+      labelled.citingDecisionId,
+    );
     const run = (
       polarity: typeof POLARITY.POSITIVE | typeof POLARITY.NEUTRAL,
       runId: string,
       producedAt: string,
     ) => ({
       ...labelFor(labelled, polarity),
-      ...provenanceFor(CITATION_REVIEW_ORIGIN.AI_ANNOTATION, runId, producedAt),
+      ...provenanceFor(
+        CITATION_REVIEW_ORIGIN.AI_ANNOTATION,
+        runId,
+        textRevisionSha256,
+        producedAt,
+      ),
     });
     const first = run(
       POLARITY.NEUTRAL,
@@ -1071,6 +1184,7 @@ describe("reviewed citation labels", () => {
       ...provenanceFor(
         CITATION_REVIEW_ORIGIN.AI_ANNOTATION,
         "run-offset",
+        await textRevisionSha256For(labelled.citingDecisionId),
         producedAt,
       ),
     };

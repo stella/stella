@@ -10,6 +10,7 @@ import {
   caseLawDecisions,
   caseLawPolarityRules,
 } from "@/api/db/schema";
+import { runCitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
 import { classifyCitedPart } from "@/api/handlers/case-law/polarity/cited-part";
 import {
   POLARITIES,
@@ -24,6 +25,7 @@ import {
   selectCitationPolarity,
 } from "@/api/handlers/case-law/polarity/rule-engine";
 import type { CompiledRule } from "@/api/handlers/case-law/polarity/rule-engine";
+import { citationTextRevisionFence } from "@/api/handlers/case-law/polarity/text-revision";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { CaseLawRootHandle } from "@/api/lib/case-law/maintenance-lane";
 import { numericColumnParam } from "@/api/lib/db/column-storage";
@@ -73,6 +75,7 @@ type FormRepairCandidate = {
   ruleId: string | null;
   citationText: string;
   sectionIndex: number | null;
+  contentHash: string | null;
   sections: { text: string }[] | null;
 };
 
@@ -140,6 +143,7 @@ const candidateSelection = {
   citationText: caseLawCitations.citationText,
   sectionIndex: caseLawCitations.sectionIndex,
   sections: caseLawDecisions.sections,
+  contentHash: caseLawDecisions.contentHash,
 };
 
 const eligibleConditions = () => [
@@ -248,7 +252,7 @@ export const applyFormRepairs = async ({
     return { applied: 0, skipped: 0 };
   }
   const expected = new Map(plan.rows.map((row) => [row.id, row]));
-  return await transaction(async (tx) => {
+  return await runCitationGraphTransaction(transaction, async (tx) => {
     const candidates = await tx
       .select(candidateSelection)
       .from(caseLawCitations)
@@ -293,17 +297,17 @@ export const applyFormRepairs = async ({
     const documents = new Map(
       repairs.map(({ candidate }) => [
         candidate.citingDecisionId,
-        candidate.sections,
+        { sections: candidate.sections, contentHash: candidate.contentHash },
       ]),
     );
     const changed =
       repairs.length === 0
         ? []
         : await tx.execute(sql`
-      WITH expected_documents(id, sections) AS (VALUES ${sql.join(
+      WITH expected_documents(id, sections, content_hash) AS (VALUES ${sql.join(
         [...documents].map(
-          ([id, sections]) =>
-            sql`(${id}::uuid, ${JSON.stringify(sections)}::text::jsonb)`,
+          ([id, revision]) =>
+            sql`(${id}::uuid, ${revision.sections === null ? null : JSON.stringify(revision.sections)}::text::jsonb, ${revision.contentHash}::text)`,
         ),
         sql.raw(","),
       )}), repairs(id, citing_decision_id, citation_text, section_index, previous_polarity, previous_rule_id, rule_id, rule_pattern, window_start, window_end, confidence, cited_part) AS (VALUES ${sql.join(
@@ -326,7 +330,6 @@ export const applyFormRepairs = async ({
              polarity_confidence = v.confidence, cited_part = v.cited_part
         FROM repairs v
         JOIN expected_documents document ON document.id = v.citing_decision_id
-        JOIN ${caseLawDecisions} d ON d.id = document.id AND d.sections = document.sections
         JOIN ${caseLawPolarityRules} old_rule ON old_rule.id = v.previous_rule_id AND old_rule.kind = ${POLARITY_RULE_KIND.FORM}
         JOIN ${caseLawPolarityRules} new_rule ON new_rule.id = v.rule_id
           AND new_rule.polarity = ${POLARITY.NEUTRAL} AND new_rule.pattern = v.rule_pattern
@@ -335,6 +338,11 @@ export const applyFormRepairs = async ({
             sql.raw(","),
           )})
        WHERE c.id = v.id AND c.citing_decision_id = v.citing_decision_id
+         AND ${citationTextRevisionFence({
+           citingDecisionId: sql.raw("document.id"),
+           expectedContentHash: sql.raw("document.content_hash"),
+           expectedSections: sql.raw("document.sections"),
+         })}
          AND c.citation_text = v.citation_text AND c.section_index IS NOT DISTINCT FROM v.section_index
          AND c.polarity = v.previous_polarity AND c.polarity_rule_id = v.previous_rule_id
          AND ${unreviewedCitationSql({ citingDecisionId: sql.raw("c.citing_decision_id"), citationKey: sql.raw("c.citation_key") })}

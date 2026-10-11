@@ -39,6 +39,7 @@ const candidate = {
   id: citationId,
   citingDecisionId: createSafeId<"caseLawDecision">(),
   jurisdiction: "XX",
+  contentHash: null,
   polarity: POLARITY.SUPPORTIVE,
   ruleId: oldRuleId,
   citationText: "A 12/2020",
