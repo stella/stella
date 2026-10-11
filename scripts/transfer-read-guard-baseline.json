@@ -1158,7 +1158,7 @@
     "file": "apps/api/src/lib/document-processing-queue.ts",
     "function": "module/persistMissingNativeExtractionRuns",
     "kind": "constant-limit",
-    "count": 3,
+    "count": 2,
     "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
   },
   {
