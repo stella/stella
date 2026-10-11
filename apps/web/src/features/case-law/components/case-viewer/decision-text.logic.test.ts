@@ -357,7 +357,7 @@ describe("visible decision blocks", () => {
     ).toEqual(["case-number", "title", "body"]);
   });
 
-  test("repairs legacy same-line Roman headings after Odůvodnění", () => {
+  test("leaves canonical section types unchanged", () => {
     const legacyAst = {
       ...ast,
       blocks: [
@@ -375,14 +375,16 @@ describe("visible decision blocks", () => {
           id: "b127",
           inlines: [{ text: "VIII. Vlastní přezkum", type: "text" }],
           plainText: "VIII. Vlastní přezkum",
-          type: "paragraph",
+          level: 3,
+          type: "heading",
         },
         {
           anchorId: "p-128",
           id: "b128",
           inlines: [{ text: "VIII. A) Tzv. data retention", type: "text" }],
           plainText: "VIII. A) Tzv. data retention",
-          type: "paragraph",
+          level: 4,
+          type: "heading",
         },
       ],
     } as const satisfies DocumentAst;
@@ -417,6 +419,9 @@ describe("visible decision blocks", () => {
         type: "heading",
       },
     ]);
+    expect(
+      visibleDecisionBlocks(legacyAst, DECISION_IDENTIFIER_TYPES.CASE_NUMBER),
+    ).toEqual(legacyAst.blocks);
   });
 });
 

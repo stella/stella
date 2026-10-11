@@ -4,15 +4,13 @@
 // oxlint-disable-next-line no-console
 console.log("suppressed");
 
-/* oxlint-disable suppression-hygiene/no-foreign-directive -- fixture: foreign formatter directives must be rejected */
+// oxlint-disable-next-line suppression-hygiene/no-foreign-directive -- fixture: foreign formatter directives must be rejected
 // biome-ignore format: fixture proves dead formatter directives are rejected
 const foreignDirective = "foreign";
-/* oxlint-enable suppression-hygiene/no-foreign-directive */
 
-/* oxlint-disable suppression-hygiene/no-foreign-directive -- fixture: the legacy eslint spelling must be rejected */
+// oxlint-disable-next-line suppression-hygiene/no-foreign-directive -- fixture: the legacy eslint spelling must be rejected
 // eslint-disable-next-line no-console -- fixture: legacy alias of the oxlint directive
 console.log("legacy spelling");
-/* oxlint-enable suppression-hygiene/no-foreign-directive */
 
 // Prose naming eslint-disable mid-sentence -- not a directive; only a leading one is flagged.
 

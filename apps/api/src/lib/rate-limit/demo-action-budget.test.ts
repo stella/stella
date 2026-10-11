@@ -3,11 +3,16 @@ import { describe, expect, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import {
+  resetMetricLineSinkForTesting,
+  setMetricLineSinkForTesting,
+} from "@/api/lib/observability/request-metrics";
+import {
   ActionAdmissionError,
   withActionAdmission,
 } from "@/api/lib/rate-limit/action-admission";
 import { DEMO_ACCOUNT_DAILY_ACTION_BUDGET } from "@/api/lib/rate-limit/demo-action-budget";
 import { createTestDemoActionBudget } from "@/api/tests/helpers/demo-action-budget";
+import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 
 const organizationId = toSafeId<"organization">("org_demo");
 const demoUser = toSafeId<"user">("user_demo");
@@ -74,8 +79,37 @@ const expectDailyRefusal = (
 };
 
 describe("demo account daily action budget", () => {
-  test("admits the daily maximum and refuses the next action even with admission disabled", async () => {
+  test("reports the configured rejection window without caller identity", async () => {
     const { budget } = demoBudget();
+    await exhaustWith(budget, disabledAction);
+    const logger = installRecordingLogger();
+    const metrics: string[] = [];
+    setMetricLineSinkForTesting((line) => {
+      metrics.push(line);
+    });
+    try {
+      expectDailyRefusal(await disabledAction(budget));
+      expect(logger.records).toHaveLength(1);
+      expect(logger.records.at(0)?.attributes).toEqual({
+        budget: "demo.action.user",
+        "budget.keyKind": "user",
+        "budget.windowMs": DEMO_ACCOUNT_DAILY_ACTION_BUDGET.durationMs,
+        "http.status_code": 429,
+      });
+      expect(metrics).toHaveLength(1);
+      expect(JSON.parse(metrics.at(0) ?? "{}")).toMatchObject({
+        budgetName: "demo.action.user",
+        RateLimitRejected: 1,
+      });
+    } finally {
+      logger.restore();
+      resetMetricLineSinkForTesting();
+    }
+  });
+
+  test("admits the daily maximum and refuses the next action even with admission disabled", async () => {
+    const tracked = demoBudget();
+    const { budget } = tracked;
     await exhaustWith(budget, disabledAction);
     let calls = 0;
     const refused = await withActionAdmission({
@@ -90,6 +124,9 @@ describe("demo account daily action budget", () => {
     });
     expectDailyRefusal(refused);
     expect(calls).toBe(0);
+    expect(tracked.completions()).toBe(
+      DEMO_ACCOUNT_DAILY_ACTION_BUDGET.max + 1,
+    );
   });
 
   test("counts concurrency-only background actions against the same budget", async () => {
@@ -132,6 +169,76 @@ describe("demo account daily action budget", () => {
     });
     expect(Result.isOk(admitted)).toBe(true);
     expect(tracked.increments()).toBe(1);
+  });
+
+  test("completes started success, started failure, and unstarted refund attempts", async () => {
+    const tracked = demoBudget();
+    const success = await withActionAdmission({
+      organizationId,
+      userId: demoUser,
+      enabled: false,
+      demoActionBudget: tracked.budget,
+      run: async () => await Promise.resolve("served"),
+    });
+    expect(Result.isOk(success)).toBe(true);
+
+    const failure = await withActionAdmission({
+      organizationId,
+      userId: demoUser,
+      enabled: false,
+      demoActionBudget: tracked.budget,
+      run: async () => {
+        throw new Error("Synthetic started action failure");
+      },
+    });
+    expect(Result.isError(failure)).toBe(true);
+
+    const refusedBeforeStart = await withActionAdmission({
+      organizationId,
+      userId: demoUser,
+      enabled: true,
+      execution: "background-job",
+      actionKind: "workflow.background",
+      policy,
+      redis: { send: async () => await Promise.resolve(0) },
+      demoActionBudget: tracked.budget,
+      run: async () => await Promise.resolve("unreachable"),
+    });
+    expect(Result.isError(refusedBeforeStart)).toBe(true);
+    expect(refusedBeforeStart).toMatchObject({
+      error: { reason: "busy" },
+    });
+
+    expect(tracked.increments()).toBe(3);
+    expect(tracked.completions()).toBe(3);
+    expect(tracked.count()).toBe(2);
+  });
+
+  test("completes an increment failure to clear an uncertain refund marker", async () => {
+    let completions = 0;
+    const unavailable = await withActionAdmission({
+      organizationId,
+      userId: demoUser,
+      enabled: false,
+      demoActionBudget: {
+        resolveDemoUserId: async () => await Promise.resolve(demoUser),
+        counter: () => ({
+          increment: async () => {
+            throw new Error("Synthetic ambiguous increment failure");
+          },
+          decrement: async () => await Promise.resolve(),
+          complete: async () => {
+            completions += 1;
+          },
+        }),
+        now: () => DAY_START_MS,
+      },
+      run: async () => await Promise.resolve("unreachable"),
+    });
+    expect(unavailable).toMatchObject({
+      error: { reason: "unavailable" },
+    });
+    expect(completions).toBe(1);
   });
 
   test("refunds an attempt refused before its work starts", async () => {

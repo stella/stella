@@ -1,13 +1,17 @@
 import * as v from "valibot";
 
 import { decisionParagraphRangeSchema } from "@stll/api-contract/decision-paragraph-range";
-import { blockSchema } from "@stll/legal-ast/document-ast";
 
 import { LIMITS } from "@/api/lib/limits";
 
 import { cursorInput, nullAsAbsent, uuidInputSchema } from "./tool-utils";
 
-export const READER_PAGE_MAX_CHARS = LIMITS.decisionReaderPageMaxChars;
+export { READER_PAGE_MAX_CHARS } from "@stll/api-contract/limits";
+export {
+  openDecisionOutput,
+  blocksDecisionOutput,
+  provisionPreviewOutput,
+} from "../lib/chat/decision-reader-projections";
 export const READER_PAGE_CONTENT_CHARS = LIMITS.decisionReaderPageContentChars;
 export const READER_FRAGMENT_CHARS =
   Math.floor(READER_PAGE_CONTENT_CHARS / 2) - 1024;
@@ -68,104 +72,3 @@ export const previewProvisionArgs = nullAsAbsent(
     ),
   }),
 );
-
-const readerMetadataSchema = v.strictObject({
-  decisionId: v.string(),
-  caseNumber: v.string(),
-  court: v.string(),
-  country: v.string(),
-  date: v.nullable(v.string()),
-  ecli: v.nullable(v.string()),
-  appUrl: v.nullable(v.string()),
-});
-const withheldReasonSchema = v.strictObject({
-  code: v.literal("source_licence"),
-  message: v.string(),
-});
-const readerOutlineSchema = v.strictObject({
-  anchorId: v.string(),
-  title: v.string(),
-  level: v.number(),
-});
-const readerWindowSchema = v.strictObject({
-  anchorId: v.string(),
-  number: v.nullable(v.number()),
-  text: v.string(),
-});
-export const openDecisionOutput = v.variant("status", [
-  v.strictObject({
-    status: v.literal("available"),
-    metadata: readerMetadataSchema,
-    outline: v.array(readerOutlineSchema),
-    window: v.array(readerWindowSchema),
-    truncated: v.boolean(),
-  }),
-  v.strictObject({
-    status: v.literal("withheld"),
-    metadata: readerMetadataSchema,
-    withheldReason: withheldReasonSchema,
-  }),
-  v.strictObject({
-    status: v.literal("unavailable"),
-    metadata: readerMetadataSchema,
-  }),
-]);
-const citationAnchorSchema = v.strictObject({
-  pieceId: v.string(),
-  start: v.number(),
-  end: v.number(),
-  citationId: v.string(),
-  decisionId: v.string(),
-});
-const provisionAnchorSchema = v.strictObject({
-  pieceId: v.string(),
-  start: v.number(),
-  end: v.number(),
-  provision: previewProvisionArgs.advertisedSchema.entries.provision,
-});
-const blockFragmentSchema = v.strictObject({
-  blockId: v.string(),
-  offset: v.number(),
-  totalChars: v.number(),
-  json: v.string(),
-});
-// Metadata is shared by every outcome, so it is published once beside the
-// outcome union rather than inside each branch.
-export const blocksDecisionOutput = v.strictObject({
-  metadata: readerMetadataSchema,
-  content: v.variant("status", [
-    v.strictObject({
-      status: v.literal("available"),
-      phase: v.picklist(["blocks", "citations", "provisions"]),
-      items: v.array(blockSchema),
-      blockFragments: v.array(blockFragmentSchema),
-      citationAnchors: v.array(citationAnchorSchema),
-      provisionAnchors: v.array(provisionAnchorSchema),
-      nextCursor: v.nullable(v.string()),
-      limit: v.literal(READER_PAGE_MAX_CHARS),
-    }),
-    v.strictObject({
-      status: v.literal("withheld"),
-      withheldReason: withheldReasonSchema,
-    }),
-    v.strictObject({ status: v.literal("unavailable") }),
-  ]),
-});
-const previewHeading = v.strictObject({
-  anchorId: v.string(),
-  level: v.number(),
-  text: v.string(),
-});
-export const provisionPreviewOutput = v.strictObject({
-  documentId: v.string(),
-  language: v.string(),
-  anchorId: v.string(),
-  citedAnchorId: v.nullable(v.string()),
-  headings: v.array(previewHeading),
-  heading: v.nullable(
-    v.strictObject({ id: v.string(), ...previewHeading.entries }),
-  ),
-  blocks: v.array(
-    v.strictObject({ id: v.string(), anchorId: v.string(), text: v.string() }),
-  ),
-});

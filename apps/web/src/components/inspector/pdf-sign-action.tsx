@@ -18,6 +18,7 @@ import {
 } from "@/features/desktop/desktop-action-gate";
 import type { DesktopRequiredDialogProps } from "@/features/desktop/desktop-action-gate";
 import { detachedUserAction } from "@/lib/errors/user-toast";
+import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 
 export type PdfSignTarget = PdfSignableFile & { fieldId: string };
 
@@ -120,13 +121,18 @@ export const PdfSignButton = ({ target }: PdfSignButtonProps) => {
   const flow = usePdfSignFlow();
   return (
     <>
-      <ToolbarIconAction
-        density="toolbar"
-        disabled={flow.isConnecting}
-        icon={<SignatureIcon className="size-3.5" />}
-        label={flow.label}
-        onClick={flow.start}
-      />
+      <CapabilityAction action={{ capability: "desktop" }} surface="control">
+        {(capabilityProps) => (
+          <ToolbarIconAction
+            density="toolbar"
+            disabled={flow.isConnecting}
+            icon={<SignatureIcon className="size-3.5" />}
+            label={flow.label}
+            onClick={flow.start}
+            {...capabilityProps}
+          />
+        )}
+      </CapabilityAction>
       <PdfSignDialogs flow={flow} target={target} />
     </>
   );

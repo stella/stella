@@ -1,0 +1,5 @@
+{
+  "metric": "duplicate-token-blocks",
+  "delta": 2,
+  "reason": "The warm-ranking rewrite splits an existing contiguous clone region shared with the frozen pre-compaction name-matching oracle: packages/sanctions/src/name-match.ts and packages/sanctions/src/test-fixtures/legacy-name-match.ts each rise from 9 to 10 blocks (+1 each, +2 total). Weighted query coverage is extracted once for production scoring and estimation. The remaining region includes unchanged result and candidate contracts; the legacy implementation must remain byte-frozen and independent so a production matcher change cannot alter both sides of response and work-budget equivalence checks. No new algorithm copy is introduced."
+}

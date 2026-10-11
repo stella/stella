@@ -22,7 +22,7 @@ import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 
-import { listOutgoingDecisionCitations } from "./citations";
+import { listOutgoingDecisionCitationRoutes } from "./citations";
 import { readDecisionHandler } from "./get";
 
 /**
@@ -90,6 +90,7 @@ type ProvisionAnchor = {
   pieceId: string;
   start: number;
   end: number;
+  appUrl: string | null;
   provision: { document_id: string; anchor: string; cited_anchor: string };
 };
 
@@ -156,6 +157,7 @@ const locateProvisionAnchors = async ({
       pieceId: row.printPieceId,
       start: row.printStart,
       end: row.printEnd,
+      appUrl: preview.appUrl,
       provision: {
         document_id: preview.documentId,
         anchor: provisionHeadingAnchor(row.anchor),
@@ -197,7 +199,7 @@ export const readDecisionReaderSource = async ({
       const canRead = textAccess === "readable";
       const citations =
         canRead && ast !== null && phase === "citations"
-          ? await listOutgoingDecisionCitations({
+          ? await listOutgoingDecisionCitationRoutes({
               tx: subject.tx,
               decisionId: subject.id,
               cursor: referenceCursor,
@@ -228,6 +230,7 @@ export const readDecisionReaderSource = async ({
     end: number;
     citationId: string;
     decisionId: string;
+    appUrl: string | null;
   }[] = [];
   if (citations !== null) {
     if (!("items" in citations)) {
@@ -251,6 +254,7 @@ export const readDecisionReaderSource = async ({
           end: span.end,
           citationId: span.source.id,
           decisionId: span.source.citedDecisionId,
+          appUrl: span.source.appUrl,
         });
       }
     }
@@ -275,6 +279,9 @@ export const readDecisionReaderSource = async ({
     decision: {
       id: decision.id,
       caseNumber: decision.caseNumber,
+      caseNumberType: decision.caseNumberType,
+      courtAbbreviation: decision.courtAbbreviation,
+      courtTier: decision.courtTier,
       court: decision.court,
       country: decision.country,
       decisionDate: decision.decisionDate,

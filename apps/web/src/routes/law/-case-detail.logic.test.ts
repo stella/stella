@@ -35,6 +35,7 @@ const UNPUBLISHED_DECISION = {
   citationsTo: [],
   country: "XAA",
   court: "Synthetic court",
+  courtId: null,
   courtAbbreviation: null,
   courtTier: "other",
   createdAt: "2026-01-01T00:00:00.000Z",

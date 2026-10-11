@@ -152,7 +152,11 @@ const insertDecision = async (seed: InsertDecisionOptions): Promise<void> => {
 /** The seeded decisions the walk would hand out now. */
 const queued = async (): Promise<Set<SafeId<"caseLawDecision">>> => {
   const ours = new Set(seeded.values());
-  const queue = await loadPendingDocuments(scopedDb, QUEUE_READ_LIMIT);
+  const queue = await loadPendingDocuments({
+    scopedDb,
+    adapterKey: ADAPTER_KEYS.SK_COURTS,
+    limit: QUEUE_READ_LIMIT,
+  });
   return new Set(queue.map(({ id }) => id).filter((id) => ours.has(id)));
 };
 
@@ -460,7 +464,11 @@ describe("a stale claim", () => {
       const label = `buffered-${oldStatus}`;
       await insertFetchable(label, "source-v1");
       const buffered = (
-        await loadPendingDocuments(scopedDb, QUEUE_READ_LIMIT)
+        await loadPendingDocuments({
+          scopedDb,
+          adapterKey: ADAPTER_KEYS.SK_COURTS,
+          limit: QUEUE_READ_LIMIT,
+        })
       ).find(({ id }) => id === idFor(label));
       if (buffered === undefined) {
         throw new Error("expected buffered decision");

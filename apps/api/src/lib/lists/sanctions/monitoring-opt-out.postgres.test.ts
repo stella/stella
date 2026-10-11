@@ -1,9 +1,9 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
-import { createHash } from "node:crypto";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import { organization } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -418,9 +418,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
         const editionId = createSafeId<"sanctionsEdition">();
         const seededAt = new Date("2026-09-29T12:00:00Z");
         const now = new Date("2026-09-29T12:01:00Z");
-        const editionHash = createHash("sha256")
-          .update(editionId)
-          .digest("hex");
+        const editionHash = hashSha256Hex(editionId);
         const sources = sanctionsSourceIds();
         const existingSources = await admin.select().from(sanctionsSources);
         const missingSources = sources.filter(

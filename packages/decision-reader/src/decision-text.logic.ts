@@ -9,7 +9,6 @@ import {
   type TextField,
 } from "@stll/api-contract/case-law-text-field";
 import type { ProvisionPlacementFailure } from "@stll/api-contract/provision-placement";
-import { caseLawSectionHeading } from "@stll/legal-ast/case-law-heading";
 import {
   CZ_CAPTION_FORMS,
   SK_CAPTION_FORMS,
@@ -36,7 +35,6 @@ import {
   planBlockLineWrap,
 } from "@stll/legal-ast/line-wrap";
 import { dropOverlappingSpans } from "@stll/legal-ast/text-spans";
-import { collapseSpacedLetters } from "@stll/text-normalize";
 
 import { buildFulltextParagraphBlocks } from "./document-ast-text";
 import type { HeadnoteOrigin } from "./headnote-block";
@@ -266,7 +264,6 @@ export const visibleDecisionBlocks = (
   const docketIsReferenceLine =
     caseNumberType === DECISION_IDENTIFIER_TYPES.CASE_NUMBER;
   const visible: Block[] = [];
-  let inReasoning = false;
   for (const block of ast?.blocks ?? []) {
     if (
       (docketIsReferenceLine &&
@@ -275,28 +272,6 @@ export const visibleDecisionBlocks = (
       (block.type === "table" && block.role === "related-proceedings")
     ) {
       continue;
-    }
-    // A court that letter-spaces the heading ("O d ů v o d n ě n í :") opens
-    // its reasoning all the same.
-    if (
-      block.type === "heading" &&
-      /^Odůvodnění\s*:?$/iu.test(collapseSpacedLetters(block.plainText))
-    ) {
-      inReasoning = true;
-    }
-    if (inReasoning && block.type === "paragraph" && block.role === undefined) {
-      const heading = caseLawSectionHeading(block.plainText);
-      if (heading !== null) {
-        visible.push({
-          anchorId: block.anchorId,
-          id: block.id,
-          inlines: block.inlines,
-          level: heading.level,
-          plainText: block.plainText,
-          type: "heading",
-        });
-        continue;
-      }
     }
     visible.push(block);
   }

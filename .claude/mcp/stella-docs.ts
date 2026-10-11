@@ -1,7 +1,13 @@
 // Setup owns installation. An MCP handshake must not wait for the package
 // registry or race another session installing into the same checkout.
 try {
-  await import("./server.ts");
+  const [{ StdioServerTransport }, { createStellaDocsServer }] =
+    await Promise.all([
+      import("@modelcontextprotocol/sdk/server/stdio.js"),
+      import("./server.ts"),
+    ]);
+  const transport = new StdioServerTransport();
+  await createStellaDocsServer().connect(transport);
 } catch (error) {
   process.stderr.write(`[stella-docs] Startup failed: ${String(error)}\n`);
   if (

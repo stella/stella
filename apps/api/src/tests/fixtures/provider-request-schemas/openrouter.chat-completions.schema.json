@@ -507,6 +507,19 @@
       "required": ["role", "content"],
       "type": "object"
     },
+    "ChatDynamicServerTool": {
+      "properties": {
+        "parameters": {
+          "additionalProperties": {},
+          "type": "object"
+        },
+        "type": {
+          "type": "string"
+        }
+      },
+      "required": ["type"],
+      "type": "object"
+    },
     "ChatFormatGrammarConfig": {
       "properties": {
         "grammar": {
@@ -630,6 +643,9 @@
         },
         {
           "$ref": "#/$defs/ChatWebSearchShorthand"
+        },
+        {
+          "$ref": "#/$defs/ChatDynamicServerTool"
         }
       ]
     },
@@ -1256,7 +1272,7 @@
               "items": {
                 "maxLength": 253,
                 "minLength": 1,
-                "pattern": "^[a-z0-9*]([a-z0-9*-]{0,61}[a-z0-9*])?(\\.[a-z0-9*]([a-z0-9*-]{0,61}[a-z0-9*])?)*$",
+                "pattern": "^(?![-.])(?!.*[-.]$)(?!.*(?:\\.\\.|\\.-|-\\.))(?!.*[^.]{64})[a-z0-9*.-]+$",
                 "type": "string"
               },
               "maxItems": 50,
@@ -1633,6 +1649,10 @@
           },
           "maxItems": 1024,
           "type": "array"
+        },
+        "cost_tier": {
+          "pattern": "^[a-z][a-z0-9_-]{0,31}$",
+          "type": "string"
         },
         "excluded_models": {
           "items": {
@@ -3090,6 +3110,10 @@
         },
         "id": {
           "enum": ["switchyard-router"],
+          "type": "string"
+        },
+        "judge_model": {
+          "minLength": 1,
           "type": "string"
         }
       },

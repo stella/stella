@@ -1,18 +1,21 @@
 "use client";
 
-import { memo } from "react";
+import { memo, useMemo } from "react";
 import type { ComponentProps } from "react";
 
 import { cjk } from "@streamdown/cjk";
 import { math } from "@streamdown/math";
 import { mermaid } from "@streamdown/mermaid";
-import { Streamdown } from "streamdown";
+import { defaultRehypePlugins, Streamdown } from "streamdown";
 
 import { cn } from "@stll/ui/utils";
 
 import { messageComponents } from "@/components/ai-elements/message-response-components";
+import { rehypeMarkdownSourceOffsets } from "@/components/chat/rehype-markdown-source-offsets";
 
-export type MessageResponseProps = ComponentProps<typeof Streamdown>;
+export type MessageResponseProps = ComponentProps<typeof Streamdown> & {
+  sourceOffsets?: boolean;
+};
 
 const streamdownPlugins = { cjk, math, mermaid };
 
@@ -29,42 +32,66 @@ export const MessageResponseImpl = memo(
     allowedTags,
     components,
     rehypePlugins,
+    sourceOffsets = false,
     ...props
-  }: MessageResponseProps) => (
-    // Streamdown's internal memo doesn't compare `rehypePlugins`, so
-    // a re-render with a new plugin set is silently skipped and the
-    // unified processor is never rebuilt. Tying the key to plugin
-    // identity plus tuple options forces a fresh mount whenever the
-    // rehype chain actually changes — without this, the anonymization plugin
-    // wouldn't run for messages whose children text was identical
-    // when first rendered with no plugins.
-    <Streamdown
-      // Chat content can be any language regardless of the UI locale, so let
-      // each message resolve its own direction (Latin -> LTR, Arabic -> RTL)
-      // instead of inheriting the RTL shell and reordering Latin punctuation.
-      dir="auto"
-      key={rehypePluginsKey(rehypePlugins)}
-      className={cn(
-        "size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
-        "[&_ol]:my-2 [&_ol]:list-decimal [&_ol]:ps-5",
-        "[&_ul]:my-2 [&_ul]:list-disc [&_ul]:ps-5",
-        // `inline` keeps the loose-list `<p>` next to the list marker
-        // (Tailwind would otherwise need to scan streamdown's compiled
-        // JS to pick up its own `[&>p]:inline` utility on each `<li>`).
-        "[&_li]:my-1 [&_li>p]:my-0 [&_li>p]:inline [&_li>p+p]:mt-2",
-        className,
-      )}
-      plugins={streamdownPlugins}
-      allowedTags={{ ...ANON_TAG_ALLOWED, ...allowedTags }}
-      components={{
-        ...messageComponents,
-        ...components,
-        img: components?.img ?? messageComponents.img,
-      }}
-      {...(rehypePlugins ? { rehypePlugins } : {})}
-      {...props}
-    />
-  ),
+  }: MessageResponseProps) => {
+    const effectiveRehypePlugins = useMemo(
+      () =>
+        sourceOffsets
+          ? [
+              ...(rehypePlugins ?? Object.values(defaultRehypePlugins)),
+              rehypeMarkdownSourceOffsets,
+            ]
+          : rehypePlugins,
+      [rehypePlugins, sourceOffsets],
+    );
+    return (
+      // Streamdown's internal memo doesn't compare `rehypePlugins`, so
+      // a re-render with a new plugin set is silently skipped and the
+      // unified processor is never rebuilt. Tying the key to plugin
+      // identity plus tuple options forces a fresh mount whenever the
+      // rehype chain actually changes — without this, the anonymization plugin
+      // wouldn't run for messages whose children text was identical
+      // when first rendered with no plugins.
+      <Streamdown
+        // Chat content can be any language regardless of the UI locale, so let
+        // each message resolve its own direction (Latin -> LTR, Arabic -> RTL)
+        // instead of inheriting the RTL shell and reordering Latin punctuation.
+        dir="auto"
+        key={rehypePluginsKey(effectiveRehypePlugins)}
+        className={cn(
+          "size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
+          "[&_ol]:my-2 [&_ol]:list-decimal [&_ol]:ps-5",
+          "[&_ul]:my-2 [&_ul]:list-disc [&_ul]:ps-5",
+          // `inline` keeps the loose-list `<p>` next to the list marker
+          // (Tailwind would otherwise need to scan streamdown's compiled
+          // JS to pick up its own `[&>p]:inline` utility on each `<li>`).
+          "[&_li]:my-1 [&_li>p]:my-0 [&_li>p]:inline [&_li>p+p]:mt-2",
+          className,
+        )}
+        plugins={streamdownPlugins}
+        allowedTags={{ ...ANON_TAG_ALLOWED, ...allowedTags }}
+        components={{
+          ...messageComponents,
+          ...components,
+          img: components?.img ?? messageComponents.img,
+        }}
+        {...(effectiveRehypePlugins
+          ? { rehypePlugins: effectiveRehypePlugins }
+          : {})}
+        {...props}
+        // Streaming parses each block separately, yielding block-local positions.
+        // Settled editable answers need one parse of the unchanged full source.
+        {...(sourceOffsets
+          ? ({
+              mode: "static",
+              parseIncompleteMarkdown: false,
+              normalizeHtmlIndentation: false,
+            } as const)
+          : {})}
+      />
+    );
+  },
   // Children covers streaming text deltas. Compare the props that
   // matter for downstream features (rehype plugin, components map,
   // styling) so the wasm pipeline output isn't masked by an over-
@@ -74,6 +101,7 @@ export const MessageResponseImpl = memo(
     prev.rehypePlugins === next.rehypePlugins &&
     prev.components === next.components &&
     prev.allowedTags === next.allowedTags &&
+    prev.sourceOffsets === next.sourceOffsets &&
     prev.className === next.className,
 );
 

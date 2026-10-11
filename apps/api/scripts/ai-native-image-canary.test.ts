@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
+
 import {
   isNativeImageFormatRejection,
   nativeImageProbeReportSchema,
@@ -53,9 +55,7 @@ describe("native image capability evidence", () => {
         .map(({ modelId, mimeType }) => `${modelId}/${mimeType}`)
         .toSorted(),
     ).toEqual(expected.toSorted());
-    const fixtureSha256 = new Bun.CryptoHasher("sha256")
-      .update(bytes)
-      .digest("hex");
+    const fixtureSha256 = hashSha256Hex(bytes);
     for (const record of records) {
       expect(record).toMatchObject({
         status: "supported",

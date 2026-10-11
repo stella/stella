@@ -4,6 +4,7 @@ import { t } from "elysia";
 import type { Static } from "elysia";
 
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
@@ -75,6 +76,10 @@ const PUBLISHED_FILE_ENCRYPTION = officeFileEncryption(DOCX_MIME_TYPE);
 const CHECKPOINT_CLEANUP_GRACE_MS = 60_000;
 const FOLIO_COLLAB_PUBLICATION_IDEMPOTENCY_CONSTRAINT =
   "folio_collab_publications_idempotency_uidx";
+
+export const hashPublishedFolioCollabBytes = (
+  storedBytes: Uint8Array,
+): string => hashSha256Hex(storedBytes);
 
 type FolioCollabCheckpointCut = {
   checkpointFileId: SafeId<"userFile">;
@@ -295,7 +300,7 @@ type ReadPublishableCheckpointOptions = {
 };
 
 /** Reads the checkpoint and refuses bytes that fail the hash, format or scan. */
-const readPublishableCheckpoint = async ({
+export const readPublishableCheckpoint = async ({
   checkpointKey,
   expectedSha256Hex,
   fileName,
@@ -305,9 +310,7 @@ const readPublishableCheckpoint = async ({
 > => {
   const checkpoint = await readS3ArrayBuffer(checkpointKey, signal);
   const checkpointBytes = new Uint8Array(checkpoint);
-  const actualSha256Hex = new Bun.CryptoHasher("sha256")
-    .update(checkpointBytes)
-    .digest("hex");
+  const actualSha256Hex = hashSha256Hex(checkpointBytes);
   if (actualSha256Hex !== expectedSha256Hex) {
     return Result.err(
       new HandlerError({
@@ -422,12 +425,13 @@ const storePublicationSource = async ({
           organizationId: source.organizationId,
           objectKey: source.key,
           sizeBytes: bytes.byteLength,
-          write: async () =>
+          content: bytes,
+          write: async ({ content, objectKey }) =>
             await writeS3ObjectWithRetry(
               {
                 contentType: DOCX_MIME_TYPE,
-                data: bytes,
-                key: source.key,
+                data: content,
+                key: objectKey,
               },
               { type: "cleanup-intent", intent: source.cleanupIntentId },
             ),
@@ -977,7 +981,7 @@ const publishFolioCollabVersion = createSafeHandler(
     const storedSha256Hex =
       strippedArchive === null
         ? body.expectedSha256Hex
-        : new Bun.CryptoHasher("sha256").update(storedBytes).digest("hex");
+        : hashPublishedFolioCollabBytes(storedBytes);
 
     const sourceFileId = allocateFileObject();
     const sourceKey = createFileKey({

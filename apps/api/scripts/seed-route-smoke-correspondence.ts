@@ -2,6 +2,8 @@ import { panic } from "better-result";
 import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
+
 import { member, user } from "@/api/db/auth-schema";
 import {
   correspondence,
@@ -29,7 +31,7 @@ const workspaceId = toSafeId<"workspace">(workspaceValue);
 const correspondenceId = toSafeId<"correspondence">(correspondenceValue);
 const db = openMaintenanceDb({ readOnly: false });
 
-await db.transaction(async (tx) => {
+const operation = db.transaction(async (tx) => {
   const [filer] = await tx
     .select({ id: user.id, name: user.name, email: user.email })
     .from(workspaces)
@@ -88,4 +90,7 @@ await db.transaction(async (tx) => {
   });
 });
 
+await runScriptWithErrorOutput(async () => {
+  await operation;
+});
 process.exit(0);

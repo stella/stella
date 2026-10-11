@@ -10,7 +10,7 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import { parseUsableDocumentAst } from "@stll/legal-ast/document-ast";
+import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
 
 import { toSafeId } from "@/api/lib/branded-types";
 
@@ -109,7 +109,7 @@ describe("resolveRowAnalysisInput", () => {
   ) => {
     const subject = row(overrides);
     return await resolveRowAnalysisInput({
-      readAst: async () => parseUsableDocumentAst(subject.documentAst),
+      readAst: async () => parseCaseLawDecisionAst(subject.documentAst),
       row: subject,
     });
   };
@@ -120,7 +120,7 @@ describe("resolveRowAnalysisInput", () => {
       reads: 0,
       readAst: async () => {
         reader.reads += 1;
-        return parseUsableDocumentAst(documentAst);
+        return parseCaseLawDecisionAst(documentAst);
       },
     };
     return reader;
@@ -166,7 +166,7 @@ describe("resolveRowAnalysisInput", () => {
   // parse arrives from the object, and the decision is analysable.
   test("takes the parse the corpus reader resolved, not the row's column", async () => {
     const resolved = await resolveRowAnalysisInput({
-      readAst: async () => parseUsableDocumentAst(documentAst),
+      readAst: async () => parseCaseLawDecisionAst(documentAst),
       row: row({ documentAst: null, astS3Key: "cz/ns/abc.zst" }),
     });
 

@@ -19,16 +19,17 @@ import { TaggedError } from "better-result";
  * Usage: bun run db:seed-firm-knowledge --matters 15 [--api <origin>]
  *   [--replace-incomplete]
  */
-import { createHash } from "node:crypto";
 import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
 
 import { STELLA_API_VERSION_PREFIX } from "@stll/api-contract";
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
+import { printError } from "@stll/errors";
 
 import { sessionCookieNameForDevPort } from "@/api/lib/auth/auth-cookie-name";
 
 import { selectMatterNames } from "./seed-firm-knowledge.logic";
+import { seedFileIdentity } from "./seed-utils";
 
 const CORPUS_REPOSITORY = "https://github.com/harveyai/harvey-labs.git";
 // Pinned so every machine seeds identical documents and an upstream change
@@ -165,9 +166,6 @@ class FirmKnowledgeSeedError extends TaggedError("FirmKnowledgeSeedError")<{
 const fail: (message: string) => never = (message) => {
   throw new FirmKnowledgeSeedError({ message });
 };
-
-const getErrorMessage = (error: unknown): string =>
-  error instanceof Error ? error.message : "Seed failed";
 
 const parseArgs = () => {
   const args = process.argv.slice(2);
@@ -338,14 +336,15 @@ const readMatter = async (matterRoot: string): Promise<MatterManifest> => {
       }
 
       const bytes = await Bun.file(absolutePath).bytes();
+      const { sha256Hex, sizeBytes } = seedFileIdentity(bytes);
       files.push({
         absolutePath,
         key,
         mimeType,
         name: entry.name,
         parentKey,
-        sha256Hex: createHash("sha256").update(bytes).digest("hex"),
-        size: bytes.byteLength,
+        sha256Hex,
+        size: sizeBytes,
       });
     }
   };
@@ -660,7 +659,7 @@ const main = async () => {
 // `seedFirmKnowledge`, so importing the module never starts a run.
 if (import.meta.main) {
   await main().catch((error: unknown) => {
-    console.error(getErrorMessage(error));
+    printError(error);
     process.exitCode = 1;
   });
 }

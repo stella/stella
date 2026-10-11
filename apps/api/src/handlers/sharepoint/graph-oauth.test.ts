@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
-import { buildAuthorizeUrl } from "@/api/handlers/sharepoint/graph-oauth";
+import { sha256Base64Url as legacyBase64Url } from "@stll/sha256/node";
+
+import {
+  buildAuthorizeUrl,
+  createPkce,
+} from "@/api/handlers/sharepoint/graph-oauth";
 
 describe("buildAuthorizeUrl", () => {
   test("carries the OAuth and PKCE parameters", () => {
@@ -21,4 +26,9 @@ describe("buildAuthorizeUrl", () => {
     expect(url.searchParams.get("client_id")).toBe("client-123");
     expect(url.searchParams.get("scope")).toContain("offline_access");
   });
+});
+
+test("SharePoint PKCE preserves the legacy unpadded base64url digest", () => {
+  const { codeVerifier, codeChallenge } = createPkce();
+  expect(codeChallenge).toBe(legacyBase64Url(codeVerifier));
 });

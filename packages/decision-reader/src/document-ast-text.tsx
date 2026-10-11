@@ -904,6 +904,9 @@ const BlockPermalink = ({
   const messages = useReaderMessages();
 
   const { copyPermalink } = useReaderPresentation();
+  if (copyPermalink === undefined) {
+    return null;
+  }
 
   return (
     <a

@@ -79,10 +79,27 @@ type Scenario = {
   installExit?: string;
   tags?: string[];
   latest?: string;
+  newestReleaseStatus?: number;
+  newestReleaseDraft?: boolean;
+  newestTagType?: "tag" | "commit";
+  newestTagCreatedAt?: string;
+  releaseWorkflowStatus?: "queued" | "in_progress" | "completed";
+  releaseWorkflowConclusion?: "success" | "failure";
+  releaseWorkflowRuns?: readonly WorkflowRun[];
+  desktopWorkflowStatus?: "queued" | "in_progress" | "completed";
+  desktopWorkflowConclusion?: "success" | "failure";
+  desktopWorkflowRuns?: readonly WorkflowRun[];
   assetStatus?: number;
   firstAssetStatus?: number;
   session?: "required" | "notification-error";
   redirect?: "once" | "chain";
+};
+
+type WorkflowRun = {
+  status: "queued" | "in_progress" | "completed";
+  conclusion: "success" | "failure" | null;
+  created_at: string;
+  display_title?: string;
 };
 
 type McpPayloadOptions = { name: string; rpc: Scenario["rpc"] };
@@ -131,6 +148,79 @@ const redirectFixture = ({ pathname, mode }: RedirectFixtureOptions) => {
   return null;
 };
 
+type DesktopFixtureOptions = { pathname: string; scenario: Scenario };
+const desktopFixture = ({ pathname, scenario }: DesktopFixtureOptions) => {
+  if (pathname === "/desktop/latest") {
+    return Response.json({
+      tag_name: scenario.latest ?? "v10.0.0",
+      draft: false,
+      prerelease: false,
+      assets: [
+        "Stella-macos-universal.dmg",
+        "Stella-windows-x64-setup.exe",
+        "latest.json",
+      ].map((name) => ({ name })),
+    });
+  }
+  if (pathname === "/desktop/tags") {
+    return Response.json(
+      (scenario.tags ?? ["v2.0.0", "v10.0.0", "v11.0.0-beta.1"]).map((tag) => ({
+        ref: `refs/tags/${tag}`,
+        object: { type: scenario.newestTagType ?? "tag", sha: `sha-${tag}` },
+      })),
+    );
+  }
+  if (pathname === "/desktop/tag-object") {
+    return Response.json({
+      tagger: {
+        date: scenario.newestTagCreatedAt ?? "2026-10-09T09:00:00Z",
+      },
+    });
+  }
+  if (pathname === "/desktop/release") {
+    if (scenario.newestReleaseStatus !== undefined) {
+      return new Response(null, { status: scenario.newestReleaseStatus });
+    }
+    return Response.json({
+      tag_name: "v10.0.0",
+      draft: scenario.newestReleaseDraft ?? false,
+    });
+  }
+  if (pathname === "/desktop/release-workflow") {
+    return Response.json({
+      workflow_runs: scenario.releaseWorkflowRuns ?? [
+        {
+          status: scenario.releaseWorkflowStatus ?? "completed",
+          conclusion: scenario.releaseWorkflowConclusion ?? "success",
+          created_at: "2026-10-09T09:00:00Z",
+        },
+      ],
+    });
+  }
+  // GitHub lists a workflow_run-triggered run under the default branch, so a
+  // branch-filtered query for the tag finds none of the desktop runs.
+  if (pathname === "/desktop/desktop-workflow-by-branch") {
+    return Response.json({ workflow_runs: [] });
+  }
+  if (pathname === "/desktop/desktop-workflow") {
+    return Response.json({
+      workflow_runs: (
+        scenario.desktopWorkflowRuns ?? [
+          {
+            status: scenario.desktopWorkflowStatus ?? "completed",
+            conclusion: scenario.desktopWorkflowConclusion ?? "success",
+            created_at: "2026-10-09T09:00:00Z",
+          },
+        ]
+      ).map((run) => ({
+        ...run,
+        display_title: run.display_title ?? "Release Desktop App v10.0.0",
+      })),
+    });
+  }
+  return null;
+};
+
 const assetStatusFor = (scenario: Scenario, attempt: number | undefined) =>
   attempt === 1 && scenario.firstAssetStatus
     ? scenario.firstAssetStatus
@@ -155,24 +245,9 @@ const run = async ({
     async fetch(req) {
       const pathname = new URL(req.url).pathname;
       counts.set(pathname, (counts.get(pathname) ?? 0) + 1);
-      if (pathname === "/desktop/latest") {
-        return Response.json({
-          tag_name: scenario.latest ?? "v10.0.0",
-          draft: false,
-          prerelease: false,
-          assets: [
-            "Stella-macos-universal.dmg",
-            "Stella-windows-x64-setup.exe",
-            "latest.json",
-          ].map((name) => ({ name })),
-        });
-      }
-      if (pathname === "/desktop/tags") {
-        return Response.json(
-          (scenario.tags ?? ["v2.0.0", "v10.0.0", "v11.0.0-beta.1"]).map(
-            (tag) => ({ ref: `refs/tags/${tag}` }),
-          ),
-        );
+      const desktop = desktopFixture({ pathname, scenario });
+      if (desktop !== null) {
+        return desktop;
       }
       const redirect = redirectFixture({ pathname, mode: scenario.redirect });
       if (redirect !== null) {
@@ -323,7 +398,26 @@ const run = async ({
     );
     await Bun.write(
       path.join(work, "gh"),
-      `#!/usr/bin/env bash\nif [[ "$2" == --paginate ]]; then route=tags; else route=latest; fi\ncurl -fsS "$FAKE_SERVER/desktop/$route"\n`,
+      `#!/usr/bin/env bash
+case "$*" in
+  *git/tags/*) route=tag-object ;;
+  *matching-refs*) route=tags ;;
+  *releases/tags*) route=release ;;
+  *release-desktop.yml*branch=*) route=desktop-workflow-by-branch ;;
+  *release-desktop.yml*) route=desktop-workflow ;;
+  *release.yml*) route=release-workflow ;;
+  *) route=latest ;;
+esac
+response=$(mktemp)
+status=$(curl --silent --show-error --output "$response" --write-out '%{http_code}' "$FAKE_SERVER/desktop/$route") || exit $?
+if [[ "$status" -lt 200 || "$status" -ge 300 ]]; then
+  rm -f "$response"
+  echo "gh: fixture request failed (HTTP $status)" >&2
+  exit 1
+fi
+cat "$response"
+rm -f "$response"
+`,
     );
     await Promise.all(
       ["npm", "stella", "gh", "git"].map(async (file) => {
@@ -349,6 +443,7 @@ const run = async ({
           JOURNEY_CLI_URL: server.url.toString().replace(/\/$/u, ""),
           JOURNEY_RETRY_PAUSE_SECONDS: "0",
           STELLA_DESKTOP_RETRY_PAUSE_SECONDS: "0",
+          STELLA_DESKTOP_NOW_EPOCH: "1791536400",
           JOURNEY_TIMEOUT_SECONDS: scenario.delay ? "0.1" : "3",
           CLI_FIXTURE: path.join(work, "stella"),
           CLI_VERSION: scenario.cliVersion ?? "10.0.0",
@@ -388,7 +483,7 @@ const run = async ({
     const installClean = await Bun.file(
       path.join(work, "install-check"),
     ).exists();
-    return { stdout, exit, counts, calls, cliCalls, installClean };
+    return { stdout, stderr, exit, counts, calls, cliCalls, installClean };
   } finally {
     await server.stop(true);
     await rm(work, { recursive: true, force: true });
@@ -620,6 +715,185 @@ describe("scheduled read journeys", () => {
       (await run({ scenario: { latest: "v2.0.0" }, mode: "desktop" })).exit,
     ).toBe(1);
     expect(result.stdout).toBe("desktop-release-policy: ok\n");
+  });
+  test("allows a young draft while the newest desktop release is publishing", async () => {
+    const result = await run({
+      scenario: { latest: "v2.0.0", newestReleaseDraft: true },
+      mode: "desktop",
+    });
+    expect(result.exit).toBe(0);
+    expect(result.stdout).toBe("desktop-release-policy: publishing\n");
+  });
+  test("judges only the newest desktop run, so a rerun after a failure is still publishing", async () => {
+    const result = await run({
+      scenario: {
+        latest: "v2.0.0",
+        desktopWorkflowRuns: [
+          {
+            status: "in_progress",
+            conclusion: null,
+            created_at: "2026-10-09T09:40:00Z",
+          },
+          {
+            status: "completed",
+            conclusion: "failure",
+            created_at: "2026-10-09T09:10:00Z",
+          },
+        ],
+      },
+      mode: "desktop",
+    });
+    expect(result.exit).toBe(0);
+    expect(result.stdout).toBe("desktop-release-policy: publishing\n");
+  });
+  test("allows a young in-progress run while the newest desktop release is publishing", async () => {
+    const result = await run({
+      scenario: {
+        latest: "v2.0.0",
+        desktopWorkflowStatus: "in_progress",
+      },
+      mode: "desktop",
+    });
+    expect(result.exit).toBe(0);
+    expect(result.stdout).toBe("desktop-release-policy: publishing\n");
+  });
+  test("ignores an in-progress desktop run for another tag", async () => {
+    const result = await run({
+      scenario: {
+        latest: "v2.0.0",
+        newestTagCreatedAt: "2020-01-01T00:00:00Z",
+        releaseWorkflowRuns: [],
+        desktopWorkflowRuns: [
+          {
+            status: "in_progress",
+            conclusion: null,
+            created_at: "2026-10-09T09:00:00Z",
+            display_title: "Release Desktop App v2.0.0",
+          },
+        ],
+      },
+      mode: "desktop",
+    });
+    expect(result.exit).toBe(1);
+    expect(result.stderr).toContain(
+      "Desktop latest must match the newest stable application tag",
+    );
+  });
+  test("rejects an old newest release that is not latest", async () => {
+    const result = await run({
+      scenario: {
+        latest: "v2.0.0",
+        newestReleaseDraft: true,
+        newestTagCreatedAt: "2020-01-01T00:00:00Z",
+        releaseWorkflowRuns: [],
+        desktopWorkflowRuns: [],
+      },
+      mode: "desktop",
+    });
+    expect(result.exit).toBe(1);
+  });
+  test("rejects an annotated tag publishing time in the future", async () => {
+    const result = await run({
+      scenario: {
+        latest: "v2.0.0",
+        newestReleaseDraft: true,
+        newestTagCreatedAt: "2026-10-09T11:00:00Z",
+        releaseWorkflowRuns: [],
+        desktopWorkflowRuns: [],
+      },
+      mode: "desktop",
+    });
+    expect(result.exit).toBe(1);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toContain(
+      "Newest stable application tag publishing time is in the future",
+    );
+  });
+  test("allows publishing before the newest GitHub Release exists", async () => {
+    const result = await run({
+      scenario: {
+        latest: "v2.0.0",
+        newestReleaseStatus: 404,
+        desktopWorkflowStatus: "in_progress",
+      },
+      mode: "desktop",
+    });
+    expect(result.exit).toBe(0);
+    expect(result.stdout).toBe("desktop-release-policy: publishing\n");
+  });
+  test("rejects a lightweight tag with no release workflow or release", async () => {
+    const result = await run({
+      scenario: {
+        latest: "v2.0.0",
+        newestReleaseStatus: 404,
+        newestTagType: "commit",
+        releaseWorkflowRuns: [],
+        desktopWorkflowRuns: [],
+      },
+      mode: "desktop",
+    });
+    expect(result.exit).toBe(1);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toContain(
+      "Newest stable application tag has no release workflow or annotated tag creation time",
+    );
+  });
+  test("uses a young release workflow for a lightweight tag on an old commit", async () => {
+    const result = await run({
+      scenario: {
+        latest: "v2.0.0",
+        newestReleaseStatus: 404,
+        newestTagType: "commit",
+        releaseWorkflowRuns: [],
+        desktopWorkflowRuns: [
+          {
+            status: "in_progress",
+            conclusion: null,
+            created_at: "2026-10-09T08:50:00Z",
+          },
+        ],
+      },
+      mode: "desktop",
+    });
+    expect(result.exit).toBe(0);
+    expect(result.stdout).toBe("desktop-release-policy: publishing\n");
+  });
+  test("rejects a lightweight tag whose release workflow is outside the publishing window", async () => {
+    const result = await run({
+      scenario: {
+        latest: "v2.0.0",
+        newestReleaseStatus: 404,
+        newestTagType: "commit",
+        releaseWorkflowRuns: [],
+        desktopWorkflowRuns: [
+          {
+            status: "in_progress",
+            conclusion: null,
+            created_at: "2026-10-09T05:00:00Z",
+          },
+        ],
+      },
+      mode: "desktop",
+    });
+    expect(result.exit).toBe(1);
+  });
+  test("rejects a failed release run before the newest release becomes latest", async () => {
+    const result = await run({
+      scenario: {
+        latest: "v2.0.0",
+        newestReleaseDraft: true,
+        releaseWorkflowConclusion: "failure",
+      },
+      mode: "desktop",
+    });
+    expect(result.exit).toBe(1);
+  });
+  test("rejects completed release runs when the newest release is not latest", async () => {
+    const result = await run({
+      scenario: { latest: "v2.0.0" },
+      mode: "desktop",
+    });
+    expect(result.exit).toBe(1);
   });
   test("reports an installer that passes only after its one retry", async () => {
     const result = await run({

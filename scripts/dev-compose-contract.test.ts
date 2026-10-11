@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 
 import { QUICKWIT_V09_BINARY_VERSION } from "@/api/lib/legal-search/corpus-index-engine-version";
 
+import images from "./ci-service-images.json" with { type: "json" };
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
@@ -58,6 +60,34 @@ const isLoopbackPublish = (port: unknown): boolean =>
     : isRecord(port) && port["host_ip"] === LOOPBACK_HOST;
 
 describe("local compose services", () => {
+  test("ships Postgres initialization from a seed-only image context", async () => {
+    const services = await readComposeServices();
+    const postgres = recordField(services, "postgres");
+    expect(recordField(postgres, "build")).toEqual({
+      context: ".",
+      dockerfile: "docker/postgres/Dockerfile",
+    });
+    expect(stringArrayField(postgres, "volumes")).toEqual([
+      "pgdata:/var/lib/postgresql",
+    ]);
+    const dockerfile = await Bun.file(
+      new URL("../docker/postgres/Dockerfile", import.meta.url),
+    ).text();
+    expect(dockerfile).toContain(
+      `FROM ${stringField(recordField(services, "quickwit09-postgres-setup"), "image")}`,
+    );
+    expect(dockerfile).toMatch(
+      /^COPY docker\/postgres\/init\.sql \/docker-entrypoint-initdb\.d\/init\.sql$/mu,
+    );
+    expect(
+      await Bun.file(
+        new URL("../docker/postgres/Dockerfile.dockerignore", import.meta.url),
+      ).text(),
+    ).toBe(
+      "*\n!docker/\ndocker/*\n!docker/postgres/\ndocker/postgres/*\n!docker/postgres/Dockerfile\n!docker/postgres/init.sql\n",
+    );
+  });
+
   test("publish host ports on loopback only", async () => {
     const services = await readComposeServices();
     const exposed = Object.entries(services).flatMap(([name, service]) => {
@@ -120,21 +150,50 @@ describe("local Quickwit generation", () => {
       recordField(services, "quickwit09"),
       "image",
     );
-    const workflow = await Bun.file(
-      new URL("../.github/workflows/ci.yml", import.meta.url),
-    ).text();
-    const workflowImages = [
-      ...workflow.matchAll(/quickwit\/quickwit:[^\s"']+/gu),
-    ].map(([image]) => image);
-
-    // A workflow copy of the image must move with the manifest, or the
-    // contract suites keep passing against an engine nobody deploys.
-    expect(workflowImages.length).toBeGreaterThan(0);
-    for (const image of workflowImages) {
-      expect(image).toStartWith(
-        `quickwit/quickwit:${QUICKWIT_V09_BINARY_VERSION}@sha256:`,
-      );
-      expect(image).toBe(composeImage);
+    const workflow: unknown = Bun.YAML.parse(
+      await Bun.file(
+        new URL("../.github/workflows/ci.yml", import.meta.url),
+      ).text(),
+    );
+    if (!isRecord(workflow)) {
+      throw new TypeError("CI workflow must be an object");
     }
+    const jobs = recordField(workflow, "jobs");
+    const planner = recordField(jobs, "ci-plan");
+    expect(stringField(recordField(planner, "outputs"), "quickwit")).toBe(
+      `\${{ steps.images.outputs.quickwit }}`,
+    );
+    const plannerSteps = planner["steps"];
+    if (!Array.isArray(plannerSteps)) {
+      throw new TypeError("CI planner steps must be an array");
+    }
+    const resolver = plannerSteps.find(
+      (step) => isRecord(step) && step["id"] === "images",
+    );
+    if (!isRecord(resolver)) {
+      throw new TypeError("CI planner must resolve image sources");
+    }
+    expect(stringField(resolver, "run")).toContain(
+      'bun scripts/ci-service-images.ts --resolve >> "$GITHUB_OUTPUT"',
+    );
+    const suites = recordField(jobs, "service-suites");
+    const steps = suites["steps"];
+    if (!Array.isArray(steps)) {
+      throw new TypeError("CI service suite steps must be an array");
+    }
+    const engine = steps.find(
+      (step) => isRecord(step) && step["name"] === "Start corpus engine",
+    );
+    if (!isRecord(engine)) {
+      throw new TypeError("CI service suites must start the corpus engine");
+    }
+    expect(stringField(engine, "run")).toContain(
+      `\${{ needs.ci-plan.outputs.quickwit }} run`,
+    );
+    const image = images.find(({ name }) => name === "quickwit");
+    if (image === undefined) {
+      throw new TypeError("CI image inventory must declare Quickwit");
+    }
+    expect(image.source).toBe(`docker.io/${composeImage}`);
   });
 });

@@ -10,6 +10,10 @@ import {
 } from "@/api/lib/client-ip";
 import { isResponseValidationError } from "@/api/lib/errors/response-validation";
 import { resolveResponseStatus } from "@/api/lib/observability/response-status";
+import {
+  recordBudgetRejection,
+  type BudgetObservation,
+} from "@/api/lib/rate-limit/budget-observability";
 
 type MaybePromise<T> = T | Promise<T>;
 
@@ -24,7 +28,9 @@ export type RateLimitContextConfig = {
 };
 
 export type RateLimitContext = {
-  decrement: (key: string) => MaybePromise<void>;
+  /** Drop refund identity after response completion, preserving the quota count. */
+  complete: (key: string) => MaybePromise<void>;
+  decrement: (key: string, windowStart?: number) => MaybePromise<void>;
   increment: (
     key: string,
     duration?: number,
@@ -32,6 +38,11 @@ export type RateLimitContext = {
   ) => MaybePromise<RateLimitCounter>;
   init: (options: RateLimitContextConfig) => void;
   kill: () => MaybePromise<void>;
+};
+
+export type ReadableRateLimitContext = RateLimitContext & {
+  /** Observe the active window without charging or allocating a refund identity. */
+  read: (key: string) => MaybePromise<RateLimitCounter | null>;
 };
 
 export type RequestIpServer = {
@@ -56,7 +67,8 @@ export type RateLimitOptions = {
   errorResponse?: RateLimitErrorResponse;
   generator: RateLimitGenerator;
   max: number;
-  onLimit?: () => void;
+  budget?: BudgetObservation | ((key: string) => BudgetObservation);
+  onLimit?: (limited: { key: string; duration: number }) => void;
   skip?: (request: Request) => MaybePromise<boolean>;
 };
 
@@ -96,7 +108,7 @@ export const scopedRateLimitKey = ({
  * to N× the configured limit. The hard global limit is
  * enforced at the network edge.
  */
-export class InMemoryRateLimitContext implements RateLimitContext {
+export class InMemoryRateLimitContext implements ReadableRateLimitContext {
   private durationMs = 60_000;
   private readonly store = new Map<string, RateLimitEntry>();
   private readonly cleanupTimer: ReturnType<typeof setInterval>;
@@ -111,6 +123,18 @@ export class InMemoryRateLimitContext implements RateLimitContext {
 
   init({ duration }: RateLimitContextConfig) {
     this.durationMs = duration;
+  }
+
+  read(key: string) {
+    const entry = this.store.get(key);
+    if (!entry || entry.expiresAt <= Temporal.Now.instant().epochMilliseconds) {
+      return null;
+    }
+    return {
+      count: entry.count,
+      nextReset: new Date(entry.expiresAt),
+      start: entry.start,
+    };
   }
 
   increment(key: string, duration?: number, requestTime?: number) {
@@ -136,10 +160,19 @@ export class InMemoryRateLimitContext implements RateLimitContext {
     };
   }
 
-  decrement(key: string) {
+  complete(_key: string): void {
+    // In-memory counters retain no refund identities.
+  }
+
+  decrement(key: string, windowStart?: number) {
     const now = Temporal.Now.instant().epochMilliseconds;
     const entry = this.store.get(key);
-    if (entry && entry.expiresAt > now && entry.count > 0) {
+    if (
+      entry &&
+      entry.expiresAt > now &&
+      entry.count > 0 &&
+      (windowStart === undefined || entry.start === windowStart)
+    ) {
       entry.count -= 1;
     }
   }
@@ -170,9 +203,9 @@ export class InMemoryRateLimitContext implements RateLimitContext {
 type RateLimitResponseSet = Context["set"];
 
 type RateLimitRequestState =
-  | { type: "counted"; key: string }
-  | { type: "counted_early_failure" }
-  | { type: "limited" }
+  | { type: "counted"; key: string; windowStart: number }
+  | { type: "counted_early_failure"; key: string; windowStart: number }
+  | { type: "limited"; key: string }
   | { type: "refunded" }
   | { type: "skipped" };
 
@@ -251,6 +284,7 @@ export const rateLimit = ({
   generator,
   max,
   onLimit,
+  budget,
   skip = () => false,
 }: RateLimitOptions) => {
   context.init({ duration });
@@ -280,7 +314,7 @@ export const rateLimit = ({
     }
 
     const key = await generator(request, server);
-    const { count, nextReset } = await context.increment(
+    const { count, nextReset, start } = await context.increment(
       key,
       duration,
       Temporal.Now.instant().epochMilliseconds,
@@ -303,8 +337,14 @@ export const rateLimit = ({
     });
 
     if (exceeded) {
-      onLimit?.();
-      requestState.set(request, { type: "limited" });
+      if (budget !== undefined) {
+        recordBudgetRejection({
+          ...(typeof budget === "function" ? budget(key) : budget),
+          windowMs: duration,
+        });
+      }
+      onLimit?.({ key, duration });
+      requestState.set(request, { type: "limited", key });
       set.status = 429;
       return errorResponse;
     }
@@ -312,8 +352,8 @@ export const rateLimit = ({
     requestState.set(
       request,
       phase === "before_handler"
-        ? { type: "counted", key }
-        : { type: "counted_early_failure" },
+        ? { type: "counted", key, windowStart: start }
+        : { type: "counted_early_failure", key, windowStart: start },
     );
     return undefined;
   };
@@ -344,7 +384,7 @@ export const rateLimit = ({
         switch (state.type) {
           case "counted":
             requestState.set(request, { type: "refunded" });
-            await context.decrement(state.key);
+            await context.decrement(state.key, state.windowStart);
             return undefined;
           case "counted_early_failure":
           case "limited":
@@ -420,7 +460,7 @@ export const rateLimit = ({
       case "counted":
         if (handledError) {
           requestState.set(request, { type: "refunded" });
-          await context.decrement(state.key);
+          await context.decrement(state.key, state.windowStart);
         }
         return undefined;
       case "counted_early_failure":
@@ -433,6 +473,18 @@ export const rateLimit = ({
         return panic(`Unhandled state: ${String(state)}`);
       }
     }
+  });
+
+  plugin.onAfterResponse({ as: "scoped" }, async ({ request }) => {
+    const state = requestState.get(request);
+    if (
+      state?.type === "counted" ||
+      state?.type === "counted_early_failure" ||
+      state?.type === "limited"
+    ) {
+      await context.complete(state.key);
+    }
+    requestState.delete(request);
   });
 
   plugin.onStop(async () => {

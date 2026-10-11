@@ -37,7 +37,7 @@ import {
 } from "@/features/statutes/statute-reader-blocks";
 import { optionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
-import { createStatuteLinkTarget } from "@/lib/statute-route";
+import { createStatuteLinkTarget } from "@/lib/statutes/statute-route";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 /**

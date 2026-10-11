@@ -1,3 +1,4 @@
+// @api-test-heavy-db: retains a full-size 20,000-entry sanctions corpus.
 import { Result, panic } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
@@ -182,7 +183,7 @@ test(
     expect(reads).toBe(0);
     const built = index.unwrap("The refreshed index was not built");
     expect(built.entries).toHaveLength(ENTRY_COUNT);
-    expect(built.identifierEntries.has("P101234")).toBe(true);
+    expect(built.identifierEntries.get("P101234")).toBeDefined();
     expectEventLoopResponsive(report, { budgetMs: LOOP_BUDGET_MS });
   },
   TEST_TIMEOUT_MS,

@@ -14,6 +14,7 @@ import {
   brandPersistedLegislationDocumentId,
 } from "@/api/lib/safe-id-boundaries";
 
+import { DECISION_READER_RESOURCE_URI } from "./apps/resource-uri";
 import type { McpRequestContext } from "./context";
 import {
   blocksDecisionOutput,
@@ -65,6 +66,10 @@ const withheldReason = {
 const metadataOf = ({ decision }: ReaderSource) => ({
   decisionId: decision.id,
   caseNumber: decision.caseNumber.slice(0, 256),
+  caseNumberType: decision.caseNumberType,
+  courtAbbreviation: decision.courtAbbreviation,
+  courtTier: decision.courtTier,
+  language: decision.language,
   court: decision.court.slice(0, 256),
   country: decision.country,
   date: decision.decisionDate,
@@ -137,7 +142,12 @@ const OPEN_DECISION_TOOL_DEFINITION = defineValibotMcpTool({
   description:
     "Open one decision when the user asks to read or open it. Returns metadata, outline and a small target window. paragraphs names the court's printed numbers (48 or 48-53); appUrl opens the web reader at that range. At most once per answer.",
   inputSchema: openDecisionArgs,
-  _meta: { ui: { visibility: ["model", "app"] } },
+  _meta: {
+    ui: {
+      resourceUri: DECISION_READER_RESOURCE_URI,
+      visibility: ["model", "app"],
+    },
+  },
 });
 const READ_DECISION_BLOCKS_TOOL_DEFINITION = defineValibotMcpTool({
   ...common,

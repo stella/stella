@@ -16,6 +16,10 @@ const { IntlProvider } = await import("use-intl");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const messages = (await import("@/i18n/langs/en.json")).default;
 const { TranslateDocumentDialog } = await import("./translate-document-dialog");
+const { ActionCapabilitiesProvider } =
+  await import("@/lib/organization/feature-access/capability-actions");
+const { resolveActionCapabilities } =
+  await import("@/lib/organization/feature-access/action-capabilities.logic");
 const { deepLAvailabilityOptions } = await import("@/lib/deepl/queries");
 
 const clients: InstanceType<typeof QueryClient>[] = [];
@@ -134,9 +138,20 @@ for (const controlled of [true, false]) {
       const view = render(
         <QueryClientProvider client={client}>
           <IntlProvider locale="en" messages={messages} timeZone="UTC">
-            <FormattingProvider locale="en" timeZone="UTC">
-              <router.RouterProvider router={appRouter} />
-            </FormattingProvider>
+            <ActionCapabilitiesProvider
+              value={resolveActionCapabilities({
+                role: "member",
+                ai: true,
+                deepl: true,
+                ocr: true,
+                desktop: "current",
+                settings: undefined,
+              })}
+            >
+              <FormattingProvider locale="en" timeZone="UTC">
+                <router.RouterProvider router={appRouter} />
+              </FormattingProvider>
+            </ActionCapabilitiesProvider>
           </IntlProvider>
         </QueryClientProvider>,
       );

@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
+
 import { env } from "@/api/env";
 import { normalizeRateLimitClientAddress } from "@/api/lib/client-ip";
-import {
-  EXISTING_ACCOUNT_OTP_EMAIL_MAX,
-  NEW_ACCOUNT_OTP_RATE_LIMITS,
-} from "@/api/lib/limits";
+import { NEW_ACCOUNT_OTP_RATE_LIMITS } from "@/api/lib/limits";
+import { OTP_DELIVERY_RATE_LIMITS } from "@/api/lib/rate-limit/budget-config";
 import { InMemoryRateLimitContext } from "@/api/lib/rate-limit/rate-limit";
 
 import {
@@ -73,11 +73,15 @@ describe("new-account OTP abuse policy", () => {
         email: "user@example.com",
       });
 
-    expect(await evaluate(EXISTING_ACCOUNT_OTP_EMAIL_MAX)).toEqual({
+    expect(
+      await evaluate(OTP_DELIVERY_RATE_LIMITS.existingAccountEmailMax),
+    ).toEqual({
       status: "allowed",
       reason: "existing_account",
     });
-    expect(await evaluate(EXISTING_ACCOUNT_OTP_EMAIL_MAX + 1)).toEqual({
+    expect(
+      await evaluate(OTP_DELIVERY_RATE_LIMITS.existingAccountEmailMax + 1),
+    ).toEqual({
       status: "rate_limited",
       reason: "email",
     });
@@ -174,9 +178,7 @@ describe("new-account OTP abuse policy", () => {
     const keyedIpDigest = new Bun.CryptoHasher("sha256", env.BETTER_AUTH_SECRET)
       .update(clientIp)
       .digest("hex");
-    const unkeyedEmailDigest = new Bun.CryptoHasher("sha256")
-      .update(normalizedEmail)
-      .digest("hex");
+    const unkeyedEmailDigest = hashSha256Hex(normalizedEmail);
 
     expect(observedKeys).toEqual([
       `auth:new-account-otp:email:${keyedEmailDigest}`,

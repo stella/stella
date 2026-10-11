@@ -1,18 +1,4 @@
-/**
- * Settings card for the organisation's web-search BYOK keys.
- *
- * Mirrors the DeepL key card: keys are validated via a server-side
- * probe before persisting, stored encrypted, and only ever surface to
- * the UI as a masked preview. One card covers both keys (search
- * provider + page reader) via a shared per-kind field. Only the
- * feature-specific copy lives under `webSearch.settings`; everything
- * generic reuses existing keys.
- */
-
-import { useState } from "react";
-
 import { useQuery } from "@tanstack/react-query";
-import { useRouteContext } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
@@ -21,14 +7,12 @@ import { Trash2Icon } from "@stll/ui/icons";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { SecretInput } from "@/components/secret-input";
-import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { useQueryView } from "@/lib/use-query-view";
-import {
-  webSearchConfigOptions,
-  webSearchKeysKeys,
-} from "@/lib/web-search/queries";
-import { useSettingsMutation } from "@/routes/_protected.settings/-hooks/use-settings-mutation";
+import { webSearchConfigOptions } from "@/lib/web-search/queries";
+
+import { AISettingsSectionFeedback } from "./ai-settings-section";
+import type { KeySettingsSectionProps } from "./ai-settings-section";
 
 type WebSearchKeyKind = "search" | "fetch";
 
@@ -36,12 +20,17 @@ type WebSearchKeyState =
   | { configured: false; platformFallback: boolean }
   | { configured: true; apiKeyMasked: string; platformFallback: boolean };
 
-export const WebSearchKeysCard = () => {
+type WebSearchKeysCardProps = {
+  search: KeySettingsSectionProps;
+  fetch: KeySettingsSectionProps;
+};
+
+export const WebSearchKeysCard = ({
+  search,
+  fetch,
+}: WebSearchKeysCardProps) => {
   const t = useTranslations();
-  const activeOrganizationId = useRouteContext({
-    from: "/_protected",
-    select: (ctx) => ctx.user.activeOrganizationId,
-  });
+  const { activeOrganizationId } = useAuthenticatedUser();
 
   const settingsQuery = useQuery(
     webSearchConfigOptions({ organizationId: activeOrganizationId }),
@@ -65,8 +54,16 @@ export const WebSearchKeysCard = () => {
         </p>
       </div>
 
-      <WebSearchKeyField kind="search" state={config?.search} />
-      <WebSearchKeyField kind="fetch" state={config?.fetch} />
+      <WebSearchKeyField
+        kind="search"
+        state={config?.search}
+        controller={search}
+      />
+      <WebSearchKeyField
+        kind="fetch"
+        state={config?.fetch}
+        controller={fetch}
+      />
     </div>
   );
 };
@@ -74,39 +71,15 @@ export const WebSearchKeysCard = () => {
 type WebSearchKeyFieldProps = {
   kind: WebSearchKeyKind;
   state: WebSearchKeyState | undefined;
+  controller: KeySettingsSectionProps;
 };
 
-const WebSearchKeyField = ({ kind, state }: WebSearchKeyFieldProps) => {
+const WebSearchKeyField = ({
+  kind,
+  state,
+  controller: { draft, onChange, onRemove, feedback, disabled },
+}: WebSearchKeyFieldProps) => {
   const t = useTranslations();
-
-  const [apiKey, setApiKey] = useState("");
-
-  const saveMutation = useSettingsMutation({
-    mutationFn: async () =>
-      unwrapEden(
-        await api["organization-settings"]["web-search-key"].post({
-          kind,
-          apiKey,
-        }),
-      ),
-    invalidate: webSearchKeysKeys.all,
-    successToast: { title: t("success.organizationUpdated") },
-    errorToast: {
-      title: t("errors.actionFailed"),
-      description: t("errors.actionFailed"),
-    },
-    onSuccess: () => setApiKey(""),
-  });
-
-  const deleteMutation = useSettingsMutation({
-    mutationFn: async () =>
-      unwrapEden(
-        await api["organization-settings"]["web-search-key"].delete({ kind }),
-      ),
-    invalidate: webSearchKeysKeys.all,
-    successToast: { title: t("success.organizationUpdated") },
-    errorToast: { title: t("errors.actionFailed") },
-  });
 
   const title =
     kind === "search"
@@ -114,7 +87,6 @@ const WebSearchKeyField = ({ kind, state }: WebSearchKeyFieldProps) => {
       : t("webSearch.settings.fetchTitle");
 
   const isConfigured = state?.configured === true;
-  const canSave = apiKey.trim().length > 0 && !saveMutation.isPending;
   const fieldId = `web-search-key-${kind}`;
 
   return (
@@ -127,7 +99,7 @@ const WebSearchKeyField = ({ kind, state }: WebSearchKeyFieldProps) => {
         </p>
       )}
 
-      {state?.configured === true && (
+      {draft.action !== "cleared" && state?.configured === true && (
         <div className="flex items-center justify-between gap-2">
           <div className="bg-muted flex flex-wrap items-center gap-2 rounded border px-3 py-2">
             <span className="text-muted-foreground text-xs">
@@ -137,8 +109,8 @@ const WebSearchKeyField = ({ kind, state }: WebSearchKeyFieldProps) => {
           </div>
           <Button
             aria-label={t("common.remove")}
-            loading={deleteMutation.isPending}
-            onClick={() => deleteMutation.mutate()}
+            disabled={disabled}
+            onClick={onRemove}
             size="sm"
             variant="ghost"
           >
@@ -155,25 +127,22 @@ const WebSearchKeyField = ({ kind, state }: WebSearchKeyFieldProps) => {
             </label>
             <SecretInput
               autoComplete="off"
-              disabled={saveMutation.isPending}
+              disabled={disabled}
               id={fieldId}
-              onChange={(e) => setApiKey(e.target.value)}
+              onChange={(e) => onChange(e.target.value)}
               placeholder={t("organization.aiConfig.apiKeyPlaceholder")}
-              value={apiKey}
+              value={draft.action === "set" ? draft.apiKey : ""}
             />
           </div>
         </FramePanel>
       </Frame>
 
-      <Button
-        className="self-start"
-        disabled={!canSave}
-        loading={saveMutation.isPending}
-        onClick={() => saveMutation.mutate()}
-        size="sm"
-      >
-        {isConfigured ? t("common.saveChanges") : t("common.save")}
-      </Button>
+      {draft.action === "cleared" && (
+        <p className="text-muted-foreground text-sm">
+          {t("common.unsavedChanges")}
+        </p>
+      )}
+      <AISettingsSectionFeedback feedback={feedback} />
     </div>
   );
 };
