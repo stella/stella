@@ -1,3 +1,4 @@
+import { EventType, uiMessagesToWire } from "@tanstack/ai";
 import type { StreamChunk, StreamDurability } from "@tanstack/ai";
 import { panic, TaggedError } from "better-result";
 import {
@@ -18,7 +19,10 @@ import { Temporal } from "@stll/time";
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { chatRunLogEntries, chatRunLogs, chatTurns } from "@/api/db/schema";
+import { messageTurnTiming } from "@/api/handlers/chat/chat-turn-timing";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createStreamMessageCapture } from "@/api/lib/chat/stream-message-capture";
+import { emitChatRunLogMetric } from "@/api/lib/observability/request-metrics";
 import type { SchedulerDb } from "@/api/lib/scheduler/types";
 
 const MAX_CHUNK_BYTES = 1024 * 1024;
@@ -94,18 +98,36 @@ const createRunLogReader = ({
   organizationId,
   runId,
 }: RunLogReaderOptions): Pick<StreamDurability, "read" | "snapshot"> => {
-  const loadPage = async (after: bigint) =>
-    await db(async (tx) => {
-      const [log] = await tx
+  const loadHeader = async (tx: Transaction) =>
+    (
+      await tx
         .select({
           closedAt: chatRunLogs.closedAt,
           nextSeq: chatRunLogs.nextSeq,
+          tailBatchId: chatRunLogEntries.batchId,
+          tailChunk: chatRunLogEntries.chunk,
         })
         .from(chatRunLogs)
+        .leftJoin(
+          chatRunLogEntries,
+          and(
+            eq(chatRunLogEntries.organizationId, chatRunLogs.organizationId),
+            eq(chatRunLogEntries.runId, chatRunLogs.runId),
+            eq(chatRunLogEntries.seq, sql`${chatRunLogs.nextSeq} - 1`),
+          ),
+        )
         .where(logKey(organizationId, runId))
-        .limit(1);
+        .limit(1)
+    ).at(0);
+  const loadPage = async (after: bigint) =>
+    await db(async (tx) => {
+      const log = await loadHeader(tx);
       const entries = await tx
-        .select({ chunk: chatRunLogEntries.chunk, seq: chatRunLogEntries.seq })
+        .select({
+          chunk: chatRunLogEntries.chunk,
+          seq: chatRunLogEntries.seq,
+          batchId: chatRunLogEntries.batchId,
+        })
         .from(chatRunLogEntries)
         .where(
           and(
@@ -141,6 +163,21 @@ const createRunLogReader = ({
         // db-await-in-loop: tailing page walk; each read starts after the last yielded seq, a page holds at most READ_PAGE_SIZE rows, and the loop ends at the close marker, the not-found deadline, or the abort signal
         const { entries, log } = await loadPage(after);
         for (const entry of entries) {
+          // Final append precedes the transaction that stores the transcript
+          // and closes the log. Hold an open tail terminal until that commit;
+          // intermediate finishes release once the next iteration appends.
+          if (
+            log?.closedAt === null &&
+            (log.tailChunk?.type === EventType.RUN_FINISHED ||
+              log.tailChunk?.type === EventType.RUN_ERROR) &&
+            entry.batchId === log.tailBatchId &&
+            (entry.seq === log.nextSeq - 1n ||
+              (entry.chunk.type === EventType.TEXT_MESSAGE_END &&
+                entry.chunk.metadata !== undefined &&
+                "turnTiming" in entry.chunk.metadata))
+          ) {
+            break;
+          }
           after = entry.seq;
           yield { offset: after.toString(), chunk: entry.chunk };
         }
@@ -157,7 +194,10 @@ const createRunLogReader = ({
         ) {
           throw new ChatRunLogError({ message: "Chat run log was not found" });
         }
-        if (entries.length === READ_PAGE_SIZE) {
+        if (
+          entries.length === READ_PAGE_SIZE &&
+          after === entries.at(-1)?.seq
+        ) {
           continue;
         }
         await Bun.sleep(TAIL_POLL_MS);
@@ -165,11 +205,7 @@ const createRunLogReader = ({
     },
     snapshot: async () =>
       await db(async (tx) => {
-        const [log] = await tx
-          .select({ nextSeq: chatRunLogs.nextSeq })
-          .from(chatRunLogs)
-          .where(logKey(organizationId, runId))
-          .limit(1);
+        const log = await loadHeader(tx);
         if (log === undefined) {
           return [];
         }
@@ -181,6 +217,7 @@ const createRunLogReader = ({
             .select({
               chunk: chatRunLogEntries.chunk,
               seq: chatRunLogEntries.seq,
+              batchId: chatRunLogEntries.batchId,
             })
             .from(chatRunLogEntries)
             .where(
@@ -194,6 +231,18 @@ const createRunLogReader = ({
             .limit(READ_PAGE_SIZE);
           for (const entry of entries) {
             after = entry.seq;
+            if (
+              log.closedAt === null &&
+              (log.tailChunk?.type === EventType.RUN_FINISHED ||
+                log.tailChunk?.type === EventType.RUN_ERROR) &&
+              entry.batchId === log.tailBatchId &&
+              (entry.seq === log.nextSeq - 1n ||
+                (entry.chunk.type === EventType.TEXT_MESSAGE_END &&
+                  entry.chunk.metadata !== undefined &&
+                  "turnTiming" in entry.chunk.metadata))
+            ) {
+              continue;
+            }
             result.push({ offset: after.toString(), chunk: entry.chunk });
           }
           if (entries.length < READ_PAGE_SIZE) {
@@ -206,6 +255,137 @@ const createRunLogReader = ({
           }
         }
       }),
+  };
+};
+
+// A reconnect replays at most 256 deltas or a 1 MiB suffix. Larger prefixes
+// fold into one canonical SDK transcript snapshot, bounded by MAX_RUN_BYTES.
+const MAX_CATCHUP_CHUNKS = 256n;
+const MAX_CATCHUP_BYTES = 1024n * 1024n;
+
+export const createChatRunLogReplay = async ({
+  db,
+  organizationId,
+  runId,
+  resumeOffset,
+  waitForStart = false,
+}: RunLogReaderOptions & {
+  waitForStart?: boolean;
+  resumeOffset: string;
+}): Promise<StreamDurability | null> => {
+  const header = await db(async (tx) =>
+    (
+      await tx
+        .select({
+          closedAt: chatRunLogs.closedAt,
+          nextSeq: chatRunLogs.nextSeq,
+          bytesUsed: chatRunLogs.bytesUsed,
+        })
+        .from(chatRunLogs)
+        .where(logKey(organizationId, runId))
+        .limit(1)
+    ).at(0),
+  );
+  const reader = createRunLogReader({ db, organizationId, runId });
+  if (header === undefined) {
+    return waitForStart
+      ? {
+          ...reader,
+          resumeFrom: () => resumeOffset,
+          append: () => panic("A rejoined chat run cannot produce"),
+          close: async () => {
+            // A viewer closes delivery without closing the producer log.
+          },
+        }
+      : null;
+  }
+  if (header.closedAt !== null) {
+    return null;
+  }
+  const after = (() => {
+    if (resumeOffset === "-1") {
+      return 0n;
+    }
+    if (resumeOffset === "now") {
+      return header.nextSeq - 1n;
+    }
+    return offsetSequence(resumeOffset);
+  })();
+  if (after >= header.nextSeq) {
+    throw new ChatRunLogError({
+      message: "Chat run log offset is beyond the stored tail",
+    });
+  }
+  // Headers let small runs skip the range aggregate; large runs measure only
+  // the requested indexed suffix, so a recent reader does not compact again.
+  const gapBytes =
+    header.bytesUsed <= MAX_CATCHUP_BYTES
+      ? header.bytesUsed
+      : await db(async (tx) => {
+          const [range] = await tx
+            .select({
+              bytes: sql<string>`coalesce(sum(octet_length(${chatRunLogEntries.chunk}::text)), 0)::text`,
+            })
+            .from(chatRunLogEntries)
+            .where(
+              and(
+                entryKey(organizationId, runId),
+                gt(chatRunLogEntries.seq, after),
+              ),
+            );
+          return BigInt(
+            range?.bytes ??
+              panic("Chat catch-up byte aggregate returned no row"),
+          );
+        });
+  const compact =
+    header.nextSeq - 1n - after > MAX_CATCHUP_CHUNKS ||
+    gapBytes > MAX_CATCHUP_BYTES;
+  return {
+    ...reader,
+    resumeFrom: () => resumeOffset,
+    append: () => panic("A rejoined chat run cannot produce"),
+    close: async () => {
+      // A viewer closes delivery without closing the producer log.
+    },
+    async *read(offset, signal) {
+      if (!compact) {
+        yield* reader.read(offset, signal);
+        return;
+      }
+      const prefix = await reader.snapshot();
+      const final = prefix.at(-1);
+      // A snapshot restores message state; the terminal still carries native
+      // interrupt descriptors and must pass through the ordinary close fence.
+      if (
+        final?.chunk.type === EventType.RUN_FINISHED ||
+        final?.chunk.type === EventType.RUN_ERROR
+      ) {
+        prefix.pop();
+      }
+      const last = prefix.at(-1);
+      if (last === undefined) {
+        yield* reader.read(offset, signal);
+        return;
+      }
+      const { processor } = createStreamMessageCapture({
+        initialMessages: [],
+        capture: (message) => message,
+      });
+      for (const { chunk } of prefix) {
+        processor.processChunk(chunk);
+      }
+      yield {
+        offset: last.offset,
+        chunk: {
+          type: EventType.MESSAGES_SNAPSHOT,
+          messages: uiMessagesToWire(processor.getMessages(), {
+            includeSnapshotStructuredOutput: true,
+          }),
+        },
+      };
+      yield* reader.read(last.offset, signal);
+    },
   };
 };
 
@@ -263,6 +443,7 @@ export const createChatRunLog = ({
           message: "Chat run log chunk exceeds its size limit",
         });
       }
+      const startedAt = performance.now();
       const offsets = await db(async (tx) => {
         await assertOwner(tx);
         await tx
@@ -345,6 +526,10 @@ export const createChatRunLog = ({
         return chunks.map((_, index) => (first + BigInt(index)).toString());
       });
       pendingBatch = null;
+      emitChatRunLogMetric({
+        type: "append",
+        durationMs: performance.now() - startedAt,
+      });
       return offsets;
     },
     // Settlement/recovery must close while holding the execution fence; the
@@ -414,6 +599,39 @@ export const closeChatRunLogOnTx = async ({
   if (runId === null) {
     return;
   }
+  // The final batch is appended under the running fence. Finalize its timing
+  // after settlement, in the same transaction that releases the log's tail.
+  const timing = sql`(
+    select ${messageTurnTiming({
+      messageId: chatTurns.timingMessageId,
+      threadId: chatTurns.threadId,
+      fallbackTurnId: chatTurns.id,
+    })}
+    from ${chatTurns}
+    where ${chatTurns.id} = ${turnId}
+      and ${chatTurns.organizationId} = ${organizationId}
+  )`;
+  // audit: skip — derived metadata in the ephemeral log; transcript settlement is audited by its caller
+  await tx
+    .update(chatRunLogEntries)
+    .set({
+      chunk: sql`jsonb_set(${chatRunLogEntries.chunk}, '{metadata,turnTiming}', coalesce(${timing}, 'null'::jsonb))`,
+    })
+    .where(
+      and(
+        entryKey(organizationId, runId),
+        eq(
+          chatRunLogEntries.batchId,
+          sql`(
+          select batch_id from chat_run_log_entries
+          where organization_id = ${organizationId} and run_id = ${runId}
+          order by seq desc limit 1
+        )`,
+        ),
+        sql`${chatRunLogEntries.chunk}->>'type' = ${EventType.TEXT_MESSAGE_END}`,
+        sql`${chatRunLogEntries.chunk}->'metadata' ? 'turnTiming'`,
+      ),
+    );
   await tx
     .update(chatRunLogs)
     .set({ closedAt: sql`now()` })

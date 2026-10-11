@@ -1,5 +1,9 @@
 name: Nightly Full Typecheck
 
+defaults:
+  run:
+    shell: bash
+
 on:
   schedule:
     # 03:17 UTC daily (off-minute to avoid :00 stampede)

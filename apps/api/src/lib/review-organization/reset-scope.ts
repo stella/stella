@@ -1,12 +1,15 @@
 import { Result } from "better-result";
 import { eq, inArray, sql } from "drizzle-orm";
 
+import { stella, WORKSPACE_ACCESS_MODE } from "@/api/db/rls";
 import type { Transaction } from "@/api/db/root";
 import {
   chatThreads,
   CORRESPONDENCE_REVIEW_RESET_SETTING,
   userFiles,
+  workspaces,
 } from "@/api/db/schema";
+import { runScopedWorkInTransaction } from "@/api/db/scoped";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { inOrder } from "@/api/lib/review-organization/in-order";
@@ -205,8 +208,14 @@ const removedCount = (rows: unknown[]): number => {
 export const sweepReviewOrganization = async (
   tx: Transaction,
   organizationId: SafeId<"organization">,
+  userId: SafeId<"user">,
 ): Promise<Map<string, number>> => {
   // audit: skip - the reset sweep; the run's totals go to the system audit
+  const workspaceRows = await tx
+    .select({ id: workspaces.id })
+    .from(workspaces)
+    .where(eq(workspaces.organizationId, organizationId));
+  const workspaceIds = workspaceRows.map(({ id }) => id);
   const removed = new Map<string, number>();
   // Chat attachments name no organization; their rows hold their threads
   // (`user_files.thread_id` restricts), and the storage census already
@@ -227,17 +236,51 @@ export const sweepReviewOrganization = async (
   await tx.execute(
     sql`SELECT set_config(${CORRESPONDENCE_REVIEW_RESET_SETTING.organizationId}, ${organizationId}, true)`,
   );
+  const applicationTables = new Set(
+    (
+      await tx
+        .select({
+          name: sql<string>`c.relname`,
+        })
+        .from(
+          sql`pg_catalog.pg_class c INNER JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace`,
+        ).where(sql`n.nspname = current_schema() AND c.relforcerowsecurity
+      AND has_table_privilege(${stella.name}, c.oid, 'DELETE')
+      AND NOT EXISTS (SELECT 1 FROM pg_catalog.pg_policy policy
+        WHERE policy.polrelid = c.oid AND policy.polcmd IN ('*', 'd')
+          AND policy.polpermissive AND 0 = ANY(policy.polroles)
+          AND strpos(pg_catalog.pg_get_expr(policy.polqual, policy.polrelid), 'CURRENT_USER') > 0
+          AND strpos(pg_catalog.pg_get_expr(policy.polqual, policy.polrelid), 'pg_get_userbyid') > 0)`)
+    ).map(({ name }) => name),
+  );
   const swept = await inOrder(REVIEW_RESET_CLEARED_TABLES, async (name) => {
-    // audit: skip - one table of the reset sweep; totals go to the system audit
-    const rows = executedRows(
-      await tx.execute(
-        sql`WITH removed AS (DELETE FROM ${sql.identifier(name)} WHERE organization_id = ${organizationId} RETURNING 1) SELECT count(*)::int AS n FROM removed`,
-      ),
-    );
-    removed.set(name, removedCount(rows));
+    const clear = async (deleteTx: Transaction) => {
+      // audit: skip - one table of the reset sweep; totals go to the system audit
+      const rows = executedRows(
+        await deleteTx.execute(
+          sql`WITH removed AS (DELETE FROM ${sql.identifier(name)} WHERE organization_id = ${organizationId} RETURNING 1) SELECT count(*)::int AS n FROM removed`,
+        ),
+      );
+      removed.set(name, removedCount(rows));
+    };
+    // Explicit owner cleanup policies cover user and feature-hidden rows.
+    // The remaining application policies use the entire organization matter set.
+    if (applicationTables.has(name)) {
+      await runScopedWorkInTransaction({
+        tx,
+        organizationId,
+        userId,
+        workspaceScope: {
+          type: WORKSPACE_ACCESS_MODE.explicit,
+          workspaceIds,
+        },
+        fn: clear,
+      });
+      return Result.ok(undefined);
+    }
+    await clear(tx);
     return Result.ok(undefined);
   });
-  // Each table's delete either completes or throws out of the transaction.
   swept.unwrap("The sweep's table deletes report no errors");
   await tx.execute(
     sql`SELECT set_config(${CORRESPONDENCE_REVIEW_RESET_SETTING.organizationId}, '', true)`,

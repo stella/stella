@@ -1,6 +1,10 @@
 name: Manual checks
 run-name: "Manual checks ${{ inputs.check }} ${{ github.sha }}"
 
+defaults:
+  run:
+    shell: bash
+
 on:
   workflow_dispatch:
     inputs:

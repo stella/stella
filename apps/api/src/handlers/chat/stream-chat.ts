@@ -26,13 +26,12 @@ import {
   createThirdPartyBoundaryRefusalPayload,
 } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
+import { sanitizeErrorAttributesForOutput } from "@stll/errors";
 import { Temporal } from "@stll/time";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { userFiles } from "@/api/db/schema";
 import type { UsageEventLane } from "@/api/db/schema";
-import { setSharedLockTimeout } from "@/api/db/shared-pool-timeouts";
-import { env } from "@/api/env";
 import type { AnonymizationRefusal } from "@/api/handlers/chat/anonymization-refusal";
 import { refuseAnonymizedCrossing } from "@/api/handlers/chat/anonymization-refusal";
 import { modelAcceptsDocumentAttachment } from "@/api/handlers/chat/attachment-modality";
@@ -59,7 +58,6 @@ import {
   chatAttemptRequestOptions,
   chatSystemPrompts,
 } from "@/api/handlers/chat/chat-request";
-import { shadowChatRun } from "@/api/handlers/chat/chat-run-shadow";
 import {
   CHAT_RUN_MODE,
   type ChatRunMode,
@@ -130,9 +128,11 @@ import type { ChatTurnModel } from "@/api/handlers/chat/turn-model";
 import type {
   ChatAnonRestoration,
   ChatMessage,
+  ChatMessageMetadata,
   ChatMessageUsage,
   ChatPart,
   ChatTurnOutcome,
+  ChatTurnTiming,
   PersistableChatMessage,
   PersistableTerminalAssistantMessage,
 } from "@/api/handlers/chat/types";
@@ -195,6 +195,7 @@ import {
 import type { PublicStreamChunk } from "@/api/lib/chat/tanstack-chat-runtime";
 import { ToolCallIdLedger } from "@/api/lib/chat/unique-tool-call-ids";
 import { readPresent, readUnavailable } from "@/api/lib/errors/read-outcome";
+import type { ReadOutcome } from "@/api/lib/errors/read-outcome";
 import {
   ChatEmptyCompletionError,
   ChatLoopDetectedError,
@@ -227,7 +228,6 @@ import {
   tokenUsageFromTerminalChunk,
 } from "@/api/lib/tanstack-ai-usage";
 import { projectVisualPreviewStream } from "@/api/lib/visual-preview-stream";
-import { isLocalDevOpen } from "@/api/runtime-mode";
 
 const TIMING_READ_FAILURE = failureSink({
   event: "chat.turn.timing_read_failed",
@@ -737,31 +737,31 @@ export const streamChat = async ({
           yield* attemptStream;
         })();
 
-  const shadow = shadowChatRun({
-    enabled: env.CHAT_RUN_LOG_SHADOW ?? isLocalDevOpen(),
-    createLog: () =>
-      createChatRunLog({
-        db: async (callback) => {
-          const appended = await safeDb(
-            async (tx) => {
-              // Bound lock ownership too: a timed-out shadow append must not stall settlement.
-              await tx.execute(sql`SET LOCAL transaction_timeout = '100ms'`);
-              await setSharedLockTimeout(tx, 25);
-              return await callback(tx);
-            },
-            { retry: { times: 0, delayMs: 0, backoff: "constant" } },
-          );
-          if (Result.isError(appended)) {
-            throw appended.error;
-          }
-          return appended.value;
-        },
-        execution: run.execution,
-        organizationId,
-        runId,
-      }),
-    source: projectVisualPreviewStream(stream),
+  const log = createChatRunLog({
+    db: async (callback) => {
+      const result = await safeDb(callback);
+      if (Result.isError(result)) {
+        throw result.error;
+      }
+      return result.value;
+    },
+    execution: run.execution,
+    organizationId,
+    runId,
   });
+  const settlement: {
+    event: StreamChatFinishEvent | undefined;
+    source: "not-started" | "started";
+    resumeSnapshot: ChatMessageMetadata["resumeSnapshot"];
+    terminalChunk: StreamChunk | undefined;
+    finished: Promise<unknown> | undefined;
+  } = {
+    source: "not-started",
+    resumeSnapshot: undefined,
+    terminalChunk: undefined,
+    finished: undefined,
+    event: undefined,
+  };
   const persistenceVisibleStream = transformPersistenceVisibleStream({
     boundary: thirdPartyBoundary,
     initialRestorationPlaceholders:
@@ -773,14 +773,12 @@ export const streamChat = async ({
           })
         : new Set<string>(),
     restorationPairs,
-    source: shadow.source,
+    source: projectVisualPreviewStream(stream),
   });
   const timingPhase: { status: "running" | "settled" } = { status: "running" };
   const processedStream = processTurnForPersistence({
     visualOrigin,
-    // The run's own signal, not the deadline's. Cancelling the response stream
-    // aborts only this derived controller — that is the abort a client
-    // disconnect delivers — while the deadline reaches both.
+    // Delivery detach does not reach the producer; Stop, ownership and budgets do.
     abortSignal:
       run.control.admissionSignal === undefined
         ? abortController.signal
@@ -797,40 +795,35 @@ export const streamChat = async ({
     deadlineSignal,
     flushPendingSource: persistenceVisibleStream.flushPending,
     initialMessages: preparedMessageList,
-    onFinish: async (event) => {
-      await shadow.flush();
-      await run.settle(
-        async () =>
-          await onFinish({
-            outcome: event.outcome,
-            responseMessage: attachTerminalTurnOutcome({
-              message: toPersistableChatMessage(
-                stampReasoningProvenance({
-                  message: {
-                    ...event.responseMessage,
-                    metadata: {
-                      ...event.responseMessage.metadata,
-                      turnModel: servedTurnModel,
-                    },
-                  },
-                  model: {
-                    provider: servedTurnModel.provider,
-                    modelId: servedTurnModel.model,
-                  },
-                  initialMessages: rawMessages,
-                }),
-              ),
-              turnOutcome: event.outcome,
+    onFinish: (event) => {
+      settlement.event = {
+        outcome: event.outcome,
+        responseMessage: attachTerminalTurnOutcome({
+          message: toPersistableChatMessage(
+            stampReasoningProvenance({
+              message: {
+                ...event.responseMessage,
+                metadata: {
+                  ...event.responseMessage.metadata,
+                  turnModel: servedTurnModel,
+                },
+              },
+              model: {
+                provider: servedTurnModel.provider,
+                modelId: servedTurnModel.model,
+              },
+              initialMessages: rawMessages,
             }),
-          }),
-      );
-      timingPhase.status = "settled";
+          ),
+          turnOutcome: event.outcome,
+        }),
+      };
     },
     owningAssistantMessageId,
     restorationPairs,
     source: persistenceVisibleStream,
   });
-  const output = transformClientVisibleStream({
+  const visibleOutput = transformClientVisibleStream({
     deniedApprovals: findDeniedApprovals(preparedMessageList),
     resolveAssistantTextRefs,
     resolveAssistantToolInputRefs,
@@ -840,27 +833,127 @@ export const streamChat = async ({
     storedHistory,
   });
 
+  const output = (async function* () {
+    settlement.source = "started";
+    const finalChunks: StreamChunk[] = [];
+    for await (const chunk of visibleOutput) {
+      if (
+        settlement.event !== undefined &&
+        (chunk.type === EventType.RUN_FINISHED ||
+          chunk.type === EventType.RUN_ERROR)
+      ) {
+        if (
+          chunk.type === EventType.RUN_FINISHED &&
+          chunk.outcome?.type === "interrupt"
+        ) {
+          settlement.resumeSnapshot = {
+            resumeState: { threadId, runId },
+            pendingInterrupts: chunk.outcome.interrupts,
+          };
+        }
+        finalChunks.push(chunk);
+        continue;
+      }
+      yield chunk;
+    }
+    // The visual transform can flush buffered refs after the source terminal.
+    // Deliver that content before terminalizing, and identify the last terminal
+    // so every earlier iteration remains appendable under the execution fence.
+    settlement.terminalChunk = finalChunks.at(-1);
+    for (const chunk of finalChunks) {
+      if (chunk === settlement.terminalChunk) {
+        timingPhase.status = "settled";
+      }
+      yield chunk;
+    }
+    if (settlement.event !== undefined) {
+      timingPhase.status = "settled";
+    }
+  })();
+  const finishSettlement = async () => {
+    const { event } = settlement;
+    if (event === undefined) {
+      settlement.finished ??= run.failProduction(settlement.source);
+      await settlement.finished;
+      return;
+    }
+    const responseMessage =
+      event.outcome.type === "awaiting-user" &&
+      settlement.resumeSnapshot !== undefined
+        ? attachTerminalTurnOutcome({
+            message: toPersistableChatMessage({
+              ...event.responseMessage,
+              metadata: {
+                ...event.responseMessage.metadata,
+                resumeSnapshot: settlement.resumeSnapshot,
+              },
+            }),
+            turnOutcome: event.outcome,
+          })
+        : event.responseMessage;
+    settlement.finished ??= run.settle(
+      async () => await onFinish({ outcome: event.outcome, responseMessage }),
+    );
+    await settlement.finished;
+  };
+
+  const readTiming = async (): Promise<ReadOutcome<ChatTurnTiming | null>> => {
+    const timing = await readChatTurnTiming({
+      execution: run.execution,
+      safeDb,
+    });
+    if (Result.isError(timing)) {
+      observeFailure(timing.error, {
+        sink: TIMING_READ_FAILURE,
+        ctx: { threadId },
+      });
+      return readUnavailable({ kind: "thrown", error: timing.error });
+    }
+    return readPresent(timing.value);
+  };
+
   return {
     type: "streaming",
     response: run.produce(
       withChatTurnTiming({
         source: output,
         getPhase: () => timingPhase.status,
-        readTiming: async () => {
-          const timing = await readChatTurnTiming({
-            execution: run.execution,
-            safeDb,
-          });
-          if (Result.isError(timing)) {
-            observeFailure(timing.error, {
-              sink: TIMING_READ_FAILURE,
-              ctx: { threadId },
-            });
-            return readUnavailable({ kind: "thrown", error: timing.error });
-          }
-          return readPresent(timing.value);
-        },
+        readTiming,
       }),
+      {
+        ...log,
+        append: async (chunks) => {
+          const offsets = await log.append(chunks);
+          if (
+            settlement.terminalChunk !== undefined &&
+            chunks.includes(settlement.terminalChunk)
+          ) {
+            // Append while fenced; persist the transcript before returning the
+            // offsets that allow the SDK to deliver the final terminal event.
+            await finishSettlement();
+            const timing = await readTiming();
+            // The settlement transaction finalizes these same metadata events in
+            // the log. Update the live batch before the SDK forwards its offsets.
+            for (const chunk of chunks) {
+              if (
+                chunk.type === EventType.TEXT_MESSAGE_END &&
+                chunk.metadata !== undefined &&
+                "turnTiming" in chunk.metadata
+              ) {
+                chunk.metadata["turnTiming"] =
+                  timing.type === "present" ? timing.value : null;
+              }
+            }
+          }
+          return offsets;
+        },
+        close: async () => {
+          // A producer cutoff can return its generator without emitting a
+          // terminal. The SDK flushes its cleanup batch before this callback.
+          await finishSettlement();
+          await log.close();
+        },
+      },
     ),
   };
 };
@@ -1871,17 +1964,20 @@ const reportStreamFailure = (
   }
   classifyRejectedProviderRequest(error, kind);
   captureError(error, { kind });
-  logger.error("chat.stream_failed", {
-    kind,
-    ...errorFingerprint(error),
-    ...providerStatusFields(error),
-    // Structural fields only (code, param, type), never the body's message.
-    ...providerErrorFields(error),
-    // The template name only; the message itself can echo request content.
-    ...(providerMessage === undefined
-      ? {}
-      : { "error.provider.reason": providerErrorReason(providerMessage) }),
-  });
+  logger.error(
+    "chat.stream_failed",
+    sanitizeErrorAttributesForOutput({
+      kind,
+      ...errorFingerprint(error),
+      ...providerStatusFields(error),
+      // Structural fields only (code, param, type), never the body's message.
+      ...providerErrorFields(error),
+      // The template name only; the message itself can echo request content.
+      ...(providerMessage === undefined
+        ? {}
+        : { "error.provider.reason": providerErrorReason(providerMessage) }),
+    }),
+  );
 };
 
 const normalizeRunErrorChunk = (chunk: RunErrorChunk): RunErrorChunk => {
@@ -2592,8 +2688,8 @@ export const processServerChatStream = async function* ({
     }
     const kind = classifyAIError(error);
     if (abortSignal.aborted) {
-      // An aborted stream is an expected exit (metered cutoff, client
-      // disconnect); its rejection shape is not a stream defect even
+      // An aborted stream is an expected exit (metered cutoff, ownership
+      // loss); its rejection shape is not a stream defect even
       // when the classifier cannot name it.
       captureError(error, { kind });
       await terminalize({
@@ -2615,17 +2711,8 @@ export const processServerChatStream = async function* ({
       timestamp: Temporal.Now.instant().epochMilliseconds,
     };
   } finally {
-    // Client-disconnect teardown: Bun's `ReadableStream.cancel()` fires when the
-    // socket drops and aborts the run's controller. `chat()` hands that signal
-    // to the provider request, so the model call is cancelled with the socket;
-    // tanstack breaks its `for await`, and that `.return()`s this generator
-    // mid-stream, so neither the natural-completion finish nor the `catch` ran.
-    // Persist whatever content accumulated before the abort as a cut-short
-    // turn, so a partial answer is not silently lost on remount. Skipped when
-    // the stream already finished or failed, and a no-op when nothing
-    // accumulated (finalizeStream drops whitespace-only messages). Awaiting here
-    // completes even on teardown, and persistence uses the shared RLS pool, not
-    // a request-scoped handle.
+    // Stop, budgets, ownership loss or transport failure can return the
+    // generator before natural completion. Preserve its accumulated message.
     if (terminal.state === "open") {
       await terminalize({
         flushProcessor: true,

@@ -30,7 +30,8 @@ const timingMetadata = (outcome: ReadOutcome<ChatTurnTiming | null>) => {
 
 /** Metadata uses the SDK's message events, so the real processor owns its
  * projection. Observe at emission so provider waits count in the live duration.
- * Terminal timing is read only after durable settlement.
+ * Terminal metadata joins the final batch; the durability adapter finalizes
+ * its timing in the settlement transaction before forwarding that batch.
  * @yields Source events carrying server-owned active timing metadata.
  */
 export const withChatTurnTiming = async function* ({

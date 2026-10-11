@@ -1,5 +1,7 @@
 import { panic } from "better-result";
 
+import { sanitizeErrorAttributesForOutput } from "@stll/errors";
+
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { errorSystemFields } from "@/api/lib/errors/utils";
@@ -107,14 +109,17 @@ export const processResultForCorpusOutcome = (
         reason: PROCESS_DECISION_RETRY_REASON.CORPUS_WRITE,
       };
     case "failed": {
-      logger.error("case_law.ingestion.corpus_write_failed", {
-        decisionId,
-        caseNumber: caseNumber ?? "",
-        country: country ?? "",
-        ...errorSystemFields(outcome.error),
-        ...pgErrorFields(outcome.error),
-        "error.detail": wrappedErrorDetail(outcome.error),
-      });
+      logger.error(
+        "case_law.ingestion.corpus_write_failed",
+        sanitizeErrorAttributesForOutput({
+          decisionId,
+          caseNumber: caseNumber ?? "",
+          country: country ?? "",
+          ...errorSystemFields(outcome.error),
+          ...pgErrorFields(outcome.error),
+          "error.detail": wrappedErrorDetail(outcome.error),
+        }),
+      );
       captureError(outcome.error, {
         decisionId,
         step: "processDecision.corpusWrite",

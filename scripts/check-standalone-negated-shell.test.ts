@@ -65,6 +65,36 @@ fi`;
   expect(check("scripts/passing.bash", source)).toEqual([]);
 });
 
+test("recognizes negation after time pipeline prefixes", () => {
+  for (const timed of ["time ! true", "time -p ! true"]) {
+    expect(
+      check("scripts/timed.sh", `set -e\n${timed}\necho continued`),
+      timed,
+    ).toEqual([{ file: "scripts/timed.sh", line: 2, source: timed }]);
+  }
+});
+
+test("accepts final group negations when the group status is consumed", () => {
+  for (const source of [
+    "if ( ! grep -q x file ); then :; fi",
+    "{ ! grep -q x file; } || exit 1",
+    "if { true; ! false; }; then :; fi",
+  ]) {
+    expect(check("scripts/consumed-group.sh", source), source).toEqual([]);
+  }
+});
+
+test("rejects group negations that do not supply a consumed group status", () => {
+  for (const source of [
+    "if ( ! grep -q x file; true ); then :; fi",
+    "{ ! grep -q x file; }\necho continued",
+  ]) {
+    expect(check("scripts/unconsumed-group.sh", source), source).toHaveLength(
+      1,
+    );
+  }
+});
+
 test("accepts a negation consumed by || on the same line, not by &&", () => {
   expect(check("scripts/or.sh", "! grep -q x file || exit 1")).toEqual([]);
   expect(
@@ -414,4 +444,70 @@ test("a terminal negation continued from an and-or line is still in the list", (
       "f() {\n  true && # why\n  ! true\n}",
     ),
   ).toHaveLength(1);
+});
+
+test("a case arm inside a function or group keeps the enclosing frame", () => {
+  expect(
+    check(
+      "scripts/case-in-function.sh",
+      'f() { case "$x" in x) :;; esac; ! false; }\nif f; then :; fi',
+    ),
+  ).toEqual([]);
+  expect(
+    check(
+      "scripts/case-in-group.sh",
+      '{ case "$x" in (x) :;; y) :;; esac; ! false; } || exit 1',
+    ),
+  ).toEqual([]);
+  expect(
+    check(
+      "scripts/case-in-subshell.sh",
+      'if ( case "$x" in x) :;; esac; ! false; ); then :; fi',
+    ),
+  ).toEqual([]);
+  expect(
+    check(
+      "scripts/case-pattern-named-case.sh",
+      'if ( case "$x" in x) :;; case) :;; esac; ! false; ); then :; fi',
+    ),
+  ).toEqual([]);
+  expect(
+    check(
+      "scripts/case-fallthrough.sh",
+      'if ( case "$x" in x) : ;& y) : ;;& z) : ;; esac; ! false ); then :; fi',
+    ),
+  ).toEqual([]);
+  expect(
+    check(
+      "scripts/nested-case.sh",
+      '( case "$x" in x) case "$y" in (y) :;; esac;; esac; ! false ) || exit 1',
+    ),
+  ).toEqual([]);
+  expect(
+    check(
+      "scripts/case-arm-negation.sh",
+      'f() { case "$x" in x) ! false; echo next;; esac; }',
+    ),
+  ).toHaveLength(1);
+});
+
+test("a group that feeds a pipe does not pass its status on", () => {
+  expect(
+    check("scripts/group-pipe.sh", "if ( ! grep -q x file ) | cat; then :; fi"),
+  ).toHaveLength(1);
+  expect(
+    check(
+      "scripts/group-redirect-pipe.sh",
+      "if ( ! grep -q x file ) 2>/dev/null | cat; then :; fi",
+    ),
+  ).toHaveLength(1);
+  expect(
+    check(
+      "scripts/group-redirect.sh",
+      "if ( ! grep -q x file ) 2>/dev/null; then :; fi",
+    ),
+  ).toEqual([]);
+  expect(
+    check("scripts/group-last.sh", "if cat | ( ! grep -q x file ); then :; fi"),
+  ).toEqual([]);
 });

@@ -14,6 +14,7 @@ import type {
 } from "@stll/ai-catalog";
 import type { ActionAdmissionRefusal } from "@stll/api-contract/action-admission";
 import type { ChatTurnTiming } from "@stll/api-contract/chat";
+import type { ChatTurnResumeProbe } from "@stll/chat/resume-contract";
 import type { FolioAgentToolName } from "@stll/folio-agents";
 import type {
   FolioAgentToolInputByName,
@@ -178,6 +179,11 @@ export type ChatMessageMetadata = {
   refEncoding?: ChatRefEncoding | undefined;
   /** Server-owned replay context for persisted tool references. */
   refContext?: ChatRefContext | undefined;
+  /** Server-owned native interrupt identity, retained with the transcript
+   * after the delivery log expires. Incoming metadata cannot set this. */
+  resumeSnapshot?:
+    | Extract<ChatTurnResumeProbe, { type: "transcript" }>["resumeSnapshot"]
+    | undefined;
   /** Server-owned provenance. Incoming client metadata validation deliberately
    *  does not accept this field. */
   serverProvenance?:

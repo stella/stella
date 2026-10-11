@@ -49,6 +49,8 @@
 
 import { panic } from "better-result";
 
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
+
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import {
   enterCaseLawMaintenanceLane,
@@ -201,80 +203,85 @@ let held = 0;
 const unknownCodes = new Map<string, number>();
 const courts = new Map<string, number>();
 
-while (reattributed + superseded < limit) {
-  // db-await-in-loop: keyset page per iteration; the page is the batch
-  const page = await readPage(cursor);
+await runScriptWithErrorOutput(async () => {
+  while (reattributed + superseded < limit) {
+    // db-await-in-loop: keyset page per iteration; the page is the batch
+    const page = await readPage(cursor);
 
-  // The cursor advances by rows examined, not by rows matched. A page whose
-  // rows all held is still progress, and a walk that only moved on a match
-  // would read the same page forever once the last one was behind it.
-  if (page.cursor === null) {
-    break;
-  }
-  cursor = page.cursor;
-  scanned += page.scanned;
-
-  for (const row of page.rows) {
-    // The allowance is per row, not per page: a page is read whole, so a run
-    // with one slot left would otherwise write every re-attributable row on
-    // it. What an operator authorised is the number of rows changed.
-    if (reattributed + superseded >= limit) {
+    // The cursor advances by rows examined, not by rows matched. A page whose
+    // rows all held is still progress, and a walk that only moved on a match
+    // would read the same page forever once the last one was behind it.
+    if (page.cursor === null) {
       break;
     }
-    const repair = decideCzNsCourtRepair(row);
-    switch (repair.outcome) {
-      case CZ_NS_COURT_REPAIR_OUTCOMES.HELD: {
-        held += 1;
+    cursor = page.cursor;
+    scanned += page.scanned;
+
+    for (const row of page.rows) {
+      // The allowance is per row, not per page: a page is read whole, so a run
+      // with one slot left would otherwise write every re-attributable row on
+      // it. What an operator authorised is the number of rows changed.
+      if (reattributed + superseded >= limit) {
         break;
       }
-      case CZ_NS_COURT_REPAIR_OUTCOMES.UNKNOWN_CODE: {
-        unknownCodes.set(repair.code, (unknownCodes.get(repair.code) ?? 0) + 1);
-        break;
-      }
-      case CZ_NS_COURT_REPAIR_OUTCOMES.REATTRIBUTED: {
-        courts.set(repair.court, (courts.get(repair.court) ?? 0) + 1);
-        if (!apply) {
-          reattributed += 1;
+      const repair = decideCzNsCourtRepair(row);
+      switch (repair.outcome) {
+        case CZ_NS_COURT_REPAIR_OUTCOMES.HELD: {
+          held += 1;
           break;
         }
-        // db-await-in-loop: one transaction per row: each takes its projection lock and syncs that row, so a failure rolls back only that row
-        const written = await reattributeRow(repair);
-        if (written) {
-          reattributed += 1;
-        } else {
-          superseded += 1;
+        case CZ_NS_COURT_REPAIR_OUTCOMES.UNKNOWN_CODE: {
+          unknownCodes.set(
+            repair.code,
+            (unknownCodes.get(repair.code) ?? 0) + 1,
+          );
+          break;
         }
-        break;
-      }
-      default: {
-        repair satisfies never;
-        panic(`Unhandled cz-ns court repair: ${JSON.stringify(repair)}`);
+        case CZ_NS_COURT_REPAIR_OUTCOMES.REATTRIBUTED: {
+          courts.set(repair.court, (courts.get(repair.court) ?? 0) + 1);
+          if (!apply) {
+            reattributed += 1;
+            break;
+          }
+          // db-await-in-loop: one transaction per row: each takes its projection lock and syncs that row, so a failure rolls back only that row
+          const written = await reattributeRow(repair);
+          if (written) {
+            reattributed += 1;
+          } else {
+            superseded += 1;
+          }
+          break;
+        }
+        default: {
+          repair satisfies never;
+          panic(`Unhandled cz-ns court repair: ${JSON.stringify(repair)}`);
+        }
       }
     }
   }
-}
 
-console.info(
-  `${scanned.toLocaleString()} rows of the source examined: ` +
-    `${reattributed.toLocaleString()} ${apply ? "re-attributed" : "would be re-attributed"}, ` +
-    `${held.toLocaleString()} already correct, ` +
-    `${superseded.toLocaleString()} changed under the run.`,
-);
-for (const [court, count] of [...courts].toSorted((a, b) => b[1] - a[1])) {
-  console.info(`  ${String(count).padStart(6)}  ${court}`);
-}
-if (unknownCodes.size > 0) {
-  console.error(
-    "ECLI court codes the map does not know; these rows were left alone:",
+  console.info(
+    `${scanned.toLocaleString()} rows of the source examined: ` +
+      `${reattributed.toLocaleString()} ${apply ? "re-attributed" : "would be re-attributed"}, ` +
+      `${held.toLocaleString()} already correct, ` +
+      `${superseded.toLocaleString()} changed under the run.`,
   );
-  for (const [code, count] of [...unknownCodes].toSorted(
-    (a, b) => b[1] - a[1],
-  )) {
-    console.error(`  ${String(count).padStart(6)}  ${code}`);
+  for (const [court, count] of [...courts].toSorted((a, b) => b[1] - a[1])) {
+    console.info(`  ${String(count).padStart(6)}  ${court}`);
   }
-}
-if (!apply) {
-  console.info("Report only. Re-run with --apply to write.");
-}
+  if (unknownCodes.size > 0) {
+    console.error(
+      "ECLI court codes the map does not know; these rows were left alone:",
+    );
+    for (const [code, count] of [...unknownCodes].toSorted(
+      (a, b) => b[1] - a[1],
+    )) {
+      console.error(`  ${String(count).padStart(6)}  ${code}`);
+    }
+  }
+  if (!apply) {
+    console.info("Report only. Re-run with --apply to write.");
+  }
 
-process.exit(0);
+  process.exit(0);
+});
