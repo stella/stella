@@ -200,7 +200,7 @@ for (const operation of ["create", "update"] as const) {
     const result = await updateFactDetails.handler(context);
 
     if (!("updatedAt" in result)) {
-      return panic("Fact detail write did not return its stored timestamp");
+      panic("Fact detail write did not return its stored timestamp");
     }
     expect(result.updatedAt.toISOString()).toBe(storedUpdatedAt.toISOString());
   });

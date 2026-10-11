@@ -135,7 +135,7 @@ for (const operation of ["create", "update"] as const) {
               ? {
                   returning: async () => [{ updatedAt: storedUpdatedAt }],
                 }
-              : Promise.resolve([]),
+              : [],
         }),
       }),
       delete: () => ({ where: async () => [] }),

@@ -245,7 +245,7 @@ if (!databaseUrl || !runPostgres) {
                   ? result.code
                   : 200,
               )
-              .toSorted(),
+              .toSorted((left, right) => left - right),
           ).toEqual([200, 409]);
           const refusal = results.find(
             (result) => result instanceof ElysiaCustomStatusResponse,

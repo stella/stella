@@ -126,7 +126,7 @@ export const upsertFieldContentSchema = t.Union(
 
 export type FieldWriteContent = Static<typeof upsertFieldContentSchema>;
 
-export const INTERNAL_FIELD_WRITE_PRECONDITION = "internal" as const;
+export const INTERNAL_FIELD_WRITE_PRECONDITION = Symbol("internal field write");
 const ABSENT_ROW_UPDATED_AT = new Date(0);
 const ABSENT_ROW_EXPECTED_UPDATED_AT = ABSENT_ROW_UPDATED_AT.toISOString();
 
@@ -319,11 +319,12 @@ const replaceStoredField = async ({
       )
       .returning({ updatedAt: entities.updatedAt })
   ).at(0);
-  if (updatedEntity === undefined || updatedEntity.updatedAt === null) {
+  const updatedAt = updatedEntity?.updatedAt;
+  if (updatedAt === undefined || updatedAt === null) {
     return panic("Locked field entity did not return updatedAt");
   }
 
-  return updatedEntity.updatedAt;
+  return updatedAt;
 };
 
 export type WriteFieldValueProps = {
