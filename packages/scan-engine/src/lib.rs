@@ -22,7 +22,7 @@ const DESKEW_TENTHS: f32 = 0.1;
 const MIN_FOREGROUND_CONTRAST: u8 = 15;
 const ADAPTIVE_THRESHOLD_OFFSET: i32 = 5;
 const CROP_PADDING_MM: f32 = 3.0;
-const STRONG_EDGE_GRADIENT: u8 = 10;
+const MIN_EDGE_CONTRAST: u8 = 10;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CleanOutput {
@@ -390,41 +390,86 @@ fn rotate_centered(gray: &GrayImage, angle: f32) -> Result<RotatedImage, Unrecog
 }
 
 fn threshold_document(flattened: &GrayImage) -> GrayImage {
-    let local = adaptive_threshold(flattened, 20, ADAPTIVE_THRESHOLD_OFFSET);
+    let local_mean = box_filter_scaled(flattened, 20);
     let absolute_threshold = page_background(flattened).saturating_sub(MIN_FOREGROUND_CONTRAST);
     GrayImage::from_fn(flattened.width(), flattened.height(), |x, y| {
         // Local contrast preserves fine strokes; the page-background threshold also preserves
         // solid marks whose interior has no local contrast.
-        let foreground =
-            local.get_pixel(x, y)[0] == 0 || flattened.get_pixel(x, y)[0] <= absolute_threshold;
+        let value = flattened.get_pixel(x, y)[0];
+        let foreground = i32::from(value)
+            < i32::from(local_mean.get_pixel(x, y)[0]) - ADAPTIVE_THRESHOLD_OFFSET
+            || value <= absolute_threshold;
         Luma([if foreground { 0 } else { 255 }])
     })
+}
+
+fn box_filter_scaled(gray: &GrayImage, radius: u32) -> GrayImage {
+    let width = gray.width();
+    let height = gray.height();
+    let mut horizontal = GrayImage::new(width, height);
+    for y in 0..height {
+        let mut sum = (0..=radius.min(width - 1))
+            .map(|x| u64::from(gray.get_pixel(x, y)[0]))
+            .sum::<u64>();
+        for x in 0..width {
+            let left = x.saturating_sub(radius);
+            let right = x.saturating_add(radius).min(width - 1);
+            let count = u64::from(right - left + 1);
+            horizontal.put_pixel(x, y, Luma([((sum + count / 2) / count) as u8]));
+            if x >= radius {
+                sum -= u64::from(gray.get_pixel(x - radius, y)[0]);
+            }
+            if let Some(next) = x.checked_add(radius + 1).filter(|next| *next < width) {
+                sum += u64::from(gray.get_pixel(next, y)[0]);
+            }
+        }
+    }
+
+    let mut filtered = GrayImage::new(width, height);
+    for x in 0..width {
+        let mut sum = (0..=radius.min(height - 1))
+            .map(|y| u64::from(horizontal.get_pixel(x, y)[0]))
+            .sum::<u64>();
+        for y in 0..height {
+            let top = y.saturating_sub(radius);
+            let bottom = y.saturating_add(radius).min(height - 1);
+            let count = u64::from(bottom - top + 1);
+            filtered.put_pixel(x, y, Luma([((sum + count / 2) / count) as u8]));
+            if y >= radius {
+                sum -= u64::from(horizontal.get_pixel(x, y - radius)[0]);
+            }
+            if let Some(next) = y.checked_add(radius + 1).filter(|next| *next < height) {
+                sum += u64::from(horizontal.get_pixel(x, next)[0]);
+            }
+        }
+    }
+    filtered
 }
 
 fn flattening_background(gray: &GrayImage) -> GrayImage {
     let width = gray.width();
     let height = gray.height();
     let longest_side = width.max(height);
-    // Illumination is smooth while printed regions have sharp, enclosing boundaries. Measure
-    // gradients after smoothing at 1/500 of the longest side, close gaps by 1/250, then flood
-    // from the page boundary: anything the strong-edge barrier encloses is excluded from the
-    // background and filled from its nearest reachable page pixel. The final illumination field
-    // is averaged over 1/12 of the longest side. Thus every spatial parameter scales with the
-    // image rather than with a particular scan resolution; the 10-level gradient threshold
-    // describes sharpness at that scale, not a minimum foreground-to-page contrast.
+    // Illumination is smooth while printed regions have sharp, enclosing boundaries. Smooth at
+    // 1/500 of the longest side, then compare samples one smoothing radius apart on either side.
+    // The threshold is therefore the measured contrast across a scale-sized span, rather than a
+    // per-pixel slope that shrinks as resolution increases. Close gaps by 1/250, then flood from
+    // the page boundary: anything the edge barrier encloses is excluded from the background and
+    // filled from its nearest reachable page pixel. Average the final illumination field over
+    // 1/12 of the longest side. Every spatial measurement is resolution-independent.
     let edge_scale = (longest_side / 500).max(1);
     let edge_dilation = (longest_side / 250).max(1);
     let illumination_radius = (longest_side / 12).max(1);
-    let smooth = box_filter(gray, edge_scale, edge_scale);
+    let smooth = box_filter_scaled(gray, edge_scale);
     let mut strong_edge = vec![false; (width * height) as usize];
     for y in 0..height {
         for x in 0..width {
-            let left = smooth.get_pixel(x.saturating_sub(1), y)[0];
-            let right = smooth.get_pixel((x + 1).min(width - 1), y)[0];
-            let above = smooth.get_pixel(x, y.saturating_sub(1))[0];
-            let below = smooth.get_pixel(x, (y + 1).min(height - 1))[0];
+            let left = smooth.get_pixel(x.saturating_sub(edge_scale), y)[0];
+            let right = smooth.get_pixel(x.saturating_add(edge_scale).min(width - 1), y)[0];
+            let above = smooth.get_pixel(x, y.saturating_sub(edge_scale))[0];
+            let below = smooth.get_pixel(x, y.saturating_add(edge_scale).min(height - 1))[0];
             strong_edge[(y * width + x) as usize] =
-                left.abs_diff(right).max(above.abs_diff(below)) >= STRONG_EDGE_GRADIENT;
+                left.abs_diff(right).max(above.abs_diff(below)) >= MIN_EDGE_CONTRAST;
         }
     }
     let stride = width as usize + 1;
@@ -525,7 +570,7 @@ fn flattening_background(gray: &GrayImage) -> GrayImage {
             }
         }
     }
-    box_filter(&inpainted, illumination_radius, illumination_radius)
+    box_filter_scaled(&inpainted, illumination_radius)
 }
 
 fn content_bounds(binary: &GrayImage, dpi: f32) -> Option<ContentBox> {
