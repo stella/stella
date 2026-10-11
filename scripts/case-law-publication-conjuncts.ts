@@ -1,4 +1,4 @@
-import type ts from "typescript";
+import ts from "typescript";
 
 type Token = { depth: number } & (
   | { kind: "interpolation"; text: "?"; expression: ts.Expression }
@@ -57,7 +57,7 @@ const caseDepthBefore = (tokens: readonly Token[], depth: number): number => {
   return count;
 };
 
-const tokenize = (template: ts.TemplateExpression): Token[] => {
+const tokenize = (template: ts.TemplateLiteral): Token[] => {
   const tokens: Token[] = [];
   let depth = 0;
   let blockDepth = 0;
@@ -150,8 +150,9 @@ const tokenize = (template: ts.TemplateExpression): Token[] => {
     }
   };
 
-  scan(template.head.text);
-  for (const span of template.templateSpans) {
+  scan(ts.isTemplateExpression(template) ? template.head.text : template.text);
+  const spans = ts.isTemplateExpression(template) ? template.templateSpans : [];
+  for (const span of spans) {
     if (mode === "sql") {
       tokens.push({
         kind: "interpolation",
@@ -163,6 +164,21 @@ const tokenize = (template: ts.TemplateExpression): Token[] => {
     scan(span.literal.text);
   }
   return unsupported || mode !== "sql" || depth !== 0 ? [] : tokens;
+};
+
+export const hasPreservingSqlJoin = (template: ts.TemplateLiteral): boolean => {
+  const tokens = tokenize(template);
+  return tokens.some((token, index) => {
+    if (
+      token.kind !== "word" ||
+      (token.text !== "RIGHT" && token.text !== "FULL")
+    ) {
+      return false;
+    }
+    const next = tokens[index + 1];
+    const join = next?.text === "OUTER" ? tokens[index + 2] : next;
+    return join?.kind === "word" && join.text === "JOIN";
+  });
 };
 
 const isClauseEnd = (token: Token | undefined, kind: "WHERE" | "ON") =>

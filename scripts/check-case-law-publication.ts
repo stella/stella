@@ -4,6 +4,7 @@ import path from "node:path";
 import ts from "typescript";
 
 import {
+  hasPreservingSqlJoin,
   positiveSqlConjunctInterpolations,
   type PositiveSqlConjunct,
 } from "./case-law-publication-conjuncts";
@@ -987,6 +988,34 @@ const createFileCensusContext = (
   };
 };
 
+const hasUnsupportedDecisionJoin = (site: ReadSite): boolean => {
+  if (site.kind === "builder") {
+    return builderCalls(site.node).some(
+      (call) =>
+        ts.isPropertyAccessExpression(call.expression) &&
+        (call.expression.name.text === "rightJoin" ||
+          call.expression.name.text === "fullJoin"),
+    );
+  }
+  if (site.kind !== "raw") {
+    return false;
+  }
+  let found = false;
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isTaggedTemplateExpression(node) &&
+      hasPreservingSqlJoin(node.template)
+    ) {
+      found = true;
+    }
+    if (!found) {
+      ts.forEachChild(node, visit);
+    }
+  };
+  visit(site.node);
+  return found;
+};
+
 const inspectFileReads = (
   context: FileCensusContext,
   tableOf: (node: ts.Node) => string | undefined,
@@ -1017,6 +1046,10 @@ const inspectFileReads = (
     const aliases = site.kind === "raw" ? rawDecisionAliases(rawQuery) : [];
     const label = `${file}:${site.line}`;
     reads.push(label);
+    if (hasUnsupportedDecisionJoin(site)) {
+      errors.push(`${label}: decision reads use inner or left joins`);
+      continue;
+    }
     if (new Set(aliases).size !== aliases.length) {
       errors.push(`${label}: give each decision table its own alias`);
       continue;

@@ -257,3 +257,22 @@ test("a joined source condition does not certify the base decision", () => {
   expect(filtered.reads).toHaveLength(2);
   expect(filtered.errors).toEqual([]);
 });
+
+test("decision reads use inner or left joins", () => {
+  const report = inspectCaseLawPublication([
+    {
+      file: "apps/api/src/lib/legal-search/decision-join.ts",
+      source: `${publicationImports}
+      import { sql } from "drizzle-orm";
+      import { publishedCaseLawDecisionSqlFor as eligibleSql } from "@/api/lib/case-law/published-decisions";
+      const query = sql\`SELECT d.id FROM case_law_sources s
+        RIGHT JOIN case_law_decisions d ON s.id = d.source_id
+        AND \${sql.raw(eligibleSql("d"))}\`;`,
+    },
+  ]);
+  expect(report.reads).toHaveLength(1);
+  expect(report.errors).toHaveLength(1);
+  expect(report.errors.at(0)).toContain(
+    "decision reads use inner or left joins",
+  );
+});

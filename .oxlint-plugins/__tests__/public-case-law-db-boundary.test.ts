@@ -71,8 +71,8 @@ describe.serial("public-law relation scan", () => {
     const source = [
       'import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";',
       'import { caseLawDecisions } from "@/api/db/schema";',
-      'import { isNull } from "drizzle-orm";',
-      "const query = caseLawPublicReadDb((tx) => tx.select({ redacted: isNull(caseLawDecisions.redactedAt) }).from(caseLawDecisions));",
+      'import { eq, isNull } from "drizzle-orm";',
+      "const query = caseLawPublicReadDb((tx) => tx.select({ redacted: isNull(caseLawDecisions.redactedAt) }).from(caseLawDecisions).where(eq(caseLawDecisions.id, id)));",
     ].join("\n");
     expect(
       await lint(source, "apps/api/src/handlers/case-law/read.ts"),

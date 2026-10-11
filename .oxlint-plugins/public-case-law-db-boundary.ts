@@ -73,22 +73,27 @@ const hasRawPublicationCondition = (statement: string): boolean =>
     ),
   ].some((match) => RAW_PUBLICATION_TEST.test(match[1] ?? ""));
 const isQueryFilter = (node: AstNode): boolean => {
+  let child: AstNode = node;
   let current: unknown = node.parent;
   while (isAstNode(current)) {
     if (
       current.type === "CallExpression" &&
       isAstNode(current.callee) &&
       current.callee.type === "MemberExpression" &&
-      getPropertyName(current.callee.property) === "where"
+      getPropertyName(current.callee.property) === "where" &&
+      Array.isArray(current.arguments) &&
+      current.arguments.includes(child)
     ) {
       return true;
     }
     if (
       current.type === "Property" &&
-      getPropertyName(current.key) === "where"
+      getPropertyName(current.key) === "where" &&
+      current.value === child
     ) {
       return true;
     }
+    child = current;
     current = current.parent;
   }
   return false;
@@ -1380,6 +1385,7 @@ export default eslintCompatPlugin({
                   getPropertyName(argument.property) === "redactedAt",
               )
             ) {
+              let child: AstNode = node;
               let ancestor: unknown = node.parent;
               let insideFilter = false;
               while (isAstNode(ancestor)) {
@@ -1387,7 +1393,9 @@ export default eslintCompatPlugin({
                   ancestor.type === "CallExpression" &&
                   isAstNode(ancestor.callee) &&
                   ancestor.callee.type === "MemberExpression" &&
-                  getPropertyName(ancestor.callee.property) === "where"
+                  getPropertyName(ancestor.callee.property) === "where" &&
+                  Array.isArray(ancestor.arguments) &&
+                  ancestor.arguments.includes(child)
                 ) {
                   insideFilter = true;
                   break;
@@ -1400,6 +1408,7 @@ export default eslintCompatPlugin({
                 ) {
                   break;
                 }
+                child = ancestor;
                 ancestor = ancestor.parent;
               }
               if (insideFilter) {
