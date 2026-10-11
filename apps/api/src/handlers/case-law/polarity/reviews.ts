@@ -7,19 +7,35 @@ import type { caseLawCitations } from "@/api/db/schema";
 import { CITATION_REVIEW_ORIGIN } from "@/api/handlers/case-law/polarity/consts";
 import { citationTextRevisionFingerprintSql } from "@/api/handlers/case-law/polarity/text-revision";
 
-// sql-perf-allow: bounded by the indexed citing decision and citation key of the current page
-const storedReviewTextEligibleSql = sql`(${caseLawCitationReviews.origin} = ${CITATION_REVIEW_ORIGIN.HUMAN_REVIEW}
-  OR (${caseLawCitationReviews.textRevisionSha256} IS NOT NULL
+type ReviewTextEligibility = {
+  origin: SQLWrapper;
+  citingDecisionId: SQLWrapper;
+  textRevisionSha256: SQLWrapper;
+};
+
+/** Only a review eligible for the current text can supply a label or claim precedence. */
+export const reviewTextEligibleSql = ({
+  origin,
+  citingDecisionId,
+  textRevisionSha256,
+}: ReviewTextEligibility): SQL =>
+  // sql-perf-allow: bounded by the indexed citing decision and citation key of the current page or input batch
+  sql`(${origin} = ${CITATION_REVIEW_ORIGIN.HUMAN_REVIEW}
+  OR (${textRevisionSha256} IS NOT NULL
     AND EXISTS (
       SELECT 1 FROM ${caseLawDecisions} AS review_text_revision
-       WHERE review_text_revision.id = ${caseLawCitationReviews.citingDecisionId}
-         AND ${caseLawCitationReviews.textRevisionSha256} = ${citationTextRevisionFingerprintSql(
-           {
-             contentHash: sql`review_text_revision.content_hash`,
-             sections: sql`review_text_revision.sections`,
-           },
-         )}
+       WHERE review_text_revision.id = ${citingDecisionId}
+         AND ${textRevisionSha256} = ${citationTextRevisionFingerprintSql({
+           contentHash: sql`review_text_revision.content_hash`,
+           sections: sql`review_text_revision.sections`,
+         })}
     )))`;
+
+const storedReviewTextEligibleSql = reviewTextEligibleSql({
+  origin: caseLawCitationReviews.origin,
+  citingDecisionId: caseLawCitationReviews.citingDecisionId,
+  textRevisionSha256: caseLawCitationReviews.textRevisionSha256,
+});
 
 type CitationInsert = typeof caseLawCitations.$inferInsert;
 

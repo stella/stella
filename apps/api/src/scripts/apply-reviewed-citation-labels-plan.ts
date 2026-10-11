@@ -26,10 +26,8 @@ import type {
   CitationReviewStanding,
   ReviewablePolarity,
 } from "@/api/handlers/case-law/polarity/consts";
-import {
-  citationTextRevisionFingerprintFence,
-  citationTextRevisionFingerprintSql,
-} from "@/api/handlers/case-law/polarity/text-revision";
+import { reviewTextEligibleSql } from "@/api/handlers/case-law/polarity/reviews";
+import { citationTextRevisionFingerprintFence } from "@/api/handlers/case-law/polarity/text-revision";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -545,8 +543,8 @@ const groupByCitation = (
 };
 
 /**
- * One label per citation, by the order that settles a stored review against
- * an incoming one: origin precedence, then for model labels the later
+ * One text-eligible label per citation, by the order that settles a stored
+ * review against an incoming one: origin precedence, then for model labels the later
  * `producedAt`. Labels nothing orders (two human reviews, or two model labels
  * produced at the same instant) contradict each other at the top, so none of
  * them stands and the citation is left as it is.
@@ -653,13 +651,18 @@ export const reviewMayReplaceSql = ({
   const storedOrigin = sql.raw(`${stored}.origin`);
   const incomingOrigin = sql.raw(`${incoming}.origin`);
   const human = sql`${CITATION_REVIEW_ORIGIN.HUMAN_REVIEW}::text`;
-  return sql`COALESCE(
+  const storedEligible = reviewTextEligibleSql({
+    origin: storedOrigin,
+    citingDecisionId: sql.raw(`${stored}.citing_decision_id`),
+    textRevisionSha256: sql.raw(`${stored}.text_revision_sha256`),
+  });
+  return sql`(NOT ${storedEligible} OR COALESCE(
     ${incomingRank} < ${storedRank}
     OR (${incomingRank} = ${storedRank}
         AND ((${incomingOrigin} = ${human} AND ${storedOrigin} = ${human})
           OR (${incomingOrigin} <> ${human} AND ${storedOrigin} <> ${human}
               AND ${sql.raw(`${incoming}.produced_at`)} > ${sql.raw(`${stored}.produced_at`)}))),
-    false)`;
+    false))`;
 };
 
 const incomingTextRevisionFence = citationTextRevisionFingerprintFence({
@@ -667,14 +670,11 @@ const incomingTextRevisionFence = citationTextRevisionFingerprintFence({
   expectedFingerprint: sql`v.text_revision_sha256`,
 });
 
-// sql-perf-allow: bounded by the validated input label batch and indexed decision ids
-const incomingReviewCurrentSql = sql`(v.origin = ${CITATION_REVIEW_ORIGIN.HUMAN_REVIEW}
-  OR EXISTS (SELECT 1 FROM case_law_decisions AS review_text_revision
-     WHERE review_text_revision.id = v.citing_decision_id
-       AND v.text_revision_sha256 = ${citationTextRevisionFingerprintSql({
-         contentHash: sql`review_text_revision.content_hash`,
-         sections: sql`review_text_revision.sections`,
-       })}))`;
+const incomingReviewCurrentSql = reviewTextEligibleSql({
+  origin: sql`v.origin`,
+  citingDecisionId: sql`v.citing_decision_id`,
+  textRevisionSha256: sql`v.text_revision_sha256`,
+});
 
 const incomingReviewEligibleSql = sql`(v.origin = ${CITATION_REVIEW_ORIGIN.HUMAN_REVIEW} OR ${incomingTextRevisionFence})`;
 
@@ -777,11 +777,33 @@ const planReviewedLabels = (
 ): PlannedLabels => {
   const accepted: AcceptedLabel[] = [];
   const refused: ReviewedLabelRowResult[] = [];
-  for (const row of stateRows) {
+  const states = stateRows.map((row) => {
     const state = v.parse(labelStateRowSchema, row);
     const label = labels.at(state.ord);
     if (label === undefined) {
       return panic(`label state for an unknown ordinal ${state.ord}`);
+    }
+    return { state, label };
+  });
+  for (const { state, label } of states) {
+    if (!state.text_current) {
+      refused.push({
+        ...label.ids,
+        index: label.index,
+        outcome: REVIEWED_LABEL_OUTCOME.STALE,
+      });
+    }
+  }
+  const current = states.filter(({ state }) => state.text_current);
+  const stateByIndex = new Map(
+    current.map(({ label, state }) => [label.index, state]),
+  );
+  const settled = settleDuplicateLabels(current.map(({ label }) => label));
+  refused.push(...settled.settled);
+  for (const label of settled.labels) {
+    const state = stateByIndex.get(label.index);
+    if (state === undefined) {
+      return panic(`settled label without state at index ${label.index}`);
     }
     const outcome = outcomeOf(state);
     if (
@@ -956,18 +978,19 @@ const decideReviewedLabels = async ({
     identities,
     existingDecisions,
   );
-  const settled = settleDuplicateLabels(resolved.labels);
   const planned =
-    settled.labels.length === 0
+    resolved.labels.length === 0
       ? { accepted: [], refused: [] }
       : planReviewedLabels(
-          settled.labels,
+          resolved.labels,
           executedRows(
-            await tx.execute(reviewedLabelStateStatement(settled.labels, mode)),
+            await tx.execute(
+              reviewedLabelStateStatement(resolved.labels, mode),
+            ),
           ),
         );
   return {
-    settled: [...parsed.invalid, ...resolved.invalid, ...settled.settled],
+    settled: [...parsed.invalid, ...resolved.invalid],
     planned,
   };
 };

@@ -120,6 +120,8 @@ type IngestOptions = {
   rawHash: string;
   /** A section before the citing one, which moves the citation's section. */
   leading?: string;
+  /** A section after the citing one, preserving its position while revising text. */
+  trailing?: string;
 };
 
 const ingest = async ({
@@ -127,10 +129,15 @@ const ingest = async ({
   cited,
   rawHash,
   leading,
+  trailing,
 }: IngestOptions) => {
   observationOrder += 1n;
   const citing = departureFrom(cited);
-  const paragraphs = leading === undefined ? [citing] : [leading, citing];
+  const paragraphs = [
+    ...(leading === undefined ? [] : [leading]),
+    citing,
+    ...(trailing === undefined ? [] : [trailing]),
+  ];
   const text = paragraphs.join("\n\n");
   const input: IngestionResult = plainTextIngestionResult({
     caseNumber,
@@ -1049,7 +1056,196 @@ describe("reviewed citation labels", () => {
     );
   });
 
+  test.each(["stale-first", "current-first"] as const)(
+    "a stale adjudication does not block current annotation in one batch (%s)",
+    async (order) => {
+      const suffix = order === "stale-first" ? "1031" : "1032";
+      const cited = `sp. zn. 29 Cdo ${suffix}/2015`;
+      const caseNumber = `30 Cdo ${suffix}/2026`;
+      const labelled = await ingestRuleLabelled({
+        caseNumber,
+        cited,
+        rawHash: `stale-review-${order}`,
+      });
+      const ids = {
+        citingDecisionId: labelled.citingDecisionId,
+        citationKey: keyOf(labelled),
+      };
+      const oldRevision = await textRevisionSha256For(
+        labelled.citingDecisionId,
+      );
+      const adjudicated = {
+        ...labelFor(labelled, POLARITY.POSITIVE),
+        ...provenanceFor(
+          CITATION_REVIEW_ORIGIN.AI_ADJUDICATED,
+          `adjudicated-${order}`,
+          oldRevision,
+        ),
+      };
+      expect((await applyLabels([adjudicated])).rows).toEqual([
+        { ...ids, index: 0, outcome: REVIEWED_LABEL_OUTCOME.APPLIED },
+      ]);
+
+      await ingest({
+        caseNumber,
+        cited,
+        rawHash: `revised-text-${order}`,
+        trailing: "The panel separately considers costs.",
+      });
+      const currentRevision = await textRevisionSha256For(
+        labelled.citingDecisionId,
+      );
+      expect(currentRevision).not.toBe(oldRevision);
+      const revisedCitation = await readCitation(cited);
+      expect(revisedCitation.citationKey).toBe(ids.citationKey);
+      const annotation = {
+        ...labelFor(revisedCitation, POLARITY.NEUTRAL),
+        ...provenanceFor(
+          CITATION_REVIEW_ORIGIN.AI_ANNOTATION,
+          `annotation-${order}`,
+          currentRevision,
+          LATER,
+        ),
+      };
+      const entries =
+        order === "stale-first"
+          ? [adjudicated, annotation]
+          : [annotation, adjudicated];
+      const staleIndex = order === "stale-first" ? 0 : 1;
+      const currentIndex = 1 - staleIndex;
+      const expectedRows = [
+        {
+          ...ids,
+          index: staleIndex,
+          outcome: REVIEWED_LABEL_OUTCOME.STALE,
+        },
+        {
+          ...ids,
+          index: currentIndex,
+          outcome: REVIEWED_LABEL_OUTCOME.APPLIED,
+        },
+      ].toSorted((left, right) => left.index - right.index);
+
+      const planned = await planLabels(entries);
+      expect(planned.type).toBe("planned");
+      expect(planned.rows).toEqual(expectedRows);
+      expect(
+        (
+          await db.execute(sql`
+            SELECT origin, polarity, text_revision_sha256
+              FROM ${caseLawCitationReviews}
+             WHERE citing_decision_id = ${labelled.citingDecisionId}::uuid
+               AND citation_key = ${ids.citationKey}
+          `)
+        ).rows,
+      ).toEqual([
+        {
+          origin: CITATION_REVIEW_ORIGIN.AI_ADJUDICATED,
+          polarity: POLARITY.POSITIVE,
+          text_revision_sha256: oldRevision,
+        },
+      ]);
+
+      expect((await applyLabels(entries)).rows).toEqual(expectedRows);
+      expect(
+        (
+          await db.execute(sql`
+            SELECT origin, polarity, run_id, text_revision_sha256
+              FROM ${caseLawCitationReviews}
+             WHERE citing_decision_id = ${labelled.citingDecisionId}::uuid
+               AND citation_key = ${ids.citationKey}
+          `)
+        ).rows,
+      ).toEqual([
+        {
+          origin: CITATION_REVIEW_ORIGIN.AI_ANNOTATION,
+          polarity: POLARITY.NEUTRAL,
+          run_id: `annotation-${order}`,
+          text_revision_sha256: currentRevision,
+        },
+      ]);
+      expect(await readCitation(cited)).toMatchObject({
+        polarity: POLARITY.NEUTRAL,
+        polarityRuleId: null,
+        polaritySource: "review",
+      });
+    },
+  );
+
+  test("a current lower-priority annotation cannot replace adjudication for the same revision", async () => {
+    const cited = "sp. zn. 29 Cdo 1034/2015";
+    const labelled = await ingestRuleLabelled({
+      caseNumber: "30 Cdo 1034/2026",
+      cited,
+      rawHash: "current-review-precedence",
+    });
+    const ids = {
+      citingDecisionId: labelled.citingDecisionId,
+      citationKey: keyOf(labelled),
+    };
+    const revision = await textRevisionSha256For(labelled.citingDecisionId);
+    const adjudicated = {
+      ...labelFor(labelled, POLARITY.POSITIVE),
+      ...provenanceFor(
+        CITATION_REVIEW_ORIGIN.AI_ADJUDICATED,
+        "same-revision-adjudication",
+        revision,
+      ),
+    };
+    expect((await applyLabels([adjudicated])).rows).toEqual([
+      { ...ids, index: 0, outcome: REVIEWED_LABEL_OUTCOME.APPLIED },
+    ]);
+
+    const annotation = {
+      ...labelFor(labelled, POLARITY.NEUTRAL),
+      ...provenanceFor(
+        CITATION_REVIEW_ORIGIN.AI_ANNOTATION,
+        "same-revision-annotation",
+        revision,
+        LATER,
+      ),
+    };
+    const planned = await planLabels([annotation]);
+    expect(planned.rows).toEqual([
+      {
+        ...ids,
+        index: 0,
+        outcome: REVIEWED_LABEL_OUTCOME.REFUSED_PRECEDENCE,
+      },
+    ]);
+    expect((await applyLabels([annotation])).rows).toEqual(planned.rows);
+    expect(
+      (
+        await db.execute(sql`
+          SELECT origin, polarity, text_revision_sha256
+            FROM ${caseLawCitationReviews}
+           WHERE citing_decision_id = ${labelled.citingDecisionId}::uuid
+             AND citation_key = ${ids.citationKey}
+        `)
+      ).rows,
+    ).toEqual([
+      {
+        origin: CITATION_REVIEW_ORIGIN.AI_ADJUDICATED,
+        polarity: POLARITY.POSITIVE,
+        text_revision_sha256: revision,
+      },
+    ]);
+    expect(await readCitation(cited)).toMatchObject({
+      polarity: POLARITY.POSITIVE,
+      polarityRuleId: null,
+      polaritySource: "review",
+    });
+  });
+
   test("the upsert's compare-and-set agrees with citationReviewMayReplace on every pair", async () => {
+    const labelled = await ingestRuleLabelled({
+      caseNumber: "30 Cdo 1033/2026",
+      cited: "sp. zn. 29 Cdo 1033/2015",
+      rawHash: "eligible-review-matrix",
+    });
+    const textRevisionSha256 = await textRevisionSha256For(
+      labelled.citingDecisionId,
+    );
     const instants = [PRODUCED_AT, LATER];
     const standings = [
       { origin: CITATION_REVIEW_ORIGIN.HUMAN_REVIEW, producedAt: null },
@@ -1077,8 +1273,12 @@ describe("reviewed citation labels", () => {
             ),
             sql`, `,
           )}) AS pair(ord, stored_origin, stored_at, incoming_origin, incoming_at)
-         CROSS JOIN LATERAL (SELECT pair.stored_origin AS origin, pair.stored_at AS produced_at) s
-         CROSS JOIN LATERAL (SELECT pair.incoming_origin AS origin, pair.incoming_at AS produced_at) i
+         CROSS JOIN LATERAL (SELECT pair.stored_origin AS origin, pair.stored_at AS produced_at,
+                                    ${labelled.citingDecisionId}::uuid AS citing_decision_id,
+                                    ${textRevisionSha256}::text AS text_revision_sha256) s
+         CROSS JOIN LATERAL (SELECT pair.incoming_origin AS origin, pair.incoming_at AS produced_at,
+                                    ${labelled.citingDecisionId}::uuid AS citing_decision_id,
+                                    ${textRevisionSha256}::text AS text_revision_sha256) i
          ORDER BY pair.ord
       `)
     ).rows;
