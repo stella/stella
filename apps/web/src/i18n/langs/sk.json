@@ -1928,6 +1928,7 @@
     "noResults": "Žiadne výsledky",
     "noVersions": "Žiadna história verzií",
     "none": "Žiadne",
+    "notStated": "Neuvedené",
     "notes": "Poznámky",
     "open": "Otvoriť",
     "openInNewTab": "Otvoriť na novej karte",
@@ -1997,6 +1998,7 @@
     "sort": "Zoradiť",
     "source": "Zdroj",
     "stale": "Zastarané",
+    "start": "Začať",
     "status": "Stav",
     "stepCount": "{count, plural, one {# krok} few {# kroky} many {# kroku} other {# krokov}}",
     "stepProgress": "{current} z {total}",
@@ -2811,7 +2813,6 @@
       },
       "selectFlow": "Vyberte pracovný postup",
       "sizeConfirmTitle": "Rozsiahly beh postupu",
-      "start": "Spustiť",
       "startFailed": "Pracovný postup sa nepodarilo spustiť.",
       "started": "Pracovný postup spustený",
       "stepProgress": "Krok {current} z {total}",
@@ -3028,8 +3029,7 @@
   "guides": {
     "action": {
       "replay": "Spustiť znova",
-      "skip": "Preskočiť",
-      "start": "Začať"
+      "skip": "Preskočiť"
     },
     "checklist": {
       "progress": "{completed} z {total} dokončených"
@@ -3709,6 +3709,10 @@
         "nameMissing": "Neuložené: zadajte názov",
         "positionsNeedAttention": "Neuložené: {count, plural, one {# pozícia vyžaduje} few {# pozície vyžadujú} other {# pozícií vyžaduje}} pozornosť"
       },
+      "buildWithAi": {
+        "description": "Odpovedzte v chate na niekoľko otázok a playbook sa bude priebežne ukladať.",
+        "title": "Vytvoriť pomocou AI"
+      },
       "check": "Použiť presné pravidlo namiesto AI",
       "checkHint": "Pre merateľné podmienky, napríklad: splatnosť ≤ 30 dní.",
       "checkKind": {
@@ -4159,6 +4163,10 @@
     "aiConfig": {
       "addProvider": "Pridať poskytovateľa",
       "addProviderFirst": "Najprv pridajte poskytovateľa",
+      "anthropicKeyDisabled": "Vytvorte aktívny API kľúč v konzole Anthropic a nahraďte ním tento kľúč.",
+      "anthropicNoCredits": "Doplňte kredit pre API vo fakturácii konzoly Anthropic a skúste to znova.",
+      "anthropicOrganizationRestricted": "Požiadajte správcu organizácie Anthropic o prístup alebo použite kľúč z povolenej organizácie.",
+      "anthropicSubscriptionToken": "Použite API kľúč vytvorený v konzole Anthropic namiesto tokenu predplatného Claude.",
       "anthropicWorkspaceId": "ID pracovného priestoru",
       "anthropicWorkspaceRequired": "Tento kľúč Anthropic vyžaduje pracovný priestor. Zadajte jeho ID z konzoly Anthropic a znova uložte.",
       "anthropicWorkspaces": "Otvoriť pracovné priestory Anthropic",
@@ -4167,7 +4175,9 @@
       "apiKeyPlaceholder": "Zadajte svoj API kľúč",
       "apiKeySaved": "Uložený kľúč {key}",
       "apiKeyUpdatePlaceholder": "Zadajte nový kľúč pre aktualizáciu",
+      "azureModelNotEnabled": "Skontrolujte, či nasadenie modelu existuje vo vybranom prostriedku a oblasti Azure a či k nemu má tento kľúč prístup.",
       "baseUrl": "Základná URL",
+      "bedrockModelNotEnabled": "Skontrolujte dostupnosť modelu vo vybranej oblasti AWS, prístup k modelu a oprávnenia IAM. Povoľte model alebo vyberte dostupný model a skúste to znova.",
       "chooseModelsSubtitle": "Pre každú rolu zvoľte model. Ceny sa aktualizujú vpravo.",
       "chooseModelsTitle": "Vyberte modely",
       "configure": "Nakonfigurovať",
@@ -4198,6 +4208,8 @@
       "editProviders": "Upraviť poskytovateľov",
       "endpoint": "Endpoint",
       "endpointDescription": "Použite Azure OpenAI alebo Azure Foundry endpoint /openai/v1. stella uloží normalizovaný endpoint.",
+      "googleApiNotEnabled": "V projekte Google Cloud, ktorému tento kľúč patrí, povoľte Generative Language API a skúste to znova.",
+      "googleKeyRestricted": "V Google Cloud skontrolujte obmedzenia kľúča podľa API, IP adries a odkazujúcich webov. Povoľte potrebné API a požiadavky svojho servera a skúste to znova.",
       "keepSavedKey": "Ponechať uložený kľúč",
       "keyFormatHint": "Tento kľúč má pre {provider} nezvyčajný formát. Uložením ho overíte u poskytovateľa.",
       "modelForRole": "Model pre rolu {role}",
@@ -4207,6 +4219,9 @@
       "newApiKey": "Nový API kľúč",
       "newApiKeyDescription": "Po uložení zmien nahradí uložený kľúč.",
       "noModelResults": "Žiadne zodpovedajúce ponúkané modely",
+      "openaiInsufficientQuota": "Skontrolujte rozpočet projektu OpenAI a fakturáciu API. Doplňte kredit alebo zvýšte príslušný limit a skúste to znova.",
+      "openaiProjectOrganizationMismatch": "Použite API kľúč z požadovaného projektu a organizácie OpenAI. Skontrolujte ich nastavenia prístupu a skúste to znova.",
+      "openrouterNoCredits": "Doplňte kredit vo fakturácii OpenRouter a skúste to znova.",
       "overrideRoles": "Prepísať roly",
       "overrideRolesDescription": "Vyberte, ktoré roly používajú tento kľúč, a potom vyberte model pre každú rolu. Nevybrané roly použijú predvolené nastavenie platformy.",
       "prices": {
@@ -4226,6 +4241,7 @@
       "providerForRole": "Poskytovateľ pre {role}",
       "providerKeyInvalid": "{provider} odmietol kľúč. Skontrolujte ho pred uložením.",
       "providerKeyInvalidShort": "Neplatný",
+      "providerSetupConsole": "Otvoriť nastavenia poskytovateľa",
       "providersDescription": "Pridajte prihlasovacie údaje poskytovateľov, ktoré má stella používať.",
       "providersPanel": "Poskytovatelia",
       "removeLastProviderConfirm": "Odstrániť {provider}? Tým sa tiež obnoví predvolený výber modelov AI.",

@@ -4,6 +4,7 @@ import {
   CASE_LAW_ANALYSIS_FAILURE_CODES,
   CASE_LAW_ANALYSIS_UNAVAILABLE_CODES,
 } from "@stll/api-contract";
+import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import type {
   AnalysisHeading,
   DecisionAnalysis,
@@ -224,4 +225,52 @@ describe("what Retry does for each analysis error", () => {
       expect(analysisRetryOf({ kind: "unavailable", code })).toBe("none");
     }
   });
+});
+
+test("a failed analysis preserves a validated provider diagnostic and its retry action", () => {
+  const diagnostic = {
+    provider: "anthropic",
+    code: "ai_config_anthropic_no_credits",
+    message: "API credit balance is too low",
+  } as const satisfies ProviderDiagnostic;
+  const parsed = parseAnalysisResponse({
+    status: "error",
+    code: "provider_unavailable",
+    key: { source: "organization", provider: "anthropic" },
+    providerDiagnostic: diagnostic,
+  });
+  expect(parsed).toEqual({
+    status: "error",
+    error: {
+      kind: "failed",
+      code: "provider_unavailable",
+      key: { source: "organization", provider: "anthropic" },
+      providerDiagnostic: diagnostic,
+    },
+  });
+  if (parsed?.status !== "error") {
+    return;
+  }
+  const state = analysisStateFromQuery({
+    hasQueryError: false,
+    isFetching: false,
+    result: { kind: "error", error: parsed.error },
+  });
+  expect(state).toEqual({ status: "error", error: parsed.error });
+  expect(analysisRetryOf(parsed.error)).toBe("new-run");
+});
+
+test("malformed diagnostics cannot become an analysis error message", () => {
+  expect(
+    parseAnalysisResponse({
+      status: "error",
+      code: "provider_unavailable",
+      key: { source: "organization", provider: "anthropic" },
+      providerDiagnostic: {
+        provider: "anthropic",
+        code: "unknown_code",
+        message: "Invalid diagnostic",
+      },
+    }),
+  ).toEqual({ status: "error", error: { kind: "unreadable" } });
 });

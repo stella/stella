@@ -6,20 +6,37 @@ set -euo pipefail
 CRATE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 readonly CRATE_DIR
 readonly OUTPUT_DIR="${SCAN_ENGINE_WASM_OUT_DIR:-${CRATE_DIR}/generated}"
+readonly CANONICAL_RUST_HOST="x86_64-unknown-linux-gnu"
+
+if [[ $# -ne 0 ]]; then
+  printf 'usage: %s\n' "$0" >&2
+  exit 2
+fi
+
+cd "${CRATE_DIR}"
+PINNED_RUST_VERSION="$(sed -n 's/^channel = "\([^"]*\)"/\1/p' rust-toolchain.toml)"
+readonly PINNED_RUST_VERSION
+RUSTC_METADATA="$("${RUSTC:-rustc}" -vV)"
+readonly RUSTC_METADATA
+RUSTC_HOST="$(printf '%s\n' "${RUSTC_METADATA}" | sed -n 's/^host: //p')"
+readonly RUSTC_HOST
+RUSTC_RELEASE="$(printf '%s\n' "${RUSTC_METADATA}" | sed -n 's/^release: //p')"
+readonly RUSTC_RELEASE
+if [[ "${RUSTC_HOST}" != "${CANONICAL_RUST_HOST}" || "${RUSTC_RELEASE}" != "${PINNED_RUST_VERSION}" ]]; then
+  printf 'Scan engine WASM generation requires x86_64 Linux with Rust %s (found %s, Rust %s). Use the scan-engine-wasm CI artifact to update generated/.\n' \
+    "${PINNED_RUST_VERSION}" "${RUSTC_HOST}" "${RUSTC_RELEASE}" >&2
+  exit 2
+fi
+
 RESOLVED_CARGO_HOME="$(cd "${CARGO_HOME:-${HOME}/.cargo}" && pwd)"
 readonly RESOLVED_CARGO_HOME
-RUSTC_SYSROOT="$(rustc --print sysroot)"
+RUSTC_SYSROOT="$("${RUSTC:-rustc}" --print sysroot)"
 readonly RUSTC_SYSROOT
 TARGET_DIR="${CARGO_TARGET_DIR:-${CRATE_DIR}/target}"
 if [[ "${TARGET_DIR}" != /* ]]; then
   TARGET_DIR="${CRATE_DIR}/${TARGET_DIR}"
 fi
 readonly TARGET_DIR
-
-if [[ $# -ne 0 ]]; then
-  printf 'usage: %s\n' "$0" >&2
-  exit 2
-fi
 
 bash "${CRATE_DIR}/scripts/wasm-toolchain.sh"
 

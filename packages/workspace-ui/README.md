@@ -24,12 +24,12 @@ Use the explicit subpaths for focused modules:
 ```tsx
 import { ConditionBuilder } from "@stll/workspace-ui/conditions";
 import { FieldValue } from "@stll/workspace-ui/field-value";
-import { SortChips } from "@stll/workspace-ui/sorts";
-import { WorkspaceViewSwitcher } from "@stll/workspace-ui/view-switcher";
 import {
   ResponsiveActionToolbar,
   ResponsiveActionToolbarItem,
 } from "@stll/workspace-ui/responsive-action-toolbar";
+import { SortChips } from "@stll/workspace-ui/sorts";
+import { WorkspaceViewSwitcher } from "@stll/workspace-ui/view-switcher";
 ```
 
 The package also exposes a root entry for code that uses several workspace

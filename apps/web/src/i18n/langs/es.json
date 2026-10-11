@@ -1928,6 +1928,7 @@
     "noResults": "Sin resultados",
     "noVersions": "Sin historial de versiones",
     "none": "Ninguno",
+    "notStated": "No indicado",
     "notes": "Notas",
     "open": "Abrir",
     "openInNewTab": "Abrir en una pestaña nueva",
@@ -1997,6 +1998,7 @@
     "sort": "Ordenar",
     "source": "Fuente",
     "stale": "Obsoleto",
+    "start": "Empezar",
     "status": "Estado",
     "stepCount": "{count, plural, one {# paso} other {# pasos}}",
     "stepProgress": "{current} de {total}",
@@ -2811,7 +2813,6 @@
       },
       "selectFlow": "Elige un flujo de trabajo",
       "sizeConfirmTitle": "Ejecución de flujo extensa",
-      "start": "Iniciar",
       "startFailed": "No se pudo iniciar el flujo de trabajo.",
       "started": "Flujo de trabajo iniciado",
       "stepProgress": "Paso {current} de {total}",
@@ -3028,8 +3029,7 @@
   "guides": {
     "action": {
       "replay": "Volver a empezar",
-      "skip": "Omitir",
-      "start": "Empezar"
+      "skip": "Omitir"
     },
     "checklist": {
       "progress": "{completed} de {total} completado"
@@ -3709,6 +3709,10 @@
         "nameMissing": "Sin guardar: añade un nombre",
         "positionsNeedAttention": "Sin guardar: {count, plural, one {# posición requiere} other {# posiciones requieren}} atención"
       },
+      "buildWithAi": {
+        "description": "Responda a unas preguntas en un chat y el playbook se irá guardando sobre la marcha.",
+        "title": "Crear con IA"
+      },
       "check": "Usar una regla exacta en lugar de IA",
       "checkHint": "Para condiciones medibles, como: plazo de pago ≤ 30 días.",
       "checkKind": {
@@ -4159,6 +4163,10 @@
     "aiConfig": {
       "addProvider": "Añadir proveedor",
       "addProviderFirst": "Añade primero un proveedor",
+      "anthropicKeyDisabled": "Crea una clave de API activa en la consola de Anthropic y sustituye esta clave.",
+      "anthropicNoCredits": "Añade saldo para la API en la sección de facturación de la consola de Anthropic y vuelve a intentarlo.",
+      "anthropicOrganizationRestricted": "Pide acceso al administrador de tu organización de Anthropic o usa una clave de una organización permitida.",
+      "anthropicSubscriptionToken": "Usa una clave de API creada en la consola de Anthropic en lugar de un token de suscripción a Claude.",
       "anthropicWorkspaceId": "ID del espacio de trabajo",
       "anthropicWorkspaceRequired": "Esta clave de Anthropic necesita un espacio de trabajo. Introduce su ID desde la consola de Anthropic y vuelve a guardar.",
       "anthropicWorkspaces": "Abrir los espacios de trabajo de Anthropic",
@@ -4167,7 +4175,9 @@
       "apiKeyPlaceholder": "Introduce tu clave de API",
       "apiKeySaved": "Clave guardada {key}",
       "apiKeyUpdatePlaceholder": "Introduce una clave nueva para actualizarla",
+      "azureModelNotEnabled": "Comprueba que la implementación del modelo existe en el recurso y la región de Azure seleccionados y que esta clave puede acceder a ella.",
       "baseUrl": "URL base",
+      "bedrockModelNotEnabled": "Revisa la disponibilidad del modelo en la región de AWS seleccionada, el acceso al modelo y tus permisos de IAM. Habilita un modelo o elige uno accesible y vuelve a intentarlo.",
       "chooseModelsSubtitle": "Elige un modelo para cada rol. Los precios se actualizan a la derecha.",
       "chooseModelsTitle": "Elegir modelos",
       "configure": "Configurar",
@@ -4198,6 +4208,8 @@
       "editProviders": "Editar proveedores",
       "endpoint": "Punto de conexión",
       "endpointDescription": "Usa el punto de conexión /openai/v1 de Azure OpenAI o Azure Foundry. stella guarda el punto de conexión normalizado.",
+      "googleApiNotEnabled": "Habilita la Generative Language API en el proyecto de Google Cloud al que pertenece esta clave y vuelve a intentarlo.",
+      "googleKeyRestricted": "Revisa las restricciones de API, direcciones IP y sitios de referencia de esta clave en Google Cloud. Permite la API necesaria y las solicitudes de tu servidor y vuelve a intentarlo.",
       "keepSavedKey": "Conservar clave guardada",
       "keyFormatHint": "Esta clave tiene un formato inusual para {provider}. Guárdala para comprobarla con el proveedor.",
       "modelForRole": "Modelo para {role}",
@@ -4207,6 +4219,9 @@
       "newApiKey": "Nueva clave API",
       "newApiKeyDescription": "Sustituirá la clave guardada al guardar los cambios.",
       "noModelResults": "No hay modelos ofrecidos que coincidan",
+      "openaiInsufficientQuota": "Revisa el presupuesto de tu proyecto de OpenAI y la facturación de la API. Añade saldo o aumenta el límite correspondiente y vuelve a intentarlo.",
+      "openaiProjectOrganizationMismatch": "Usa una clave de API del proyecto y la organización de OpenAI que corresponden. Revisa sus ajustes de acceso y vuelve a intentarlo.",
+      "openrouterNoCredits": "Añade saldo en la sección de facturación de OpenRouter y vuelve a intentarlo.",
       "overrideRoles": "Anular roles",
       "overrideRolesDescription": "Elige qué roles usan esta clave y luego el modelo de cada rol. Los roles no seleccionados usan el valor predeterminado de la plataforma.",
       "prices": {
@@ -4226,6 +4241,7 @@
       "providerForRole": "Proveedor para {role}",
       "providerKeyInvalid": "{provider} rechazó la clave. Compruébela antes de guardar.",
       "providerKeyInvalidShort": "No válida",
+      "providerSetupConsole": "Abrir los ajustes del proveedor",
       "providersDescription": "Añade las credenciales de los proveedores que quieres que use stella.",
       "providersPanel": "Proveedores",
       "removeLastProviderConfirm": "¿Eliminar {provider}? Esto también restablece la selección personalizada de modelos de IA.",

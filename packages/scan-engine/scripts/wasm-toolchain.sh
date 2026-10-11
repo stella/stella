@@ -22,7 +22,10 @@ if [[ "${CARGO_NET_OFFLINE:-}" == "true" ]]; then
 fi
 
 cd "${CRATE_DIR}"
-cargo fetch --locked --target wasm32-unknown-unknown
+# The offline build also resolves crates for the host platform (for example
+# cpufeatures on x86_64), so fetch both targets.
+host_target="$(rustc -vV | sed -n 's/^host: //p')"
+cargo fetch --locked --target wasm32-unknown-unknown --target "${host_target}"
 if ! wasm_bindgen_ready; then
   cargo install wasm-bindgen-cli --version "=${WASM_BINDGEN_VERSION}" --locked
 fi
