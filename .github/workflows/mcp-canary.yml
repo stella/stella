@@ -1,5 +1,9 @@
 name: MCP canary
 
+defaults:
+  run:
+    shell: bash
+
 on:
   schedule:
     - cron: "*/10 * * * *"
