@@ -2415,7 +2415,11 @@ describe("capability executor validate_only permission preflight", () => {
 describe("public-law capability service classification", () => {
   test("public content capabilities never consume organization service budgets", () => {
     const contentCapabilities = capabilityCatalog.filter(
-      (entry) => entry.access === "read" && entry.readClass === "public",
+      (entry) =>
+        entry.access === "read" &&
+        entry.readClass === "public" &&
+        // Operator ingestion health is not a corpus content read.
+        entry.id !== "case-law.ingestion.get",
     );
     expect(contentCapabilities.map(({ id }) => id)).toContain(
       "legislation.get",
