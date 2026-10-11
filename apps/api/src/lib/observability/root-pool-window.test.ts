@@ -47,7 +47,7 @@ const recordSample = (
 describe("root pool interval aggregation", () => {
   test("reports nearest-rank percentile bounds and exact sampled max, then resets", () => {
     const clock = fakeClock();
-    const window = createRootPoolWindow(clock.now);
+    const window = createRootPoolWindow({ now: clock.now, random: () => 0 });
     for (let value = 20; value > 0; value -= 1) {
       recordSample(window, clock, value);
     }
@@ -96,7 +96,7 @@ describe("root pool interval aggregation", () => {
 
   test("keeps live counts across a report and clears failed acquisitions", () => {
     const clock = fakeClock();
-    const window = createRootPoolWindow(clock.now);
+    const window = createRootPoolWindow({ now: clock.now, random: () => 0 });
     const start = window.requested();
     expect(window.flush(2, observedSnapshot).waitingRequests).toBe(1);
     clock.advance(7);
@@ -121,7 +121,7 @@ describe("root pool interval aggregation", () => {
 
   test("keeps unavailable pool counts distinct from zero and still reports the acquisition window", () => {
     const clock = fakeClock();
-    const window = createRootPoolWindow(clock.now);
+    const window = createRootPoolWindow({ now: clock.now, random: () => 0 });
     recordSample(window, clock, 12);
     expect(
       window.flush(8, {
@@ -144,9 +144,16 @@ describe("root pool interval aggregation", () => {
 
   test("returns only primitive tokens and reads the clock only on sampled requests", () => {
     let calls = 0;
-    const window = createRootPoolWindow(() => {
-      calls += 1;
-      return 0;
+    let draws = 0;
+    const window = createRootPoolWindow({
+      now: () => {
+        calls += 1;
+        return 0;
+      },
+      random: () => {
+        draws += 1;
+        return 0;
+      },
     });
     expect(calls).toBe(1);
     for (let index = 0; index < 128; index += 1) {
@@ -156,12 +163,47 @@ describe("root pool interval aggregation", () => {
       window.released();
     }
     expect(calls).toBe(5);
+    expect(draws).toBe(2);
     expect(window.flush(8, observedSnapshot).waitSamples).toBe(2);
+  });
+
+  test("fresh sampling phases cover queued positions in periodic batches", () => {
+    let time = 0;
+    let phase = 0;
+    let draws = 0;
+    const window = createRootPoolWindow({
+      now: () => time,
+      random: () => {
+        draws += 1;
+        return (phase + 0.5) / 64;
+      },
+    });
+    for (phase = 0; phase < 64; phase += 1) {
+      const tokens: (number | null)[] = [];
+      time = phase * 1000;
+      for (let position = 0; position < 64; position += 1) {
+        tokens.push(window.requested());
+      }
+      expect(tokens.filter((token) => token !== null)).toHaveLength(1);
+      expect(tokens.at(phase)).toBe(time);
+      for (const [position, token] of tokens.entries()) {
+        time = phase * 1000 + position;
+        window.acquired(token);
+        window.released();
+      }
+    }
+    expect(draws).toBe(64);
+    expect(window.flush(8, observedSnapshot)).toMatchObject({
+      waitSamples: 64,
+      waitP50Ms: 31,
+      waitP95Ms: 60,
+      waitMaxMs: 63,
+    });
   });
 
   test("bounds fractional waits and preserves long waits in the overflow bucket", () => {
     const clock = fakeClock();
-    const window = createRootPoolWindow(clock.now);
+    const window = createRootPoolWindow({ now: clock.now, random: () => 0 });
     recordSample(window, clock, 1.25);
     recordSample(window, clock, 70_000.5);
     expect(window.flush(8, observedSnapshot)).toMatchObject({
@@ -177,7 +219,7 @@ test("pool fields extend one existing record without declaring new metrics or di
   setMetricLineSinkForTesting((line) => {
     lines.push(line);
   });
-  const window = createRootPoolWindow(() => 0);
+  const window = createRootPoolWindow({ now: () => 0, random: () => 0 });
   const report = window.flush(8, observedSnapshot);
   emitEventLoopDelayMetric({ maxMs: 12, p99Ms: 10, rootPool: report });
   expect(lines.map((line): unknown => JSON.parse(line))).toEqual([

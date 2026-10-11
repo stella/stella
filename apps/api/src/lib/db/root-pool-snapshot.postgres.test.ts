@@ -78,7 +78,10 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
       }
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         let time = 0;
-        const window = createRootPoolWindow(() => time);
+        const window = createRootPoolWindow({
+          now: () => time,
+          random: () => 0,
+        });
         const client = instrumentRootPoolTransactions(
           openClient({ max: 1 }).sql,
           window,

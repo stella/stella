@@ -5,11 +5,20 @@ type RootPoolSnapshot =
 const SAMPLE_EVERY = 64;
 const MAX_BUCKET_MS = 60_000;
 
+type RootPoolWindowOptions = {
+  now?: () => number;
+  random?: () => number;
+};
+
 // Millisecond upper bounds, with one overflow bucket. Storage is allocated
 // once; acquisition paths return only a primitive timer token.
-export const createRootPoolWindow = (now: () => number = performance.now) => {
+export const createRootPoolWindow = ({
+  now = performance.now,
+  random = Math.random,
+}: RootPoolWindowOptions = {}) => {
   const buckets = new Float64Array(MAX_BUCKET_MS + 1);
-  let requests = 0;
+  let requestInBlock = 0;
+  let sampleAt = 0;
   let samples = 0;
   let maxMs = 0;
   let waiting = 0;
@@ -39,8 +48,14 @@ export const createRootPoolWindow = (now: () => number = performance.now) => {
     requested: () => {
       waiting += 1;
       waitingPeak = Math.max(waitingPeak, waiting);
-      requests += 1;
-      return requests % SAMPLE_EVERY === 1 ? now() : null;
+      // A fresh uniform position per block prevents periodic batches from
+      // always selecting the same acquisition; one draw costs no allocation.
+      if (requestInBlock === 0) {
+        sampleAt = Math.floor(random() * SAMPLE_EVERY);
+      }
+      const sampled = requestInBlock === sampleAt;
+      requestInBlock = (requestInBlock + 1) % SAMPLE_EVERY;
+      return sampled ? now() : null;
     },
     acquired: (started: number | null) => {
       waiting -= 1;

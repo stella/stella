@@ -10,7 +10,7 @@ const snapshot = { status: "observed", size: 1, inUse: 0, idle: 1 } as const;
 test("acquisition timing excludes transaction work and releases exactly once", async () => {
   let time = 0;
   let released = 0;
-  const window = createRootPoolWindow(() => time);
+  const window = createRootPoolWindow({ now: () => time, random: () => 0 });
   const result = await withRootPoolReservation({
     window,
     reserve: async () => {
@@ -38,7 +38,7 @@ test("acquisition timing excludes transaction work and releases exactly once", a
 });
 
 test("reservation failure propagates and clears the queue without recording a successful wait", async () => {
-  const window = createRootPoolWindow(() => 0);
+  const window = createRootPoolWindow({ now: () => 0, random: () => 0 });
   const failure = new TypeError("connection unavailable");
   const result = await rejectionOf(
     withRootPoolReservation({
@@ -63,7 +63,7 @@ test("reservation failure propagates and clears the queue without recording a su
 
 test("work failure propagates after releasing the reserved session", async () => {
   let released = 0;
-  const window = createRootPoolWindow(() => 0);
+  const window = createRootPoolWindow({ now: () => 0, random: () => 0 });
   const failure = new TypeError("work failed");
   const result = await rejectionOf(
     withRootPoolReservation({
