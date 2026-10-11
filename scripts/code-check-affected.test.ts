@@ -953,7 +953,7 @@ describe("parallel code-quality legs", () => {
     expect(steps).toHaveLength(3);
     const assertDeadline = (step: string) => {
       const minutes = Number(
-        step.match(/^ {8}timeout-minutes: (\d+)$/mu)?.at(1),
+        /^ {8}timeout-minutes: (\d+)$/mu.exec(step)?.at(1),
       );
       if (
         !Number.isSafeInteger(minutes) ||
