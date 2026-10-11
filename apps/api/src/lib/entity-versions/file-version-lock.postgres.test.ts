@@ -27,6 +27,7 @@ import { lockWorkspaceForEntityCreate } from "@/api/lib/entity-cap-lock";
 import { publishCheckpointInTransaction } from "@/api/lib/entity-versions/publish-folio-collab-checkpoint";
 import { officeFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import { allocateFileObject } from "@/api/lib/files/file-object-ids";
+import { cents } from "@/api/lib/money";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
@@ -65,9 +66,12 @@ const seedFixture = async (db: GatedTestDb) => {
     name: "Version writer",
     email: `${userId}@example.test`,
   });
-  await db
-    .insert(workspaces)
-    .values({ id: workspaceId, organizationId, name: "Version matter" });
+  await db.insert(workspaces).values({
+    id: workspaceId,
+    organizationId,
+    name: "Version matter",
+    reference: workspaceId,
+  });
   await db.insert(entities).values({
     id: entityId,
     workspaceId,
@@ -354,7 +358,7 @@ if (!databaseUrl || !enabled) {
             timezoneId: "Europe/Prague",
             durationMinutes: 1,
             billedMinutes: 1,
-            rateAtEntry: 0,
+            rateAtEntry: cents(0),
             currency: "CZK",
             narrative: "Timer fixture",
             timerStartedAt: new Date(),
