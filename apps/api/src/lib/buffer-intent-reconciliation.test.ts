@@ -111,7 +111,7 @@ test("share-locks an active workspace before reserving a writer intent", async (
     }),
   });
 
-  await lockActiveWorkspaceForBufferIntent(tx, workspaceId);
+  await lockActiveWorkspaceForBufferIntent({ tx, workspaceId, mode: "share" });
 
   expect(locks).toEqual(["share"]);
 });
@@ -127,10 +127,11 @@ test("rejects a writer reservation after workspace deletion seals", async () => 
     }),
   });
 
-  const rejection: unknown = await lockActiveWorkspaceForBufferIntent(
+  const rejection: unknown = await lockActiveWorkspaceForBufferIntent({
     tx,
     workspaceId,
-  ).then(
+    mode: "share",
+  }).then(
     () => null,
     (error: unknown) => error,
   );

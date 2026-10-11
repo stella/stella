@@ -766,7 +766,11 @@ export const storeFolioCollabSnapshot = async ({
     try: async () =>
       await value.scopedDb(async (tx) => {
         await lockOrganizationObjectIntentsForWriter(tx, value.organizationId);
-        await lockActiveWorkspaceForBufferIntent(tx, value.workspaceId);
+        await lockActiveWorkspaceForBufferIntent({
+          tx,
+          workspaceId: value.workspaceId,
+          mode: "share",
+        });
         // Reserve cleanup ownership before the object can exist. A process crash
         // after PUT therefore leaves a durable exact-key tombstone for recovery.
         await tx.insert(bufferObjectCleanupIntents).values({

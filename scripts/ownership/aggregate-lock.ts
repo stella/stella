@@ -13,6 +13,8 @@ export default {
     "TRY and NOWAIT requests return typed busy results. " +
     "Registered chains enforce rank order. Selected-row acquisitions compose the registered identity and tenant " +
     "predicate before locking; caller predicates can only narrow it and caller locking clauses are rejected. " +
+    "Joined source queries declare ranked entity, version, and field targets with explicit OF coverage. " +
+    "Bounded entity snapshots acquire a sorted, scoped batch in one query. " +
     "Returned physical identity and tenant scope are checked against registered projected columns. " +
     "Successful locking-query execution reserves the declared ordering identity, even when no rows return; " +
     "only returned identities confirm held coverage for later same-key acquisitions. " +

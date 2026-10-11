@@ -109,6 +109,16 @@ export const aggregateFences = () => {
       id: { id: createSafeId<"entity">(), workspaceId },
       mode: "update",
     },
+    entityVersion: {
+      aggregate: "entityVersion",
+      id: { id: createSafeId<"entityVersion">(), workspaceId },
+      mode: "update",
+    },
+    field: {
+      aggregate: "field",
+      id: { id: createSafeId<"field">(), workspaceId },
+      mode: "update",
+    },
     signal: {
       aggregate: "signal",
       id: { id: createSafeId<"signal">(), organizationId },

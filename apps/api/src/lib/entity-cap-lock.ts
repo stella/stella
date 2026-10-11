@@ -1,8 +1,10 @@
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import { workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withAggregateParentBatch } from "@/api/lib/db/aggregate-lock";
+import type { RowLockMode } from "@/api/lib/db/aggregate-lock";
 
 /**
  * Canonical lock order for entity creation and hierarchy mutations (issue #1139,
@@ -14,9 +16,8 @@ import type { SafeId } from "@/api/lib/branded-types";
  *
  *   1. `lockWorkspacesForEntityCap` (this function): a row-level
  *      `SELECT ... FOR UPDATE` on every `workspaces` row the
- *      operation touches, acquired ONE AT A TIME in ascending
- *      workspace-id order (never via a single multi-row query — see
- *      below).
+ *      operation touches, acquired by the aggregate owner in ascending
+ *      workspace-id order.
  *   2. Parent-entity `FOR UPDATE`, only when the insert is scoped to
  *      a folder parent (`checkEntityCreateParentForInsert`).
  *   3. The `document_reference_counters` row for the target
@@ -31,11 +32,9 @@ import type { SafeId } from "@/api/lib/branded-types";
  * {A, B} in the SAME order, so neither can hold one row and block on
  * the other (no ABBA).
  *
- * Locks are taken with sequential single-row queries, not one
- * `WHERE id IN (...) ORDER BY id FOR UPDATE`: Postgres places the
- * row-locking step (`LockRows`) below `ORDER BY` in the plan, so an
- * `ORDER BY` does NOT guarantee lock-acquisition order for `FOR
- * UPDATE` — only issuing the queries in order does.
+ * The aggregate owner orders the batch by immutable primary key with
+ * COLLATE "C". PostgreSQL sorts rows before LockRows acquires their locks;
+ * workspace IDs cannot change while the sorted rows wait for a lock.
  *
  * Participants as of this writing (see #1139 for the full audit):
  *   - `checkEntityCreateCapacityForInsert` (`entity-create.ts`) —
@@ -73,7 +72,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 type LockWorkspaceRowsOptions = {
   tx: Transaction;
   workspaceIds: readonly SafeId<"workspace">[];
-  mode: "update" | "no-key-update";
+  mode: RowLockMode;
 };
 
 const lockWorkspaceRows = async ({
@@ -81,25 +80,14 @@ const lockWorkspaceRows = async ({
   workspaceIds,
   mode,
 }: LockWorkspaceRowsOptions): Promise<void> => {
-  const orderedIds = [...new Set(workspaceIds)].toSorted();
-
-  for (const id of orderedIds) {
-    // Raw `FOR UPDATE`, not the query-builder form: it locks the
-    // exact same `workspaces` row either way (Postgres doesn't care
-    // how the SQL was generated), but matches the `tx.execute(sql...)`
-    // shape every other advisory/row lock in this codebase already
-    // uses. A missing row is not distinguished here — access control
-    // upstream already guarantees `workspaceId` exists for every
-    // caller, and the insert that follows has an FK to `workspaces`
-    // that would fail regardless.
-    //
-    // db-await-in-loop: sequential, ascending-id acquisition is the invariant this function exists to provide; see the module doc comment
-    await tx.execute(
-      mode === "update"
-        ? sql`SELECT id FROM ${workspaces} WHERE id = ${id} FOR UPDATE`
-        : sql`SELECT id FROM ${workspaces} WHERE id = ${id} FOR NO KEY UPDATE`,
-    );
-  }
+  // Callers authorize the matter first; a missing row remains an FK failure
+  // at insertion rather than a new error from this synchronization helper.
+  await withAggregateParentBatch({
+    tx,
+    organizationIds: [],
+    workspaceIds,
+    mode,
+  });
 };
 
 export const lockWorkspacesForEntityCap = async (
@@ -117,12 +105,12 @@ export const lockWorkspaceForEntityCreate = async (
   tx: Transaction,
   workspaceId: SafeId<"workspace">,
 ) => {
+  await lockWorkspaceRows({ tx, workspaceIds: [workspaceId], mode: "update" });
   const rows = await tx
     .select({ status: workspaces.status })
     .from(workspaces)
     .where(eq(workspaces.id, workspaceId))
-    .limit(1)
-    .for("update");
+    .limit(1);
   return rows.at(0)?.status;
 };
 
@@ -136,4 +124,4 @@ export const lockWorkspacesForEntityTransfer = async (
   tx: Transaction,
   workspaceIds: readonly SafeId<"workspace">[],
 ): Promise<void> =>
-  await lockWorkspaceRows({ tx, workspaceIds, mode: "no-key-update" });
+  await lockWorkspaceRows({ tx, workspaceIds, mode: "no key update" });

@@ -34,6 +34,7 @@ import {
   settleObjectCleanupIntentsAfterWriter,
 } from "@/api/lib/buffer-intent-reconciliation";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { withAggregateParentBatch } from "@/api/lib/db/aggregate-lock";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { COLLABORATION_DOCUMENT_SOURCE } from "@/api/lib/document-source";
 import { computeVersionDiffStats } from "@/api/lib/entity-versions/compute-version-diff";
@@ -690,7 +691,7 @@ type PublishCheckpointOptions = {
   workspaceId: SafeId<"workspace">;
 };
 
-const publishCheckpointInTransaction = async ({
+export const publishCheckpointInTransaction = async ({
   body,
   checkpointKey,
   checkpointRoom,
@@ -704,7 +705,17 @@ const publishCheckpointInTransaction = async ({
   workspaceId,
 }: PublishCheckpointOptions) => {
   const { description, label, roomId } = body;
-  await lockActiveWorkspaceForBufferIntent(tx, workspaceId);
+  await withAggregateParentBatch({
+    tx,
+    organizationIds: [organizationId],
+    mode: "key share",
+  });
+  await lockActiveWorkspaceForBufferIntent({
+    tx,
+    workspaceId,
+    organizationId,
+    mode: "update",
+  });
   await lockDocxEditTarget({
     entityId: checkpointRoom.entityId,
     propertyId: checkpointRoom.propertyId,

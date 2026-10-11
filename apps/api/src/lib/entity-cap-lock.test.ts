@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
 import type { SQL } from "drizzle-orm";
-import { TransactionRollbackError } from "drizzle-orm";
+import { eq, TransactionRollbackError } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
 import { organization } from "@/api/db/auth-schema";
@@ -13,55 +13,28 @@ import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 import {
+  lockWorkspaceForEntityCreate,
   lockWorkspacesForEntityCap,
   lockWorkspacesForEntityTransfer,
 } from "./entity-cap-lock";
 
-/**
- * Every entity-creating path shares `lockWorkspacesForEntityCap` so
- * cap checks serialize with each other (issue #1139). True
- * concurrent-deadlock behavior isn't observable with the shared
- * PGlite test instance (a single-threaded WASM connection, so two
- * transactions can't actually block on each other's locks — see
- * `apps/api/src/tests/security/test-utils.ts`). What IS testable
- * without real concurrency is the invariant the whole design leans
- * on: that this function always locks a shared set of workspace ids
- * in the SAME deterministic order, no matter what order the caller
- * passes them in. If that holds, an A->B move and a concurrent B->A
- * move provably request their locks in the same order and cannot
- * form an ABBA cycle — which is the actual property #1139 asks for.
- */
-
-// Reading `SQL.queryChunks` directly is fragile: whether a literal
-// or interpolated part shows up as a raw string vs. a wrapper object
-// (`StringChunk`, `Param`, ...) is a Drizzle internal that has
-// already changed across versions. `PgDialect#sqlToQuery` is the
-// same public compilation step Drizzle itself uses to build the
-// query sent to Postgres, so it stays correct however chunks are
-// represented internally — it returns the driver-bound `params`
-// array, and this lock query interpolates exactly one value (the
-// workspace id) per call.
+// Compile through the public Drizzle dialect so the fake observes the same
+// bound workspace identities and ordered batch SQL as PostgreSQL.
 const pgDialect = new PgDialect();
-
-const lockedWorkspaceId = (query: SQL): string => {
-  const { params } = pgDialect.sqlToQuery(query);
-  if (params.length !== 1) {
-    throw new TypeError(
-      `Expected the lock query to bind exactly one param, got ${params.length}`,
-    );
-  }
-  const [id] = params;
-  if (typeof id !== "string") {
-    throw new TypeError("Lock query did not interpolate a workspace id");
-  }
-  return id;
-};
 
 const createOrderTrackingTx = () => {
   const lockedOrder: string[] = [];
   const execute = mock(async (query: SQL) => {
-    lockedOrder.push(lockedWorkspaceId(query));
-    return [];
+    const { params, sql: statement } = pgDialect.sqlToQuery(query);
+    expect(statement).toContain('ORDER BY "workspaces"."id"::text COLLATE "C"');
+    const ids = params.map((id) => {
+      if (typeof id !== "string") {
+        throw new TypeError("Lock query did not interpolate a workspace id");
+      }
+      return id;
+    });
+    lockedOrder.push(...ids);
+    return ids.map((id) => ({ id }));
   });
   return { execute, lockedOrder, tx: { execute } };
 };
@@ -85,7 +58,7 @@ describe("lockWorkspacesForEntityCap ordering", () => {
       wsHigh,
     ]);
     expect(lockedOrder).toEqual([wsLow, wsHigh]);
-    expect(queries).toHaveLength(2);
+    expect(queries).toHaveLength(1);
     for (const query of queries) {
       expect(query).toContain("FOR NO KEY UPDATE");
     }
@@ -198,6 +171,23 @@ const seedTestWorkspace = async (
 };
 
 describe("lockWorkspacesForEntityCap against a real workspace row", () => {
+  test("creation returns the locked status and preserves missing matters", async () => {
+    const result = await runRolledBack(async (tx) => {
+      const missing = await lockWorkspaceForEntityCreate(
+        tx,
+        toSafeId<"workspace">(Bun.randomUUIDv7()),
+      );
+      const workspaceId = await seedTestWorkspace(tx);
+      await tx
+        .update(workspaces)
+        .set({ status: "archived" })
+        .where(eq(workspaces.id, workspaceId));
+      const status = await lockWorkspaceForEntityCreate(tx, workspaceId);
+      return { missing, status };
+    });
+    expect(result).toEqual({ missing: undefined, status: "archived" });
+  });
+
   test("locks a single seeded workspace without error", async () => {
     const result = await runRolledBack(async (tx) => {
       const workspaceId = await seedTestWorkspace(tx);

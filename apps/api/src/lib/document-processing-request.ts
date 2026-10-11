@@ -12,6 +12,10 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
+import {
+  withAggregateRowQuery,
+  withAggregateTransaction,
+} from "@/api/lib/db/aggregate-lock";
 import { lockForWrite } from "@/api/lib/db/lock-for-write";
 import { DOCUMENT_OCR_PROCESSOR_VERSION } from "@/api/lib/document-processing-contract";
 
@@ -104,50 +108,55 @@ export const persistManualOcrRun = async ({
   workspaceId,
   db,
 }: PersistManualOcrRunOptions): Promise<PersistedDocumentProcessingRun | null> =>
-  await db.transaction(async (tx) => {
+  await withAggregateTransaction(db, async (tx) => {
     const parents = await lockForWrite(tx, {
       organizationIds: [organizationId],
-      workspaceIds: [workspaceId],
     });
-    if (
-      !parents.organizationIds.has(organizationId) ||
-      !parents.workspaceIds.has(workspaceId)
-    ) {
+    if (!parents.organizationIds.has(organizationId)) {
       return null;
     }
 
-    // Parent KEY SHARE locks precede entity -> workspace status fence -> run.
+    // Workspace status fencing precedes the source entity and run locks.
     // The entity lock prevents a version replacement from queuing OCR for a
     // no-longer-current file; the workspace fence serializes status changes.
-    const currentRows = await tx
-      .select({ id: entities.id })
-      .from(entities)
-      .where(
-        and(
-          eq(entities.id, source.entityId),
-          eq(entities.workspaceId, workspaceId),
+    const workspaceRows = (
+      await withAggregateRowQuery({
+        tx,
+        aggregate: "workspace",
+        id: { id: workspaceId, organizationId },
+        mode: "no key update",
+        select: (lockTx) =>
+          lockTx
+            .select({
+              id: workspaces.id,
+              organizationId: workspaces.organizationId,
+            })
+            .from(workspaces)
+            .limit(1),
+        where: eq(workspaces.status, "active"),
+      })
+    ).rows;
+    if (!workspaceRows.at(0)) {
+      return null;
+    }
+    const currentRows = (
+      await withAggregateRowQuery({
+        tx,
+        aggregate: "entity",
+        id: { id: source.entityId, workspaceId },
+        mode: "update",
+        select: (lockTx) =>
+          lockTx
+            .select({ id: entities.id, workspaceId: entities.workspaceId })
+            .from(entities)
+            .limit(1),
+        where: and(
           eq(entities.currentVersionId, source.entityVersionId),
           eq(entities.readOnly, false),
         ),
-      )
-      .limit(1)
-      .for("update");
+      })
+    ).rows;
     if (!currentRows.at(0)) {
-      return null;
-    }
-    const workspaceRows = await tx
-      .select({ id: workspaces.id })
-      .from(workspaces)
-      .where(
-        and(
-          eq(workspaces.id, workspaceId),
-          eq(workspaces.organizationId, organizationId),
-          eq(workspaces.status, "active"),
-        ),
-      )
-      .limit(1)
-      .for("no key update");
-    if (!workspaceRows.at(0)) {
       return null;
     }
     const sourceFieldRows = await tx
