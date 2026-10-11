@@ -7,7 +7,7 @@ describe("MCP app host locales", () => {
     ["cs-CZ", "cs", "Dokument 123"],
     ["sk-SK", "sk", "Dokument 123"],
     ["en-GB", "en", "Document 123"],
-  ])(
+  ] as const)(
     "regional host locale %s selects catalog %s",
     (hostLocale, expected, documentLabel) => {
       const locale = appLocale(hostLocale);

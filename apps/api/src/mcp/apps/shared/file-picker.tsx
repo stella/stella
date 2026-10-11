@@ -16,7 +16,7 @@ import "./generated/style.css";
 export const mountFilePicker = () => {
   const container = document.querySelector<HTMLElement>("#app");
   const messageKey = (element: HTMLElement | null) => {
-    const key = element?.dataset.message;
+    const key = element?.dataset["message"];
     if (!key || !isAppMessageKey(key)) {
       panic("File picker is missing a catalog message key");
     }
