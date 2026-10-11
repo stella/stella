@@ -1438,19 +1438,23 @@ export const CASE_LAW_COVERAGE_PROJECTION = projectionBranch(
             decisionYearTo: v.nullable(v.number()),
             pendingTextCount: v.number(),
             knownGaps: v.variant("type", [
-              v.strictObject({ type: v.literal("unknown") }),
-              v.strictObject({ type: v.literal("none-recorded") }),
-              v.strictObject({
-                type: v.literal("known"),
-                gaps: v.array(
-                  v.strictObject({
-                    from: v.string(),
-                    to: v.string(),
-                    reason: v.string(),
-                    evidenceRef: v.string(),
-                  }),
-                ),
-              }),
+              projectionBranch(v.strictObject({ type: v.literal("unknown") })),
+              projectionBranch(
+                v.strictObject({ type: v.literal("none-recorded") }),
+              ),
+              projectionBranch(
+                v.strictObject({
+                  type: v.literal("known"),
+                  gaps: v.array(
+                    v.strictObject({
+                      from: v.string(),
+                      to: v.string(),
+                      reason: v.string(),
+                      evidenceRef: v.string(),
+                    }),
+                  ),
+                }),
+              ),
             ]),
           }),
         ),
