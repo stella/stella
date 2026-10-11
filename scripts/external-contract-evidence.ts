@@ -12,7 +12,7 @@ import ts from "typescript";
 
 import { parseSource } from "./parse-memo";
 
-const MAX_FILES = 2048;
+const MAX_FILES = 8192;
 const MAX_DEPTH = 64;
 const MAX_BYTES = 32 * 1024 * 1024;
 const RUNTIME_SOURCE = /\.[cm]?[jt]sx?$/u;
