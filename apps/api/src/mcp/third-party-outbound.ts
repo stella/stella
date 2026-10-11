@@ -17,6 +17,17 @@ export type RequiresThirdPartyOutbound = {
   readonly [REQUIRES_THIRD_PARTY_OUTBOUND]: true;
 };
 
+export const isThirdPartyOutboundHandler = <THandler extends object>(
+  handler: THandler,
+): handler is THandler & RequiresThirdPartyOutbound =>
+  REQUIRES_THIRD_PARTY_OUTBOUND in handler &&
+  handler[REQUIRES_THIRD_PARTY_OUTBOUND] === true;
+
+export const markThirdPartyOutboundHandler = <THandler extends object>(
+  handler: THandler,
+): THandler & RequiresThirdPartyOutbound =>
+  Object.assign(handler, { [REQUIRES_THIRD_PARTY_OUTBOUND]: true } as const);
+
 type ThirdPartyOutboundHandlerOptions = {
   args: Record<string, unknown>;
   context: McpRequestContext;
@@ -43,7 +54,7 @@ export const withThirdPartyOutbound = <
     ...dependencies: TDependencies
   ) => Promise<TypedMcpToolResponse<TData>>,
 ): ThirdPartyOutboundHandler<TData, TDependencies> =>
-  Object.assign(
+  markThirdPartyOutboundHandler(
     async (
       {
         args,
@@ -65,5 +76,4 @@ export const withThirdPartyOutbound = <
       }
       return await handler({ args, context, permit }, ...dependencies);
     },
-    { [REQUIRES_THIRD_PARTY_OUTBOUND]: true } as const,
   );

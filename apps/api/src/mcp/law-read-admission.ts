@@ -6,6 +6,11 @@ import {
   type LawReadAdmission,
 } from "@/api/lib/usage/law-read-admission";
 import type { McpRequestContext } from "@/api/mcp/context";
+import {
+  isThirdPartyOutboundHandler,
+  markThirdPartyOutboundHandler,
+  type RequiresThirdPartyOutbound,
+} from "@/api/mcp/third-party-outbound";
 import type {
   InternalToolErrorResult,
   McpToolHandler,
@@ -79,6 +84,9 @@ export const admitMcpLawRead = async (
 };
 
 export function withMcpLawReadAdmission<TData>(
+  handler: TypedMcpToolHandler<TData> & RequiresThirdPartyOutbound,
+): TypedMcpToolHandler<TData> & RequiresThirdPartyOutbound;
+export function withMcpLawReadAdmission<TData>(
   handler: TypedMcpToolHandler<TData>,
 ): TypedMcpToolHandler<TData>;
 export function withMcpLawReadAdmission<TData>(
@@ -98,5 +106,7 @@ export function withMcpLawReadAdmission(
     });
   };
   admittedHandlers.add(admittedHandler);
-  return admittedHandler;
+  return isThirdPartyOutboundHandler(handler)
+    ? markThirdPartyOutboundHandler(admittedHandler)
+    : admittedHandler;
 }

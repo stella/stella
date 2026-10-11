@@ -21,6 +21,7 @@ import {
   LAW_MCP_TOOL_DISPOSITION,
 } from "@/api/mcp/static-tool-definitions";
 import { surfaceToolVocabulary } from "@/api/mcp/surface-tool-mentions";
+import { isThirdPartyOutboundHandler } from "@/api/mcp/third-party-outbound";
 import { scopeProseToSurface } from "@/api/mcp/tool-mentions";
 import type { McpToolDefinition, ToolScope } from "@/api/mcp/tool-types";
 
@@ -57,6 +58,17 @@ describe("MCP tool registry", () => {
         `${tool.name} must be admission wrapped`,
       ).toBe(true);
     }
+  });
+
+  test("admitted BOE reads retain their outbound-service classification", () => {
+    const handler = getStaticMcpToolHandler(
+      "search_boe_legislation",
+      "default",
+    );
+    expect(handler).toBeDefined();
+    expect(handler !== undefined && isThirdPartyOutboundHandler(handler)).toBe(
+      true,
+    );
   });
 
   test("offers generic capability tools only on the advanced surface", () => {
