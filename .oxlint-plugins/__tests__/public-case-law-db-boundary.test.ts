@@ -1,5 +1,13 @@
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import ts from "typescript";
 
+import {
+  isCaseLawPublicReadModule,
+  UNREDACTED_VIEW_ALLOWED_MODULES,
+} from "../public-case-law-db-boundary.ts";
+import { canonicalModuleId } from "../utils.ts";
 import { lintSingleRule } from "./lint-single-rule.ts";
 
 setDefaultTimeout(20_000);
@@ -21,72 +29,180 @@ const lint = async (source: string, sourcePath = "apps/api/src/lib/read.ts") =>
   });
 
 describe.serial("public-law relation scan", () => {
-  test("case-law reads keep publication conditions in the owner", async () => {
+  test("public case-law reads cannot name the base decision table", async () => {
     const source = [
       'import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";',
-      'import { sql } from "drizzle-orm";',
-      "export const read = sql`select d.id from case_law_decisions d where d.redacted_at is null`;",
+      'import { caseLawDecisions as decisions } from "@/api/db/schema/case-law";',
+      "void decisions;",
       "void caseLawPublicReadDb;",
     ].join("\n");
     expect(
       await lint(source, "apps/api/src/handlers/case-law/read.ts"),
-    ).toContain(3);
+    ).toHaveLength(1);
   });
 
-  test("case-law filters keep redaction and observation conditions in the owner", async () => {
-    const redactionSource = [
-      'import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";',
-      'import { caseLawDecisions } from "@/api/db/schema";',
-      'import { isNull } from "drizzle-orm";',
-      "const query = caseLawPublicReadDb((tx) => tx.select().from(caseLawDecisions).where(isNull(caseLawDecisions.redactedAt)));",
-    ].join("\n");
-    expect(
-      await lint(redactionSource, "apps/api/src/handlers/case-law/read.ts"),
-    ).toContain(4);
-
-    const observationSource = [
-      'import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";',
-      'import { storedObservationHasDetail } from "@/api/lib/legal-search/partial-observation-sql";',
-      "void caseLawPublicReadDb;",
-      "void storedObservationHasDetail;",
-    ].join("\n");
-    expect(
-      await lint(observationSource, "apps/api/src/handlers/case-law/read.ts"),
-    ).toContain(2);
-  });
-
-  test("query-builder conditions use the publication owner", async () => {
+  test("public case-law SQL cannot name the base decision table", async () => {
     const source = [
       'import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";',
-      'import { caseLawDecisions } from "@/api/db/schema";',
       'import { sql } from "drizzle-orm";',
-      `const query = caseLawPublicReadDb((tx) => tx.select().from(caseLawDecisions).where(sql\`\${caseLawDecisions.redactedAt} IS NULL\`));`,
+      "export const query = sql`select id from case_law_decisions`;",
     ].join("\n");
     expect(
       await lint(source, "apps/api/src/handlers/case-law/read.ts"),
-    ).toContain(4);
+    ).toHaveLength(1);
   });
 
-  test("display state is independent of the publication filter", async () => {
+  test("the unredacted decision view is reserved for subject lookup", async () => {
     const source = [
       'import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";',
-      'import { caseLawDecisions } from "@/api/db/schema";',
-      'import { eq, isNull } from "drizzle-orm";',
-      "const query = caseLawPublicReadDb((tx) => tx.select({ redacted: isNull(caseLawDecisions.redactedAt) }).from(caseLawDecisions).where(eq(caseLawDecisions.id, id)));",
+      'import { unredactedCaseLawDecisions } from "@/api/db/schema";',
+      "void unredactedCaseLawDecisions;",
     ].join("\n");
     expect(
       await lint(source, "apps/api/src/handlers/case-law/read.ts"),
+    ).toHaveLength(1);
+  });
+
+  test("subject lookup may use the unredacted decision view", async () => {
+    const source = [
+      'import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";',
+      'import { unredactedCaseLawDecisions } from "@/api/db/schema";',
+      "void caseLawPublicReadDb;",
+      "void unredactedCaseLawDecisions;",
+    ].join("\n");
+    expect(
+      await lint(source, "apps/api/src/lib/case-law/public-subject.ts"),
     ).toEqual([]);
   });
 
-  test("the publication owner may define the publication condition", async () => {
-    const source = "export const clause = sql`d.redacted_at IS NULL`;";
+  test("the unredacted view allowance stays scoped to the subject module", () => {
+    expect(UNREDACTED_VIEW_ALLOWED_MODULES).toEqual([
+      "apps/api/src/lib/case-law/public-subject.ts",
+    ]);
+  });
+
+  test("every production public-read module is in the rule boundary", () => {
+    const repositoryRoot = path.resolve(import.meta.dir, "../..");
+    const apiRoot = path.join(repositoryRoot, "apps/api/src");
+    const candidateModules = new Map<string, ReadonlySet<string>>();
+    for (const filename of new Bun.Glob("**/*.{ts,tsx}").scanSync({
+      cwd: apiRoot,
+      onlyFiles: true,
+    })) {
+      if (
+        filename.endsWith(".d.ts") ||
+        filename.endsWith(".test.ts") ||
+        filename.endsWith(".test.tsx") ||
+        filename.includes("/tests/")
+      ) {
+        continue;
+      }
+      const sourcePath = `apps/api/src/${filename}`;
+      const sourceFile = ts.createSourceFile(
+        sourcePath,
+        readFileSync(path.join(apiRoot, filename), "utf-8"),
+        ts.ScriptTarget.Latest,
+        true,
+        filename.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+      );
+      const importedModules = new Set<string>();
+      let importsReadSurface = false;
+      for (const statement of sourceFile.statements) {
+        const moduleSpecifier =
+          ts.isImportDeclaration(statement) || ts.isExportDeclaration(statement)
+            ? statement.moduleSpecifier
+            : undefined;
+        if (!moduleSpecifier || !ts.isStringLiteral(moduleSpecifier)) {
+          continue;
+        }
+        const moduleId = canonicalModuleId(moduleSpecifier.text, sourcePath);
+        importedModules.add(moduleId);
+        const namedBindings =
+          ts.isImportDeclaration(statement) && statement.importClause
+            ? statement.importClause.namedBindings
+            : undefined;
+        if (!namedBindings || !ts.isNamedImports(namedBindings)) {
+          continue;
+        }
+        const importedNames = new Set(
+          namedBindings.elements.map(
+            ({ propertyName, name }) => propertyName?.text ?? name.text,
+          ),
+        );
+        if (
+          moduleId === "apps/api/src/lib/case-law-public-read-db" &&
+          (importedNames.has("CaseLawPublicReadDb") ||
+            importedNames.has("CaseLawPublicReadTransaction"))
+        ) {
+          importsReadSurface = true;
+        }
+        if (
+          moduleId === "apps/api/src/lib/public-law-shared-query" &&
+          (importedNames.has("definePublicLawSharedQuery") ||
+            importedNames.has("PUBLIC_LAW_SHARED_QUERY"))
+        ) {
+          importsReadSurface = true;
+        }
+      }
+      if (importsReadSurface) {
+        candidateModules.set(sourcePath, importedModules);
+      }
+    }
+    candidateModules.set(
+      "apps/api/src/lib/public-law-shared-query.ts",
+      new Set(),
+    );
+
+    expect(candidateModules.size).toBeGreaterThan(1);
+    for (const [filename, importedModules] of candidateModules) {
+      expect(isCaseLawPublicReadModule(filename, importedModules)).toBe(true);
+    }
+  });
+
+  test("CaseLawPublicReadDb, its transaction, and registered query modules reject raw base reads", async () => {
+    const caseLawReadTypeSource = (typeName: string) =>
+      [
+        `import type { ${typeName} } from "@/api/lib/case-law-public-read-db";`,
+        'import { sql } from "drizzle-orm";',
+        `declare const readHandle: ${typeName};`,
+        "void readHandle;",
+        "export const query = sql`select id from case_law_decisions`;",
+      ].join("\n");
+    for (const typeName of [
+      "CaseLawPublicReadDb",
+      "CaseLawPublicReadTransaction",
+    ]) {
+      expect(
+        await lint(
+          caseLawReadTypeSource(typeName),
+          `apps/api/src/handlers/case-law/${typeName}.ts`,
+        ),
+      ).toHaveLength(1);
+    }
+    const registeredQuery = [
+      'import { definePublicLawSharedQuery, PUBLIC_LAW_SHARED_QUERY } from "@/api/lib/public-law-shared-query";',
+      'import { sql } from "drizzle-orm";',
+      "export const query = definePublicLawSharedQuery(",
+      "  PUBLIC_LAW_SHARED_QUERY.caseLawAnalysis,",
+      "  async () => await sql`select id from case_law_decisions`,",
+      ");",
+    ].join("\n");
     expect(
       await lint(
-        source,
-        "apps/api/src/lib/case-law/published-decisions-sql.ts",
+        registeredQuery,
+        "apps/api/src/handlers/case-law/registered-query.ts",
       ),
-    ).toEqual([]);
+    ).toHaveLength(1);
+    const sharedQueryRegistry = [
+      'import { sql } from "drizzle-orm";',
+      "export const query = sql`select id from case_law_decisions`;",
+    ].join("\n");
+    expect(
+      await lint(
+        sharedQueryRegistry,
+        "apps/api/src/lib/public-law-shared-query.ts",
+      ),
+    ).toHaveLength(1);
   });
 
   test("covers a legislation read", async () => {

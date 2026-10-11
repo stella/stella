@@ -14,7 +14,6 @@ import {
   courtTierLabelFromMap,
   type CourtWeightMap,
 } from "@/api/lib/case-law/court-weights";
-import { publishedCaseLawDecisionSqlFor } from "@/api/lib/case-law/published-decisions";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import {
   definePublicLawSharedQuery,
@@ -215,10 +214,9 @@ export const readCaseLawCourtActivityQuery = definePublicLawSharedQuery(
         WITH ORDINALITY AS named(court, ordinality)
       LEFT JOIN LATERAL (
         SELECT latest_decision.updated_at
-        FROM case_law_decisions latest_decision
+        FROM case_law_published_decisions latest_decision
         WHERE latest_decision.country = ${country}
           AND latest_decision.court = named.court
-          AND ${sql.raw(publishedCaseLawDecisionSqlFor("latest_decision"))}
           AND ${admitted(sql`latest_decision.source_id`)}
         ORDER BY latest_decision.updated_at DESC
         LIMIT 1
@@ -227,11 +225,10 @@ export const readCaseLawCourtActivityQuery = definePublicLawSharedQuery(
         SELECT
           count(*) FILTER (WHERE recent_decision.created_at >= ${sinceDay}::timestamptz) AS added_last_day,
           count(*) FILTER (WHERE recent_decision.created_at >= ${sinceWeek}::timestamptz) AS added_last_week
-        FROM case_law_decisions recent_decision
+        FROM case_law_published_decisions recent_decision
         WHERE recent_decision.country = ${country}
           AND recent_decision.court = named.court
           AND recent_decision.updated_at >= ${scanFrom}::timestamptz
-          AND ${sql.raw(publishedCaseLawDecisionSqlFor("recent_decision"))}
           AND ${admitted(sql`recent_decision.source_id`)}
       ) recent ON true
       ORDER BY named.ordinality

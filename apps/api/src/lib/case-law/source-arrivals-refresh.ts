@@ -3,7 +3,6 @@ import { sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import { caseLawSourceArrivals } from "@/api/db/schema";
-import { publishedCaseLawDecisionSqlFor } from "@/api/lib/case-law/published-decisions";
 import { SOURCE_ARRIVALS_WINDOW_MS } from "@/api/lib/case-law/source-arrivals-window";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 
@@ -33,11 +32,10 @@ const sourceArrivalsCountSql = ({
   until: Date;
 }) => sql`
   SELECT count(*)::integer AS added_last_week
-  FROM case_law_decisions d
+  FROM case_law_published_decisions d
   WHERE d.source_id = s.id
     AND d.created_at >= ${since.toISOString()}::timestamptz
     AND d.created_at < ${until.toISOString()}::timestamptz
-    AND ${sql.raw(publishedCaseLawDecisionSqlFor("d"))}
 `;
 
 /** The refresh input for every source, as one statement the plan guard checks. */

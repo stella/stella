@@ -35,7 +35,7 @@ import {
   publicCaseLawCountry,
 } from "@stll/api-contract/case-law-launch-readiness";
 
-import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import { unredactedCaseLawDecisions, caseLawSources } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
   CaseLawPublicReadDb,
@@ -47,8 +47,7 @@ import {
   supplementAnchorPrefix,
 } from "@/api/lib/case-law/decision-absorption";
 import { normalizePublicDecisionLanguage } from "@/api/lib/case-law/decision-language";
-import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
-import { unredactedCaseLawDecisionFor } from "@/api/lib/case-law/published-decisions-sql";
+import { publishedCaseLawDecisionFor } from "@/api/lib/case-law/published-decisions";
 import { isRedistributable } from "@/api/lib/legal-search/corpus-source";
 
 /** Module-private, so the subject type is constructible only below. */
@@ -103,7 +102,7 @@ export type DecisionSubjectLocator =
 const locatorCondition = (locator: DecisionSubjectLocator) => {
   switch (locator.kind) {
     case "id":
-      return eq(caseLawDecisions.id, locator.id);
+      return eq(unredactedCaseLawDecisions.id, locator.id);
     case "slug": {
       const country = publicCaseLawCountry(locator.country);
       const language = normalizePublicDecisionLanguage(locator.language);
@@ -115,13 +114,13 @@ const locatorCondition = (locator: DecisionSubjectLocator) => {
       }
       return language === null
         ? and(
-            eq(caseLawDecisions.country, country),
-            eq(caseLawDecisions.slug, locator.slug),
+            eq(unredactedCaseLawDecisions.country, country),
+            eq(unredactedCaseLawDecisions.slug, locator.slug),
           )
         : and(
-            eq(caseLawDecisions.country, country),
-            eq(caseLawDecisions.slug, locator.slug),
-            sql`replace(lower(${caseLawDecisions.language}), '_', '-') = ${language}`,
+            eq(unredactedCaseLawDecisions.country, country),
+            eq(unredactedCaseLawDecisions.slug, locator.slug),
+            sql`replace(lower(${unredactedCaseLawDecisions.language}), '_', '-') = ${language}`,
           );
     }
     default: {
@@ -139,18 +138,18 @@ const selectLocatedRow = async (
   (
     await tx
       .select({
-        id: caseLawDecisions.id,
-        country: caseLawDecisions.country,
+        id: unredactedCaseLawDecisions.id,
+        country: unredactedCaseLawDecisions.country,
         descriptor: caseLawSources.descriptor,
-        published: sql<boolean>`${publishedCaseLawDecision}`,
-        absorption: decisionAbsorptionSql(caseLawDecisions.metadata),
+        published: sql<boolean>`${publishedCaseLawDecisionFor(unredactedCaseLawDecisions)}`,
+        absorption: decisionAbsorptionSql(unredactedCaseLawDecisions.metadata),
       })
-      .from(caseLawDecisions)
+      .from(unredactedCaseLawDecisions)
       .innerJoin(
         caseLawSources,
-        eq(caseLawSources.id, caseLawDecisions.sourceId),
+        eq(caseLawSources.id, unredactedCaseLawDecisions.sourceId),
       )
-      .where(and(unredactedCaseLawDecisionFor(caseLawDecisions), condition))
+      .where(condition)
       .limit(1)
   ).at(0);
 
@@ -202,7 +201,7 @@ const resolveSubjectIn = async (
   }
   const target = await selectLocatedRow(
     tx,
-    eq(caseLawDecisions.id, absorption.decisionId),
+    eq(unredactedCaseLawDecisions.id, absorption.decisionId),
   );
   if (target === undefined || !isPublic(target)) {
     return null;

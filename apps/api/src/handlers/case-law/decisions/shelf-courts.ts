@@ -7,7 +7,6 @@ import {
 } from "@/api/lib/case-law/court-weights";
 import { isCourtDirectoryJurisdiction } from "@/api/lib/case-law/decision-court-id-sql";
 import { loadPublicCourtWeightsForCountry } from "@/api/lib/case-law/public-case-law-config";
-import { publishedCaseLawDecisionSqlFor } from "@/api/lib/case-law/published-decisions";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import type { LegalBrowseFacets } from "@/api/lib/legal-search/types";
 import { LIMITS } from "@/api/lib/limits";
@@ -89,15 +88,13 @@ export const readCourtNames = async ({
       await tx.execute(sql`
         WITH RECURSIVE court_walk AS (
           SELECT min(first_decision.court) AS court
-          FROM case_law_decisions first_decision
+          FROM case_law_published_decisions first_decision
           WHERE first_decision.country = ${country}
-              AND ${sql.raw(publishedCaseLawDecisionSqlFor("first_decision"))}
           UNION ALL
           SELECT (
             SELECT min(next_decision.court)
-            FROM case_law_decisions next_decision
+            FROM case_law_published_decisions next_decision
             WHERE next_decision.country = ${country}
-              AND ${sql.raw(publishedCaseLawDecisionSqlFor("next_decision"))}
               AND next_decision.court > court_walk.court
           )
           FROM court_walk

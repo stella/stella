@@ -35,6 +35,10 @@ import { pgFtsBrowseFacetPublishedQuery } from "@/api/lib/legal-search/pg-fts-br
 import { readPgFtsBrowseFacets } from "@/api/lib/legal-search/pg-fts-browse-facets";
 import { isRecord } from "@/api/lib/type-guards";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
+import {
+  caseLawPublishedDecisionsFixtureSql,
+  caseLawUnredactedDecisionsFixtureSql,
+} from "@/api/tests/helpers/case-law-publication-view-fixture";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const NOW = new Date("2026-10-11T12:00:00.000Z");
@@ -72,6 +76,8 @@ if (!databaseUrl || !runPostgresTests) {
           ) ON COMMIT DROP`),
           );
         }
+        await tx.execute(caseLawPublishedDecisionsFixtureSql);
+        await tx.execute(caseLawUnredactedDecisionsFixtureSql);
 
         const sourceId = createSafeId<"caseLawSource">();
         const decisionId = createSafeId<"caseLawDecision">();
@@ -427,6 +433,28 @@ if (!databaseUrl || !runPostgresTests) {
           redactedAt: state.redactedAt,
         }));
         await tx.insert(caseLawDecisions).values(rows);
+
+        await tx.execute(caseLawPublishedDecisionsFixtureSql);
+        await tx.execute(caseLawUnredactedDecisionsFixtureSql);
+
+        const publishedViewRows = await tx.execute<{ id: string }>(
+          sql`SELECT id FROM case_law_published_decisions`,
+        );
+        const unredactedViewRows = await tx.execute<{ id: string }>(
+          sql`SELECT id FROM case_law_unredacted_decisions`,
+        );
+        expect(new Set(publishedViewRows.rows.map(({ id }) => id))).toEqual(
+          new Set(
+            rows
+              .filter((_, index) => states[index]?.visibility === true)
+              .map(({ id }) => id),
+          ),
+        );
+        expect(new Set(unredactedViewRows.rows.map(({ id }) => id))).toEqual(
+          new Set(
+            rows.filter((row) => row.redactedAt === null).map(({ id }) => id),
+          ),
+        );
 
         const published = pgFtsBrowseFacetPublishedQuery(tx).as("published");
         const publishedIds = new Set(

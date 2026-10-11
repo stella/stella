@@ -9,7 +9,7 @@ import {
   type PublicCaseLawCountry,
 } from "@stll/api-contract/case-law-launch-readiness";
 
-import { caseLawDecisions } from "@/api/db/schema";
+import { publishedCaseLawDecisions } from "@/api/db/schema";
 import { readBrowseFacetsUnderPolicy } from "@/api/handlers/case-law/decisions/facets";
 import {
   type CaseLawCourtStatusRow,
@@ -23,7 +23,6 @@ import type {
 } from "@/api/lib/case-law-public-read-db";
 import { readNonRedistributableCaseLawSourceIds } from "@/api/lib/case-law/non-redistributable-sources";
 import { loadPublicCourtWeights } from "@/api/lib/case-law/public-case-law-config";
-import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
 import { errorTag } from "@/api/lib/errors/utils";
 import { createTtlResultCache } from "@/api/lib/legal-search/browse-facets-cache";
 import {
@@ -94,20 +93,24 @@ export const readCaseLawCorpusStatusQuery = definePublicLawSharedQuery(
       .select({
         updatedAt: sql<
           string | null
-        >`to_json(${caseLawDecisions.updatedAt}) #>> '{}'`,
+        >`to_json(${publishedCaseLawDecisions.updatedAt}) #>> '{}'`,
       })
-      .from(caseLawDecisions)
+      .from(publishedCaseLawDecisions)
       .where(
         and(
-          eq(caseLawDecisions.country, country),
-          publishedCaseLawDecision,
+          eq(publishedCaseLawDecisions.country, country),
           excludedSourceIds.length === 0
             ? undefined
-            : notInArray(caseLawDecisions.sourceId, [...excludedSourceIds]),
+            : notInArray(publishedCaseLawDecisions.sourceId, [
+                ...excludedSourceIds,
+              ]),
         ),
       )
       // The index's own order, so the walk stops at the first admitted row.
-      .orderBy(desc(caseLawDecisions.updatedAt), desc(caseLawDecisions.id))
+      .orderBy(
+        desc(publishedCaseLawDecisions.updatedAt),
+        desc(publishedCaseLawDecisions.id),
+      )
       .limit(1);
 
     return row?.updatedAt ?? null;

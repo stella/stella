@@ -2,6 +2,8 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { sql, TransactionRollbackError } from "drizzle-orm";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import { stellaPublicLawReader } from "@/api/db/rls";
 import type { Transaction } from "@/api/db/root";
 import { readCitationGraphFacts } from "@/api/handlers/case-law/analysis/significance";
@@ -178,6 +180,27 @@ if (!databaseUrl || !runPostgresTests) {
         canReadPublicLaw: true,
         canReadOtherData: false,
       });
+    });
+
+    test("reads the decision views and cannot read the base relation", async () => {
+      await asReader(databaseUrl, async (tx) => {
+        await tx.execute(
+          sql.raw('SELECT "id" FROM "case_law_published_decisions" LIMIT 0'),
+        );
+        await tx.execute(
+          sql.raw('SELECT "id" FROM "case_law_unredacted_decisions" LIMIT 0'),
+        );
+      });
+
+      const baseRelationFailure = await rejectionOf(
+        asReader(databaseUrl, async (tx) => {
+          await tx.execute(
+            sql.raw('SELECT "id" FROM "case_law_decisions" LIMIT 0'),
+          );
+        }),
+      );
+      expect(baseRelationFailure).toBeInstanceOf(Error);
+      expect(String(baseRelationFailure)).toContain("permission denied");
     });
 
     test("the search and configuration reads return the seeded rows", async () => {

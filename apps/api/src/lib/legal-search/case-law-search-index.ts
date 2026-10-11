@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { and, asc, eq, gt, isNull, notExists, sql } from "drizzle-orm";
+import { and, asc, eq, gt, notExists, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { union } from "drizzle-orm/pg-core";
 
@@ -11,6 +11,7 @@ import {
   CASE_LAW_SEARCH_BACKFILL_FAILURE_STATUS,
   caseLawDecisionIdentifiers,
   caseLawDecisions,
+  publishedCaseLawDecisions,
   caseLawSearchBackfillFailures,
   caseLawSearchDocumentPreviewPassages,
   caseLawSearchDocuments,
@@ -50,14 +51,14 @@ const SEARCH_BACKFILL_DEDUPE_WINDOW_MS = 30_000;
 const ERROR_CLASS_MAX_LENGTH = 80;
 
 // Column to column in Postgres, at full timestamptz precision.
-const matchingSearchBackfillSourceVersion = sql`${caseLawSearchBackfillFailures.sourceUpdatedAt}::timestamptz = ${caseLawDecisions.updatedAt}::timestamptz`;
+const matchingSearchBackfillSourceVersion = sql`${caseLawSearchBackfillFailures.sourceUpdatedAt}::timestamptz = ${publishedCaseLawDecisions.updatedAt}::timestamptz`;
 
 // A marker is only authoritative for the source version that failed. The
 // decision PK probe excludes cooling and parked work without walking the
 // failure table ahead of the created-at candidate index.
 const eligibleSearchBackfillDecision = sql`NOT EXISTS (
   SELECT 1 FROM ${caseLawSearchBackfillFailures}
-  WHERE ${caseLawSearchBackfillFailures.decisionId} = ${caseLawDecisions.id}
+  WHERE ${caseLawSearchBackfillFailures.decisionId} = ${publishedCaseLawDecisions.id}
     AND ${matchingSearchBackfillSourceVersion}
     AND (
       (${caseLawSearchBackfillFailures.status} = ${CASE_LAW_SEARCH_BACKFILL_FAILURE_STATUS.PARKED}
@@ -180,7 +181,7 @@ export const recordSearchBackfillFailure = async (
         ${CASE_LAW_SEARCH_BACKFILL_FAILURE_STATUS.COOLDOWN},
         now() + (${SEARCH_BACKFILL_RETRY_DELAYS_MS[0]}::bigint * interval '1 millisecond'),
         now()
-      FROM case_law_decisions AS decision
+      FROM case_law_published_decisions AS decision
       WHERE decision.id = ${decisionId}
         AND decision.updated_at = ${sourceUpdatedAt}::timestamptz
       ON CONFLICT (decision_id) DO UPDATE SET
@@ -261,31 +262,29 @@ export const indexDecision = async (
   const [decision] = await scopedDb((tx) =>
     tx
       .select({
-        id: caseLawDecisions.id,
-        caseNumber: caseLawDecisions.caseNumber,
-        ecli: caseLawDecisions.ecli,
+        id: publishedCaseLawDecisions.id,
+        caseNumber: publishedCaseLawDecisions.caseNumber,
+        ecli: publishedCaseLawDecisions.ecli,
         identifiers: sql<string[]>`ARRAY(
           SELECT identifier.value
           FROM ${caseLawDecisionIdentifiers} identifier
-          WHERE identifier.decision_id = ${caseLawDecisions.id}
+          WHERE identifier.decision_id = ${publishedCaseLawDecisions.id}
           ORDER BY identifier.type, identifier.value
         )`,
-        court: caseLawDecisions.court,
-        language: caseLawDecisions.language,
-        fulltext: caseLawDecisions.fulltext,
-        sections: caseLawDecisions.sections,
+        court: publishedCaseLawDecisions.court,
+        language: publishedCaseLawDecisions.language,
+        fulltext: publishedCaseLawDecisions.fulltext,
+        sections: publishedCaseLawDecisions.sections,
       })
-      .from(caseLawDecisions)
+      .from(publishedCaseLawDecisions)
       .innerJoin(
         caseLawSources,
-        eq(caseLawSources.id, caseLawDecisions.sourceId),
+        eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
       )
       .where(
         and(
-          eq(caseLawDecisions.id, decisionId),
-          isNull(caseLawDecisions.redactedAt),
+          eq(publishedCaseLawDecisions.id, decisionId),
           redistributableCaseLawSource,
-          publishedCaseLawDecision,
         ),
       )
       .limit(1),
@@ -464,33 +463,35 @@ export const backfillSearchIndex = async (
   const missing = await scopedDb((tx) =>
     tx
       .select({
-        id: caseLawDecisions.id,
-        sourceUpdatedAt: sql<string>`${caseLawDecisions.updatedAt}::text`.as(
-          "source_updated_at",
-        ),
+        id: publishedCaseLawDecisions.id,
+        sourceUpdatedAt:
+          sql<string>`${publishedCaseLawDecisions.updatedAt}::text`.as(
+            "source_updated_at",
+          ),
       })
-      .from(caseLawDecisions)
+      .from(publishedCaseLawDecisions)
       .innerJoin(
         caseLawSources,
-        eq(caseLawSources.id, caseLawDecisions.sourceId),
+        eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
       )
       .where(
         and(
-          isNull(caseLawDecisions.redactedAt),
           redistributableCaseLawSource,
-          publishedCaseLawDecision,
           notExists(
             tx
               .select({ one: sql`1` })
               .from(caseLawSearchDocuments)
               .where(
-                eq(caseLawSearchDocuments.decisionId, caseLawDecisions.id),
+                eq(
+                  caseLawSearchDocuments.decisionId,
+                  publishedCaseLawDecisions.id,
+                ),
               ),
           ),
           eligibleSearchBackfillDecision,
         ),
       )
-      .orderBy(asc(caseLawDecisions.createdAt))
+      .orderBy(asc(publishedCaseLawDecisions.createdAt))
       .limit(missingLimit),
   );
 
@@ -499,35 +500,35 @@ export const backfillSearchIndex = async (
     const staleCandidates = (predicate: SQL) =>
       tx
         .select({
-          id: caseLawDecisions.id,
-          createdAt: caseLawDecisions.createdAt,
-          sourceUpdatedAt: sql<string>`${caseLawDecisions.updatedAt}::text`.as(
-            "source_updated_at",
-          ),
+          id: publishedCaseLawDecisions.id,
+          createdAt: publishedCaseLawDecisions.createdAt,
+          sourceUpdatedAt:
+            sql<string>`${publishedCaseLawDecisions.updatedAt}::text`.as(
+              "source_updated_at",
+            ),
         })
-        .from(caseLawDecisions)
+        .from(publishedCaseLawDecisions)
         .innerJoin(
           caseLawSearchDocuments,
-          eq(caseLawSearchDocuments.decisionId, caseLawDecisions.id),
+          eq(caseLawSearchDocuments.decisionId, publishedCaseLawDecisions.id),
         )
         .innerJoin(
           caseLawSources,
-          eq(caseLawSources.id, caseLawDecisions.sourceId),
+          eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
         )
         .where(
           and(
             redistributableCaseLawSource,
-            publishedCaseLawDecision,
             predicate,
             eligibleSearchBackfillDecision,
           ),
         )
-        .orderBy(asc(caseLawDecisions.createdAt))
+        .orderBy(asc(publishedCaseLawDecisions.createdAt))
         .limit(staleLimit);
 
     const updated = staleCandidates(
       // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- column-to-column comparison evaluated in Postgres; no JS Date is bound
-      gt(caseLawDecisions.updatedAt, caseLawSearchDocuments.updatedAt),
+      gt(publishedCaseLawDecisions.updatedAt, caseLawSearchDocuments.updatedAt),
     );
     const missingPreview = staleCandidates(
       notExists(
@@ -538,7 +539,7 @@ export const backfillSearchIndex = async (
             and(
               eq(
                 caseLawSearchDocumentPreviewPassages.decisionId,
-                caseLawDecisions.id,
+                publishedCaseLawDecisions.id,
               ),
               eq(
                 caseLawSearchDocumentPreviewPassages.generation,
@@ -620,15 +621,18 @@ export const backfillSearchIndex = async (
         .select({ count: sql<number>`count(*)::int` })
         .from(caseLawSearchBackfillFailures)
         .innerJoin(
-          caseLawDecisions,
+          publishedCaseLawDecisions,
           and(
-            eq(caseLawSearchBackfillFailures.decisionId, caseLawDecisions.id),
+            eq(
+              caseLawSearchBackfillFailures.decisionId,
+              publishedCaseLawDecisions.id,
+            ),
             matchingSearchBackfillSourceVersion,
           ),
         )
         .innerJoin(
           caseLawSources,
-          eq(caseLawSources.id, caseLawDecisions.sourceId),
+          eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
         )
         .where(
           and(
@@ -639,7 +643,6 @@ export const backfillSearchIndex = async (
             sql`${caseLawSearchBackfillFailures.lastFailedAt} >
               now() - (${SEARCH_BACKFILL_PARKED_TTL_MS}::bigint * interval '1 millisecond')`,
             redistributableCaseLawSource,
-            publishedCaseLawDecision,
           ),
         )
     ).at(0);

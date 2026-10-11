@@ -6,10 +6,7 @@ import { isNonNullObject } from "@stll/template-conditions/path";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import type { SafeId } from "@/api/lib/branded-types";
-import {
-  publicCaseLawDecisionJoin,
-  publicCaseLawDecisionWhere,
-} from "@/api/lib/case-law/search-sql";
+import { publicCaseLawDecisionJoin } from "@/api/lib/case-law/search-sql";
 import { LIMITS } from "@/api/lib/limits";
 import { CHAT_SEARCH_DISPLAY_METADATA_GENERATION } from "@/api/lib/search/chat-search-generation";
 import { chatThreadScopeSql } from "@/api/lib/search/chat-thread-scope-sql";
@@ -439,7 +436,7 @@ export const buildSearchPreviewQuery = ({
           useUnaccent: sql`coalesce(clfc.use_unaccent, true)`,
         })}
         FROM case_law_search_documents clsd
-        JOIN case_law_decisions d ON d.id = clsd.decision_id
+        JOIN case_law_published_decisions d ON d.id = clsd.decision_id
         LEFT JOIN case_law_fts_configs clfc ON clfc.language = clsd.language
         ${publicCaseLawDecisionJoin}
         ${previewPassageJoin({
@@ -448,8 +445,7 @@ export const buildSearchPreviewQuery = ({
           parentFilter: sql`passage.decision_id = clsd.decision_id`,
           table: "case-law",
         })}
-        WHERE ${publicCaseLawDecisionWhere}
-          AND clsd.decision_id = ${resultId}
+        WHERE clsd.decision_id = ${resultId}
           ${previewTextFilter(sql`clsd.tsv`, tsQuery)}
         LIMIT 1
       `;

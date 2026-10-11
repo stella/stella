@@ -10,7 +10,7 @@ import {
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
 import {
-  caseLawDecisions,
+  publishedCaseLawDecisions,
   caseLawSitemapShards,
   caseLawSources,
 } from "@/api/db/schema";
@@ -20,7 +20,6 @@ import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
-import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import {
   decisionBucketSql,
@@ -110,19 +109,19 @@ export const getShardConditions = ({
   year,
 }: SitemapShardDecisionsQuery): SQL[] | { error: "invalidShard" } => {
   const conditions: SQL[] = [
-    eq(caseLawDecisions.country, country.toUpperCase()),
+    eq(publishedCaseLawDecisions.country, country.toUpperCase()),
   ];
 
   if (year === SITEMAP_UNDATED_YEAR || month === SITEMAP_UNDATED_MONTH) {
     if (year !== SITEMAP_UNDATED_YEAR || month !== SITEMAP_UNDATED_MONTH) {
       return { error: "invalidShard" };
     }
-    conditions.push(isNull(caseLawDecisions.decisionDate));
+    conditions.push(isNull(publishedCaseLawDecisions.decisionDate));
   } else {
     const { end, start } = getShardDateRange(year, month);
     conditions.push(
-      sql`${caseLawDecisions.decisionDate} >= ${start}`,
-      sql`${caseLawDecisions.decisionDate} < ${end}`,
+      sql`${publishedCaseLawDecisions.decisionDate} >= ${start}`,
+      sql`${publishedCaseLawDecisions.decisionDate} < ${end}`,
     );
   }
 
@@ -139,26 +138,33 @@ export const readSitemapDecisionAlternates = async (
 ) =>
   await tx
     .select({
-      id: caseLawDecisions.id,
-      caseNumber: caseLawDecisions.caseNumber,
-      slug: caseLawDecisions.slug,
-      country: caseLawDecisions.country,
-      court: caseLawDecisions.court,
-      language: caseLawDecisions.language,
-      languageGroupKey: caseLawDecisions.languageGroupKey,
-      updatedAt: caseLawDecisions.updatedAt,
+      id: publishedCaseLawDecisions.id,
+      caseNumber: publishedCaseLawDecisions.caseNumber,
+      slug: publishedCaseLawDecisions.slug,
+      country: publishedCaseLawDecisions.country,
+      court: publishedCaseLawDecisions.court,
+      language: publishedCaseLawDecisions.language,
+      languageGroupKey: publishedCaseLawDecisions.languageGroupKey,
+      updatedAt: publishedCaseLawDecisions.updatedAt,
     })
-    .from(caseLawDecisions)
-    .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
+    .from(publishedCaseLawDecisions)
+    .innerJoin(
+      caseLawSources,
+      eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
+    )
     .where(
       and(
-        inArray(caseLawDecisions.languageGroupKey, languageGroupKeys),
-        inArray(caseLawDecisions.country, [...PUBLIC_CASE_LAW_COUNTRIES]),
+        inArray(publishedCaseLawDecisions.languageGroupKey, languageGroupKeys),
+        inArray(publishedCaseLawDecisions.country, [
+          ...PUBLIC_CASE_LAW_COUNTRIES,
+        ]),
         redistributableCaseLawSource,
-        publishedCaseLawDecision,
       ),
     )
-    .orderBy(asc(caseLawDecisions.language), asc(caseLawDecisions.id))
+    .orderBy(
+      asc(publishedCaseLawDecisions.language),
+      asc(publishedCaseLawDecisions.id),
+    )
     .limit(SITEMAP_LANGUAGE_ALTERNATE_ROW_LIMIT);
 
 export const sitemapShardDecisionsQuery = (
@@ -167,25 +173,25 @@ export const sitemapShardDecisionsQuery = (
 ) =>
   tx
     .select({
-      id: caseLawDecisions.id,
-      caseNumber: caseLawDecisions.caseNumber,
-      slug: caseLawDecisions.slug,
-      country: caseLawDecisions.country,
-      court: caseLawDecisions.court,
-      language: caseLawDecisions.language,
-      languageGroupKey: caseLawDecisions.languageGroupKey,
-      updatedAt: caseLawDecisions.updatedAt,
+      id: publishedCaseLawDecisions.id,
+      caseNumber: publishedCaseLawDecisions.caseNumber,
+      slug: publishedCaseLawDecisions.slug,
+      country: publishedCaseLawDecisions.country,
+      court: publishedCaseLawDecisions.court,
+      language: publishedCaseLawDecisions.language,
+      languageGroupKey: publishedCaseLawDecisions.languageGroupKey,
+      updatedAt: publishedCaseLawDecisions.updatedAt,
     })
-    .from(caseLawDecisions)
-    .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
-    .where(
-      and(
-        redistributableCaseLawSource,
-        publishedCaseLawDecision,
-        ...conditions,
-      ),
+    .from(publishedCaseLawDecisions)
+    .innerJoin(
+      caseLawSources,
+      eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
     )
-    .orderBy(desc(caseLawDecisions.updatedAt), desc(caseLawDecisions.id))
+    .where(and(redistributableCaseLawSource, ...conditions))
+    .orderBy(
+      desc(publishedCaseLawDecisions.updatedAt),
+      desc(publishedCaseLawDecisions.id),
+    )
     .limit(LIMITS.caseLawSitemapShardUrlLimit + 1);
 
 /**

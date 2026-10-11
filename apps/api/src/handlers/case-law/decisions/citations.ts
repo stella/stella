@@ -4,13 +4,12 @@ import { status } from "elysia";
 
 import {
   caseLawCitations,
-  caseLawDecisions,
+  publishedCaseLawDecisions,
   caseLawSources,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import { readPublicDecisionLanguageAlternatesInTx } from "@/api/lib/case-law/language-alternates";
-import { publishedCaseLawDecisionFor } from "@/api/lib/case-law/published-decisions";
 import { redistributableCaseLawSourceFor } from "@/api/lib/case-law/redistribution";
 import { buildCaseLawDecisionAppUrl } from "@/api/lib/legal-search/public-law-app-urls";
 import { LIMITS } from "@/api/lib/limits";
@@ -23,9 +22,15 @@ import {
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedCaseLawCitationId } from "@/api/lib/safe-id-boundaries";
 
-const citedDecision = alias(caseLawDecisions, "cited_case_law_decision");
+const citedDecision = alias(
+  publishedCaseLawDecisions,
+  "cited_case_law_decision",
+);
 const citedSource = alias(caseLawSources, "cited_case_law_source");
-const citingDecision = alias(caseLawDecisions, "citing_case_law_decision");
+const citingDecision = alias(
+  publishedCaseLawDecisions,
+  "citing_case_law_decision",
+);
 const citingSource = alias(caseLawSources, "citing_case_law_source");
 
 const decodeCitationCursor = (
@@ -131,17 +136,13 @@ const readOutgoingDecisionCitationRows = async ({
         OR (
           ${citedSource.id} IS NOT NULL
           AND ${redistributableCaseLawSourceFor(citedSource.descriptor)}
-          AND ${publishedCaseLawDecisionFor(citedDecision)}
         )
       )`,
     })
     .from(candidates)
     .leftJoin(
       citedDecision,
-      and(
-        eq(citedDecision.id, candidates.citedDecisionId),
-        publishedCaseLawDecisionFor(citedDecision),
-      ),
+      and(eq(citedDecision.id, candidates.citedDecisionId)),
     )
     .leftJoin(citedSource, eq(citedSource.id, citedDecision.sourceId))
     .orderBy(asc(candidates.id))
@@ -234,16 +235,12 @@ export const listIncomingDecisionCitations = async ({
       visible: sql<boolean>`(
         ${citingSource.id} IS NOT NULL
         AND ${redistributableCaseLawSourceFor(citingSource.descriptor)}
-        AND ${publishedCaseLawDecisionFor(citingDecision)}
       )`,
     })
     .from(candidates)
     .leftJoin(
       citingDecision,
-      and(
-        eq(citingDecision.id, candidates.citingDecisionId),
-        publishedCaseLawDecisionFor(citingDecision),
-      ),
+      and(eq(citingDecision.id, candidates.citingDecisionId)),
     )
     .leftJoin(citingSource, eq(citingSource.id, citingDecision.sourceId))
     .orderBy(asc(candidates.id))

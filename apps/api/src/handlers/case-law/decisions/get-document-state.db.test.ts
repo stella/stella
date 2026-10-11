@@ -239,7 +239,7 @@ if (!databaseUrl || !runPostgresTests) {
           .select({ hasDocument: rowHoldsDocument })
           .from(caseLawDecisions)
           .where(eq(caseLawDecisions.id, id));
-        const publicRow = await caseLawPublicReadDb(
+        const [publicRow] = await caseLawPublicReadDb(
           async (tx) => await decisionRecordQuery(tx, id),
         );
         expect(full?.hasDocument, name).toBe(expected);

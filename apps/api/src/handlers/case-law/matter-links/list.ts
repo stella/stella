@@ -5,7 +5,7 @@ import { DECISION_TEXT_WITHHELD_REASON } from "@stll/api-contract/case-law-text-
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
-  caseLawDecisions,
+  publishedCaseLawDecisions,
   caseLawMatterLinks,
   caseLawSources,
 } from "@/api/db/schema";
@@ -17,7 +17,6 @@ import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { readDecisionHeadnote } from "@/api/lib/case-law/decision-text";
 import { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
-import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
 import {
   publisherHeadnoteMetadataSql,
   publisherKeywordsMetadataSql,
@@ -55,42 +54,37 @@ export const listMatterLinksHandler = async ({
         note: caseLawMatterLinks.note,
         linkedBy: caseLawMatterLinks.linkedBy,
         createdAt: caseLawMatterLinks.createdAt,
-        caseNumber: caseLawDecisions.caseNumber,
-        slug: caseLawDecisions.slug,
-        ecli: caseLawDecisions.ecli,
-        court: caseLawDecisions.court,
-        country: caseLawDecisions.country,
-        language: caseLawDecisions.language,
-        languageGroupKey: caseLawDecisions.languageGroupKey,
-        decisionDate: caseLawDecisions.decisionDate,
-        decisionType: caseLawDecisions.decisionType,
-        citationCount: caseLawDecisions.citationCount,
+        caseNumber: publishedCaseLawDecisions.caseNumber,
+        slug: publishedCaseLawDecisions.slug,
+        ecli: publishedCaseLawDecisions.ecli,
+        court: publishedCaseLawDecisions.court,
+        country: publishedCaseLawDecisions.country,
+        language: publishedCaseLawDecisions.language,
+        languageGroupKey: publishedCaseLawDecisions.languageGroupKey,
+        decisionDate: publishedCaseLawDecisions.decisionDate,
+        decisionType: publishedCaseLawDecisions.decisionType,
+        citationCount: publishedCaseLawDecisions.citationCount,
         descriptor: caseLawSources.descriptor,
         // Publisher text follows the source's terms, exactly as the search
         // hit does: a source that withholds redistribution contributes the
         // row's own facts and no borrowed prose.
         headnote: sql<string | null>`CASE WHEN ${redistributableCaseLawSource}
-          THEN ${publisherHeadnoteMetadataSql(caseLawDecisions.metadata)}
+          THEN ${publisherHeadnoteMetadataSql(publishedCaseLawDecisions.metadata)}
         END`,
         keywords: sql<string[] | null>`CASE WHEN ${redistributableCaseLawSource}
-          THEN ${publisherKeywordsMetadataSql(caseLawDecisions.metadata)}
+          THEN ${publisherKeywordsMetadataSql(publishedCaseLawDecisions.metadata)}
         END`,
       })
       .from(caseLawMatterLinks)
       .innerJoin(
-        caseLawDecisions,
-        eq(caseLawDecisions.id, caseLawMatterLinks.decisionId),
+        publishedCaseLawDecisions,
+        eq(publishedCaseLawDecisions.id, caseLawMatterLinks.decisionId),
       )
       .innerJoin(
         caseLawSources,
-        eq(caseLawSources.id, caseLawDecisions.sourceId),
+        eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
       )
-      .where(
-        and(
-          eq(caseLawMatterLinks.workspaceId, workspaceId),
-          publishedCaseLawDecision,
-        ),
-      )
+      .where(and(eq(caseLawMatterLinks.workspaceId, workspaceId)))
       .orderBy(desc(caseLawMatterLinks.createdAt), desc(caseLawMatterLinks.id))
       .limit(LIMITS.caseLawMatterLinksPerWorkspace),
   );

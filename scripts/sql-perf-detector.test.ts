@@ -720,6 +720,26 @@ test("every high-volume relation receives the per-source count guard", () => {
   }
 });
 
+test.each(["case_law_published_decisions", "case_law_unredacted_decisions"])(
+  "publication view %s receives the per-source count guard",
+  (view) => {
+    expect(
+      kinds(`sql\`SELECT count(*) FROM ${view} WHERE source_id = $1\``),
+    ).toEqual(["per-source-full-count"]);
+  },
+);
+
+test.each(["publishedCaseLawDecisions", "unredactedCaseLawDecisions"])(
+  "a source join to %s does not restrict an aggregate to one source",
+  (view) => {
+    expect(
+      kinds(
+        `import { count, eq } from "drizzle-orm"; db.select({ total: count() }).from(${view}).innerJoin(caseLawSources, eq(caseLawSources.id, ${view}.sourceId));`,
+      ),
+    ).toEqual([]);
+  },
+);
+
 test.each([
   "sql`SELECT source_id, count(*) FROM legislation_documents WHERE country = ${country} GROUP BY source_id`",
   'import { count, eq } from "drizzle-orm"; db.select({ source: legislationDocuments.sourceId, count: count() }).from(legislationDocuments).where(eq(legislationDocuments.country, country)).groupBy(legislationDocuments.sourceId);',

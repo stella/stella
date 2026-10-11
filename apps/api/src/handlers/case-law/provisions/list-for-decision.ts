@@ -9,7 +9,7 @@ import { PROVISION_LINK_STATUS_TYPES } from "@stll/api-contract/provision-link-s
 import type { ProvisionLinkStatus } from "@stll/api-contract/provision-link-status";
 
 import {
-  caseLawDecisions,
+  publishedCaseLawDecisions,
   caseLawProvisionCitations,
   caseLawProvisionExtractions,
   caseLawProvisionExtractionRevisions,
@@ -17,10 +17,6 @@ import {
 } from "@/api/db/schema";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import type { RedistributableDecisionSubject } from "@/api/lib/case-law/public-subject";
-import {
-  publishedCaseLawDecision,
-  publishedCaseLawDecisionFor,
-} from "@/api/lib/case-law/published-decisions";
 import { tPaginationCursor, tPaginationLimit } from "@/api/lib/custom-schema";
 import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/lib/legal-search/corpus-storage";
 import { LIMITS } from "@/api/lib/limits";
@@ -222,13 +218,12 @@ const readLegacyProvisionPage = async ({
     .select(LEGACY_CITATION_FIELDS)
     .from(caseLawProvisionCitations)
     .innerJoin(
-      caseLawDecisions,
-      eq(caseLawDecisions.id, caseLawProvisionCitations.decisionId),
+      publishedCaseLawDecisions,
+      eq(publishedCaseLawDecisions.id, caseLawProvisionCitations.decisionId),
     )
     .where(
       and(
         eq(caseLawProvisionCitations.decisionId, decisionId),
-        publishedCaseLawDecision,
         cursor === null
           ? undefined
           : sql`(${caseLawProvisionCitations.spanStart}, ${caseLawProvisionCitations.anchor}) > (${cursor.spanStart}::integer, ${cursor.anchor}::text)`,
@@ -271,7 +266,7 @@ export const listDecisionProvisionsHandler = async ({
     return await readLegacyProvisionPage({ subject, cursor, limit });
   }
 
-  const decision = caseLawDecisions;
+  const decision = publishedCaseLawDecisions;
   const extraction = caseLawProvisionExtractions;
   const revisions = caseLawProvisionExtractionRevisions;
   const registry = caseLawProvisionExtractionRevisionsRegistry;
@@ -310,7 +305,6 @@ export const listDecisionProvisionsHandler = async ({
   }));
   const pageConditions = [
     eq(caseLawProvisionCitations.decisionId, decisionId),
-    publishedCaseLawDecisionFor(decision),
     ...(cursor === null
       ? []
       : [
@@ -341,9 +335,7 @@ export const listDecisionProvisionsHandler = async ({
       ),
     )
     .leftJoin(caseLawProvisionCitations, and(...pageConditions))
-    .where(
-      and(publishedCaseLawDecisionFor(decision), eq(decision.id, decisionId)),
-    )
+    .where(eq(decision.id, decisionId))
     .orderBy(
       asc(caseLawProvisionCitations.spanStart),
       asc(caseLawProvisionCitations.anchor),

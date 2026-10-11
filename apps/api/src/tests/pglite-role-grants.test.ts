@@ -1,6 +1,6 @@
 import type { PGlite } from "@electric-sql/pglite";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { getTableName, isTable } from "drizzle-orm";
+import { getTableName, getViewName, isTable, isView } from "drizzle-orm";
 import { readdir } from "node:fs/promises";
 import nodePath from "node:path";
 
@@ -154,10 +154,12 @@ const grantedColumnPairs = (sqlText: string): Set<string> => {
   return pairs;
 };
 
-const schemaTableNames = new Set<string>(
+const schemaRelationNames = new Set<string>(
   Object.values(schema)
-    .filter((value) => isTable(value))
-    .map((table) => getTableName(table)),
+    .filter((value) => isTable(value) || isView(value))
+    .map((relation) =>
+      isTable(relation) ? getTableName(relation) : getViewName(relation),
+    ),
 );
 
 const readMigrationSql = async (): Promise<string> => {
@@ -188,7 +190,7 @@ describe("pglite role grants mirror the committed migrations", () => {
         return (
           !WHOLESALE_ROLES.has(role) &&
           !MIGRATION_REPLAYED_ROLES.has(role) &&
-          schemaTableNames.has(table) &&
+          schemaRelationNames.has(table) &&
           !harnessPairs.has(pair)
         );
       })

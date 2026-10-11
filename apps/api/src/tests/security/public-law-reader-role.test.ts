@@ -1140,6 +1140,26 @@ describe("public-law reader role", () => {
     );
   });
 
+  test("reads the case-law views and cannot read the base relation", async () => {
+    await testDb.transaction(async (tx) => {
+      await tx.execute(sql.raw(`SET LOCAL ROLE ${quoted(READER_ROLE)}`));
+      await tx.execute(
+        sql.raw('SELECT "id" FROM "case_law_published_decisions" LIMIT 0'),
+      );
+      await tx.execute(
+        sql.raw('SELECT "id" FROM "case_law_unredacted_decisions" LIMIT 0'),
+      );
+    });
+
+    const baseRelationRejection = await readerStatementFailure(
+      'SELECT "id" FROM "case_law_decisions" LIMIT 0',
+    );
+    expect(baseRelationRejection).toBeInstanceOf(Error);
+    expect(errorMessageChain(baseRelationRejection)).toContain(
+      "permission denied",
+    );
+  });
+
   test("has SELECT policies for required relations and only declared relations", async () => {
     const result = await testDb.execute<{ tablename: string }>(sql`
       SELECT tablename
@@ -1151,16 +1171,28 @@ describe("public-law reader role", () => {
     `);
 
     const policies = result.rows.map(({ tablename }) => tablename);
+    const viewRelations = new Set([
+      "case_law_published_decisions",
+      "case_law_unredacted_decisions",
+    ]);
     const requiredRelations = declaredColumnPairs
       .filter(({ grant }) => grant === "required")
       .map(({ relation }) => relation);
+    const policyRelations = requiredRelations.filter(
+      (relation) =>
+        relation !== "case_law_published_decisions" &&
+        relation !== "case_law_unredacted_decisions",
+    );
     const declaredRelations = Object.keys(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION);
     expect(
-      requiredRelations.filter((relation) => !policies.includes(relation)),
+      policyRelations.filter((relation) => !policies.includes(relation)),
     ).toEqual([]);
     expect(
       policies.filter((relation) => !declaredRelations.includes(relation)),
     ).toEqual([]);
+    expect(policies.filter((relation) => viewRelations.has(relation))).toEqual(
+      [],
+    );
   });
 
   test("keeps the previous reader policies during rollout", async () => {

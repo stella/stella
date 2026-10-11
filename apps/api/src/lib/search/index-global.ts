@@ -21,10 +21,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { decisionIdentifierProjection } from "@/api/lib/case-law/decision-identifiers";
 import { readPublicDecisionLanguageAlternatesForGroupKeys } from "@/api/lib/case-law/language-alternates";
 import type { PublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
-import {
-  publicCaseLawDecisionJoin,
-  publicCaseLawDecisionWhere,
-} from "@/api/lib/case-law/search-sql";
+import { publicCaseLawDecisionJoin } from "@/api/lib/case-law/search-sql";
 import { lockForWrite } from "@/api/lib/db/lock-for-write";
 import { escapeLike } from "@/api/lib/escape-like";
 import { primaryReferenceTypeFromStored } from "@/api/lib/legal-search/decision-primary-reference";
@@ -925,10 +922,10 @@ const readGlobalSearch = async (
         ${searchScore({ tsv: sql`clsd.tsv`, updatedAt: sql`d.updated_at` })},
         d.updated_at
       FROM case_law_search_documents clsd
-      JOIN case_law_decisions d ON d.id = clsd.decision_id
+      JOIN case_law_published_decisions d ON d.id = clsd.decision_id
       ${publicCaseLawDecisionJoin}
       ${caseLawBodyPreviewJoin}
-      WHERE ${publicCaseLawDecisionWhere} AND true
+      WHERE TRUE
         ${caseLawTextSearchFilter}
         ${caseLawUpdatedFilter}
         ${globalSearchCursorSql({
@@ -992,9 +989,9 @@ const readGlobalSearch = async (
     FROM (
       SELECT 1
       FROM case_law_search_documents clsd
-      JOIN case_law_decisions d ON d.id = clsd.decision_id
+      JOIN case_law_published_decisions d ON d.id = clsd.decision_id
       ${publicCaseLawDecisionJoin}
-      WHERE ${publicCaseLawDecisionWhere} AND true
+      WHERE TRUE
         ${caseLawTextSearchFilter}
         ${caseLawUpdatedFilter}
       LIMIT ${GLOBAL_SEARCH_RESULT_LIMIT}

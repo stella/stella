@@ -21,7 +21,6 @@ import {
 import {
   bodyPreviewJoin,
   publicCaseLawDecisionJoin,
-  publicCaseLawDecisionWhere,
 } from "@/api/lib/case-law/search-sql";
 import { blendedRankSql } from "@/api/lib/legal-search/authority-sql";
 import { primaryReferenceTypeFromStored } from "@/api/lib/legal-search/decision-primary-reference";
@@ -192,12 +191,11 @@ export const providerSearchPlan = ({
       d.citation_authority,
       d.created_at
     FROM case_law_search_documents sd
-    JOIN case_law_decisions d
+    JOIN case_law_published_decisions d
       ON d.id = sd.decision_id
     ${publicCaseLawDecisionJoin}
     ${bodyPreviewJoin}
-    WHERE ${publicCaseLawDecisionWhere}
-      AND ${ftsSearch.predicate}
+    WHERE ${ftsSearch.predicate}
       ${allFilters}
       ${cursorFilter}
     ORDER BY score DESC, sd.decision_id DESC
@@ -210,10 +208,9 @@ export const providerSearchPlan = ({
   ) => sql`
     SELECT d.${sql.raw(column)} AS value, count(*)::int AS count
     FROM case_law_search_documents sd
-    JOIN case_law_decisions d ON d.id = sd.decision_id
+    JOIN case_law_published_decisions d ON d.id = sd.decision_id
     ${publicCaseLawDecisionJoin}
-    WHERE ${publicCaseLawDecisionWhere}
-      AND ${ftsSearch.predicate}
+    WHERE ${ftsSearch.predicate}
       ${omit === "court" ? sql`` : courtFilter}
       ${omit === "country" ? sql`` : countryFilter}
       ${omit === "language" ? sql`` : languageFilter}

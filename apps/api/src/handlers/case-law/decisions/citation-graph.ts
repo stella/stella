@@ -11,7 +11,7 @@ import { Temporal } from "@stll/time";
 
 import {
   caseLawCitations,
-  caseLawDecisions,
+  publishedCaseLawDecisions,
   caseLawSources,
 } from "@/api/db/schema";
 import { CITATION_KIND } from "@/api/handlers/case-law/citation-kind";
@@ -30,7 +30,6 @@ import { decisionCourtAbbreviation } from "@/api/lib/case-law/court-presentation
 import { readPublicDecisionLanguageAlternatesInTx } from "@/api/lib/case-law/language-alternates";
 import type { PublicDecisionLanguageAlternate } from "@/api/lib/case-law/language-alternates";
 import type { RedistributableDecisionSubject } from "@/api/lib/case-law/public-subject";
-import { publishedCaseLawDecisionFor } from "@/api/lib/case-law/published-decisions";
 import { redistributableCaseLawSourceFor } from "@/api/lib/case-law/redistribution";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
@@ -139,7 +138,10 @@ export type DecisionCitationRow = {
 };
 
 /** The decision at the far end of the citation, whichever way it points. */
-const relatedDecision = alias(caseLawDecisions, "graph_related_decision");
+const relatedDecision = alias(
+  publishedCaseLawDecisions,
+  "graph_related_decision",
+);
 const relatedSource = alias(caseLawSources, "graph_related_source");
 
 const decodeCitationCursor = (
@@ -256,7 +258,6 @@ const visibleFor = ({
   const resolvedAndOpen = sql`(
     ${relatedSource.id} IS NOT NULL
     AND ${redistributableCaseLawSourceFor(relatedSource.descriptor)}
-    AND ${publishedCaseLawDecisionFor(relatedDecision)}
     AND ${inArray(relatedDecision.country, [...PUBLIC_CASE_LAW_COUNTRIES])}
   )`;
   return keepsUnresolved
@@ -378,10 +379,7 @@ export const decisionCitationPageQuery = ({
     .from(candidates)
     .leftJoin(
       relatedDecision,
-      and(
-        eq(relatedDecision.id, candidates.relatedId),
-        publishedCaseLawDecisionFor(relatedDecision),
-      ),
+      and(eq(relatedDecision.id, candidates.relatedId)),
     )
     .leftJoin(relatedSource, eq(relatedSource.id, relatedDecision.sourceId))
     .orderBy(asc(candidates.id))
@@ -574,10 +572,7 @@ export const decisionCitationSummaryQuery = ({
     .from(incomingCandidates)
     .leftJoin(
       relatedDecision,
-      and(
-        eq(relatedDecision.id, incomingCandidates.relatedId),
-        publishedCaseLawDecisionFor(relatedDecision),
-      ),
+      and(eq(relatedDecision.id, incomingCandidates.relatedId)),
     )
     .leftJoin(relatedSource, eq(relatedSource.id, relatedDecision.sourceId))
     // By ordinal: the year expression binds its bounds as parameters, and
@@ -607,10 +602,7 @@ export const decisionCitationSummaryQuery = ({
     .from(outgoingCandidates)
     .leftJoin(
       relatedDecision,
-      and(
-        eq(relatedDecision.id, outgoingCandidates.relatedId),
-        publishedCaseLawDecisionFor(relatedDecision),
-      ),
+      and(eq(relatedDecision.id, outgoingCandidates.relatedId)),
     )
     .leftJoin(relatedSource, eq(relatedSource.id, relatedDecision.sourceId))
     .groupBy(outgoingCandidates.polarity);
@@ -648,7 +640,6 @@ export const decisionCitationSummaryQuery = ({
         .innerJoin(relatedSource, publishedBy)
         .where(
           and(
-            publishedCaseLawDecisionFor(relatedDecision),
             lte(candidates.ordinal, CITATION_SUMMARY_SCAN_LIMIT),
             eq(candidates.kind, CITATION_KIND.PRECEDENT),
             visibleFor({
@@ -779,7 +770,6 @@ export const listLeadingCitationsHandler = async ({
     .innerJoin(relatedSource, eq(relatedSource.id, relatedDecision.sourceId))
     .where(
       and(
-        publishedCaseLawDecisionFor(relatedDecision),
         eq(spec.anchor, decisionId),
         precedentOnly,
         // Before ranking, so a hidden decision cannot take a leader's place.
@@ -833,12 +823,7 @@ export const listLeadingCitationsHandler = async ({
       relatedDecision,
       sql`${relatedDecision.id} = ${ranked.relatedId}::uuid`,
     )
-    .where(
-      and(
-        publishedCaseLawDecisionFor(relatedDecision),
-        sql`${ranked.rank} <= ${LEADING_CITATIONS_PER_TREATMENT}`,
-      ),
-    )
+    .where(and(sql`${ranked.rank} <= ${LEADING_CITATIONS_PER_TREATMENT}`))
     .orderBy(asc(ranked.rank), asc(ranked.id))
     .limit(CITATION_TREATMENTS.length * LEADING_CITATIONS_PER_TREATMENT);
   const toRelatedDecision = await withLanguageAlternates(

@@ -4,14 +4,13 @@ import type { SQL } from "drizzle-orm";
 
 import {
   caseLawBrowseFacetCounts,
-  caseLawDecisions,
+  publishedCaseLawDecisions,
   caseLawSources,
 } from "@/api/db/schema";
 import {
   caseLawPublicReadDb,
   type CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
-import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { LegalBrowseFacetsError } from "@/api/lib/legal-search/browse-facets";
 import type {
@@ -37,48 +36,51 @@ const readLivePgFtsBrowseFacets = async (
 ): Promise<LegalBrowseFacets> => {
   const scope: SQL[] = [redistributableCaseLawSource];
   if (query.jurisdiction) {
-    scope.push(eq(caseLawDecisions.country, query.jurisdiction));
+    scope.push(eq(publishedCaseLawDecisions.country, query.jurisdiction));
   }
 
   const countryRows = await tx
     .select({
-      value: caseLawDecisions.country,
+      value: publishedCaseLawDecisions.country,
       count: sql<number>`count(*)::int`,
     })
-    .from(caseLawDecisions)
-    .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
-    .where(and(publishedCaseLawDecision, ...scope))
-    .groupBy(caseLawDecisions.country)
-    .orderBy(desc(sql`count(*)`), desc(caseLawDecisions.country))
+    .from(publishedCaseLawDecisions)
+    .innerJoin(
+      caseLawSources,
+      eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
+    )
+    .where(and(...scope))
+    .groupBy(publishedCaseLawDecisions.country)
+    .orderBy(desc(sql`count(*)`), desc(publishedCaseLawDecisions.country))
     .limit(query.limit);
 
   const courtRows = await tx
     .select({
-      value: caseLawDecisions.court,
+      value: publishedCaseLawDecisions.court,
       count: sql<number>`count(*)::int`,
     })
-    .from(caseLawDecisions)
-    .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
-    .where(and(publishedCaseLawDecision, ...scope))
-    .groupBy(caseLawDecisions.court)
-    .orderBy(desc(sql`count(*)`), desc(caseLawDecisions.court))
+    .from(publishedCaseLawDecisions)
+    .innerJoin(
+      caseLawSources,
+      eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
+    )
+    .where(and(...scope))
+    .groupBy(publishedCaseLawDecisions.court)
+    .orderBy(desc(sql`count(*)`), desc(publishedCaseLawDecisions.court))
     .limit(query.limit);
 
-  const decisionYear = sql<string>`to_char(${caseLawDecisions.decisionDate}, 'YYYY')`;
+  const decisionYear = sql<string>`to_char(${publishedCaseLawDecisions.decisionDate}, 'YYYY')`;
   const yearRows = await tx
     .select({
       value: decisionYear,
       count: sql<number>`count(*)::int`,
     })
-    .from(caseLawDecisions)
-    .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
-    .where(
-      and(
-        publishedCaseLawDecision,
-        isNotNull(caseLawDecisions.decisionDate),
-        ...scope,
-      ),
+    .from(publishedCaseLawDecisions)
+    .innerJoin(
+      caseLawSources,
+      eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
     )
+    .where(and(isNotNull(publishedCaseLawDecisions.decisionDate), ...scope))
     .groupBy(decisionYear)
     .orderBy(desc(decisionYear))
     .limit(query.limit);

@@ -1,11 +1,10 @@
 import { sql } from "drizzle-orm";
 
-import { publishedCaseLawDecisionSqlFor } from "@/api/lib/case-law/published-decisions";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 
 /**
- * The source gate for raw pg-fts queries. Pair it with
- * publicCaseLawDecisionWhere to filter the base decision row.
+ * The source gate for raw pg-fts queries. The base decision comes from the
+ * published view, which applies its own visibility condition.
  *
  * Both halves are query-time as well as index-time. The projection is gated
  * when it is written, so this keeps out rows indexed before a source turned
@@ -18,11 +17,6 @@ export const publicCaseLawDecisionJoin = sql`
     ON case_law_sources.id = d.source_id
    AND ${redistributableCaseLawSource}
 `;
-
-/** Positive filter for the decision row introduced before the source join. */
-export const publicCaseLawDecisionWhere = sql.raw(
-  publishedCaseLawDecisionSqlFor("d"),
-);
 
 export const bodyPreviewJoin = sql`
   LEFT JOIN LATERAL (

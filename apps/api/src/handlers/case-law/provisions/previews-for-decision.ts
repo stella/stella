@@ -1,15 +1,17 @@
 import { panic } from "better-result";
-import { and, eq, inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 import { provisionVersionAsOf } from "@stll/api-contract/provision-version-basis";
 import type { ProvisionVersionBasis } from "@stll/api-contract/provision-version-basis";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { provisionHeadingAnchor } from "@stll/legal-ast/provision-preview";
 
-import { caseLawDecisions, legislationDocuments } from "@/api/db/schema";
+import {
+  publishedCaseLawDecisions,
+  legislationDocuments,
+} from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { RedistributableDecisionSubject } from "@/api/lib/case-law/public-subject";
-import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
 import {
   buildProvisionPreview,
   previewVersionColumns,
@@ -261,9 +263,9 @@ export const readDecisionDate = async ({
   tx,
 }: RedistributableDecisionSubject): Promise<string | null> => {
   const [row] = await tx
-    .select({ decisionDate: caseLawDecisions.decisionDate })
-    .from(caseLawDecisions)
-    .where(and(eq(caseLawDecisions.id, id), publishedCaseLawDecision))
+    .select({ decisionDate: publishedCaseLawDecisions.decisionDate })
+    .from(publishedCaseLawDecisions)
+    .where(eq(publishedCaseLawDecisions.id, id))
     .limit(1);
 
   return row?.decisionDate ?? null;

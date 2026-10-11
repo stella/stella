@@ -26,7 +26,7 @@ import { createSha256 } from "@stll/sha256/bun";
 import {
   caseLawCitations,
   caseLawDecisionIdentifiers,
-  caseLawDecisions,
+  publishedCaseLawDecisions,
 } from "@/api/db/schema";
 import { CITATION_KIND } from "@/api/handlers/case-law/citation-kind";
 import { treatmentOf } from "@/api/handlers/case-law/decisions/citation-graph";
@@ -37,10 +37,6 @@ import { CITATION_TREATMENTS } from "@/api/lib/case-law/citation-vocabulary";
 import type { CitationTreatment } from "@/api/lib/case-law/citation-vocabulary";
 import { decisionCourtWeight } from "@/api/lib/case-law/court-weights";
 import { loadPublicCourtWeightsWithin } from "@/api/lib/case-law/public-case-law-config";
-import {
-  publishedCaseLawDecision,
-  publishedCaseLawDecisionFor,
-} from "@/api/lib/case-law/published-decisions";
 
 /**
  * Which revision of the significance prompt wrote a stored text. Bump it
@@ -108,13 +104,14 @@ export const readCitationGraphFacts = async ({
   decisionId: SafeId<"caseLawDecision">;
   tx: CaseLawPublicReadTransaction;
 }): Promise<CitationGraphFacts | null> => {
-  const subject = await tx.query.caseLawDecisions.findFirst({
-    where: {
-      id: { eq: decisionId },
-      RAW: (table) => publishedCaseLawDecisionFor(table),
-    },
-    columns: { id: true, decisionDate: true },
-  });
+  const [subject] = await tx
+    .select({
+      id: publishedCaseLawDecisions.id,
+      decisionDate: publishedCaseLawDecisions.decisionDate,
+    })
+    .from(publishedCaseLawDecisions)
+    .where(eq(publishedCaseLawDecisions.id, decisionId))
+    .limit(1);
   if (!subject) {
     return null;
   }
@@ -123,21 +120,20 @@ export const readCitationGraphFacts = async ({
     .select({
       citingId: caseLawCitations.citingDecisionId,
       polarity: caseLawCitations.polarity,
-      court: caseLawDecisions.court,
-      country: caseLawDecisions.country,
-      courtId: caseLawDecisions.courtId,
-      decisionDate: caseLawDecisions.decisionDate,
+      court: publishedCaseLawDecisions.court,
+      country: publishedCaseLawDecisions.country,
+      courtId: publishedCaseLawDecisions.courtId,
+      decisionDate: publishedCaseLawDecisions.decisionDate,
     })
     .from(caseLawCitations)
     .innerJoin(
-      caseLawDecisions,
-      eq(caseLawDecisions.id, caseLawCitations.citingDecisionId),
+      publishedCaseLawDecisions,
+      eq(publishedCaseLawDecisions.id, caseLawCitations.citingDecisionId),
     )
     .where(
       and(
         eq(caseLawCitations.citedDecisionId, decisionId),
         eq(caseLawCitations.kind, CITATION_KIND.PRECEDENT),
-        publishedCaseLawDecision,
       ),
     );
 

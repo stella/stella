@@ -11,7 +11,7 @@ import {
 } from "@stll/api-contract/case-law-launch-readiness";
 import { isUuid } from "@stll/uuid-codec";
 
-import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import { publishedCaseLawDecisions, caseLawSources } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
   CaseLawPublicReadDb,
@@ -31,10 +31,6 @@ import { readDecisionHeadnote } from "@/api/lib/case-law/decision-text";
 import { decisionTypeFilterSql } from "@/api/lib/case-law/decision-type-filter-sql";
 import { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
 import { loadPublicCourtWeights } from "@/api/lib/case-law/public-case-law-config";
-import {
-  publishedCaseLawDecision,
-  publishedCaseLawDecisionFor,
-} from "@/api/lib/case-law/published-decisions";
 import {
   redistributableCaseLawSource,
   redistributableCaseLawSourceFor,
@@ -121,11 +117,11 @@ const decisionDateKeysetAfter = ({
   decisionDate,
   id,
 }: DecisionDateCursor): SQL =>
-  sql`(${decisionDateSortKeySql(caseLawDecisions.decisionDate)}, ${caseLawDecisions.id})
+  sql`(${decisionDateSortKeySql(publishedCaseLawDecisions.decisionDate)}, ${publishedCaseLawDecisions.id})
     < (coalesce(${decisionDate}::date, '-infinity'::date), ${id}::uuid)`;
 
 /** The language versions of a decision, so the sibling rule can be applied to them. */
-const sibling = alias(caseLawDecisions, "sibling");
+const sibling = alias(publishedCaseLawDecisions, "sibling");
 const siblingSource = alias(caseLawSources, "sibling_source");
 
 /** The table or its alias: the alias carries its own table name in the types. */
@@ -195,7 +191,7 @@ export const listDecisionsPageQuery = ({
 }: ListDecisionsPageQueryOptions) => {
   const conditions: SQL[] = [
     redistributableCaseLawSource,
-    ...decisionFilterConditions(query, caseLawDecisions),
+    ...decisionFilterConditions(query, publishedCaseLawDecisions),
   ];
   if (cursor !== undefined) {
     conditions.push(decisionDateKeysetAfter(cursor));
@@ -203,11 +199,13 @@ export const listDecisionsPageQuery = ({
 
   return tx
     .select(publicDecisionRowColumns())
-    .from(caseLawDecisions)
-    .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
+    .from(publishedCaseLawDecisions)
+    .innerJoin(
+      caseLawSources,
+      eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
+    )
     .where(
       and(
-        publishedCaseLawDecision,
         ...conditions,
         // A multilingual decision is listed once, by its oldest listable
         // version. Rows only ever arrive with newer timestamps, so no later
@@ -224,11 +222,13 @@ export const listDecisionsPageQuery = ({
             .innerJoin(siblingSource, eq(siblingSource.id, sibling.sourceId))
             .where(
               and(
-                eq(sibling.languageGroupKey, caseLawDecisions.languageGroupKey),
+                eq(
+                  sibling.languageGroupKey,
+                  publishedCaseLawDecisions.languageGroupKey,
+                ),
                 // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- column against column inside one statement, nothing round-trips through a JS Date
-                sql`(${sibling.createdAt}, ${sibling.id}) < (${caseLawDecisions.createdAt}, ${caseLawDecisions.id})`,
+                sql`(${sibling.createdAt}, ${sibling.id}) < (${publishedCaseLawDecisions.createdAt}, ${publishedCaseLawDecisions.id})`,
                 redistributableCaseLawSourceFor(siblingSource.descriptor),
-                publishedCaseLawDecisionFor(sibling),
                 ...decisionFilterConditions(query, sibling),
               ),
             ),
@@ -236,8 +236,8 @@ export const listDecisionsPageQuery = ({
       ),
     )
     .orderBy(
-      desc(decisionDateSortKeySql(caseLawDecisions.decisionDate)),
-      desc(caseLawDecisions.id),
+      desc(decisionDateSortKeySql(publishedCaseLawDecisions.decisionDate)),
+      desc(publishedCaseLawDecisions.id),
     )
     .limit(limit + 1)
     .offset(offset);

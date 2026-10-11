@@ -63,7 +63,10 @@ import {
   DECISION_COURT_ID_MAX_LENGTH,
   decisionCourtIdByCountrySql,
 } from "@/api/lib/case-law/decision-court-id-sql";
-import { publishedCaseLawDecisionFor } from "@/api/lib/case-law/published-decisions-sql";
+import {
+  publishedCaseLawDecisionFor,
+  unredactedCaseLawDecisionFor,
+} from "@/api/lib/case-law/published-decisions-sql";
 import { redistributableCaseLawSourceFor } from "@/api/lib/case-law/redistribution-sql";
 import type {
   CaseLawResearchAnswerRun,
@@ -999,12 +1002,33 @@ export const caseLawDecisions = p.pgTable(
     // every such citation.
     p.check("decisions_citation_key_non_empty", sql`${t.citationKey} <> ''`),
     ...globalCaseLawPolicies(),
-    ...publicCaseLawReaderPolicies(),
     ...caseLawAnalysisWriterPolicies(),
     ...caseLawAnalysisReaderDecisionPolicies(),
     ...corpusSampleReaderDecisionPolicies(),
   ],
 );
+
+/** Published decisions, with columns and types derived from the base table. */
+export const publishedCaseLawDecisions = p
+  .pgView("case_law_published_decisions")
+  .with({ securityBarrier: true })
+  .as((qb) =>
+    qb
+      .select()
+      .from(caseLawDecisions)
+      .where(publishedCaseLawDecisionFor(caseLawDecisions)),
+  );
+
+/** Unredacted decisions for the public subject's narrowly scoped locator. */
+export const unredactedCaseLawDecisions = p
+  .pgView("case_law_unredacted_decisions")
+  .with({ securityBarrier: true })
+  .as((qb) =>
+    qb
+      .select()
+      .from(caseLawDecisions)
+      .where(unredactedCaseLawDecisionFor(caseLawDecisions)),
+  );
 
 /** Searchable identifiers stated by a decision's publisher. */
 export const caseLawDecisionIdentifiers = p.pgTable(

@@ -14,7 +14,8 @@ export const PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT = {
   caseLawDecisionAliases: "case_law_decision_aliases",
   caseLawDecisionIdentifiers: "case_law_decision_identifiers",
   caseLawDecisionJudges: "case_law_decision_judges",
-  caseLawDecisions: "case_law_decisions",
+  publishedCaseLawDecisions: "case_law_published_decisions",
+  unredactedCaseLawDecisions: "case_law_unredacted_decisions",
   caseLawBrowseFacetCounts: "case_law_browse_facet_counts",
   caseLawFtsConfigs: "case_law_fts_configs",
   caseLawJudges: "case_law_judges",
@@ -120,6 +121,43 @@ export const PROVISION_LINK_STATUS_COLUMN_GRANTS_BY_RELATION = {
  * `permitted` first, revoke in a later release, so both releases serve while
  * the two steps are apart.
  */
+const CASE_LAW_DECISION_VIEW_COLUMN_GRANTS = {
+  id: "required",
+  source_id: "required",
+  case_number: "required",
+  case_number_type: "required",
+  slug: "required",
+  ecli: "required",
+  citation_key: "required",
+  // Granted a release after the column (expand first); the read probes
+  // for the grant and falls back to the spellings without it.
+  docket_family_key: "permitted",
+  court: "required",
+  court_id: "required",
+  country: "required",
+  language: "required",
+  language_group_key: "required",
+  decision_date: "required",
+  decision_type: "required",
+  fulltext: "required",
+  sections: "required",
+  document_ast: "required",
+  analysis: "required",
+  source_url: "required",
+  document_url: "required",
+  metadata: "required",
+  redacted_at: "required",
+  citation_authority: "required",
+  citation_count: "required",
+  text_s3_key: "required",
+  ast_s3_key: "required",
+  content_hash: "required",
+  // Granted, and no longer read: the column is dropped a release from now.
+  indexed_hash: "permitted",
+  created_at: "required",
+  updated_at: "required",
+} as const;
+
 export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
   case_law_citations: {
     id: "required",
@@ -174,42 +212,8 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     role: "required",
     position: "required",
   },
-  case_law_decisions: {
-    id: "required",
-    source_id: "required",
-    case_number: "required",
-    case_number_type: "required",
-    slug: "required",
-    ecli: "required",
-    citation_key: "required",
-    // Granted a release after the column (expand first); the read probes
-    // for the grant and falls back to the spellings without it.
-    docket_family_key: "permitted",
-    court: "required",
-    court_id: "required",
-    country: "required",
-    language: "required",
-    language_group_key: "required",
-    decision_date: "required",
-    decision_type: "required",
-    fulltext: "required",
-    sections: "required",
-    document_ast: "required",
-    analysis: "required",
-    source_url: "required",
-    document_url: "required",
-    metadata: "required",
-    redacted_at: "required",
-    citation_authority: "required",
-    citation_count: "required",
-    text_s3_key: "required",
-    ast_s3_key: "required",
-    content_hash: "required",
-    // Granted, and no longer read: the column is dropped a release from now.
-    indexed_hash: "permitted",
-    created_at: "required",
-    updated_at: "required",
-  },
+  case_law_published_decisions: CASE_LAW_DECISION_VIEW_COLUMN_GRANTS,
+  case_law_unredacted_decisions: CASE_LAW_DECISION_VIEW_COLUMN_GRANTS,
   // The text-search configuration a language's query is parsed with. It is
   // read from the database whose search documents it has to match.
   case_law_fts_configs: {
@@ -474,7 +478,6 @@ export const publicLawColumnPairs = (
  */
 export const ROLLOUT_CASE_LAW_WHOLE_RELATIONS = [
   "case_law_citations",
-  "case_law_decisions",
   "case_law_provision_citations",
 ] as const;
 export const ROLLOUT_CASE_LAW_SOURCE_RELATION = "case_law_sources";
@@ -485,6 +488,7 @@ export const ROLLOUT_CASE_LAW_SOURCE_COLUMNS = [
   "descriptor",
 ] as const;
 export const ROLLOUT_CASE_LAW_RELATIONS = [
-  ...ROLLOUT_CASE_LAW_WHOLE_RELATIONS,
+  "case_law_citations",
+  "case_law_provision_citations",
   ROLLOUT_CASE_LAW_SOURCE_RELATION,
 ] as const;

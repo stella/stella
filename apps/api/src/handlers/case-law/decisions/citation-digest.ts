@@ -11,11 +11,11 @@
  * transaction that approved the subject.
  */
 import { panic } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 import type { DecisionTextWithheldReason } from "@stll/api-contract/case-law-text-field";
 
-import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import { publishedCaseLawDecisions, caseLawSources } from "@/api/db/schema";
 import {
   listDecisionCitationsHandler,
   listTopCitingDecisionsHandler,
@@ -29,7 +29,6 @@ import type {
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
-import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
 import { decisionTextWithheldReason } from "@/api/lib/legal-search/corpus-source";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -80,14 +79,12 @@ export const readGatedDecisionCitationDigest = async ({
       }
       const [source] = await subject.tx
         .select({ descriptor: caseLawSources.descriptor })
-        .from(caseLawDecisions)
+        .from(publishedCaseLawDecisions)
         .innerJoin(
           caseLawSources,
-          eq(caseLawSources.id, caseLawDecisions.sourceId),
+          eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
         )
-        .where(
-          and(eq(caseLawDecisions.id, subject.id), publishedCaseLawDecision),
-        )
+        .where(eq(publishedCaseLawDecisions.id, subject.id))
         .limit(1);
       if (source === undefined) {
         return panic(`No source for gated decision ${String(subject.id)}`);

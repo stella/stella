@@ -14,6 +14,7 @@ import { panic } from "better-result";
 import ts from "typescript";
 
 import { HIGH_VOLUME_TABLES } from "../apps/api/src/db/high-volume-tables.ts";
+import { PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT } from "../apps/api/src/lib/public-law-relations.ts";
 
 export type SqlPerfHit = {
   kind:
@@ -47,7 +48,7 @@ export const isBaselinedSqlPerfKind = (kind: SqlPerfHit["kind"]): boolean =>
 
 const LIKE = /\b(?:NOT\s+)?I?LIKE\b/giu;
 const CORPUS =
-  /\b(?:case_law_decisions|legislation_documents|case_law_[a-z_]*citation[a-z_]*|caseLawDecisions|legislationDocuments|caseLaw\w*Citation\w*)\b/iu;
+  /\b(?:case_law_(?:published_|unredacted_)?decisions|legislation_documents|case_law_[a-z_]*citation[a-z_]*|(?:published|unredacted)?CaseLawDecisions|legislationDocuments|caseLaw\w*Citation\w*)\b/iu;
 const GROUP_EXPRESSION =
   /\b(?:to_char|date_trunc|extract|substring|split_part|coalesce|lower|cast)\s*\(|::\s*text\b|->>/iu;
 const GROUP_NON_COLUMNS =
@@ -513,11 +514,17 @@ const COMPARISONS = new Set([
 const CURSOR_COMPARISONS = new Set(["gt", "gte", "lt", "lte"]);
 const REPORT_CORPUS_TABLES = new Set([
   ...HIGH_VOLUME_TABLES,
+  PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT.publishedCaseLawDecisions,
+  PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT.unredactedCaseLawDecisions,
   "legislation_documents",
   "legislation_search_documents",
 ]);
 
+const schemaRelationNames = new Map<string, string>(
+  Object.entries(PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT),
+);
 const sqlTableName = (name: string): string =>
+  schemaRelationNames.get(name) ??
   name.replaceAll(/([a-z\d])([A-Z])/gu, "$1_$2").toLowerCase();
 
 const isCorpusColumn = (column: string, bindings: ConstBindings): boolean => {

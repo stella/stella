@@ -62,42 +62,31 @@ import {
 } from "./utils.ts";
 
 const PUBLIC_READ_DB_MODULE = "apps/api/src/lib/case-law-public-read-db";
-const PUBLICATION_OWNER =
-  "apps/api/src/lib/case-law/published-decisions-sql.ts";
-const RAW_PUBLICATION_TEST =
-  /(?:\bredacted_at\s+is\s+(?:not\s+)?null\b|\bmetadata\b[\s\S]{0,180}\b(?:isListingOnly|is_listing_only|listing-only|listing_only)\b[\s\S]{0,100}(?:=|<>|!=|\bis\s+(?:distinct\s+from|not\s+distinct\s+from)))|(?:\b(?:isListingOnly|is_listing_only|listing-only|listing_only)\b[\s\S]{0,180}\bmetadata\b[\s\S]{0,100}(?:=|<>|!=|\bis\s+(?:distinct\s+from|not\s+distinct\s+from)))/iu;
-const hasRawPublicationCondition = (statement: string): boolean =>
+const PUBLIC_LAW_SHARED_QUERY_MODULE =
+  "apps/api/src/lib/public-law-shared-query";
+export const UNREDACTED_VIEW_ALLOWED_MODULES: readonly string[] = [
+  "apps/api/src/lib/case-law/public-subject.ts",
+];
+const canUseUnredactedView = (filename: string): boolean =>
+  UNREDACTED_VIEW_ALLOWED_MODULES.some((modulePath) =>
+    filename.endsWith(modulePath),
+  );
+
+const CASE_LAW_READ_MODULE_OWNERS: readonly string[] = [
+  PUBLIC_READ_DB_MODULE,
+  PUBLIC_LAW_SHARED_QUERY_MODULE,
+];
+
+export const isCaseLawPublicReadModule = (
+  filename: string,
+  importedModules: ReadonlySet<string>,
+): boolean =>
+  CASE_LAW_READ_MODULE_OWNERS.some((owner) => importedModules.has(owner)) ||
   [
-    ...statement.matchAll(
-      /\b(?:where|on)\b([\s\S]*?)(?=\b(?:group\s+by|order\s+by|limit|returning|union|select)\b|$)/giu,
-    ),
-  ].some((match) => RAW_PUBLICATION_TEST.test(match[1] ?? ""));
-const isQueryFilter = (node: AstNode): boolean => {
-  let child: AstNode = node;
-  let current: unknown = node.parent;
-  while (isAstNode(current)) {
-    if (
-      current.type === "CallExpression" &&
-      isAstNode(current.callee) &&
-      current.callee.type === "MemberExpression" &&
-      getPropertyName(current.callee.property) === "where" &&
-      Array.isArray(current.arguments) &&
-      current.arguments.includes(child)
-    ) {
-      return true;
-    }
-    if (
-      current.type === "Property" &&
-      getPropertyName(current.key) === "where" &&
-      current.value === child
-    ) {
-      return true;
-    }
-    child = current;
-    current = current.parent;
-  }
-  return false;
-};
+    `${PUBLIC_READ_DB_MODULE}.ts`,
+    `${PUBLIC_LAW_SHARED_QUERY_MODULE}.ts`,
+    ...UNREDACTED_VIEW_ALLOWED_MODULES,
+  ].some((modulePath) => filename.endsWith(modulePath));
 
 // The modules that own a public-law read: the connection, the two branded
 // corpus handles, and the registry of queries the reader-role suite runs.
@@ -109,6 +98,9 @@ const PUBLIC_LAW_BOUNDARY_OWNERS: readonly string[] = [
 ];
 
 const SCHEMA_MODULE = "apps/api/src/db/schema";
+const isSchemaModule = (moduleId: string | null): boolean =>
+  moduleId === SCHEMA_MODULE ||
+  (moduleId !== null && moduleId.startsWith(`${SCHEMA_MODULE}/`));
 
 /**
  * Where a producer takes SQL text: an argument position, or named properties
@@ -245,7 +237,7 @@ const PUBLIC_LAW_RELATION_SET: ReadonlySet<string> = new Set(
 );
 
 const PUBLIC_CASE_LAW_QUERY_RELATIONS: ReadonlySet<string> = new Set([
-  "caseLawDecisions",
+  "publishedCaseLawDecisions",
 ]);
 
 // Schema exports that are not tables: enum-like constants such as
@@ -286,18 +278,23 @@ const declaredModule = (
     ? canonicalModuleId(statement.source.value, importerRepoPath)
     : null;
 
-// Whether the program imports one of `owners`.
-const importsPublicReadDb = (
+// Canonical module ids imported or re-exported by a program.
+const programImports = (
   program: unknown,
   importerRepoPath: string,
-  owners: readonly string[],
-) =>
-  isAstNode(program) &&
-  Array.isArray(program.body) &&
-  program.body.some((statement) => {
+): ReadonlySet<string> => {
+  if (!isAstNode(program) || !Array.isArray(program.body)) {
+    return new Set();
+  }
+  const modules = new Set<string>();
+  for (const statement of program.body) {
     const moduleId = declaredModule(statement, importerRepoPath);
-    return moduleId !== null && owners.includes(moduleId);
-  });
+    if (moduleId !== null) {
+      modules.add(moduleId);
+    }
+  }
+  return modules;
+};
 
 const getTxQueryObject = (node: unknown): AstNode | null => {
   const object = isAstNode(node) ? node.object : null;
@@ -1184,10 +1181,10 @@ export default eslintCompatPlugin({
             "A CTE in public-law SQL may not take the name of a schema table ('{{relation}}'); rename it.",
           opaqueSql:
             "Raw SQL in a public-law read must be text the rule can read: a literal, a constant this file defines, a literal-union parameter, a constant in REVIEWED_SQL_CONSTANTS, or a producer in REVIEWED_SQL_PRODUCERS.",
-          publicationPredicate:
-            "Public case-law publication conditions must come from published-decisions.ts.",
-          directObservationPredicate:
-            "Public case-law reads must use published-decisions.ts for observation eligibility.",
+          baseCaseLawRead:
+            "Public case-law reads must use the published decisions view, not the base decision table.",
+          unredactedView:
+            "The unredacted decisions view is reserved for the public subject lookup.",
         },
       },
       createOnce(context) {
@@ -1196,9 +1193,8 @@ export default eslintCompatPlugin({
         let inBoundary = false;
         // Every public-law read: the SQL it runs is checked here.
         let readsPublicLaw = false;
+        let inCaseLawReadBoundary = false;
         let importerRepoPath = "";
-        let publicationOwner = false;
-        const nullPredicateNames = new Set<string>();
         let candidates: AstNode[] = [];
         let executedStrings: AstNode[] = [];
 
@@ -1213,8 +1209,8 @@ export default eslintCompatPlugin({
             | "opaqueSql"
             | "producerArgument"
             | "shadowingCte"
-            | "publicationPredicate"
-            | "directObservationPredicate",
+            | "baseCaseLawRead"
+            | "unredactedView",
           relation = "",
         ) => {
           const key = `${String(node.range[0])}:${messageId}:${relation}`;
@@ -1234,6 +1230,21 @@ export default eslintCompatPlugin({
           ctes: ReadonlyMap<string, SqlToken>,
         ) => {
           if (reference.kind === "name") {
+            if (
+              inCaseLawReadBoundary &&
+              reference.relation === "case_law_decisions"
+            ) {
+              report(reportNode(reference.token.owner), "baseCaseLawRead");
+              return;
+            }
+            if (
+              inCaseLawReadBoundary &&
+              reference.relation === "case_law_unredacted_decisions" &&
+              !canUseUnredactedView(importerRepoPath)
+            ) {
+              report(reportNode(reference.token.owner), "unredactedView");
+              return;
+            }
             if (
               !isGrantedRelation(reference.schema, reference.relation, ctes)
             ) {
@@ -1262,77 +1273,55 @@ export default eslintCompatPlugin({
             importerRepoPath = repoRelativeFilename(context);
             inBoundary = false;
             readsPublicLaw = false;
-            publicationOwner = false;
-            nullPredicateNames.clear();
+            inCaseLawReadBoundary = false;
             candidates = [];
             executedStrings = [];
             reported = new Set();
           },
           Program(node) {
+            const importedModules = programImports(node, importerRepoPath);
             inBoundary =
               isFileIn(context, [`${PUBLIC_READ_DB_MODULE}.ts`]) ||
-              importsPublicReadDb(node, importerRepoPath, [
-                PUBLIC_READ_DB_MODULE,
-              ]);
+              importedModules.has(PUBLIC_READ_DB_MODULE);
             readsPublicLaw =
               isFileIn(
                 context,
                 PUBLIC_LAW_BOUNDARY_OWNERS.map((owner) => `${owner}.ts`),
               ) ||
-              importsPublicReadDb(
-                node,
-                importerRepoPath,
-                PUBLIC_LAW_BOUNDARY_OWNERS,
+              PUBLIC_LAW_BOUNDARY_OWNERS.some((owner) =>
+                importedModules.has(owner),
               );
-            publicationOwner = isFileIn(context, [PUBLICATION_OWNER]);
+            inCaseLawReadBoundary = isCaseLawPublicReadModule(
+              importerRepoPath,
+              importedModules,
+            );
           },
           ImportDeclaration(node) {
-            const moduleId = declaredModule(node, importerRepoPath);
             if (
-              readsPublicLaw &&
-              !publicationOwner &&
-              moduleId ===
-                "apps/api/src/lib/legal-search/partial-observation-sql"
+              !inCaseLawReadBoundary ||
+              !isSchemaModule(declaredModule(node, importerRepoPath))
             ) {
-              for (const specifier of node.specifiers) {
-                const imported = getImportedName(specifier);
-                if (
-                  imported === "storedObservationHasDetail" ||
-                  imported === "storedObservationHasDetailSqlFor"
-                ) {
-                  context.report({
-                    node: specifier,
-                    messageId: "directObservationPredicate",
-                  });
-                }
-              }
-            }
-            if (moduleId === "drizzle-orm") {
-              for (const specifier of node.specifiers) {
-                if (
-                  getImportedName(specifier) === "isNull" ||
-                  getImportedName(specifier) === "isNotNull"
-                ) {
-                  const local = isAstNode(specifier)
-                    ? getPropertyName(specifier.local)
-                    : null;
-                  if (local !== null) {
-                    nullPredicateNames.add(local);
-                  }
-                }
-              }
-            }
-            if (
-              !inBoundary ||
-              declaredModule(node, importerRepoPath) !== SCHEMA_MODULE
-            ) {
-              return;
-            }
-            if (node.importKind === "type") {
               return;
             }
             for (const specifier of node.specifiers) {
               const imported = getImportedName(specifier);
+              if (imported === "caseLawDecisions") {
+                context.report({
+                  node: specifier,
+                  messageId: "baseCaseLawRead",
+                });
+                continue;
+              }
+              if (
+                imported === "unredactedCaseLawDecisions" &&
+                !canUseUnredactedView(importerRepoPath)
+              ) {
+                context.report({
+                  node: specifier,
+                  messageId: "unredactedView",
+                });
+                continue;
+              }
               if (
                 (isAstNode(specifier) && specifier.importKind === "type") ||
                 (imported !== null &&
@@ -1372,48 +1361,6 @@ export default eslintCompatPlugin({
           CallExpression(node) {
             if (!readsPublicLaw || !isAstNode(node)) {
               return;
-            }
-            if (
-              !publicationOwner &&
-              isIdentifier(node.callee) &&
-              nullPredicateNames.has(node.callee.name) &&
-              Array.isArray(node.arguments) &&
-              node.arguments.some(
-                (argument) =>
-                  isAstNode(argument) &&
-                  argument.type === "MemberExpression" &&
-                  getPropertyName(argument.property) === "redactedAt",
-              )
-            ) {
-              let child: AstNode = node;
-              let ancestor: unknown = node.parent;
-              let insideFilter = false;
-              while (isAstNode(ancestor)) {
-                if (
-                  ancestor.type === "CallExpression" &&
-                  isAstNode(ancestor.callee) &&
-                  ancestor.callee.type === "MemberExpression" &&
-                  getPropertyName(ancestor.callee.property) === "where" &&
-                  Array.isArray(ancestor.arguments) &&
-                  ancestor.arguments.includes(child)
-                ) {
-                  insideFilter = true;
-                  break;
-                }
-                if (
-                  ancestor.type === "Program" ||
-                  ancestor.type === "FunctionDeclaration" ||
-                  ancestor.type === "FunctionExpression" ||
-                  ancestor.type === "ArrowFunctionExpression"
-                ) {
-                  break;
-                }
-                child = ancestor;
-                ancestor = ancestor.parent;
-              }
-              if (insideFilter) {
-                context.report({ node, messageId: "publicationPredicate" });
-              }
             }
             if (isSqlMethodCall(node, "raw")) {
               candidates.push(node);
@@ -1467,34 +1414,6 @@ export default eslintCompatPlugin({
                 continue;
               }
               for (const variant of statementVariants(composition.parts)) {
-                const publicationText = variant
-                  .map((part) => {
-                    if (part.kind === "text") {
-                      return part.text;
-                    }
-                    if (
-                      part.kind === "opaque" &&
-                      part.node.type === "MemberExpression"
-                    ) {
-                      const property = getPropertyName(part.node.property);
-                      if (property === "redactedAt") {
-                        return "redacted_at";
-                      }
-                      if (property === "metadata") {
-                        return "metadata";
-                      }
-                    }
-                    return " ";
-                  })
-                  .join("");
-                if (
-                  !publicationOwner &&
-                  (hasRawPublicationCondition(publicationText) ||
-                    (isQueryFilter(root) &&
-                      RAW_PUBLICATION_TEST.test(publicationText)))
-                ) {
-                  report(root, "publicationPredicate");
-                }
                 const { references, ctes } = statementReferences(
                   tokenize(variant),
                 );
