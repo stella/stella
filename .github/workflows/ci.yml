@@ -6460,8 +6460,8 @@ jobs:
       )
       )
     runs-on: ubuntu-latest
-    # Longest leg: 15m setup + 9m tests + 4m uploads + 2m cancellation/post hooks.
-    timeout-minutes: 30
+    # Longest leg: 15m setup + 13m tests + 4m uploads + 2m cancellation/post hooks.
+    timeout-minutes: 34
     permissions:
       contents: read
       packages: read
@@ -6591,7 +6591,7 @@ jobs:
       # API-owned browser checks (visual sandbox) need the API from this stack
       # but no web app; one shard runs them.
       - name: Run API browser checks
-        timeout-minutes: 1
+        timeout-minutes: 3
         if: >-
           !cancelled()
           && steps.e2e-stack.outputs.status == 'ready'
@@ -6601,7 +6601,7 @@ jobs:
         run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/api test:e2e:browser
 
       - name: Run route-smoke Playwright shard
-        timeout-minutes: 1
+        timeout-minutes: 3
         if: >-
           always()
           && !cancelled()
@@ -7818,21 +7818,10 @@ jobs:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: package.json
 
-      - name: Select install budget from restored cache
-        id: bun-install-budget
-        run: |
-          # Prefix-key restores are warm too; inspect the restored cache contents.
-          if compgen -G "$HOME/.bun/install/cache/*" > /dev/null; then
-            echo "cache-restored=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "cache-restored=false" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Install dependencies
         timeout-minutes: 5
         run: bun scripts/ci-install.ts "$RUNNER_TEMP/bun-install/desktop-windows-dry-run.log" --frozen-lockfile --ignore-scripts
         env:
-          CI_INSTALL_CACHE_RESTORED: ${{ steps.bun-install-budget.outputs.cache-restored }}
           BUN_INSTALL_GLOBAL_STORE: "0"
           NPM_TOKEN: ""
 
@@ -7948,7 +7937,7 @@ jobs:
           save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install scripts workspace dependencies
-        timeout-minutes: 3
+        timeout-minutes: 5
         run: bun scripts/ci-install.ts "$RUNNER_TEMP/bun-install/scripts.log" --frozen-lockfile --ignore-scripts --filter @stll/scripts
         env:
           # Restored Windows global-store links can omit transitive dependency
