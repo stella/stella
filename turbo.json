@@ -775,9 +775,7 @@
         "tsconfig*.json",
         "$TURBO_ROOT$/packages/scripts/src/api-typecheck-declarations.ts"
       ],
-      "outputs": [
-        ".cache/typecheck-declarations/**"
-      ]
+      "outputs": [".cache/typecheck-declarations/**"]
     },
     "@stll/api#typecheck:tests": {
       "dependsOn": [
