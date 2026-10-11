@@ -249,8 +249,115 @@ test("the offline baseline reader uses the merge base and preserves absent files
     expect(JSON.parse(absent.stdout.toString())).toEqual({});
     const invalid = read("baseline.txt", "--help");
     expect(invalid.exitCode).not.toBe(0);
-    expect(invalid.stderr.toString()).toContain(
-      "Cannot resolve baseline --help",
+    expect(invalid.stderr.toString()).toContain("Invalid offline Git ref");
+    const blob = git(["rev-parse", `${base}:baseline.txt`]);
+    rmSync(
+      path.join(directory, ".git/objects", blob.slice(0, 2), blob.slice(2)),
+    );
+    git(["config", "remote.origin.url", "offlineprobe::baseline"]);
+    git(["config", "remote.origin.promisor", "true"]);
+    git(["config", "remote.origin.partialclonefilter", "blob:none"]);
+    git(["config", "extensions.partialClone", "origin"]);
+    const trace = path.join(directory, "git-trace.json");
+    const missing = runPreloaded(
+      `import { readGitBaseline } from './scripts/offline-git-read.ts';
+       process.env['GIT_TRACE2_EVENT'] = ${JSON.stringify(trace)};
+       readGitBaseline(${JSON.stringify({ root: directory, base, file: "baseline.txt" })});`,
+      "--check",
+    );
+    expect(missing.exitCode).not.toBe(0);
+    expect(missing.stderr.toString()).toContain(
+      "Baseline blob must be present locally",
+    );
+    expect(readFileSync(trace, "utf-8")).not.toContain('"child_start"');
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test.each(["fetch", "push", "checkout", "status", "-c"])(
+  "the offline Git owner rejects the unsupported operation %s",
+  (type) => {
+    const result = runPreloaded(
+      `import { readOfflineGit } from './scripts/offline-git-read.ts';
+       readOfflineGit(${JSON.stringify({ root, operation: { type } })});`,
+      "--check",
+    );
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr.toString()).toContain(
+      "Unsupported offline Git operation",
+    );
+  },
+);
+
+test.each([
+  { type: "merge-base", ref: "--help", error: "ref" },
+  { type: "merge-base", ref: "main..HEAD", error: "ref" },
+  { type: "merge-base", ref: "HEAD -c protocol.allow=always", error: "ref" },
+  { type: "ls-tree", commit: "--help", file: "baseline.txt", error: "commit" },
+  {
+    type: "show",
+    commit: "HEAD:baseline.txt",
+    file: "baseline.txt",
+    error: "commit",
+  },
+  ...["ls-tree", "show"].flatMap((type) =>
+    [
+      "--help",
+      "../baseline.txt",
+      "dir/../baseline.txt",
+      ":(glob)*",
+      "baseline.txt --help",
+      "/baseline.txt",
+    ].map((file) => ({
+      type,
+      commit: "0".repeat(40),
+      file,
+      error: "path",
+    })),
+  ),
+])(
+  "offline Git inputs cannot smuggle options or path expressions: %j",
+  ({ error, ...operation }) => {
+    const result = runPreloaded(
+      `import { readOfflineGit } from './scripts/offline-git-read.ts';
+     readOfflineGit(${JSON.stringify({ root, operation })});`,
+      "--check",
+    );
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr.toString()).toContain(`Invalid offline Git ${error}`);
+  },
+);
+
+test("the Git owner classification cannot permit child processes in another module", () => {
+  const directory = mkdtempSync(
+    path.join(root, ".offline-git-classification-"),
+  );
+  try {
+    const entry = path.join(directory, "check.ts");
+    writeFileSync(
+      entry,
+      `import ${JSON.stringify(path.join(root, "scripts/offline-git-read.ts"))}; import './planted';`,
+    );
+    writeFileSync(
+      path.join(directory, "planted.ts"),
+      "import { spawnSync } from 'node:child_process';",
+    );
+    const violations = offlineImportGraphViolations({
+      entries: [entry],
+      repositoryRoot: root,
+      allowances: parseOfflineImportAllowances(
+        JSON.parse(
+          readFileSync(
+            path.join(root, "scripts/offline-check-import-allowlist.json"),
+            "utf-8",
+          ),
+        ),
+      ).filter(({ file }) => file === "scripts/offline-git-read.ts"),
+    });
+    expect(violations).toHaveLength(1);
+    expect(violations.at(0)?.message).toContain(
+      "planted.ts: node:child_process is forbidden",
     );
   } finally {
     rmSync(directory, { recursive: true, force: true });
