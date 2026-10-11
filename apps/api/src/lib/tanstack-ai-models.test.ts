@@ -1027,13 +1027,15 @@ describe("tanStackModelOptionsForTask", () => {
           continue;
         }
         const mode = modeByGroup[MODEL_TASK_OVERRIDE_GROUP[task]];
-        expect<unknown>(
-          tanStackModelOptionsForTask({
-            provider,
-            task,
-            modelId: entry.candidate.modelId,
-            organizationId: null,
-          }),
+        // Resolved options carry brands; the baseline states plain values.
+        const options: unknown = tanStackModelOptionsForTask({
+          provider,
+          task,
+          modelId: entry.candidate.modelId,
+          organizationId: null,
+        });
+        expect(
+          options,
           `${provider}/${task}/${entry.candidate.modelId}`,
         ).toEqual(baseline[provider][mode]);
       }
