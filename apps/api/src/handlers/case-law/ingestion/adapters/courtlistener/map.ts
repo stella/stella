@@ -32,7 +32,7 @@ import {
 import { hasVisibleText } from "./snapshot-columns";
 
 export const COURTLISTENER_IMPORT_KEY = IMPORT_SOURCE_KEYS.COURTLISTENER;
-export const COURTLISTENER_PARSER_VERSION = 8;
+export const COURTLISTENER_PARSER_VERSION = 14;
 
 const textField = (value: string) =>
   hasVisibleText(value)
@@ -121,6 +121,7 @@ export const mapCourtListenerRecord = (
         scdbPresent: plan.scdbPresent,
       },
       textSelection: composed.opinions,
+      sourceDefects: composed.sourceDefects,
       diagnostics: plan.diagnostics,
     }),
     fulltext: composed.blocks.map(({ plainText }) => plainText).join("\n\n"),

@@ -445,7 +445,7 @@ const vocabularyFor = (
  */
 const noteBoundaries = (
   format: CourtListenerHtmlFormat,
-  $: cheerio.CheerioAPI,
+  root: cheerio.Cheerio<ParentNode>,
 ): TextUnit["boundaries"] => {
   switch (format) {
     case "html_anon_2020":
@@ -455,7 +455,7 @@ const noteBoundaries = (
     case "html":
       return "layout";
     case "html_with_citations":
-      return $(
+      return root.find(
         "div.courtcasedochead, div.courtcasedocbody, footnote_body, cross_reference",
       ).length > 0
         ? "markup"
@@ -468,10 +468,57 @@ const noteBoundaries = (
 };
 
 /** Publisher links that name another document, not a place in this one. */
-const publisherLinks = ($: cheerio.CheerioAPI): number =>
-  $("a[href]")
+const publisherLinks = ($: cheerio.CheerioAPI, root: ParentNode): number =>
+  $(root)
+    .find("a[href]")
     .toArray()
     .filter((element) => !element.attribs["href"]?.startsWith("#")).length;
+
+/**
+ * A complete publisher page can survive in a text column with class/id
+ * attributes removed. Its single outer wrapper still encloses separate
+ * header, captioned document and footer siblings. Only that complete,
+ * unambiguous signature proves the document boundary; an ambiguous page
+ * keeps its original root and therefore still requires any image assets.
+ */
+const documentBody = ($: cheerio.CheerioAPI, body: ParentNode): ParentNode => {
+  const children = body.children.filter(isTag);
+  const wrapper = children.at(0);
+  if (children.length !== 1 || wrapper?.name !== "div") {
+    return body;
+  }
+  let header = false;
+  let footer = false;
+  let candidate: Element | undefined;
+  for (const child of wrapper.children) {
+    if (!isTag(child)) {
+      continue;
+    }
+    const markers = $(child).find("header, footer, h1").toArray();
+    if (["header", "footer", "h1"].includes(child.name)) {
+      markers.push(child);
+    }
+    const headings = markers.filter(({ name }) => name === "h1");
+    const hasHeader = markers.some(({ name }) => name === "header");
+    const hasFooter = markers.some(({ name }) => name === "footer");
+    header ||= hasHeader;
+    footer ||= hasFooter;
+    if (headings.length === 0) {
+      continue;
+    }
+    if (
+      headings.length !== 1 ||
+      candidate !== undefined ||
+      child.name !== "div" ||
+      hasHeader ||
+      hasFooter
+    ) {
+      return body;
+    }
+    candidate = child;
+  }
+  return header && footer && candidate !== undefined ? candidate : body;
+};
 
 const parseHtml =
   (
@@ -491,13 +538,14 @@ const parseHtml =
     if (limit !== null) {
       return { status: "over-limit", limit };
     }
-    const [body] = $("body").toArray();
-    if (body === undefined || !hasChildren(body)) {
+    const [pageBody] = $("body").toArray();
+    if (pageBody === undefined || !hasChildren(pageBody)) {
       return {
         status: "unusable",
         reason: TEXT_CANDIDATE_UNUSABLE.NO_VISIBLE_TEXT,
       };
     }
+    const body = context === "opinion" ? documentBody($, pageBody) : pageBody;
     const graphics = graphicsIn(body);
     if (Object.keys(graphics).length > 0) {
       return { status: "requires-assets", graphics };
@@ -522,7 +570,7 @@ const parseHtml =
         ? { ...baseVocabulary, opinion: () => null }
         : baseVocabulary;
     const backlinkCharacters = preparedNotes.removed;
-    const links = publisherLinks($);
+    const links = publisherLinks($, body);
 
     const builder = createUnitBuilder({
       rootOpinionPolicy: "single",
@@ -532,7 +580,8 @@ const parseHtml =
           ? "front-matter"
           : unitClass(rowType, domType, position).body,
       blockAllowance: blockAllowance(budget),
-      boundaries: spanDefects === 0 ? noteBoundaries(format, $) : "layout",
+      boundaries:
+        spanDefects === 0 ? noteBoundaries(format, $(body)) : "layout",
     });
     const implicitOpinion =
       context === "opinion" &&

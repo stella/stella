@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * Which text column of an opinion row becomes its document.
  *
@@ -9,8 +10,6 @@
  * budget ends the selection: a lower column would stand in for text it does
  * not hold.
  */
-
-import { panic } from "better-result";
 
 import type { OpinionRow } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/snapshot-columns";
 import type { OpinionType } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/vocabulary";
@@ -31,6 +30,12 @@ import {
   type TextCandidateUnusable,
 } from "./outcome";
 import { parsePlainText, parsePreformatted } from "./plain-text";
+import { plainTextStructureOf } from "./plain-text-structure";
+import {
+  publishedTextDefects,
+  type PublishedTextDefect,
+} from "./source-defects";
+import { courtListenerValidationPolicy } from "./validation-policy";
 
 /** Text columns in precedence order. `xml_scan` is never text: see below. */
 export const COURTLISTENER_TEXT_FORMATS = [
@@ -56,7 +61,7 @@ export const textStructureOf = (
   text: string,
 ): TextStructure => {
   if (format === "plain_text") {
-    return "plain";
+    return plainTextStructureOf(text);
   }
   const head = withoutXmlDeclaration(text).trimStart();
   if (format === "xml_harvard" || OPINION_ROOT.test(head)) {
@@ -88,9 +93,15 @@ const parseCandidate = (
       return parseCandidate(format, "html", input);
     }
     case "html":
-      return format === "xml_harvard" || format === "plain_text"
+      return format === "xml_harvard"
         ? panic(`${format} is never read as HTML`)
-        : { structure, parsed: COURTLISTENER_HTML_PARSERS[format](input) };
+        : {
+            structure,
+            parsed:
+              COURTLISTENER_HTML_PARSERS[
+                format === "plain_text" ? "html" : format
+              ](input),
+          };
     default: {
       structure satisfies never;
       return panic(`Unhandled text structure: ${String(structure)}`);
@@ -110,6 +121,7 @@ export type OpinionTextSelection =
       readonly format: CourtListenerTextFormat;
       readonly structure: TextStructure;
       readonly text: ParsedOpinionText;
+      readonly sourceDefects: readonly PublishedTextDefect[];
       readonly attempts: readonly CandidateAttempt[];
     }
   | {
@@ -132,11 +144,14 @@ export type OpinionTextSelection =
 
 const RESIDUE = "MARKUP_RESIDUE";
 
-/** Why the retention check refused a parse, or `null` when it passed. */
-const retentionFailure = (
+type CandidateValidation =
+  | { status: "accepted"; sourceDefects: PublishedTextDefect[] }
+  | { status: "refused"; reason: TextCandidateUnusable };
+
+const validateCandidate = (
   row: OpinionRow,
   text: ParsedOpinionText,
-): TextCandidateUnusable | null => {
+): CandidateValidation => {
   const result = validateAndLog(
     {
       parser: "courtlistener",
@@ -145,13 +160,18 @@ const retentionFailure = (
     },
     text.validationHtml,
     text.units.flatMap(({ blocks }) => [...blocks]),
+    { sourcePolicy: courtListenerValidationPolicy },
   );
-  if (result.ok) {
-    return null;
+  const sourceDefects = publishedTextDefects(text, result);
+  if (sourceDefects !== null) {
+    return { status: "accepted", sourceDefects };
   }
-  return result.issues.some(({ code }) => code === RESIDUE)
-    ? TEXT_CANDIDATE_UNUSABLE.MARKUP_RESIDUE
-    : TEXT_CANDIDATE_UNUSABLE.CONTENT_LOSS;
+  return {
+    status: "refused",
+    reason: result.issues.some(({ code }) => code === RESIDUE)
+      ? TEXT_CANDIDATE_UNUSABLE.MARKUP_RESIDUE
+      : TEXT_CANDIDATE_UNUSABLE.CONTENT_LOSS,
+  };
 };
 
 /**
@@ -186,21 +206,28 @@ export const selectOpinionText = ({
     );
     switch (parsed.status) {
       case "parsed": {
-        const refused = retentionFailure(row, parsed.text);
-        if (refused === null) {
-          budget.blocks += parsed.text.units.reduce(
-            (sum, { blocks }) => sum + blocks.length,
-            0,
-          );
-          return {
-            status: "parsed",
-            format,
-            structure,
-            text: parsed.text,
-            attempts,
-          };
+        const validation = validateCandidate(row, parsed.text);
+        switch (validation.status) {
+          case "accepted":
+            budget.blocks += parsed.text.units.reduce(
+              (sum, { blocks }) => sum + blocks.length,
+              0,
+            );
+            return {
+              status: "parsed",
+              format,
+              structure,
+              text: parsed.text,
+              sourceDefects: validation.sourceDefects,
+              attempts,
+            };
+          case "refused":
+            attempts.push({ format, structure, reason: validation.reason });
+            break;
+          default:
+            validation satisfies never;
+            return panic("Unhandled candidate validation");
         }
-        attempts.push({ format, structure, reason: refused });
         break;
       }
       case "unusable":
