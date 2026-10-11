@@ -475,28 +475,35 @@ const publisherLinks = ($: cheerio.CheerioAPI, root: ParentNode): number =>
     .filter((element) => !element.attribs["href"]?.startsWith("#")).length;
 
 /** A document header can carry its caption; page furniture needs page evidence. */
-const documentBody = ($: cheerio.CheerioAPI, body: ParentNode): ParentNode => {
+const pageChrome = ($: cheerio.CheerioAPI, body: ParentNode): Element[] => {
   const headers = $(body).find("header");
   const pageHeaders = headers.filter(
     (_, element) => $(element).find("nav").length > 0,
   );
   const footers = $(body).find("footer");
-  $(body).find("nav, aside").remove();
+  const navigation = $(body).find("nav").toArray();
   const documentHeading = $(body)
     .find("h1")
     .toArray()
-    .some((heading) => $(heading).closest("header, footer").length === 0);
+    .some((heading) => $(heading).closest("header, footer, nav").length === 0);
   if (pageHeaders.length === 0 || footers.length === 0 || !documentHeading) {
-    return body;
+    return navigation;
   }
-  // A heading inside a header/footer belongs to the document unless it was
-  // inside the navigation already removed above.
-  pageHeaders.add(footers).each((_, element) => {
-    if ($(element).find("h1, h2, h3, h4, h5, h6").length === 0) {
-      $(element).remove();
-    }
-  });
-  return body;
+  const pageAsides = $(body)
+    .find("aside")
+    .filter((_, element) => $(element).find("nav").length > 0);
+  const furniture = pageHeaders
+    .add(footers)
+    .add(pageAsides)
+    .filter(
+      (_, element) =>
+        !$(element)
+          .find("h1, h2, h3, h4, h5, h6")
+          .toArray()
+          .some((heading) => $(heading).closest("nav").length === 0),
+    )
+    .toArray();
+  return [...navigation, ...furniture];
 };
 
 const parseHtml =
@@ -524,8 +531,10 @@ const parseHtml =
         reason: TEXT_CANDIDATE_UNUSABLE.NO_VISIBLE_TEXT,
       };
     }
-    const body = context === "opinion" ? documentBody($, pageBody) : pageBody;
-    const graphics = graphicsIn(body);
+    const body = pageBody;
+    const chrome = context === "opinion" ? pageChrome($, pageBody) : [];
+    const excluded = new WeakSet(chrome);
+    const graphics = graphicsIn(pageBody, excluded);
     if (Object.keys(graphics).length > 0) {
       return { status: "requires-assets", graphics };
     }
@@ -537,17 +546,36 @@ const parseHtml =
           element.name = style === "it" ? "em" : "strong";
         }
       });
-    const notes = $(body).find("*").toArray().filter(isNote);
+    const notes = $(body)
+      .find("*")
+      .toArray()
+      .filter(
+        (element) =>
+          isNote(element) &&
+          !$(element)
+            .parents()
+            .toArray()
+            .some((parent) => excluded.has(parent)),
+      );
     const spanDefects = noteSpanDefects(text, notes);
     const preparedNotes = prepareNotes($, notes);
     const baseVocabulary = vocabularyFor(
       preparedNotes.labels,
       captionElements(body),
     );
-    const vocabulary =
+    const documentVocabulary =
       context === "headmatter"
         ? { ...baseVocabulary, opinion: () => null }
         : baseVocabulary;
+    const vocabulary = {
+      ...documentVocabulary,
+      excluded: (element: Element) => excluded.has(element),
+    };
+    // Snapshot the original body before the block walk removes identified chrome.
+    const source = sourceTextOf(pageBody, vocabulary);
+    for (const element of chrome) {
+      $(element).remove();
+    }
     const backlinkCharacters = preparedNotes.removed;
     const links = publisherLinks($, body);
 
@@ -595,9 +623,6 @@ const parseHtml =
         reason: TEXT_CANDIDATE_UNUSABLE.NO_VISIBLE_TEXT,
       };
     }
-    // Conservation uses the full page minus identified chrome, independently of
-    // the root chosen for the block walk.
-    const source = sourceTextOf(pageBody, vocabulary);
     if (!conservesText(source.paragraphs.join(" "), units)) {
       return {
         status: "unusable",

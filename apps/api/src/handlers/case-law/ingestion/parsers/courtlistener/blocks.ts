@@ -437,6 +437,8 @@ export const createUnitBuilder = ({
 
 /** What a format's elements mean at the block level. */
 export type BodyVocabulary = {
+  /** Positively identified page furniture; excluded from the source snapshot. */
+  readonly excluded?: (element: Element) => boolean;
   /** Elements that are one paragraph each, by role. */
   readonly paragraphs: Readonly<Record<string, DraftRole>>;
   /**
@@ -541,13 +543,19 @@ export const cdataAsText = (root: ParentNode): void => {
 };
 
 /** The graphic constructs below `root`, by element name. */
-export const graphicsIn = (root: ParentNode): Record<string, number> => {
+export const graphicsIn = (
+  root: ParentNode,
+  excluded?: WeakSet<Element>,
+): Record<string, number> => {
   const found: Record<string, number> = {};
   const stack: AnyNode[] = [...root.children];
   while (stack.length > 0) {
     const node = stack.pop();
     if (node === undefined) {
       break;
+    }
+    if (isTag(node) && excluded?.has(node)) {
+      continue;
     }
     if (isTag(node) && GRAPHICS.has(nameOf(node))) {
       const name = nameOf(node);
@@ -591,7 +599,11 @@ export const sourceTextOf = (
       current += textOf(node);
       return;
     }
-    if (!isTag(node) || isExcludedHtmlTag(nameOf(node))) {
+    if (
+      !isTag(node) ||
+      isExcludedHtmlTag(nameOf(node)) ||
+      vocabulary.excluded?.(node)
+    ) {
       return;
     }
     const anchor = vocabulary.pageAnchor(node);

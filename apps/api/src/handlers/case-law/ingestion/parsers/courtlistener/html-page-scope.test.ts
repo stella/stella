@@ -24,6 +24,79 @@ const parse = (text: string) =>
     budget: createTextBudget(),
   });
 
+test("an unproven aside retains its substantive footnote", () => {
+  const parsed = parse(
+    "<p>Judgment.</p><aside><p>1. Substantive footnote.</p></aside>",
+  );
+  expect(parsed.status).toBe("parsed");
+  if (parsed.status !== "parsed") {
+    return;
+  }
+  expect(
+    parsed.text.units.flatMap(({ blocks }) =>
+      blocks.map(({ plainText }) => plainText),
+    ),
+  ).toEqual(["Judgment.", "1. Substantive footnote."]);
+  expect(parsed.text.validationHtml).toContain("1. Substantive footnote.");
+});
+
+test("an exhibit image in an unproven aside requires assets", () => {
+  expect(
+    parse(
+      '<p>Judgment.</p><aside><img src="/invented-exhibit.png" alt="Exhibit"></aside>',
+    ).status,
+  ).toBe("requires-assets");
+});
+
+test("page evidence identifies a navigation aside while preserving substantive siblings", () => {
+  const parsed = parse(
+    page(
+      '<aside><nav>Sidebar links</nav><p>Publisher sidebar</p><img src="/invented-logo.svg" alt=""></aside><aside><p>Substantive note.</p></aside>',
+    ),
+  );
+  expect(parsed.status).toBe("parsed");
+  if (parsed.status !== "parsed") {
+    return;
+  }
+  const text = parsed.text.units.flatMap(({ blocks }) =>
+    blocks.map(({ plainText }) => plainText),
+  );
+  expect(text).toContain("Substantive note.");
+  expect(text).not.toContain("Publisher sidebar");
+  expect(parsed.text.validationHtml).toContain("Substantive note.");
+  expect(parsed.text.validationHtml).not.toContain("Publisher sidebar");
+});
+
+test("every generated substantive aside is conserved", () => {
+  assertProperty(
+    "every generated substantive aside is conserved",
+    fc.property(
+      fc.array(fc.stringMatching(/^[a-z]{4,30}$/u), {
+        minLength: 1,
+        maxLength: 30,
+      }),
+      (words) => {
+        const paragraphs = words.map((word) => `Substantive ${word} note.`);
+        const parsed = parse(
+          `<p>Judgment.</p>${paragraphs.map((text) => `<aside><p>${text}</p></aside>`).join("")}`,
+        );
+        expect(parsed.status).toBe("parsed");
+        if (parsed.status !== "parsed") {
+          return;
+        }
+        expect(
+          parsed.text.units.flatMap(({ blocks }) =>
+            blocks.map(({ plainText }) => plainText),
+          ),
+        ).toEqual(["Judgment.", ...paragraphs]);
+        for (const paragraph of paragraphs) {
+          expect(parsed.text.validationHtml).toContain(paragraph);
+        }
+      },
+    ),
+  );
+});
+
 test("full publisher pages retain unclassified content in document order", () => {
   const parsed = parse(page("<p>Invented ruling.</p><p>1 Invented note.</p>"));
   expect(parsed.status).toBe("parsed");
@@ -146,7 +219,7 @@ test("publisher furniture scope conserves every generated opinion paragraph", ()
         const content = paragraphs
           .map(
             (text) =>
-              `<div><p>${text}</p><aside>Excluded sidebar</aside></div>`,
+              `<div><p>${text}</p><aside><nav>Excluded sidebar</nav></aside></div>`,
           )
           .join("");
         const source = `<div><header><nav>Header menu</nav>Header</header><div><p>Before caption.</p><nav>Nested menu</nav></div><div><h1>Opinion</h1><p>Facts</p><section><footer>Nested footer</footer><p>Nested content.</p></section></div>${content}<footer>Footer</footer></div>`;
