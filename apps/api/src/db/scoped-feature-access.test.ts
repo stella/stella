@@ -1,4 +1,6 @@
 import { expect, test } from "bun:test";
+import type { SQLWrapper } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
@@ -244,36 +246,61 @@ test("enrolled member decisions agree across request and database scope", async 
 });
 
 test("request transactions reuse their authenticated feature snapshot", async () => {
-  const organizationId = toSafeId<"organization">(grant.organizationId);
-  const userId = toSafeId<"user">("fixture-user");
-  const featureAccessSnapshot = buildFeatureAccessSnapshot({
-    organizationId,
-    userId,
-    identity: memberIdentity,
-    enrolments: [],
-  });
-  let queries = 0;
-  const tx = {
-    execute: async () => {
-      queries += 1;
-      return [];
+  await withDeployment(
+    {
+      mode: RUNTIME_MODE.strict,
+      legalLists: true,
+      featureIds: [LEGAL_LISTS_FEATURE_ID],
     },
-  };
-  const database = markRlsDatabase({
-    transaction: async <T>(fn: (transaction: typeof tx) => Promise<T>) =>
-      await fn(tx),
-  });
-  const options = {
-    organizationId,
-    userId,
-    serverValidatedWorkspaceIds: [],
-    featureAccessSnapshot,
-  };
-  const scoped = createMembershipScopedDb(database, options);
-  const safe = createMembershipSafeDb(database, options);
-  await scoped(async () => undefined);
-  await scoped(async () => undefined);
-  const result = await safe(async () => undefined);
-  expect(result.isOk()).toBe(true);
-  expect(queries).toBe(3);
+    async () => {
+      const organizationId = toSafeId<"organization">(grant.organizationId);
+      const userId = toSafeId<"user">("fixture-user");
+      const featureAccessSnapshot = buildFeatureAccessSnapshot({
+        organizationId,
+        userId,
+        identity: memberIdentity,
+        enrolments: [],
+      });
+      expect(
+        featureAccessSnapshot.decisions.get(LEGAL_LISTS_FEATURE_ID)?.status,
+      ).toBe("enabled");
+      const dialect = new PgDialect();
+      let queries = 0;
+      const tx = {
+        execute: async (query: SQLWrapper | string) => {
+          queries += 1;
+          expect(typeof query).not.toBe("string");
+          if (typeof query === "string") {
+            return [];
+          }
+          const rendered = dialect.sqlToQuery(query.getSQL());
+          const setting = rendered.sql.match(
+            /set_config\('app\.enabled_features', \$(\d+), true\)/u,
+          );
+          expect(setting).not.toBeNull();
+          expect(rendered.params.at(Number(setting?.at(1)) - 1)).toBe(
+            JSON.stringify([LEGAL_LISTS_FEATURE_ID]),
+          );
+          return [];
+        },
+      };
+      const database = markRlsDatabase({
+        transaction: async <T>(fn: (transaction: typeof tx) => Promise<T>) =>
+          await fn(tx),
+      });
+      const options = {
+        organizationId,
+        userId,
+        serverValidatedWorkspaceIds: [],
+        featureAccessSnapshot,
+      };
+      const scoped = createMembershipScopedDb(database, options);
+      const safe = createMembershipSafeDb(database, options);
+      await scoped(async () => undefined);
+      await scoped(async () => undefined);
+      const result = await safe(async () => undefined);
+      expect(result.isOk()).toBe(true);
+      expect(queries).toBe(3);
+    },
+  );
 });
