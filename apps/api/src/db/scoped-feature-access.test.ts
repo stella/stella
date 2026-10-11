@@ -67,75 +67,82 @@ const withDeployment = async (
 };
 
 test("authenticated feature scope derives the complete prerequisite grant decision", async () => {
-  for (const featureIds of [
-    [],
-    [LEGAL_LISTS_FEATURE_ID],
-    [LIST_VERIFICATION_FEATURE_ID],
-    [LEGAL_LISTS_FEATURE_ID, LIST_VERIFICATION_FEATURE_ID],
-  ]) {
-    testState.setConfig(
-      "API_FEATURE_ACCESS_GRANTS",
-      Object.fromEntries(featureIds.map((id) => [id, [grant]])),
-    );
-    let queries = 0;
-    const tx = {
-      execute: async () => {
-        queries += 1;
-        return [
-          {
-            email: "member@example.test",
-            emailVerified: true,
-            enrolledFeatureIds: [],
-          },
-        ];
-      },
-    };
-    const actual = await resolveScopedFeatureIds({
-      tx,
-      organizationId: grant.organizationId,
-      userId: "fixture-user",
-    });
-    const expected = featureIds.includes(LEGAL_LISTS_FEATURE_ID)
-      ? featureIds
-      : [];
-    expect(actual).toEqual(expected);
-    expect(queries).toBe(1);
-  }
-  testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
-    [LEGAL_LISTS_FEATURE_ID]: [grant],
-  });
-  for (const identity of [
-    [],
-    [
-      {
-        email: "member@example.test",
-        emailVerified: false,
-        enrolledFeatureIds: [],
-      },
-    ],
-  ]) {
-    expect(
-      await resolveScopedFeatureIds({
-        tx: { execute: async () => identity },
+  const restoreMode = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
+  try {
+    testState.setConfig("FEATURE_TIME_BILLING", false);
+    testState.setConfig("FEATURE_LEGAL_LISTS", true);
+    for (const featureIds of [
+      [],
+      [LEGAL_LISTS_FEATURE_ID],
+      [LIST_VERIFICATION_FEATURE_ID],
+      [LEGAL_LISTS_FEATURE_ID, LIST_VERIFICATION_FEATURE_ID],
+    ]) {
+      testState.setConfig(
+        "API_FEATURE_ACCESS_GRANTS",
+        Object.fromEntries(featureIds.map((id) => [id, [grant]])),
+      );
+      let queries = 0;
+      const tx = {
+        execute: async () => {
+          queries += 1;
+          return [
+            {
+              email: "member@example.test",
+              emailVerified: true,
+              enrolledFeatureIds: [],
+            },
+          ];
+        },
+      };
+      const actual = await resolveScopedFeatureIds({
+        tx,
         organizationId: grant.organizationId,
         userId: "fixture-user",
+      });
+      const expected = featureIds.includes(LEGAL_LISTS_FEATURE_ID)
+        ? featureIds
+        : [];
+      expect(actual).toEqual(expected);
+      expect(queries).toBe(expected.length === 0 ? 0 : 1);
+    }
+    testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
+      [LEGAL_LISTS_FEATURE_ID]: [grant],
+    });
+    for (const identity of [
+      [],
+      [
+        {
+          email: "member@example.test",
+          emailVerified: false,
+          enrolledFeatureIds: [],
+        },
+      ],
+    ]) {
+      expect(
+        await resolveScopedFeatureIds({
+          tx: { execute: async () => identity },
+          organizationId: grant.organizationId,
+          userId: "fixture-user",
+        }),
+      ).toEqual([]);
+    }
+    let serviceQueries = 0;
+    expect(
+      await resolveScopedFeatureIds({
+        tx: {
+          execute: async () => {
+            serviceQueries += 1;
+            return [];
+          },
+        },
+        organizationId: grant.organizationId,
+        userId: null,
       }),
     ).toEqual([]);
+    expect(serviceQueries).toBe(0);
+  } finally {
+    restoreMode();
   }
-  let serviceQueries = 0;
-  expect(
-    await resolveScopedFeatureIds({
-      tx: {
-        execute: async () => {
-          serviceQueries += 1;
-          return [];
-        },
-      },
-      organizationId: grant.organizationId,
-      userId: null,
-    }),
-  ).toEqual([]);
-  expect(serviceQueries).toBe(0);
 });
 
 test("a disabled legal-lists deployment admits neither the feature nor its dependants", async () => {
@@ -237,7 +244,7 @@ test("enrolled member decisions agree across request and database scope", async 
         expect(scoped).toEqual(
           deployed && identity?.emailVerified ? ["time-billing"] : [],
         );
-        expect(queries).toBe(1);
+        expect(queries).toBe(deployed ? 1 : 0);
       }
     }
   } finally {
@@ -304,4 +311,60 @@ test("request transactions reuse their authenticated feature snapshot", async ()
       expect(queries).toBe(3);
     },
   );
+});
+
+test("scopes without a possible feature perform no identity or enrolment read", async () => {
+  const restoreMode = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
+  try {
+    testState.setConfig("FEATURE_TIME_BILLING", false);
+    testState.setConfig("API_FEATURE_ACCESS_GRANTS", {});
+    let queries = 0;
+    expect(
+      await resolveScopedFeatureIds({
+        tx: {
+          execute: async () => {
+            queries += 1;
+            return [];
+          },
+        },
+        organizationId: grant.organizationId,
+        userId: "fixture-user",
+      }),
+    ).toEqual([]);
+    expect(queries).toBe(0);
+  } finally {
+    restoreMode();
+  }
+});
+
+test("invitation scopes read identity without touching self-serve enrolments", async () => {
+  const restoreMode = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
+  try {
+    testState.setConfig("FEATURE_TIME_BILLING", false);
+    testState.setConfig("FEATURE_LEGAL_LISTS", true);
+    testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
+      [LEGAL_LISTS_FEATURE_ID]: [grant],
+    });
+    const dialect = new PgDialect();
+    const statements: string[] = [];
+    const actual = await resolveScopedFeatureIds({
+      tx: {
+        execute: async (query) => {
+          if (typeof query === "string") {
+            statements.push(query);
+          } else {
+            statements.push(dialect.sqlToQuery(query.getSQL()).sql);
+          }
+          return [memberIdentity];
+        },
+      },
+      organizationId: grant.organizationId,
+      userId: "fixture-user",
+    });
+    expect(actual).toEqual([LEGAL_LISTS_FEATURE_ID]);
+    expect(statements).toHaveLength(1);
+    expect(statements.at(0)).not.toContain("feature_enrolments");
+  } finally {
+    restoreMode();
+  }
 });

@@ -2,9 +2,14 @@ import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 import type { SQLWrapper } from "drizzle-orm";
 
+import { member, user as authUser } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
+import { featureEnrolments } from "@/api/db/schema";
 import { executedRows } from "@/api/lib/db/executed-rows";
-import { buildFeatureAccessSnapshot } from "@/api/lib/feature-access/snapshot";
+import {
+  buildFeatureAccessSnapshot,
+  featureAccessReadPlan,
+} from "@/api/lib/feature-access/snapshot";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 
 type ScopedFeatureAccessOptions = {
@@ -21,14 +26,25 @@ export const resolveScopedFeatureIds = async ({
   if (userId === null) {
     return [];
   }
+  const { candidates, enrolmentFeatureIds } = featureAccessReadPlan({
+    organizationId,
+  });
+  if (candidates.length === 0) {
+    return [];
+  }
+  const enrolments =
+    enrolmentFeatureIds.length === 0
+      ? sql`'{}'::text[]`
+      : sql`coalesce((SELECT array_agg(e.feature_id) FROM ${featureEnrolments} e
+        WHERE e.organization_id = ${member.organizationId} AND e.user_id = ${member.userId}
+          AND e.feature_id = ANY(${sql.param(enrolmentFeatureIds)}::text[])), '{}')`;
   const identity = executedRows(
     await tx.execute(sql`
-    SELECT u.email, u.email_verified AS "emailVerified",
-      coalesce((SELECT array_agg(e.feature_id) FROM public.feature_enrolments e
-        WHERE e.organization_id = m.organization_id AND e.user_id = m.user_id), '{}') AS "enrolledFeatureIds"
-    FROM public.member m INNER JOIN public."user" u ON u.id = m.user_id
-    WHERE m.organization_id = ${organizationId} AND m.user_id = ${userId}
-      AND u.deleted_at IS NULL
+    SELECT ${authUser.email} AS email, ${authUser.emailVerified} AS "emailVerified",
+      ${enrolments} AS "enrolledFeatureIds"
+    FROM ${member} INNER JOIN ${authUser} ON ${authUser.id} = ${member.userId}
+    WHERE ${member.organizationId} = ${organizationId} AND ${member.userId} = ${userId}
+      AND ${authUser.deletedAt} IS NULL
     LIMIT 1
   `),
   ).at(0);

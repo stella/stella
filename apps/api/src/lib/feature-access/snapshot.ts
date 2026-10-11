@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import { envFeatureAccess } from "@/api/env-feature-access";
 import { isFeatureDeployed } from "@/api/lib/feature-access/deployment";
 import type { FeatureAccessGrants } from "@/api/lib/feature-access/grants-schema";
@@ -9,8 +11,48 @@ import type {
   FeatureAccessDecision,
   FeatureAccessSnapshot,
 } from "@/api/lib/feature-access/policy";
+import { featurePrerequisiteClosure } from "@/api/lib/feature-access/prerequisites";
 import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
 import type { FeatureRegistry } from "@/api/lib/feature-access/registry";
+
+type FeatureAccessReadPlanOptions = {
+  organizationId: string;
+  registry?: FeatureRegistry;
+  grants?: FeatureAccessGrants;
+};
+
+/** Identity is needed only for a feature that can admit this organization. */
+export const featureAccessReadPlan = ({
+  organizationId,
+  registry = FEATURE_REGISTRY,
+  grants = envFeatureAccess.API_FEATURE_ACCESS_GRANTS,
+}: FeatureAccessReadPlanOptions) => {
+  const definitions = new Map(Object.entries(registry));
+  const enrolmentKind = (id: string) =>
+    definitions.get(id)?.enrolment ??
+    panic("Feature read plan requires a registered feature");
+  const candidates = Object.keys(registry).filter(
+    (id) =>
+      isFeatureDeployed(registry, id) &&
+      [...featurePrerequisiteClosure(registry, id)].every(
+        (required) =>
+          enrolmentKind(required) === "self-serve" ||
+          grants[required]?.some(
+            (grant) => grant.organizationId === organizationId,
+          ) === true,
+      ),
+  );
+  const enrolmentFeatureIds = [
+    ...new Set(
+      candidates.flatMap((id) =>
+        [...featurePrerequisiteClosure(registry, id)].filter(
+          (required) => enrolmentKind(required) === "self-serve",
+        ),
+      ),
+    ),
+  ];
+  return { candidates, enrolmentFeatureIds };
+};
 
 type FeatureAccessIdentity = { email: string; emailVerified: boolean };
 

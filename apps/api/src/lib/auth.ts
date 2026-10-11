@@ -181,7 +181,10 @@ import {
 import { handoffCommittedEntityDeletionCleanupBatch } from "@/api/lib/entity-deletion-cleanup-handoff";
 import { enqueueEntityDeletionCleanup } from "@/api/lib/entity-deletion-cleanup-queue";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { buildFeatureAccessSnapshot } from "@/api/lib/feature-access/snapshot";
+import {
+  buildFeatureAccessSnapshot,
+  featureAccessReadPlan,
+} from "@/api/lib/feature-access/snapshot";
 import {
   AUTH_RATE_LIMITS,
   EMAIL_OTP_MIN_RESPONSE_DURATION_MS,
@@ -2498,17 +2501,19 @@ type MemberAuthorization = {
   enrolledFeatureIds: readonly string[];
 };
 
-// Bounded by the enrolment primary key (user, organization, feature) and the
-// feature registry. The caller is read as the table owner, which the
-// enrolment owner policy admits.
-const enrolledFeatureIdsOfMember = sql<
-  string[]
->`coalesce((select array_agg(${featureEnrolments.featureId}) from ${featureEnrolments} where ${featureEnrolments.organizationId} = ${member.organizationId} and ${featureEnrolments.userId} = ${member.userId}), '{}')`;
-
-const featureAccessColumns = {
-  emailVerified: authUser.emailVerified,
-  userDeleted: sql<boolean>`${authUser.deletedAt} is not null`,
-  enrolledFeatureIds: enrolledFeatureIdsOfMember,
+const featureAccessColumns = (organizationId: SafeId<"organization">) => {
+  const { enrolmentFeatureIds } = featureAccessReadPlan({ organizationId });
+  return {
+    emailVerified: authUser.emailVerified,
+    userDeleted: sql<boolean>`${authUser.deletedAt} is not null`,
+    // Fold enrolments into the member read only when a self-serve decision needs them.
+    enrolledFeatureIds:
+      enrolmentFeatureIds.length === 0
+        ? sql<string[]>`'{}'::text[]`
+        : sql<
+            string[]
+          >`coalesce((select array_agg(${featureEnrolments.featureId}) from ${featureEnrolments} where ${featureEnrolments.organizationId} = ${member.organizationId} and ${featureEnrolments.userId} = ${member.userId} and ${featureEnrolments.featureId} = ANY(${sql.param(enrolmentFeatureIds)}::text[])), '{}')`,
+  };
 };
 
 const ACTIVE_WORKSPACE_STATUS = "active";
@@ -2523,7 +2528,7 @@ export const resolveMemberAuthorization = async (
         memberId: member.id,
         role: member.role,
         email: authUser.email,
-        ...featureAccessColumns,
+        ...featureAccessColumns(organizationId),
       })
       .from(member)
       .innerJoin(authUser, eq(authUser.id, member.userId))
@@ -2567,7 +2572,7 @@ export const resolveMemberAuthorization = async (
       role: member.role,
       workspaceId: workspaces.id,
       workspaceStatus: workspaces.status,
-      ...featureAccessColumns,
+      ...featureAccessColumns(organizationId),
     })
     .from(member)
     .innerJoin(authUser, eq(authUser.id, member.userId))

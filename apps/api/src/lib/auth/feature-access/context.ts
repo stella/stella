@@ -1,5 +1,5 @@
-import { Result } from "better-result";
-import { and, eq, isNull } from "drizzle-orm";
+import { panic, Result } from "better-result";
+import { and, eq, isNull, sql } from "drizzle-orm";
 
 import { member, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -15,7 +15,10 @@ import type {
 } from "@/api/lib/feature-access/policy";
 import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
 import type { FeatureRegistry } from "@/api/lib/feature-access/registry";
-import { buildFeatureAccessSnapshot } from "@/api/lib/feature-access/snapshot";
+import {
+  buildFeatureAccessSnapshot,
+  featureAccessReadPlan,
+} from "@/api/lib/feature-access/snapshot";
 
 type ResolveFeatureAccessSnapshotOptions = {
   tx: Pick<Transaction, "select">;
@@ -32,17 +35,29 @@ export const resolveFeatureAccessSnapshot = async ({
   registry = FEATURE_REGISTRY,
   grants = env.API_FEATURE_ACCESS_GRANTS,
 }: ResolveFeatureAccessSnapshotOptions): Promise<FeatureAccessSnapshot> => {
-  const featureIds = Object.keys(registry);
-  const decisions = new Map<string, FeatureAccessDecision>();
-  if (featureIds.length === 0) {
-    return createFeatureAccessSnapshot({ organizationId, userId, decisions });
-  }
+  const { candidates, enrolmentFeatureIds } = featureAccessReadPlan({
+    organizationId,
+    registry,
+    grants,
+  });
+  const enrolledFeatureIds =
+    enrolmentFeatureIds.length === 0
+      ? sql<string[]>`'{}'::text[]`
+      : sql<
+          string[]
+        >`coalesce((select array_agg(e.feature_id) from ${featureEnrolments} e
+        where e.organization_id = ${member.organizationId} and e.user_id = ${member.userId}
+          and e.feature_id = ANY(${sql.param(enrolmentFeatureIds)}::text[])), '{}')`;
   const identity =
-    userId === null
+    userId === null || candidates.length === 0
       ? undefined
       : (
           await tx
-            .select({ email: user.email, emailVerified: user.emailVerified })
+            .select({
+              email: user.email,
+              emailVerified: user.emailVerified,
+              enrolledFeatureIds,
+            })
             .from(member)
             .innerJoin(user, eq(user.id, member.userId))
             .where(
@@ -54,32 +69,17 @@ export const resolveFeatureAccessSnapshot = async ({
             )
             .limit(1)
         ).at(0);
-  const enrolments =
-    userId === null ||
-    identity === undefined ||
-    !Object.values(registry).some(
-      (definition) => definition.enrolment === "self-serve",
-    )
-      ? []
-      : await tx
-          .select({
-            featureId: featureEnrolments.featureId,
-            organizationId: featureEnrolments.organizationId,
-            userId: featureEnrolments.userId,
-          })
-          .from(featureEnrolments)
-          .where(
-            and(
-              eq(featureEnrolments.organizationId, organizationId),
-              eq(featureEnrolments.userId, userId),
-            ),
-          )
-          .limit(featureIds.length);
   return buildFeatureAccessSnapshot({
     organizationId,
     userId,
     identity: identity ?? null,
-    enrolments,
+    enrolments: (identity === undefined ? [] : identity.enrolledFeatureIds).map(
+      (featureId) => ({
+        featureId,
+        organizationId,
+        userId: userId ?? panic("Feature enrolments require a user"),
+      }),
+    ),
     registry,
     grants,
   });
