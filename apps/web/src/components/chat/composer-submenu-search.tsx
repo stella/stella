@@ -22,6 +22,13 @@ import {
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 
+/** Long composer lists (Skills, Context, a matter's files, the matter picker)
+ *  stay short enough to open level with their trigger instead of being
+ *  shifted up to fit the viewport; the rest scrolls under the pinned search
+ *  field. */
+export const COMPOSER_LIST_VIEWPORT_CLASS_NAME =
+  "max-h-[min(22rem,var(--available-height))]";
+
 /** The editor character that opened this search as a shortcut popup. The
  *  field leads with it instead of the magnifier, so the "/" or "@" the user
  *  typed stays visible, and Backspace past it closes the popup. */

@@ -19,6 +19,7 @@ import { Skeleton } from "@stll/ui/skeleton";
 import { contentDir } from "@stll/ui/use-content-dir";
 import { cn } from "@stll/ui/utils";
 
+import { COMPOSER_LIST_VIEWPORT_CLASS_NAME } from "@/components/chat/composer-submenu-search";
 import { MatterIcon } from "@/components/matter-icon";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useFormatter, useLocale } from "@/i18n/formatting-context";
@@ -165,7 +166,7 @@ const MatterPickerSearch = ({
 }: MatterPickerSearchProps) => {
   const t = useTranslations();
   return (
-    <div className="flex flex-col gap-1.5 border-b px-2 pt-1.5 pb-2">
+    <div className="bg-popover sticky top-0 z-10 flex flex-col gap-1.5 border-b px-2 pt-1.5 pb-2">
       <p className="text-foreground text-sm font-semibold">
         {t("inspector.matterPicker.title")}
       </p>
@@ -411,7 +412,12 @@ export const ChatMatterPicker = ({
           />
         )}
       </MenuTrigger>
-      <MenuPopup align="start" className="w-72" sideOffset={6}>
+      <MenuPopup
+        align="start"
+        className="w-72"
+        sideOffset={6}
+        viewportClassName={COMPOSER_LIST_VIEWPORT_CLASS_NAME}
+      >
         <MatterPickerSearch
           search={search}
           onChange={setSearch}

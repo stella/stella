@@ -91,6 +91,7 @@ import {
 } from "@/components/chat/composer-plus-menu.logic";
 import { ComposerQueryResults } from "@/components/chat/composer-query-results";
 import {
+  COMPOSER_LIST_VIEWPORT_CLASS_NAME,
   ComposerSubmenuSearch,
   pickHighlightedItemOnTab,
   useFocusSearchOnOpen,
@@ -389,12 +390,6 @@ export const ComposerPlusMenu = ({
     </>
   );
 };
-
-// Long composer lists (Skills, Context, a matter's files) stay short enough
-// to open level with their trigger instead of being shifted up to fit the
-// viewport; the rest scrolls under the pinned search field.
-const COMPOSER_LIST_VIEWPORT_CLASS_NAME =
-  "max-h-[min(22rem,var(--available-height))]";
 
 type ShortcutAnchor = NonNullable<ComponentProps<typeof MenuPopup>["anchor"]>;
 
