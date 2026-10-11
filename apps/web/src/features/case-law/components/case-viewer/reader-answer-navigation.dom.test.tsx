@@ -86,6 +86,7 @@ const ReopenHarness = () => {
       </div>
       <ReaderAnswerCard
         answer={answer}
+        generationMode="enabled"
         active
         openRevision={revision}
         busy={false}

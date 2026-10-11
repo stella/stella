@@ -374,10 +374,13 @@ const readerAnswersRecoveryOptions = ({
   });
 };
 
-export type UseReaderAnswersOptions = { decisionId: string; enabled: boolean };
+export type UseReaderAnswersOptions = {
+  decisionId: string;
+  generationMode: "enabled" | "gated";
+};
 export const useReaderAnswers = ({
   decisionId,
-  enabled,
+  generationMode,
 }: UseReaderAnswersOptions) => {
   const user = useMaybeAuthenticatedUser();
   const locale = useLocale();
@@ -387,7 +390,7 @@ export const useReaderAnswers = ({
     organizationId: user?.activeOrganizationId ?? "",
     userId: user?.id ?? "",
   });
-  const scope = `${user?.activeOrganizationId ?? "guest"}:${user?.id ?? "guest"}:${decisionId}:${enabled ? "enabled" : "disabled"}`;
+  const scope = `${user?.activeOrganizationId ?? "guest"}:${user?.id ?? "guest"}:${decisionId}:${generationMode}`;
   const [runtime, setRuntime] = useState(() =>
     createReaderAnswerRuntime(scope),
   );
@@ -405,8 +408,7 @@ export const useReaderAnswers = ({
       runtime,
       queryClient,
     }),
-    enabled:
-      enabled && user !== null && !isCreating && busyAnswerIds.size === 0,
+    enabled: user !== null && !isCreating && busyAnswerIds.size === 0,
   });
   const [errors, setErrors] = useState<ReaderAnswerErrors>(new Map());
   if (runtime.scope !== scope) {
@@ -429,7 +431,7 @@ export const useReaderAnswers = ({
     await performReaderAnswerOperation(options.queryKey, {
       id,
       operation,
-      enabled,
+      enabled: generationMode === "enabled",
       authenticated: user !== null,
       runtime,
       queryClient,

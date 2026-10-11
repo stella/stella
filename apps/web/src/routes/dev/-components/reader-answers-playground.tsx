@@ -69,6 +69,7 @@ export const ReaderAnswersPlayground = () => {
       </article>
       <ReaderAnswerCard
         answer={{ ...fixture, visibility }}
+        generationMode="enabled"
         active={false}
         openRevision={openRevision}
         citationLabel={() => "¶13"}

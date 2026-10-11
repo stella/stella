@@ -204,7 +204,8 @@ test("reader answers create, follow up, regenerate, share, reload and delete thr
   const server = fakeServer();
   const { wrapper } = setup();
   const hook = renderHook(
-    () => useReaderAnswers({ decisionId: "decision-1", enabled: true }),
+    () =>
+      useReaderAnswers({ decisionId: "decision-1", generationMode: "enabled" }),
     { wrapper },
   );
   await waitFor(() => expect(hook.result.current.isLoading).toBe(false));
@@ -243,7 +244,8 @@ test("reader answers create, follow up, regenerate, share, reload and delete thr
   hook.unmount();
   const reload = setup();
   const reloaded = renderHook(
-    () => useReaderAnswers({ decisionId: "decision-1", enabled: true }),
+    () =>
+      useReaderAnswers({ decisionId: "decision-1", generationMode: "enabled" }),
     { wrapper: reload.wrapper },
   );
   await waitFor(() =>
@@ -262,7 +264,8 @@ test("failed regeneration keeps one fresh assistant and sanitized partials survi
   fakeServer(true);
   const { wrapper } = setup();
   const hook = renderHook(
-    () => useReaderAnswers({ decisionId: "decision-1", enabled: true }),
+    () =>
+      useReaderAnswers({ decisionId: "decision-1", generationMode: "enabled" }),
     { wrapper },
   );
   await waitFor(() => expect(hook.result.current.isLoading).toBe(false));
@@ -288,7 +291,8 @@ test("failed regeneration keeps one fresh assistant and sanitized partials survi
   hook.unmount();
   const reload = setup();
   const reloaded = renderHook(
-    () => useReaderAnswers({ decisionId: "decision-1", enabled: true }),
+    () =>
+      useReaderAnswers({ decisionId: "decision-1", generationMode: "enabled" }),
     { wrapper: reload.wrapper },
   );
   await waitFor(() =>
@@ -323,7 +327,8 @@ test("switching decision discards a delayed stream before it can activate an old
   );
   const { wrapper } = setup();
   const hook = renderHook(
-    ({ decisionId }) => useReaderAnswers({ decisionId, enabled: true }),
+    ({ decisionId }) =>
+      useReaderAnswers({ decisionId, generationMode: "enabled" }),
     { wrapper, initialProps: { decisionId: "decision-1" } },
   );
   await waitFor(() => expect(hook.result.current.isLoading).toBe(false));
@@ -359,7 +364,7 @@ test("selecting decision text and clicking Explain opens the persisted margin an
     const root = useRef<HTMLElement>(null);
     const answers = useReaderAnswers({
       decisionId: "decision-1",
-      enabled: true,
+      generationMode: "enabled",
     });
     return (
       <>
@@ -406,6 +411,7 @@ test("selecting decision text and clicking Explain opens the persisted margin an
           <ReaderAnswerCard
             key={answer.id}
             answer={answer}
+            generationMode="enabled"
             active={answers.activeAnswerId === answer.id}
             openRevision={0}
             onOpen={() => answers.setActiveAnswerId(answer.id)}
@@ -618,7 +624,8 @@ test("list invalidation cannot overwrite an active answer stream and terminal re
   );
   const { client, wrapper } = setup();
   const hook = renderHook(
-    () => useReaderAnswers({ decisionId: "decision-1", enabled: true }),
+    () =>
+      useReaderAnswers({ decisionId: "decision-1", generationMode: "enabled" }),
     { wrapper },
   );
   await waitFor(() => expect(hook.result.current.isLoading).toBe(false));
@@ -661,7 +668,8 @@ test("stream admission exhaustion stays a budget failure after reload", async ()
   fakeServer(true, "action_period_exhausted");
   const { wrapper } = setup();
   const hook = renderHook(
-    () => useReaderAnswers({ decisionId: "decision-1", enabled: true }),
+    () =>
+      useReaderAnswers({ decisionId: "decision-1", generationMode: "enabled" }),
     { wrapper },
   );
   await waitFor(() => expect(hook.result.current.isLoading).toBe(false));
@@ -677,7 +685,8 @@ test("stream admission exhaustion stays a budget failure after reload", async ()
   hook.unmount();
   const reload = setup();
   const reloaded = renderHook(
-    () => useReaderAnswers({ decisionId: "decision-1", enabled: true }),
+    () =>
+      useReaderAnswers({ decisionId: "decision-1", generationMode: "enabled" }),
     { wrapper: reload.wrapper },
   );
   await waitFor(() =>
@@ -785,7 +794,8 @@ test("persisted streaming answers poll to completion and release mutations", asy
   const server = pollingServer("complete");
   const { wrapper } = setup();
   const hook = renderHook(
-    () => useReaderAnswers({ decisionId: "decision-1", enabled: true }),
+    () =>
+      useReaderAnswers({ decisionId: "decision-1", generationMode: "enabled" }),
     { wrapper },
   );
   await waitFor(() =>
@@ -820,7 +830,11 @@ test.each(["never", "hanging"] as const)(
     const server = pollingServer(settlement);
     const { wrapper } = setup();
     const hook = renderHook(
-      () => useReaderAnswers({ decisionId: "decision-1", enabled: true }),
+      () =>
+        useReaderAnswers({
+          decisionId: "decision-1",
+          generationMode: "enabled",
+        }),
       { wrapper },
     );
     await waitFor(() =>

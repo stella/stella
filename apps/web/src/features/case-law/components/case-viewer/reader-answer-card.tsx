@@ -22,6 +22,7 @@ import type { ReaderAnswerFailureKind } from "./reader-answers.logic";
 
 export type ReaderAnswerCardProps = {
   answer: ReaderAnswer;
+  generationMode: "enabled" | "gated";
   onFollowUp: (question: string) => void;
   onRegenerate: () => void;
   onDelete: () => void;
@@ -37,6 +38,7 @@ export type ReaderAnswerCardProps = {
 
 export const ReaderAnswerCard = ({
   answer,
+  generationMode,
   onFollowUp,
   onRegenerate,
   onDelete,
@@ -197,7 +199,7 @@ export const ReaderAnswerCard = ({
                 .join("\n\n")}
               className="min-h-11 min-w-11"
             />
-            {answer.mine && (
+            {answer.mine && generationMode === "enabled" && (
               <>
                 <Button
                   className="min-h-11"
@@ -232,7 +234,7 @@ export const ReaderAnswerCard = ({
               </>
             )}
           </div>
-          {answer.mine && (
+          {answer.mine && generationMode === "enabled" && (
             <form
               className="mt-1 flex flex-col gap-1"
               onSubmit={(event) => {

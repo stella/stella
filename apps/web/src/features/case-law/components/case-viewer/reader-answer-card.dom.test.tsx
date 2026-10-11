@@ -106,6 +106,7 @@ const mount = (
   };
   const props = {
     answer,
+    generationMode: "enabled" as const,
     ...handlers,
     active: false,
     openRevision: 0,

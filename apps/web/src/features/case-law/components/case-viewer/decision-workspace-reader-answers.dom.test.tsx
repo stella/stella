@@ -196,6 +196,67 @@ const analysis = {
   })),
 } satisfies DecisionAnalysis;
 
+const fakeReaderServer = () => {
+  const requests: Request[] = [];
+  globalThis.fetch = Object.assign(
+    async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+      const request = new Request(input, init);
+      requests.push(request);
+      const path = new URL(request.url).pathname;
+      if (path.endsWith("/reader/answers")) {
+        return Response.json({ items: [answer], nextCursor: null, limit: 50 });
+      }
+      if (path.endsWith("/provisions")) {
+        return Response.json({
+          items: [],
+          previews: [],
+          nextCursor: null,
+          status: { type: "current" },
+          generation: null,
+        });
+      }
+      if (path.endsWith("/reader/annotations") || path.endsWith("/citations")) {
+        return Response.json({ items: [], nextCursor: null });
+      }
+      throw new TypeError(`Unexpected request: ${request.method} ${path}`);
+    },
+    { preconnect: originalFetch.preconnect },
+  );
+  return requests;
+};
+
+const renderGatedWorkspace = async (
+  client: InstanceType<typeof QueryClient>,
+) => {
+  const root = createRootRoute({
+    component: () => (
+      <DecisionWorkspace
+        decision={decision}
+        decisionId={decision.id}
+        aiMode="gated"
+      />
+    ),
+  });
+  const router = createRouter({
+    routeTree: root,
+    history: createMemoryHistory({ initialEntries: ["/"] }),
+  });
+  await router.load();
+  return render(
+    <QueryClientProvider client={client}>
+      <AuthenticatedUserProvider user={user}>
+        <IntlProvider locale="en" messages={messages} timeZone="UTC">
+          <FormattingProvider locale="en" timeZone="UTC">
+            <WebReaderPresentationProvider>
+              <RouterProvider router={router} />
+            </WebReaderPresentationProvider>
+          </FormattingProvider>
+        </IntlProvider>
+      </AuthenticatedUserProvider>
+    </QueryClientProvider>,
+  );
+};
+
 test("opening a passage answer reveals its expanded gutter card below preceding notes", async () => {
   // HappyDOM has no layout: supply paragraph positions and measured note heights;
   // the real gutter placement still decides each card's resulting top.
@@ -228,29 +289,7 @@ test("opening a passage answer reveals its expanded gutter card below preceding 
       return this.closest('[data-margin-note="card"]') ? 250 : 100;
     },
   });
-  globalThis.fetch = Object.assign(
-    async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
-      const request = new Request(input, init);
-      const path = new URL(request.url).pathname;
-      if (path.endsWith("/reader/answers")) {
-        return Response.json({ items: [answer], nextCursor: null, limit: 50 });
-      }
-      if (path.endsWith("/provisions")) {
-        return Response.json({
-          items: [],
-          previews: [],
-          nextCursor: null,
-          status: { type: "current" },
-          generation: null,
-        });
-      }
-      if (path.endsWith("/reader/annotations") || path.endsWith("/citations")) {
-        return Response.json({ items: [], nextCursor: null });
-      }
-      throw new TypeError(`Unexpected request: ${request.method} ${path}`);
-    },
-    { preconnect: originalFetch.preconnect },
-  );
+  fakeReaderServer();
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
@@ -280,33 +319,7 @@ test("opening a passage answer reveals its expanded gutter card below preceding 
     }).queryKey,
     [answer],
   );
-  const root = createRootRoute({
-    component: () => (
-      <DecisionWorkspace
-        decision={decision}
-        decisionId={decision.id}
-        aiMode="gated"
-      />
-    ),
-  });
-  const router = createRouter({
-    routeTree: root,
-    history: createMemoryHistory({ initialEntries: ["/"] }),
-  });
-  await router.load();
-  const view = render(
-    <QueryClientProvider client={client}>
-      <AuthenticatedUserProvider user={user}>
-        <IntlProvider locale="en" messages={messages} timeZone="UTC">
-          <FormattingProvider locale="en" timeZone="UTC">
-            <WebReaderPresentationProvider>
-              <RouterProvider router={router} />
-            </WebReaderPresentationProvider>
-          </FormattingProvider>
-        </IntlProvider>
-      </AuthenticatedUserProvider>
-    </QueryClientProvider>,
-  );
+  const view = await renderGatedWorkspace(client);
   const card = await view.findByRole("region", {
     name: messages.readerAnswers.title,
   });
@@ -357,4 +370,44 @@ test("opening a passage answer reveals its expanded gutter card below preceding 
   expect(scroll?.target).toBe(card);
   expect(scroll?.options).toEqual({ behavior: "instant", block: "nearest" });
   expect(scroll?.expanded).toBe(true);
+});
+
+test("a gated reader loads saved explanations from an empty cache without offering mutations", async () => {
+  const requests = fakeReaderServer();
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  clients.push(client);
+  expect(client.getQueryCache().getAll()).toHaveLength(0);
+  const view = await renderGatedWorkspace(client);
+  const card = await view.findByRole("region", {
+    name: messages.readerAnswers.title,
+  });
+  const reads = requests.filter((request) =>
+    new URL(request.url).pathname.endsWith("/reader/answers"),
+  );
+  expect(reads).toHaveLength(1);
+  const read = reads.at(0);
+  if (read === undefined) {
+    throw new TypeError("Persisted answers must load through HTTP");
+  }
+  expect(read.method).toBe("GET");
+  expect(new URL(read.url).searchParams.get("decisionId")).toBe(decision.id);
+  expect(within(card).getByText("An explanation.")).toBeDefined();
+  expect(
+    within(card).queryByRole("textbox", {
+      name: messages.readerAnswers.followUp,
+    }),
+  ).toBeNull();
+  expect(
+    within(card).queryByRole("button", {
+      name: messages.readerAnswers.regenerate,
+    }),
+  ).toBeNull();
+  expect(
+    within(card).queryByRole("button", { name: messages.common.delete }),
+  ).toBeNull();
+  expect(
+    within(card).queryByRole("button", { name: messages.readerAnswers.share }),
+  ).toBeNull();
 });

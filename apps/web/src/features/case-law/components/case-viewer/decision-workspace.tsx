@@ -215,7 +215,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
   const navigate = useNavigate();
   const answers = useReaderAnswers({
     decisionId,
-    enabled: props.aiMode === "enabled",
+    generationMode: props.aiMode,
   });
   const visibleAnswers = annotationsForMarksFilter(
     answers.answers,
@@ -300,6 +300,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
     id: answer.id,
     startAnchorId: answer.anchor.paragraphId,
     answer,
+    generationMode: props.aiMode,
     active: answers.activeAnswerId === answer.id,
     openRevision,
     busy:
