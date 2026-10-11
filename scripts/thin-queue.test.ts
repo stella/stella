@@ -1240,24 +1240,30 @@ test("main release and scheduled runs execute the planned version compiler in ei
 
 test("queue admission covers every gated job except documented event and producer exceptions", () => {
   const exceptions = new Set(Object.keys(MERGE_GROUP_EXCEPTIONS));
-  for (const job of exceptions) {
-    for (const queueDepth of ["thin", "full"]) {
-      expect(
-        selected(
-          ci.jobs[job]?.if,
-          context({
-            event: { event: "merge_group", message: "ordinary" },
-            variable: queueDepth,
-            queueDepth,
-          }),
-        ),
-        `${job}/${queueDepth}`,
-      ).toBe(false);
-    }
-  }
   expect([...admitted].toSorted()).toEqual(
     needs.filter((job) => job !== "ci-plan" && !exceptions.has(job)).toSorted(),
   );
+});
+
+test("docs checks certify scoped merge groups at both queue depths", () => {
+  expect(admitted.has("ci-checks-docs")).toBe(true);
+  for (const queueDepth of ["thin", "full"]) {
+    for (const required of ["true", "false"]) {
+      const value = context({
+        event: { event: "merge_group", message: "ordinary" },
+        variable: queueDepth,
+        queueDepth,
+      });
+      const planner = value.needs["ci-plan"];
+      if (!planner) {
+        panic("Missing ci-plan context");
+      }
+      planner.outputs["docs_checks_required"] = required;
+      expect(selected(ci.jobs["ci-checks-docs"]?.if, value)).toBe(
+        required === "true",
+      );
+    }
+  }
 });
 
 test("scoped queue eligibility is invariant under depth and the retired browser switch", () => {
