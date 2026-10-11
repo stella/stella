@@ -436,7 +436,7 @@ export const parseTestRegistrations = (
         const whenTrue = registrationName(node.initializer.whenTrue, aliases);
         const whenFalse = registrationName(node.initializer.whenFalse, aliases);
         if (whenTrue !== undefined && whenFalse !== undefined) {
-          aliases.set(node.name.text, `${whenTrue}|conditional`);
+          aliases.set(node.name.text, `${whenTrue}|${whenFalse}|conditional`);
         }
       }
     }
@@ -501,7 +501,7 @@ export const parseTestRegistrations = (
       ts.forEachChild(node, visit);
       return;
     }
-    const isOnly = name.split(".").includes("only");
+    const isOnly = name.split(/[.|]/u).includes("only");
     const callback = node.arguments.find(
       (argument, index) =>
         (hook || index > 0) &&

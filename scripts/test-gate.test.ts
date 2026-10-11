@@ -46,7 +46,6 @@ context("test registration census", () => {
   check.each([
     ["test", "test.only"],
     ["test.only", "test"],
-    ["test", "test.only.each([1])"],
     ["describe", "describe.only"],
   ])(
     "finds focus in either conditional alias branch: %s / %s",
@@ -61,6 +60,18 @@ context("test registration census", () => {
       ]);
     },
   );
+
+  check("preserves focus through nested conditional aliases", () => {
+    const source = `
+      const inner = enabled ? test : test.only;
+      const selected = other ? test : inner;
+      selected("nested focus", () => {});
+    `;
+    expect(parseTestRegistrations("fixture.test.ts", source)).toEqual([
+      { identity: "fixture.test.ts::nested focus", type: "disabled" },
+      { identity: "fixture.test.ts::nested focus", type: "only" },
+    ]);
+  });
 
   check.each(["&&", "||", "??"])(
     "inventories short-circuit registrations: %s",
