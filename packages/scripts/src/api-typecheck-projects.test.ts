@@ -1,4 +1,14 @@
 import { expect, test } from "bun:test";
+import { spawnSync } from "node:child_process";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
@@ -6,10 +16,78 @@ import {
   validateApiTypecheckProjects,
 } from "./api-typecheck-projects";
 
+const REPO_ROOT = path.resolve(import.meta.dir, "../../..");
+
 test("every API TypeScript source has exactly one compiler project owner", () => {
-  expect(
-    validateApiTypecheckProjects(path.resolve(import.meta.dir, "../../..")),
-  ).toEqual([]);
+  expect(validateApiTypecheckProjects(REPO_ROOT)).toEqual([]);
+});
+
+test("Bun consumers read referenced declarations instead of source", () => {
+  const config = JSON.parse(
+    readFileSync(path.join(REPO_ROOT, "apps/api/tsconfig.tests.json"), "utf-8"),
+  );
+  const directory = realpathSync(
+    mkdtempSync(path.join(tmpdir(), "api-typecheck-reference-")),
+  );
+  try {
+    for (const name of ["src", "tests", "declarations"]) {
+      mkdirSync(path.join(directory, name));
+    }
+    writeFileSync(
+      path.join(directory, "src/value.ts"),
+      'export const value = "source";\n',
+    );
+    writeFileSync(
+      path.join(directory, "declarations/value.d.ts"),
+      'export declare const value: "declaration";\n',
+    );
+    writeFileSync(
+      path.join(directory, "tests/value.test.ts"),
+      'import { value } from "../src/value";\nexport const result: "declaration" = value;\n',
+    );
+    writeFileSync(
+      path.join(directory, "src/tsconfig.json"),
+      JSON.stringify({
+        compilerOptions: {
+          composite: true,
+          declaration: true,
+          rootDir: ".",
+          outDir: "../declarations",
+          types: [],
+        },
+        files: ["value.ts"],
+      }),
+    );
+    writeFileSync(
+      path.join(directory, "tests/tsconfig.json"),
+      JSON.stringify({
+        compilerOptions: {
+          disableSourceOfProjectReferenceRedirect:
+            config.compilerOptions.disableSourceOfProjectReferenceRedirect,
+          types: [],
+        },
+        references: [{ path: "../src" }],
+        files: ["value.test.ts"],
+      }),
+    );
+    const result = spawnSync(
+      process.execPath,
+      [
+        "check",
+        "--no-pretty",
+        "--listFilesOnly",
+        "--project=tests/tsconfig.json",
+      ],
+      { cwd: directory, encoding: "utf-8" },
+    );
+    expect(result.error).toBeUndefined();
+    expect(result.status).toBe(0);
+    const files = result.stdout.split("\n");
+    expect(files).toContain(path.join(directory, "declarations/value.d.ts"));
+    expect(files).not.toContain(path.join(directory, "src/value.ts"));
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 test("missing and overlapping project roots fail ownership validation", () => {
