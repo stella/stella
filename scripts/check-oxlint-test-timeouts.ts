@@ -117,46 +117,6 @@ const hasTimeoutOverride = (file: ts.SourceFile): boolean => {
     });
   };
 
-  const hasTimeoutOption = (
-    expression: ts.Expression,
-    seen = new Set<string>(),
-  ): boolean => {
-    if (
-      ts.isParenthesizedExpression(expression) ||
-      ts.isAsExpression(expression) ||
-      ts.isSatisfiesExpression(expression)
-    ) {
-      return hasTimeoutOption(expression.expression, seen);
-    }
-    if (ts.isIdentifier(expression)) {
-      if (seen.has(expression.text)) {
-        return false;
-      }
-      seen.add(expression.text);
-      const value = values.get(expression.text);
-      return value !== undefined && hasTimeoutOption(value, seen);
-    }
-    if (!ts.isObjectLiteralExpression(expression)) {
-      return false;
-    }
-    return expression.properties.some((property) => {
-      if (ts.isSpreadAssignment(property)) {
-        return hasTimeoutOption(property.expression, new Set(seen));
-      }
-      const name = property.name;
-      if (name === undefined) {
-        return false;
-      }
-      if (ts.isIdentifier(name) || ts.isStringLiteral(name)) {
-        return name.text === "timeout";
-      }
-      return (
-        ts.isComputedPropertyName(name) &&
-        ts.isStringLiteral(name.expression) &&
-        name.expression.text === "timeout"
-      );
-    });
-  };
   const visit = (node: ts.Node): boolean => {
     if (ts.isCallExpression(node)) {
       // The data call in test.each(cases)(...) has no test arguments.
@@ -171,12 +131,20 @@ const hasTimeoutOverride = (file: ts.SourceFile): boolean => {
         api = members.at(1);
       }
       if (!isFactory && api !== undefined && TEST_APIS.has(api)) {
+        const secondArgument = node.arguments.at(1);
         const thirdArgument = node.arguments.at(2);
+        const optionsFirst =
+          secondArgument !== undefined &&
+          (ts.isObjectLiteralExpression(secondArgument) ||
+            ts.isIdentifier(secondArgument)) &&
+          thirdArgument !== undefined &&
+          (ts.isArrowFunction(thirdArgument) ||
+            ts.isFunctionExpression(thirdArgument));
+        const optionsArgument = optionsFirst ? secondArgument : thirdArgument;
         if (
           api === "setDefaultTimeout" ||
-          (thirdArgument !== undefined &&
-            !isTimeoutFreeOptions(thirdArgument)) ||
-          node.arguments.some((argument) => hasTimeoutOption(argument))
+          (optionsArgument !== undefined &&
+            !isTimeoutFreeOptions(optionsArgument))
         ) {
           return true;
         }

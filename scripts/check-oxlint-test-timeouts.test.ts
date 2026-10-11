@@ -175,6 +175,49 @@ for (const [name, source, expected] of [
   });
 }
 
+for (const signature of ["options-first", "callback-first"]) {
+  for (const [name, setup, options, expected] of [
+    ["inline retry", "", "{ retry: 2 }", []],
+    [
+      "inline timeout",
+      "",
+      "{ timeout: 60_000 }",
+      ["fixture.test.ts: timeout override is not allow-listed"],
+    ],
+    ["named retry", "const options = { retry: 2 };", "options", []],
+    [
+      "named timeout",
+      "const options = { timeout: 60_000 };",
+      "options",
+      ["fixture.test.ts: timeout override is not allow-listed"],
+    ],
+    [
+      "imported options",
+      'import { options } from "./options";',
+      "options",
+      ["fixture.test.ts: timeout override is not allow-listed"],
+    ],
+  ] as const) {
+    for (const callback of ["() => {}", "function () {} "]) {
+      test(`${signature} classifies ${name} with ${callback}`, () => {
+        withFixture((directory, file) => {
+          const argumentsSource =
+            signature === "options-first"
+              ? `${options}, ${callback}`
+              : `${callback}, ${options}`;
+          writeFileSync(
+            file,
+            `${IMPORTS}${setup}test("case", ${argumentsSource});`,
+          );
+          expect(customLintTestTimeoutViolations({ directory })).toEqual(
+            expected,
+          );
+        });
+      });
+    }
+  }
+}
+
 test("shared test helpers cannot change the central budget", () => {
   withFixture((directory) => {
     writeFileSync(
