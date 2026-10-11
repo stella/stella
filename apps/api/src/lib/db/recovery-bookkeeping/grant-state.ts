@@ -1,6 +1,8 @@
 import { panic } from "better-result";
 import { sql, type SQL } from "drizzle-orm";
 
+import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
+
 import type { ScopedTransaction } from "@/api/db/safe-db";
 import type {
   documentProcessingRuns,
@@ -142,6 +144,16 @@ export const transitionRecoveryGrantState = async (
           ...op.options,
           set: {
             ...op.options.set,
+            ...(op.options.to === "pending"
+              ? {
+                  // Regrant removes admission parking while the budget deadline remains binding.
+                  deadlineScoutErrorCode: sql`CASE
+                    WHEN ${op.table.deadlineScoutSkippedUntil} IS NOT NULL
+                    THEN ${ACTION_ADMISSION_CODES.periodExhausted}
+                    ELSE ${op.options.set.deadlineScoutErrorCode}
+                  END`,
+                }
+              : {}),
             ...(op.attemptRefund === undefined
               ? {}
               : {

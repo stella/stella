@@ -2,6 +2,8 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { and, eq, getTableColumns, sql } from "drizzle-orm";
 
+import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
+
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { rootDb, Transaction } from "@/api/db/root";
 import {
@@ -635,7 +637,10 @@ describe.skipIf(!enabled)("deadline admission recovery (postgres)", () => {
           try {
             await client.db
               .update(documentProcessingRuns)
-              .set({ deadlineScoutSkippedUntil: skippedUntil })
+              .set({
+                deadlineScoutSkippedUntil: skippedUntil,
+                deadlineScoutErrorCode: ACTION_ADMISSION_CODES.periodExhausted,
+              })
               .where(eq(documentProcessingRuns.id, source.runId));
             expect(
               await pauseDocumentDeadlineScoutAfterGrantLoss({
@@ -649,6 +654,7 @@ describe.skipIf(!enabled)("deadline admission recovery (postgres)", () => {
                 await client.db
                   .select({
                     status: documentProcessingRuns.deadlineScoutStatus,
+                    errorCode: documentProcessingRuns.deadlineScoutErrorCode,
                     skippedUntil:
                       documentProcessingRuns.deadlineScoutSkippedUntil,
                   })
@@ -658,6 +664,7 @@ describe.skipIf(!enabled)("deadline admission recovery (postgres)", () => {
               ).at(0);
             expect(await read()).toEqual({
               status: "awaiting_grant",
+              errorCode: "feature_not_granted",
               skippedUntil,
             });
             await client.db.transaction(async (tx) => {
@@ -677,7 +684,11 @@ describe.skipIf(!enabled)("deadline admission recovery (postgres)", () => {
                 userId: f.pausedUserId,
               });
             });
-            expect(await read()).toEqual({ status: "pending", skippedUntil });
+            expect(await read()).toEqual({
+              status: "pending",
+              errorCode: ACTION_ADMISSION_CODES.periodExhausted,
+              skippedUntil,
+            });
             const dispatched: string[] = [];
             await recoverDocumentDeadlineScoutDispatches({
               database: asTestRaw<typeof rootDb>(client.db),
