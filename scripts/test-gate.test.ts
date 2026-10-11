@@ -81,7 +81,7 @@ context("test registration census", () => {
         parseTestRegistrations(
           "fixture.test.ts",
           `
-      process.env.RUN_TESTS ${operator} test("conditional", () => {});
+      flags.runTests ${operator} test("conditional", () => {});
       enabled ${operator} describe("suite", () => { test("nested", () => {}); });
       test("always", () => {}) ${operator} other();
     `,
@@ -955,10 +955,11 @@ jobs:
   });
 
   check("ignores package commands that may continue on error", () => {
-    for (const [jobOption, stepOption] of [
+    const placements: readonly (readonly [string, string])[] = [
       [`continue-on-error: \${{ vars.ALLOW_TEST_FAILURE }}`, ""],
       ["", `continue-on-error: \${{ vars.ALLOW_TEST_FAILURE }}`],
-    ]) {
+    ];
+    for (const [jobOption, stepOption] of placements) {
       const workflow = Bun.YAML.parse(`
 jobs:
   package-check:
