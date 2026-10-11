@@ -3,6 +3,7 @@ import { expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
+import type { ExtractionWarnings } from "@stll/api-contract/case-law-extraction-warnings";
 import { DECISION_JUDGE_ROLES } from "@stll/api-contract/case-law-judges";
 import { TEXT_FIELD_TYPE } from "@stll/api-contract/case-law-text-field";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
@@ -210,13 +211,10 @@ test("decision readers keep every section whole so citation section indices reso
 test("decision API projection preserves typed extraction warnings", () => {
   const extractionWarnings = [
     { rule: "html-tag", count: 7, firstOffsets: [0, 8, 16] },
-  ] as const;
+  ] satisfies ExtractionWarnings;
   const decision = projectDecisionReader({
     ...decisionWithText("Court text"),
-    extractionWarnings: extractionWarnings.map((warning) => ({
-      ...warning,
-      firstOffsets: [...warning.firstOffsets],
-    })),
+    extractionWarnings,
   });
   expect(decision.extractionWarnings).toEqual(extractionWarnings);
   expect(Value.Check(readDecisionSuccessResponseSchema, decision)).toBe(true);

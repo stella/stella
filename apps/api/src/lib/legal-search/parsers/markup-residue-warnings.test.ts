@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
+import type { ExtractionWarnings } from "@stll/api-contract/case-law-extraction-warnings";
 import { assertProperty } from "@stll/property-testing";
 
 import { markupResidueIn, markupResidueWarnings } from "./markup-residue";
@@ -34,7 +35,7 @@ test("residue warning counts and locations survive repeated scans", () => {
               (_, index) => prefixLength + index * 8,
             ),
           },
-        ];
+        ] satisfies ExtractionWarnings;
         expect(markupResidueWarnings(text)).toEqual(expected);
         markupResidueIn(text);
         expect(markupResidueWarnings(text)).toEqual(expected);

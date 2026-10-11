@@ -13,6 +13,14 @@
       "metadata": {
         "type": "object",
         "properties": {
+          "extractionWarnings": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            },
+            "maxItems": 14
+          },
           "decisionId": {
             "type": "string"
           },
@@ -71,6 +79,7 @@
           }
         },
         "required": [
+          "extractionWarnings",
           "decisionId",
           "caseNumber",
           "caseNumberType",
@@ -169,6 +178,14 @@
       "metadata": {
         "type": "object",
         "properties": {
+          "extractionWarnings": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            },
+            "maxItems": 14
+          },
           "decisionId": {
             "type": "string"
           },
@@ -227,6 +244,7 @@
           }
         },
         "required": [
+          "extractionWarnings",
           "decisionId",
           "caseNumber",
           "caseNumberType",

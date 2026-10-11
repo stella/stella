@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { beforeAll, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
+import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -24,6 +25,7 @@ import {
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
+import type { EmptyAst } from "@/api/lib/legal-search/document-types";
 import { EMPTY_AST } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
@@ -75,7 +77,7 @@ if (!databaseUrl || !runPostgresTests) {
     type IngestWarningDocumentOptions = {
       fulltext: string | undefined;
       sequence: number;
-      documentAst?: DocumentAst;
+      documentAst?: DocumentAst | EmptyAst;
     };
     const ingest = async ({
       fulltext,
@@ -141,7 +143,7 @@ if (!databaseUrl || !runPostgresTests) {
         async (subject) => await readDecisionHandler({ subject }),
       );
       if (read === null || !("documentPending" in read)) {
-        return panic("Expected public decision read");
+        panic("Expected public decision read");
       }
       expect(read.extractionWarnings).toEqual(dirty.extractionWarnings);
       await db.insert(caseLawCitations).values({
@@ -153,28 +155,34 @@ if (!databaseUrl || !runPostgresTests) {
         decisionId: dirty.id,
         direction: "cites",
         limit: 10,
+        cursor: undefined,
       });
-      if (passages === null || passages.type !== "page") {
-        return panic("Expected public citation page");
+      if (passages?.type !== "page") {
+        panic("Expected public citation page");
       }
       expect(passages.page.items.at(0)?.extractionWarnings).toEqual(
         dirty.extractionWarnings,
       );
       const fulltext = "The court decided the appeal.";
-      const repairedAst = {
-        ...EMPTY_AST,
-        blocks: [
-          {
-            type: "paragraph",
-            id: "p1",
-            anchorId: "p1",
-            plainText: fulltext,
-            inlines: [{ type: "text", text: fulltext }],
-          },
-        ],
-      } satisfies DocumentAst;
+      // Text alone still lacks structure. Only a valid AST clears ast-missing.
       expect(
-        (await ingest({ fulltext, sequence: 3, documentAst: repairedAst }))
+        (await ingest({ fulltext, sequence: 3 })).extractionWarnings,
+      ).toEqual([{ rule: "ast-missing", count: 1, firstOffsets: [] }]);
+      const repairedAst =
+        parseDocumentAst({
+          version: 1,
+          blocks: [
+            {
+              type: "paragraph",
+              id: "p1",
+              anchorId: "p1",
+              plainText: fulltext,
+              inlines: [{ type: "text", text: fulltext }],
+            },
+          ],
+        }) ?? panic("Expected a valid repaired fixture AST");
+      expect(
+        (await ingest({ fulltext, sequence: 4, documentAst: repairedAst }))
           .extractionWarnings,
       ).toEqual([]);
     });

@@ -224,13 +224,10 @@ const reportStoredDocumentQuality = ({
   }
   const warnings = markupResidueWarnings(fulltext ?? "");
   const astBlocks = hasUsableAst(documentAst) ? documentAst.blocks.length : 0;
-  const signal =
-    preserveStoredDocument || pendingMirrorPayload !== null
-      ? undefined
-      : storedDecisionSignal({
-          hasFulltext: Boolean(fulltext),
-          astBlocks,
-        });
+  const signal = storedDecisionSignal({
+    hasFulltext: Boolean(fulltext),
+    astBlocks,
+  });
   if (signal) {
     warnings.push({
       rule: fulltext ? "ast-missing" : "document-empty",
@@ -257,12 +254,7 @@ const reportStoredDocumentQuality = ({
   // as the document. Skipped where a stored document is being preserved,
   // which stores no text of its own.
   const storedResidue =
-    preserveStoredDocument ||
-    pendingMirrorPayload !== null ||
-    astBlocks > 0 ||
-    !fulltext
-      ? undefined
-      : markupResidueIn(fulltext);
+    astBlocks > 0 || !fulltext ? undefined : markupResidueIn(fulltext);
   if (storedResidue) {
     logger.error(AST_MARKUP_RESIDUE, {
       sourceId,
@@ -278,10 +270,9 @@ const reportStoredDocumentQuality = ({
   // Text read through the wrong character set, by the adapter or upstream.
   // Checked on every stored text, parsed or not: the parser sees the text
   // after decoding and cannot tell either.
-  const encoding =
-    preserveStoredDocument || pendingMirrorPayload !== null || !fulltext
-      ? undefined
-      : textEncodingReport(fulltext, result.language);
+  const encoding = !fulltext
+    ? undefined
+    : textEncodingReport(fulltext, result.language);
   const subject = {
     sourceId,
     caseNumber: result.caseNumber,

@@ -10,6 +10,7 @@ const absentText = {
   type: "absent",
 } as const;
 const decision = {
+  extractionWarnings: [],
   caseNumber: "SYN 1/2026",
   caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
   citationsFrom: [],
