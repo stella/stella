@@ -264,6 +264,20 @@ export const registrationRunsWithService = (
     ) {
       return false;
     }
+    // A right operand runs only when the left one lets it: `&&` needs a true
+    // left side, `||` a false one; `??` depends on nullishness and fails closed.
+    if (ts.isBinaryExpression(ancestor) && child === ancestor.right) {
+      const operator = ancestor.operatorToken.kind;
+      if (
+        (operator === ts.SyntaxKind.AmpersandAmpersandToken &&
+          evaluate(ancestor.left) !== true) ||
+        (operator === ts.SyntaxKind.BarBarToken &&
+          evaluate(ancestor.left) !== false) ||
+        operator === ts.SyntaxKind.QuestionQuestionToken
+      ) {
+        return false;
+      }
+    }
     child = ancestor;
     ancestor = ancestor.parent;
   }

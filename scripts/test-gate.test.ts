@@ -301,6 +301,23 @@ context("test registration census", () => {
       'test.skipIf(!runPostgres).skipIf(otherFlag)("registration", () => {});',
       false,
     ],
+    [
+      'if (runPostgres) { otherFlag && test("registration", () => {}); }',
+      false,
+    ],
+    [
+      'if (runPostgres) { runPostgres && test("registration", () => {}); }',
+      true,
+    ],
+    ['if (runPostgres) { disabled || test("registration", () => {}); }', true],
+    [
+      'if (runPostgres) { otherFlag || test("registration", () => {}); }',
+      false,
+    ],
+    [
+      'if (runPostgres) { otherFlag ?? test("registration", () => {}); }',
+      false,
+    ],
   ] as const)(
     "establishes the active service path for %s",
     (registration, active) => {
