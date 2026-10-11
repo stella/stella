@@ -381,6 +381,31 @@ context("test registration census", () => {
     15_000,
   );
 
+  check(
+    "a package script runner whose failure cannot propagate collects nothing",
+    () => {
+      for (const test of ["bun test src | cat", "bun test src &"]) {
+        expect(
+          packageTestCollectionFailure({
+            candidate: "packages/fixture/src/a.test.ts",
+            packageDirectory: "packages/fixture",
+            scripts: { test },
+          }),
+          test,
+        ).toBe(
+          "runner command: test script does not invoke a gating test runner",
+        );
+      }
+      expect(
+        packageTestCollectionFailure({
+          candidate: "packages/fixture/src/a.test.ts",
+          packageDirectory: "packages/fixture",
+          scripts: { test: "echo start | cat && bun test src" },
+        }),
+      ).toBeUndefined();
+    },
+  );
+
   check("credits a file collected only by a later runner", () => {
     for (const scripts of [
       { test: "bun test src/unit && bun test src/integration" },
