@@ -706,10 +706,14 @@ const shellInvocationGates = (
     if (pipeline.includes("&") || (!pipefail && pipeline.includes("|"))) {
       continue;
     }
-    if (
-      !scriptErrexit &&
+    const trailing =
       end !== -1 &&
-      suffix.slice(end + 1).some((word) => word !== ";" && word !== "\n")
+      suffix.slice(end + 1).some((word) => word !== ";" && word !== "\n");
+    // errexit ignores a failure on the left of `&&`, so a later statement then
+    // decides the status; without errexit any later statement does.
+    if (
+      trailing &&
+      (!scriptErrexit || (pipelineEnd !== -1 && list[pipelineEnd] === "&&"))
     ) {
       continue;
     }
@@ -1552,7 +1556,15 @@ const executableCondition = ({
       if (name === undefined || name in contextOptions.variables) {
         return false;
       }
-      const results = ["", "off", "on"].map((value) =>
+      // Literals the expression compares against are the values that can
+      // change its outcome; registered defaults are handled above.
+      const samples = new Set([
+        "",
+        "off",
+        "on",
+        ...(quotedLiterals(expression) ?? []).map(({ text }) => text),
+      ]);
+      const results = [...samples].map((value) =>
         evaluate(
           expression,
           gatingEventContext(

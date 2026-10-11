@@ -760,6 +760,7 @@ jobs:
       for (const run of [
         "bun scripts/test-gate.ts || true",
         "bun scripts/test-gate.ts || echo failed",
+        "bun scripts/test-gate.ts && echo passed; echo done",
         "bun scripts/test-gate.ts || { echo failed; exit 0; }",
         "set +e; bun scripts/test-gate.ts",
       ]) {
@@ -904,27 +905,30 @@ jobs:
   );
 
   check("fails closed and names unresolved repository variables", () => {
-    const workflow = Bun.YAML.parse(`
+    for (const value of ["on", "enabled"]) {
+      const workflow = Bun.YAML.parse(`
 jobs:
   package-check:
     steps:
-      - if: vars.SOME_TOGGLE == 'on'
+      - if: vars.SOME_TOGGLE == '${value}'
         run: bun --filter @stll/orphan test
   ci-result:
     needs: [package-check]
 `);
-    const analysis = analyzeGatingWorkflow(workflow);
-    expect(analysis.findings).toEqual([
-      "job condition: package-check/step-1 has unresolved context vars.SOME_TOGGLE",
-    ]);
-    expect(
-      packageTestExecutionFailure({
-        gatingJobs: analysis.jobs,
-        packageDirectory: "packages/orphan",
-        packageName: "@stll/orphan",
-        shardedPackages: new Set<string>(),
-      }),
-    ).toBe("job condition: no gating job executes @stll/orphan test");
+      const analysis = analyzeGatingWorkflow(workflow);
+      expect(analysis.findings, value).toEqual([
+        "job condition: package-check/step-1 has unresolved context vars.SOME_TOGGLE",
+      ]);
+      expect(
+        packageTestExecutionFailure({
+          gatingJobs: analysis.jobs,
+          packageDirectory: "packages/orphan",
+          packageName: "@stll/orphan",
+          shardedPackages: new Set<string>(),
+        }),
+        value,
+      ).toBe("job condition: no gating job executes @stll/orphan test");
+    }
   });
 
   check("fails closed and names inputs without declared defaults", () => {
