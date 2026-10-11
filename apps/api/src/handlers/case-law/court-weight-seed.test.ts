@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import nodePath from "node:path";
 
+import { courtAbbreviation } from "@stll/api-contract/case-law-court-abbreviations";
 import type { CaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
-import { courtAbbreviation } from "@stll/api-contract/court-abbreviations";
 import { US_COURTS } from "@stll/api-contract/us-courts";
 
 import {

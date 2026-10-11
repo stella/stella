@@ -15,6 +15,7 @@ import {
 import { cn } from "../lib/utils";
 import { buttonVariants } from "./button";
 import { Loader } from "./loader";
+import { ScrollArea } from "./scroll-area";
 
 type ToastData = {
   tooltipStyle?: boolean;
@@ -251,20 +252,25 @@ const Toasts = ({ position }: { position: ToastPosition }) => {
             })()}
             toast={toastItem}
           >
-            <Toast.Content className="pointer-events-auto flex items-center gap-3 overflow-hidden px-3.5 py-3 text-sm transition-opacity duration-250 select-text data-behind:opacity-0 data-behind:not-data-expanded:pointer-events-none data-expanded:opacity-100">
+            <Toast.Content className="pointer-events-auto flex items-center gap-3 px-3.5 py-3 text-sm transition-opacity duration-250 select-text data-behind:opacity-0 data-behind:not-data-expanded:pointer-events-none data-expanded:opacity-100">
               <div className="flex min-w-0 flex-1 gap-2">
                 <ToastIcon type={toastItem.type} />
 
-                <div className="flex min-w-0 flex-col gap-0.5 select-text">
-                  <Toast.Title
-                    className="truncate font-medium"
-                    data-slot="toast-title"
-                  />
-                  <Toast.Description
-                    className="text-muted-foreground wrap-break-word"
-                    data-slot="toast-description"
-                  />
-                </div>
+                <ScrollArea
+                  axis="vertical"
+                  className="h-auto min-w-0 flex-1 [&_[data-slot=scroll-area-viewport]]:max-h-[60dvh]"
+                >
+                  <div className="flex min-w-0 flex-col gap-0.5 select-text">
+                    <Toast.Title
+                      className="font-medium wrap-anywhere whitespace-pre-wrap"
+                      data-slot="toast-title"
+                    />
+                    <Toast.Description
+                      className="text-muted-foreground wrap-anywhere whitespace-pre-wrap"
+                      data-slot="toast-description"
+                    />
+                  </div>
+                </ScrollArea>
               </div>
               <div className="ms-auto flex shrink-0 items-center gap-2">
                 {toastItem.actionProps && (
@@ -341,23 +347,36 @@ const AnchoredToasts = () => {
               >
                 {tooltipStyle ? (
                   <Toast.Content className="pointer-events-auto px-2 py-1 select-text">
-                    <Toast.Title data-slot="toast-title" />
+                    <ScrollArea
+                      axis="vertical"
+                      className="h-auto [&_[data-slot=scroll-area-viewport]]:max-h-[60dvh]"
+                    >
+                      <Toast.Title
+                        className="wrap-anywhere whitespace-pre-wrap"
+                        data-slot="toast-title"
+                      />
+                    </ScrollArea>
                   </Toast.Content>
                 ) : (
-                  <Toast.Content className="pointer-events-auto flex items-center gap-3 overflow-hidden px-3.5 py-3 text-sm select-text">
+                  <Toast.Content className="pointer-events-auto flex items-center gap-3 px-3.5 py-3 text-sm select-text">
                     <div className="flex min-w-0 flex-1 gap-2">
                       <ToastIcon type={toastItem.type} />
 
-                      <div className="flex min-w-0 flex-col gap-0.5 select-text">
-                        <Toast.Title
-                          className="truncate font-medium"
-                          data-slot="toast-title"
-                        />
-                        <Toast.Description
-                          className="text-muted-foreground wrap-break-word"
-                          data-slot="toast-description"
-                        />
-                      </div>
+                      <ScrollArea
+                        axis="vertical"
+                        className="h-auto min-w-0 flex-1 [&_[data-slot=scroll-area-viewport]]:max-h-[60dvh]"
+                      >
+                        <div className="flex min-w-0 flex-col gap-0.5 select-text">
+                          <Toast.Title
+                            className="font-medium wrap-anywhere whitespace-pre-wrap"
+                            data-slot="toast-title"
+                          />
+                          <Toast.Description
+                            className="text-muted-foreground wrap-anywhere whitespace-pre-wrap"
+                            data-slot="toast-description"
+                          />
+                        </div>
+                      </ScrollArea>
                     </div>
                     {toastItem.actionProps && (
                       <Toast.Action
@@ -464,11 +483,11 @@ function normalizeToastActionProps({
 }
 
 function getDefaultToastTimeout(type: ToastType | undefined) {
-  if (type === "loading") {
+  if (type === "loading" || type === "error") {
     return 0;
   }
 
-  if (type === "error" || type === "warning") {
+  if (type === "warning") {
     return 6000;
   }
 

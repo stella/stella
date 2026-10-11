@@ -26,19 +26,13 @@ import {
 import { hungarianCitationForm } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { isRecord } from "@/api/lib/type-guards";
 
-/** Closed set; persisted, so a CHECK constraint mirrors it in the schema. */
-export const CITATION_KIND = {
-  PRECEDENT: "precedent",
-  PROCEDURAL: "procedural",
-} as const;
+import { CITATION_KIND, type CitationKind } from "./citation-kind-values";
 
-export type CitationKind = (typeof CITATION_KIND)[keyof typeof CITATION_KIND];
-
-/** The same values as a list, for the column's `enum` and the CHECK. */
-export const CITATION_KINDS = [
-  CITATION_KIND.PRECEDENT,
-  CITATION_KIND.PROCEDURAL,
-] as const;
+export {
+  CITATION_KIND,
+  CITATION_KINDS,
+  type CitationKind,
+} from "./citation-kind-values";
 
 /**
  * Registries of courts whose decisions are published as standalone

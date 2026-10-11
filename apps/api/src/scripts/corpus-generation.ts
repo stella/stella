@@ -1,3 +1,4 @@
+import { Result, TaggedError, panic } from "better-result";
 /**
  * The operator command for the corpus generation registry: which generation
  * of each corpus family is registered, and which one serves.
@@ -22,10 +23,10 @@
  * reads that revision, so no projection change can land between the census
  * and the flip.
  */
-
-import { Result, TaggedError, panic } from "better-result";
 import { eq } from "drizzle-orm";
 import { parseArgs } from "node:util";
+
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
 import type { Transaction } from "@/api/db/root";
 import { corpusIndexGenerations } from "@/api/db/schema";
@@ -1218,8 +1219,10 @@ export const runCorpusGenerationCommand = async ({
 };
 
 if (import.meta.main) {
-  // The door's connections stay open otherwise.
-  process.exit(
-    await runCorpusGenerationCommand({ args: process.argv.slice(2) }),
-  );
+  await runScriptWithErrorOutput(async () => {
+    // The door's connections stay open otherwise.
+    process.exit(
+      await runCorpusGenerationCommand({ args: process.argv.slice(2) }),
+    );
+  });
 }

@@ -13,10 +13,11 @@ use crate::{
     ClipboardSnapshot, ClipboardSourceAppVisual,
   },
   clipboard_screen_capture::ClipboardScreenCapture,
-  clipboard_window::{self, ClipboardCaller, ClipboardStartupTrace},
+  clipboard_window::{self, ClipboardStartupTrace},
   desktop_telemetry::{
     DesktopTelemetry, DesktopTelemetrySpan, DesktopTelemetryWindow, DesktopTimingReport,
   },
+  local_window::ClipboardCaller,
 };
 
 const HISTORY_EVENT: &str = "clipboard-history-changed";

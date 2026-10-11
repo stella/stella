@@ -90,6 +90,7 @@ export const actionDrawsServiceBudget = ({
  */
 export const FREE_WITHOUT_OWN_KEY = {
   "chat.send": "counts",
+  "chat.span-edit": "counts",
   // The automatic title of a counted chat send rides on that send.
   "chat.generate-thread-title": "counts",
   "chat.improve-prompt": "counts",

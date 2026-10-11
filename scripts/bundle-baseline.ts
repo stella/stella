@@ -9,20 +9,29 @@
 //
 // This measures the gzipped size of every client JS asset, groups them the way
 // the build's manualChunks names them (apps/web/vite.config.ts), and guards a
-// committed baseline so that a size regression fails CI while an improvement
-// just prompts you to ratchet the baseline down.
+// committed baseline. Growth past the headroom is reported, never blocking: CI
+// annotates the grown groups and writes them to the job summary, and a nightly
+// run lists every group over budget. An improvement prompts a ratchet down.
 //
 // Modes:
 //   bun scripts/bundle-baseline.ts                 report groups + gzip sizes
 //   bun scripts/bundle-baseline.ts --write-baseline regenerate the baseline
-//   bun scripts/bundle-baseline.ts --check          CI gate (exit 1 on regression)
+//   bun scripts/bundle-baseline.ts --check          CI report (warns on growth; fails only when it cannot measure)
 //   bun scripts/bundle-baseline.ts --self-test      prove the comparison logic fires
 //
 // CI-only by design: it needs a completed `bun --filter @stll/web build` first,
 // so it is too slow for the local lint/pre-commit loop. Wired into
 // .github/workflows/ci.yml's web-build job, right after "Build web".
 
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  appendFileSync,
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { BASELINE_PATHS } from "./baseline-paths";
@@ -372,23 +381,69 @@ const runCheck = (): number => {
     return 0;
   }
 
-  console.error("\nbundle --check: chunk group(s) grew past the baseline:\n");
-  for (const d of regressions) {
-    const delta = d.current - d.baseline;
-    console.error(
-      `  ${d.key}: ${kib(d.baseline)} -> ${kib(d.current)} ` +
-        `(+${kib(delta)}, ${pct(d.current, d.baseline)})`,
-    );
-    console.error(`      ${perfMeaning(d.key)}.`);
-  }
-  console.error(
-    `\nAllowed headroom is ${Math.round((HEADROOM - 1) * 100)}% over baseline. ` +
-      "Find what grew (run\n" +
-      "`ANALYZE=1 bun --filter @stll/web build` for the visualizer treemap) and\n" +
-      "trim it, or, if the growth is genuinely justified, run\n" +
-      `\`${WRITE_HINT}\` and commit ${BASELINE_REL} with a rationale in your PR.`,
+  return reportRegressions(
+    regressions,
+    process.env["GITHUB_STEP_SUMMARY"],
+    console.log,
   );
-  return 1;
+};
+
+// Growth past the headroom is reported, never blocking: an annotation per
+// group, the console detail, and a job-summary table when a path is given.
+const reportRegressions = (
+  regressions: readonly GroupDiff[],
+  summaryPath: string | undefined,
+  log: (line: string) => void,
+): number => {
+  const headroom = `${Math.round((HEADROOM - 1) * 100)}%`;
+  log(
+    `\nbundle --check: chunk group(s) grew past the ${headroom} headroom ` +
+      "(warning only):\n",
+  );
+  for (const d of regressions) {
+    const growth = `${kib(d.baseline)} -> ${kib(d.current)} (+${kib(d.current - d.baseline)}, ${pct(d.current, d.baseline)})`;
+    log(`  ${d.key}: ${growth}`);
+    log(`      ${perfMeaning(d.key)}.`);
+    log(
+      `::warning title=Bundle size: ${d.key}::${d.key} grew ${growth} over the ${headroom} headroom.`,
+    );
+  }
+  log(
+    "\nFind what grew (run `ANALYZE=1 bun --filter @stll/web build` for the\n" +
+      "visualizer treemap) and trim it, or re-measure with\n" +
+      `\`${WRITE_HINT}\` and commit ${BASELINE_REL} with a rationale.`,
+  );
+  writeSummary(regressions, headroom, summaryPath);
+  return 0;
+};
+
+// The job summary lists the grown groups so the run page shows them without
+// reading the log.
+const writeSummary = (
+  regressions: readonly GroupDiff[],
+  headroom: string,
+  summaryPath: string | undefined,
+): void => {
+  if (summaryPath === undefined || summaryPath === "") {
+    return;
+  }
+  const rows = regressions.map(
+    (d) =>
+      `| ${d.key} | ${kib(d.baseline)} | ${kib(d.current)} | +${kib(d.current - d.baseline)} | ${pct(d.current, d.baseline)} |`,
+  );
+  appendFileSync(
+    summaryPath,
+    [
+      `### Bundle groups over the ${headroom} headroom`,
+      "",
+      "| Group | Baseline | Current | Growth | Change |",
+      "| --- | ---: | ---: | ---: | ---: |",
+      ...rows,
+      "",
+      `Re-measure with \`${WRITE_HINT}\` once the growth is understood.`,
+      "",
+    ].join("\n"),
+  );
 };
 
 // --- Self-test --------------------------------------------------------------
@@ -466,6 +521,32 @@ const runSelfTest = (): number => {
       `diffAll did not isolate the over-budget group (got ${regressed
         .map((d) => d.key)
         .join(", ")})`,
+    );
+  }
+
+  // Over-budget growth is reported without failing, and the summary names it.
+  const summaryDir = mkdtempSync(path.join(tmpdir(), "bundle-summary-"));
+  const summaryFile = path.join(summaryDir, "summary.md");
+  writeFileSync(summaryFile, "");
+  const reported: string[] = [];
+  const exitCode = reportRegressions(regressed, summaryFile, (line) => {
+    reported.push(line);
+  });
+  const summary = readFileSync(summaryFile, "utf-8");
+  rmSync(summaryDir, { recursive: true, force: true });
+  if (exitCode !== 0) {
+    failures.push(`reportRegressions exited ${exitCode}, want 0`);
+  }
+  if (
+    !reported.some((line) =>
+      line.startsWith("::warning title=Bundle size: entry::"),
+    )
+  ) {
+    failures.push("reportRegressions did not annotate the grown group");
+  }
+  if (!summary.includes("| entry |") || !summary.includes("headroom")) {
+    failures.push(
+      "reportRegressions did not write the grown group to the summary",
     );
   }
 

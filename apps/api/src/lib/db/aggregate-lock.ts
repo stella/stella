@@ -20,7 +20,7 @@ import { compareCodeUnit } from "@stll/collation";
 
 import { organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
-import { workspaces } from "@/api/db/schema";
+import { pdfSigningSessions, workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
@@ -43,13 +43,23 @@ export const AGGREGATE_LOCKS = {
   desktopCredential: { rank: 80, kind: "row" },
   workspace: { rank: 100, kind: "row" },
   memberCleanup: { rank: 110, kind: "row" },
+  // A chat interaction's fences: the thread, then the turn awaiting input,
+  // then the receipt it produced.
+  chatThread: { rank: 120, kind: "row" },
+  chatTurn: { rank: 130, kind: "row" },
+  chatSecret: { rank: 140, kind: "row" },
   run: { rank: 200, kind: "row" },
   currentStep: { rank: 300, kind: "row" },
   obligation: { rank: 400, kind: "row" },
   entity: { rank: 500, kind: "row" },
+  signal: { rank: 600, kind: "row" },
+  automatedFlowRunCap: { rank: 700, kind: "advisory" },
   processingClaim: { rank: 600, kind: "row" },
   contactCapacity: { rank: 700, kind: "advisory" },
   personalCatalog: { rank: 700, kind: "advisory" },
+  searchHistory: { rank: 710, kind: "row" },
+  chatMessage: { rank: 810, kind: "row" },
+  signingSession: { rank: 900, kind: "row" },
 } as const;
 
 export type AggregateName = keyof typeof AGGREGATE_LOCKS;
@@ -87,6 +97,7 @@ export const AGGREGATE_CHAINS = {
     "processingClaim",
   ],
   scoutRun: ["orgFeatureAdmission", "scoutCensus"],
+  chatSecret: ["chatThread", "chatTurn", "chatSecret"],
   memberPrefix: [
     "workspace",
     "memberCleanup",
@@ -96,8 +107,13 @@ export const AGGREGATE_CHAINS = {
     "entity",
   ],
   desktopRenewal: ["desktopMembership", "desktopCredential"],
+  signal: ["signal"],
+  automatedFlowRunCap: ["automatedFlowRunCap"],
   contactCapacity: ["contactCapacity"],
   personalCatalog: ["personalCatalog"],
+  searchHistory: ["desktopMembership", "searchHistory"],
+  chatRevision: ["chatThread", "chatMessage"],
+  signingSession: ["workspace", "signingSession"],
 } as const satisfies Record<string, readonly AggregateName[]>;
 
 export const ROW_LOCK_MODES = [
@@ -159,10 +175,29 @@ type AggregateIdentities = {
         id: string;
         workspaceId: SafeId<"workspace">;
       };
+  chatThread: {
+    id: SafeId<"chatThread">;
+    organizationId: SafeId<"organization">;
+    userId: SafeId<"user">;
+  };
+  chatTurn: {
+    threadId: SafeId<"chatThread">;
+    toolCallId: string;
+    organizationId: SafeId<"organization">;
+    userId: SafeId<"user">;
+  };
+  chatSecret: {
+    id: string;
+    threadId: SafeId<"chatThread">;
+    organizationId: SafeId<"organization">;
+    userId: SafeId<"user">;
+  };
   run: { id: SafeId<"flowRun">; workspaceId: SafeId<"workspace"> };
   currentStep: { id: SafeId<"flowRunStep">; workspaceId: SafeId<"workspace"> };
   obligation: { id: SafeId<"entity">; workspaceId: SafeId<"workspace"> };
   entity: { id: SafeId<"entity">; workspaceId: SafeId<"workspace"> };
+  signal: { id: SafeId<"signal">; organizationId: SafeId<"organization"> };
+  automatedFlowRunCap: SafeId<"flowDefinition">;
   processingClaim: {
     id: SafeId<"documentProcessingRun">;
     workspaceId: SafeId<"workspace">;
@@ -171,6 +206,16 @@ type AggregateIdentities = {
   personalCatalog: {
     organizationId: SafeId<"organization">;
     userId: SafeId<"user">;
+  };
+  searchHistory: {
+    organizationId: SafeId<"organization">;
+    userId: SafeId<"user">;
+  };
+  chatMessage: { id: SafeId<"chatMessage">; threadId: SafeId<"chatThread"> };
+  signingSession: {
+    id: SafeId<"pdfSigningSession">;
+    workspaceId: SafeId<"workspace">;
+    organizationId: SafeId<"organization">;
   };
 };
 
@@ -415,6 +460,47 @@ export const withAggregateTransaction = async <Tx extends object, T>(
   });
 };
 
+type SkipLockedBatchOptions<Tx extends object, Row, T> = {
+  database: {
+    transaction: <Value>(run: (tx: Tx) => Promise<Value>) => Promise<Value>;
+  };
+  limit: number;
+  select: (tx: Tx) => {
+    toSQL: () => { sql: string };
+    limit: (limit: number) => {
+      for: (mode: RowLockMode, config: LockConfig) => PromiseLike<Row[]>;
+    };
+  };
+  run: (tx: Tx, rows: Row[]) => Promise<T>;
+};
+
+/** Nonblocking batches own a fresh transaction and forbid later aggregate acquisitions. */
+export const withSkipLockedBatch = async <Tx extends object, Row, T>({
+  database,
+  limit,
+  select,
+  run,
+}: SkipLockedBatchOptions<Tx, Row, T>): Promise<T> => {
+  if (!Number.isSafeInteger(limit) || limit < 1) {
+    panic("Skip-locked batches require a bounded positive limit");
+  }
+  return await withAggregateTransaction(database, async (tx) => {
+    const history = lockHistory(tx);
+    const query = select(tx);
+    const target = aggregateSelectTarget(query.toSQL().sql);
+    if (target.joined || !target.filtered) {
+      panic("Skip-locked batches require a filtered single-table query");
+    }
+    // These locks never wait, but holding them while acquiring a blocking
+    // aggregate would reintroduce an unordered chain. Keep that path closed.
+    history.status = "acquiring";
+    const rows = await query.limit(limit).for("update", { skipLocked: true });
+    const value = await run(tx, rows);
+    completeAcquisition(history);
+    return value;
+  });
+};
+
 /** Track the public savepoint callback without inspecting driver internals. */
 export const withAggregateSavepoint = async <T>(
   tx: Pick<Transaction, "execute" | "transaction">,
@@ -493,6 +579,14 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
         scopeColumns: [],
         scopeValues: [],
       };
+    case "searchHistory":
+      return {
+        table: "search_history_owners",
+        columns: ["organization_id", "user_id"],
+        values: [options.id.organizationId, options.id.userId],
+        scopeColumns: [],
+        scopeValues: [],
+      };
     case "desktopCredential":
       return {
         table: "apikey",
@@ -500,6 +594,14 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
         values: [options.id.id],
         scopeColumns: ["reference_id"],
         scopeValues: [options.id.userId],
+      };
+    case "chatMessage":
+      return {
+        table: "chat_messages",
+        columns: ["id"],
+        values: [options.id.id],
+        scopeColumns: ["thread_id"],
+        scopeValues: [options.id.threadId],
       };
     case "workspace":
       return {
@@ -541,6 +643,14 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
         scopeColumns: ["workspace_id"],
         scopeValues: [options.id.workspaceId],
       };
+    case "signal":
+      return {
+        table: "signals",
+        columns: ["id"],
+        values: [options.id.id],
+        scopeColumns: ["organization_id"],
+        scopeValues: [options.id.organizationId],
+      };
     case "schedulerClaim":
       return {
         table: "scheduler_jobs",
@@ -572,6 +682,42 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
         values: [options.id.id],
         scopeColumns: ["organization_id"],
         scopeValues: [options.id.organizationId],
+      };
+    case "chatThread":
+      return {
+        table: "chat_threads",
+        columns: ["id"],
+        values: [options.id.id],
+        scopeColumns: ["organization_id", "user_id"],
+        scopeValues: [options.id.organizationId, options.id.userId],
+      };
+    case "chatTurn":
+      return {
+        table: "chat_turns",
+        columns: ["thread_id", "interaction_tool_call_id"],
+        values: [options.id.threadId, options.id.toolCallId],
+        scopeColumns: ["organization_id", "user_id"],
+        scopeValues: [options.id.organizationId, options.id.userId],
+      };
+    case "chatSecret":
+      return {
+        table: "chat_secrets",
+        columns: ["id"],
+        values: [options.id.id],
+        scopeColumns: ["thread_id", "organization_id", "user_id"],
+        scopeValues: [
+          options.id.threadId,
+          options.id.organizationId,
+          options.id.userId,
+        ],
+      };
+    case "signingSession":
+      return {
+        table: "pdf_signing_sessions",
+        columns: ["id"],
+        values: [options.id.id],
+        scopeColumns: ["workspace_id"],
+        scopeValues: [options.id.workspaceId],
       };
     case "memberCleanup":
       switch (options.id.type) {
@@ -622,7 +768,23 @@ const physicalRowLock = ({
 };
 const rowLock = (options: RowIdentityOptions, mode: RowLockMode): HeldLock => {
   const { table, values } = rowResource(options);
-  return physicalRowLock({ aggregate: options.aggregate, table, values, mode });
+  const lock = physicalRowLock({
+    aggregate: options.aggregate,
+    table,
+    values,
+    mode,
+  });
+  return options.aggregate === "signingSession"
+    ? {
+        ...lock,
+        orderKey: JSON.stringify([
+          options.aggregate,
+          table,
+          options.id.organizationId,
+          ...values,
+        ]),
+      }
+    : lock;
 };
 
 // A batch is ordered twice: by SQL (COLLATE "C", byte order) and by the
@@ -738,6 +900,12 @@ const rowStatement = (
 };
 const advisoryResource = (options: AdvisoryIdentityOptions) => {
   switch (options.aggregate) {
+    case "automatedFlowRunCap":
+      return {
+        first: sql`${0x0f_10_cc_a9}::integer`,
+        second: sql`hashtext(${options.id})`,
+        order: [options.aggregate, options.id],
+      };
     case "contactCapacity":
       return {
         first: sql`hashtext('contact_capacity')`,
@@ -766,7 +934,7 @@ const advisoryResource = (options: AdvisoryIdentityOptions) => {
       };
     case "definitionCap":
       return {
-        first: sql`${0x0f_10_cc_a9}::integer`,
+        first: sql`${0x0f_10_cc_ab}::integer`,
         second: sql`hashtext(${options.id.definitionId})`,
         order: [options.aggregate, options.id.definitionId],
       };
@@ -886,6 +1054,60 @@ export const withAggregateLock = async (
   }
   completeAcquisition(history);
   return rows.length > 0 ? { status: "locked" } : { status: "missing" };
+};
+
+type OpenSigningPageOptions = {
+  tx: Transaction;
+  sessions: readonly AggregateIdentities["signingSession"][];
+};
+
+/** Lock and recheck a discovered page; a concurrently closed session is no longer eligible. */
+export const lockOpenSigningPage = async ({
+  tx,
+  sessions,
+}: OpenSigningPageOptions) => {
+  if (sessions.length === 0) {
+    return [];
+  }
+  const history = lockHistory(tx);
+  assertAggregateLevelAvailable(history);
+  const ordered = sessions.toSorted((left, right) =>
+    compareCodeUnit(left.id, right.id),
+  );
+  const locks = new Map(
+    ordered.map((session) => [
+      session.id,
+      rowLock({ aggregate: "signingSession", id: session }, "update"),
+    ]),
+  );
+  for (const lock of locks.values()) {
+    assertLockOrder(history, lock, "block");
+  }
+  history.status = "acquiring";
+  const rows = await tx.execute(sql`
+    SELECT id, workspace_id FROM ${pdfSigningSessions}
+    WHERE (id, workspace_id) IN (${sql.join(
+      ordered.map(
+        (session) => sql`(${session.id}::uuid, ${session.workspaceId}::uuid)`,
+      ),
+      sql`, `,
+    )})
+      AND status = 'open'
+    ORDER BY id FOR UPDATE
+  `);
+  const heldIds = new Set(
+    executedRows(rows).map((row) => v.parse(parentRowSchema, row).id),
+  );
+  for (const session of ordered) {
+    if (heldIds.has(session.id)) {
+      retainLock(
+        history,
+        locks.get(session.id) ?? panic("Missing signing session lock"),
+      );
+    }
+  }
+  completeAcquisition(history);
+  return ordered.filter(({ id }) => heldIds.has(id));
 };
 
 type AggregateLockableQuery<Row> = {
@@ -1385,3 +1607,22 @@ export const withAggregateRowQuery = async <Row>(
   }
   return await acquire(options.tx);
 };
+
+type AutomatedFlowRunCapLockOptions = {
+  definitionId: SafeId<"flowDefinition">;
+  database: Pick<Transaction, "transaction">;
+};
+
+/** Own the cap transaction so the decision and insert share its advisory fence. */
+export const withAutomatedFlowRunCapLock = async <T>(
+  { definitionId, database }: AutomatedFlowRunCapLockOptions,
+  run: (tx: Transaction) => Promise<T>,
+): Promise<T> =>
+  await withAggregateTransaction(database, async (tx) => {
+    await withAggregateLock({
+      aggregate: "automatedFlowRunCap",
+      id: definitionId,
+      tx,
+    });
+    return await run(tx);
+  });

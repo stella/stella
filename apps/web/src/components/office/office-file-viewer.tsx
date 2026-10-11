@@ -42,6 +42,7 @@ import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { registerOfficeCitationNavigation } from "@/lib/files/office-citations";
 import { fileOptions } from "@/lib/files/queries";
+import { useActionCapabilities } from "@/lib/organization/feature-access/capability-actions";
 import "@/components/office/office-file-viewer.css";
 
 const OFFICE_AI_DOCK_CLEARANCE_PX = 96;
@@ -69,6 +70,8 @@ export const OfficeFileViewer = ({
   const analytics = useAnalytics();
   const { resolvedTheme } = useTheme();
   const desktopGate = useDesktopActionGate("edit-file");
+  const desktopCapability =
+    useActionCapabilities("desktop").capabilities.desktop;
   const editIntentStateRef = useRef(INITIAL_OFFICE_EDIT_INTENT_STATE);
   const navigationSequenceRef = useRef(0);
   const [attempt, setAttempt] = useState(0);
@@ -114,6 +117,7 @@ export const OfficeFileViewer = ({
   const handleEditIntentKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLDivElement>) => {
       if (
+        desktopCapability.type !== "available" ||
         desktopEditTarget === null ||
         viewerStatus.type !== "ready" ||
         !isOfficeEditIntentKey(event.nativeEvent)
@@ -148,6 +152,7 @@ export const OfficeFileViewer = ({
     },
     [
       desktopEditTarget,
+      desktopCapability.type,
       desktopGate,
       fieldId,
       openInDesktop,

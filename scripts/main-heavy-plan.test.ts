@@ -112,19 +112,44 @@ const planned = (plan: Record<string, string>, job: string) => {
   const scope = scopes[job];
   return scope === null || (scope !== undefined && plan[scope] === "true");
 };
+// Computed job scopes also depend on changed-file scopes that are not gated
+// directly. Pin their source outputs; unrelated scopes remain unplanned.
+const directScopePattern =
+  /^\$\{\{\s*(steps\.changed-files\.outputs\.[\w-]+_required)\s*\}\}$/u;
+const computedScopeInputs = new Set(
+  Object.values(planOutputs)
+    .filter((expression) => !directScopePattern.test(expression))
+    .flatMap((expression) =>
+      [
+        ...expression.matchAll(
+          /\bsteps\.changed-files\.outputs\.[\w-]+_required\b/gu,
+        ),
+      ].map(([reference]) => reference),
+    ),
+);
 const allPlanned = Object.fromEntries(
-  Object.values(scopes).flatMap((scope) =>
-    scope === null ? [] : [[scope, "true"]],
-  ),
+  [
+    ...new Set([
+      ...Object.values(scopes).filter((scope) => scope !== null),
+      ...Object.entries(planOutputs)
+        .filter(([, expression]) => {
+          const reference = directScopePattern.exec(expression)?.[1];
+          return reference !== undefined && computedScopeInputs.has(reference);
+        })
+        .map(([name]) => name),
+    ]),
+  ].map((scope) => [scope, "true"]),
 );
 const heavyPlan = {
   ...allPlanned,
+  package_checks_required: "true",
   trusted: "true",
   coverage_profile: "normal-v1",
   pilot_fast_jobs: "[]",
   queue_required_jobs: "[]",
   suite_depth: "full",
   queue_depth: "full",
+  browser_spec_selection_required: "true",
   fix_tests_on_base_required: "false",
 };
 
@@ -303,6 +328,8 @@ test("heavy event policies exclude pull requests and preserve existing full cert
         plan["suite_depth"] = depth;
         plan["queue_depth"] = "full";
         plan["heavy_web_build_required"] = "false";
+        plan["browser_spec_selection_required"] = required;
+        plan["docker_checks_pr_required"] = required;
         // Queue policies intentionally remove PR execution. Existing non-PR
         // certification stays unchanged except for the added queue route smoke.
         for (const [job, body] of Object.entries(original.jobs)) {
@@ -330,7 +357,23 @@ test("heavy event policies exclude pull requests and preserve existing full cert
           ) {
             expected = expected && required === "true";
           }
+          if (job === "docker-checks" && event === "merge_group") {
+            expected = required === "true";
+          }
           if (job === "route-smoke" && event === "merge_group") {
+            expected = required === "true";
+          }
+          // Selected browser specs build the web app on pull requests.
+          if (
+            event === "pull_request" &&
+            current.includes(
+              "needs.ci-plan.outputs.browser_spec_selection_required == 'true'",
+            )
+          ) {
+            expected = required === "true";
+          }
+          // Selected production e2e specs run on pull requests when planned.
+          if (event === "pull_request" && job === "e2e-production-shard") {
             expected = required === "true";
           }
           expect(

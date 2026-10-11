@@ -9,7 +9,7 @@ import {
 import type { StatuteSlugKey } from "@/features/statutes/queries/statutes";
 import { isStatuteWindowGap } from "@/features/statutes/statute-expression";
 import type { StatuteWindowGap } from "@/features/statutes/statute-expression";
-import { isPublicStatuteCountry } from "@/lib/statute-route";
+import { isPublicStatuteCountry } from "@/lib/statutes/statute-route";
 
 /** The corpus reads an address resolves through: by document id, and by slug. */
 export type StatuteRouteReads<Statute> = {

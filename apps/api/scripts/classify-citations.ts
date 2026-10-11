@@ -1,3 +1,4 @@
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 /**
  * Batch classify citation polarity.
  *
@@ -36,7 +37,7 @@
  * reviewed citation.
  */
 
-import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import { printError } from "@stll/errors";
 
 import {
   caseLawCitations,
@@ -310,7 +311,7 @@ const main = async () => {
         await Bun.sleep(200);
       }
     } catch (error) {
-      console.error(`[polarity] Failed citation ${citation.id}:`, error);
+      printError(`[polarity] Failed citation ${citation.id}:`, error);
       fallbacks++;
     }
   }
@@ -330,6 +331,6 @@ const main = async () => {
 };
 
 main().catch((error: unknown) => {
-  console.error("Classification failed:", error);
+  printError("Classification failed:", error);
   process.exit(1);
 });

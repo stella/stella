@@ -15,6 +15,7 @@ import HardBreak from "@tiptap/extension-hard-break";
 import Paragraph from "@tiptap/extension-paragraph";
 import Text from "@tiptap/extension-text";
 import { Placeholder, UndoRedo } from "@tiptap/extensions";
+import { closeHistory } from "@tiptap/pm/history";
 import type {
   EditorState,
   Plugin,
@@ -34,6 +35,7 @@ import {
 } from "@stll/api-contract/chat-file-types";
 import { CHAT_CONTEXT_FILE_MAX_BYTES } from "@stll/chat-limits";
 import { openFilePicker as openBrowserFilePicker } from "@stll/ui/file-picker";
+import { stellaToast } from "@stll/ui/toast";
 
 import {
   decisionPassageContent,
@@ -41,20 +43,31 @@ import {
 } from "@/components/chat-decision-passage";
 import {
   applyDraftDocToEditor,
+  CHAT_DRAFT_ECHO_META,
   updateCarriesDraftEcho,
 } from "@/components/chat-editor-echo";
 import { createChatComposerDocument } from "@/components/chat-editor-markdown.logic";
-import { readChatPaste } from "@/components/chat-editor-paste.logic";
+import {
+  insertCredentialPasteRequest,
+  readChatPaste,
+} from "@/components/chat-editor-paste.logic";
 import type { ComposerSource } from "@/components/chat-editor-source";
 import { ChatMention } from "@/components/chat-mention-extension";
 import type { ChatMentionOption } from "@/components/chat-mention-extension";
 import { insertChatMention } from "@/components/chat-mention-helpers";
 import {
+  ChatPastedTextAttachments,
   insertPastedTextChip,
+  PASTED_TEXT_ATTACHMENTS_ATTR,
   PastedText,
+  readPastedTextAttachments,
   pastedTextChipContent,
 } from "@/components/chat-pasted-text-extension";
-import type { PastedTextAttrs } from "@/components/chat-pasted-text-extension";
+import type {
+  PastedTextAttachment,
+  PastedTextAttrs,
+} from "@/components/chat-pasted-text-extension";
+import { containsCredentialCandidate } from "@/components/chat-secret-candidate.logic";
 import { ChatAnonDecorations } from "@/components/chat/chat-anon-decorations-extension";
 import {
   mountedEditorFor,
@@ -105,14 +118,17 @@ const POP_DIRECTIONAL_ISOLATE = String.fromCodePoint(8297);
 const isolateBidi = (value: string): string =>
   `${FIRST_STRONG_ISOLATE}${value}${POP_DIRECTIONAL_ISOLATE}`;
 
-type ChatDraftAttachmentBase = {
+type ChatDraftFileAttachment = {
+  type: "file";
   file: File;
   filename: string;
   id: string;
   mimeType: string;
 };
 
-export type ChatDraftAttachment = ChatDraftAttachmentBase;
+export type ChatDraftAttachment =
+  | ChatDraftFileAttachment
+  | PastedTextAttachment;
 
 export type ChatInputDraft = {
   files: ChatDraftAttachment[];
@@ -254,6 +270,7 @@ export type ChatEditorController = {
    */
   placeholder: string;
   removeFile: (id: string) => void;
+  expandPastedText: (id: string) => void;
   /**
    * Replace the prompt. The composer parses its own inline Markdown and has
    * no HTML path, so the input is minted by `composerText` (prose, verbatim)
@@ -637,6 +654,7 @@ export const useChatEditor = ({
   // oxlint-disable-next-line react/refs -- latest-ref mirror: consumed by out-of-render editor handlers, must reflect this render's prop
   suggestedFollowupPromptRef.current = suggestedFollowupPrompt;
   const submitHandlerRef = useRef<(() => Promise<void>) | null>(null);
+  const confirmedCredentialSendRef = useRef(false);
   const fileIdCounterRef = useRef(0);
   const activePluginKeysRef = useRef<(string | PluginKey)[]>([]);
   const editorRef = useRef<Editor | null>(null);
@@ -675,7 +693,15 @@ export const useChatEditor = ({
   // editor through the draft-apply effect below. Freezing the initial doc
   // keeps the option identity-stable so the react binding never re-applies
   // editor options mid-typing (see the `useEditor` call for why that matters).
-  const [initialDraftDoc] = useState(() => draftDoc);
+  const [initialDraftDoc] = useState(() => ({
+    ...draftDoc,
+    attrs: {
+      ...draftDoc.attrs,
+      [PASTED_TEXT_ATTACHMENTS_ATTR]: (
+        draft?.attachments ?? EMPTY_ATTACHMENTS
+      ).filter((attachment) => attachment.type === "pasted_text"),
+    },
+  }));
   const attachments = draft?.attachments ?? EMPTY_ATTACHMENTS;
   const [isEmpty, setIsEmpty] = useState(() =>
     areDraftDocsEqual(draftDoc, EMPTY_CHAT_DRAFT_DOC),
@@ -694,6 +720,23 @@ export const useChatEditor = ({
     isEmptyRef.current = nextIsEmpty;
     setIsEmpty(nextIsEmpty);
   });
+  const showCredentialPasteNotice = useLatestCallback(
+    (targetEditor: Editor) => {
+      stellaToast.warning(t("chat.credentialPasteTitle"), {
+        description: t("chat.credentialPasteDescription"),
+        action: {
+          label: t("chat.credentialPasteAction"),
+          onClick: () => {
+            insertCredentialPasteRequest(
+              targetEditor,
+              t("chat.credentialPasteRequest"),
+            );
+          },
+        },
+      });
+    },
+  );
+  const pastedTextAttachmentsRef = useRef<unknown>(null);
   const attachmentsRef = useRef(attachments);
   // oxlint-disable-next-line react/refs -- latest-ref mirror: read at submit time out-of-render, must hold this render's attachments
   attachmentsRef.current = attachments;
@@ -813,6 +856,25 @@ export const useChatEditor = ({
       // schedule a persist — only genuine document changes do.
       if (!transactions.some((transaction) => transaction.docChanged)) {
         return;
+      }
+
+      const pastedAttachments: unknown =
+        nextEditor.state.doc.attrs[PASTED_TEXT_ATTACHMENTS_ATTR];
+      if (pastedTextAttachmentsRef.current !== pastedAttachments) {
+        pastedTextAttachmentsRef.current = pastedAttachments;
+        const nextAttachments = [
+          ...attachmentsRef.current.filter(
+            (attachment) => attachment.type === "file",
+          ),
+          ...readPastedTextAttachments(pastedAttachments),
+        ];
+        attachmentsRef.current = nextAttachments;
+        const doc = nextEditor.getJSON();
+        getOrCreateWeakSet(editorAuthoredDocsRef).add(doc);
+        setDraft(
+          threadKey,
+          createChatDraftState({ attachments: nextAttachments, doc }),
+        );
       }
 
       if (!isNavigatingHistoryRef.current) {
@@ -938,12 +1000,33 @@ export const useChatEditor = ({
     UndoRedo,
     ChatMention.configure({ deleteTriggerWithBackspace: true }),
     PastedText,
+    ChatPastedTextAttachments,
     // Decorates nothing until a chat surface's anonymization layer
     // stores pairs via `setChatAnonDecorationPairs`. Installed here
     // unconditionally so every surface sharing this editor gets
     // consistent in-editor highlights without a per-mount install.
     ChatAnonDecorations,
   ]);
+
+  const addPastedTextAttachment = useLatestCallback((text: string) => {
+    const targetEditor = editorRef.current;
+    if (!isUsableEditor(targetEditor)) {
+      return;
+    }
+    targetEditor.view.dispatch(
+      closeHistory(targetEditor.state.tr).setDocAttribute(
+        PASTED_TEXT_ATTACHMENTS_ATTR,
+        [
+          ...readPastedTextAttachments(
+            targetEditor.state.doc.attrs[PASTED_TEXT_ATTACHMENTS_ATTR],
+          ),
+          { type: "pasted_text", id: crypto.randomUUID(), text },
+        ],
+      ),
+    );
+    targetEditor.view.dispatch(closeHistory(targetEditor.state.tr));
+    markDraftStarted();
+  });
 
   const [editorProps] = useState<EditorProps>(() => ({
     attributes: (state) => ({
@@ -981,11 +1064,10 @@ export const useChatEditor = ({
           );
           return true;
         case "chip":
-          insertPastedTextChip(targetEditor, {
-            label: "",
-            source: "paste",
-            text: paste.text,
-          });
+          addPastedTextAttachment(paste.text);
+          return true;
+        case "credential":
+          showCredentialPasteNotice(targetEditor);
           return true;
         case "text":
           targetEditor.commands.insertContent(paste.content, {
@@ -1057,6 +1139,8 @@ export const useChatEditor = ({
     extensions,
     onCreate: ({ editor: nextEditor }) => {
       editorRef.current = nextEditor;
+      pastedTextAttachmentsRef.current =
+        nextEditor.state.doc.attrs[PASTED_TEXT_ATTACHMENTS_ATTR];
       applyIsEmpty(nextEditor.isEmpty);
     },
     onUpdate: ({ editor: nextEditor, transaction, appendedTransactions }) => {
@@ -1144,7 +1228,17 @@ export const useChatEditor = ({
       return undefined;
     }
 
-    applyDraftDocToEditor(editor, draftDoc);
+    applyDraftDocToEditor(editor, {
+      ...draftDoc,
+      attrs: {
+        ...draftDoc.attrs,
+        [PASTED_TEXT_ATTACHMENTS_ATTR]: attachmentsRef.current.filter(
+          (attachment) => attachment.type === "pasted_text",
+        ),
+      },
+    });
+    pastedTextAttachmentsRef.current =
+      editor.state.doc.attrs[PASTED_TEXT_ATTACHMENTS_ATTR];
     applyIsEmpty(editor.isEmpty);
     return undefined;
   }, [applyIsEmpty, draftDoc, editor]);
@@ -1224,7 +1318,30 @@ export const useChatEditor = ({
         return;
       }
 
+      const previousPastedAttachments = attachmentsRef.current.filter(
+        (attachment) => attachment.type === "pasted_text",
+      );
+      const nextPastedAttachments = nextAttachments.filter(
+        (attachment) => attachment.type === "pasted_text",
+      );
+      attachmentsRef.current = nextAttachments;
+      if (
+        previousPastedAttachments.length !== nextPastedAttachments.length ||
+        nextPastedAttachments.some(
+          (item, index) => item !== previousPastedAttachments.at(index),
+        )
+      ) {
+        editor.view.dispatch(
+          closeHistory(editor.state.tr).setDocAttribute(
+            PASTED_TEXT_ATTACHMENTS_ATTR,
+            nextPastedAttachments,
+          ),
+        );
+        editor.view.dispatch(closeHistory(editor.state.tr));
+        return;
+      }
       const doc = editor.getJSON();
+      getOrCreateWeakSet(editorAuthoredDocsRef).add(doc);
 
       setDraft(
         threadKey,
@@ -1246,7 +1363,10 @@ export const useChatEditor = ({
       const nextAttachments = [...attachmentsRef.current];
 
       for (const file of Array.from(files)) {
-        if (nextAttachments.length >= CHAT_FILES_PER_MESSAGE) {
+        if (
+          nextAttachments.filter((item) => item.type === "file").length >=
+          CHAT_FILES_PER_MESSAGE
+        ) {
           break;
         }
 
@@ -1256,6 +1376,7 @@ export const useChatEditor = ({
 
         fileIdCounterRef.current += 1;
         nextAttachments.push({
+          type: "file",
           file,
           filename: file.name,
           id: `chat-file-${fileIdCounterRef.current}`,
@@ -1273,8 +1394,44 @@ export const useChatEditor = ({
       updateAttachments(
         attachmentsRef.current.filter((attachment) => attachment.id !== id),
       );
+      focus();
     },
-    [updateAttachments],
+    [focus, updateAttachments],
+  );
+
+  const expandPastedText = useCallback(
+    (id: string) => {
+      if (!isUsableEditor(editor)) {
+        return;
+      }
+      const attachment = attachmentsRef.current.find((item) => item.id === id);
+      if (attachment?.type !== "pasted_text") {
+        return;
+      }
+      // JSON text bypasses clipboard/HTML parsing and retains literal whitespace.
+      editor
+        .chain()
+        .focus()
+        .command(({ tr }) => {
+          closeHistory(tr).setDocAttribute(
+            PASTED_TEXT_ATTACHMENTS_ATTR,
+            readPastedTextAttachments(
+              tr.doc.attrs[PASTED_TEXT_ATTACHMENTS_ATTR],
+            ).filter((item) => item.id !== id),
+          );
+          return true;
+        })
+        .insertContent(
+          { type: "text", text: attachment.text },
+          {
+            applyInputRules: false,
+            applyPasteRules: false,
+          },
+        )
+        .run();
+      editor.view.dispatch(closeHistory(editor.state.tr));
+    },
+    [editor],
   );
 
   const handleDrop = useCallback(
@@ -1345,6 +1502,27 @@ export const useChatEditor = ({
       const doc = editor.getJSON();
       const files = attachmentsRef.current;
 
+      if (
+        !confirmedCredentialSendRef.current &&
+        containsCredentialCandidate(editor.getText())
+      ) {
+        stellaToast.warning(t("chat.credentialSendTitle"), {
+          description: t("chat.credentialSendDescription"),
+          action: {
+            label: t("chat.credentialSendAction"),
+            onClick: () => {
+              confirmedCredentialSendRef.current = true;
+              detached(
+                submitHandlerRef.current?.(),
+                "chat-editor-provider.credential-send-anyway",
+              );
+            },
+          },
+        });
+        return;
+      }
+      confirmedCredentialSendRef.current = false;
+
       if (!html && files.length === 0) {
         return;
       }
@@ -1357,13 +1535,23 @@ export const useChatEditor = ({
       // about to clear.
       debouncedPersistEditorDraft.cancel();
       clearDraft(threadKey);
-      editor.commands.clearContent();
+      attachmentsRef.current = [];
+      editor
+        .chain()
+        .setMeta(CHAT_DRAFT_ECHO_META, true)
+        .command(({ tr }) => {
+          tr.setDocAttribute(PASTED_TEXT_ATTACHMENTS_ATTR, []);
+          return true;
+        })
+        .clearContent()
+        .run();
       applyIsEmpty(true);
       draftStartedThreadKeyRef.current = null;
 
       try {
         await send({ files, html });
       } catch (error) {
+        attachmentsRef.current = files;
         const restoreThreadKey =
           ChatSubmitPreservedError.is(error) &&
           error.restoreThreadKey !== undefined
@@ -1394,6 +1582,7 @@ export const useChatEditor = ({
       editor,
       queryClient,
       setDraft,
+      t,
       threadKey,
     ],
   );
@@ -1417,6 +1606,7 @@ export const useChatEditor = ({
       blur,
       canSubmit,
       editor,
+      expandPastedText,
       focus,
       handleDragOver,
       handleDrop,
@@ -1435,6 +1625,7 @@ export const useChatEditor = ({
       blur,
       canSubmit,
       editor,
+      expandPastedText,
       focus,
       handleDrop,
       handlePaste,

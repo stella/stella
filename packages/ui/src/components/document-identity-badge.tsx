@@ -3,6 +3,7 @@ import { panic } from "better-result";
 import { FileTextIcon } from "../icons";
 import { cn } from "../lib/utils";
 import { CourtBadge } from "./court-badge";
+import type { CourtBadgeSize } from "./court-badge";
 import {
   COURT_TIER_WEIGHT,
   statuteIdentityLabels,
@@ -12,9 +13,10 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "./tooltip";
 
 export const DocumentIdentityBadge = ({
   identity,
+  size,
   title,
 }: DocumentIdentityBadgeProps) => {
-  const content = documentIdentityMark(identity);
+  const content = documentIdentityMark(identity, size);
   if (title === undefined) {
     return content;
   }
@@ -32,11 +34,16 @@ export const DocumentIdentityBadge = ({
 
 type DocumentIdentityBadgeProps = {
   identity: DocumentIdentity;
+  /** Decision chips can fit an inline metadata row. */
+  size?: CourtBadgeSize | undefined;
   /** Omit when the enclosing tab already supplies the full-title tooltip. */
   title?: string | undefined;
 };
 
-function documentIdentityMark(identity: DocumentIdentity) {
+function documentIdentityMark(
+  identity: DocumentIdentity,
+  size: CourtBadgeSize | undefined,
+) {
   switch (identity.kind) {
     case "statute": {
       const labels = statuteIdentityLabels(identity);
@@ -78,6 +85,7 @@ function documentIdentityMark(identity: DocumentIdentity) {
         >
           <CourtBadge
             abbreviation={abbreviation}
+            size={size}
             weight={
               identity.courtTier === undefined
                 ? "outline"

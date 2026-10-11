@@ -1,7 +1,7 @@
 import { panic, Result } from "better-result";
 import { t } from "elysia";
 
-import { TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
+import { MODEL_ROLES, TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
 
 import { organizationSettings } from "@/api/db/schema";
 import {
@@ -31,6 +31,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { createSafeId } from "@/api/lib/branded-types";
+import { OPTIONAL_ANTHROPIC_WORKSPACE_ID_PATTERN } from "@/api/lib/chat/anthropic-config";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { isAllowedBYOKModelForRole } from "@/api/lib/tanstack-ai-models";
 import type { BYOKProvider, ModelRole } from "@/api/lib/tanstack-ai-models";
@@ -43,6 +44,12 @@ const BYOK_PROVIDER_VALUES = TANSTACK_AI_PROVIDERS;
 const providerBody = t.Object({
   provider: t.UnionEnum(BYOK_PROVIDER_VALUES),
   apiKey: t.Optional(t.String({ minLength: 1 })),
+  anthropicWorkspaceId: t.Optional(
+    t.String({
+      maxLength: 256,
+      pattern: OPTIONAL_ANTHROPIC_WORKSPACE_ID_PATTERN,
+    }),
+  ),
   region: t.Optional(
     t.Union([t.Literal("global"), t.Literal("eu"), t.Literal("ch")]),
   ),
@@ -62,12 +69,16 @@ const decisionBody = t.Object({
 
 const updateAIConfigBody = t.Object({
   providers: t.Array(providerBody, { minItems: 1 }),
-  overrideModels: t.Object({
-    fast: modelSelectionBody,
-    chat: modelSelectionBody,
-    reasoning: modelSelectionBody,
-    pdf: modelSelectionBody,
-  }),
+  overrideModels: t.Optional(
+    t.Nullable(
+      t.Object({
+        fast: t.Optional(modelSelectionBody),
+        chat: t.Optional(modelSelectionBody),
+        reasoning: t.Optional(modelSelectionBody),
+        pdf: t.Optional(modelSelectionBody),
+      }),
+    ),
+  ),
   decision: t.Optional(t.Nullable(decisionBody)),
 });
 
@@ -147,6 +158,7 @@ const updateAIConfig = createSafeRootHandler(
     const modelResult = normalizeOverrideModels(
       body.overrideModels,
       providerResult.providers,
+      existingConfig?.overrideModels ?? null,
     );
     if (!modelResult.valid) {
       return Result.err(
@@ -172,12 +184,7 @@ const updateAIConfig = createSafeRootHandler(
       );
     }
 
-    const newKeyProviders = new Set<BYOKProvider>();
-    for (const provider of body.providers) {
-      if (provider.apiKey) {
-        newKeyProviders.add(provider.provider);
-      }
-    }
+    const newKeyProviders = changedProviderKeys(body.providers, existingConfig);
 
     const providersToValidate = providerResult.providers.filter(
       (providerConfig) =>
@@ -207,10 +214,17 @@ const updateAIConfig = createSafeRootHandler(
       return [`${providerConfig.provider}: ${result.error}`];
     });
 
+    const failedResults = validationResults.filter((result) => !result.valid);
+    const firstErrorCode = failedResults.at(0)?.code;
+    const setupErrorCode = failedResults.every(
+      (result) => result.code === firstErrorCode,
+    )
+      ? firstErrorCode
+      : undefined;
     if (failures.length > 0) {
       return Result.err(
         new HandlerError({
-          code: AI_CONFIG_ERROR_CODE.providerValidationFailed,
+          code: setupErrorCode ?? AI_CONFIG_ERROR_CODE.providerValidationFailed,
           status: 400,
           message: failures.join("; "),
         }),
@@ -304,7 +318,32 @@ type ValidationResult = ProviderProbeResult;
 type ProviderConfigInput = {
   provider: BYOKProvider;
   apiKey?: string | undefined;
+  anthropicWorkspaceId?: string | undefined;
   region?: DataRegion | undefined;
+};
+
+const changedProviderKeys = (
+  providers: readonly ProviderConfigInput[],
+  existingConfig: OrgAIConfig | undefined,
+) => {
+  const newKeyProviders = new Set<BYOKProvider>();
+  for (const provider of providers) {
+    const existingProvider = existingConfig?.providers.find(
+      (candidate) => candidate.provider === provider.provider,
+    );
+    const existingAnthropicWorkspaceId =
+      existingProvider?.provider === "anthropic"
+        ? existingProvider.anthropicWorkspaceId
+        : undefined;
+    const workspaceIdChanged =
+      provider.anthropicWorkspaceId !== undefined &&
+      (provider.anthropicWorkspaceId.trim() || undefined) !==
+        existingAnthropicWorkspaceId;
+    if (provider.apiKey || workspaceIdChanged) {
+      newKeyProviders.add(provider.provider);
+    }
+  }
+  return newKeyProviders;
 };
 
 type TanStackBYOKProviderConfig = OrgAIProviderConfig & {
@@ -370,6 +409,32 @@ const resolveProviderConfigs = (
       };
     }
 
+    if (providerInput.provider === "anthropic") {
+      const existingAnthropicWorkspaceId =
+        existingProvider?.provider === "anthropic"
+          ? existingProvider.anthropicWorkspaceId
+          : undefined;
+      let anthropicWorkspaceId = providerInput.apiKey
+        ? undefined
+        : existingAnthropicWorkspaceId;
+      if (providerInput.anthropicWorkspaceId !== undefined) {
+        anthropicWorkspaceId =
+          providerInput.anthropicWorkspaceId.trim() || undefined;
+      }
+      resolvedProviders.push({
+        provider: "anthropic",
+        apiKey,
+        region,
+        anthropicWorkspaceId,
+      });
+      continue;
+    }
+    if (providerInput.anthropicWorkspaceId !== undefined) {
+      return {
+        valid: false,
+        error: "Workspace ID is supported only for Anthropic",
+      };
+    }
     resolvedProviders.push({
       provider: providerInput.provider,
       apiKey,
@@ -385,20 +450,21 @@ type OverrideModelSelectionInput = {
   modelId: string;
 };
 
-type OverrideModelsInput = Record<ModelRole, OverrideModelSelectionInput>;
+type OverrideModelsInput = Partial<
+  Record<ModelRole, OverrideModelSelectionInput | undefined>
+>;
 
 type OverrideModelsResult =
-  | { valid: true; overrideModels: Record<ModelRole, OrgAIModelSelection> }
+  | { valid: true; overrideModels: OrgAIConfig["overrideModels"] }
   | { valid: false; error: string };
 
 const normalizeRoleSelection = (
   role: ModelRole,
-  overrideModels: OverrideModelsInput,
+  selection: OverrideModelSelectionInput,
   configuredProviders: ReadonlySet<BYOKProvider>,
 ):
   | { valid: true; selection: OrgAIModelSelection }
   | { valid: false; error: string } => {
-  const selection = overrideModels[role];
   const modelId = selection.modelId.trim();
 
   if (!modelId) {
@@ -434,54 +500,51 @@ const normalizeRoleSelection = (
 };
 
 const normalizeOverrideModels = (
-  overrideModels: OverrideModelsInput,
+  overrideModels: OverrideModelsInput | null | undefined,
   providers: readonly TanStackBYOKProviderConfig[],
+  existing: OrgAIConfig["overrideModels"],
 ): OverrideModelsResult => {
   const configuredProviders = new Set(
-    providers.map((providerConfig) => providerConfig.provider),
+    providers.map(({ provider }) => provider),
   );
-
-  const chat = normalizeRoleSelection(
-    "chat",
-    overrideModels,
-    configuredProviders,
-  );
-  if (!chat.valid) {
-    return chat;
+  const selections = overrideModels === undefined ? existing : overrideModels;
+  if (selections === null) {
+    return { valid: true, overrideModels: null };
   }
-  const fast = normalizeRoleSelection(
-    "fast",
-    overrideModels,
-    configuredProviders,
-  );
-  if (!fast.valid) {
-    return fast;
+  const selectionsByRole: [ModelRole, OrgAIModelSelection][] = [];
+  for (const role of MODEL_ROLES) {
+    const selection = selections[role];
+    if (selection === undefined) {
+      continue;
+    }
+    const provider = TANSTACK_AI_PROVIDERS.find(
+      (candidate) => candidate === selection.provider,
+    );
+    if (provider === undefined || !configuredProviders.has(provider)) {
+      if (overrideModels === undefined) {
+        continue;
+      }
+      return {
+        valid: false,
+        error: `Model selection for ${role} uses an unconfigured provider`,
+      };
+    }
+    const result = normalizeRoleSelection(
+      role,
+      { provider, modelId: selection.modelId },
+      configuredProviders,
+    );
+    if (!result.valid) {
+      return result;
+    }
+    selectionsByRole.push([role, result.selection]);
   }
-  const reasoning = normalizeRoleSelection(
-    "reasoning",
-    overrideModels,
-    configuredProviders,
-  );
-  if (!reasoning.valid) {
-    return reasoning;
-  }
-  const pdf = normalizeRoleSelection(
-    "pdf",
-    overrideModels,
-    configuredProviders,
-  );
-  if (!pdf.valid) {
-    return pdf;
-  }
-
   return {
     valid: true,
-    overrideModels: {
-      chat: chat.selection,
-      fast: fast.selection,
-      reasoning: reasoning.selection,
-      pdf: pdf.selection,
-    },
+    overrideModels:
+      selectionsByRole.length === 0
+        ? null
+        : Object.fromEntries(selectionsByRole),
   };
 };
 
@@ -519,6 +582,10 @@ const validateProviderKey = async (
     try: async () =>
       await probeProvider({
         apiKey: providerConfig.apiKey,
+        anthropicWorkspaceId:
+          providerConfig.provider === "anthropic"
+            ? providerConfig.anthropicWorkspaceId
+            : undefined,
         permit,
         provider: providerConfig.provider,
         timeoutMs: SETTINGS_PROBE_TIMEOUT_MS,

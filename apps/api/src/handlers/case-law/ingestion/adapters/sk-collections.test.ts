@@ -2,7 +2,7 @@ import { PDF } from "@libpdf/core";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import { courtAbbreviation } from "@stll/api-contract/court-abbreviations";
+import { courtAbbreviation } from "@stll/api-contract/case-law-court-abbreviations";
 
 import {
   joinSkCollectionRecords,

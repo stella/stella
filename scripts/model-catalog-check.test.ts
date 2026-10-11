@@ -155,6 +155,7 @@ const runRefresh = async (
     | "capabilities"
     | "unexpected"
     | "failed",
+  existingChangeset?: string,
 ) => {
   const directory = await mkdtemp(path.join(tmpdir(), "catalog-refresh-"));
   directories.push(directory);
@@ -182,9 +183,15 @@ const runRefresh = async (
     path.join(directory, "packages/ai-catalog/src/capabilities.gen.ts"),
     "// capabilities\n",
   );
+  if (existingChangeset !== undefined) {
+    await Bun.write(
+      path.join(directory, ".changeset/model-catalog-refresh.md"),
+      existingChangeset,
+    );
+  }
   for (const command of [
     ["git", "init", "-q"],
-    ["git", "add", "packages"],
+    ["git", "add", "packages", ".changeset"],
     [
       "git",
       "-c",
@@ -280,6 +287,44 @@ fi
 };
 
 describe("scheduled catalog refresh", () => {
+  test.each([
+    ["LF", '---\n"@stll/ai-catalog": patch\n---\n\nAdd a new model route.\n'],
+    [
+      "CRLF",
+      '---\r\n"@stll/ai-catalog": patch\r\n---\r\n\r\nAdd a new model route.\r\n',
+    ],
+    ["no frontmatter", "Add a new model route.\n"],
+    [
+      "extra package",
+      '---\n"@stll/ai-catalog": patch\n"@stll/web": patch\n---\n\nRefresh upstream model rates and request capabilities.\n',
+    ],
+    [
+      "major bump",
+      '---\n"@stll/ai-catalog": major\n---\n\nRefresh upstream model rates and request capabilities.\n',
+    ],
+  ])(
+    "a hand-written changeset (%s) at the refresh path stops the refresh",
+    async (_, note) => {
+      const result = await runRefresh("rates", note);
+      expect(result.exitCode).toBe(1);
+      expect(result.log).toContain("move it to its own changeset file");
+      expect(await result.changeset.text()).toBe(note);
+    },
+  );
+
+  test("the refresh replaces its own earlier changesets", async () => {
+    for (const earlier of [
+      "---\n---\n",
+      '---\n"@stll/ai-catalog": patch\n---\n\nRefresh upstream model rates and request capabilities.\n',
+    ]) {
+      const result = await runRefresh("rates", earlier);
+      expect(result.exitCode, result.log).toBe(0);
+      expect(
+        parseChangesetEntry(await result.changeset.text()).packages,
+      ).toEqual(["@stll/ai-catalog"]);
+    }
+  });
+
   test("unchanged inputs produce no proposal", async () => {
     const result = await runRefresh("unchanged");
     expect(result.exitCode).toBe(0);

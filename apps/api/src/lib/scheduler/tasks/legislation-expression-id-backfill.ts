@@ -3,6 +3,7 @@ import { and, asc, eq, exists, gt, isNull, lte, not, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 import type { Verdict } from "@stll/db-load-gate/health";
+import { sanitizeErrorAttributesForOutput } from "@stll/errors";
 import { Temporal } from "@stll/time";
 import { isUuid } from "@stll/uuid-codec";
 
@@ -353,14 +354,17 @@ export const createLegislationExpressionIdBackfill =
     });
     if (settled.isErr()) {
       if (settled.error instanceof BackfillHeldError) {
-        logger.info("scheduler.legislation_expression_ids_held", {
-          ...(settled.error.holdUntil === null
-            ? {}
-            : { holdUntil: settled.error.holdUntil }),
-          ...(settled.error.heldSince === null
-            ? {}
-            : { heldSince: settled.error.heldSince }),
-        });
+        logger.info(
+          "scheduler.legislation_expression_ids_held",
+          sanitizeErrorAttributesForOutput({
+            ...(settled.error.holdUntil === null
+              ? {}
+              : { holdUntil: settled.error.holdUntil }),
+            ...(settled.error.heldSince === null
+              ? {}
+              : { heldSince: settled.error.heldSince }),
+          }),
+        );
         return undefined;
       }
       return Result.err(

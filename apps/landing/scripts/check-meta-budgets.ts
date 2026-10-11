@@ -132,6 +132,7 @@ const staticPageFiles = [
   { page: "/press", file: "src/pages/press.astro" },
   { page: "/privacy", file: "src/pages/privacy.astro" },
   { page: "/security", file: "src/pages/security.astro" },
+  { page: "/support", file: "src/pages/support.astro" },
   { page: "/terms", file: "src/pages/terms.astro" },
 ];
 

@@ -100,6 +100,7 @@ const renewDesktopAccount = createSafeBoundedPublicHandler(
         organizationId: context.organizationId,
         currentKey: authorization.slice(7),
         successorKey: body.successorKey,
+        consumedProof: context.consumedProof,
         recordAuditEvent,
       }),
     );

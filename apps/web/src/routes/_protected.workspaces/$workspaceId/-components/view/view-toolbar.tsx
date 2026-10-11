@@ -78,6 +78,7 @@ import {
   PLAYBOOK_PICKER_LIMIT,
   playbooksOptions,
 } from "@/lib/knowledge/queries";
+import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 import { toSafeId } from "@/lib/safe-id";
 import type {
   ViewLayout,
@@ -781,35 +782,45 @@ const RunPlaybookControl = ({ workspaceId }: RunPlaybookControlProps) => {
 
   return (
     <Menu onOpenChange={setOpen} open={open}>
-      <MenuTrigger
-        render={
-          <Button
-            aria-label={t("workspaces.playbooks.run")}
-            disabled={isRunning}
-            size="icon-xs"
-            title={t("workspaces.playbooks.run")}
-            variant="ghost"
-          />
-        }
-      >
-        <PlayIcon className="size-3.5" />
-      </MenuTrigger>
+      <CapabilityAction action={{ capability: "ai" }} surface="control">
+        {(capabilityProps) => (
+          <MenuTrigger
+            render={
+              <Button
+                aria-label={t("workspaces.playbooks.run")}
+                disabled={isRunning}
+                size="icon-xs"
+                title={t("workspaces.playbooks.run")}
+                variant="ghost"
+              />
+            }
+            {...capabilityProps}
+          >
+            <PlayIcon className="size-3.5" />
+          </MenuTrigger>
+        )}
+      </CapabilityAction>
       <MenuPopup>
-        <MenuItem
-          closeOnClick={false}
-          disabled={isRunning}
-          onClick={() => {
-            detached(handleAutoRun(), "view-toolbar.auto-run");
-          }}
-        >
-          <AiActionIcon className="size-3.5" />
-          <span className="flex flex-col">
-            <span>{t("workspaces.playbooks.autoRun")}</span>
-            <span className="text-muted-foreground text-xs">
-              {t("workspaces.playbooks.autoRunHint")}
-            </span>
-          </span>
-        </MenuItem>
+        <CapabilityAction action={{ capability: "ai" }} surface="menu">
+          {(capabilityProps) => (
+            <MenuItem
+              closeOnClick={false}
+              disabled={isRunning}
+              onClick={() => {
+                detached(handleAutoRun(), "view-toolbar.auto-run");
+              }}
+              {...capabilityProps}
+            >
+              <AiActionIcon className="size-3.5" />
+              <span className="flex flex-col">
+                <span>{t("workspaces.playbooks.autoRun")}</span>
+                <span className="text-muted-foreground text-xs">
+                  {t("workspaces.playbooks.autoRunHint")}
+                </span>
+              </span>
+            </MenuItem>
+          )}
+        </CapabilityAction>
         <MenuSeparator />
         {/* Applies to the individual playbooks below; auto-run always
             materializes columns. */}
@@ -842,16 +853,24 @@ const RunPlaybookControl = ({ workspaceId }: RunPlaybookControlProps) => {
           <MenuItem disabled>{t("knowledge.playbooks.empty")}</MenuItem>
         )}
         {playbooks.map((playbook) => (
-          <MenuItem
-            closeOnClick={false}
-            disabled={isRunning}
+          <CapabilityAction
+            action={{ capability: "ai" }}
+            surface="menu"
             key={playbook.id}
-            onClick={() => {
-              detached(handleRun(playbook.id), "view-toolbar.run");
-            }}
           >
-            {playbook.name}
-          </MenuItem>
+            {(capabilityProps) => (
+              <MenuItem
+                closeOnClick={false}
+                disabled={isRunning}
+                onClick={() => {
+                  detached(handleRun(playbook.id), "view-toolbar.run");
+                }}
+                {...capabilityProps}
+              >
+                {playbook.name}
+              </MenuItem>
+            )}
+          </CapabilityAction>
         ))}
       </MenuPopup>
     </Menu>

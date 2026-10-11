@@ -28,6 +28,7 @@ type SafeOutboundFetchCall = {
   url: URL;
   headers: Headers;
   method: string;
+  maxBytes: number;
 };
 
 type MockResponse =
@@ -51,7 +52,12 @@ const mockSafeOutboundFetchBytes = async (opts: {
 }): Promise<Result<SafeOutboundFetchResponse, SafeOutboundFetchError>> => {
   const url = opts.url instanceof URL ? opts.url : new URL(opts.url);
   const headers = new Headers(opts.headers);
-  calls.push({ url, headers, method: opts.method ?? "GET" });
+  calls.push({
+    url,
+    headers,
+    method: opts.method ?? "GET",
+    maxBytes: opts.maxBytes,
+  });
 
   if (nextResponse.kind === "error") {
     return Result.err(
@@ -64,6 +70,13 @@ const mockSafeOutboundFetchBytes = async (opts: {
       ? nextResponse.body
       : JSON.stringify(nextResponse.body),
   );
+  if (bodyBytes.byteLength > opts.maxBytes) {
+    return Result.err(
+      new MockSafeOutboundFetchError({
+        message: "Response exceeds transport limit",
+      }),
+    );
+  }
   return Result.ok({
     body: bodyBytes.buffer.slice(
       bodyBytes.byteOffset,
@@ -342,5 +355,192 @@ describe("probeProvider", () => {
       valid: false,
       error: "Anthropic rejected the key (HTTP 401): invalid_api_key",
     });
+  });
+});
+
+describe("Anthropic workspace-scoped provider checks", () => {
+  test("checks a user key with the workspace header without generation", async () => {
+    expect(
+      await probeProvider({
+        provider: "anthropic",
+        apiKey: "sk-ant-usr-fixture",
+        anthropicWorkspaceId: "wrk_fixture",
+      }),
+    ).toEqual({ valid: true });
+    expect(calls).toHaveLength(1);
+    expect(calls.at(0)?.url.pathname).toBe("/v1/models");
+    expect(calls.at(0)?.method).toBe("GET");
+    expect(calls.at(0)?.headers.get("anthropic-workspace-id")).toBe(
+      "wrk_fixture",
+    );
+    expect(calls.at(0)?.headers.get("x-api-key")).toBe("sk-ant-usr-fixture");
+  });
+
+  test("returns the full provider diagnostic and typed workspace guidance", async () => {
+    const message =
+      "This API key is not scoped to a workspace, so this request must include the anthropic-workspace-id header with the ID of the workspace to use.";
+    nextResponse = {
+      kind: "ok",
+      status: 400,
+      body: {
+        type: "error",
+        error: { type: "invalid_request_error", message },
+      },
+    };
+    expect(
+      await probeProvider({
+        provider: "anthropic",
+        apiKey: "sk-ant-usr-fixture",
+      }),
+    ).toEqual({
+      valid: false,
+      code: "ai_config_anthropic_workspace_required",
+      error: `Anthropic rejected the key (HTTP 400): ${message}`,
+    });
+    expect(calls.at(0)?.url.pathname).toBe("/v1/models");
+  });
+
+  test("keeps workspace-scoped keys unchanged", async () => {
+    expect(
+      await probeProvider({
+        provider: "anthropic",
+        apiKey: "sk-ant-api03-fixture",
+      }),
+    ).toEqual({ valid: true });
+    expect(calls.at(0)?.headers.has("anthropic-workspace-id")).toBe(false);
+  });
+
+  test("keeps long unknown provider diagnostics in full", async () => {
+    const message = "Provider diagnostic ".repeat(40);
+    nextResponse = {
+      kind: "ok",
+      status: 401,
+      body: { error: { type: "authentication_error", message } },
+    };
+    expect(
+      await probeProvider({
+        provider: "anthropic",
+        apiKey: "sk-ant-api03-fixture",
+      }),
+    ).toEqual({
+      valid: false,
+      error: `Anthropic rejected the key (HTTP 401): ${message}`,
+    });
+  });
+
+  test("sends Google keys in a header rather than the URL", async () => {
+    await probeProvider({ provider: "google", apiKey: "google-fixture-key" });
+    expect(calls.at(0)?.url.search).toBe("");
+    expect(calls.at(0)?.headers.get("x-goog-api-key")).toBe(
+      "google-fixture-key",
+    );
+  });
+});
+
+test("provider diagnostics retain their full reason while echoed keys are removed", async () => {
+  const apiKey = "fixture-key-without-provider-prefix";
+  const message = `Key ${apiKey} rejected. ${"Provider reason ".repeat(40)}`;
+  nextResponse = {
+    kind: "ok",
+    status: 401,
+    body: { error: { type: "authentication_error", message } },
+  };
+  const result = await probeProvider({ provider: "anthropic", apiKey });
+  expect(result).toEqual({
+    valid: false,
+    error: `Anthropic rejected the key (HTTP 401): ${message.replace(apiKey, "[redacted-secret]")}`,
+  });
+});
+
+test("provider transport is bounded without shortening accepted diagnostic text", async () => {
+  const message = "Neutral full provider diagnostic ".repeat(1000);
+  nextResponse = { kind: "ok", status: 400, body: { error: { message } } };
+  const result = await probeProvider({
+    provider: "openai",
+    apiKey: "fixture-key",
+  });
+  expect(calls.at(0)?.maxBytes).toBe(1_000_000);
+  expect(result).toMatchObject({
+    valid: false,
+    error: expect.stringContaining(message),
+  });
+});
+
+const largeModelListOptions = [
+  { provider: "openai", apiKey: "fixture-key" },
+  { provider: "google", apiKey: "fixture-key" },
+  { provider: "bedrock", apiKey: "fixture-key" },
+  { provider: "mistral", apiKey: "fixture-key" },
+  { provider: "anthropic", apiKey: "fixture-key" },
+  { provider: "openrouter", apiKey: "fixture-key" },
+  {
+    provider: "azure_foundry",
+    apiKey: "fixture-key",
+    endpoint: "https://example.openai.azure.com/openai/v1",
+    expectedAzureDeployments: ["fixture-deployment"],
+  },
+  {
+    provider: "huggingface",
+    apiKey: "fixture-key",
+    endpoint: "https://example.endpoints.huggingface.cloud/v1",
+  },
+] as const satisfies readonly Omit<
+  ProbeProviderOptions,
+  "fetchBytes" | "permit"
+>[];
+
+const assertLargeModelList = async (
+  options: Omit<ProbeProviderOptions, "fetchBytes" | "permit">,
+) => {
+  const body = {
+    data: [
+      {
+        id: "fixture-deployment",
+        description: "Model details ".repeat(10_000),
+      },
+    ],
+  };
+  expect(
+    new TextEncoder().encode(JSON.stringify(body)).byteLength,
+  ).toBeGreaterThan(64 * 1024);
+  nextResponse = { kind: "ok", status: 200, body };
+  expect(await probeProvider(options)).toEqual({ valid: true });
+  expect(calls.at(0)?.maxBytes).toBe(1_000_000);
+};
+
+const assertOversizedError = async (
+  options: Omit<ProbeProviderOptions, "fetchBytes" | "permit">,
+) => {
+  const message = "Neutral provider diagnostic ".repeat(3000);
+  nextResponse = { kind: "ok", status: 400, body: { error: { message } } };
+  const result = await probeProvider(options);
+  expect(JSON.stringify(result)).not.toContain("Neutral provider diagnostic");
+  expect(result).toMatchObject({
+    valid: false,
+    error: expect.stringContaining("exceeding the 64 KiB diagnostic limit"),
+  });
+};
+
+for (const options of largeModelListOptions) {
+  test(`accepts successful model lists above 64 KiB for ${options.provider}`, async () =>
+    assertLargeModelList(options));
+  test(`refuses oversized error diagnostics without truncation for ${options.provider}`, async () =>
+    assertOversizedError(options));
+}
+
+test("retains a full short diagnostic from a large error response", async () => {
+  const message = "The configured project does not have access to this model.";
+  const body = {
+    error: { message, metadata: "Neutral error metadata ".repeat(5000) },
+  };
+  expect(
+    new TextEncoder().encode(JSON.stringify(body)).byteLength,
+  ).toBeGreaterThan(64 * 1024);
+  nextResponse = { kind: "ok", status: 403, body };
+  expect(
+    await probeProvider({ provider: "openai", apiKey: "fixture-key" }),
+  ).toEqual({
+    valid: false,
+    error: `OpenAI rejected the key (HTTP 403): ${message}`,
   });
 });

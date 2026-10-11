@@ -152,7 +152,10 @@ const detail = (status: PlaybookDetailData["status"]) =>
     positionSources: [],
   }) satisfies PlaybookDetailData;
 
-const mountEditor = async (status: PlaybookDetailData["status"]) => {
+const mountEditor = async (
+  status: PlaybookDetailData["status"],
+  hostMode: "pane" | "page" = "pane",
+) => {
   fixtureDetail = detail(status);
   const tabId = `lifecycle-${status}`;
   const client = new QueryClient({
@@ -198,13 +201,26 @@ const mountEditor = async (status: PlaybookDetailData["status"]) => {
             organizationId={ORGANIZATION_ID}
             key={payload.playbookId}
             playbookId={payload.playbookId}
-            host={{
-              type: "pane",
-              tabId,
-              isTabOpen: (id) =>
-                store.getState().tabs.some((tab) => tab.id === id),
-              onClose: () => store.getState().closeTab(tabId),
-            }}
+            host={
+              hostMode === "page"
+                ? {
+                    type: "page",
+                    onBack: () => store.getState().closeTab(tabId),
+                    onSaved: () => undefined,
+                    tourAnchors: {
+                      back: () => ({}),
+                      basics: {},
+                      addPosition: {},
+                    },
+                  }
+                : {
+                    type: "pane",
+                    tabId,
+                    isTabOpen: (id) =>
+                      store.getState().tabs.some((tab) => tab.id === id),
+                    onClose: () => store.getState().closeTab(tabId),
+                  }
+            }
           />
         )}
       </>
@@ -416,6 +432,7 @@ type PropertyBackend = {
   rows: Map<string, PlaybookDetailData>;
   pending: PropertyRequest[];
   putCount: number;
+  missingMethods: string[];
   reads: { playbookId: string; fields: LifecycleFields; updatedAt: string }[];
   writes: {
     fields: LifecycleFields;
@@ -470,7 +487,14 @@ const handlePropertyRequest = async ({
 }: PropertyRequestOptions) => {
   const playbookId = url.pathname.split("/").at(-1) ?? "";
   const row = backend.rows.get(playbookId);
-  if (method === "GET" && row !== undefined) {
+  if (method === "PUT") {
+    backend.putCount += 1;
+  }
+  if (row === undefined) {
+    backend.missingMethods.push(method);
+    return Response.json({ message: "Playbook not found" }, { status: 404 });
+  }
+  if (method === "GET") {
     backend.reads.push({
       playbookId,
       fields: { name: row.name, description: row.description ?? "" },
@@ -478,11 +502,11 @@ const handlePropertyRequest = async ({
     });
     return Response.json(row);
   }
-  if (method === "DELETE" && row !== undefined) {
+  if (method === "DELETE") {
     backend.rows.delete(playbookId);
     return Response.json({});
   }
-  if (method !== "PUT" || row === undefined) {
+  if (method !== "PUT") {
     return Response.json(
       { message: "Unexpected model-test request" },
       { status: 404 },
@@ -495,7 +519,6 @@ const handlePropertyRequest = async ({
     body = await input.clone().text();
   }
   const response = Promise.withResolvers<Response>();
-  backend.putCount += 1;
   backend.pending.push({
     playbookId,
     ...readPropertyBody(body),
@@ -1013,7 +1036,7 @@ const answerLifecycle = async (
     });
     return;
   }
-  if (model.confirmation === "discard") {
+  if (model.confirmation === "discard" || model.mode === "hidden") {
     model.mode = "closed";
     model.confirmation = "none";
     await act(async () => {
@@ -1026,10 +1049,6 @@ const answerLifecycle = async (
     return;
   }
   const button = real.view.getByRole("button", { name: messages.common.save });
-  if (model.mode === "hidden") {
-    expect(button).toHaveProperty("disabled", true);
-    return;
-  }
   if (lifecycleDirty(model) || model.pending.length > 0) {
     model.unacknowledged.push({ ...model.draft });
     model.pending.push({
@@ -1272,12 +1291,169 @@ class LifecycleCommand implements fc.AsyncCommand<
   }
 }
 
+const disposeLifecycleFixture = async (real: LifecycleReal) => {
+  await act(async () => {
+    cancelPlaybookPaneLeave();
+    real.view.unmount();
+  });
+  while (real.backend.pending.length > 0) {
+    const pending = real.backend.pending.splice(0);
+    await act(async () => {
+      for (const request of pending) {
+        request.response.resolve(
+          Response.json({ message: "Trial disposed" }, { status: 503 }),
+        );
+      }
+    });
+    await settleLifecycle();
+  }
+  for (const dispose of cleanups.splice(0)) {
+    dispose();
+  }
+  propertyBackend = null;
+  jest.useRealTimers();
+};
+
+test("a failed page-host save becomes clean after reverting to freshly confirmed server values", async () => {
+  const backend: PropertyBackend = {
+    clock: 0,
+    rows: new Map([[PLAYBOOK_ID, detail("draft")]]),
+    pending: [],
+    putCount: 0,
+    missingMethods: [],
+    reads: [],
+    writes: [],
+  };
+  propertyBackend = backend;
+  const mounted = await mountEditor("draft", "page");
+  const real: LifecycleReal = { ...mounted, backend };
+  jest.useFakeTimers();
+  try {
+    await editLifecycleField(real, "name", "Unpersisted page name");
+    await editLifecycleField(
+      real,
+      "description",
+      "Unpersisted page description",
+    );
+    expect(hasUnsavedWork()).toBe(true);
+    await act(async () => {
+      fireEvent.click(
+        mounted.view.getByRole("button", { name: messages.common.save }),
+      );
+    });
+    await settleLifecycle();
+    const request = backend.pending.shift();
+    if (request === undefined) {
+      throw new TypeError("A page Save must send an actual request");
+    }
+    const readsBefore = backend.reads.length;
+    await act(async () => {
+      request.response.resolve(
+        Response.json({ message: "Save unavailable" }, { status: 503 }),
+      );
+    });
+    await settleLifecycle();
+    expect(backend.reads.length).toBeGreaterThan(readsBefore);
+    await editLifecycleField(real, "name", detail("draft").name);
+    await editLifecycleField(real, "description", detail("draft").description);
+    await settleLifecycle();
+    expect(hasUnsavedWork()).toBe(false);
+    expect(
+      mounted.view.getByRole("button", { name: messages.common.save }),
+    ).toHaveProperty("disabled", true);
+    const unload = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(unload);
+    expect(unload.defaultPrevented).toBe(false);
+    expect(backend.putCount).toBe(1);
+  } finally {
+    await disposeLifecycleFixture(real);
+  }
+});
+
+test("a dirty real pane deleted elsewhere closes only after confirming discard and clears parking", async () => {
+  const backend: PropertyBackend = {
+    clock: 0,
+    rows: new Map([[PLAYBOOK_ID, detail("draft")]]),
+    pending: [],
+    putCount: 0,
+    missingMethods: [],
+    reads: [],
+    writes: [],
+  };
+  propertyBackend = backend;
+  const mounted = await mountEditor("draft");
+  const real: LifecycleReal = { ...mounted, backend };
+  jest.useFakeTimers();
+  try {
+    const finalDraftName = "Deleted playbook draft to discard";
+    await editLifecycleField(real, "name", finalDraftName);
+    backend.rows.delete(PLAYBOOK_ID);
+    await act(async () => {
+      await mounted.client.refetchQueries({
+        queryKey: playbookDetailOptions(ORGANIZATION_ID, PLAYBOOK_ID).queryKey,
+        exact: true,
+      });
+    });
+    await settleLifecycle();
+    expect(
+      mounted.view.getByText(messages.knowledge.playbooks.deletedElsewhere),
+    ).toBeDefined();
+    expect(backend.missingMethods).toContain("GET");
+    expect(backend.missingMethods).toContain("PUT");
+    expect(readParkedPlaybookPane(mounted.tabId, PLAYBOOK_ID)?.draft.name).toBe(
+      finalDraftName,
+    );
+    await act(async () => {
+      fireEvent.click(
+        mounted.view.getByRole("button", { name: messages.common.close }),
+      );
+    });
+    expect(usePlaybookPaneLeave.getState()).toMatchObject({
+      type: "confirm",
+      phase: "ready",
+      leaveState: "save-failed",
+    });
+    expect(mounted.store.getState().tabs.map((tab) => tab.id)).toEqual([
+      mounted.tabId,
+    ]);
+    await act(async () => {
+      fireEvent.click(
+        mounted.view.getByRole("button", {
+          name: messages.common.goBackToEditing,
+        }),
+      );
+    });
+    expect(readParkedPlaybookPane(mounted.tabId, PLAYBOOK_ID)?.draft.name).toBe(
+      finalDraftName,
+    );
+    await act(async () => {
+      fireEvent.click(
+        mounted.view.getByRole("button", { name: messages.common.close }),
+      );
+    });
+    await act(async () => {
+      fireEvent.click(
+        mounted.view.getByRole("button", {
+          name: messages.clauses.leaveAndDiscard,
+        }),
+      );
+    });
+    await settleLifecycle();
+    expect(mounted.store.getState().tabs).toHaveLength(0);
+    expect(readParkedPlaybookPane(mounted.tabId, PLAYBOOK_ID)).toBeNull();
+    expect(hasUnsavedWork()).toBe(false);
+  } finally {
+    await disposeLifecycleFixture(real);
+  }
+});
+
 test("a failing real editor autosave stays paused after successful verification until explicit Retry", async () => {
   const backend: PropertyBackend = {
     clock: 0,
     rows: new Map([[PLAYBOOK_ID, detail("draft")]]),
     pending: [],
     putCount: 0,
+    missingMethods: [],
     reads: [],
     writes: [],
   };
@@ -1412,6 +1588,7 @@ test(
             rows: new Map([[PLAYBOOK_ID, detail("approved")]]),
             pending: [],
             putCount: 0,
+            missingMethods: [],
             writes: [],
             reads: [],
           };

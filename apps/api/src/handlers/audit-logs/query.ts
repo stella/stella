@@ -14,7 +14,10 @@ import {
   ORGANIZATION_AUDIT_LOG_RESOURCE_ID,
 } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
-import { projectAuditReadChanges } from "@/api/lib/audit-log-details";
+import {
+  auditReadChangesSql,
+  projectAuditReadChanges,
+} from "@/api/lib/audit-log-details";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   tPaginationCursor,
@@ -226,7 +229,10 @@ export const queryAuditLogPage = async function* ({
           action: auditLogs.action,
           resourceType: auditLogs.resourceType,
           resourceId: auditLogs.resourceId,
-          changes: auditLogs.changes,
+          changes: auditReadChangesSql({
+            featureAccessSnapshot,
+            principal: { organizationId, userId },
+          }),
           metadata: auditLogs.metadata,
           createdAtCursor: auditLogCursor.cursorValue.as("created_at_cursor"),
         })

@@ -131,12 +131,13 @@ export const writeFolioCollabCheckpointObject = async ({
           organizationId,
           objectKey: checkpointKey,
           sizeBytes: checkpointBytes.byteLength,
-          write: async () =>
+          content: checkpointBytes,
+          write: async ({ content, objectKey }) =>
             await writeS3ObjectWithRetry(
               {
                 contentType: DOCX_MIME_TYPE,
-                data: checkpointBytes,
-                key: checkpointKey,
+                data: content,
+                key: objectKey,
               },
               ownership,
             ),

@@ -194,6 +194,8 @@ export const ACTIVITY_TARGET_SOURCE_BY_RESOURCE_TYPE = {
   rate_table: null,
   report_export: null,
   saved_search: null,
+  // Personal history is never shared through a matter's activity feed.
+  search_history: null,
   seller_profile: null,
   saved_time_narrative: null,
   number_series: null,

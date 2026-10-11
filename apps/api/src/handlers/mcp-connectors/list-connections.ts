@@ -23,6 +23,7 @@ const listMcpConnections = createSafeRootHandler(
             id: mcpUserConnections.id,
             connectorId: mcpUserConnections.connectorId,
             connectorSlug: mcpConnectors.slug,
+            responseDisposition: mcpUserConnections.responseDisposition,
             status: mcpUserConnections.status,
             enabled: mcpUserConnections.enabled,
             scope: mcpUserConnections.scope,

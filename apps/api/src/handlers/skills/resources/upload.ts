@@ -10,6 +10,7 @@ import {
 } from "@/api/lib/agent-skills/content-hash";
 import {
   RESOURCE_PATH_PATTERN,
+  RESOURCE_PATH_MAX_CHARS,
   inferResourceKind,
 } from "@/api/lib/agent-skills/resource-path";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -52,7 +53,7 @@ const uploadSkillResourceParamsSchema = t.Object({
 });
 
 const uploadSkillResourceBodySchema = t.Object({
-  path: t.String({ minLength: 1, maxLength: 512 }),
+  path: t.String({ minLength: 1, maxLength: RESOURCE_PATH_MAX_CHARS }),
   file: t.File({ maxSize: UPLOAD_MAX_SIZE }),
 });
 
@@ -105,7 +106,11 @@ const uploadSkillResource = createSafeRootHandler(
     user,
   }) {
     const path = body.path.trim();
-    if (!path || !RESOURCE_PATH_PATTERN.test(path)) {
+    if (
+      !path ||
+      path.length > RESOURCE_PATH_MAX_CHARS ||
+      !RESOURCE_PATH_PATTERN.test(path)
+    ) {
       return Result.err(
         new HandlerError({ status: 400, message: "Invalid resource path" }),
       );

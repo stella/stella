@@ -11,12 +11,12 @@ import {
 } from "@/features/statutes/components/statute-validity-indicator";
 import type { ProvisionViewPayload } from "@/features/statutes/provision-inspector.logic";
 import { ineligibleExpressionLabelKey } from "@/features/statutes/statute-expression";
-import { formatValidityRange } from "@/features/statutes/statute-format";
 import {
   resolveStatuteDisplayStatus,
   STATUTE_STATUS_LABEL_KEYS,
 } from "@/features/statutes/statute-status";
 import { useFormatter } from "@/i18n/formatting-context";
+import { formatValidityRange } from "@/lib/statutes/statute-format";
 
 export const ProvisionVersionContext = ({
   decisionContext,

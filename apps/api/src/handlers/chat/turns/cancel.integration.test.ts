@@ -1,4 +1,4 @@
-import { RUN_CANCEL_REASON } from "@tanstack/ai";
+import { memoryStream, RUN_CANCEL_REASON } from "@tanstack/ai";
 import type { StreamChunk } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
@@ -365,7 +365,10 @@ const produceUntilCut = ({
       };
     });
   };
-  const response = run.produce(output());
+  const response = run.produce(
+    output(),
+    memoryStream({ runId: Bun.randomUUIDv7() }),
+  );
   return { response, run };
 };
 

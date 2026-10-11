@@ -1,7 +1,6 @@
-// parser-output-unchanged: [sk-courts] court abbreviation helper moved to the API contract package
 import { panic } from "better-result";
 
-import { courtAbbreviation } from "@stll/api-contract/court-abbreviations";
+import { courtAbbreviation } from "@stll/api-contract/case-law-court-abbreviations";
 import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-grammar";
 import { Temporal } from "@stll/time";
 

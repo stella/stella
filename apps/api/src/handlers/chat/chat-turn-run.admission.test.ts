@@ -1,4 +1,9 @@
-import { EventType, StreamProcessor } from "@tanstack/ai";
+import {
+  memoryStream,
+  EventType,
+  StreamProcessor,
+  toServerSentEventsResponse,
+} from "@tanstack/ai";
 import type { StreamChunk } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
@@ -13,7 +18,7 @@ import {
   withActionAdmission,
 } from "@/api/lib/rate-limit/action-admission";
 import { startExecutionAdmission } from "@/api/lib/rate-limit/execution-admission";
-import type { withTimeout } from "@/api/lib/with-timeout";
+import { withTimeout } from "@/api/lib/with-timeout";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -25,7 +30,132 @@ import { ChatTurnOwnership, ChatTurnRun } from "./chat-turn-run";
 import { processServerChatStream, toChatMessage } from "./stream-chat";
 import { createChatMessageIdMapper } from "./stream-message-identity";
 
+test("durable SSE delivers a tool start while its provider is waiting", async () => {
+  const providerMayFinish = Promise.withResolvers<undefined>();
+  const providerFinished = Promise.withResolvers<undefined>();
+  let providerReleased = false;
+  const toolStart = {
+    type: EventType.TOOL_CALL_START,
+    toolCallId: "waiting-tool-call",
+    toolCallName: "ask_user",
+    parentMessageId: "waiting-assistant",
+  } satisfies StreamChunk;
+  const source = (async function* (): AsyncIterable<StreamChunk> {
+    try {
+      yield toolStart;
+      await providerMayFinish.promise;
+      providerReleased = true;
+    } finally {
+      providerFinished.resolve(undefined);
+    }
+  })();
+  const durability = memoryStream({ runId: Bun.randomUUIDv7() });
+  const response = toServerSentEventsResponse(source, {
+    abortController: new AbortController(),
+    durability: { adapter: durability },
+  });
+  const reader = (
+    response.body ?? panic("SSE response requires a body")
+  ).getReader();
+  try {
+    const received = await withTimeout(
+      async () => {
+        const decoder = new TextDecoder();
+        let text = "";
+        while (!text.includes('"type":"TOOL_CALL_START"')) {
+          const { done, value } = await reader.read();
+          if (done) {
+            return panic("SSE ended before delivering the tool start");
+          }
+          text += decoder.decode(value, { stream: true });
+        }
+        return text;
+      },
+      { label: "durable tool start delivery", timeoutMs: 1000 },
+    );
+    expect(received).toContain('"toolCallName":"ask_user"');
+    expect(providerReleased).toBe(false);
+    expect(
+      (await durability.snapshot()).map(({ chunk }) => chunk),
+    ).toContainEqual(toolStart);
+  } finally {
+    providerMayFinish.resolve(undefined);
+    await reader.cancel();
+    await withTimeout(async () => await providerFinished.promise, {
+      label: "tool start provider cleanup",
+      timeoutMs: 1000,
+    });
+  }
+});
+
 describe("chat run admission follows owned settlement", () => {
+  test("an initial durability write failure releases admission and unused connectors without pulling the provider", async () => {
+    const admission = new AbortController();
+    let releases = 0;
+    let connectorCloses = 0;
+    let providerCalls = 0;
+    const run = new ChatTurnRun({
+      admission: {
+        signal: admission.signal,
+        modelAdmission: testModelAdmission(
+          toSafeId<"organization">("org_admission"),
+        ),
+        reservePeriod: async () => Result.ok(undefined),
+        release: async () => {
+          releases += 1;
+        },
+      },
+      connectors: {
+        close: () => {
+          connectorCloses += 1;
+        },
+      },
+      deadlineMs: 60_000,
+      mode: "raw",
+      heartbeat: { intervalMs: 60_000, renewEvery: 1000 },
+      ownership: new ChatTurnOwnership(),
+      owner: {
+        indexThread: async () => {},
+        execution: {
+          id: toSafeId<"chatTurn">("turn_delivery_failure"),
+          executionId: "execution_delivery_failure",
+        },
+        owningAssistantMessage: undefined,
+        recordAuditEvent: async () => {},
+        safeDb: createScopedDbMock({}).safeDb,
+        threadId: toSafeId<"chatThread">("thread_delivery_failure"),
+        userId: toSafeId<"user">("user_delivery_failure"),
+        workspaceId: null,
+      },
+    });
+    const durability = memoryStream({ runId: Bun.randomUUIDv7() });
+    const source = (async function* (): AsyncIterable<StreamChunk> {
+      providerCalls += 1;
+      yield { type: EventType.CUSTOM, name: "unused-provider", value: {} };
+    })();
+    await run
+      .produce(source, {
+        ...durability,
+        append: async () => {
+          throw new HandlerError({
+            status: 500,
+            message: "Delivery write failed",
+          });
+        },
+        close: async () => {
+          await run.failProduction("not-started");
+          await durability.close();
+        },
+      })
+      .text();
+    // The deliberately empty DB fixture cannot store the failure, but the
+    // local lifecycle must still terminate and return its occupied capacity.
+    expect(providerCalls).toBe(0);
+    expect(connectorCloses).toBe(1);
+    expect(releases).toBe(1);
+    expect(await run.settled).toBe("unstored");
+  });
+
   test("persists once and releases admission when processor finalization throws after lease loss", async () => {
     for (const exit of ["drain", "throw"] as const) {
       const admission = new AbortController();
@@ -132,7 +262,9 @@ describe("chat run admission follows owned settlement", () => {
           });
         },
       });
-      await run.produce(output).text();
+      await run
+        .produce(output, memoryStream({ runId: Bun.randomUUIDv7() }))
+        .text();
       expect(await run.settled).toBe("stored");
       expect(persisted).toBe(1);
       expect(releases).toBe(1);
@@ -206,7 +338,10 @@ describe("chat run admission follows owned settlement", () => {
       });
       yield* [];
     };
-    const transport = run.produce(output());
+    const transport = run.produce(
+      output(),
+      memoryStream({ runId: Bun.randomUUIDv7() }),
+    );
     await beatStarted.promise;
     expect(releases).toBe(0);
     admission.abort(
@@ -320,7 +455,10 @@ describe("chat run admission follows owned settlement", () => {
       processor: new StreamProcessor(),
       source: source(),
     });
-    const transport = run.produce(output);
+    const transport = run.produce(
+      output,
+      memoryStream({ runId: Bun.randomUUIDv7() }),
+    );
     const consumed = transport.text();
     await persistenceFinished.promise;
     await finalizerStarted.promise;
@@ -567,7 +705,9 @@ describe("chat run admission follows owned settlement", () => {
           processor: new StreamProcessor(),
           source: source(),
         });
-        await run.produce(output).text();
+        await run
+          .produce(output, memoryStream({ runId: Bun.randomUUIDv7() }))
+          .text();
       }
       expect(await run.settled).toBe("stored");
       expect(discardedPersistence).toBe(0);
@@ -725,7 +865,9 @@ describe("chat run admission follows owned settlement", () => {
         await finalizerMayFinish.promise;
       }
     };
-    const consumed = run.produce(output()).text();
+    const consumed = run
+      .produce(output(), memoryStream({ runId: Bun.randomUUIDv7() }))
+      .text();
     await finalizerStarted.promise;
     await waitStarted.promise;
     expect(acquisitions).toBe(1);

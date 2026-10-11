@@ -12,6 +12,7 @@ import {
 import { requireEditableSkillOrigin } from "@/api/lib/agent-skills/origin";
 import {
   RESOURCE_PATH_PATTERN,
+  RESOURCE_PATH_MAX_CHARS,
   inferResourceKind,
 } from "@/api/lib/agent-skills/resource-path";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -25,8 +26,8 @@ const renameSkillResourceParamsSchema = t.Object({
 });
 
 const renameSkillResourceBodySchema = t.Object({
-  oldPath: t.String({ minLength: 1, maxLength: 512 }),
-  newPath: t.String({ minLength: 1, maxLength: 512 }),
+  oldPath: t.String({ minLength: 1, maxLength: RESOURCE_PATH_MAX_CHARS }),
+  newPath: t.String({ minLength: 1, maxLength: RESOURCE_PATH_MAX_CHARS }),
 });
 
 const config = {
@@ -59,7 +60,11 @@ const renameSkillResource = createSafeRootHandler(
     user,
   }) {
     const newPath = body.newPath.trim();
-    if (!newPath || !RESOURCE_PATH_PATTERN.test(newPath)) {
+    if (
+      !newPath ||
+      newPath.length > RESOURCE_PATH_MAX_CHARS ||
+      !RESOURCE_PATH_PATTERN.test(newPath)
+    ) {
       return Result.err(
         new HandlerError({ status: 400, message: "Invalid resource path" }),
       );

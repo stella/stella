@@ -1,13 +1,20 @@
+// parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
 import "@/api/lib/observability/otel";
+import type { AttributeValue } from "@opentelemetry/api";
 import { logs, SeverityNumber } from "@opentelemetry/api-logs";
+import { Result } from "better-result";
 
 import type { FailureGrade, FailureReason } from "@stll/errors";
-import { FAILURE_GRADES, isFailureReason } from "@stll/errors";
+import {
+  FAILURE_GRADES,
+  isFailureReason,
+  isQueryErrorOutputKey,
+  sanitizeErrorForOutput,
+} from "@stll/errors";
 
 import type { ErrorFingerprint } from "@/api/lib/errors/utils";
 import { SENSITIVE_LOG_ATTRIBUTE_KEY_PATTERN } from "@/api/lib/observability/log-attribute-policy";
 
-const otelLogger = logs.getLogger("stella.api");
 // Denylist of attribute-key substrings whose values may carry document
 // content, client-identifying text, PII, or credentials, none of which
 // belong in telemetry for privileged legal data. This is defense-in-depth:
@@ -23,9 +30,10 @@ const otelLogger = logs.getLogger("stella.api");
 // rejects such keys at the call site can pin the same one.
 const SENSITIVE_ATTRIBUTE_KEY_PATTERN = SENSITIVE_LOG_ATTRIBUTE_KEY_PATTERN;
 
-type LoggerAttributeValue = boolean | number | string;
+type LoggerAttributeValue = AttributeValue;
 
 export type LoggerAttributes = Record<string, LoggerAttributeValue>;
+type LoggerAttributeInput = Record<string, unknown>;
 
 /** The request's graded failure, from the request's failure observation. */
 type RequestLogFailure = {
@@ -63,10 +71,7 @@ const FAILURE_REASON_KEYS: ReadonlySet<string> = new Set([
 const isFailureGrade = (value: unknown): boolean =>
   FAILURE_GRADES.some((grade) => grade === value);
 
-const isOwnedValueValid = (
-  key: string,
-  value: LoggerAttributeValue,
-): boolean => {
+const isOwnedValueValid = (key: string, value: unknown): boolean => {
   if (FAILURE_GRADE_KEYS.has(key)) {
     return isFailureGrade(value);
   }
@@ -76,16 +81,59 @@ const isOwnedValueValid = (
   return true;
 };
 
-export const sanitizeLogAttributes = (
-  attributes: LoggerAttributes | undefined,
-): LoggerAttributes | undefined => {
-  if (!attributes) {
+const UNSERIALIZABLE_ATTRIBUTE = "[unserializable attribute]";
+
+const outputAttributeValue = (value: unknown): AttributeValue | undefined => {
+  if (
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  ) {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    if (value.every((item: unknown) => typeof item === "string")) {
+      return value;
+    }
+    if (value.every((item: unknown) => typeof item === "number")) {
+      return value;
+    }
+    if (value.every((item: unknown) => typeof item === "boolean")) {
+      return value;
+    }
+  }
+  if (typeof value === "bigint") {
+    return String(value);
+  }
+  if (value === undefined) {
     return undefined;
   }
+  return Result.try(() => {
+    const serialized: unknown = JSON.stringify(value, (_key, item: unknown) =>
+      typeof item === "bigint" ? String(item) : item,
+    );
+    return typeof serialized === "string"
+      ? serialized
+      : UNSERIALIZABLE_ATTRIBUTE;
+  }).unwrapOr(UNSERIALIZABLE_ATTRIBUTE);
+};
 
-  let dropped = 0;
+const filterLogAttributes = ({
+  attributes,
+  queryFieldsDropped,
+}: {
+  attributes: unknown;
+  queryFieldsDropped: number;
+}): LoggerAttributes | undefined => {
+  if (
+    attributes === null ||
+    typeof attributes !== "object" ||
+    Array.isArray(attributes)
+  ) {
+    return undefined;
+  }
+  let dropped = queryFieldsDropped;
   const safeAttributes: LoggerAttributes = {};
-
   for (const [key, value] of Object.entries(attributes)) {
     if (
       SENSITIVE_ATTRIBUTE_KEY_PATTERN.test(key) ||
@@ -94,16 +142,33 @@ export const sanitizeLogAttributes = (
       dropped += 1;
       continue;
     }
-
-    safeAttributes[key] = value;
+    const safeValue = outputAttributeValue(value);
+    if (safeValue === undefined) {
+      dropped += 1;
+      continue;
+    }
+    safeAttributes[key] = safeValue;
   }
-
   if (dropped > 0) {
     safeAttributes["log.attributes_dropped"] = dropped;
   }
-
   return safeAttributes;
 };
+
+const queryFieldCount = (
+  attributes: LoggerAttributeInput | undefined,
+): number =>
+  Result.try(
+    () => Object.keys(attributes ?? {}).filter(isQueryErrorOutputKey).length,
+  ).unwrapOr(0);
+
+export const sanitizeLogAttributes = (
+  attributes: LoggerAttributeInput | undefined,
+): LoggerAttributes | undefined =>
+  filterLogAttributes({
+    attributes: sanitizeErrorForOutput(attributes),
+    queryFieldsDropped: queryFieldCount(attributes),
+  });
 
 export type LogRecord = {
   readonly severityText: string;
@@ -156,33 +221,47 @@ const emit = ({
   message,
   severityNumber,
   severityText,
+  outputStream = "stderr",
 }: {
-  attributes: LoggerAttributes | undefined;
+  attributes: LoggerAttributeInput | undefined;
   message: string;
   severityNumber: SeverityNumber;
   severityText: string;
+  outputStream?: "stderr" | "stdout";
 }): void => {
+  const output = sanitizeErrorForOutput([message, attributes]);
+  const safeMessage =
+    Array.isArray(output) && typeof output.at(0) === "string"
+      ? String(output.at(0))
+      : "[unreadable log]";
   const safeAttributes = annotateUnowned(
     severityNumber,
-    sanitizeLogAttributes(attributes),
+    filterLogAttributes({
+      attributes: Array.isArray(output) ? output.at(1) : undefined,
+      queryFieldsDropped: queryFieldCount(attributes),
+    }),
   );
   if (recordSink !== null) {
-    recordSink({ severityText, message, attributes: safeAttributes });
+    recordSink({
+      severityText,
+      message: safeMessage,
+      attributes: safeAttributes,
+    });
     return;
   }
   const record = {
     severityNumber,
     severityText,
-    body: message,
+    body: safeMessage,
   };
 
   if (safeAttributes) {
-    otelLogger.emit({
+    logs.getLogger("stella.api").emit({
       ...record,
       attributes: safeAttributes,
     });
   } else {
-    otelLogger.emit(record);
+    logs.getLogger("stella.api").emit(record);
   }
 
   // Backstop for every structured record above DEBUG. The OTel pipeline
@@ -201,10 +280,10 @@ const emit = ({
   // of severity, so severity was never what kept payloads out. DEBUG stays
   // unmirrored as the escape hatch for hot loops.
   if (severityNumber >= SeverityNumber.INFO) {
-    process.stderr.write(
+    process[outputStream].write(
       `${JSON.stringify({
         severity: severityText,
-        message,
+        message: safeMessage,
         ...safeAttributes,
       })}\n`,
     );
@@ -231,70 +310,62 @@ const emitRequest = ({
   severity,
   statusCode,
 }: RequestLogOptions): void => {
-  const safeAttributes = annotateUnowned(REQUEST_SEVERITY[severity], {
-    // The fingerprint's keys are already this sink's attribute names, so the
-    // record ships whole rather than being re-listed field by field. A second
-    // copy of that key set can only ever be a shorter one, and a field it
-    // leaves out is a field no reader of this sink can get back. It goes
-    // first, so none of its keys can override the request's own.
-    ...sanitizeLogAttributes(errorFingerprint),
-    "http.method": method,
-    "http.route": route ?? "unmatched",
-    "http.status_code": statusCode,
-    "request.duration_ms": durationMs,
-    ...(elysiaCode === undefined ? {} : { "http.elysia_code": elysiaCode }),
-    ...(errorType === undefined ? {} : { "error.type": errorType }),
-    ...(requestId === undefined ? {} : { "request.id": requestId }),
-    ...(clientAddressSource === undefined
-      ? {}
-      : { "client.address_source": clientAddressSource }),
-    ...(failure === undefined
-      ? {}
-      : {
-          "failure.grade": failure.grade,
-          "failure.reason": failure.reason,
-          "failure.shadow": "true",
-        }),
-  });
-
-  if (recordSink !== null) {
-    recordSink({ severityText: severity, message, attributes: safeAttributes });
-    return;
-  }
-  otelLogger.emit({
-    ...(safeAttributes === undefined ? {} : { attributes: safeAttributes }),
-    body: message,
+  emit({
+    message,
     severityNumber: REQUEST_SEVERITY[severity],
     severityText: severity,
+    outputStream: "stdout",
+    attributes: {
+      // The fingerprint's keys are already this sink's attribute names, so the
+      // record ships whole rather than being re-listed field by field. A second
+      // copy of that key set can only ever be a shorter one, and a field it
+      // leaves out is a field no reader of this sink can get back. It goes
+      // first, so none of its keys can override the request's own.
+      ...errorFingerprint,
+      "http.method": method,
+      "http.route": route ?? "unmatched",
+      "http.status_code": statusCode,
+      "request.duration_ms": durationMs,
+      ...(elysiaCode === undefined ? {} : { "http.elysia_code": elysiaCode }),
+      ...(errorType === undefined ? {} : { "error.type": errorType }),
+      ...(requestId === undefined ? {} : { "request.id": requestId }),
+      ...(clientAddressSource === undefined
+        ? {}
+        : { "client.address_source": clientAddressSource }),
+      ...(failure === undefined
+        ? {}
+        : {
+            "failure.grade": failure.grade,
+            "failure.reason": failure.reason,
+            "failure.shadow": "true",
+          }),
+    },
   });
-  process.stdout.write(
-    `${JSON.stringify({ severity, message, ...safeAttributes })}\n`,
-  );
 };
 
 export const logger = {
-  debug: (message: string, attributes?: LoggerAttributes) =>
+  debug: (message: string, attributes?: LoggerAttributeInput) =>
     emit({
       message,
       attributes,
       severityNumber: SeverityNumber.DEBUG,
       severityText: "DEBUG",
     }),
-  info: (message: string, attributes?: LoggerAttributes) =>
+  info: (message: string, attributes?: LoggerAttributeInput) =>
     emit({
       message,
       attributes,
       severityNumber: SeverityNumber.INFO,
       severityText: "INFO",
     }),
-  warn: (message: string, attributes?: LoggerAttributes) =>
+  warn: (message: string, attributes?: LoggerAttributeInput) =>
     emit({
       message,
       attributes,
       severityNumber: SeverityNumber.WARN,
       severityText: "WARN",
     }),
-  error: (message: string, attributes?: LoggerAttributes) =>
+  error: (message: string, attributes?: LoggerAttributeInput) =>
     emit({
       message,
       attributes,

@@ -1,5 +1,9 @@
 name: Clean queued PR runs
 
+defaults:
+  run:
+    shell: bash
+
 on:
   schedule:
     - cron: "23 3 * * *"

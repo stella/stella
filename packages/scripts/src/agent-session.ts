@@ -657,13 +657,17 @@ const runStackScript = (
   return result.stdout.toString();
 };
 
-const checkSeal = (root: string, runtime: DevRuntime) =>
-  parseSealStatus(
-    runStackScript(root, runtime, {
-      args: ["scripts/seed-seal.ts", "check", devStatePath(root, SEAL_FILE)],
-      label: "Checking the seal",
-    }),
-  ) ?? fail("The seal check printed no status");
+const checkSeal = (root: string, runtime: DevRuntime) => {
+  const output = runStackScript(root, runtime, {
+    args: ["scripts/seed-seal.ts", "check", devStatePath(root, SEAL_FILE)],
+    label: "Checking the seal",
+  });
+  const status =
+    parseSealStatus(output) ?? fail("The seal check printed no status");
+  // Preserve the classified write report on both sides of each capture.
+  console.log(output.trim());
+  return status;
+};
 
 const EVIDENCE_DIR = "evidence";
 const MANIFEST_PATTERN = /^manifest-\d{20}-\d+\.json$/u;
