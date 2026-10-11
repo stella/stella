@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import { DANGEROUS_CHARS } from "@stll/legal-ast/text-sanitize";
 
 export const COURTLISTENER_TEXT_USABILITY = {
@@ -131,15 +133,15 @@ const hasReadableSentence = (text: string): boolean => {
   return false;
 };
 
-type TextDecodabilityOptions = {
-  remaining: string;
+type BodyClassificationOptions = {
+  normalized: string;
   unattributed: string;
 };
 
-const isUndecodable = ({
-  remaining,
+const classifyBody = ({
+  normalized,
   unattributed,
-}: TextDecodabilityOptions): boolean => {
+}: BodyClassificationOptions): CourtListenerTextUsability => {
   const compact = unattributed.replace(/\s+/gu, " ").trim();
   const metadataOnly = unattributed
     .split(/\n[^\S\n]*\n/gu)
@@ -156,6 +158,34 @@ const isUndecodable = ({
     });
   if (compact.length > 0 && metadataOnly) {
     return COURTLISTENER_TEXT_USABILITY.NO_RULING_TEXT;
+  }
+  if (hasReadableSentence(unattributed)) {
+    return COURTLISTENER_TEXT_USABILITY.USABLE;
+  }
+  if (SOURCE_PLACEHOLDERS.some((pattern) => pattern.test(compact))) {
+    return COURTLISTENER_TEXT_USABILITY.SOURCE_PLACEHOLDER;
+  }
+  if (unattributed.split(/\n/gu).some((line) => RULING_WORDS.test(line))) {
+    return COURTLISTENER_TEXT_USABILITY.USABLE;
+  }
+
+  const remaining = unattributed
+    .replace(WRITTEN_DATE, " ")
+    // A suffix cannot consume the letter opening the next exemption code.
+    .replace(/\([a-z]\)\s*\(\d+\)(?:\s*\([a-z]\)(?!\s*\(\d+\)))?/gu, " ")
+    .replace(/\bappendix\s+\d+\b/gu, " ")
+    .replace(/\b\d[\d/.,: -]*\b/gu, " ")
+    .replace(/\b(?:for|at|of|the|and|to|in|on)\b/gu, " ")
+    .trim();
+  if (
+    /^(?:(?:amended\s+)?memorandum opinion|decision)[\s.!]*$/u.test(remaining)
+  ) {
+    return COURTLISTENER_TEXT_USABILITY.NO_RULING_TEXT;
+  }
+  if (!/\p{L}/u.test(remaining)) {
+    return /\d/u.test(normalized) || !remaining
+      ? COURTLISTENER_TEXT_USABILITY.NO_RULING_TEXT
+      : COURTLISTENER_TEXT_USABILITY.UNDECODABLE;
   }
   // UTF-16 decoded as a single-byte encoding and replacement/control bytes
   // cannot supply a word. A genuine word elsewhere still remains admissible.
@@ -189,9 +219,11 @@ const isUndecodable = ({
       /general[^\S\r\n]*\n/u.test(unattributed) &&
       /[!?[]\p{L}/u.test(compact))
   ) {
-    return true;
+    return COURTLISTENER_TEXT_USABILITY.UNDECODABLE;
   }
-  return !/\p{L}{2}/u.test(readable);
+  return /\p{L}{2}/u.test(readable)
+    ? COURTLISTENER_TEXT_USABILITY.USABLE
+    : COURTLISTENER_TEXT_USABILITY.UNDECODABLE;
 };
 
 export const classifyCourtListenerText = (
@@ -209,36 +241,16 @@ export const classifyCourtListenerText = (
         : line;
     })
     .join("\n");
-  const compact = unattributed.replace(/\s+/gu, " ").trim();
-  if (hasReadableSentence(unattributed)) {
-    return COURTLISTENER_TEXT_USABILITY.USABLE;
+  const classification = classifyBody({ normalized, unattributed });
+  switch (classification) {
+    case COURTLISTENER_TEXT_USABILITY.SOURCE_PLACEHOLDER:
+    case COURTLISTENER_TEXT_USABILITY.USABLE:
+    case COURTLISTENER_TEXT_USABILITY.NO_RULING_TEXT:
+    case COURTLISTENER_TEXT_USABILITY.UNDECODABLE:
+      return classification;
+    default: {
+      classification satisfies never;
+      return panic("Unhandled CourtListener text classification");
+    }
   }
-  if (SOURCE_PLACEHOLDERS.some((pattern) => pattern.test(compact))) {
-    return COURTLISTENER_TEXT_USABILITY.SOURCE_PLACEHOLDER;
-  }
-  if (unattributed.split(/\n/gu).some((line) => RULING_WORDS.test(line))) {
-    return COURTLISTENER_TEXT_USABILITY.USABLE;
-  }
-
-  const remaining = unattributed
-    .replace(WRITTEN_DATE, " ")
-    // A suffix cannot consume the letter opening the next exemption code.
-    .replace(/\([a-z]\)\s*\(\d+\)(?:\s*\([a-z]\)(?!\s*\(\d+\)))?/gu, " ")
-    .replace(/\bappendix\s+\d+\b/gu, " ")
-    .replace(/\b\d[\d/.,: -]*\b/gu, " ")
-    .replace(/\b(?:for|at|of|the|and|to|in|on)\b/gu, " ")
-    .trim();
-  if (
-    /^(?:(?:amended\s+)?memorandum opinion|decision)[\s.!]*$/u.test(remaining)
-  ) {
-    return COURTLISTENER_TEXT_USABILITY.NO_RULING_TEXT;
-  }
-  if (!/\p{L}/u.test(remaining)) {
-    return /\d/u.test(normalized) || !remaining
-      ? COURTLISTENER_TEXT_USABILITY.NO_RULING_TEXT
-      : COURTLISTENER_TEXT_USABILITY.UNDECODABLE;
-  }
-  return isUndecodable({ remaining, unattributed })
-    ? COURTLISTENER_TEXT_USABILITY.UNDECODABLE
-    : COURTLISTENER_TEXT_USABILITY.USABLE;
 };
