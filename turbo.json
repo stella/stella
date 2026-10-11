@@ -19,7 +19,7 @@
   // default changes and a cached pass could replay over the edit. Hashing the
   // patches globally is the honest scope: the blast radius is every dependent
   // package, not one task's declared inputs.
-  "globalDependencies": ["patches/**"],
+  "globalDependencies": ["patches/**", "scripts/bun-toolchain.gen.json"],
   "tasks": {
     "@stll/desktop#test:browser": {
       "inputs": ["$TURBO_DEFAULT$"]
@@ -267,7 +267,7 @@
       "dependsOn": ["transit", "^generate:capability-runtime"],
       // Turbo hashes each workspace dependency closure from bun.lock. Root
       // tools (typescript and bun-types) enter its global dependency hash;
-      // Bun itself is pinned by packageManager. Hash shared source separately.
+      // The narrow generated Bun pin is a global input. Hash shared source separately.
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/.npmrc",

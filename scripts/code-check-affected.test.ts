@@ -668,6 +668,47 @@ describe("Turbo cache input contract", () => {
 });
 
 describe("full and affected code-check parity", () => {
+  test("a stale Bun fingerprint fails before planning or replaying any cached checks", () => {
+    const directory = mkdtempSync(path.join(tmpdir(), "code-check-toolchain-"));
+    writeFileSync(
+      path.join(directory, "bun"),
+      `#!/bin/sh
+if [ "$1" = "scripts/generate-bun-toolchain.ts" ]; then
+  echo 'drifted: scripts/bun-toolchain.gen.json' >&2
+  exit 1
+fi
+exec "$CHECK_REAL_BUN" "$@"
+`,
+      { mode: 0o755 },
+    );
+    try {
+      const result = Bun.spawnSync(
+        [
+          process.execPath,
+          "scripts/code-check-affected.ts",
+          "--all",
+          "--dry-run",
+        ],
+        {
+          env: {
+            ...process.env,
+            PATH: `${directory}:${process.env["PATH"] ?? ""}`,
+            CHECK_REAL_BUN: process.execPath,
+          },
+          stdout: "pipe",
+          stderr: "pipe",
+        },
+      );
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr.toString()).toContain("generate-bun-toolchain.ts");
+      expect(result.stdout.toString()).not.toContain(
+        "code-check: lint all; typecheck all",
+      );
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  }, 30_000);
+
   test("an unexpected merge-base failure is surfaced, not read as no base", () => {
     const directory = mkdtempSync(path.join(tmpdir(), "code-check-git-"));
     const git = Bun.which("git");

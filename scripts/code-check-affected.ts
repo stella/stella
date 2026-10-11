@@ -1067,6 +1067,15 @@ type CodeCheckError = CommandFailedError;
 const main = async (): Promise<Result<number, CommandFailedError>> => {
   const deadlineMs = Date.now() + CODE_CHECK_EXECUTION_BUDGET_MS;
   const options = parseArgs(process.argv.slice(2));
+  // Verify the narrow runtime pin before even the Turbo affected/dry-run query:
+  // a stale projection must fail before any old-runtime cache can be replayed.
+  const toolchain = await runCheck(
+    ["bun", "scripts/generate-bun-toolchain.ts"],
+    Math.min(30_000, Math.max(0, deadlineMs - Date.now())),
+  );
+  if (toolchain.isErr()) {
+    return toolchain;
+  }
   const scoped = planScope(options.scope);
   if (scoped.isErr()) {
     return scoped;

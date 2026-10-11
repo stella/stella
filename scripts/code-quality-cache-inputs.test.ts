@@ -10,10 +10,13 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
+import { generateBunToolchain } from "./generate-bun-toolchain";
+
 const root = path.resolve(import.meta.dir, "..");
 const taskSchema = v.looseObject({ inputs: v.optional(v.array(v.string())) });
 const configSchema = v.looseObject({
   tasks: v.record(v.string(), taskSchema),
+  globalDependencies: v.optional(v.array(v.string())),
   remoteCache: v.optional(
     v.looseObject({
       timeout: v.optional(v.number()),
@@ -110,6 +113,17 @@ test("root typecheck retains complete dependency inputs for cross-workspace impo
   }
 });
 
+test("the narrow Bun pin is a global cache input without the whole manifest", () => {
+  expect(configuration.globalDependencies).toContain(
+    "scripts/bun-toolchain.gen.json",
+  );
+  expect(configuration.globalDependencies).not.toContain("package.json");
+  const mutation = configuration.globalDependencies?.filter(
+    (input) => input !== "scripts/bun-toolchain.gen.json",
+  );
+  expect(mutation).not.toContain("scripts/bun-toolchain.gen.json");
+});
+
 const remoteCacheProblems = ({
   remoteCache,
 }: v.InferOutput<typeof configSchema>) => {
@@ -150,7 +164,7 @@ const summarySchema = v.object({
 // Exercise the pinned Turbo binary and its Bun parser, not a model of their hashing.
 // https://github.com/vercel/turborepo/tree/v2.11.6/crates/turborepo-lockfiles/src/bun
 // Root external dependencies intentionally remain global in Turbo 2.11.6.
-test("Bun lock dependency changes invalidate their workspace, while root tool changes remain global", () => {
+test("Bun pins invalidate every quality task without hashing unrelated root manifest edits", async () => {
   const fixture = mkdtempSync(path.join(tmpdir(), "quality-cache-inputs-"));
   const write = (name: string, value: unknown) =>
     writeFileSync(path.join(fixture, name), JSON.stringify(value));
@@ -163,19 +177,25 @@ test("Bun lock dependency changes invalidate their workspace, while root tool ch
     return result.stdout.toString();
   };
   try {
-    write("package.json", {
+    const manifest = {
       name: "fixture",
       private: true,
       packageManager: "bun@1.4.3",
       workspaces: ["packages/*"],
       devDependencies: { tool: "*" },
-    });
-    write("turbo.json", {
+    };
+    write("package.json", manifest);
+    expect(await generateBunToolchain(fixture, false)).toBe(1);
+    expect(await generateBunToolchain(fixture, true)).toBe(0);
+    expect(await generateBunToolchain(fixture, false)).toBe(0);
+    const turbo = {
+      globalDependencies: configuration.globalDependencies,
       tasks: {
         lint: { inputs: ["$TURBO_DEFAULT$"] },
         typecheck: { inputs: ["$TURBO_DEFAULT$"] },
       },
-    });
+    };
+    write("turbo.json", turbo);
     for (const name of ["a", "b"]) {
       mkdirSync(path.join(fixture, "packages", name), { recursive: true });
       write(`packages/${name}/package.json`, {
@@ -240,6 +260,46 @@ test("Bun lock dependency changes invalidate their workspace, while root tool ch
       "b#lint",
       "b#typecheck",
     ]);
+    const fingerprint = readFileSync(
+      path.join(fixture, "scripts/bun-toolchain.gen.json"),
+      "utf-8",
+    );
+    write("package.json", {
+      ...manifest,
+      scripts: { unrelated: "echo changed" },
+    });
+    expect(await generateBunToolchain(fixture, true)).toBe(0);
+    expect(
+      readFileSync(
+        path.join(fixture, "scripts/bun-toolchain.gen.json"),
+        "utf-8",
+      ),
+    ).toBe(fingerprint);
+    expect(hashes()).toEqual(initial);
+
+    // Only packageManager changes; dependencies and bun.lock stay identical.
+    write("package.json", { ...manifest, packageManager: "bun@1.4.4" });
+    expect(await generateBunToolchain(fixture, false)).toBe(1);
+    expect(await generateBunToolchain(fixture, true)).toBe(0);
+    const pinChanged = hashes();
+    for (const [taskId, hash] of initial) {
+      expect(pinChanged.get(taskId)).not.toBe(hash);
+    }
+
+    // Removing the real production input recreates the old-runtime cache hit.
+    write("turbo.json", {
+      ...turbo,
+      globalDependencies: turbo.globalDependencies?.filter(
+        (input) => input !== "scripts/bun-toolchain.gen.json",
+      ),
+    });
+    const unprotected = hashes();
+    write("package.json", manifest);
+    expect(await generateBunToolchain(fixture, true)).toBe(0);
+    expect(hashes()).toEqual(unprotected);
+    write("turbo.json", turbo);
+    expect(hashes()).toEqual(initial);
+
     lock("2.0.0", "1.0.0");
     const workspaceChanged = hashes();
     for (const task of ["lint", "typecheck"]) {
