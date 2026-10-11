@@ -374,7 +374,7 @@ describe("search preview rendering contract", () => {
                     matterRef: "matter_1",
                     kind: "document",
                     mimeType: "application/pdf",
-                    workspaceId: ids.wsA1,
+                    workspaceId: previewQuery.accessibleWorkspaceIds[0],
                   },
                 ],
               },

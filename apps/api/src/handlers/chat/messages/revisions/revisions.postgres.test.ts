@@ -19,6 +19,7 @@ import {
 } from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import {
+  chatMessageFromPersisted,
   normalizePersistedChatMessageContent,
   toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
@@ -577,9 +578,9 @@ if (!databaseUrl || !runPostgres) {
           expect(historyAfter.value.map(({ id }) => id)).toEqual([
             fixture.messageId,
           ]);
-          expect(historyAfter.value.at(0)?.content.data).toEqual(
-            normalizePersistedChatMessageContent(edited).parts,
-          );
+          expect(
+            historyAfter.value.map(chatMessageFromPersisted).at(0)?.parts,
+          ).toEqual(normalizePersistedChatMessageContent(edited).parts);
         } finally {
           await fixture.cleanUp();
         }
@@ -681,9 +682,9 @@ if (!databaseUrl || !runPostgres) {
             fixture.messageId,
             keptMessageId,
           ]);
-          expect(historyAfter.value.at(0)?.content.data).toEqual(
-            normalizePersistedChatMessageContent(edited).parts,
-          );
+          expect(
+            historyAfter.value.map(chatMessageFromPersisted).at(0)?.parts,
+          ).toEqual(normalizePersistedChatMessageContent(edited).parts);
           const note = await fixture.scoped(db)(
             async (tx) =>
               await readChatRevisionContextChanges({

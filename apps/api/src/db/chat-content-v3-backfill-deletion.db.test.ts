@@ -33,11 +33,11 @@ type DeletionCase = {
 };
 
 const runDeletionRace = async ({ content, source }: DeletionCase) => {
-  if (databaseUrl === undefined) {
-    return panic("Chat content backfill deletion tests require DATABASE_URL");
-  }
+  const url =
+    databaseUrl ??
+    panic("Chat content backfill deletion tests require DATABASE_URL");
 
-  await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+  await withGatedTestClients(url, async ({ openClient }) => {
     const connectionA = openClient({ max: 1 });
     const connectionB = openClient({ max: 1 });
     const schema = `chat_content_v3_delete_${Bun.randomUUIDv7().replaceAll("-", "")}`;
@@ -83,9 +83,10 @@ const runDeletionRace = async ({ content, source }: DeletionCase) => {
           import.meta.url,
         ),
       ).text();
-      const createReceipts = migration.match(
-        /CREATE TABLE "chat_content_v3_backfill_receipts" \([\s\S]*?\);/u,
-      )?.[0];
+      const createReceipts =
+        /CREATE TABLE "chat_content_v3_backfill_receipts" \([\s\S]*?\);/u.exec(
+          migration,
+        )?.[0];
       if (createReceipts === undefined) {
         panic(
           "Backfill receipt migration is missing its CREATE TABLE statement",
@@ -119,7 +120,7 @@ const runDeletionRace = async ({ content, source }: DeletionCase) => {
       }
 
       expect(
-        await connectionA.sql.unsafe(
+        await connectionA.sql.unsafe<{ content: unknown }[]>(
           `SELECT content FROM ${CHAT_CONTENT_V3_SOURCES[source].table}`,
         ),
       ).toEqual([{ content }]);
@@ -205,16 +206,20 @@ const runDeletionRace = async ({ content, source }: DeletionCase) => {
           value: [],
         });
         expect(
-          await connectionA.sql.unsafe("SELECT id FROM chat_messages"),
+          await connectionA.sql.unsafe<{ id: string }[]>(
+            "SELECT id FROM chat_messages",
+          ),
         ).toEqual([]);
         expect(
-          await connectionA.sql.unsafe("SELECT id FROM chat_message_revisions"),
+          await connectionA.sql.unsafe<{ id: string }[]>(
+            "SELECT id FROM chat_message_revisions",
+          ),
         ).toEqual([]);
         await connectionB.sql.unsafe("DELETE FROM organization WHERE id = $1", [
           organizationId,
         ]);
         expect(
-          await connectionA.sql.unsafe(
+          await connectionA.sql.unsafe<{ row_id: string }[]>(
             "SELECT row_id FROM chat_content_v3_backfill_receipts",
           ),
         ).toEqual([]);
@@ -230,7 +235,7 @@ const runDeletionRace = async ({ content, source }: DeletionCase) => {
   });
 };
 
-describe.skipIf(!enabled || databaseUrl === undefined)(
+describe.skipIf(!enabled)(
   "chat content v3 backfill records parent deletions",
   () => {
     test.each([

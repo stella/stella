@@ -203,7 +203,8 @@ test.each([1, 2])(
         }),
       ),
     ).toMatchObject({
-      message: "Stored chat content requires the v3 data backfill",
+      // The compaction generator wraps the stored-content panic it hit.
+      cause: { message: "Stored chat content requires the v3 data backfill" },
     });
   },
 );
