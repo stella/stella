@@ -65,6 +65,17 @@ test("every unambiguous reporter spelling scans to its parsed identity", () => {
           : [],
       ),
     ).toEqual([canonical]);
+    const pageMarker = scan(`${text} p. 975`).result;
+    if (Result.isError(pageMarker)) {
+      throw pageMarker.error;
+    }
+    expect(
+      pageMarker.value.events.flatMap((event) =>
+        event.kind === "token" && event.token.kind === "full"
+          ? [event.token.base?.identifier.value]
+          : [],
+      ),
+    ).toEqual([canonical]);
     const placeholder = scan(`319 U.S., ${text}`).result;
     if (Result.isError(placeholder)) {
       throw placeholder.error;
@@ -117,6 +128,80 @@ test("every unambiguous reporter spelling scans to its parsed identity", () => {
           `${String(volume)}${gap}${spelling}${separator}${gap}${String(page)}`,
         );
       },
+    ),
+  );
+});
+
+test("every exact table spelling proves a next-volume boundary", () => {
+  const spellings = Object.keys(US_REPORTER_SPELLINGS);
+  type ReporterBoundaryArgs = {
+    spelling: string;
+    volume: number;
+    page: number;
+  };
+  const assertBoundary = ({ spelling, volume, page }: ReporterBoundaryArgs) => {
+    const text = `${String(volume)} ${spelling} ${String(page)}`;
+    const canonical = canonicalUsReporterCitation(text);
+    const citations = [
+      text,
+      `${String(volume)} ${spelling},${String(page)}`,
+      `${String(volume)} ${spelling} (8 U.S.) ${String(page)}`,
+      `${String(volume)} ${spelling} (8 U.S.),${String(page)}`,
+    ];
+    for (const citation of citations) {
+      for (const prefix of [
+        "319 U.S., ",
+        "319 U.S. 527, ",
+        "319 U.S. 527, 528, ",
+      ]) {
+        const { result } = scan(prefix + citation);
+        if (Result.isError(result)) {
+          throw result.error;
+        }
+        expect(
+          result.value.events.flatMap((event) =>
+            event.kind === "token" && event.token.kind === "full"
+              ? [event.token.base?.identifier.value ?? null]
+              : [],
+          ),
+        ).toEqual(
+          prefix === "319 U.S., " ? [canonical] : ["319 U.S. 527", canonical],
+        );
+      }
+    }
+    for (const lead of [" at ", ", at "]) {
+      const { result } = scan(
+        `319 U.S. 527, ${String(volume)} ${spelling}${lead}${String(page)}`,
+      );
+      if (Result.isError(result)) {
+        throw result.error;
+      }
+      expect(
+        result.value.events.flatMap((event) =>
+          event.kind === "token" && event.token.kind === "full"
+            ? [event.token.pin]
+            : [],
+        ),
+      ).toEqual([null]);
+      expect(
+        result.value.events.flatMap((event) =>
+          event.kind === "token" ? [event.token.kind] : [],
+        ),
+      ).toEqual(["full", "volume-reporter"]);
+    }
+  };
+  for (const spelling of spellings) {
+    assertBoundary({ spelling, volume: 137, page: 246 });
+  }
+  assertProperty(
+    "exact table spelling proves numeric role despite identity ambiguity",
+    fc.property(
+      fc.record({
+        spelling: fc.constantFrom(...spellings),
+        volume: fc.integer({ min: 1, max: 9999 }),
+        page: fc.integer({ min: 1, max: 99_999 }),
+      }),
+      assertBoundary,
     ),
   );
 });

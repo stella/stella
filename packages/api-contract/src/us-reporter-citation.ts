@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import type { DecisionReporterGrammar } from "./decision-query-intent";
 import {
   US_REPORTER_EDITIONS,
@@ -114,11 +116,14 @@ export const US_REPORTER_SPELLING_SOURCE = Object.keys(US_REPORTER_SPELLINGS)
   .map(flexibleSpellingSource)
   .join("|");
 
+/** Optional nominative volume and reporter, shared by whole and contextual reads. */
+export const US_REPORTER_NOMINATIVE_SOURCE = String.raw`(?:\s{0,16}\((?<nominative>\d{1,3}\s{1,16}(?:${US_REPORTER_SPELLING_SOURCE}))\))?`;
+
 /** A first page follows whitespace or a comma, with bounded typography gaps. */
 export const US_REPORTER_PAGE_LEAD_SOURCE = String.raw`(?:\s{0,16},\s{0,16}|\s{1,16})`;
 
-/** A number introducing another reporter reference is a volume, not a page. */
-export const US_REPORTER_PAGE_END_SOURCE = String.raw`(?![\p{L}\p{N}])(?!\s{1,16}(?:${US_REPORTER_SPELLING_SOURCE})(?:${US_REPORTER_PAGE_LEAD_SOURCE}\d{1,5}(?![\p{L}\p{N}])|\s{0,16},?\s{1,16}at\s{1,16}))`;
+/** A page cannot end inside a word or a longer numeral. */
+export const US_REPORTER_PAGE_END_SOURCE = String.raw`(?![\p{L}\p{N}])`;
 
 const DASH = "[-‐‑‒–—―−]";
 const PAGE_RANGE_SOURCE = String.raw`\d{1,5}(?:\s*${DASH}\s*\d{1,5})?`;
@@ -132,7 +137,7 @@ const REPORTER_GROUP_SOURCE = `(?<reporter>${US_REPORTER_SPELLING_SOURCE})`;
 
 const FULL_RE = new RegExp(
   String.raw`^${VOLUME_SOURCE}\s+${REPORTER_GROUP_SOURCE}` +
-    String.raw`(?:\s*\((?<nominative>\d{1,3}\s+(?:${US_REPORTER_SPELLING_SOURCE}))\))?` +
+    US_REPORTER_NOMINATIVE_SOURCE +
     String.raw`${US_REPORTER_PAGE_LEAD_SOURCE}(?<page>\d{1,5})${US_REPORTER_PAGE_END_SOURCE}` +
     String.raw`(?:(?:\s*,\s*(?:at\s+)?|\s+at\s+)(?<pins>${PIN_LIST_SOURCE}))?` +
     String.raw`(?:\s*\((?<parenthetical>[^()]{0,60}\d{4})\))?$`,
@@ -333,6 +338,35 @@ export const canonicalUsReporterCitation = (raw: string): string | null => {
   return others.length === 0 && only.reporter !== null && publishers === 1
     ? formatUsReporterCitation(only)
     : null;
+};
+
+const REFERENCE_START_RE = new RegExp(
+  String.raw`\d{1,4}\s{1,16}(?<reporter>${US_REPORTER_SPELLING_SOURCE})${US_REPORTER_NOMINATIVE_SOURCE}(?:${US_REPORTER_PAGE_LEAD_SOURCE}\d{1,5}${US_REPORTER_PAGE_END_SOURCE}|\s{0,16},?\s{1,16}at\s{1,16}\d{1,5}${US_REPORTER_PAGE_END_SOURCE})`,
+  "iyu",
+);
+
+/**
+ * A next reference may displace a page only with an exact table spelling.
+ * Case-folded candidates alone cannot distinguish prose `p.` from `P.`.
+ * This proves numeric roles, not identity; ambiguous reporters also qualify.
+ */
+export const isUsReporterReferenceStart = (
+  text: string,
+  from: number,
+): boolean => {
+  REFERENCE_START_RE.lastIndex = from;
+  const match = REFERENCE_START_RE.exec(text);
+  if (match === null) {
+    return false;
+  }
+  const reporter = match.groups?.["reporter"];
+  if (reporter === undefined) {
+    return panic("Reporter reference grammar matched without its reporter");
+  }
+  return (
+    US_REPORTER_SPELLINGS[spellingKey(reporter)] !== undefined &&
+    parseUsReporterReference(match[0]) !== null
+  );
 };
 
 const US_REPORTER_GRAMMAR: DecisionReporterGrammar = {

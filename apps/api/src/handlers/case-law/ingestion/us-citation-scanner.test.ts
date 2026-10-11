@@ -49,6 +49,52 @@ test("a page delimiter keeps an ambiguous reporter unresolved", () => {
   ).toEqual([null]);
 });
 
+test("a next reference volume never becomes a missing first page", () => {
+  const cases = [
+    ["137 F.2d 246 F.2d 975", ["246 F.2d 975"]],
+    ["319 U.S., 8 U.S. (8 Cranch) 229", ["8 U.S. 229"]],
+    ["137 S.W. 246 S.Ct. 2017", ["246 S. Ct. 2017"]],
+    ["137 S.W.3d 137 S.W.3d 975", ["137 S.W.3d 975"]],
+    ["_ U.S. _, 137 S.Ct. 246 L.Ed.2d 975", ["246 L. Ed. 2d 975"]],
+    ["137 U.S.\n246 S.Ct. at 975", []],
+  ] as const;
+  for (const [text, expected] of cases) {
+    const result = scan(text, { limit: 10_000, spent: 0 });
+    if (Result.isError(result)) {
+      throw result.error;
+    }
+    expect(
+      result.value.events.flatMap((event) =>
+        event.kind === "token" && event.token.kind === "full"
+          ? [event.token.base?.identifier.value]
+          : [],
+      ),
+    ).toEqual(expected.slice());
+  }
+});
+
+test("an ambiguous next reporter volume is never a pin", () => {
+  const result = scan("137 U.S. 246, 8 Cranch at 975", {
+    limit: 10_000,
+    spent: 0,
+  });
+  if (Result.isError(result)) {
+    throw result.error;
+  }
+  expect(
+    result.value.events.flatMap((event) =>
+      event.kind === "token" && event.token.kind === "full"
+        ? [event.token.pin]
+        : [],
+    ),
+  ).toEqual([null]);
+  expect(
+    result.value.events.flatMap((event) =>
+      event.kind === "token" ? [event.token.kind] : [],
+    ),
+  ).toEqual(["full", "volume-reporter"]);
+});
+
 test("case-folded footnote pins retain their note kind", () => {
   const result = scan("137 F3d 246, 247 N. 8", {
     limit: 10_000,

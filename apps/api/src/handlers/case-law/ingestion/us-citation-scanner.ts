@@ -18,7 +18,9 @@ import { panic, Result, TaggedError } from "better-result";
 
 import {
   canonicalUsReporterCitation,
+  isUsReporterReferenceStart,
   parseUsReporterReference,
+  US_REPORTER_NOMINATIVE_SOURCE,
   US_REPORTER_PAGE_END_SOURCE,
   US_REPORTER_PAGE_LEAD_SOURCE,
   US_REPORTER_SPELLING_SOURCE,
@@ -152,7 +154,7 @@ const PIN_ITEM = String.raw`(?:¶¶?\s?\d{1,5}(?:\s?${DASH}\s?\d{1,5})?|${NOTE_I
 const PIN_ITEM_END = String.raw`${US_REPORTER_PAGE_END_SOURCE}(?!\s{1,2}\p{L}[\p{L}'&]*\.)`;
 const FIRST_PIN_RE = new RegExp(`${PIN_ITEM}${PIN_ITEM_END}`, "iyu");
 const NEXT_PIN_RE = new RegExp(
-  String.raw`(?:\s?[,&]\s?|\sand\s)${PIN_ITEM}${PIN_ITEM_END}`,
+  String.raw`(?:\s?[,&]\s?|\sand\s)(?<item>${PIN_ITEM})${PIN_ITEM_END}`,
   "iyu",
 );
 const PIN_PART_RE = new RegExp(
@@ -203,6 +205,9 @@ const readPinList = (
   from: number,
   budget: CitationWorkBudget,
 ): PinRead | null => {
+  if (isUsReporterReferenceStart(text, from)) {
+    return null;
+  }
   FIRST_PIN_RE.lastIndex = from;
   const first = FIRST_PIN_RE.exec(text);
   if (first === null) {
@@ -213,6 +218,13 @@ const readPinList = (
     NEXT_PIN_RE.lastIndex = end;
     const next = NEXT_PIN_RE.exec(text);
     if (next === null || !chargeWork(budget, 1)) {
+      break;
+    }
+    const item = next.groups?.["item"];
+    if (item === undefined) {
+      return panic("Next pin grammar matched without an item");
+    }
+    if (isUsReporterReferenceStart(text, end + next[0].length - item.length)) {
       break;
     }
     end += next[0].length;
@@ -286,7 +298,7 @@ const REPORTER_WORD = String.raw`(?!at\s)\p{L}[\p{L}'&]*\.?`;
 const REPORTER_PART = String.raw`(?:${REPORTER_WORD}|\d{1,2}(?:d|nd|rd|th|st)\.?|\(\d{1,3}\s{1,2}[^()\d]{1,24}\))`;
 const REPORTER_RUN = String.raw`${REPORTER_WORD}(?:(?:(?<=\.)\s{0,2}|\s{1,2})${REPORTER_PART}){0,5}`;
 const CANDIDATE_RE = new RegExp(
-  String.raw`${VOLUME_START}(?<head>(?<volume>\d{1,4})\s{1,16}(?:${US_REPORTER_SPELLING_SOURCE}))(?:\s{0,16}\(\d{1,3}\s{1,16}(?:${US_REPORTER_SPELLING_SOURCE})\))?(?:${US_REPORTER_PAGE_LEAD_SOURCE}(?<page>\d{1,5})${US_REPORTER_PAGE_END_SOURCE}|(?<short>\s{0,16},?\s{1,16}at\s{1,16}))`,
+  String.raw`${VOLUME_START}(?<head>(?<volume>\d{1,4})\s{1,16}(?:${US_REPORTER_SPELLING_SOURCE}))${US_REPORTER_NOMINATIVE_SOURCE}(?:${US_REPORTER_PAGE_LEAD_SOURCE}(?<page>\d{1,5})${US_REPORTER_PAGE_END_SOURCE}|(?<short>\s{0,16},?\s{1,16}at\s{1,16}))`,
   "giu",
 );
 const UNSUPPORTED_SHORT_RE = new RegExp(
@@ -378,6 +390,9 @@ const reporterToken = (
   const head = match.groups?.["head"] ?? "";
   const page = match.groups?.["page"];
   if (page !== undefined) {
+    if (isUsReporterReferenceStart(text, matchEnd - page.length)) {
+      return null;
+    }
     const base = readFullCitation(match[0], identityKey);
     if (base !== undefined) {
       const pin = readLedPin(text, matchEnd, FULL_PIN_LEAD_RE, budget);
