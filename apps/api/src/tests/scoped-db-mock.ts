@@ -59,7 +59,7 @@ export const createSelectQueryMock = <TRow>(rows: TRow[]) => {
   const limit = (count: number) => {
     const selected = rows.slice(rowOffset, rowOffset + count);
     return Object.assign(Promise.resolve(selected), {
-      for: async () => await Promise.resolve(selected),
+      for: async () => selected,
     });
   };
   const offset = (count: number) => {
@@ -71,7 +71,7 @@ export const createSelectQueryMock = <TRow>(rows: TRow[]) => {
     Object.assign(Promise.resolve(rows), {
       limit,
       offset,
-      for: async () => await Promise.resolve(rows),
+      for: async () => rows,
       orderBy: () => ({ limit, offset }),
     });
   return {
@@ -200,12 +200,12 @@ export const createScopedDbMock = (
       execute: async (query: SQL) => {
         const rendered = new PgDialect().sqlToQuery(query);
         if (!/pg_(?:try_)?advisory_xact_lock\(/u.test(rendered.sql)) {
-          return Promise.resolve([]);
+          return [];
         }
         const identity = JSON.stringify(rendered.params);
         const key = advisoryKeys.get(identity) ?? advisoryKeys.size + 1;
         advisoryKeys.set(identity, key);
-        return Promise.resolve([{ key1: 1, key2: key, acquired: true }]);
+        return [{ key1: 1, key2: key, acquired: true }];
       },
       ...(typeof tx === "object" && tx !== null ? tx : {}),
       select: fixtureSelect(tx, options),

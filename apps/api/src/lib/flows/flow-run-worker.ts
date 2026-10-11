@@ -565,6 +565,7 @@ export const reconcileOrphanedFlowRuns = async (
           return panic("Unknown flow trigger source");
       }
     }
+    // db-await-in-loop: each keyset page admits its complete actor set before advancing the recovery cursor.
     const admitted = await loadBackgroundFeatureActors({
       tx: database,
       featureId: "flows",

@@ -23,7 +23,10 @@ import type { PracticeJurisdiction } from "@/api/db/schema";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
-import { isBackgroundFeatureEnabled } from "@/api/lib/feature-access/background";
+import {
+  isBackgroundFeatureEnabled,
+  loadBackgroundFeatureActors,
+} from "@/api/lib/feature-access/background";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
 import {
@@ -448,6 +451,14 @@ export const runWorkAttentionScout = async ({
 
   const assignedAt = await loadAssignedAt(db, rows);
   const batches = groupByRecipient(rows, assignedAt, now);
+  const admitted = await loadBackgroundFeatureActors({
+    tx: db,
+    featureId: "signals",
+    principals: batches.map((batch) => ({
+      organizationId: batch.organizationId,
+      userId: batch.recipientUserId,
+    })),
+  });
 
   let emitted = 0;
   let inserted = 0;
@@ -455,14 +466,7 @@ export const runWorkAttentionScout = async ({
   let organizationsWithoutMember = 0;
   for (const batch of batches) {
     const userId = batch.recipientUserId;
-    if (
-      !(await isBackgroundFeatureEnabled({
-        tx: db,
-        organizationId: batch.organizationId,
-        userId,
-        featureId: "signals",
-      }))
-    ) {
+    if (!admitted.get(batch.organizationId)?.has(userId)) {
       logger.info("scout.work_attention.skipped", {
         organizationId: batch.organizationId,
         reason: "recipient_not_granted",

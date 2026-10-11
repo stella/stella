@@ -53,7 +53,6 @@ export const getSearchMaintenance = (
       const readPage = async (cursor: string | null) =>
         readCursorPage(
           // Keyset pagination: O(1) per batch vs O(N) for offset
-          // db-await-in-loop: keyset page per iteration; the page is the batch
           database
             .select({ id: entities.id })
             .from(entities)
@@ -70,7 +69,6 @@ export const getSearchMaintenance = (
         );
       for await (const batch of iterateCursorPages(readPage)) {
         for (const entity of batch) {
-          // db-await-in-loop: full rebuild: each entity's document is built from its own fields and text, and no batched builder exists; the keyset page bounds each pass
           await indexEntity(entity.id);
         }
       }

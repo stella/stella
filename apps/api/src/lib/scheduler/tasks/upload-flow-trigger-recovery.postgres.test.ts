@@ -1389,7 +1389,7 @@ describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
               sourceKind: "document-review",
               sourceId,
               status: "awaiting_grant",
-              nextAttemptAt: LATER,
+              nextAttemptAt: NOW,
             });
             await recoverScoutEmission(
               asTestRaw<SchedulerTaskContext>({

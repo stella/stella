@@ -1,11 +1,13 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { is } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 import {
   boolean,
   getTableConfig,
   integer,
   jsonb,
+  PgDialect,
   PgTable,
   pgTable,
   text,
@@ -24,6 +26,7 @@ import { oauthConsent } from "@/api/db/auth-schema";
 import { bytea } from "@/api/db/columns";
 import { matterInboundAddresses, searchHistoryEntries } from "@/api/db/schema";
 import { ACCOUNT_DELETION_MANUAL_TABLES } from "@/api/lib/account-deletion-steps";
+import { aggregateExecutionRows } from "@/api/lib/db/aggregate-lock-order.fixture";
 import { removeOrganizationMemberInTransaction } from "@/api/lib/member-assignment-offboarding";
 import { ORGANIZATION_MEMBER_CLEANUP_COLUMNS } from "@/api/lib/member-assignment-offboarding-census";
 import {
@@ -290,6 +293,15 @@ const handledMemberTables = async (omittedDelete?: PgTable) => {
   });
   const transaction = new Proxy(database, {
     get: (target, property, receiver) => {
+      if (property === "execute") {
+        return async (statement: SQL) => {
+          const { sql: query } = new PgDialect().sqlToQuery(statement);
+          if (query.includes("advisory_xact_lock")) {
+            return aggregateExecutionRows(statement);
+          }
+          return await target.execute(statement);
+        };
+      }
       if (property === "transaction") {
         return async (run: (savepoint: typeof database) => Promise<unknown>) =>
           await run(transaction);

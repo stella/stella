@@ -74,7 +74,6 @@ export const findSignalsBackgroundActor = async ({
   const candidateMembers = alias(member, "signals_actor_candidates");
   let cursor: { id: string; createdAtToken: TimestampCasToken } | undefined;
   for (;;) {
-    // db-await-in-loop: keyset-search every admitted candidate; one refused snapshot cannot hide later members.
     const page = await readCursorPage(
       tx
         .select({

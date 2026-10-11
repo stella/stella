@@ -8,7 +8,6 @@
 import {
   afterAll,
   afterEach,
-  beforeAll,
   describe,
   expect,
   setSystemTime,
@@ -39,6 +38,7 @@ import { DueSlot } from "@/api/lib/scheduler/due-slot";
 import type { SchedulerDb, SchedulerJob } from "@/api/lib/scheduler/types";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -49,6 +49,7 @@ import {
   flowScheduleJobId,
 } from "./flow-run";
 
+const testState = createTestState({ file: import.meta.path, config: env });
 const testDb: TestDatabase = await getTestDb();
 
 // 2026-07-06 is a Monday, 2026-07-05 a Sunday.
@@ -72,7 +73,7 @@ describe("scheduled flow due day", () => {
     return startOutcomes.get(input.definitionId) ?? { status: "settled" };
   });
 
-  beforeAll(async () => {
+  testState.beforeAll(async () => {
     await testDb.insert(organization).values({
       id: organizationId,
       name: "Scheduled Flow Org",
@@ -200,16 +201,14 @@ describe("scheduled flow due day", () => {
   };
 
   test("deployment disabled retains a validated daily slot without starting", async () => {
-    const previousFlag = env.FEATURE_FLOWS;
     const restore = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
-    env.FEATURE_FLOWS = false;
+    testState.setConfig("FEATURE_FLOWS", false);
     try {
       const schedule: Schedule = { frequency: "daily", hourUtc: 23 };
       const definitionId = await createDefinition(schedule);
       await runTick(definitionId, schedule, MONDAY_SLOT, MONDAY_SLOT);
       expect(started.filter((id) => id === definitionId)).toHaveLength(0);
     } finally {
-      env.FEATURE_FLOWS = previousFlag;
       restore();
     }
   });
@@ -252,14 +251,13 @@ describe("scheduled flow due day", () => {
       "actor_not_granted",
     ] as const) {
       test(`${frequency} ${refusal} ignores non-due slots and settles stale retained slots before regrant`, async () => {
-        const previousFlag = env.FEATURE_FLOWS;
         const restore = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
         const schedule: Schedule =
           frequency === "weekly"
             ? { frequency, hourUtc: 23, dayOfWeek: 1 }
             : { frequency, hourUtc: 23, dayOfMonth: 6 };
         const definitionId = await createDefinition(schedule);
-        env.FEATURE_FLOWS = refusal !== "deployment_disabled";
+        testState.setConfig("FEATURE_FLOWS", refusal !== "deployment_disabled");
         if (refusal === "actor_not_granted") {
           await testDb
             .delete(featureEnrolments)
@@ -301,7 +299,7 @@ describe("scheduled flow due day", () => {
               },
             })
             .where(eq(schedulerJobs.id, flowScheduleJobId(definitionId)));
-          env.FEATURE_FLOWS = true;
+          testState.setConfig("FEATURE_FLOWS", true);
           if (refusal === "actor_not_granted") {
             await testDb
               .insert(featureEnrolments)
@@ -321,7 +319,6 @@ describe("scheduled flow due day", () => {
             dueSlot: MONDAY_SLOT.toISOString(),
           });
         } finally {
-          env.FEATURE_FLOWS = previousFlag;
           restore();
           await testDb
             .insert(featureEnrolments)

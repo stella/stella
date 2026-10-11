@@ -32,6 +32,10 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
+const offeredFeatures = () =>
+  SELF_SERVE_FEATURE_IDS.filter((featureId) =>
+    isDeploymentFeatureEnabled(FEATURE_REGISTRY[featureId].deploymentFeature),
+  );
 
 describe.skipIf(!runPostgresTests)(
   "feature enrolment ownership (postgres)",
@@ -129,11 +133,7 @@ describe.skipIf(!runPostgresTests)(
                   }),
                 ),
               ).toEqual({
-                features: SELF_SERVE_FEATURE_IDS.filter((featureId) =>
-                  isDeploymentFeatureEnabled(
-                    FEATURE_REGISTRY[featureId].deploymentFeature,
-                  ),
-                ).map((featureId) => ({
+                features: offeredFeatures().map((featureId) => ({
                   featureId,
                   enrolled: featureId === "time-billing" && owns,
                 })),
@@ -204,7 +204,10 @@ describe.skipIf(!runPostgresTests)(
               >(callerContext),
             ),
           ).toEqual({
-            features: [{ featureId: "time-billing", enrolled: false }],
+            features: offeredFeatures().map((featureId) => ({
+              featureId,
+              enrolled: false,
+            })),
           });
           env.FEATURE_TIME_BILLING = false;
           expect(
@@ -213,7 +216,12 @@ describe.skipIf(!runPostgresTests)(
                 Parameters<typeof getFeatureEnrolments.handler>[0]
               >(callerContext),
             ),
-          ).toEqual({ features: [] });
+          ).toEqual({
+            features: offeredFeatures().map((featureId) => ({
+              featureId,
+              enrolled: false,
+            })),
+          });
           expect(
             await enrolFeature.handler(
               createTestHandlerContext<

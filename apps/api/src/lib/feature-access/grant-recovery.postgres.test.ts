@@ -5,7 +5,7 @@ import { and, eq, getTableName, sql } from "drizzle-orm";
 import { MEMBER_REMOVAL_BUSY_CODE } from "@stll/api-contract";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
-import { member } from "@/api/db/auth-schema";
+import { member, user } from "@/api/db/auth-schema";
 import {
   featureEnrolments,
   flowDefinitions,
@@ -26,6 +26,7 @@ import { flowScheduleJobId } from "@/api/lib/scheduler/tasks/flow-run";
 import { resumeSignalsAfterGrant } from "@/api/lib/signals/grant-recovery";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
+import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import {
   flowReviewGateFixture,
   waitForBlockedPid,
@@ -258,6 +259,7 @@ if (!databaseUrl || !enabled) {
             initialRunStatus: "pending",
           });
           const previousFlows = env.FEATURE_FLOWS;
+          const retainedOwnerId = mintAuthProviderId<"user">();
           const previousSignals = env.FEATURE_SIGNALS;
           const restoreRuntime = setRuntimeModeForTesting({
             mode: RUNTIME_MODE.strict,
@@ -267,6 +269,20 @@ if (!databaseUrl || !enabled) {
           const definitionId = createSafeId<"flowDefinition">();
           const enqueueStep = mock(async () => {});
           try {
+            // Removing the recovery actor must preserve the organization's owner invariant.
+            await db.insert(user).values({
+              id: retainedOwnerId,
+              name: "Retained owner",
+              email: `${retainedOwnerId}@example.test`,
+              emailVerified: true,
+            });
+            await db.insert(member).values({
+              id: Bun.randomUUIDv7(),
+              organizationId: f.organizationId,
+              userId: retainedOwnerId,
+              role: "owner",
+              createdAt: new Date(),
+            });
             await db.insert(featureEnrolments).values({
               organizationId: f.organizationId,
               userId: f.userId,
@@ -409,6 +425,7 @@ if (!databaseUrl || !enabled) {
               .delete(schedulerJobs)
               .where(eq(schedulerJobs.id, flowScheduleJobId(definitionId)));
             await f.cleanup();
+            await db.delete(user).where(eq(user.id, retainedOwnerId));
             testState.setConfig("FEATURE_FLOWS", previousFlows);
             testState.setConfig("FEATURE_SIGNALS", previousSignals);
             restoreRuntime();

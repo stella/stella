@@ -51,6 +51,11 @@ const MIGRATIONS = [
     index: "flow_upload_trigger_intents_skipped_recovery_idx",
     table: "flow_upload_trigger_intents",
   },
+  {
+    name: "20261010006000_validate_feature_recovery_constraints",
+    index: undefined,
+    table: undefined,
+  },
 ] as const;
 const DEPENDENCIES = [
   "organization",
@@ -73,10 +78,39 @@ const migrationStatements = async (name: string) =>
     .map((statement) => statement.trim())
     .filter(Boolean);
 
+const executableStatement = (statement: string) =>
+  statement.replace(/^\s*--[^\n]*$/gmu, "").trim();
+
+const committedCutpoints = async (name: string) => {
+  const cutpoints: number[] = [];
+  let transaction: "open" | "committed" = "open";
+  const statements = await migrationStatements(name);
+  for (const [index, statement] of statements.entries()) {
+    const executable = executableStatement(statement);
+    if (/^BEGIN\s*;/iu.test(executable)) {
+      transaction = "open";
+      continue;
+    }
+    if (/^COMMIT\s*;/iu.test(executable)) {
+      transaction = "committed";
+      cutpoints.push(index);
+      continue;
+    }
+    // DDL outside BEGIN commits independently, including each constraint validation.
+    if (
+      transaction === "committed" &&
+      /^(?:ALTER|CREATE|DROP)\s/iu.test(executable)
+    ) {
+      cutpoints.push(index);
+    }
+  }
+  return cutpoints;
+};
+
 type ApplyMigrationOptions = {
   session: MigrationSession;
   name: string;
-  interrupt: "none" | "committed-prefix";
+  interrupt: "none" | "transaction-end" | number;
 };
 
 const applyMigration = async ({
@@ -85,11 +119,12 @@ const applyMigration = async ({
   interrupt,
 }: ApplyMigrationOptions) => {
   await session.unsafe("BEGIN");
-  for (const statement of await migrationStatements(name)) {
+  for (const [index, statement] of (
+    await migrationStatements(name)
+  ).entries()) {
     // db-await-in-loop: shipped migration statements require sequential execution.
     await session.unsafe(statement);
-    const executable = statement.replace(/^\s*--[^\n]*$/gmu, "").trim();
-    if (interrupt === "committed-prefix" && executable === "COMMIT;") {
+    if (interrupt === index) {
       return;
     }
   }
@@ -130,7 +165,8 @@ const seedRecoverySources = async (session: MigrationSession) => {
   for (let index = 0; index < 2; index += 1) {
     const entityId = Bun.randomUUIDv7();
     // db-await-in-loop: two source identities establish a genuine concurrent uniqueness failure.
-    await session`INSERT INTO entities (id, workspace_id, name) VALUES (${entityId}, ${workspaceId}, 'replay.pdf')`;
+    // LIKE copies the gate checks, but not the trigger that initializes the gate.
+    await session`INSERT INTO entities (id, workspace_id, name, entity_feature_gate) VALUES (${entityId}, ${workspaceId}, 'replay.pdf', 'open')`;
     // db-await-in-loop: seed the matching run before testing its replay index.
     await session`INSERT INTO flow_runs (id, workspace_id, definition_id, definition_snapshot, trigger_source)
       VALUES (${Bun.randomUUIDv7()}, ${workspaceId}, ${definitionId}, '{"name":"Replay flow","steps":[]}', '{"type":"schedule"}')`;
@@ -146,7 +182,10 @@ const seedRecoverySources = async (session: MigrationSession) => {
 type MigrationScenarioOptions = {
   session: MigrationSession;
   migration: (typeof MIGRATIONS)[number];
-  scenario: "complete" | "interrupted" | "invalid-index";
+  scenario:
+    | "complete"
+    | "invalid-index"
+    | { type: "interrupted"; afterStatement: number | "transaction-end" };
 };
 
 const migrationScenario = async ({
@@ -213,7 +252,11 @@ const migrationScenario = async ({
       await applyMigration({
         session,
         name: migration.name,
-        interrupt: "committed-prefix",
+        interrupt:
+          scenario === "invalid-index"
+            ? ((await committedCutpoints(migration.name)).at(0) ??
+              "transaction-end")
+            : scenario.afterStatement,
       });
       if (
         migration.name === "20261010005400_upload_trigger_settlements" ||
@@ -276,13 +319,21 @@ describe.skipIf(!enabled)(
                 migration,
                 scenario: "complete",
               });
-              expect(
-                await migrationScenario({
-                  session,
-                  migration,
-                  scenario: "interrupted",
-                }),
-              ).toBe(complete);
+              const cutpoints = await committedCutpoints(migration.name);
+              const interruptions =
+                cutpoints.length === 0
+                  ? ["transaction-end" as const]
+                  : cutpoints;
+              for (const afterStatement of interruptions) {
+                // db-await-in-loop: each committed prefix gets a fresh isolated replay schema.
+                expect(
+                  await migrationScenario({
+                    session,
+                    migration,
+                    scenario: { type: "interrupted", afterStatement },
+                  }),
+                ).toBe(complete);
+              }
               if (migration.index !== undefined) {
                 expect(
                   await migrationScenario({

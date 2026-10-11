@@ -362,6 +362,7 @@ export const deleteEntitiesHandler = async function* ({
     detached(
       Result.tryPromise(
         async () =>
+          // db-await-in-loop: non-PG repair removes each committed entity through the provider's single-entity API.
           await safeDb(
             async (tx) =>
               await getSearchMaintenance(tx, upsertSearchDocument).removeEntity(

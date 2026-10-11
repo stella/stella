@@ -172,7 +172,6 @@ export const recoverScoutEmission: SchedulerTask = async ({
   ).items;
   for (const source of pending) {
     signal.throwIfAborted();
-    // db-await-in-loop: bounded source page; independent atomic tenant emission and dequeue
     const recovery = await Result.tryPromise(async () =>
       withAggregateTransaction(db, async (tx) => {
         await lockFeatureRecoveryAdmission({
