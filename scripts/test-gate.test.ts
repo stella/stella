@@ -327,7 +327,7 @@ context("test registration census", () => {
         gatingJobs: new Map([["ci-checks-rest", ["bun scripts/test-gate.ts"]]]),
         packageDirectory: "packages/orphan",
         packageName: "@stll/orphan",
-        shardedPackages: new Set(),
+        shardedPackages: new Set<string>(),
       }),
     ).toBe("job condition: no gating job executes @stll/orphan test");
   });
@@ -340,7 +340,7 @@ context("test registration census", () => {
         ]),
         packageDirectory: "packages/orphan",
         packageName: "@stll/orphan",
-        shardedPackages: new Set(),
+        shardedPackages: new Set<string>(),
       }),
     ).toBe("job condition: no gating job executes @stll/orphan test");
   });
@@ -367,7 +367,7 @@ context("test registration census", () => {
         gatingJobs: new Map([["package-check", [packageCommand]]]),
         packageDirectory: "packages/orphan",
         packageName: "@stll/orphan",
-        shardedPackages: new Set(),
+        shardedPackages: new Set<string>(),
       }),
       managedServiceRunnerFailure({
         command: serviceCommand,
@@ -398,7 +398,7 @@ context("test registration census", () => {
         ]),
         packageDirectory: "packages/orphan",
         packageName: "@stll/orphan",
-        shardedPackages: new Set(),
+        shardedPackages: new Set<string>(),
       }),
       managedServiceRunnerFailure({
         command: serviceCommand,
@@ -425,7 +425,7 @@ jobs:
         gatingJobs: gatingWorkflowJobs(workflow),
         packageDirectory: "packages/orphan",
         packageName: "@stll/orphan",
-        shardedPackages: new Set(),
+        shardedPackages: new Set<string>(),
       }),
     ).toBe("job condition: no gating job executes @stll/orphan test");
   });
@@ -450,7 +450,7 @@ jobs:
         gatingJobs: gatingWorkflowJobs(workflow),
         packageDirectory: "packages/orphan",
         packageName: "@stll/orphan",
-        shardedPackages: new Set(),
+        shardedPackages: new Set<string>(),
       }),
     ).toBe("job condition: no gating job executes @stll/orphan test");
   });
@@ -475,7 +475,7 @@ jobs:
         gatingJobs: gatingWorkflowJobs(workflow),
         packageDirectory: "packages/orphan",
         packageName: "@stll/orphan",
-        shardedPackages: new Set(),
+        shardedPackages: new Set<string>(),
       }),
     ).toBeUndefined();
   });
@@ -495,7 +495,7 @@ jobs:
         gatingJobs: analyzeGatingWorkflow(workflow).jobs,
         packageDirectory: "packages/orphan",
         packageName: "@stll/orphan",
-        shardedPackages: new Set(),
+        shardedPackages: new Set<string>(),
       }),
     ).toBeUndefined();
   });
@@ -517,7 +517,7 @@ jobs:
           gatingJobs: analyzeGatingWorkflow(workflow).jobs,
           packageDirectory: "packages/orphan",
           packageName: "@stll/orphan",
-          shardedPackages: new Set(),
+          shardedPackages: new Set<string>(),
         }),
       ).toBe("job condition: no gating job executes @stll/orphan test");
     },
@@ -542,7 +542,7 @@ jobs:
         gatingJobs: analysis.jobs,
         packageDirectory: "packages/orphan",
         packageName: "@stll/orphan",
-        shardedPackages: new Set(),
+        shardedPackages: new Set<string>(),
       }),
     ).toBe("job condition: no gating job executes @stll/orphan test");
   });
@@ -579,7 +579,7 @@ jobs:
         gatingJobs: analysis.jobs,
         packageDirectory: "packages/orphan",
         packageName: "@stll/orphan",
-        shardedPackages: new Set(),
+        shardedPackages: new Set<string>(),
       }),
     ).toBeUndefined();
   });
@@ -599,7 +599,7 @@ jobs:
         gatingJobs: gatingWorkflowJobs(workflow),
         packageDirectory: "packages/orphan",
         packageName: "@stll/orphan",
-        shardedPackages: new Set(),
+        shardedPackages: new Set<string>(),
       }),
     ).toBe("job condition: no gating job executes @stll/orphan test");
   });
@@ -619,7 +619,7 @@ jobs:
         gatingJobs: gatingWorkflowJobs(workflow),
         packageDirectory: "packages/orphan",
         packageName: "@stll/orphan",
-        shardedPackages: new Set(),
+        shardedPackages: new Set<string>(),
       }),
     ).toBe("job condition: no gating job executes @stll/orphan test");
   });
@@ -639,7 +639,7 @@ jobs:
         gatingJobs: gatingWorkflowJobs(workflow),
         packageDirectory: "packages/orphan",
         packageName: "@stll/orphan",
-        shardedPackages: new Set(),
+        shardedPackages: new Set<string>(),
       }),
     ).toBe("job condition: no gating job executes @stll/orphan test");
   });
@@ -660,7 +660,7 @@ jobs:
         gatingJobs: gatingWorkflowJobs(workflow),
         packageDirectory: "packages/orphan",
         packageName: "@stll/orphan",
-        shardedPackages: new Set(),
+        shardedPackages: new Set<string>(),
       }),
     ).toBe("job condition: no gating job executes @stll/orphan test");
   });
@@ -747,7 +747,7 @@ context("root test runner coverage", () => {
 `;
         const topology = {
           gatingJobs: gatingWorkflowJobs(Bun.YAML.parse(workflow)),
-          shardedPackages: new Set(),
+          shardedPackages: new Set<string>(),
           workflow,
         };
         expect(
@@ -769,7 +769,7 @@ context("root test runner coverage", () => {
 `;
     const topology = {
       gatingJobs: gatingWorkflowJobs(Bun.YAML.parse(workflow)),
-      shardedPackages: new Set(),
+      shardedPackages: new Set<string>(),
       workflow,
     };
     for (const file of [...files, "scripts/named.test.ts"]) {
@@ -801,7 +801,7 @@ context("root test runner coverage", () => {
           nonGatingFiles: new Set(),
           topology: {
             gatingJobs: gatingWorkflowJobs(Bun.YAML.parse(workflow)),
-            shardedPackages: new Set(),
+            shardedPackages: new Set<string>(),
             workflow,
           },
         }),
@@ -844,7 +844,7 @@ context("root runner command shapes", () => {
           nonGatingFiles: new Set(),
           topology: {
             gatingJobs: gatingWorkflowJobs(Bun.YAML.parse(workflow)),
-            shardedPackages: new Set(),
+            shardedPackages: new Set<string>(),
             workflow,
           },
         });
@@ -890,7 +890,7 @@ context("suppressed collection", () => {
               nonGatingFiles: new Set(),
               topology: {
                 gatingJobs: new Map([["root-tests", [command]]]),
-                shardedPackages: new Set(),
+                shardedPackages: new Set<string>(),
                 workflow,
               },
             }),
@@ -906,7 +906,7 @@ context("suppressed collection", () => {
           ]),
           packageDirectory: "packages/orphan",
           packageName: "@stll/orphan",
-          shardedPackages: new Set(),
+          shardedPackages: new Set<string>(),
         }),
       ).toBeUndefined();
       for (const scripts of [
@@ -954,7 +954,7 @@ context("Playwright failure propagation", () => {
         scripts: { "test:browser": body },
         topology: {
           gatingJobs: new Map([["browser-tests", [invocation]]]),
-          shardedPackages: new Set(),
+          shardedPackages: new Set<string>(),
           workflow: invocation,
         },
       }),
@@ -975,7 +975,7 @@ context("Playwright configuration filters", () => {
         gatingJobs: new Map([
           ["browser-tests", ["bun --filter @stll/desktop test:browser"]],
         ]),
-        shardedPackages: new Set(),
+        shardedPackages: new Set<string>(),
         workflow: "",
       },
       readConfig: () =>
@@ -1074,7 +1074,7 @@ context("Playwright CLI selection", () => {
           scripts: { "test:browser": body },
           topology: {
             gatingJobs: new Map([["browser-tests", [invocation]]]),
-            shardedPackages: new Set(),
+            shardedPackages: new Set<string>(),
             workflow: invocation,
           },
           readConfig:
@@ -1102,7 +1102,7 @@ context("Playwright selector contracts", () => {
       scripts: { "test:browser": "playwright test" },
       topology: {
         gatingJobs: new Map([["browser-tests", [invocation]]]),
-        shardedPackages: new Set(),
+        shardedPackages: new Set<string>(),
         workflow: invocation,
       },
       readConfig: () => `export default defineConfig({
@@ -1176,7 +1176,7 @@ ${steps}
       scripts: { "test:browser": "playwright test" },
       topology: {
         gatingJobs: analysis.jobs,
-        shardedPackages: new Set(),
+        shardedPackages: new Set<string>(),
         workflow,
       },
       readConfig: () =>
