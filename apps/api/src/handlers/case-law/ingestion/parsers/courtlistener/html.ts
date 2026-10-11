@@ -474,50 +474,29 @@ const publisherLinks = ($: cheerio.CheerioAPI, root: ParentNode): number =>
     .toArray()
     .filter((element) => !element.attribs["href"]?.startsWith("#")).length;
 
-/**
- * A complete publisher page can survive in a text column with class/id
- * attributes removed. Its single outer wrapper still encloses separate
- * header, captioned document and footer siblings. Only that complete,
- * unambiguous signature proves the document boundary; an ambiguous page
- * keeps its original root and therefore still requires any image assets.
- */
+/** A document header can carry its caption; page furniture needs page evidence. */
 const documentBody = ($: cheerio.CheerioAPI, body: ParentNode): ParentNode => {
-  const children = body.children.filter(isTag);
-  const wrapper = children.at(0);
-  if (children.length !== 1 || wrapper?.name !== "div") {
+  const headers = $(body).find("header");
+  const pageHeaders = headers.filter(
+    (_, element) => $(element).find("nav").length > 0,
+  );
+  const footers = $(body).find("footer");
+  $(body).find("nav, aside").remove();
+  const documentHeading = $(body)
+    .find("h1")
+    .toArray()
+    .some((heading) => $(heading).closest("header, footer").length === 0);
+  if (pageHeaders.length === 0 || footers.length === 0 || !documentHeading) {
     return body;
   }
-  let header = false;
-  let footer = false;
-  let candidate: Element | undefined;
-  for (const child of wrapper.children) {
-    if (!isTag(child)) {
-      continue;
+  // A heading inside a header/footer belongs to the document unless it was
+  // inside the navigation already removed above.
+  pageHeaders.add(footers).each((_, element) => {
+    if ($(element).find("h1, h2, h3, h4, h5, h6").length === 0) {
+      $(element).remove();
     }
-    const markers = $(child).find("header, footer, h1").toArray();
-    if (["header", "footer", "h1"].includes(child.name)) {
-      markers.push(child);
-    }
-    const headings = markers.filter(({ name }) => name === "h1");
-    const hasHeader = markers.some(({ name }) => name === "header");
-    const hasFooter = markers.some(({ name }) => name === "footer");
-    header ||= hasHeader;
-    footer ||= hasFooter;
-    if (headings.length === 0) {
-      continue;
-    }
-    if (
-      headings.length !== 1 ||
-      candidate !== undefined ||
-      child.name !== "div" ||
-      hasHeader ||
-      hasFooter
-    ) {
-      return body;
-    }
-    candidate = child;
-  }
-  return header && footer && candidate !== undefined ? candidate : body;
+  });
+  return body;
 };
 
 const parseHtml =
@@ -616,7 +595,9 @@ const parseHtml =
         reason: TEXT_CANDIDATE_UNUSABLE.NO_VISIBLE_TEXT,
       };
     }
-    const source = sourceTextOf(body, vocabulary);
+    // Conservation uses the full page minus identified chrome, independently of
+    // the root chosen for the block walk.
+    const source = sourceTextOf(pageBody, vocabulary);
     if (!conservesText(source.paragraphs.join(" "), units)) {
       return {
         status: "unusable",

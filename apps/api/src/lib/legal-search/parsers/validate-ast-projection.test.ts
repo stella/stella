@@ -52,7 +52,9 @@ test("canonical projection accepts letter spacing and detects lost letters", () 
       }),
       fc.constantFrom(" ", "  "),
       (words, spacing) => {
-        const text = words.map((word) => [...word].join(spacing)).join("\n");
+        const text = words
+          .map((word) => Array.from(word).join(spacing))
+          .join("\n");
         const block = paragraph(text);
         expect(block.plainText).not.toBe(text);
         const result = validateAst(`<p>${text}</p>`, [block]);
@@ -87,7 +89,7 @@ test("canonical validation does not invent words across folded OCR lines", () =>
         const filler =
           "The invented judgment preserves complete words. ".repeat(100);
         const sourceParts = words.map(
-          (word) => `Term ${[...word].join("\n")} suffix.`,
+          (word) => `Term ${Array.from(word).join("\n")} suffix.`,
         );
         const blocks = words.map((word) =>
           paragraph(`Term ${word.slice(0, 2)} ${word.slice(2)} suffix.`),
