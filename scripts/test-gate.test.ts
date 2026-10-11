@@ -1,4 +1,5 @@
 import { describe as context, expect, test as check } from "bun:test";
+import { readFileSync } from "node:fs";
 
 import {
   analyzeGatingWorkflow,
@@ -381,6 +382,110 @@ context("test registration census", () => {
       }),
     ).toContain("does not collect");
   });
+
+  check.each([
+    ["bun test src/one", "two.test.ts", true],
+    ["bun test --preload ./setup.ts", "--timeout 100 one", false],
+    ["bun run test:unit", "one.test.ts", false],
+    ["bun test", "./one.test.ts", false],
+    ["bun test", "one", false],
+    ["bun test", "--path-ignore-patterns '**/two.test.ts'", false],
+  ])(
+    "combines Bun body %s with arguments %s",
+    (body, forwarded, collectsTwo) => {
+      const command = `bun --filter @stll/orphan test -- ${forwarded}`;
+      const options = {
+        gatingJobs: new Map([["package-check", [command]]]),
+        packageDirectory: "packages/orphan",
+        packageName: "@stll/orphan",
+        shardedPackages: new Set<string>(),
+      };
+      const scripts = { test: body, "test:unit": "bun test" };
+      const failure = packageTestExecutionFailure({
+        ...options,
+        collection: { candidate: "packages/orphan/src/two.test.ts", scripts },
+      });
+      if (collectsTwo) {
+        expect(failure).toBeUndefined();
+      } else {
+        expect(failure).toBeDefined();
+      }
+    },
+  );
+
+  check.each([
+    `"\${args[@]}"`,
+    '"$(( shard + 1 ))"',
+    "--shard 1/2",
+    "-t focused",
+  ])(
+    "fails closed and names unresolved forwarded arguments: %s",
+    (forwarded) => {
+      const command = `bun --filter @stll/orphan test -- ${forwarded}`;
+      const failure = packageTestExecutionFailure({
+        gatingJobs: new Map([["package-check", [command]]]),
+        packageDirectory: "packages/orphan",
+        packageName: "@stll/orphan",
+        shardedPackages: new Set(),
+        collection: {
+          candidate: "packages/orphan/two.test.ts",
+          scripts: { test: "bun test" },
+        },
+      });
+      expect(failure).toContain("runner arguments: unresolved");
+      expect(failure).toContain(command);
+    },
+  );
+
+  check(
+    "resolves the root query-cache check without broadening its forwarded selection",
+    () => {
+      const rootScripts = {
+        "check:query-cache-types":
+          "bun run generate && bun --filter @stll/orphan test -- src/one.test.ts && bun packages/scripts/src/query-cache-types.ts",
+      };
+      const options = {
+        rootScripts,
+        gatingJobs: new Map([
+          ["package-check", ["bun run check:query-cache-types"]],
+        ]),
+        packageDirectory: "packages/orphan",
+        packageName: "@stll/orphan",
+        shardedPackages: new Set<string>(),
+      };
+      expect(
+        packageTestExecutionFailure({
+          ...options,
+          collection: {
+            candidate: "packages/orphan/src/one.test.ts",
+            scripts: { test: "bun test" },
+          },
+        }),
+      ).toBeUndefined();
+      expect(
+        packageTestExecutionFailure({
+          ...options,
+          collection: {
+            candidate: "packages/orphan/src/two.test.ts",
+            scripts: { test: "bun test" },
+          },
+        }),
+      ).toContain("does not collect");
+    },
+  );
+
+  check.each(["nightly-test", "api-test-memory", "network-baseline-record"])(
+    "separate workflow %s supplies no gating credit",
+    (name) => {
+      const workflow = Bun.YAML.parse(
+        readFileSync(
+          new URL(`../.github/workflows/${name}.yml`, import.meta.url),
+          "utf-8",
+        ),
+      );
+      expect(gatingWorkflowJobs(workflow).size).toBe(0);
+    },
+  );
 
   check("requires the gating job to invoke the exact test script", () => {
     expect(
