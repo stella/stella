@@ -19,6 +19,11 @@ import { Temporal } from "@stll/time";
 
 import { isMockAI } from "@/api/consts";
 import {
+  MOCK_AI_CANCELLATION_MARKER,
+  mockAiCancellationChunks,
+  mockAiCancellationSignal,
+} from "@/api/dev/mock-ai-cancellation";
+import {
   mockAiStreamKindChunks,
   mockAiStreamKindOf,
 } from "@/api/dev/mock-ai-stream-kinds";
@@ -436,7 +441,7 @@ async function* createDocumentCallChunks({
   };
 }
 
-const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
+export const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
   kind: "text",
   name: "mock",
   model: modelId,
@@ -448,7 +453,8 @@ const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
     toolCallMetadata: {},
     systemPromptMetadata: undefined,
   },
-  async *chatStream({ model, runId, threadId, messages }) {
+  async *chatStream(options) {
+    const { model, runId, threadId, messages } = options;
     logger.debug("mock_ai.turn_answered", { "ai.model": model });
     const resolvedRunId = runId ?? "mock-run";
     const resolvedThreadId = threadId ?? "mock-thread";
@@ -587,7 +593,19 @@ const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
       timestamp,
     } satisfies AdapterYieldChunk;
 
-    if (slowStream) {
+    if (latestUserText.includes(MOCK_AI_CANCELLATION_MARKER)) {
+      for await (const delta of mockAiCancellationChunks(
+        mockAiCancellationSignal(options),
+      )) {
+        yield {
+          type: EventType.TEXT_MESSAGE_CONTENT,
+          messageId,
+          delta,
+          model,
+          timestamp,
+        } satisfies AdapterYieldChunk;
+      }
+    } else if (slowStream) {
       for (const delta of SLOW_STREAM_CHUNKS) {
         yield {
           type: EventType.TEXT_MESSAGE_CONTENT,
@@ -1034,7 +1052,7 @@ const synthesizeJsonSchemaArray = (node: JsonSchemaNode): unknown[] => {
   );
 };
 
-if (isMockAI()) {
+export const registerMockAI = () => {
   registerBatchGenerator(generateBatchMock);
   registerTanStackMockTextAdapterFactory(createMockTextAdapter);
   logger.warn("mock_ai.enabled", {
@@ -1044,4 +1062,8 @@ if (isMockAI()) {
         ? "every AI request gets a canned reply, organization keys included"
         : "AI requests get canned replies unless the organization configured its own key",
   });
+};
+
+if (isMockAI()) {
+  registerMockAI();
 }
