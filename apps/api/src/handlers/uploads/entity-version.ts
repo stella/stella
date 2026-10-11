@@ -197,7 +197,7 @@ export const finalizeEntityVersion = async function* ({
     const writeResultResult = await safeDb(async (tx) => {
       await withAggregateParentBatch({
         tx,
-        organizationIds: [organizationId],
+        organizationIds: [],
         workspaceIds: [workspaceId],
         mode: "key share",
       });
