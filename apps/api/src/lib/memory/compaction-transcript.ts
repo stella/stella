@@ -114,9 +114,6 @@ export const renderTranscript = (rows: readonly TranscriptRow[]): string => {
 };
 
 const messageText = (content: TranscriptRow["content"]): string => {
-  if (content.version !== 3) {
-    panic("Stored chat content requires the v3 data backfill");
-  }
   if (!Array.isArray(content.data)) {
     panic("Stored v3 chat content has invalid data");
   }

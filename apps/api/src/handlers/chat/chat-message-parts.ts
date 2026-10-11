@@ -186,12 +186,8 @@ export const createChatAttachmentPart = ({
 
 export const normalizePersistedChatMessageContent = (
   content: PersistedChatMessageContent,
-): NormalizedChatMessageParts => {
-  if (content.version !== 3) {
-    panic("Stored chat content requires the v3 data backfill");
-  }
-  return normalizePersistedV3ChatMessageContent(content);
-};
+): NormalizedChatMessageParts =>
+  normalizePersistedV3ChatMessageContent(content);
 
 type PersistedV3Part = PersistedChatMessageContentV3["data"][number];
 

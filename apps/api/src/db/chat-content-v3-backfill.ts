@@ -31,6 +31,12 @@ export const CHAT_CONTENT_V3_SOURCES = {
   ChatContentV3Source,
   { table: string; messageId: string }
 >;
+const chatContentV3Source = (key: string): ChatContentV3Source => {
+  if (key === "message" || key === "revision") {
+    return key;
+  }
+  return panic("Unknown chat backfill source");
+};
 const backfillName = (source: ChatContentV3Source) =>
   `chat-content-v3-${source}`;
 
@@ -251,10 +257,8 @@ export const createChatContentV3Repair = (
   name: "chat-content-v3",
   readCompletion: readChatContentV3Completion,
   repair: async (connection) => {
-    for (const source of Object.keys(CHAT_CONTENT_V3_SOURCES)) {
-      if (source !== "message" && source !== "revision") {
-        return panic("Unknown chat backfill source");
-      }
+    for (const key of Object.keys(CHAT_CONTENT_V3_SOURCES)) {
+      const source = chatContentV3Source(key);
       // Fresh installations have no data work or metric source to wait for.
       if (
         (

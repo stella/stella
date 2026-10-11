@@ -902,9 +902,6 @@ const estimateDeltaPartTokens = (part: unknown): number => {
 };
 
 const deltaMessageParts = (message: DeltaMessage): unknown[] => {
-  if (message.content.version !== 3) {
-    panic("Stored chat content requires the v3 data backfill");
-  }
   if (!Array.isArray(message.content.data)) {
     panic("Stored v3 chat content has invalid data");
   }

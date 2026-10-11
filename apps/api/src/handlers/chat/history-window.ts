@@ -20,10 +20,11 @@ import { chatMessageCursorCodec } from "@/api/lib/chat/message-cursor";
 import type { TimestampIdCursor } from "@/api/lib/db-pagination";
 import { LIMITS } from "@/api/lib/limits";
 
-export type WindowedThreadMessage = Pick<
-  typeof chatMessages.$inferSelect,
-  "id" | "role" | "content"
->;
+export type WindowedThreadMessage = {
+  id: SafeId<"chatMessage">;
+  role: ChatMessageRole;
+  content: PersistedChatMessageContent;
+};
 
 /**
  * PostgreSQL's version of the row: every insert and every update writes a new
