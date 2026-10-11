@@ -30,6 +30,7 @@ import {
 } from "@/api/lib/bullmq-requeue";
 import type { RequeueableQueue } from "@/api/lib/bullmq-requeue";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
+import { withAggregateRowQuery } from "@/api/lib/db/aggregate-lock";
 import type { FeatureAccessGrants } from "@/api/lib/feature-access/grants-schema";
 import type { ListVerificationAccessProof } from "@/api/lib/lists/verification/access";
 import { resolveListVerificationAccess } from "@/api/lib/lists/verification/access-context";
@@ -231,22 +232,28 @@ export const resolveListVerificationRunAccess = async ({
   expectedStatus,
 }: ResolvePersistedRunAccessArgs) => {
   const persisted = (
-    await tx
-      .select({
-        requestedBy: legalListVerificationRuns.requestedBy,
-        status: legalListVerificationRuns.status,
-      })
-      .from(legalListVerificationRuns)
-      .where(
-        and(
-          eq(legalListVerificationRuns.id, run.id),
-          eq(legalListVerificationRuns.organizationId, run.organizationId),
-          eq(legalListVerificationRuns.workspaceId, run.workspaceId),
-        ),
-      )
-      .limit(1)
-      .for("update")
-  ).at(0);
+    await withAggregateRowQuery({
+      tx,
+      aggregate: "listVerificationRun",
+      id: { id: run.id, workspaceId: run.workspaceId },
+      mode: "update",
+      select: () =>
+        tx
+          .select({
+            workspaceId: legalListVerificationRuns.workspaceId,
+            id: legalListVerificationRuns.id,
+            requestedBy: legalListVerificationRuns.requestedBy,
+            status: legalListVerificationRuns.status,
+          })
+          .from(legalListVerificationRuns)
+          .limit(1),
+      where: and(
+        eq(legalListVerificationRuns.id, run.id),
+        eq(legalListVerificationRuns.organizationId, run.organizationId),
+        eq(legalListVerificationRuns.workspaceId, run.workspaceId),
+      ),
+    })
+  ).rows.at(0);
   if (
     persisted === undefined ||
     (persisted.status !== "queued" && persisted.status !== "running") ||
@@ -464,23 +471,30 @@ const setRunFailed = async ({
   await actor.writeDb(async (tx) => {
     // The persisted requester is authoritative for both transition and audit.
     const owned = (
-      await tx
-        .select({ id: legalListVerificationRuns.id })
-        .from(legalListVerificationRuns)
-        .where(
-          and(
-            eq(legalListVerificationRuns.id, actor.runId),
-            eq(legalListVerificationRuns.workspaceId, actor.workspaceId),
-            eq(legalListVerificationRuns.organizationId, actor.organizationId),
-            or(
-              eq(legalListVerificationRuns.requestedBy, actor.userId),
-              isNull(legalListVerificationRuns.requestedBy),
-            ),
+      await withAggregateRowQuery({
+        tx,
+        aggregate: "listVerificationRun",
+        id: { id: actor.runId, workspaceId: actor.workspaceId },
+        mode: "update",
+        select: () =>
+          tx
+            .select({
+              workspaceId: legalListVerificationRuns.workspaceId,
+              id: legalListVerificationRuns.id,
+            })
+            .from(legalListVerificationRuns)
+            .limit(1),
+        where: and(
+          eq(legalListVerificationRuns.id, actor.runId),
+          eq(legalListVerificationRuns.workspaceId, actor.workspaceId),
+          eq(legalListVerificationRuns.organizationId, actor.organizationId),
+          or(
+            eq(legalListVerificationRuns.requestedBy, actor.userId),
+            isNull(legalListVerificationRuns.requestedBy),
           ),
-        )
-        .limit(1)
-        .for("update")
-    ).at(0);
+        ),
+      })
+    ).rows.at(0);
     if (owned === undefined) {
       return;
     }
@@ -843,19 +857,27 @@ export const processListVerificationRun = async ({
 }: ProcessListVerificationRunArgs): Promise<void> => {
   const claim = await actor.writeDb(async (tx) => {
     const run = (
-      await tx
-        .select({ requestedBy: legalListVerificationRuns.requestedBy })
-        .from(legalListVerificationRuns)
-        .where(
-          and(
-            eq(legalListVerificationRuns.id, actor.runId),
-            eq(legalListVerificationRuns.workspaceId, actor.workspaceId),
-            eq(legalListVerificationRuns.organizationId, actor.organizationId),
-          ),
-        )
-        .limit(1)
-        .for("update")
-    ).at(0);
+      await withAggregateRowQuery({
+        tx,
+        aggregate: "listVerificationRun",
+        id: { id: actor.runId, workspaceId: actor.workspaceId },
+        mode: "update",
+        select: () =>
+          tx
+            .select({
+              workspaceId: legalListVerificationRuns.workspaceId,
+              id: legalListVerificationRuns.id,
+              requestedBy: legalListVerificationRuns.requestedBy,
+            })
+            .from(legalListVerificationRuns)
+            .limit(1),
+        where: and(
+          eq(legalListVerificationRuns.id, actor.runId),
+          eq(legalListVerificationRuns.workspaceId, actor.workspaceId),
+          eq(legalListVerificationRuns.organizationId, actor.organizationId),
+        ),
+      })
+    ).rows.at(0);
     if (
       run === undefined ||
       (run.requestedBy !== null && run.requestedBy !== actor.userId)

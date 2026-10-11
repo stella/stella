@@ -17,6 +17,10 @@ import {
   legalListVerificationRuns,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  withAggregateRowQuery,
+  withAggregateSetQuery,
+} from "@/api/lib/db/aggregate-lock";
 import type {
   ClaimState,
   ClaimVerdict,
@@ -239,7 +243,7 @@ export const readVerificationRun = async ({
 };
 
 type ReadClaimForReviewArgs = {
-  tx: Pick<Transaction, "select">;
+  tx: Transaction;
   workspaceId: SafeId<"workspace">;
   runId: SafeId<"legalListVerificationRun">;
   claimId: SafeId<"legalListClaim">;
@@ -250,57 +254,79 @@ export const readClaimForReview = async ({
   workspaceId,
   runId,
   claimId,
-}: ReadClaimForReviewArgs) =>
+}: ReadClaimForReviewArgs) => {
   // Locking the claim serializes reviewers on it, so the fold the event
   // is validated against is the one it will be appended to.
-  (
-    await tx
-      .select({
-        state: legalListClaims.state,
-        recordConflict: legalListClaims.recordConflict,
-      })
-      .from(legalListClaims)
-      .where(
-        and(
-          eq(legalListClaims.id, claimId),
-          eq(legalListClaims.runId, runId),
-          eq(legalListClaims.workspaceId, workspaceId),
-        ),
-      )
-      .limit(1)
-      .for("update")
-  ).at(0);
+  const claim = (
+    await withAggregateRowQuery({
+      tx,
+      aggregate: "listVerificationClaim",
+      id: { id: claimId, workspaceId },
+      mode: "update",
+      select: () =>
+        tx
+          .select({
+            id: legalListClaims.id,
+            workspaceId: legalListClaims.workspaceId,
+            state: legalListClaims.state,
+            recordConflict: legalListClaims.recordConflict,
+          })
+          .from(legalListClaims)
+          .limit(1),
+      where: and(
+        eq(legalListClaims.id, claimId),
+        eq(legalListClaims.runId, runId),
+        eq(legalListClaims.workspaceId, workspaceId),
+      ),
+    })
+  ).rows.at(0);
+
+  if (claim === undefined) {
+    return undefined;
+  }
+  return { state: claim.state, recordConflict: claim.recordConflict };
+};
 
 type ReadClaimsForBulkReviewArgs = {
-  tx: Pick<Transaction, "select">;
+  tx: Transaction;
   workspaceId: SafeId<"workspace">;
   runId: SafeId<"legalListVerificationRun">;
   claimIds: SafeId<"legalListClaim">[];
 };
 
-export const readClaimsForBulkReview = ({
+export const readClaimsForBulkReview = async ({
   tx,
   workspaceId,
   runId,
   claimIds,
-}: ReadClaimsForBulkReviewArgs) =>
-  // Id order is the lock order every caller shares, so two overlapping
-  // bulk accepts cannot deadlock.
-  tx
-    .select({
-      id: legalListClaims.id,
-      state: legalListClaims.state,
-      refs: legalListClaims.refs,
-      recordConflict: legalListClaims.recordConflict,
-    })
-    .from(legalListClaims)
-    .where(
-      and(
-        eq(legalListClaims.workspaceId, workspaceId),
-        eq(legalListClaims.runId, runId),
-        inArray(legalListClaims.id, claimIds),
-      ),
-    )
-    .orderBy(asc(legalListClaims.id))
-    .limit(claimIds.length)
-    .for("update");
+}: ReadClaimsForBulkReviewArgs) => {
+  const acquisition = await withAggregateSetQuery({
+    tx,
+    aggregate: "listVerificationClaim",
+    scope: { workspaceId, runId },
+    ids: claimIds,
+    mode: "update",
+    select: (lockTx) =>
+      lockTx
+        .select({
+          id: legalListClaims.id,
+          workspaceId: legalListClaims.workspaceId,
+          runId: legalListClaims.runId,
+          state: legalListClaims.state,
+          refs: legalListClaims.refs,
+          recordConflict: legalListClaims.recordConflict,
+        })
+        .from(legalListClaims),
+    where: and(
+      eq(legalListClaims.workspaceId, workspaceId),
+      eq(legalListClaims.runId, runId),
+      inArray(legalListClaims.id, claimIds),
+    ),
+  });
+  return acquisition.rows.map(({ id, state, refs, recordConflict }) => ({
+    id,
+    state,
+    refs,
+    recordConflict,
+  }));
+};

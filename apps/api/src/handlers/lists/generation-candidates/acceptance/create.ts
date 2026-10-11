@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
@@ -6,14 +6,17 @@ import type { Static } from "elysia";
 import type { Transaction } from "@/api/db/root";
 import { abortableTx } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
+import type { legalListGenerationCandidateSources } from "@/api/db/schema";
 import {
   entities,
   legalListGenerationCandidates,
-  legalListGenerationCandidateSources,
-  legalListGenerationRuns,
   legalListItemSources,
   WORK_OBLIGATION_SOURCE,
 } from "@/api/db/schema";
+import {
+  lockAcceptanceCandidate,
+  lockAcceptanceFinalization,
+} from "@/api/handlers/lists/generation-candidates/acceptance/transactions";
 import { commitSettledRun } from "@/api/handlers/lists/generation-candidates/commit-settled-run";
 import { legalListRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
@@ -55,7 +58,7 @@ const config = {
   body: bodySchema,
 } satisfies WorkspaceHandlerConfig;
 
-type AcceptanceBody = Static<typeof bodySchema>;
+export type AcceptanceBody = Static<typeof bodySchema>;
 
 /** Candidate source ids are unique uuids, so byte order is a total order. */
 const byCandidateSourceId = (
@@ -228,24 +231,7 @@ const cleanupAcceptance = async (
   { reason, entityOwnership }: ReleaseAcceptanceOptions,
 ) =>
   await safeDb(async (tx) => {
-    const current = (
-      await tx
-        .select({
-          acceptedEntityId: legalListGenerationCandidates.acceptedEntityId,
-          reservedEntityId: legalListGenerationCandidates.reservedEntityId,
-          status: legalListGenerationCandidates.status,
-        })
-        .from(legalListGenerationCandidates)
-        .where(
-          and(
-            eq(legalListGenerationCandidates.id, body.candidateId),
-            eq(legalListGenerationCandidates.runId, body.runId),
-            eq(legalListGenerationCandidates.listId, body.listId),
-            eq(legalListGenerationCandidates.workspaceId, workspaceId),
-          ),
-        )
-        .for("update")
-    ).at(0);
+    const current = await lockAcceptanceCandidate({ tx, body, workspaceId });
     if (
       current?.status === "accepted" &&
       current.acceptedEntityId === acceptedEntityId
@@ -397,7 +383,7 @@ const createCandidateTask = async ({
 
 type FinalizeAcceptanceOptions = {
   body: AcceptanceBody;
-  claimedSources: ClaimedCandidate["sources"];
+  claimedSources: (typeof legalListGenerationCandidateSources.$inferSelect)[];
   entityId: SafeId<"entity">;
   recordAuditEvent: AuditRecorder;
   tx: Transaction;
@@ -419,79 +405,28 @@ const finalizeAcceptance = async ({
   userId,
   workspaceId,
 }: FinalizeAcceptanceOptions) => {
-  const run = (
-    await tx
-      .select({ id: legalListGenerationRuns.id })
-      .from(legalListGenerationRuns)
-      .where(
-        and(
-          eq(legalListGenerationRuns.id, body.runId),
-          eq(legalListGenerationRuns.listId, body.listId),
-          eq(legalListGenerationRuns.workspaceId, workspaceId),
-        ),
-      )
-      .for("update")
-  ).at(0);
-  if (!run) {
-    return { status: "conflict" as const };
+  const read = await lockAcceptanceFinalization({
+    body,
+    claimedSources,
+    entityId,
+    tx,
+    workspaceId,
+  });
+  switch (read.status) {
+    case "accepted":
+    case "conflict":
+    case "source-missing": {
+      return read;
+    }
+    case "ready": {
+      break;
+    }
+    default: {
+      read satisfies never;
+      return panic("Unhandled acceptance finalization read result");
+    }
   }
-  const liveCandidate = (
-    await tx
-      .select({
-        acceptedEntityId: legalListGenerationCandidates.acceptedEntityId,
-        reservedEntityId: legalListGenerationCandidates.reservedEntityId,
-        status: legalListGenerationCandidates.status,
-      })
-      .from(legalListGenerationCandidates)
-      .where(
-        and(
-          eq(legalListGenerationCandidates.id, body.candidateId),
-          eq(legalListGenerationCandidates.runId, body.runId),
-          eq(legalListGenerationCandidates.listId, body.listId),
-          eq(legalListGenerationCandidates.workspaceId, workspaceId),
-        ),
-      )
-      .for("update")
-  ).at(0);
-  if (
-    liveCandidate?.status === "accepted" &&
-    liveCandidate.acceptedEntityId === entityId
-  ) {
-    return { status: "accepted" as const };
-  }
-  if (
-    liveCandidate?.status !== "accepting" ||
-    liveCandidate.reservedEntityId !== entityId
-  ) {
-    return { status: "conflict" as const };
-  }
-  const liveSources = await tx
-    .select({
-      id: legalListGenerationCandidateSources.id,
-      sourceEntityId: legalListGenerationCandidateSources.sourceEntityId,
-      sourceEntityVersionId:
-        legalListGenerationCandidateSources.sourceEntityVersionId,
-      locator: legalListGenerationCandidateSources.locator,
-      quote: legalListGenerationCandidateSources.quote,
-    })
-    .from(legalListGenerationCandidateSources)
-    .where(
-      and(
-        eq(legalListGenerationCandidateSources.candidateId, body.candidateId),
-        eq(legalListGenerationCandidateSources.runId, body.runId),
-        eq(legalListGenerationCandidateSources.listId, body.listId),
-        eq(legalListGenerationCandidateSources.workspaceId, workspaceId),
-      ),
-    )
-    .for("update");
-  const claimedSourceIds = new Set(claimedSources.map((source) => source.id));
-  if (
-    liveSources.length === 0 ||
-    liveSources.length !== claimedSourceIds.size ||
-    liveSources.some((source) => !claimedSourceIds.has(source.id))
-  ) {
-    return { status: "source-missing" as const };
-  }
+  const liveSources = read.sources;
   await tx.insert(legalListItemSources).values(
     liveSources.map((source) => ({
       id: createSafeId<"legalListItemSource">(),
@@ -551,7 +486,6 @@ const finalizeAcceptance = async ({
   });
   return { status: "accepted" as const };
 };
-
 export const createAcceptGenerationCandidate = (
   dependencies: AcceptanceDependencies = DEFAULT_ACCEPTANCE_DEPENDENCIES,
 ) =>

@@ -1,6 +1,8 @@
 import { panic, Result, TaggedError } from "better-result";
 import {
   and,
+  asc,
+  inArray,
   eq,
   or,
   getColumnTable,
@@ -27,6 +29,8 @@ import {
   entityVersions,
   fields,
   pdfSigningSessions,
+  legalListGenerationCandidateSources,
+  legalListClaims,
   workspaces,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -62,6 +66,13 @@ export const AGGREGATE_LOCKS = {
   entity: { rank: 500, kind: "row" },
   entityVersion: { rank: 510, kind: "row" },
   field: { rank: 520, kind: "row" },
+  legalList: { rank: 530, kind: "row" },
+  listGenerationRun: { rank: 540, kind: "row" },
+  listGenerationCandidate: { rank: 550, kind: "row" },
+  listGenerationSource: { rank: 560, kind: "row" },
+  listVerificationRun: { rank: 570, kind: "row" },
+  listVerificationClaim: { rank: 580, kind: "row" },
+  listFactDetails: { rank: 590, kind: "row" },
   signal: { rank: 600, kind: "row" },
   automatedFlowRunCap: { rank: 700, kind: "advisory" },
   processingClaim: { rank: 600, kind: "row" },
@@ -124,6 +135,19 @@ export const AGGREGATE_CHAINS = {
     "field",
     "processingClaim",
   ],
+  listGeneration: [
+    "workspace",
+    "legalList",
+    "listGenerationRun",
+    "listGenerationCandidate",
+    "listGenerationSource",
+  ],
+  listVerification: [
+    "workspace",
+    "listVerificationRun",
+    "listVerificationClaim",
+  ],
+  listFact: ["workspace", "entity", "listFactDetails"],
   signal: ["signal"],
   automatedFlowRunCap: ["automatedFlowRunCap"],
   contactCapacity: ["contactCapacity"],
@@ -218,6 +242,31 @@ type AggregateIdentities = {
     workspaceId: SafeId<"workspace">;
   };
   field: { id: SafeId<"field">; workspaceId: SafeId<"workspace"> };
+  legalList: { id: SafeId<"legalList">; workspaceId: SafeId<"workspace"> };
+  listGenerationRun: {
+    id: SafeId<"legalListGenerationRun">;
+    workspaceId: SafeId<"workspace">;
+  };
+  listGenerationCandidate: {
+    id: SafeId<"legalListGenerationCandidate">;
+    workspaceId: SafeId<"workspace">;
+  };
+  listGenerationSource: {
+    id: SafeId<"legalListGenerationCandidateSource">;
+    workspaceId: SafeId<"workspace">;
+  };
+  listVerificationRun: {
+    id: SafeId<"legalListVerificationRun">;
+    workspaceId: SafeId<"workspace">;
+  };
+  listVerificationClaim: {
+    id: SafeId<"legalListClaim">;
+    workspaceId: SafeId<"workspace">;
+  };
+  listFactDetails: {
+    itemEntityId: SafeId<"entity">;
+    workspaceId: SafeId<"workspace">;
+  };
   signal: { id: SafeId<"signal">; organizationId: SafeId<"organization"> };
   automatedFlowRunCap: SafeId<"flowDefinition">;
   processingClaim: {
@@ -583,6 +632,113 @@ type RowResource = {
   scopeColumns: readonly string[];
   scopeValues: readonly (string | number)[];
 };
+type ListRowIdentity = Extract<
+  RowIdentityOptions,
+  {
+    aggregate:
+      | "legalList"
+      | "listGenerationRun"
+      | "listGenerationCandidate"
+      | "listGenerationSource"
+      | "listVerificationRun"
+      | "listVerificationClaim"
+      | "listFactDetails";
+  }
+>;
+const listRowResource = (options: ListRowIdentity): RowResource => {
+  switch (options.aggregate) {
+    case "legalList":
+      return {
+        table: "legal_lists",
+        columns: ["id"],
+        values: [options.id.id.toLowerCase()],
+        scopeColumns: ["workspace_id"],
+        scopeValues: [options.id.workspaceId.toLowerCase()],
+      };
+    case "listGenerationRun":
+      return {
+        table: "legal_list_generation_runs",
+        columns: ["id"],
+        values: [options.id.id.toLowerCase()],
+        scopeColumns: ["workspace_id"],
+        scopeValues: [options.id.workspaceId.toLowerCase()],
+      };
+    case "listGenerationCandidate":
+      return {
+        table: "legal_list_generation_candidates",
+        columns: ["id"],
+        values: [options.id.id.toLowerCase()],
+        scopeColumns: ["workspace_id"],
+        scopeValues: [options.id.workspaceId.toLowerCase()],
+      };
+    case "listGenerationSource":
+      return {
+        table: "legal_list_generation_candidate_sources",
+        columns: ["id"],
+        values: [options.id.id.toLowerCase()],
+        scopeColumns: ["workspace_id"],
+        scopeValues: [options.id.workspaceId.toLowerCase()],
+      };
+    case "listVerificationRun":
+      return {
+        table: "legal_list_verification_runs",
+        columns: ["id"],
+        values: [options.id.id.toLowerCase()],
+        scopeColumns: ["workspace_id"],
+        scopeValues: [options.id.workspaceId.toLowerCase()],
+      };
+    case "listVerificationClaim":
+      return {
+        table: "legal_list_claims",
+        columns: ["id"],
+        values: [options.id.id.toLowerCase()],
+        scopeColumns: ["workspace_id"],
+        scopeValues: [options.id.workspaceId.toLowerCase()],
+      };
+    case "listFactDetails":
+      return {
+        table: "legal_list_fact_details",
+        columns: ["item_entity_id"],
+        values: [options.id.itemEntityId.toLowerCase()],
+        scopeColumns: ["workspace_id"],
+        scopeValues: [options.id.workspaceId.toLowerCase()],
+      };
+    default:
+      options satisfies never;
+      return panic("Unknown list row aggregate");
+  }
+};
+
+type MemberCleanupIdentity = Extract<
+  RowIdentityOptions,
+  { aggregate: "memberCleanup" }
+>;
+const memberCleanupRowResource = (
+  options: MemberCleanupIdentity,
+): RowResource => {
+  switch (options.id.type) {
+    case "organization-member":
+      return {
+        table: "member",
+        columns: ["id"],
+        values: [options.id.id],
+        scopeColumns: ["organization_id"],
+        scopeValues: [options.id.organizationId],
+      };
+    case "workspace-member":
+      return {
+        table: "workspace_members",
+        columns: ["id"],
+        values: [options.id.id],
+        scopeColumns: ["workspace_id"],
+        scopeValues: [options.id.workspaceId],
+      };
+    default:
+      options.id satisfies never;
+      return panic("Unknown member cleanup resource");
+  }
+};
+
 const rowResource = (options: RowIdentityOptions): RowResource => {
   switch (options.aggregate) {
     case "organization":
@@ -681,6 +837,14 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
         scopeColumns: ["workspace_id"],
         scopeValues: [options.id.workspaceId],
       };
+    case "legalList":
+    case "listGenerationRun":
+    case "listGenerationCandidate":
+    case "listGenerationSource":
+    case "listVerificationRun":
+    case "listVerificationClaim":
+    case "listFactDetails":
+      return listRowResource(options);
     case "signal":
       return {
         table: "signals",
@@ -758,27 +922,7 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
         scopeValues: [options.id.workspaceId],
       };
     case "memberCleanup":
-      switch (options.id.type) {
-        case "organization-member":
-          return {
-            table: "member",
-            columns: ["id"],
-            values: [options.id.id],
-            scopeColumns: ["organization_id"],
-            scopeValues: [options.id.organizationId],
-          };
-        case "workspace-member":
-          return {
-            table: "workspace_members",
-            columns: ["id"],
-            values: [options.id.id],
-            scopeColumns: ["workspace_id"],
-            scopeValues: [options.id.workspaceId],
-          };
-        default:
-          options.id satisfies never;
-          return panic("Unknown member cleanup resource");
-      }
+      return memberCleanupRowResource(options);
     default:
       options satisfies never;
       return panic("Unknown row aggregate");
@@ -1813,6 +1957,208 @@ export async function withAggregateRowQuery<Row>(
   }
   return await acquire(options.tx);
 }
+
+type AggregateSetQuery<Row> = AggregateLockableQuery<Row> & {
+  limit: (limit: number) => AggregateLockableQuery<Row>;
+};
+type AggregateSetScope =
+  | {
+      aggregate: "listGenerationSource";
+      scope: {
+        workspaceId: SafeId<"workspace">;
+        listId: SafeId<"legalList">;
+        runId: SafeId<"legalListGenerationRun">;
+        candidateId: SafeId<"legalListGenerationCandidate">;
+      };
+    }
+  | {
+      aggregate: "listVerificationClaim";
+      scope: {
+        workspaceId: SafeId<"workspace">;
+        runId: SafeId<"legalListVerificationRun">;
+      };
+      ids: readonly SafeId<"legalListClaim">[];
+    };
+type AggregateSetQueryOptions<Row> = AggregateSetScope & {
+  tx: Transaction;
+  mode: RowLockMode;
+  select: (tx: Transaction) => {
+    toSQL: () => { sql: string };
+    as: (alias: string) => Subquery;
+    where: (predicate: SQL) => {
+      orderBy: (order: SQL) => AggregateSetQuery<Row>;
+    };
+  };
+  where?: SQL;
+};
+
+const listSetResource = (options: AggregateSetScope): RowResource => {
+  switch (options.aggregate) {
+    case "listGenerationSource":
+      return {
+        table: getTableName(legalListGenerationCandidateSources),
+        columns: ["id"],
+        values: [""],
+        scopeColumns: ["workspace_id", "list_id", "run_id", "candidate_id"],
+        scopeValues: [
+          options.scope.workspaceId.toLowerCase(),
+          options.scope.listId.toLowerCase(),
+          options.scope.runId.toLowerCase(),
+          options.scope.candidateId.toLowerCase(),
+        ],
+      };
+    case "listVerificationClaim":
+      return {
+        table: getTableName(legalListClaims),
+        columns: ["id"],
+        values: [""],
+        scopeColumns: ["workspace_id", "run_id"],
+        scopeValues: [
+          options.scope.workspaceId.toLowerCase(),
+          options.scope.runId.toLowerCase(),
+        ],
+      };
+    default:
+      options satisfies never;
+      return panic("Unknown aggregate set resource");
+  }
+};
+
+const assertSetQueryOrder = (source: string, table: string): void => {
+  const tokens = outerSelectTokens(source).filter(({ depth }) => depth === 0);
+  const start = tokens.findIndex(
+    ({ kind, value }) => kind === "word" && value === "order",
+  );
+  const end = tokens.findIndex(
+    ({ kind, value }, index) =>
+      index > start && kind === "word" && value === "limit",
+  );
+  const ordering = tokens.slice(start, end === -1 ? undefined : end);
+  const expected = ["order", "by", table, ".", "id", "asc"];
+  if (
+    start === -1 ||
+    ordering.length !== expected.length ||
+    ordering.some(({ value }, index) => value !== expected.at(index))
+  ) {
+    panic("Aggregate set query must lock in registered physical order");
+  }
+};
+
+/** Lock an entire parent-scoped source set, or a known claim set, in one ordered SELECT. */
+export const withAggregateSetQuery = async <Row>(
+  options: AggregateSetQueryOptions<Row>,
+): Promise<Exclude<AggregateRowsResult<Row>, { status: "busy" }>> => {
+  const history = lockHistory(options.tx);
+  assertAggregateLevelAvailable(history);
+  const resource = listSetResource(options);
+  const request = (id: string) =>
+    physicalRowLock({
+      aggregate: options.aggregate,
+      table: resource.table,
+      values: [id],
+      mode: options.mode,
+    });
+  const knownIds =
+    options.aggregate === "listVerificationClaim"
+      ? [...new Set(options.ids.map((id) => id.toLowerCase()))].toSorted(
+          compareCodeUnit,
+        )
+      : undefined;
+  const knownIdSet = knownIds === undefined ? undefined : new Set(knownIds);
+  if (knownIds !== undefined) {
+    for (const id of knownIds) {
+      assertBatchIdAlphabet(id);
+      assertLockOrder(history, request(id), "block");
+    }
+  } else {
+    // The source membership is discovered by this SELECT, including rows later
+    // omitted by PostgreSQL predicate rechecks. Consume this rank's entire key
+    // range so a subsequent unseen source cannot descend behind such a lock.
+    if (
+      allOrderingReservations(history).some(
+        ({ rank }) => rank >= AGGREGATE_LOCKS[options.aggregate].rank,
+      )
+    ) {
+      panic("Discovered aggregate set must acquire a fresh registered rank");
+    }
+    assertLockOrder(history, request(""), "block");
+  }
+  const query = options.select(options.tx);
+  const target = aggregateSelectTarget(query.toSQL().sql);
+  if (target.table !== resource.table || target.joined) {
+    panic("Aggregate set query target does not match its registered resource");
+  }
+  if (target.filtered) {
+    panic("Pass additional aggregate predicates through the where option");
+  }
+  const projection = registeredProjection(
+    getColumns(query.as("aggregate_set_projection")),
+    resource,
+  );
+  const predicate =
+    and(
+      ...resource.scopeColumns.map(
+        (column, index) =>
+          sql`${sql.identifier(resource.table)}.${sql.identifier(column)} = ${resource.scopeValues.at(index) ?? panic("Missing aggregate set scope")}`,
+      ),
+      options.aggregate === "listVerificationClaim"
+        ? inArray(legalListClaims.id, options.ids)
+        : undefined,
+      options.where,
+    ) ?? panic("Missing aggregate set predicate");
+  const ordered = query
+    .where(predicate)
+    .orderBy(
+      asc(sql`${sql.identifier(resource.table)}.${sql.identifier("id")}`),
+    );
+  const scoped =
+    options.aggregate === "listGenerationSource"
+      ? ordered
+      : ordered.limit(options.ids.length);
+  const statement = scoped.toSQL().sql;
+  aggregateSelectTarget(statement);
+  assertSetQueryOrder(statement, resource.table);
+  history.status = "acquiring";
+  const rows = await scoped.for(options.mode);
+  if (knownIds === undefined) {
+    retainReservation(history, request("\uffff"));
+  } else {
+    for (const id of knownIds) {
+      retainReservation(history, request(id));
+    }
+  }
+  const projected = rows.map((row) => projectedRowValues(row, projection));
+  const returnedIds: string[] = [];
+  for (const row of projected) {
+    const id = projectedPhysicalIdentity(row).at(0);
+    if (typeof id !== "string") {
+      panic("Aggregate set query returned an invalid physical key");
+    }
+    retainLock(history, request(id));
+    returnedIds.push(id);
+  }
+  completeAcquisition(history);
+  for (const row of projected) {
+    for (const column of row) {
+      if (column.kind === "tenant" && column.value !== column.expected) {
+        panic("Aggregate set query returned an undeclared tenant or parent");
+      }
+    }
+  }
+  for (const [index, id] of returnedIds.entries()) {
+    assertBatchIdAlphabet(id);
+    const previous = returnedIds.at(index - 1);
+    if (
+      (previous !== undefined && compareCodeUnit(previous, id) >= 0) ||
+      (knownIdSet !== undefined && !knownIdSet.has(id))
+    ) {
+      panic(
+        "Aggregate set query returned an undeclared or unordered physical row",
+      );
+    }
+  }
+  return { status: rows.length === 0 ? "missing" : "locked", rows };
+};
 
 type AutomatedFlowRunCapLockOptions = {
   definitionId: SafeId<"flowDefinition">;

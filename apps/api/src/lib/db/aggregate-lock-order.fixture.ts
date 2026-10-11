@@ -20,6 +20,44 @@ export const aggregateFences = () => {
   const threadId = createSafeId<"chatThread">();
   const userId = mintAuthProviderId<"user">();
   return {
+    legalList: {
+      aggregate: "legalList",
+      id: { id: createSafeId<"legalList">(), workspaceId },
+      mode: "update",
+    },
+    listGenerationRun: {
+      aggregate: "listGenerationRun",
+      id: { id: createSafeId<"legalListGenerationRun">(), workspaceId },
+      mode: "update",
+    },
+    listGenerationCandidate: {
+      aggregate: "listGenerationCandidate",
+      id: { id: createSafeId<"legalListGenerationCandidate">(), workspaceId },
+      mode: "update",
+    },
+    listGenerationSource: {
+      aggregate: "listGenerationSource",
+      id: {
+        id: createSafeId<"legalListGenerationCandidateSource">(),
+        workspaceId,
+      },
+      mode: "update",
+    },
+    listVerificationRun: {
+      aggregate: "listVerificationRun",
+      id: { id: createSafeId<"legalListVerificationRun">(), workspaceId },
+      mode: "update",
+    },
+    listVerificationClaim: {
+      aggregate: "listVerificationClaim",
+      id: { id: createSafeId<"legalListClaim">(), workspaceId },
+      mode: "update",
+    },
+    listFactDetails: {
+      aggregate: "listFactDetails",
+      id: { itemEntityId: createSafeId<"entity">(), workspaceId },
+      mode: "update",
+    },
     signingSession: {
       aggregate: "signingSession",
       id: {

@@ -12,6 +12,7 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { withAggregateRowQuery } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 
@@ -43,19 +44,25 @@ const rejectGenerationCandidate = createSafeHandler(
   async function* ({ safeDb, workspaceId, body, recordAuditEvent }) {
     const rejected = yield* Result.await(
       safeDb(async (tx) => {
-        const run = (
-          await tx
-            .select({ id: legalListGenerationRuns.id })
-            .from(legalListGenerationRuns)
-            .where(
-              and(
-                eq(legalListGenerationRuns.id, body.runId),
-                eq(legalListGenerationRuns.listId, body.listId),
-                eq(legalListGenerationRuns.workspaceId, workspaceId),
-              ),
-            )
-            .for("update")
-        ).at(0);
+        const acquisition = await withAggregateRowQuery({
+          tx,
+          aggregate: "listGenerationRun",
+          id: { id: body.runId, workspaceId },
+          mode: "update",
+          select: (lockTx) =>
+            lockTx
+              .select({
+                id: legalListGenerationRuns.id,
+                workspaceId: legalListGenerationRuns.workspaceId,
+              })
+              .from(legalListGenerationRuns),
+          where: and(
+            eq(legalListGenerationRuns.id, body.runId),
+            eq(legalListGenerationRuns.listId, body.listId),
+            eq(legalListGenerationRuns.workspaceId, workspaceId),
+          ),
+        });
+        const run = acquisition.rows.at(0);
         if (!run) {
           return false;
         }

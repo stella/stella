@@ -1,5 +1,6 @@
 import { and, eq } from "drizzle-orm";
 
+import type { Transaction } from "@/api/db/root";
 import {
   legalListClaims,
   legalListVerificationBlocks,
@@ -10,18 +11,14 @@ import {
   AUDIT_RESOURCE_TYPE,
   createBackgroundAuditRecorder,
 } from "@/api/lib/audit-log";
-import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withAggregateRowQuery } from "@/api/lib/db/aggregate-lock";
 import { insertInChunks } from "@/api/lib/db/bulk-write";
-import type { TransitionTransaction } from "@/api/lib/db/transitions";
 import { defineTransitions, transition } from "@/api/lib/db/transitions";
 import { VERIFICATION_RUN_ACTIVE_STATUSES } from "@/api/lib/lists/verification/contract";
 import type { VerificationRunErrorCode } from "@/api/lib/lists/verification/contract";
 import type { VerificationBlock } from "@/api/lib/lists/verification/document-text";
 import { emitVerificationRunFailureMetric } from "@/api/lib/observability/request-metrics";
-
-type VerificationTransaction = Parameters<AuditRecorder>[0] &
-  TransitionTransaction;
 
 const VERIFICATION_RUN_TRANSITIONS = defineTransitions(
   legalListVerificationRuns,
@@ -35,7 +32,7 @@ const VERIFICATION_RUN_TRANSITIONS = defineTransitions(
 );
 
 type VerificationTransitionAuditArgs = {
-  tx: VerificationTransaction;
+  tx: Transaction;
   run: {
     id: SafeId<"legalListVerificationRun">;
     organizationId: SafeId<"organization">;
@@ -79,7 +76,7 @@ export const recordVerificationAuditEvent = async ({
 };
 
 type CompleteVerificationRunArgs = {
-  tx: VerificationTransaction;
+  tx: Transaction;
   runId: SafeId<"legalListVerificationRun">;
   workspaceId: SafeId<"workspace">;
   blocks: readonly VerificationBlock[];
@@ -95,24 +92,28 @@ export const completeVerificationRun = async ({
   claims,
 }: CompleteVerificationRunArgs): Promise<void> => {
   const run = (
-    await tx
-      .select({
-        id: legalListVerificationRuns.id,
-        organizationId: legalListVerificationRuns.organizationId,
-        workspaceId: legalListVerificationRuns.workspaceId,
-        requestedBy: legalListVerificationRuns.requestedBy,
-      })
-      .from(legalListVerificationRuns)
-      .where(
-        and(
-          eq(legalListVerificationRuns.id, runId),
-          eq(legalListVerificationRuns.workspaceId, workspaceId),
-          eq(legalListVerificationRuns.status, "running"),
-        ),
-      )
-      .limit(1)
-      .for("update")
-  ).at(0);
+    await withAggregateRowQuery({
+      tx,
+      aggregate: "listVerificationRun",
+      id: { id: runId, workspaceId },
+      mode: "update",
+      select: () =>
+        tx
+          .select({
+            id: legalListVerificationRuns.id,
+            organizationId: legalListVerificationRuns.organizationId,
+            workspaceId: legalListVerificationRuns.workspaceId,
+            requestedBy: legalListVerificationRuns.requestedBy,
+          })
+          .from(legalListVerificationRuns)
+          .limit(1),
+      where: and(
+        eq(legalListVerificationRuns.id, runId),
+        eq(legalListVerificationRuns.workspaceId, workspaceId),
+        eq(legalListVerificationRuns.status, "running"),
+      ),
+    })
+  ).rows.at(0);
   if (run === undefined) {
     return;
   }
@@ -177,7 +178,7 @@ export const completeVerificationRun = async ({
 };
 
 type FailVerificationRunArgs = {
-  tx: VerificationTransaction;
+  tx: Transaction;
   run: {
     id: SafeId<"legalListVerificationRun">;
     workspaceId: SafeId<"workspace">;
@@ -194,24 +195,28 @@ export const failVerificationRun = async ({
   expectedStatus,
 }: FailVerificationRunArgs): Promise<boolean> => {
   const owned = (
-    await tx
-      .select({
-        id: legalListVerificationRuns.id,
-        workspaceId: legalListVerificationRuns.workspaceId,
-        organizationId: legalListVerificationRuns.organizationId,
-        requestedBy: legalListVerificationRuns.requestedBy,
-      })
-      .from(legalListVerificationRuns)
-      .where(
-        and(
-          eq(legalListVerificationRuns.id, run.id),
-          eq(legalListVerificationRuns.workspaceId, run.workspaceId),
-          eq(legalListVerificationRuns.organizationId, run.organizationId),
-        ),
-      )
-      .limit(1)
-      .for("update")
-  ).at(0);
+    await withAggregateRowQuery({
+      tx,
+      aggregate: "listVerificationRun",
+      id: { id: run.id, workspaceId: run.workspaceId },
+      mode: "update",
+      select: () =>
+        tx
+          .select({
+            id: legalListVerificationRuns.id,
+            workspaceId: legalListVerificationRuns.workspaceId,
+            organizationId: legalListVerificationRuns.organizationId,
+            requestedBy: legalListVerificationRuns.requestedBy,
+          })
+          .from(legalListVerificationRuns)
+          .limit(1),
+      where: and(
+        eq(legalListVerificationRuns.id, run.id),
+        eq(legalListVerificationRuns.workspaceId, run.workspaceId),
+        eq(legalListVerificationRuns.organizationId, run.organizationId),
+      ),
+    })
+  ).rows.at(0);
   if (owned === undefined) {
     return false;
   }

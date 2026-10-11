@@ -15,6 +15,7 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { FieldDiffs } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { withAggregateRowQuery } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import {
@@ -150,19 +151,19 @@ const updateFactDetails = createSafeHandler(
           return { type: "not-a-fact" } as const;
         }
 
-        const existing = (
-          await tx
-            .select()
-            .from(legalListFactDetails)
-            .where(
-              and(
-                eq(legalListFactDetails.itemEntityId, itemEntityId),
-                eq(legalListFactDetails.workspaceId, workspaceId),
-              ),
-            )
-            .limit(1)
-            .for("update")
-        ).at(0);
+        const acquisition = await withAggregateRowQuery({
+          tx,
+          aggregate: "listFactDetails",
+          id: { itemEntityId, workspaceId },
+          mode: "update",
+          select: (lockTx) =>
+            lockTx.select().from(legalListFactDetails).limit(1),
+          where: and(
+            eq(legalListFactDetails.itemEntityId, itemEntityId),
+            eq(legalListFactDetails.workspaceId, workspaceId),
+          ),
+        });
+        const existing = acquisition.rows.at(0);
 
         const changes: FieldDiffs = {};
         for (const key of FACT_DETAIL_FIELDS) {

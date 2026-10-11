@@ -9,6 +9,7 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { withAggregateRowQuery } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { LIMITS } from "@/api/lib/limits";
@@ -46,18 +47,25 @@ const createColumn = createSafeHandler(
   async function* ({ safeDb, workspaceId, body, recordAuditEvent }) {
     const result = yield* Result.await(
       safeDb(async (tx) => {
-        const lists = await tx
-          .select({ id: legalLists.id })
-          .from(legalLists)
-          .where(
-            and(
-              eq(legalLists.id, body.listId),
-              eq(legalLists.workspaceId, workspaceId),
-              eq(legalLists.status, "active"),
-            ),
-          )
-          .for("update");
-        const list = lists.at(0);
+        const lists = await withAggregateRowQuery({
+          tx,
+          aggregate: "legalList",
+          id: { id: body.listId, workspaceId },
+          mode: "update",
+          select: (lockTx) =>
+            lockTx
+              .select({
+                id: legalLists.id,
+                workspaceId: legalLists.workspaceId,
+              })
+              .from(legalLists),
+          where: and(
+            eq(legalLists.id, body.listId),
+            eq(legalLists.workspaceId, workspaceId),
+            eq(legalLists.status, "active"),
+          ),
+        });
+        const list = lists.rows.at(0);
         const property = await tx.query.properties.findFirst({
           where: {
             id: { eq: body.propertyId },

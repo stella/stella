@@ -5,6 +5,7 @@ import {
   aggregateLockBaselineProblems,
   aggregateLockSites,
 } from "../.oxlint-plugins/aggregate-lock-sites.ts";
+import { plantedLookalikeOwner } from "./check-aggregate-locks.fixture";
 import {
   aggregateLockSourceIncluded,
   parseAggregateLockBaseline,
@@ -63,4 +64,19 @@ test("a first baseline cannot enroll a newly added source file", () => {
   expect(
     aggregateLockBaselineProblems({ actual: rows, baseline: rows, previous }),
   ).toContainEqual(expect.stringContaining("may only shrink"));
+});
+
+test("a planted lookalike aggregate owner is inventoried as an outside-owner primitive", () => {
+  expect(aggregateLockSourceIncluded(plantedLookalikeOwner.file)).toBe(true);
+  const actual = aggregateLockBaseline(
+    aggregateLockSites(
+      plantedLookalikeOwner.file,
+      plantedLookalikeOwner.source,
+    ),
+  );
+  expect(actual).toHaveLength(1);
+  expect(actual.at(0)?.file).toBe(plantedLookalikeOwner.file);
+  expect(
+    aggregateLockBaselineProblems({ actual, baseline: [], previous: [] }),
+  ).toContainEqual(expect.stringContaining(plantedLookalikeOwner.file));
 });

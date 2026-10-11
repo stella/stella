@@ -1560,48 +1560,6 @@
     "reason": "builder-for in apps/api/src/handlers/legislation/work-name-backfill.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
-    "file": "apps/api/src/handlers/lists/columns/create.ts",
-    "fingerprint": "5b09d460c9371da93ebbdbbf491849a24daabd81c09203d3a2462c5fa31c9232",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/lists/columns/create.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/handlers/lists/create.ts",
-    "fingerprint": "3752cb2be4510907a8e1011dd226e529ae15516186845065e7a6ab1d3fa45d8a",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/lists/create.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/handlers/lists/generation-candidates/acceptance/create.ts",
-    "fingerprint": "03dce5cbc98964abb96082eb0f3c9bdb6848d83dca5e7beb74e1d19c154ff98e",
-    "count": 2,
-    "reason": "builder-for in apps/api/src/handlers/lists/generation-candidates/acceptance/create.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/handlers/lists/generation-candidates/acceptance/create.ts",
-    "fingerprint": "94ceca32ba58c615e8c521dc24cdb555496bae7ef88905dc9f7683d553d57527",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/lists/generation-candidates/acceptance/create.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/handlers/lists/generation-candidates/acceptance/create.ts",
-    "fingerprint": "f18f111e71767c1c423cf0e70b1918593be113200c50c5f9ae9df5a5b568d8a0",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/lists/generation-candidates/acceptance/create.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/handlers/lists/generation-candidates/rejection/create.ts",
-    "fingerprint": "94ceca32ba58c615e8c521dc24cdb555496bae7ef88905dc9f7683d553d57527",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/lists/generation-candidates/rejection/create.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/handlers/lists/items/fact-details/update.ts",
-    "fingerprint": "d2bab05e19105782592f7d044a6554c5d0ee0891b8167ff79e233c5338537253",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/lists/items/fact-details/update.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
     "file": "apps/api/src/handlers/memories/update.ts",
     "fingerprint": "57d76d747519bcd8783087297221d3bc1f79297d2e24cc71a984fa7cc5eaad27",
     "count": 1,
@@ -3624,30 +3582,6 @@
     "reason": "builder-for in apps/api/src/lib/lists/sanctions/refresh.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
-    "file": "apps/api/src/lib/lists/verification/read-run.ts",
-    "fingerprint": "72a2eccef67aec8cbff07c746ddcceaef9e1a18ce57cfea5b050fa41b4703b23",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/lists/verification/read-run.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/lists/verification/read-run.ts",
-    "fingerprint": "d690dc48e75a035f071076c4b620b16524d006cd695b1fc183aaac7f0eb79626",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/lists/verification/read-run.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/lists/verification/run-persistence.ts",
-    "fingerprint": "2e37eb952d2b58b904183a4f96791516fc493f285e1d33b3a9be180a4b9e0b8b",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/lists/verification/run-persistence.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/lists/verification/run-persistence.ts",
-    "fingerprint": "8b5189dce28cbfbede21fac52ae24e8a83b4754cba78f2506477ca1b9533c828",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/lists/verification/run-persistence.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
     "file": "apps/api/src/lib/lists/verification/run-queue.ts",
     "fingerprint": "4356b79513b118c553a379ef90a722ab5d188a890400fc0969c54b1106f49c51",
     "count": 1,
@@ -3655,27 +3589,9 @@
   },
   {
     "file": "apps/api/src/lib/lists/verification/run-queue.ts",
-    "fingerprint": "60be1296e0ef0beef328d1ed48e645db09d2ecbac2d55926c9247caa174d6e30",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/lists/verification/run-queue.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/lists/verification/run-queue.ts",
-    "fingerprint": "6e8dde52d872b9512475a731ab37dfe4d1ce20520e1204aaad0d20d409dbbc58",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/lists/verification/run-queue.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/lists/verification/run-queue.ts",
     "fingerprint": "85ffa4ca52c26df6bcdfae41b0fffdd4d5e3232ff3ec110c8b27e8ca36e63a36",
     "count": 1,
     "reason": "transaction-boundary in apps/api/src/lib/lists/verification/run-queue.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
-  },
-  {
-    "file": "apps/api/src/lib/lists/verification/run-queue.ts",
-    "fingerprint": "88cb47201415bf68fc3de113c86496cab1f61f0fcd00e2bb8dfc513e93bf0c0a",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/lists/verification/run-queue.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
     "file": "apps/api/src/lib/lists/verification/view-layout.ts",

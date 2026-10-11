@@ -8,6 +8,7 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
+import { withAggregateRowQuery } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { LIMITS } from "@/api/lib/limits";
@@ -37,14 +38,30 @@ const config = {
 
 const createList = createSafeHandler(
   config,
-  async function* ({ safeDb, workspaceId, user, body, recordAuditEvent }) {
+  async function* ({
+    safeDb,
+    workspaceId,
+    session,
+    user,
+    body,
+    recordAuditEvent,
+  }) {
     const result = yield* Result.await(
       safeDb(async (tx) => {
-        await tx
-          .select({ id: workspaces.id })
-          .from(workspaces)
-          .where(eq(workspaces.id, workspaceId))
-          .for("update");
+        await withAggregateRowQuery({
+          tx,
+          aggregate: "workspace",
+          id: { id: workspaceId, organizationId: session.activeOrganizationId },
+          mode: "update",
+          select: (lockTx) =>
+            lockTx
+              .select({
+                id: workspaces.id,
+                organizationId: workspaces.organizationId,
+              })
+              .from(workspaces),
+          where: eq(workspaces.id, workspaceId),
+        });
         const count = await tx.$count(
           legalLists,
           eq(legalLists.workspaceId, workspaceId),
