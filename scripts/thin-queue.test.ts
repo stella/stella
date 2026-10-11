@@ -18,7 +18,12 @@ import {
   evaluate as evaluateExpression,
   UNKNOWN,
 } from "./github-expression";
-import { mainHeavyJobs, queueAdmittedJobs, thinJobs } from "./main-heavy-plan";
+import {
+  mainHeavyJobs,
+  MERGE_GROUP_EXCEPTIONS,
+  queueAdmittedJobs,
+  thinJobs,
+} from "./main-heavy-plan";
 
 const root = new URL("../", import.meta.url).pathname;
 const stepSchema = v.looseObject({
@@ -1234,12 +1239,22 @@ test("main release and scheduled runs execute the planned version compiler in ei
 }, 30_000);
 
 test("queue admission covers every gated job except documented event and producer exceptions", () => {
-  const exceptions = new Set([
-    "ci-checks-docs",
-    "fix-tests-on-base",
-    "heavy-web-build",
-    "release-typecheck",
-  ]);
+  const exceptions = new Set(Object.keys(MERGE_GROUP_EXCEPTIONS));
+  for (const job of exceptions) {
+    for (const queueDepth of ["thin", "full"]) {
+      expect(
+        selected(
+          ci.jobs[job]?.if,
+          context({
+            event: { event: "merge_group", message: "ordinary" },
+            variable: queueDepth,
+            queueDepth,
+          }),
+        ),
+        `${job}/${queueDepth}`,
+      ).toBe(false);
+    }
+  }
   expect([...admitted].toSorted()).toEqual(
     needs.filter((job) => job !== "ci-plan" && !exceptions.has(job)).toSorted(),
   );
