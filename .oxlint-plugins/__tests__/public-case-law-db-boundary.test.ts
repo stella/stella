@@ -1,8 +1,6 @@
-import { describe, expect, setDefaultTimeout, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
 import { lintSingleRule } from "./lint-single-rule.ts";
-
-setDefaultTimeout(20_000);
 
 // The passive fixture sits inside the case-law boundary. These cases cover
 // the other ways a file reads public law, which the fixture cannot also be:

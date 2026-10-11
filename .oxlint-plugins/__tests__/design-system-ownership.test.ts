@@ -1,12 +1,10 @@
-import { describe, expect, setDefaultTimeout, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
 import { lintSingleRule } from "./lint-single-rule.ts";
 
 const SEARCH_INPUT_RULE = "no-decorated-search-input";
 const DIALOG_FOOTER_RULE = "dialog-footer-owns-actions";
 const LEGAL_CLICHE_RULE = "no-legal-cliche-glyph";
-
-setDefaultTimeout(20_000);
 
 const lint = async (rule: string, source: string) =>
   (await lintSingleRule(rule, source, { sourcePath: "surface.tsx" })).map(

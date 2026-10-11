@@ -1,9 +1,7 @@
-import { describe, expect, setDefaultTimeout, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
 import plugin from "../no-computed-key-record-assignment.ts";
 import { lintSingleRule } from "./lint-single-rule.ts";
-
-setDefaultTimeout(20_000);
 
 const lint = async (lines: readonly string[]) =>
   await lintSingleRule(

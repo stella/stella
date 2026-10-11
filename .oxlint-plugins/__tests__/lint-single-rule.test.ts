@@ -1,9 +1,7 @@
 import { Result } from "better-result";
-import { expect, setDefaultTimeout, test } from "bun:test";
+import { expect, test } from "bun:test";
 
 import { lintSingleRule } from "./lint-single-rule.ts";
-
-setDefaultTimeout(20_000);
 
 test("parser failures cannot supply clean rule coverage", async () => {
   const result = await Result.tryPromise(

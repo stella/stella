@@ -1,4 +1,4 @@
-import { describe, expect, setDefaultTimeout, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
 import {
   DECISION_TEXT_ABSENCE_METADATA_KEY,
@@ -8,8 +8,6 @@ import {
 import { lintSingleRule } from "./lint-single-rule.ts";
 
 const RULE_NAME = "no-raw-decision-text-fields";
-
-setDefaultTimeout(20_000);
 
 const lint = async (source: string) =>
   await lintSingleRule(RULE_NAME, source, { sourcePath: "adapter.ts" });

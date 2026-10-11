@@ -1,8 +1,6 @@
-import { describe, expect, setDefaultTimeout, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
 import { lintSingleRule } from "./lint-single-rule.ts";
-
-setDefaultTimeout(20_000);
 
 const SOURCE = [
   'import { user } from "@/api/db/auth-schema";',

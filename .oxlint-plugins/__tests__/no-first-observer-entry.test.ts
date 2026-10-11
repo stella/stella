@@ -1,9 +1,7 @@
-import { describe, expect, setDefaultTimeout, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 
 import { lintSingleRule } from "./lint-single-rule.ts";
-
-setDefaultTimeout(30_000);
 
 const lint = async (source: string) =>
   await lintSingleRule("no-first-observer-entry", source);

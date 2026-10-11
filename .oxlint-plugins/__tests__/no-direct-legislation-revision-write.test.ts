@@ -1,11 +1,10 @@
-import { describe, expect, setDefaultTimeout, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import { LEGISLATION_PARTIAL_WRITERS } from "../no-direct-legislation-revision-write.ts";
 import { lintSingleRule } from "./lint-single-rule.ts";
 
-setDefaultTimeout(20_000);
 const RULE = "no-direct-legislation-revision-write";
 const IMPORT =
   'import { legislationDocuments as versions } from "@/api/db/schema";';

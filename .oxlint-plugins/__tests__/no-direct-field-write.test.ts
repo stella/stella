@@ -1,10 +1,8 @@
-import { describe, expect, setDefaultTimeout, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { lintSingleRule } from "./lint-single-rule.ts";
-
-setDefaultTimeout(20_000);
 
 const lint = async (
   lines: readonly string[],
@@ -105,5 +103,5 @@ describe.serial("no-direct-field-write", () => {
       }
     }
     expect(reports).toEqual({});
-  }, 300_000);
+  });
 });

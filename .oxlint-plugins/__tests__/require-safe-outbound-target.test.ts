@@ -1,8 +1,6 @@
-import { describe, expect, setDefaultTimeout, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
 import { lintSingleRule } from "./lint-single-rule.ts";
-
-setDefaultTimeout(20_000);
 
 const ADAPTER_PATH = "apps/api/src/handlers/soft-law/adapters/uoou.ts";
 const lint = async (lines: readonly string[], sourcePath = ADAPTER_PATH) =>
