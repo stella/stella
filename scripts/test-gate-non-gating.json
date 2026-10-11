@@ -1,5 +1,25 @@
 [
   {
+    "file": ".claude/mcp/doc-content.test.ts",
+    "owningWorkflow": ".github/workflows/ci.yml",
+    "reason": "package test runner uses shell-expanded *.test.ts; the static Bun selector resolver cannot prove that expansion"
+  },
+  {
+    "file": ".claude/mcp/fetch-allowed-url.test.ts",
+    "owningWorkflow": ".github/workflows/ci.yml",
+    "reason": "package test runner uses shell-expanded *.test.ts; the static Bun selector resolver cannot prove that expansion"
+  },
+  {
+    "file": ".claude/mcp/stella-docs-http.test.ts",
+    "owningWorkflow": ".github/workflows/ci.yml",
+    "reason": "package test runner uses shell-expanded *.test.ts; the static Bun selector resolver cannot prove that expansion"
+  },
+  {
+    "file": ".claude/mcp/stella-docs.test.ts",
+    "owningWorkflow": ".github/workflows/ci.yml",
+    "reason": "package test runner uses shell-expanded *.test.ts; the static Bun selector resolver cannot prove that expansion"
+  },
+  {
     "file": ".oxlint-plugins/__fixtures__/no-direct-test-state.fixture.test.ts",
     "owningWorkflow": ".github/workflows/ci.yml",
     "reason": "static lint-rule input checked by the plugin fixture harness; contains deliberate invalid source, not executable tests"
