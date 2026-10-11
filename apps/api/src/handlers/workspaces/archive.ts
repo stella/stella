@@ -14,7 +14,9 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withAggregateRowQuery } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
 
 const config = {
   contract: "patch",
@@ -44,6 +46,14 @@ export const archiveWorkspaceHandler = async function* ({
 }: ArchiveWorkspaceHandlerProps) {
   const outcome = yield* Result.await(
     safeDb(async (tx) => {
+      const scope = await tx.query.workspaces.findFirst({
+        where: { id: { eq: workspaceId } },
+        columns: { organizationId: true },
+      });
+      if (!scope) {
+        return "archived" as const;
+      }
+      const organizationId = brandPersistedOrganizationId(scope.organizationId);
       // Timer starts take this advisory lock before inserting. Acquire it
       // before the workspace row lock to keep lock ordering acyclic, then hold
       // it through the active-timer check so archive cannot strand a timer
@@ -54,13 +64,21 @@ export const archiveWorkspaceHandler = async function* ({
       // Lock the workspace before inspecting dispatches. OCR takes this same
       // lock immediately before it claims a run, so archive cannot race a
       // provider dispatch after the workspace becomes read-only.
-      const workspaceRows = await tx
-        .select({ id: workspaces.id, status: workspaces.status })
-        .from(workspaces)
-        .where(eq(workspaces.id, workspaceId))
-        .limit(1)
-        .for("update");
-      const workspace = workspaceRows.at(0);
+      const acquisition = await withAggregateRowQuery({
+        tx,
+        aggregate: "workspace",
+        id: { id: workspaceId, organizationId },
+        mode: "update",
+        select: (lockTx) =>
+          lockTx
+            .select({
+              id: workspaces.id,
+              organizationId: workspaces.organizationId,
+              status: workspaces.status,
+            })
+            .from(workspaces),
+      });
+      const workspace = acquisition.rows.at(0);
       if (workspace?.status === "active") {
         const runningOcrRuns = await tx
           .select({ id: documentProcessingRuns.id })
