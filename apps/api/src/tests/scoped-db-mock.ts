@@ -197,7 +197,7 @@ export const createScopedDbMock = (
     // Tests provide only the transaction members touched by the handler.
     const advisoryKeys = new Map<string, number>();
     const transaction = {
-      execute: (query: SQL) => {
+      execute: async (query: SQL) => {
         const rendered = new PgDialect().sqlToQuery(query);
         if (!/pg_(?:try_)?advisory_xact_lock\(/u.test(rendered.sql)) {
           return Promise.resolve([]);

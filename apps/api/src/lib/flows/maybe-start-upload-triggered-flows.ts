@@ -77,7 +77,7 @@ export const maybeStartUploadTriggeredFlows = async ({
   entityId,
   workspaceId,
 }: MaybeStartUploadTriggeredFlowsArgs): Promise<void> => {
-  const dispatched = await Result.tryPromise(() =>
+  const dispatched = await Result.tryPromise(async () =>
     recoverUploadFlowTriggerIntents({
       database: rootDb,
       now: new Date(),

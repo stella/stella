@@ -147,7 +147,7 @@ describe("removeWorkspaceMember", () => {
           }),
           where: () => ({
             orderBy: () => createSelectQueryMock([]).from().where().orderBy(),
-            limit: (count: number) =>
+            limit: async (count: number) =>
               createSelectQueryMock(
                 table === workspaces
                   ? [

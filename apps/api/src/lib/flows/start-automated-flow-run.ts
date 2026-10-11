@@ -226,7 +226,7 @@ export const startAutomatedFlowRun = async (
 
   // Snapshot fields (name, steps) come from a root read: the automated triggers
   // run in a background context and the cap is an org-wide rail.
-  const admission = await Result.tryPromise(() =>
+  const admission = await Result.tryPromise(async () =>
     featureEnabled({
       organizationId,
       userId: brandPersistedUserId(createdByUserId),

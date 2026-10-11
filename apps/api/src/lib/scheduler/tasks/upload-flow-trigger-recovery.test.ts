@@ -332,7 +332,7 @@ describe("upload receipt retention and eligible replay", () => {
       .set({ enabled: true })
       .where(eq(flowDefinitions.id, definitionId));
     let starts = 0;
-    const sweep = () =>
+    const sweep = async () =>
       recoverUploadFlowTriggerIntents({
         database: asTestRaw<SchedulerDb>(database),
         now: RETRY,
@@ -392,7 +392,7 @@ describe("upload receipt retention and eligible replay", () => {
     );
     const eligible = receipts.at(32) ?? panic("Missing eligible receipt");
     const started: string[] = [];
-    const sweep = () =>
+    const sweep = async () =>
       recoverUploadFlowTriggerIntents({
         database: asTestRaw<SchedulerDb>(database),
         now: RETRY,

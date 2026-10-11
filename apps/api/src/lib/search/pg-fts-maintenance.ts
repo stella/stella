@@ -50,7 +50,7 @@ export const getSearchMaintenance = (
 
     for (const ws of orgWorkspaces) {
       const wsId = toSafeId<"workspace">(ws.id);
-      const readPage = (cursor: string | null) =>
+      const readPage = async (cursor: string | null) =>
         readCursorPage(
           // Keyset pagination: O(1) per batch vs O(N) for offset
           // db-await-in-loop: keyset page per iteration; the page is the batch

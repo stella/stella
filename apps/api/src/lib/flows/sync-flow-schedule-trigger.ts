@@ -111,8 +111,7 @@ export const syncFlowScheduleTriggerInTransaction = async ({
   const schedule = flowScheduleToSchedulerSchedule(definition.trigger.schedule);
   const existingPayload = v.safeParse(flowRunPayloadSchema, existing?.payload);
   const unchanged =
-    existing !== undefined &&
-    existing.task === FLOW_RUN_TASK &&
+    existing?.task === FLOW_RUN_TASK &&
     existingPayload.success &&
     existingPayload.output.definitionId === definitionId &&
     schedulerSchedulesEqual(existing.schedule, schedule);
@@ -162,7 +161,7 @@ const repairOrphanedFlowScheduleJobs = async ({
     SELECT 1 FROM ${flowDefinitions}
     WHERE ${flowDefinitions.id}::text = lower(${schedulerJobs.payload}->>'definitionId')
   )`;
-  const readPage = (cursor: string | null) =>
+  const readPage = async (cursor: string | null) =>
     readCursorPage(
       database
         .select({ id: schedulerJobs.id, payload: schedulerJobs.payload })
@@ -242,7 +241,7 @@ export const repairFlowScheduleTriggers = async ({
       OR NOT ${flowRunPayloadMatchesSql({ payload: schedulerJobs.payload, definitionId: flowDefinitions.id })}
     ) END
   ) ELSE ${schedulerJobs.id} IS NOT NULL END`;
-  const readPage = (cursor: string | null) =>
+  const readPage = async (cursor: string | null) =>
     readCursorPage(
       database
         .select({

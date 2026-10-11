@@ -615,8 +615,10 @@ const settleFailedObservation = async ({
         skippedUntil: admission.skippedUntil,
       });
       return;
-    case "admitted":
-      return await rejectDeadlineObservation({ db, run, error });
+    case "admitted": {
+      await rejectDeadlineObservation({ db, run, error });
+      return;
+    }
     default:
       admission satisfies never;
       return panic("Unhandled deadline scan admission");
