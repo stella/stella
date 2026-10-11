@@ -984,7 +984,7 @@ const main = async (): Promise<void> => {
   ]);
 
   run(["bun", "packages/scripts/src/api-typecheck-partition.ts", "--resolved"]);
-  run(["bun", "test", "scripts/api-secondary-program-source-boundary.test.ts"]);
+  run(["bun", "scripts/api-secondary-program-source-boundary.ts"]);
 
   // Autofix checks supplied projects without loading the repository cache audit.
   const { typecheckCacheContractIssues } =

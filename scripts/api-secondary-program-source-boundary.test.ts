@@ -11,15 +11,10 @@ import path from "node:path";
 
 import {
   apiSourceBoundaryViolations,
-  checkApiSecondaryProgramBoundary,
   secondaryProgramFiles,
 } from "./api-secondary-program-source-boundary";
 
 describe("secondary TypeScript API source boundary", () => {
-  test("keeps API implementation files out of secondary programs", () => {
-    expect(checkApiSecondaryProgramBoundary()).toEqual([]);
-  });
-
   test("detects an implementation source imported into a secondary program", () => {
     const root = realpathSync(
       mkdtempSync(path.join(tmpdir(), "api-source-boundary-")),
