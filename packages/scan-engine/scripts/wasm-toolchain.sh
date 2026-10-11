@@ -22,7 +22,8 @@ if [[ "${CARGO_NET_OFFLINE:-}" == "true" ]]; then
 fi
 
 cd "${CRATE_DIR}"
-cargo fetch --locked --target wasm32-unknown-unknown
+# Offline builds also resolve host dependencies used by build scripts and proc-macros.
+cargo fetch --locked
 if ! wasm_bindgen_ready; then
   cargo install wasm-bindgen-cli --version "=${WASM_BINDGEN_VERSION}" --locked
 fi
