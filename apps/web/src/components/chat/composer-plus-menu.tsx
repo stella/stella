@@ -390,6 +390,12 @@ export const ComposerPlusMenu = ({
   );
 };
 
+// Long composer lists (Skills, Context, a matter's files) stay short enough
+// to open level with their trigger instead of being shifted up to fit the
+// viewport; the rest scrolls under the pinned search field.
+const COMPOSER_LIST_VIEWPORT_CLASS_NAME =
+  "max-h-[min(22rem,var(--available-height))]";
+
 type ShortcutAnchor = NonNullable<ComponentProps<typeof MenuPopup>["anchor"]>;
 
 type ShortcutPlacement = { anchor: ShortcutAnchor; side: ShortcutPopupSide };
@@ -871,7 +877,11 @@ export const ComposerSkillsMenu = ({
         <SkillIcon />
         {label}
       </MenuSubTrigger>
-      <MenuSubPopup className="w-72" onKeyDown={pickHighlightedItemOnTab}>
+      <MenuSubPopup
+        className="w-72"
+        viewportClassName={COMPOSER_LIST_VIEWPORT_CLASS_NAME}
+        onKeyDown={pickHighlightedItemOnTab}
+      >
         {content}
       </MenuSubPopup>
     </MenuSub>
@@ -902,6 +912,7 @@ const ComposerShortcutPopup = ({
       anchor={anchor}
       aria-label={label}
       className="w-72"
+      viewportClassName={COMPOSER_LIST_VIEWPORT_CLASS_NAME}
       collisionAvoidance={SHORTCUT_POPUP_COLLISION_AVOIDANCE}
       onKeyDown={pickHighlightedItemOnTab}
       side={side}
@@ -1129,7 +1140,11 @@ export const ComposerContextMenu = ({
         <AtSignIcon />
         {label}
       </MenuSubTrigger>
-      <MenuSubPopup className="w-72" onKeyDown={pickHighlightedItemOnTab}>
+      <MenuSubPopup
+        className="w-72"
+        viewportClassName={COMPOSER_LIST_VIEWPORT_CLASS_NAME}
+        onKeyDown={pickHighlightedItemOnTab}
+      >
         {content}
       </MenuSubPopup>
     </MenuSub>
@@ -1377,7 +1392,10 @@ const ComposerContextMatterSub = ({
           {matter.name}
         </BidiText>
       </MenuSubTrigger>
-      <MenuSubPopup className="w-72">
+      <MenuSubPopup
+        className="w-72"
+        viewportClassName={COMPOSER_LIST_VIEWPORT_CLASS_NAME}
+      >
         <ComposerSubmenuSearch
           onChange={setSearch}
           placeholder={t("chat.composerMenu.searchFiles")}

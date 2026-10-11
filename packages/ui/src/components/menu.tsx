@@ -37,8 +37,12 @@ const MenuPopup = ({
   side = "bottom",
   anchor,
   collisionAvoidance,
+  viewportClassName,
   ...props
 }: MenuPrimitive.Popup.Props & {
+  /** Classes for the scrolling list inside the popup, e.g. a lower height
+   *  cap for a long searchable list. */
+  viewportClassName?: string;
   align?: MenuPrimitive.Positioner.Props["align"];
   sideOffset?: MenuPrimitive.Positioner.Props["sideOffset"];
   alignOffset?: MenuPrimitive.Positioner.Props["alignOffset"];
@@ -65,7 +69,12 @@ const MenuPopup = ({
         data-slot="menu-popup"
         {...props}
       >
-        <div className="max-h-(--available-height) w-full overflow-y-auto p-1">
+        <div
+          className={cn(
+            "max-h-(--available-height) w-full overflow-y-auto p-1",
+            viewportClassName,
+          )}
+        >
           {children}
         </div>
       </MenuPrimitive.Popup>
@@ -278,6 +287,7 @@ const MenuSubPopup = ({
   align = "start",
   ...props
 }: MenuPrimitive.Popup.Props & {
+  viewportClassName?: string;
   align?: MenuPrimitive.Positioner.Props["align"];
   sideOffset?: MenuPrimitive.Positioner.Props["sideOffset"];
   alignOffset?: MenuPrimitive.Positioner.Props["alignOffset"];

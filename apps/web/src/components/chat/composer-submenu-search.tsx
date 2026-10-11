@@ -99,7 +99,10 @@ export const ComposerSubmenuSearch = ({
   );
 
   return (
-    <div className="px-2 pt-1.5 pb-2" ref={bindPopupKeys}>
+    <div
+      className="bg-popover sticky top-0 z-10 px-2 pt-1.5 pb-2"
+      ref={bindPopupKeys}
+    >
       <InputGroup>
         <InputGroupAddon>
           {trigger ? (
