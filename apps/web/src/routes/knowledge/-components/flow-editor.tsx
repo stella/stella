@@ -49,6 +49,7 @@ import {
   type FlowTriggerType,
 } from "@/components/flows/flow-meta";
 import { FlowSwitch } from "@/components/flows/flow-switch";
+import { MatterOptionLabel } from "@/components/matter-option-label";
 import { guideAnchor } from "@/features/guides/guide-anchor";
 import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -605,7 +606,7 @@ const FlowEditorForm = ({
 
 // ── Trigger section ───────────────────────────────────
 
-type WorkspaceOption = { id: string; name: string };
+type WorkspaceOption = { color: string | null; id: string; name: string };
 
 type WorkspaceOptions =
   | { status: "loading" }
@@ -778,7 +779,7 @@ const ScheduleConfig = ({
             {workspaces.status === "ready" &&
               workspaces.items.map((workspace) => (
                 <SelectItem key={workspace.id} value={workspace.id}>
-                  {workspace.name}
+                  <MatterOptionLabel matter={workspace} />
                 </SelectItem>
               ))}
           </SelectPopup>

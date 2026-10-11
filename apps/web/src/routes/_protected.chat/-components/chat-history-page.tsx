@@ -45,7 +45,10 @@ import {
 import { ChatThreadOriginPrefix } from "@/components/chat/chat-thread-origin-prefix";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import Tooltip from "@/components/tooltip";
-import { MatterCombobox } from "@/components/workspaces/matter-combobox";
+import {
+  MatterCombobox,
+  toMatterOption,
+} from "@/components/workspaces/matter-combobox";
 import type { MatterOption } from "@/components/workspaces/matter-combobox";
 import {
   ChatTitleRename,
@@ -124,9 +127,6 @@ export const ChatHistoryPage = ({
   const commitQuery = useDebouncedCallback((q: string) => {
     onSearchChange({ ...search, q: q.trim().length > 0 ? q : undefined });
   }, SEARCH_DEBOUNCE_MS);
-  // Clearing the filters resets the matter field: it shows its own typed
-  // text, which a cleared selection would otherwise leave behind.
-  const [matterFieldGeneration, setMatterFieldGeneration] = useState(0);
   const [deleteDialog, setDeleteDialog] = useState<DeleteDialog>({
     type: "closed",
   });
@@ -159,7 +159,6 @@ export const ChatHistoryPage = ({
   const clearFilters = () => {
     commitQuery.cancel();
     setQuery("");
-    setMatterFieldGeneration((generation) => generation + 1);
     onSearchChange({});
   };
 
@@ -190,7 +189,7 @@ export const ChatHistoryPage = ({
               id={matterFieldId}
               // Remounts once the matter named in the URL resolves, so the
               // field opens showing it.
-              key={`${matters === undefined ? "pending" : "ready"}-${matterFieldGeneration}`}
+              key={matters === undefined ? "pending" : "ready"}
               onChange={(matter) => {
                 onSearchChange({ ...search, matter: matter?.id });
               }}
@@ -250,11 +249,7 @@ export const ChatHistoryPage = ({
   );
 };
 
-type NavigationMatter = {
-  client: { displayName: string } | null;
-  id: string;
-  name: string;
-};
+type NavigationMatter = Parameters<typeof toMatterOption>[0];
 
 /** The selected matter as the combobox expects it, from the URL's id. */
 function matterOption(
@@ -265,13 +260,7 @@ function matterOption(
     return null;
   }
   const matter = matters.find(({ id }) => id === matterId);
-  return matter === undefined
-    ? null
-    : {
-        clientName: matter.client?.displayName ?? null,
-        id: matter.id,
-        name: matter.name,
-      };
+  return matter === undefined ? null : toMatterOption(matter);
 }
 
 type ChatHistoryResultsProps = {

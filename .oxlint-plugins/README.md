@@ -214,6 +214,7 @@ runtime validation, or integration tests.
 - [`require-cached-collator`](./require-cached-collator.ts) (`require-cached-collator`): prevents repeated `Intl.Collator` construction in sort and render paths.
 - [`require-dir-on-rendered-name`](./require-dir-on-rendered-name.ts) (`require-dir-on-rendered-name`): requires rendered human names to declare direction so mixed-script content remains legible.
 - [`require-matter-affordance`](./require-matter-affordance.ts) (`require-matter-affordance`): requires matter labels to use the canonical icon, color, and interaction affordance.
+- [`require-matter-option-label`](./require-matter-option-label.ts) (`require-matter-option-label`): requires picker options that name a matter to draw its coloured icon, preferably through the shared matter option label.
 - [`require-relative-time-helpers`](./require-relative-time-helpers.ts) (`require-relative-time-helpers`): centralizes relative-time output in the locale-aware shared helpers.
 - [`stella-toast`](./stella-toast.ts) (`stella-toast`): requires the owned toast API so translated copy, deduplication, and error treatment remain consistent.
 

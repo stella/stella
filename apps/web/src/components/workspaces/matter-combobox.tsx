@@ -1,9 +1,6 @@
-import { useDeferredValue, useState } from "react";
-
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
-import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import {
   Combobox,
@@ -12,18 +9,35 @@ import {
   ComboboxItem,
   ComboboxList,
   ComboboxPopup,
+  useComboboxFilter,
 } from "@stll/ui/combobox";
 import { SearchIcon } from "@stll/ui/icons";
 
 import { selectRecentWorkspaces } from "@/components/app-sidebar.logic";
+import { MatterIcon } from "@/components/matter-icon";
+import { MatterOptionLabel } from "@/components/matter-option-label";
 import { detached } from "@/lib/detached";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 
 export type MatterOption = {
+  clientName: string | null;
+  color: string | null;
   id: string;
   name: string;
-  clientName: string | null;
 };
+
+/** A matter from the navigation list, as the combobox offers it. */
+export const toMatterOption = (matter: {
+  client: { displayName: string } | null;
+  color: string | null;
+  id: string;
+  name: string;
+}): MatterOption => ({
+  clientName: matter.client?.displayName ?? null,
+  color: matter.color,
+  id: matter.id,
+  name: matter.name,
+});
 
 const EMPTY_MATTERS: MatterOption[] = [];
 
@@ -48,7 +62,9 @@ type MatterComboboxProps = {
  * One control wherever the app asks that question — uploading a document,
  * pinning case law — so the list, the search and the client line read the same
  * everywhere. Filtering is client-side over the navigation list the sidebar
- * already holds, so the popup opens without a round trip.
+ * already holds, so the popup opens without a round trip. Base UI owns the
+ * input text and filters the items it is given, so its empty state appears
+ * only when nothing matches.
  */
 export const MatterCombobox = ({
   activeOrganizationId,
@@ -59,10 +75,7 @@ export const MatterCombobox = ({
   order = "default",
 }: MatterComboboxProps) => {
   const t = useTranslations();
-  // The input shows the typed search, so a control mounted with a matter
-  // already chosen starts out showing that matter's name.
-  const [search, setSearch] = useState(value?.name ?? "");
-  const deferredSearch = useDeferredValue(search);
+  const { contains } = useComboboxFilter({ sensitivity: "base", value });
   const {
     data: matters = EMPTY_MATTERS,
     error,
@@ -84,49 +97,45 @@ export const MatterCombobox = ({
               workspaces: data.workspaces,
             })
           : data.workspaces;
-      return ordered.map((matter) => ({
-        clientName: matter.client?.displayName ?? null,
-        id: matter.id,
-        name: matter.name,
-      }));
+      return ordered.map(toMatterOption);
     },
   });
-
-  const term = deferredSearch.trim().toLocaleLowerCase();
-  const filtered = matters.filter(
-    (matter) =>
-      term.length === 0 ||
-      matter.name.toLocaleLowerCase().includes(term) ||
-      matter.clientName?.toLocaleLowerCase().includes(term),
-  );
 
   return (
     <div className="flex flex-col gap-2">
       <Combobox
+        // A matter matches on its name or its client's, accent- and
+        // case-insensitively. While the input still shows the chosen
+        // matter's name, the filter keeps every matter in view.
+        filter={(matter: MatterOption, query) =>
+          contains(matter, query, matterName) ||
+          contains(matter, query, matterClientName)
+        }
+        isItemEqualToValue={(item, selected) => item.id === selected.id}
+        items={matters}
         itemToStringLabel={(matter) => matter.name}
-        onInputValueChange={setSearch}
         onValueChange={(matter) => onChange(matter)}
         value={value}
       >
         <ComboboxInput
           id={id}
           placeholder={t("common.selectAMatter")}
-          showClear={search.length > 0}
-          startAddon={<SearchIcon />}
-          value={search}
+          showClear={value !== null}
+          startAddon={
+            value === null ? (
+              <SearchIcon />
+            ) : (
+              <MatterIcon matter={{ id: value.id, color: value.color }} />
+            )
+          }
         />
         <ComboboxPopup>
           <ComboboxList>
-            {filtered.map((matter) => (
+            {(matter: MatterOption) => (
               <ComboboxItem key={matter.id} value={matter}>
-                <BidiText className="truncate">{matter.name}</BidiText>
-                {matter.clientName !== null && (
-                  <span className="text-muted-foreground ms-2 truncate text-xs">
-                    <BidiText>{matter.clientName}</BidiText>
-                  </span>
-                )}
+                <MatterOptionLabel matter={matter} />
               </ComboboxItem>
-            ))}
+            )}
           </ComboboxList>
           <ComboboxEmpty>{t("common.noResults")}</ComboboxEmpty>
         </ComboboxPopup>
@@ -149,3 +158,11 @@ export const MatterCombobox = ({
     </div>
   );
 };
+
+function matterName(matter: MatterOption): string {
+  return matter.name;
+}
+
+function matterClientName(matter: MatterOption): string {
+  return matter.clientName ?? "";
+}
