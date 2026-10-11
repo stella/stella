@@ -488,7 +488,10 @@ const bookkeepingDirectiveMessage = ({
     : undefined;
 };
 
-const justifiedSkipDirectiveRanges = (node: AstNode): Range[] => {
+const justifiedSkipDirectiveRanges = (node: unknown): Range[] => {
+  if (!isAstNode(node)) {
+    return [];
+  }
   const comments: unknown = "comments" in node ? node.comments : null;
   if (!Array.isArray(comments)) {
     return [];
