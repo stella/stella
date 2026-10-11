@@ -724,15 +724,24 @@ const createStatuteVersionsPage = () => ({
 
 const createProvisionVersionRow = ({
   allowsDerivedAi = true,
-}: { allowsDerivedAi?: boolean } = {}) => ({
+  eli = STATUTE_ELI,
+  id = STATUTE_ID,
+  versionValidFrom = "2014-01-01",
+}: {
+  allowsDerivedAi?: boolean;
+  eli?: string;
+  id?: string;
+  versionValidFrom?: string | null;
+} = {}) => ({
   allowsDerivedAi,
   country: "CZE",
   slug: "89-2012-sb-obcansky-zakonik",
   sourceUrl: "https://www.e-sbirka.cz/sb/2012/89",
   astS3Key: null,
   documentAst: createStatuteAst(),
-  id: STATUTE_ID,
-  versionValidFrom: "2014-01-01",
+  eli,
+  id: toSafeId<"legislationDocument">(id),
+  versionValidFrom,
   versionValidTo: null,
   ...EFFECTIVE_LABEL,
 });
@@ -4198,12 +4207,25 @@ describe("OpenAI-compatible MCP tools", () => {
                 description:
                   "Read the consolidation in force on this ISO date (YYYY-MM-DD); omit it for the text in force today.",
               },
+              document_id: {
+                type: "string",
+                format: "uuid",
+                description:
+                  "Exact consolidation handle returned as documentId by read_provision_history",
+              },
               language: {
                 type: "string",
                 minLength: 2,
                 maxLength: 8,
                 description:
                   "Language of the consolidation to read. Language is part of the work key, so an act published in two languages has one consolidation in each.",
+              },
+              text_cursor: {
+                type: "string",
+                minLength: 1,
+                maxLength: 512,
+                description:
+                  "Opaque nextTextCursor from this provision and consolidation",
               },
             },
             required: ["eli", "anchor"],
@@ -4635,6 +4657,173 @@ describe("OpenAI-compatible MCP tools", () => {
     );
   });
 
+  test("read_statute_provisions reads an open-start consolidation by document handle", async () => {
+    readLegislationProvisionVersionsMock.mockResolvedValue([
+      createProvisionVersionRow({
+        id: STATUTE_PRIOR_ID,
+        versionValidFrom: null,
+      }),
+    ]);
+    readVersionBlocksMock.mockResolvedValue(createStatuteBlocks());
+
+    const payload = parseToolPayload(
+      await handleMcpToolCall({
+        args: {
+          items: [
+            {
+              anchor: PROVISION_ANCHOR,
+              document_id: STATUTE_PRIOR_ID,
+              eli: STATUTE_ELI,
+            },
+          ],
+        },
+        context: createContext(),
+        toolName: "read_statute_provisions",
+      }),
+    );
+
+    expect(resolveStatuteExpressionMock).not.toHaveBeenCalled();
+    expect(payload).toMatchObject({
+      items: [
+        {
+          documentId: STATUTE_PRIOR_ID,
+          status: "found",
+          versionValidFrom: null,
+        },
+      ],
+    });
+  });
+
+  test("read_statute_provisions refuses a document handle from another eli", async () => {
+    readLegislationProvisionVersionsMock.mockResolvedValue([
+      createProvisionVersionRow({ eli: "https://example.test/eli/other" }),
+    ]);
+
+    const payload = parseToolPayload(
+      await handleMcpToolCall({
+        args: {
+          items: [
+            {
+              anchor: PROVISION_ANCHOR,
+              document_id: STATUTE_ID,
+              eli: STATUTE_ELI,
+            },
+          ],
+        },
+        context: createContext(),
+        toolName: "read_statute_provisions",
+      }),
+    );
+
+    expect(payload).toMatchObject({
+      items: [
+        {
+          message: "This document_id does not belong to the requested eli.",
+          status: "not_found",
+        },
+      ],
+    });
+    expect(readVersionBlocksMock).not.toHaveBeenCalled();
+  });
+
+  test("read_statute_provisions refuses a document handle with as_of", async () => {
+    const payload = parseToolPayload(
+      await handleMcpToolCall({
+        args: {
+          items: [
+            {
+              anchor: PROVISION_ANCHOR,
+              as_of: "2014-01-01",
+              document_id: STATUTE_ID,
+              eli: STATUTE_ELI,
+            },
+          ],
+        },
+        context: createContext(),
+        toolName: "read_statute_provisions",
+      }),
+    );
+    expect(payload).toMatchObject({ items: [{ status: "invalid" }] });
+    expect(resolveStatuteExpressionMock).not.toHaveBeenCalled();
+  });
+
+  test("read_statute_provisions pages text to exact reconstruction", async () => {
+    resolveStatuteExpressionMock.mockResolvedValue({
+      type: "expression",
+      id: STATUTE_ID,
+    });
+    readLegislationProvisionVersionsMock.mockResolvedValue([
+      createProvisionVersionRow(),
+    ]);
+    readVersionBlocksMock.mockResolvedValue(createStatuteBlocks());
+    const chunks: string[] = [];
+    let textCursor: string | undefined;
+    do {
+      const payload = parseToolPayload(
+        await handleMcpToolCall({
+          args: {
+            items: [
+              {
+                anchor: PROVISION_ANCHOR,
+                eli: STATUTE_ELI,
+                ...(textCursor === undefined
+                  ? {}
+                  : { text_cursor: textCursor }),
+              },
+            ],
+          },
+          context: createContext(),
+          toolName: "read_statute_provisions",
+        }),
+      );
+      const item =
+        isRecord(payload) && Array.isArray(payload["items"])
+          ? payload["items"].at(0)
+          : undefined;
+      expect(item).toMatchObject({ status: "found" });
+      if (!isRecord(item) || typeof item["text"] !== "string") {
+        throw new Error("Expected provision text");
+      }
+      expect(item["text"].length).toBeLessThanOrEqual(
+        LIMITS.legislationProvisionTextChars,
+      );
+      chunks.push(item["text"]);
+      textCursor =
+        typeof item["nextTextCursor"] === "string"
+          ? item["nextTextCursor"]
+          : undefined;
+    } while (textCursor !== undefined);
+
+    expect(chunks.join("")).toBe(`§ 1729\n\n${LONG_PROVISION_BODY}`);
+  });
+
+  test("read_statute_provisions refuses an invalid text cursor", async () => {
+    resolveStatuteExpressionMock.mockResolvedValue({
+      type: "expression",
+      id: STATUTE_ID,
+    });
+    readLegislationProvisionVersionsMock.mockResolvedValue([
+      createProvisionVersionRow(),
+    ]);
+    readVersionBlocksMock.mockResolvedValue(createStatuteBlocks());
+    expectErrorEnvelope(
+      await handleMcpToolCall({
+        args: {
+          items: [
+            {
+              anchor: PROVISION_ANCHOR,
+              eli: STATUTE_ELI,
+              text_cursor: "ptw1.invalid",
+            },
+          ],
+        },
+        context: createContext(),
+        toolName: "read_statute_provisions",
+      }),
+      { code: "invalid_cursor", message: "Invalid cursor" },
+    );
+  });
+
   test("read_statute_provisions withholds one entry's wording without failing the batch", async () => {
     resolveStatuteExpressionMock.mockResolvedValue({
       type: "expression",
@@ -4880,6 +5069,58 @@ describe("OpenAI-compatible MCP tools", () => {
       nextCursor: null,
     });
     expect(JSON.stringify(payload)).not.toContain("as enacted");
+  });
+
+  test("read_provision_history pages one long version to exact reconstruction", async () => {
+    resolveStatuteWorkVersionMock.mockResolvedValue({
+      type: "expression",
+      id: STATUTE_ID,
+    });
+    const text = `§ 1729\n\n${LONG_PROVISION_BODY}`;
+    readProvisionHistoryHandlerMock.mockResolvedValue({
+      items: [
+        {
+          country: "CZE",
+          slug: "89-2012-sb-obcansky-zakonik",
+          sourceUrl: "https://www.e-sbirka.cz/sb/2012/89",
+          allowsDerivedAi: true,
+          documentId: STATUTE_PRIOR_ID,
+          text,
+          versionValidFrom: null,
+          versionValidTo: "2013-12-31",
+          ...EFFECTIVE_LABEL,
+        },
+      ],
+      nextCursor: null,
+    });
+    const chunks: string[] = [];
+    let textCursor: string | undefined;
+    do {
+      const payload = parseToolPayload(
+        await handleMcpToolCall({
+          args: {
+            anchor: PROVISION_ANCHOR,
+            eli: STATUTE_ELI,
+            ...(textCursor === undefined ? {} : { text_cursor: textCursor }),
+          },
+          context: createContext(),
+          toolName: "read_provision_history",
+        }),
+      );
+      const item =
+        isRecord(payload) && Array.isArray(payload["items"])
+          ? payload["items"].at(0)
+          : undefined;
+      if (!isRecord(item) || typeof item["text"] !== "string") {
+        throw new Error("Expected history text");
+      }
+      chunks.push(item["text"]);
+      textCursor =
+        typeof item["nextTextCursor"] === "string"
+          ? item["nextTextCursor"]
+          : undefined;
+    } while (textCursor !== undefined);
+    expect(chunks.join("")).toBe(text);
   });
 
   test("read_provision_history points at the outline when the anchor is absent", async () => {
