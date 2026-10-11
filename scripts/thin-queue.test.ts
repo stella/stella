@@ -1246,7 +1246,7 @@ test("queue admission covers every gated job except documented event and produce
 });
 
 test("docs checks certify scoped merge groups at both queue depths", () => {
-  expect(admitted.has("ci-checks-docs")).toBe(true);
+  expect(admitted).toContain("ci-checks-docs");
   for (const queueDepth of ["thin", "full"]) {
     for (const required of ["true", "false"]) {
       const value = context({
