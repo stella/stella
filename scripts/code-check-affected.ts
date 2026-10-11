@@ -1096,7 +1096,8 @@ const main = async (): Promise<Result<number, CommandFailedError>> => {
         "--quiet",
         `${DEFAULT_BASE}^{commit}`,
       ]);
-      const terminated = reference.signalCode !== undefined;
+      const terminated =
+        reference.signalCode !== undefined && reference.signalCode !== null;
       if (reference.exitCode === 1 && !terminated) {
         return null;
       }

@@ -704,7 +704,7 @@ process.exit(childExitStatus(result));
     }
   }, 30_000);
 
-  test("the full command still plans normal checks without origin/main", () => {
+  test("a missing origin/main with exit 1 and null signal uses the full-check fallback", () => {
     const directory = mkdtempSync(path.join(tmpdir(), "code-check-git-"));
     const git = Bun.which("git");
     expect(git).not.toBeNull();
@@ -723,11 +723,18 @@ process.exit(childExitStatus(result));
       if (environmentPath === undefined) {
         throw new Error("PATH is required to run the code-check command");
       }
+      const reference = Bun.spawnSync(
+        ["git", "rev-parse", "--verify", "--quiet", "origin/main^{commit}"],
+        { env: { ...process.env, PATH: `${directory}:${environmentPath}` } },
+      );
+      expect(reference.exitCode).toBe(1);
+      expect(reference.signalCode).toBeNull();
       const result = Bun.spawnSync(
         ["bun", "scripts/code-check-affected.ts", "--all", "--dry-run"],
         { env: { ...process.env, PATH: `${directory}:${environmentPath}` } },
       );
-      expect(result.exitCode).toBe(0);
+      expect(result.exitCode, result.stderr.toString()).toBe(0);
+      expect(result.stderr.toString()).not.toContain("Panic");
       const output = result.stdout.toString();
       expect(output).toContain(
         "skipping exact result boundary lint; no merge base for origin/main",
