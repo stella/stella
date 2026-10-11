@@ -40,7 +40,7 @@ describe("citation page parsing", () => {
           },
         },
       ],
-    };
+    } satisfies CitationPage;
 
     expect(parseCitationPage(payload)).toEqual(payload);
   });

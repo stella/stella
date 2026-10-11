@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { DECISION_TEXT_WITHHELD_REASON } from "@stll/api-contract/case-law-text-field";
@@ -79,18 +80,20 @@ describe("citation graph model", () => {
     );
     const graph = graphElements(createGraph(citationPage({ citations })));
 
-    expect(graph.edges.map(({ polarity }) => polarity)).toEqual(
-      CITATION_TREATMENTS,
-    );
+    expect(graph.edges.map(({ polarity }) => polarity)).toEqual([
+      ...CITATION_TREATMENTS,
+    ]);
     expect(graph.edges).toHaveLength(CITATION_TREATMENTS.length);
     expect(graph.nodes.filter(({ type }) => type === "resolved")).toHaveLength(
       CITATION_TREATMENTS.length - 1,
     );
+    const unresolved =
+      citations.at(-1) ?? panic("Missing unresolved citation fixture");
     expect(graph.nodes.filter(({ type }) => type === "unresolved")).toEqual([
       {
         type: "unresolved",
-        id: `unresolved:${citations.at(-1)?.citationId}`,
-        citationText: citations.at(-1)?.citationText,
+        id: `unresolved:${unresolved.citationId}`,
+        citationText: unresolved.citationText,
       },
     ]);
   });
