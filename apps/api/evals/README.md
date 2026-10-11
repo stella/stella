@@ -89,3 +89,14 @@ the default provider chain (see `getTanStackTextModelById`).
 - `agent-orientation.ts`: given stella's MCP tool list or CLI skill, does a
   model pick the right tool or command and arguments for a natural-language
   task, scored without executing anything?
+- `legal-interpretation.ts`: seven synthetic cases test statutory meaning,
+  application to facts, conflicting methods, contract interpretation,
+  no-case-law disclosure, missing jurisdiction-overlay disclosure, and decision
+  citation provenance. Uses production tool definitions, input schemas and
+  response projection types with fixture results; it does not exercise database
+  handlers or skill discovery. The shipped skill and reference files are loaded
+  as context. Scores behavior and answer structure, never legal conclusions.
+  Citation detection covers ECLI and docket-shaped references; it is not a
+  universal citation parser. Paid runs require explicit models:
+  `bun run eval:legal-interpretation -- --models provider::modelId --json /tmp/interpretation.json`.
+  Deterministic scorer tests make no model calls.
