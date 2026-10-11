@@ -11,7 +11,7 @@
  * transaction that approved the subject.
  */
 import { panic } from "better-result";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import type { DecisionTextWithheldReason } from "@stll/api-contract/case-law-text-field";
 
@@ -29,6 +29,7 @@ import type {
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
+import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
 import { decisionTextWithheldReason } from "@/api/lib/legal-search/corpus-source";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -84,7 +85,9 @@ export const readGatedDecisionCitationDigest = async ({
           caseLawSources,
           eq(caseLawSources.id, caseLawDecisions.sourceId),
         )
-        .where(eq(caseLawDecisions.id, subject.id))
+        .where(
+          and(eq(caseLawDecisions.id, subject.id), publishedCaseLawDecision),
+        )
         .limit(1);
       if (source === undefined) {
         return panic(`No source for gated decision ${String(subject.id)}`);

@@ -361,14 +361,19 @@ export const decisionIdsNamedBy = ({
   const own = tx
     .select({ id: caseLawDecisions.id })
     .from(caseLawDecisions)
-    .where(ownCondition);
+    .where(and(ownCondition, publishedCaseLawDecision));
   if (familyKey === null) {
     return unionAll(own, published);
   }
   const family = tx
     .select({ id: caseLawDecisions.id })
     .from(caseLawDecisions)
-    .where(eq(caseLawDecisions.docketFamilyKey, familyKey));
+    .where(
+      and(
+        eq(caseLawDecisions.docketFamilyKey, familyKey),
+        publishedCaseLawDecision,
+      ),
+    );
   return unionAll(own, published, family);
 };
 
@@ -453,7 +458,12 @@ export const readDecisionIdentityHits = async (
       ...publishedSheetColumns,
     })
     .from(caseLawDecisions)
-    .where(inArray(caseLawDecisions.id, [...decisionIds]));
+    .where(
+      and(
+        inArray(caseLawDecisions.id, [...decisionIds]),
+        publishedCaseLawDecision,
+      ),
+    );
   const byId = new Map(rows.map((row) => [String(row.id), row]));
   const identifiersByDecision = await readIdentifiersByDecision(
     tx,

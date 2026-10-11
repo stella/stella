@@ -14,7 +14,7 @@
  * citation count could multiply is read while the gate's transaction is open.
  */
 import { panic, Result } from "better-result";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import type { DecisionTextWithheldReason } from "@stll/api-contract/case-law-text-field";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
@@ -34,6 +34,7 @@ import type { CitationReadDirection } from "@/api/lib/case-law/citation-vocabula
 import { GRAPH_DIRECTION } from "@/api/lib/case-law/citation-vocabulary";
 import { readDecisionAnalysisAst } from "@/api/lib/case-law/decision-analysis";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
+import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
 import { errorTag } from "@/api/lib/errors/utils";
 import { readCorpusTombstones } from "@/api/lib/legal-search/corpus-reads";
 import { decisionTextWithheldReason } from "@/api/lib/legal-search/corpus-source";
@@ -113,7 +114,9 @@ const readPassageSourcePointers = async (
     })
     .from(caseLawDecisions)
     .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
-    .where(inArray(caseLawDecisions.id, [...ids]));
+    .where(
+      and(inArray(caseLawDecisions.id, [...ids]), publishedCaseLawDecision),
+    );
   // The same split the decision read makes: redistribution decides whether a
   // citation may be listed at all, derived AI whether its text may travel
   // with it.
@@ -151,7 +154,9 @@ const readDecisionTextColumns = async (
           sections: caseLawDecisions.sections,
         })
         .from(caseLawDecisions)
-        .where(inArray(caseLawDecisions.id, [...ids])),
+        .where(
+          and(inArray(caseLawDecisions.id, [...ids]), publishedCaseLawDecision),
+        ),
   );
   return new Map(
     rows.map(({ id, ...columns }) => [String(id), columns] as const),

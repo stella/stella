@@ -568,6 +568,15 @@ export const installPgliteStatuteCitationCounts = async (
   ).filter((candidate) => !executableSql(candidate).startsWith("SET "))) {
     await db.execute(sql.raw(statement));
   }
+  for (const statement of readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261010212100_case_law_publication_filter",
+      "migration.sql",
+    ),
+  ).filter((candidate) => !executableSql(candidate).startsWith("SET "))) {
+    await db.execute(sql.raw(statement));
+  }
 };
 
 const PROVISION_EXTRACTION_STATE_STATEMENT_PREFIXES = [

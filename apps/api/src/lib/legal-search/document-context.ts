@@ -25,7 +25,7 @@ export const readDocumentContextDecision = definePublicLawSharedQuery(
     await tx.query.caseLawDecisions.findFirst({
       where: {
         id: { eq: decisionId },
-        RAW: (table) => publishedCaseLawDecisionFor(table.metadata),
+        RAW: (table) => publishedCaseLawDecisionFor(table),
       },
       columns: {
         id: true,

@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
@@ -17,6 +17,10 @@ import {
 } from "@/api/db/schema";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import type { RedistributableDecisionSubject } from "@/api/lib/case-law/public-subject";
+import {
+  publishedCaseLawDecision,
+  publishedCaseLawDecisionFor,
+} from "@/api/lib/case-law/published-decisions";
 import { tPaginationCursor, tPaginationLimit } from "@/api/lib/custom-schema";
 import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/lib/legal-search/corpus-storage";
 import { LIMITS } from "@/api/lib/limits";
@@ -224,7 +228,7 @@ const readLegacyProvisionPage = async ({
     .where(
       and(
         eq(caseLawProvisionCitations.decisionId, decisionId),
-        isNull(caseLawDecisions.redactedAt),
+        publishedCaseLawDecision,
         cursor === null
           ? undefined
           : sql`(${caseLawProvisionCitations.spanStart}, ${caseLawProvisionCitations.anchor}) > (${cursor.spanStart}::integer, ${cursor.anchor}::text)`,
@@ -306,8 +310,7 @@ export const listDecisionProvisionsHandler = async ({
   }));
   const pageConditions = [
     eq(caseLawProvisionCitations.decisionId, decisionId),
-    // A redacted decision's old citation excerpts must not escape its tombstone.
-    isNull(decision.redactedAt),
+    publishedCaseLawDecisionFor(decision),
     ...(cursor === null
       ? []
       : [

@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { and, asc, eq, gt, isNull, notExists, sql } from "drizzle-orm";
+import { and, asc, eq, gt, notExists, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { union } from "drizzle-orm/pg-core";
 
@@ -133,7 +133,6 @@ export const recordSearchBackfillFailure = async (
           and(
             eq(caseLawDecisions.id, decisionId),
             sql`${caseLawDecisions.updatedAt} = ${sourceUpdatedAt}::timestamptz`,
-            isNull(caseLawDecisions.redactedAt),
             redistributableCaseLawSource,
             publishedCaseLawDecision,
           ),
@@ -337,10 +336,7 @@ export const indexDecision = async (
         .select({ id: caseLawDecisions.id })
         .from(caseLawDecisions)
         .where(
-          and(
-            eq(caseLawDecisions.id, decision.id),
-            isNull(caseLawDecisions.redactedAt),
-          ),
+          and(eq(caseLawDecisions.id, decision.id), publishedCaseLawDecision),
         )
         .for("share")
         .limit(1);
@@ -520,7 +516,6 @@ export const backfillSearchIndex = async (
         )
         .where(
           and(
-            isNull(caseLawDecisions.redactedAt),
             redistributableCaseLawSource,
             publishedCaseLawDecision,
             predicate,
@@ -643,7 +638,6 @@ export const backfillSearchIndex = async (
             ),
             sql`${caseLawSearchBackfillFailures.lastFailedAt} >
               now() - (${SEARCH_BACKFILL_PARKED_TTL_MS}::bigint * interval '1 millisecond')`,
-            isNull(caseLawDecisions.redactedAt),
             redistributableCaseLawSource,
             publishedCaseLawDecision,
           ),

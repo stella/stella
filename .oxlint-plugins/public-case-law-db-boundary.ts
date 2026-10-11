@@ -62,6 +62,37 @@ import {
 } from "./utils.ts";
 
 const PUBLIC_READ_DB_MODULE = "apps/api/src/lib/case-law-public-read-db";
+const PUBLICATION_OWNER =
+  "apps/api/src/lib/case-law/published-decisions-sql.ts";
+const RAW_PUBLICATION_TEST =
+  /(?:\bredacted_at\s+is\s+(?:not\s+)?null\b|\bmetadata\b[\s\S]{0,180}\b(?:isListingOnly|is_listing_only|listing-only|listing_only)\b[\s\S]{0,100}(?:=|<>|!=|\bis\s+(?:distinct\s+from|not\s+distinct\s+from)))|(?:\b(?:isListingOnly|is_listing_only|listing-only|listing_only)\b[\s\S]{0,180}\bmetadata\b[\s\S]{0,100}(?:=|<>|!=|\bis\s+(?:distinct\s+from|not\s+distinct\s+from)))/iu;
+const hasRawPublicationCondition = (statement: string): boolean =>
+  [
+    ...statement.matchAll(
+      /\b(?:where|on)\b([\s\S]*?)(?=\b(?:group\s+by|order\s+by|limit|returning|union|select)\b|$)/giu,
+    ),
+  ].some((match) => RAW_PUBLICATION_TEST.test(match[1] ?? ""));
+const isQueryFilter = (node: AstNode): boolean => {
+  let current: unknown = node.parent;
+  while (isAstNode(current)) {
+    if (
+      current.type === "CallExpression" &&
+      isAstNode(current.callee) &&
+      current.callee.type === "MemberExpression" &&
+      getPropertyName(current.callee.property) === "where"
+    ) {
+      return true;
+    }
+    if (
+      current.type === "Property" &&
+      getPropertyName(current.key) === "where"
+    ) {
+      return true;
+    }
+    current = current.parent;
+  }
+  return false;
+};
 
 // The modules that own a public-law read: the connection, the two branded
 // corpus handles, and the registry of queries the reader-role suite runs.
@@ -105,7 +136,10 @@ export const REVIEWED_SQL_PRODUCERS: readonly {
       "A CASE over the court registry's patterns and the court directory's ids; reads no relation.",
   },
   {
-    modules: ["apps/api/src/lib/case-law/published-decisions"],
+    modules: [
+      "apps/api/src/lib/case-law/published-decisions",
+      "apps/api/src/lib/case-law/published-decisions-sql",
+    ],
     name: "publishedCaseLawDecisionSqlFor",
     sqlArguments: [0],
     reason: "A predicate over the aliased decision's metadata column.",
@@ -1145,6 +1179,10 @@ export default eslintCompatPlugin({
             "A CTE in public-law SQL may not take the name of a schema table ('{{relation}}'); rename it.",
           opaqueSql:
             "Raw SQL in a public-law read must be text the rule can read: a literal, a constant this file defines, a literal-union parameter, a constant in REVIEWED_SQL_CONSTANTS, or a producer in REVIEWED_SQL_PRODUCERS.",
+          publicationPredicate:
+            "Public case-law publication conditions must come from published-decisions.ts.",
+          directObservationPredicate:
+            "Public case-law reads must use published-decisions.ts for observation eligibility.",
         },
       },
       createOnce(context) {
@@ -1154,6 +1192,8 @@ export default eslintCompatPlugin({
         // Every public-law read: the SQL it runs is checked here.
         let readsPublicLaw = false;
         let importerRepoPath = "";
+        let publicationOwner = false;
+        const nullPredicateNames = new Set<string>();
         let candidates: AstNode[] = [];
         let executedStrings: AstNode[] = [];
 
@@ -1167,7 +1207,9 @@ export default eslintCompatPlugin({
             | "uninspectableRelation"
             | "opaqueSql"
             | "producerArgument"
-            | "shadowingCte",
+            | "shadowingCte"
+            | "publicationPredicate"
+            | "directObservationPredicate",
           relation = "",
         ) => {
           const key = `${String(node.range[0])}:${messageId}:${relation}`;
@@ -1215,6 +1257,8 @@ export default eslintCompatPlugin({
             importerRepoPath = repoRelativeFilename(context);
             inBoundary = false;
             readsPublicLaw = false;
+            publicationOwner = false;
+            nullPredicateNames.clear();
             candidates = [];
             executedStrings = [];
             reported = new Set();
@@ -1235,8 +1279,44 @@ export default eslintCompatPlugin({
                 importerRepoPath,
                 PUBLIC_LAW_BOUNDARY_OWNERS,
               );
+            publicationOwner = isFileIn(context, [PUBLICATION_OWNER]);
           },
           ImportDeclaration(node) {
+            const moduleId = declaredModule(node, importerRepoPath);
+            if (
+              readsPublicLaw &&
+              !publicationOwner &&
+              moduleId ===
+                "apps/api/src/lib/legal-search/partial-observation-sql"
+            ) {
+              for (const specifier of node.specifiers) {
+                const imported = getImportedName(specifier);
+                if (
+                  imported === "storedObservationHasDetail" ||
+                  imported === "storedObservationHasDetailSqlFor"
+                ) {
+                  context.report({
+                    node: specifier,
+                    messageId: "directObservationPredicate",
+                  });
+                }
+              }
+            }
+            if (moduleId === "drizzle-orm") {
+              for (const specifier of node.specifiers) {
+                if (
+                  getImportedName(specifier) === "isNull" ||
+                  getImportedName(specifier) === "isNotNull"
+                ) {
+                  const local = isAstNode(specifier)
+                    ? getPropertyName(specifier.local)
+                    : null;
+                  if (local !== null) {
+                    nullPredicateNames.add(local);
+                  }
+                }
+              }
+            }
             if (
               !inBoundary ||
               declaredModule(node, importerRepoPath) !== SCHEMA_MODULE
@@ -1287,6 +1367,44 @@ export default eslintCompatPlugin({
           CallExpression(node) {
             if (!readsPublicLaw || !isAstNode(node)) {
               return;
+            }
+            if (
+              !publicationOwner &&
+              isIdentifier(node.callee) &&
+              nullPredicateNames.has(node.callee.name) &&
+              Array.isArray(node.arguments) &&
+              node.arguments.some(
+                (argument) =>
+                  isAstNode(argument) &&
+                  argument.type === "MemberExpression" &&
+                  getPropertyName(argument.property) === "redactedAt",
+              )
+            ) {
+              let ancestor: unknown = node.parent;
+              let insideFilter = false;
+              while (isAstNode(ancestor)) {
+                if (
+                  ancestor.type === "CallExpression" &&
+                  isAstNode(ancestor.callee) &&
+                  ancestor.callee.type === "MemberExpression" &&
+                  getPropertyName(ancestor.callee.property) === "where"
+                ) {
+                  insideFilter = true;
+                  break;
+                }
+                if (
+                  ancestor.type === "Program" ||
+                  ancestor.type === "FunctionDeclaration" ||
+                  ancestor.type === "FunctionExpression" ||
+                  ancestor.type === "ArrowFunctionExpression"
+                ) {
+                  break;
+                }
+                ancestor = ancestor.parent;
+              }
+              if (insideFilter) {
+                context.report({ node, messageId: "publicationPredicate" });
+              }
             }
             if (isSqlMethodCall(node, "raw")) {
               candidates.push(node);
@@ -1340,6 +1458,34 @@ export default eslintCompatPlugin({
                 continue;
               }
               for (const variant of statementVariants(composition.parts)) {
+                const publicationText = variant
+                  .map((part) => {
+                    if (part.kind === "text") {
+                      return part.text;
+                    }
+                    if (
+                      part.kind === "opaque" &&
+                      part.node.type === "MemberExpression"
+                    ) {
+                      const property = getPropertyName(part.node.property);
+                      if (property === "redactedAt") {
+                        return "redacted_at";
+                      }
+                      if (property === "metadata") {
+                        return "metadata";
+                      }
+                    }
+                    return " ";
+                  })
+                  .join("");
+                if (
+                  !publicationOwner &&
+                  (hasRawPublicationCondition(publicationText) ||
+                    (isQueryFilter(root) &&
+                      RAW_PUBLICATION_TEST.test(publicationText)))
+                ) {
+                  report(reportNode(root), "publicationPredicate");
+                }
                 const { references, ctes } = statementReferences(
                   tokenize(variant),
                 );

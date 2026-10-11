@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import { provisionVersionAsOf } from "@stll/api-contract/provision-version-basis";
 import type { ProvisionVersionBasis } from "@stll/api-contract/provision-version-basis";
@@ -9,6 +9,7 @@ import { provisionHeadingAnchor } from "@stll/legal-ast/provision-preview";
 import { caseLawDecisions, legislationDocuments } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { RedistributableDecisionSubject } from "@/api/lib/case-law/public-subject";
+import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
 import {
   buildProvisionPreview,
   previewVersionColumns,
@@ -262,7 +263,7 @@ export const readDecisionDate = async ({
   const [row] = await tx
     .select({ decisionDate: caseLawDecisions.decisionDate })
     .from(caseLawDecisions)
-    .where(eq(caseLawDecisions.id, id))
+    .where(and(eq(caseLawDecisions.id, id), publishedCaseLawDecision))
     .limit(1);
 
   return row?.decisionDate ?? null;

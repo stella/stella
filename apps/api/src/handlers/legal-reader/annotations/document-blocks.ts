@@ -8,6 +8,7 @@ import { legislationDocuments, legislationSources } from "@/api/db/schema";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { readDecisionAnalysisAst } from "@/api/lib/case-law/decision-analysis";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
+import { publishedCaseLawDecisionFor } from "@/api/lib/case-law/published-decisions";
 import { readCorpusTombstones } from "@/api/lib/legal-search/corpus-reads";
 import { allowsDerivedAi } from "@/api/lib/legal-search/corpus-source";
 import { publishedLegislationDocument } from "@/api/lib/legal-search/legislation-redistribution";
@@ -53,7 +54,10 @@ const resolveDecision = async (
     { kind: "id", id: brandPersistedCaseLawDecisionId(decisionId) },
     async ({ id, tx }) =>
       await tx.query.caseLawDecisions.findFirst({
-        where: { id: { eq: id } },
+        where: {
+          id: { eq: id },
+          RAW: (table) => publishedCaseLawDecisionFor(table),
+        },
         columns: DECISION_AST_COLUMNS,
         with: { source: { columns: { descriptor: true } } },
       }),

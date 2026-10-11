@@ -131,7 +131,7 @@ const readOutgoingDecisionCitationRows = async ({
         OR (
           ${citedSource.id} IS NOT NULL
           AND ${redistributableCaseLawSourceFor(citedSource.descriptor)}
-          AND ${publishedCaseLawDecisionFor(citedDecision.metadata)}
+          AND ${publishedCaseLawDecisionFor(citedDecision)}
         )
       )`,
     })
@@ -228,7 +228,7 @@ export const listIncomingDecisionCitations = async ({
       visible: sql<boolean>`(
         ${citingSource.id} IS NOT NULL
         AND ${redistributableCaseLawSourceFor(citingSource.descriptor)}
-        AND ${publishedCaseLawDecisionFor(citingDecision.metadata)}
+        AND ${publishedCaseLawDecisionFor(citingDecision)}
       )`,
     })
     .from(candidates)

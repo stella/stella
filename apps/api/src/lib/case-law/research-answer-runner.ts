@@ -25,6 +25,10 @@ import type {
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
 import { reportCaseLawIncompleteAnswer } from "@/api/lib/case-law/incomplete-answer-telemetry";
+import {
+  publishedCaseLawDecision,
+  publishedCaseLawDecisionFor,
+} from "@/api/lib/case-law/published-decisions";
 import type {
   ResearchAnswerClaim,
   ResearchAnswerCell,
@@ -567,7 +571,10 @@ const readResearchDecision = async (
   decisionId: SafeId<"caseLawDecision">,
 ): Promise<ResearchDecisionRow | null> => {
   const row = await tx.query.caseLawDecisions.findFirst({
-    where: { id: { eq: decisionId } },
+    where: {
+      id: { eq: decisionId },
+      RAW: (table) => publishedCaseLawDecisionFor(table),
+    },
     columns: {
       id: true,
       caseNumber: true,
@@ -725,6 +732,7 @@ const readCurrentResearchRevisionTx = async (
       and(
         eq(caseLawDecisions.id, decisionId),
         currentCaseLawCorpusProjection(generation),
+        publishedCaseLawDecision,
       ),
     )
     .limit(1);

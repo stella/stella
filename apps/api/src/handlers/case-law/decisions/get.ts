@@ -1,5 +1,5 @@
 import { panic, Result, UnhandledException } from "better-result";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { status, t } from "elysia";
 
 import type { DecisionJudgeRole } from "@stll/api-contract/case-law-judges";
@@ -39,6 +39,10 @@ import {
 import { listPublicDecisionLanguageAlternates } from "@/api/lib/case-law/language-alternates";
 import { loadPublicCourtWeightsWithin } from "@/api/lib/case-law/public-case-law-config";
 import type { RedistributableDecisionSubject } from "@/api/lib/case-law/public-subject";
+import {
+  publishedCaseLawDecision,
+  publishedCaseLawDecisionFor,
+} from "@/api/lib/case-law/published-decisions";
 import { publisherHeadnoteOf } from "@/api/lib/case-law/publisher-summary";
 import { decisionSourceAttributionUrl } from "@/api/lib/case-law/source-attribution";
 import {
@@ -81,7 +85,7 @@ export const decisionTextPresenceQuery = (
       written: sql<boolean>`${caseLawDecisions.fulltext} IS NOT NULL`,
     })
     .from(caseLawDecisions)
-    .where(eq(caseLawDecisions.id, decisionId))
+    .where(and(eq(caseLawDecisions.id, decisionId), publishedCaseLawDecision))
     .limit(1);
 
 export const readDecisionTextColumnWritten = definePublicLawSharedQuery(
@@ -309,7 +313,10 @@ export const decisionRecordQuery = (
   decisionId: SafeId<"caseLawDecision">,
 ) =>
   tx.query.caseLawDecisions.findFirst({
-    where: { id: { eq: decisionId } },
+    where: {
+      id: { eq: decisionId },
+      RAW: (table) => publishedCaseLawDecisionFor(table),
+    },
     extras: { hasDocument: publicRowHoldsDocumentFor },
     columns: {
       id: true,
@@ -828,7 +835,10 @@ const resolveFulltext = async ({
 }: ResolveFulltextInput): Promise<CorpusReadOutcome<string>> => {
   const postgresFulltext = async (): Promise<string | null> => {
     const fallback = await tx.query.caseLawDecisions.findFirst({
-      where: { id: { eq: decisionId } },
+      where: {
+        id: { eq: decisionId },
+        RAW: (table) => publishedCaseLawDecisionFor(table),
+      },
       columns: { fulltext: true },
     });
     return fallback?.fulltext ?? null;

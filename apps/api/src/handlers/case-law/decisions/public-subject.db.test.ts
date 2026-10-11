@@ -247,7 +247,7 @@ test(
 );
 
 test(
-  "decision reads describe the AST actually served and null missing or redacted bodies",
+  "public decision reads describe available document content",
   async () => {
     const storedAst = {
       version: 1,
@@ -332,11 +332,10 @@ test(
     expect(served.projectionDigest).toBe(await projectionDigest(storedAst));
     expect(served.documentAst).not.toEqual(storedAst);
 
-    for (const id of [bodylessId, redactedId]) {
-      const withoutAst = await read(id);
-      expect(withoutAst.documentAstSource).toBeNull();
-      expect(withoutAst.projectionDigest).toBeNull();
-    }
+    const withoutAst = await read(bodylessId);
+    expect(withoutAst.documentAstSource).toBeNull();
+    expect(withoutAst.projectionDigest).toBeNull();
+    expect((await get(`/d/${redactedId}`)).status).toBe(404);
   },
   DB_TEST_TIMEOUT_MS,
 );

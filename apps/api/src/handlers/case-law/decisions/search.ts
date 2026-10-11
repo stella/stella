@@ -628,6 +628,7 @@ export const caseLawSearchPlan = ({
     JOIN case_law_sources src ON src.id = d.source_id
     ${bodyPreviewJoin}
     WHERE ${representativeFilter}
+      AND ${sql.raw(publishedCaseLawDecisionSqlFor("d"))}
       ${cursorFilter}
     ORDER BY m.sort_key DESC, m.decision_id DESC
     LIMIT ${limit + 1}
@@ -1771,6 +1772,7 @@ export const decisionIdsByIdentityQuery = ({
     .from(caseLawDecisions)
     .where(
       and(
+        publishedCaseLawDecision,
         inArray(
           caseLawDecisions.id,
           decisionIdsNamedBy({

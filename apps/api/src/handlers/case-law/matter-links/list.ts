@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 
 import { DECISION_TEXT_WITHHELD_REASON } from "@stll/api-contract/case-law-text-field";
 
@@ -17,6 +17,7 @@ import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { readDecisionHeadnote } from "@/api/lib/case-law/decision-text";
 import { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
+import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
 import {
   publisherHeadnoteMetadataSql,
   publisherKeywordsMetadataSql,
@@ -84,7 +85,12 @@ export const listMatterLinksHandler = async ({
         caseLawSources,
         eq(caseLawSources.id, caseLawDecisions.sourceId),
       )
-      .where(eq(caseLawMatterLinks.workspaceId, workspaceId))
+      .where(
+        and(
+          eq(caseLawMatterLinks.workspaceId, workspaceId),
+          publishedCaseLawDecision,
+        ),
+      )
       .orderBy(desc(caseLawMatterLinks.createdAt), desc(caseLawMatterLinks.id))
       .limit(LIMITS.caseLawMatterLinksPerWorkspace),
   );

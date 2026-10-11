@@ -21,6 +21,74 @@ const lint = async (source: string, sourcePath = "apps/api/src/lib/read.ts") =>
   });
 
 describe.serial("public-law relation scan", () => {
+  test("case-law reads keep publication conditions in the owner", async () => {
+    const source = [
+      'import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";',
+      'import { sql } from "drizzle-orm";',
+      "export const read = sql`select d.id from case_law_decisions d where d.redacted_at is null`;",
+      "void caseLawPublicReadDb;",
+    ].join("\n");
+    expect(
+      await lint(source, "apps/api/src/handlers/case-law/read.ts"),
+    ).toContain(3);
+  });
+
+  test("case-law filters keep redaction and observation conditions in the owner", async () => {
+    const redactionSource = [
+      'import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";',
+      'import { caseLawDecisions } from "@/api/db/schema";',
+      'import { isNull } from "drizzle-orm";',
+      "const query = caseLawPublicReadDb((tx) => tx.select().from(caseLawDecisions).where(isNull(caseLawDecisions.redactedAt)));",
+    ].join("\n");
+    expect(
+      await lint(redactionSource, "apps/api/src/handlers/case-law/read.ts"),
+    ).toContain(4);
+
+    const observationSource = [
+      'import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";',
+      'import { storedObservationHasDetail } from "@/api/lib/legal-search/partial-observation-sql";',
+      "void caseLawPublicReadDb;",
+      "void storedObservationHasDetail;",
+    ].join("\n");
+    expect(
+      await lint(observationSource, "apps/api/src/handlers/case-law/read.ts"),
+    ).toContain(2);
+  });
+
+  test("query-builder conditions use the publication owner", async () => {
+    const source = [
+      'import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";',
+      'import { caseLawDecisions } from "@/api/db/schema";',
+      'import { sql } from "drizzle-orm";',
+      `const query = caseLawPublicReadDb((tx) => tx.select().from(caseLawDecisions).where(sql\`\${caseLawDecisions.redactedAt} IS NULL\`));`,
+    ].join("\n");
+    expect(
+      await lint(source, "apps/api/src/handlers/case-law/read.ts"),
+    ).toContain(4);
+  });
+
+  test("display state is independent of the publication filter", async () => {
+    const source = [
+      'import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";',
+      'import { caseLawDecisions } from "@/api/db/schema";',
+      'import { isNull } from "drizzle-orm";',
+      "const query = caseLawPublicReadDb((tx) => tx.select({ redacted: isNull(caseLawDecisions.redactedAt) }).from(caseLawDecisions));",
+    ].join("\n");
+    expect(
+      await lint(source, "apps/api/src/handlers/case-law/read.ts"),
+    ).toEqual([]);
+  });
+
+  test("the publication owner may define the publication condition", async () => {
+    const source = "export const clause = sql`d.redacted_at IS NULL`;";
+    expect(
+      await lint(
+        source,
+        "apps/api/src/lib/case-law/published-decisions-sql.ts",
+      ),
+    ).toEqual([]);
+  });
+
   test("covers a legislation read", async () => {
     const source = [
       'import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";',

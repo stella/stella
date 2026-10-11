@@ -103,6 +103,7 @@ import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { formatDecisionForPrompt } from "@/api/lib/case-law/analysis-prompt";
 import { readDecisionAnalysisAst } from "@/api/lib/case-law/decision-analysis";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
+import { publishedCaseLawDecisionFor } from "@/api/lib/case-law/published-decisions";
 import { estimateTextTokens } from "@/api/lib/chat/compaction-tokens";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { formatDateInTimeZone } from "@/api/lib/date-format";
@@ -2223,7 +2224,10 @@ export const buildActiveDecisionSection = async ({
             { kind: "id", id: activeDecision.decisionId },
             async ({ id, tx }) =>
               await tx.query.caseLawDecisions.findFirst({
-                where: { id: { eq: id } },
+                where: {
+                  id: { eq: id },
+                  RAW: (table) => publishedCaseLawDecisionFor(table),
+                },
                 columns: ACTIVE_DECISION_COLUMNS,
                 with: { source: { columns: { descriptor: true } } },
               }),

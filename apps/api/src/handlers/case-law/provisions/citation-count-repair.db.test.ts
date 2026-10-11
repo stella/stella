@@ -12,7 +12,6 @@ import {
 import { createStatuteCitationCountRepair } from "@/api/handlers/case-law/provisions/citation-count-repair";
 import { createSafeId } from "@/api/lib/branded-types";
 import { publishedCaseLawDecisionSqlFor } from "@/api/lib/case-law/published-decisions";
-import { storedObservationHasDetailSqlFor } from "@/api/lib/legal-search/partial-observation-sql";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -194,11 +193,13 @@ test("checkpointed repair removes stale memberships and converges on replay", as
 
 test("the stored publication predicate derives from the public-read owner", async () => {
   const definition = await db.execute(sql`
-    SELECT prosrc FROM pg_proc WHERE oid = 'case_law_statute_citation_is_published(jsonb)'::regprocedure
+    SELECT prosrc FROM pg_proc WHERE oid = 'case_law_statute_citation_is_published(jsonb, timestamptz)'::regprocedure
   `);
-  expect(definition.rows).toEqual([
-    { prosrc: ` SELECT ${storedObservationHasDetailSqlFor("metadata")} ` },
-  ]);
+  const storedPredicate = definition.rows.at(0)?.["prosrc"];
+  expect(typeof storedPredicate).toBe("string");
+  expect(String(storedPredicate).replaceAll(/\s+/gu, " ").trim()).toBe(
+    `SELECT ${publishedCaseLawDecisionSqlFor("decision")} FROM (SELECT metadata, redacted_at) decision`,
+  );
 });
 
 test("a failed checkpoint rolls back membership repair and can be replayed", async () => {

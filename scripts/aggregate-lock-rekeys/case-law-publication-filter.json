@@ -1,0 +1,14 @@
+[
+  {
+    "file": "apps/api/src/lib/legal-search/case-law-search-index.ts",
+    "from": "bfa8cd41da649399ea0a3cddf9920b10b0ca8c6443b5725f7b140b8c2fe074ef",
+    "to": "da84e36e8f19191e781cb3407790bd5225f3a90d0231a0445bbeb8100c09deba",
+    "reason": "Use the publication owner in the existing projection retry lock query; acquisition mode, target and count are unchanged."
+  },
+  {
+    "file": "apps/api/src/lib/legal-search/case-law-search-index.ts",
+    "from": "da59847a805cb4732021f29074eb99924a9badb3111e781bf386e2723130b33a",
+    "to": "3de6e946f7b5dc514713fa89fb6b81fcbe7e6ec38224d0a18c31660e33e58e28",
+    "reason": "Use the publication owner in the existing projection write lock query; acquisition mode, target and count are unchanged."
+  }
+]

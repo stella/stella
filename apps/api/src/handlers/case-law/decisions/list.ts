@@ -228,7 +228,7 @@ export const listDecisionsPageQuery = ({
                 // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- column against column inside one statement, nothing round-trips through a JS Date
                 sql`(${sibling.createdAt}, ${sibling.id}) < (${caseLawDecisions.createdAt}, ${caseLawDecisions.id})`,
                 redistributableCaseLawSourceFor(siblingSource.descriptor),
-                publishedCaseLawDecisionFor(sibling.metadata),
+                publishedCaseLawDecisionFor(sibling),
                 ...decisionFilterConditions(query, sibling),
               ),
             ),

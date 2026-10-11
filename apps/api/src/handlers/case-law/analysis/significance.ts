@@ -37,6 +37,10 @@ import { CITATION_TREATMENTS } from "@/api/lib/case-law/citation-vocabulary";
 import type { CitationTreatment } from "@/api/lib/case-law/citation-vocabulary";
 import { decisionCourtWeight } from "@/api/lib/case-law/court-weights";
 import { loadPublicCourtWeightsWithin } from "@/api/lib/case-law/public-case-law-config";
+import {
+  publishedCaseLawDecision,
+  publishedCaseLawDecisionFor,
+} from "@/api/lib/case-law/published-decisions";
 
 /**
  * Which revision of the significance prompt wrote a stored text. Bump it
@@ -105,7 +109,10 @@ export const readCitationGraphFacts = async ({
   tx: CaseLawPublicReadTransaction;
 }): Promise<CitationGraphFacts | null> => {
   const subject = await tx.query.caseLawDecisions.findFirst({
-    where: { id: { eq: decisionId } },
+    where: {
+      id: { eq: decisionId },
+      RAW: (table) => publishedCaseLawDecisionFor(table),
+    },
     columns: { id: true, decisionDate: true },
   });
   if (!subject) {
@@ -130,6 +137,7 @@ export const readCitationGraphFacts = async ({
       and(
         eq(caseLawCitations.citedDecisionId, decisionId),
         eq(caseLawCitations.kind, CITATION_KIND.PRECEDENT),
+        publishedCaseLawDecision,
       ),
     );
 

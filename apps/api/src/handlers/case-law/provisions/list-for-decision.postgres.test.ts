@@ -33,6 +33,8 @@ if (!databaseUrl || !runPostgresTests) {
       const { db: readerDb } = openClient();
       const sourceId = createSafeId<"caseLawSource">();
       const decisionId = createSafeId<"caseLawDecision">();
+      const listingOnlyId = createSafeId<"caseLawDecision">();
+      const redactedId = createSafeId<"caseLawDecision">();
       const language = `x${Bun.randomUUIDv7().replaceAll("-", "").slice(-7)}`;
       const setStatusGrants = async (mode: "grant" | "revoke") => {
         const columnsByRelation = new Map<string, string[]>();
@@ -113,6 +115,23 @@ if (!databaseUrl || !runPostgresTests) {
           (id, source_id, country, language, court, case_number, content_hash)
           VALUES (${decisionId}::uuid, ${sourceId}::uuid, 'CZE', ${language},
             'Court', ${decisionId}, ${"a".repeat(64)})`;
+        await owner`INSERT INTO case_law_decisions
+          (id, source_id, country, language, court, case_number, content_hash, metadata, redacted_at)
+          VALUES
+            (${listingOnlyId}::uuid, ${sourceId}::uuid, 'CZE', ${language},
+              'Court', ${listingOnlyId}, ${"b".repeat(64)},
+              '{"_stellaPartialObservation":{"isListingOnly":true}}'::jsonb, NULL),
+            (${redactedId}::uuid, ${sourceId}::uuid, 'CZE', ${language},
+              'Court', ${redactedId}, ${"c".repeat(64)}, '{}'::jsonb, now())`;
+        for (const id of [listingOnlyId, redactedId]) {
+          expect(
+            await withRedistributableSubject(
+              readDb,
+              { kind: "id", id },
+              async (subject) => subject.id,
+            ),
+          ).toBeNull();
+        }
         for (const [start, anchor] of [
           [10, "a"],
           [20, "a"],

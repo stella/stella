@@ -4,6 +4,7 @@ import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { corpusStorageMode } from "@/api/env-base";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
+import { publishedCaseLawDecisionFor } from "@/api/lib/case-law/published-decisions";
 import {
   readCorpusAst,
   readCorpusPayloadOrFallback,
@@ -42,7 +43,10 @@ export const readDecisionAnalysis = definePublicLawSharedQuery(
     decisionId: SafeId<"caseLawDecision">,
   ) =>
     await tx.query.caseLawDecisions.findFirst({
-      where: { id: { eq: decisionId } },
+      where: {
+        id: { eq: decisionId },
+        RAW: (table) => publishedCaseLawDecisionFor(table),
+      },
       columns: decisionAnalysisColumns,
       // `descriptor` carries the source's reuse terms and is read only to
       // decide whether the text may be fed to a model; it is never returned.

@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, isNull, lt, sql } from "drizzle-orm";
+import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
@@ -190,13 +190,7 @@ const readCitingDecisionRows = async ({
       languageGroupKey: caseLawDecisions.languageGroupKey,
       decisionDate: caseLawDecisions.decisionDate,
       citationAuthority: caseLawDecisions.citationAuthority,
-      // Keep the public citation relationship when its source decision is
-      // tombstoned, but do not return a verbatim excerpt from removed text.
-      sentenceText: sql<string | null>`CASE
-          WHEN ${caseLawDecisions.redactedAt} IS NULL
-          THEN ${caseLawProvisionCitations.sentenceText}
-          ELSE NULL
-        END`.as("sentence_text"),
+      sentenceText: caseLawProvisionCitations.sentenceText,
       printText: caseLawProvisionCitations.printText,
       spanStart: caseLawProvisionCitations.spanStart,
       spanEnd: caseLawProvisionCitations.spanEnd,
@@ -217,7 +211,7 @@ const readCitingDecisionRows = async ({
       eq(caseLawDecisions.id, caseLawProvisionCitations.decisionId),
     )
     .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
-    .where(and(...conditions))
+    .where(and(publishedCaseLawDecision, ...conditions))
     .as("citing_decision_mentions");
 
   let continuation: SQL | undefined;
@@ -359,16 +353,11 @@ export const listCitingDecisionsHandler = async (
     eq(caseLawDecisions.country, jurisdiction),
     work,
     redistributableCaseLawSource,
-    publishedCaseLawDecision,
   ];
 
   if (query.anchor !== undefined) {
     conditions.push(eq(caseLawProvisionCitations.anchor, query.anchor));
   }
-  if (query.excerpt === "required") {
-    conditions.push(isNull(caseLawDecisions.redactedAt));
-  }
-
   if (query.court !== undefined) {
     conditions.push(eq(caseLawDecisions.court, query.court));
   }

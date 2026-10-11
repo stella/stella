@@ -256,7 +256,7 @@ const visibleFor = ({
   const resolvedAndOpen = sql`(
     ${relatedSource.id} IS NOT NULL
     AND ${redistributableCaseLawSourceFor(relatedSource.descriptor)}
-    AND ${publishedCaseLawDecisionFor(relatedDecision.metadata)}
+    AND ${publishedCaseLawDecisionFor(relatedDecision)}
     AND ${inArray(relatedDecision.country, [...PUBLIC_CASE_LAW_COUNTRIES])}
   )`;
   return keepsUnresolved

@@ -58,6 +58,7 @@ const DB_TEST_TIMEOUT_MS = 120_000;
 
 const sourceId = createSafeId<"caseLawSource">();
 const publishedId = createSafeId<"caseLawDecision">();
+const redactedId = createSafeId<"caseLawDecision">();
 const pendingId = createSafeId<"caseLawDecision">();
 const groupPendingId = createSafeId<"caseLawDecision">();
 const groupPublishedId = createSafeId<"caseLawDecision">();
@@ -172,6 +173,15 @@ beforeAll(async () => {
       createdAt: new Date(2026, 2, 4, 9),
       metadata: {},
     }),
+    {
+      ...seedDecision({
+        id: redactedId,
+        caseNumber: "redacted",
+        createdAt: new Date(2026, 2, 4, 9, 30),
+        metadata: {},
+      }),
+      redactedAt: new Date("2026-03-05T00:00:00Z"),
+    },
     seedDecision({
       id: pendingId,
       caseNumber: "2 Cdo 2/2026",
@@ -295,7 +305,7 @@ test(
 );
 
 test(
-  "no public surface shows a listing-only row",
+  "public reads use the publication filter",
   async () => {
     expect((await listedIds()).toSorted()).toEqual(
       [publishedId, groupPublishedId].toSorted(),
