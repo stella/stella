@@ -251,7 +251,8 @@ describe("write contracts cover the mutation route graph", () => {
       export default createSafeHandler(${config}, async ({body, scopedDb}) =>
         scopedDb.transaction(async (tx) => {
           const stored = await tx.readForUpdate();
-          enforce({type: 'updatedAt', field: 'expectedUpdatedAt', expectedUpdatedAt: body.expectedUpdatedAt, storedUpdatedAt: stored.updatedAt, resource: 'Example'});
+          const conflict = enforce({type: 'updatedAt', field: 'expectedUpdatedAt', expectedUpdatedAt: body.expectedUpdatedAt, storedUpdatedAt: stored.updatedAt, resource: 'Example'});
+          if (conflict !== null) return conflict;
           return tx.replace(body);
         }));`;
     const diagnostic = expect.stringContaining(
@@ -273,7 +274,7 @@ describe("write contracts cover the mutation route graph", () => {
     sources.set(
       helper,
       `import { enforceWritePrecondition } from '@/api/lib/write-contract';
-      export const write = (body) => { enforceWritePrecondition({type: 'updatedAt', field: 'expectedUpdatedAt', expectedUpdatedAt: body.expectedUpdatedAt, storedUpdatedAt: new Date(), resource: 'Example'}); };`,
+      export const write = (body) => { const conflict = enforceWritePrecondition({type: 'updatedAt', field: 'expectedUpdatedAt', expectedUpdatedAt: body.expectedUpdatedAt, storedUpdatedAt: new Date(), resource: 'Example'}); if (conflict) return conflict; return {}; };`,
     );
     const invoked = `import { createSafeHandler } from '@/api/lib/api-handlers'; import {write} from './write';
       export default createSafeHandler(${config}, async ({body}) => write(body));`;
@@ -326,12 +327,12 @@ describe("write contracts cover the mutation route graph", () => {
     const config = `{contract: 'replace', precondition: {type: 'updatedAt', field: 'expectedUpdatedAt'}}`;
     const call = `enforceWritePrecondition({type: 'updatedAt', field: 'expectedUpdatedAt'})`;
     for (const body of [
-      `if (body.expectedUpdatedAt) { ${call}; }`,
-      `body.expectedUpdatedAt && ${call};`,
-      `body.expectedUpdatedAt ? ${call} : undefined;`,
-      `for (const item of body.items) { ${call}; }`,
-      `try { body.check(); } catch { ${call}; }`,
-      `try { ${call}; } catch {}`,
+      `if (body.expectedUpdatedAt) { const conflict = ${call}; if (conflict) return conflict; }`,
+      `return body.expectedUpdatedAt && ${call};`,
+      `return body.expectedUpdatedAt ? ${call} : undefined;`,
+      `for (const item of body.items) { const conflict = ${call}; if (conflict) return conflict; }`,
+      `try { body.check(); } catch { return ${call}; }`,
+      `try { const conflict = ${call}; if (conflict) return conflict; } catch {}`,
     ]) {
       const sources = fixture(config);
       sources.set(
@@ -345,6 +346,67 @@ describe("write contracts cover the mutation route graph", () => {
       );
     }
   });
+  test("ignored, dropped and voided conflicts cannot authorize a replacement", () => {
+    const config = `{contract: 'replace', precondition: {type: 'updatedAt', field: 'expectedUpdatedAt'}, body: t.Object({expectedUpdatedAt: t.String({format: 'date-time'})})}`;
+    const call = `enforceWritePrecondition({type: 'updatedAt', field: 'expectedUpdatedAt', expectedUpdatedAt: body.expectedUpdatedAt, storedUpdatedAt: new Date(), resource: 'Example'})`;
+    const sources = fixture(config);
+    const withBody = (
+      body: string,
+    ) => `import { t } from 'elysia'; import { createSafeHandler } from '@/api/lib/api-handlers';
+      import { enforceWritePrecondition } from '@/api/lib/write-contract';
+      export default createSafeHandler(${config}, async ({body}) => { ${body} return {}; });`;
+    for (const body of [
+      `${call};`,
+      `const conflict = ${call};`,
+      `void ${call};`,
+      `const conflict = ${call}; if (conflict) { void conflict; }`,
+      `const conflict = ${call}; if (conflict) { const conflict = null; return conflict; }`,
+      `const conflict = ${call}; if (conflict === null) return conflict;`,
+      `let conflict = ${call}; conflict = null; if (conflict) return conflict;`,
+    ]) {
+      sources.set(handler, withBody(body));
+      expect(check(sources)).toContainEqual(
+        expect.stringContaining("Replacement must reach owner enforcement"),
+      );
+    }
+    for (const body of [
+      `return ${call};`,
+      `const conflict = ${call}; if (conflict) return conflict;`,
+      `const conflict = ${call}; if (conflict !== null) { return conflict; }`,
+    ]) {
+      sources.set(handler, withBody(body));
+      expect(check(sources)).toEqual([]);
+    }
+  });
+  test("an invoked helper must propagate its conflict through the handler", () => {
+    const config = `{contract: 'replace', precondition: {type: 'updatedAt', field: 'expectedUpdatedAt'}}`;
+    const sources = fixture(config);
+    sources.set(
+      "apps/api/src/handlers/example/write.ts",
+      `import { enforceWritePrecondition } from '@/api/lib/write-contract';
+      export const write = () => enforceWritePrecondition({type: 'updatedAt', field: 'expectedUpdatedAt'});`,
+    );
+    for (const body of [
+      "write(); return {};",
+      "const conflict = write(); return {};",
+      "void write(); return {};",
+    ]) {
+      sources.set(
+        handler,
+        `import { createSafeHandler } from '@/api/lib/api-handlers'; import { write } from './write';
+        export default createSafeHandler(${config}, async () => { ${body} });`,
+      );
+      expect(check(sources)).toContainEqual(
+        expect.stringContaining("Replacement must reach owner enforcement"),
+      );
+    }
+    sources.set(
+      handler,
+      `import { createSafeHandler } from '@/api/lib/api-handlers'; import { write } from './write';
+      export default createSafeHandler(${config}, async () => { const conflict = await write(); if (conflict) return conflict; return {}; });`,
+    );
+    expect(check(sources)).toEqual([]);
+  });
   test("compound revision declarations require every owner comparison", () => {
     const config = `{contract: 'replace', precondition: {type: 'revision', fields: ['baseRevision', 'selectedTextHash']}}`;
     const sources = fixture(config);
@@ -355,8 +417,10 @@ describe("write contracts cover the mutation route graph", () => {
     const guarded = `import { createSafeHandler } from '@/api/lib/api-handlers';
       import { enforceWritePrecondition } from '@/api/lib/write-contract';
       export default createSafeHandler(${config}, async ({body}) => {
-        enforceWritePrecondition({type: 'revision', field: 'baseRevision', expectedRevision: body.baseRevision, storedRevision: 1, resource: 'Example'});
-        enforceWritePrecondition({type: 'revision', field: 'selectedTextHash', expectedRevision: body.selectedTextHash, storedRevision: 'hash', resource: 'Example'});
+        const baseConflict = enforceWritePrecondition({type: 'revision', field: 'baseRevision', expectedRevision: body.baseRevision, storedRevision: 1, resource: 'Example'});
+        if (baseConflict) return baseConflict;
+        const hashConflict = enforceWritePrecondition({type: 'revision', field: 'selectedTextHash', expectedRevision: body.selectedTextHash, storedRevision: 'hash', resource: 'Example'});
+        if (hashConflict) return hashConflict;
         return {};
       });`;
     sources.set(handler, guarded);
@@ -613,5 +677,5 @@ describe("write contracts cover the mutation route graph", () => {
         debtIds: readWriteContractDebtIds(load),
       }),
     ).toEqual([]);
-  });
+  }, 30_000);
 });

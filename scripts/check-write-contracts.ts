@@ -51,6 +51,80 @@ const unwrap = (node: ts.Expression): ts.Expression => {
   }
   return node;
 };
+/** Recognize only a returned value or an immediate conflict early return. */
+const propagatesConflict = (call: ts.CallExpression): boolean => {
+  let expression: ts.Node = call;
+  while (
+    ts.isAwaitExpression(expression.parent) ||
+    ts.isParenthesizedExpression(expression.parent) ||
+    ts.isAsExpression(expression.parent) ||
+    ts.isSatisfiesExpression(expression.parent)
+  ) {
+    expression = expression.parent;
+  }
+  const parent = expression.parent;
+  if (ts.isReturnStatement(parent) || ts.isArrowFunction(parent)) {
+    return true;
+  }
+  if (
+    !ts.isVariableDeclaration(parent) ||
+    !ts.isIdentifier(parent.name) ||
+    !ts.isVariableDeclarationList(parent.parent) ||
+    !isConstDeclarationList(parent.parent) ||
+    parent.parent.declarations.length !== 1 ||
+    !ts.isVariableStatement(parent.parent.parent)
+  ) {
+    return false;
+  }
+  const statement = parent.parent.parent;
+  const block = statement.parent;
+  if (!ts.isBlock(block)) {
+    return false;
+  }
+  const next = block.statements.at(block.statements.indexOf(statement) + 1);
+  const name = parent.name.text;
+  const returnsConflict = (node: ts.Statement): boolean => {
+    if (ts.isBlock(node)) {
+      const only = node.statements.at(0);
+      return (
+        node.statements.length === 1 &&
+        only !== undefined &&
+        returnsConflict(only)
+      );
+    }
+    return (
+      ts.isReturnStatement(node) &&
+      node.expression !== undefined &&
+      ts.isIdentifier(unwrap(node.expression)) &&
+      unwrap(node.expression).getText() === name
+    );
+  };
+  if (next === undefined) {
+    return false;
+  }
+  if (ts.isReturnStatement(next)) {
+    return returnsConflict(next);
+  }
+  if (!ts.isIfStatement(next) || next.elseStatement !== undefined) {
+    return false;
+  }
+  const condition = unwrap(next.expression);
+  const nonNull =
+    (ts.isIdentifier(condition) && condition.text === name) ||
+    (ts.isBinaryExpression(condition) &&
+      (condition.operatorToken.kind ===
+        ts.SyntaxKind.ExclamationEqualsEqualsToken ||
+        condition.operatorToken.kind ===
+          ts.SyntaxKind.ExclamationEqualsToken) &&
+      ((ts.isIdentifier(condition.left) &&
+        condition.left.text === name &&
+        condition.right.kind === ts.SyntaxKind.NullKeyword) ||
+        (ts.isIdentifier(condition.right) &&
+          condition.right.text === name &&
+          condition.left.kind === ts.SyntaxKind.NullKeyword)));
+  return nonNull && returnsConflict(next.thenStatement);
+};
+
 const modulePath = (file: string, specifier: string) => {
   let target: string | undefined;
   if (specifier.startsWith("@/api/")) {
@@ -727,7 +801,7 @@ class WriteSourceResolver {
     seen.add(key);
     const scope = wrapperScope(resolved);
     const visit = (node: ts.Node, currentScope: LexicalScope) => {
-      // Only unconditional comparisons count: a branch, loop, catch, short
+      // Only unconditional, propagated comparisons count: a branch, loop, catch, short
       // circuit or optional call may skip the comparison on some write path.
       if (ts.isFunctionLike(node) || isConditionalExecution(node)) {
         return;
@@ -750,7 +824,7 @@ class WriteSourceResolver {
       const nestedScope = ts.isBlock(node)
         ? blockScope(node, currentScope)
         : currentScope;
-      if (ts.isCallExpression(node)) {
+      if (ts.isCallExpression(node) && propagatesConflict(node)) {
         for (const field of this.callEnforcement({
           value: { file: resolved.file, node, scope: nestedScope },
           type,

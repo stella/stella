@@ -8,7 +8,7 @@ import {
 } from "./optimistic-concurrency";
 
 /** Exact migration identities; the route census binds these to the reasoned baseline. */
-export const REPLACE_CONTRACT_DEBT_IDS = [
+const REPLACE_CONTRACT_DEBT_IDS = [
   "apps/api/src/handlers/case-law/research/columns-reorder.ts",
   "apps/api/src/handlers/chat/messages/revisions/accept.ts",
   "apps/api/src/handlers/clauses/update.ts",
@@ -81,20 +81,17 @@ type WritePreconditionArgs =
     };
 
 /** Check every declared field after locking the decisive row, holding that lock through the write. */
-export const enforceWritePrecondition = (args: WritePreconditionArgs): void => {
+export const enforceWritePrecondition = (
+  args: WritePreconditionArgs,
+): HandlerError<409> | null => {
   switch (args.type) {
-    case "updatedAt": {
-      const conflict = assertUnchangedSince(args);
-      if (conflict) {
-        throw conflict;
-      }
-      return;
-    }
+    case "updatedAt":
+      return assertUnchangedSince(args);
     case "revision":
       if (args.storedRevision === args.expectedRevision) {
-        return;
+        return null;
       }
-      throw new HandlerError({
+      return new HandlerError({
         code: VERSION_CONFLICT_ERROR_CODE,
         status: 409,
         message: `${args.resource} changed while it was being edited; reload and try again`,

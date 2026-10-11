@@ -1,4 +1,3 @@
-import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { t } from "elysia";
 
@@ -27,27 +26,26 @@ describe("replacement writes require the state the caller read", () => {
         updatedAt: new Date("2026-01-02T00:00:00.000Z"),
         values: ["original"],
       };
-      const result = Result.try({
-        try: () => {
-          enforceWritePrecondition({
-            type: "updatedAt",
-            field: "expectedUpdatedAt",
-            storedUpdatedAt: row.updatedAt,
-            expectedUpdatedAt,
-            resource: "Record",
-          });
-          row.values = ["replacement"];
-        },
-        catch: (error) => error,
-      });
-      expect(result.isErr()).toBe(true);
-      if (result.isErr()) {
-        expect(result.error).toBeInstanceOf(HandlerError);
-        expect(result.error).toMatchObject({
-          status: 409,
-          code: VERSION_CONFLICT_ERROR_CODE,
+      const replace = () => {
+        const conflict = enforceWritePrecondition({
+          type: "updatedAt",
+          field: "expectedUpdatedAt",
+          storedUpdatedAt: row.updatedAt,
+          expectedUpdatedAt,
+          resource: "Record",
         });
-      }
+        if (conflict !== null) {
+          return conflict;
+        }
+        row.values = ["replacement"];
+        return null;
+      };
+      const conflict = replace();
+      expect(conflict).toBeInstanceOf(HandlerError);
+      expect(conflict).toMatchObject({
+        status: 409,
+        code: VERSION_CONFLICT_ERROR_CODE,
+      });
       expect(row.values).toEqual(["original"]);
     }
   });
@@ -57,13 +55,17 @@ describe("replacement writes require the state the caller read", () => {
       updatedAt: new Date("2026-01-02T00:00:00.000Z"),
       values: ["original"],
     };
-    enforceWritePrecondition({
+    const conflict = enforceWritePrecondition({
       type: "updatedAt",
       field: "expectedUpdatedAt",
       storedUpdatedAt: row.updatedAt,
       expectedUpdatedAt: "2026-01-02T01:00:00.000+01:00",
       resource: "Record",
     });
+    expect(conflict).toBeNull();
+    if (conflict !== null) {
+      return conflict;
+    }
     row.values = ["replacement"];
     expect(row.values).toEqual(["replacement"]);
   });
@@ -75,26 +77,25 @@ describe("replacement writes require the state the caller read", () => {
       { storedRevision: 1, expectedRevision: "1" },
     ]) {
       const row = { values: ["original"] };
-      const result = Result.try({
-        try: () => {
-          enforceWritePrecondition({
-            type: "revision",
-            field: "revision",
-            ...tokens,
-            resource: "Record",
-          });
-          row.values = ["replacement"];
-        },
-        catch: (error) => error,
-      });
-      expect(result.isErr()).toBe(true);
-      if (result.isErr()) {
-        expect(result.error).toBeInstanceOf(HandlerError);
-        expect(result.error).toMatchObject({
-          status: 409,
-          code: VERSION_CONFLICT_ERROR_CODE,
+      const replace = () => {
+        const conflict = enforceWritePrecondition({
+          type: "revision",
+          field: "revision",
+          ...tokens,
+          resource: "Record",
         });
-      }
+        if (conflict !== null) {
+          return conflict;
+        }
+        row.values = ["replacement"];
+        return null;
+      };
+      const conflict = replace();
+      expect(conflict).toBeInstanceOf(HandlerError);
+      expect(conflict).toMatchObject({
+        status: 409,
+        code: VERSION_CONFLICT_ERROR_CODE,
+      });
       expect(row.values).toEqual(["original"]);
     }
   });
@@ -102,13 +103,17 @@ describe("replacement writes require the state the caller read", () => {
   test("matching numeric and string revisions allow the replacement", () => {
     for (const revision of [2, "current"]) {
       const row = { values: ["original"] };
-      enforceWritePrecondition({
+      const conflict = enforceWritePrecondition({
         type: "revision",
         field: "revision",
         storedRevision: revision,
         expectedRevision: revision,
         resource: "Record",
       });
+      expect(conflict).toBeNull();
+      if (conflict !== null) {
+        return conflict;
+      }
       row.values = ["replacement"];
       expect(row.values).toEqual(["replacement"]);
     }
