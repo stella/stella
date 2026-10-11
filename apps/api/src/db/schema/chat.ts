@@ -9,14 +9,16 @@ import {
   CHAT_TURN_FAILURE_CODES,
   CHAT_TURN_INTERACTION_TYPES,
   CHAT_TURN_INTERRUPTION_REASONS,
-  CHAT_TURN_STATUSES,
-  CHAT_TURN_TIMING_DISPOSITION,
 } from "@/api/handlers/chat/chat-turn-state";
 import {
   CHAT_THREAD_NAME_KIND,
   CHAT_THREAD_NAME_KINDS,
   type ChatThreadNameKind,
 } from "@/api/lib/chat/thread-name-kinds";
+import {
+  CHAT_TURN_STATUSES,
+  CHAT_TURN_TIMING_DISPOSITION,
+} from "@/api/lib/chat/turn-status";
 
 import {
   entityFeatureGateChecks,

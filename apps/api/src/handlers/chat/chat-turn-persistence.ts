@@ -26,7 +26,6 @@ import {
 } from "@/api/handlers/chat/chat-turn-settlement";
 import type { CutShortOutcome } from "@/api/handlers/chat/chat-turn-settlement";
 import {
-  CHAT_TURN_TIMING_ACTIVE_STATUSES,
   chatTurnViewOf,
   planChatTurnTransition,
 } from "@/api/handlers/chat/chat-turn-state";
@@ -37,7 +36,6 @@ import type {
   ChatTurnState,
   ChatTurnView,
 } from "@/api/handlers/chat/chat-turn-state";
-import { messageTurnTiming } from "@/api/handlers/chat/chat-turn-timing";
 import { isChatHistorySnapshotCurrentOnTx } from "@/api/handlers/chat/history-window";
 import type { ChatHistorySnapshot } from "@/api/handlers/chat/history-window";
 import type {
@@ -51,6 +49,8 @@ import type { AIErrorKind } from "@/api/lib/ai-error";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { closeChatRunLogOnTx } from "@/api/lib/chat/run-log";
+import { CHAT_TURN_TIMING_ACTIVE_STATUSES } from "@/api/lib/chat/turn-status";
+import { messageTurnTiming } from "@/api/lib/chat/turn-timing";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
 import { isRecord } from "@/api/lib/type-guards";

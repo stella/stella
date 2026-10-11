@@ -758,7 +758,11 @@ describe("transient visual preview fault persistence", () => {
           source: projected,
         } = await persistNativeInterruptTurn(
           projectVisualPreviewStream(source()),
-          { abortSignal: abort.signal, deadlineSignal: deadline.signal },
+          {
+            abortSignal: abort.signal,
+            deadlineSignal: deadline.signal,
+            runSignal: new AbortController().signal,
+          },
         );
         expect(lifecycle.closed).toBe(true);
         expect(JSON.stringify(emitted)).not.toContain(partial.png);
@@ -1193,6 +1197,7 @@ describe("admission loss before message production identifies the persisted assi
       };
       const { emitted, finish } = await persistNativeInterruptTurn(source(), {
         abortSignal: admission.signal,
+        runSignal: new AbortController().signal,
         deadlineSignal: new AbortController().signal,
       });
       expect(
@@ -1324,6 +1329,7 @@ describe("late admission loss retains a completed and charged response", () => {
     };
     const { finish, emitted } = await persistNativeInterruptTurn(source(), {
       abortSignal: admission.signal,
+      runSignal: new AbortController().signal,
       deadlineSignal: new AbortController().signal,
     });
     expect(finish?.outcome).toEqual({
@@ -1383,6 +1389,7 @@ describe("late admission loss retains a completed and charged response", () => {
         };
         const { emitted, finish } = await persistNativeInterruptTurn(source(), {
           abortSignal: admission.signal,
+          runSignal: new AbortController().signal,
           deadlineSignal: new AbortController().signal,
           ...(exit === "teardown"
             ? { teardownAfterSourceChunks: fixture.length + 1 }
@@ -1457,6 +1464,7 @@ describe("admission lost before continuation production retains the original che
       };
       const { finish } = await persistNativeInterruptTurn(source(), {
         abortSignal: admission.signal,
+        runSignal: new AbortController().signal,
         deadlineSignal: new AbortController().signal,
         getRestorableCheckpoint: () => checkpoint,
         ...(exit === "teardown" ? { teardownAfterSourceChunks: 1 } : {}),

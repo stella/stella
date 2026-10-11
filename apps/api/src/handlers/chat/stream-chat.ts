@@ -151,7 +151,7 @@ import {
   providerStatusFields,
 } from "@/api/lib/ai-error";
 import type { AIErrorKind } from "@/api/lib/ai-error";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, detached } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { TanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -200,6 +200,7 @@ import { ToolCallIdLedger } from "@/api/lib/chat/unique-tool-call-ids";
 import { readPresent, readUnavailable } from "@/api/lib/errors/read-outcome";
 import type { ReadOutcome } from "@/api/lib/errors/read-outcome";
 import {
+  AIGenerationCancelledError,
   ChatEmptyCompletionError,
   ChatLoopDetectedError,
 } from "@/api/lib/errors/tagged-errors";
@@ -231,6 +232,7 @@ import {
   tokenUsageFromTerminalChunk,
 } from "@/api/lib/tanstack-ai-usage";
 import { projectVisualPreviewStream } from "@/api/lib/visual-preview-stream";
+import { withTimeout } from "@/api/lib/with-timeout";
 
 const TIMING_READ_FAILURE = failureSink({
   event: "chat.turn.timing_read_failed",
@@ -2482,6 +2484,85 @@ const failedRunDetails = ({ chunk, sourceChunk }: FailedRunDetailsOptions) => {
   };
 };
 
+const SOURCE_CLEANUP_AFTER_CUT_FAILURE = failureSink({
+  event: "chat.source_cleanup_after_cut_failed",
+  expected: [],
+});
+
+/** A provider that ignores cancellation cannot hold the turn's settlement.
+ * @yields Source chunks until the run is cut short.
+ */
+const readSourceUntilCut = async function* (
+  source: AsyncIterable<PublicStreamChunk>,
+  signal: AbortSignal,
+): AsyncIterable<Result<PublicStreamChunk, unknown>> {
+  const cancellation = new AIGenerationCancelledError({
+    message: "Chat source iteration was cancelled",
+  });
+  const isRunCut = () => signal.aborted;
+  const iterator = source[Symbol.asyncIterator]();
+  let ended = false;
+  try {
+    while (true) {
+      if (isRunCut()) {
+        yield Result.err(cancellation);
+        return;
+      }
+      const next = Result.tryPromise({
+        try: async () => await iterator.next(),
+        catch: (error: unknown) => error,
+      });
+      const raced = await Result.tryPromise({
+        try: async () =>
+          await withTimeout(async () => await next, {
+            label: "chat source iteration",
+            signal,
+            timeoutMs: 0,
+          }),
+        catch: (error: unknown) => error,
+      });
+      if (Result.isError(raced)) {
+        yield Result.err(isRunCut() ? cancellation : raced.error);
+        return;
+      }
+      const read = raced.value;
+      if (Result.isError(read)) {
+        yield Result.err(read.error);
+        return;
+      }
+      const step = read.value;
+      if (step.done) {
+        ended = true;
+        return;
+      }
+      yield Result.ok(step.value);
+    }
+  } finally {
+    if (!ended && iterator.return !== undefined) {
+      if (isRunCut()) {
+        // Async generator return waits for its outstanding next. Request
+        // cleanup, but let settlement finish while an uncooperative next is
+        // still blocked; the race already observes that next's rejection.
+        detached(
+          Result.tryPromise(async () => await iterator.return?.()).then(
+            (result) => {
+              if (Result.isError(result)) {
+                observeFailure(result.error, {
+                  sink: SOURCE_CLEANUP_AFTER_CUT_FAILURE,
+                });
+              }
+              return undefined;
+            },
+          ),
+          "chat.source-cleanup-after-cut",
+        );
+      } else {
+        await iterator.return();
+      }
+    }
+  }
+};
+
 export const processServerChatStream = async function* ({
   abortSignal,
   runSignal = abortSignal,
@@ -2563,7 +2644,15 @@ export const processServerChatStream = async function* ({
       }),
     });
 
-    for await (const sourceChunk of normalizedSource) {
+    for await (const sourceRead of readSourceUntilCut(
+      normalizedSource,
+      runSignal,
+    )) {
+      if (Result.isError(sourceRead)) {
+        const { error } = sourceRead;
+        throw error;
+      }
+      const sourceChunk = sourceRead.value;
       if (sourceChunk.type === EventType.TEXT_MESSAGE_START) {
         announcedAssistantMessage = true;
       }
@@ -2671,10 +2760,11 @@ export const processServerChatStream = async function* ({
     }
     const kind = classifyAIError(error);
     if (abortSignal.aborted) {
-      // An aborted stream is an expected exit (metered cutoff, ownership
-      // loss); its rejection shape is not a stream defect even
-      // when the classifier cannot name it.
-      captureError(error, { kind });
+      // Run control cancellation is an expected exit. Keep telemetry for
+      // other upstream failures that arrive during cancellation.
+      if (!AIGenerationCancelledError.is(error)) {
+        captureError(error, { kind });
+      }
       await terminalize({
         flushProcessor: true,
         outcome: cutShortOutcome(),

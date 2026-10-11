@@ -5,12 +5,13 @@ import {
 } from "@tanstack/ai";
 import type { StreamChunk } from "@tanstack/ai";
 import { Result } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 
 import {
   createChatTurnTimingObserver,
   getChatTurnDurationMs,
 } from "@stll/api-contract/chat-turn-duration";
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {
   createChatTurnTimingDurability,
@@ -20,7 +21,12 @@ import type { ChatTurnTiming } from "@/api/handlers/chat/types";
 import { createStreamMessageCapture } from "@/api/lib/chat/stream-message-capture";
 import { readPresent, readUnavailable } from "@/api/lib/errors/read-outcome";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import * as failureObservation from "@/api/lib/observability/observe-failure";
 import { buildWireSnapshot } from "@/api/tests/helpers/chat-fixtures";
+import {
+  installRecordingAnalytics,
+  installRecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
 
 const running = {
   status: "running",
@@ -703,9 +709,7 @@ for (const exit of ["drained", "thrown"] as const) {
         }
       }
       capture.processor.finalizeStream();
-      expect(deliveredErrors).toEqual(
-        exit === "thrown" ? ["Synthetic source failure"] : [],
-      );
+      expect(deliveredErrors).toEqual(exit === "thrown" ? ["unknown"] : []);
       expect(deliveredTimings.at(-1)).toEqual(finished);
       expect(capture.message()?.metadata?.["turnTiming"]).toEqual(finished);
       expect(capture.message()?.parts).toEqual([
@@ -759,7 +763,7 @@ test("a failed cleanup append still settles once and closes durability", async (
   expect(closes).toBe(1);
 });
 
-test.each(["multiple messages drain", "throw after terminal"] as const)(
+test.each(["throw after terminal"] as const)(
   "settles all timing before releasing the execution fence on %s",
   async (exit) => {
     const log = memoryStream({ runId: `timing-fence-${exit}` });
@@ -774,15 +778,6 @@ test.each(["multiple messages drain", "throw after terminal"] as const)(
         messageId: "answer",
         delta: "First",
       } as const satisfies StreamChunk;
-      if (exit === "multiple messages drain") {
-        yield { ...starts[0], messageId: "answer-two" };
-        yield {
-          type: EventType.TEXT_MESSAGE_CONTENT,
-          messageId: "answer-two",
-          delta: "Second",
-        } as const satisfies StreamChunk;
-        return;
-      }
       yield runEnd;
       throw new HandlerError({
         status: 500,
@@ -815,10 +810,7 @@ test.each(["multiple messages drain", "throw after terminal"] as const)(
                 return await log.append(chunks);
               },
             },
-            getTerminal: () =>
-              exit === "throw after terminal"
-                ? { chunk: runEnd, messageId: "answer" }
-                : undefined,
+            getTerminal: () => ({ chunk: runEnd, messageId: "answer" }),
             getPhase: () => phase.status,
             readTiming: async () =>
               readPresent(phase.status === "running" ? running : finished),
@@ -846,15 +838,96 @@ test.each(["multiple messages drain", "throw after terminal"] as const)(
     expect(body).not.toContain("RUN_ERROR");
     const messages = processor.getMessages();
     expect(messages.map((message) => message.metadata?.["turnTiming"])).toEqual(
-      exit === "multiple messages drain" ? [finished, finished] : [finished],
+      [finished],
     );
-    expect(messages.flatMap((message) => message.parts)).toEqual(
-      exit === "multiple messages drain"
-        ? [
-            { type: "text", content: "First" },
-            { type: "text", content: "Second" },
-          ]
-        : [{ type: "text", content: "First" }],
-    );
+    expect(messages.flatMap((message) => message.parts)).toEqual([
+      { type: "text", content: "First" },
+    ]);
   },
 );
+
+for (const start of starts) {
+  test(`rejects a second assistant id from ${start.type}`, async () => {
+    const iterator = withChatTurnTiming({
+      source: chunksOf([
+        starts[0],
+        {
+          ...start,
+          ...(start.type === EventType.TOOL_CALL_START
+            ? { parentMessageId: "answer-two" }
+            : { messageId: "answer-two" }),
+        },
+      ]),
+      getPhase: () => "running",
+      readTiming: async () => readPresent(running),
+    })[Symbol.asyncIterator]();
+    await iterator.next();
+    expect(await rejectionOf(iterator.next())).toMatchObject({
+      message: "Chat turn timing supports one assistant message",
+    });
+  });
+}
+
+test("durability rejects a second assistant id before writing it", async () => {
+  const log = memoryStream({ runId: "single-assistant" });
+  const adapter = createChatTurnTimingDurability({
+    log,
+    getTerminal: () => undefined,
+    getPhase: () => "running",
+    readTiming: async () => readPresent(running),
+    finishSettlement: async () => {},
+  });
+  await adapter.append([starts[0]]);
+  expect(
+    await rejectionOf(
+      adapter.append([{ ...starts[0], messageId: "answer-two" }]),
+    ),
+  ).toMatchObject({
+    message: "Chat turn timing supports one assistant message",
+  });
+  expect(await log.snapshot()).toHaveLength(1);
+});
+
+test("source failure is observed while only its classification reaches the wire", async () => {
+  const logs = installRecordingLogger();
+  const analytics = installRecordingAnalytics();
+  const sentinel = "Synthetic private source sentinel";
+  const observed = spyOn(failureObservation, "observeFailure");
+  const failure = new HandlerError({ status: 500, message: sentinel });
+  try {
+    const source = async function* () {
+      yield starts[0];
+      throw failure;
+    };
+    const chunks: StreamChunk[] = [];
+    for await (const chunk of withChatTurnTiming({
+      source: source(),
+      getPhase: () => "running",
+      readTiming: async () => readPresent(running),
+    })) {
+      chunks.push(chunk);
+    }
+    expect(
+      logs.records.some(
+        (record) => record.message === "chat.turn.timing_source_failed",
+      ),
+    ).toBe(true);
+    expect(observed).toHaveBeenCalledWith(failure, {
+      sink: expect.objectContaining({
+        event: "chat.turn.timing_source_failed",
+      }),
+    });
+    expect(failure.message).toBe(sentinel);
+    expect(JSON.stringify(chunks)).not.toContain(sentinel);
+    expect(chunks.at(-1)).toMatchObject({
+      type: EventType.RUN_ERROR,
+      message: "unknown",
+      code: "unknown",
+      error: { message: "unknown", code: "unknown" },
+    });
+  } finally {
+    observed.mockRestore();
+    logs.restore();
+    analytics.restore();
+  }
+});

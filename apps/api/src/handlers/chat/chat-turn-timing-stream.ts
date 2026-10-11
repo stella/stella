@@ -1,12 +1,19 @@
 import { EventType } from "@tanstack/ai";
 import type { StreamChunk, StreamDurability } from "@tanstack/ai";
-import { toRunErrorPayload } from "@tanstack/ai/adapter-internals";
 import { panic, Result } from "better-result";
 
 import { Temporal } from "@stll/time";
 
 import type { ChatTurnTiming } from "@/api/handlers/chat/types";
+import { classifyAIError } from "@/api/lib/ai-error";
 import type { ReadOutcome } from "@/api/lib/errors/read-outcome";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
+
+const SOURCE_FAILED_SINK = failureSink({
+  event: "chat.turn.timing_source_failed",
+  expected: [],
+});
 
 type WithChatTurnTimingArgs = {
   source: AsyncIterable<StreamChunk>;
@@ -42,7 +49,7 @@ export const withChatTurnTiming = async function* ({
   readTiming,
   getPhase,
 }: WithChatTurnTimingArgs): AsyncIterable<StreamChunk> {
-  const messageIds = new Set<string>();
+  let assistantMessageId: string | undefined;
   let settledTiming: Promise<ReadOutcome<ChatTurnTiming | null>> | undefined;
   const emitSettledTiming = async function* (
     timestamp?: number,
@@ -54,12 +61,11 @@ export const withChatTurnTiming = async function* ({
       getPhase() === "settled"
         ? timingMetadata(await (settledTiming = readTiming()))
         : { turnTiming: null };
-    const messageId = Array.from(messageIds).at(-1);
+    const messageId = assistantMessageId;
     if (messageId === undefined) {
       return;
     }
-    // One finalization trigger lets durability group every message's final
-    // timing into a single fenced batch, including when SDK batch size is one.
+    // The single assistant message has one fenced final timing event.
     yield {
       type: EventType.TEXT_MESSAGE_END,
       messageId,
@@ -81,16 +87,14 @@ export const withChatTurnTiming = async function* ({
         // SDK cleanup appends thrown errors without forwarding that batch.
         // Emit the terminal error here so durability can settle its timing
         // while fenced and forward both events to the live reader.
-        const error = toRunErrorPayload(step.error.cause);
+        observeFailure(step.error.cause, { sink: SOURCE_FAILED_SINK });
+        const kind = classifyAIError(step.error.cause);
         yield {
           type: EventType.RUN_ERROR,
           timestamp: Temporal.Now.instant().epochMilliseconds,
-          message: error.message,
-          ...(error.code === undefined ? {} : { code: error.code }),
-          error: {
-            message: error.message,
-            ...(error.code === undefined ? {} : { code: error.code }),
-          },
+          message: kind,
+          code: kind,
+          error: { message: kind, code: kind },
         };
         return;
       }
@@ -116,7 +120,13 @@ export const withChatTurnTiming = async function* ({
       }
       if (messageId !== undefined) {
         if (
-          !messageIds.has(messageId) &&
+          assistantMessageId !== undefined &&
+          assistantMessageId !== messageId
+        ) {
+          panic("Chat turn timing supports one assistant message");
+        }
+        if (
+          assistantMessageId === undefined &&
           chunk.type !== EventType.TEXT_MESSAGE_START
         ) {
           yield {
@@ -129,7 +139,7 @@ export const withChatTurnTiming = async function* ({
             metadata: timingMetadata(await readTiming()),
           };
         }
-        messageIds.add(messageId);
+        assistantMessageId = messageId;
       }
       if (
         getPhase() === "settled" &&
@@ -147,7 +157,10 @@ export const withChatTurnTiming = async function* ({
         continue;
       }
       if (chunk.type === EventType.MESSAGES_SNAPSHOT) {
-        if (!chunk.messages.some((message) => messageIds.has(message.id))) {
+        const trackedMessageId = assistantMessageId;
+        if (
+          !chunk.messages.some((message) => message.id === trackedMessageId)
+        ) {
           yield chunk;
           continue;
         }
@@ -155,7 +168,7 @@ export const withChatTurnTiming = async function* ({
         yield {
           ...chunk,
           messages: chunk.messages.map((message) =>
-            messageIds.has(message.id)
+            message.id === trackedMessageId
               ? {
                   ...message,
                   metadata: { ...message.metadata, ...observation },
@@ -243,37 +256,12 @@ export const createChatTurnTimingDurability = ({
 }: CreateChatTurnTimingDurabilityArgs): StreamDurability => {
   let status: "pending" | "finished" = "pending";
   let messageId: string | undefined;
-  const messageIds = new Set<string>();
   let settlement: Promise<void> | undefined;
   const settle = async () => {
     settlement ??= finishSettlement();
     await settlement;
   };
   const finalize = async (chunks: StreamChunk[]) => {
-    const endIndex = chunks.findIndex(
-      (chunk) =>
-        chunk.type === EventType.TEXT_MESSAGE_END &&
-        chunk.metadata !== undefined &&
-        "turnTiming" in chunk.metadata,
-    );
-    for (const id of messageIds) {
-      if (
-        chunks.some(
-          (chunk) =>
-            chunk.type === EventType.TEXT_MESSAGE_END &&
-            chunk.messageId === id &&
-            chunk.metadata !== undefined &&
-            "turnTiming" in chunk.metadata,
-        )
-      ) {
-        continue;
-      }
-      chunks.splice(endIndex, 0, {
-        type: EventType.TEXT_MESSAGE_END,
-        messageId: id,
-        metadata: { turnTiming: null },
-      });
-    }
     const offsets = await log.append(chunks);
     await settle();
     const timing = timingMetadata(await readTiming());
@@ -300,8 +288,10 @@ export const createChatTurnTimingDurability = ({
           chunk.type === EventType.TEXT_MESSAGE_START &&
           chunk.role === "assistant"
         ) {
+          if (messageId !== undefined && messageId !== chunk.messageId) {
+            panic("Chat turn timing supports one assistant message");
+          }
           messageId = chunk.messageId;
-          messageIds.add(chunk.messageId);
         }
       }
       const last = chunks.at(-1);

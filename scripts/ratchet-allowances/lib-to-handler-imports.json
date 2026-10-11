@@ -1,5 +1,0 @@
-{
-  "metric": "lib-to-handler-imports",
-  "delta": 1,
-  "reason": "The replay log reuses the canonical chat turn timing SQL projection to finalize terminal metadata atomically with settlement. Reusing it preserves exact parity with transcript hydration without duplicating timing arithmetic."
-}

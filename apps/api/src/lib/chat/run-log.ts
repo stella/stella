@@ -20,9 +20,9 @@ import { Temporal } from "@stll/time";
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { chatRunLogEntries, chatRunLogs, chatTurns } from "@/api/db/schema";
-import { messageTurnTiming } from "@/api/handlers/chat/chat-turn-timing";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createStreamMessageCapture } from "@/api/lib/chat/stream-message-capture";
+import { messageTurnTiming } from "@/api/lib/chat/turn-timing";
 import { emitChatRunLogMetric } from "@/api/lib/observability/request-metrics";
 import type { SchedulerDb } from "@/api/lib/scheduler/types";
 
@@ -229,6 +229,9 @@ const createRunLogReader = ({
   const loadPage = async (after: bigint) =>
     await db(async (tx) => {
       const log = await loadHeader(tx);
+      if (log === undefined) {
+        return { entries: [], log };
+      }
       const entries = await tx
         .select({
           chunk: chatRunLogEntries.chunk,
@@ -239,6 +242,7 @@ const createRunLogReader = ({
           and(
             entryKey(organizationId, runId),
             gt(chatRunLogEntries.seq, after),
+            lt(chatRunLogEntries.seq, log.nextSeq),
           ),
         )
         .orderBy(asc(chatRunLogEntries.seq))
@@ -260,12 +264,10 @@ const createRunLogReader = ({
 
   return {
     async *read(offset, signal) {
-      let after: bigint | null;
-      if (offset === "-1") {
-        after = 0n;
-      } else if (offset === "now") {
+      let after: bigint | null = 0n;
+      if (offset === "now") {
         after = null;
-      } else {
+      } else if (offset !== "-1") {
         after = offsetSequence(offset);
       }
       if (after === null) {

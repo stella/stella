@@ -12,7 +12,6 @@ import {
   normalizePersistedChatMessageContent,
 } from "@/api/handlers/chat/chat-message-parts";
 import { ACTIVE_CHAT_TURN_STATUSES } from "@/api/handlers/chat/chat-turn-state";
-import { messageTurnTiming } from "@/api/handlers/chat/chat-turn-timing";
 import type {
   ChatMessageMetadata,
   ChatTurnTiming,
@@ -21,6 +20,7 @@ import type {
   PersistedChatMessageContent,
 } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { messageTurnTiming } from "@/api/lib/chat/turn-timing";
 import { LIMITS } from "@/api/lib/limits";
 import {
   decodePaginationCursor,

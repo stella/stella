@@ -1,5 +1,0 @@
-{
-  "metric": "audit-skip-directives",
-  "delta": 1,
-  "reason": "Final timing metadata is a derived projection in the ephemeral replay log, finalized atomically with the already-audited transcript settlement; a second audit event would duplicate the durable mutation."
-}

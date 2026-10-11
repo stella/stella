@@ -3,36 +3,12 @@ import { panic } from "better-result";
 import type { PermissionInput } from "@stll/permissions";
 
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ChatTurnStatus } from "@/api/lib/chat/turn-status";
 
 /** Whoever may start a turn in a thread may also stop it. */
 export const CHAT_TURN_PERMISSIONS = {
   chat: ["create"],
 } satisfies PermissionInput;
-
-export const CHAT_TURN_STATUSES = [
-  "accepted",
-  "running",
-  "awaiting-user",
-  "completed",
-  "failed",
-  "cancelled",
-  "interrupted",
-] as const;
-export type ChatTurnStatus = (typeof CHAT_TURN_STATUSES)[number];
-
-export const CHAT_TURN_TIMING_DISPOSITION = {
-  accepted: "hidden",
-  running: "running",
-  "awaiting-user": "finished",
-  completed: "finished",
-  failed: "finished",
-  cancelled: "finished",
-  interrupted: "finished",
-} as const satisfies Record<ChatTurnStatus, "hidden" | "running" | "finished">;
-
-export const CHAT_TURN_TIMING_ACTIVE_STATUSES = CHAT_TURN_STATUSES.filter(
-  (status) => CHAT_TURN_TIMING_DISPOSITION[status] !== "finished",
-);
 
 /** The statuses of a turn not yet settled; a thread holds at most one. */
 export const ACTIVE_CHAT_TURN_STATUSES = [
