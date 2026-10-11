@@ -3,10 +3,8 @@
  *
  * Orchestrates the classification cascade:
  * 1. Regex rules first (fast, free)
- * 2. A System One reading (Jev) when the deployment has a key: a typed
- *    choice with calibrated confidence, accepted above a floor
- * 3. The generative model for what the earlier tiers did not settle; it
- *    also extracts the key phrase a rule can be promoted from
+ * 2. A typed decision: the decision model first, with generative fallback
+ *    owned by decide; generative evidence supplies promotion phrases
  * 4. Track surface forms for auto-promotion to regex rules
  *
  * Over time, the regex ruleset grows and model usage drops.
@@ -27,7 +25,6 @@ import type {
   CitationContexts,
   CitationWindows,
 } from "@/api/handlers/case-law/polarity/context";
-import { classifyWithLLM } from "@/api/handlers/case-law/polarity/llm-classifier";
 import { unreviewedCitationSql } from "@/api/handlers/case-law/polarity/reviews";
 import {
   incrementMatchCount,
@@ -37,12 +34,15 @@ import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
 import { classifyWithSystemOne } from "@/api/handlers/case-law/polarity/system-one-classifier";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { DecisionGenerator } from "@/api/lib/workflow/decisions/decide";
 import type { SystemOneClient } from "@/api/lib/workflow/decisions/system-one";
 
 export { extractContexts } from "@/api/handlers/case-law/polarity/context";
 
 /** How many of a citation's windows the model tiers read. */
 const EXCERPT_WINDOWS = 5;
+const MIN_PROMOTION_PHRASE_LENGTH = 3;
+const MAX_PROMOTION_PHRASE_LENGTH = 100;
 
 /**
  * What the model tiers read: the citation's windows in reading order, with
@@ -102,6 +102,7 @@ type ClassifyCitationArgs = {
      * the tier. Injected so a comparison run can pin a model.
      */
     decisionModel?: SystemOneClient | null;
+    generator?: DecisionGenerator;
   };
 };
 
@@ -141,10 +142,7 @@ export const classifyCitation = async ({
     };
   }
 
-  // Tier 2: System One. A decided reading is the label; anything else falls
-  // through, including a transport failure and a deployment with no decision
-  // model, rather than becoming an `unknown` polarity: the generative tier
-  // still reads.
+  // The decision owner asks both model tiers over the same excerpt.
   const context = excerptOf(windows.contexts);
   const reading = await classifyWithSystemOne({
     client: options?.decisionModel,
@@ -152,31 +150,9 @@ export const classifyCitation = async ({
     citationText,
     language,
     abortSignal: options?.abortSignal,
+    generator: options?.generator,
   });
-  if (reading.state === "decided") {
-    return {
-      polarity: reading.answer.choice,
-      ruleId: null,
-      source: "system-one",
-      confidence: reading.confidence,
-    };
-  }
-
-  // Tier 3: LLM classification
-  // Note: LLM is called even in dry-run mode (only DB writes
-  // are suppressed). Use small --limit values for cost preview.
-  const llmResult = await classifyWithLLM({
-    context,
-    citationText,
-    language,
-    abortSignal: options?.abortSignal,
-  });
-
-  if (llmResult.isErr()) {
-    // `unknown` here records that classification did not happen, not that the
-    // citation was read and found unclear. The two are not distinguishable
-    // once persisted, because the column has no value for "read it, could not
-    // decide"; adding one needs a CHECK-constraint migration.
+  if (reading.state === "undecided") {
     return {
       polarity: POLARITY.UNKNOWN,
       ruleId: null,
@@ -184,11 +160,21 @@ export const classifyCitation = async ({
       confidence: null,
     };
   }
-
-  const { polarity, keyPhrase, confidence } = llmResult.value;
+  const polarity = reading.answer.choice;
+  const confidence = reading.confidence;
+  const keyPhrase = reading.evidence;
 
   // Track surface form for potential rule promotion
-  if (!options?.dryRun && confidence >= 0.8 && keyPhrase.length >= 3) {
+  if (
+    !options?.dryRun &&
+    reading.source === "generative" &&
+    confidence >= 0.8 &&
+    keyPhrase !== null &&
+    keyPhrase.length >= MIN_PROMOTION_PHRASE_LENGTH &&
+    keyPhrase.length <= MAX_PROMOTION_PHRASE_LENGTH &&
+    context.includes(keyPhrase) &&
+    keyPhrase.trim().length >= MIN_PROMOTION_PHRASE_LENGTH
+  ) {
     trackSurfaceForm({
       keyPhrase,
       language,
@@ -200,7 +186,12 @@ export const classifyCitation = async ({
     });
   }
 
-  return { polarity, ruleId: null, source: "llm", confidence };
+  return {
+    polarity,
+    ruleId: null,
+    source: reading.source === "decision-model" ? "system-one" : "llm",
+    confidence,
+  };
 };
 
 /**

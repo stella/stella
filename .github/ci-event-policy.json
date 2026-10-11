@@ -160,6 +160,8 @@
     "main-pr-depth.yml/validate": "main",
     "main-pr-depth.yml/suites": "main",
     "main-pr-depth.yml/status": "main",
+    "ci.yml/query-perf": "pr-fast",
+    "query-perf.yml/query-perf": "pr-fast",
     "manual-checks.yml/check": "main",
     "bundle-size-nightly.yml/report": "main"
   },
