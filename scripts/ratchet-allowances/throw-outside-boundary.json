@@ -1,5 +1,5 @@
 {
   "metric": "throw-outside-boundary",
-  "delta": 1,
-  "reason": "The replacement write boundary throws a standard version conflict when its required timestamp or revision does not match locked stored state; returning an ignorable error would permit the replacement to continue."
+  "delta": 8,
+  "reason": "Better Auth organization hooks and adapter boundaries propagate typed membership refusals; the member-role mutation rejects failed requests after surfacing the error."
 }
