@@ -154,7 +154,9 @@ const mountGraph = async ({
       expandedResult,
     }) => {
       const iframe = document.querySelector<HTMLIFrameElement>("iframe");
-      if (iframe === null) return "missing" as const;
+      if (iframe === null) {
+        return "missing" as const;
+      }
       const calls: FixtureHost["calls"] = [];
       const links: string[] = [];
       const messages: FixtureHost["messages"] = [];
@@ -169,13 +171,17 @@ const mountGraph = async ({
         typeof value === "object" && value !== null && !Array.isArray(value);
       const reject = (id: unknown, message: string) => {
         failures.push(message);
-        reply({ jsonrpc: "2.0", id, error: { code: -32602, message } });
+        reply({ jsonrpc: "2.0", id, error: { code: -32_602, message } });
       };
       window.addEventListener("message", (event) => {
         const data: unknown = event.data;
-        if (event.source !== iframe.contentWindow || !isRecord(data)) return;
+        if (event.source !== iframe.contentWindow || !isRecord(data)) {
+          return;
+        }
         const { method, params, id } = data;
-        if (typeof method !== "string") return;
+        if (typeof method !== "string") {
+          return;
+        }
         messages.push({ method, params });
         switch (method) {
           case "ui/initialize":
@@ -288,7 +294,9 @@ const mountGraph = async ({
             reply({ jsonrpc: "2.0", id, result: {} });
             break;
           default:
-            if (id !== undefined) reply({ jsonrpc: "2.0", id, result: {} });
+            if (id !== undefined) {
+              reply({ jsonrpc: "2.0", id, result: {} });
+            }
         }
       });
       globalThis.citationGraphFixtureHost = {

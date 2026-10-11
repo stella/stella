@@ -4889,6 +4889,17 @@
       translate: var(--tw-translate-x) var(--tw-translate-y);
     }
   }
+  @media (width >= 600px) {
+    .min-\[600px\]\:mt-4 {
+      margin-top: calc(var(--spacing) * 4);
+    }
+    .min-\[600px\]\:block {
+      display: block;
+    }
+    .min-\[600px\]\:flex {
+      display: flex;
+    }
+  }
   @media (width >= 40rem) {
     .sm\:-ms-1 {
       margin-inline-start: calc(var(--spacing) * -1);

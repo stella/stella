@@ -99,7 +99,7 @@ const createBridge = ({
     },
     getSnapshot: () => current,
     supportsTools: () => supportsTools,
-    requestTool: (request: ToolRequest) => {
+    requestTool: async (request: ToolRequest) => {
       requests.push(request);
       return new Promise<BridgeToolResult | undefined>((resolve) => {
         pending.push(resolve);

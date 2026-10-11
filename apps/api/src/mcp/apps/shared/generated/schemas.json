@@ -1047,5 +1047,97 @@
       }
     },
     "additionalProperties": false
+  },
+  "read_case_law_citations": {
+    "type": "object",
+    "properties": {
+      "decisionId": {
+        "type": "string"
+      },
+      "direction": {
+        "enum": [
+          "cites",
+          "cited_by"
+        ],
+        "type": "string"
+      },
+      "nextCursor": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "citations": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "citationId": {
+              "type": "string"
+            },
+            "citationText": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "textWithheldReason": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "source_licence"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "polarity": {
+              "enum": [
+                "negative",
+                "neutral",
+                "positive",
+                "supportive",
+                "mixed",
+                "unclassified"
+              ],
+              "type": "string"
+            },
+            "decision": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "additionalProperties": true
+            },
+            "passage": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "additionalProperties": true
+            }
+          },
+          "required": [
+            "citationId",
+            "citationText",
+            "textWithheldReason",
+            "polarity",
+            "decision",
+            "passage"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "decisionId",
+      "direction",
+      "nextCursor",
+      "citations"
+    ],
+    "additionalProperties": false
   }
 }
