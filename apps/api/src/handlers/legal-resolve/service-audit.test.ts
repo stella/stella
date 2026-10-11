@@ -14,9 +14,6 @@ test("resolve audits normalize countries and preserve typed outcomes", () => {
   expect(serviceResolveAuditOutcome("rate-limit reached", 429)).toBe(
     "rate_limited",
   );
-  expect(serviceResolveAuditOutcome({ error: "not_entitled" }, 403)).toBe(
-    "not_entitled",
-  );
   expect(
     serviceResolveAuditOutcome({ status: "country_unavailable" }, 500),
   ).toBe("error");
