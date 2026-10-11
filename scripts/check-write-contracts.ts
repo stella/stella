@@ -122,7 +122,12 @@ const wrapperScope = ({ node, scope }: LocatedExpression): LexicalScope => {
   if (!ts.isBlock(node.body)) {
     return bindings;
   }
-  for (const statement of node.body.statements) {
+  return blockScope(node.body, bindings);
+};
+
+const blockScope = (block: ts.Block, parent: LexicalScope): LexicalScope => {
+  const bindings = new Map(parent);
+  for (const statement of block.statements) {
     if (ts.isFunctionDeclaration(statement) && statement.name !== undefined) {
       bindings.set(statement.name.text, undefined);
     }
@@ -721,22 +726,25 @@ class WriteSourceResolver {
     }
     seen.add(key);
     const scope = wrapperScope(resolved);
-    const visit = (node: ts.Node) => {
+    const visit = (node: ts.Node, currentScope: LexicalScope) => {
       if (ts.isFunctionLike(node)) {
         return;
       }
+      const nestedScope = ts.isBlock(node)
+        ? blockScope(node, currentScope)
+        : currentScope;
       if (ts.isCallExpression(node)) {
         for (const field of this.callEnforcement({
-          value: { file: resolved.file, node, scope },
+          value: { file: resolved.file, node, scope: nestedScope },
           type,
           seen,
         })) {
           result.add(field);
         }
       }
-      ts.forEachChild(node, visit);
+      ts.forEachChild(node, (child) => visit(child, nestedScope));
     };
-    visit(resolved.node.body);
+    visit(resolved.node.body, scope);
     return result;
   };
   callEnforcement = ({
@@ -769,7 +777,14 @@ class WriteSourceResolver {
       }
       return result;
     }
-    for (const expression of [value.node.expression, ...value.node.arguments]) {
+    // Transaction callbacks run while their decisive lock is held. Other callback
+    // consumers require a called write helper rather than an assumed invocation.
+    const callbacks =
+      ts.isPropertyAccessExpression(value.node.expression) &&
+      value.node.expression.name.text === "transaction"
+        ? value.node.arguments
+        : [];
+    for (const expression of [value.node.expression, ...callbacks]) {
       for (const field of this.functionEnforcement({
         value: { file: value.file, node: expression, scope: value.scope },
         type,

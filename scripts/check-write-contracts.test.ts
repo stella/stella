@@ -303,6 +303,24 @@ describe("write contracts cover the mutation route graph", () => {
       );
     }
   });
+  test("block shadows and uninvoked callback arguments cannot stand in for enforcement", () => {
+    const config = `{contract: 'replace', precondition: {type: 'updatedAt', field: 'expectedUpdatedAt'}}`;
+    for (const body of [
+      `{ const enforceWritePrecondition = () => {}; enforceWritePrecondition({type: 'updatedAt', field: 'expectedUpdatedAt'}); }`,
+      `const ignore = (callback) => {}; ignore(() => enforceWritePrecondition({type: 'updatedAt', field: 'expectedUpdatedAt'}));`,
+    ]) {
+      const sources = fixture(config);
+      sources.set(
+        handler,
+        `import { createSafeHandler } from '@/api/lib/api-handlers';
+        import { enforceWritePrecondition } from '@/api/lib/write-contract';
+        export default createSafeHandler(${config}, async () => { ${body} return {}; });`,
+      );
+      expect(check(sources)).toContainEqual(
+        expect.stringContaining("Replacement must reach owner enforcement"),
+      );
+    }
+  });
   test("compound revision declarations require every owner comparison", () => {
     const config = `{contract: 'replace', precondition: {type: 'revision', fields: ['baseRevision', 'selectedTextHash']}}`;
     const sources = fixture(config);
