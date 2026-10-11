@@ -198,7 +198,6 @@ export const ChatHistoryPage = ({
               onChange={(matter) => {
                 onSearchChange({ ...search, matter: matter?.id });
               }}
-              order="recent"
               userId={userId}
               value={selectedMatter}
             />

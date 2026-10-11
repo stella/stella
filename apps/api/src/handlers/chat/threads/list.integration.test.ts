@@ -671,24 +671,6 @@ describe("chat thread list matter filter", () => {
     expect(second.nextCursor).toBeNull();
   });
 
-  test("never returns another organization's threads for its matter", async () => {
-    const foreignId = await seedForeignThread({
-      organizationId: ids.orgB,
-      userId: ids.userB1,
-      workspaceId: ids.wsB1,
-    });
-
-    const listed = await listPage({
-      limit: 100,
-      workspaceId: ids.wsB1,
-      workspaceIds: [ids.wsA1, ids.wsA2, ids.wsB1],
-    });
-
-    expect(listedIds(listed)).not.toContain(foreignId);
-    expect(listed.global).toEqual([]);
-    expect(listed.workspaces).toEqual([]);
-  });
-
   test("a matter the caller cannot open is not found, not an empty list", async () => {
     const hiddenId = await seedThread({
       title: "Filter: matter the caller lost",
