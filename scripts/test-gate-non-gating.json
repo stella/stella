@@ -1,5 +1,15 @@
 [
   {
+    "file": ".oxlint-plugins/__fixtures__/no-direct-test-state.fixture.test.ts",
+    "owningWorkflow": ".github/workflows/ci.yml",
+    "reason": "static lint-rule input checked by the plugin fixture harness; contains deliberate invalid source, not executable tests"
+  },
+  {
+    "file": ".oxlint-plugins/__fixtures__/no-swallowed-item-error.fixture.test.ts",
+    "owningWorkflow": ".github/workflows/ci.yml",
+    "reason": "static lint-rule input checked by the plugin fixture harness; contains deliberate invalid source, not executable tests"
+  },
+  {
     "file": "apps/visual-preview/browser/render.test.ts",
     "owningWorkflow": ".github/workflows/visual-preview.yml",
     "reason": "separate workflow; fold decision pending"
@@ -23,5 +33,10 @@
     "file": "apps/web/e2e/staging/staging-smoke.spec.ts",
     "owningWorkflow": ".github/workflows/staging-smoke.yml",
     "reason": "deployed-environment scenario cannot gate merges"
+  },
+  {
+    "file": "scripts/browser/visual-preview-composition.spec.ts",
+    "owningWorkflow": ".github/workflows/visual-preview.yml",
+    "reason": "separate workflow; fold decision pending"
   }
 ]

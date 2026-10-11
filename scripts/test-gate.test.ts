@@ -197,28 +197,106 @@ context("test registration census", () => {
   });
 
   check(
+    "inverse managed-service conditions remain in the disabled inventory",
+    () => {
+      const source = `
+      const runPostgres = process.env.STELLA_RUN_POSTGRES_TESTS === "true";
+      test.skipIf(runPostgres)("inverse skip helper", () => {});
+      if (!runPostgres) test("inverse branch", () => {});
+    `;
+      expect(parseTestRegistrations("fixture.test.ts", source)).toEqual([
+        { identity: "fixture.test.ts::inverse branch", type: "disabled" },
+        { identity: "fixture.test.ts::inverse skip helper", type: "disabled" },
+      ]);
+    },
+  );
+
+  check.each([
+    [
+      'test.skipIf((runPostgres && "disabled") === "disabled")("registration", () => {});',
+      false,
+    ],
+    [
+      'const selected = runPostgres ? test : test.skip; selected("registration", () => {});',
+      true,
+    ],
+    [
+      'const selected = runPostgres ? test.skip : test; selected("registration", () => {});',
+      false,
+    ],
+    ['test.skipIf(!runPostgres)("registration", () => {});', true],
+    ['test.todoIf(!runPostgres)("registration", () => {});', true],
+    ['test.if(runPostgres)("registration", () => {});', true],
+    ['if (!runPostgres) {} else test("registration", () => {});', true],
+    ['if (disabled) test("registration", () => {});', false],
+    ['test.skipIf(!disabled)("registration", () => {});', false],
+    ['test.todoIf(runPostgres)("registration", () => {});', false],
+    ['test.if(!runPostgres)("registration", () => {});', false],
+    [
+      'if (runPostgres) { if (!runPostgres) test("registration", () => {}); }',
+      false,
+    ],
+    [
+      'if (!runPostgres) { test.skipIf(!runPostgres)("registration", () => {}); }',
+      false,
+    ],
+    ['if (runPostgres && otherFlag) test("registration", () => {});', false],
+    [
+      'if (runPostgres) { if (otherFlag) test("registration", () => {}); }',
+      false,
+    ],
+    [
+      'test.skipIf(!runPostgres).skipIf(otherFlag)("registration", () => {});',
+      false,
+    ],
+  ] as const)(
+    "establishes the active service path for %s",
+    (registration, active) => {
+      const source = `
+      const runPostgres = process.env.STELLA_RUN_POSTGRES_TESTS === "true";
+      const disabled = !runPostgres;
+      ${registration}
+    `;
+      expect(parseTestRegistrations("fixture.test.ts", source)).toEqual([
+        {
+          identity: "fixture.test.ts::registration",
+          type: "disabled",
+          ...(active
+            ? { managedServiceGate: "STELLA_RUN_POSTGRES_TESTS" }
+            : {}),
+        },
+      ]);
+    },
+  );
+
+  check(
     "reports the first package collection edge",
     () => {
-      expect(firstCollectionFailure("unowned/example.test.ts", new Set())).toBe(
-        "package task: no owning package.json",
-      );
       expect(
-        firstCollectionFailure(
-          "apps/web/e2e/staging/staging-smoke.spec.ts",
-          new Set(),
-        ),
+        firstCollectionFailure({
+          file: "unowned/example.test.ts",
+          nonGatingFiles: new Set(),
+        }),
+      ).toBe("package task: no owning package.json");
+      expect(
+        firstCollectionFailure({
+          file: "apps/web/e2e/staging/staging-smoke.spec.ts",
+          nonGatingFiles: new Set(),
+        }),
       ).toBe("runner glob: web wrapper does not collect the file");
       expect(
-        firstCollectionFailure(
-          "apps/web/e2e/staging/staging-smoke.spec.ts",
-          new Set(["apps/web/e2e/staging/staging-smoke.spec.ts"]),
-        ),
+        firstCollectionFailure({
+          file: "apps/web/e2e/staging/staging-smoke.spec.ts",
+          nonGatingFiles: new Set([
+            "apps/web/e2e/staging/staging-smoke.spec.ts",
+          ]),
+        }),
       ).toBeUndefined();
       expect(
-        firstCollectionFailure(
-          "apps/desktop/tests/browser/theme-prepaint.playwright.spec.ts",
-          new Set(),
-        ),
+        firstCollectionFailure({
+          file: "apps/desktop/tests/browser/theme-prepaint.playwright.spec.ts",
+          nonGatingFiles: new Set(),
+        }),
       ).toBeUndefined();
       const fixturePackage = {
         test: "bun test src --path-ignore-patterns '**/excluded.test.ts'",
@@ -575,4 +653,136 @@ jobs:
       "job condition: no gating job executes the STELLA_RUN_POSTGRES_TESTS runner",
     );
   });
+});
+
+context("root test runner coverage", () => {
+  const files = [
+    "scripts/orphan.test.ts",
+    ".oxlint-plugins/__tests__/orphan.test.ts",
+  ];
+  const runner =
+    "bun scripts/run-unlisted-script-tests.ts\nfind ./.oxlint-plugins/__tests__ -maxdepth 1 -name '*.test.ts' -print0 | sort -z | xargs -0 bun test";
+  const cases = [
+    { name: "disabled", condition: "if: false" },
+    { name: "push-only", condition: "if: github.event_name == 'push'" },
+    { name: "continue-on-error", condition: "continue-on-error: true" },
+  ];
+  for (const { name, condition } of cases) {
+    for (const file of files) {
+      check(`rejects ${file} collected only by a ${name} step`, () => {
+        const workflow = `jobs:
+  root-tests:
+    steps:
+      - ${condition}
+        run: |
+          ${runner.replaceAll("\n", "\n          ")}
+  ci-result:
+    needs: [root-tests]
+`;
+        const topology = {
+          gatingJobs: gatingWorkflowJobs(Bun.YAML.parse(workflow)),
+          shardedPackages: new Set(),
+          workflow,
+        };
+        expect(
+          firstCollectionFailure({ file, nonGatingFiles: new Set(), topology }),
+        ).toBe(`job condition: no gating job collects ${file}`);
+      });
+    }
+  }
+
+  check("counts the actual root collectors and their file boundaries", () => {
+    const workflow = `jobs:
+  root-tests:
+    steps:
+      - run: |
+          ${runner.replaceAll("\n", "\n          ")}
+      - run: bun test scripts/named.test.ts
+  ci-result:
+    needs: [root-tests]
+`;
+    const topology = {
+      gatingJobs: gatingWorkflowJobs(Bun.YAML.parse(workflow)),
+      shardedPackages: new Set(),
+      workflow,
+    };
+    for (const file of [...files, "scripts/named.test.ts"]) {
+      expect(
+        firstCollectionFailure({ file, nonGatingFiles: new Set(), topology }),
+      ).toBeUndefined();
+    }
+    const file = ".oxlint-plugins/__tests__/nested/orphan.test.ts";
+    expect(
+      firstCollectionFailure({ file, nonGatingFiles: new Set(), topology }),
+    ).toBe(`job condition: no gating job collects ${file}`);
+  });
+
+  check(
+    "a named non-gating script cannot fall back to the unlisted runner",
+    () => {
+      const workflow = `jobs:
+  root-tests:
+    steps:
+      - if: false
+        run: bun test scripts/named.test.ts
+      - run: bun scripts/run-unlisted-script-tests.ts
+  ci-result:
+    needs: [root-tests]
+`;
+      expect(
+        firstCollectionFailure({
+          file: "scripts/named.test.ts",
+          nonGatingFiles: new Set(),
+          topology: {
+            gatingJobs: gatingWorkflowJobs(Bun.YAML.parse(workflow)),
+            shardedPackages: new Set(),
+            workflow,
+          },
+        }),
+      ).toBe("job condition: no gating job collects scripts/named.test.ts");
+    },
+  );
+});
+
+context("root runner command shapes", () => {
+  const cases = [
+    {
+      file: "scripts/check-api-cli-contract.test.ts",
+      command: String.raw`bun test --preload ./apps/api/src/tests/setup-env.ts \
+  scripts/check-api-cli-contract.test.ts`,
+    },
+    {
+      file: "scripts/transfer-read-guard.test.ts",
+      command:
+        "bun run --cwd packages/scripts test ../../scripts/transfer-read-guard.test.ts",
+    },
+  ];
+  for (const { file, command } of cases) {
+    check(`collects ${file} only when its actual command gates`, () => {
+      for (const condition of ["", "if: false\n        "]) {
+        const workflow = `jobs:
+  root-tests:
+    steps:
+      - ${condition}run: |
+          ${command.replaceAll("\n", "\n          ")}
+  ci-result:
+    needs: [root-tests]
+`;
+        const failure = firstCollectionFailure({
+          file,
+          nonGatingFiles: new Set(),
+          topology: {
+            gatingJobs: gatingWorkflowJobs(Bun.YAML.parse(workflow)),
+            shardedPackages: new Set(),
+            workflow,
+          },
+        });
+        expect(failure).toBe(
+          condition === ""
+            ? undefined
+            : `job condition: no gating job collects ${file}`,
+        );
+      }
+    });
+  }
 });

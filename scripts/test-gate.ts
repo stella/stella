@@ -12,6 +12,12 @@ import {
   definitelyFalse,
   evaluate,
 } from "./github-expression";
+import { unlistedTests } from "./run-unlisted-script-tests";
+import {
+  registrationRunsWithService,
+  requiredServiceEnvironment,
+  serviceConditionEvaluator,
+} from "./test-gate-service";
 import {
   TEST_JOB_SHARDS,
   shardPackages,
@@ -314,6 +320,51 @@ const serviceGateAliases = (source: ts.SourceFile) => {
   return gateAliases;
 };
 
+const referencedServiceGate = (
+  node: ts.Node,
+  gateAliases: ReturnType<typeof serviceGateAliases>,
+): (typeof SERVICE_GATES)[number] | undefined => {
+  const text = node.getText();
+  return SERVICE_GATES.find(
+    (gate) =>
+      text.includes(gate) ||
+      [...gateAliases.entries()].some(
+        ([alias, aliasedGate]) =>
+          aliasedGate === gate && new RegExp(`\\b${alias}\\b`, "u").test(text),
+      ),
+  );
+};
+
+const serviceEnvironments = new Map<string, ReadonlySet<string>>();
+const serviceEnvironment = (
+  gate: (typeof SERVICE_GATES)[number],
+): ReadonlySet<string> => {
+  const cached = serviceEnvironments.get(gate);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const manifest = readJson("apps/api/package.json");
+  if (!isRecord(manifest) || !isRecord(manifest["ciGateTestRunners"])) {
+    panic("API service runners are missing");
+  }
+  const runner = Object.values(manifest["ciGateTestRunners"]).find(
+    (value) => isRecord(value) && value["gate"] === gate,
+  );
+  if (
+    !isRecord(runner) ||
+    typeof runner["runner"] !== "string" ||
+    runner["gateValue"] !== "true"
+  ) {
+    panic(`Service runner is missing for ${gate}`);
+  }
+  const file = path.posix.join("apps/api", runner["runner"]);
+  const required = requiredServiceEnvironment(
+    parseTypeScript(file, readFileSync(path.join(ROOT, file), "utf-8")),
+  );
+  serviceEnvironments.set(gate, required);
+  return required;
+};
+
 export const parseTestRegistrations = (
   file: string,
   sourceText: string,
@@ -370,21 +421,16 @@ export const parseTestRegistrations = (
   const constantTitles = constantStringBindings(source);
 
   const gateAliases = serviceGateAliases(source);
-
-  const referencedServiceGate = (
-    node: ts.Node,
-  ): (typeof SERVICE_GATES)[number] | undefined => {
-    const text = node.getText();
-    return SERVICE_GATES.find(
-      (gate) =>
-        text.includes(gate) ||
-        [...gateAliases.entries()].some(
-          ([alias, aliasedGate]) =>
-            aliasedGate === gate &&
-            new RegExp(`\\b${alias}\\b`, "u").test(text),
-        ),
-    );
-  };
+  const serviceConditions = new Map(
+    SERVICE_GATES.map((gate) => [
+      gate,
+      serviceConditionEvaluator({
+        source,
+        gate,
+        requiredEnvironment: serviceEnvironment(gate),
+      }),
+    ]),
+  );
 
   const findings: RegistrationFinding[] = [];
   const suites: string[] = [];
@@ -407,10 +453,10 @@ export const parseTestRegistrations = (
     let ancestor = node.parent;
     while (!ts.isSourceFile(ancestor)) {
       if (ts.isIfStatement(ancestor)) {
-        return referencedServiceGate(ancestor.expression);
+        return referencedServiceGate(ancestor.expression, gateAliases);
       }
       if (ts.isConditionalExpression(ancestor)) {
-        return referencedServiceGate(ancestor.condition);
+        return referencedServiceGate(ancestor.condition, gateAliases);
       }
       if (ts.isFunctionLike(ancestor)) {
         return undefined;
@@ -424,7 +470,11 @@ export const parseTestRegistrations = (
       ts.forEachChild(node, visit);
       return;
     }
-    if (ts.isCallExpression(node.parent) && node.parent.expression === node) {
+    if (
+      (ts.isCallExpression(node.parent) ||
+        ts.isPropertyAccessExpression(node.parent)) &&
+      node.parent.expression === node
+    ) {
       ts.forEachChild(node, visit);
       return;
     }
@@ -459,10 +509,19 @@ export const parseTestRegistrations = (
       .split(".")
       .some((part) => ["skip", "todo", "fixme"].includes(part));
     const controlledGate = calleeDisabled
-      ? referencedServiceGate(node.expression)
+      ? referencedServiceGate(node.expression, gateAliases)
       : enclosingServiceGate(node);
     const managedServiceGate =
-      unconditionallyDisabled || callbackDisabled ? undefined : controlledGate;
+      unconditionallyDisabled ||
+      callbackDisabled ||
+      controlledGate === undefined ||
+      !registrationRunsWithService(
+        node,
+        serviceConditions.get(controlledGate) ??
+          panic(`Service condition evaluator is missing for ${controlledGate}`),
+      )
+        ? undefined
+        : controlledGate;
     if (title === undefined) {
       if (isOnly || isDisabled) {
         const { line, character } = source.getLineAndCharacterOfPosition(
@@ -1167,6 +1226,7 @@ export const gatingWorkflowJobs = (
   analyzeGatingWorkflow(workflow).jobs;
 
 type RepositoryTestExecutionTopology = {
+  readonly workflow: string;
   readonly gatingJobs: ReadonlyMap<string, readonly string[]>;
   readonly shardedPackages: ReadonlySet<string>;
 };
@@ -1190,6 +1250,7 @@ const repositoryTestExecutionTopology = (): RepositoryTestExecutionTopology => {
   const gatingJobs = analysis.jobs;
   const planJob = gatingJobs.get("ci-plan")?.join("\n") ?? "";
   cachedRepositoryTestExecutionTopology = {
+    workflow,
     gatingJobs,
     shardedPackages: new Set(
       Object.entries(TEST_JOB_SHARDS).flatMap(([jobShard, shards]) =>
@@ -1270,15 +1331,98 @@ const isCollectedByGatingPlaywright = (
   return false;
 };
 
-export const firstCollectionFailure = (
-  file: string,
-  nonGatingFiles: ReadonlySet<string>,
-): string | undefined => {
+type FirstCollectionOptions = {
+  readonly file: string;
+  readonly nonGatingFiles: ReadonlySet<string>;
+  readonly topology?: RepositoryTestExecutionTopology;
+};
+
+export const firstCollectionFailure = ({
+  file,
+  nonGatingFiles,
+  topology = repositoryTestExecutionTopology(),
+}: FirstCollectionOptions): string | undefined => {
   if (nonGatingFiles.has(file)) {
     return undefined;
   }
   if (file.startsWith("scripts/") || file.startsWith(".oxlint-plugins/")) {
-    return undefined;
+    const isUnlistedScript =
+      new Bun.Glob("scripts/**/*.test.ts").match(file) &&
+      unlistedTests([file], topology.workflow).length === 1;
+    const pluginGlob = ".oxlint-plugins/__tests__/*.test.ts";
+    const pluginRunner =
+      "find ./.oxlint-plugins/__tests__ -maxdepth 1 -name '*.test.ts' -print0 | sort -z | xargs -0 bun test";
+    return gatingCommandExecutionFailure({
+      commandMatches: (command) => {
+        if (
+          isUnlistedScript &&
+          command.includes("bun scripts/run-unlisted-script-tests.ts")
+        ) {
+          return true;
+        }
+        if (
+          new Bun.Glob(pluginGlob).match(file) &&
+          command.includes(pluginRunner)
+        ) {
+          return true;
+        }
+        return command
+          .replaceAll(/\\\r?\n/gu, " ")
+          .split("\n")
+          .some((line) => {
+            if (line.includes("|")) {
+              return false;
+            }
+            if (
+              packageTestCollectionFailure({
+                candidate: file,
+                packageDirectory: ".",
+                scripts: { test: line },
+              }) === undefined
+            ) {
+              return true;
+            }
+            const words = shellWords(line);
+            const cwdIndex = words.indexOf("--cwd");
+            if (
+              cwdIndex === -1 ||
+              (words[cwdIndex - 1] !== "bun" &&
+                !(
+                  words[cwdIndex - 1] === "run" && words[cwdIndex - 2] === "bun"
+                )) ||
+              words[cwdIndex + 2] !== "test"
+            ) {
+              return false;
+            }
+            const packageDirectory = words[cwdIndex + 1];
+            if (packageDirectory === undefined) {
+              return false;
+            }
+            const manifest = path.posix.join(packageDirectory, "package.json");
+            if (!existsSync(path.join(ROOT, manifest))) {
+              return false;
+            }
+            const scripts = packageScripts(manifest);
+            const testCommand = scripts?.["test"];
+            if (typeof testCommand !== "string") {
+              return false;
+            }
+            const arguments_ = words
+              .slice(cwdIndex + 3)
+              .map((word) => JSON.stringify(word))
+              .join(" ");
+            return (
+              packageTestCollectionFailure({
+                candidate: file,
+                packageDirectory,
+                scripts: { ...scripts, test: `${testCommand} ${arguments_}` },
+              }) === undefined
+            );
+          });
+      },
+      gatingJobs: topology.gatingJobs,
+      missingMessage: `job condition: no gating job collects ${file}`,
+    });
   }
   const packageFile = nearestPackage(file);
   if (packageFile === undefined) {
@@ -1294,7 +1438,6 @@ export const firstCollectionFailure = (
   }
   const packageName = manifest["name"];
   const packageDirectory = path.posix.dirname(packageFile);
-  const topology = repositoryTestExecutionTopology();
   const collectionFailure = packageTestCollectionFailure({
     candidate: file,
     packageDirectory,
@@ -1383,8 +1526,13 @@ const validateExecutionTopology = (errors: string[]): void => {
     "bun scripts/test-gate.ts",
   ];
   for (const command of requiredCommands) {
-    if (!workflow.includes(command)) {
-      errors.push(`runner glob: ci.yml does not execute ${command}`);
+    const runnerFailure = gatingCommandExecutionFailure({
+      commandMatches: (candidate) => candidate.includes(command),
+      gatingJobs,
+      missingMessage: `job condition: no gating job executes ${command}`,
+    });
+    if (runnerFailure !== undefined) {
+      errors.push(runnerFailure);
     }
   }
 
@@ -1438,7 +1586,7 @@ const run = (): void => {
     }
   }
   for (const file of files) {
-    const brokenEdge = firstCollectionFailure(file, nonGatingFiles);
+    const brokenEdge = firstCollectionFailure({ file, nonGatingFiles });
     if (brokenEdge !== undefined) {
       errors.push(`${file}: ${brokenEdge}`);
     }
