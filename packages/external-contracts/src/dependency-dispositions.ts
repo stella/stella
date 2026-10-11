@@ -151,6 +151,8 @@ export const IN_PROCESS_DEPENDENCIES = {
     "Workspace package used as an internal module; implementation stays within the monorepo.",
   "@stll/permissions":
     "Workspace package used as an internal module; implementation stays within the monorepo.",
+  "@stll/playwright-tools":
+    "Workspace package used as an internal module; implementation stays within the monorepo.",
   "@stll/property-testing":
     "Workspace package used as an internal module; implementation stays within the monorepo.",
   "@stll/redis-config":
