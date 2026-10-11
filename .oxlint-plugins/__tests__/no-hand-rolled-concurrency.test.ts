@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
+import path from "node:path";
 
 import exceptions from "../no-hand-rolled-concurrency-exceptions.json" with { type: "json" };
 import { lintSingleRule, runSingleRule } from "./lint-single-rule.ts";
@@ -8,7 +9,10 @@ const rule = "no-hand-rolled-concurrency";
 
 test("each exception reaches exactly one diagnostic in its current source", async () => {
   for (const entry of exceptions) {
-    const source = readFileSync(entry.path, "utf-8");
+    const source = readFileSync(
+      path.resolve(import.meta.dirname, "../..", entry.path),
+      "utf-8",
+    );
     const raw = await runSingleRule(rule, source, { sourcePath: entry.path });
     expect(raw.lines).toHaveLength(1);
     expect(

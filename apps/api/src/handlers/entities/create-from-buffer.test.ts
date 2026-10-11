@@ -277,6 +277,7 @@ describe("createEntityFromBuffer", () => {
     let insertedEntity: unknown;
     let insertedField: unknown;
     const tx = {
+      execute: async () => [{ id: workspaceId }],
       query: {
         properties: {
           findMany: async () => [
@@ -417,6 +418,10 @@ describe("createEntityFromBuffer", () => {
   test("locks and rechecks the parent in the insert transaction", async () => {
     const locks: unknown[] = [];
     const tx = {
+      execute: async () => {
+        locks.push("update");
+        return [{ id: workspaceId }];
+      },
       query: {
         properties: {
           findMany: async () => [
@@ -476,6 +481,7 @@ describe("createEntityFromBuffer", () => {
 
   test("cleans up uploaded bytes when the in-transaction callback fails", async () => {
     const tx = {
+      execute: async () => [{ id: workspaceId }],
       query: {
         properties: {
           findMany: async () => [
@@ -540,6 +546,7 @@ describe("createEntityFromBuffer", () => {
 
   test("keeps a failed-cleanup intent available for bounded reconciliation", async () => {
     const tx = {
+      execute: async () => [{ id: workspaceId }],
       query: {
         properties: {
           findMany: async () => [
@@ -610,7 +617,7 @@ describe("createEntityFromBuffer", () => {
   test("preserves bytes when the entity commit acknowledgement is ambiguous", async () => {
     let nextDocumentSequence = 0;
     const tx = withIntentPersistence({
-      execute: async () => undefined,
+      execute: async () => [{ id: workspaceId }],
       query: {
         properties: {
           findMany: async () => [
@@ -1081,18 +1088,18 @@ const createParentSelect =
     return {
       from: (table: unknown) => ({
         where: () => ({
-          limit: () => ({
-            for: async (strength: unknown) => {
-              onLock?.(strength);
-              if (table === workspaces) {
-                return [{ status: workspaceStatus }];
-              }
-              if (parentKind !== null) {
-                return [{ id: parentId, kind: parentKind }];
-              }
-              return [];
-            },
-          }),
+          limit: (): unknown => {
+            const parentRows =
+              parentKind === null ? [] : [{ id: parentId, kind: parentKind }];
+            const rows =
+              table === workspaces ? [{ status: workspaceStatus }] : parentRows;
+            return Object.assign(Promise.resolve(rows), {
+              for: async (strength: unknown) => {
+                onLock?.(strength);
+                return rows;
+              },
+            });
+          },
         }),
       }),
     };

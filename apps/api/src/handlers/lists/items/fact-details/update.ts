@@ -59,6 +59,11 @@ const bodySchema = t.Object({
 });
 
 const config = {
+  contract: "replace",
+  precondition: {
+    type: "deferred",
+    baselineId: "apps/api/src/handlers/lists/items/fact-details/update.ts",
+  },
   featureAccess: { featureId: LIST_VERIFICATION_FEATURE_ID, type: "required" },
   description:
     "Set the evidential detail of one fact item, replacing what it had: when " +

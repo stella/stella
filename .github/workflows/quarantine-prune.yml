@@ -7,8 +7,8 @@ defaults:
 # A temporary `minimumReleaseAgeExcludes` entry stops being needed at a
 # wall-clock instant, and stops being safe at the same moment: it would let the
 # next version of that package publish straight past the release-age gate. So
-# the removal is proposed automatically rather than waiting to be noticed, and
-# the guard in ci.yml only tolerates an expired entry while this PR is open.
+# the removal is proposed automatically rather than waiting to be noticed.
+# Expiry still blocks the guard while the removal PR is open.
 
 on:
   schedule:
@@ -81,6 +81,28 @@ jobs:
           repositories: ${{ github.event.repository.name }}
           permission-contents: write
           permission-pull-requests: write
+
+      - name: Disarm existing removal proposal
+        if: steps.prune.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -euo pipefail
+
+          armed_pr="$(gh pr list --repo "$GITHUB_REPOSITORY" \
+            --state open --base main --head "$PRUNE_BRANCH" \
+            --json number,isCrossRepository,autoMergeRequest \
+            --jq 'map(select(.isCrossRepository == false and .autoMergeRequest != null))[0].number // empty')"
+          if [[ -z "$armed_pr" ]]; then
+            echo "Existing quarantine removal proposal is not armed."
+            exit 0
+          fi
+
+          # A proposal already in the merge queue leaves it when the refresh
+          # pushes a new head, and under a merge hold the queue's required
+          # result refuses it, so disarming is what remains to do here.
+
+          gh pr merge "$armed_pr" --repo "$GITHUB_REPOSITORY" --disable-auto
 
       # The commit is created through the API so GitHub signs it. The branch
       # name is reserved for this job alone: re-running replaces its own

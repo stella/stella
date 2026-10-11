@@ -26,9 +26,11 @@ import {
 import {
   createDocumentProcessingReconciliationPhases,
   processDocumentProcessingRun,
+  markRunFailed,
   persistMissingNativeExtractionRuns,
   persistOcrProjection,
 } from "@/api/lib/document-processing-queue";
+import { DocumentProcessingJobError } from "@/api/lib/document-processing-queue-policy";
 import { persistManualOcrRun } from "@/api/lib/document-processing-request";
 import { restoreManualOcrRunAfterProjectionLoss } from "@/api/lib/search/document-processing-manual-ocr-restore";
 import { upsertSearchDocument } from "@/api/lib/search/index-entity";
@@ -279,6 +281,24 @@ const seedFailedSearchReplay = async (
 
 const queuePaths = ["projection", "dispatch", "native-repair"] as const;
 type QueuePath = (typeof queuePaths)[number];
+const capWriterPaths = [
+  "request",
+  "restore",
+  "automatic",
+  ...queuePaths,
+] as const;
+const capRunStatuses = {
+  request: "queued",
+  restore: "failed",
+  automatic: "queued",
+  projection: "running",
+  dispatch: "queued",
+  "native-repair": "queued",
+} as const satisfies Record<
+  (typeof capWriterPaths)[number],
+  (typeof documentProcessingRuns.$inferSelect)["status"]
+>;
+
 type OcrFixture = Awaited<ReturnType<typeof seedOcrFixture>>;
 
 type RunQueueWriterOptions = {
@@ -512,6 +532,309 @@ if (!databaseUrl || !runPostgresTests) {
     15_000,
   );
 
+  test.each(capWriterPaths)(
+    "%s completes after the cap writer updates workspace then entity",
+    async (path) => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const setup = openClient();
+        const writer = openClient({ connection: { statement_timeout: 5000 } });
+        const cap = openClient({ connection: { statement_timeout: 5000 } });
+        const observer = openClient();
+        const fixture = await seedOcrFixture(setup.db);
+        const { organizationId, workspaceId, userId, source } = fixture;
+        const ready = Promise.withResolvers<undefined>();
+        const continueCap = Promise.withResolvers<undefined>();
+        const pending: Promise<unknown>[] = [];
+        const claimToken = Bun.randomUUIDv7();
+        try {
+          await setup.db.insert(organizationSettings).values({
+            organizationId,
+            documentProcessingMode: "searchable-text",
+          });
+          const run =
+            (
+              await setup.db
+                .insert(documentProcessingRuns)
+                .values({
+                  id: createSafeId<"documentProcessingRun">(),
+                  organizationId,
+                  workspaceId,
+                  ...source,
+                  kind: "ocr",
+                  processorVersion: DOCUMENT_OCR_PROCESSOR_VERSION,
+                  requestSource: "manual",
+                  requestedBy: userId,
+                  status: capRunStatuses[path],
+                  claimedBy: path === "projection" ? claimToken : null,
+                  errorCode: path === "restore" ? "search_index_failed" : null,
+                })
+                .returning()
+            ).at(0) ?? panic("Cap serialization fixture missing");
+          if (
+            path === "request" ||
+            path === "automatic" ||
+            path === "native-repair"
+          ) {
+            await setup.db
+              .delete(documentProcessingRuns)
+              .where(eq(documentProcessingRuns.id, run.id));
+          }
+          const writerPid =
+            (
+              await writer.sql<
+                { pid: number }[]
+              >`SELECT pg_backend_pid() AS pid`
+            ).at(0)?.pid ?? panic("Writer session missing");
+          const capPid =
+            (
+              await cap.sql<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`
+            ).at(0)?.pid ?? panic("Cap session missing");
+          pending.push(
+            cap.db.transaction(async (tx) => {
+              if (path === "automatic" || path === "native-repair") {
+                // These chains retain the parent KEY SHARE fence.
+                await tx
+                  .select({ id: workspaces.id })
+                  .from(workspaces)
+                  .where(eq(workspaces.id, workspaceId))
+                  .for("update");
+              } else {
+                // A non-key UPDATE is compatible with the old parent KEY SHARE,
+                // so the old source-first acquisition reaches the opposing wait.
+                await tx
+                  .update(workspaces)
+                  .set({ name: "Cap matter writer" })
+                  .where(eq(workspaces.id, workspaceId));
+              }
+              ready.resolve(undefined);
+              await continueCap.promise;
+              await tx
+                .update(entities)
+                .set({ name: "Cap writer completed" })
+                .where(eq(entities.id, source.entityId));
+            }),
+          );
+          await withTimeout(async () => await ready.promise, {
+            label: "Cap workspace barrier",
+            timeoutMs: 3000,
+          });
+          const database = asTestRaw<typeof rootDb>({
+            transaction: async <T>(
+              operation: (tx: Transaction) => Promise<T>,
+            ) =>
+              await writer.db.transaction(async (tx) => {
+                const result = await operation(tx);
+                // Dispatch claim writes are the tested transaction; stop before I/O.
+                return path === "dispatch" ? null : result;
+              }),
+          });
+          const runWriter = async () => {
+            switch (path) {
+              case "request":
+                expect(
+                  (
+                    await persistManualOcrRun({
+                      db: database,
+                      organizationId,
+                      workspaceId,
+                      userId,
+                      source,
+                      recordAuditEvent: async () => undefined,
+                    })
+                  )?.status,
+                ).toBe("queued");
+                return;
+              case "restore":
+                await restoreManualOcrRunAfterProjectionLoss({
+                  db: database,
+                  organizationId,
+                  workspaceId,
+                  ...source,
+                });
+                return;
+              case "automatic":
+                await requestAutomaticDocumentOcr({
+                  db: database,
+                  organizationId,
+                  workspaceId,
+                  ...source,
+                  requestSource: "upload",
+                });
+                return;
+              case "projection":
+              case "dispatch":
+              case "native-repair":
+                await runQueueWriter({
+                  path,
+                  first: "ocr",
+                  database,
+                  fixture,
+                  run,
+                  claimToken,
+                });
+                return;
+              default:
+                path satisfies never;
+            }
+          };
+          pending.push(runWriter());
+          await waitForBlockedPid(observer.sql, {
+            waitingPid: writerPid,
+            holdingPid: capPid,
+          });
+          continueCap.resolve(undefined);
+          await Promise.all(pending);
+          expect(
+            (
+              await setup.db
+                .select({ name: entities.name })
+                .from(entities)
+                .where(eq(entities.id, source.entityId))
+            ).at(0)?.name,
+          ).toBe("Cap writer completed");
+          if (path === "projection") {
+            expect(
+              (
+                await setup.db
+                  .select({ ocrRunId: extractedContent.ocrRunId })
+                  .from(extractedContent)
+                  .where(eq(extractedContent.entityId, source.entityId))
+              ).at(0)?.ocrRunId,
+            ).toBe(run.id);
+          }
+          expect(
+            (
+              await setup.db
+                .select({ status: documentProcessingRuns.status })
+                .from(documentProcessingRuns)
+                .where(eq(documentProcessingRuns.entityId, source.entityId))
+            ).at(0)?.status,
+          ).toBe(
+            path === "projection" || path === "dispatch" ? "running" : "queued",
+          );
+        } finally {
+          continueCap.resolve(undefined);
+          await Promise.allSettled(pending);
+          await fixture.cleanup();
+        }
+      });
+    },
+    15_000,
+  );
+
+  test.each([
+    { errorCode, retryScheduled: true },
+    { errorCode: "processing_failed", retryScheduled: false },
+  ] as const)(
+    "failure settlement observes the locked claim for $errorCode",
+    async ({ errorCode, retryScheduled }) => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const setup = openClient();
+        const holder = openClient({ connection: { statement_timeout: 5000 } });
+        const settler = openClient({ connection: { statement_timeout: 5000 } });
+        const observer = openClient();
+        const fixture = await seedOcrFixture(setup.db);
+        const ready = Promise.withResolvers<undefined>();
+        const release = Promise.withResolvers<undefined>();
+        const pending: Promise<unknown>[] = [];
+        const claimToken = Bun.randomUUIDv7();
+        try {
+          const run =
+            (
+              await setup.db
+                .insert(documentProcessingRuns)
+                .values({
+                  id: createSafeId<"documentProcessingRun">(),
+                  organizationId: fixture.organizationId,
+                  workspaceId: fixture.workspaceId,
+                  ...fixture.source,
+                  kind: "ocr",
+                  processorVersion: DOCUMENT_OCR_PROCESSOR_VERSION,
+                  requestSource: "upload",
+                  requestedBy: fixture.userId,
+                  status: "running",
+                  claimedBy: claimToken,
+                  attemptCount: 1,
+                })
+                .returning()
+            ).at(0) ?? panic("Claim fixture missing");
+          const holderPid =
+            (
+              await holder.sql<
+                { pid: number }[]
+              >`SELECT pg_backend_pid() AS pid`
+            ).at(0)?.pid ?? panic("Claim holder missing");
+          const settlerPid =
+            (
+              await settler.sql<
+                { pid: number }[]
+              >`SELECT pg_backend_pid() AS pid`
+            ).at(0)?.pid ?? panic("Claim settler missing");
+          pending.push(
+            holder.db.transaction(async (tx) => {
+              await tx
+                .select({ id: documentProcessingRuns.id })
+                .from(documentProcessingRuns)
+                .where(eq(documentProcessingRuns.id, run.id))
+                .for("update");
+              ready.resolve(undefined);
+              await release.promise;
+              await tx
+                .update(documentProcessingRuns)
+                .set({ attemptCount: 2, requestSource: "manual" })
+                .where(eq(documentProcessingRuns.id, run.id));
+            }),
+          );
+          await withTimeout(async () => await ready.promise, {
+            label: "Claim holder barrier",
+            timeoutMs: 3000,
+          });
+          pending.push(
+            markRunFailed({
+              database: asTestRaw<typeof rootDb>(settler.db),
+              run,
+              claimToken,
+              error: new DocumentProcessingJobError({
+                code: errorCode,
+                message: "Search index unavailable",
+              }),
+            }).then((outcome) => expect(outcome).toBe("settled")),
+          );
+          await waitForBlockedPid(observer.sql, {
+            waitingPid: settlerPid,
+            holdingPid: holderPid,
+          });
+          release.resolve(undefined);
+          await Promise.all(pending);
+          const settled = (
+            await setup.db
+              .select({
+                status: documentProcessingRuns.status,
+                attemptCount: documentProcessingRuns.attemptCount,
+                claimedBy: documentProcessingRuns.claimedBy,
+                errorCode: documentProcessingRuns.errorCode,
+                nextAttemptAt: documentProcessingRuns.nextAttemptAt,
+              })
+              .from(documentProcessingRuns)
+              .where(eq(documentProcessingRuns.id, run.id))
+          ).at(0);
+          expect(settled).toEqual({
+            status: "failed",
+            attemptCount: 2,
+            claimedBy: null,
+            errorCode,
+            nextAttemptAt: retryScheduled ? expect.any(Date) : null,
+          });
+        } finally {
+          release.resolve(undefined);
+          await Promise.allSettled(pending);
+          await fixture.cleanup();
+        }
+      });
+    },
+    15_000,
+  );
+
   test.each(schedules)(
     "$path remains compatible with repair when $first starts first",
     async ({ path, first }) => {
@@ -551,19 +874,17 @@ if (!databaseUrl || !runPostgresTests) {
             repairPidRows.at(0)?.pid ?? panic("Repair session missing");
           const ocrDatabase = {
             transaction: async <T>(run: (tx: Transaction) => Promise<T>) =>
-              await ocr.db.transaction(async (tx) => {
-                // Pause at the same entity lock the real OCR path acquires.
-                await tx
-                  .select({ id: entities.id })
-                  .from(entities)
-                  .where(eq(entities.id, source.entityId))
-                  .for("update");
-                if (first === "ocr") {
-                  firstReady.resolve(undefined);
-                  await releaseFirst.promise;
-                }
-                return await run(tx);
-              }),
+              await ocr.db.transaction(
+                async (tx) =>
+                  await run(
+                    first === "ocr"
+                      ? withSourceBarrier(tx, {
+                          ready: () => firstReady.resolve(undefined),
+                          release: releaseFirst.promise,
+                        })
+                      : tx,
+                  ),
+              ),
           };
           const repairDatabase = {
             query: repair.db.query,

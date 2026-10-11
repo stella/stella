@@ -135,7 +135,9 @@ type FailDocumentProcessingAttemptOptions = {
   errorCode: string;
   errorMessage: string;
   now: Date;
-  retryable?: boolean;
+  retryable?:
+    | boolean
+    | ((run: typeof documentProcessingRuns.$inferSelect) => boolean);
   staleBefore?: Date;
 };
 
@@ -184,7 +186,7 @@ export const failDocumentProcessingAttempt = async ({
     }
     const retryScheduled = shouldRetryDocumentProcessing(
       owned.attemptCount,
-      retryable,
+      typeof retryable === "function" ? retryable(owned) : retryable,
     );
     const changed = await transition({
       tx,

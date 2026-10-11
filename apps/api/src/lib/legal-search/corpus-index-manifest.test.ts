@@ -6,12 +6,12 @@ import {
 } from "@stll/api-contract/case-law-jurisdictions";
 
 import type { CaseLawIndexGroup } from "@/api/lib/legal-search/case-law-index-groups";
-import { CORPUS_INDEX_COMMIT_TIMEOUT_SECS } from "@/api/lib/legal-search/corpus-index-config";
 import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexConfigFromManifest,
   corpusIndexIdFromManifest,
   corpusIndexManifestDigest,
+  corpusIndexPositionalFields,
   corpusIndexPublisherFields,
   corpusIndexRoute,
   corpusIndexStemFields,
@@ -32,8 +32,12 @@ const EXPECTED_DIGESTS = {
     "1fc5f09b5471e49a4e5588c9f59c3ce78c08a9aa54b55e5edef168bc315accc8",
   case_law_v7:
     "ca567a8f26fc3c4af987db655943ac46bbde12af27379b927239e795eb16d2d0",
+  case_law_v8:
+    "f86d63a815b35dbc8dd9de16ad84355ccbf61e5faad64483ca884bb5a9994b65",
   legislation_v2:
     "dc252d8635081d8037e7f9b1aca6713181a27390e8eb6dda54139ae6a1e68583",
+  legislation_v3:
+    "a3a9c8005b8475abc0565d4c9ff7aa41b2e9882a86e7202217789ea02c6aa8d0",
 } as const satisfies Record<keyof typeof CORPUS_INDEX_MANIFESTS, string>;
 
 type CaseLawManifestGeneration = {
@@ -87,6 +91,15 @@ const EXPECTED_CASE_LAW_ROUTES = {
     SVK: "cs_sk",
     USA: "usa",
   },
+  case_law_v8: {
+    AUT: "aut",
+    CZE: "cs_sk",
+    EU: "eu",
+    HUN: "hun",
+    POL: "pol",
+    SVK: "cs_sk",
+    USA: "usa",
+  },
 } as const satisfies Record<
   CaseLawManifestGeneration,
   Record<CaseLawJurisdiction, CaseLawIndexGroup>
@@ -97,7 +110,9 @@ test("the final-generation registry is exact and fails closed", () => {
     "case_law_v5",
     "case_law_v6",
     "case_law_v7",
+    "case_law_v8",
     "legislation_v2",
+    "legislation_v3",
   ]);
   expect(requireCorpusIndexManifest("case_law", "case_law_v5")).toBe(
     CORPUS_INDEX_MANIFESTS.case_law_v5,
@@ -108,8 +123,14 @@ test("the final-generation registry is exact and fails closed", () => {
   expect(requireCorpusIndexManifest("case_law", "case_law_v7")).toBe(
     CORPUS_INDEX_MANIFESTS.case_law_v7,
   );
+  expect(requireCorpusIndexManifest("case_law", "case_law_v8")).toBe(
+    CORPUS_INDEX_MANIFESTS.case_law_v8,
+  );
   expect(requireCorpusIndexManifest("legislation", "legislation_v2")).toBe(
     CORPUS_INDEX_MANIFESTS.legislation_v2,
+  );
+  expect(requireCorpusIndexManifest("legislation", "legislation_v3")).toBe(
+    CORPUS_INDEX_MANIFESTS.legislation_v3,
   );
   expect(() => requireCorpusIndexManifest("case_law", "case_law_v4")).toThrow(
     "Unknown case-law index manifest: case_law_v4",
@@ -129,8 +150,14 @@ test("manifest digests pin every semantic array and ignore object key order", ()
   expect(corpusIndexManifestDigest(CORPUS_INDEX_MANIFESTS.case_law_v7)).toBe(
     EXPECTED_DIGESTS.case_law_v7,
   );
+  expect(corpusIndexManifestDigest(CORPUS_INDEX_MANIFESTS.case_law_v8)).toBe(
+    EXPECTED_DIGESTS.case_law_v8,
+  );
   expect(corpusIndexManifestDigest(CORPUS_INDEX_MANIFESTS.legislation_v2)).toBe(
     EXPECTED_DIGESTS.legislation_v2,
+  );
+  expect(corpusIndexManifestDigest(CORPUS_INDEX_MANIFESTS.legislation_v3)).toBe(
+    EXPECTED_DIGESTS.legislation_v3,
   );
   for (const digest of Object.values(EXPECTED_DIGESTS)) {
     expect(digest).toMatch(/^[0-9a-f]{64}$/u);
@@ -456,8 +483,32 @@ const EXPECTED_DOCSTORE_BLOCKSIZE = {
   case_law_v5: 1_000_000,
   case_law_v6: 1_000_000,
   case_law_v7: 65_536,
+  case_law_v8: 65_536,
   legislation_v2: 1_000_000,
+  legislation_v3: 1_000_000,
 } as const satisfies Record<keyof typeof CORPUS_INDEX_MANIFESTS, number>;
+
+const BUILT_THROUGH_V7_INDEXING = {
+  commit_timeout_secs: 60,
+  maturation_period: "4hours",
+} as const;
+const V8_INDEXING = {
+  commit_timeout_secs: 600,
+  maturation_period: "7days",
+} as const;
+
+/** Per generation, and total so a new generation answers rather than inherits. */
+const EXPECTED_INDEXING = {
+  case_law_v5: BUILT_THROUGH_V7_INDEXING,
+  case_law_v6: BUILT_THROUGH_V7_INDEXING,
+  case_law_v7: BUILT_THROUGH_V7_INDEXING,
+  case_law_v8: V8_INDEXING,
+  legislation_v2: BUILT_THROUGH_V7_INDEXING,
+  legislation_v3: V8_INDEXING,
+} as const satisfies Record<
+  keyof typeof CORPUS_INDEX_MANIFESTS,
+  { commit_timeout_secs: number; maturation_period: string }
+>;
 
 test("final manifests make every storage and index cost explicit", () => {
   for (const manifest of Object.values(CORPUS_INDEX_MANIFESTS)) {
@@ -475,7 +526,6 @@ test("final manifests make every storage and index cost explicit", () => {
     for (const absent of [
       "year",
       "seq",
-      "chunk_id",
       "heading_path",
       "citation_authority",
       "citation_count",
@@ -484,6 +534,7 @@ test("final manifests make every storage and index cost explicit", () => {
     ]) {
       expect(fields.has(absent)).toBe(false);
     }
+    expect(fields.has("chunk_id")).toBe(manifest.generation === "case_law_v8");
     expect(manifest.engine.indexConfig.doc_mapping.store_source).toBe(false);
     expect(manifest.engine.indexConfig.doc_mapping.max_num_partitions).toBe(
       200,
@@ -494,13 +545,14 @@ test("final manifests make every storage and index cost explicit", () => {
     expect(manifest.engine.indexConfig.doc_mapping.store_document_size).toBe(
       false,
     );
+    const indexing = EXPECTED_INDEXING[manifest.generation];
     expect(manifest.engine.indexConfig.indexing_settings).toMatchObject({
-      commit_timeout_secs: 60,
+      commit_timeout_secs: indexing.commit_timeout_secs,
       docstore_blocksize: EXPECTED_DOCSTORE_BLOCKSIZE[manifest.generation],
       docstore_compression_level: 8,
       merge_policy: {
         type: "stable_log",
-        maturation_period: "4hours",
+        maturation_period: indexing.maturation_period,
         merge_factor: 10,
         max_merge_factor: 12,
         min_level_num_docs: 100_000,
@@ -565,9 +617,6 @@ test("creation topology and tag pruning are part of the manifest", () => {
     "court",
     "language",
   ]);
-  expect(caseLaw.engine.indexConfig.indexing_settings.commit_timeout_secs).toBe(
-    CORPUS_INDEX_COMMIT_TIMEOUT_SECS,
-  );
 
   const legislation = CORPUS_INDEX_MANIFESTS.legislation_v2;
   // Plane may add a jurisdiction without changing the public routing rule:
@@ -678,6 +727,71 @@ test("v7 carries its own docstore settings and marks the ids fast", () => {
   expect(carriedFields(v7)).toEqual(carriedFields(v6));
 });
 
+test("v8 adds exact passage identity and records the text stem without positions", () => {
+  const v7 = CORPUS_INDEX_MANIFESTS.case_law_v7.engine.indexConfig;
+  const v8 = CORPUS_INDEX_MANIFESTS.case_law_v8.engine.indexConfig;
+
+  expect(v8.doc_mapping.field_mappings).toEqual([
+    ...v7.doc_mapping.field_mappings.map((field) =>
+      field.name === "text_stem"
+        ? { ...field, record: "freq" as const }
+        : field,
+    ),
+    {
+      name: "chunk_id",
+      type: "text",
+      tokenizer: "raw",
+      indexed: true,
+      stored: true,
+      fast: false,
+      record: "basic",
+      fieldnorms: false,
+    } as const,
+  ]);
+  expect({ ...v8.doc_mapping }).toEqual({
+    ...v7.doc_mapping,
+    field_mappings: v8.doc_mapping.field_mappings,
+  });
+  expect(CORPUS_INDEX_MANIFESTS.case_law_v8.projection).toEqual({
+    ...CORPUS_INDEX_MANIFESTS.case_law_v7.projection,
+    builderVersion: "case-law-passages-v4",
+  });
+  // A phrase may only reach a field that records positions; the query builder
+  // reads this set rather than assuming it.
+  const v7Positional = corpusIndexPositionalFields(
+    CORPUS_INDEX_MANIFESTS.case_law_v7,
+  );
+  const v8Positional = corpusIndexPositionalFields(
+    CORPUS_INDEX_MANIFESTS.case_law_v8,
+  );
+  expect(v7Positional.has("text_stem")).toBe(true);
+  expect(v8Positional.has("text_stem")).toBe(false);
+  expect([...v8Positional]).toEqual(
+    [...v7Positional].filter((name) => name !== "text_stem"),
+  );
+  for (const surface of ["title", "text", "headnote", "headnote_stem"]) {
+    expect(v8Positional.has(surface)).toBe(true);
+  }
+});
+
+test("legislation v3 is v2 under the v8 commit window and maturation", () => {
+  const v2 = CORPUS_INDEX_MANIFESTS.legislation_v2;
+  const v3 = CORPUS_INDEX_MANIFESTS.legislation_v3;
+  expect(v3.engine.indexConfig.doc_mapping).toEqual(
+    v2.engine.indexConfig.doc_mapping,
+  );
+  expect(v3.projection).toEqual(v2.projection);
+  expect(v3.route).toEqual(v2.route);
+  expect(v3.engine.indexConfig.indexing_settings).toEqual({
+    ...v2.engine.indexConfig.indexing_settings,
+    commit_timeout_secs: 600,
+    merge_policy: {
+      ...v2.engine.indexConfig.indexing_settings.merge_policy,
+      maturation_period: "7days",
+    },
+  });
+});
+
 test("only a generation that maps a publisher field reports one", () => {
   expect(
     corpusIndexPublisherFields(CORPUS_INDEX_MANIFESTS.case_law_v5),
@@ -696,7 +810,13 @@ test("only a generation that maps a publisher field reports one", () => {
     keywordsField: "keywords",
   });
   expect(
+    corpusIndexPublisherFields(CORPUS_INDEX_MANIFESTS.case_law_v8),
+  ).toEqual(corpusIndexPublisherFields(CORPUS_INDEX_MANIFESTS.case_law_v7));
+  expect(
     corpusIndexPublisherFields(CORPUS_INDEX_MANIFESTS.legislation_v2),
+  ).toEqual({ kind: "none" });
+  expect(
+    corpusIndexPublisherFields(CORPUS_INDEX_MANIFESTS.legislation_v3),
   ).toEqual({ kind: "none" });
   for (const manifest of Object.values(CORPUS_INDEX_MANIFESTS)) {
     const publisher = corpusIndexPublisherFields(manifest);
@@ -758,8 +878,15 @@ test("only a generation that maps the stem fields reports them", () => {
     text: "text_stem",
     publisherSummary: "headnote_stem",
   });
+  expect(corpusIndexStemFields(CORPUS_INDEX_MANIFESTS.case_law_v8)).toEqual({
+    text: "text_stem",
+    publisherSummary: "headnote_stem",
+  });
   expect(
     corpusIndexStemFields(CORPUS_INDEX_MANIFESTS.legislation_v2),
+  ).toBeNull();
+  expect(
+    corpusIndexStemFields(CORPUS_INDEX_MANIFESTS.legislation_v3),
   ).toBeNull();
   for (const manifest of Object.values(CORPUS_INDEX_MANIFESTS)) {
     const fields = corpusIndexStemFields(manifest);

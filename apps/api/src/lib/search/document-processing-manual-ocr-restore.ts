@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { and, eq, inArray, lt, or } from "drizzle-orm";
+import { and, eq, inArray, lt, or, sql } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
@@ -11,8 +11,6 @@ import {
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  withAggregateLock,
-  withAggregateParentBatch,
   withAggregateRowQuery,
   withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
@@ -75,51 +73,42 @@ export const restoreManualOcrRunAfterProjectionLoss = async ({
     const parents = await lockForWrite(tx, {
       organizationIds: [organizationId],
     });
-    const matters = await withAggregateParentBatch({
-      tx,
-      organizationIds: [],
-      workspaceIds: [workspaceId],
-      mode: "no key update",
-    });
-    if (
-      !parents.organizationIds.has(organizationId) ||
-      !matters.workspaceIds.has(workspaceId)
-    ) {
+    if (!parents.organizationIds.has(organizationId)) {
       return;
     }
 
-    const workspaceRows = await tx
-      .select({ id: workspaces.id })
-      .from(workspaces)
-      .where(
-        and(
-          eq(workspaces.id, workspaceId),
-          eq(workspaces.organizationId, organizationId),
-          eq(workspaces.status, "active"),
-        ),
-      )
-      .limit(1);
+    const workspaceRows = (
+      await withAggregateRowQuery({
+        tx,
+        aggregate: "workspace",
+        id: { id: workspaceId, organizationId },
+        mode: "no key update",
+        select: (lockTx) =>
+          lockTx
+            .select({
+              id: workspaces.id,
+              organizationId: workspaces.organizationId,
+            })
+            .from(workspaces),
+        where: eq(workspaces.status, "active"),
+      })
+    ).rows;
     if (!workspaceRows.at(0)) {
       return;
     }
-    await withAggregateLock({
-      tx,
-      aggregate: "entity",
-      id: { id: entityId, workspaceId },
-      mode: "update",
-    });
-    const currentRows = await tx
-      .select({ id: entities.id })
-      .from(entities)
-      .where(
-        and(
-          eq(entities.id, entityId),
-          eq(entities.workspaceId, workspaceId),
-          eq(entities.currentVersionId, entityVersionId),
-          eq(entities.readOnly, false),
-        ),
-      )
-      .limit(1);
+    const currentRows = (
+      await withAggregateRowQuery({
+        tx,
+        aggregate: "entity",
+        id: { id: entityId, workspaceId },
+        mode: "update",
+        select: (lockTx) =>
+          lockTx
+            .select({ id: entities.id, workspaceId: entities.workspaceId })
+            .from(entities),
+        where: sql`${entities.currentVersionId} = ${entityVersionId} AND ${entities.readOnly} = false`,
+      })
+    ).rows;
     if (!currentRows.at(0)) {
       return;
     }
@@ -256,8 +245,7 @@ export const restoreManualOcrRunAfterProjectionLoss = async ({
     });
     switch (changed.type) {
       case "stale":
-        panic("Locked manual OCR run changed during projection repair");
-        return;
+        return panic("Locked manual OCR run changed during projection repair");
       case "transitioned":
         return;
       default:
