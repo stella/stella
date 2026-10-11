@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import * as v from "valibot";
 
 const root = path.resolve(import.meta.dir, "..");
 const EXACT_VERSION = /^\d+\.\d+\.\d+$/u;
@@ -30,8 +31,31 @@ const channel = (file: string): string => {
   return match[1];
 };
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
+const environmentSchema = v.optional(v.record(v.string(), v.unknown()), {});
+const workflowSchema = v.looseObject({
+  env: environmentSchema,
+  jobs: v.record(
+    v.string(),
+    v.looseObject({
+      env: environmentSchema,
+      steps: v.optional(
+        v.array(
+          v.looseObject({
+            env: environmentSchema,
+            uses: v.optional(v.string()),
+            with: environmentSchema,
+          }),
+        ),
+        [],
+      ),
+    }),
+  ),
+});
+const readWorkflow = (file: string) =>
+  v.parse(
+    workflowSchema,
+    Bun.YAML.parse(readFileSync(path.join(root, file), "utf-8")),
+  );
 
 type ToolchainUse = { file: string; job: string; version: string };
 
@@ -41,52 +65,29 @@ const toolchainUses = (): ToolchainUse[] =>
   [
     ...new Bun.Glob(".github/workflows/*.{yml,yaml}").scanSync({ cwd: root }),
   ].flatMap((file) => {
-    const workflow: unknown = Bun.YAML.parse(
-      readFileSync(path.join(root, file), "utf-8"),
-    );
-    if (!isRecord(workflow) || !isRecord(workflow["jobs"])) {
-      return [];
-    }
-    const workflowEnv = isRecord(workflow["env"]) ? workflow["env"] : {};
-    return Object.entries(workflow["jobs"]).flatMap(([job, body]) => {
-      if (!isRecord(body)) {
-        return [];
-      }
-      const steps = Array.isArray(body["steps"]) ? body["steps"] : [];
+    const workflow = readWorkflow(file);
+    return Object.entries(workflow.jobs).flatMap(([job, body]) => {
       const versions = [
-        workflowEnv["RUSTUP_TOOLCHAIN"],
-        isRecord(body["env"]) ? body["env"]["RUSTUP_TOOLCHAIN"] : undefined,
-        ...steps.flatMap((step: unknown) =>
-          isRecord(step)
-            ? [
-                isRecord(step["env"])
-                  ? step["env"]["RUSTUP_TOOLCHAIN"]
-                  : undefined,
-                typeof step["uses"] === "string" &&
-                step["uses"].startsWith("dtolnay/rust-toolchain@")
-                  ? // Without an input the action installs its floating default.
-                    ((isRecord(step["with"])
-                      ? step["with"]["toolchain"]
-                      : undefined) ?? "stable")
-                  : undefined,
-              ]
-            : [],
-        ),
+        workflow.env["RUSTUP_TOOLCHAIN"],
+        body.env["RUSTUP_TOOLCHAIN"],
+        ...body.steps.flatMap((step) => [
+          step.env["RUSTUP_TOOLCHAIN"],
+          step.uses?.startsWith("dtolnay/rust-toolchain@")
+            ? // Without an input the action installs its floating default.
+              (step.with["toolchain"] ?? "stable")
+            : undefined,
+        ]),
       ];
       return versions.flatMap((version) =>
-        version === undefined ? [] : [{ file, job, version: String(version) }],
+        version === undefined
+          ? []
+          : [{ file, job, version: v.parse(v.string(), version) }],
       );
     });
   });
 
 const jobSource = (file: string, job: string): string =>
-  JSON.stringify(
-    (
-      Bun.YAML.parse(readFileSync(path.join(root, file), "utf-8")) as {
-        jobs: Record<string, unknown>;
-      }
-    ).jobs[job],
-  );
+  JSON.stringify(readWorkflow(file).jobs[job]);
 
 test("Rust toolchains are exact versions, never a floating channel", () => {
   for (const crate of CRATES) {
