@@ -350,6 +350,11 @@ describe("write contracts cover the mutation route graph", () => {
           "if (HandlerError.is(updated)) return Result.err(updated);",
           "",
         ),
+      guarded.replace("const updated =", "database = ignore; const updated ="),
+      guarded.replace(
+        "const updated =",
+        "({database} = other); const updated =",
+      ),
       guarded.replace("better-result", "./lookalike"),
       guarded.replace(
         "const updated =",
@@ -366,6 +371,66 @@ describe("write contracts cover the mutation route graph", () => {
         expect.stringContaining("Replacement must reach owner enforcement"),
       );
     }
+  });
+  test("generator write helpers execute only through returned delegation with the supplied safe handle", () => {
+    const config = `{contract: 'replace', precondition: {type: 'updatedAt', field: 'expectedUpdatedAt'}}`;
+    const sources = fixture(config);
+    sources.set(
+      "apps/api/src/handlers/example/write.ts",
+      `
+      import { Result } from 'better-result';
+      import { HandlerError } from '@/api/lib/errors/tagged-errors';
+      import { enforceWritePrecondition } from '@/api/lib/write-contract';
+      export const write = async function* ({database}) {
+        const updated = yield* Result.await(database(async () => {
+          const conflict = enforceWritePrecondition({type: 'updatedAt', field: 'expectedUpdatedAt'});
+          if (conflict) return conflict;
+          return {};
+        }));
+        if (HandlerError.is(updated)) return Result.err(updated);
+        return Result.ok(updated);
+      };`,
+    );
+    const guarded = `import {createSafeHandler} from '@/api/lib/api-handlers'; import {write} from './write';
+      export default createSafeHandler(${config}, async function* ({safeDb}) {return yield* write({database: safeDb});});`;
+    sources.set(handler, guarded);
+    expect(check(sources)).toEqual([]);
+    for (const changed of [
+      guarded.replace("return yield* write", "return write"),
+      guarded.replace("return yield* write", "yield* write"),
+      guarded.replace("database: safeDb", "database: ignore"),
+      guarded.replace(
+        "return yield* write",
+        "safeDb = ignore; return yield* write",
+      ),
+    ]) {
+      sources.set(handler, changed);
+      expect(check(sources)).toContainEqual(
+        expect.stringContaining("Replacement must reach owner enforcement"),
+      );
+    }
+  });
+  test("canonical module helpers cannot resolve writable aliases", () => {
+    const config = `{contract: 'replace', precondition: {type: 'updatedAt', field: 'expectedUpdatedAt'}}`;
+    const sources = fixture(config);
+    const guarded = `import {createSafeHandler} from '@/api/lib/api-handlers'; import {withAggregateTransaction} from '@/api/lib/db/aggregate-lock'; import {enforceWritePrecondition} from '@/api/lib/write-contract';
+      const transaction = withAggregateTransaction;
+      export default createSafeHandler(${config}, async () => await transaction(database, async () => {
+        const conflict = enforceWritePrecondition({type:'updatedAt',field:'expectedUpdatedAt'});
+        if (conflict) return conflict;
+        return {};
+      }));`;
+    sources.set(handler, guarded);
+    expect(check(sources)).toEqual([]);
+    sources.set(
+      handler,
+      guarded
+        .replace("const transaction", "let transaction")
+        .replace("export default", "transaction = ignore; export default"),
+    );
+    expect(check(sources)).toContainEqual(
+      expect.stringContaining("Replacement must reach owner enforcement"),
+    );
   });
   test("owner identity, field and invoked helper reachability are required", () => {
     const config = `{contract: 'replace', precondition: {type: 'updatedAt', field: 'expectedUpdatedAt'}}`;

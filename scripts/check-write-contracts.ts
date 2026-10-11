@@ -224,6 +224,37 @@ const wrapperScope = ({ node, scope }: LocatedExpression): LexicalScope => {
   return blockScope(node.body, bindings);
 };
 
+/** Any assignment invalidates provenance; branches and nested closures may also replace a handle. */
+const assignedNames = (node: ts.Node): string[] => {
+  if (ts.isIdentifier(node)) {
+    return [node.text];
+  }
+  if (ts.isParenthesizedExpression(node)) {
+    return assignedNames(node.expression);
+  }
+  if (ts.isObjectLiteralExpression(node)) {
+    return node.properties.flatMap((property) => {
+      if (ts.isShorthandPropertyAssignment(property)) {
+        return [property.name.text];
+      }
+      if (ts.isPropertyAssignment(property)) {
+        return assignedNames(property.initializer);
+      }
+      if (ts.isSpreadAssignment(property)) {
+        return assignedNames(property.expression);
+      }
+      return [];
+    });
+  }
+  if (ts.isArrayLiteralExpression(node)) {
+    return node.elements.flatMap(assignedNames);
+  }
+  if (ts.isSpreadElement(node)) {
+    return assignedNames(node.expression);
+  }
+  return [];
+};
+
 const blockScope = (block: ts.Block, parent: LexicalScope): LexicalScope => {
   const bindings = new Map(parent);
   for (const statement of block.statements) {
@@ -244,6 +275,36 @@ const blockScope = (block: ts.Block, parent: LexicalScope): LexicalScope => {
       }
     }
   }
+  const invalidate = (node: ts.Node) => {
+    if (
+      ts.isBinaryExpression(node) &&
+      node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
+      node.operatorToken.kind <= ts.SyntaxKind.LastAssignment
+    ) {
+      for (const name of assignedNames(node.left)) {
+        bindings.set(name, undefined);
+      }
+    }
+    if (
+      (ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node)) &&
+      (node.operator === ts.SyntaxKind.PlusPlusToken ||
+        node.operator === ts.SyntaxKind.MinusMinusToken)
+    ) {
+      for (const name of assignedNames(node.operand)) {
+        bindings.set(name, undefined);
+      }
+    }
+    if (
+      (ts.isForOfStatement(node) || ts.isForInStatement(node)) &&
+      !ts.isVariableDeclarationList(node.initializer)
+    ) {
+      for (const name of assignedNames(node.initializer)) {
+        bindings.set(name, undefined);
+      }
+    }
+    ts.forEachChild(node, invalidate);
+  };
+  invalidate(block);
   return bindings;
 };
 
@@ -613,6 +674,12 @@ class WriteSourceResolver {
         const found = statement.declarationList.declarations.find(
           (item) => ts.isIdentifier(item.name) && item.name.text === name,
         );
+        if (
+          found !== undefined &&
+          !isConstDeclarationList(statement.declarationList)
+        ) {
+          return undefined;
+        }
         if (found?.initializer !== undefined) {
           return this.factoryBinding({
             file,
@@ -931,7 +998,12 @@ class WriteSourceResolver {
           visit(statement, nestedScope);
           if (
             ts.isReturnStatement(statement) ||
-            ts.isThrowStatement(statement)
+            ts.isThrowStatement(statement) ||
+            this.hasUnknownReturn({
+              file: resolved.file,
+              node: statement,
+              scope: nestedScope,
+            })
           ) {
             break;
           }
@@ -942,6 +1014,90 @@ class WriteSourceResolver {
     };
     visit(resolved.node.body, scope);
     return result;
+  };
+  /** A possible success exit prevents a later comparison from guarding every write path. */
+  private readonly hasUnknownReturn = ({
+    file,
+    node,
+    scope,
+  }: {
+    file: string;
+    node: ts.Node;
+    scope: LexicalScope;
+  }): boolean => {
+    const refusal = (expression: ts.Expression, currentScope: LexicalScope) => {
+      let returned = unwrap(expression);
+      while (
+        ts.isAwaitExpression(returned) ||
+        (ts.isYieldExpression(returned) &&
+          returned.asteriskToken !== undefined &&
+          returned.expression !== undefined)
+      ) {
+        if (returned.expression === undefined) {
+          return false;
+        }
+        returned = unwrap(returned.expression);
+      }
+      const value = this.resolve({ file, node: returned, scope: currentScope });
+      if (value === undefined) {
+        return false;
+      }
+      if (
+        this.canonicalMethod({
+          value,
+          owner: "better-result",
+          binding: "Result",
+          method: "err",
+        })
+      ) {
+        return true;
+      }
+      if (!ts.isCallExpression(value.node) && !ts.isNewExpression(value.node)) {
+        return false;
+      }
+      if (ts.isCallExpression(value.node) && ts.isOptionalChain(value.node)) {
+        return false;
+      }
+      const imported = this.factoryBinding({
+        file: value.file,
+        expression: value.node.expression,
+        scope: value.scope,
+      });
+      return ts.isNewExpression(value.node)
+        ? imported?.module === "apps/api/src/lib/errors/tagged-errors.ts" &&
+            imported.imported === "HandlerError"
+        : imported?.module === OWNER &&
+            imported.imported === "enforceWritePrecondition";
+    };
+    const visit = (current: ts.Node, currentScope: LexicalScope): boolean => {
+      if (ts.isFunctionLike(current)) {
+        return false;
+      }
+      const nestedScope = new Map(
+        ts.isBlock(current) ? blockScope(current, currentScope) : currentScope,
+      );
+      if (
+        ts.isCatchClause(current) &&
+        current.variableDeclaration !== undefined
+      ) {
+        for (const name of bindingNames(current.variableDeclaration.name)) {
+          nestedScope.set(name, undefined);
+        }
+      }
+      if (ts.isReturnStatement(current)) {
+        return (
+          current.expression === undefined ||
+          !refusal(current.expression, nestedScope)
+        );
+      }
+      return (
+        ts.forEachChild(
+          current,
+          (child) => visit(child, nestedScope) || undefined,
+        ) === true
+      );
+    };
+    return visit(node, scope);
   };
   callEnforcement = ({
     value,
@@ -991,6 +1147,14 @@ class WriteSourceResolver {
       }
       return result;
     }
+    return this.invokedHelperEnforcement({ value, type, seen });
+  };
+  private readonly invokedHelperEnforcement = ({
+    value,
+    type,
+    seen,
+  }: EnforcementCallOptions): Set<string> => {
+    const result = new Set<string>();
     const helper = this.resolve({
       file: value.file,
       node: value.node.expression,
@@ -1000,6 +1164,22 @@ class WriteSourceResolver {
       helper !== undefined &&
       ts.isFunctionExpression(helper.node) &&
       helper.node.asteriskToken !== undefined;
+    if (generator) {
+      let invocation: ts.Node = value.node;
+      while (
+        ts.isParenthesizedExpression(invocation.parent) ||
+        ts.isAsExpression(invocation.parent) ||
+        ts.isSatisfiesExpression(invocation.parent)
+      ) {
+        invocation = invocation.parent;
+      }
+      if (
+        !ts.isYieldExpression(invocation.parent) ||
+        invocation.parent.asteriskToken === undefined
+      ) {
+        return result;
+      }
+    }
     if (!propagatesConflict(value.node, { delegatesGenerator: generator })) {
       return result;
     }
