@@ -365,6 +365,32 @@ const serviceEnvironment = (
   return required;
 };
 
+const isConditionallyRegistered = (node: ts.CallExpression): boolean => {
+  let child: ts.Node = node;
+  let ancestor = node.parent;
+  while (!ts.isSourceFile(ancestor)) {
+    if (
+      ts.isBinaryExpression(ancestor) &&
+      ancestor.right === child &&
+      [
+        ts.SyntaxKind.AmpersandAmpersandToken,
+        ts.SyntaxKind.BarBarToken,
+        ts.SyntaxKind.QuestionQuestionToken,
+      ].includes(ancestor.operatorToken.kind)
+    ) {
+      return true;
+    }
+    if (ts.isIfStatement(ancestor) || ts.isConditionalExpression(ancestor)) {
+      return true;
+    }
+    if (ts.isFunctionLike(ancestor)) {
+      return false;
+    }
+    child = ancestor;
+    ancestor = ancestor.parent;
+  }
+  return false;
+};
 export const parseTestRegistrations = (
   file: string,
   sourceText: string,
@@ -410,7 +436,7 @@ export const parseTestRegistrations = (
         const whenTrue = registrationName(node.initializer.whenTrue, aliases);
         const whenFalse = registrationName(node.initializer.whenFalse, aliases);
         if (whenTrue !== undefined && whenFalse !== undefined) {
-          aliases.set(node.name.text, `${whenTrue}|conditional`);
+          aliases.set(node.name.text, `${whenTrue}|${whenFalse}|conditional`);
         }
       }
     }
@@ -434,19 +460,6 @@ export const parseTestRegistrations = (
 
   const findings: RegistrationFinding[] = [];
   const suites: string[] = [];
-  const isConditionallyRegistered = (node: ts.CallExpression): boolean => {
-    let ancestor = node.parent;
-    while (!ts.isSourceFile(ancestor)) {
-      if (ts.isIfStatement(ancestor) || ts.isConditionalExpression(ancestor)) {
-        return true;
-      }
-      if (ts.isFunctionLike(ancestor)) {
-        return false;
-      }
-      ancestor = ancestor.parent;
-    }
-    return false;
-  };
   const enclosingServiceGate = (
     node: ts.CallExpression,
   ): (typeof SERVICE_GATES)[number] | undefined => {
@@ -488,7 +501,7 @@ export const parseTestRegistrations = (
       ts.forEachChild(node, visit);
       return;
     }
-    const isOnly = name.split(".").includes("only");
+    const isOnly = name.split(/[.|]/u).includes("only");
     const callback = node.arguments.find(
       (argument, index) =>
         (hook || index > 0) &&
@@ -582,6 +595,11 @@ const nearestPackage = (file: string): string | undefined => {
 type PackageScripts = Readonly<Record<string, unknown>>;
 
 type PackageTestExecutionOptions = {
+  readonly rootScripts?: PackageScripts;
+  readonly collection?: {
+    readonly candidate: string;
+    readonly scripts: PackageScripts;
+  };
   readonly gatingJobs: ReadonlyMap<string, readonly string[]>;
   readonly packageDirectory: string;
   readonly packageName: string;
@@ -722,32 +740,121 @@ const gatingArguments = ({
   return invocations;
 };
 
+let cachedRootScripts: PackageScripts | undefined;
+const repositoryRootScripts = (): PackageScripts => {
+  cachedRootScripts ??= packageScripts("package.json") ?? {};
+  return cachedRootScripts;
+};
+
+const expandRootScripts = (
+  command: string,
+  scripts: PackageScripts,
+  visited: ReadonlySet<string> = new Set(),
+): string[] => {
+  const expanded = [command];
+  const words = shellWords(command, "include");
+  const invokedNames = new Set(
+    words.flatMap((word, index) => {
+      const name = words[index + 2];
+      return word === "bun" && words[index + 1] === "run" && name !== undefined
+        ? [name]
+        : [];
+    }),
+  );
+  for (const name of invokedNames) {
+    const body = scripts[name];
+    if (typeof body !== "string" || visited.has(name)) {
+      continue;
+    }
+    const invocations = gatingArguments({
+      command,
+      invocationEnd: (tokens, index) =>
+        tokens[index] === "bun" &&
+        tokens[index + 1] === "run" &&
+        tokens[index + 2] === name &&
+        !tokens.slice(0, index).includes("cd")
+          ? index + 3
+          : undefined,
+    });
+    for (const arguments_ of invocations) {
+      const forwarded =
+        arguments_.at(0) === "--" ? arguments_.slice(1) : arguments_;
+      expanded.push(
+        ...expandRootScripts(
+          `${body} ${forwarded.map((word) => JSON.stringify(word)).join(" ")}`,
+          scripts,
+          new Set([...visited, name]),
+        ),
+      );
+    }
+  }
+  return expanded;
+};
+
+const expandedRootCommands = new WeakMap<
+  PackageScripts,
+  Map<string, readonly string[]>
+>();
+const rootScriptCommands = (
+  command: string,
+  scripts: PackageScripts,
+): readonly string[] => {
+  let commands = expandedRootCommands.get(scripts);
+  if (commands === undefined) {
+    commands = new Map();
+    expandedRootCommands.set(scripts, commands);
+  }
+  const cached = commands.get(command);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const expanded = expandRootScripts(command, scripts);
+  commands.set(command, expanded);
+  return expanded;
+};
+
 export const packageTestExecutionFailure = ({
+  collection,
+  rootScripts = repositoryRootScripts(),
   gatingJobs,
   packageDirectory,
   packageName,
   scriptName = "test",
   shardedPackages,
 }: PackageTestExecutionOptions): string | undefined => {
-  const invokesPackageScript = (command: string): boolean =>
-    shellInvocationGates(
-      command,
-      (words, index) =>
-        packageInvocationEnd({
-          words,
-          index,
+  let directExecutionFailure = `job condition: no gating job executes ${packageName} ${scriptName}`;
+  for (const commands of gatingJobs.values()) {
+    for (const command of commands.flatMap((workflowCommand) =>
+      rootScriptCommands(workflowCommand, rootScripts),
+    )) {
+      const invocations = gatingArguments({
+        command,
+        invocationEnd: (words, index) =>
+          packageInvocationEnd({
+            words,
+            index,
+            packageDirectory,
+            packageName,
+            scriptName,
+          }),
+      });
+      for (const arguments_ of invocations) {
+        if (collection === undefined) {
+          return undefined;
+        }
+        const failure = packageTestCollectionFailure({
+          ...collection,
           packageDirectory,
-          packageName,
           scriptName,
-        }) !== undefined,
-    );
-  const directExecutionFailure = gatingCommandExecutionFailure({
-    commandMatches: invokesPackageScript,
-    gatingJobs,
-    missingMessage: `job condition: no gating job executes ${packageName} ${scriptName}`,
-  });
-  if (directExecutionFailure === undefined) {
-    return undefined;
+          forwardedArguments:
+            arguments_.at(0) === "--" ? arguments_.slice(1) : arguments_,
+        });
+        if (failure === undefined) {
+          return undefined;
+        }
+        directExecutionFailure = `${failure}; command: ${command}`;
+      }
+    }
   }
   const testJob = gatingJobs.get("ci-tests");
   if (
@@ -769,7 +876,13 @@ export const packageTestExecutionFailure = ({
       command.includes("bun scripts/test-shards.ts --filters"),
     )
   ) {
-    return undefined;
+    return collection === undefined
+      ? undefined
+      : packageTestCollectionFailure({
+          ...collection,
+          packageDirectory,
+          scriptName,
+        });
   }
   return directExecutionFailure;
 };
@@ -840,7 +953,98 @@ const shellWords = (
       : [match[1] ?? match[2] ?? match[3] ?? match[4] ?? ""],
   );
 
+const BUN_VALUE_ARGUMENTS = new Set([
+  "--preload",
+  "-r",
+  "--timeout",
+  "--rerun-each",
+  "--retry",
+  "--seed",
+  "--max-concurrency",
+  "--reporter",
+  "--reporter-outfile",
+  "--coverage-dir",
+  "--coverage-reporter",
+  "--path-ignore-patterns",
+  "--timings",
+]);
+const BUN_BOOLEAN_ARGUMENTS = new Set([
+  "--coverage",
+  "--concurrent",
+  "--randomize",
+  "--update-snapshots",
+  "-u",
+  "--dots",
+  "--parallel",
+  "--update-timings",
+  "--todo",
+]);
+
+const bunArgumentCollectionFailure = (
+  relativeCandidate: string,
+  arguments_: readonly string[],
+): string | undefined => {
+  if (arguments_.some((argument) => /[$`]/u.test(argument))) {
+    return "runner arguments: unresolved dynamic pass-through";
+  }
+  const patterns: string[] = [];
+  const ignored: string[] = [];
+  let positionalOnly = false;
+  for (let index = 0; index < arguments_.length; index += 1) {
+    const argument = arguments_[index] ?? "";
+    if (argument === "--" && !positionalOnly) {
+      positionalOnly = true;
+      continue;
+    }
+    if (positionalOnly || !argument.startsWith("-")) {
+      patterns.push(argument);
+      continue;
+    }
+    const [flag, inlineValue] = argument.split(/[=](.*)/u);
+    if (flag === "--bail") {
+      if (
+        inlineValue === undefined &&
+        /^\d+$/u.test(arguments_[index + 1] ?? "")
+      ) {
+        index += 1;
+      }
+      continue;
+    }
+    if (BUN_BOOLEAN_ARGUMENTS.has(flag ?? "")) {
+      continue;
+    }
+    if (!BUN_VALUE_ARGUMENTS.has(flag ?? "")) {
+      return `runner arguments: unresolved option ${argument}`;
+    }
+    const value = inlineValue ?? arguments_[++index];
+    if (value === undefined) {
+      return `runner arguments: missing value for ${argument}`;
+    }
+    if (flag === "--path-ignore-patterns") {
+      ignored.push(value);
+    }
+  }
+  if (
+    ignored.some((pattern) => new Bun.Glob(pattern).match(relativeCandidate))
+  ) {
+    return "runner glob: test command excludes the file";
+  }
+  if (
+    patterns.length === 0 ||
+    patterns.some((pattern) =>
+      pattern.startsWith("./")
+        ? relativeCandidate === path.posix.normalize(pattern) ||
+          relativeCandidate.startsWith(`${path.posix.normalize(pattern)}/`)
+        : !pattern.startsWith("/") && relativeCandidate.includes(pattern),
+    )
+  ) {
+    return undefined;
+  }
+  return "runner glob: test command does not collect the file";
+};
+
 type PackageTestCollectionOptions = {
+  readonly forwardedArguments?: readonly string[];
   readonly candidate: string;
   readonly packageDirectory: string;
   readonly scriptName?: string;
@@ -849,6 +1053,7 @@ type PackageTestCollectionOptions = {
 };
 
 export const packageTestCollectionFailure = ({
+  forwardedArguments = [],
   candidate,
   packageDirectory,
   scriptName = "test",
@@ -876,15 +1081,37 @@ export const packageTestCollectionFailure = ({
     }
     const delegatedScript = words[index + 2];
     if (words[index + 1] === "run" && delegatedScript?.startsWith("test:")) {
+      const remaining = words.slice(index + 3);
+      const boundary = remaining.findIndex((word) => SHELL_OPERATORS.has(word));
+      const delegatedArguments =
+        boundary === -1 ? remaining : remaining.slice(0, boundary);
       return packageTestCollectionFailure({
         candidate,
         packageDirectory,
         scriptName: delegatedScript,
         scripts,
+        forwardedArguments: [
+          ...(delegatedArguments.at(0) === "--"
+            ? delegatedArguments.slice(1)
+            : delegatedArguments),
+          ...(boundary === -1 ? forwardedArguments : []),
+        ],
         visited: new Set([...visited, scriptName]),
       });
     }
     if (words[index + 1]?.endsWith("scripts/run-tests.ts")) {
+      const remaining = words.slice(index + 2);
+      const boundary = remaining.findIndex((word) => SHELL_OPERATORS.has(word));
+      const failure = bunArgumentCollectionFailure(
+        path.posix.relative(packageDirectory, candidate),
+        [
+          ...(boundary === -1 ? remaining : remaining.slice(0, boundary)),
+          ...(boundary === -1 ? forwardedArguments : []),
+        ],
+      );
+      if (failure !== undefined) {
+        return failure;
+      }
       if (packageDirectory === "apps/api") {
         return ["src", "evals", "scripts"].some((root) =>
           candidate.startsWith(`${packageDirectory}/${root}/`),
@@ -904,38 +1131,16 @@ export const packageTestCollectionFailure = ({
     }
     const remaining = words.slice(index + 2);
     const end = remaining.findIndex((word) => SHELL_OPERATORS.has(word));
-    const arguments_ = end === -1 ? remaining : remaining.slice(0, end);
-    const ignorePatternIndex = arguments_.indexOf("--path-ignore-patterns");
+    const arguments_ = [
+      ...(end === -1 ? remaining : remaining.slice(0, end)),
+      ...(end === -1 ? forwardedArguments : []),
+    ];
     const relativeCandidate = path.posix.relative(packageDirectory, candidate);
-    if (
-      ignorePatternIndex !== -1 &&
-      arguments_.at(ignorePatternIndex + 1) !== undefined &&
-      new Bun.Glob(arguments_.at(ignorePatternIndex + 1) ?? "").match(
-        relativeCandidate,
-      )
-    ) {
-      return "runner glob: test command excludes the file";
-    }
-    const positional = arguments_.filter(
-      (argument, argumentIndex) =>
-        !argument.startsWith("-") &&
-        (ignorePatternIndex === -1 ||
-          argumentIndex !== ignorePatternIndex + 1) &&
-        argument !== "true" &&
-        argument !== "false",
-    );
-    if (
-      positional.length === 0 ||
-      positional.some(
-        (entry) =>
-          relativeCandidate === entry ||
-          relativeCandidate.startsWith(`${entry}/`) ||
-          new Bun.Glob(entry).match(relativeCandidate),
-      )
-    ) {
+    const failure = bunArgumentCollectionFailure(relativeCandidate, arguments_);
+    if (failure === undefined) {
       return undefined;
     }
-    return "runner glob: test command does not collect the file";
+    return failure;
   }
   return "runner command: test script does not invoke a gating test runner";
 };
@@ -2095,12 +2300,14 @@ export const firstCollectionFailure = ({
     packageDirectory,
     scripts,
   });
-  if (collectionFailure === undefined) {
-    return packageTestExecutionFailure({
-      ...topology,
-      packageDirectory,
-      packageName,
-    });
+  const executionFailure = packageTestExecutionFailure({
+    ...topology,
+    packageDirectory,
+    packageName,
+    collection: { candidate: file, scripts },
+  });
+  if (executionFailure === undefined) {
+    return undefined;
   }
   const playwrightCollection = gatingPlaywrightCollection({
     file,
@@ -2124,6 +2331,7 @@ export const firstCollectionFailure = ({
         packageDirectory,
         packageName,
         scriptName,
+        collection: { candidate: file, scripts },
       }) === undefined
     ) {
       return undefined;
@@ -2131,7 +2339,7 @@ export const firstCollectionFailure = ({
   }
   return playwrightCollection.type === "unresolved"
     ? playwrightCollection.finding
-    : collectionFailure;
+    : (collectionFailure ?? executionFailure);
 };
 
 const validateCanonicalOrder = (

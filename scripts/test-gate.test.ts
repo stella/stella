@@ -1,4 +1,5 @@
 import { describe as context, expect, test as check } from "bun:test";
+import { readFileSync } from "node:fs";
 
 import {
   analyzeGatingWorkflow,
@@ -39,6 +40,55 @@ context("test registration census", () => {
         },
         { identity: "fixture.test.ts::conditional todo", type: "disabled" },
         { identity: "fixture.test.ts::todo registration", type: "disabled" },
+      ]);
+    },
+  );
+
+  check.each([
+    ["test", "test.only"],
+    ["test.only", "test"],
+    ["describe", "describe.only"],
+  ])(
+    "finds focus in either conditional alias branch: %s / %s",
+    (whenTrue, whenFalse) => {
+      const source = `
+      const selected = enabled ? ${whenTrue} : ${whenFalse};
+      selected("conditional focus", () => {});
+    `;
+      expect(parseTestRegistrations("fixture.test.ts", source)).toEqual([
+        { identity: "fixture.test.ts::conditional focus", type: "disabled" },
+        { identity: "fixture.test.ts::conditional focus", type: "only" },
+      ]);
+    },
+  );
+
+  check("preserves focus through nested conditional aliases", () => {
+    const source = `
+      const inner = enabled ? test : test.only;
+      const selected = other ? test : inner;
+      selected("nested focus", () => {});
+    `;
+    expect(parseTestRegistrations("fixture.test.ts", source)).toEqual([
+      { identity: "fixture.test.ts::nested focus", type: "disabled" },
+      { identity: "fixture.test.ts::nested focus", type: "only" },
+    ]);
+  });
+
+  check.each(["&&", "||", "??"])(
+    "inventories short-circuit registrations: %s",
+    (operator) => {
+      expect(
+        parseTestRegistrations(
+          "fixture.test.ts",
+          `
+      process.env.RUN_TESTS ${operator} test("conditional", () => {});
+      enabled ${operator} describe("suite", () => { test("nested", () => {}); });
+      test("always", () => {}) ${operator} other();
+    `,
+        ),
+      ).toEqual([
+        { identity: "fixture.test.ts::conditional", type: "disabled" },
+        { identity: "fixture.test.ts::suite", type: "disabled" },
       ]);
     },
   );
@@ -332,6 +382,131 @@ context("test registration census", () => {
       }),
     ).toBe("job condition: no gating job executes @stll/orphan test");
   });
+
+  check.each([
+    "bun --filter @stll/orphan test -- one.test.ts",
+    "bun run --cwd packages/orphan test -- one.test.ts",
+    "cd packages/orphan && bun run test -- one.test.ts",
+  ])("combines package collection with forwarded filters: %s", (command) => {
+    const options = {
+      gatingJobs: new Map([["package-check", [command]]]),
+      packageDirectory: "packages/orphan",
+      packageName: "@stll/orphan",
+      shardedPackages: new Set<string>(),
+    };
+    expect(
+      packageTestExecutionFailure({
+        ...options,
+        collection: {
+          candidate: "packages/orphan/one.test.ts",
+          scripts: { test: "bun test" },
+        },
+      }),
+    ).toBeUndefined();
+    expect(
+      packageTestExecutionFailure({
+        ...options,
+        collection: {
+          candidate: "packages/orphan/two.test.ts",
+          scripts: { test: "bun test" },
+        },
+      }),
+    ).toContain("does not collect");
+  });
+
+  check.each([
+    ["bun test src/one", "two.test.ts", true],
+    ["bun test --preload ./setup.ts", "--timeout 100 one", false],
+    ["bun run test:unit", "one.test.ts", false],
+    ["bun test", "./one.test.ts", false],
+    ["bun test", "one", false],
+    ["bun test", "--path-ignore-patterns '**/two.test.ts'", false],
+  ])(
+    "combines Bun body %s with arguments %s",
+    (body, forwarded, collectsTwo) => {
+      const command = `bun --filter @stll/orphan test -- ${forwarded}`;
+      const options = {
+        gatingJobs: new Map([["package-check", [command]]]),
+        packageDirectory: "packages/orphan",
+        packageName: "@stll/orphan",
+        shardedPackages: new Set<string>(),
+      };
+      const scripts = { test: body, "test:unit": "bun test" };
+      const failure = packageTestExecutionFailure({
+        ...options,
+        collection: { candidate: "packages/orphan/src/two.test.ts", scripts },
+      });
+      if (collectsTwo) {
+        expect(failure).toBeUndefined();
+      } else {
+        expect(failure).toBeDefined();
+      }
+    },
+  );
+
+  check.each([
+    `"\${args[@]}"`,
+    '"$(( shard + 1 ))"',
+    "--shard 1/2",
+    "-t focused",
+  ])(
+    "fails closed and names unresolved forwarded arguments: %s",
+    (forwarded) => {
+      const command = `bun --filter @stll/orphan test -- ${forwarded}`;
+      const failure = packageTestExecutionFailure({
+        gatingJobs: new Map([["package-check", [command]]]),
+        packageDirectory: "packages/orphan",
+        packageName: "@stll/orphan",
+        shardedPackages: new Set(),
+        collection: {
+          candidate: "packages/orphan/two.test.ts",
+          scripts: { test: "bun test" },
+        },
+      });
+      expect(failure).toContain("runner arguments: unresolved");
+      expect(failure).toContain(command);
+    },
+  );
+
+  check(
+    "resolves the root query-cache check without broadening its forwarded selection",
+    () => {
+      const topology = {
+        workflow: "",
+        gatingJobs: new Map([
+          ["package-check", ["bun run check:query-cache-types"]],
+        ]),
+        shardedPackages: new Set<string>(),
+      };
+      expect(
+        firstCollectionFailure({
+          file: "packages/scripts/src/query-cache-types.test.ts",
+          nonGatingFiles: new Set(),
+          topology,
+        }),
+      ).toBeUndefined();
+      expect(
+        firstCollectionFailure({
+          file: "packages/scripts/src/i18n-usage.test.ts",
+          nonGatingFiles: new Set(),
+          topology,
+        }),
+      ).toContain("does not collect");
+    },
+  );
+
+  check.each(["nightly-test", "api-test-memory", "network-baseline-record"])(
+    "separate workflow %s supplies no gating credit",
+    (name) => {
+      const workflow = Bun.YAML.parse(
+        readFileSync(
+          new URL(`../.github/workflows/${name}.yml`, import.meta.url),
+          "utf-8",
+        ),
+      );
+      expect(gatingWorkflowJobs(workflow).size).toBe(0);
+    },
+  );
 
   check("requires the gating job to invoke the exact test script", () => {
     expect(
