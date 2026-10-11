@@ -29,8 +29,6 @@ const transaction = (statementMs = 0, lockMs = 0) => {
           {
             statement_timeout: `${statementMs}ms`,
             lock_timeout: `${lockMs}ms`,
-            statement_ms: statementMs,
-            lock_ms: lockMs,
           },
         ];
       }
@@ -83,7 +81,7 @@ describe("decision write extension", () => {
     const bound = tx.statements.find((statement) =>
       statement.sql.includes("set_config"),
     );
-    expect(bound?.params).toEqual(["20", "10"]);
+    expect(bound?.params).toEqual(["20ms", "10ms"]);
     expect(tx.statements.at(-1)?.params).toEqual(["20ms", "10ms"]);
     expect(
       tx.statements.some((statement) => statement.sql.startsWith("ROLLBACK")),
@@ -96,8 +94,10 @@ describe("decision write extension", () => {
       fc.asyncProperty(
         fc.boolean(),
         fc.boolean(),
-        async (failStatement, defer) => {
-          const tx = transaction();
+        fc.integer({ min: 0, max: 5000 }),
+        fc.integer({ min: 0, max: 5000 }),
+        async (failStatement, defer, statementMs, lockMs) => {
+          const tx = transaction(statementMs, lockMs);
           const outcome = await runDecisionWriteExtension(tx, decisionId, {
             extension: async ({ tx: executor }) => {
               await executor.execute(sql.raw("write extension"));
@@ -121,6 +121,10 @@ describe("decision write extension", () => {
               statement.sql.startsWith("ROLLBACK"),
             ),
           ).toBe(failStatement || defer);
+          expect(tx.statements.at(-1)?.params).toEqual([
+            `${statementMs}ms`,
+            `${lockMs}ms`,
+          ]);
         },
       ),
       { numRuns: 20 },
@@ -152,6 +156,7 @@ describe("decision write extension", () => {
       }),
     ).toEqual({ type: "deferred", reason: "deadline" });
     expect(tx.stored).toEqual(["canonical"]);
+    expect(tx.statements.at(-1)?.params).toEqual(["0ms", "0ms"]);
     resume?.();
     await finished;
     expect(
@@ -200,5 +205,37 @@ describe("decision write extension", () => {
         ),
       ),
     ).toMatchObject({ message: "connection lost" });
+  });
+
+  test("restoration failures propagate and never replace an earlier cleanup failure", async () => {
+    for (const cleanup of ["success", "failed"] as const) {
+      const tx = transaction();
+      let restoration = false;
+      expect(
+        await rejectionOf(
+          runDecisionWriteExtension(
+            {
+              execute: async (query) => {
+                const statement = dialect.sqlToQuery(query);
+                if (statement.sql.startsWith("ROLLBACK")) {
+                  restoration = true;
+                  if (cleanup === "failed") {
+                    throw new Error("cleanup failed");
+                  }
+                }
+                if (restoration && statement.sql.includes("set_config")) {
+                  throw new Error("restoration failed");
+                }
+                return await tx.execute(query);
+              },
+            },
+            decisionId,
+            { extension: async () => ({ type: "deferred", reason: "failed" }) },
+          ),
+        ),
+      ).toMatchObject({
+        message: cleanup === "failed" ? "cleanup failed" : "restoration failed",
+      });
+    }
   });
 });
