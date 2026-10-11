@@ -1012,6 +1012,7 @@ jobs:
     for (const run of [
       "bun scripts/test-gate.ts || { echo failed; exit 1; }",
       "bun scripts/test-gate.ts || false",
+      "bun scripts/test-gate.ts &&\n  bun scripts/network-baseline-scope.ts validate",
     ]) {
       const workflow = Bun.YAML.parse(`
 jobs:

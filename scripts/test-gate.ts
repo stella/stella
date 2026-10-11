@@ -695,7 +695,15 @@ const shellInvocationGates = (
       }
       return false;
     };
-    const end = suffix.findIndex((word) => word === ";" || word === "\n");
+    // A newline right after `&&`, `||` or `|` continues the list.
+    const end = suffix.findIndex(
+      (word, offset) =>
+        word === ";" ||
+        (word === "\n" &&
+          !["&&", "||", "|"].includes(
+            offset === 0 ? (words[index] ?? "") : (suffix[offset - 1] ?? ""),
+          )),
+    );
     const list = end === -1 ? suffix : suffix.slice(0, end);
     const pipelineEnd = list.findIndex(
       (word) => word === "&&" || word === "||",
