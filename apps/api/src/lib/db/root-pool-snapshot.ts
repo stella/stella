@@ -21,7 +21,7 @@ class RootPoolSnapshotError extends TaggedError("RootPoolSnapshotError")<{
   cause: unknown;
 }> {}
 
-export const readRootPoolSnapshot = (client: Pick<SQL, "reserve">) =>
+export const readRootPoolSnapshot = async (client: Pick<SQL, "reserve">) =>
   Result.tryPromise({
     try: async () => {
       using session = await client.reserve({
