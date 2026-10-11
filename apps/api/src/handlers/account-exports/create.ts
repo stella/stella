@@ -9,6 +9,7 @@ import {
   ACCOUNT_ACCESS,
   createSafeSessionHandler,
 } from "@/api/lib/api-handlers";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 
@@ -40,5 +41,11 @@ const requestPersonalDataExport = createSafeSessionHandler(
     return Result.ok(accountExportStatus(row));
   },
 );
+
+declareAggregateMutation(requestPersonalDataExport.handler, {
+  type: "independent",
+  reason:
+    "The export store serializes the request under the account and export aggregate locks in one audited transaction.",
+});
 
 export default requestPersonalDataExport;

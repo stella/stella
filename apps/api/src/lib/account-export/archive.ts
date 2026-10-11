@@ -67,7 +67,7 @@ const archiveDeps = {
  * the object was gone when its body was read, typically because the file was
  * deleted after the inventory was taken.
  */
-export type AccountExportFileUnavailableReason = "object_missing";
+type AccountExportFileUnavailableReason = "object_missing";
 
 // A projection may yield a value JSON cannot represent, such as undefined.
 const serializeRecord = (row: unknown): string | undefined =>
