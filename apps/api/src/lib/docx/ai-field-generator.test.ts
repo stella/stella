@@ -765,7 +765,7 @@ describe("buildAiConditionDecider decision tier", () => {
       managedAIResidency: "eu",
       organizationId,
       admission: testModelAdmission(organizationId),
-      resolveTextModel: () => ({ ...model, adapter }),
+      resolveTextModel: async () => ({ ...model, adapter }),
       skillContext: { organizationId, userId, safeDb: skillDb },
       tenantWorkspaceIds: [],
     });
