@@ -63,6 +63,22 @@ describe("TEMPLATE_CONDITION_DECISION_OUTPUT_SCHEMA", () => {
   });
 });
 
+test("generative preview projection returns only declared condition fields", () => {
+  const input = {
+    path: base.path,
+    label: base.label,
+    decision: { state: "decided", decidedBy: "generative_model", value: true },
+    inputValues: { extra: "ordinary context" },
+  } as const;
+  expect(toPreviewConditionDecision(input)).toEqual({
+    path: base.path,
+    label: base.label,
+    state: "decided",
+    value: true,
+    decided_by: "generative_model",
+  });
+});
+
 describe("undecided condition wire contract", () => {
   test("rejects an unknown wire reason", () => {
     expect(
