@@ -218,6 +218,20 @@ beforeAll(
       ),
     );
 
+    const dated = await db
+      .select({ id: caseLawDecisions.id })
+      .from(caseLawDecisions)
+      .where(eq(caseLawDecisions.sourceId, czSourceId));
+    await db.insert(caseLawSearchDocuments).values(
+      dated.map(({ id }) => ({
+        decisionId: id,
+        language: "cs",
+        regconfig: "simple",
+        searchableText: "Published decision text",
+        tsv: sql`to_tsvector('simple', 'Published decision text')`,
+      })),
+    );
+
     // SAFETY: the PGlite handle implements the root select and transaction
     // surface the scheduled refresh uses.
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- embedded test database stands in for the root pool
@@ -339,7 +353,7 @@ const loadCoverage = async (
   });
 
 test(
-  "withdrawn and listing-only decisions cannot widen either published year bound",
+  "unindexed, withdrawn and listing-only decisions cannot widen either served year bound",
   async () => {
     const db = drizzle({ client });
     const sourceId = createSafeId<"caseLawSource">();
@@ -393,6 +407,15 @@ test(
         .map(({ id }) => id)
         .toSorted();
       expect(expectedIds).toHaveLength(2);
+      await db.insert(caseLawSearchDocuments).values(
+        expectedIds.map((id) => ({
+          decisionId: id,
+          language: "cs",
+          regconfig: "simple",
+          searchableText: "Published decision text",
+          tsv: sql`to_tsvector('simple', 'Published decision text')`,
+        })),
+      );
       const decision = alias(caseLawDecisions, "publication_parity_decisions");
       await readAsReader(async (tx) => {
         const published = await tx
@@ -442,7 +465,29 @@ test(
         { year: 1900, count: 2 },
         { year: 2020, count: 2 },
       ]);
-      const sources = await readAsReader(readCaseLawCoverageSourcesQuery);
+      await db.insert(caseLawDecisions).values(
+        [1800, 2100].map((year) =>
+          decisionRow({
+            caseNumber: `unindexed ${year}`,
+            country: "CZE",
+            court: "Nejvyšší soud",
+            sourceId,
+            createdAt: NOW,
+            decisionDate: `${year}-06-15`,
+            fulltext: "Published but unindexed text",
+          }),
+        ),
+      );
+      const sources = await readAsReader((tx) =>
+        readCaseLawCoverageSourcesQuery(tx, "pg-fts"),
+      );
+      const unknown = await readAsReader((tx) =>
+        readCaseLawCoverageSourcesQuery(tx, "corpus-index"),
+      );
+      expect(unknown.find(({ id }) => id === sourceId)).toMatchObject({
+        decisionYearFrom: null,
+        decisionYearTo: null,
+      });
       expect(sources.find(({ id }) => id === sourceId)).toMatchObject({
         decisionYearFrom: 2000,
         decisionYearTo: 2010,

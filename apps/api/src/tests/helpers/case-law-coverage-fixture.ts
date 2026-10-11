@@ -64,7 +64,7 @@ export const CASE_LAW_COVERAGE_FIXTURE = {
           addedLastWeek: 0,
           updatedAt: null,
         },
-        { type: "other-courts", tier: "other", courts: 4, decisions: 10 },
+        { type: "other-courts", tier: "other", courts: null, decisions: 10 },
       ],
     },
     { ...base, country: "SVK", availability: "in-preparation" },
@@ -106,7 +106,7 @@ export const CASE_LAW_COVERAGE_EXPECTED = {
       courts: [
         { type: "court", court: "Nejvyšší soud", decisions: 60 },
         { type: "tier", tier: "regional", courts: 8, decisions: 30 },
-        { type: "other-courts", courts: 4, decisions: 10 },
+        { type: "other-courts", courts: null, decisions: 10 },
       ],
     },
     {

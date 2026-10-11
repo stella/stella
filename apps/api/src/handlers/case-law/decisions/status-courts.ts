@@ -1,4 +1,3 @@
-import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 
 import { courtAbbreviation } from "@stll/api-contract/case-law-court-abbreviations";
@@ -16,7 +15,7 @@ import {
   type CourtWeightMap,
 } from "@/api/lib/case-law/court-weights";
 import { publishedCaseLawDecisionSqlFor } from "@/api/lib/case-law/published-decisions";
-import { publishedUnredactedCaseLawDecisionSqlFor } from "@/api/lib/case-law/published-decisions-sql";
+import { servedCaseLawDecisionFor } from "@/api/lib/case-law/published-decisions-sql";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import type { LegalSearchEngine } from "@/api/lib/legal-search/types";
 import {
@@ -159,14 +158,9 @@ export const readCaseLawCourtCountQuery = definePublicLawSharedQuery(
       engine: LegalSearchEngine;
     },
   ): Promise<number | null> => {
-    switch (engine) {
-      case "corpus-index":
-        return null;
-      case "pg-fts":
-        break;
-      default:
-        engine satisfies never;
-        return panic("Unhandled court-count provider");
+    const eligibility = servedCaseLawDecisionFor("d", engine);
+    if (eligibility === null) {
+      return null;
     }
     const admitted =
       excludedSourceIds.length === 0
@@ -175,17 +169,16 @@ export const readCaseLawCourtCountQuery = definePublicLawSharedQuery(
           SELECT value::uuid
           FROM jsonb_array_elements_text(${JSON.stringify([...excludedSourceIds])}::text::jsonb) AS value
         )`;
-    const published = sql.raw(publishedUnredactedCaseLawDecisionSqlFor("d"));
+    const served = eligibility;
     const result: unknown = await withSharedStatementTimeout(
       tx,
       ACTIVITY_STATEMENT_TIMEOUT_MS,
       async () =>
         await tx.execute(sql`
         SELECT count(DISTINCT d.court)::integer AS courts
-        FROM case_law_search_documents sd
-        JOIN case_law_decisions d ON d.id = sd.decision_id
+        FROM case_law_decisions d
         WHERE d.country = ${country}
-          AND ${published}
+          AND ${served}
           ${admitted}
       `),
     );

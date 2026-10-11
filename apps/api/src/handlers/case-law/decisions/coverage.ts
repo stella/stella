@@ -39,14 +39,17 @@ import type {
 } from "@/api/lib/case-law-public-read-db";
 import { readNonRedistributableCaseLawSourceIds } from "@/api/lib/case-law/non-redistributable-sources";
 import { loadPublicCourtWeights } from "@/api/lib/case-law/public-case-law-config";
-import { publishedUnredactedCaseLawDecisionSqlFor } from "@/api/lib/case-law/published-decisions-sql";
+import { servedCaseLawDecisionFor } from "@/api/lib/case-law/published-decisions-sql";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { CASE_LAW_SOURCE_ROWS_BOUND } from "@/api/lib/legal-search/ingestion-constants";
 import { storedObservationIsListingOnlySqlFor } from "@/api/lib/legal-search/partial-observation-sql";
 import { createUnrecognizedSourceReporter } from "@/api/lib/legal-search/source-registry-membership";
-import type { LegalBrowseFacets } from "@/api/lib/legal-search/types";
+import type {
+  LegalBrowseFacets,
+  LegalSearchEngine,
+} from "@/api/lib/legal-search/types";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
 import {
@@ -236,9 +239,6 @@ type CaseLawCoverageSourceRow = {
  * nothing a reader of the corpus needs. The redistribution gate is applied
  * here rather than per number, so a withheld source contributes to nothing.
  */
-const PUBLISHED_COVERAGE_DECISION_SQL = sql.raw(
-  publishedUnredactedCaseLawDecisionSqlFor("coverage_decisions"),
-);
 const LISTING_ONLY_COVERAGE_DECISION_SQL = sql.raw(
   storedObservationIsListingOnlySqlFor("coverage_decisions.metadata"),
 );
@@ -247,8 +247,12 @@ export const readCaseLawCoverageSourcesQuery = definePublicLawSharedQuery(
   PUBLIC_LAW_SHARED_QUERY.caseLawCoverageSources,
   async (
     tx: CaseLawPublicReadTransaction,
-  ): Promise<CaseLawCoverageSourceRow[]> =>
-    await tx
+    engine: LegalSearchEngine = envBase.LEGAL_SEARCH_PROVIDER,
+  ): Promise<CaseLawCoverageSourceRow[]> => {
+    const eligibility = servedCaseLawDecisionFor("coverage_decisions", engine);
+    // The external serving index cannot prove SQL membership: no endpoints means unknown.
+    const served = eligibility ?? sql`FALSE`;
+    return await tx
       .select({
         id: caseLawSources.id,
         adapterKey: caseLawSources.adapterKey,
@@ -263,7 +267,7 @@ export const readCaseLawCoverageSourcesQuery = definePublicLawSharedQuery(
           SELECT extract(year FROM coverage_decisions.decision_date)::integer
           FROM case_law_decisions AS coverage_decisions
           WHERE coverage_decisions.source_id = case_law_sources.id
-            AND ${PUBLISHED_COVERAGE_DECISION_SQL}
+            AND ${served}
             AND coverage_decisions.decision_date IS NOT NULL
           ORDER BY coverage_decisions.decision_date ASC
           LIMIT 1
@@ -272,7 +276,7 @@ export const readCaseLawCoverageSourcesQuery = definePublicLawSharedQuery(
           SELECT extract(year FROM coverage_decisions.decision_date)::integer
           FROM case_law_decisions AS coverage_decisions
           WHERE coverage_decisions.source_id = case_law_sources.id
-            AND ${PUBLISHED_COVERAGE_DECISION_SQL}
+            AND ${served}
             AND coverage_decisions.decision_date IS NOT NULL
           ORDER BY coverage_decisions.decision_date DESC
           LIMIT 1
@@ -289,7 +293,8 @@ export const readCaseLawCoverageSourcesQuery = definePublicLawSharedQuery(
       .from(caseLawSources)
       .where(redistributableCaseLawSource)
       .orderBy(caseLawSources.adapterKey)
-      .limit(CASE_LAW_SOURCE_ROWS_BOUND),
+      .limit(CASE_LAW_SOURCE_ROWS_BOUND);
+  },
 );
 
 /** A source the week's read did not answer for: unknown, never zero. */

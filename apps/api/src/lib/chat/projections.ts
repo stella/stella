@@ -1479,7 +1479,7 @@ export const CASE_LAW_COVERAGE_PROJECTION = projectionBranch(
               projectionBranch(
                 v.strictObject({
                   type: v.literal("other-courts"),
-                  courts: v.number(),
+                  courts: v.nullable(v.number()),
                   decisions: v.number(),
                 }),
               ),

@@ -50,7 +50,11 @@ describe.skipIf(!enabled)("published coverage bounds plan (postgres)", () => {
       const schema = sql.identifier(schemaName);
       await db.execute(sql`CREATE SCHEMA ${schema}`);
       try {
-        for (const table of ["case_law_sources", "case_law_decisions"]) {
+        for (const table of [
+          "case_law_sources",
+          "case_law_decisions",
+          "case_law_search_documents",
+        ]) {
           await db.execute(sql`CREATE TABLE ${schema}.${sql.identifier(table)}
             (LIKE public.${sql.identifier(table)} INCLUDING ALL)`);
         }
@@ -113,12 +117,18 @@ describe.skipIf(!enabled)("published coverage bounds plan (postgres)", () => {
           FROM case_law_sources sources
           CROSS JOIN (VALUES (DATE '1900-01-01'), (DATE '2020-01-01')) endpoints(endpoint)
           CROSS JOIN (VALUES ('withdrawn'), ('listing-only')) statuses(status)`);
+        await db.execute(sql`INSERT INTO case_law_search_documents
+          (decision_id, language, regconfig, searchable_text, tsv)
+          SELECT id, 'cs', 'simple', fulltext, to_tsvector('simple', fulltext)
+          FROM case_law_decisions WHERE case_number LIKE 'published/%'`);
+        await db.execute(sql`ANALYZE case_law_search_documents`);
         await db.execute(sql`VACUUM (ANALYZE) case_law_decisions`);
         await db.execute(sql`ANALYZE case_law_sources`);
 
         captured.length = 0;
         const rows = await readCaseLawCoverageSourcesQuery(
           asTestRaw<CaseLawPublicReadTransaction>(db),
+          "pg-fts",
         );
         expect(captured).toHaveLength(1);
         const statement =
