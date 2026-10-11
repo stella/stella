@@ -56,6 +56,7 @@ const NETWORK_MODULES = new Set([
   "ws",
   "nodemailer",
   "posthog-node",
+  "posthog-js",
   "bullmq",
   "mailauth",
   "@smithy/fetch-http-handler",

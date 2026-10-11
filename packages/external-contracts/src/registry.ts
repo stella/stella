@@ -872,14 +872,28 @@ export const EXTERNAL_CONTRACTS = {
         path: "apps/api/src/lib/analytics/posthog-node.ts",
         role: "primary",
       },
+      {
+        path: "apps/web/src/lib/analytics/posthog.ts",
+        role: "primary",
+      },
+      {
+        path: "apps/web/src/lib/api-request-context.ts",
+        role: "primary",
+      },
     ],
-    sdks: ["posthog-node"],
+    sdks: ["posthog-node", "posthog-js"],
     pinSources: [
       {
         type: "manifest",
         file: "apps/api/package.json",
         section: "dependencies",
         package: "posthog-node",
+      },
+      {
+        type: "manifest",
+        file: "apps/web/package.json",
+        section: "dependencies",
+        package: "posthog-js",
       },
     ],
     driftTriggers: ["pin-bump"],

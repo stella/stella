@@ -661,6 +661,18 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["module:posthog-node"],
   },
   {
+    path: "apps/web/src/lib/analytics/posthog.ts",
+    class: "vendor-sdk",
+    reason: "Sends configured browser analytics events to the PostHog service.",
+    transports: ["module:posthog-js"],
+  },
+  {
+    path: "apps/web/src/lib/api-request-context.ts",
+    class: "vendor-sdk",
+    reason: "Reads the browser analytics SDK session ID for request headers.",
+    transports: ["module:posthog-js"],
+  },
+  {
     path: "apps/api/src/lib/email/inbound/authentication.ts",
     class: "vendor-sdk",
     reason:
