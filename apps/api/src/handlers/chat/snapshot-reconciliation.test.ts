@@ -1,9 +1,15 @@
-import type { ActivityPart, ToolCallPart, UIMessage } from "@tanstack/ai";
+import type {
+  ActivityPart,
+  ToolCallPart,
+  ToolResultPart,
+  UIMessage,
+} from "@tanstack/ai";
 import { expect, test } from "bun:test";
 
 import {
   createSnapshotActivityReconciler,
   reconcileSnapshotCall,
+  reconcileSnapshotResult,
 } from "@/api/handlers/chat/snapshot-reconciliation";
 
 test("duplicate activity keys match ordinal slots and preserve unmatched parts", () => {
@@ -138,4 +144,50 @@ test("the selected result owns call state and output", () => {
       resultOutput: "denied",
     }),
   ).toMatchObject({ state: "error", output: "denied" });
+});
+
+const resultCases = [
+  { canonical: "streaming", snapshot: "streaming", owner: "snapshot" },
+  { canonical: "streaming", snapshot: "complete", owner: "snapshot" },
+  { canonical: "complete", snapshot: "streaming", owner: "canonical" },
+  { canonical: "error", snapshot: "complete", owner: "canonical" },
+] as const;
+
+for (const { canonical, snapshot, owner } of resultCases) {
+  test(`result ${canonical} to ${snapshot} retains the ${owner} payload`, () => {
+    const previous = {
+      type: "tool-result",
+      toolCallId: "call",
+      state: canonical,
+      content: "previous",
+      ...(canonical === "error" ? { outcome: "denied" as const } : {}),
+    } as const satisfies ToolResultPart;
+    const updated = {
+      type: "tool-result",
+      toolCallId: "call",
+      state: snapshot,
+      content: "updated",
+    } as const satisfies ToolResultPart;
+    expect(
+      reconcileSnapshotResult({ canonical: previous, snapshot: updated }),
+    ).toBe(owner === "snapshot" ? updated : previous);
+  });
+}
+
+test("streaming result progress keeps an output-bearing call reloadable", () => {
+  const result = {
+    type: "tool-result",
+    toolCallId: selected.id,
+    state: "streaming",
+    content: "latest progress",
+  } as const satisfies ToolResultPart;
+  expect(
+    reconcileSnapshotCall({
+      selected,
+      other,
+      result,
+      resultSelected: true,
+      resultOutput: "latest progress",
+    }),
+  ).toMatchObject({ state: "complete", output: "latest progress" });
 });

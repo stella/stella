@@ -96,6 +96,7 @@ import { stampReasoningProvenance } from "@/api/handlers/chat/reasoning-provenan
 import {
   createSnapshotActivityReconciler,
   reconcileSnapshotCall,
+  reconcileSnapshotResult,
 } from "@/api/handlers/chat/snapshot-reconciliation";
 import {
   assistantMessageStartChunk,
@@ -114,7 +115,6 @@ import type {
 } from "@/api/handlers/chat/stream-message-identity";
 import {
   createTanStackTerminalHooks,
-  TANSTACK_TOOL_RESULT_STATE_LIFECYCLE,
   tanStackStreamEventLifecycle,
 } from "@/api/handlers/chat/tanstack-chat-lifecycle";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
@@ -2516,14 +2516,10 @@ const processPersistenceChunk = ({
               if (existing?.type !== "tool-result") {
                 panic("A matching snapshot result has no streamed tool result");
               }
-              // Equal-finality results retain canonical content and denials.
-              if (
-                TANSTACK_TOOL_RESULT_STATE_LIFECYCLE[existing.state] ===
-                  "active" &&
-                TANSTACK_TOOL_RESULT_STATE_LIFECYCLE[part.state] === "settled"
-              ) {
-                parts[existingIndex] = part;
-              }
+              parts[existingIndex] = reconcileSnapshotResult({
+                canonical: existing,
+                snapshot: part,
+              });
               break;
             }
             case "activity":

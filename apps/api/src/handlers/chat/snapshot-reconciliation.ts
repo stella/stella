@@ -5,6 +5,35 @@ import type {
   UIMessage,
 } from "@tanstack/ai";
 
+import { TANSTACK_TOOL_RESULT_STATE_LIFECYCLE } from "@/api/handlers/chat/tanstack-chat-lifecycle";
+
+type ToolResultFinality =
+  (typeof TANSTACK_TOOL_RESULT_STATE_LIFECYCLE)[ToolResultPart["state"]];
+
+// Snapshot progress advances active results; settled content stays canonical.
+const RESULT_OWNER = {
+  active: { active: "snapshot", settled: "snapshot" },
+  settled: { active: "canonical", settled: "canonical" },
+} as const satisfies Record<
+  ToolResultFinality,
+  Record<ToolResultFinality, "snapshot" | "canonical">
+>;
+
+type SnapshotResultOptions = {
+  canonical: ToolResultPart;
+  snapshot: ToolResultPart;
+};
+
+export const reconcileSnapshotResult = ({
+  canonical,
+  snapshot,
+}: SnapshotResultOptions): ToolResultPart =>
+  RESULT_OWNER[TANSTACK_TOOL_RESULT_STATE_LIFECYCLE[canonical.state]][
+    TANSTACK_TOOL_RESULT_STATE_LIFECYCLE[snapshot.state]
+  ] === "snapshot"
+    ? snapshot
+    : canonical;
+
 type CallFieldOptions = {
   selected: ToolCallPart;
   other: ToolCallPart;
@@ -36,7 +65,9 @@ const CALL_FIELDS = {
     if (result === undefined) {
       return selected.state;
     }
-    return result.state === "streaming" ? "input-complete" : result.state;
+    // SDK snapshots and hydration classify a call with output as complete;
+    // progress is represented by the sibling result's streaming state.
+    return result.state === "streaming" ? "complete" : result.state;
   },
   output: ({ selected, result, resultSelected, resultOutput }) => {
     if (

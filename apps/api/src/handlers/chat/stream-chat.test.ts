@@ -746,6 +746,132 @@ describe("snapshot tool-result reconciliation", () => {
     }
   }
 
+  for (const terminal of [false, true]) {
+    test(`streaming snapshot progress persists its latest content${terminal ? " without downgrading a terminal result" : ""}`, async () => {
+      const call = {
+        type: "tool-call",
+        id: "snapshot-call",
+        name: "lookup",
+        arguments: "{}",
+        input: {},
+        state: "input-complete",
+      } as const satisfies ToolCallPart;
+      const first = {
+        type: "tool-result",
+        toolCallId: call.id,
+        state: "streaming",
+        content: '{"progress":1}',
+      } as const satisfies ToolResultPart;
+      const second = { ...first, content: '{"progress":2}' };
+      const completed = {
+        ...second,
+        state: "complete",
+        content: '{"progress":3}',
+      } as const satisfies ToolResultPart;
+      const results = terminal
+        ? [first, second, completed, first]
+        : [first, second];
+      const expected = terminal
+        ? [first, second, completed, completed]
+        : [first, second];
+      const snapshots = results.map((result) => {
+        const message = {
+          id: "snapshot-assistant",
+          role: "assistant",
+          parts: [
+            {
+              ...call,
+              state:
+                result.state === "streaming" ? "input-complete" : result.state,
+            },
+            result,
+          ],
+        } satisfies UIMessage;
+        return unsafeFixture(
+          "The server snapshot extension carries incremental UI tool results",
+          {
+            type: EventType.MESSAGES_SNAPSHOT,
+            messages: [message],
+          } satisfies StreamChunk,
+        );
+      });
+      const { emitted, finish } = await persistNativeInterruptTurn(
+        streamChunks([
+          {
+            type: EventType.RUN_STARTED,
+            runId: "snapshot-run",
+            threadId: "snapshot-thread",
+          },
+          {
+            type: EventType.TEXT_MESSAGE_START,
+            messageId: "snapshot-assistant",
+            role: "assistant",
+          },
+          {
+            type: EventType.TEXT_MESSAGE_CONTENT,
+            messageId: "snapshot-assistant",
+            delta: "Checking progress.",
+          },
+          ...snapshots,
+          {
+            type: EventType.RUN_FINISHED,
+            runId: "snapshot-run",
+            threadId: "snapshot-thread",
+            finishReason: "stop",
+          },
+        ]),
+      );
+      if (finish === null) {
+        panic("Snapshot progress did not persist its turn");
+      }
+      const client = new StreamProcessor();
+      let snapshotIndex = 0;
+      for (const chunk of emitted) {
+        client.processChunk(chunk);
+        if (chunk.type !== EventType.MESSAGES_SNAPSHOT) {
+          continue;
+        }
+        const expectedResult = expected.at(snapshotIndex);
+        if (expectedResult === undefined) {
+          panic("Unexpected progress snapshot");
+        }
+        expect(
+          client
+            .getMessages()
+            .flatMap(({ parts }) => parts)
+            .find((part) => part.type === "tool-result"),
+        ).toMatchObject(expectedResult);
+        snapshotIndex += 1;
+      }
+      expect(snapshotIndex).toBe(results.length);
+      const latest = terminal ? completed : second;
+      expect(
+        finish.responseMessage.parts.find(
+          (part) => part.type === "tool-result",
+        ),
+      ).toMatchObject(latest);
+      expect(
+        finish.responseMessage.parts.find((part) => part.type === "tool-call"),
+      ).toMatchObject({
+        state: "complete",
+        output: { progress: terminal ? 3 : 2 },
+      });
+      const reload = chatMessageFromPersisted({
+        id: finish.responseMessage.id,
+        role: finish.responseMessage.role,
+        content: structuredClone(
+          chatMessageContentFromMessage(finish.responseMessage),
+        ),
+      });
+      expect(
+        reload.parts.find((part) => part.type === "tool-result"),
+      ).toMatchObject(latest);
+      expect(
+        diffLiveAgainstReload({ live: client.getMessages(), reload: [reload] }),
+      ).toEqual([]);
+    });
+  }
+
   test("snapshot completion replaces partial call arguments without deltas", async () => {
     const partial = {
       type: "tool-call",
@@ -1029,9 +1155,7 @@ describe("snapshot tool-result reconciliation", () => {
           content: `Snapshot ${next.state} result`,
         };
         const expected =
-          previous === undefined ||
-          (previous.state === "streaming" &&
-            (incoming.state === "complete" || incoming.state === "error"))
+          previous === undefined || previous.state === "streaming"
             ? incoming
             : previous;
         const toolCall = {
@@ -1132,13 +1256,12 @@ describe("snapshot tool-result reconciliation", () => {
           expect(visibleCalls.every((call) => !("approval" in call))).toBe(
             true,
           );
+          const selectedState =
+            selected?.state === "streaming" ? "complete" : selected?.state;
           expect(visibleCalls).toMatchObject([
             {
               id: toolCall.id,
-              state:
-                selected === undefined || selected.state === "streaming"
-                  ? "input-complete"
-                  : selected.state,
+              state: selectedState ?? "input-complete",
               ...(selected === undefined ? {} : { output: selected.content }),
             },
           ]);
