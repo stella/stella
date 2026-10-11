@@ -86,11 +86,7 @@ export const checkModelDefaultsLedger = ({
     for (const provider of AI_PROVIDERS) {
       const entry = ledger[task][provider];
       if (entry.kind === "unsupported") {
-        if (
-          task !== "pdf" ||
-          provider !== "mistral" ||
-          entry.reason !== "document-input-unsupported"
-        ) {
+        if (task !== "pdf" || provider !== "mistral") {
           errors.push(
             `${task}/${provider}: unsupported defaults require an existing document-input exception`,
           );
