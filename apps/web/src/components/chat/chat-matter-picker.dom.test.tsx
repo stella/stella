@@ -14,6 +14,7 @@ const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
 const { workspacesNavigationOptions } =
   await import("@/lib/workspaces/queries");
+const { toSafeId } = await import("@/lib/safe-id");
 const { COMPOSER_LIST_VIEWPORT_CLASS_NAME } =
   await import("./composer-submenu-search");
 const { ChatMatterPicker } = await import("./chat-matter-picker");
@@ -42,7 +43,9 @@ const workspaces = Array.from({ length: MATTER_COUNT }, (_, index) => ({
   client: null,
   clientId: null,
   color: null,
-  defaultViewId: `view_${index}`,
+  defaultViewId: toSafeId<"workspaceView">(
+    `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
+  ),
   id: `workspace_${index}`,
   lastActivityAt: new Date("2026-07-30T12:00:00.000Z"),
   name: `Matter ${index}`,
