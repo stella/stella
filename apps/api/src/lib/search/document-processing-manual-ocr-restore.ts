@@ -182,7 +182,9 @@ export const restoreManualOcrRunAfterProjectionLoss = async ({
                 attemptCount: documentProcessingRuns.attemptCount,
               })
               .from(documentProcessingRuns),
-          where: restorableRunFilter(),
+          where:
+            restorableRunFilter() ??
+            panic("Missing manual OCR restore predicate"),
         })
       : null;
     if (locked?.status === "busy") {
