@@ -19,6 +19,7 @@ const rateEntryParamsSchema = workspaceParams({
 
 const deleteRateEntry = createSafeHandler(
   {
+    contract: "patch",
     description:
       "Delete one person, role, or table-default rate line (hourly rate and effective dates) from " +
       "a rate table, leaving the table and its other lines in place. Use " +

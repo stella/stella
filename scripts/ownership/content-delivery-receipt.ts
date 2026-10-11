@@ -17,7 +17,7 @@ export default {
         reason: "Records a receipt after the content-grant audit write.",
       },
       {
-        path: "apps/api/src/lib/audit-log.ts",
+        path: "apps/api/src/lib/db/audit-recording.ts",
         reason: "Records a receipt after a content-access audit write.",
       },
       {

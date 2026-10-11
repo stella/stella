@@ -13,6 +13,7 @@ const listEntityLinksParamsSchema = workspaceParams({
 
 const listEntityLinks = createSafeHandler(
   {
+    contract: "patch",
     description:
       "List every link one task has, in both directions, each with the " +
       "entity at the other end and its kind. Change them with " +
