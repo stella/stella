@@ -440,8 +440,8 @@ const vocabularyFor = (
  * ordinary paragraphs under a `NOTES` heading and the generic column mixes
  * marked notes with notes set inline, so neither proves a note boundary.
  * The citation column holds another column's markup and is read by what it
- * carries: the anonymized conversion's divisions, or Columbia's note bodies
- * and cross references.
+ * carries: the anonymized conversion's divisions, or Columbia's note bodies.
+ * Added citation links establish no boundary around otherwise unmarked notes.
  */
 const noteBoundaries = (
   format: CourtListenerHtmlFormat,
@@ -455,9 +455,8 @@ const noteBoundaries = (
     case "html":
       return "layout";
     case "html_with_citations":
-      return $(
-        "div.courtcasedochead, div.courtcasedocbody, footnote_body, cross_reference",
-      ).length > 0
+      return $("div.courtcasedochead, div.courtcasedocbody, footnote_body")
+        .length > 0
         ? "markup"
         : "layout";
     default: {
