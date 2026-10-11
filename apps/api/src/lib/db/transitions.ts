@@ -42,6 +42,11 @@ export type TransitionSpec = {
 };
 
 type ScopedStateTable = PgTable;
+
+/** The declared state column of a transition table; a missing column is a programming error. */
+const declaredStateColumn = (table: PgTable, column: string) =>
+  getColumns(table)[column] ??
+  panic("Declared transition state column is missing");
 type ColumnKey<TTable extends PgTable> = keyof TTable["_"]["columns"] & string;
 type StateValue<
   TTable extends ScopedStateTable,
@@ -574,7 +579,7 @@ export const defineNullableScopedTransitions = <
   >,
 ) => {
   const spec = defineScopedTransitions(options);
-  const state = getColumns(options.table)[options.stateColumn];
+  const state = declaredStateColumn(options.table, options.stateColumn);
   if (state.notNull) {
     panic("A nullable transition requires a nullable state column");
   }
@@ -626,7 +631,7 @@ export const transitionNullableScopedCount = async <
   to: StateValue<NoInfer<TTable>, NoInfer<TState>> | null;
   recordTransitionAuditEvent: (tx: TTx, count: number) => void | Promise<void>;
 }) => {
-  const state = getColumns(spec.table)[spec.stateColumn];
+  const state = declaredStateColumn(spec.table, spec.stateColumn);
   if (to !== null && !isScopedStateValue(spec.table, spec.stateColumn, to)) {
     panic("Unknown nullable transition target");
   }
