@@ -267,7 +267,7 @@ for (const taskName of ["typecheck", "//#typecheck:repo"] as const) {
           expect(artifacts.size).toBeGreaterThan(0);
         }
       } finally {
-        server.stop(true);
+        await server.stop(true);
         rmSync(directory, { recursive: true, force: true });
       }
     }, 30_000);
