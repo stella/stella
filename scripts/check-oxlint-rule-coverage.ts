@@ -166,16 +166,23 @@ export const repositoryRules = async () => {
   return { ruleIds: ruleIds.toSorted(), registeredRuleIds };
 };
 
+// Cases spawn real oxlint processes. A slow CI run measured an observed p99 of
+// 5.002s (censored by the default timeout) and a passing maximum of 15.814s.
+// Allow 30s per case for subprocess startup and runner contention, without retries.
 export const CUSTOM_LINT_TEST_ARGS = [
   "test",
+  "--timeout",
+  "30000",
   "./.oxlint-plugins/__tests__",
 ] as const;
 
-const main = async (): Promise<number> => {
+export const checkRuleCoverage = async (
+  spawnTests = Bun.spawnSync,
+): Promise<number> => {
   const directory = mkdtempSync(path.join(tmpdir(), "oxlint-rule-coverage-"));
   const coveragePath = path.join(directory, "coverage.jsonl");
   try {
-    const tests = Bun.spawnSync([process.execPath, ...CUSTOM_LINT_TEST_ARGS], {
+    const tests = spawnTests([process.execPath, ...CUSTOM_LINT_TEST_ARGS], {
       cwd: repoRoot,
       env: { ...process.env, OXLINT_RULE_COVERAGE_PATH: coveragePath },
       stdout: "inherit",
@@ -207,5 +214,5 @@ const main = async (): Promise<number> => {
 };
 
 if (import.meta.main) {
-  process.exitCode = await main();
+  process.exitCode = await checkRuleCoverage();
 }
