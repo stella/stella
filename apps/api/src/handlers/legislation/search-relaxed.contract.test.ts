@@ -25,7 +25,6 @@ import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client
 import { readServingCorpusIndexGenerationTx } from "@/api/lib/legal-search/corpus-index-generation-store";
 import {
   CORPUS_INDEX_MANIFESTS,
-  corpusIndexConfigFromManifest,
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { HIGHLIGHT_COPIES_PER_PASSAGE } from "@/api/lib/legal-search/corpus-index-pagination";
@@ -46,6 +45,7 @@ import type {
 } from "@/api/lib/legislation-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
 import { encodeCursor } from "@/api/lib/search/cursor";
+import { corpusFixtureIndexConfig } from "@/api/tests/helpers/corpus-fixture-index";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestPglite,
@@ -280,7 +280,7 @@ describe.skipIf(!runEngineTests)(
       );
 
       const created = await corpusClient.createIndex(
-        corpusIndexConfigFromManifest(MANIFEST, INDEX_ID),
+        corpusFixtureIndexConfig(MANIFEST, INDEX_ID),
         "unobserved",
       );
       if (created.isErr()) {
