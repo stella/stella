@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { inspectAppManifest } from "./app-guards";
-import { CITATION_GRAPH_APP } from "./apps/manifest";
+import { MCP_APPS } from "./apps/manifest";
 import { DEFAULT_MCP_TOOL_DEFINITIONS } from "./static-tool-definitions";
 import type { McpToolDefinition } from "./tool-types";
 
@@ -60,9 +60,9 @@ describe("presentation app tool audiences", () => {
   test("citation graph's linked and callable tools satisfy the app contract", () => {
     expect(
       inspectAppManifest({
-        apps: [CITATION_GRAPH_APP],
+        apps: MCP_APPS,
         tools: DEFAULT_MCP_TOOL_DEFINITIONS,
-        directories: [CITATION_GRAPH_APP.directory],
+        directories: MCP_APPS.map(({ directory }) => directory),
       }),
     ).toEqual([]);
   });
