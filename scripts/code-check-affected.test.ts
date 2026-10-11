@@ -17,6 +17,7 @@ import {
 } from "../packages/scripts/src/code-quality-partition";
 import {
   ALL_WORKSPACE_CACHE_INPUTS,
+  WORKSPACE_TYPECHECK_CACHE_INPUTS,
   CommandFailedError,
   DEPENDENCY_CACHE_INPUTS,
   failureExitCode,
@@ -612,7 +613,7 @@ describe("Turbo cache input contract", () => {
     const tasks = turboTasks();
 
     expect(taskInputs(tasks, "typecheck").filter(isRootInput)).toEqual(
-      [...ALL_WORKSPACE_CACHE_INPUTS].toSorted(),
+      [...WORKSPACE_TYPECHECK_CACHE_INPUTS].toSorted(),
     );
     expect(taskInputs(tasks, "//#typecheck:repo").filter(isRootInput)).toEqual(
       [
