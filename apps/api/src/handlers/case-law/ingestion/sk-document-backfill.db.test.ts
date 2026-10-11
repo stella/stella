@@ -550,13 +550,13 @@ if (!databaseUrl || !runPostgresTests) {
     });
 
     for (const changed of ["text revision", "document URL"] as const) {
-      test(`a stale ${changed} cannot prioritize the refreshed decision`, async () => {
-        const oldDocumentUrl = `https://example.test/stale-${suffix}.pdf`;
+      test(`demand for an earlier ${changed} does not prioritize the current one`, async () => {
+        const oldDocumentUrl = `https://example.test/earlier-${suffix}.pdf`;
         const currentDocumentUrl = `https://example.test/current-${suffix}.pdf`;
         const expectedCurrentDocumentUrl =
           changed === "text revision" ? oldDocumentUrl : currentDocumentUrl;
         const id = await insertDecision({
-          caseNumber: `stale-request-${changed}-${suffix}`,
+          caseNumber: `earlier-request-${changed}-${suffix}`,
           fulltext: null,
           documentUrl: oldDocumentUrl,
           contentHash: "old-content-revision",

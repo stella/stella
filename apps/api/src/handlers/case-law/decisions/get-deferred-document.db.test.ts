@@ -233,7 +233,11 @@ test.each([
           documentAst: { blocks: [{ id: "fetched-paragraph" }] },
           hasDocument: true,
           documentPending: false,
-          metadata: storedMetadata,
+          metadata: {},
+          textFields: {
+            abstract: { type: "present", text: storedMetadata.abstract },
+            headnote: { type: "present", text: storedMetadata.headnote },
+          },
           sections: initialSections,
           citationsFrom: [{ id: citationId }],
           source: { allowsDerivedAi: true },
