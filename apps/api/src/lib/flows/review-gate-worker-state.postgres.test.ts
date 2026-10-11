@@ -200,7 +200,7 @@ if (!databaseUrl || !enabled) {
           });
           const readyAt = state.steps.at(0)?.finishedAt;
           if (readyAt === null || readyAt === undefined) {
-            return panic("Completed step has no finish clock");
+            panic("Completed step has no finish clock");
           }
           await db
             .update(flowRuns)

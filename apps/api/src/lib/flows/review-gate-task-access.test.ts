@@ -11,7 +11,10 @@ import {
 } from "@/api/lib/flows/review-gate-task";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { createTestState } from "@/api/tests/helpers/test-state";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const organizationId = mintAuthProviderId<"organization">();
 const userId = mintAuthProviderId<"user">();
@@ -25,8 +28,7 @@ describe("linked task flow admission", () => {
             const restoreMode = setRuntimeModeForTesting({
               mode: RUNTIME_MODE.strict,
             });
-            const previous = env.FEATURE_FLOWS;
-            env.FEATURE_FLOWS = deploymentEnabled;
+            testState.setConfig("FEATURE_FLOWS", deploymentEnabled);
             try {
               const database = createScopedDbMock(
                 {},
@@ -74,7 +76,6 @@ describe("linked task flow admission", () => {
                 });
               }
             } finally {
-              env.FEATURE_FLOWS = previous;
               restoreMode();
             }
           });

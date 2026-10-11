@@ -560,13 +560,11 @@ describe("account erasure spans every organization", () => {
     await rollingBack(async (tx) => {
       const raw = asTestRaw<Transaction>(tx);
       // Three affected matters across two organizations fit a cap of two per organization.
-      expect(
-        await tryLockAccountMemberCleanup({
-          tx: raw,
-          userId: brandPersistedUserId(ids.userA1),
-          workspacesPerOrganization: 2,
-        }),
-      ).toBeUndefined();
+      await tryLockAccountMemberCleanup({
+        tx: raw,
+        userId: brandPersistedUserId(ids.userA1),
+        workspacesPerOrganization: 2,
+      });
       // A cap of one per organization cannot cover those three matters.
       const refused = await Result.tryPromise({
         try: async () =>

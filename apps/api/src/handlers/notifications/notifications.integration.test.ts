@@ -701,7 +701,7 @@ test("revoking flows hides retained notifications and linked work until re-grant
     columns: { emailVerified: true },
   });
   if (identity === undefined) {
-    return expect.unreachable("Missing member identity");
+    expect.unreachable("Missing member identity");
   }
   const taskId = createSafeId<"entity">();
   const runId = createSafeId<"flowRun">();
@@ -710,7 +710,7 @@ test("revoking flows hides retained notifications and linked work until re-grant
   );
   const hiddenReadId = hiddenIds.at(0);
   if (hiddenReadId === undefined) {
-    return expect.unreachable("Missing notification fixture");
+    expect.unreachable("Missing notification fixture");
   }
   seeded.push(...hiddenIds);
   const grantWhere = and(
@@ -806,7 +806,7 @@ test("revoking flows hides retained notifications and linked work until re-grant
         }),
       );
       if (!("items" in page)) {
-        return expect.unreachable(`Work queue failed: ${JSON.stringify(page)}`);
+        expect.unreachable(`Work queue failed: ${JSON.stringify(page)}`);
       }
       return page.items.some(({ entityId }) => entityId === taskId);
     };

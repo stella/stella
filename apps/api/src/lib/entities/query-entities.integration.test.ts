@@ -3,7 +3,6 @@ import {
   afterAll,
   afterEach,
   beforeEach,
-  beforeAll,
   describe,
   expect,
   setDefaultTimeout,
@@ -34,6 +33,7 @@ import {
 } from "@/api/lib/entity-filters";
 import { isRecord } from "@/api/lib/type-guards";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
+import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -50,9 +50,11 @@ setDefaultTimeout(120_000);
 let testDb: TestDatabase;
 let ids: TestIds;
 let safeDb: SafeDb;
+const testState = createTestState({ file: import.meta.path, config: env });
+
 const sessionIds: SafeId<"desktopEditSession">[] = [];
 
-beforeAll(async () => {
+testState.beforeAll(async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
   ids = fixture.ids;
@@ -144,8 +146,7 @@ const readActiveEditor = async () => {
 
 describe("entity active edit indicators", () => {
   test("ordinary entity windows remain available with signal deployment disabled", async () => {
-    const previous = env.FEATURE_SIGNALS;
-    env.FEATURE_SIGNALS = false;
+    testState.setConfig("FEATURE_SIGNALS", false);
     const restore = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
     try {
       const result = await queryEntities({
@@ -168,7 +169,6 @@ describe("entity active edit indicators", () => {
         ).toBe(true);
       }
     } finally {
-      env.FEATURE_SIGNALS = previous;
       restore();
     }
   });
@@ -578,7 +578,7 @@ describe("find in table", () => {
     }
   };
 
-  beforeAll(async () => {
+  testState.beforeAll(async () => {
     const tool = { version: 1 as const, type: "manual-input" as const };
     const definitions: {
       content: PropertyContent;

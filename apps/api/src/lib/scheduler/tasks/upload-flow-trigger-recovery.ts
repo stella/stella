@@ -3,7 +3,7 @@ import {
   and,
   asc,
   eq,
-  getTableColumns,
+  getColumns,
   inArray,
   isNotNull,
   lte,
@@ -269,7 +269,7 @@ const settleUploadTriggerClaim = async ({
       panic("Blocking aggregate acquisition returned busy");
     }
     const current = acquired.rows.at(0);
-    if (current === undefined || current.status !== "pending") {
+    if (current?.status !== "pending") {
       return "stale";
     }
     if (
@@ -564,7 +564,7 @@ export const resumeUploadTriggersAfterGrant = async ({
   const page = await readCursorPage(
     tx
       .select({
-        ...getTableColumns(flowUploadTriggerIntents),
+        ...getColumns(flowUploadTriggerIntents),
         retryAtToken: timestampCasToken(flowUploadTriggerIntents.retryAt),
       })
       .from(flowUploadTriggerIntents)
@@ -636,7 +636,7 @@ export const uploadTriggerGrantRepairQuery = ({
 }: UploadTriggerGrantRepairQueryOptions) =>
   database
     .select({
-      ...getTableColumns(flowUploadTriggerIntents),
+      ...getColumns(flowUploadTriggerIntents),
       retryAt: timestampCasToken(flowUploadTriggerIntents.retryAt),
     })
     .from(flowDefinitions)
@@ -714,7 +714,7 @@ const reconcileUploadTriggerGrantState = async ({
     await readCursorPage(
       database
         .select({
-          ...getTableColumns(flowUploadTriggerIntents),
+          ...getColumns(flowUploadTriggerIntents),
           retryAt: timestampCasToken(flowUploadTriggerIntents.retryAt),
         })
         .from(flowUploadTriggerIntents)
@@ -738,7 +738,7 @@ const reconcileUploadTriggerGrantState = async ({
     await readCursorPage(
       database
         .select({
-          ...getTableColumns(flowUploadTriggerIntents),
+          ...getColumns(flowUploadTriggerIntents),
           retryAt: timestampCasToken(flowUploadTriggerIntents.retryAt),
         })
         .from(flowUploadTriggerIntents)

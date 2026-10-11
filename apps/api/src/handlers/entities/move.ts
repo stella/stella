@@ -8,6 +8,7 @@ import type { SafeDb } from "@/api/db/safe-db";
 import { entities, workspaces } from "@/api/db/schema";
 import type { EntityKind } from "@/api/db/schema-validators";
 import { entityRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import { detached } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -219,16 +220,19 @@ export const moveEntityHandler = async function* ({
   const moved = yield* attempt;
   yield* moved;
 
-  Result.tryPromise(
-    async () =>
-      await safeDb(async (tx) => await syncSearchActivity(workspaceId, tx)),
-  ).then((searchAttempt) => {
-    const result = searchAttempt.andThen((value) => value);
-    if (result.isErr()) {
-      observeFailure(result.error, { sink: searchRepairFailure });
-    }
-    return result;
-  });
+  detached(
+    Result.tryPromise(
+      async () =>
+        await safeDb(async (tx) => await syncSearchActivity(workspaceId, tx)),
+    ).then((searchAttempt) => {
+      const result = searchAttempt.andThen((value) => value);
+      if (result.isErr()) {
+        observeFailure(result.error, { sink: searchRepairFailure });
+      }
+      return result;
+    }),
+    "entities-move.search-repair",
+  );
 
   return Result.ok({});
 };

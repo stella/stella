@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 import { and, eq } from "drizzle-orm";
 
 import { CLIENT_MATTER_ADMIN_ROLES } from "@stll/permissions";
@@ -21,8 +21,11 @@ import {
 } from "@/api/lib/feature-access/background";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const db = await getTestDb();
 const tx = asTestRaw<Pick<Transaction, "select">>(db);
@@ -30,7 +33,7 @@ const organizationId = mintAuthProviderId<"organization">();
 const userId = mintAuthProviderId<"user">();
 const workspaceId = createSafeId<"workspace">();
 
-beforeAll(async () => {
+testState.beforeAll(async () => {
   await db.insert(organization).values({
     id: organizationId,
     name: "Background gates",
@@ -83,11 +86,10 @@ describe("background feature admission", () => {
         test(`${featureId}: deployment=${String(deploymentEnabled)}, enrolled=${String(enrolled)}`, async () => {
           const flag =
             featureId === "signals" ? "FEATURE_SIGNALS" : "FEATURE_FLOWS";
-          const previousFlag = env[flag];
           const restore = setRuntimeModeForTesting({
             mode: RUNTIME_MODE.strict,
           });
-          env[flag] = deploymentEnabled;
+          testState.setConfig(flag, deploymentEnabled);
           try {
             await db
               .delete(featureEnrolments)
@@ -128,7 +130,6 @@ describe("background feature admission", () => {
               ).toBe(deploymentEnabled && enrolled ? userId : null);
             }
           } finally {
-            env[flag] = previousFlag;
             restore();
           }
         });

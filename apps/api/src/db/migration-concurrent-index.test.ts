@@ -2053,14 +2053,18 @@ const isReplaySafeBeforeSplit = (
   const dropped = droppedObjects(earlier);
   const alter = ALTER_TABLE.exec(statement)?.groups;
   if (alter !== undefined) {
-    const table = canonicalRelation(alter["table"] ?? "");
+    const tableCapture = alter["table"];
+    if (tableCapture === undefined) {
+      panic("ALTER TABLE match has no table capture");
+    }
+    const table = canonicalRelation(tableCapture);
     // Every action has to survive on its own: one guarded clause says nothing
     // about the unguarded one beside it.
     return splitTableActions(alter["actions"] ?? "").every((action) => {
       if (REPLAY_SAFE_TABLE_ACTIONS.some((pattern) => pattern.test(action))) {
         // Actions execute in order within the same atomic ALTER statement.
         dropped.push(
-          ...droppedObjects([`ALTER TABLE ${alter["table"]} ${action}`]),
+          ...droppedObjects([`ALTER TABLE ${tableCapture} ${action}`]),
         );
         return true;
       }

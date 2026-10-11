@@ -15,7 +15,7 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { and, eq, getTableColumns, sql } from "drizzle-orm";
+import { and, eq, getColumns, sql } from "drizzle-orm";
 
 import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
 import { SCOUT_KEY } from "@stll/api-contract/signals";
@@ -208,7 +208,7 @@ const readDeadlineClaim = async (runId: SafeId<"documentProcessingRun">) => {
     (
       await testDb
         .select({
-          ...getTableColumns(documentProcessingRuns),
+          ...getColumns(documentProcessingRuns),
           deadlineScoutClaimedAtToken: timestampCasToken(
             documentProcessingRuns.deadlineScoutClaimedAt,
           ),

@@ -38,7 +38,7 @@ export const resumeFeatureAfterGrant = async ({
         return;
       default: {
         featureId satisfies never;
-        return panic("Unknown self-serve feature");
+        panic("Unknown self-serve feature");
       }
     }
   });

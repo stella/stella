@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { deepEquals } from "bun";
-import { and, eq, getTableColumns, gte, sql } from "drizzle-orm";
+import { and, eq, getColumns, gte, sql } from "drizzle-orm";
 
 import { DAY_IN_MS, Temporal } from "@stll/time";
 
@@ -152,7 +152,7 @@ const revalidateUploadIntent = async ({
   const receipt = (
     await tx
       .select({
-        ...getTableColumns(flowUploadTriggerIntents),
+        ...getColumns(flowUploadTriggerIntents),
         retryAtToken: timestampCasToken(flowUploadTriggerIntents.retryAt),
       })
       .from(flowUploadTriggerIntents)

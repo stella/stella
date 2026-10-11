@@ -3,7 +3,7 @@ import {
   and,
   asc,
   eq,
-  getTableColumns,
+  getColumns,
   inArray,
   lt,
   sql,
@@ -1100,7 +1100,7 @@ const runCreateDocumentStep = async ({
     broadcastUpdate,
     enqueueStep,
   };
-  let admissionPaused = false;
+  const admission = { paused: false };
   const created = await Result.tryPromise({
     try: async () =>
       await createEntity({
@@ -1126,7 +1126,7 @@ const runCreateDocumentStep = async ({
               userId: actorUserId,
             }))
           ) {
-            admissionPaused = true;
+            admission.paused = true;
             tx.rollback();
           }
         },
@@ -1138,10 +1138,7 @@ const runCreateDocumentStep = async ({
             ...completionArgs,
             output: { kind: "create-document", entityId: document.entityId },
           });
-          if (
-            completion.result === null ||
-            completion.result.status !== "completed"
-          ) {
+          if (completion.result?.status !== "completed") {
             tx.rollback();
           }
         },
@@ -1149,15 +1146,14 @@ const runCreateDocumentStep = async ({
     catch: (cause) => cause,
   });
   if (
-    (admissionPaused ||
+    (admission.paused ||
       completion.result === null ||
       (completion.result !== undefined &&
-        completion.result !== null &&
         completion.result.status !== "completed")) &&
     created.isErr() &&
     created.error instanceof TransactionRollbackError
   ) {
-    if (admissionPaused) {
+    if (admission.paused) {
       return { status: "paused" };
     }
     if (
@@ -1305,7 +1301,7 @@ const publishCompletedStep = async (
 ): Promise<void> => {
   const advance = advanceAfterStep({ stepIndex, stepCount });
 
-  if (completed === null || completed.status !== "completed") {
+  if (completed?.status !== "completed") {
     return;
   }
   const { payload, pings } = completed;
@@ -1846,7 +1842,7 @@ const lockRunAndCurrentStep = async (
   }
   const steps = await tx
     .select({
-      ...getTableColumns(flowRunSteps),
+      ...getColumns(flowRunSteps),
       startedAtToken: timestampCasToken(flowRunSteps.startedAt),
     })
     .from(flowRunSteps)

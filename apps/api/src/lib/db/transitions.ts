@@ -575,9 +575,6 @@ export const defineNullableScopedTransitions = <
 ) => {
   const spec = defineScopedTransitions(options);
   const state = getColumns(options.table)[options.stateColumn];
-  if (state === undefined) {
-    panic("Declared transition state column is missing");
-  }
   if (state.notNull) {
     panic("A nullable transition requires a nullable state column");
   }
@@ -630,9 +627,6 @@ export const transitionNullableScopedCount = async <
   recordTransitionAuditEvent: (tx: TTx, count: number) => void | Promise<void>;
 }) => {
   const state = getColumns(spec.table)[spec.stateColumn];
-  if (state === undefined) {
-    panic("Declared transition state column is missing");
-  }
   if (to !== null && !isScopedStateValue(spec.table, spec.stateColumn, to)) {
     panic("Unknown nullable transition target");
   }

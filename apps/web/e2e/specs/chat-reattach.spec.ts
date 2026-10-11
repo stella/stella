@@ -35,7 +35,12 @@ test("reloading a running turn rejoins its answer without duplication", async ({
   await expect(answer).toHaveCount(2);
   const heldAnswer =
     "This mock reply streams back while awaiting an explicit cancellation.";
-  await expect(answer.last()).toHaveText(heldAnswer);
+  // The durable stream can retain a partial batch until Stop. Reload after
+  // visible progress, then compare the replayed prefix before flushing its tail.
+  await expect(answer.last()).toContainText(ANSWER_START);
+  const heldPrefix = await answer.last().textContent();
+  assert.ok(heldPrefix !== null, "The running answer must contain text");
+  expect(heldAnswer.startsWith(heldPrefix)).toBe(true);
   await page.screenshot({ path: test.info().outputPath("before-reload.png") });
   const join = page.waitForResponse(
     (response) =>
@@ -46,12 +51,13 @@ test("reloading a running turn rejoins its answer without duplication", async ({
   expect((await join).ok()).toBe(true);
   await expect(answer).toHaveCount(2);
   await expect(answer.first()).toHaveText(uninterrupted);
-  await expect(answer.last()).toHaveText(heldAnswer, { timeout: 30_000 });
+  await expect(answer.last()).toContainText(heldPrefix, { timeout: 30_000 });
   await page.screenshot({ path: test.info().outputPath("after-catchup.png") });
   await expect(stop).toBeVisible();
   await stop.click();
   await expect(stop).toBeHidden({ timeout: 30_000 });
   await expect(transcript).toContainText("Stopped");
+  await expect(answer.last()).toHaveText(heldAnswer);
   await expect(transcript.getByRole("button", { name: "Resend" })).toHaveCount(
     0,
   );

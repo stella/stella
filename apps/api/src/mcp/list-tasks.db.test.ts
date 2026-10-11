@@ -303,7 +303,7 @@ test("ordinary task detail omits related flow reviews after revoke in HTTP and M
     columns: { emailVerified: true },
   });
   if (identity === undefined) {
-    return expect.unreachable("Missing member identity");
+    expect.unreachable("Missing member identity");
   }
   const grantWhere = and(
     eq(featureEnrolments.organizationId, ids.orgA),
@@ -392,22 +392,20 @@ test("ordinary task detail omits related flow reviews after revoke in HTTP and M
         asTestRaw<Parameters<typeof readTaskById.handler>[0]>(httpContext),
       );
       if (!("children" in detail)) {
-        return expect.unreachable(
-          `Task read failed: ${JSON.stringify(detail)}`,
-        );
+        expect.unreachable(`Task read failed: ${JSON.stringify(detail)}`);
       }
       const links = await listEntityLinks.handler(
         asTestRaw<Parameters<typeof listEntityLinks.handler>[0]>(httpContext),
       );
       if (!Array.isArray(links)) {
-        return expect.unreachable(`Link read failed: ${JSON.stringify(links)}`);
+        expect.unreachable(`Link read failed: ${JSON.stringify(links)}`);
       }
       const mcp = await MATTER_TOOL_HANDLERS.list_tasks({
         args: { task_id: taskA1 },
         context,
       });
       if (!("egress" in mcp) || !("task" in mcp.payload)) {
-        return expect.unreachable(`MCP detail failed: ${JSON.stringify(mcp)}`);
+        expect.unreachable(`MCP detail failed: ${JSON.stringify(mcp)}`);
       }
       return {
         children: detail.children.map(({ id }) => id),

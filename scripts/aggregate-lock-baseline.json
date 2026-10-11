@@ -3151,9 +3151,9 @@
   },
   {
     "file": "apps/api/src/lib/flows/flow-executor.ts",
-    "fingerprint": "4a10eb724d1d95ce2837af3b769afddb0e3fc37eb60fae9b4519de97f7e7e9f9",
+    "fingerprint": "7011ffbb361ac016b08176f861dd1bc0e2cddb5da8d55822e5add8c21ccf8450",
     "count": 1,
-    "reason": "existing acquisition, query changed by #5308; selected step projection now includes the opaque startedAtToken; mode/table/key/predicate identical; migrates with owner extension follow-up"
+    "reason": "existing acquisition, query changed by #5308; selected step projection now includes the opaque startedAtToken and uses the equivalent getColumns API; mode/table/key/predicate identical; migrates with owner extension follow-up"
   },
   {
     "file": "apps/api/src/lib/flows/flow-executor.ts",

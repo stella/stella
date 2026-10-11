@@ -77,7 +77,7 @@ export const syncFlowScheduleTriggerInTransaction = async ({
   }
   const definition = acquired.rows.at(0);
   const jobId = flowScheduleJobId(definitionId);
-  if (definition === undefined || definition.trigger.type !== "schedule") {
+  if (definition?.trigger.type !== "schedule") {
     await writeSchedulerBookkeeping({
       type: "delete-source",
       db: tx,

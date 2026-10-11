@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { and, eq, getTableColumns, sql, type SQL } from "drizzle-orm";
+import { and, eq, getColumns, sql, type SQL } from "drizzle-orm";
 
 import type { ScopedTransaction } from "@/api/db/safe-db";
 import type {
@@ -134,7 +134,7 @@ export async function mutateRecoveryClaim(
         .set({ retryAt: op.retryAt })
         .where(op.where)
         .returning({
-          ...getTableColumns(op.table),
+          ...getColumns(op.table),
           claimToken: timestampCasToken(op.table.retryAt),
         });
     case "upload-defer":
@@ -188,7 +188,7 @@ export async function mutateRecoveryClaim(
       const claimed = await readBounded(
         op.tx
           .select({
-            ...getTableColumns(op.table),
+            ...getColumns(op.table),
             deadlineScoutClaimedAtToken: timestampCasToken(
               op.table.deadlineScoutClaimedAt,
             ),

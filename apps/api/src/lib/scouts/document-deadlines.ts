@@ -70,12 +70,13 @@ const DEADLINE_SCOUT_ERROR_CODE = {
   FEATURE_NOT_GRANTED: "feature_not_granted",
   OBSERVATION_FAILED: "observation_failed",
   SOURCE_SUPERSEDED: "source_superseded",
+  STALE_CLAIM: "stale_claim",
 } as const;
 
 class DocumentDeadlineScoutError extends TaggedError(
   "DocumentDeadlineScoutError",
 )<{
-  code: string;
+  code: (typeof DEADLINE_SCOUT_ERROR_CODE)[keyof typeof DEADLINE_SCOUT_ERROR_CODE];
   message: string;
   cause: unknown;
 }> {}
@@ -167,11 +168,13 @@ const extractDeadlines = async ({
           actorUserId: userId,
         });
         if (decision !== "current") {
-          const code = {
-            "not-granted": DEADLINE_SCOUT_ERROR_CODE.FEATURE_NOT_GRANTED,
-            stale_claim: "stale_claim",
-            superseded: DEADLINE_SCOUT_ERROR_CODE.SOURCE_SUPERSEDED,
-          }[decision];
+          const code = (
+            {
+              "not-granted": DEADLINE_SCOUT_ERROR_CODE.FEATURE_NOT_GRANTED,
+              stale_claim: DEADLINE_SCOUT_ERROR_CODE.STALE_CLAIM,
+              superseded: DEADLINE_SCOUT_ERROR_CODE.SOURCE_SUPERSEDED,
+            } as const
+          )[decision];
           throw new DocumentDeadlineScoutError({
             code,
             message: "Deadline observation is no longer admitted",
@@ -212,14 +215,19 @@ const extractDeadlines = async ({
       case DEADLINE_SCOUT_ERROR_CODE.FEATURE_NOT_GRANTED:
         onRefused({ type: "feature_not_granted" });
         break;
-      case "stale_claim":
+      case DEADLINE_SCOUT_ERROR_CODE.STALE_CLAIM:
         onRefused({ type: "stale_claim" });
         break;
       case DEADLINE_SCOUT_ERROR_CODE.SOURCE_SUPERSEDED:
         onRefused({ type: "source_superseded" });
         break;
-      default:
+      case DEADLINE_SCOUT_ERROR_CODE.OBSERVATION_FAILED:
+      case null:
         onRefused(deadlineScanAdmission(error));
+        break;
+      default:
+        refusal satisfies never;
+        panic("Unknown deadline observation refusal");
     }
     // An observation reports its failure by rejecting, as the model call
     // itself does; a refused scan is such a failure.
@@ -751,7 +759,7 @@ export const runDocumentDeadlineScout = async ({
   };
   // The config is read before the scout run opens: an organization barred
   // from the instance provider without a key of its own cannot observe.
-  let sourceSettled = false;
+  const sourceSettlement = { settled: false };
   const observed = Result.flatten(
     await Result.tryPromise(async () => {
       const orgAIConfigResult = await loadOrgAISettings(db, {
@@ -882,7 +890,7 @@ export const runDocumentDeadlineScout = async ({
             return decision === "current";
           },
           settle: async (tx, admission) => {
-            sourceSettled = await settleAcceptedDeadlineObservation({
+            sourceSettlement.settled = await settleAcceptedDeadlineObservation({
               tx,
               run,
               scan,
@@ -905,7 +913,7 @@ export const runDocumentDeadlineScout = async ({
   }
 
   if (
-    sourceSettled ||
+    sourceSettlement.settled ||
     observed.value.outcome === "stale" ||
     scan.admission.type === "stale_claim"
   ) {

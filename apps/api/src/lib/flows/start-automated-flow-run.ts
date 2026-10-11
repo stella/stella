@@ -353,7 +353,7 @@ export const startAutomatedFlowRun = async (
         break;
       default:
         disposition satisfies never;
-        return panic("Unknown automated run insertion disposition");
+        panic("Unknown automated run insertion disposition");
     }
 
     // Enqueue after the rows commit. A failure here leaves the run `pending`; the

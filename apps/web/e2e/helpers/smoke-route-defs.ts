@@ -83,7 +83,9 @@ export const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
   }),
   staticRoute("/settings/organization/members"),
   staticRoute("/settings/organization/usage"),
-  staticRoute("/inbox"),
+  staticRoute("/inbox", {
+    expectation: { kind: "redirectsTo", to: "/chat" },
+  }),
   staticRoute("/workspaces"),
   {
     template: "/chat/workspaces/$workspaceId/$threadId",
