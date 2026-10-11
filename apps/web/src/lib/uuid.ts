@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { v7 as uuidv7 } from "uuid";
+import { v4 as uuidv4, v7 as uuidv7 } from "uuid";
 
 type Uuid = `${string}-${string}-${string}-${string}-${string}`;
 
@@ -16,6 +16,15 @@ export const createUuid = (): Uuid => {
 };
 
 const RANDOM_VALUE_BYTES = 16;
+
+/** Create an unpredictable nonce for protocols that require UUID syntax. */
+export const createRandomUuid = (): Uuid => {
+  const value = uuidv4();
+  if (!isUuid(value)) {
+    panic("uuid v4 generator returned an invalid UUID");
+  }
+  return value;
+};
 
 /** Create a full-entropy value for nonces and other opaque uniqueness tokens. */
 export const createRandomValue = () => {

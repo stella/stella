@@ -25,8 +25,12 @@ type RunGatedTestsOptions = {
   // them instead of skipping every suite.
   requiredEnv: readonly string[];
   script: GatedTestScript;
+  preload?: string | undefined;
   selection?: string | undefined;
   exclusiveTestPaths?: ReadonlySet<string> | undefined;
+  shardTestFiles?:
+    | ((testFiles: readonly string[]) => readonly string[])
+    | undefined;
   validateTestPlan?:
     | ((apiRoot: string, testPaths: readonly string[]) => Promise<void>)
     | undefined;
@@ -40,6 +44,7 @@ type RunTestBatchesOptions = {
   cwd: string;
   gate: string;
   gateValue: string;
+  preload?: string | undefined;
   spawn?: (options: {
     cmd: string[];
     cwd: string;
@@ -60,6 +65,7 @@ export const runTestBatches = async ({
   cwd,
   gate,
   gateValue,
+  preload,
   spawn = (options) => Bun.spawn(options),
 }: RunTestBatchesOptions): Promise<number> => {
   const hasReporterOutfile = bunArguments.some(
@@ -90,6 +96,7 @@ export const runTestBatches = async ({
             "--max-concurrency=1",
             "--preload",
             "./src/tests/setup-env.ts",
+            ...(preload ? ["--preload", preload] : []),
             ...(reporterPlan.argumentsByBatch.at(index) ?? []),
           ],
           testFiles: testBatch,
@@ -164,9 +171,11 @@ export const discoverGatedTestFiles = async ({
 export const runGatedTests = async ({
   requiredEnv,
   script,
+  preload,
   selection,
   exclusiveTestPaths = new Set(),
   validateTestPlan,
+  shardTestFiles,
 }: RunGatedTestsOptions): Promise<number> => {
   const runner = packageJson.ciGateTestRunners[script];
   const missing = requiredEnv.filter((name) => !process.env[name]);
@@ -197,15 +206,23 @@ export const runGatedTests = async ({
     plannedFiles,
     normalizeAbsoluteTestPatterns(patterns, apiRoot),
   );
-  const testFiles = plannedFiles.filter(
+  const matchingFiles = plannedFiles.filter(
     (testFile) => selectedPaths === null || selectedPaths.has(testFile),
   );
 
-  if (testFiles.length === 0) {
+  if (matchingFiles.length === 0) {
     console.error(
       `No test files declaring ${runner.gate} matched the selection.`,
     );
     return 1;
+  }
+
+  const testFiles = shardTestFiles?.(matchingFiles) ?? matchingFiles;
+  if (testFiles.length === 0) {
+    console.log(
+      `Empty ${runner.gate} shard; other shards cover this selection.`,
+    );
+    return 0;
   }
 
   // The same derived sources the package `test` script generates first: the
@@ -241,5 +258,6 @@ export const runGatedTests = async ({
     cwd: apiRoot,
     gate: runner.gate,
     gateValue: runner.gateValue,
+    preload,
   });
 };

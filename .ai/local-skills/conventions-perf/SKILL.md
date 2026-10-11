@@ -19,7 +19,10 @@ up as a reviewable diff in the PR. Six guards exist today:
   per-request DB query budget.
 - **Bundle baseline** (`scripts/bundle-baseline.ts` +
   `scripts/bundle-baseline.json`): gzipped size per vendor/entry/route chunk
-  group, wired into the web-build CI job via `--check`.
+  group, reported by the web-build CI job via `--check` and listed nightly by
+  `bundle-size-nightly.yml`. Growth past the headroom is a warning annotation
+  plus a job-summary table, never a failing check; it fails only when it cannot
+  measure (missing build or baseline).
 - **React Compiler bailout guard** (`scripts/rc-bailouts.ts` +
   `scripts/react-compiler-bailouts.json`): tracks every component the compiler
   cannot memoize, so a bailout losing its manual `useMemo`/`useCallback` fails
@@ -129,10 +132,12 @@ query counter wiring before trusting the route's N+1 budget again.
 
 ### Bundle group over budget
 
-The bundle baseline fails when a named group (`entry`, a `vendor-*` chunk, or
-`routes`/`largest-route`) exceeds its committed gzip size by more than 3% (or
-1 KiB, whichever is larger, per `HEADROOM`/`HEADROOM_FLOOR_BYTES`). Two
-specific failure shapes:
+The bundle report warns (it does not block) when a named group (`entry`, a
+`vendor-*` chunk, or `routes`/`largest-route`) exceeds its committed gzip size
+by more than 3% (or 1 KiB, whichever is larger, per
+`HEADROOM`/`HEADROOM_FLOOR_BYTES`). Treat the warning as work: find what grew
+and trim it, or re-measure with `--write-baseline` and a rationale. Two specific
+shapes to look for:
 
 - **A dependency escaped its `manualChunks` bucket** and landed in `entry`
   (paid on every cold visit) instead of a lazy route chunk or `vendor-*`

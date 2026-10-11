@@ -10,6 +10,10 @@ import {
 import { env } from "@/api/env";
 import { toSafeId } from "@/api/lib/branded-types";
 import { isRecord } from "@/api/lib/type-guards";
+import {
+  claimFixtureDeviceProof,
+  createDesktopDeviceSigner,
+} from "@/api/tests/helpers/desktop-device-proof";
 import { createTestState } from "@/api/tests/helpers/test-state";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -27,9 +31,19 @@ const readAs = async (caller: Caller, organizationId = ORGANIZATION_ID) => {
     {},
     { featureAccess: { identity: caller } },
   );
+  const device = await createDesktopDeviceSigner();
   const endpoint = createDesktopFeatureAccessReadEndpoint({
-    authorizeAccount: async () =>
+    authorizeAccount: async (request) =>
       Result.ok({
+        consumedProof: await claimFixtureDeviceProof({
+          request: await device.signRequest({
+            request,
+            credential: "fixture-credential",
+          }),
+          deviceJkt: device.deviceJkt,
+          keyId: "key_test",
+          credential: "fixture-credential",
+        }),
         organizationId: toSafeId<"organization">(organizationId),
         userId: toSafeId<"user">("user_test"),
         keyId: "key_test",

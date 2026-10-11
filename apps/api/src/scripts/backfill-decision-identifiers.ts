@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * Durable typed-identifier rollout.
  *
@@ -8,7 +9,7 @@
  * legacy resolver bridge, in a later release.
  */
 
-import { panic } from "better-result";
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
 import {
   runDecisionIdentifierBackfill,
@@ -61,10 +62,12 @@ if (modeArgs.at(0) === APPLY_MODE) {
   process.exit(0);
 }
 
-const { rootDb } = await openCaseLawReadOnlySession();
-const verification = await verifyDecisionIdentifierBackfill(
-  rootDb,
-  requestedBatchSize,
-);
-console.log(JSON.stringify(verification, null, 2));
-process.exit(verification.status === "ready-for-cutover" ? 0 : 2);
+await runScriptWithErrorOutput(async () => {
+  const { rootDb } = await openCaseLawReadOnlySession();
+  const verification = await verifyDecisionIdentifierBackfill(
+    rootDb,
+    requestedBatchSize,
+  );
+  console.log(JSON.stringify(verification, null, 2));
+  process.exit(verification.status === "ready-for-cutover" ? 0 : 2);
+});

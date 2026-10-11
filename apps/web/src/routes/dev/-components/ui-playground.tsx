@@ -207,6 +207,7 @@ import { AIKeyRequiredDialog } from "@/components/require-ai-key";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { ControlSizesPlayground } from "@/routes/dev/-components/control-sizes-playground";
+import { createPlaygroundChatApproval } from "@/routes/dev/-components/playground-chat-approval";
 
 const renderPlaygroundAnchor = ({
   children,
@@ -1673,45 +1674,7 @@ function SharedChatRendererSample() {
         }}
       >
         <ChatApprovalContext
-          value={{
-            activeOrganizationId: "dev-active-organization",
-            alwaysApprovedTools: new Set(),
-            conversationApprovedTools: new Set(),
-            handleAllowInConversation: () => {
-              /* no-op in playground */
-            },
-            handleAlwaysAllow: () => {
-              /* no-op in playground */
-            },
-            handleApprove: () => {
-              /* no-op in playground */
-            },
-            handleDeny: () => {
-              /* no-op in playground */
-            },
-            continueRequestSecret: async () => {
-              /* no-op in playground */
-            },
-            handleRequestSecret: async () =>
-              await Promise.resolve({
-                status: "declined" as const,
-                target: {
-                  type: "mcp-connector" as const,
-                  connectorSlug: "playground",
-                },
-              }),
-            secretAvailabilityKey: "playground-thread",
-            resolveSecretTarget: async () =>
-              await Promise.resolve({
-                available: false,
-                connector: {
-                  connectionId: "sample-connection",
-                  displayName: "Sample connector",
-                  host: "sample.test",
-                  responseDisposition: "normal" as const,
-                },
-              }),
-          }}
+          value={createPlaygroundChatApproval("dev-active-organization")}
         >
           <ChatThreadMessages
             approvalPendingMessageId={null}

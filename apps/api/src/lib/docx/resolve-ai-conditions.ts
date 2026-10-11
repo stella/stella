@@ -17,12 +17,12 @@
  * leaving an agent to infer it from the rendered text.
  */
 
+import type { DecisionUndecidedReason } from "@stll/api-contract/ai-decision-provider";
 import { mapWithConcurrency } from "@stll/concurrency";
 import { evaluateCondition, resolvePath } from "@stll/template-conditions";
 
 import { isRecord } from "@/api/lib/type-guards";
 
-import type { DecisionUndecidedReason } from "../workflow/decisions/decide";
 import { omitSourceBoundValues } from "./ai-visible-values";
 import { findRepeatableContainer } from "./repeatable-paths";
 import type { FieldMeta } from "./types";
@@ -54,7 +54,8 @@ const aiConditionLabel = (field: FieldMeta): string =>
  */
 type AiConditionDecision =
   | { decidedBy: "decision_model"; value: boolean; probability: number }
-  | { decidedBy: "generative_model"; value: boolean };
+  | { decidedBy: "generative_model"; value: boolean }
+  | { decidedBy: "undecided"; reason: DecisionUndecidedReason };
 
 export type AiConditionDecider = (input: {
   prompt: string;
@@ -184,6 +185,15 @@ export const resolveAiConditions = async ({
         label,
         state: "undecided",
         reason: "failed",
+      });
+      continue;
+    }
+    if (decision.decidedBy === "undecided") {
+      conditions.push({
+        path: field.path,
+        label,
+        state: "undecided",
+        reason: decision.reason,
       });
       continue;
     }

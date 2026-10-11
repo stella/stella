@@ -66,6 +66,7 @@ import { healthRoute } from "@/api/handlers/health/routes";
 import { hostedUsageWebhookRoute } from "@/api/handlers/hosted-usage-webhook/routes";
 import { invoicesRoute } from "@/api/handlers/invoices/routes";
 import { legalReaderRoute } from "@/api/handlers/legal-reader/routes";
+import { legalResolveRoute } from "@/api/handlers/legal-resolve/routes";
 import { legislationCorpusRoute } from "@/api/handlers/legislation/corpus-routes";
 import { publicLegislationRoute } from "@/api/handlers/legislation/public-routes";
 import { legislationRoute } from "@/api/handlers/legislation/routes";
@@ -74,10 +75,7 @@ import { handleMcpAppSandboxRequest } from "@/api/handlers/mcp-app-sandbox/route
 import { mcpConnectorsRoute } from "@/api/handlers/mcp-connectors/routes";
 import { mcpRoute } from "@/api/handlers/mcp/routes";
 import { handleMcpPreflightRequest } from "@/api/handlers/mcp/routes-core";
-import {
-  createMcpTransportAddressRateLimitOptions,
-  createMcpTransportRateLimitOptions,
-} from "@/api/handlers/mcp/transport-rate-limit";
+import { createMcpTransportRateLimitOptions } from "@/api/handlers/mcp/transport-rate-limit";
 import { meRoute } from "@/api/handlers/me/routes";
 import { memoriesRoute } from "@/api/handlers/memories/routes";
 import { notificationsRoute } from "@/api/handlers/notifications/routes";
@@ -94,6 +92,7 @@ import { reportsRoute } from "@/api/handlers/reports/routes";
 import { publicSanctionsRoute } from "@/api/handlers/sanctions/public-routes";
 import { savedSearchesRoute } from "@/api/handlers/saved-searches/routes";
 import { savedTimeNarrativesRoute } from "@/api/handlers/saved-time-narratives/routes";
+import { searchHistoryRoute } from "@/api/handlers/search-history/routes";
 import { searchRoute } from "@/api/handlers/search/routes";
 import { sellerProfilesRoute } from "@/api/handlers/seller-profiles/routes";
 import { sharepointRoute } from "@/api/handlers/sharepoint/routes";
@@ -139,6 +138,7 @@ import {
 } from "@/api/lib/browser-origin-guard";
 import { startManagedProviderChecks } from "@/api/lib/chat/managed-provider-checks";
 import {
+  clientAddressConfigurationWarning,
   resolveClientAddress,
   resolveSignupRateLimitClientIp,
   sealEdgeHeaders,
@@ -423,6 +423,7 @@ const api = new Elysia()
         rateLimit({
           duration: API_RATE_LIMITS.agentAuth.duration,
           max: API_RATE_LIMITS.agentAuth.max,
+          budget: { name: "api.agent_auth.address", keyKind: "address" },
           ...createRedisRateLimit({
             failurePolicy: "fail_open_local",
             scope: "agent-auth",
@@ -440,6 +441,10 @@ const api = new Elysia()
         rateLimit({
           duration: API_RATE_LIMITS.api.duration,
           max: API_RATE_LIMITS.api.max,
+          budget: {
+            name: "api.agent_auth_confirm.address",
+            keyKind: "address",
+          },
           ...createRedisRateLimit({
             failurePolicy: "fail_open_local",
             scope: "agent-auth-confirm",
@@ -456,11 +461,9 @@ const api = new Elysia()
   .use(
     // The MCP transport paths sit at the root, outside the shared `/v1`
     // budget, and one agent loop can otherwise issue unbounded JSON-RPC calls.
-    // The address budget runs first so rotating bearer values cannot dodge
-    // the credential budget. Each limiter's own `skip` keeps discovery and
-    // preflight unmetered.
+    // Accepted credentials have independent buckets. Authentication failures
+    // consume the route-owned address budget; discovery and preflight are unmetered.
     new Elysia()
-      .use(rateLimit(createMcpTransportAddressRateLimitOptions()))
       .use(rateLimit(createMcpTransportRateLimitOptions()))
       .use(mcpRoute),
   )
@@ -506,6 +509,7 @@ const api = new Elysia()
             rateLimit({
               duration: API_RATE_LIMITS.folioCollab.duration,
               max: API_RATE_LIMITS.folioCollab.max,
+              budget: { name: "api.folio_collab.address", keyKind: "address" },
               ...createRedisRateLimit({
                 failurePolicy: "fail_open_local",
                 scope: "folio-collab",
@@ -556,12 +560,22 @@ const api = new Elysia()
       .use(legislationCorpusRoute)
       .use(new Elysia().use(publicLegislationRoute).use(publicSanctionsRoute))
       .use(publicKnowledgeRoute)
-      .use(searchRoute)
-      .use(savedSearchesRoute)
+      // Compose the search slice in one link to bound the server's inferred
+      // Elysia chain depth while preserving each route's full contract.
+      .use(
+        new Elysia()
+          .use(searchRoute)
+          .use(savedSearchesRoute)
+          .use(searchHistoryRoute),
+      )
       .use(savedTimeNarrativesRoute)
       .use(auditLogsRoute)
-      .use(caseLawRoute)
-      .use(legalReaderRoute)
+      .use(
+        new Elysia()
+          .use(caseLawRoute)
+          .use(legalReaderRoute)
+          .use(legalResolveRoute),
+      )
       .use(chatRoute)
       .use(userFilesRoute)
       .use(skillsRoute)
@@ -706,6 +720,15 @@ const startS3RefreshLoop = () => {
 // schema mirror — must yield the fully constructed `api` without any of
 // these side effects (no DB, no Redis, no listen).
 const startServer = async (): Promise<void> => {
+  const clientAddressWarning = clientAddressConfigurationWarning({
+    edgeHeader: env.STELLA_CLIENT_ADDRESS_HEADER,
+    originVerifySecret: env.STELLA_ORIGIN_VERIFY_SECRET,
+  });
+  if (clientAddressWarning !== null) {
+    logger.warn(clientAddressWarning, {
+      "clientAddress.configurationWarning": 1,
+    });
+  }
   if (envBase.REDIS_URL !== undefined) {
     const { mode } = redisConnectionConfig({
       url: envBase.REDIS_URL,

@@ -2494,6 +2494,10 @@
   .text-\[calc\(1rem\*var\(--reader-text-scale\)\)\] {
     font-size: calc(1rem * var(--reader-text-scale));
   }
+  .leading-3\.5 {
+    --tw-leading: calc(var(--spacing) * 3.5);
+    line-height: calc(var(--spacing) * 3.5);
+  }
   .leading-4 {
     --tw-leading: calc(var(--spacing) * 4);
     line-height: calc(var(--spacing) * 4);
@@ -2598,6 +2602,9 @@
   }
   .break-all {
     word-break: break-all;
+  }
+  .text-ellipsis {
+    text-overflow: ellipsis;
   }
   .whitespace-normal {
     white-space: normal;
@@ -5454,6 +5461,9 @@
   }
   .\[\&_\[data-slot\=review-status-dot\]\]\:bg-current [data-slot=review-status-dot] {
     background-color: currentcolor;
+  }
+  .\[\&_\[data-slot\=scroll-area-viewport\]\]\:max-h-\[60dvh\] [data-slot=scroll-area-viewport] {
+    max-height: 60dvh;
   }
   .\[\&_mark\]\:bg-\(--text-mark\)\/30 mark {
     background-color: var(--text-mark);

@@ -31,7 +31,6 @@ const ENTITY_COUNT = 100_000;
 const MATCHES_PER_KIND = 1000;
 const SAMPLE_COUNT = 5;
 const POLICY_COUNT = 47;
-const MAX_TIME_RATIO = 1.1;
 const MAX_BUFFER_RATIO = 1.25;
 const QUERY_TEXT = "budgetneedle";
 const HIT_LIMIT = 20;
@@ -607,32 +606,22 @@ describe.skipIf(!enabled)(
             }
           }
         }
+        // Times are logged for diagnosis only: wall-clock ratios on shared
+        // runners are noise. Buffers and the per-row SubPlan check gate.
         console.info(
           JSON.stringify({
             event: "search_budget_comparisons",
-            maxTimeRatio: MAX_TIME_RATIO,
             maxBufferRatio: MAX_BUFFER_RATIO,
             comparisons,
           }),
         );
         for (const comparison of comparisons) {
-          const {
-            jit,
-            featureLabel,
-            queryName,
-            offBuffers,
-            onBuffers,
-            offTime,
-            onTime,
-          } = comparison;
+          const { jit, featureLabel, queryName, offBuffers, onBuffers } =
+            comparison;
           expect(
             onBuffers,
             `JIT ${jit}, ${featureLabel} ${queryName} shared buffers: on=${onBuffers}, off=${offBuffers}`,
           ).toBeLessThanOrEqual(offBuffers * MAX_BUFFER_RATIO);
-          expect(
-            onTime,
-            `JIT ${jit}, ${featureLabel} ${queryName} execution time: on=${onTime}ms, off=${offTime}ms`,
-          ).toBeLessThanOrEqual(offTime * MAX_TIME_RATIO);
         }
       } finally {
         finished.resolve(undefined);

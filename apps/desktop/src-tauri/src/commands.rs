@@ -8,12 +8,10 @@ use crate::types::{AppSnapshot, DesktopNotificationPreferences};
 
 pub type AppState = Arc<Mutex<SessionManager>>;
 
-const STELLA_DESKTOP_ACCOUNT_URL: &str = "https://my.stll.app/settings/account/desktop";
-
 fn stella_account_url(linked_self_host_origin: Option<&str>) -> String {
-  linked_self_host_origin.map_or_else(
-    || STELLA_DESKTOP_ACCOUNT_URL.to_string(),
-    |origin| format!("{origin}/settings/account/desktop"),
+  format!(
+    "{}/settings/account/desktop",
+    linked_self_host_origin.unwrap_or(crate::config::PRODUCTION_WEB_ORIGIN)
   )
 }
 
@@ -42,7 +40,10 @@ pub async fn open_stella_account(
       return Err("Reconnect the self-hosted desktop server to select its API".into());
     }
     let (api_base_url, origin) = selected_self_host.as_ref().map_or(
-      ("https://api.stll.app", "https://my.stll.app"),
+      (
+        crate::config::PRODUCTION_API_BASE_URL,
+        crate::config::PRODUCTION_WEB_ORIGIN,
+      ),
       |connection| {
         (
           connection.api_base_url.as_str(),
@@ -50,7 +51,7 @@ pub async fn open_stella_account(
         )
       },
     );
-    return crate::account::open_browser_connection(&app, api_base_url, origin);
+    return crate::account::open_browser_connection(&app, api_base_url, origin).await;
   }
   let web_origin = linked.as_ref().map(|account| account.web_origin.as_str());
   app
@@ -269,6 +270,9 @@ mod tests {
       stella_account_url(Some("https://stella.example")),
       "https://stella.example/settings/account/desktop"
     );
-    assert_eq!(stella_account_url(None), STELLA_DESKTOP_ACCOUNT_URL);
+    assert_eq!(
+      stella_account_url(None),
+      "https://my.stll.app/settings/account/desktop"
+    );
   }
 }

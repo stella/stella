@@ -13,17 +13,24 @@ const autofixText = readFileSync(
 );
 const workflow: unknown = Bun.YAML.parse(ciText);
 
-const durationJobConditionMatches = (eventName: string) => {
+const durationJobConditionMatches = (
+  eventName: string,
+  postgresResult = "success",
+  cancelled = false,
+) => {
   const jobs = Reflect.get(workflow ?? {}, "jobs");
   const job = Reflect.get(jobs ?? {}, "api-test-durations");
   const condition = String(Reflect.get(job ?? {}, "if"));
   const values: Record<string, boolean> = {
+    "!cancelled()": !cancelled,
     "inputs.pr_depth_only != true": true,
     "needs.ci-plan.outputs.run_required != 'false'": true,
     "github.ref == 'refs/heads/main'": true,
     "github.event_name != 'pull_request'": eventName !== "pull_request",
     "github.event_name != 'merge_group'": eventName !== "merge_group",
     "needs.ci-tests.result == 'success'": true,
+    "(needs.postgres-service-suites.result == 'success' || needs.postgres-service-suites.result == 'skipped')":
+      postgresResult === "success" || postgresResult === "skipped",
     "needs.ci-plan.outputs.api_test_shards != '0'": true,
   };
   return condition.split(/\s*&&\s*/u).every((clause) => values[clause]);
@@ -157,4 +164,97 @@ test("pull request workflows neither write nor require committed duration weight
     expect(text).not.toContain("--add-missing");
     expect(text).not.toContain("refresh-test-durations.ts --check");
   }
+});
+
+test("Postgres duration weights have a separate immutable planning snapshot", () => {
+  const jobs = Reflect.get(workflow ?? {}, "jobs");
+  const plan = Reflect.get(jobs ?? {}, "ci-plan");
+  expect(Reflect.get(plan ?? {}, "outputs")).toMatchObject({
+    postgres_test_durations_hash: `\${{ steps.postgres-test-durations.outputs.hash }}`,
+  });
+  const steps = workflowJobSteps(workflow, "ci-plan");
+  expect(
+    workflowStepByName(steps, "Restore Postgres test durations"),
+  ).toMatchObject({
+    with: {
+      path: `\${{ runner.temp }}/postgres-test-durations.json`,
+      key: `postgres-test-durations-\${{ github.run_id }}`,
+      "restore-keys": "postgres-test-durations-",
+    },
+  });
+  const resolve = String(
+    workflowStepByName(steps, "Resolve Postgres test durations")["run"],
+  );
+  expect(resolve).toContain(
+    'sha256sum "$RUNNER_TEMP/postgres-test-durations.json"',
+  );
+  expect(resolve).toContain('echo "hash=missing"');
+  expect(
+    workflowStepByName(steps, "Upload planned Postgres test durations"),
+  ).toMatchObject({
+    with: {
+      name: "postgres-test-durations-plan",
+      path: `\${{ runner.temp }}/postgres-test-durations.json`,
+      overwrite: true,
+      "retention-days": 1,
+      "if-no-files-found": "ignore",
+    },
+  });
+});
+
+test("duration refresh tolerates skipped Postgres jobs and rejects failed ones", () => {
+  const jobs = Reflect.get(workflow ?? {}, "jobs");
+  const job = Reflect.get(jobs ?? {}, "api-test-durations");
+  expect(Reflect.get(job ?? {}, "needs")).toContain("postgres-service-suites");
+  for (const result of ["success", "skipped"]) {
+    expect(durationJobConditionMatches("push", result)).toBeTrue();
+  }
+  for (const result of ["failure", "cancelled"]) {
+    expect(durationJobConditionMatches("push", result)).toBeFalse();
+  }
+  expect(durationJobConditionMatches("push", "success", true)).toBeFalse();
+});
+
+test("Postgres durations refresh exclusively from successful service timings", () => {
+  const steps = workflowJobSteps(workflow, "api-test-durations");
+  for (const name of [
+    "Download Postgres test timings",
+    "Restore previous Postgres test durations",
+    "Aggregate Postgres test durations",
+    "Save Postgres test durations",
+  ]) {
+    expect(workflowStepByName(steps, name)["if"]).toBe(
+      "needs.postgres-service-suites.result == 'success'",
+    );
+  }
+  expect(
+    workflowStepByName(steps, "Download Postgres test timings"),
+  ).toMatchObject({
+    with: {
+      pattern: "postgres-test-timings-*",
+      path: `\${{ runner.temp }}/postgres-test-timings`,
+      "merge-multiple": true,
+    },
+  });
+  expect(
+    workflowStepByName(steps, "Restore previous Postgres test durations"),
+  ).toMatchObject({
+    with: { "restore-keys": "postgres-test-durations-" },
+  });
+  const aggregate = String(
+    workflowStepByName(steps, "Aggregate Postgres test durations")["run"],
+  );
+  expect(aggregate).toContain('mkdir -p "$RUNNER_TEMP/postgres-test-timings"');
+  expect(aggregate).toContain(
+    'refresh-test-durations.ts --write "$RUNNER_TEMP/postgres-test-durations.json"',
+  );
+  expect(aggregate).not.toContain("api-test-timings");
+  expect(
+    workflowStepByName(steps, "Save Postgres test durations"),
+  ).toMatchObject({
+    with: {
+      path: `\${{ runner.temp }}/postgres-test-durations.json`,
+      key: `postgres-test-durations-\${{ github.run_id }}`,
+    },
+  });
 });

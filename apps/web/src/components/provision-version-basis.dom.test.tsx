@@ -1,6 +1,7 @@
 import type { ComponentProps } from "react";
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { panic } from "better-result";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import {
@@ -26,6 +27,8 @@ const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { buildFormattingLocale } = await import("@/i18n/i18n-store");
 const { ProvisionsCited } =
   await import("@/features/case-law/components/case-viewer/provisions-cited");
+const { ProvisionVersionBasisLabel } =
+  await import("./provision-version-basis");
 const { CitingDecisionItem } =
   await import("@/features/statutes/components/provision-citing-decisions");
 const { decisionProvisionsInfiniteOptions } =
@@ -66,6 +69,9 @@ const decision = {
   slug: "decision",
   decisionDate: "2020-01-01",
   citationAuthority: 1,
+  courtTier: "supreme",
+  mentionCount: 1,
+  snippetCitation: null,
   sentenceText: "§ 13",
   spanStart: 0,
   spanEnd: 4,
@@ -266,8 +272,10 @@ for (const [locale, messages] of [
               isHydrated
             />
             <CitingDecisionItem
+              currentVersionValidFrom={null}
               decision={{ ...decision, versionBasis: basis }}
             />
+            <ProvisionVersionBasisLabel basis={basis} />
           </>
         ),
       });
@@ -294,7 +302,14 @@ for (const [locale, messages] of [
         </QueryClientProvider>,
       );
       const chip = ui.getByRole("button", { name: reference });
-      expect(chip.getAttribute("href")).toBe(readerUrl);
+      const href = chip.getAttribute("href");
+      expect(href).not.toBeNull();
+      if (href === null) {
+        panic("Missing decision reader link");
+      }
+      const target = new URL(href);
+      expect(`${target.origin}${target.pathname}`).toBe(readerUrl);
+      expect(target.searchParams.get("q")).toBe(decision.sentenceText);
       expect(chip.textContent).not.toContain(label);
       const citingBasis = ui.getByText(
         (_, element) =>

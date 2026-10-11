@@ -157,6 +157,7 @@ export const listMatterLinksHandler = async ({
 };
 
 const config = {
+  contract: "patch",
   description:
     "List the case-law decisions linked to the current matter, newest link " +
     "first, each with its note and the decision's row facts: case number, " +

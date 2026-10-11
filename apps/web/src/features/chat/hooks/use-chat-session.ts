@@ -118,7 +118,11 @@ import {
   type SendQueueEvent,
   type SendQueueState,
 } from "@/features/chat/hooks/use-chat-session-send-queue.logic";
-import { fetchOlderMessages } from "@/features/chat/queries";
+import {
+  fetchChatMessage,
+  fetchOlderMessages,
+  invalidateChatThreadAcrossScopes,
+} from "@/features/chat/queries";
 import { getChatTurnPhase } from "@/features/chat/turn-notifications.logic";
 import { useChatTurnNotifications } from "@/features/chat/use-chat-turn-notifications";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
@@ -323,6 +327,7 @@ export const useChatSession = ({
   const t = useTranslations();
   const { activeOrganizationId: organizationId, id: userId } =
     useAuthenticatedUser();
+  const queryClient = useQueryClient();
   const mcpCatalogQuery = useQuery(mcpConnectorsOptions(organizationId));
   const mcpCatalogView = useQueryView(mcpCatalogQuery);
   useQueryViewError(mcpCatalogView);
@@ -380,6 +385,7 @@ export const useChatSession = ({
   const {
     error: runtimeError,
     sessionGenerating,
+    reconnecting,
     status,
     stop: stopState,
     turnAbandoned,
@@ -640,6 +646,33 @@ export const useChatSession = ({
     // oxlint-disable-next-line react/refs -- deliberate render-time ref write: render-current runtime identity for the stale-response guard in loadOlder
     seededChatRef.current = chat;
   }
+
+  const refreshAnswers = useCallback(
+    async (messageId: string) => {
+      const runtime = chat;
+      const [refreshed] = await Promise.all([
+        fetchChatMessage({ threadId: threadRef.threadId, messageId }),
+        invalidateChatThreadAcrossScopes({
+          queryClient,
+          threadId: threadRef.threadId,
+        }),
+      ]);
+      if (seededChatRef.current === runtime) {
+        runtime.setMessages(
+          runtime
+            .getSnapshot()
+            .messages.map((message) =>
+              message.id === refreshed.id &&
+              (message.revision === undefined ||
+                message.revision <= refreshed.revision)
+                ? refreshed
+                : message,
+            ),
+        );
+      }
+    },
+    [chat, queryClient, threadRef],
+  );
 
   const loadOlder = useCallback(async () => {
     const before = olderCursorRef.current;
@@ -1122,7 +1155,6 @@ export const useChatSession = ({
     }),
   );
 
-  const queryClient = useQueryClient();
   const handledDocumentDeletionToolCallIdsRef = useRef(new Set<string>());
   const handledDocxReplacementToolCallIdsRef = useRef(new Set<string>());
   const handledPlaybookSaveToolCallIdsRef = useRef(new Set<string>());
@@ -1587,11 +1619,18 @@ export const useChatSession = ({
       isChatTurnGenerating({
         hasError: error !== undefined,
         messages,
-        requestActive: isChatClientRequestActive(status),
+        requestActive: reconnecting || isChatClientRequestActive(status),
         sessionGenerating,
         stopStatus: stopState.status,
       }),
-    [error, messages, sessionGenerating, status, stopState.status],
+    [
+      error,
+      messages,
+      reconnecting,
+      sessionGenerating,
+      status,
+      stopState.status,
+    ],
   );
   useExternalSyncEffect(() => {
     applySendQueueEvent({ type: "generation-status-synced", isGenerating });
@@ -1740,6 +1779,8 @@ export const useChatSession = ({
 
   return {
     clientStatus: status,
+    reconnecting,
+    refreshAnswers,
     error,
     messages,
     loadOlder,

@@ -50,6 +50,7 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "anonymization_blacklist_entries.variants",
   "bilingual_translation_rows.warnings",
   "bilingual_translation_runs.glossary",
+  "case_law_analysis_failures.provider_diagnostic",
   "case_law_decision_supplements.document_ast",
   "case_law_decision_supplements.metadata",
   "case_law_decisions.sections",
@@ -70,6 +71,7 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "case_law_sources.descriptor",
   "chat_thread_compactions.summary",
   "chat_thread_names.target",
+  "chat_threads.active_skill",
   "clause_variants.body",
   "clause_versions.body",
   "clauses.body",
@@ -459,6 +461,12 @@ const RETAINED_MEMBER_COLUMNS = {
 const MATTER_REMOVAL_RETAINED_COLUMNS = {
   "desktop_presence.user_id":
     "Organization-scoped presence; the person stays an organization member.",
+  "search_history_entries.user_id":
+    "The person's own organization-scoped search history; they stay an organization member.",
+  "search_history_owners.user_id":
+    "Organization-scoped history ordering state outlives a matter removal.",
+  "search_history_tombstones.user_id":
+    "Organization-scoped deletion identities outlive a matter removal.",
   "member.user_id": "Organization membership outlives a matter removal.",
   "contacts.originating_attorney_id":
     "Organization-level attorney; the person stays an organization member.",

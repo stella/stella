@@ -44,6 +44,7 @@ export const ACTION_KINDS = {
   "chat.send": MODEL_ACTION,
   "chat.generate-thread-title": MODEL_ACTION,
   "chat.improve-prompt": MODEL_ACTION,
+  "chat.span-edit": MODEL_ACTION,
   "chat.suggest-thread-title": MODEL_ACTION,
   "chat.suggested-prompts": MODEL_ACTION,
   "chat.thread-recap": MODEL_ACTION,

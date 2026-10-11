@@ -625,7 +625,7 @@ type BunFlagPolicy =
   | "workspace"
   | "unsupported";
 
-// Bun 1.4.2 CLI help owns this census; tests reject new undocumented decisions.
+// Bun 1.4.3 CLI help owns this census; tests reject new undocumented decisions.
 const runtimeBunFlags = {
   "--silent": "switch",
   "--elide-lines": "value",
@@ -643,6 +643,7 @@ const runtimeBunFlags = {
   "--watch-kill-signal": "value",
   "--hot": "switch",
   "--no-clear-screen": "switch",
+  "--check": "unsupported",
   "--smol": "switch",
   "--interactive": "switch",
   "-r": "preload",
@@ -745,6 +746,8 @@ export const BUN_FLAGS = {
     "--production": "switch",
     "--compile": "switch",
     "--compile-exec-argv": "value",
+    "--bytecode-order": "unsupported",
+    "--compile-jit-policy": "value",
     "--compile-autoload-dotenv": "switch",
     "--no-compile-autoload-dotenv": "switch",
     "--compile-autoload-bunfig": "switch",
@@ -757,6 +760,7 @@ export const BUN_FLAGS = {
     "--asset": "unsupported",
     "--bytecode": "switch",
     "--bytecode-depth": "value",
+    "--no-optimize-bytecode": "switch",
     "--watch": "switch",
     "--no-clear-screen": "switch",
     "--target": "value",

@@ -13,6 +13,7 @@ import { afterEach, describe, expect, test } from "bun:test";
  */
 
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
 
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import type { SaosItem } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
@@ -393,6 +394,10 @@ describe("pl-courts listSlicePage", () => {
 
     expect(error).toBeInstanceOf(AdapterFetchError);
     expect(String(error)).toContain("text/html");
+    expect(error).toHaveProperty(
+      "stopKind",
+      INGESTION_STOP_KIND.SOURCE_UNREACHABLE,
+    );
   });
 
   test("the media type is read whole, not searched for", async () => {

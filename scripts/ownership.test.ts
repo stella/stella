@@ -120,6 +120,7 @@ test("independent row additions merge cleanly and pass the production check", ()
       "scripts/ownership-types.ts",
       "scripts/ownership-loader.ts",
       "scripts/generated-artifacts.ts",
+      "packages/scripts/src/generated-artifact-format.ts",
       "scripts/schema-introspection.ts",
       "scripts/ownership/status-transition.ts",
       ".oxlint-plugins/module-id.ts",
@@ -736,4 +737,49 @@ describe("desktop renewal root connection door", () => {
       expect(() => assertRenewalExports(mutation)).toThrow(TypeError);
     }
   });
+});
+
+describe("desktop proof replay ownership", () => {
+  const proofOwner =
+    "apps/api/src/lib/business-registries/desktop/proof-store.ts";
+  const proofSpecifier = "@/api/lib/business-registries/desktop/proof-store";
+  const proofDoor = () => {
+    const door = ROOT_CONNECTION_DOORS.find(
+      ({ id }) => id === "desktop-device-proof-replay",
+    );
+    const enforcement = door?.enforcement;
+    if (!door || enforcement?.kind !== "import") {
+      throw new TypeError(
+        "Desktop replay receipts require an import-confined owner",
+      );
+    }
+    return { ...door, enforcement };
+  };
+  test("only the request, rotation and real database test owners can consume proof authority", async () => {
+    const door = proofDoor();
+    expect(door.owner).toEqual([proofOwner]);
+    expect(door.enforcement.specifiers).toEqual([proofSpecifier]);
+    expect("names" in door.enforcement).toBe(false);
+    expect(OWNERSHIP.filter(({ id }) => id === door.id)).toEqual([door]);
+    const source = `import { ConsumedDesktopDeviceProof } from "${proofSpecifier}";\nexport * from "${proofSpecifier}";\nconst store = await import("${proofSpecifier}");`;
+    const ruleOptionsForRoot = () => ({ entries: [door] });
+    for (const sourcePath of [
+      proofOwner,
+      ...door.enforcement.allowed.map((caller) => caller.path),
+    ]) {
+      expect(
+        await lintSingleRule("confine-owner", source, {
+          sourcePath,
+          ruleOptionsForRoot,
+        }),
+      ).toEqual([]);
+    }
+    expect(
+      await lintSingleRule("confine-owner", source, {
+        sourcePath:
+          "apps/api/src/handlers/desktop-registry/unapproved-proof-owner.ts",
+        ruleOptionsForRoot,
+      }),
+    ).toEqual([1, 2, 3]);
+  }, 60_000);
 });

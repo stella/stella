@@ -35,6 +35,7 @@ type DesktopLinkIdentity = {
   userId: SafeId<"user">;
   organizationId: SafeId<"organization">;
   scopedDb: ScopedDb;
+  deviceJkt: string;
 };
 
 const loadAccount = async (identity: DesktopLinkIdentity) => {
@@ -70,6 +71,7 @@ const mintCredential = async (identity: DesktopLinkIdentity) =>
           metadata: {
             purpose: DESKTOP_REGISTRY_KEY_CONFIG,
             organizationId: identity.organizationId,
+            deviceJkt: identity.deviceJkt,
             inactivityExpiresAt: expiresAt.toISOString(),
           },
         },
@@ -163,12 +165,14 @@ export const createDesktopLinkRedeemHandler = (
 ) =>
   createSafeTokenHandler(
     {
+      contract: "patch",
       accountAccess: ACCOUNT_ACCESS.sandbox,
       mcp: { type: "internal", reason: "provider_secret" },
       body: permissiveBodySchema({
         keys: [
           "correlationId",
           "verifier",
+          "deviceJkt",
           "expectedUserId",
           "expectedOrganizationId",
         ],
@@ -196,7 +200,9 @@ export const createDesktopLinkRedeemHandler = (
       const linked = request.headers.has("authorization")
         ? yield* Result.await(services.authorizeLinkedAccount(request))
         : null;
-      const identity = yield* Result.await(services.authorizeGrant(body));
+      const identity = yield* Result.await(
+        services.authorizeGrant(body, request, linked?.consumedProof),
+      );
       if (linked) {
         if (
           linked.userId !== identity.userId ||

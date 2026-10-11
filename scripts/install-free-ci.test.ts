@@ -10,6 +10,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { installTimeoutMs } from "./ci-install";
 import {
   boundedInstallProblems,
   installWorkflowPolicy,
@@ -23,6 +24,7 @@ import {
   type Classification,
   type InstallFreeInvocation,
 } from "./install-free-ci";
+import { workflowJobSteps } from "./workflow-steps";
 
 // CI runs this file in "Test install-free CI commands" without the dependency
 // install, which the check below enforces for this file too.
@@ -57,6 +59,55 @@ test("Windows installs and every explicit CI cold install retain bounded logs", 
   }
 });
 
+test("the real Windows dry-run deadline retains platform headroom regardless of cache restoration", () => {
+  const workflow: unknown = Bun.YAML.parse(
+    readFileSync(path.join(REPO_ROOT, CI_WORKFLOW), "utf-8"),
+  );
+  const steps = workflowJobSteps(workflow, "desktop-windows-dry-run");
+  const install = steps.find(
+    (step) =>
+      typeof step["run"] === "string" &&
+      step["run"].includes("scripts/ci-install.ts"),
+  );
+  if (install === undefined) {
+    expect.unreachable("Missing bounded Windows install");
+  }
+  const minimum = Math.ceil(installTimeoutMs("win32") / 60_000) + 1;
+  expect(install["timeout-minutes"]).toBe(minimum);
+  const check = (candidateSteps: unknown[]) =>
+    boundedInstallProblems(
+      {
+        jobs: {
+          fixture: {
+            "runs-on": "windows-latest",
+            "timeout-minutes": 10,
+            steps: candidateSteps,
+          },
+        },
+      },
+      "windows",
+    );
+  expect(check(steps)).toEqual([]);
+  expect(
+    check(
+      steps.filter(
+        (step) =>
+          typeof step["uses"] !== "string" ||
+          !step["uses"].startsWith("stella/.github/actions/setup-bun-cached@"),
+      ),
+    ),
+  ).toEqual([]);
+  for (const limit of [minimum - 1, minimum + 1]) {
+    expect(
+      check(
+        steps.map((step) =>
+          step === install ? { ...step, "timeout-minutes": limit } : step,
+        ),
+      ),
+    ).toContain("fixture: install needs a bounded step timeout");
+  }
+});
+
 test("the install guard rejects bypasses, unbounded steps and lost logs", () => {
   const upload = {
     uses: "actions/upload-artifact@fixture",
@@ -65,7 +116,7 @@ test("the install guard rejects bypasses, unbounded steps and lost logs", () => 
   };
   const install = {
     run: 'bun scripts/ci-install.ts "$RUNNER_TEMP/bun-install/scripts.log" --ignore-scripts',
-    "timeout-minutes": 3,
+    "timeout-minutes": 5,
   };
   const workflow = (steps: unknown[]) => ({
     jobs: {
@@ -1426,6 +1477,7 @@ test("everything CI runs without the dependency install imports only built-ins",
     "scripts/check-api-deployment.test.ts",
     "scripts/check-standalone-lockfiles.ts",
     "scripts/detect-e2e-changes.test.ts",
+    "scripts/e2e-spec-shards-core.ts",
     "scripts/install-free-ci.test.ts",
   ]) {
     expect(loaded).toContain(file);

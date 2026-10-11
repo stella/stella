@@ -9,7 +9,6 @@ import {
   DefaultNotFoundComponent,
   DefaultPendingComponent,
 } from "@/components/route-components";
-import { installChatRuntimeCleanup } from "@/features/chat/queries";
 import { installUserScopedStorage } from "@/lib/account/install-user-scoped-storage";
 import { installSessionChangeListener } from "@/lib/account/session-change-listener";
 import { listenForSessionDocumentRestore } from "@/lib/account/session-document";
@@ -36,7 +35,6 @@ export function getRouter() {
   const queryClient = createAppQueryClient();
   installPDFDocumentCleanup(queryClient);
   installDocxDocumentCacheInvalidation(queryClient);
-  installChatRuntimeCleanup(queryClient);
   installTableStoreReconcile(queryClient);
   installSessionCacheGuard(queryClient, {
     isAuthFlowPage: () => isAuthFlowPathname(window.location.pathname),

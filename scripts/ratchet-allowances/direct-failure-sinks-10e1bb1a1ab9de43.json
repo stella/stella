@@ -1,0 +1,6 @@
+{
+  "metric": "direct-failure-sinks",
+  "file": "apps/api/src/handlers/case-law/ingestion/adapters/document-parse-failure.ts",
+  "delta": 1,
+  "reason": "Consolidates nine existing adapter parser-warning sinks into one shared boundary while preserving their WARN severity and event fields. The total number of direct sinks decreases."
+}
