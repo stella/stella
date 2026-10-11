@@ -23,7 +23,9 @@ const workflowToolchains = () =>
       ...readFileSync(path.join(root, file), "utf-8").matchAll(
         /^\s+(?:toolchain|RUSTUP_TOOLCHAIN): (\S+)$/gmu,
       ),
-    ].map(([line, version]) => ({ file, line: line.trim(), version })),
+    ].flatMap(([line, version]) =>
+      version === undefined ? [] : [{ file, line: line.trim(), version }],
+    ),
   );
 
 test("Rust toolchains are exact versions, never a floating channel", () => {
