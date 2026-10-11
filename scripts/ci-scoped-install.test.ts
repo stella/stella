@@ -1,5 +1,13 @@
 import { expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
@@ -13,8 +21,8 @@ const workflow: unknown = Bun.YAML.parse(
 const targets = {
   "e2e-report": ["@stll/playwright-tools", "!stella"],
   "docker-checks": ["@stll/agent-engine...", "stella"],
-  "landing-build": ["@stll/landing...", "stella"],
-  "e2e-landing": ["@stll/landing...", "stella"],
+  "landing-build": ["@stll/landing...", "@stll/cli...", "stella"],
+  "e2e-landing": ["@stll/landing...", "@stll/cli...", "stella"],
 } as const;
 
 const installFilters = (command: string) => {
@@ -37,7 +45,7 @@ for (const [job, filters] of Object.entries(targets)) {
       (step) => step["name"] === "Install dependencies",
     );
     const command = v.parse(v.string(), install?.["run"]);
-    expect(installFilters(command)).toEqual(filters);
+    expect(installFilters(command)).toEqual([...filters]);
   });
 }
 
@@ -45,7 +53,7 @@ test("a full workspace install cannot satisfy a scoped job", () => {
   const full =
     "bash scripts/retry.sh bun ci --frozen-lockfile --ignore-scripts";
   for (const filters of Object.values(targets)) {
-    expect(installFilters(full)).not.toEqual(filters);
+    expect(installFilters(full)).not.toEqual([...filters]);
   }
 });
 
@@ -168,3 +176,151 @@ for (const scope of ["landing", "marketing"]) {
     }
   });
 }
+
+test("landing verification and failure diagnostics use its installed workspace", () => {
+  const steps = workflowJobSteps(workflow, "e2e-landing");
+  const setup = v.parse(
+    v.object({ with: v.record(v.string(), v.string()) }),
+    steps.find((step) => step["uses"] === "./.github/actions/setup-playwright"),
+  );
+  expect(setup.with["package-directory"]).toBe("apps/landing");
+  const diagnostics = v.parse(
+    v.object({ with: v.object({ path: v.string() }) }),
+    steps.find((step) => step["name"] === "Upload failure diagnostics"),
+  );
+  expect(diagnostics.with.path.split("\n")).toContain(
+    "apps/landing/test-results/",
+  );
+  const action = v.parse(
+    v.object({
+      inputs: v.object({
+        "package-directory": v.object({ default: v.string() }),
+      }),
+      runs: v.object({
+        steps: v.array(v.object({ env: v.record(v.string(), v.string()) })),
+      }),
+    }),
+    Bun.YAML.parse(
+      readFileSync(
+        path.join(root, ".github/actions/setup-playwright/action.yml"),
+        "utf-8",
+      ),
+    ),
+  );
+  expect(action.inputs["package-directory"].default).toBe("apps/web");
+  for (const step of action.runs.steps) {
+    expect(step.env["PLAYWRIGHT_PACKAGE_DIR"]).toBe(
+      `\${{ inputs.package-directory }}`,
+    );
+  }
+});
+
+test("browser verification resolves the selected workspace without a web install", () => {
+  const directory = realpathSync(
+    mkdtempSync(path.join(tmpdir(), "scoped-playwright-")),
+  );
+  const verifier = path.join(
+    root,
+    ".github/actions/setup-playwright/verify-browsers.sh",
+  );
+  try {
+    mkdirSync(path.join(directory, "bin"));
+    writeFileSync(
+      path.join(directory, "bin/bun"),
+      '#!/usr/bin/env bash\nprintf "verification cwd: %s\\n" "$PWD"\n',
+      { mode: 0o755 },
+    );
+    // GNU realpath can resolve a missing final path component.
+    writeFileSync(
+      path.join(directory, "bin/realpath"),
+      '#!/usr/bin/env bash\nprintf "%s/%s\\n" "$PWD" "$1"\n',
+      { mode: 0o755 },
+    );
+    for (const workspace of ["apps/web", "apps/landing"]) {
+      const packageDirectory = path.join(
+        directory,
+        workspace,
+        "node_modules/@playwright/test",
+      );
+      mkdirSync(packageDirectory, { recursive: true });
+      const env = {
+        ...process.env,
+        PATH: `${directory}/bin:${process.env["PATH"] ?? ""}`,
+        GITHUB_WORKSPACE: directory,
+        PLAYWRIGHT_PACKAGE_DIR: workspace,
+      };
+      const verified = Bun.spawnSync(["bash", verifier], { env });
+      expect(verified.exitCode, verified.stderr.toString()).toBe(0);
+      expect(verified.stdout.toString()).toContain(
+        `verification cwd: ${directory}/${workspace}`,
+      );
+      rmSync(packageDirectory, { recursive: true });
+      const missing = Bun.spawnSync(["bash", verifier], { env });
+      expect(missing.exitCode).not.toBe(0);
+      expect(missing.stderr.toString()).toContain(
+        "Playwright is not installed",
+      );
+      expect(missing.stdout.toString()).not.toContain("verification cwd:");
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("landing diagnostics follow the browser configuration output directory", () => {
+  const directory = realpathSync(
+    mkdtempSync(path.join(tmpdir(), "scoped-playwright-config-")),
+  );
+  const configDirectory = path.join(directory, "packages/playwright-tools/src");
+  const sdkDirectory = path.join(directory, "node_modules/@playwright/test");
+  try {
+    mkdirSync(configDirectory, { recursive: true });
+    mkdirSync(sdkDirectory, { recursive: true });
+    // Only the SDK's configuration wrapper is replaced; execute the real owner.
+    writeFileSync(
+      path.join(sdkDirectory, "package.json"),
+      JSON.stringify({
+        name: "@playwright/test",
+        type: "module",
+        exports: "./config.js",
+      }),
+    );
+    writeFileSync(
+      path.join(sdkDirectory, "config.js"),
+      'export const defineConfig = (value) => value; export const devices = { "Desktop Chrome": {} };',
+    );
+    for (const file of ["marketing-config.ts", "env.ts"]) {
+      writeFileSync(
+        path.join(configDirectory, file),
+        readFileSync(
+          path.join(root, "packages/playwright-tools/src", file),
+          "utf-8",
+        ),
+      );
+    }
+    const result = Bun.spawnSync(
+      [
+        process.execPath,
+        "-e",
+        'import { marketingConfig } from "./packages/playwright-tools/src/marketing-config.ts"; console.log(JSON.stringify(marketingConfig({ testDir: ".", project: "landing" })));',
+      ],
+      { cwd: directory },
+    );
+    expect(result.exitCode, result.stderr.toString()).toBe(0);
+    const config = v.parse(
+      v.object({ outputDir: v.string() }),
+      JSON.parse(result.stdout.toString()),
+    );
+    const artifacts = v.parse(
+      v.object({ with: v.object({ path: v.string() }) }),
+      workflowJobSteps(workflow, "e2e-landing").find(
+        (step) => step["name"] === "Upload failure diagnostics",
+      ),
+    );
+    expect(artifacts.with.path.split("\n")).toContain(
+      `${path.relative(directory, config.outputDir)}/`,
+    );
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});

@@ -896,8 +896,6 @@
       "dependsOn": [],
       "inputs": [
         "$TURBO_DEFAULT$",
-        "$TURBO_ROOT$/package.json",
-        "$TURBO_ROOT$/bun.lock",
         "$TURBO_ROOT$/docker-compose.yml",
         "$TURBO_ROOT$/docker/postgres/**",
         "$TURBO_ROOT$/.github/workflows/**",

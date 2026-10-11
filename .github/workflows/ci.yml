@@ -6158,7 +6158,7 @@ jobs:
           save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install dependencies
-        run: bash scripts/retry.sh bun ci --frozen-lockfile --ignore-scripts --filter @stll/landing... --filter stella
+        run: bash scripts/retry.sh bun ci --frozen-lockfile --ignore-scripts --filter @stll/landing... --filter @stll/cli... --filter stella
         env:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
           # the real npm token to dependency lifecycle scripts.
@@ -7117,7 +7117,7 @@ jobs:
           save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install dependencies
-        run: bash scripts/retry.sh bun ci --frozen-lockfile --ignore-scripts --filter @stll/landing... --filter stella
+        run: bash scripts/retry.sh bun ci --frozen-lockfile --ignore-scripts --filter @stll/landing... --filter @stll/cli... --filter stella
         env:
           NPM_TOKEN: ""
 
@@ -7157,6 +7157,8 @@ jobs:
 
       - name: Install Playwright browsers
         uses: ./.github/actions/setup-playwright
+        with:
+          package-directory: apps/landing
 
       - name: Check landing islands
         env:
@@ -7178,7 +7180,7 @@ jobs:
           name: landing-e2e-diagnostics
           path: |
             /tmp/landing.log
-            apps/web/test-results/
+            apps/landing/test-results/
           if-no-files-found: ignore
           retention-days: 7
 

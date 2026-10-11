@@ -1721,9 +1721,7 @@ test("browser image runner preserves argv, cwd, verdict and only browser inputs,
     path.join(root, imageFile),
     readFileSync(path.resolve(import.meta.dirname, "..", imageFile), "utf-8"),
   );
-  mkdirSync(path.join(root, "apps/web/node_modules/@playwright/test"), {
-    recursive: true,
-  });
+  mkdirSync(path.join(root, "apps/web"), { recursive: true });
   const cache = path.join(directory, ".bun/install/cache");
   mkdirSync(cache, { recursive: true });
   writeFileSync(
@@ -1780,12 +1778,27 @@ esac
     DOCKER_CREDENTIAL_FILE: credentialFile,
   };
   try {
-    for (const { offline, cached } of [
+    for (const { offline, cached, packageDirectory } of [
       { offline: false, cached: true },
       { offline: false, cached: false },
       { offline: true, cached: true },
       { offline: true, cached: false },
-    ]) {
+    ].flatMap((scenario) =>
+      ["apps/web", "apps/landing"].map((selectedDirectory) => ({
+        ...scenario,
+        packageDirectory: selectedDirectory,
+      })),
+    )) {
+      for (const workspace of ["apps/web", "apps/landing"]) {
+        rmSync(path.join(root, workspace, "node_modules"), {
+          recursive: true,
+          force: true,
+        });
+      }
+      mkdirSync(
+        path.join(root, packageDirectory, "node_modules/@playwright/test"),
+        { recursive: true },
+      );
       writeFileSync(credentialFile, "fixture");
       writeFileSync(dockerCalls, "");
       const result = Bun.spawnSync(
@@ -1802,7 +1815,13 @@ esac
         ],
         {
           cwd: path.join(root, "apps/web"),
-          env: { ...runnerEnv, DOCKER_IMAGE_CACHED: String(cached) },
+          env: {
+            ...runnerEnv,
+            DOCKER_IMAGE_CACHED: String(cached),
+            ...(packageDirectory === "apps/landing"
+              ? { PLAYWRIGHT_PACKAGE_DIR: packageDirectory }
+              : {}),
+          },
           stdout: "pipe",
           stderr: "pipe",
         },
@@ -1832,6 +1851,11 @@ esac
       expect(args).toContain("/native/bun:/usr/local/bin/bunx:ro");
       expect(args).toContain("PLAYWRIGHT_BROWSERS_PATH=/ms-playwright");
       expect(args).toContain("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1");
+      if (packageDirectory === "apps/landing") {
+        expect(args).toContain("PLAYWRIGHT_PACKAGE_DIR");
+      } else {
+        expect(args).not.toContain("PLAYWRIGHT_PACKAGE_DIR");
+      }
       expect(args).toContain("E2E_EXECUTION_PROFILE");
       expect(args).toContain("E2E_EDGE_HEADER_VALUE");
       expect(args).not.toContain("GH_TOKEN");

@@ -26,6 +26,12 @@ export const marketingConfig = ({ testDir, project }: MarketingConfigOptions) =>
         ]
       : [["list"]],
     testDir,
+    outputDir: path.join(
+      REPO_ROOT,
+      "apps",
+      project === "landing" ? "landing" : "web",
+      "test-results",
+    ),
     fullyParallel: false,
     workers: 1,
     retries: 0,
