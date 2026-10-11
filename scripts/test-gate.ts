@@ -791,6 +791,28 @@ const expandRootScripts = (
   return expanded;
 };
 
+const expandedRootCommands = new WeakMap<
+  PackageScripts,
+  Map<string, readonly string[]>
+>();
+const rootScriptCommands = (
+  command: string,
+  scripts: PackageScripts,
+): readonly string[] => {
+  let commands = expandedRootCommands.get(scripts);
+  if (commands === undefined) {
+    commands = new Map();
+    expandedRootCommands.set(scripts, commands);
+  }
+  const cached = commands.get(command);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const expanded = expandRootScripts(command, scripts);
+  commands.set(command, expanded);
+  return expanded;
+};
+
 export const packageTestExecutionFailure = ({
   collection,
   rootScripts = repositoryRootScripts(),
@@ -803,7 +825,7 @@ export const packageTestExecutionFailure = ({
   let directExecutionFailure = `job condition: no gating job executes ${packageName} ${scriptName}`;
   for (const commands of gatingJobs.values()) {
     for (const command of commands.flatMap((workflowCommand) =>
-      expandRootScripts(workflowCommand, rootScripts),
+      rootScriptCommands(workflowCommand, rootScripts),
     )) {
       const invocations = gatingArguments({
         command,
