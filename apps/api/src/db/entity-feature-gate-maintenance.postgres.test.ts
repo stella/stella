@@ -458,12 +458,30 @@ describe.skipIf(!runPostgresTests)(
           VALUES (${runId}, ${fixture.organizationId}, ${fixture.workspaceB}, ${fixture.factB},
             ${createSafeId<"field">()}, ${fixture.factVersionB}, repeat('a', 64),
             '{"facts":[],"listId":"fixture-list"}'::jsonb)`;
-          await client`INSERT INTO legal_list_claims (id, workspace_id, run_id, position, type, state, text, anchor)
+          await inAppScope(
+            client,
+            {
+              organizationId: fixture.organizationId,
+              workspaceIds: [fixture.workspaceB],
+              featureIds: [LEGAL_LISTS_FEATURE_ID],
+            },
+            async (tx) =>
+              await tx`INSERT INTO legal_list_claims (id, workspace_id, run_id, position, type, state, text, anchor)
           VALUES (${claimId}, ${fixture.workspaceB}, ${runId}, 0, 'fact', 'nocover', 'Pinned claim',
-            '{"type":"docx-block"}'::jsonb)`;
-          const [stored] = await client`SELECT entity_feature_gate AS gate,
+            '{"type":"docx-block"}'::jsonb)`,
+          );
+          const [stored] = await inAppScope(
+            client,
+            {
+              organizationId: fixture.organizationId,
+              workspaceIds: [fixture.workspaceB],
+              featureIds: [LEGAL_LISTS_FEATURE_ID],
+            },
+            async (tx) =>
+              await tx`SELECT entity_feature_gate AS gate,
           entity_feature_organization_ids = ARRAY[${fixture.organizationId}::text] AS only_parent_organization
-          FROM legal_list_claims WHERE id = ${claimId}`;
+          FROM legal_list_claims WHERE id = ${claimId}`,
+          );
           expect(stored).toEqual({
             gate: "legal-lists",
             only_parent_organization: true,
@@ -502,12 +520,29 @@ describe.skipIf(!runPostgresTests)(
             entity_id, file_field_id, entity_version_id, content_sha256, evidence)
             VALUES (${runId}, ${fixture.organizationId}, ${fixture.workspaceB}, ${fixture.factB},
               ${fixture.fieldB}, ${fixture.factVersionB}, repeat('a', 64), '{"facts":[],"listId":"fixture-list"}'::jsonb)`;
-          await client`INSERT INTO legal_list_claims (id, workspace_id, run_id, position, type, state, text, anchor)
+          await inAppScope(
+            client,
+            {
+              organizationId: fixture.organizationId,
+              workspaceIds: [fixture.workspaceB],
+              featureIds: [LEGAL_LISTS_FEATURE_ID],
+            },
+            async (tx) =>
+              await tx`INSERT INTO legal_list_claims (id, workspace_id, run_id, position, type, state, text, anchor)
             VALUES (${claimId}, ${fixture.workspaceB}, ${runId}, 0, 'fact', 'nocover', 'Pinned claim',
-              '{"type":"docx-block"}'::jsonb)`;
-          const [before] =
-            await client`SELECT xmin::text AS revision, entity_feature_gate AS gate
-            FROM legal_list_claims WHERE id = ${claimId}`;
+              '{"type":"docx-block"}'::jsonb)`,
+          );
+          const [before] = await inAppScope(
+            client,
+            {
+              organizationId: fixture.organizationId,
+              workspaceIds: [fixture.workspaceB],
+              featureIds: [LEGAL_LISTS_FEATURE_ID],
+            },
+            async (tx) =>
+              await tx`SELECT xmin::text AS revision, entity_feature_gate AS gate
+            FROM legal_list_claims WHERE id = ${claimId}`,
+          );
           expect(before?.gate).toBe("legal-lists");
           await client`UPDATE entities SET name = 'Renamed without a gate change' WHERE id = ${fixture.factB}`;
           expect(
@@ -515,9 +550,17 @@ describe.skipIf(!runPostgresTests)(
               await client`SELECT name FROM entities WHERE id = ${fixture.factB}`
             ).at(0)?.name,
           ).toBe("Renamed without a gate change");
-          const [after] =
-            await client`SELECT xmin::text AS revision, entity_feature_gate AS gate
-            FROM legal_list_claims WHERE id = ${claimId}`;
+          const [after] = await inAppScope(
+            client,
+            {
+              organizationId: fixture.organizationId,
+              workspaceIds: [fixture.workspaceB],
+              featureIds: [LEGAL_LISTS_FEATURE_ID],
+            },
+            async (tx) =>
+              await tx`SELECT xmin::text AS revision, entity_feature_gate AS gate
+            FROM legal_list_claims WHERE id = ${claimId}`,
+          );
           expect(after).toEqual(before);
         } finally {
           await client`DELETE FROM organization WHERE id = ${fixture.organizationId}`;

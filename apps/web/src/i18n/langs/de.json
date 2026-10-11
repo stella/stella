@@ -732,6 +732,13 @@
         "procedural-history": "Verfahrensgang",
         "reasoning": "Argumentation"
       },
+      "errors": {
+        "answerIncomplete": "{source, select, organization {Der {provider}-Schlüssel Ihrer Organisation hat eine unvollständige Antwort geliefert.} other {Das KI-Modell hat eine unvollständige Antwort geliefert.}}",
+        "providerRefused": "{source, select, organization {{provider} hat die Anfrage mit dem Schlüssel Ihrer Organisation abgelehnt. Prüfen Sie den Schlüssel, sein Kontingent und die Abrechnung in den Organisationseinstellungen.} other {Der KI-Anbieter hat die Anfrage abgelehnt.}}",
+        "providerUnavailable": "{source, select, organization {{provider} ist für den Schlüssel Ihrer Organisation gerade nicht verfügbar.} other {Der KI-Anbieter ist gerade nicht verfügbar.}}",
+        "timedOut": "{source, select, organization {{provider} hat mit dem Schlüssel Ihrer Organisation nicht rechtzeitig geantwortet.} other {Das KI-Modell hat nicht rechtzeitig geantwortet.}}",
+        "unavailable": "Für diese Entscheidung ist keine KI-Analyse verfügbar."
+      },
       "generate": "KI-Leitsätze erzeugen",
       "holdingAnchor": "Zum Absatz",
       "invitation": "Mit einem kostenlosen Konto erstellt die KI Arbeitsnotizen zu dieser Entscheidung.",
@@ -993,10 +1000,14 @@
     "viewer": {
       "abstract": "Zusammenfassung",
       "appliedVersionNotStated": "Angewandte Fassung nicht angegeben",
+      "appliedVersionNotStatedCompact": "Fassung nicht angegeben",
       "appliedVersionStatedAmendment": "Fassung gemäß Änderungsgesetz <reference>{amendment}</reference>",
+      "appliedVersionStatedAmendmentCompact": "Angegeben: <reference>{amendment}</reference>",
       "appliedVersionStatedDate": "{relation, select, on {Am {date} geltende Fassung} until {Bis einschließlich {date} geltende Fassung} from {Ab {date} geltende Fassung} other {Am {date} geltende Fassung}}",
+      "appliedVersionStatedDateCompact": "{relation, select, on {Angegeben: {date}} until {Angegeben: bis {date}} from {Angegeben: ab {date}} other {Angegeben: {date}}}",
       "caseFileMayHoldOthers": "Diese Verfahrensakte kann auch weitere Entscheidungen enthalten.",
       "citedBy": "Zitiert von",
+      "citedDecisionPassage": "Textstelle in der Entscheidung",
       "cites": "Zitiert",
       "dissentByline": "Sondervotum: <bdi>{names}</bdi>",
       "judgeRole": {
@@ -1023,7 +1034,9 @@
       "textPending": "Der Entscheidungstext wird noch abgerufen",
       "textReadFailed": "Der Entscheidungstext konnte nicht geladen werden",
       "textUnavailable": "Für diese Entscheidung liegt kein Text vor",
-      "versionAtDecisionDateInferred": "Fassung zum Entscheidungsdatum (abgeleitet)"
+      "versionAtDecisionDateInferred": "Fassung zum Entscheidungsdatum (abgeleitet)",
+      "versionBasisInferredCompact": "Entscheidungsdatum · abgeleitet",
+      "versionBasisInferredExplanation": "Die Fassung wird aus dem Entscheidungsdatum abgeleitet. Die Entscheidung gibt nicht an, welche Fassung gilt."
     }
   },
   "catalogue": {
@@ -1089,6 +1102,18 @@
     "anonymizedModeEnabled": "Anonymisierter KI-Modus ist an",
     "anonymizedSpan": {
       "tooltip": "An das Modell gesendet als {placeholder}."
+    },
+    "answerEdit": {
+      "acceptFailed": "Die Änderung konnte nicht gespeichert werden. Versuchen Sie es erneut.",
+      "ask": "Änderungen anfordern",
+      "failed": "Die Änderung konnte nicht vorbereitet werden. Versuchen Sie es erneut.",
+      "instruction": "Beschreiben Sie die Änderung",
+      "instructionRequired": "Beschreiben Sie, wie der ausgewählte Text geändert werden soll.",
+      "invalidSelection": "Diese Auswahl kann nicht bearbeitet werden. Wählen Sie zusammenhängenden Text aus.",
+      "proposal": "Vorgeschlagene Änderung",
+      "requesting": "Änderungen werden vorbereitet…",
+      "stale": "Diese Antwort wurde geändert. Wählen Sie den Text erneut aus.",
+      "submit": "Änderung anfordern"
     },
     "applyMode": {
       "description": "Word speichert, wer welche Änderung vorgenommen hat. Wir merken uns Ihre Auswahl.",
@@ -1313,7 +1338,9 @@
     "pastedText": {
       "expand": "Vollständigen Text anzeigen",
       "fromClipboard": "{count, plural, one {# Zeichen eingefügt} other {# Zeichen eingefügt}}",
-      "fromPromptFallback": "Skill"
+      "fromPromptFallback": "Skill",
+      "showInTextField": "Im Textfeld anzeigen",
+      "title": "Eingefügter Text"
     },
     "placeholder": "Geben Sie hier Ihre Frage ein, / für Skills, @ für Kontext",
     "promptImprovementStrategies": {
@@ -1681,6 +1708,7 @@
     "actions": "Aktionen",
     "active": "Aktiv",
     "add": "Hinzufügen",
+    "advanced": "Erweitert",
     "all": "Alle",
     "and": "Und",
     "anonymizationLabels": {
@@ -1747,6 +1775,7 @@
     "createdAt": "Erstellt am {date}",
     "currency": "Währung",
     "currentPage": "Aktuelle Seite",
+    "custom": "Benutzerdefiniert",
     "date": "Datum",
     "datePicker": {
       "label": "Datumsauswahl",
@@ -1767,6 +1796,7 @@
     "description": "Beschreibung",
     "details": "Details",
     "detailsHiddenFeatureUnavailable": "Details ausgeblendet: Funktion nicht aktiviert",
+    "detailsUnavailable": "Details nicht verfügbar",
     "disconnect": "Trennen",
     "dismiss": "Verwerfen",
     "displayName": "Anzeigename",
@@ -1899,6 +1929,7 @@
     "noResults": "Keine Ergebnisse",
     "noVersions": "Kein Versionsverlauf",
     "none": "Keine",
+    "notStated": "Nicht angegeben",
     "notes": "Notizen",
     "open": "Öffnen",
     "openInNewTab": "In neuem Tab öffnen",
@@ -1933,6 +1964,7 @@
     "rename": "Umbenennen",
     "required": "Erforderlich",
     "reset": "Zurücksetzen",
+    "resetToDefault": "Auf Standard zurücksetzen",
     "resetZoom": "Zoom zurücksetzen",
     "restore": "Wiederherstellen",
     "retry": "Erneut versuchen",
@@ -1967,6 +1999,7 @@
     "sort": "Sortieren",
     "source": "Quelle",
     "stale": "Veraltet",
+    "start": "Starten",
     "status": "Status",
     "stepCount": "{count, plural, one {# Schritt} other {# Schritte}}",
     "stepProgress": "{current} von {total}",
@@ -1986,6 +2019,7 @@
     "unexpectedError": "Ein unerwarteter Fehler ist aufgetreten. Bitte kontaktieren Sie den Support.",
     "unknownUser": "Unbekannter Benutzer",
     "unpin": "Lösen",
+    "unsavedChanges": "Ungespeicherte Änderungen",
     "unsavedChangesEscape": "Ungespeicherte Änderungen. Erneut Esc drücken, um sie zu verwerfen",
     "unsavedLeaveConfirm": "Sie haben ungespeicherte Änderungen. Ohne Speichern verlassen?",
     "unverified": "Nicht verifiziert",
@@ -2033,6 +2067,7 @@
     "scopeExternalMcps": "Ihre verbundenen externen Tools verwenden",
     "scopeFeedback": "Produktfeedback an die stella-Betreuer senden",
     "scopeKnowledgeWrite": "Ihre Klauseln erstellen, bearbeiten und löschen und Playbooks ausführen",
+    "scopeLawRead": "Öffentliche Rechtsvorschriften und Rechtsprechung lesen",
     "scopeMattersWrite": "Ihre Akten und Aufgaben erstellen und bearbeiten",
     "scopeOfflineAccess": "Sie angemeldet halten, ohne erneute Zustimmung zu verlangen",
     "scopeOnboarding": "Tätigkeitsgebiete Ihrer Organisation konfigurieren",
@@ -2044,11 +2079,38 @@
     "scopeSkills": "Ihre gespeicherten stella-Skills verwenden",
     "scopeTemplates": "Dokumentvorlagen auflisten, ausfüllen und erstellen",
     "scopeTemplatesAnonymized": "Anonymisierte Versionen Ihrer Dokumentvorlagen auflisten, ausfüllen und erstellen",
+    "sensitiveAccess": "Enthält Zugriffe, die Daten löschen oder Ihre Organisation ändern können",
+    "showAllPermissions": "{count, plural, one {Berechtigung anzeigen} other {Alle # Berechtigungen anzeigen}}",
     "signedInAs": "Angemeldet als <email>{accountEmail}</email>",
+    "summaryAdminRead": "Audit-Protokoll",
+    "summaryAdminWrite": "Mitglieder und Einstellungen der Organisation, einschließlich Löschen",
+    "summaryBillingWrite": "Zeiteinträge, einschließlich Löschen",
+    "summaryChat": "Chats, einschließlich Löschen",
+    "summaryContactsWrite": "Kontakte, einschließlich Löschen",
+    "summaryDocumentsWrite": "Dokumente, einschließlich Löschen",
+    "summaryExternalMcps": "verbundene externe Tools",
+    "summaryFeedback": "Feedback",
+    "summaryKnowledgeWrite": "Klauseln und Playbooks, einschließlich Löschen von Klauseln",
+    "summaryLawRead": "öffentliche Rechtsvorschriften und Rechtsprechung",
+    "summaryLineChange": "<group>Kann ändern:</group> {items} ({count})",
+    "summaryLineOther": "<group>Außerdem:</group> {items}",
+    "summaryLineRead": "<group>Kann lesen:</group> {items} ({count})",
+    "summaryMattersWrite": "Akten und Aufgaben, einschließlich Löschen",
+    "summaryOfflineAccess": "dauerhafte Anmeldung",
+    "summaryOnboarding": "Tätigkeitsgebiete",
+    "summaryProfile": "Profil",
+    "summaryRead": "Dokumente, Akten und Kontakte",
+    "summaryReadAnonymized": "anonymisierte Dokumente und Akten",
+    "summarySearch": "Suche",
+    "summarySearchAnonymized": "anonymisierte Suche",
+    "summarySkills": "Skills, einschließlich Löschen",
+    "summaryTemplates": "Dokumentvorlagen, einschließlich Löschen",
+    "summaryTemplatesAnonymized": "anonymisierte Dokumentvorlagen",
     "title": "Zugriff autorisieren",
     "unverifiedApp": "Nicht verifizierte App",
     "unverifiedExplanation": "stella hat nicht überprüft, wer diese App veröffentlicht.",
-    "useAnotherAccount": "Anderes Konto verwenden"
+    "useAnotherAccount": "Anderes Konto verwenden",
+    "verifiedPublisher": "Verifizierte App von {publisher}"
   },
   "contacts": {
     "alsoPartyIn": "Tritt auch als Partei in {count, plural, one {# weiteren Akte} other {# weiteren Akten}} auf",
@@ -2752,7 +2814,6 @@
       },
       "selectFlow": "Workflow auswählen",
       "sizeConfirmTitle": "Umfangreicher Ablauf",
-      "start": "Starten",
       "startFailed": "Der Workflow konnte nicht gestartet werden.",
       "started": "Workflow gestartet",
       "stepProgress": "Schritt {current} von {total}",
@@ -2969,8 +3030,7 @@
   "guides": {
     "action": {
       "replay": "Neu starten",
-      "skip": "Überspringen",
-      "start": "Starten"
+      "skip": "Überspringen"
     },
     "checklist": {
       "progress": "{completed} von {total} abgeschlossen"
@@ -3650,6 +3710,10 @@
         "nameMissing": "Nicht gespeichert: Fügen Sie einen Namen hinzu",
         "positionsNeedAttention": "Nicht gespeichert: {count, plural, one {# Standpunkt muss} other {# Standpunkte müssen}} überprüft werden"
       },
+      "buildWithAi": {
+        "description": "Beantworten Sie im Chat ein paar Fragen – das Playbook wird dabei laufend gespeichert.",
+        "title": "Mit KI erstellen"
+      },
       "check": "Exakte Regel statt KI verwenden",
       "checkHint": "Für messbare Bedingungen, etwa: Zahlungsziel ≤ 30 Tage.",
       "checkKind": {
@@ -3801,7 +3865,6 @@
         "fallback": "Alternative",
         "notAcceptable": "Nicht akzeptabel"
       },
-      "unsavedChanges": "Ungespeicherte Änderungen",
       "untitledPosition": "Standpunkt ohne Titel",
       "updated": "Playbook aktualisiert",
       "updatedAt": "Aktualisiert: {date}",
@@ -3890,7 +3953,9 @@
   },
   "lawHome": {
     "clearRecent": "Verlauf löschen",
+    "clearRecentConfirmation": "Alle Ihre letzten Suchanfragen, Entscheidungen und Rechtsvorschriften in dieser Organisation löschen? Dies kann nicht rückgängig gemacht werden.",
     "enteringIntoForce": "Tritt demnächst in Kraft",
+    "importFailed": "Der lokale Verlauf konnte nicht importiert werden. Er ist weiterhin auf diesem Gerät gespeichert.",
     "inForceFrom": "In Kraft ab {date}",
     "noRecent": "Noch keine kürzlichen Aktivitäten",
     "noSignals": "Noch keine Signale",
@@ -4010,7 +4075,6 @@
       "invalidBinding": "Fügen Sie eine Nicht-Modifikatortaste hinzu",
       "notRebindable": "Dieses Tastenkürzel kann nicht geändert werden",
       "pressKeys": "Neue Tasten drücken…",
-      "resetToDefault": "Auf Standard zurücksetzen",
       "title": "Tastenkürzel"
     },
     "showShortcuts": "Tastenkürzel anzeigen",
@@ -4100,37 +4164,55 @@
     "aiConfig": {
       "addProvider": "Provider hinzufügen",
       "addProviderFirst": "Zuerst Provider hinzufügen",
+      "anthropicKeyDisabled": "Erstellen Sie in der Anthropic-Konsole einen aktiven API-Schlüssel und ersetzen Sie diesen Schlüssel.",
+      "anthropicNoCredits": "Laden Sie in der Abrechnung der Anthropic-Konsole API-Guthaben auf und versuchen Sie es erneut.",
+      "anthropicOrganizationRestricted": "Bitten Sie die Administration Ihrer Anthropic-Organisation um Zugriff oder verwenden Sie einen Schlüssel aus einer zugelassenen Organisation.",
+      "anthropicSubscriptionToken": "Verwenden Sie einen in der Anthropic-Konsole erstellten API-Schlüssel anstelle eines Tokens für ein Claude-Abonnement.",
+      "anthropicWorkspaceId": "Workspace-ID",
+      "anthropicWorkspaceRequired": "Dieser Anthropic-Schlüssel benötigt einen Workspace. Geben Sie dessen ID aus der Anthropic-Konsole ein und speichern Sie erneut.",
+      "anthropicWorkspaces": "Anthropic-Workspaces öffnen",
       "apiKey": "API-Schlüssel",
       "apiKeyConfiguredPlaceholder": "Konfiguriert: {key}. Geben Sie einen neuen Schlüssel ein, um ihn zu ersetzen.",
       "apiKeyPlaceholder": "API-Schlüssel eingeben",
       "apiKeySaved": "Gespeicherter Schlüssel {key}",
       "apiKeyUpdatePlaceholder": "Neuen Schlüssel zum Aktualisieren eingeben",
+      "azureModelNotEnabled": "Prüfen Sie, ob die Modellbereitstellung in der ausgewählten Azure-Ressource und Region existiert und ob dieser Schlüssel darauf zugreifen kann.",
       "baseUrl": "Basis-URL",
+      "bedrockModelNotEnabled": "Prüfen Sie die Modellverfügbarkeit in der ausgewählten AWS-Region, den Modellzugriff und Ihre IAM-Berechtigungen. Aktivieren Sie ein Modell oder wählen Sie ein zugängliches Modell aus und versuchen Sie es erneut.",
       "chooseModelsSubtitle": "Wählen Sie ein Modell pro Rolle. Preise erscheinen rechts.",
       "chooseModelsTitle": "Modelle wählen",
       "configure": "Konfigurieren",
       "customModelBadge": "Benutzerdefiniert · {provider}",
       "customModelDescription": "Diese Modell-ID ist nicht im stella-Katalog. Sie wird unverändert an den gewählten Provider gesendet.",
       "customModelHint": "Kein Katalogtreffer. Geben Sie eine beliebige Modell-ID ein; benutzerdefinierte IDs werden unverändert gespeichert.",
-      "dataRegion": "Datenregion",
-      "dataRegionDescription": "Leitet KI-Anfragen zwecks Datensouveränität über die ausgewählte Region.",
-      "dataRegionUnsupported": "Regionales Routing ist nur für Google AI (Vertex AI) verfügbar.",
       "decision": {
-        "add": "Entscheidungsmodell hinzufügen",
-        "description": "Fragen mit fester Antwort, etwa Dokumentkategorien oder die Polarität von Zitaten, gehen an dieses Modell; ohne eines beantwortet sie das generative Modell.",
+        "dataRegion": "Datenregion",
+        "description": "Fragen mit festen Antworten (Dokumentkategorien, Polarität von Zitaten)",
+        "generativeFallback": "Verwendet das generative Modell für die jeweilige Aufgabe.",
         "incomplete": "Geben Sie für das Entscheidungsmodell einen API-Schlüssel und ein Modell an oder entfernen Sie es.",
         "instanceProvided": "stella stellt bereits ein Entscheidungsmodell bereit; fügen Sie nur dann ein eigenes hinzu, wenn Sie ein anderes nutzen möchten.",
-        "label": "Entscheidungsmodell",
-        "modelId": "Modell-ID"
+        "label": "Entscheidungsfindung",
+        "regionEu": "Europäische Union",
+        "regionGlobal": "Weltweit",
+        "reuseOpenAIKey": "Meinen OpenAI-Schlüssel verwenden",
+        "separateKey": "Separaten Schlüssel verwenden"
       },
       "defaultModel": "Standard: {model}",
       "defaultModelOption": "Standard",
+      "defaultRationale": {
+        "chat": "Für Gespräche und alltägliche Fragen.",
+        "fast": "Für kurze Routineaufgaben.",
+        "pdf": "Zum Lesen und Analysieren von PDF-Dokumenten.",
+        "reasoning": "Für komplexe Aufgaben, die sorgfältiges Schlussfolgern erfordern."
+      },
       "deploymentNamePlaceholder": "Bereitstellungsname",
-      "description": "Verwenden Sie Ihren eigenen API-Schlüssel oder konfigurieren Sie eine Region zur Datensouveränität.",
       "editProviders": "Anbieter bearbeiten",
       "endpoint": "Endpunkt",
       "endpointDescription": "Verwenden Sie den Azure OpenAI- oder Azure Foundry-Endpunkt /openai/v1. stella speichert den normalisierten Endpunkt.",
+      "googleApiNotEnabled": "Aktivieren Sie die Generative Language API im Google-Cloud-Projekt, zu dem dieser Schlüssel gehört, und versuchen Sie es erneut.",
+      "googleKeyRestricted": "Prüfen Sie die API-, IP-Adress- und Referrer-Einschränkungen dieses Schlüssels in Google Cloud. Lassen Sie die benötigte API und Anfragen Ihres Servers zu und versuchen Sie es erneut.",
       "keepSavedKey": "Gespeicherten Schlüssel behalten",
+      "keyFormatHint": "Dieser Schlüssel hat ein ungewöhnliches Format für {provider}. Speichern Sie ihn, um ihn beim Anbieter zu prüfen.",
       "modelForRole": "Modell für {role}",
       "modelIdPlaceholder": "Modelle suchen",
       "modelsDescription": "Wählen Sie für jede KI-Kategorie einen Anbieter und ein angebotenes multimodales Modell.",
@@ -4138,6 +4220,9 @@
       "newApiKey": "Neuer API-Schlüssel",
       "newApiKeyDescription": "Er ersetzt den gespeicherten Schlüssel beim Speichern.",
       "noModelResults": "Keine passenden angebotenen Modelle",
+      "openaiInsufficientQuota": "Prüfen Sie das Budget Ihres OpenAI-Projekts und die API-Abrechnung. Laden Sie Guthaben auf oder erhöhen Sie das betreffende Limit und versuchen Sie es erneut.",
+      "openaiProjectOrganizationMismatch": "Verwenden Sie einen API-Schlüssel aus dem vorgesehenen OpenAI-Projekt und der vorgesehenen Organisation. Prüfen Sie deren Zugriffseinstellungen und versuchen Sie es erneut.",
+      "openrouterNoCredits": "Laden Sie in der OpenRouter-Abrechnung Guthaben auf und versuchen Sie es erneut.",
       "overrideRoles": "Rollen überschreiben",
       "overrideRolesDescription": "Wählen Sie aus, welche Rollen diesen Schlüssel verwenden, und legen Sie für jede Rolle ein Modell fest. Nicht ausgewählte Rollen verwenden den Plattformstandard.",
       "prices": {
@@ -4157,15 +4242,14 @@
       "providerForRole": "Provider für {role}",
       "providerKeyInvalid": "{provider} hat den Schlüssel abgelehnt. Bitte überprüfen Sie ihn.",
       "providerKeyInvalidShort": "Ungültig",
+      "providerSetupConsole": "Anbietereinstellungen öffnen",
       "providersDescription": "Fügen Sie die Provider-Zugangsdaten hinzu, die stella verwenden soll.",
       "providersPanel": "Provider",
-      "regions": {
-        "ch": "Schweiz (europe-west6)",
-        "eu": "EU (europe-west4)",
-        "global": "Global"
-      },
+      "removeLastProviderConfirm": "{provider} entfernen? Dadurch wird auch die benutzerdefinierte Auswahl der KI-Modelle zurückgesetzt.",
       "removeProvider": "Provider entfernen",
+      "removeProviderConfirm": "{provider} und die gespeicherten Zugangsdaten entfernen?",
       "replaceKey": "Schlüssel ersetzen",
+      "roleUnavailable": "{provider} unterstützt diese Rolle nicht.",
       "roles": {
         "chat": "Chat",
         "fast": "Schnell",
@@ -4175,7 +4259,8 @@
       "selectAtLeastOneRole": "Wählen Sie mindestens eine Rolle für diesen Schlüssel aus.",
       "selectModelForEachRole": "Fügen Sie einen Provider hinzu und wählen Sie für jede Kategorie ein Modell aus.",
       "selectedProvider": "{provider}",
-      "title": "KI-Konfiguration"
+      "title": "KI-Konfiguration",
+      "usingDefaults": "Standardeinstellungen aktiv"
     },
     "invitations": {
       "cancelInvitation": "Einladung stornieren",
@@ -4205,7 +4290,6 @@
       "patternMustContainSeq": "Muster muss '{'SEQ'}' enthalten",
       "patternRequired": "Muster ist erforderlich",
       "presets": {
-        "custom": "Benutzerdefiniert",
         "sequential": "Fortlaufend (001)",
         "yearMonthSequential": "Jahr-Monat / fortlaufend (2026-02/001)",
         "yearSequential": "Jahr / fortlaufend (2026/001)"
@@ -4237,7 +4321,6 @@
       "member": "Mitglied",
       "owner": "Eigentümer"
     },
-    "settings": "Organisationseinstellungen",
     "settingsDescription": "Name und Slug der Organisation bearbeiten",
     "switchOrganization": "Organisation wechseln"
   },
@@ -4612,7 +4695,7 @@
     "organization": {
       "activeMembers": "Aktive Mitglieder",
       "ai": "KI-Konfiguration",
-      "aiDescription": "Verwenden Sie Ihren eigenen API-Schlüssel oder konfigurieren Sie eine Region zur Datensouveränität",
+      "aiDescription": "Verbinden Sie Ihre eigenen API-Schlüssel für KI-Anbieter.",
       "anonymization": {
         "addPlaceholder": "Immer zu maskierender Begriff (z. B. Teamname)",
         "deleteAction": "Begriff löschen",
@@ -4777,7 +4860,17 @@
     "amendedTimes": "{count, plural, =0 {Nicht geändert} one {Einmal geändert} other {# Mal geändert}}",
     "asOf": "Fassung gültig am",
     "backToList": "Alle Rechtsvorschriften",
+    "citingDecisionHideSnippet": "Passage einklappen",
+    "citingDecisionMentionCount": "{count}× zitiert",
+    "citingDecisionOlderVersion": "Ältere Fassung",
+    "citingDecisionShowSnippet": "Vollständige Passage anzeigen",
+    "citingDecisionsCourtPlaceholder": "Alle Gerichte",
     "citingDecisionsFilterPlaceholder": "Geladene Entscheidungen filtern",
+    "citingDecisionsSnapshotCapped": "{count} Entscheidungen angezeigt (höchstens die {limit} mit den meisten Erwähnungen dieser Vorschrift).",
+    "citingDecisionsSortCitations": "Erwähnungen dieser Vorschrift",
+    "citingDecisionsSortDate": "Entscheidungsdatum",
+    "citingDecisionsYear": "Entscheidungsjahr",
+    "citingDecisionsYearPlaceholder": "Alle Jahre",
     "columns": {
       "act": "Rechtsakt",
       "amendments": "Änderungen",
@@ -4819,6 +4912,7 @@
     "inForceSince": "In Kraft seit {date}",
     "ineligibleVersion": "{range} ({label})",
     "leadingDecisions": "Leitentscheidungen",
+    "leadingDecisionsExplanation": "Die erste Erwähnung in jeder Entscheidung, geordnet nach Zitiergewicht: gewichtete eingehende Zitate, angepasst an Gerichtsrang, Zitierpolarität und Alter.",
     "noVersionInForce": "Am gewählten Tag galt keine Fassung dieses Gesetzes.",
     "openEnded": "heute",
     "openProvision": "Vorschrift öffnen",
@@ -5456,11 +5550,7 @@
       "apiKeyPlaceholder": "00000000-0000-0000-0000-000000000000:fx",
       "currentKey": "Gespeicherter Schlüssel",
       "description": "Konfigurieren Sie einen DeepL-API-Schlüssel, um die Dokumentübersetzung zu aktivieren. Free- und Pro-Schlüssel werden beide unterstützt.",
-      "removed": "DeepL-Schlüssel entfernt",
-      "removedDescription": "Die Übersetzung ist deaktiviert, bis ein neuer Schlüssel hinzugefügt wird.",
       "removing": "Wird entfernt…",
-      "saved": "DeepL-Schlüssel gespeichert",
-      "savedDescription": "Übersetzungen sind jetzt verfügbar.",
       "tierFree": "Free",
       "tierPro": "Pro",
       "title": "DeepL-Übersetzung"
@@ -6030,12 +6120,30 @@
         "addPDF": "PDF hinzufügen",
         "applyCrop": "Zuschnitt anwenden",
         "crop": "Zuschneiden",
-        "cropBottom": "Unten",
-        "cropDescription": "{count, plural, one {Legen Sie die Schnittbereiche für die ausgewählte Seite fest.} other {Legen Sie die Schnittbereiche für die # ausgewählten Seiten fest.}}",
-        "cropLeft": "Links",
-        "cropRight": "Rechts",
+        "cropAdvanced": "Erweitert",
+        "cropBottom": "Unten (mm)",
+        "cropDescription": "{count, plural, one {Legen Sie die Schnittbereiche für die ausgewählte Seite in Millimetern fest.} other {Legen Sie die Schnittbereiche für die # ausgewählten Seiten in Millimetern fest.}}",
+        "cropHandle": "Zuschnittgröße ändern: {position}",
+        "cropHandleBottom": "unten",
+        "cropHandleBottomLeft": "unten links",
+        "cropHandleBottomRight": "unten rechts",
+        "cropHandleLeft": "links",
+        "cropHandleRight": "rechts",
+        "cropHandleTop": "oben",
+        "cropHandleTopLeft": "oben links",
+        "cropHandleTopRight": "oben rechts",
+        "cropHint": "Ziehen Sie den Bereich oder seine Ziehpunkte. Die Pfeiltasten ändern den Zuschnitt um 1 mm, mit Umschalt um 10 mm. Für alle ausgewählten Seiten gelten dieselben Ränder.",
+        "cropLeft": "Links (mm)",
+        "cropMove": "Zuschnittbereich verschieben",
+        "cropNextPage": "Nächste ausgewählte Seite",
+        "cropPage": "Seite {page, number} von {count, number}",
+        "cropPreview": "Zuschnittvorschau, Seite {page, number}",
+        "cropPreviewFailed": "Die Seitenvorschau konnte nicht gerendert werden.",
+        "cropPreviousPage": "Vorherige ausgewählte Seite",
+        "cropRight": "Rechts (mm)",
         "cropTitle": "Seiten zuschneiden",
-        "cropTop": "Oben",
+        "cropTooSmall": "Diese Seite ist zu klein für einen Zuschnitt mit mindestens 10 mm Kantenlänge.",
+        "cropTop": "Oben (mm)",
         "delete": "Löschen",
         "deselectAll": "Auswahl aufheben",
         "discard": "Verwerfen",
@@ -6244,7 +6352,6 @@
     "views": {
       "addAdvancedFilter": "Erweiterten Filter hinzufügen",
       "addFields": "Felder hinzufügen",
-      "advancedFilter": "Erweitert",
       "advancedFilterCount": "{count, plural, =0 {Beliebig} one {# Regel} other {# Regeln}}",
       "aiGenerated": "KI-generiert",
       "calendar": {

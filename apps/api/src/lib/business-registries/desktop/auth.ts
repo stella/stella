@@ -6,6 +6,7 @@ import type { PermissionInput } from "@stll/permissions";
 import { rlsDb } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { createMembershipScopedDb } from "@/api/db/scoped";
+import { env } from "@/api/env";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { getAuth, resolveCredentialMemberAuthorization } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -15,6 +16,11 @@ import {
   DESKTOP_REGISTRY_PERMISSION,
   parseDesktopRegistryMetadata,
 } from "@/api/lib/business-registries/desktop/config";
+import {
+  VerifiedDesktopDeviceProof,
+  desktopProofRequestUrl,
+} from "@/api/lib/business-registries/desktop/proof";
+import { ConsumedDesktopDeviceProof } from "@/api/lib/business-registries/desktop/proof-store";
 import { probeDesktopCredential } from "@/api/lib/business-registries/desktop/renewal";
 import {
   DESKTOP_REGISTRY_REQUEST_AUTHORIZATION_MAX_LENGTH,
@@ -36,19 +42,46 @@ const rejected = () =>
     message: DESKTOP_REGISTRY_UNKNOWN_TOKEN_RESPONSE.body.message,
   });
 
+const forbidden = () =>
+  new HandlerError({
+    status: 403,
+    message: "Your role does not allow this desktop operation",
+  });
+
+/**
+ * A missing membership ends the account link (401); a live member whose role
+ * lacks the operation's permission keeps it (403). The desktop account acts
+ * with the person's own live role.
+ */
+export const desktopMemberDenial = (
+  member: { role: string } | null,
+  permission: PermissionInput,
+): HandlerError<401 | 403> | null => {
+  if (!member || !isMemberRole(member.role)) {
+    return rejected();
+  }
+  if (!hasMemberPermission(sessionMemberRole(member.role), permission)) {
+    return forbidden();
+  }
+  return null;
+};
+
 // Authentication owns the RLS bootstrap; registry handlers receive only the
 // resulting scoped database. This never creates a browser or MCP session.
 type DesktopRegistryAuthorization = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   keyId: string;
+  consumedProof: ConsumedDesktopDeviceProof;
   scopedDb: ScopedDb;
 };
 
 const authorizeDesktopCredential = async (
   request: Request,
   permission: PermissionInput,
-): Promise<Result<DesktopRegistryAuthorization, HandlerError<401 | 503>>> => {
+): Promise<
+  Result<DesktopRegistryAuthorization, HandlerError<401 | 403 | 503>>
+> => {
   const authorization = request.headers.get("authorization");
   if (
     !authorization?.startsWith(DESKTOP_REGISTRY_REQUEST_AUTHORIZATION_PREFIX) ||
@@ -80,6 +113,28 @@ const authorizeDesktopCredential = async (
   const metadata = parseDesktopRegistryMetadata(key.metadata);
   if (!metadata.success) {
     return Result.err(rejected());
+  }
+  const proof = await VerifiedDesktopDeviceProof.verify({
+    request,
+    expectedUrl: desktopProofRequestUrl(
+      request,
+      env.PUBLIC_URL ?? env.BETTER_AUTH_URL,
+    ),
+    expectedThumbprint: metadata.output.deviceJkt,
+    binding: {
+      type: "account",
+      keyId: key.id,
+      credential: authorization.slice(7),
+    },
+  });
+  if (proof.isErr()) {
+    return Result.err(proof.error);
+  }
+  const consumed = await ConsumedDesktopDeviceProof.claim({
+    proof: proof.value,
+  });
+  if (consumed.isErr()) {
+    return Result.err(consumed.error);
   }
   const identity = brandActorSessionIdentity({
     organizationId: metadata.output.organizationId,
@@ -130,17 +185,14 @@ const authorizeDesktopCredential = async (
   if (member.isErr()) {
     return Result.err(member.error);
   }
-  if (
-    !member.value ||
-    !isMemberRole(member.value.role) ||
-    // The desktop account acts with the person's own live role.
-    !hasMemberPermission(sessionMemberRole(member.value.role), permission)
-  ) {
-    return Result.err(rejected());
+  const denied = desktopMemberDenial(member.value, permission);
+  if (denied) {
+    return Result.err(denied);
   }
   return Result.ok({
     ...identity,
     keyId: key.id,
+    consumedProof: consumed.value,
     scopedDb: createMembershipScopedDb(rlsDb, {
       ...identity,
       serverValidatedWorkspaceIds: [],

@@ -13,12 +13,18 @@ import {
 // document actions and registry operations keep their own resource permissions.
 export default createSafeRootHandler(
   {
+    contract: "patch",
     permissions: DESKTOP_ACCOUNT_PERMISSION,
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "auth_plumbing" },
     body: t.Object(
       {
         correlationId: t.String({ format: "uuid" }),
+        deviceJkt: t.String({
+          minLength: 43,
+          maxLength: 43,
+          pattern: "^[A-Za-z0-9_-]{43}$",
+        }),
         verifierHash: t.String({
           minLength: 64,
           maxLength: 64,

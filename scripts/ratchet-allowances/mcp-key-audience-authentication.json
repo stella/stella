@@ -1,0 +1,5 @@
+{
+  "metric": "throw-outside-boundary",
+  "delta": 1,
+  "reason": "The existing MCP credential resolver rejects authentication failures by throwing McpAuthenticationError at the transport authentication boundary. The new audience mismatch follows the same typed rejection contract and supplies the bound resource path before any owner lookup."
+}

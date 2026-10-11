@@ -60,6 +60,9 @@ describe("sitemapSources", () => {
     expect(sources("/security/")).toContain(
       "apps/landing/src/data/security-controls.ts",
     );
+    expect(sources("/support/")).toEqual([
+      "apps/landing/src/pages/support.astro",
+    ]);
   });
 
   test("unmapped pages panic instead of inheriting a date", () => {

@@ -19,7 +19,6 @@ import {
   submitsOnEnter,
   writeProvisionQuestionDraft,
 } from "@/features/statutes/provision-inspector.logic";
-import { formatValidityDate } from "@/features/statutes/statute-format";
 import { useSessionStorage } from "@/hooks/use-session-storage";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -27,6 +26,7 @@ import {
   CapabilityAction,
   useActionCapabilities,
 } from "@/lib/organization/feature-access/capability-actions";
+import { formatValidityDate } from "@/lib/statutes/statute-format";
 
 const QUESTION_MAX_LENGTH = 2000;
 

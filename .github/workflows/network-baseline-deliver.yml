@@ -1,5 +1,9 @@
 name: Deliver network baseline
 
+defaults:
+  run:
+    shell: bash
+
 # Publish a validated, immutable main recording; no branch writes or PR threads.
 on:
   workflow_call:

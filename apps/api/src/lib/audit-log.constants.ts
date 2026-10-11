@@ -12,6 +12,8 @@ export const AUDIT_ACTION = {
 export type AuditAction = (typeof AUDIT_ACTION)[keyof typeof AUDIT_ACTION];
 
 export const AUDIT_RESOURCE_TYPE = {
+  SERVICE_OAUTH_CLIENT: "service_oauth_client",
+  LEGAL_RESOLVE: "legal_resolve",
   AUDIT_LOG: "audit_log",
   AGENT_SKILL: "agent_skill",
   AGENT_SKILL_COMMENT: "agent_skill_comment",
@@ -67,6 +69,7 @@ export const AUDIT_RESOURCE_TYPE = {
   REPORT_EXPORT: "report_export",
   RATE_TABLE: "rate_table",
   SAVED_SEARCH: "saved_search",
+  SEARCH_HISTORY: "search_history",
   SELLER_PROFILE: "seller_profile",
   SAVED_TIME_NARRATIVE: "saved_time_narrative",
   VAT_RATE: "vat_rate",

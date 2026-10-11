@@ -52,7 +52,9 @@ import {
   readPlUokikView,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-uokik";
 import { PL_UOKIK_RULING_UNREAD } from "@/api/handlers/case-law/ingestion/parsers/pl-uokik";
+import { CITATION_STORAGE_WIDTHS } from "@/api/lib/case-law/citation-storage-bounds";
 import { readGzipJson } from "@/api/lib/gzip-json";
+import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 import { isRecord } from "@/api/lib/type-guards";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
@@ -270,7 +272,11 @@ const parkedYesterday = (cursor: string): string =>
   });
 
 /** A made-up dated row, as the view states one, for rows the register adds. */
-const syntheticEntry = (unid: string, printed: string): Entry => ({
+const syntheticEntry = (
+  unid: string,
+  printed: string,
+  number = "DKK-999/2026",
+): Entry => ({
   "@position": "1",
   "@unid": unid,
   "@noteid": "1",
@@ -280,7 +286,7 @@ const syntheticEntry = (unid: string, printed: string): Entry => ({
       "@columnnumber": "0",
       "@name": "$7",
       text: {
-        "0": `[<B>Numer decyzji: </B>DKK-999/2026<BR><b>]Data decyzji:      [</B>${printed}<BR>][<A HREF=/bp/dec_prez.nsf/0/${unid}?OpenDocument   title='opis dokumentu'>Spółka</A>][<BR>]Kontrola koncentracji[<BR>]`,
+        "0": `[<B>Numer decyzji: </B>${number}<BR><b>]Data decyzji:      [</B>${printed}<BR>][<A HREF=/bp/dec_prez.nsf/0/${unid}?OpenDocument   title='opis dokumentu'>Spółka</A>][<BR>]Kontrola koncentracji[<BR>]`,
       },
     },
   ],
@@ -421,6 +427,61 @@ describe("a decision", () => {
     expect(decision.caseNumber === NUMBERLESS).toBe(true);
     expect(decision.caseNumberIsPlaceholder).toBe(true);
     expect(decision.decisionDate).toBeUndefined();
+  });
+
+  test("numbers at the storage boundary retain exact text or the exact document identity", async () => {
+    const page = await pageOf(FILELESS);
+    const width = CITATION_STORAGE_WIDTHS.caseNumber;
+    for (const token of ["x", "é", "𐐀"]) {
+      for (const length of [width - 1, width, width + 1]) {
+        const number = token.repeat(length);
+        const entry = syntheticEntry(FILELESS, "22.09.2026", number);
+        for (const detail of [
+          undefined,
+          page.replaceAll("DIH-4/2009", () => number),
+        ]) {
+          const decision = decisionOf(await buildFrom(entry, detail));
+          expect(decision.sourceDocumentId).toBe(FILELESS);
+          expect(length > width ? FILELESS : number).toBe(decision.caseNumber);
+          expect(decision.caseNumberIsPlaceholder === true).toBe(
+            length > width,
+          );
+          expect(
+            decision.metadata["caseNumberFallbackReason"] ===
+              (length > width ? "overlong-number" : undefined),
+          ).toBe(true);
+          expect(decision.metadata["decisionNumber"] === number).toBe(true);
+          if (length > width || token === "𐐀") {
+            expect(decision.identifiers).toBeUndefined();
+          }
+          expect(
+            decision.metadata["identifierStorageReason"] ===
+              (length <= width && token === "𐐀"
+                ? "unrepresentable-identifier"
+                : undefined),
+          ).toBe(true);
+          expect(sanitizeResult(decision).caseNumber).toBe(decision.caseNumber);
+        }
+      }
+    }
+    const registerLine = Array.from(
+      { length: width },
+      (_, index) => `DKK-${index}/2026`,
+    ).join("; ");
+    const decision = decisionOf(
+      await buildFrom(
+        syntheticEntry(FILELESS, "22.09.2026", registerLine),
+        undefined,
+      ),
+    );
+    expect(FILELESS).toBe(decision.caseNumber);
+    expect(decision.caseNumberIsPlaceholder).toBe(true);
+    expect(decision.metadata["decisionNumberAsListed"] === registerLine).toBe(
+      true,
+    );
+    expect(
+      decision.metadata["caseNumberFallbackReason"] === "overlong-number",
+    ).toBe(true);
   });
 
   test("is identified by its number as the register prints it and as prose cites it", async () => {

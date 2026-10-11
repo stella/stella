@@ -1,0 +1,13 @@
+{
+  "maxMetadataBytes": 512,
+  "detailsAccess": [
+    "disabled",
+    "ready",
+    "accessibilityRequired",
+    "unavailable"
+  ],
+  "changedEvent": "activity-timeline-changed",
+  "recordingStatuses": ["off", "recording", "paused"],
+  "retentions": ["week", "month", "quarter"],
+  "retentionDays": [7, 30, 90]
+}

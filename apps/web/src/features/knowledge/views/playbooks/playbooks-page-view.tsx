@@ -9,6 +9,7 @@ import {
   ClipboardListIcon,
   Clock3Icon,
   RotateCcwIcon,
+  SparklesIcon,
 } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 import { Skeleton } from "@stll/ui/skeleton";
@@ -70,6 +71,7 @@ export const PlaybooksPageView = ({
               title={t("knowledge.playbooks.recommended")}
             />
             <PlaybookStarterCards
+              builder={actions.buildWithAi}
               onStart={actions.startFrom}
               starters={source.starters}
             />
@@ -187,14 +189,70 @@ const SectionHeading = ({ id, title }: SectionHeadingProps) => (
   </div>
 );
 
+const STARTER_CARD_CLASS =
+  "border-border bg-card hover:border-foreground/25 hover:bg-muted/30 focus-visible:ring-ring flex h-full min-h-44 w-full flex-col rounded-xl border p-4 text-start focus-visible:ring-2 focus-visible:outline-none disabled:opacity-60";
+
+type StarterCardActionProps = {
+  isPending: boolean;
+  label: string;
+};
+
+const StarterCardAction = ({ isPending, label }: StarterCardActionProps) => {
+  const t = useTranslations();
+  return (
+    <span className="text-foreground mt-auto flex items-center gap-1 pt-4 text-sm font-medium">
+      {isPending ? (
+        <Loader className="size-4" label={t("common.loading")} size="sm" />
+      ) : (
+        <>
+          {label}
+          <ArrowRightIcon className="size-4 rtl:rotate-180" />
+        </>
+      )}
+    </span>
+  );
+};
+
+type BuildWithAiCardProps = {
+  onStart: () => void;
+  disabled: boolean;
+};
+
+const BuildWithAiCard = ({ onStart, disabled }: BuildWithAiCardProps) => {
+  const t = useTranslations();
+  return (
+    <li>
+      <button
+        className={STARTER_CARD_CLASS}
+        disabled={disabled}
+        onClick={onStart}
+        type="button"
+      >
+        <span className="bg-muted flex size-10 items-center justify-center rounded-lg">
+          <SparklesIcon className="text-muted-foreground size-5" />
+        </span>
+        <span className="mt-3 font-medium">
+          {t("knowledge.playbooks.buildWithAi.title")}
+        </span>
+        <span className="text-muted-foreground mt-1 line-clamp-2 text-sm">
+          {t("knowledge.playbooks.buildWithAi.description")}
+        </span>
+        <StarterCardAction isPending={false} label={t("common.start")} />
+      </button>
+    </li>
+  );
+};
+
 type PlaybookStarterCardsProps = {
   starters: PlaybooksSource["starters"];
   onStart: (starter: KnowledgePlaybookStarter) => void;
+  builder: (() => void) | undefined;
 };
 
 const PlaybookStarterCards = ({
   starters,
   onStart,
+  builder,
 }: PlaybookStarterCardsProps) => {
   const t = useTranslations();
 
@@ -224,15 +282,17 @@ const PlaybookStarterCards = ({
     );
   }
 
+  const anyPending = starters.pendingStarterId !== null;
   return (
     <ul className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      {builder && <BuildWithAiCard disabled={anyPending} onStart={builder} />}
       {starters.items.map((starter) => {
         const isPending = starters.pendingStarterId === starter.starterId;
         return (
           <li key={starter.starterId}>
             <button
-              className="border-border bg-card hover:border-foreground/25 hover:bg-muted/30 focus-visible:ring-ring flex h-full min-h-44 w-full flex-col rounded-xl border p-4 text-start focus-visible:ring-2 focus-visible:outline-none disabled:opacity-60"
-              disabled={starters.pendingStarterId !== null}
+              className={STARTER_CARD_CLASS}
+              disabled={anyPending}
               onClick={() => onStart(starter)}
               type="button"
             >
@@ -253,20 +313,10 @@ const PlaybookStarterCards = ({
                   count: starter.positionCount,
                 })}
               </span>
-              <span className="text-foreground mt-auto flex items-center gap-1 pt-4 text-sm font-medium">
-                {isPending ? (
-                  <Loader
-                    className="size-4"
-                    label={t("common.loading")}
-                    size="sm"
-                  />
-                ) : (
-                  <>
-                    {t("knowledge.playbooks.starters.useStarter")}
-                    <ArrowRightIcon className="size-4 rtl:rotate-180" />
-                  </>
-                )}
-              </span>
+              <StarterCardAction
+                isPending={isPending}
+                label={t("knowledge.playbooks.starters.useStarter")}
+              />
             </button>
           </li>
         );

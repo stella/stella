@@ -122,7 +122,7 @@ test.each(vectors.map((vector) => [vector.name, vector] as const))(
       scopedDb: noDatabase,
       sections: vector.sections,
     });
-    const rows: unknown = citationRowsOf(plan);
+    const rows: unknown = citationRowsOf(plan.unwrap()).unwrap();
     expect(rows).toEqual(vector.rows);
   },
 );

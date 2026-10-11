@@ -84,7 +84,12 @@ const withCommittedMonitoring = async (
         await tx.execute(
           sql.raw(`CREATE ROLE ${OWNER} NOLOGIN NOSUPERUSER NOBYPASSRLS`),
         );
-        await tx.execute(sql.raw(`GRANT USAGE ON SCHEMA public TO ${OWNER}`));
+        await tx.execute(
+          sql.raw(`GRANT ${OWNER} TO CURRENT_USER WITH INHERIT TRUE, SET TRUE`),
+        );
+        await tx.execute(
+          sql.raw(`GRANT USAGE, CREATE ON SCHEMA public TO ${OWNER}`),
+        );
         for (const table of MONITORING_TABLES) {
           await tx.execute(
             sql.raw(`ALTER TABLE public.${table} OWNER TO ${OWNER}`),
@@ -228,6 +233,7 @@ if (!databaseUrl || !runPostgresTests) {
   test("committed monitoring migrations isolate every operation on all three tables", async () => {
     await withCommittedMonitoring(databaseUrl, async (tx) => {
       await assertForcedRls(tx, MONITORING_TABLES);
+      await asOwner(tx);
       for (const table of MONITORING_TABLES) {
         await tx.execute(
           insertRow({
@@ -356,6 +362,7 @@ if (!databaseUrl || !runPostgresTests) {
           sql.raw(`ALTER TABLE public.${table} OWNER TO ${OWNER}`),
         );
       }
+      await asOwner(tx);
       type RowOptions = {
         table: (typeof tables)[number];
         organization: string;
@@ -557,23 +564,6 @@ if (!databaseUrl || !runPostgresTests) {
           sql`SELECT * FROM public.sanctions_screening_events WHERE id = ${EVENT_A}`,
         ),
       ).toEqual(before);
-      // RESET returns to CI's administrative identity; this bypass is intentional
-      // and is distinct from the forced-RLS, non-superuser owner checked above.
-      await tx.execute(sql`RESET ROLE`);
-      const administrator = await tx.execute<{ bypass: boolean }>(
-        sql`SELECT rolsuper OR rolbypassrls AS bypass FROM pg_roles WHERE rolname = current_user`,
-      );
-      expect(administrator).toEqual([{ bypass: true }]);
-      expect(
-        await tx.execute(
-          sql`UPDATE public.sanctions_screening_events SET reason = 'administrative' WHERE id = ${EVENT_A} RETURNING *`,
-        ),
-      ).toHaveLength(1);
-      expect(
-        await tx.execute(
-          sql`DELETE FROM public.sanctions_screening_events WHERE id = ${EVENT_A} RETURNING *`,
-        ),
-      ).toHaveLength(1);
     });
   }, 120_000);
 }

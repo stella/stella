@@ -103,6 +103,7 @@ export const importSkillsBodySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   contentDelivery: {
     type: "none",
     reason: "Imports skills without delivering stored-file bytes.",

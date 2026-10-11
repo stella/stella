@@ -320,6 +320,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-raw-error-logging.fixture.ts", [
     "no-raw-error-logging/no-raw-error-logging",
   ]),
+  fixtureRuleOverride("no-raw-error-output.fixture.ts", [
+    "no-raw-error-output/no-raw-error-output",
+  ]),
   fixtureRuleOverride("failure-sink-handle.fixture.ts", [
     "failure-sink-handle/failure-sink-handle",
   ]),
@@ -510,6 +513,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("require-safe-route-handlers.fixture.ts", [
     "require-safe-route-handlers/no-direct-handler-config",
     "require-safe-route-handlers/require-safe-route-handlers",
+  ]),
+  fixtureRuleOverride("require-write-contract.fixture.ts", [
+    "require-write-contract/require-write-contract",
   ]),
   fixtureRuleOverride("require-workspace-handler-config.fixture.ts", [
     "require-workspace-handler-config/require-workspace-handler-config",
@@ -1390,6 +1396,9 @@ const config = defineConfig({
     "apps/web/public/**",
     // Declaration files carry no runtime code; skip product-code rules.
     "**/*.d.ts",
+    // wasm-bindgen glue is committed verbatim and checked by rebuilding it;
+    // product-code rewrites would be replaced by the next generation.
+    "packages/scan-engine/generated/scan_engine.js",
     // Snowball stemmers: generated output plus the upstream JS runtime,
     // transcribed verbatim. Product-code rules would rewrite the algorithm
     // (prefer-code-point changes UTF-16 semantics; no-bitwise has no
@@ -1446,6 +1455,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-layout-motion-classes.ts",
     "./.oxlint-plugins/no-body-ownership-ids.ts",
     "./.oxlint-plugins/no-raw-error-logging.ts",
+    "./.oxlint-plugins/no-raw-error-output.ts",
     "./.oxlint-plugins/failure-sink-handle.ts",
     "./.oxlint-plugins/no-redacted-log-attribute-key.ts",
     "./.oxlint-plugins/no-untyped-updates.ts",
@@ -1488,6 +1498,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-beforeload-redirect.ts",
     "./.oxlint-plugins/require-safe-route-handlers.ts",
     "./.oxlint-plugins/require-workspace-handler-config.ts",
+    "./.oxlint-plugins/require-write-contract.ts",
     "./.oxlint-plugins/no-inline-endpoint-in-routes.ts",
     "./.oxlint-plugins/security-guards.ts",
     "./.oxlint-plugins/no-unbranded-ownership-id-param.ts",
@@ -1626,6 +1637,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-detached-label-shape.ts",
     "./.oxlint-plugins/no-awaited-builder-union.ts",
     "./.oxlint-plugins/confine-owner.ts",
+    "./.oxlint-plugins/no-unanchored-footnotes.ts",
     "./.oxlint-plugins/confine-aggregate-lock.ts",
     "./.oxlint-plugins/no-direct-status-set.ts",
     "./.oxlint-plugins/no-discarded-transition-result.ts",
@@ -2357,9 +2369,13 @@ const config = defineConfig({
     },
     {
       // The desktop shell runs in the system WebView of its minimum macOS
-      // version, which predates `Array#toSorted`; sort a fresh array there.
+      // version, which predates `Array#toSorted` and `Array#toReversed`; sort
+      // or reverse a fresh array there (apps/desktop/tests/webview-baseline).
       files: ["apps/desktop/src/**/*.{ts,tsx}"],
-      rules: { "unicorn/no-array-sort": "off" },
+      rules: {
+        "unicorn/no-array-sort": "off",
+        "unicorn/no-array-reverse": "off",
+      },
     },
     {
       // Two guards contradict each other in apps/web; this override picks one.
@@ -3430,6 +3446,16 @@ const config = defineConfig({
       },
     },
     {
+      files: ["apps/api/src/mcp/apps/**/*.tsx"],
+      excludeFiles: ["**/*.test.tsx"],
+      rules: {
+        "no-untranslated-jsx-literal/no-untranslated-jsx-literal": [
+          "error",
+          { allowedText: ["stella"] },
+        ],
+      },
+    },
+    {
       // Web element registrations share one owner and conflict registry.
       files: ["apps/web/src/lib/drag-and-drop/element-registration.ts"],
       rules: {
@@ -4486,6 +4512,23 @@ const config = defineConfig({
       },
     },
     {
+      files: ["apps/api/scripts/**/*.ts", "apps/api/src/**/*.{ts,tsx}"],
+      excludeFiles: [
+        "**/*.{test,spec}.{ts,tsx}",
+        "apps/api/src/tests/**/*.{ts,tsx}",
+      ],
+      rules: {
+        "no-raw-error-output/no-raw-error-output": "error",
+      },
+    },
+    {
+      // This sink contract deliberately injects unsafe records and verifies redaction.
+      files: ["apps/api/src/lib/errors/query-error-output.test.ts"],
+      rules: {
+        "no-raw-error-logging/no-raw-error-logging": "off",
+      },
+    },
+    {
       // Server-side outbound requests. A target that is constant, validated
       // configuration, or a Stella-owned producer carries a suppression at
       // the call naming that boundary; arbitrary URLs belong behind
@@ -4805,6 +4848,16 @@ const config = defineConfig({
           "error",
           { entries: enforcedOwnershipEntries },
         ],
+      },
+    },
+    {
+      files: [
+        "apps/api/src/handlers/case-law/ingestion/parsers/**/*.ts",
+        ".oxlint-plugins/__fixtures__/no-unanchored-footnotes.fixture.ts",
+      ],
+      excludeFiles: ["apps/api/src/**/*.test.ts"],
+      rules: {
+        "no-unanchored-footnotes/no-unanchored-footnotes": "error",
       },
     },
     {
@@ -5143,6 +5196,10 @@ const config = defineConfig({
         "require-file-transport-disposition/require-file-transport-disposition":
           "error",
       },
+    },
+    {
+      files: ["apps/api/src/**/*.ts"],
+      rules: { "require-write-contract/require-write-contract": "error" },
     },
     {
       // A workspace-scoped config must name the type that requires its params

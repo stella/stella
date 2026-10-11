@@ -261,6 +261,7 @@ export const deleteTimeEntryHandler = async function* ({
 
 const deleteTimeEntryById = createSafeHandler(
   {
+    contract: "patch",
     description:
       "Delete a time entry. A draft entry is permanently deleted; an " +
       "approved entry is written off instead (kept for the audit trail, " +

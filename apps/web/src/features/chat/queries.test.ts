@@ -15,6 +15,7 @@ import {
 import {
   CHAT_CONTINUATION_REJECTED_ERROR_CODE,
   CHAT_TURN_INTENT,
+  CHAT_TURN_ID_HEADER,
 } from "@stll/api-contract";
 import {
   ACTION_ADMISSION_CODES,
@@ -37,12 +38,13 @@ import {
 import {
   __resetChatRequestStateForTests,
   acquireChatRuntime,
+} from "@/features/chat/chat-runtime-registry";
+import {
   applyChatModelChange,
   chatThreadOptions,
   groupedChatThreadsOptions,
   invalidateGroupedChatThreads,
   invalidateChatThreadLists,
-  installChatRuntimeCleanup,
   listChatHistoryItems,
   matchesChatThread,
   matchesChatThreadAcrossScopes,
@@ -97,6 +99,37 @@ const chatRequestRunId = (body: unknown): string => {
 
 const parseChatRequestRunId = (init: RequestInit | undefined): string =>
   chatRequestRunId(parseJsonRequestBody(init));
+
+test("retains answer revisions when hydrating and refreshing the live runtime", () => {
+  const originalAnswer = {
+    id: assistantMessageId,
+    role: "assistant",
+    parts: [{ type: "text", content: "The deadline is Monday." }],
+    revision: 0,
+    edited: false,
+  } as const satisfies PersistedChatMessage;
+  const runtime = createChatRuntime({
+    activeTurnId: null,
+    context: undefined,
+    initialMessages: [originalAnswer],
+    key: { scope: "global", threadId: toChatThreadId("thread-A") },
+    onError: (error) => {
+      throw error;
+    },
+    onFinish: () => undefined,
+    reloadThread: () => undefined,
+  });
+  expect(runtime.getSnapshot().messages).toEqual([originalAnswer]);
+  const editedAnswer = {
+    ...originalAnswer,
+    parts: [{ type: "text", content: "The deadline is Friday." }],
+    revision: 1,
+    edited: true,
+  } as const satisfies PersistedChatMessage;
+  runtime.setMessages([editedAnswer]);
+  expect(runtime.getSnapshot().messages).toEqual([editedAnswer]);
+  runtime.leave();
+});
 
 describe("chatKeys", () => {
   test("isolates normalized history searches from the unfiltered list", () => {
@@ -214,6 +247,7 @@ describe("chat thread fetch failures", () => {
 
     expect(data).toMatchObject({
       messages: [],
+      activeSkill: null,
       threadExists: false,
     });
   });
@@ -439,6 +473,7 @@ describe("mergeGroupedChatThreadPages", () => {
             updatedAt: "2026-05-16T08:00:00.000Z",
             usedAnonymization: false,
             context: EMPTY_THREAD_CONTEXT,
+            decision: null,
           },
         ],
         nextCursor: "page-2",
@@ -455,6 +490,7 @@ describe("mergeGroupedChatThreadPages", () => {
                 updatedAt: "2026-05-16T07:00:00.000Z",
                 usedAnonymization: false,
                 context: EMPTY_THREAD_CONTEXT,
+                decision: null,
               },
             ],
           },
@@ -470,6 +506,7 @@ describe("mergeGroupedChatThreadPages", () => {
             updatedAt: "2026-05-16T08:00:00.000Z",
             usedAnonymization: false,
             context: EMPTY_THREAD_CONTEXT,
+            decision: null,
           },
           {
             createdAt: "2026-05-16T06:00:00.000Z",
@@ -479,6 +516,7 @@ describe("mergeGroupedChatThreadPages", () => {
             updatedAt: "2026-05-16T06:00:00.000Z",
             usedAnonymization: false,
             context: EMPTY_THREAD_CONTEXT,
+            decision: null,
           },
         ],
         nextCursor: null,
@@ -495,6 +533,7 @@ describe("mergeGroupedChatThreadPages", () => {
                 updatedAt: "2026-05-16T07:00:00.000Z",
                 usedAnonymization: false,
                 context: EMPTY_THREAD_CONTEXT,
+                decision: null,
               },
               {
                 createdAt: "2026-05-16T05:00:00.000Z",
@@ -504,6 +543,7 @@ describe("mergeGroupedChatThreadPages", () => {
                 updatedAt: "2026-05-16T05:00:00.000Z",
                 usedAnonymization: false,
                 context: EMPTY_THREAD_CONTEXT,
+                decision: null,
               },
             ],
           },
@@ -519,6 +559,7 @@ describe("mergeGroupedChatThreadPages", () => {
                 updatedAt: "2026-05-16T06:00:00.000Z",
                 usedAnonymization: false,
                 context: EMPTY_THREAD_CONTEXT,
+                decision: null,
               },
               {
                 createdAt: "2026-05-16T04:00:00.000Z",
@@ -528,6 +569,7 @@ describe("mergeGroupedChatThreadPages", () => {
                 updatedAt: "2026-05-16T04:00:00.000Z",
                 usedAnonymization: false,
                 context: EMPTY_THREAD_CONTEXT,
+                decision: null,
               },
             ],
           },
@@ -1130,20 +1172,37 @@ describe("chat runtime", () => {
 
   test("latches an explicitly stopped turn until authoritative hydration", async () => {
     const threadId = toChatThreadId("thread-stopped");
-    globalThis.fetch = createFetchMock(
-      async (_input, init) =>
-        await new Promise<Response>((_resolve, reject) => {
-          init?.signal?.addEventListener(
-            "abort",
-            () => {
-              const error = new Error("aborted");
-              error.name = "AbortError";
-              reject(error);
-            },
-            { once: true },
-          );
+    const accepted = Promise.withResolvers<undefined>();
+    globalThis.fetch = createFetchMock(async (input, init) => {
+      const url = input instanceof Request ? input.url : input.toString();
+      if (init?.method === "POST" && url.endsWith("/cancel")) {
+        return Response.json({
+          turn: {
+            id: "018f0000-0000-7000-8000-00000000000a",
+            reason: "user-stop",
+            status: "cancelled",
+          },
+        });
+      }
+      await accepted.promise;
+      return new Response(
+        new ReadableStream({
+          start(controller) {
+            init?.signal?.addEventListener(
+              "abort",
+              () => controller.error(new DOMException("Aborted", "AbortError")),
+              { once: true },
+            );
+          },
         }),
-    );
+        {
+          headers: {
+            "Content-Type": "text/event-stream",
+            [CHAT_TURN_ID_HEADER]: "018f0000-0000-7000-8000-00000000000a",
+          },
+        },
+      );
+    });
     const runtime = createChatRuntime({
       activeTurnId: null,
       context: undefined,
@@ -1162,11 +1221,13 @@ describe("chat runtime", () => {
 
     runtime.stop();
 
+    expect(runtime.getSnapshot().turnAbandoned).toBe(true);
+    accepted.resolve(undefined);
+    await stream;
     expect(runtime.getSnapshot()).toMatchObject({
       status: "ready",
       turnAbandoned: true,
     });
-    await stream;
   });
 
   test("exposes progressive create-document source from partial arguments", async () => {
@@ -2628,13 +2689,11 @@ describe("chat runtime", () => {
                 part.state === "input-complete",
             ),
           );
-      const toolCallShown = new Promise<void>((resolve) => {
-        const unsubscribe = runtime.subscribe(() => {
-          if (hasCompleteToolCall()) {
-            unsubscribe();
-            resolve();
-          }
-        });
+      const toolCallShown = Promise.withResolvers<undefined>();
+      const unsubscribe = runtime.subscribe(() => {
+        if (hasCompleteToolCall()) {
+          toolCallShown.resolve(undefined);
+        }
       });
       const sent = sendThreadChatMessage(
         runtime,
@@ -2651,7 +2710,7 @@ describe("chat runtime", () => {
         toolCall: answerCase.toolCall,
       });
       pushFirstStream(chunks.filter((chunk) => chunk.type !== "RUN_FINISHED"));
-      await toolCallShown;
+      await toolCallShown.promise;
       // The answer leaves while the run that asked is still open, and before
       // the page has seen the interrupt it resolves.
       expect(runtime.getSnapshot().isLoading).toBe(true);
@@ -2665,6 +2724,7 @@ describe("chat runtime", () => {
       await sent;
       await answered;
       await continuationRequested;
+      unsubscribe();
 
       expect(requests).toHaveLength(2);
       expect(requests.at(1)).toMatchObject({
@@ -3111,6 +3171,7 @@ describe("acquireChatRuntime reconcile", () => {
     contextMatterIds: [],
     lastActivityAt: null,
     threadRevision: null,
+    activeSkill: null,
     threadExists: true,
     usedAnonymization: false,
     webSearchAvailable: false,
@@ -3653,7 +3714,6 @@ describe("acquireChatRuntime reconcile", () => {
 
   test("keeps distinct runtimes per context capability set and sweeps them all on query GC", () => {
     const queryClient = new QueryClient();
-    installChatRuntimeCleanup(queryClient);
     const data = buildThreadData();
 
     // Both contexts map to the SAME pure-data query key: contextKind
@@ -3853,18 +3913,21 @@ describe("acquireChatRuntime reconcile", () => {
 
     const staleData = buildThreadData();
     const plainContext = { allowMissingThread: true };
-    // `getActiveSkill` flips contextKind, so this surface's PURE-DATA
+    // `getActiveTemplate` flips contextKind, so this surface's PURE-DATA
     // query key differs from the plain one — the busy reattach must
     // match on thread identity, not on the query key.
-    const skillContext = {
+    const templateContext = {
       allowMissingThread: true,
-      getActiveSkill: () => ({ skillId: "skill-A", skillName: "Summarize" }),
+      getActiveTemplate: () => ({
+        fileName: "template.docx",
+        templateId: "template-A",
+      }),
     };
     expect(
       chatThreadOptions({
         activeOrganizationId,
         key: threadRef,
-        context: skillContext,
+        context: templateContext,
       }).queryKey,
     ).not.toEqual(
       chatThreadOptions({
@@ -3876,7 +3939,7 @@ describe("acquireChatRuntime reconcile", () => {
 
     const streaming = acquireChatRuntime({
       activeOrganizationId,
-      context: skillContext,
+      context: templateContext,
       data: staleData,
       key: threadRef,
       queryClient,
@@ -3920,16 +3983,19 @@ describe("acquireChatRuntime reconcile", () => {
 
     const staleData = buildThreadData();
     const plainContext = { allowMissingThread: true };
-    const skillContext = {
+    const templateContext = {
       allowMissingThread: true,
-      getActiveSkill: () => ({ skillId: "skill-A", skillName: "Summarize" }),
+      getActiveTemplate: () => ({
+        fileName: "template.docx",
+        templateId: "template-A",
+      }),
     };
 
     // No prior entry under the plain key: the mid-stream acquire hits
     // the cross-key busy scan and records an alias under it.
     const streaming = acquireChatRuntime({
       activeOrganizationId,
-      context: skillContext,
+      context: templateContext,
       data: staleData,
       key: threadRef,
       queryClient,
@@ -3991,7 +4057,7 @@ describe("acquireChatRuntime reconcile", () => {
     expect(
       acquireChatRuntime({
         activeOrganizationId,
-        context: skillContext,
+        context: templateContext,
         data: staleData,
         key: threadRef,
         queryClient,
@@ -4001,12 +4067,14 @@ describe("acquireChatRuntime reconcile", () => {
 
   test("GC sweep removes only the entries of the removed query key", () => {
     const queryClient = new QueryClient();
-    installChatRuntimeCleanup(queryClient);
     const staleData = buildThreadData();
     const plainContext = { allowMissingThread: true };
-    const skillContext = {
+    const templateContext = {
       allowMissingThread: true,
-      getActiveSkill: () => ({ skillId: "skill-A", skillName: "Summarize" }),
+      getActiveTemplate: () => ({
+        fileName: "template.docx",
+        templateId: "template-A",
+      }),
     };
     const plainOptions = chatThreadOptions({
       activeOrganizationId,
@@ -4023,7 +4091,7 @@ describe("acquireChatRuntime reconcile", () => {
     });
     const skillRuntime = acquireChatRuntime({
       activeOrganizationId,
-      context: skillContext,
+      context: templateContext,
       data: staleData,
       key: threadRef,
       queryClient,
@@ -4048,7 +4116,7 @@ describe("acquireChatRuntime reconcile", () => {
     expect(
       acquireChatRuntime({
         activeOrganizationId,
-        context: skillContext,
+        context: templateContext,
         data: staleData,
         key: threadRef,
         queryClient,

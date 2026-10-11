@@ -64,6 +64,15 @@ const hasExternalCssReference = (css: string): boolean => {
   return false;
 };
 
+const hasScriptBearingCss = (css: string): boolean => {
+  const decoded = decodeCssToken(css);
+  return (
+    /expression\s*\(/iu.test(decoded) ||
+    /(?:^|[^-\w])(?:behaviou?r|-moz-binding)\s*:/iu.test(decoded) ||
+    /(?:java|vb)script:/iu.test(decoded)
+  );
+};
+
 export const inspectMcpAppHtml = (html: string): string[] => {
   const document = load(html);
   const issues: string[] = [];
@@ -74,6 +83,9 @@ export const inspectMcpAppHtml = (html: string): string[] => {
     const tag = element.tagName;
     if (tag === "style" && hasExternalCssReference(document(element).text())) {
       issues.push("Non-inline stylesheet URL: style");
+    }
+    if (tag === "style" && hasScriptBearingCss(document(element).text())) {
+      issues.push("Script-bearing CSS: style");
     }
     if (
       (tag === "script" && element.attribs["src"] !== undefined) ||
@@ -96,6 +108,9 @@ export const inspectMcpAppHtml = (html: string): string[] => {
       }
       if (name === "style" && hasExternalCssReference(value)) {
         issues.push(`Non-inline style URL: ${tag}`);
+      }
+      if (name === "style" && hasScriptBearingCss(value)) {
+        issues.push(`Script-bearing CSS style: ${tag}`);
       }
     }
   }

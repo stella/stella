@@ -89,7 +89,7 @@ const activeSkillContext: ActiveChatSkillContext = {
   id: skillId,
   origin: "authored",
   requiredTools: [],
-  resources: [{ kind: "knowledge", path: "knowledge/canary.md" }],
+  resources: [{ path: "references/canary.md" }],
   source: "installed",
   toolName: "provider-schema-canary",
   version: null,
