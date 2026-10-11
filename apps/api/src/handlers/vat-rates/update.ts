@@ -17,6 +17,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { pickDefined } from "@/api/lib/pick-defined";
 
 const config = {
+  contract: "patch",
   description:
     "Update an active VAT rate validity period without overlapping another period for its code.",
   permissions: { organizationSettings: ["update"] },

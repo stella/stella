@@ -3,7 +3,7 @@ import { panic, Result } from "better-result";
 
 import {
   SKILL_FILE_NAME,
-  SKILL_RESOURCE_FOLDER_KINDS,
+  SKILL_RESOURCE_FOLDERS,
   validateSkillPackage,
   type SkillPackageDiagnostic,
   type SkillPackageFile,
@@ -111,7 +111,7 @@ const collectPinnedFiles = async (
   ];
   const pending = [target.directory];
   const queued = new Set(pending);
-  const resourceFolders = new Set(Object.keys(SKILL_RESOURCE_FOLDER_KINDS));
+  const resourceFolders = SKILL_RESOURCE_FOLDERS;
 
   while (pending.length > 0) {
     const directory = pending.shift();
