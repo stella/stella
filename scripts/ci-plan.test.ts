@@ -3638,7 +3638,7 @@ test("split service suites preserve their scopes and independent verdicts", () =
   for (const suite of suites) {
     const scope = suiteScopes.find(([name]) => name === suite.name)?.[1];
     if (scope === undefined) {
-      throw new TypeError(`No service scope for ${suite.name}`);
+      throw new TypeError("No service scope for suite");
     }
     const predicate = `needs.ci-plan.outputs.${scope} == 'true'`;
     if (scope === "corpus_suites_required") {
@@ -6034,8 +6034,12 @@ test("Postgres plans are visible on PRs while execution requires explicit opt-in
         });
         const jobValues = {
           ...values,
-          "needs.ci-plan.outputs.postgres_service_suites_required":
-            String(eligible),
+          "needs.ci-plan.outputs.postgres_service_suites_required": v.parse(
+            v.boolean(),
+            eligible,
+          )
+            ? "true"
+            : "false",
         };
         expect(eligible).toBe(event !== EVENT.pullRequest || enabled);
         expect(evaluate(planner?.if ?? "false", { values })).toBe(

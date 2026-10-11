@@ -4971,14 +4971,25 @@ jobs:
           fi
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
         with:
           bun-version-file: package.json
+          save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install dependencies
+        timeout-minutes: 3
         run: bun scripts/ci-install.ts "$RUNNER_TEMP/bun-install/postgres.log" --frozen-lockfile --ignore-scripts --filter @stll/api --filter @stll/cli
         env:
           NPM_TOKEN: ""
+
+      - name: Upload failed Bun install logs
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: bun-install-${{ github.job }}-${{ matrix.shard }}
+          path: ${{ runner.temp }}/bun-install/*.log
+          retention-days: 7
+          if-no-files-found: ignore
 
       - name: Apply migrations to service Postgres
         if: needs.ci-plan.outputs.postgres_suites_required == 'true' || needs.ci-plan.outputs.corpus_suites_required == 'true'

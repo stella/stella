@@ -119,6 +119,7 @@ const allPlanned = Object.fromEntries(
 );
 const heavyPlan = {
   ...allPlanned,
+  package_checks_required: "true",
   trusted: "true",
   coverage_profile: "normal-v1",
   pilot_fast_jobs: "[]",
