@@ -159,6 +159,8 @@ export const IN_PROCESS_DEPENDENCIES = {
     "Workspace package used as an internal module; implementation stays within the monorepo.",
   "@stll/sanctions":
     "Workspace package used as an internal module; implementation stays within the monorepo.",
+  "@stll/scan-engine":
+    "Workspace package used as an internal module; implementation stays within the monorepo.",
   "@stll/scripts":
     "Workspace package used as an internal module; implementation stays within the monorepo.",
   "@stll/sha256":

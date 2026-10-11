@@ -1508,13 +1508,25 @@ export const EXTERNAL_CONTRACTS = {
         path: "apps/api/scripts/record-docx-engine-parity.ts",
         role: "primary",
       },
+      {
+        path: "packages/scan-engine/src/scan-engine.ts",
+        role: "primary",
+      },
+      {
+        path: "packages/scan-engine/src/scan-engine.worker.ts",
+        role: "primary",
+      },
+      {
+        path: "apps/web/src/testing/dom-network-guard.ts",
+        role: "primary",
+      },
     ],
     sdks: [],
     pinSources: [],
     driftTriggers: ["upstream-response-change"],
     status: "uncharacterised",
     reason:
-      "These census entries acquire local modules; local loading tests exist, but no remote-service characterisation applies.",
+      "These census entries load local modules or package-owned binaries, or refuse test requests; local tests exist, but no remote-service characterisation applies.",
   },
   "stella-api": {
     owners: [

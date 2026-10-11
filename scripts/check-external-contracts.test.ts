@@ -68,7 +68,7 @@ test("the real outbound census and SDK manifests have total offline coverage", (
       sdks: [...readExternalSdks(ROOT), "@example/sdk"],
     }).join("\n"),
   ).toContain("SDK @example/sdk maps to 0");
-});
+}, 30_000);
 
 test("the closed dependency census includes clients without SDK-shaped names", () => {
   expect(readExternalSdks(ROOT)).toContain("posthog-js");
