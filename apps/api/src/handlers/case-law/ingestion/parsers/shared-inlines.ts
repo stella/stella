@@ -373,8 +373,11 @@ export const inlinesToPlainText = (inlines: readonly Inline[]): string => {
  * markup-shape dependence this function exists to remove, since the same
  * document with the break written as `\n` inside a text node loses it.
  */
-const trimLeadingWhitespace = (nodes: Inline[]): Inline[] => {
-  const result = [...nodes];
+const trimInlineWhitespace = (
+  nodes: readonly Inline[],
+  edge: "start" | "end",
+): Inline[] => {
+  const result = edge === "start" ? [...nodes] : nodes.toReversed();
   // Page anchors passed on the way in: zero-width on the text axis, so
   // neither whitespace to drop nor content that ends the trim.
   const kept: Inline[] = [];
@@ -397,7 +400,8 @@ const trimLeadingWhitespace = (nodes: Inline[]): Inline[] => {
     }
 
     if (first.type === "text") {
-      const trimmed = first.text.trimStart();
+      const trimmed =
+        edge === "start" ? first.text.trimStart() : first.text.trimEnd();
       if (trimmed.length > 0) {
         result[0] = { ...first, text: trimmed };
         break;
@@ -408,16 +412,49 @@ const trimLeadingWhitespace = (nodes: Inline[]): Inline[] => {
 
     // bold | italic | link — trim inside, and drop the wrapper entirely
     // when nothing but whitespace was in it.
-    const children = trimLeadingWhitespace(first.children);
-    if (children.length > 0) {
+    const children = trimInlineWhitespace(first.children, edge);
+    if (inlinesToPlainText(children).length > 0) {
       result[0] = { ...first, children };
       break;
+    }
+    if (children.length > 0) {
+      kept.push({ ...first, children });
     }
     result.shift();
   }
 
   kept.push(...result);
-  return kept;
+  return edge === "start" ? kept : kept.toReversed();
+};
+
+// parser-output-unchanged: Only cz-us, cz-nss, and hu-bhgy consume the new normalization/prefix path (their versions are bumped); all other parsers use unchanged HTML/text utilities.
+const NORMALIZED_INLINE_LINE = Symbol("normalized-inline-line");
+
+/** Text offsets and rendering share the same trimmed, formatting-preserving tree. */
+export const normalizeInlineLine = (nodes: readonly Inline[]) => {
+  const inlines = trimInlineWhitespace(
+    trimInlineWhitespace(nodes, "start"),
+    "end",
+  );
+  return {
+    [NORMALIZED_INLINE_LINE]: true as const,
+    inlines,
+    plainText: inlinesToPlainText(inlines),
+  };
+};
+
+export const stripInlineLinePrefix = (
+  line: ReturnType<typeof normalizeInlineLine>,
+  pattern: RegExp,
+) => {
+  const match = pattern.exec(line.plainText);
+  return {
+    match,
+    line:
+      match === null
+        ? line
+        : normalizeInlineLine(stripInlinePrefix(line.inlines, match[0].length)),
+  };
 };
 
 export const stripInlinePrefix = (
@@ -475,7 +512,7 @@ export const stripInlinePrefix = (
     }
   }
 
-  return trimLeadingWhitespace(result);
+  return trimInlineWhitespace(result, "start");
 };
 
 /**
