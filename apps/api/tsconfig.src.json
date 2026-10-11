@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "${configDir}/.cache/tsbuildinfo.src.json"
+  },
+  "exclude": [
+    "src/mcp/apps",
+    "src/handlers/visual-sandbox/browser",
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx"
+  ]
+}

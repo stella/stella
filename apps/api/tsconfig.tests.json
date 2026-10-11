@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.src.json",
+  "compilerOptions": {
+    "disableSourceOfProjectReferenceRedirect": true,
+    "tsBuildInfoFile": "${configDir}/.cache/tsbuildinfo.tests.json"
+  },
+  "references": [
+    {
+      "path": "./tsconfig.declarations.json"
+    }
+  ],
+  "include": ["src/**/*.test.ts", "src/**/*.test.tsx", "../../types"],
+  "exclude": ["src/mcp/apps", "src/handlers/visual-sandbox/browser"]
+}

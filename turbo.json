@@ -710,6 +710,90 @@
     },
     "@stll/api#typecheck": {
       "dependsOn": [
+        "typecheck:src",
+        "typecheck:tests",
+        "typecheck:scripts",
+        "typecheck:contracts",
+        "typecheck:mcp-apps",
+        "typecheck:visual-sandbox"
+      ],
+      "inputs": ["package.json"],
+      "outputs": []
+    },
+    "@stll/api#typecheck:src": {
+      "dependsOn": [
+        "transit",
+        "@stll/cli#codegen:runtime",
+        "generate:capability-runtime"
+      ],
+      "inputs": [
+        "src/**",
+        "!src/**/*.test.ts",
+        "!src/**/*.test.tsx",
+        "!src/mcp/apps/**",
+        "!src/handlers/visual-sandbox/browser/**",
+        "drizzle.config.ts",
+        "$TURBO_ROOT$/.npmrc",
+        "$TURBO_ROOT$/bunfig.toml",
+        "$TURBO_ROOT$/package.json",
+        "$TURBO_ROOT$/bun.lock",
+        "$TURBO_ROOT$/packages/**",
+        "$TURBO_ROOT$/types/**",
+        "package.json",
+        "tsconfig*.json"
+      ],
+      "outputs": []
+    },
+    "@stll/api#typecheck:declarations": {
+      "dependsOn": [
+        "transit",
+        "@stll/cli#codegen:runtime",
+        "generate:capability-runtime"
+      ],
+      "inputs": [
+        "src/**",
+        "!src/**/*.test.ts",
+        "!src/**/*.test.tsx",
+        "!src/mcp/apps/**",
+        "!src/handlers/visual-sandbox/browser/**",
+        "drizzle.config.ts",
+        "$TURBO_ROOT$/.npmrc",
+        "$TURBO_ROOT$/bunfig.toml",
+        "$TURBO_ROOT$/package.json",
+        "$TURBO_ROOT$/bun.lock",
+        "$TURBO_ROOT$/packages/**",
+        "$TURBO_ROOT$/types/**",
+        "package.json",
+        "tsconfig*.json"
+      ],
+      "outputs": [
+        ".cache/typecheck-declarations/**",
+        ".cache/tsbuildinfo.declarations.json"
+      ]
+    },
+    "@stll/api#typecheck:tests": {
+      "dependsOn": [
+        "transit",
+        "@stll/cli#codegen:runtime",
+        "generate:capability-runtime",
+        "typecheck:declarations"
+      ],
+      "inputs": [
+        "src/**/*.test.ts",
+        "src/**/*.test.tsx",
+        "$TURBO_ROOT$/.npmrc",
+        "$TURBO_ROOT$/bunfig.toml",
+        "$TURBO_ROOT$/package.json",
+        "$TURBO_ROOT$/bun.lock",
+        "$TURBO_ROOT$/packages/**",
+        "$TURBO_ROOT$/types/**",
+        "package.json",
+        "tsconfig*.json"
+      ],
+      "outputs": []
+    },
+    "@stll/api#typecheck:scripts": {
+      "dependsOn": [
         "transit",
         "@stll/cli#codegen:runtime",
         "generate:capability-runtime"
@@ -720,17 +804,69 @@
         "$TURBO_ROOT$/bunfig.toml",
         "$TURBO_ROOT$/package.json",
         "$TURBO_ROOT$/bun.lock",
-        "$TURBO_ROOT$/packages/typescript-config/**",
-        "$TURBO_ROOT$/patches/**",
-        "$TURBO_ROOT$/types/**"
+        "$TURBO_ROOT$/packages/**",
+        "$TURBO_ROOT$/types/**",
+        "package.json",
+        "tsconfig*.json"
       ],
-      "outputs": [
-        "src/mcp/generated/capability-dispatch.ts",
-        "src/mcp/generated/capability-catalog.ts",
-        "src/mcp/generated/capability-feature-bindings.ts",
-        "$TURBO_ROOT$/packages/cli/src/generated/route-map.ts",
-        "$TURBO_ROOT$/packages/cli/src/generated/tool-annotations.ts"
-      ]
+      "outputs": []
+    },
+    "@stll/api#typecheck:contracts": {
+      "dependsOn": [
+        "transit",
+        "@stll/cli#codegen:runtime",
+        "generate:capability-runtime"
+      ],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/.npmrc",
+        "$TURBO_ROOT$/bunfig.toml",
+        "$TURBO_ROOT$/package.json",
+        "$TURBO_ROOT$/bun.lock",
+        "$TURBO_ROOT$/packages/**",
+        "$TURBO_ROOT$/types/**",
+        "package.json",
+        "tsconfig*.json"
+      ],
+      "outputs": []
+    },
+    "@stll/api#typecheck:mcp-apps": {
+      "dependsOn": [
+        "transit",
+        "@stll/cli#codegen:runtime",
+        "generate:capability-runtime"
+      ],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/.npmrc",
+        "$TURBO_ROOT$/bunfig.toml",
+        "$TURBO_ROOT$/package.json",
+        "$TURBO_ROOT$/bun.lock",
+        "$TURBO_ROOT$/packages/**",
+        "$TURBO_ROOT$/types/**",
+        "package.json",
+        "tsconfig*.json"
+      ],
+      "outputs": []
+    },
+    "@stll/api#typecheck:visual-sandbox": {
+      "dependsOn": [
+        "transit",
+        "@stll/cli#codegen:runtime",
+        "generate:capability-runtime"
+      ],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/.npmrc",
+        "$TURBO_ROOT$/bunfig.toml",
+        "$TURBO_ROOT$/package.json",
+        "$TURBO_ROOT$/bun.lock",
+        "$TURBO_ROOT$/packages/**",
+        "$TURBO_ROOT$/types/**",
+        "package.json",
+        "tsconfig*.json"
+      ],
+      "outputs": []
     },
     "@stll/api#lint": {
       "dependsOn": ["typecheck", "generate:capability-runtime"],

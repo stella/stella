@@ -28,7 +28,7 @@
     "docker:reset-dev": "docker compose --profile dev down -v && docker compose --profile dev up -d",
     "docker:stop-dev": "docker compose --profile dev down",
     "clean": "git clean -xdf .cache .turbo node_modules",
-    "typecheck": "bun --cwd=../../packages/cli run codegen:runtime && bun run generate:capability-runtime && bun check --no-pretty --all --project=tsconfig.json && bun check --no-pretty --all --project=tsconfig.contracts.json && bun check --no-pretty --all --project=tsconfig.scripts.json && bun check --no-pretty --all --project=tsconfig.mcp-apps.json && bun check --no-pretty --all --project=tsconfig.visual-sandbox.json",
+    "typecheck": "bun ../../packages/scripts/src/api-typecheck.ts",
     "lint": "bun --cwd=../../packages/cli run codegen:runtime && bun run generate:capability-runtime && cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check apps/api",
     "lint:fix": "bun --cwd=../../packages/cli run codegen:runtime && bun run generate:capability-runtime && cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix apps/api",
     "format": "bun ../../scripts/run-oxfmt.ts .",
@@ -72,7 +72,14 @@
     "corpus:generation": "bun run --env-file=.env src/scripts/corpus-generation.ts",
     "document-processing-worker": "bun src/scripts/document-processing-worker.ts",
     "dev:errors": "tail -F .dev-logs/errors.jsonl",
-    "generate:capability-runtime": "bun scripts/generate-capability-runtime.ts"
+    "generate:capability-runtime": "bun scripts/generate-capability-runtime.ts",
+    "typecheck:declarations": "bun ../../packages/scripts/src/tsc-native.ts --project=tsconfig.declarations.json",
+    "typecheck:src": "bun check --no-pretty --all --project=tsconfig.src.json",
+    "typecheck:tests": "bun check --no-pretty --all --project=tsconfig.tests.json",
+    "typecheck:scripts": "bun check --no-pretty --all --project=tsconfig.scripts.json",
+    "typecheck:contracts": "bun check --no-pretty --all --project=tsconfig.contracts.json",
+    "typecheck:mcp-apps": "bun check --no-pretty --all --project=tsconfig.mcp-apps.json",
+    "typecheck:visual-sandbox": "bun check --no-pretty --all --project=tsconfig.visual-sandbox.json"
   },
   "dependencies": {
     "@aws-sdk/client-cloudwatch": "^3.1145.0",

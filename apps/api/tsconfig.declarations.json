@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.src.json",
+  "compilerOptions": {
+    "composite": true,
+    "noCheck": true,
+    "noEmit": false,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "rootDir": "../..",
+    "outDir": "./.cache/typecheck-declarations",
+    "tsBuildInfoFile": "${configDir}/.cache/tsbuildinfo.declarations.json"
+  }
+}

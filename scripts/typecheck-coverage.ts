@@ -116,6 +116,8 @@ const OXC_PROJECT_PROXIES = [
 ] as const satisfies readonly OxcProjectProxy[];
 
 const OXC_NATIVE_ONLY_PROJECTS = [
+  "apps/api/tsconfig.src.json",
+  "apps/api/tsconfig.tests.json",
   "tsconfig.scripts.json",
   "tsconfig.tooling.json",
   "tsconfig.oxlint-plugins.json",
@@ -256,8 +258,16 @@ const typecheckProjects = (): string[] => {
 
       addProject(path.join(workspace, "tsconfig.json"), workspace);
 
-      for (const project of supplementalProjects(typecheck)) {
-        addProject(path.join(workspace, project), workspace);
+      for (const [name, command] of Object.entries(packageJson.scripts)) {
+        if (name !== "typecheck" && !name.startsWith("typecheck:")) {
+          continue;
+        }
+        if (name === "typecheck:declarations" || typeof command !== "string") {
+          continue;
+        }
+        for (const project of supplementalProjects(command)) {
+          addProject(path.join(workspace, project), workspace);
+        }
       }
     }
   }

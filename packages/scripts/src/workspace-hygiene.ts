@@ -2,6 +2,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
+import { validateApiTypecheckProjects } from "./api-typecheck-projects";
 import { validateWorkspaceAppBoundaries } from "./workspace-app-boundaries";
 import type { AppBoundaryOptions } from "./workspace-app-boundaries";
 
@@ -734,6 +735,7 @@ export const validateWorkspaceRoot = (
   appBoundaryOptions: AppBoundaryOptions = {},
 ): WorkspaceIssue[] => {
   const issues: WorkspaceIssue[] = [
+    ...validateApiTypecheckProjects(rootDir),
     ...validateWorkspaceAppBoundaries(rootDir, appBoundaryOptions),
     ...validateTurboInstallPins(rootDir),
     ...validateBunCwdRunForm(rootDir),
