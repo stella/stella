@@ -266,7 +266,7 @@ pub fn handle_url(
           return;
         }
         tracing::info!(target: crate::logging::TRAIL_TARGET, event = "account.linked");
-        resume_parked_handoff(manager, app_handle);
+        resume_parked_handoff(manager, app_handle).await;
       });
     }
     Some(DeepLinkAction::ConnectSelfHost {
@@ -471,15 +471,24 @@ async fn offer_account_link(
   tracing::info!(target: crate::logging::TRAIL_TARGET, event = "handoff.parked", target_kind = ?run.target);
   let expiry_token = zeroize::Zeroizing::new(run.token.clone());
   let expiry_app = app.clone();
+  let expiry_api = run.api_base_url.clone();
   tauri::async_runtime::spawn(async move {
     if matches!(
-      crate::handoff::expire_parked(&expiry_token).await,
+      crate::handoff::expire_parked(&expiry_token, &expiry_api).await,
       crate::handoff::Resumable::Expired
     ) {
       present_handoff_failure(&expiry_app, &crate::handoff::Failure::Expired).await;
     }
   });
-  let offer = crate::handoff::account_offer(&run.token).await;
+  offer_parked_handoff(run, manager, app).await;
+}
+
+async fn offer_parked_handoff(
+  run: HandoffRun,
+  manager: Arc<Mutex<SessionManager>>,
+  app: AppHandle,
+) {
+  let offer = crate::handoff::account_offer(&run.token, &run.api_base_url).await;
   match offer.pending() {
     crate::handoff::Resumable::Nothing => return,
     crate::handoff::Resumable::Expired => {
@@ -512,42 +521,85 @@ async fn offer_account_link(
     crate::handoff::Resumable::Ready(_) => {}
   }
   if !approved {
-    if crate::handoff::unpark(&run.token) {
+    if crate::handoff::unpark(&run.token, &run.api_base_url) {
       tracing::info!(target: crate::logging::TRAIL_TARGET, event = "handoff.dropped", target_kind = ?run.target);
       crate::handoff::decline(run.target, &run.api_base_url, &run.token).await;
     }
     return;
   }
-  let Some(web_origin) = web_origin_for_api(&manager, &run.api_base_url).await else {
-    crate::handoff::unpark(&run.token);
-    present_handoff_failure(&app, &crate::handoff::Failure::UntrustedServer).await;
-    return;
-  };
-  match crate::account::open_browser_connection(&app, &run.api_base_url, &web_origin)
+  match offer
+    .connect(&DesktopConnectionHost {
+      manager: &manager,
+      app: &app,
+    })
     .await
   {
-    Ok(()) => {
-      tracing::info!(target: crate::logging::TRAIL_TARGET, event = "account.link_started")
+    Ok(crate::handoff::OfferConnection::NotCurrent) => {}
+    Ok(crate::handoff::OfferConnection::Expired) => {
+      present_handoff_failure(&app, &crate::handoff::Failure::Expired).await;
     }
-    // A link already in progress resumes the handoff when it completes.
-    Err(error) if error == crate::account::LINK_ALREADY_PENDING => {}
-    Err(error) => {
-      crate::handoff::unpark(&run.token);
-      present_handoff_failure(&app, &crate::handoff::Failure::Terminal(error)).await;
+    Ok(crate::handoff::OfferConnection::Started(outcome)) => match outcome {
+      crate::account::ConnectionStart::Started => {
+        tracing::info!(target: crate::logging::TRAIL_TARGET, event = "account.link_started");
+      }
+      crate::account::ConnectionStart::SameOriginPending => {}
+      crate::account::ConnectionStart::DifferentOriginPending => {
+        // Keep this token for its own offer after the other connection completes.
+        present_handoff_failure(&app, &crate::handoff::Failure::AccountMismatch).await;
+      }
+    },
+    Err(failure) => {
+      crate::handoff::unpark(&run.token, &run.api_base_url);
+      present_handoff_failure(&app, &failure).await;
     }
   }
 }
 
-fn resume_parked_handoff(manager: Arc<Mutex<SessionManager>>, app: AppHandle) {
-  match crate::handoff::take_parked() {
-    crate::handoff::Resumable::Nothing => {}
-    crate::handoff::Resumable::Expired => {
+struct DesktopConnectionHost<'a> {
+  manager: &'a Mutex<SessionManager>,
+  app: &'a AppHandle,
+}
+
+impl crate::handoff::ConnectionHost for DesktopConnectionHost<'_> {
+  type Prepared = crate::account::PreparedBrowserConnection;
+
+  async fn web_origin(&self, api_base_url: &str) -> Option<String> {
+    web_origin_for_api(self.manager, api_base_url).await
+  }
+
+  async fn prepare(
+    &self,
+    api_base_url: &str,
+    web_origin: &str,
+  ) -> Result<Self::Prepared, String> {
+    crate::account::prepare_browser_connection(api_base_url, web_origin).await
+  }
+
+  fn open(
+    &self,
+    prepared: Self::Prepared,
+  ) -> Result<crate::account::ConnectionStart, String> {
+    prepared.open(self.app)
+  }
+}
+
+async fn resume_parked_handoff(manager: Arc<Mutex<SessionManager>>, app: AppHandle) {
+  let account =
+    match crate::account::current(&app.state::<crate::account::AccountState>()).await {
+      Ok(Some(account)) => account,
+      Ok(None) => return,
+      Err(error) => {
+        present_handoff_failure(&app, &crate::handoff::Failure::Terminal(error)).await;
+        return;
+      }
+    };
+  match crate::handoff::take_parked_for_account(&account.api_base_url).await {
+    crate::handoff::ResumeAfterLink::Nothing => {}
+    crate::handoff::ResumeAfterLink::Expired => {
       tracing::info!(target: crate::logging::TRAIL_TARGET, event = "handoff.expired");
-      tauri::async_runtime::spawn(async move {
-        present_handoff_failure(&app, &crate::handoff::Failure::Expired).await;
-      });
+      present_handoff_failure(&app, &crate::handoff::Failure::Expired).await;
     }
-    crate::handoff::Resumable::Ready(parked) => {
+    crate::handoff::ResumeAfterLink::Ready(parked) => {
       tracing::info!(target: crate::logging::TRAIL_TARGET, event = "handoff.resumed", target_kind = ?parked.target);
       start_handoff(
         HandoffRun {
@@ -559,6 +611,19 @@ fn resume_parked_handoff(manager: Arc<Mutex<SessionManager>>, app: AppHandle) {
         manager,
         app,
       );
+    }
+    crate::handoff::ResumeAfterLink::NeedsOffer(parked) => {
+      offer_parked_handoff(
+        HandoffRun {
+          target: parked.target,
+          api_base_url: parked.api_base_url.clone(),
+          token: parked.token.to_string(),
+          expires: parked.expires,
+        },
+        manager,
+        app,
+      )
+      .await;
     }
   }
 }

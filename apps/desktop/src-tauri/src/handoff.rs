@@ -288,12 +288,12 @@ impl From<String> for Stop {
 /// The account a redemption may present. An unlinked desktop, or one whose
 /// saved credential the API rejects, must not redeem: an unauthenticated
 /// redeem ends the handoff on the server, and the user is about to link.
-/// An account on another server keeps the unauthenticated redeem, which
-/// tells the web the desktop needs a different account.
+/// An account on another server also waits for its own connection; it must
+/// never send an unauthenticated redemption for the new handoff.
 async fn admitted_account(
   state: &crate::account::AccountState,
   api_base_url: &str,
-) -> Result<Option<crate::account::AccountRequest>, Stop> {
+) -> Result<crate::account::AccountRequest, Stop> {
   let account = match crate::account::foreground_account(state).await {
     Ok(account) => account,
     Err(error) if error == crate::registry::not_connected() => {
@@ -305,7 +305,7 @@ async fn admitted_account(
     return Err(Stop::AccountRequired);
   };
   if account.api_base_url != api_base_url {
-    return Ok(None);
+    return Err(Stop::AccountRequired);
   }
   match crate::registry::request(
     account.request_auth(),
@@ -325,7 +325,7 @@ async fn admitted_account(
       Err(Stop::AccountRequired)
     }
     // Anything else is the redeem's to report, with its own recovery.
-    Ok(_) | Err(_) => Ok(Some(account)),
+    Ok(_) | Err(_) => Ok(account),
   }
 }
 
@@ -355,7 +355,7 @@ async fn redeem_with<T: serde::de::DeserializeOwned>(
       target,
       api_base_url,
       token,
-      account: account.as_ref(),
+      account: Some(&account),
     })
     .await;
     let failure = match result {
@@ -446,26 +446,101 @@ pub(crate) struct ParkedHandoff {
   pub api_base_url: String,
   pub token: zeroize::Zeroizing<String>,
   pub expires: std::time::Instant,
+  recovery: AccountRecovery,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum AccountRecovery {
+  OfferRequired,
+  AwaitingAccount,
 }
 
 static PARKED: std::sync::Mutex<Option<ParkedHandoff>> = std::sync::Mutex::new(None);
 static ACCOUNT_OFFER: Mutex<()> = Mutex::const_new(());
+static CONNECTION_START: Mutex<()> = Mutex::const_new(());
+
+pub(crate) trait ConnectionHost: Sync {
+  type Prepared: Send;
+  fn web_origin(
+    &self,
+    api_base_url: &str,
+  ) -> impl std::future::Future<Output = Option<String>> + Send;
+  fn prepare(
+    &self,
+    api_base_url: &str,
+    web_origin: &str,
+  ) -> impl std::future::Future<Output = Result<Self::Prepared, String>> + Send;
+  fn open(
+    &self,
+    prepared: Self::Prepared,
+  ) -> Result<crate::account::ConnectionStart, String>;
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum OfferConnection {
+  NotCurrent,
+  Expired,
+  Started(crate::account::ConnectionStart),
+}
 
 /// Replacements queue behind the active offer instead of losing their dialog.
-/// The lease checks token ownership again after the user's response.
+/// The lease checks token and API ownership again after the user's response.
 pub(crate) struct AccountOffer {
   token: zeroize::Zeroizing<String>,
+  api_base_url: String,
   _lease: tokio::sync::MutexGuard<'static, ()>,
 }
 
-pub(crate) async fn account_offer(token: &str) -> AccountOffer {
+pub(crate) async fn account_offer(token: &str, api_base_url: &str) -> AccountOffer {
   AccountOffer {
     token: zeroize::Zeroizing::new(token.into()),
+    api_base_url: api_base_url.into(),
     _lease: ACCOUNT_OFFER.lock().await,
   }
 }
 
 impl AccountOffer {
+  pub(crate) async fn connect(
+    &self,
+    host: &impl ConnectionHost,
+  ) -> Result<OfferConnection, Failure> {
+    let original = match self.pending() {
+      Resumable::Nothing => return Ok(OfferConnection::NotCurrent),
+      Resumable::Expired => return Ok(OfferConnection::Expired),
+      Resumable::Ready(parked) => parked,
+    };
+    let web_origin = host
+      .web_origin(&original.api_base_url)
+      .await
+      .ok_or(Failure::UntrustedServer)?;
+    let prepared = host
+      .prepare(&original.api_base_url, &web_origin)
+      .await
+      .map_err(Failure::Terminal)?;
+    // Preparation has no reservation or browser side effect. Revalidate only
+    // after every await, then reserve and open under the same lease as parking.
+    let _start = CONNECTION_START.lock().await;
+    let mut parked = PARKED
+      .lock()
+      .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let Some(current) = parked.as_mut() else {
+      return Ok(OfferConnection::NotCurrent);
+    };
+    if current.token != original.token
+      || current.api_base_url != original.api_base_url
+      || current.recovery != AccountRecovery::OfferRequired
+    {
+      return Ok(OfferConnection::NotCurrent);
+    }
+    if std::time::Instant::now() >= current.expires {
+      parked.take();
+      return Ok(OfferConnection::Expired);
+    }
+    let outcome = host.open(prepared).map_err(Failure::Terminal)?;
+    current.recovery = AccountRecovery::AwaitingAccount;
+    Ok(OfferConnection::Started(outcome))
+  }
+
   pub(crate) fn pending(&self) -> Resumable {
     self.pending_at(std::time::Instant::now())
   }
@@ -475,10 +550,16 @@ impl AccountOffer {
       .lock()
       .unwrap_or_else(std::sync::PoisonError::into_inner);
     match parked.as_ref() {
-      Some(current) if current.token.as_str() == self.token.as_str() => {
+      Some(current)
+        if current.token.as_str() == self.token.as_str()
+          && current.api_base_url == self.api_base_url =>
+      {
         if now >= current.expires {
           parked.take();
           return Resumable::Expired;
+        }
+        if current.recovery == AccountRecovery::AwaitingAccount {
+          return Resumable::Nothing;
         }
         Resumable::Ready(current.clone())
       }
@@ -488,18 +569,20 @@ impl AccountOffer {
 }
 
 /// A parked token gets an expiry notice even if the browser never completes.
-pub(crate) async fn expire_parked(token: &str) -> Resumable {
+pub(crate) async fn expire_parked(token: &str, api_base_url: &str) -> Resumable {
   let expires = PARKED
     .lock()
     .unwrap_or_else(std::sync::PoisonError::into_inner)
     .as_ref()
-    .filter(|current| current.token.as_str() == token)
+    .filter(|current| {
+      current.token.as_str() == token && current.api_base_url == api_base_url
+    })
     .map(|current| current.expires);
   let Some(expires) = expires else {
     return Resumable::Nothing;
   };
   tokio::time::sleep_until(tokio::time::Instant::from_std(expires)).await;
-  account_offer(token).await.pending()
+  account_offer(token, api_base_url).await.pending()
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -521,12 +604,13 @@ pub(crate) async fn park_if_unlinked(
   }
   // Linking shares this lease: it either publishes before this check, or
   // publishes after the handoff is parked and its completion can resume it.
+  let _start = CONNECTION_START.lock().await;
   let _lease = crate::account::lock_requests().await;
   let account = crate::account::current(state).await?;
   if std::time::Instant::now() >= expires {
     return Ok(AccountWait::Expired);
   }
-  if account.is_some() {
+  if account.is_some_and(|account| account.api_base_url == api_base_url) {
     return Ok(AccountWait::AccountAvailable);
   }
   park_until(target, api_base_url, token, expires);
@@ -546,18 +630,18 @@ fn park_until(
     api_base_url: api_base_url.into(),
     token: zeroize::Zeroizing::new(token.into()),
     expires,
+    recovery: AccountRecovery::OfferRequired,
   });
 }
 
-/// Drops the parked handoff if it is still `token`'s. Returns whether it was.
-pub(crate) fn unpark(token: &str) -> bool {
+/// Drops the parked handoff only for the same token and API origin.
+pub(crate) fn unpark(token: &str, api_base_url: &str) -> bool {
   let mut parked = PARKED
     .lock()
     .unwrap_or_else(std::sync::PoisonError::into_inner);
-  if parked
-    .as_ref()
-    .is_some_and(|parked| parked.token.as_str() == token)
-  {
+  if parked.as_ref().is_some_and(|parked| {
+    parked.token.as_str() == token && parked.api_base_url == api_base_url
+  }) {
     *parked = None;
     return true;
   }
@@ -569,6 +653,14 @@ pub(crate) enum Resumable {
   Nothing,
   Expired,
   Ready(ParkedHandoff),
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum ResumeAfterLink {
+  Nothing,
+  Expired,
+  Ready(ParkedHandoff),
+  NeedsOffer(ParkedHandoff),
 }
 
 impl std::fmt::Debug for ParkedHandoff {
@@ -589,10 +681,12 @@ impl PartialEq for ParkedHandoff {
 }
 impl Eq for ParkedHandoff {}
 
-pub(crate) fn take_parked() -> Resumable {
+#[cfg(test)]
+fn take_parked() -> Resumable {
   take_parked_at(std::time::Instant::now())
 }
 
+#[cfg(test)]
 fn take_parked_at(now: std::time::Instant) -> Resumable {
   match PARKED
     .lock()
@@ -602,6 +696,32 @@ fn take_parked_at(now: std::time::Instant) -> Resumable {
     None => Resumable::Nothing,
     Some(parked) if now >= parked.expires => Resumable::Expired,
     Some(parked) => Resumable::Ready(parked),
+  }
+}
+
+pub(crate) async fn take_parked_for_account(api_base_url: &str) -> ResumeAfterLink {
+  let _start = CONNECTION_START.lock().await;
+  let mut parked = PARKED
+    .lock()
+    .unwrap_or_else(std::sync::PoisonError::into_inner);
+  let Some(current) = parked.as_mut() else {
+    return ResumeAfterLink::Nothing;
+  };
+  if std::time::Instant::now() >= current.expires {
+    parked.take();
+    return ResumeAfterLink::Expired;
+  }
+  if current.api_base_url == api_base_url {
+    return ResumeAfterLink::Ready(
+      parked.take().expect("the parked handoff was checked above"),
+    );
+  }
+  match current.recovery {
+    AccountRecovery::OfferRequired => ResumeAfterLink::Nothing,
+    AccountRecovery::AwaitingAccount => {
+      current.recovery = AccountRecovery::OfferRequired;
+      ResumeAfterLink::NeedsOffer(current.clone())
+    }
   }
 }
 
@@ -1173,6 +1293,62 @@ mod tests {
     }
   }
 
+  #[derive(Clone, Copy, PartialEq, Eq)]
+  enum ConnectionAwait {
+    OriginLookup,
+    BrowserPreparation,
+  }
+
+  struct FakeConnectionHost {
+    paused_at: Option<ConnectionAwait>,
+    gate: std::sync::Mutex<Option<tokio::sync::oneshot::Receiver<()>>>,
+    opened: std::sync::Mutex<Vec<String>>,
+    outcome: crate::account::ConnectionStart,
+  }
+
+  impl FakeConnectionHost {
+    async fn pause(&self, stage: ConnectionAwait) {
+      if self.paused_at != Some(stage) {
+        return;
+      }
+      let receiver = self.gate.lock().unwrap().take().unwrap();
+      receiver.await.unwrap();
+    }
+  }
+
+  impl ConnectionHost for FakeConnectionHost {
+    type Prepared = String;
+
+    async fn web_origin(&self, _: &str) -> Option<String> {
+      self.pause(ConnectionAwait::OriginLookup).await;
+      Some("https://web.example.test".into())
+    }
+
+    async fn prepare(&self, api_base_url: &str, _: &str) -> Result<String, String> {
+      self.pause(ConnectionAwait::BrowserPreparation).await;
+      Ok(api_base_url.into())
+    }
+
+    fn open(
+      &self,
+      api_base_url: String,
+    ) -> Result<crate::account::ConnectionStart, String> {
+      self.opened.lock().unwrap().push(api_base_url);
+      Ok(self.outcome)
+    }
+  }
+
+  fn immediate_connection(
+    outcome: crate::account::ConnectionStart,
+  ) -> FakeConnectionHost {
+    FakeConnectionHost {
+      paused_at: None,
+      gate: std::sync::Mutex::new(None),
+      opened: Default::default(),
+      outcome,
+    }
+  }
+
   // Every assertion on the single parked slot lives in this one test, so
   // parallel tests cannot race on it.
   #[tokio::test]
@@ -1217,7 +1393,8 @@ mod tests {
         &origin,
         "stella_dr_live",
       ));
-      let Resumable::Ready(parked) = take_parked() else {
+      let ResumeAfterLink::Ready(parked) = take_parked_for_account(&origin).await
+      else {
         panic!("the parked handoff must resume after linking");
       };
       assert_eq!(parked.target, target);
@@ -1296,7 +1473,7 @@ mod tests {
       "first",
       now + HANDOFF_LIFETIME,
     );
-    let first_offer = account_offer("first").await;
+    let first_offer = account_offer("first", &origin).await;
     assert!(matches!(first_offer.pending(), Resumable::Ready(_)));
     park_until(
       Target::PdfSigning,
@@ -1304,7 +1481,7 @@ mod tests {
       "second",
       now + HANDOFF_LIFETIME,
     );
-    let mut second_offer = std::pin::pin!(account_offer("second"));
+    let mut second_offer = std::pin::pin!(account_offer("second", &origin));
     assert!(
       std::future::poll_fn(|cx| std::task::Poll::Ready(
         second_offer.as_mut().poll(cx).is_pending()
@@ -1313,7 +1490,7 @@ mod tests {
       "a replacement must queue behind the active offer"
     );
     assert_eq!(first_offer.pending(), Resumable::Nothing);
-    assert!(!unpark("first"));
+    assert!(!unpark("first", &origin));
     drop(first_offer);
     let second_offer = second_offer.await;
     let Resumable::Ready(offered) = second_offer.pending() else {
@@ -1321,7 +1498,7 @@ mod tests {
     };
     assert_eq!(offered.token.as_str(), "second");
     assert_eq!(offered.target, Target::PdfSigning);
-    assert!(unpark("second"));
+    assert!(unpark("second", &origin));
     assert_eq!(second_offer.pending(), Resumable::Nothing);
     drop(second_offer);
 
@@ -1333,9 +1510,9 @@ mod tests {
       "first",
       now + HANDOFF_LIFETIME,
     );
-    let first_offer = account_offer("first").await;
+    let first_offer = account_offer("first", &origin).await;
     park_until(Target::PdfSigning, &origin, &token, now + HANDOFF_LIFETIME);
-    let mut second_offer = std::pin::pin!(account_offer(&token));
+    let mut second_offer = std::pin::pin!(account_offer(&token, &origin));
     assert!(
       std::future::poll_fn(|cx| std::task::Poll::Ready(
         second_offer.as_mut().poll(cx).is_pending()
@@ -1350,7 +1527,7 @@ mod tests {
         "stella_dr_live",
       ));
     }
-    let Resumable::Ready(resumed) = take_parked() else {
+    let ResumeAfterLink::Ready(resumed) = take_parked_for_account(&origin).await else {
       panic!("a link completed during the old offer must resume the replacement");
     };
     assert_eq!(resumed.token.as_str(), token);
@@ -1384,7 +1561,7 @@ mod tests {
       "first",
       now + HANDOFF_LIFETIME,
     );
-    let first_offer = account_offer("first").await;
+    let first_offer = account_offer("first", &origin).await;
     park_until(
       Target::PdfSigning,
       &origin,
@@ -1392,7 +1569,7 @@ mod tests {
       now + HANDOFF_LIFETIME,
     );
     drop(first_offer);
-    let second_offer = account_offer("second").await;
+    let second_offer = account_offer("second", &origin).await;
     assert_eq!(
       second_offer.pending_at(now + HANDOFF_LIFETIME),
       Resumable::Expired
@@ -1402,6 +1579,135 @@ mod tests {
       Resumable::Nothing
     );
     drop(second_offer);
+
+    // Both asynchronous preparations can be superseded. Reservation and launch
+    // must revalidate the token AND origin after the last await.
+    for stage in [
+      ConnectionAwait::OriginLookup,
+      ConnectionAwait::BrowserPreparation,
+    ] {
+      for (replacement_api, replacement_token) in [
+        (origin.as_str(), "second"),
+        ("https://other.example.test", "second"),
+        ("https://other.example.test", "first"),
+      ] {
+        let expires = std::time::Instant::now() + HANDOFF_LIFETIME;
+        assert_eq!(
+          park_if_unlinked(&state, Target::DesktopEdit, &origin, "first", expires)
+            .await
+            .unwrap(),
+          AccountWait::Parked
+        );
+        let first_offer = account_offer("first", &origin).await;
+        let (release, receiver) = tokio::sync::oneshot::channel();
+        let host = FakeConnectionHost {
+          paused_at: Some(stage),
+          gate: std::sync::Mutex::new(Some(receiver)),
+          opened: Default::default(),
+          outcome: crate::account::ConnectionStart::Started,
+        };
+        {
+          let mut connection = std::pin::pin!(first_offer.connect(&host));
+          assert!(
+            std::future::poll_fn(|cx| std::task::Poll::Ready(
+              connection.as_mut().poll(cx).is_pending()
+            ))
+            .await,
+            "the regression must reach the selected await"
+          );
+          assert_eq!(
+            park_if_unlinked(
+              &state,
+              Target::PdfSigning,
+              replacement_api,
+              replacement_token,
+              expires
+            )
+            .await
+            .unwrap(),
+            AccountWait::Parked
+          );
+          release.send(()).unwrap();
+          assert_eq!(
+            connection.await.unwrap(),
+            OfferConnection::NotCurrent,
+            "a replaced token cannot reserve or open a browser connection after an await"
+          );
+          assert!(host.opened.lock().unwrap().is_empty());
+        }
+        drop(first_offer);
+
+        let second_offer = account_offer(replacement_token, replacement_api).await;
+        let Resumable::Ready(current) = second_offer.pending() else {
+          panic!("the replacement must get its own offer");
+        };
+        assert_eq!(current.api_base_url, replacement_api);
+        let second_host =
+          immediate_connection(crate::account::ConnectionStart::Started);
+        assert_eq!(
+          second_offer.connect(&second_host).await.unwrap(),
+          OfferConnection::Started(crate::account::ConnectionStart::Started)
+        );
+        assert_eq!(*second_host.opened.lock().unwrap(), [replacement_api]);
+        drop(second_offer);
+        if replacement_api != origin {
+          let ResumeAfterLink::NeedsOffer(reoffered) =
+            take_parked_for_account(&origin).await
+          else {
+            panic!("a different-server completion must re-offer instead of resuming");
+          };
+          assert_eq!(reoffered.api_base_url, replacement_api);
+          let second_offer = account_offer(replacement_token, replacement_api).await;
+          assert!(matches!(second_offer.pending(), Resumable::Ready(_)));
+          drop(second_offer);
+        }
+        let ResumeAfterLink::Ready(resumed) =
+          take_parked_for_account(replacement_api).await
+        else {
+          panic!("only a matching-server completion may resume the replacement");
+        };
+        assert_eq!(resumed.token.as_str(), replacement_token);
+        assert_eq!(resumed.api_base_url, replacement_api);
+        assert_eq!(
+          take_parked_for_account(replacement_api).await,
+          ResumeAfterLink::Nothing
+        );
+      }
+    }
+
+    // A different-origin pending connection has its own state and re-offer,
+    // rather than pretending the replacement can use the pending account.
+    let other_api = "https://other.example.test";
+    let expires = std::time::Instant::now() + HANDOFF_LIFETIME;
+    *state.lock().await =
+      crate::account::AccountStore::fixture(linked_fixture(&origin, "stella_dr_live"));
+    assert!(matches!(
+      admitted_account(&state, other_api).await,
+      Err(Stop::AccountRequired)
+    ));
+    assert_eq!(
+      park_if_unlinked(&state, Target::PdfSigning, other_api, "other", expires)
+        .await
+        .unwrap(),
+      AccountWait::Parked
+    );
+    let other_offer = account_offer("other", other_api).await;
+    let other_host =
+      immediate_connection(crate::account::ConnectionStart::DifferentOriginPending);
+    assert_eq!(
+      other_offer.connect(&other_host).await.unwrap(),
+      OfferConnection::Started(crate::account::ConnectionStart::DifferentOriginPending)
+    );
+    drop(other_offer);
+    assert!(matches!(
+      take_parked_for_account(&origin).await,
+      ResumeAfterLink::NeedsOffer(_)
+    ));
+    let other_offer = account_offer("other", other_api).await;
+    assert!(matches!(other_offer.pending(), Resumable::Ready(_)));
+    assert!(unpark("other", other_api));
+    drop(other_offer);
+    *state.lock().await = crate::account::AccountStore::Memory(None);
 
     // Parking an aged link preserves its arrival deadline, including across
     // a resumed handoff; no new account offer may renew the server token.
@@ -1414,7 +1720,7 @@ mod tests {
           .unwrap(),
         AccountWait::Parked
       );
-      let offer = account_offer(&token).await;
+      let offer = account_offer(&token, &origin).await;
       let Resumable::Ready(aged) =
         offer.pending_at(original_expiry - Duration::from_nanos(1))
       else {
@@ -1477,8 +1783,8 @@ mod tests {
       "second",
       now + HANDOFF_LIFETIME,
     );
-    assert!(!unpark("first"));
-    assert!(unpark("second"));
+    assert!(!unpark("first", &origin));
+    assert!(unpark("second", &origin));
     assert_eq!(take_parked_at(now), Resumable::Nothing);
     park_until(Target::PdfSigning, &origin, "late", now + HANDOFF_LIFETIME);
     assert_eq!(take_parked_at(now + HANDOFF_LIFETIME), Resumable::Expired);

@@ -1051,10 +1051,22 @@ fn new_browser_connection_with_key(
   ))
 }
 
-async fn begin_browser_connection(
+pub(crate) struct PreparedBrowserConnection {
+  connection: BrowserConnection,
+  url: String,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ConnectionStart {
+  Started,
+  SameOriginPending,
+  DifferentOriginPending,
+}
+
+pub(crate) async fn prepare_browser_connection(
   api_base_url: &str,
   web_origin: &str,
-) -> Result<String, String> {
+) -> Result<PreparedBrowserConnection, String> {
   let api_base_url = crate::config::normalize_self_host_api_base_url(api_base_url)?;
   let web_origin = crate::config::normalize_self_host_web_origin(web_origin)?;
   let _lease = lock_requests().await;
@@ -1062,29 +1074,52 @@ async fn begin_browser_connection(
   let key = crate::device_proof::prepare(has_link).await?;
   let (connection, url) =
     new_browser_connection_with_key(&api_base_url, &web_origin, key)?;
-  let mut pending = BROWSER_CONNECTION
-    .lock()
-    .map_err(|_| "Desktop connection is unavailable")?;
-  reserve_browser_connection(&mut pending, connection, std::time::Instant::now())?;
-  Ok(url)
+  Ok(PreparedBrowserConnection { connection, url })
 }
 
 fn reserve_browser_connection(
   pending: &mut Option<BrowserConnection>,
   connection: BrowserConnection,
   now: std::time::Instant,
-) -> Result<(), String> {
-  if pending.as_ref().is_some_and(|current| {
-    now < current.expires_at
-      && matches!(
-        current.redemption,
-        LinkRedemption::Waiting { .. } | LinkRedemption::Redeeming
-      )
-  }) {
-    return Err(LINK_ALREADY_PENDING.into());
+) -> ConnectionStart {
+  if let Some(current) = pending.as_ref()
+    && now < current.expires_at
+    && matches!(
+      current.redemption,
+      LinkRedemption::Waiting { .. } | LinkRedemption::Redeeming
+    )
+  {
+    return if current.api_base_url == connection.api_base_url {
+      ConnectionStart::SameOriginPending
+    } else {
+      ConnectionStart::DifferentOriginPending
+    };
   }
   *pending = Some(connection);
-  Ok(())
+  ConnectionStart::Started
+}
+
+impl PreparedBrowserConnection {
+  pub(crate) fn open(self, app: &tauri::AppHandle) -> Result<ConnectionStart, String> {
+    use tauri_plugin_opener::OpenerExt;
+    let mut pending = BROWSER_CONNECTION
+      .lock()
+      .map_err(|_| "Desktop connection is unavailable")?;
+    match reserve_browser_connection(
+      &mut pending,
+      self.connection,
+      std::time::Instant::now(),
+    ) {
+      ConnectionStart::Started => {}
+      outcome @ (ConnectionStart::SameOriginPending
+      | ConnectionStart::DifferentOriginPending) => return Ok(outcome),
+    }
+    if app.opener().open_url(self.url, None::<&str>).is_err() {
+      *pending = None;
+      return Err("Could not open desktop connection".into());
+    }
+    Ok(ConnectionStart::Started)
+  }
 }
 
 pub async fn open_browser_connection(
@@ -1092,12 +1127,16 @@ pub async fn open_browser_connection(
   api_base_url: &str,
   web_origin: &str,
 ) -> Result<(), String> {
-  use tauri_plugin_opener::OpenerExt;
-  let url = begin_browser_connection(api_base_url, web_origin).await?;
-  app
-    .opener()
-    .open_url(url, None::<&str>)
-    .map_err(|_| "Could not open desktop connection".into())
+  match prepare_browser_connection(api_base_url, web_origin)
+    .await?
+    .open(app)?
+  {
+    ConnectionStart::Started => Ok(()),
+    ConnectionStart::SameOriginPending => Err(LINK_ALREADY_PENDING.into()),
+    ConnectionStart::DifferentOriginPending => {
+      Err(crate::i18n::t("dialog.handoffAccountMismatch").into())
+    }
+  }
 }
 
 fn valid_bridge_proof(
@@ -1589,13 +1628,25 @@ mod tests {
       new_browser_connection("https://api.stll.app", "https://my.stll.app").unwrap();
     assert_eq!(
       reserve_browser_connection(&mut pending, replacement, std::time::Instant::now()),
-      Err("A desktop account connection is already pending".into())
+      ConnectionStart::SameOriginPending
+    );
+    assert_eq!(pending.as_ref().unwrap().correlation_id, original_id);
+    let (other_server, _) =
+      new_browser_connection("https://other.example.test", "https://web.example.test")
+        .unwrap();
+    assert_eq!(
+      reserve_browser_connection(&mut pending, other_server, std::time::Instant::now()),
+      ConnectionStart::DifferentOriginPending,
+      "a pending connection for another API cannot count as the requested link"
     );
     assert_eq!(pending.as_ref().unwrap().correlation_id, original_id);
     let (replacement, _) =
       new_browser_connection("https://api.stll.app", "https://my.stll.app").unwrap();
     let replacement_id = replacement.correlation_id.clone();
-    assert!(reserve_browser_connection(&mut pending, replacement, expires_at).is_ok());
+    assert_eq!(
+      reserve_browser_connection(&mut pending, replacement, expires_at),
+      ConnectionStart::Started
+    );
     assert_eq!(pending.unwrap().correlation_id, replacement_id);
   }
 
@@ -1614,13 +1665,13 @@ mod tests {
       let (replacement, _) =
         new_browser_connection("https://api.stll.app", "https://my.stll.app").unwrap();
       let replacement_id = replacement.correlation_id.clone();
-      assert!(
+      assert_eq!(
         reserve_browser_connection(
           &mut pending,
           replacement,
           std::time::Instant::now()
-        )
-        .is_ok()
+        ),
+        ConnectionStart::Started
       );
       assert_eq!(pending.unwrap().correlation_id, replacement_id);
     }
