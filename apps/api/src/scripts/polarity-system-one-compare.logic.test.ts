@@ -31,6 +31,7 @@ import {
   percentileOf,
   parseCompareArgs,
   planSampleBuckets,
+  polarityProbabilitiesOf,
   renderComparisonReport,
   renderPairedComparisonReport,
   summarisePairedComparison,
@@ -845,4 +846,26 @@ describe("paired decision provider reports", () => {
       }),
     ).toThrow("require the same sample");
   });
+});
+
+test("polarity reports combine form and neutral probability without losing mass", () => {
+  const projected = polarityProbabilitiesOf({
+    positive: 0.125,
+    supportive: 0.125,
+    neutral: 0.25,
+    negative: 0.25,
+    form: 0.25,
+  });
+  expect(projected).toEqual({
+    positive: 0.125,
+    supportive: 0.125,
+    neutral: 0.5,
+    negative: 0.25,
+  });
+  expect(Object.keys(projected).toSorted()).toEqual(
+    [...CLASSIFIABLE_POLARITIES].toSorted(),
+  );
+  expect(
+    Object.values(projected).reduce((sum, value) => sum + value, 0),
+  ).toBeCloseTo(1);
 });

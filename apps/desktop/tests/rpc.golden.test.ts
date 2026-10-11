@@ -15,6 +15,7 @@ import {
   type SessionSnapshot,
   type TrustedSelfHostConnection,
 } from "../src/shared/rpc";
+import { BRIDGE_VERSION } from "./bridge-version";
 
 // Golden-fixture contract for the desktop bridge RPC surface.
 //
@@ -44,20 +45,10 @@ const readFixture = (name: string): unknown =>
   JSON.parse(readFileSync(path.join(FIXTURE_DIR, name), "utf-8"));
 
 test("snapshot fixture advertises the native bridge contract revision", () => {
-  const native = readFileSync(
-    new URL("../src-tauri/src/types.rs", import.meta.url),
-    "utf-8",
-  );
-  const revision = /^pub const BRIDGE_VERSION: u32 = (\d+);$/mu
-    .exec(native)
-    ?.at(1);
-  if (!revision) {
-    throw new TypeError("Missing native bridge contract revision");
-  }
-  expect(readFixture("app-snapshot.json")).toHaveProperty(
-    "bridgeVersion",
-    Number(revision),
-  );
+  expect(
+    readFixtureRecord("app-snapshot.json")["bridgeVersion"],
+    "apps/desktop/fixtures/rpc/app-snapshot.json bridgeVersion must match BRIDGE_VERSION in apps/desktop/src-tauri/src/types.rs; update the recorded fixture after a bridge version bump",
+  ).toBe(BRIDGE_VERSION);
 });
 
 // Fixtures are hand-authored JSON objects (never arrays or primitives); this
@@ -97,7 +88,7 @@ const CAMEL_CASE = /^[a-z][a-zA-Z0-9]*$/u;
 // runtime `toEqual` is the on-disk half.
 const appSnapshot = {
   bridgePort: 45_901,
-  bridgeVersion: 20,
+  bridgeVersion: BRIDGE_VERSION,
   capabilities: ["office-edit.v1", "self-host.connect", "account-link.v5"],
   notificationPreferences: {
     documentReady: true,

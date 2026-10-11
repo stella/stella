@@ -1916,12 +1916,13 @@ test("template discovery and condition preview include clause-only declarations"
     }),
   });
   const preview = await templateDecideConditionsLogic({
+    runDecisions: async () => {
+      throw new Error("Deterministic preview must not enter AI gates");
+    },
     scopedDb: previewDb.scopedDb,
     organizationId,
     templateId: source.templateId,
     body: { values: { included: false } },
-    orgAIConfig: null,
-    client: null,
     abortSignal: new AbortController().signal,
   });
   expect(preview.unwrap().conditions).toEqual([

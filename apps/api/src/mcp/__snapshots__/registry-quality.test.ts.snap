@@ -2123,7 +2123,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "destructiveHint": "Preview template conditions does not change state.",
       "openWorldHint": "Preview template conditions is confined to the private workspace or a bounded computation."
     },
-    "description": "Ask what current values decide without filling. Returns every AI condition with \`path\`, \`label\`, and either \`state: \\"decided\\"\`, its \`value\`, \`decided_by\` (\`user\` or \`decision_model\`), and \`probability\` for model answers; or \`state: \\"undecided\\"\` and \`reason\` (\`no_decision_model\`, \`below_floor\`, \`failed\`, \`refusal\`). Only the decision model runs; fill may later use the generative model. A boolean in \`values\` wins. Nothing is written.",
+    "description": "Ask what current values decide without filling. Returns every AI condition with \`path\`, \`label\`, and either \`state: \\"decided\\"\`, its \`value\`, \`decided_by\` (\`user\`, \`decision_model\`, or \`generative_model\`), and \`probability\` for model answers; or \`state: \\"undecided\\"\` and \`reason\` (\`failed\` or \`refusal\`). The decision model uses the generative model when it cannot settle a question. Consumes AI usage. A boolean in \`values\` wins. Nothing is written.",
     "annotations": {
       "title": "Preview template conditions",
       "destructiveHint": false,
@@ -8478,7 +8478,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "destructiveHint": "Preview template conditions does not change state.",
       "openWorldHint": "Preview template conditions is confined to the private workspace or a bounded computation."
     },
-    "description": "Ask what current values decide without filling. Returns every AI condition with \`path\`, \`label\`, and either \`state: \\"decided\\"\`, its \`value\`, \`decided_by\` (\`user\` or \`decision_model\`), and \`probability\` for model answers; or \`state: \\"undecided\\"\` and \`reason\` (\`no_decision_model\`, \`below_floor\`, \`failed\`, \`refusal\`). Only the decision model runs; fill may later use the generative model. A boolean in \`values\` wins. Nothing is written.",
+    "description": "Ask what current values decide without filling. Returns every AI condition with \`path\`, \`label\`, and either \`state: \\"decided\\"\`, its \`value\`, \`decided_by\` (\`user\`, \`decision_model\`, or \`generative_model\`), and \`probability\` for model answers; or \`state: \\"undecided\\"\` and \`reason\` (\`failed\` or \`refusal\`). The decision model uses the generative model when it cannot settle a question. Consumes AI usage. A boolean in \`values\` wins. Nothing is written.",
     "annotations": {
       "title": "Preview template conditions",
       "destructiveHint": false,
@@ -14625,7 +14625,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "destructiveHint": "Preview template conditions does not change state.",
       "openWorldHint": "Preview template conditions is confined to the private workspace or a bounded computation."
     },
-    "description": "Ask what current values decide without filling. Returns every AI condition with \`path\`, \`label\`, and either \`state: \\"decided\\"\`, its \`value\`, \`decided_by\` (\`user\` or \`decision_model\`), and \`probability\` for model answers; or \`state: \\"undecided\\"\` and \`reason\` (\`no_decision_model\`, \`below_floor\`, \`failed\`, \`refusal\`). Only the decision model runs; fill may later use the generative model. A boolean in \`values\` wins. Nothing is written.",
+    "description": "Ask what current values decide without filling. Returns every AI condition with \`path\`, \`label\`, and either \`state: \\"decided\\"\`, its \`value\`, \`decided_by\` (\`user\`, \`decision_model\`, or \`generative_model\`), and \`probability\` for model answers; or \`state: \\"undecided\\"\` and \`reason\` (\`failed\` or \`refusal\`). The decision model uses the generative model when it cannot settle a question. Consumes AI usage. A boolean in \`values\` wins. Nothing is written.",
     "annotations": {
       "title": "Preview template conditions",
       "destructiveHint": false,

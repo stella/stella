@@ -274,6 +274,7 @@
     "moveGroupEarlier": "Mover a la izquierda",
     "moveGroupLater": "Mover a la derecha",
     "moreOptions": "Más opciones",
+    "moreItemActions": "Más acciones para el elemento {number}",
     "noResults": "No hay recortes coincidentes",
     "noResultsDescription": "¿Quieres buscar «{query}» en los registros?",
     "noGroup": "Sin grupo",

@@ -10,9 +10,12 @@ import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
 import { CITATION_KIND } from "@/api/handlers/case-law/citation-kind";
 import { excerptOf } from "@/api/handlers/case-law/polarity/classifier";
+import { POLARITY_READINGS } from "@/api/handlers/case-law/polarity/model-readings";
 import { extractContexts } from "@/api/handlers/case-law/polarity/context";
-import { classifyWithLLM } from "@/api/handlers/case-law/polarity/llm-classifier";
-import { POLARITY_QUESTION } from "@/api/handlers/case-law/polarity/system-one-classifier";
+import {
+  classifyWithSystemOne,
+  POLARITY_QUESTION,
+} from "@/api/handlers/case-law/polarity/system-one-classifier";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import { openCaseLawReadOnlySession } from "@/api/lib/case-law/maintenance-lane";
 import { readCorpusText } from "@/api/lib/legal-search/corpus-reads";
@@ -30,6 +33,7 @@ import {
   DISAGREEMENT_EXAMPLES,
   parseCompareArgs,
   planSampleBuckets,
+  polarityProbabilitiesOf,
   renderComparisonReport,
   renderPairedComparisonReport,
   summarisePairedComparison,
@@ -291,8 +295,8 @@ const readWithDecisionModel = async (
   }
   return {
     status: "read",
-    polarity: answers.polarity.choice,
-    probabilities: answers.polarity.probabilities,
+    polarity: POLARITY_READINGS[answers.polarity.choice].polarity,
+    probabilities: polarityProbabilitiesOf(answers.polarity.probabilities),
     confidence: answers.polarity.confidence,
     latencyMs,
     inputTokens: usage.inputTokens,
@@ -305,17 +309,23 @@ const readWithLlm = async (item: ComparisonItem): Promise<LlmOutcome> => {
     return { status: "not-run" };
   }
   const startedAt = performance.now();
-  const classified = await classifyWithLLM({
+  const classified = await classifyWithSystemOne({
+    client: null,
     context: item.context,
     citationText: item.citation.citationText,
     language: item.decision.language,
   });
   const latencyMs = Math.round(performance.now() - startedAt);
-  if (Result.isError(classified)) {
-    return { status: "failed", message: classified.error.message };
+  if (classified.state === "undecided") {
+    return { status: "failed", message: classified.reason };
   }
-  const { polarity, confidence, keyPhrase } = classified.value;
-  return { status: "read", polarity, confidence, keyPhrase, latencyMs };
+  return {
+    status: "read",
+    polarity: POLARITY_READINGS[classified.answer.choice].polarity,
+    confidence: classified.confidence,
+    keyPhrase: classified.evidence ?? "",
+    latencyMs,
+  };
 };
 
 await runScriptWithErrorOutput(async () => {

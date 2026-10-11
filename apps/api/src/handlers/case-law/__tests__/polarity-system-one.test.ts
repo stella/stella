@@ -4,8 +4,10 @@ import type { Fetcher } from "@stll/fetch";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { classifyCitation } from "@/api/handlers/case-law/polarity/classifier";
-import { CLASSIFIABLE_POLARITIES } from "@/api/handlers/case-law/polarity/consts";
-import { POLARITY_GUIDANCE } from "@/api/handlers/case-law/polarity/guidance";
+import {
+  MODEL_READING_GUIDANCE,
+  POLARITY_READINGS,
+} from "@/api/handlers/case-law/polarity/model-readings";
 import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
 import {
   classifyWithSystemOne,
@@ -40,9 +42,11 @@ const fakeClient = (
       typeof init?.body === "string" ? JSON.parse(init.body) : null;
     requests.push(body);
     const probabilities = Object.fromEntries(
-      CLASSIFIABLE_POLARITIES.map((polarity) => [
+      Object.keys(MODEL_READING_GUIDANCE).map((polarity) => [
         polarity,
-        polarity === choice ? confidence : (1 - confidence) / 3,
+        polarity === choice
+          ? confidence
+          : (1 - confidence) / (Object.keys(MODEL_READING_GUIDANCE).length - 1),
       ]),
     );
     const answers = Object.fromEntries(
@@ -81,10 +85,13 @@ const context =
   "soud k závěru, že nárok promlčen nebyl.";
 
 describe("classifyWithSystemOne", () => {
-  test("asks one choice over the polarity vocabulary with the shared guidance as criteria", async () => {
+  test("asks one choice over valid kind and polarity pairs with shared guidance", async () => {
     const { client, requests } = fakeClient("negative", 0.9);
     const reading = await classifyWithSystemOne({
       client,
+      generator: async () => {
+        throw new Error("Generation unavailable in this test");
+      },
       context,
       citationText: "sp. zn. 21 Cdo 1234/2020",
       language: "cs",
@@ -110,24 +117,65 @@ describe("classifyWithSystemOne", () => {
       questions: {
         [String(questionKey)]: {
           type: "choice",
-          criteria: Object.fromEntries(
-            CLASSIFIABLE_POLARITIES.map((polarity) => [
-              polarity,
-              POLARITY_GUIDANCE[polarity],
-            ]),
-          ),
+          criteria: MODEL_READING_GUIDANCE,
         },
       },
     });
   });
 
-  test("a reading under the floor is undecided, so the generative tier reads", async () => {
+  test("the decision owner supplies generative polarity when the model cannot settle it", async () => {
+    const { client } = fakeClient("negative", 0.6);
+    const reading = await classifyWithSystemOne({
+      client,
+      context,
+      citationText: "sp. zn. 21 Cdo 1234/2020",
+      language: "cs",
+      generator: async ({ questions, state }) => {
+        expect(state).toMatchObject({ excerpt: context });
+        expect(Object.keys(questions)).toEqual(["answer"]);
+        return {
+          model: "test-generative",
+          output: {
+            answers: [
+              {
+                id: "answer",
+                answer: {
+                  type: "choice",
+                  choice: "negative",
+                  probabilities: {
+                    positive: 0.02,
+                    negative: 0.94,
+                    neutral: 0.01,
+                    supportive: 0.02,
+                    form: 0.01,
+                  },
+                  confidence: 0.94,
+                },
+                evidence: "Na rozdíl od",
+              },
+            ],
+          },
+        };
+      },
+    });
+    expect(reading).toMatchObject({
+      state: "decided",
+      source: "generative",
+      evidence: "Na rozdíl od",
+      answer: { choice: "negative" },
+    });
+  });
+
+  test("a generative failure after an answer under the floor stays undecided", async () => {
     const { client } = fakeClient(
       "negative",
       SYSTEM_ONE_POLARITY_ACCEPT_CONFIDENCE - 0.05,
     );
     const reading = await classifyWithSystemOne({
       client,
+      generator: async () => {
+        throw new Error("Generation unavailable in this test");
+      },
       context,
       citationText: "sp. zn. 21 Cdo 1234/2020",
       language: "cs",
@@ -135,19 +183,16 @@ describe("classifyWithSystemOne", () => {
 
     expect(reading).toMatchObject({
       state: "undecided",
-      reason: "below-floor",
+      reason: "failed",
     });
   });
 
-  /**
-   * The tier is the only thing between the regex tier and the generative one,
-   * and it returns a label only on `state === "decided"`, so an undecided
-   * reading is the pre-existing LLM path. Asserted here rather than through
-   * `classifyCitation`, which would call the generative model.
-   */
-  test("with no decision model nothing is asked and nothing is decided", async () => {
+  test("a generative failure without a decision model stays undecided", async () => {
     const reading = await classifyWithSystemOne({
       client: null,
+      generator: async () => {
+        throw new Error("Generation unavailable in this test");
+      },
       context,
       citationText: "sp. zn. 21 Cdo 1234/2020",
       language: "cs",
@@ -155,8 +200,10 @@ describe("classifyWithSystemOne", () => {
 
     expect(reading).toEqual({
       state: "undecided",
-      reason: "no-backend",
+      reason: "failed",
       confidence: null,
+      source: "generative",
+      model: null,
     });
   });
 });
@@ -192,8 +239,115 @@ describe("classifyCitation with the System One tier", () => {
     });
   });
 
+  test.each([null, "", "  ", "invented phrase", "x".repeat(101)])(
+    "does not promote unsupported or oversized evidence %p",
+    async (evidence) => {
+      let writes = 0;
+      const scopedDb: ScopedDb = () => {
+        writes += 1;
+        throw new Error("Promotion must not write unsupported evidence");
+      };
+      const excerpt =
+        evidence !== null && evidence !== "invented phrase"
+          ? `${context} ${evidence}`
+          : context;
+      const result = await classifyCitation({
+        windows: {
+          mentions: [excerpt],
+          contexts: [excerpt],
+          evidenceSpan: { start: 0, end: excerpt.length },
+        },
+        citationText: "sp. zn. 21 Cdo 1234/2020",
+        language: "cs",
+        observedAt: new Date("2026-09-17T00:00:00Z"),
+        scopedDb,
+        options: {
+          ruleCache: emptyRuleCache("cs"),
+          decisionModel: null,
+          generator: async () => ({
+            model: "test-generative",
+            output: {
+              answers: [
+                {
+                  id: "answer",
+                  answer: {
+                    type: "choice",
+                    choice: "negative",
+                    probabilities: {
+                      positive: 0.02,
+                      negative: 0.94,
+                      neutral: 0.01,
+                      supportive: 0.02,
+                      form: 0.01,
+                    },
+                    confidence: 0.94,
+                  },
+                  evidence,
+                },
+              ],
+            },
+          }),
+        },
+      });
+      expect(result).toMatchObject({ polarity: "negative", source: "llm" });
+      expect(writes).toBe(0);
+    },
+  );
+
   test("the acceptance floor is a real floor", () => {
     expect(SYSTEM_ONE_POLARITY_ACCEPT_CONFIDENCE).toBeGreaterThan(0.5);
     expect(SYSTEM_ONE_POLARITY_ACCEPT_CONFIDENCE).toBeLessThan(1);
   });
 });
+
+test.each(Object.entries(POLARITY_READINGS))(
+  "each valid model reading gives its specified polarity: %s",
+  async (readingChoice, treatment) => {
+    const result = await classifyCitation({
+      windows: {
+        mentions: [context],
+        contexts: [context],
+        evidenceSpan: { start: 0, end: context.length },
+      },
+      citationText: "sp. zn. 21 Cdo 1234/2020",
+      language: "cs",
+      observedAt: new Date("2026-09-17T00:00:00Z"),
+      scopedDb: scopedDbThatMustNotRun,
+      options: {
+        ruleCache: emptyRuleCache("cs"),
+        decisionModel: null,
+        dryRun: true,
+        generator: async ({ questions }) => {
+          expect(Object.keys(questions)).toEqual(["answer"]);
+          return {
+            model: "test-generative",
+            output: {
+              answers: [
+                {
+                  id: "answer",
+                  answer: {
+                    type: "choice",
+                    choice: readingChoice,
+                    probabilities: Object.fromEntries(
+                      Object.keys(MODEL_READING_GUIDANCE).map((key) => [
+                        key,
+                        key === readingChoice ? 1 : 0,
+                      ]),
+                    ),
+                    confidence: 1,
+                  },
+                  evidence: "Na rozdíl od",
+                },
+              ],
+            },
+          };
+        },
+      },
+    });
+    expect(result).toMatchObject({
+      polarity: treatment.polarity,
+      source: "llm",
+      confidence: 1,
+    });
+  },
+);

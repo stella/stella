@@ -7,114 +7,78 @@
  * for potential rule generation.
  */
 
-import { Result } from "better-result";
-
 import { resolveCaching } from "@/api/lib/ai-config";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";
-import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
+import type { DecisionGenerationOptions } from "@/api/lib/workflow/decisions/decide";
 
-import { CLASSIFIABLE_POLARITIES } from "./consts";
-import { POLARITY_GUIDANCE } from "./guidance";
-import { classificationSchema } from "./llm-classification-schema";
-import type { ClassificationResult } from "./llm-classification-schema";
+import { MODEL_READING_GUIDANCE } from "./model-readings";
 
 const SYSTEM_PROMPT = `You are a legal citation polarity classifier.
 
 Given a text excerpt from a court decision that contains a citation
-reference, classify the relationship between the citing decision and
-the cited decision.
+reference, choose one reading of the citing court's use of the cited decision.
+A form reading describes citation typography or a reference marker rather
+than the court's treatment, and has neutral polarity.
 
 Classifications:
-${CLASSIFIABLE_POLARITIES.map(
-  (polarity) => `- "${polarity}": ${POLARITY_GUIDANCE[polarity]}`,
-).join("\n")}
+${Object.entries(MODEL_READING_GUIDANCE)
+  .map(([reading, guidance]) => `- "${reading}": ${guidance}`)
+  .join("\n")}
 
-Extract the specific phrase (2-5 words) from the text that most
-strongly indicates the polarity. This phrase will be used to generate
-regex rules for future classification.
-
-Set kind to "stance" for a treatment cue, or "form" for citation typography,
-procedure labels, or reference markers. A form phrase must have neutral polarity.
+Extract the specific phrase or marker (at most 100 characters) that most
+strongly supports the chosen reading. For form, extract the form marker,
+not a treatment cue. This phrase will be used to generate regex rules
+for future classification.
 
 Report confidence honestly. A high-confidence answer can be promoted into
 a regex rule that labels later citations without you, so an uncertain one
 must say so rather than round itself up.`;
 
-type ClassifyWithLLMOptions = {
-  /** Text surrounding the citation (2-3 sentences). */
-  context: string;
-  /** The citation reference itself. */
-  citationText: string;
-  /** ISO language code (e.g. "cs", "sk", "de"). */
-  language: string;
-  abortSignal?: AbortSignal | undefined;
-};
-
-/** Classify a citation's polarity using an LLM. */
-export const classifyWithLLM = async ({
+/** Normal corpus generation context consumed by the typed decision owner. */
+export const polarityGeneration = ({
   context,
   citationText,
   language,
   abortSignal,
-}: ClassifyWithLLMOptions): Promise<
-  Result<ClassificationResult, WorkflowIntegrationError>
-> => {
-  const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+}: {
+  context: string;
+  citationText: string;
+  language: string;
+  abortSignal?: AbortSignal | undefined;
+}) =>
+  ({
     dataClass: "public_corpus",
-    feature: "case-law.polarity",
-    modelRole: "fast",
-    properties: {
-      language,
-    },
-    traceId: Bun.randomUUIDv7(),
-  });
-
-  return await Result.tryPromise({
-    try: async () => {
-      const output = await generateTanStackObjectForRole({
-        dataClass: "public_corpus",
-        role: "fast",
-        serviceTier: "flex",
-        orgAIConfig: null,
-        organizationId: null,
-        // Corpus-wide work on the deployment's own key: no organization's
-        // budget to draw from.
-        admission: NO_ORGANIZATION_MODEL_DISPATCH,
-        // Public case-law corpus: no tenant workspace scope to guard against.
-        tenantWorkspaceIds: [],
-        analytics: aiAnalytics,
-        caching: resolveCaching({
-          promptCachingEnabled: true,
-          role: "fast",
-          scopeKey: `polarity:${language}`,
-        }),
-        system: SYSTEM_PROMPT,
-        messages: [
-          {
-            role: "user",
-            content: `Language: ${language}
-Citation reference: ${citationText}
-Surrounding text:
-${context}`,
-          },
-        ],
-        outputSchema: classificationSchema,
-        abortSignal: abortSignal
-          ? AbortSignal.any([abortSignal, AbortSignal.timeout(15_000)])
-          : AbortSignal.timeout(15_000),
-      });
-
-      return output;
-    },
-    catch: (error) => {
-      aiAnalytics.captureError(error);
-
-      return new WorkflowIntegrationError({
-        message: "Citation polarity LLM classification failed",
-        cause: error,
-      });
-    },
-  });
-};
+    role: "fast",
+    serviceTier: "flex",
+    orgAIConfig: null,
+    organizationId: null,
+    admission: NO_ORGANIZATION_MODEL_DISPATCH,
+    tenantWorkspaceIds: [],
+    analytics: createTanStackAIAnalyticsCallbacks({
+      dataClass: "public_corpus",
+      feature: "case-law.polarity",
+      modelRole: "fast",
+      properties: { language },
+      traceId: Bun.randomUUIDv7(),
+    }),
+    caching: resolveCaching({
+      promptCachingEnabled: true,
+      role: "fast",
+      scopeKey: `polarity:${language}`,
+    }),
+    system: SYSTEM_PROMPT,
+    messages: [
+      {
+        role: "user",
+        content: `Language: ${language}\nCitation reference: ${citationText}\nSurrounding text:\n${context}`,
+      },
+    ],
+    evidenceInstruction:
+      "Extract the specific phrase (at most 100 characters) from the excerpt supporting the chosen reading: a treatment cue for stance, or a citation form marker for form. Use null when no phrase supports it.",
+    abortSignal,
+    deadlineMs: 15_000,
+  }) satisfies Extract<
+    DecisionGenerationOptions,
+    { dataClass: "public_corpus" }
+  >;
