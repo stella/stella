@@ -16,21 +16,29 @@ export const withGenerationLock = async ({
   lockPath,
   run,
 }: GenerationLockOptions) => {
-  mkdirSync(path.dirname(lockPath), { recursive: true });
-  const database = new Database(lockPath, { create: true });
+  const opened = Result.try(() => {
+    mkdirSync(path.dirname(lockPath), { recursive: true });
+    return new Database(lockPath, { create: true });
+  });
+  if (opened.isErr()) {
+    return opened;
+  }
+  const database = opened.value;
   try {
     while (true) {
-      const acquired = Result.try(() => database.exec("BEGIN IMMEDIATE"));
+      const acquired = Result.try(() => database.run("BEGIN IMMEDIATE"));
       if (acquired.isOk()) {
         break;
       }
       const cause = acquired.error.cause;
       if (!(cause instanceof SQLiteError) || cause.code !== "SQLITE_BUSY") {
-        throw acquired.error;
+        return acquired;
       }
       await Bun.sleep(LOCK_POLL_MS);
     }
-    await run();
+    return await Result.tryPromise(async () => {
+      await run();
+    });
   } finally {
     database.close(true);
   }

@@ -9,8 +9,6 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { rejectionOf } from "@stll/property-testing/rejection";
-
 import { withGenerationLock } from "./generation-lock";
 
 const fixture = () => {
@@ -23,7 +21,7 @@ const fixture = () => {
     import { appendFileSync, closeSync, openSync, unlinkSync, writeFileSync } from 'node:fs';
     const directory = ${JSON.stringify(directory)};
     writeFileSync(directory + '/attempt-' + process.pid, '');
-    await withGenerationLock({
+    const generated = await withGenerationLock({
       lockPath: directory + '/lock.sqlite',
       run: async () => {
         writeFileSync(directory + '/acquired-' + process.pid, '');
@@ -36,6 +34,7 @@ const fixture = () => {
         unlinkSync(directory + '/active');
       },
     });
+    generated.unwrap("Fixture generation failed");
   `,
   );
   const children: ReturnType<typeof Bun.spawn>[] = [];
@@ -109,24 +108,56 @@ test("generation failure propagates and releases the lock", async () => {
   const lockPath = path.join(directory, "lock.sqlite");
   try {
     const failure = new Error("generation failed");
-    expect(
-      await rejectionOf(
-        withGenerationLock({
-          lockPath,
-          run: () => {
-            throw failure;
-          },
-        }),
-      ),
-    ).toBe(failure);
+    const failed = await withGenerationLock({
+      lockPath,
+      run: () => {
+        throw failure;
+      },
+    });
+    expect(failed.isErr()).toBe(true);
+    if (failed.isErr()) {
+      expect(failed.error.cause).toBe(failure);
+    }
     let completed = false;
-    await withGenerationLock({
+    const generated = await withGenerationLock({
       lockPath,
       run: () => {
         completed = true;
       },
     });
+    expect(generated.isOk()).toBe(true);
     expect(completed).toBe(true);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("invalid lock files return errors without running generation", async () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "stella-invalid-lock-"));
+  const lockPath = path.join(directory, "lock.sqlite");
+  writeFileSync(lockPath, "invalid SQLite bytes");
+  let executions = 0;
+  try {
+    const failed = await withGenerationLock({
+      lockPath,
+      run: () => {
+        executions += 1;
+      },
+    });
+    expect(failed.isErr()).toBe(true);
+    if (failed.isErr()) {
+      expect(failed.error.cause).toBeInstanceOf(Error);
+    }
+    expect(executions).toBe(0);
+    rmSync(lockPath);
+    const repaired = await withGenerationLock({
+      lockPath,
+      run: () => {
+        executions += 1;
+      },
+    });
+    expect(repaired.isOk()).toBe(true);
+    expect(executions).toBe(1);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

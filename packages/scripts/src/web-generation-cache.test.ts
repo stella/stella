@@ -49,7 +49,10 @@ test("one package script and Turbo task own API type generation", () => {
     "utf-8",
   );
   expect(entrypoint).toMatch(
-    /if \(import\.meta\.main\)\s*\{\s*await withGenerationLock\(\{[^}]*run: main,/u,
+    /if \(import\.meta\.main\)\s*\{\s*const generated = await withGenerationLock\(\{[^}]*run: main,/u,
+  );
+  expect(entrypoint).toContain(
+    'generated.unwrap("API type generation failed");',
   );
   expect(entrypoint).not.toMatch(/\bmain\(\)/u);
   const config: unknown = Bun.JSONC.parse(
@@ -351,10 +354,16 @@ test("web sources generate once across compiler tasks and restore until source i
       ...env,
       PATH: `${bin}${path.delimiter}/usr/bin${path.delimiter}/bin`,
     };
+    const missingTurbo = Bun.spawnSync(["/bin/sh", "-c", "command -v turbo"], {
+      env: prepareEnv,
+    });
+    expect(missingTurbo.exitCode).not.toBe(0);
+    expect(missingTurbo.stdout.toString()).toBe("");
     expect(
-      Bun.spawnSync(["/bin/sh", "-c", "command -v turbo"], { env: prepareEnv })
-        .exitCode,
-    ).toBe(1);
+      Bun.spawnSync(["/bin/sh", "-c", "command -v bun"], { env: prepareEnv })
+        .stdout.toString()
+        .trim(),
+    ).toBe(path.join(bin, "bun"));
     const prepare = () =>
       Bun.spawnSync(
         [process.execPath, "scripts/ci-generated-sources.ts", "prepare"],

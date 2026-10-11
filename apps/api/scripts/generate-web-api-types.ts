@@ -1340,8 +1340,9 @@ const main = () => {
 };
 
 if (import.meta.main) {
-  await withGenerationLock({
+  const generated = await withGenerationLock({
     lockPath: path.join(REPO_ROOT, ".cache/web-api-generation.sqlite"),
     run: main,
   });
+  generated.unwrap("API type generation failed");
 }
