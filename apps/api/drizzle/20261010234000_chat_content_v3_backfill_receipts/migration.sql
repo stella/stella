@@ -6,7 +6,7 @@ CREATE TABLE "chat_content_v3_backfill_receipts" (
   "source" text NOT NULL,
   "row_id" uuid NOT NULL,
   "message_id" uuid NOT NULL,
-  "organization_id" text NOT NULL,
+  "organization_id" varchar(128) NOT NULL,
   "from_version" integer,
   "outcome" text NOT NULL,
   "reason" text NOT NULL,
