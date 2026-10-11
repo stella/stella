@@ -203,7 +203,7 @@ for (const feature of FEATURES) {
             for (const { method, path } of route.routes) {
               const response = await route.handle(
                 new Request(
-                  `http://localhost${path.replaceAll(/:[A-Za-z]+/gu, () => "malformed-id")}`,
+                  `http://localhost${String(path).replaceAll(/:[A-Za-z]+/gu, () => "malformed-id")}`,
                   { method },
                 ),
               );

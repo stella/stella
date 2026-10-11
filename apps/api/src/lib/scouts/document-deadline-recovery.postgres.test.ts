@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { and, eq, getTableColumns, sql } from "drizzle-orm";
+import { and, eq, getColumns, sql } from "drizzle-orm";
 
 import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
 
@@ -432,7 +432,7 @@ describe.skipIf(!enabled)("deadline admission recovery (postgres)", () => {
           const claimed = await claim(tx);
           expect(claimed.status).toBe("claimed");
           if (claimed.status !== "claimed") {
-            return panic("Missing claim projection");
+            panic("Missing claim projection");
           }
           const row = claimed.run;
           expect(row.id).toBe(source.runId);
@@ -500,7 +500,7 @@ describe.skipIf(!enabled)("deadline admission recovery (postgres)", () => {
             (
               await holder.db
                 .select({
-                  ...getTableColumns(documentProcessingRuns),
+                  ...getColumns(documentProcessingRuns),
                   deadlineScoutClaimedAtToken: timestampCasToken(
                     documentProcessingRuns.deadlineScoutClaimedAt,
                   ),

@@ -14,7 +14,7 @@ import {
   workspaceContacts,
   workspaces,
 } from "@/api/db/schema";
-import { authMacro } from "@/api/lib/auth";
+import { authMacro, type ValidateAuthValue } from "@/api/lib/auth";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { readDevOtp } from "@/api/lib/dev-otp-store";
 import {
@@ -300,14 +300,14 @@ export const devRoute = new Elysia({ prefix: "/dev" })
   .post(
     "/rebuild-search",
     declareAggregateMutation(
-      async (ctx) => {
-        await ctx.scopedDb(
+      async ({ scopedDb, session }: ValidateAuthValue) => {
+        await scopedDb(
           async (tx) =>
             await getSearchMaintenance(tx, upsertSearchDocument).rebuildIndex(
-              ctx.session.activeOrganizationId,
+              session.activeOrganizationId,
             ),
         );
-        await rebuildSupplementalSearchIndex(ctx.session.activeOrganizationId);
+        await rebuildSupplementalSearchIndex(session.activeOrganizationId);
         return { ok: true };
       },
       {
