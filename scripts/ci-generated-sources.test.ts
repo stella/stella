@@ -537,7 +537,6 @@ test("API boot entry points prepare capability runtime sources before starting",
     "dev",
     "test",
     "test:property",
-    "typecheck",
     "lint",
     "lint:fix",
   ]) {
@@ -563,6 +562,24 @@ test("API boot entry points prepare capability runtime sources before starting",
     Bun.JSONC.parse(
       readFileSync(new URL("../turbo.json", import.meta.url), "utf-8"),
     ),
+  );
+  expect(api.scripts["typecheck"]).toBe(
+    "bun ../../packages/scripts/src/api-typecheck.ts",
+  );
+  for (const command of ["lint", "lint:fix"]) {
+    const script =
+      api.scripts[command] ?? panic(`Missing API ${command} script`);
+    const emission = script.indexOf(
+      "turbo run typecheck:declarations --filter=@stll/api",
+    );
+    expect(emission).toBeGreaterThanOrEqual(0);
+    expect(script.indexOf("bun --bun oxlint")).toBeGreaterThan(emission);
+  }
+  expect(turbo.tasks["@stll/api#typecheck"]?.dependsOn).toContain(
+    "typecheck:src",
+  );
+  expect(turbo.tasks["@stll/api#typecheck:src"]?.dependsOn).toContain(
+    "generate:capability-runtime",
   );
   expect(turbo.tasks["@stll/web#generate:api-types"]?.dependsOn).toContain(
     "@stll/api#generate:capability-runtime",

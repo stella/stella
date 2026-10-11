@@ -249,11 +249,16 @@ test("capability runtime cache manifests cover every file the producer writes", 
       ),
     );
     const assertOutputs = (tasks: typeof config.tasks) => {
+      expect(tasks["@stll/api#typecheck"]?.dependsOn).toContain(
+        "typecheck:src",
+      );
       expect(
         tasks["@stll/api#generate:capability-runtime"]?.outputs?.toSorted(),
       ).toEqual(outputs);
       for (const output of outputs) {
-        expect(tasks["@stll/api#typecheck"]?.outputs).toContain(output);
+        expect(tasks["@stll/api#typecheck:src"]?.dependsOn).toContain(
+          "generate:capability-runtime",
+        );
         expect(tasks["@stll/web#generate:api-types"]?.inputs).toContain(
           `!$TURBO_ROOT$/apps/api/${output}`,
         );
@@ -273,10 +278,7 @@ test("capability runtime cache manifests cover every file the producer writes", 
       expect(web.inputs.length).toBe(originalLength - 1);
       expect(() => assertOutputs(mutated)).toThrow("toContain");
     }
-    for (const task of [
-      "@stll/api#generate:capability-runtime",
-      "@stll/api#typecheck",
-    ]) {
+    for (const task of ["@stll/api#generate:capability-runtime"]) {
       for (const output of outputs) {
         const mutated = structuredClone(config.tasks);
         const body = mutated[task];

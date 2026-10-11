@@ -409,6 +409,10 @@ const validateTypeScriptToolchain = (rootDir: string): WorkspaceIssue[] => {
       if (
         typecheck !== null &&
         relativePackagePath !== TYPESCRIPT6_COMPATIBILITY.astro.packagePath &&
+        !(
+          relativePackagePath === "apps/api/package.json" &&
+          typecheck === "bun ../../packages/scripts/src/api-typecheck.ts"
+        ) &&
         !typecheck
           .split("&&")
           .some((command) =>

@@ -106,3 +106,44 @@ test("missing and overlapping project roots fail ownership validation", () => {
     ]).map(({ path: file }) => file),
   ).toEqual(["src/a.test.ts"]);
 });
+
+test("the API declaration command emits through the native compiler CLI", () => {
+  const api = JSON.parse(
+    readFileSync(path.join(REPO_ROOT, "apps/api/package.json"), "utf-8"),
+  );
+  const [, wrapper, ...args] = api.scripts["typecheck:declarations"].split(" ");
+  const directory = mkdtempSync(
+    path.join(tmpdir(), "api-native-declarations-"),
+  );
+  try {
+    writeFileSync(
+      path.join(directory, "value.ts"),
+      "export type Value = string;\n",
+    );
+    writeFileSync(
+      path.join(directory, "tsconfig.declarations.json"),
+      JSON.stringify({
+        compilerOptions: {
+          noCheck: true,
+          declaration: true,
+          emitDeclarationOnly: true,
+          outDir: "declarations",
+          types: [],
+        },
+        files: ["value.ts"],
+      }),
+    );
+    const result = spawnSync(
+      process.execPath,
+      [path.resolve(REPO_ROOT, "apps/api", wrapper), ...args],
+      { cwd: directory, encoding: "utf-8" },
+    );
+    expect(result.error).toBeUndefined();
+    expect(result.status, result.stdout + result.stderr).toBe(0);
+    expect(
+      readFileSync(path.join(directory, "declarations/value.d.ts"), "utf-8"),
+    ).toContain("export type Value = string;");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});

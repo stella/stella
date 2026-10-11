@@ -39,6 +39,15 @@ test("declaration consumers run after emission and invalidate with API source ch
     expect(task["inputs"], id).toContain("$TURBO_ROOT$/patches/**");
   }
   const consumers = new Set(["@stll/api#typecheck:tests"]);
+  for (const [id, task] of Object.entries(tasks)) {
+    if (
+      isRecord(task) &&
+      Array.isArray(task["dependsOn"]) &&
+      task["dependsOn"].includes(EMITTER)
+    ) {
+      consumers.add(id);
+    }
+  }
   const manifests = [
     "package.json",
     ...new Bun.Glob("{apps,packages}/*/package.json").scanSync(ROOT),

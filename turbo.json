@@ -274,7 +274,8 @@
         "@stll/web#generate:api-types",
         "@stll/web#generate:route-tree",
         "@stll/cli#codegen:runtime",
-        "@stll/api#generate:capability-runtime"
+        "@stll/api#generate:capability-runtime",
+        "@stll/api#typecheck:declarations"
       ],
       // Root projects can import workspace source. The broad workspace inputs
       // trade some misses for correctness while still sharing exact results
@@ -285,10 +286,14 @@
         "$TURBO_ROOT$/.npmrc",
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/apps/**",
+        "!$TURBO_ROOT$/apps/**/.cache/**",
+        "!$TURBO_ROOT$/apps/**/.turbo/**",
         "$TURBO_ROOT$/bunfig.toml",
         "$TURBO_ROOT$/package.json",
         "$TURBO_ROOT$/bun.lock",
         "$TURBO_ROOT$/packages/**",
+        "!$TURBO_ROOT$/packages/**/.cache/**",
+        "!$TURBO_ROOT$/packages/**/.turbo/**",
         "$TURBO_ROOT$/patches/**",
         "$TURBO_ROOT$/scripts/**",
         "$TURBO_ROOT$/types/**",
