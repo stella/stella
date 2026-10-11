@@ -61,8 +61,8 @@ test("one request is authorized once, whoever asks first", async () => {
   const authorize = authorizeOncePerRequest(async (request) => {
     seen.push(request);
     return await Promise.resolve({
-      status: 403 as const,
-      body: { error: "missing_scope" as const },
+      status: 401 as const,
+      body: { error: "unauthorized" as const },
     });
   });
   const first = new Request("https://api.test/v1/law/cz/citations/resolve");
@@ -72,8 +72,8 @@ test("one request is authorized once, whoever asks first", async () => {
   expect(seen).toEqual([]);
   await Promise.all([authorize(first), authorize(first)]);
   expect(await authorize.getExistingAuthorization(first)).toEqual({
-    status: 403,
-    body: { error: "missing_scope" },
+    status: 401,
+    body: { error: "unauthorized" },
   });
   expect(await authorize.getExistingAuthorization(second)).toBeUndefined();
   await authorize(first);

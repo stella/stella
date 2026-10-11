@@ -28,7 +28,6 @@ const organizationId = toSafeId<"organization">(
 const admitted = admitLawRead({
   organizationId,
   publicLawEnabled: () => true,
-  mayReadPublicLaw: async () => Result.ok(true),
 });
 if (Result.isError(admitted)) {
   panic("expected fixture admission");
