@@ -13,15 +13,18 @@
 // fails safe to the full check.
 
 import { panic, Result, TaggedError } from "better-result";
-import { existsSync, readdirSync } from "node:fs";
+import { appendFileSync, existsSync, readdirSync } from "node:fs";
+import { totalmem } from "node:os";
 import path from "node:path";
 import { stripVTControlCharacters } from "node:util";
 
+import { childExitStatus } from "../packages/scripts/src/child-exit-status";
 import {
   CODE_CHECK_LEGS,
   ownsCodeCheckPath,
   type CodeCheckLeg,
 } from "../packages/scripts/src/code-quality-partition";
+import { runBudgetedCheck } from "./code-quality-task-budget";
 import { isChangedLintPath } from "./lint-paths";
 import { measureResultBoundaryDebt } from "./ratchet";
 import {
@@ -31,6 +34,7 @@ import {
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const DEFAULT_BASE = "origin/main";
+const CODE_CHECK_EXECUTION_BUDGET_MS = 290_000;
 const WORKSPACE_PARENTS = ["apps", "packages"] as const;
 export const DEPENDENCY_CACHE_INPUTS = [
   "$TURBO_ROOT$/.npmrc",
@@ -44,7 +48,12 @@ export const SHARED_COMPILER_CACHE_INPUTS = [
   "$TURBO_ROOT$/types/**",
 ] as const;
 export const ALL_WORKSPACE_CACHE_INPUTS = [
-  ...DEPENDENCY_CACHE_INPUTS,
+  // Turbo hashes each workspace's resolved lock graph and root tools itself.
+  ...DEPENDENCY_CACHE_INPUTS.filter(
+    (input) =>
+      input !== "$TURBO_ROOT$/bun.lock" &&
+      input !== "$TURBO_ROOT$/package.json",
+  ),
   ...SHARED_COMPILER_CACHE_INPUTS,
 ] as const;
 // Every module `oxlint.config.ts` imports is rule configuration: a row edited
@@ -400,13 +409,16 @@ const capture = (
     ...(env === undefined ? {} : { env }),
     stdout: "pipe",
     stderr: "pipe",
+    timeout: 30_000,
+    killSignal: "SIGKILL",
   });
   const stdout = result.stdout.toString();
-  if (result.exitCode !== 0) {
+  const exitCode = childExitStatus(result);
+  if (exitCode !== 0) {
     return Result.err(
       commandFailed({
         command,
-        exitCode: result.exitCode,
+        exitCode,
         output: `${stdout}\n${result.stderr.toString()}`,
       }),
     );
@@ -414,39 +426,31 @@ const capture = (
   return Result.ok(stdout);
 };
 
-const tee = async (
-  stream: ReadableStream<Uint8Array>,
-  sink: NodeJS.WriteStream,
-): Promise<string> => {
-  const decoder = new TextDecoder();
-  const chunks: string[] = [];
-  for await (const chunk of stream) {
-    sink.write(chunk);
-    chunks.push(decoder.decode(chunk, { stream: true }));
-  }
-  chunks.push(decoder.decode());
-  return chunks.join("");
-};
-
 // Streams the check's output live and keeps a copy, so a failure can be
 // summarized from the failed task's own lines.
 const runCheck = async (
   command: readonly string[],
+  timeoutMs = CODE_CHECK_EXECUTION_BUDGET_MS,
 ): Promise<Result<void, CommandFailedError>> => {
-  const child = Bun.spawn([...command], {
+  const { exitCode, output } = await runBudgetedCheck({
+    command,
     cwd: REPO_ROOT,
-    stdout: "pipe",
-    stderr: "pipe",
+    timeoutMs,
+    writeStdout: (text) => {
+      process.stdout.write(text);
+    },
+    writeStderr: (text) => {
+      process.stderr.write(text);
+    },
+    writeSummary: (text) => {
+      const summaryPath = process.env["GITHUB_STEP_SUMMARY"];
+      if (summaryPath !== undefined) {
+        appendFileSync(summaryPath, text);
+      }
+    },
   });
-  const [stdout, stderr, exitCode] = await Promise.all([
-    tee(child.stdout, process.stdout),
-    tee(child.stderr, process.stderr),
-    child.exited,
-  ]);
   if (exitCode !== 0) {
-    return Result.err(
-      commandFailed({ command, exitCode, output: `${stdout}\n${stderr}` }),
-    );
+    return Result.err(commandFailed({ command, exitCode, output }));
   }
   return Result.ok();
 };
@@ -618,18 +622,23 @@ type ExecuteCheckCommandsOptions = {
   commands: readonly (readonly string[])[];
   runner?: (
     command: readonly string[],
+    timeoutMs: number,
   ) => Result<void, CodeCheckError> | Promise<Result<void, CodeCheckError>>;
   write?: (output: string) => void;
   dryRun?: boolean;
+  deadlineMs?: number;
+  now?: () => number;
 };
 
 export const executeCheckCommands = async ({
   commands,
-  runner = runCheck,
+  runner,
   write = (output) => {
     process.stdout.write(output);
   },
   dryRun = false,
+  now = Date.now,
+  deadlineMs = now() + CODE_CHECK_EXECUTION_BUDGET_MS,
 }: ExecuteCheckCommandsOptions): Promise<number> => {
   const failures: CodeCheckError[] = [];
   for (const command of commands) {
@@ -637,9 +646,17 @@ export const executeCheckCommands = async ({
       write(`  ${command.join(" ")}\n`);
       continue;
     }
-    const result = await runner(command);
+    const timeoutMs = deadlineMs - now();
+    if (timeoutMs <= 0) {
+      write("code-check: execution deadline exceeded before next command\n");
+      return 1;
+    }
+    const result = await (runner === undefined
+      ? runCheck(command, timeoutMs)
+      : runner(command, timeoutMs));
     if (result.isErr()) {
       failures.push(result.error);
+      break;
     }
   }
   if (failures.length === 0) {
@@ -647,24 +664,12 @@ export const executeCheckCommands = async ({
   }
   write(`code-check: ${failures.length} failed command(s)\n`);
   for (const failure of failures) {
-    switch (failure._tag) {
-      case "CommandFailedError": {
-        write(
-          formatCheckFailure({
-            summary: summarizeCheckFailure(failure),
-            annotations: process.env["GITHUB_ACTIONS"] === "true",
-          }),
-        );
-        break;
-      }
-      case "DelegatedCheckFailedError": {
-        break;
-      }
-      default: {
-        failure satisfies never;
-        panic("unknown code-check failure");
-      }
-    }
+    write(
+      formatCheckFailure({
+        summary: summarizeCheckFailure(failure),
+        annotations: process.env["GITHUB_ACTIONS"] === "true",
+      }),
+    );
   }
   return 1;
 };
@@ -746,18 +751,49 @@ const parseAffectedWorkspacePaths = (output: string): string[] => {
   });
 };
 
+const THREE_TASK_MEMORY_BYTES = 12 * 1024 ** 3;
+export const codeCheckConcurrency = (memoryBytes = totalmem()): number =>
+  memoryBytes >= THREE_TASK_MEMORY_BYTES ? 3 : 2;
+
 const turboCommand = (tasks: readonly string[], scope: TaskScope): string[] => [
   "bun",
   "--bun",
   "turbo",
   "run",
   ...tasks,
-  "--concurrency=2",
-  "--continue=dependencies-successful",
+  `--concurrency=${codeCheckConcurrency()}`,
+  "--summarize",
+  "--remote-cache-timeout=20",
+  "--log-order=stream",
+  "--log-prefix=task",
   ...(scope.type === "all"
     ? []
     : scope.targets.map((target) => `--filter=./${target}`)),
 ];
+
+export const prioritizeWebLint = (commands: string[][]): string[][] =>
+  commands.flatMap((command) => {
+    if (
+      command[2] !== "turbo" ||
+      !command.includes("lint") ||
+      command.includes("--filter=!./apps/web") ||
+      (command.some((argument) => argument.startsWith("--filter=./")) &&
+        !command.includes("--filter=./apps/web"))
+    ) {
+      return [command];
+    }
+    // Explicit task IDs start the critical web program before the smaller
+    // workspaces. Its generated prerequisites still run through Turbo.
+    const web = [
+      ...turboCommand(
+        command.includes("typecheck")
+          ? ["@stll/web#lint", "@stll/web#typecheck"]
+          : ["@stll/web#lint"],
+        { type: "all" },
+      ),
+    ];
+    return [web, [...command, "--filter=!./apps/web"]];
+  });
 
 const sameScope = (left: TaskScope, right: TaskScope): boolean => {
   if (left.type !== right.type) {
@@ -847,13 +883,16 @@ export const scopedCommands = (
       rootLintPaths: ownsRoot ? plan.rootLintPaths : [],
       rootChecks: ownsRoot ? plan.rootChecks : [],
     });
-    return commands.map((command) =>
+    const partitioned = commands.map((command) =>
       command[2] === "turbo" && !command.includes("typecheck:repo")
         ? command.concat(
             codeCheckExclusions(partition.workspaces, partition.leg),
           )
         : command,
     );
+    return partition.leg === "web"
+      ? prioritizeWebLint(partitioned)
+      : partitioned;
   }
   const commands: string[][] = [];
   const rootChecks = new Set(plan.rootChecks);
@@ -913,8 +952,11 @@ export const scopedCommands = (
       "turbo",
       "run",
       "typecheck:repo",
-      "--concurrency=2",
-      "--continue=dependencies-successful",
+      `--concurrency=${codeCheckConcurrency()}`,
+      "--summarize",
+      "--remote-cache-timeout=20",
+      "--log-order=stream",
+      "--log-prefix=task",
     ]);
   }
   return commands;
@@ -1006,43 +1048,10 @@ const planScope = (
   }
 };
 
-// The full-repository fallback is another code-check run, which prints its
-// own failure summary.
-class DelegatedCheckFailedError extends TaggedError(
-  "DelegatedCheckFailedError",
-)<{
-  message: string;
-  exitCode: number;
-}> {}
-
-type CodeCheckError = CommandFailedError | DelegatedCheckFailedError;
-
-const runFullFallback = (
-  leg: CodeCheckLeg | undefined,
-): Result<void, DelegatedCheckFailedError> => {
-  const command = [
-    "bun",
-    "run",
-    "code-check",
-    ...(leg === undefined ? [] : ["--leg", leg]),
-  ];
-  const { exitCode } = Bun.spawnSync(command, {
-    cwd: REPO_ROOT,
-    stdout: "inherit",
-    stderr: "inherit",
-  });
-  if (exitCode !== 0) {
-    return Result.err(
-      new DelegatedCheckFailedError({
-        message: `Command failed (${exitCode}): ${command.join(" ")}`,
-        exitCode,
-      }),
-    );
-  }
-  return Result.ok();
-};
+type CodeCheckError = CommandFailedError;
 
 const main = async (): Promise<Result<number, CommandFailedError>> => {
+  const deadlineMs = Date.now() + CODE_CHECK_EXECUTION_BUDGET_MS;
   const options = parseArgs(process.argv.slice(2));
   const scoped = planScope(options.scope);
   if (scoped.isErr()) {
@@ -1062,14 +1071,25 @@ const main = async (): Promise<Result<number, CommandFailedError>> => {
           cwd: REPO_ROOT,
           stdout: "pipe",
           stderr: "pipe",
+          timeout: Math.max(1, Math.min(30_000, deadlineMs - Date.now())),
+          killSignal: "SIGKILL",
         });
       // Only a missing comparison ref means "no base"; any other Git failure
       // is surfaced rather than silently skipping the exact lint.
-      if (
-        git(["rev-parse", "--verify", "--quiet", `${DEFAULT_BASE}^{commit}`])
-          .exitCode !== 0
-      ) {
+      const reference = git([
+        "rev-parse",
+        "--verify",
+        "--quiet",
+        `${DEFAULT_BASE}^{commit}`,
+      ]);
+      const terminated = reference.signalCode !== undefined;
+      if (reference.exitCode === 1 && !terminated) {
         return null;
+      }
+      if (childExitStatus(reference) !== 0) {
+        panic(
+          `git rev-parse ${DEFAULT_BASE} failed: ${reference.stderr.toString().trim()}`,
+        );
       }
       const result = git(["merge-base", DEFAULT_BASE, "HEAD"]);
       const base = result.stdout.toString().trim();
@@ -1105,10 +1125,7 @@ const main = async (): Promise<Result<number, CommandFailedError>> => {
       await executeCheckCommands({
         commands,
         dryRun: options.dryRun,
-        runner: async (command) =>
-          command === fallbackCommand
-            ? runFullFallback(leg)
-            : runCheck(command),
+        deadlineMs,
       }),
     );
   }
@@ -1132,7 +1149,11 @@ const main = async (): Promise<Result<number, CommandFailedError>> => {
     ),
   );
   return Result.ok(
-    await executeCheckCommands({ commands, dryRun: options.dryRun }),
+    await executeCheckCommands({
+      commands,
+      dryRun: options.dryRun,
+      deadlineMs,
+    }),
   );
 };
 

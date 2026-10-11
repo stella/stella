@@ -1,0 +1,6 @@
+{
+  "defaultSeconds": 90,
+  "overrides": {
+    "@stll/web#lint": 240
+  }
+}
