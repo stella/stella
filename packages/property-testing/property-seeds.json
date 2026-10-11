@@ -24,6 +24,38 @@
       "date": "2026-10-03"
     }
   ],
+  "apps/api/src/handlers/chat/snapshot-reconciliation.property.test.ts::snapshot reconciliation preserves generated interleavings across live persistence and reload": [
+    {
+      "seed": 20260901,
+      "path": "5:0:0:0:1:1:2:1:2:4:5",
+      "note": "Interleaved snapshot and delta coverage",
+      "date": "2026-10-11"
+    },
+    {
+      "seed": 20260901,
+      "path": "0:0:1:1:2:1:1:2:3:3:2:2:3",
+      "note": "Snapshot completion after resumed deltas",
+      "date": "2026-10-11"
+    },
+    {
+      "seed": 20260901,
+      "path": "69:0:0:1:10",
+      "note": "Text continuation across snapshot resets",
+      "date": "2026-10-11"
+    },
+    {
+      "seed": 20261011,
+      "path": "34:0:0:22:11",
+      "note": "Text continuation alongside reasoning",
+      "date": "2026-10-11"
+    },
+    {
+      "seed": 20260901,
+      "path": "5:0:0:0:1:1:2:1:2:4:5:0:0:0:0",
+      "note": "Snapshot-derived textual growth",
+      "date": "2026-10-11"
+    }
+  ],
   "apps/api/src/handlers/chat/tools/subagent-tools.property.test.ts::subagent tool projection retains every eligible own entry and its input": [
     {
       "seed": 20260901,

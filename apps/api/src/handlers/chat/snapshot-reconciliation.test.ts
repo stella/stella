@@ -1,5 +1,6 @@
 import type {
   ActivityPart,
+  MessagePart,
   ToolCallPart,
   ToolResultPart,
   UIMessage,
@@ -8,6 +9,7 @@ import { expect, test } from "bun:test";
 
 import {
   createSnapshotActivityReconciler,
+  SnapshotPartReconciler,
   reconcileSnapshotCall,
   reconcileSnapshotResult,
 } from "@/api/handlers/chat/snapshot-reconciliation";
@@ -191,3 +193,95 @@ test("streaming result progress keeps an output-bearing call reloadable", () => 
     }),
   ).toMatchObject({ state: "complete", output: "latest progress" });
 });
+
+const sdkPartExamples = {
+  text: { type: "text", content: "Answer" },
+  thinking: { type: "thinking", content: "Reason", stepId: "step" },
+  "tool-call": {
+    type: "tool-call",
+    id: "call",
+    name: "lookup",
+    arguments: "{}",
+    state: "input-complete",
+  },
+  "tool-result": {
+    type: "tool-result",
+    toolCallId: "call",
+    content: "Result",
+    state: "complete",
+  },
+  activity: {
+    type: "activity",
+    activityType: "review",
+    content: { value: "Activity" },
+  },
+  "structured-output": {
+    type: "structured-output",
+    status: "complete",
+    raw: "{}",
+    data: {},
+  },
+  subagent: {
+    type: "subagent",
+    subagent: { id: "child", name: "Review", status: "finished", messages: [] },
+  },
+  "ui-resource": {
+    type: "ui-resource",
+    toolCallId: "call",
+    toolName: "lookup",
+    resource: { uri: "ui://view", mimeType: "text/html", text: "View" },
+  },
+  image: {
+    type: "image",
+    source: {
+      type: "url",
+      value: "https://example.test/image.png",
+      mimeType: "image/png",
+    },
+  },
+  audio: {
+    type: "audio",
+    source: {
+      type: "url",
+      value: "https://example.test/audio.mp3",
+      mimeType: "audio/mpeg",
+    },
+  },
+  video: {
+    type: "video",
+    source: {
+      type: "url",
+      value: "https://example.test/video.mp4",
+      mimeType: "video/mp4",
+    },
+  },
+  document: {
+    type: "document",
+    source: {
+      type: "url",
+      value: "https://example.test/document.pdf",
+      mimeType: "application/pdf",
+    },
+  },
+} as const satisfies {
+  [Kind in MessagePart["type"]]: Extract<MessagePart, { type: Kind }>;
+};
+
+for (const example of Object.values(sdkPartExamples)) {
+  test(`every ${example.type} carries its owner through SDK clones and snapshots`, () => {
+    const owner = new SnapshotPartReconciler([]);
+    owner.snapshot(example);
+    expect(owner.provenanceOf(example)).toBe("snapshot-derived");
+    const normalized = structuredClone(example);
+    owner.adoptSnapshot([example], [normalized]);
+    expect(owner.provenanceOf(normalized)).toBe("snapshot-derived");
+    const synthetic = structuredClone(normalized);
+    owner.observe([normalized], [synthetic]);
+    expect(owner.provenanceOf(synthetic)).toBe("snapshot-derived");
+    const delta = structuredClone(example);
+    owner.observe([], [delta]);
+    expect(owner.provenanceOf(delta)).toBe("delta-streamed");
+    owner.snapshot(delta);
+    expect(owner.provenanceOf(delta)).toBe("delta-streamed");
+  });
+}
